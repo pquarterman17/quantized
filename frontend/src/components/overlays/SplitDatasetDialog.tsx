@@ -77,6 +77,14 @@ export default function SplitDatasetDialog() {
   // dataset as well would fix that but re-seed on EVERY edit, wiping a
   // tolerance the user typed while a recalc lands — the worse of the two, so
   // this is a deliberate trade, not an oversight.
+  // NARROWED 2026-09-19 (P3.3 round 8). The sentence above is true only over a
+  // NON-dialog surface. Two of these backdrop dialogs can be open at once, and
+  // `stopPropagation()` does not stop a same-node, same-phase sibling, so BOTH
+  // window-capture handlers run on ONE Escape — measured, 2 open dialogs to 0.
+  // Tracked as BUG-018 (`plans/BUGS_AND_ISSUES.md`), pinned by
+  // `stackedDialogEscape.test.tsx`. Migrating onto `useEscapeSurface` fixes
+  // the ladder but is blocked on `escapeStack`'s `isEditingTarget` bail; see
+  // the bug entry for that measurement before attempting it again.
   useEffect(() => {
     if (!dataset) return;
     setToleranceText(String(autoTolerance(columnValues(dataset.data, col))));

@@ -3797,11 +3797,12 @@ covers a much smaller subset and guards focus on Analyze.
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
 - [~] Keyboard reachability, focus, order, cancel. **Audited in full and
-  fixed across seven rounds, 2026-09-18–19 (round 7 closed R1, the last of
-  the deliberately-deferred items).** Stays `[~]` rather than `[x]`: ten
-  residuals remain (R2–R11 below), each a distinct, smaller gap — none of
-  them a dialog with no keyboard dismissal at all, which is what the audit
-  originally found.
+  fixed across eight rounds, 2026-09-18–19.** Round 7 closed R1's focus half;
+  **round 8 NARROWED R1** after measuring that its Escape half was closed on
+  a false claim, and filed the measured defect as **BUG-018**. Stays `[~]`
+  rather than `[x]`: twelve residuals remain (R2–R13 below), each a distinct,
+  smaller gap — none of them a dialog with no keyboard dismissal at all,
+  which is what the audit originally found.
 
   **The audit** — every `.tsx` under `components/overlays`, the `ToolWindow`
   workshop host, and the three Library views. Columns: focus moves INTO the
@@ -3816,7 +3817,7 @@ covers a much smaller subset and guards focus on Analyze.
   | PlotRecipeApplyDialog | **N** | **N** | **dead** | **N** | all four |
   | QuickPlotWithDialog | **N** | **N** | **dead** | **N** | all four |
   | AnnotationTextDialog | **N** | **N** | weak | **N** | all four |
-  | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | Y | Y | Y (window capture, kept) | Y | R1 closed (round 7) — focus-in + trap + restore, per-dialog landing spot |
+  | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | Y | Y | **Y alone, WRONG stacked (BUG-018)** | Y | R1 narrowed (round 8) — focus-in + trap + restore closed; Escape OWNERSHIP is not |
   | CommandPalette | Y | (single input) | Y | **N** | unchanged — residual |
   | ContextMenu | Y | n/a (roving menu) | Y | Y | already correct |
   | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2); Escape re-homed on the shared ordered registry (round 3); a DECLINED close keeps the key (round 4) |
@@ -4194,6 +4195,38 @@ covers a much smaller subset and guards focus on Analyze.
     it is one of the two documented exceptions above, and closing it needs the
     hook to reach its host frame's ref.
 
+  - **R12** (round 8, review NIT 4) — **two `aria-modal="true"` dialogs can be
+    mounted at once, and each one hides the app's live regions.** Follows
+    directly from BUG-018: with Preferences and Shortcuts both open, both
+    carry `aria-modal="true"`, and AT behaviour with two concurrent modals is
+    undefined. Separately and more reachably, `aria-modal` on any one of these
+    ten hides everything outside that dialog from assistive tech for as long
+    as it is open — including the two `aria-live` regions the app raises
+    announcements through, `components/overlays/Toaster.tsx` and the status
+    bar (`StatusBar.tsx`). A toast raised while a dialog is open is therefore
+    silently not announced. Pre-existing for `ConfirmDialog`; extended to six
+    more dialogs by round 7 (Preferences and Help had `role` but not
+    `aria-modal`). Closing it properly means `inert` on the background plus
+    hoisting the live regions out of the inert subtree, which is a design
+    decision of its own, not a markup tweak. Not fixed here; recorded.
+
+  - **R13** (round 8, review NIT 5) — **three of round 7's eight new Escape
+    cases discriminate only on focus-in/restore, not on Escape
+    reachability.** Each "Escape … gives focus back to the opener" case
+    drives `user.keyboard("{Escape}")`, which is right, but because the
+    handler is a window-CAPTURE listener the dialog closes whether or not
+    focus ever moved in. What actually distinguishes the fixed tree in those
+    cases is `expect(opener).not.toHaveFocus()` right after open and
+    `expect(opener).toHaveFocus()` after close — both genuinely pinned, so
+    the cases are sound; the case NAMES just promise more than they check.
+    Escape reachability itself is pinned only by the pre-existing
+    `fireEvent.keyDown(window, …)` tests, which exist in five of the eight
+    files (`ShortcutsDialog`, `TextFormatHelp`, `PreferencesDialog`,
+    `HelpDialog`, `SplitDatasetDialog`) and **not** in `SeparateWorksheets`,
+    `CombineWorkbooks` or `ReimportAll`. Recorded rather than renamed: the
+    three missing reachability pins are worth adding with BUG-018's fix,
+    when the mechanism they would pin is the one that will actually ship.
+
   - **Round 5 2026-09-18 — the ladder is resolved at KEYDOWN, not one
     macrotask later.** Round 4 landed locally and was NOT pushed, because
     `e2e/specs/region-tool-escape.spec.ts` ("Esc mid-drag cancels the gesture
@@ -4421,21 +4454,104 @@ covers a much smaller subset and guards focus on Analyze.
     (`components/overlays/*.test.tsx`), green at baseline, and restored
     after. The full `components/overlays` suite (23 files, 268 tests, 20 new)
     is green with every sabotage reverted.
-  - Eager bundle: parent `b10bcad3` **889,475 B** → tip **889,477 B**, **+2 B**
-    (budget 920,400 B, so **30,923 B** of headroom left). Both built after
-    `rm -rf node_modules/.vite`, the parent in its own worktree after
-    `npm ci`. No new library code — only existing-hook adoption plus
+  - Eager bundle — **CORRECTED in round 8; the pair below was measured
+    against the wrong parent.** `cee0494f~1` is **`4179b166`**, not
+    `b10bcad3`, which is three commits back (`b10bcad3` → `c841c38d` →
+    `4179b166` → `cee0494f`); the two intervening P4.1 commits moved 218
+    lines out of eager `store/useApp.ts` into a new 265-line
+    `store/workspaceHydration.ts`, both eager sources, so the old pair folded
+    that extraction into this commit's number. Re-measured 2026-09-19 in a
+    throwaway worktree, `npm ci` once (no lock or `package.json` drift
+    between the two commits) and `rm -rf node_modules/.vite` before each
+    build: parent **`4179b166` 889,496 B** → tip **`cee0494f` 889,498 B**,
+    **+2 B**. The delta was right; **both absolute numbers were wrong by
+    21 B**, and the parent SHA was wrong outright. Budget 920,400 B, so
+    30,902 B of headroom at that tip. (Superseded arithmetic, kept so the
+    correction is auditable: `b10bcad3` **889,475 B** → **889,477 B**.)
+    No new library code — only existing-hook adoption plus
     `role`/`aria-modal`/`aria-labelledby` markup, so the delta is negligible.
 
+  **Round 8 (2026-09-19) — R1 narrowed, BUG-018 filed, landing spot fixed.**
+  This round changed almost no product code, on purpose. It started from an
+  adversarial review of `cee0494f` that reproduced a stacked-dialog Escape
+  double-close in real Chromium with three keystrokes and no mouse.
+  - **The preferred fix was built and MEASURED, then reverted.** All ten
+    backdrop dialogs were migrated onto `useEscapeSurface("window", …)`,
+    keeping each dialog's close semantics (`ReimportAll` still `cancel()`,
+    `RecoveryChoice` still `applyCancelRecovery()`, `ConfirmDialog` keeping
+    Enter on its own window-capture listener and moving only Escape). It
+    **does** fix the ladder, measured: Preferences over Shortcuts went 2 → 1
+    → 0 on two Escapes, and Preferences over a pending `ConfirmDialog` closed
+    Preferences on the first Escape with the confirm **still pending**,
+    resolving `false` only on the second — exactly the target behaviour.
+  - **It was reverted because it inverted the ladder elsewhere.**
+    `escapeStack`'s dispatcher returns early on
+    `isEditingTarget(event.target)` (INPUT/TEXTAREA/SELECT), and FOUR of the
+    ten dialogs land focus on such a control **by design**, per round 7's own
+    landing-spot table: Help's search box, Separate's and Combine's Name
+    field, Split's Column select. Measured: with Help open and focus on its
+    search box, Escape did nothing at all — twice — and `SeparateWorksheets`
+    alone would not close from its own documented landing spot. The scoped
+    suite went from 268 green to **9 failed / 264 passed across 7 files**; of
+    those 9, four are this genuine regression (Help, Separate, Combine,
+    Split's `user.keyboard("{Escape}")` cases) and the rest are the
+    synchronous-`fireEvent` tests meeting the registry's one-macrotask
+    deferral. Making it work would mean giving `escapeStack` a new modal tier
+    that bypasses `isEditingTarget`, `cmdkOpen` and the `.qzk-ctx` guard —
+    a redesign of the dispatcher that has already produced an inversion in
+    each of rounds 2, 3, 4 and 5, not an adoption of existing infrastructure.
+    Out of scope for a bounded round; recorded as BUG-018's design note so
+    the next attempt starts from the measurement rather than repeating it.
+  - **What shipped instead:** this narrowing, BUG-018, the corrected bundle
+    record above, two new residuals (R12, R13), and one real fix — the
+    Preferences landing spot (below).
+  - **Preferences lands on the SELECTED segment, not the first one** (review
+    NIT 3). `SegmentedControl` gives every option a plain focusable
+    `<button role="tab">` with no roving `tabindex`, so round 7's
+    `focusablesIn(paneRef.current)[0]` was always the FIRST option. Measured
+    with `theme: "light"`: focus landed on **"Dark"**, carrying
+    `aria-selected="false"` — a screen-reader user's entry point was "Dark,
+    tab, not selected", and Enter/Space there flipped the theme. The new
+    `landingSpotIn` helper prefers the selected option of the `role="tablist"`
+    group the default belongs to, falling back to the plain DOM-order default
+    for every non-tablist pane. Round 7's test covered only the default dark
+    theme, where first-in-DOM and selected coincide; **both themes are pinned
+    now** (`it.each`), and the assertion is stated as the property —
+    `aria-selected="true"` on whatever it landed on — not just the label.
+  - **Round 7's per-dialog sabotage property is preserved.** Re-verified
+    after the landing-spot change: commenting out `useDialogFocus` in
+    Preferences alone still reddens exactly its trap and restore cases
+    (**RED 2/10**), and the two landing-spot cases correctly stay green
+    because the dialog's own effect satisfies them — the same disclosure
+    round 7 made.
+
   **Named residuals (why this is `[~]`).**
-  - ~~**R1**~~ **CLOSED (round 7).** The eight backdrop dialogs (Split,
-    Separate, Combine, ReimportAll, Shortcuts, TextFormatHelp, Preferences,
-    Help) now take focus on open, trap Tab, and restore it to the opener on
-    close, via the same `useDialogFocus`/`useFocusTrap` infrastructure every
-    other dialog in this box uses. Their Escape stays a window-capture
-    listener, by deliberate choice (see round 7) — it already worked and
-    already always wins over anything mounted behind a true modal backdrop,
-    so nothing there needed to change.
+  - **R1** — **NARROWED (round 8), not closed.** The FOCUS half is closed and
+    stays closed: the eight backdrop dialogs (Split, Separate, Combine,
+    ReimportAll, Shortcuts, TextFormatHelp, Preferences, Help) take focus on
+    open, trap Tab, and restore it to the opener on close, via the same
+    `useDialogFocus`/`useFocusTrap` infrastructure every other dialog in this
+    box uses — round 7's per-dialog sabotage table reproduces exactly, and an
+    independent review re-ran all eight.
+
+    The ESCAPE half is **not** closed, and round 7's reason for keeping the
+    window-capture listener was false where it mattered. It claimed a backdrop
+    dialog "can never be out-ranked" and that "joining the registry buys
+    nothing". Both hold for a dialog over a NON-dialog surface — measured, and
+    still true. Neither holds for a dialog over ANOTHER dialog, which is the
+    one case the registry's ordering exists to settle: all ten backdrop
+    dialogs (these eight plus `ConfirmDialog` and `RecoveryChoiceDialog`)
+    listen with `window.addEventListener("keydown", …, true)` and call
+    `stopPropagation()`, which does not stop a same-node, same-phase sibling,
+    so both handlers run on one keystroke. Measured on this tree
+    (`490243f9`), jsdom, real components, `user.keyboard("{Escape}")`:
+    Preferences + Shortcuts, Preferences + Help and Preferences + a pending
+    `ConfirmDialog` each go from 2 open `[role="dialog"]` to **0** on ONE
+    Escape, and the confirm resolves `false` on the same keystroke that
+    dismissed Preferences. **Filed as BUG-018** (`plans/BUGS_AND_ISSUES.md`)
+    with that reproduction and pinned by
+    `components/overlays/stackedDialogEscape.test.tsx`. Pre-existing, not
+    introduced by round 7 — the Escape effects are byte-identical to base.
   - **R2** — `CommandPalette` focuses its input but never restores focus to
     the opener on close.
   - **R3** — floating workshop windows have no keyboard MOVE or RESIZE. No

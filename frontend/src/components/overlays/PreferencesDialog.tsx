@@ -34,6 +34,35 @@ const NOTATION_OPTS = [
   { value: "fixed", label: "Fixed" },
 ];
 
+/** Where focus lands when Preferences opens: the first focusable control in
+ *  the active pane — except that when that control is one option of a
+ *  `role="tablist"` group, the SELECTED option is taken instead.
+ *
+ *  Round 8 (review NIT 3). `SegmentedControl` renders every option as a plain
+ *  focusable `<button role="tab">` with no roving `tabindex`, so "first
+ *  focusable in DOM order" is always the FIRST option, never the current one.
+ *  On the Appearance pane that is the Theme control, whose first option is
+ *  "Dark": measured with `theme: "light"` active, the landing spot was the
+ *  "Dark" button carrying `aria-selected="false"`. A screen-reader user
+ *  opening Preferences was told "Dark, tab, not selected" as their entry
+ *  point, and Enter/Space there flipped the theme — the opposite of what
+ *  landing on "the setting they came for" was meant to buy. The shipped test
+ *  only covered the default dark theme, where first-in-DOM and selected
+ *  coincide, so the light case was unpinned; both are pinned now.
+ *
+ *  Only the group the landing control actually belongs to is consulted, and
+ *  only when its selected option is itself focusable — otherwise this returns
+ *  the plain DOM-order default, which is what every non-tablist pane wants. */
+function landingSpotIn(pane: HTMLElement | null): HTMLElement | null {
+  const focusables = focusablesIn(pane);
+  const first = focusables[0] ?? null;
+  if (!first) return null;
+  const group = first.closest('[role="tablist"]');
+  if (!group) return first;
+  const selected = group.querySelector<HTMLElement>('[aria-selected="true"]');
+  return selected && focusables.includes(selected) ? selected : first;
+}
+
 function PrefRow({
   label,
   hint,
@@ -76,6 +105,14 @@ export default function PreferencesDialog() {
   // — a true backdrop modal always wins over anything mounted behind it, and
   // window-capture already guarantees that ahead of the registry's window-
   // bubble listener.
+  // NARROWED 2026-09-19 (P3.3 round 8). The sentence above is true only over a
+  // NON-dialog surface. Two of these backdrop dialogs can be open at once, and
+  // `stopPropagation()` does not stop a same-node, same-phase sibling, so BOTH
+  // window-capture handlers run on ONE Escape — measured, 2 open dialogs to 0.
+  // Tracked as BUG-018 (`plans/BUGS_AND_ISSUES.md`), pinned by
+  // `stackedDialogEscape.test.tsx`. Migrating onto `useEscapeSurface` fixes
+  // the ladder but is blocked on `escapeStack`'s `isEditingTarget` bail; see
+  // the bug entry for that measurement before attempting it again.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -96,9 +133,11 @@ export default function PreferencesDialog() {
   // reachability either way). Landing on the shared hook's raw default (the
   // FIRST focusable element in DOM order) would put focus on the "✕" close
   // button, which works but tells a keyboard/screen-reader user nothing about
-  // what this dialog is actually for. Instead, this effect focuses the first
-  // focusable control INSIDE THE ACTIVE PANE (`.qzk-prefs-pane`) — the
-  // setting a user opening Preferences almost certainly came for — and runs
+  // what this dialog is actually for. Instead, this effect focuses the
+  // meaningful control INSIDE THE ACTIVE PANE (`.qzk-prefs-pane`) — the
+  // setting a user opening Preferences almost certainly came for, at its
+  // CURRENT value rather than at whichever option happens to be first in DOM
+  // order (`landingSpotIn` above, round 8 review NIT 3) — and runs
   // BEFORE `useDialogFocus` below so its own default is already satisfied and
   // skips (same "already inside `ref`" rule ParamDialog's `autoFocus` and
   // HelpDialog's search-box focus rely on). The Keyboard tab has no focusable
@@ -107,7 +146,7 @@ export default function PreferencesDialog() {
   // close button, which is the correct behaviour for that one pane.
   useEffect(() => {
     if (!open) return;
-    focusablesIn(paneRef.current)[0]?.focus();
+    landingSpotIn(paneRef.current)?.focus();
   }, [open]);
   useDialogFocus(dialogRef, open);
 

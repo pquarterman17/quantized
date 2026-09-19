@@ -65,11 +65,35 @@ describe("PreferencesDialog", () => {
 describe("PreferencesDialog focus-in / Tab trap / Escape / restore (P3.3 R1)", () => {
   afterEach(() => useApp.getState().setPrefsOpen(false));
 
+  afterEach(() => useApp.getState().setTheme("dark"));
+
   it("moves focus into the ACTIVE PANE on open, onto Theme — not the raw first-in-DOM Close button", () => {
     useApp.getState().setPrefsOpen(true);
     render(<PreferencesDialog />);
     // The Appearance tab's first control: the "Dark" segmented-control tab.
     expect(screen.getByRole("tab", { name: "Dark" })).toHaveFocus();
+  });
+
+  // Round 8 (review NIT 3). Both themes, because the landing spot is only
+  // ever WRONG in the theme the shipped test did not cover: `SegmentedControl`
+  // has no roving `tabindex`, so "first focusable in DOM order" is always
+  // "Dark", which under `theme: "light"` is an `aria-selected="false"` option
+  // — a screen reader announced "Dark, tab, not selected" as the entry point
+  // and Enter/Space there flipped the theme. The landing spot must be the
+  // option that is actually SELECTED.
+  it.each([
+    ["dark" as const, "Dark"],
+    ["light" as const, "Light"],
+  ])("lands on the SELECTED Theme segment, not the first one, with theme %s", (theme, expected) => {
+    useApp.getState().setTheme(theme);
+    useApp.getState().setPrefsOpen(true);
+    render(<PreferencesDialog />);
+    const landed = document.activeElement as HTMLElement;
+    expect(landed).toBe(screen.getByRole("tab", { name: expected }));
+    // The property that matters, stated directly: whatever it landed on is
+    // the CURRENT value. A regression to first-in-DOM makes this false under
+    // `light` while still landing on a `role="tab"`.
+    expect(landed).toHaveAttribute("aria-selected", "true");
   });
 
   it("Tab traps at the dialog's real boundary (the Close button first, Done last), even though focus-in skipped past Close", async () => {
