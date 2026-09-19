@@ -7915,6 +7915,22 @@ asserted by test).
   nowhere in this directory's rendered code (comments excepted — they are the
   record of what each site used to draw).
 
+`nodeIconRenderSites.test.tsx` (new, review round 1) closes the level below
+that: injectivity proves the *vocabulary* is sound and the accessibility audit
+proves each mark is *labelled*, but neither proved the **wiring** — that a
+given render site reaches for its OWN kind's entry. The reviewer pointed
+`ReportsSection.tsx` and `SavedFiguresSection.tsx` at `LIBRARY_NODE_GLYPH
+.folder` and the whole suite stayed green, i.e. a Report/Folder and a
+Publication-figure/Folder collision could be reintroduced with nothing red.
+The closure is **table-driven** rather than two more one-off cases, so the
+next kind added cannot be missed: the table is asserted to cover every member
+of `LIBRARY_NODE_KINDS`, and each entry renders its site and asserts the glyph
+under that kind's title, plus that no other kind's mark leaked into the row.
+It lists the eight sites that name a kind **literally** — the only ones that
+can be miswired; `ArtifactRows`, `CollectionsSection`, `DetailsRow` and
+`TilePreview` index the map by `node.kind` and are correct by construction,
+and `Library.tsx`'s toolbar button is a command covered by `nodeIcons.test.ts`.
+
 `rowIconAccessibility.test.tsx` gains two describe blocks: the rendered mark
 of each row kind **is** the one the shared map declares (four kinds rendered
 together produce four different characters — the owner's complaint, at the DOM
@@ -7941,6 +7957,14 @@ acceptance evidence is untouched and still passes.
 - **Measured, objective:** every collision in the table above was read out of
   the source at the cited line, and the injectivity test would have failed on
   the pre-fix map. The fix to that half is not a matter of taste.
+- **Judgement, needs the owner's eye — one case named explicitly** (review
+  round 1): editable-figure `◇` and publication-figure `◆` are distinguished
+  **only by fill**. That is the same class of hairline distinction this entry
+  condemns in `▦`/`▥`/`▤`'s hatch direction, softened only by the argument
+  that solid-vs-outline is a coarser contrast than hatch and that the two are
+  genuinely one family. It is a judgement call, not a measured result: if the
+  owner cannot tell them apart in the tree, `◆` should move to a different
+  shape rather than a different fill.
 - **Judgement, needs the owner's eye:** the *choice* of the eight marks, and
   the density change (hiding `∿` at rest). No screenshot of the owner's actual
   Origin project exists here, so the aggregate-density claim — "a worksheet
@@ -7970,6 +7994,9 @@ acceptance evidence is untouched and still passes.
   set — `nodeIcons.test.ts`, sabotage-verified.
 - [x] One source of truth; no component declares its own kind→glyph map —
   `nodeIcons.test.ts`, sabotage-verified.
+- [x] Every render site draws its OWN kind's mark, over the complete kind set
+  — `nodeIconRenderSites.test.tsx`, sabotage-verified at both sites the
+  review round found unguarded.
 - [x] The same entity looks the same in Tree, Tiles, Details and Collections
   — all four now read `LIBRARY_NODE_GLYPH`.
 - [x] Accessibility does not regress: every icon-only control keeps an
@@ -7986,6 +8013,7 @@ acceptance evidence is untouched and still passes.
 - PR/commit: committed on the worktree branch (not pushed, per task
   instructions).
 - Automated tests: `nodeIcons.test.ts` (new, 11 cases),
+  `nodeIconRenderSites.test.tsx` (new, 9 cases — review round 1),
   `rowIconAccessibility.test.tsx` (+7 cases), `PagesSection.test.tsx`
   (expectation updated to the shared constant).
 - Owner verification: pending — the density and mark-choice halves above.
