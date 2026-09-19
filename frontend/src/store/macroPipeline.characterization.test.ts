@@ -92,10 +92,24 @@ function changedSince(before: Snap): string[] {
 /** POISON: seed macroSteps with content a real call would never coincidentally
  *  reproduce, so any branch that touches the array is observably different —
  *  including a branch that leaves its CONTENT the same but the array itself a
- *  new reference (still "changed" by the identity rule above, pinned as such). */
+ *  new reference (still "changed" by the identity rule above, pinned as such).
+ *  `macroRecording`/`pipelineRunning` are seeded NON-default too — the seven
+ *  pipeline-view actions (updateStepParams/toggleStep/removeStep/moveStep/
+ *  insertStep/loadSteps/setPipelineRunning) never read or write
+ *  `macroRecording`, but their "writes ONLY macroSteps" specs diff the WHOLE
+ *  store, so an accidental `macroRecording` write in a future edit must be
+ *  observable no matter which order the file's describe blocks run in —
+ *  relying on carryover from an earlier describe block (the recorder specs
+ *  leaving it `true`) made that coverage order-dependent and silently absent
+ *  under `vitest run -t` on any of the seven in isolation (default `false`,
+ *  unpoisoned). `startMacro`/`stopMacro`/`recordMacro`/`clearMacro` still
+ *  arrange their OWN starting value per spec (a hardcoded-target boolean
+ *  poisoned to its own target is invisible either way — see the file header),
+ *  so this global seed only matters for the seven that must leave it alone. */
 function poison(): void {
   useApp.setState({
     macroSteps: [step("stale-1", "ui", "STALE", "stale();")],
+    macroRecording: true, // non-default (false)
     pipelineRunning: true, // non-default (false); recordMacro specs override per-branch
   });
 }

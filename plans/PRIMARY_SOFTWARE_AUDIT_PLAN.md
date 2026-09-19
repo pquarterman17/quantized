@@ -6895,7 +6895,7 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   nothing at all, not even a new `macroSteps` array reference) told apart
   from every OTHER unmatched-id branch (`updateStepParams`/`toggleStep`/
   `removeStep`), which still produces a NEW `macroSteps` array reference via
-  `.map`/`.filter` even though its content is unchanged — and from the two
+  `.map`/`.filter` even though its content is unchanged — and from the three
   plain boolean flip-setters (`startMacro`/`stopMacro`/`setPipelineRunning`),
   where a store-wide non-default poison would have hidden half of each
   writer's behavior (the "already at the target value" case), so each of
@@ -6908,6 +6908,29 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   runnable kind — each reddened exactly the spec written to catch it and
   nothing else, confirmed by re-running the file after each single-line
   break and restoring it before the next.
+
+  **Adversarial review of the fifth extraction (2026-09-19), findings closed
+  same day.** Verdict: all four sabotages reproduced exactly as claimed, the
+  pre-extraction green was confirmed at the characterization commit, the
+  layering guard and the 1,386 pin both check out, and the full gate
+  matched. Two findings, both test/doc-only. MED (confirmed): `poison()`
+  seeded only `macroSteps`/`pipelineRunning` — `macroRecording` was never
+  poisoned for the seven pipeline-view actions
+  (`updateStepParams`/`toggleStep`/`removeStep`/`moveStep`/`insertStep`/
+  `loadSteps`/`setPipelineRunning`), which passed only via file-order
+  carryover from the preceding `recordMacro` block leaving it `true` —
+  proven by isolating them (`vitest run -t`), where it read back as the
+  default `false`, contradicting the file's own "each spec arranges its own
+  starting value" rule and leaving that coverage order-dependent. Fixed by
+  seeding `macroRecording: true` in `poison()`; all 26 specs still pass, and
+  each of the seven pipeline-view describes was re-run in isolation
+  (`vitest run -t` on all seven, not just two) and still passes — none of
+  the seven writes `macroRecording` (confirmed by source), so no
+  changed-key `toEqual([...])` array needed updating; the fix makes
+  existing, correct coverage order-independent rather than surfacing a new
+  gap. LOW (confirmed): this note's own "the two plain boolean
+  flip-setters (`startMacro`/`stopMacro`/`setPipelineRunning`)" named three,
+  not two — corrected to "three" above.
 - [ ] Generate clients/types where it reduces drift.
 - [ ] Add a growth ratchet, not an arbitrary rewrite.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy
