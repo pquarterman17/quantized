@@ -287,8 +287,10 @@ inexpensive model.
   protection; strict expected-failure test remains open.
 - [ ] **BUG-003 / P2:** a hidden stale Data Filter predicate remains a contract
   problem pending the product decision recorded in the living tracker.
-- [ ] **BUG-005 / P2:** Corrections/Resample can numerically transform
-  categorical codes and silently discard their meaning.
+- [x] **BUG-005 / P2 (fixed 2026-09-20, `df06a518`):** Corrections passes
+  categorical codes through all y transforms; Resample preserves a coincident
+  grid and refuses a new one; reimport/workspace round trips preserve levels and
+  order.
 - [ ] **BUG-009 / P2:** pending-dataset handling remains several guards rather
   than a resolve-then-apply contract.
 - [ ] **FEATURE-001 / P3:** faceted per-series styling remains deliberately
@@ -306,13 +308,14 @@ inexpensive model.
 4. [x] Add UX-006 alongside other packaging work or as a tiny independent PR.
 5. [ ] Perform the owner acceptance pass for BUG-001 and UX-001/UX-004 on the
    actual files; convert every observed failure into a numbered entry here.
-6. [ ] Then take BUG-005 before lower-value polish because silently corrupting
-   categorical meaning is more important than adding another plotting option.
+6. [x] Fix BUG-005 before lower-value polish: preserve category meaning through
+   Corrections/reimport and refuse meaning-destroying Resample grids.
 
 ## Change log
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-09-20 | Codex | Fixed BUG-005 across Corrections, Resample, browser reimport, raw/corrected workspace persistence and client/API boundaries | `df06a518`; focused backend 175/1 skip; frontend architecture/affected 311; full frontend 11,758/2 expected failures; full backend 5,417/87 skip/9 xfail excluding three host MAX_PATH setup cases; forced typecheck/lint/Ruff/mypy/build/integrity green |
 | 2026-09-20 | Codex | Fixed BUG-023 with the shared BUG-017 sentinel codec across frozen FigureDocuments, snapshot-window numeric arrays, workspace saves, and workbook transfer | Direct/full round trips; focused 271; full frontend 11,755; typecheck/lint/build/bundle; integrity 13 |
 | 2026-09-20 | ChatGPT-Sol | Extended BUG-023 to the independent static snapshot-window payload; filed UX-007 for the dead workbook Properties placeholder; completed the saved numeric-payload boundary pass | Serializer/sanitizer tracing, persistence tests, action-registry and plan reconciliation |
 | 2026-09-20 | ChatGPT-Sol | Created independent v0.26.1 audit; filed BUG-023, UX-005, and UX-006; reconciled the highest-priority existing open items | Static call-path inspection, published-wheel probe, release artifact/API verification |

@@ -978,9 +978,13 @@ output, not a caught error).
   trusting the sweep — and then the whole diff put through a high-effort
   adversarial review, which found the sweep had MISSED sites and that two of
   the "fixes" rested on overstated claims (both corrected below; the review
-  round is the honest part of this record, not a footnote). Result: **three
-  real drops fixed, two deliberate strips documented**; two categories that do
-  not exist yet; one open owner question; and one bug the fix itself surfaced.
+  round is the honest part of this record, not a footnote). Result at the time:
+  **three real drops fixed, two deliberate strips documented**; two categories
+  that do not exist yet; one open owner question; and one bug the fix itself
+  surfaced. **BUG-005 closed 2026-09-20:** Corrections now passes level-code
+  channels through every y transform, Resample refuses a genuinely new grid
+  rather than interpolating codes or silently mixing methods, and coincident
+  grids preserve levels, order and row sidecars.
 
   Fixed, each sabotage-verified:
   - `lib/dataset.ts`'s `cloneDataStruct` was a hand-written ALLOWLIST of the
@@ -1018,19 +1022,14 @@ output, not a caught error).
   - `routes/export.py`'s `export_opj` rebuilt the dataclass by hand to stamp
     `origin_book`, naming five of six fields. Now `dataclasses.replace`, the
     pattern `io/technique.py` and `io/origin_project/__init__.py` already use.
-  - `calc/corrections.py` and `calc/resample.py` drop `cat_levels`, and the drop
-    is now explicit and documented in both modules rather than reading like the
-    accidental omission the sweep took it for, pinned by tests that also assert
-    the codes really are invalidated for the parameters they use. **Review-round
-    correction:** the first version called the drop simply "CORRECT". It is
-    CONSERVATIVE, which is not the same claim. Both functions drop the table
-    whenever they run, including identity-parameter paths (an empty correction
-    set, a resample onto a grid coincident with the input) where the codes come
-    back exactly intact and the table would still have been valid. The strip is
-    right for the transforms that change values and over-broad for the ones that
-    do not. Both halves — that a categorical channel is transformed at all, and
-    that the table is dropped even when nothing changed — are filed as
-    **BUG-005**, not papered over.
+  - `calc/corrections.py` and `calc/resample.py` originally dropped
+    `cat_levels`; the audit correctly filed the conservative strip and the
+    underlying transformation as **BUG-005**. Closed 2026-09-20 in `df06a518`:
+    Corrections masks categorical channels from every y transform and preserves
+    their tables/order; Resample refuses a new grid when categories are present
+    and treats a coincident grid as a true identity. Browser reimport's related
+    allowlist loss is closed by its spread-first projection, and store/workspace
+    round-trip tests cover the raw and corrected copies.
 
   Ruled out by direct inspection, worth recording so it is not re-audited:
   - **No key-shifting mis-map exists** (the worst class, where a column
