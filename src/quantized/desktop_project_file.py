@@ -19,6 +19,8 @@ import time
 from collections.abc import Callable, Mapping
 from typing import Any
 
+from quantized.desktop_source_identity import matches_declared_source
+
 __all__ = [
     "WORKSPACE_FORMAT",
     "WORKSPACE_VERSIONS",
@@ -151,43 +153,22 @@ def payload_declares_source(
     the PREVIOUS project. The payload being written is the authoritative
     description of the workspace it describes.
 
-    Cost discipline (self-review on #291): this runs on EVERY quick save and
-    Save As, under the exclusive OS lock, and ``os.path.realpath`` on
-    Windows opens each path (``_getfinalpathname``) — on a source that lives
-    on an unreachable network share that is the SMB timeout, per source, per
-    save, in the exact "offline" state the relink workflow models as
-    first-class. So: a pure-string comparison first (``normcase(abspath)``,
-    no I/O — catches the identical and the ``sub/../raw.csv`` spellings),
-    and ``realpath`` (the symlink/junction/case-folded spellings) only for a
-    source on the SAME drive/UNC root as the destination — a source on
-    another root cannot be the destination file (a cross-root link from the
-    destination's side is already folded into ``resolved_dest``). A string
-    that cannot be normalised at all is skipped (same tolerance as
-    ``desktop_consent.normalize_path``) rather than turning a save into a
-    crash.
+    Cost discipline (self-review on #291, hardened for BUG-002): this runs on
+    EVERY quick save and Save As.  The shared identity matcher keeps the
+    pure-string comparison first, never resolves/stats a source on another
+    Windows drive or UNC root, and only stats otherwise-unrelated sources
+    when the destination has multiple hard links.  Missing sources are
+    skipped; an unexpected identity error fails closed instead of turning
+    uncertainty into overwrite permission.  See
+    :mod:`quantized.desktop_source_identity` for the cross-platform rule.
 
     ``base_dir`` (P1.7 PR 3): forwarded to :func:`declared_source_paths_of`
     so a packed project's ``kind: "bundle"`` sources are declared too —
     without it, a bundle source is invisible here (see that function's own
     doc)."""
-    dest_norm = os.path.normcase(os.path.normpath(resolved_dest))
-    dest_root = os.path.normcase(os.path.splitdrive(dest_norm)[0])
-    for raw in declared_source_paths_of(payload, base_dir):
-        try:
-            candidate = os.path.normcase(os.path.abspath(raw))
-        except (OSError, ValueError):
-            continue
-        if candidate == dest_norm:
-            return True
-        if os.path.normcase(os.path.splitdrive(candidate)[0]) != dest_root:
-            continue
-        try:
-            real = os.path.realpath(raw)
-        except (OSError, ValueError):
-            continue
-        if real == resolved_dest or os.path.normcase(os.path.normpath(real)) == dest_norm:
-            return True
-    return False
+    return matches_declared_source(
+        resolved_dest, declared_source_paths_of(payload, base_dir)
+    )
 
 
 def parse_workspace_payload(content: str) -> tuple[dict[str, Any] | None, str | None]:

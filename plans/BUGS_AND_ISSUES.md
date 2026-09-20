@@ -2,7 +2,11 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-20 (BUG-021 FIXED — owner-reported, from a real VSM
+**Updated:** 2026-09-20 (BUG-002 FIXED — declared-source write protection now
+compares filesystem identity as well as canonical path, so hard-link and
+normalization-insensitive aliases are refused without adding source I/O to the
+ordinary quick-save path; exact/symlink/hardlink/error-path regressions pass on
+Windows, macOS and Linux CI; BUG-021 FIXED — owner-reported, from a real VSM
 hysteresis loop: the Magnetometry ▸ Background tab ran the M(T) one-sided
 high-T fit on M(H) data, which shears a saturated loop down by Ms
 (measured: plateaus at 0 and −2·Ms, squareness a meaningless 1.0000). It now
@@ -73,7 +77,7 @@ This is a working document, not a claim that every observation is already reprod
 |---|---:|---|---|---|---|
 | BUG-001 | P0 | NCNR `.refl` import/plot | Uncertainty and resolution are plotted as ordinary Y curves | Claude | Every code-verifiable box closed 2026-09-12; owner Windows visual check + a Reductus variant check remain |
 | UX-001 | P1 | Origin project Library | Large worksheet cards are difficult to interpret and consume too much space | Claude | Compact Tree row + both residuals (icon audit, selected-vs-open) test-verified 2026-09-12; owner visual verification of the reported project remains. **Its icon-audit residual proved to be only half an audit — see UX-004**, which finishes it without reverting anything here |
-| BUG-002 | P2 | Desktop bridge write consent | A hard-linked alias of a declared raw source defeats the never-overwrite-your-own-source check | Unassigned | Reproduced by strict `xfail`, 2026-09-09 |
+| BUG-002 | P2 | Desktop bridge write consent | A hard-linked alias of a declared raw source defeats the never-overwrite-your-own-source check | Codex | **FIXED 2026-09-20** — filesystem-identity guard shared by cached and payload checks; strict `xfail` converted to passing cross-platform coverage; PR #382 |
 | UX-004 | P1 | Origin project Library | Node-type marks COLLIDE — `▦` meant Folder, Figure page, Worksheet and two commands; `▤` meant Workbook and Report; `▥` meant Worksheet and five artifact kinds — across three contradicting per-view maps, and `▦ ▥ ▤` differ only by hatch at row size | Claude (agent) | **Collision half FIXED 2026-09-19** and locked by an injectivity test over the complete kind set (`nodeIcons.test.ts`); one shared vocabulary separated by silhouette. Density change (`∿` becomes a resting cue) and the choice of the eight marks are design judgement — owner eyeball on the reported project still required |
 | UX-002 | P3 | Workbook copy/paste | Cross-workbook lineage (`versionOf`, external `derivedFrom`) is dropped silently — the count is computed but never shown | Unassigned | Found in review, pinned by test, 2026-09-09 |
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
@@ -544,17 +548,20 @@ alias of a declared source is permitted when it should be refused.
 
 ### Confirmed implementation evidence
 
-- `src/quantized/desktop_consent.py:320` (`is_declared_source`) and
-  `src/quantized/desktop_project_file.py:139-190`
-  (`payload_declares_source`) both key the decision on a path string after
-  `realpath`/`normcase`/`normpath` — never on filesystem identity
-  (`st_dev`/`st_ino`).
-- `realpath` resolves SYMLINKS, so a symlinked alias is already handled. A
-  HARD LINK has no link to resolve: two directory entries name one inode and
-  both are "real" paths, so string comparison cannot see them as one file.
-- Reproduced on Linux, and pinned as a **strict** xfail so it converts to a
-  failure the moment the behaviour changes:
-  `tests/test_desktop_bridge_path_shapes.py::test_a_hardlinked_alias_of_the_declared_source_is_wrongly_permitted_as_a_write_target`.
+- The former string-only checks in `desktop_consent.is_declared_source` and
+  `desktop_project_file.payload_declares_source` now share
+  `desktop_source_identity.matches_declared_source`: exact and `realpath`
+  matches stay first, then `os.stat` + `os.path.samestat` supplies the
+  Windows/macOS/Linux filesystem-identity decision a hard link needs.
+- The cached declared-source set retains its O(1) exact lookup. The fallback
+  stats otherwise-unrelated sources only when the existing destination has
+  multiple links, or when case/Unicode-equivalent spellings need the
+  filesystem to decide. The existing 200-source pack-preview performance test
+  caught an initial O(n²) draft and passes after this fast path was restored.
+- A missing source is skipped because it cannot share an existing
+  destination's identity. An unexpected identity error fails closed only when
+  identity could matter; ordinary destinations retain the offline-source
+  skip-on-error behavior.
 
 ### Why this is P2 and not P0
 
@@ -567,38 +574,60 @@ incidental to this rating — it is locked in by
 any write path is ever changed to write in place, this becomes a data-loss bug
 and must be re-rated P0.
 
-### Suspected sibling case (NOT reproduced)
+### NFC/NFD sibling case
 
-The same string-keyed design should also miss an NFC/NFD respelling of one
-filename on a normalization-insensitive filesystem (macOS HFS+/APFS), where two
-different byte sequences name one file. This could not be reproduced in the
-Linux-only gate, so it is recorded as a plausible consequence of the same root
-cause, **not** as an established fact. It needs a macOS check before anyone
-acts on it.
+The identity rule also covers an NFC/NFD respelling on a
+normalization-insensitive filesystem. The regression asks the filesystem
+whether the two spellings are one file: it asserts both cached and payload
+guards on volumes where they alias, and capability-skips that positive case
+where they are genuinely distinct. A separate negative control creates two
+distinct files on a normalization-sensitive volume and proves Unicode
+normalization alone never creates a false positive. Both macOS 3.11/3.13 CI
+jobs pass this filesystem-directed pair.
 
-### Why it was not fixed on discovery
+### Resolution and cost tradeoff
 
-The obvious fix — stat every declared source on every quick-save and compare
-`(st_dev, st_ino)` against the destination — is exactly the per-source I/O that
-`payload_declares_source`'s own docstring says was deliberately avoided: an
-unreachable network source would pay a full SMB timeout on every save. Choosing
-between a correct guard and a save that cannot hang is an owner design call,
-not a drive-by patch.
+The fix does NOT stat every declared source on every quick-save. Exact/canonical
+matches remain cheap. An ordinary single-link destination with a different
+spelling cannot be a hard-link alias, so no source identity scan runs. The scan
+is reserved for a multiply-linked destination (the hard-link case) or an
+equivalent case/Unicode spelling (the normalization-insensitive case); Windows
+sources on another drive/UNC root are rejected from consideration before
+`realpath`/`stat`, because hard links cannot cross volumes. Missing and
+unreachable-source behaviors are pinned separately.
 
 ### Fix checklist
 
-- [ ] Decide the tradeoff explicitly: identity-based comparison, a bounded/
-  cached stat, or an accepted documented limitation.
-- [ ] If identity-based: ensure an unreachable source cannot make a save hang
-  (a timeout or a skip-on-error path), and test that case.
-- [ ] Flip the strict `xfail` to a passing test in the same commit as the fix.
-- [ ] Check the macOS NFC/NFD sibling case on real macOS, then either fix or
-  explicitly rule it out here.
-- [ ] Re-read the P2 rating above once the write path is settled.
+- [x] Identity-based comparison chosen, with O(1) exact lookup and a narrowly
+  gated identity scan rather than per-source I/O on every ordinary save.
+- [x] Missing/offline-source skip and alias-relevant fail-closed error paths
+  are both tested; an ordinary destination is not blocked.
+- [x] Strict `xfail` replaced by passing dialog, write, and pure-function
+  hard-link regressions in the fixing commit.
+- [x] macOS NFC/NFD behavior covered by a real-filesystem capability test;
+  both macOS CI versions pass, while sensitive filesystems run the distinct-
+  file negative control.
+- [x] P2 rating re-read: the pre-fix impact remains correctly bounded by the
+  still-passing atomic-replace mitigation test; the bug is now closed.
 
 ### Completion record
 
-_(empty — open)_
+- PR: #382; commits `93549218` (implementation/regressions) and `f76c6350`
+  (explicit normalization-insensitive capability probe).
+- Automated tests: exact path vs independent file, symlink alias, cached
+  hard-link alias at Save As, payload-only hard-link alias at write time,
+  pure-function hard-link identity, unrelated hard-linked destination,
+  missing source, unexpected identity error, ordinary offline source,
+  NFC/NFD alias and distinct-file controls, plus the retained atomic-replace
+  mitigation and 200-source performance gate.
+- Local verification: focused BUG-002 matrix 10 passed (the NFC/NFD positive
+  probe capability-skipped on local NTFS); repository integrity 13 passed;
+  `ruff check src tests tools`; `mypy src`; 5,412 backend tests passed with
+  only three host-policy legacy-MAX_PATH setup cases excluded locally.
+- CI verification: backend green on macOS, Windows and Ubuntu (Python
+  3.11/3.13); e2e, performance guard, CodeQL and analysis green.
+- Agent verification: Codex, 2026-09-20. Owner verification: not required for
+  this filesystem guard; no UI judgement is involved.
 
 ---
 
