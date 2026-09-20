@@ -160,15 +160,24 @@ preview an editable figure.” Do not expose internal PR labels to users.
 
 **Implementation checklist:**
 
-- [ ] Replace both refusal constants with concise present-tense guidance.
-- [ ] Keep the map-specific refusal focused on opening Map view; offer
+- [x] Replace both refusal constants with concise present-tense guidance.
+- [x] Keep the map-specific refusal focused on opening Map view; offer
   configuration only where a 1-D mapping is meaningful.
-- [ ] Update every pinned menu/palette/workbook test.
-- [ ] Search all rendered copy for `PR G`, `arrives with`, and similar internal
+- [x] Update every pinned menu/palette/workbook test.
+- [x] Search all rendered copy for `PR G`, `arrives with`, and similar internal
   roadmap language.
-- [ ] Verify disabled menu tooltips are one short sentence and name the exact
+- [x] Verify disabled menu tooltips are one short sentence and name the exact
   adjacent action.
-- [ ] Run focused Quick Plot/Library tests, forced typecheck, lint, and build.
+- [x] Run focused Quick Plot/Library tests, forced typecheck, lint, and build.
+
+**Status:** Complete (2026-09-20). Generic and unsupported-technique refusal
+copy now names the adjacent **Configure Quick Plot…** action and explains that
+it assigns columns and previews an editable figure. The 2-D map refusal still
+directs users to Map view because Quick Plot creates line figures and is not a
+scientifically valid map renderer. Focused tests pass (4 files, 81 tests), as
+do forced TypeScript, lint, clean build/bundle (857.4 kB eager, under the
+857.6 kB budget), and repository-integrity tests (13 passed). Implementation
+commit: [`4997396a`](https://github.com/pquarterman17/quantized/commit/4997396aa39b7f68fed3a07b1565c34bd7bd5958).
 
 **Suggested owner/model:** ChatGPT/Codex inexpensive implementation model; this
 is bounded frontend wording plus tests and does not need an expensive model.

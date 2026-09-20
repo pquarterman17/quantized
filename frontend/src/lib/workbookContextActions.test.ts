@@ -89,7 +89,7 @@ describe("workbook menu — Quick Plot (PR F, L0.36)", () => {
     const item = menuItemFor(find("workbook.quickPlot"), target(wb, [generic]));
     expect(item.disabled).toBe(true);
     expect(item.title).toBe(
-      "unrecognized data — Configure Quick Plot arrives with the Quick Figure Builder (PR G)",
+      "unrecognized data — choose Configure Quick Plot… to assign columns and preview an editable figure",
     );
   });
 
@@ -147,7 +147,7 @@ describe("workbook menu — Quick Plot (PR F, L0.36)", () => {
     const item = menuItemFor(find("workbook.quickPlot"), target(wb, [generic, good]));
     expect(item.disabled).toBe(true);
     expect(item.title).toBe(
-      "unrecognized data — Configure Quick Plot arrives with the Quick Figure Builder (PR G)",
+      "unrecognized data — choose Configure Quick Plot… to assign columns and preview an editable figure",
     );
   });
 

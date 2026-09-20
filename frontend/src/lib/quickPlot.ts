@@ -24,7 +24,7 @@
 // live in exactly one place. A genuinely AMBIGUOUS multi-column mapping
 // (more than one plausible x/y pairing, needing the user's own compact
 // confirmation -- L0.10) is explicitly OUT of bounds for this bounded
-// profile; it needs PR G's Quick Figure Builder, which can ask. This module
+// profile; it needs the Quick Figure Builder, which can ask. This module
 // only ever says "this technique's ONE canonical shape is a line plot" or
 // refuses with a reason -- it never offers a choice.
 //
@@ -45,11 +45,11 @@ import { techniqueOf } from "./techniqueDefaults";
 import type { TechniqueViewMemoryMap } from "./techniqueViewMemory";
 import type { DataStruct, Dataset, Technique } from "./types";
 
-/** PR G's Configure Quick Plot / Quick Plot With... arrive with the Quick
- *  Figure Builder -- named once here so every disabled stub (the menu
- *  actions AND the availability gate below) agrees on the wording. */
+/** Shared guidance for datasets that need an explicit column mapping. Keep
+ *  this identical across the menu actions and availability gate so the
+ *  adjacent Configure Quick Plot command is always discoverable. */
 export const CONFIGURE_QUICK_PLOT_REASON =
-  "unrecognized data — Configure Quick Plot arrives with the Quick Figure Builder (PR G)";
+  "unrecognized data — choose Configure Quick Plot… to assign columns and preview an editable figure";
 export const NO_PLOTTABLE_COLUMNS_REASON = "no plottable columns in this worksheet";
 /** A technique whose data is 2D map-shaped (see quickPlotProfile's `is2DMap`
  *  check -- the SAME signal Stage tab routing uses, lib/stagetab.ts). */
@@ -58,7 +58,7 @@ export const MAP_DATA_REASON = "2D map data — open it in the Map view; Quick P
  *  allowlist, nor map-shaped -- most likely a FUTURE technique tag this
  *  table hasn't been taught yet. Never silently treated as line-plottable. */
 export const UNSUPPORTED_TECHNIQUE_REASON =
-  "this data type isn't supported by Quick Plot yet — Configure Quick Plot arrives with the Quick Figure Builder (PR G)";
+  "this data type isn't supported by Quick Plot — choose Configure Quick Plot… to assign columns and preview an editable figure";
 
 /** The techniques whose canonical rendering IS the shared-X, multi-Y dense-
  *  channel line mapping -- an explicit ALLOWLIST, not "everything non-
@@ -79,7 +79,7 @@ export type QuickPlotProfile = { supported: true; mode: "line" } | { supported: 
 
 /** The bounded per-technique profile (Sol's review, OPTION 1): does Quick
  *  Plot know a canonical rendering for this dataset's technique, and if so
- *  which one? `"generic"` keeps its existing PR G reason; a technique on
+ *  which one? `"generic"` uses the explicit configuration guidance; a technique on
  *  `LINE_PLOT_TECHNIQUES` is `{ supported: true; mode: "line" }`; anything
  *  else FAILS CLOSED (Sol's requirement for unproven technique/mode
  *  combinations) rather than defaulting to line. `is2DMap` (lib/mapdata.ts)
@@ -171,7 +171,7 @@ function computeQuickPlotAvailability(dataset: Dataset): QuickPlotAvailability {
  *  least one channel has a genuinely finite (x, y) pair against `.time`
  *  (Quick Plot always seeds `xKey: null`, i.e. time-as-x -- see
  *  quickPlotFigureSeed). No header/unit/adjacency inference and no
- *  confirmation dialog -- those need PR G's builder. Cached per `dataset
+ *  confirmation dialog -- those need the Quick Figure Builder. Cached per `dataset
  *  .data` object identity (P2 review fix) -- see `availabilityCache`'s
  *  doc for why that key is safe. */
 export function quickPlotAvailability(dataset: Dataset): QuickPlotAvailability {
