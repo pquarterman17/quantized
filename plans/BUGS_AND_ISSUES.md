@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-20 (BUG-024 through BUG-028 fixed in a pending Codex PR;
+**Updated:** 2026-09-20 (BUG-024 through BUG-028 merged in PR #385;
 BUG-002 FIXED — declared-source write protection now
 compares filesystem identity as well as canonical path, so hard-link and
 normalization-insensitive aliases are refused without adding source I/O to the
@@ -104,13 +104,13 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-021 | P0 | Magnetometry workshop — Background tab | The tab ran the M(T) one-sided high-T fit (`subtract_mag_background`) on an M(H) hysteresis loop, whose own docstring forbids exactly that: the window sits entirely in the +H tail, so the intercept removed carries +Ms and the corrected loop is sheared down by Ms (measured: plateaus at 0 and −2·Ms, squareness a meaningless 1.0000). Surfaced to the owner as `[object Object],[object Object],[object Object],[object Object]` — `ensureOk`'s `as { detail?: string }` cast stringifying FastAPI's array-shaped 422 `detail`, one entry per NaN gap that `JSON.stringify` had written as `null` | Claude (agent) | Reported 2026-09-19 by owner on a real VSM loop (filed as BUG-019 on the branch, renumbered on rebase); all four reported defects reproduced by measurement before any code changed. **FIXED 2026-09-20** — dispatch on the DECLARED x label/unit (`lib/magDataKind.ts`, reading `x_column_long` first so an Origin SHORT column name cannot masquerade as a field symbol), failing closed to a user choice when it cannot be determined; gaps dropped before every fit request and restored on their original rows, and SUBSTITUTED per axis on the elementwise conversion path (`lib/api/finitePairs.ts`); all five magnetometry call sites filtered, including the Hysteresis workshop's automatic analysis; any `detail` shape rendered readably (`lib/api/errorDetail.ts`, lazily imported to keep it out of the eager bundle); panel wording, control label, per-path default and the reported quantity (offset, not intercept) follow the path actually selected; a documented no-op is reported as a no-op; the readout is tagged with the datasets it is about so a dataset switch cannot leave a stale one on screen. 13 sabotages over two rounds, each restored byte-identical. Owner verification on the reported file remains |
 | BUG-022 | P1 | Fitting and peak-analysis request boundaries | `selectedFitData` deliberately preserves non-finite values, but consumers posted them to pydantic `list[float]` routes, turning NaN into rejected `null` values | ChatGPT-Sol | **FIXED 2026-09-20, widened by critical self-review:** direct Curve/Equation/Bumps fits, auto-guess, model scan, Peak Analyzer, the older Peaks workshop, saved-fit recomputation and pipeline replay now apply `dropGapRows`. Fitted curves are scattered back through `restoreGapRows`; weighting follows the same kept indices; pipeline logs and interactive notices disclose exclusions. Grouped fits and ROI gadgets were audited and already filtered finite pairs. The selector remains unchanged, preserving the original design ruling. |
 | BUG-023 | P2 | Frozen figure and snapshot-window persistence | Frozen `FigureDocument` snapshots and `kind:"snapshot"` plot windows bypassed BUG-017's non-finite-cell codec: JSON converted NaN/±Infinity to `null` and `-0` to `0`; reopen could not recover infinity kind/sign or signed zero | Codex | **FIXED 2026-09-20** — one shared JSON-boundary encoder preserves all four identities across standalone figures, workspaces, static plot bundles, and workbook transfer; legacy finite/`null` files remain valid; direct/full regressions cover every affected array |
-| BUG-024 | P0 | Corrections / uncertainty propagation | Bound X/Y uncertainty columns are corrected as ordinary measurements, so offsets, backgrounds and nonlinear transforms silently manufacture wrong error magnitudes while the binding remains active | Fixed in pending PR | Error roles now cross the route boundary; additive, multiplicative, unit, normalization, footprint, and refusal semantics have hand-calculated regression coverage |
-| BUG-025 | P0 | Desktop raw-source protection | A source recorded only on a workbook is absent from the declared-source guard, so Save As can overwrite that raw file after the workbook's final dataset is removed | Fixed in pending PR | Shared traversal now protects and resolves both dataset and workbook sources; bridge refusal is covered end to end |
-| BUG-026 | P2 | Floating plot windows | A rapid drag/resize drops its final pointer position; a cancelled touch/pen gesture can remain armed and move the window later without a pressed button | Fixed in pending PR; owner feel-check remains | One finish path flushes move/resize, cancels rAF and handles pointer cancel/blur; no-op gestures no longer create Undo entries |
-| BUG-027 | P2 | Recent data files | Desktop recent imports deduplicate by bare filename, so importing the same filename from another folder silently removes the first experiment from quick reopen | Fixed in pending PR | Native path is now the stable row identity; same-named files coexist and visible parent-folder context disambiguates them |
-| BUG-028 | P3 | Windows test reliability | Long-path bridge tests can fail in fixture setup under normal Windows MAX_PATH policy before Quantized code runs | Fixed in pending PR | Windows capability failures skip with explicit reasons; POSIX and capable hosts still exercise the bridge assertions |
-| UX-005 | P1 | Quick Plot refusal guidance | The current release tells users Configure Quick Plot “arrives with the Quick Figure Builder (PR G)” even though **Configure Quick Plot…** and the builder already shipped and appear beside Quick Plot | ChatGPT-Sol | Code-proven user-facing stale copy at both refusal constants; tests currently pin the wrong wording. Full pickup brief in `POST_RELEASE_PROBLEM_AUDIT.md` |
-| UX-006 | P3 | Installed-version diagnostics | `qz --version` is rejected, so users and support agents cannot identify an installed CLI/package build using the conventional command; the release smoke test must import Python internals instead | ChatGPT-Sol | **FIXED 2026-09-20** — `qz` and `quantized` now use argparse's version action backed by canonical `quantized.__version__`, exiting before server/browser startup; focused CLI tests and both-alias wheel smoke coverage added. Commit/PR recorded in the audit completion entry. |
+| BUG-024 | P0 | Corrections / uncertainty propagation | Bound X/Y uncertainty columns are corrected as ordinary measurements, so offsets, backgrounds and nonlinear transforms silently manufacture wrong error magnitudes while the binding remains active | Codex | **FIXED 2026-09-20** — PR #385; error roles cross the route boundary, with hand-calculated coverage for additive, multiplicative, unit, normalization, footprint, and refusal semantics |
+| BUG-025 | P0 | Desktop raw-source protection | A source recorded only on a workbook is absent from the declared-source guard, so Save As can overwrite that raw file after the workbook's final dataset is removed | Codex | **FIXED 2026-09-20** — PR #385; shared traversal protects and resolves dataset and workbook sources, with an end-to-end bridge refusal test |
+| BUG-026 | P2 | Floating plot windows | A rapid drag/resize drops its final pointer position; a cancelled touch/pen gesture can remain armed and move the window later without a pressed button | Codex | **FIXED 2026-09-20** — PR #385; one finish path flushes move/resize, cancels rAF and handles pointer cancel/blur; owner feel-check remains |
+| BUG-027 | P2 | Recent data files | Desktop recent imports deduplicate by bare filename, so importing the same filename from another folder silently removes the first experiment from quick reopen | Codex | **FIXED 2026-09-20** — PR #385; native paths identify rows, same-named files coexist, and parent-folder context disambiguates them |
+| BUG-028 | P3 | Windows test reliability | Long-path bridge tests can fail in fixture setup under normal Windows MAX_PATH policy before Quantized code runs | Codex | **FIXED 2026-09-20** — PR #385; Windows capability failures skip precisely while POSIX and capable hosts retain bridge coverage |
+| UX-005 | P1 | Quick Plot refusal guidance | Quick Plot refusal text exposed obsolete roadmap wording instead of directing users to the shipped configuration workflow | ChatGPT-Sol | **FIXED 2026-09-20** — commit `4997396a`; both refusal paths name **Configure Quick Plot…**, map data retains Map-specific guidance, and focused/full gates passed |
+| UX-006 | P3 | Installed-version diagnostics | The installed CLI previously rejected `qz --version`, obscuring the package version during release support | ChatGPT-Sol | **FIXED 2026-09-20** — `qz` and `quantized` now use argparse's version action backed by canonical `quantized.__version__`, exiting before server/browser startup; focused CLI tests and both-alias wheel smoke coverage added. Commit/PR recorded in the audit completion entry. |
 | UX-007 | P2 | Workbook Properties command | The workbook right-click menu showed **Properties…** permanently disabled and explained it with the internal roadmap text “arrives with Details/Properties (PR D)”, even though PR D shipped; the result was a prominent dead end in the new Origin-like Library | ChatGPT-Sol | **FIXED 2026-09-20** — Properties now opens a bounded read-only inspector from the shared workbook action registry in Tree, Details, and Tiles. It projects canonical workbook children, location, recorded source/Origin provenance, availability, member/artifact counts, member tags, and import time only when present; Close/Escape restores its invoking row/tile focus. Editing remains in existing commands. Focused 42 tests, full frontend suite, forced typecheck, lint, build/bundle, and integrity gates run; full pickup brief retained in `POST_RELEASE_PROBLEM_AUDIT.md` |
 
 ---
@@ -8193,19 +8193,19 @@ Full evidence and acceptance wording are in `POST_RELEASE_PROBLEM_AUDIT.md`.
 ## UX-006 — the installed CLI cannot report its own version
 
 **Priority:** P3
-**State:** Open — reproduced against the published v0.26.1 wheel
+**State:** Fixed 2026-09-20 — commit `26e5272e`
 **Reported/investigated:** 2026-09-20 by ChatGPT-Sol
 **Suggested owner/model:** Claude Haiku-class or inexpensive Codex backend model
 
-`qz --version` exits as an unrecognized argument, forcing release support to
-import Python internals to identify the installed build.
+Before the fix, `qz --version` exited as an unrecognized argument, forcing
+release support to import Python internals to identify the installed build.
 
-- [ ] Add `--version` from the canonical `quantized.__version__` value.
-- [ ] Test both installed command aliases without launching the server/browser.
-- [ ] Add the probe to the wheel smoke test and run package gates.
+- [x] Add `--version` from the canonical `quantized.__version__` value.
+- [x] Test both installed command aliases without launching the server/browser.
+- [x] Add the probe to the wheel smoke test and run package gates.
 
-Full reproduction and acceptance expectations are in
-`POST_RELEASE_PROBLEM_AUDIT.md`.
+Completion evidence and package-gate results are in
+`POST_RELEASE_PROBLEM_AUDIT.md`; the implementation shipped in `26e5272e`.
 
 ## UX-007 — workbook Properties is a disabled roadmap placeholder
 
@@ -8506,7 +8506,7 @@ acceptance evidence is untouched and still passes.
 
 **Priority:** P0
 **Reported:** 2026-09-20 by Codex during a general bug hunt
-**Status:** Fixed in pending PR
+**Status:** Fixed 2026-09-20 — PR #385 (`8760fbb6`)
 
 ### Problem and impact
 
@@ -8543,7 +8543,7 @@ following the X transform.
 
 **Priority:** P0
 **Reported:** 2026-09-20 by Codex during a general bug hunt
-**Status:** Fixed in pending PR; follow-up to BUG-002
+**Status:** Fixed 2026-09-20 — PR #385 (`8760fbb6`); follow-up to BUG-002
 
 ### Problem and impact
 
@@ -8575,7 +8575,7 @@ project or other workbook source after the user grants ordinary write consent.
 
 **Priority:** P2
 **Reported:** 2026-09-20 by Codex during a general bug hunt
-**Status:** Fixed in pending PR; owner feel-check remains
+**Status:** Fixed 2026-09-20 — PR #385 (`8760fbb6`); owner feel-check remains
 
 ### Problem and impact
 
@@ -8602,7 +8602,7 @@ respond to a later pointer move with no button held.
 
 **Priority:** P2
 **Reported:** 2026-09-20 by Codex during a general bug hunt
-**Status:** Fixed in pending PR
+**Status:** Fixed 2026-09-20 — PR #385 (`8760fbb6`)
 
 ### Problem and impact
 
@@ -8627,7 +8627,8 @@ folder trees and makes quick reopen incomplete and potentially misleading.
 
 **Priority:** P3
 **Reported:** 2026-09-20 by Codex during a general bug hunt
-**Status:** Fixed in pending PR; test infrastructure, not a demonstrated product failure
+**Status:** Fixed 2026-09-20 — PR #385 (`8760fbb6`); test infrastructure,
+not a demonstrated product failure
 
 ### Problem and impact
 
@@ -8651,6 +8652,7 @@ behavior, while GitHub runners may pass under a different policy.
 
 | Date | Author | Change | Evidence/status |
 |---|---|---|---|
+| 2026-09-20 | ChatGPT-Sol (Codex) | Reconciled UX-005/UX-006 and BUG-024 through BUG-028 after verifying their implementations on `main` | UX-005 `4997396a`; UX-006 `26e5272e`; BUG-024–028 merged as PR #385 (`8760fbb6`); BUG-026 retains its explicit owner feel-check |
 | 2026-09-20 | ChatGPT-Sol (Codex) | Fixed BUG-024 through BUG-028 in one reviewed bug-hunt follow-up | Focused backend/UI tests, generated OpenAPI schema/types, lint, production build and full suites run before PR; BUG-026 retains its explicit owner feel-check |
 | 2026-09-20 | ChatGPT-Sol (Codex) | General post-merge bug hunt filed BUG-024 through BUG-028: uncertainty propagation corruption, workbook-only raw-source overwrite gap, plot-window pointer race/cancellation leak, path-colliding recents, and a Windows MAX_PATH fixture failure | Four product findings reproduced by focused probes/code-path analysis; one test-infrastructure failure reproduced locally. No product fixes attempted in this audit |
 | 2026-09-08 | ChatGPT-Sol | Created living tracker; added BUG-001 and UX-001 from owner screenshots and code inspection | Both open |
