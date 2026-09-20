@@ -21,10 +21,22 @@ export interface RecentFile {
 const KEY = "qz.recent";
 const MAX = 12;
 
-/** Prepend `entry`, drop any prior entry with the same name (so a re-import
- *  bubbles to the top), and cap the list. Pure — does not touch storage. */
+/** Stable identity for one recent import. Native paths distinguish the common
+ * lab layout where every run is named `scan.csv`; browser uploads have no
+ * knowable source identity and therefore retain the legacy name fallback. */
+export function recentKey(entry: Pick<RecentFile, "name" | "path">): string {
+  return entry.path ?? entry.name;
+}
+
+/** Compact parent-folder disambiguator for the Recent surfaces. */
+export function recentParentLabel(path: string | undefined): string {
+  return path?.replace(/\\/g, "/").split("/").at(-2) ?? "";
+}
+
+/** Prepend `entry`, drop only the same source identity, and cap the list. */
 export function addRecentEntry(list: RecentFile[], entry: RecentFile, max = MAX): RecentFile[] {
-  const deduped = list.filter((r) => r.name !== entry.name);
+  const key = recentKey(entry);
+  const deduped = list.filter((r) => recentKey(r) !== key);
   return [entry, ...deduped].slice(0, max);
 }
 
@@ -53,11 +65,15 @@ export function saveRecent(list: RecentFile[]): void {
   }
 }
 
-/** Drop one entry by name (the per-row "Remove from recent" action). Pure —
+/** Drop one entry by source identity (the per-row "Remove from recent" action). Pure —
  *  a stale entry should be removable without also being re-imported, and
  *  without nuking the whole list. */
-export function removeRecentEntry(list: RecentFile[], name: string): RecentFile[] {
-  return list.filter((r) => r.name !== name);
+export function removeRecentEntry(
+  list: RecentFile[],
+  entry: Pick<RecentFile, "name" | "path">,
+): RecentFile[] {
+  const key = recentKey(entry);
+  return list.filter((r) => recentKey(r) !== key);
 }
 
 /** Wipe the recent list (the "Clear recent" menu item). */

@@ -182,7 +182,7 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
             return false;
           }
         }
-        const req: CorrectionsRequest = { dataset: raw, params };
+        const req: CorrectionsRequest = { dataset: raw, params, error_bindings: ds.errorRoles };
         if (bgDs) {
           req.bg_dataset = bgDs.data;
           req.bg_interp = bg!.interp;

@@ -56,7 +56,7 @@ describe("HomeScreen", () => {
   it("lists recent files", () => {
     useApp.setState({ recent });
     render(<HomeScreen onImport={noop} />);
-    expect(screen.getByText("scan.dat")).toBeInTheDocument();
+    expect(screen.getByText(/scan\.dat/)).toBeInTheDocument();
   });
 
   it("marks an OFFLINE source without offering to clean it up", () => {

@@ -18,7 +18,7 @@ import { useEffect, useState, useRef } from "react";
 import { plural } from "../../lib/plural";
 
 import { pathState, type PathState } from "../../lib/desktopBridge";
-import { relativeTime, type RecentFile } from "../../lib/recentFiles";
+import { recentKey, recentParentLabel, relativeTime, type RecentFile } from "../../lib/recentFiles";
 import { reopenRecent } from "../../lib/reopenRecent";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
@@ -45,7 +45,7 @@ function useRecentStates(recent: RecentFile[]): Record<string, PathState> {
   useEffect(() => {
     let cancelled = false;
     void Promise.all(
-      recent.filter((r) => r.path).map(async (r) => [r.name, await pathState(r.path!)] as const),
+      recent.filter((r) => r.path).map(async (r) => [recentKey(r), await pathState(r.path!)] as const),
     ).then((pairs) => {
       if (!cancelled) setStates(Object.fromEntries(pairs));
     });
@@ -88,10 +88,10 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
         <div>
           <div className="qzk-menu-label">Recent</div>
           {recent.slice(0, 6).map((r) => {
-            const badge = stateBadge(states[r.name] ?? "unknown");
+            const badge = stateBadge(states[recentKey(r)] ?? "unknown");
             return (
               <div
-                key={r.name}
+                key={recentKey(r)}
                 className="qz-meta-row"
                 style={{ display: "flex", alignItems: "center", gap: 6 }}
               >
@@ -101,7 +101,9 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
                   title={r.path ?? `${r.name} — re-opens the import picker`}
                   onClick={() => void reopenRecent(useApp.getState(), r)}
                 >
-                  <span className="qzk-menu-trunc">{r.name}</span>
+                  <span className="qzk-menu-trunc">
+                    {r.name}{r.path ? ` — ${recentParentLabel(r.path)}` : ""}
+                  </span>
                 </button>
                 {badge && (
                   <span className="qz-shortcut" style={{ color: badge.tone }} title={
@@ -121,7 +123,7 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
                   aria-label={`Remove ${r.name} from recent`}
                   title="Remove from recent"
                   className="qz-shortcut"
-                  onClick={() => removeRowSafely(homeRef.current, () => removeRecent(r.name))}
+                  onClick={() => removeRowSafely(homeRef.current, () => removeRecent(r))}
                 >
                   ✕
                 </span>

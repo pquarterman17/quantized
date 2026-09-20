@@ -6,6 +6,22 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Fixed
+
+- Corrections now preserve bound uncertainty columns: additive operations leave
+  their magnitudes alone, scale/unit/normalization operations propagate the
+  appropriate absolute factor, and unsupported nonlinear propagation fails
+  clearly instead of silently manufacturing error bars.
+- Save As now refuses to overwrite raw sources recorded only on a workbook,
+  including packed-project sources.
+- Fast floating-window drags and resizes no longer lose their final movement or
+  remain armed after pointer cancellation/window blur; clicks without movement
+  no longer create empty Undo entries.
+- Recent desktop files are keyed by source path, so identically named files in
+  different experiment folders coexist and show compact folder context.
+- Long-path test fixtures now distinguish unsupported Windows host policy from
+  product failures.
+
 ## [0.26.0] - 2026-09-18
 
 A **minor** release: the 43 merges since `v0.25.0` add new user-facing

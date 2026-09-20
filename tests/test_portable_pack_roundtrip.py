@@ -124,7 +124,7 @@ def test_pack_move_and_reopen_roundtrip(tmp_path: Path) -> None:
     )
 
     resolved_paths = extract_declared_source_paths(packed_content, base_dir=moved)
-    assert len(resolved_paths) == 4  # one per dataset, shared path repeated
+    assert len(resolved_paths) == 3  # unique declared sources; the shared path is deduplicated
     for resolved in resolved_paths:
         assert os.path.isfile(resolved)
         assert resolved.startswith(moved)

@@ -35,7 +35,7 @@ export interface RecentsSlice {
   /** Drop ONE entry. Distinct from `clearRecent`: a single stale entry should
    *  be removable without wiping the list, and without re-importing anything
    *  on the way out. */
-  removeRecent: (name: string) => void;
+  removeRecent: (entry: RecentFile) => void;
   clearRecent: () => void;
 }
 
@@ -57,9 +57,9 @@ export function createRecentsSlice(set: SliceSet): RecentsSlice {
         return { recent: next };
       }),
 
-    removeRecent: (name) =>
+    removeRecent: (entry) =>
       set((s) => {
-        const next = removeRecentEntry(s.recent, name);
+        const next = removeRecentEntry(s.recent, entry);
         saveRecent(next);
         return { recent: next };
       }),

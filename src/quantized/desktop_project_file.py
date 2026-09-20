@@ -52,7 +52,7 @@ WORKSPACE_VERSIONS = (1, 2, 3, 4)
 
 
 def extract_declared_source_paths(content: str, base_dir: str | None = None) -> list[str]:
-    """Every ``datasets[].source.path`` string a project payload itself
+    """Every dataset/workbook ``source.path`` string a project payload itself
     names — for P1.7's server-side consent-enforcement fix (``desktop_bridge
     .py``'s ``_read_granted``, ``desktop_consent.set_declared_sources``): the
     backend must record what THIS project's own OPENED FILE declares as its
@@ -87,7 +87,7 @@ def declared_source_paths_of(
     payload: Mapping[str, Any], base_dir: str | None = None
 ) -> list[str]:
     """``extract_declared_source_paths`` for an ALREADY-parsed document —
-    the half that walks ``datasets[].source``.
+    the half that walks both ``datasets[].source`` and ``workbooks[].source``.
 
     For ``kind == "path"``, unchanged: the recorded (absolute) path itself.
     For ``kind == "bundle"`` (P1.7 PR 3): resolved via
@@ -99,9 +99,15 @@ def declared_source_paths_of(
     resolve it against, and a bare bundle-relative string is never a
     filesystem path on its own."""
     datasets = payload.get("datasets")
-    if not isinstance(datasets, list):
-        return []
+    workbooks = payload.get("workbooks")
+    source_owners = [
+        item
+        for collection in (datasets, workbooks)
+        if isinstance(collection, list)
+        for item in collection
+    ]
     paths: list[str] = []
+    seen: set[str] = set()
     # Hoisted out of the loop below (review finding #7 on PR 3: it was
     # previously re-imported inside the per-dataset loop, once per
     # `kind: "bundle"` row rather than once per call). This import MUST
@@ -113,10 +119,10 @@ def declared_source_paths_of(
     resolve_bundle_source: Callable[[str, str], str | None] | None = None
     if base_dir is not None:
         from quantized.portable.project_rewrite import resolve_bundle_source
-    for ds in datasets:
-        if not isinstance(ds, dict):
+    for owner in source_owners:
+        if not isinstance(owner, dict):
             continue
-        source = ds.get("source")
+        source = owner.get("source")
         if not isinstance(source, dict):
             continue
         kind = source.get("kind")
@@ -127,14 +133,17 @@ def declared_source_paths_of(
             if resolve_bundle_source is None or base_dir is None:
                 continue
             resolved = resolve_bundle_source(base_dir, path)
-            if resolved is not None:
+            if resolved is not None and resolved not in seen:
                 paths.append(resolved)
+                seen.add(resolved)
         else:
             # `kind == "path"`, unchanged -- and, same as before this
             # parameter existed, a source dict with NO `kind` at all is
             # treated the same way (every existing caller/fixture predates
             # `kind` and never sets it).
-            paths.append(path)
+            if path not in seen:
+                paths.append(path)
+                seen.add(path)
     return paths
 
 
@@ -142,7 +151,7 @@ def payload_declares_source(
     payload: Mapping[str, Any], resolved_dest: str, base_dir: str | None = None
 ) -> bool:
     """Is ``resolved_dest`` (already ``os.path.realpath``-ed by the caller)
-    one of the dataset source paths ``payload`` itself declares? The check
+    one of the dataset or workbook source paths ``payload`` itself declares? The check
     ``write_project_file`` refuses a save destination on (P1.2 box 4,
     review round on #291).
 

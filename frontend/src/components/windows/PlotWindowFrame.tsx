@@ -77,9 +77,11 @@ interface DragState {
   origY: number;
   origW: number;
   origH: number;
-  /** Sibling snap targets (item 12) — captured once per gesture. */
   siblings: WindowGeometry[];
+  historyRecorded: boolean;
 }
+
+const END_GESTURE_EVENTS = ["pointerup", "pointercancel", "blur"] as const;
 
 export default function PlotWindowFrame({
   win,
@@ -130,15 +132,8 @@ export default function PlotWindowFrame({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bounds?.width, bounds?.height, win.id, win.winState]);
 
-  // rAF-throttled drag/resize: the native pointermove handler just records the
-  // latest pointer position; a single rAF callback flushes it into the store,
-  // so a fast drag fires at most one store update (React re-render) per frame
-  // instead of one per native mousemove. `scheduledRef` (not `rafIdRef`) is
-  // the "is a flush pending" gate — kept separate from the cancellation
-  // handle so a synchronous `requestAnimationFrame` (real browsers never do
-  // this; a test stub might) can't have its own reset-to-null clobbered by
-  // the outer `rafIdRef.current = requestAnimationFrame(...)` assignment
-  // completing (in real order) AFTER the callback already ran.
+  // Store at most one geometry update per animation frame. `scheduledRef`
+  // stays separate because test rAF stubs may invoke callbacks synchronously.
   const dragRef = useRef<DragState | null>(null);
   const pendingRef = useRef<{ a: number; b: number } | null>(null);
   const scheduledRef = useRef(false);
@@ -150,6 +145,14 @@ export default function PlotWindowFrame({
     const pending = pendingRef.current;
     const drag = dragRef.current;
     if (!pending || !drag) return;
+    pendingRef.current = null;
+    const changed = drag.mode === "move" ? pending.a !== drag.origX || pending.b !== drag.origY
+      : pending.a !== drag.origW || pending.b !== drag.origH;
+    if (!changed) return;
+    if (!drag.historyRecorded) {
+      useApp.getState().recordHistory(drag.mode === "move" ? "move window" : "resize window");
+      drag.historyRecorded = true;
+    }
     if (drag.mode === "move") moveWindow(win.id, pending.a, pending.b);
     else resizeWindow(win.id, pending.a, pending.b);
   }, [win.id, moveWindow, resizeWindow]);
@@ -195,25 +198,30 @@ export default function PlotWindowFrame({
     [schedule, bounds],
   );
 
-  const onPointerUp = useCallback(() => {
+  const finishGesture = useCallback(() => {
+    if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
+    // A release can beat the queued frame, so commit its last position first.
+    flush();
     dragRef.current = null;
+    pendingRef.current = null;
+    scheduledRef.current = false;
+    rafIdRef.current = null;
     window.removeEventListener("pointermove", onPointerMove);
-    window.removeEventListener("pointerup", onPointerUp);
-  }, [onPointerMove]);
+    END_GESTURE_EVENTS.forEach((event) => window.removeEventListener(event, finishGesture));
+  }, [flush, onPointerMove]);
 
   useEffect(
     () => () => {
       if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
       window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
+      END_GESTURE_EVENTS.forEach((event) => window.removeEventListener(event, finishGesture));
     },
-    [onPointerMove, onPointerUp],
+    [onPointerMove, finishGesture],
   );
 
   const beginDrag = (mode: DragMode) => (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     e.preventDefault();
-    useApp.getState().recordHistory(mode === "move" ? "move window" : "resize window");
     dragRef.current = {
       mode,
       startX: e.clientX,
@@ -222,23 +230,18 @@ export default function PlotWindowFrame({
       origY: win.geometry.y,
       origW: win.geometry.w,
       origH: win.geometry.h,
-      // Every OTHER visible window's rect — read non-subscribing (getState)
-      // so the drag handlers never re-bind mid-gesture (siblings can't move
-      // during OUR drag anyway).
+      historyRecorded: false,
+      // Capture other visible rectangles once so handlers stay stable.
       siblings: useApp
         .getState()
         .plotWindows.filter((w) => w.id !== win.id && w.winState !== "minimized")
         .map((w) => w.geometry),
     };
     window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
+    END_GESTURE_EVENTS.forEach((event) => window.addEventListener(event, finishGesture));
   };
 
-  // Any pointer activity anywhere in the frame (title bar, body, grip) raises
-  // + focuses it first — the item-4 "background frames focus on pointerdown"
-  // contract, implemented ONCE here (capture phase, so it runs before uPlot's
-  // own native mousedown listeners on the canvas beneath — capture visits
-  // this ancestor on the way down, before the event ever reaches the target).
+  // Capture-phase focus raises the frame before child/uPlot handlers run.
   const onFrameCapture = () => {
     if (!focused) focusWindow(win.id);
   };

@@ -219,6 +219,13 @@ def _payload_with_sources(*paths: str) -> dict[str, object]:
     return {"datasets": [{"source": {"path": p}} for p in paths]}
 
 
+def _payload_with_workbook_sources(*paths: str) -> dict[str, object]:
+    return {
+        "datasets": [],
+        "workbooks": [{"source": {"kind": "path", "path": p}} for p in paths],
+    }
+
+
 def test_payload_declares_source_matches_the_identical_and_alias_spellings(tmp_path) -> None:
     raw = tmp_path / "sub" / "raw.csv"
     raw.parent.mkdir()
@@ -230,6 +237,23 @@ def test_payload_declares_source_matches_the_identical_and_alias_spellings(tmp_p
     assert payload_declares_source(_payload_with_sources(alias), dest)
     assert not payload_declares_source(_payload_with_sources(str(tmp_path / "other.csv")), dest)
     assert not payload_declares_source(_payload_with_sources(), dest)
+
+
+def test_payload_declares_source_includes_a_memberless_workbooks_source(tmp_path) -> None:
+    raw = tmp_path / "source.opju"
+    raw.write_bytes(b"origin")
+    payload = _payload_with_workbook_sources(str(raw))
+    assert declared_source_paths_of(payload) == [str(raw)]
+    assert payload_declares_source(payload, os.path.realpath(str(raw)))
+
+
+def test_declared_sources_deduplicate_dataset_and_workbook_provenance(tmp_path) -> None:
+    raw = str(tmp_path / "source.opju")
+    payload = {
+        "datasets": [{"source": {"kind": "path", "path": raw}}],
+        "workbooks": [{"source": {"kind": "path", "path": raw}}],
+    }
+    assert declared_source_paths_of(payload) == [raw]
 
 
 @pytest.mark.skipif(os.name == "nt", reason="symlink creation needs a privilege on Windows")
@@ -305,6 +329,18 @@ def test_declared_source_paths_of_resolves_a_bundle_source_with_base_dir(
 ) -> None:
     resolved = declared_source_paths_of(_bundle_payload("sources/raw.csv"), base_dir=str(tmp_path))
     assert resolved == [os.path.join(str(tmp_path), "sources", "raw.csv")]
+
+
+def test_declared_source_paths_of_resolves_a_workbook_bundle_source(
+    tmp_path: Path,
+) -> None:
+    payload = {
+        "datasets": [],
+        "workbooks": [{"source": {"kind": "bundle", "path": "sources/raw.opju"}}],
+    }
+    assert declared_source_paths_of(payload, base_dir=str(tmp_path)) == [
+        os.path.join(str(tmp_path), "sources", "raw.opju")
+    ]
 
 
 def test_declared_source_paths_of_still_handles_a_kind_path_source_with_base_dir(

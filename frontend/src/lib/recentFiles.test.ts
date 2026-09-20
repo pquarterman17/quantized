@@ -5,6 +5,7 @@ import {
   clearRecentMeta,
   loadRecent,
   relativeTime,
+  removeRecentEntry,
   saveRecent,
   type RecentFile,
 } from "./recentFiles";
@@ -17,10 +18,31 @@ describe("addRecentEntry", () => {
     expect(list.map((r) => r.name)).toEqual(["b", "a"]);
   });
 
-  it("de-dupes by name, bubbling a re-import to the top", () => {
+  it("de-dupes browser uploads by name, bubbling a re-import to the top", () => {
     const start = [mk("a"), mk("b"), mk("c")];
     const list = addRecentEntry(start, mk("b"));
     expect(list.map((r) => r.name)).toEqual(["b", "a", "c"]);
+  });
+
+  it("keeps same-named desktop files from different folders", () => {
+    const a = { ...mk("scan.csv"), path: "C:\\run-a\\scan.csv" };
+    const b = { ...mk("scan.csv"), path: "C:\\run-b\\scan.csv" };
+    const list = addRecentEntry(addRecentEntry([], a), b);
+    expect(list.map((r) => r.path)).toEqual([b.path, a.path]);
+  });
+
+  it("re-importing the same native path replaces only that entry", () => {
+    const a = { ...mk("scan.csv"), path: "C:\\run-a\\scan.csv" };
+    const b = { ...mk("scan.csv"), path: "C:\\run-b\\scan.csv" };
+    const newerA = { ...a, at: "2026-07-01T00:00:00Z" };
+    const list = addRecentEntry([b, a], newerA);
+    expect(list).toEqual([newerA, b]);
+  });
+
+  it("removes one same-named native file by identity", () => {
+    const a = { ...mk("scan.csv"), path: "C:\\run-a\\scan.csv" };
+    const b = { ...mk("scan.csv"), path: "C:\\run-b\\scan.csv" };
+    expect(removeRecentEntry([a, b], a)).toEqual([b]);
   });
 
   it("caps the list at `max`", () => {
