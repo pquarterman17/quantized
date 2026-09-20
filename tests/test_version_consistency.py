@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
@@ -72,3 +74,26 @@ def test_version_is_pep440_ish() -> None:
     assert re.fullmatch(r"\d+\.\d+\.\d+([.-]?(a|b|rc|pre|dev)\.?\d*)?", version), (
         f"version {version!r} is not a clean X.Y.Z(-pre) string"
     )
+
+
+def test_release_tag_guard_accepts_current_version() -> None:
+    """A correctly versioned release reaches the expensive build jobs."""
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "tools" / "check_release_tag.py"), f"v{_pyproject_version()}"],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+def test_release_tag_guard_rejects_mismatched_version() -> None:
+    """A stale package version fails before installers or PyPI artifacts build."""
+    result = subprocess.run(
+        [sys.executable, str(ROOT / "tools" / "check_release_tag.py"), "v999.0.0"],
+        capture_output=True,
+        check=False,
+        text=True,
+    )
+    assert result.returncode == 1
+    assert "does not match package version" in result.stderr

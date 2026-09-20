@@ -57,6 +57,10 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Verify release tag matches package version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: python tools/check_release_tag.py "${{ github.ref_name }}"
+
       - name: Install Linux build deps (Tauri)
         if: runner.os == 'Linux'
         run: |
