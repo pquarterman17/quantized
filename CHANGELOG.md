@@ -84,10 +84,12 @@ parity) and a keyboard-focus overhaul.
   table, or an Origin text column). A small categorical column used to be
   treated as continuous and pooled into one group named after a level code;
   children are now named after their level.
-- Corrections and Resample keep a categorical column's level table (and its
-  order) when the codes provably did not change: an identity correction, a
-  row trim, an x-only shift, or a resample onto the same grid. They used to
-  drop it every time, turning every label into a bare number.
+- Corrections never applies numeric transforms to categorical level codes; it
+  preserves their table and order through offsets, backgrounds, unit changes,
+  smoothing, normalization and derivatives. Resample preserves a coincident
+  grid exactly and refuses a different grid rather than interpolating codes or
+  silently mixing methods. Reimport and workspace reopen preserve the same
+  categorical metadata in both raw and corrected copies.
 - Duplicate, Freeze copy, Extract rows and `.opj` export keep categorical
   level labels. Duplicate and Freeze copy used to reduce them to raw codes.
 - The Stat Stage no longer keeps a group-by pick on a column you have since

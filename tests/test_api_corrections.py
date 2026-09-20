@@ -79,6 +79,31 @@ def test_apply_y_offset_subtracts() -> None:
     assert out["values"] == [[5.0], [15.0], [25.0]]
 
 
+def test_apply_y_correction_preserves_categorical_codes_levels_and_order() -> None:
+    """BUG-005 at the HTTP boundary used by the SPA and Python client."""
+    dataset = {
+        "time": [1.0, 2.0, 3.0],
+        "values": [[10.0, 0.0], [20.0, 1.0], [30.0, 0.0]],
+        "labels": ["signal", "Phase"],
+        "units": ["V", ""],
+        "metadata": {"operator": "Ada"},
+        "cat_levels": {"1": ["alpha", "beta"]},
+        "level_order": {"1": [1, 0]},
+    }
+
+    resp = client.post(
+        "/api/corrections/apply",
+        json={"dataset": dataset, "params": {"yOff": 5.0}},
+    )
+
+    assert resp.status_code == 200
+    out = resp.json()
+    assert out["values"] == [[5.0, 0.0], [15.0, 1.0], [25.0, 0.0]]
+    assert out["cat_levels"] == {"1": ["alpha", "beta"]}
+    assert out["level_order"] == {"1": [1, 0]}
+    assert out["metadata"]["operator"] == "Ada"
+
+
 def test_missing_dataset_is_validation_error() -> None:
     resp = client.post("/api/corrections/apply", json={"params": {"xOff": 1.0}})
     assert resp.status_code == 422

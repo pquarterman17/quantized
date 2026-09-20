@@ -82,7 +82,7 @@ This is a working document, not a claim that every observation is already reprod
 | UX-002 | P3 | Workbook copy/paste | Cross-workbook lineage (`versionOf`, external `derivedFrom`) is dropped silently — the count is computed but never shown | Unassigned | Found in review, pinned by test, 2026-09-09 |
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
-| BUG-005 | P2 | Corrections / Resample | A categorical channel is transformed like numeric data — its level codes become fractional and its level table is (correctly) discarded, so the column silently degrades to meaningless numbers | Unassigned | Found in the Group J propagation audit, strip pinned by test, 2026-09-09 |
+| BUG-005 | P2 | Corrections / Resample | A categorical channel was transformed like numeric data — its level codes became fractional and its meaning was discarded | Codex | **FIXED 2026-09-20** in `df06a518`: Corrections passes categorical codes through every y transform; Resample preserves a coincident grid and refuses a new one; reimport/persistence preserve levels and order |
 | BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **10 of 10 code sites fixed, re-verified 2026-09-14 by grepping every call site rather than trusting the count** (see the entry's "Every caller covered" box); `lib/barlayout.ts`'s label path was the last one, shipped 2026-09-12. The deferred end-to-end reproduction test (filter + Extract, at the `planExtract` layer) was added 2026-09-14 — see the entry's Reproduction checklist. Declared closed three times before it actually was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite had caught essentially none of it; adversarial review, per-branch sabotage and measuring claims caught all of it. Owner's real-data visual confirmation remains open |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | BUG-008 | P2 | Split Dataset | An explicit `cat_levels` level table was invisible to Split, so a few-row categorical column MERGED all its samples into one child dataset (and, at row counts where the shape heuristic agreed, named the children after raw float codes) | Claude | **FIXED** 2026-09-10 after ONE review round that found 2 HIGH — the first cut fixed only the `cat_levels` shape and its chokepoint ratchet was evadable by an aliased import. 22 behaviour tests + a 2-test ratchet, every fix sabotage-verified |
@@ -1107,11 +1107,11 @@ transformed that should not have been.
 **Reported:** 2026-09-09, by Claude, in the Group J `cat_levels` propagation
 audit (a delegated read-only sweep of every DataStruct-deriving site).
 
-**Investigated:** — (design-time finding, confirmed by reading both modules;
-not surfaced by a user report.)
+**Investigated:** 2026-09-20 by Codex (design-time finding, confirmed by
+reading both modules and the HTTP/client/reimport/persistence entry points;
+not surfaced by a user report).
 
-**Suggested implementation owner/model:** a backend slice with golden-parity
-care — the change touches `calc/corrections.py`'s whole pipeline.
+**Implemented:** 2026-09-20 by Codex in `df06a518`.
 
 **Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P1.4's "Preserve
 factors through derived data, filter/join, reopen, recipes, and export" box.
@@ -1131,49 +1131,37 @@ produces fractional numbers that index nothing. So a dataset carrying, say,
 `[Moment (numeric), Phase (categorical)]` comes out of Corrections with a
 `Phase` column of arbitrary decimals.
 
-#### Why the drop WAS conservative (superseded — see the CLOSED entry below) — not simply correct
+#### Why the old drop was conservative, not correct
 
-Both functions used to discard `cat_levels` unconditionally; they now discard it unless the codes provably survived (see the CLOSED entry below). Both functions discard `cat_levels`. That is now **explicit and documented in
-both modules** (it used to be an accidental omission that read like a bug in
-the propagation audit). For a transform that actually changes values, keeping
-the table would be strictly worse: the output would claim level labels for
-values that cannot have them. The drop is damage control there, not a solution
-— the column is still garbage, just honestly-typed garbage.
+The first audit fix made the implicit loss explicit, then an interim
+2026-09-10 change kept a level table only when the result codes compared equal
+to the input. That prevented confidently wrong labels, but it was damage
+control: a categorical column could still be smoothed, differentiated or
+interpolated into meaningless decimals before its table was removed. It also
+made preservation depend on arithmetic coincidence. The final fix below
+protects category meaning at the transform boundary instead.
 
-**But the drop is over-broad, which is the second half of this bug.** Both
-functions drop the table whenever they run, including paths where nothing
-happened to the codes:
+#### Resolution
 
-- `apply_corrections` with a parameter set that touches only x (or is empty)
-  returns the codes bit-identical, and drops the table anyway.
-- `resample_data` onto a grid COINCIDENT with the input x is an identity
-  interpolation — the codes come back exact, and the table is dropped anyway.
+Corrections now derives one categorical-channel mask from `cat_levels` and
+threads it through every y transform: scale, footprint/neutron scale,
+background/offset/reference subtraction, magnetometry conversion, smoothing,
+normalization, derivative and integral. Trim still selects the same rows, but
+the surviving category codes remain bit-identical and keep both `cat_levels`
+and `level_order`.
 
-So a user who resamples "onto the same grid to normalize a batch", or applies an
-x-offset-only correction, silently loses labelling that was never invalidated.
-The two tests below assert the codes are invalidated only for the parameters
-they use; they do NOT establish that the strip is always warranted, and this
-entry no longer claims they do.
+Resample deliberately **refuses a genuinely new grid** when any categorical
+channel is present. Nearest-neighbour for only categorical columns would
+silently mix interpolation methods inside one operation, a contract the product
+does not promise. A coincident grid is a true identity: all values and row
+sidecars are copied, including on duplicate/unsorted x data where passing
+through the interpolation sanitizer would not be an identity. The actionable
+`ValueError` is the warning; Corrections needs no warning because its
+categorical pass-through is now correct.
 
-#### What the real fix requires
-
-Corrections must not transform a categorical channel at all: carry such a
-channel through untouched, and carry its level table with it. That needs a
-channel mask threaded through every step of the pipeline (offset, background,
-reference subtraction, unit conversion, smoothing, normalization, derivative)
-plus the whole-matrix helpers, and it carries real golden-parity regression
-risk against the frozen MATLAB outputs. It was deliberately NOT attempted
-inside the audit slice that found it.
-
-Open sub-questions for whoever takes it:
-
-- Should Resample *refuse* a categorical channel rather than pass it through?
-  Nearest-neighbour resampling of a code column is defensible and would
-  preserve valid codes, but it is a different interpolation than the one the
-  user picked for the numeric channels — silently mixing methods within one
-  operation needs a deliberate ruling.
-- Should the UI warn before running a correction on a mixed dataset, or should
-  the pass-through be silent because it is now correct?
+The browser reimport projection was also a five-field allowlist that discarded
+`cat_levels`/`level_order` before reapplying stored corrections. It is now
+spread-first and removes only the four project-level Origin envelopes.
 
 #### Reproduction
 
@@ -1185,7 +1173,8 @@ Open sub-questions for whoever takes it:
   fractional; `cat_levels` is `None` on the result.
 - [x] Reproduced by an agent — the two strip tests below assert exactly this,
   including that the codes really are no longer valid.
-- [ ] Reproduced through the UI on real owner data.
+- [ ] Reproduced through the UI on real owner data (not required for the
+  code-verifiable fix; retained as optional owner acceptance).
 
 #### Investigation
 
@@ -1202,62 +1191,47 @@ Open sub-questions for whoever takes it:
 
 #### Implementation
 
-- [x] Minimal safe behavior defined and shipped — the strip is explicit and
-  documented in both modules, with the reasoning inline so a future author
-  cannot "fix" it by re-adding `cat_levels=` without reading why.
-- [ ] Channel-mask pass-through for categorical channels — the actual fix.
-- [x] **DONE 2026-09-10 — stop dropping the table on paths that do not change
-  the codes.** `quantized/cat_levels.py`'s `surviving_cat_levels` is the
-  predicate, and it is EVIDENCE not inference: it compares each channel's column
-  before and after, elementwise, rather than keeping a per-transform allowlist —
-  so a transform added later is conservative by default and no existing golden
-  output can change (the function can only PRESERVE a table where the numbers are
-  bit-identical). PER CHANNEL, because `cat_levels` is: correcting one channel
-  must not cost a different, untouched one its labels. It takes `kept_rows` so a
-  TRIM compares surviving rows instead of reading the shape difference as a
-  change. NaN compares equal — a NaN code is already unresolvable by `level_of`,
-  so a NaN that stays a NaN changes nothing the table can describe.
-  Three real preservation cases now covered, each measured, not assumed: an
-  IDENTITY correction (`{}`), a pure row TRIM, and an X-ONLY shift (`xOff` moves
-  the grid, never a value); plus a resample onto a COINCIDENT grid. The drop
-  still happens whenever the numbers move — pinned by the smoothing and
-  interpolation tests that predate this, which still pass unchanged.
-  The per-channel property is demonstrated in the real pipeline by the
-  beam-footprint scale, which deliberately SKIPS `dq`-labelled channels: ch0 moves
-  (1.0 -> 114.59...), the `dq` channel does not, and only its table survives.
-  Seven sabotages verified, including both "always keep" and "always drop".
-  New home rather than a new function in `datastruct.py`, for COHESION:
-  `row_sidecars.py` owns "which metadata keys are row-indexed", this one owns
-  "when does a value transform invalidate a level table". (A line-count reason was
-  also cited and was WRONG — 506 was measured against a draft that was then
-  rewritten; the shipped single function would have left `datastruct.py` at 496,
-  under the ceiling. With `surviving_level_order` it would now be 514, but the
-  argument was always cohesion.)
-- [ ] Resample's nearest-neighbour-vs-refuse ruling.
-- [ ] Any user-facing warning.
+- [x] Minimal safe behavior defined and shipped — categorical codes are never
+  transformed by Corrections; Resample fails before allocating output on a new
+  grid and leaves the immutable source untouched.
+- [x] Channel-mask pass-through for categorical channels — every y-transforming
+  Corrections leg uses the same numeric-channel selection.
+- [x] **INTERIM 2026-09-10, superseded 2026-09-20:**
+  `surviving_cat_levels` stopped dropping tables on provable identity paths.
+  It remains a generic helper, but Corrections and Resample no longer use
+  output-code equality as their safety rule: Corrections prevents categorical
+  transformation, and Resample refuses a non-coincident grid.
+- [x] Resample's nearest-neighbour-vs-refuse ruling — refuse a new grid rather
+  than silently mix methods; preserve a coincident-grid identity.
+- [x] User-facing failure is actionable at the operation boundary; no warning
+  is needed for Corrections because categorical channels now pass through.
 
 #### Tests and acceptance
 
-- [x] The deliberate strip is pinned, with the reasoning in the docstring —
-  `test_corrections_strips_cat_levels_because_codes_are_transformed`,
-  `test_resample_strips_cat_levels_because_interpolation_breaks_codes`. Each
-  also asserts the codes are genuinely no longer valid FOR THE PARAMETERS IT
-  USES (a moving-average smooth; a 7-point resample of a 4-point input) — that
-  is the honest scope: they prove the strip fires and that these particular
-  transforms invalidate the codes. They do NOT prove the strip is always
-  warranted, and the identity-parameter cases above are exactly where it is not.
-- [ ] A test for an identity-parameter path (codes survive, table still dropped)
-  — deliberately NOT added as a passing test, since it would lock in the
-  over-broad behavior. It belongs with the fix, as the test that goes green.
-- [ ] Pass-through behavior tested — blocked on the fix.
+- [x] Every y-transforming Corrections leg is parameterized against mixed data;
+  numeric values change while category codes, levels, order and metadata stay
+  intact. Trim, empty trim, all-categorical input, reference background, HTTP
+  and Python-client boundaries are covered too.
+- [x] Identity paths are covered: empty correction, x-only shift, row trim and
+  coincident resample all preserve category meaning.
+- [x] Every Resample grid mode refuses mixed categorical data on a new grid;
+  arithmetic coincidence cannot bypass the refusal; the source remains
+  unchanged; coincident duplicate-x/NaN data is a true identity.
+- [x] Browser apply/reimport and `.dwk` serialize/parse round trips preserve
+  corrected data, raw data, `cat_levels` and `level_order`.
 - [ ] Owner verifies on real mixed data.
 
 #### Completion record
 
-- PR/commit: the Group J commit (2026-09-09) — documentation + test-locking of
-  the existing behavior only. **The bug itself is open.**
-- Automated tests: the two strip tests named above.
-- Agent verification: strip behavior only.
+- PR/commit: PR #384, implementation `df06a518` (2026-09-20).
+- Automated tests: focused backend 175 passed / 1 skipped; frontend architecture
+  and affected files 311 passed; full frontend 694 files / 11,758 passed / 2
+  expected failures; full backend 5,417 passed / 87 skipped / 9 xfailed after
+  excluding three unrelated Windows MAX_PATH fixture-setup cases. Forced
+  typecheck, lint, Ruff, mypy, production build/bundle and repository integrity
+  passed; eager bundle 856.7 kB / 857.6 kB budget.
+- Agent verification: Codex, 2026-09-20, including critical diff review and
+  immutable-source checks.
 - Owner verification: —
 
 ---
@@ -8527,6 +8501,7 @@ acceptance evidence is untouched and still passes.
 | Date | Author | Change | Evidence/status |
 |---|---|---|---|
 | 2026-09-08 | ChatGPT-Sol | Created living tracker; added BUG-001 and UX-001 from owner screenshots and code inspection | Both open |
+| 2026-09-20 | Codex | Fixed BUG-005: Corrections masks categorical channels from all y transforms, Resample refuses non-coincident grids, and reimport/workspace persistence preserve codes, levels, order and raw data | `df06a518`; focused/backend/frontend/full static and bundle gates recorded in BUG-005 completion evidence |
 | 2026-09-09 | Claude | BUG-001: parser-declared roles in `io/ncnr.py` + the missing `metadata.error_roles` reader; corrected one investigation line that measurement disproved | BUG-001 partially implemented, still open pending render/round-trip and owner checks |
 | 2026-09-09 | Claude | Added BUG-003 (Data Filter: a stale kind-mismatched predicate survives a column type change invisibly) from the Data Filter categorical-wiring slice | Display-masking half implemented + sabotage-verified; row-filtering half open pending owner call |
 | 2026-09-09 | Claude | Verified Tabulate/Stat Stage `is_categorical` wiring (PRIMARY_SOFTWARE_AUDIT_PLAN); added BUG-004 (Stat Stage: a stale groupCol/facetCol survives a column type change) and fixed it fully (display + computation, self-contained hook) | BUG-004 fixed + sabotage-verified; Tabulate confirmed self-healing (no analogous bug), also sabotage-verified |

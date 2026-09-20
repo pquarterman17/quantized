@@ -38,11 +38,11 @@ numbers can only PRESERVE a table where they are bit-identical, so it cannot
 change any existing golden output; it can only stop discarding a table that was
 still valid.
 
-NOT THE WHOLE OF BUG-005. The remaining half is that corrections should not
-TRANSFORM a categorical channel at all, which needs a channel mask threaded
-through every step and is a real parity risk; and Resample's refuse-vs-
-nearest-neighbour semantics for a categorical channel is a product decision. Both
-stay booked in ``plans/BUGS_AND_ISSUES.md``.
+BUG-005 CLOSED THE TWO LIVE CALLERS. Corrections now masks categorical channels
+out of every y transform, while Resample refuses a genuinely new grid rather
+than silently interpolating codes or mixing methods. These helpers remain the
+shared policy for other transforms that need to prove which channel-keyed
+metadata still applies.
 """
 
 from __future__ import annotations

@@ -287,54 +287,20 @@ def test_rescale_composes_with_offset_and_trim_in_scaled_units() -> None:
     assert out.time[-1] == pytest.approx(2.0)
 
 
-def test_corrections_strips_cat_levels_because_codes_are_transformed():
-    """Group J: the strip is DELIBERATE, and this locks the reasoning in place.
-
-    ``apply_corrections`` transforms every channel unconditionally (``for k in
-    range(values.shape[1])`` plus whole-matrix ``smooth_data``/``normalize``/
-    ``derivative`` calls). A categorical channel's values are level CODES
-    (0..n-1); smoothing or differentiating them yields fractional numbers that
-    index nothing, so carrying the level table forward would make the output
-    claim labels for values that cannot have them.
-
-    This test exists so that a future author who "fixes the drop" by adding
-    ``cat_levels=data.cat_levels`` gets a failure that explains why that is
-    wrong. The real fix -- corrections not touching a categorical channel at all
-    -- is tracked as BUG-005 in plans/BUGS_AND_ISSUES.md.
-    """
-    data = DataStruct.create(
-        [0.0, 1.0, 2.0, 3.0],
-        [[1.0, 0.0], [2.0, 1.0], [3.0, 0.0], [4.0, 1.0]],
+def _mixed_categorical() -> DataStruct:
+    return DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [[10.0, 0.0], [20.0, 1.0], [30.0, 0.0]],
         labels=["Y", "Phase"],
-        units=["", ""],
+        units=["V", ""],
+        metadata={"operator": "Ada"},
         cat_levels={1: ("alpha", "beta")},
+        level_order={0: (30, 20, 10), 1: (1, 0)},
     )
-    assert data.cat_levels == {1: ("alpha", "beta")}  # the input really is categorical
-
-    out = apply_corrections(
-        data, {"smoothEnabled": True, "smoothMethod": "moving", "smoothWindow": 3}
-    )
-
-    assert out.cat_levels is None
-    # And the reason: the codes themselves no longer index the table.
-    codes = out.values[:, 1]
-    assert not np.all(
-        np.isin(codes, [0.0, 1.0])
-    ), "smoothing left the codes intact -- revisit the strip"
 
 
 def test_corrections_keeps_cat_levels_when_the_codes_did_not_move():
-    """BUG-005: the strip above is right for a transform, and was WRONG for an
-    identity. The pipeline used to drop the table unconditionally, so an
-    all-defaults correction silently degraded every label to a bare number even
-    though it had not touched a single value."""
-    data = DataStruct.create(
-        [0.0, 1.0, 2.0, 3.0],
-        [[1.0, 0.0], [2.0, 1.0], [3.0, 0.0], [4.0, 1.0]],
-        labels=["Y", "Phase"],
-        units=["", ""],
-        cat_levels={1: ("alpha", "beta")},
-    )
+    data = _mixed_categorical()
 
     out = apply_corrections(data, {})
 
@@ -344,10 +310,8 @@ def test_corrections_keeps_cat_levels_when_the_codes_did_not_move():
 
 def test_corrections_keeps_cat_levels_through_a_pure_row_trim():
     """A trim SELECTS rows; it never touches a value, so every surviving code
-    still indexes the table. This is the case the unconditional drop got most
-    obviously wrong — and the one the shape difference made easy to miss, which
-    is why `surviving_cat_levels` takes `kept_rows` rather than comparing whole
-    matrices."""
+    still indexes the table. The categorical mask follows the same row selection
+    as numeric data while all later y transforms skip those codes."""
     data = DataStruct.create(
         [0.0, 1.0, 2.0, 3.0],
         [[1.0, 0.0], [2.0, 1.0], [3.0, 0.0], [4.0, 1.0]],
@@ -363,26 +327,13 @@ def test_corrections_keeps_cat_levels_through_a_pure_row_trim():
     np.testing.assert_array_equal(out.values[:, 1], [1.0, 0.0])
 
 
-def test_a_quantity_redefining_step_drops_EVERY_table_even_an_untouched_channel():
-    """The per-channel property lives in `surviving_cat_levels` and is asserted
-    directly in tests/test_cat_levels.py. In the PIPELINE it is deliberately
-    subordinate to the quantity flag: the beam-footprint scale skips `dq`-labelled
-    channels, so channel 1's numbers here really do not move — and its table is
-    dropped anyway, because after a footprint scale the DATASET is no longer the
-    thing those tables were written against.
-
-    An earlier version of this test asserted the opposite (that channel 1 kept its
-    table) and was named "drops only the channel whose codes moved". It was wrong
-    twice over: it put a table only on the SKIPPED channel, so it dropped nothing
-    and its name was a lie (review MEDIUM 5); and the behaviour it described was
-    the pre-HIGH-1 bit-identity-only rule that let a dY/dX channel keep a label.
-    """
+def test_footprint_skips_both_categorical_and_dq_channels():
     data = DataStruct.create(
         [0.5, 1.0],
-        [[1.0, 0.0], [2.0, 1.0]],
-        labels=["R", "dq"],
-        units=["", ""],
-        cat_levels={0: ("lo", "hi"), 1: ("alpha", "beta")},
+        [[1.0, 0.0, 0.1], [2.0, 1.0, 0.2]],
+        labels=["R", "Phase", "dq"],
+        units=["", "", ""],
+        cat_levels={1: ("alpha", "beta")},
     )
 
     out = apply_corrections(
@@ -390,8 +341,9 @@ def test_a_quantity_redefining_step_drops_EVERY_table_even_an_untouched_channel(
     )
 
     assert not np.array_equal(out.values[:, 0], data.values[:, 0]), "ch0 really moved"
-    np.testing.assert_array_equal(out.values[:, 1], data.values[:, 1])  # ch1 skipped
-    assert out.cat_levels is None, "the quantity changed, so no table survives"
+    np.testing.assert_array_equal(out.values[:, 1], data.values[:, 1])
+    np.testing.assert_array_equal(out.values[:, 2], data.values[:, 2])
+    assert out.cat_levels == {1: ("alpha", "beta")}
 
 
 def test_corrections_keeps_cat_levels_for_an_x_only_shift():
@@ -412,21 +364,14 @@ def test_corrections_keeps_cat_levels_for_an_x_only_shift():
     assert out.cat_levels == {1: ("alpha", "beta")}
 
 
-def test_corrections_drops_cat_levels_when_a_y_offset_moves_the_codes():
-    """The complement: yOff SUBTRACTS from every channel (measured: 0.0 -> -5.0),
-    so the codes no longer index the table and it must go."""
-    data = DataStruct.create(
-        [0.0, 1.0],
-        [[1.0, 0.0], [2.0, 1.0]],
-        labels=["Y", "Phase"],
-        units=["", ""],
-        cat_levels={1: ("alpha", "beta")},
-    )
+def test_corrections_y_offset_changes_numeric_values_not_categorical_codes():
+    data = _mixed_categorical()
 
     out = apply_corrections(data, {"yOff": 5.0})
 
-    np.testing.assert_array_equal(out.values[:, 1], [-5.0, -4.0])
-    assert out.cat_levels is None
+    np.testing.assert_array_equal(out.values[:, 0], [5.0, 15.0, 25.0])
+    np.testing.assert_array_equal(out.values[:, 1], data.values[:, 1])
+    assert out.cat_levels == data.cat_levels
 
 
 @pytest.mark.parametrize(
@@ -446,6 +391,13 @@ def test_corrections_drops_cat_levels_when_a_y_offset_moves_the_codes():
         pytest.param({"normMethod": "Area (integral=1)"}, id="norm-area"),
         pytest.param({"yScale": 1000.0}, id="y-scale"),
         pytest.param({"yOff": 5.0}, id="y-offset"),
+        pytest.param({"bgSlope": 1.0, "bgInt": 2.0}, id="linear-background"),
+        pytest.param({"bgPoly": [1.0, 0.0, 1.0]}, id="polynomial-background"),
+        pytest.param(
+            {"bgAnchors": [[1.0, 1.0], [3.0, 2.0]], "bgAnchorMethod": "linear"},
+            id="anchor-background",
+        ),
+        pytest.param({"isNeutron": True, "yOff": 2.0}, id="neutron-scale"),
         pytest.param(
             {"isMag": True, "momentUnit": "emu/g", "sampleMass": 2.0}, id="mass-normalize"
         ),
@@ -460,40 +412,21 @@ def test_corrections_drops_cat_levels_when_a_y_offset_moves_the_codes():
         ),
     ],
 )
-def test_corrections_drops_cat_levels_for_every_y_transforming_step(params):
-    """Review HIGH 1: bit-identity is NOT evidence that the codes survived, so
-    every step that REDEFINES what a channel is must drop the table regardless of
-    the numbers.
-
-    The channel here has a SINGLE level, so every code is 0 — the commonest real
-    case (a Sample/Phase/Status column constant within one file), and the one
-    where arithmetic maps the codes to themselves by accident. Measured before
-    the fix: dY/dX, ∫Y dx, a moving-average smooth, all four normalizations, a
-    unit conversion and yScale=1000 each left the column [0, 0, 0] and so KEPT
-    the table, and `level_of` returned 'only' for a dY/dX channel.
-
-    This is also the guard on the `y_touched` flag: a step added later that
-    forgets to set it is caught the moment it is given a case here.
-    """
-    data = DataStruct.create(
-        [1.0, 2.0, 3.0],
-        [[0.0, 10.0], [0.0, 20.0], [0.0, 30.0]],
-        labels=["Phase", "Y"],
-        units=["", ""],
-        cat_levels={0: ("only",)},
-    )
+def test_every_y_transform_skips_categorical_channels(params):
+    """BUG-005 regression matrix: every pipeline leg must respect the mask."""
+    data = _mixed_categorical()
 
     out = apply_corrections(data, params)
 
-    assert out.cat_levels is None, f"{params} kept a level table"
-    assert level_of(out, 0, 0.0) is None
+    assert not np.array_equal(out.values[:, 0], data.values[:, 0]), params
+    np.testing.assert_array_equal(out.values[:, 1], data.values[:, 1])
+    assert out.cat_levels == {1: ("alpha", "beta")}
+    assert out.level_order == {1: (1, 0)}
+    assert level_of(out, 1, 0.0) == "alpha"
+    assert out.metadata["operator"] == "Ada"
 
 
-def test_corrections_drops_everything_when_a_trim_keeps_no_rows():
-    """Review MEDIUM 2: zero rows is zero EVIDENCE, not full survival. Two empty
-    columns compare equal, so an empty trim used to preserve every table — even
-    one the same call had smoothed and differentiated — and `is_categorical`
-    would then be True for a channel with no value left to index it."""
+def test_corrections_preserves_category_contract_when_a_trim_keeps_no_rows():
     data = DataStruct.create(
         [0.0, 1.0],
         [[1.0, 0.0], [2.0, 1.0]],
@@ -505,7 +438,7 @@ def test_corrections_drops_everything_when_a_trim_keeps_no_rows():
     out = apply_corrections(data, {"xTrimMin": 99.0})
 
     assert out.values.shape[0] == 0
-    assert out.cat_levels is None
+    assert out.cat_levels == {1: ("a", "b")}
 
 
 def test_corrections_carries_level_order_with_the_table_it_belongs_to():
@@ -528,10 +461,48 @@ def test_corrections_carries_level_order_with_the_table_it_belongs_to():
     assert kept.cat_levels == {1: ("a", "b")}
     assert kept.level_order == {1: (1, 0)}
 
-    # And it goes with the table when the codes move.
+    # A y correction changes only numeric channels; the categorical table and
+    # its display order remain attached to the untouched codes.
     moved = apply_corrections(data, {"yOff": 5.0})
-    assert moved.cat_levels is None
-    assert moved.level_order is None
+    assert moved.cat_levels == {1: ("a", "b")}
+    assert moved.level_order == {1: (1, 0)}
+    np.testing.assert_array_equal(moved.values[:, 1], data.values[:, 1])
+
+
+def test_reference_background_subtracts_only_numeric_channels():
+    data = _mixed_categorical()
+    bg = DataStruct.create([1.0, 2.0, 3.0], [[1.0], [2.0], [3.0]])
+
+    out = apply_corrections(data, {}, bg_dataset=bg)
+
+    np.testing.assert_array_equal(out.values[:, 0], [9.0, 18.0, 27.0])
+    np.testing.assert_array_equal(out.values[:, 1], data.values[:, 1])
+    assert out.cat_levels == data.cat_levels
+
+
+def test_all_categorical_dataset_is_a_safe_pass_through_for_y_corrections():
+    data = DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [[0.0], [1.0], [0.0]],
+        labels=["Phase"],
+        cat_levels={0: ("alpha", "beta")},
+    )
+
+    out = apply_corrections(
+        data,
+        {
+            "yScale": 1000.0,
+            "yOff": 5.0,
+            "smoothEnabled": True,
+            "smoothMethod": "moving",
+            "smoothWindow": 3,
+            "normMethod": "Z-score",
+            "derivativeMode": "dY/dX",
+        },
+    )
+
+    np.testing.assert_array_equal(out.values, data.values)
+    assert out.cat_levels == data.cat_levels
 
 
 def test_corrections_drops_a_minus_one_level_order_when_x_moves():
