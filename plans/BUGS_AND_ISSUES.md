@@ -8135,7 +8135,7 @@ Full evidence, reproduction, and gate expectations are in
 ## UX-005 — Quick Plot refusal guidance advertises an already-shipped feature
 
 **Priority:** P1
-**State:** Open — code-proven user-visible stale copy
+**State:** Complete — present-tense actionable refusal guidance shipped
 **Reported/investigated:** 2026-09-20 by ChatGPT-Sol
 **Suggested owner/model:** Inexpensive ChatGPT/Codex frontend model
 
@@ -8145,9 +8145,17 @@ builder already ship beside Quick Plot. Replace the internal roadmap sentence
 with a concise present-tense instruction naming the available next action, and
 update the tests that currently pin the stale copy.
 
-- [ ] Replace both refusal messages and keep map-specific advice accurate.
-- [ ] Remove internal PR labels from rendered copy in the touched workflow.
-- [ ] Update focused menu/palette/workbook tests and run the frontend gate.
+- [x] Replace both refusal messages and keep map-specific advice accurate.
+- [x] Remove internal PR labels from rendered copy in the touched workflow.
+- [x] Update focused menu/palette/workbook tests and run the frontend gate.
+
+**Evidence (2026-09-20):** Generic and unsupported data now direct users to
+**Configure Quick Plot…** to assign columns and preview an editable figure;
+2-D map data retains the scientifically specific Map view guidance. The four
+focused Quick Plot/Library test files pass (81 tests), forced TypeScript,
+frontend lint, clean frontend build/bundle (857.4 kB eager, within the 857.6
+kB budget), and repository-integrity tests (13 passed). Implementation commit:
+see the UX-005 branch history and pull request.
 
 Full evidence and acceptance wording are in `POST_RELEASE_PROBLEM_AUDIT.md`.
 
