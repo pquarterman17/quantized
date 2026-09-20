@@ -30,10 +30,17 @@ export function findBook(
   ).find((b) => b.id === bookId);
 }
 
-/** The bare DataStruct fields (drops `.books`/`.book_source`/`.figures` —
- *  incidental to a re-read, never part of a Dataset's own `.data`). */
+/** The dataset-level DataStruct from a re-read. Spread-first so additive
+ *  scientific fields such as `cat_levels`/`level_order` survive; only the four
+ *  project-level Origin envelopes are removed because they are not part of one
+ *  Dataset's own `.data` (BUG-005). */
 function core(d: DataStruct, labels = d.labels, units = d.units, metadata = d.metadata): DataStruct {
-  return { time: d.time, values: d.values, labels, units, metadata };
+  const out = { ...d, labels, units, metadata };
+  delete out.books;
+  delete out.book_source;
+  delete out.figures;
+  delete out.origin_fidelity;
+  return out;
 }
 
 /** The ONE real DataStruct a re-import should install for `ds`: match its

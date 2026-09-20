@@ -7,6 +7,9 @@ reference-background subtraction -> magnetometry unit conversion -> smoothing
 -> normalization -> derivative. Composes the already-ported processing/units
 helpers; operates on a DataStruct + a params dict mirroring the MATLAB
 ``params`` struct (the GOTO additions are new keys, absent from MATLAB).
+Categorical value channels are level-code carriers rather than measured
+quantities: trim selects their rows, while every y transform skips them and
+their level metadata is preserved (BUG-005).
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ from typing import Any
 
 import numpy as np
 
-from ..cat_levels import surviving_cat_levels, surviving_level_order
+from ..cat_levels import surviving_level_order
 from ..datastruct import DataStruct
 from ..row_sidecars import slice_row_sidecars
 from .backgrounds import anchor_baseline, footprint_factor
@@ -98,45 +101,16 @@ def apply_corrections(
     """
     time = np.asarray(data.time, dtype=float).copy()
     values = np.asarray(data.values, dtype=float).copy()
-    # BUG-005: kept to decide, at the end, which `cat_levels` entries the
-    # pipeline actually invalidated. `values` above is mutated in place from here
-    # on, so the comparison needs its own reference.
-    values_in = np.asarray(data.values, dtype=float)
-    # BUG-005 review, HIGH 1. Bit-identity of a column is NOT evidence that its
-    # level codes survived: a transform can map codes to themselves by
-    # ARITHMETIC ACCIDENT. Measured on a single-level channel (every code 0,
-    # which is the commonest real case — a Sample/Phase/Status column constant
-    # within one file): dY/dX, ∫Y dx, a moving-average smooth, all four
-    # normalizations, a unit conversion and yScale=1000 each left it
-    # [0, 0, 0] and so kept the table, and `level_of` then returned the LABEL
-    # for a dY/dX channel. That is precisely the "labels for values that cannot
-    # have them" failure the strip exists to prevent.
-    #
-    # So the survival test is a CONJUNCTION: no step may have redefined what the
-    # channel IS (this flag), AND the numbers must be unchanged
-    # (`surviving_cat_levels`). Each half covers the other's blind spot — the
-    # flag catches an arithmetic coincidence, and the value comparison catches a
-    # step added later that forgets to set the flag.
-    #
-    # WHICH STEPS SET IT: those that REDEFINE THE QUANTITY — a derivative,
-    # integral, smooth, any normalization, a unit conversion, a mass/volume
-    # normalization, the footprint or neutron scale. After any of those the
-    # channel is no longer the thing its level table names, whatever the numbers
-    # happen to be.
-    #
-    # WHICH DO NOT: same-units arithmetic that is a genuine identity when its
-    # parameters are zero — the background/y-offset subtraction and the reference-
-    # dataset subtraction. Those run on EVERY call (`values - y_bg - y_off` is
-    # unconditional, with zeros by default), so flagging them made the flag always
-    # true and silently reverted this whole fix; the first version of it did
-    # exactly that and the identity/trim tests caught it. For these the value
-    # comparison IS the right test: subtract a real background and the codes move
-    # and are dropped; subtract zero and the channel is untouched.
-    #
-    # A NEW QUANTITY-REDEFINING STEP MUST SET THIS. `test_calc_corrections.py::
-    # test_corrections_drops_cat_levels_for_every_y_transforming_step` enumerates
-    # the current ones against a single-level channel.
-    y_touched = False
+    # BUG-005: a categorical channel stores LEVEL CODES, not a measured
+    # quantity. Every y correction below therefore applies only to numeric
+    # channels. The categorical columns still follow row selection (trim) but
+    # otherwise pass through bit-for-bit with their level tables. Keeping this
+    # mask at the pipeline boundary is safer than asking each transform whether
+    # its arithmetic happened to leave a code unchanged: zero-valued codes can
+    # survive a derivative, normalization, or scale by coincidence while their
+    # meaning has still been destroyed.
+    categorical = set(data.cat_levels or ())
+    numeric = [k for k in range(values.shape[1]) if k not in categorical]
     labels = list(data.labels)
 
     # 0. Arbitrary X/Y rescaling (MAIN_PLAN #37) — a non-destructive unit
@@ -149,16 +123,16 @@ def apply_corrections(
     #     d(y·sy)/d(x·sx) = (sy/sx)·dy/dx falls out correctly. Scaling at the END
     #     instead would multiply the derivative by sy alone — plainly wrong.
     #   * step 7's normalizations are scale-invariant, so they don't interact.
-    # yScale multiplies EVERY value channel, so a y-channel and its paired error
-    # channel scale together and error bars stay consistent for free (same
-    # uniform treatment step 5's emu/g conversion already applies).
+    # yScale multiplies every NUMERIC value channel, so a y-channel and its paired
+    # error channel scale together and error bars stay consistent for free (same
+    # uniform treatment step 5's emu/g conversion already applies). Categorical
+    # channels carry codes and are excluded by BUG-005's mask below.
     x_scale = _finite_scale(params.get("xScale"), "xScale")
     y_scale = _finite_scale(params.get("yScale"), "yScale")
     if x_scale != 1.0:
         time = time * x_scale
-    if y_scale != 1.0:
-        values = values * y_scale
-        y_touched = True
+    if y_scale != 1.0 and numeric:
+        values[:, numeric] = values[:, numeric] * y_scale
 
     # 1. Trim on x.
     x_min = params.get("xTrimMin", float("nan"))
@@ -197,25 +171,23 @@ def apply_corrections(
     if fp_w > 0 and fp_l > 0:
         theta = time / 2.0 if params.get("footprintTwoTheta", False) else time
         factor = footprint_factor(theta, beam_width=fp_w, sample_length=fp_l)
-        for k in range(values.shape[1]):
+        for k in numeric:
             if labels[k].lower() != "dq":
                 values[:, k] = values[:, k] / factor
-                y_touched = True
 
     # 3. Neutron R-scale, or background subtraction + y-offset.
     y_off = params.get("yOff", 0.0)
     if params.get("isNeutron", False):
-        for k in range(values.shape[1]):
+        for k in numeric:
             if labels[k].lower() != "dq":
                 values[:, k] = values[:, k] * y_off
-                y_touched = True
     else:
         # An anchor-point baseline (GOTO #2) beats the polynomial/slope forms.
         bg_anchors = params.get("bgAnchors")
         anchor_bg = (
             anchor_baseline(
                 time,
-                values[:, 0] if values.shape[1] else time,
+                values[:, numeric[0]] if numeric else time,
                 bg_anchors,
                 method=str(params.get("bgAnchorMethod", "pchip")),
             )
@@ -228,7 +200,7 @@ def apply_corrections(
             if bg_poly is not None and len(bg_poly) > 2
             else None
         )
-        for k in range(values.shape[1]):
+        for k in numeric:
             if anchor_bg is not None:
                 y_bg = anchor_bg
             elif poly_coeffs is not None:
@@ -242,7 +214,7 @@ def apply_corrections(
         bgx = np.asarray(bg_dataset.time, dtype=float)
         bgy = np.asarray(bg_dataset.values, dtype=float)[:, 0]
         bg_vals = _interp_zero_fill(bgx, bgy, time, bg_interp)
-        for k in range(values.shape[1]):
+        for k in numeric:
             values[:, k] = values[:, k] - bg_vals
 
     # 5. Magnetometry unit conversion.
@@ -252,85 +224,54 @@ def apply_corrections(
             target = f_unit.replace(" (raw)", "")
             time = np.asarray(convert_units(time, "Oe", target)[0], dtype=float)
         m_unit = params.get("momentUnit", "")
-        if m_unit == "emu/g" and params.get("sampleMass", 0.0) > 0:
-            values = values / params["sampleMass"]
-            y_touched = True
-        elif m_unit in ("emu/cm³", "kA/m") and params.get("sampleVolume", 0.0) > 0:
-            values = values / params["sampleVolume"]
-            y_touched = True
-        elif m_unit == "A·m²":
-            values = values * 1e-3
-            y_touched = True
+        if m_unit == "emu/g" and params.get("sampleMass", 0.0) > 0 and numeric:
+            values[:, numeric] = values[:, numeric] / params["sampleMass"]
+        elif (
+            m_unit in ("emu/cm³", "kA/m")
+            and params.get("sampleVolume", 0.0) > 0
+            and numeric
+        ):
+            values[:, numeric] = values[:, numeric] / params["sampleVolume"]
+        elif m_unit == "A·m²" and numeric:
+            values[:, numeric] = values[:, numeric] * 1e-3
 
     # 6. Smoothing.
-    if params.get("smoothEnabled", False):
+    if params.get("smoothEnabled", False) and numeric:
         win = max(1, _matlab_round(params.get("smoothWindow", 5)))
-        values = smooth_data(values, method=str(params["smoothMethod"]).lower(), window=win)
-        y_touched = True
+        smoothed = smooth_data(
+            values[:, numeric], method=str(params["smoothMethod"]).lower(), window=win
+        )
+        values[:, numeric] = smoothed
 
     # 7. Normalization.
     norm = params.get("normMethod", "None")
-    if norm == "Range [0,1]":
-        values = normalize(values, method="range")
-        y_touched = True
-    elif norm == "Peak (max=1)":
-        values = normalize(values, method="peak")
-        y_touched = True
-    elif norm == "Z-score":
-        values = normalize(values, method="zscore")
-        y_touched = True
+    if norm == "Range [0,1]" and numeric:
+        values[:, numeric] = normalize(values[:, numeric], method="range")
+    elif norm == "Peak (max=1)" and numeric:
+        values[:, numeric] = normalize(values[:, numeric], method="peak")
+    elif norm == "Z-score" and numeric:
+        values[:, numeric] = normalize(values[:, numeric], method="zscore")
     elif norm == "Area (integral=1)":
-        for k in range(values.shape[1]):
+        for k in numeric:
             area = float(np.trapezoid(values[:, k], time))
             if area != 0:
                 values[:, k] = values[:, k] / area
-                y_touched = True
 
     # 8. Derivative / integral transforms.
     deriv = params.get("derivativeMode", "None")
-    if deriv == "dY/dX":
-        values = derivative(time, values, order=1)
-        y_touched = True
-    elif deriv == "d²Y/dX²":
-        values = derivative(time, values, order=2)
-        y_touched = True
-    elif deriv == "∫Y dx":
-        values = cumulative_integral(time, values)
-        y_touched = True
-    elif deriv == "dlog/dlog":
-        values = log_derivative(time, values)
-        y_touched = True
+    if deriv == "dY/dX" and numeric:
+        values[:, numeric] = derivative(time, values[:, numeric], order=1)
+    elif deriv == "d²Y/dX²" and numeric:
+        values[:, numeric] = derivative(time, values[:, numeric], order=2)
+    elif deriv == "∫Y dx" and numeric:
+        values[:, numeric] = cumulative_integral(time, values[:, numeric])
+    elif deriv == "dlog/dlog" and numeric:
+        values[:, numeric] = log_derivative(time, values[:, numeric])
 
-    # `cat_levels` IS CARRIED FORWARD ONLY WHERE THE CODES SURVIVED (BUG-005).
-    #
-    # Every step above transforms EVERY channel unconditionally (`for k in
-    # range(values.shape[1])`, plus whole-matrix `smooth_data`/`normalize`/
-    # `derivative` calls). A categorical channel's values are level CODES
-    # (0..n-1); smoothing or differentiating them yields fractional numbers with
-    # no level, so keeping the table would make the output claim labels for
-    # values that no longer index it — worse than showing the raw numbers.
-    #
-    # That was why this dropped the table. But it dropped it UNCONDITIONALLY,
-    # including when the codes demonstrably did not move: an identity correction
-    # (every step off) or a pure row TRIM, which selects rows and never touches a
-    # value. `surviving_cat_levels` (see `quantized/cat_levels.py`) now decides
-    # per channel by COMPARING the numbers, so a table is kept exactly when it
-    # still describes the output and dropped otherwise. Evidence, not inference
-    # about which parameters are identities — which is also why it cannot change
-    # any existing golden output.
-    #
-    # STILL BOOKED as BUG-005: corrections should not TRANSFORM a categorical
-    # channel at all. That needs a channel mask threaded through every step above
-    # and carries real golden-parity regression risk, so it is not faked here.
     metadata = (
         dict(data.metadata)
         if kept_rows is None
         else slice_row_sidecars(data.metadata, kept_rows)
-    )
-    surviving = (
-        None
-        if y_touched
-        else surviving_cat_levels(data.cat_levels, values_in, values, kept_rows)
     )
     return DataStruct.create(
         time,
@@ -338,8 +279,10 @@ def apply_corrections(
         labels=labels,
         units=list(data.units),
         metadata=metadata,
-        cat_levels=surviving,
+        cat_levels=data.cat_levels,
         level_order=surviving_level_order(
-            data.level_order, surviving, np.array_equal(time, np.asarray(data.time, dtype=float))
+            data.level_order,
+            data.cat_levels,
+            np.array_equal(time, np.asarray(data.time, dtype=float)),
         ),
     )

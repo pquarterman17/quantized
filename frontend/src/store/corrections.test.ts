@@ -20,6 +20,7 @@ import type { CorrectionsRequest } from "../lib/api";
 import { rowsChangedGuard } from "./corrections";
 import { peakTableFromFit } from "../lib/peakTableFit";
 import type { CorrectionParams, DataStruct, Dataset } from "../lib/types";
+import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
 import { useApp } from "./useApp";
 
 vi.mock("../lib/api", () => ({
@@ -70,6 +71,37 @@ beforeEach(() => {
 });
 
 describe("applyCorrections + computed columns (data loss)", () => {
+  it("preserves categorical codes, levels, order, raw data, and their workspace round trip", async () => {
+    const categorical: DataStruct = {
+      time: [1, 2, 3],
+      values: [[10, 0], [20, 1], [30, 0]],
+      labels: ["m", "Phase"],
+      units: ["emu", ""],
+      metadata: { operator: "Ada" },
+      cat_levels: { 1: ["alpha", "beta"] },
+      level_order: { 1: [1, 0] },
+    };
+    vi.mocked(applyCorrectionsApi).mockImplementation(async (req: CorrectionsRequest) => ({
+      ...req.dataset,
+      values: req.dataset.values.map((row) => [row[0] - 5, row[1]]),
+    }));
+    useApp.setState({ datasets: [{ id: "d1", name: "mixed", data: categorical }] });
+
+    expect(await useApp.getState().applyCorrections("d1", { yOff: 5 })).toBe(true);
+
+    const after = useApp.getState().datasets[0];
+    expect(after.data.values).toEqual([[5, 0], [15, 1], [25, 0]]);
+    expect(after.data.cat_levels).toEqual({ 1: ["alpha", "beta"] });
+    expect(after.data.level_order).toEqual({ 1: [1, 0] });
+    expect(after.raw).toEqual(categorical);
+
+    const reopened = parseWorkspace(serializeWorkspace({ datasets: [after] })).datasets[0];
+    expect(reopened.data.cat_levels).toEqual({ 1: ["alpha", "beta"] });
+    expect(reopened.data.level_order).toEqual({ 1: [1, 0] });
+    expect(reopened.raw?.cat_levels).toEqual({ 1: ["alpha", "beta"] });
+    expect(reopened.raw?.values).toEqual(categorical.values);
+  });
+
   it("apply -> add column -> re-apply must not delete the measurement column", async () => {
     // 1. Smooth the raw scan. `raw` is captured base-only, width 1.
     await useApp.getState().applyCorrections("d1", { smooth: 3 } as CorrectionParams);

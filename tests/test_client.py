@@ -169,6 +169,25 @@ def test_apply_corrections_with_datastruct_background(qz_client: QuantizedClient
     assert corrected.n_points == ds.n_points
 
 
+def test_apply_corrections_client_preserves_categorical_meaning(
+    qz_client: QuantizedClient,
+) -> None:
+    ds = DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [[10.0, 0.0], [20.0, 1.0], [30.0, 0.0]],
+        labels=["signal", "Phase"],
+        cat_levels={1: ("alpha", "beta")},
+        level_order={1: (1, 0)},
+    )
+
+    corrected = qz_client.apply_corrections(ds, {"yOff": 5.0})
+
+    np.testing.assert_array_equal(corrected.values[:, 0], [5.0, 15.0, 25.0])
+    np.testing.assert_array_equal(corrected.values[:, 1], ds.values[:, 1])
+    assert corrected.cat_levels == ds.cat_levels
+    assert corrected.level_order == ds.level_order
+
+
 # ── Fitting ───────────────────────────────────────────────────────────
 
 _TRUE_GAUSSIAN = [2.0, 0.5, 1.2]  # A, mu, sigma

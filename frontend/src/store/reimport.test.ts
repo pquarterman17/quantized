@@ -759,6 +759,35 @@ describe("reimportDataset — corrections re-applied", () => {
     expect(ds.corrections).toEqual({ yOff: 5 }); // params unchanged
   });
 
+  it("keeps categorical meaning in both fresh raw and re-corrected data", async () => {
+    const categoricalFresh: DataStruct = {
+      time: [1, 2, 3],
+      values: [[11, 0], [21, 1], [31, 0]],
+      labels: ["m", "Phase"],
+      units: ["emu", ""],
+      metadata: { operator: "Ada" },
+      cat_levels: { 1: ["alpha", "beta"] },
+      level_order: { 1: [1, 0] },
+    };
+    const corrected = {
+      ...categoricalFresh,
+      values: [[6, 0], [16, 1], [26, 0]],
+    };
+    vi.mocked(importFile).mockResolvedValue(categoricalFresh);
+    vi.mocked(applyCorrectionsApi).mockResolvedValue(corrected);
+    useApp.setState({
+      datasets: [baseDataset({ raw, corrections: { yOff: 5 } })],
+    });
+
+    await useApp.getState().reimportDataset("d1");
+
+    const ds = useApp.getState().datasets[0];
+    expect(ds.raw).toEqual(categoricalFresh);
+    expect(ds.data.values).toEqual([[6, 0], [16, 1], [26, 0]]);
+    expect(ds.data.cat_levels).toEqual({ 1: ["alpha", "beta"] });
+    expect(ds.data.level_order).toEqual({ 1: [1, 0] });
+  });
+
   it("does not call applyCorrectionsApi when the dataset has no stored corrections", async () => {
     vi.mocked(importFile).mockResolvedValue(fresh);
     useApp.setState({ datasets: [baseDataset()] });

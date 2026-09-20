@@ -3,7 +3,9 @@
 Pure calc layer. Supports four grid modes (n_points / step / grid / match_dataset;
 exactly one, or none for a 500-point default) and four interpolation methods
 (linear / pchip / spline=not-a-knot / makima). Out-of-range samples are NaN unless
-``extrapolate=True``.
+``extrapolate=True``. A dataset with categorical channels is accepted only for
+a coincident grid; a new grid is refused rather than interpolating level codes
+or silently mixing nearest-neighbour and the requested numeric method (BUG-005).
 """
 
 from __future__ import annotations
@@ -19,7 +21,7 @@ from scipy.interpolate import (
     interp1d,
 )
 
-from ..cat_levels import surviving_cat_levels
+from ..cat_levels import surviving_level_order
 from ..datastruct import DataStruct
 from ..row_sidecars import drop_row_sidecars
 
@@ -96,12 +98,14 @@ def resample_data(
     method: str = "makima",
     extrapolate: bool = False,
 ) -> DataStruct:
-    """Resample ``data`` onto a new x-grid, interpolating every channel.
+    """Resample ``data`` onto a new x-grid, interpolating numeric channels.
 
     Specify exactly one grid mode (``n_points``, ``step``, ``grid`` or
     ``match_dataset``); with none, a 500-point linspace over the data range is
     used. Returns a new DataStruct with ``resampled``/``resampleMethod``/
-    ``resamplePoints`` stamped into ``metadata``.
+    ``resamplePoints`` stamped into ``metadata``. Raises ``ValueError`` when a
+    categorical channel is present and the requested grid differs from the
+    input grid; categorical codes cannot be interpolated without losing meaning.
     """
     if method not in _METHODS:
         raise ValueError(f"method must be one of {_METHODS}")
@@ -131,50 +135,47 @@ def resample_data(
     else:  # match_dataset
         x_new = np.asarray(match_dataset.time, dtype=float).ravel()  # type: ignore[union-attr]
 
-    y_new = np.empty((x_new.size, y_old.shape[1]))
-    for c in range(y_old.shape[1]):
-        y_new[:, c] = _interp_column(x_old, y_old[:, c], x_new, method, extrapolate)
+    # BUG-005: interpolating a categorical channel would interpolate its LEVEL
+    # CODES and manufacture fractional, meaningless values. Choosing nearest-
+    # neighbour only for those channels would silently mix methods inside one
+    # operation, which the product contract has never promised. Refuse a new
+    # grid instead, before allocating or transforming any output; the immutable
+    # source DataStruct and all of its metadata remain untouched. A genuinely
+    # coincident grid is safe and copies categorical codes exactly below.
+    coincident = np.array_equal(x_old, x_new)
+    if data.cat_levels and not coincident:
+        names = ", ".join(data.labels[c] for c in data.cat_levels)
+        raise ValueError(
+            "cannot resample categorical channel(s) onto a different grid "
+            f"without changing their meaning: {names}"
+        )
 
-    # BUG-006: the row-indexed metadata sidecars are DROPPED, not sliced. Every
-    # output row is an INTERPOLATED point on a new x grid, so no output row IS
-    # any input row and there is no index mapping to slice to -- exactly the
-    # reasoning that already governs `cat_levels` below. A per-row text cell
-    # carried onto a row it cannot describe is worse than not carrying it.
-    meta = drop_row_sidecars(data.metadata)
+    if coincident:
+        # The product contract calls this an identity resample. Copy the whole
+        # matrix instead of routing numeric columns through the sanitizer: on a
+        # duplicate/unsorted grid interpolation can average rows even though the
+        # requested grid is byte-for-byte the input, which would make preserving
+        # row sidecars below dishonest.
+        y_new = y_old.copy()
+    else:
+        y_new = np.empty((x_new.size, y_old.shape[1]))
+        for c in range(y_old.shape[1]):
+            y_new[:, c] = _interp_column(x_old, y_old[:, c], x_new, method, extrapolate)
+
+    # BUG-006: a NEW grid drops row-indexed metadata sidecars because no output
+    # row IS an input row. A coincident grid preserves them: its rows are the
+    # original rows, and BUG-005 copies categorical codes rather than
+    # interpolating them. File-level metadata is preserved in both cases.
+    meta = dict(data.metadata) if coincident else drop_row_sidecars(data.metadata)
     meta["resampled"] = True
     meta["resampleMethod"] = method
     meta["resamplePoints"] = int(x_new.size)
-    # `cat_levels` survives only where the codes did (BUG-005). Resampling
-    # INTERPOLATES, so a categorical channel's integer level codes normally
-    # become fractional and index nothing — carrying the table forward would
-    # attach labels to values that cannot have them, which is why this dropped it
-    # outright. But a resample onto a COINCIDENT grid returns its input
-    # unchanged, and there the table still describes the output exactly.
-    # `surviving_cat_levels` decides per channel by comparing the numbers, so the
-    # drop still happens whenever interpolation actually moved them.
-    #
-    # GATED ON A GENUINELY COINCIDENT GRID (review MEDIUM 4). Without the
-    # `array_equal(x_old, x_new)` test the keep also fired on a BRAND-NEW grid
-    # whenever interpolation happened to reproduce the codes — measured on a
-    # constant column (`grid=[0.5, 1.0, 1.5]`) and on a step-like one whose new
-    # points all landed inside flat regions. Those codes are valid, so it was not
-    # a wrong label; but it silently SETTLED the refuse-vs-nearest-neighbour
-    # product decision that is still booked, by shipping a third answer. Every
-    # comment and test here described the keep as coincident-grid-only, so the
-    # code now is.
-    #
-    # STILL BOOKED as BUG-005: what Resample SHOULD do with a categorical channel
-    # on a genuinely new grid (refuse, or nearest-neighbour it) is a product
-    # decision, not something to settle here.
     return DataStruct.create(
         x_new,
         y_new,
         labels=data.labels,
         units=data.units,
         metadata=meta,
-        cat_levels=(
-            surviving_cat_levels(data.cat_levels, y_old, y_new)
-            if np.array_equal(x_old, x_new)
-            else None
-        ),
+        cat_levels=data.cat_levels,
+        level_order=surviving_level_order(data.level_order, data.cat_levels, coincident),
     )

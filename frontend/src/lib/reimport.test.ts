@@ -171,6 +171,26 @@ describe("reimportColumnsChanged", () => {
 });
 
 describe("resolveFreshData", () => {
+  it("preserves categorical levels and order while removing project envelopes", async () => {
+    const categorical = {
+      ...struct(),
+      values: [[10, 0], [20, 1], [30, 0]],
+      labels: ["m", "Phase"],
+      units: ["emu", ""],
+      cat_levels: { 1: ["alpha", "beta"] },
+      level_order: { 1: [1, 0] },
+      figures: [],
+      origin_fidelity: { version: 1, figures: {} },
+    } as unknown as DataStruct;
+
+    const result = await resolveFreshData(ds(), categorical);
+
+    expect(result.cat_levels).toEqual({ 1: ["alpha", "beta"] });
+    expect(result.level_order).toEqual({ 1: [1, 0] });
+    expect("figures" in result).toBe(false);
+    expect("origin_fidelity" in result).toBe(false);
+  });
+
   it("returns the fresh top-level data for a non-Origin dataset", async () => {
     const fresh = struct();
     const result = await resolveFreshData(ds(), fresh);

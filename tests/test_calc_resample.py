@@ -134,30 +134,37 @@ def test_resample_clean_data_untouched_by_sanitizer() -> None:
     assert_allclose(out.values[:, 0], y)
 
 
-def test_resample_strips_cat_levels_because_interpolation_breaks_codes():
-    """Group J: same deliberate strip as ``calc/corrections.py`` -- see its test.
-
-    Resampling INTERPOLATES every channel onto a new grid, so a categorical
-    channel's integer level codes come back fractional and index nothing in the
-    table. Keeping the table would attach labels to values that cannot have
-    them. Tracked with corrections as BUG-005.
-    """
+@pytest.mark.parametrize("mode", ["default", "n_points", "step", "grid", "match"])
+def test_resample_refuses_every_new_grid_mode_when_a_channel_is_categorical(mode: str):
+    """BUG-005: no grid entry point may silently interpolate level codes."""
     data = DataStruct.create(
         [0.0, 1.0, 2.0, 3.0],
         [[1.0, 0.0], [2.0, 1.0], [3.0, 0.0], [4.0, 1.0]],
         labels=["Y", "Phase"],
         units=["", ""],
+        metadata={"operator": "Ada", "text_columns": {"note": ["a", "b", "c", "d"]}},
         cat_levels={1: ("alpha", "beta")},
+        level_order={1: (1, 0)},
     )
-    assert data.cat_levels == {1: ("alpha", "beta")}
+    before = data.to_dict()
+    kwargs: dict[str, Any]
+    if mode == "default":
+        kwargs = {}
+    elif mode == "n_points":
+        kwargs = {"n_points": 7}
+    elif mode == "step":
+        kwargs = {"step": 0.5}
+    elif mode == "grid":
+        kwargs = {"grid": [0.5, 1.5, 2.5]}
+    else:
+        kwargs = {
+            "match_dataset": DataStruct.create([0.5, 1.5, 2.5], [[0.0], [0.0], [0.0]])
+        }
 
-    out = resample_data(data, n_points=7, method="linear")
+    with pytest.raises(ValueError, match=r"categorical channel\(s\).*Phase"):
+        resample_data(data, method="linear", **kwargs)
 
-    assert out.cat_levels is None
-    codes = out.values[:, 1]
-    assert not np.all(
-        np.isin(codes, [0.0, 1.0])
-    ), "interpolation left the codes intact -- revisit the strip"
+    assert data.to_dict() == before, "a refused resample must not mutate its source"
 
 
 def test_resample_keeps_cat_levels_on_a_coincident_grid():
@@ -169,24 +176,38 @@ def test_resample_keeps_cat_levels_on_a_coincident_grid():
         [[10.0, 0.0], [20.0, 1.0], [30.0, 0.0], [40.0, 1.0]],
         labels=["Y", "Phase"],
         units=["", ""],
+        metadata={"operator": "Ada", "text_columns": {"note": ["a", "b", "c", "d"]}},
         cat_levels={1: ("alpha", "beta")},
+        level_order={1: (1, 0)},
     )
 
     out = resample_data(data, grid=[0.0, 1.0, 2.0, 3.0], method="linear")
 
     assert out.cat_levels == {1: ("alpha", "beta")}
+    assert out.level_order == {1: (1, 0)}
     np.testing.assert_array_equal(out.values[:, 1], [0.0, 1.0, 0.0, 1.0])
+    assert out.metadata["operator"] == "Ada"
+    assert out.metadata["text_columns"] == {"note": ["a", "b", "c", "d"]}
 
 
-def test_resample_drops_cat_levels_on_a_NEW_grid_even_if_the_codes_come_back_intact():
-    """Review MEDIUM 4: without gating the keep on a genuinely coincident grid,
-    interpolation onto a BRAND-NEW grid kept the table whenever it happened to
-    reproduce the codes — a constant categorical column, or new points that all
-    land inside flat regions. Those codes are valid, so it was not a wrong label,
-    but it silently SETTLED the refuse-vs-nearest-neighbour product decision that
-    is still booked, by shipping a third answer. Every comment and test here
-    describes the keep as coincident-grid-only, so the code is too.
-    """
+def test_resample_coincident_grid_is_a_true_identity_even_with_duplicate_x_and_nan():
+    data = DataStruct.create(
+        [0.0, 1.0, 1.0, 2.0],
+        [[10.0, 0.0], [20.0, 1.0], [float("nan"), 0.0], [40.0, 1.0]],
+        labels=["Y", "Phase"],
+        metadata={"text_columns": {"note": ["a", "b", "c", "d"]}},
+        cat_levels={1: ("alpha", "beta")},
+    )
+
+    out = resample_data(data, grid=data.time, method="linear")
+
+    np.testing.assert_array_equal(out.values, data.values, strict=True)
+    assert out.metadata["text_columns"] == data.metadata["text_columns"]
+    assert out.cat_levels == data.cat_levels
+
+
+def test_resample_refuses_a_new_grid_even_when_interpolation_would_reproduce_codes():
+    """Arithmetic coincidence must not bypass the new-grid refusal."""
     # A CONSTANT categorical column: linear interpolation reproduces it exactly.
     constant = DataStruct.create(
         [0.0, 1.0, 2.0],
@@ -195,9 +216,8 @@ def test_resample_drops_cat_levels_on_a_NEW_grid_even_if_the_codes_come_back_int
         units=["", ""],
         cat_levels={1: ("a", "b", "c")},
     )
-    out = resample_data(constant, grid=[0.5, 1.0, 1.5], method="linear")
-    np.testing.assert_array_equal(out.values[:, 1], [2.0, 2.0, 2.0])  # codes intact
-    assert out.cat_levels is None, "a new grid must not keep the table"
+    with pytest.raises(ValueError, match="different grid"):
+        resample_data(constant, grid=[0.5, 1.0, 1.5], method="linear")
 
     # A STEP-like column whose new points all land in flat regions.
     stepped = DataStruct.create(
@@ -207,6 +227,5 @@ def test_resample_drops_cat_levels_on_a_NEW_grid_even_if_the_codes_come_back_int
         units=["", ""],
         cat_levels={1: ("a", "b")},
     )
-    out2 = resample_data(stepped, grid=[0.5, 0.9, 10.2, 10.8], method="linear")
-    np.testing.assert_array_equal(out2.values[:, 1], [0.0, 0.0, 1.0, 1.0])
-    assert out2.cat_levels is None
+    with pytest.raises(ValueError, match="different grid"):
+        resample_data(stepped, grid=[0.5, 0.9, 10.2, 10.8], method="linear")
