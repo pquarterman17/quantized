@@ -211,6 +211,36 @@ def test_declared_source_uses_filesystem_identity_for_unicode_spellings(tmp_path
     assert not is_declared_source(os.path.realpath(str(f_nfd)))
 
 
+def test_nfc_nfd_alias_is_guarded_on_a_normalization_insensitive_filesystem(
+    tmp_path: Path,
+) -> None:
+    """Positive macOS sibling case, capability-skipped on sensitive volumes."""
+    composed = unicodedata.normalize("NFC", "café-alias.csv")
+    decomposed = unicodedata.normalize("NFD", "café-alias.csv")
+    raw = tmp_path / composed
+    raw.write_text("data", encoding="utf-8")
+    alias = tmp_path / decomposed
+    try:
+        aliases_same_file = os.path.samefile(raw, alias)
+    except FileNotFoundError:
+        aliases_same_file = False
+    if not aliases_same_file:
+        pytest.skip("this filesystem treats NFC and NFD names as distinct")
+
+    project = tmp_path / "workspace.dwk"
+    project.write_text(_workspace_json_declaring(str(raw)), encoding="utf-8")
+    api = DesktopApi()
+    api.attach(FakeWindow([str(project)]))
+    api.open_project_file()
+    resolved_alias = os.path.realpath(str(alias))
+
+    assert is_declared_source(resolved_alias)
+    assert payload_declares_source(
+        {"datasets": [{"source": {"kind": "path", "path": str(raw)}}]},
+        resolved_alias,
+    )
+
+
 # === Long paths ==============================================================
 #
 # Windows' legacy ~260-char MAX_PATH is an OS-level limit this code cannot
