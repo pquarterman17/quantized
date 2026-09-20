@@ -36,6 +36,7 @@ from pathlib import Path
 
 import uvicorn
 
+from quantized import __version__
 from quantized.server_launch import _open_when_healthy, _resolve_port, _run_desktop, _run_dev
 
 # Same resolution as quantized.app._WEB_DIR (kept as a separate constant here
@@ -66,6 +67,12 @@ def main_calc(argv: list[str] | None = None) -> None:
 def _serve(argv: list[str]) -> None:
     """Parse serve args, (optionally) schedule the browser, and run the server."""
     parser = argparse.ArgumentParser(prog="qz", description="Launch the quantized app.")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=__version__,
+        help="print the installed quantized version and exit",
+    )
     parser.add_argument("--host", default="127.0.0.1", help="bind host (default 127.0.0.1)")
     parser.add_argument(
         "--port",
