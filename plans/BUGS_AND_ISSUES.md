@@ -1194,7 +1194,7 @@ spread-first and removes only the four project-level Origin envelopes.
 
 #### Completion record
 
-- PR/commit: `df06a518` (2026-09-20); PR recorded after publication.
+- PR/commit: PR #384, implementation `df06a518` (2026-09-20).
 - Automated tests: focused backend 175 passed / 1 skipped; frontend architecture
   and affected files 311 passed; full frontend 694 files / 11,758 passed / 2
   expected failures; full backend 5,417 passed / 87 skipped / 9 xfailed after
