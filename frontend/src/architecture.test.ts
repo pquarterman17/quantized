@@ -1185,6 +1185,10 @@ describe("row-state model guard (#50 universal linking)", () => {
     // what moved — unlike a trim, whose mapping is unrecoverable from lengths.
     const allow = [
       "/lib/rowstate.ts",
+      // Lazy Origin preview resolution is the one boundary where exclusions
+      // must be read directly: it translates preview indices into full-book
+      // source indices before publishing the replacement dataset (BUG-009).
+      "/lib/bookData.ts",
       // ("/lib/workspace.ts" LEFT this list 2026-09-10 — the new staleness
       // check below caught it on its first run: both its read and write bodies
       // moved to workspaceDatasetParse.ts / workspaceSerialize.ts, which are

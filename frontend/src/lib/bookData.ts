@@ -5,6 +5,7 @@
 // setter comes in as a parameter, so there's no store import and no cycle.
 
 import { fetchBookData } from "./api";
+import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "./rowSidecars";
 import type { BookSource, Dataset } from "./types";
 
 /** The narrow slice of the store's `set` this module needs — an updater
@@ -96,6 +97,16 @@ export function resetBookTransportForTests(): void {
   _bookErrors.clear();
 }
 
+function resolvedExcludedRows(ds: Dataset, sourceRows: number): number[] | undefined {
+  const excluded = ds.excludedRows;
+  if (!excluded?.length) return undefined;
+  const rawMap = ds.data.metadata?.[PREVIEW_SOURCE_ROWS];
+  if (rawMap === undefined) return ds.pending?.previewSampled === false ? excluded : undefined;
+  const map = asPreviewSourceRows(rawMap, ds.data.time.length, sourceRows);
+  if (!map || excluded.some((row, i) => !Number.isInteger(row) || row < 0 || row >= map.length || (i > 0 && row <= excluded[i - 1]))) return undefined;
+  return excluded.map((i) => map[i]).sort((a, b) => a - b);
+}
+
 /** Fetch one dataset's full data and install it, single-flight. Resolves
  *  (not rejects) once the swap lands — `ensureBookData` (fire-and-forget UI
  *  trigger) attaches its own `.catch` for the toast; `resolvePendingDatasets`
@@ -113,10 +124,10 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
                 ...d,
                 data: full,
                 pending: undefined,
-                // Row-state indices were against the PREVIEW rows (#50/#53)
-                // — they no longer mean anything against the real data.
-                excludedRows: undefined,
-                filter: undefined,
+                // Exclusions are row-indexed: translate them only when the
+                // preview-to-source correspondence is proven. Filters are
+                // value-based, so the existing filter remains valid.
+                excludedRows: resolvedExcludedRows(d, full.time.length),
               }
             : d,
         ),
@@ -125,18 +136,8 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
       _bookErrors.delete(id);
     })
     .then(undefined, (e: unknown) => {
-      // BUG-009: record WHY, so `store/pendingEdit.ts` can stop promising a
-      // retry "in a moment" for a book that will never arrive. `pending` stays
-      // set on purpose (a retry may still work); only the message changes.
-      // Re-thrown unchanged, so every existing caller's error handling —
-      // `resolveDataset`'s reject, the save command's abort — is untouched.
-      //
-      // A REJECTION HANDLER, not `.catch`: `.catch` here would also catch a throw
-      // from the SUCCESS handler above (a Zustand subscriber throwing during the
-      // datasets swap), recording a fetch that actually succeeded as a failure and
-      // skipping the delete. Unreadable today — `pending` is already cleared by
-      // then, so the message short-circuits — but the record would mean less than
-      // this comment claims.
+      // Keep the pending source for retry and record the transport reason for
+      // guarded actions. Re-throw so awaited resolve/save operations abort.
       _bookErrors.set(id, { source, message: e instanceof Error ? e.message : String(e) });
       throw e;
     })

@@ -1638,25 +1638,116 @@ describe("useApp lazy per-book import (ORIGIN_FILE_DECODE_PLAN #38)", () => {
     });
   });
 
-  it("ensureBookData clears stale row-state (indices were against the preview)", async () => {
+  it("ensureBookData maps sampled-preview exclusions and preserves value filters", async () => {
     const id = "ds-preview-1";
+    const full = {
+      ...raw,
+      time: [1, 2, 3, 4, 5],
+      values: [[10], [20], [30], [40], [50]],
+    };
     useApp.setState({
       datasets: [
         {
           id,
           name: "lazy",
-          data: previewData,
-          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 5000, cols: 1 },
-          excludedRows: [0],
+          data: {
+            ...previewData,
+            // Maps are valid in any order; Dataset.excludedRows must still
+            // retain its sorted/de-duplicated contract after resolution.
+            metadata: { ...previewData.metadata, preview_source_rows: [4, 1] },
+          },
+          pending: {
+            kind: "path",
+            path: "/p.opj",
+            bookId: "Book2",
+            rows: 5,
+            cols: 1,
+            previewSampled: true,
+          },
+          excludedRows: [0, 1],
           filter: [{ col: 0, kind: "range", min: 0, max: 1 }],
         },
       ],
     });
-    vi.mocked(fetchBookData).mockResolvedValue(raw);
+    vi.mocked(fetchBookData).mockResolvedValue(full);
     useApp.getState().ensureBookData(id);
     await vi.waitFor(() => expect(useApp.getState().datasets[0].pending).toBeUndefined());
+    expect(useApp.getState().datasets[0].excludedRows).toEqual([1, 4]);
+    expect(useApp.getState().datasets[0].filter).toEqual([{ col: 0, kind: "range", min: 0, max: 1 }]);
+  });
+
+  it("ensureBookData drops exclusions when sampled row correspondence is missing or malformed", async () => {
+    for (const preview_source_rows of [undefined, [0, 0], [0, 99]]) {
+      const id = `ds-bad-map-${String(preview_source_rows)}`;
+      useApp.setState({
+        datasets: [{
+          id,
+          name: "lazy",
+          data: {
+            ...previewData,
+            metadata: preview_source_rows === undefined ? {} : { preview_source_rows },
+          },
+          pending: {
+            kind: "path",
+            path: "/p.opj",
+            bookId: "Book2",
+            rows: 5,
+            cols: 1,
+            previewSampled: true,
+          },
+          excludedRows: [0],
+        }],
+      });
+      vi.mocked(fetchBookData).mockResolvedValue(raw);
+      await useApp.getState().resolveDataset(id);
+      expect(useApp.getState().datasets[0].excludedRows).toBeUndefined();
+    }
+  });
+
+  it("ensureBookData drops a malformed duplicate preview exclusion instead of violating row-state identity", async () => {
+    const id = "ds-duplicate-exclusion";
+    useApp.setState({
+      datasets: [{
+        id,
+        name: "lazy",
+        data: { ...previewData, metadata: { preview_source_rows: [0, 2] } },
+        pending: {
+          kind: "path",
+          path: "/p.opj",
+          bookId: "Book2",
+          rows: 3,
+          cols: 1,
+          previewSampled: true,
+        },
+        excludedRows: [0, 0],
+      }],
+    });
+    vi.mocked(fetchBookData).mockResolvedValue(raw);
+    await useApp.getState().resolveDataset(id);
     expect(useApp.getState().datasets[0].excludedRows).toBeUndefined();
-    expect(useApp.getState().datasets[0].filter).toBeUndefined();
+  });
+
+  it("ensureBookData keeps prefix-preview exclusions through an identity mapping", async () => {
+    const id = "ds-prefix-preview";
+    useApp.setState({
+      datasets: [{
+        id,
+        name: "lazy",
+        data: previewData,
+        pending: {
+          kind: "path",
+          path: "/p.opj",
+          bookId: "Book2",
+          rows: 5,
+          cols: 1,
+          previewSampled: false,
+        },
+        excludedRows: [1],
+      }],
+    });
+    vi.mocked(fetchBookData).mockResolvedValue(raw);
+    await useApp.getState().resolveDataset(id);
+    expect(useApp.getState().datasets[0].excludedRows).toEqual([1]);
   });
 
   it("ensureBookData is a no-op for a dataset that isn't pending", () => {
