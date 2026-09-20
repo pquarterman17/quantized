@@ -97,7 +97,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-019 | P1 | Per-technique view memory / dataset switch / autosave | `captureTechniqueView` stored the WHOLE object handed to it, and three callers hand it the entire `AppState` — so each entry held the library, the windows and the PREVIOUS memory map, compounding the serialized workspace on every dataset switch (Fibonacci-wise when alternating two techniques, ratio -> phi ~ 1.62) until autosave's `JSON.stringify` stalled the main thread and every plot, new and old, stopped drawing | Claude (agent) | Owner-reported 2026-09-19 (XRDML 3-D map + box integration); **FIXED 2026-09-19** — the capture projects down to its nine declared fields. Measured before/after on the owner's exact sequence in the running app: 5.4 MB -> 359.6 MB -> `RangeError` -> unresponsive, versus a flat 344 B |
 | BUG-020 | P2 | Cut landing and workshop-derived datasets | A derived dataset took its id from a private page-lifetime counter (`cut-1`, `magbg-1`, etc.) instead of `store/idSeq.ts`, so a reopened workspace plus one new operation could hold TWO datasets with that id: the app could plot the old result and one delete could destroy both | Claude + ChatGPT-Sol (agents) | Cut landing fixed 2026-09-19. **Remaining four workshop call sites fixed 2026-09-20 (ChatGPT-Sol):** Baseline, Hysteresis, Magnetometry Background/Units and Reflectivity simulation/SLD now all use `nextDatasetId()`. Reflectivity keeps its counter only for human-readable result numbering. A source-level architecture ratchet prevents the six retired prefixes from returning; 80 focused hook tests pass. Owner verification remains. |
 | BUG-021 | P0 | Magnetometry workshop — Background tab | The tab ran the M(T) one-sided high-T fit (`subtract_mag_background`) on an M(H) hysteresis loop, whose own docstring forbids exactly that: the window sits entirely in the +H tail, so the intercept removed carries +Ms and the corrected loop is sheared down by Ms (measured: plateaus at 0 and −2·Ms, squareness a meaningless 1.0000). Surfaced to the owner as `[object Object],[object Object],[object Object],[object Object]` — `ensureOk`'s `as { detail?: string }` cast stringifying FastAPI's array-shaped 422 `detail`, one entry per NaN gap that `JSON.stringify` had written as `null` | Claude (agent) | Reported 2026-09-19 by owner on a real VSM loop (filed as BUG-019 on the branch, renumbered on rebase); all four reported defects reproduced by measurement before any code changed. **FIXED 2026-09-20** — dispatch on the DECLARED x label/unit (`lib/magDataKind.ts`, reading `x_column_long` first so an Origin SHORT column name cannot masquerade as a field symbol), failing closed to a user choice when it cannot be determined; gaps dropped before every fit request and restored on their original rows, and SUBSTITUTED per axis on the elementwise conversion path (`lib/api/finitePairs.ts`); all five magnetometry call sites filtered, including the Hysteresis workshop's automatic analysis; any `detail` shape rendered readably (`lib/api/errorDetail.ts`, lazily imported to keep it out of the eager bundle); panel wording, control label, per-path default and the reported quantity (offset, not intercept) follow the path actually selected; a documented no-op is reported as a no-op; the readout is tagged with the datasets it is about so a dataset switch cannot leave a stale one on screen. 13 sabotages over two rounds, each restored byte-identical. Owner verification on the reported file remains |
-| BUG-022 | P1 | Curve Fit / Equation Fit / Model Scan / Bumps / Peak Wizard / autoGuess | `lib/fitselection.ts`'s `selectedFitData` does not filter non-finite values, and all six consumers post that `x`/`y` to pydantic `list[float]` routes — so a `JSON.stringify`d NaN arrives as `null` and is rejected once per element. **The owner's same gapped hysteresis loop still 422s in Curve Fit**, legible since BUG-021's `errorDetail.ts` but still a failure | Unassigned | Found 2026-09-20 in the round-3 re-review of BUG-021; every call site and route code-read and named in the entry. NOT fixed there, deliberately: the filtering belongs at the request boundary, not inside the shared selector. `lib/api/finitePairs.ts` already has the contract to apply, including the row-alignment guarantee |
+| BUG-022 | P1 | Curve Fit / Equation Fit / Model Scan / Bumps / Peak Wizard / autoGuess | `selectedFitData` deliberately preserves non-finite values, but six consumers posted them to pydantic `list[float]` routes, turning NaN into rejected `null` values | ChatGPT-Sol | **FIXED 2026-09-20:** each request boundary now applies `dropGapRows`; fitted curves are scattered back through `restoreGapRows` before expansion to full dataset rows; weighting follows the same kept indices; Peak Analyzer builds one finite working segment for baseline/find/fit/integrate; each user-triggered path reports “N of M rows are gaps”. The selector remains unchanged, preserving the original design ruling. |
 
 ---
 
@@ -8030,10 +8030,9 @@ the output column is empty, rather than silently minting it.
 
 **Priority:** P1 — the owner's own gapped hysteresis loop still fails in Curve
 Fit; legible since BUG-021's `errorDetail.ts`, but still a failure
-**State:** Open — found in the round-3 re-review of BUG-021, not fixed there
-(out of that commit's scope); every site named below is code-read
+**State:** Verified complete (agent); owner verification outstanding
 **Reported:** 2026-09-20 by Claude (agent), reviewing BUG-021
-**Likely scope:** `frontend/src/lib/fitselection.ts` and the six hooks listed
+**Implemented scope:** the six request boundaries listed below; `selectedFitData` intentionally unchanged
 
 ### The defect
 
@@ -8070,11 +8069,28 @@ guarantee and the throw-on-mismatch that keeps a corrected column from
 shifting. Each site also needs BUG-021's user notice ("N of M rows are gaps"),
 not a silent drop.
 
-### Reproduction
+### Reproduction and acceptance
 
 - [x] Mechanism identified and each call site named (above), code-read
-- [ ] Reproduced end to end per site
-- [ ] Regression test per site
+- [x] Regression coverage for Curve Fit, auto-guess, Equation Fit, Model Scan,
+  Bumps, and Peak Analyzer
+- [x] Fitted overlays restore gaps at their original row indices
+- [x] User notice names the number of excluded rows
+- [x] Type-check and focused tests pass
+- [ ] Owner verifies the original gapped hysteresis file in Curve Fit
+
+### Implementation record — 2026-09-20 (ChatGPT-Sol)
+
+Filtering is applied immediately before each backend request, not inside
+`selectedFitData`. Curve Fit also projects a resolved `dy` vector through the
+same `keep` indices, so weighted and unweighted fits see identical rows. For
+the three paths that return a per-input fitted curve (registry, equation and
+Bumps), `restoreGapRows` reconstructs the analysis-row result before the
+existing excluded/filter-row expansion reconstructs full dataset length.
+Peak Analyzer filters its range-cut working segment once, remaps `kept` to the
+original rows, and therefore keeps baseline overlays aligned while making
+baseline, find, fit and integrate requests safe. Zero finite pairs fail with a
+plain-language error rather than making a guaranteed-invalid request.
 
 ---
 

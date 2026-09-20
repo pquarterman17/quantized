@@ -13,6 +13,7 @@ import { saveCustomModel } from "../../../lib/fitmodels";
 import { JobCancelledError } from "../../../lib/jobs";
 import * as jobs from "../../../lib/jobs";
 import type { DataStruct } from "../../../lib/types";
+import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { useModelScan } from "./useModelScan";
 
@@ -55,6 +56,7 @@ const ENTRY: ScanEntry = {
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  useToasts.setState({ toasts: [] });
   useApp.setState({
     datasets: [{ id: "d1", name: "run.dat", data: DATA }],
     activeId: "d1",
@@ -83,6 +85,18 @@ describe("useModelScan", () => {
     expect(result.current.error).toBeNull();
     expect(result.current.busy).toBe(false);
     expect(result.current.progress).toBeNull();
+  });
+
+  it("excludes non-finite pairs from a scan and tells the user", async () => {
+    const gapped = { ...DATA, values: [[10], [20], [Number.NaN], [40]] };
+    useApp.setState({ datasets: [{ id: "d1", name: "gapped.dat", data: gapped }], activeId: "d1" });
+    const { result } = renderHook(() => useModelScan());
+    await act(async () => result.current.scan());
+
+    expect(scanFitModelsJob).toHaveBeenCalledWith({ x: [0, 1, 3], y: [10, 20, 40] });
+    expect(useToasts.getState().toasts.at(-1)?.msg).toBe(
+      "1 of 4 rows are gaps; they were excluded from the scan.",
+    );
   });
 
   it("scans the primary plotted X/Y channels instead of time/values[0]", async () => {

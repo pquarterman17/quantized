@@ -12,10 +12,12 @@
 import { useRef, useState } from "react";
 
 import { type ScanEntry } from "../../../lib/api/curvefit";
+import { dropGapRows } from "../../../lib/api/finitePairs";
 import { loadCustomModels } from "../../../lib/fitmodels";
 import { scanFitModelsJob } from "../../../lib/fitscan";
 import { cancelJob, pollJob, JobCancelledError } from "../../../lib/jobs";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { toast } from "../../../store/toasts";
 import { selectedFitData } from "../../../lib/fitselection";
 
 /** The completed job's result payload — same shape as the synchronous
@@ -66,14 +68,19 @@ export function useModelScan(): ModelScanState {
       const state = useApp.getState();
       const d = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
       if (!d) return;
+      const pairs = dropGapRows(d.x, d.y);
+      if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to scan");
+      if (!pairs.complete) {
+        toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the scan.`);
+      }
       const equations = loadCustomModels().map((m) => ({
         name: m.name,
         equation: m.equation,
         guesses: m.guesses,
       }));
       const { job_id } = await scanFitModelsJob({
-        x: d.x,
-        y: d.y,
+        x: pairs.x,
+        y: pairs.y,
         ...(equations.length > 0 ? { equations } : {}),
       });
       jobRef.current = job_id;

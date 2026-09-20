@@ -8,9 +8,11 @@
 import { useRef, useState } from "react";
 
 import { fitBumps, type BumpsEngine, type BumpsFitResult } from "../../../lib/fitbumps";
+import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { cancelJob, isJobSubmit, JobCancelledError, pollJob } from "../../../lib/jobs";
 import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { toast } from "../../../store/toasts";
 import { selectedFitData } from "../../../lib/fitselection";
 
 export type EngineChoice = "parity" | BumpsEngine;
@@ -73,10 +75,15 @@ export function useBumpsFit(): BumpsFitState {
       const state = useApp.getState();
       const d = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
       if (!d) return;
+      const pairs = dropGapRows(d.x, d.y);
+      if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
+      if (!pairs.complete) {
+        toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the fit.`);
+      }
       const resp = await fitBumps({
         model: modelName,
-        x: d.x,
-        y: d.y,
+        x: pairs.x,
+        y: pairs.y,
         engine,
         ...(engine === "dream" ? dream : {}),
       });
@@ -94,7 +101,8 @@ export function useBumpsFit(): BumpsFitState {
       if (Array.isArray(fit.yFit)) {
         const n = ds.data.time.length;
         const kept = activeRowIndices(n, droppedRows(ds));
-        const y = kept.length === n ? fit.yFit : expandToFull(fit.yFit, kept, n);
+        const aligned = restoreGapRows(fit.yFit, pairs);
+        const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
         useApp.getState().setFitOverlay({ datasetId: ds.id, y });
       }
     } catch (e) {

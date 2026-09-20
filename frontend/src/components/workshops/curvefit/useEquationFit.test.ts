@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fitEquation, validateEquation } from "../../../lib/api/curvefit";
 import { loadCustomModels, saveCustomModel, type CustomFitModel } from "../../../lib/fitmodels";
 import type { DataStruct } from "../../../lib/types";
+import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { useEquationFit } from "./useEquationFit";
 
@@ -34,6 +35,7 @@ const NO_DEBOUNCE = { debounceMs: 0 };
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
+  useToasts.setState({ toasts: [] });
   useApp.setState({
     datasets: [{ id: "d1", name: "run.dat", data: DATA }],
     activeId: "d1",
@@ -147,6 +149,23 @@ describe("useEquationFit fitting", () => {
     });
     expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", y: [11, null, 31, 41] });
     expect(result.current.result?.params).toEqual([10, 1]);
+  });
+
+  it("drops non-finite pairs before fitting and restores the gap in the overlay", async () => {
+    const gapped = { ...DATA, time: [0, Number.NaN, 2, 3] };
+    useApp.setState({ datasets: [{ id: "d1", name: "gapped.dat", data: gapped }], activeId: "d1" });
+    vi.mocked(fitEquation).mockResolvedValue({ params: [1, 0], yFit: [11, 31, 41] });
+    const { result } = await validated();
+    await act(async () => result.current.fit());
+
+    expect(fitEquation).toHaveBeenCalledWith({
+      equation: "m*x + b",
+      x: [0, 2, 3],
+      y: [10, 30, 40],
+      guesses: [1, 1],
+    });
+    expect(useApp.getState().fitOverlay?.y).toEqual([11, Number.NaN, 31, 41]);
+    expect(useToasts.getState().toasts.at(-1)?.msg).toContain("1 of 4 rows are gaps");
   });
 
   it("fits the primary plotted X/Y channels instead of time/values[0]", async () => {

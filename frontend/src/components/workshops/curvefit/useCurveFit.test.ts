@@ -6,6 +6,7 @@ import { autoGuess, bootstrapFit, listFitModels } from "../../../lib/api/curvefi
 import { exportCornerFigure } from "../../../lib/api/figures";
 import { fetchBookData, fitModel } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
+import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { useCurveFit } from "./useCurveFit";
 
@@ -33,6 +34,7 @@ const DATA: DataStruct = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(listFitModels).mockResolvedValue({ models: [] });
+  useToasts.setState({ toasts: [] });
   useApp.setState({
     datasets: [{ id: "d1", name: "run.dat", data: DATA }],
     activeId: "d1",
@@ -53,6 +55,20 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
     });
     expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 1, 2, 3], y: [10, 20, 30, 40] });
     expect(useApp.getState().fitOverlay).toEqual({ datasetId: "d1", y: [11, 21, 31, 41] });
+  });
+
+  it("excludes gap rows at the request boundary and restores their overlay positions", async () => {
+    const gapped = { ...DATA, values: [[10], [Number.NaN], [30], [40]] };
+    useApp.setState({ datasets: [{ id: "d1", name: "gapped.dat", data: gapped }], activeId: "d1" });
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 31, 41] });
+    const { result } = renderHook(() => useCurveFit());
+    await act(async () => result.current.run("fit"));
+
+    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 2, 3], y: [10, 30, 40] });
+    expect(useApp.getState().fitOverlay?.y).toEqual([11, Number.NaN, 31, 41]);
+    expect(useToasts.getState().toasts.at(-1)?.msg).toBe(
+      "1 of 4 rows are gaps; they were excluded from the fit.",
+    );
   });
 
   it("fits the primary plotted X/Y channels instead of time/values[0]", async () => {
@@ -131,6 +147,15 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
       await result.current.run("guess");
     });
     expect(autoGuess).toHaveBeenCalledWith("Linear", [1, 2, 3], [20, 30, 40]);
+  });
+
+  it("auto-guess excludes the same gap rows as a full fit", async () => {
+    const gapped = { ...DATA, values: [[10], [20], [Number.NaN], [40]] };
+    useApp.setState({ datasets: [{ id: "d1", name: "gapped.dat", data: gapped }], activeId: "d1" });
+    vi.mocked(autoGuess).mockResolvedValue({ p0: [1] });
+    const { result } = renderHook(() => useCurveFit());
+    await act(async () => result.current.run("guess"));
+    expect(autoGuess).toHaveBeenCalledWith("Linear", [0, 1, 3], [10, 20, 40]);
   });
 
   it("resolves a still-pending active dataset before fitting (#38)", async () => {
