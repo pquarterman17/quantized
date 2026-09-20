@@ -23,10 +23,8 @@ import { useMemo, useRef } from "react";
 import type uPlot from "uplot";
 
 import {
-  thawColorByColumns,
-  thawErrorBars,
-  thawLabelList,
-  thawStyleList,
+  thawEntries,
+  thawList,
   type FrozenPlotBundle,
 } from "../../lib/plotsnapshot";
 import { resolveTemplate } from "../../lib/plotTemplates";
@@ -55,10 +53,10 @@ export default function SnapshotPlotWindow({ frozen, view, bg }: SnapshotPlotWin
   // Thaw the JSON-safe at-rest shapes back into PlotViewport's render shapes
   // once per bundle (a frozen bundle's identity never changes, so these are
   // stable for the window's whole life — no uPlot rebuild churn).
-  const errorBars = useMemo(() => thawErrorBars(frozen.errorBars), [frozen]);
-  const styleList = useMemo(() => thawStyleList(frozen.styleList), [frozen]);
-  const labelList = useMemo(() => thawLabelList(frozen.labelList), [frozen]);
-  const colorByColumns = useMemo(() => thawColorByColumns(frozen.colorByColumns), [frozen]);
+  const errorBars = useMemo(() => thawEntries(frozen.errorBars), [frozen]);
+  const styleList = useMemo(() => thawList(frozen.styleList), [frozen]);
+  const labelList = useMemo(() => thawList(frozen.labelList), [frozen]);
+  const colorByColumns = useMemo(() => thawEntries(frozen.colorByColumns), [frozen]);
   const hidden = useMemo(() => frozen.hidden ?? undefined, [frozen]);
 
   return (

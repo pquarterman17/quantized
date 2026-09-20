@@ -38,6 +38,13 @@ function makeDataset(id: string, name: string): Dataset {
 const ser = (datasets: Dataset[]) => serializeWorkspace({ datasets });
 const parse = (text: string) => parseWorkspace(text).datasets;
 
+function expectSpecialNumbers(cells: readonly (number | null)[]): void {
+  expect(cells[0]).toBeNaN();
+  expect(cells[1]).toBe(Infinity);
+  expect(cells[2]).toBe(-Infinity);
+  expect(Object.is(cells[3], -0)).toBe(true);
+}
+
 describe("serializeWorkspace / parseWorkspace round-trip", () => {
   it("restores datasets identically", () => {
     const datasets = [makeDataset("a", "first"), makeDataset("b", "second")];
@@ -1436,7 +1443,10 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
       datasetId: "a",
       view: { ...defaultPlotView(), plotTitle: "Persistent" },
     });
-    const loaded = parseWorkspace(serializeWorkspace({ datasets, editableFigures: [editable] }));
+    const serialized = serializeWorkspace({ datasets, editableFigures: [editable] });
+    const raw = JSON.parse(serialized) as { editableFigures: unknown[] };
+    expect(JSON.stringify(raw.editableFigures[0])).toBe(JSON.stringify(editable));
+    const loaded = parseWorkspace(serialized);
     expect(loaded.editableFigures).toEqual([editable]);
     expect(loaded.figureDocs).toEqual([]);
   });
@@ -1522,18 +1532,37 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     expect(savedAgain).not.toContain("future-editable");
   });
 
-  it("round-trips frozen canonical snapshots whose JSON cells were non-finite", () => {
+  it("round-trips every numeric identity in frozen canonical snapshots, including window documents", () => {
     const frozen = createFigureDocument({
       id: "frozen", name: "Frozen", datasetId: null, view: defaultPlotView(),
       data: {
         mode: "frozen",
-        snapshot: { time: [0, Number.NaN], values: [[Number.POSITIVE_INFINITY]], labels: ["y"], units: [""], metadata: {} },
+        snapshot: {
+          time: [Number.NaN, Infinity, -Infinity, -0],
+          values: [
+            [Number.NaN],
+            [Infinity],
+            [-Infinity],
+            [-0],
+          ],
+          labels: ["y"],
+          units: [""],
+          metadata: {},
+        },
       },
     });
-    const loaded = parseWorkspace(serializeWorkspace({ datasets: [makeDataset("a", "first")], editableFigures: [frozen] }));
-    const snapshot = loaded.editableFigures[0].data.snapshot!;
-    expect(Number.isNaN(snapshot.time[1])).toBe(true);
-    expect(Number.isNaN(snapshot.values[0][0])).toBe(true);
+    const loaded = parseWorkspace(serializeWorkspace({
+      datasets: [makeDataset("a", "first")],
+      editableFigures: [frozen],
+      plotWindows: [win({ document: frozen, datasetId: null })],
+    }));
+    for (const snapshot of [
+      loaded.editableFigures[0].data.snapshot!,
+      loaded.plotWindows[0].document!.data.snapshot!,
+    ]) {
+      expectSpecialNumbers(snapshot.time);
+      expectSpecialNumbers(snapshot.values.map((row) => row[0]));
+    }
   });
 
   it("clamps a window's dangling dataset ref to null (never drops the window itself)", () => {
@@ -1619,6 +1648,42 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     expect(s1.kind).toBe("snapshot");
     expect(s1.snapshot).toEqual(snapshot);
     expect(s1.datasetId).toBeNull();
+  });
+
+  it("round-trips NaN, ±Infinity, and -0 across every static-window numeric array", () => {
+    const special = [Number.NaN, Infinity, -Infinity, -0, null];
+    const snapshot: FrozenPlotBundle = {
+      payload: {
+        data: [special, [...special]] as FrozenPlotBundle["payload"]["data"],
+        series: [{ label: "m", unit: "emu" }],
+        xLabel: "t",
+        xUnit: "s",
+      },
+      styleList: null,
+      labelList: null,
+      errorBars: [[1, [...special]]],
+      plotted: [0],
+      colorByColumns: [[1, {
+        channel: 2,
+        z: [...special],
+        colormap: "viridis",
+        lo: 0,
+        hi: 1,
+      }]],
+      hidden: null,
+    };
+    const loaded = parseWorkspace(serializeWorkspace({
+      datasets: [makeDataset("a", "first")],
+      plotWindows: [win({ id: "s1", kind: "snapshot", datasetId: null, snapshot })],
+    }));
+    const restored = loaded.plotWindows[0].snapshot!;
+
+    expectSpecialNumbers(restored.payload.data[0] as (number | null)[]);
+    expect(restored.payload.data[0][4]).toBeNull();
+    expectSpecialNumbers(restored.errorBars[0][1]);
+    expect(restored.errorBars[0][1][4]).toBeNull();
+    expectSpecialNumbers(restored.colorByColumns[0][1].z);
+    expect(restored.colorByColumns[0][1].z[4]).toBeNull();
   });
 
   it("clamps a focusedWindowId pointing at a snapshot window to null (item 11 — snapshots never hold focus)", () => {

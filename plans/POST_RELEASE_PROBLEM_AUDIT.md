@@ -55,8 +55,8 @@ agent can implement a fix without repeating the investigation.
 
 - [x] Recheck ordinary dataset NaN/±Infinity/-0 persistence (BUG-017): the
   shared codec covers `.dwk`, autosave, Pack Project, and workbook transfer.
-- [x] Inspect the distinct frozen-figure snapshot boundary; it does **not** use
-  that codec (BUG-023 below).
+- [x] Inspect the distinct frozen-figure snapshot boundary; BUG-023 now routes
+  it through the same codec at the JSON boundary.
 - [x] Audit PageDocument frozen panels: a page stores only FigureDocument ids
   and inherits each figure's live/frozen ownership, so BUG-023's
   FigureDocument-boundary fix covers pages without a second snapshot codec.
@@ -80,7 +80,7 @@ agent can implement a fix without repeating the investigation.
 
 ### BUG-023 — frozen figures and static snapshot windows lose non-finite identity
 
-**Priority:** P2. The common NaN-gap shape remains a gap, but `+Infinity` and
+**Priority:** P2. **Fixed 2026-09-20.** The common NaN-gap shape remained a gap, but `+Infinity` and
 `-Infinity` both silently reopen as NaN and `-0` silently reopens as `+0`.
 That is a scientific-data identity loss inside an artifact explicitly meant to
 be self-contained and durable.
@@ -117,21 +117,38 @@ be self-contained and durable.
 
 **Implementation checklist:**
 
-- [ ] Route frozen snapshots through `encodeDataStruct` on serialization and
+- [x] Route frozen snapshots through the shared BUG-017 sentinel encoder on serialization and
   the matching decoder on parse.
-- [ ] Cover both data-bearing boundaries: FigureDocument snapshots and static
+- [x] Cover both data-bearing boundaries: FigureDocument snapshots and static
   plot-window bundles (`payload.data`, `errorBars`, and colour-by `z`). Prefer
   one shared numeric-array codec rather than two subtly different sentinels.
-- [ ] Preserve byte-for-byte output for finite-only documents if feasible; if
+- [x] Preserve byte-for-byte output for finite-only documents if feasible; if
   the wire type must widen, make that explicit and keep older documents valid.
-- [ ] Cover direct FigureDocument serialization and full workspace round-trip.
+- [x] Cover direct FigureDocument serialization and full workspace round-trip.
 - [x] Check PageDocument frozen panels: `pageDocument.ts` deliberately carries
   no snapshot; panels resolve the referenced FigureDocument, so there is no
   independent persistence boundary to patch.
-- [ ] Confirm live documents and ordinary finite frozen documents are unchanged.
-- [ ] Run forced TypeScript build, lint, focused/full tests, repository gates,
+- [x] Confirm live documents and ordinary finite frozen documents are unchanged.
+- [x] Run forced TypeScript build, lint, focused/full tests, repository gates,
   and production bundle check.
-- [ ] Record PR/commit and verification here and in `BUGS_AND_ISSUES.md`.
+- [x] Record PR/commit and verification here and in `BUGS_AND_ISSUES.md`.
+
+**Completion (2026-09-20):** `nonFiniteCells.ts` now exposes one numeric JSON
+boundary replacer backed by BUG-017's exact four sentinels. Workspace saves,
+standalone FigureDocument JSON, and workbook-transfer JSON all use that same
+boundary without mutating live datasets. Frozen-document normalization and
+snapshot-window sanitization decode the sentinels while retaining legacy
+finite/`null` behavior. Direct and full-workspace regressions cover NaN,
+±Infinity, and -0 in FigureDocument `time`/`values` and snapshot-window
+`payload.data`, `errorBars`, and colour-by `z`; ordinary finite output is
+byte-identical. The exact restored arrays are the inputs used by reopened
+display/export, so the comparison is pinned below the renderer as a strict
+identity contract. Verification: focused/architecture 271 tests; full frontend
+694 files / 11,755 passed / 2 expected failures; forced TypeScript, ESLint,
+production build and bundle gate; repository integrity 13/13. Eager JS is
+877,160 B, 1,022 B under the unchanged 878,182 B ceiling and 743 B smaller than
+the `origin/main` baseline. Implementation commit: `84679e60`; PR:
+https://github.com/pquarterman17/quantized/pull/381.
 
 **Suggested owner/model:** Claude Sonnet-class model for persistence-contract
 reliability; ChatGPT-Sol for the final UI/reopen acceptance check.
@@ -284,7 +301,7 @@ inexpensive model.
    guidance from a primary workflow.
 2. [ ] Resolve UX-007 next: remove the dead-end wording immediately, then use a
    small read-only inspector if it fits the current Library projection cleanly.
-3. [ ] Fix BUG-023 next: reuse an existing codec across both affected frozen
+3. [x] Fix BUG-023 next: reuse an existing codec across both affected frozen
    payloads, with direct and workspace round-trip tests.
 4. [x] Add UX-006 alongside other packaging work or as a tiny independent PR.
 5. [ ] Perform the owner acceptance pass for BUG-001 and UX-001/UX-004 on the
@@ -296,5 +313,6 @@ inexpensive model.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-09-20 | Codex | Fixed BUG-023 with the shared BUG-017 sentinel codec across frozen FigureDocuments, snapshot-window numeric arrays, workspace saves, and workbook transfer | Direct/full round trips; focused 271; full frontend 11,755; typecheck/lint/build/bundle; integrity 13 |
 | 2026-09-20 | ChatGPT-Sol | Extended BUG-023 to the independent static snapshot-window payload; filed UX-007 for the dead workbook Properties placeholder; completed the saved numeric-payload boundary pass | Serializer/sanitizer tracing, persistence tests, action-registry and plan reconciliation |
 | 2026-09-20 | ChatGPT-Sol | Created independent v0.26.1 audit; filed BUG-023, UX-005, and UX-006; reconciled the highest-priority existing open items | Static call-path inspection, published-wheel probe, release artifact/API verification |

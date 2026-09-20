@@ -10,13 +10,12 @@ import {
   publishLivePlotSnapshot,
   readLivePlotSnapshot,
   sanitizeFrozenBundle,
-  thawColorByColumns,
-  thawErrorBars,
-  thawLabelList,
-  thawStyleList,
+  thawEntries,
+  thawList,
   type LivePlotSnapshot,
 } from "./plotsnapshot";
 import type { SeriesStyle } from "./types";
+import { encodePersistedCells } from "./nonFiniteCells";
 
 function live(): LivePlotSnapshot {
   return {
@@ -99,25 +98,65 @@ describe("thaw helpers (frozen → render shapes)", () => {
   it("round-trips freeze → thaw back to the render-side shapes", () => {
     const s = live();
     const frozen = freezePlotSnapshot(s);
-    expect(thawErrorBars(frozen.errorBars)).toEqual(s.errorBars);
-    expect(thawStyleList(frozen.styleList)).toEqual(s.styleList);
-    expect(thawLabelList(frozen.labelList)).toEqual(s.labelList);
-    expect(thawColorByColumns(frozen.colorByColumns)).toEqual(s.colorByColumns);
+    expect(thawEntries(frozen.errorBars)).toEqual(s.errorBars);
+    expect(thawList(frozen.styleList)).toEqual(s.styleList);
+    expect(thawList(frozen.labelList)).toEqual(s.labelList);
+    expect(thawEntries(frozen.colorByColumns)).toEqual(s.colorByColumns);
   });
 
   it("thaws null decorations to undefined", () => {
-    expect(thawStyleList(null)).toBeUndefined();
-    expect(thawLabelList(null)).toBeUndefined();
-    expect(thawErrorBars([]).size).toBe(0);
-    expect(thawColorByColumns([]).size).toBe(0);
+    expect(thawList(null)).toBeUndefined();
+    expect(thawEntries([]).size).toBe(0);
   });
 });
 
 describe("sanitizeFrozenBundle (the untrusted-.dwk boundary)", () => {
   it("accepts a frozen bundle round-tripped through JSON", () => {
     const frozen = freezePlotSnapshot(live());
-    const out = sanitizeFrozenBundle(JSON.parse(JSON.stringify(frozen)));
+    const json = JSON.stringify(frozen, encodePersistedCells);
+    expect(json).toBe(JSON.stringify(frozen));
+    const out = sanitizeFrozenBundle(JSON.parse(json));
     expect(out).toEqual(frozen);
+  });
+
+  it("directly encodes/decodes NaN, ±Infinity, and -0 without changing null gaps", () => {
+    const source = live();
+    source.payload.data = [
+      [Number.NaN, Infinity, -Infinity, -0, null],
+      [1, Number.NaN, Infinity, -Infinity, -0],
+    ] as LivePlotSnapshot["payload"]["data"];
+    source.errorBars = new Map([[1, [Number.NaN, Infinity, -Infinity, -0, null]]]);
+    source.colorByColumns = new Map([[
+      1,
+      {
+        channel: 2,
+        z: [Number.NaN, Infinity, -Infinity, -0, null],
+        colormap: "viridis",
+        lo: 0,
+        hi: 1,
+      },
+    ]]);
+    const frozen = freezePlotSnapshot(source);
+    const json = JSON.stringify(frozen, encodePersistedCells);
+    const restored = sanitizeFrozenBundle(JSON.parse(json))!;
+
+    const payload = restored.payload.data as (number | null)[][];
+    expect(payload[0][0]).toBeNaN();
+    expect(payload[0][1]).toBe(Infinity);
+    expect(payload[0][2]).toBe(-Infinity);
+    expect(Object.is(payload[0][3], -0)).toBe(true);
+    expect(payload[0][4]).toBeNull();
+    expect(restored.errorBars[0][1][0]).toBeNaN();
+    expect(restored.errorBars[0][1][1]).toBe(Infinity);
+    expect(restored.errorBars[0][1][2]).toBe(-Infinity);
+    expect(Object.is(restored.errorBars[0][1][3], -0)).toBe(true);
+    expect(restored.errorBars[0][1][4]).toBeNull();
+    const z = restored.colorByColumns[0][1].z;
+    expect(z[0]).toBeNaN();
+    expect(z[1]).toBe(Infinity);
+    expect(z[2]).toBe(-Infinity);
+    expect(Object.is(z[3], -0)).toBe(true);
+    expect(z[4]).toBeNull();
   });
 
   it("returns null for a malformed core payload — never throws", () => {

@@ -11,6 +11,10 @@ import { sanitizeFigureOverrides, type FigureOverrides } from "./figureOverrides
 import { sanitizeExportSeriesStyles, type ExportSeriesStyle } from "./publicationStyles";
 import { PLOT_MARKS, type PlotMark } from "./plotspec";
 import { sanitizePlotView, snapshotView, type PlotView } from "./plotview";
+import {
+  decodeCell,
+  encodePersistedCells,
+} from "./nonFiniteCells";
 import type { DataStruct } from "./types";
 
 export const FIGURE_DOCUMENT_SCHEMA = "quantized.figure" as const;
@@ -306,30 +310,20 @@ function axisBreaks(value: unknown): FigurePlotState["axisBreaks"] {
 }
 
 /** Restore a frozen JSON snapshot without weakening the runtime DataStruct
- * type. JSON.stringify turns every NaN/+Infinity/-Infinity cell into null;
- * those nulls are therefore normalized to NaN (the original kind/sign is not
- * recoverable). Any other non-number cell remains invalid and rejects only
- * this frozen document, not the surrounding workspace. */
+ * type. BUG-023 sentinel strings recover exact non-finite values and signed
+ * zero. A legacy `null` remains readable as NaN under the pre-BUG-023
+ * fail-soft contract (its original NaN/infinity identity is unrecoverable).
+ * Any other non-cell rejects only this frozen document, not the workspace. */
 function normalizeFrozenDataStruct(value: unknown): DataStruct | null {
   if (!isObject(value) || !isObject(value.metadata)) return null;
-  const cells = (candidate: unknown): number[] | null => {
-    if (!Array.isArray(candidate)) return null;
-    const out: number[] = [];
-    for (const cell of candidate) {
-      if (cell === null) out.push(Number.NaN);
-      else if (typeof cell === "number") out.push(Number.isFinite(cell) ? cell : Number.NaN);
-      else return null;
-    }
-    return out;
-  };
+  const cells = (candidate: unknown): number[] | null =>
+    Array.isArray(candidate) && candidate.every((cell) => cell === null || decodeCell(cell) !== undefined)
+      ? candidate.map((cell) => cell === null ? Number.NaN : decodeCell(cell) as number)
+      : null;
   const time = cells(value.time);
   if (!time || !Array.isArray(value.values)) return null;
-  const values: number[][] = [];
-  for (const row of value.values) {
-    const normalized = cells(row);
-    if (!normalized) return null;
-    values.push(normalized);
-  }
+  const values = value.values.map(cells);
+  if (values.includes(null)) return null;
   if (
     !Array.isArray(value.labels) || !value.labels.every((item) => typeof item === "string") ||
     !Array.isArray(value.units) || !value.units.every((item) => typeof item === "string")
@@ -337,7 +331,7 @@ function normalizeFrozenDataStruct(value: unknown): DataStruct | null {
   return {
     ...(clone(value) as unknown as DataStruct),
     time,
-    values,
+    values: values as number[][],
     labels: [...value.labels],
     units: [...value.units],
     metadata: clone(value.metadata),
@@ -439,7 +433,7 @@ export function sanitizeFigureDocument(value: unknown): FigureDocument | null {
 }
 
 export function serializeFigureDocument(document: FigureDocument): string {
-  return JSON.stringify(document);
+  return JSON.stringify(document, encodePersistedCells);
 }
 
 export function deserializeFigureDocument(raw: string): FigureDocument | null {

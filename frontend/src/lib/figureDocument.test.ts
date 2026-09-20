@@ -114,13 +114,14 @@ describe("FigureDocument v2", () => {
     expect(figureDocumentVersion(restored)).toBe(2);
     expect(figureDocumentVersion({ ...document, version: 3 })).toBe(3);
     expect(figureDocumentVersion({ version: 1 })).toBeNull();
+    expect(serializeFigureDocument(document)).toBe(JSON.stringify(document));
     expect(deserializeFigureDocument(serializeFigureDocument(document))).toEqual(document);
   });
 
-  it("restores JSON-null frozen non-finite cells as NaN without sharing snapshot state", () => {
+  it("round-trips every non-finite identity and -0 in a frozen snapshot", () => {
     const frozen: DataStruct = {
-      time: [0, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY],
-      values: [[1, Number.NaN], [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY]],
+      time: [0, Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -0],
+      values: [[1, Number.NaN], [Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY], [-0, 0]],
       labels: ["a", "b"],
       units: ["", ""],
       metadata: {},
@@ -136,10 +137,16 @@ describe("FigureDocument v2", () => {
     const restored = deserializeFigureDocument(serializeFigureDocument(document));
 
     expect(restored?.data.mode).toBe("frozen");
-    expect(Number.isNaN(sanitizeFigureDocument(document)?.data.snapshot?.time[1])).toBe(true);
+    expect(sanitizeFigureDocument(document)?.data.snapshot?.time[2]).toBe(Infinity);
     const snapshot = restored!.data.snapshot!;
-    expect(snapshot.time.map(Number.isNaN)).toEqual([false, true, true, true]);
-    expect(snapshot.values.map((row) => row.map(Number.isNaN))).toEqual([[false, true], [true, true]]);
+    expect(snapshot.time[1]).toBeNaN();
+    expect(snapshot.time[2]).toBe(Infinity);
+    expect(snapshot.time[3]).toBe(-Infinity);
+    expect(Object.is(snapshot.time[4], -0)).toBe(true);
+    expect(snapshot.values[0][1]).toBeNaN();
+    expect(snapshot.values[1]).toEqual([Infinity, -Infinity]);
+    expect(Object.is(snapshot.values[2][0], -0)).toBe(true);
+    expect(Object.is(snapshot.values[2][1], -0)).toBe(false);
     snapshot.values[0][0] = 99;
     expect(document.data.snapshot?.values[0][0]).toBe(1);
 
@@ -147,6 +154,26 @@ describe("FigureDocument v2", () => {
       ...document,
       data: { mode: "frozen", snapshot: { ...frozen, values: [["not a cell"]] } },
     })).toBeNull();
+  });
+
+  it("keeps the legacy frozen-null contract: old null cells reopen as NaN", () => {
+    const document = createFigureDocument({
+      id: "legacy-null",
+      name: "Legacy frozen null",
+      datasetId: null,
+      view: defaultPlotView(),
+      data: { mode: "frozen", snapshot },
+    });
+    expect(serializeFigureDocument(document)).toBe(JSON.stringify(document));
+    const legacy = JSON.parse(JSON.stringify(document)) as Record<string, unknown>;
+    const data = legacy.data as { snapshot: { time: unknown[]; values: unknown[][] } };
+    data.snapshot.time[0] = null;
+    data.snapshot.values[0][0] = null;
+
+    const restored = sanitizeFigureDocument(legacy)!;
+
+    expect(restored.data.snapshot?.time[0]).toBeNaN();
+    expect(restored.data.snapshot?.values[0][0]).toBeNaN();
   });
 
   it("round-trips a customized view without sharing mutable state", () => {
