@@ -177,7 +177,7 @@ directs users to Map view because Quick Plot creates line figures and is not a
 scientifically valid map renderer. Focused tests pass (4 files, 81 tests), as
 do forced TypeScript, lint, clean build/bundle (857.4 kB eager, under the
 857.6 kB budget), and repository-integrity tests (13 passed). Implementation
-commit: see the UX-005 branch history and pull request.
+commit: [`4997396a`](https://github.com/pquarterman17/quantized/commit/4997396aa39b7f68fed3a07b1565c34bd7bd5958).
 
 **Suggested owner/model:** ChatGPT/Codex inexpensive implementation model; this
 is bounded frontend wording plus tests and does not need an expensive model.

@@ -8155,7 +8155,7 @@ update the tests that currently pin the stale copy.
 focused Quick Plot/Library test files pass (81 tests), forced TypeScript,
 frontend lint, clean frontend build/bundle (857.4 kB eager, within the 857.6
 kB budget), and repository-integrity tests (13 passed). Implementation commit:
-see the UX-005 branch history and pull request.
+[`4997396a`](https://github.com/pquarterman17/quantized/commit/4997396aa39b7f68fed3a07b1565c34bd7bd5958).
 
 Full evidence and acceptance wording are in `POST_RELEASE_PROBLEM_AUDIT.md`.
 
