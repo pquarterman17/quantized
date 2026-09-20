@@ -20,18 +20,23 @@ import {
 } from "./autosave";
 import { memoryBackend } from "./autosaveBackend";
 import { resetBookTransportForTests } from "./bookData";
+import { createFigureDocument } from "./figureDocument";
 import {
   decodeCell,
   encodeCell,
   encodeCells,
   encodeDataStruct,
-  encodeDatasetCells,
+  encodePersistedCells,
   isWireCellArray,
 } from "./nonFiniteCells";
 import type { PeakTable } from "./peakTable";
 import { peakDataFingerprint, peakTableMatchesData } from "./peakTableFit";
+import { defaultPlotView } from "./plotview";
 import type { Dataset, DataStruct } from "./types";
-import { buildTransferPackage, parseTransferPackage } from "./workbookTransfer";
+import {
+  buildTransferPackage,
+  parseTransferPackage,
+} from "./workbookTransfer";
 import { parseWorkspace, serializeWorkspace, type WorkspaceState } from "./workspace";
 import { useApp } from "../store/useApp";
 
@@ -103,19 +108,22 @@ describe("encoder/decoder unit contract", () => {
     expect(isWireCellArray([1, "0", 3])).toBe(false);
     expect(isWireCellArray("not an array")).toBe(false);
   });
+
+  it("does not apply sentinels to unrelated numeric configuration arrays", () => {
+    const config = { axisRange: [-0, Infinity], metadata: { z: [-0, Infinity] } };
+    expect(JSON.stringify(config, encodePersistedCells)).toBe(JSON.stringify(config));
+  });
 });
 
 describe("no output change for ordinary data (no schema bump)", () => {
   // The MECHANISM behind "a .dwk of finite data serializes byte-for-byte as it
   // did before": the encoders hand back the INPUT object, so the graph
   // JSON.stringify walks is literally the same one it walked pre-fix.
-  it("returns the input array/struct/dataset by reference when nothing needs a sentinel", () => {
+  it("returns the input array/struct by reference when nothing needs a sentinel", () => {
     const row = [1, 2, 3];
     expect(encodeCells(row)).toBe(row);
     const data = finiteData();
     expect(encodeDataStruct(data)).toBe(data);
-    const dataset = ds({ data, raw: data });
-    expect(encodeDatasetCells(dataset)).toBe(dataset);
   });
 
   it("writes a finite dataset's payload with the exact bytes it had before", () => {
@@ -300,13 +308,8 @@ describe("workbook Copy/Paste transfer package", () => {
     expect(parsed.pkg.datasets[0].data.time[0]).toBe(-Infinity);
   });
 
-  // Regression: `encodeDatasetCells` (the function this package's build step
-  // maps over every member dataset) encodes `data` AND `raw` — but unlike
-  // `serializeWorkspace`'s `.dwk` path, which calls `encodeDataStruct` on
-  // `data`/`raw` separately and inline, this is the ONE call site that could
-  // silently ignore `raw` and still leave every OTHER spec in this file
-  // green (sabotage-verified: see the BUG-017 entry). A dropped-then-decoded
-  // `raw` fails `isWireDataStruct` on the way back in and is fail-closed
+  // Regression: workbook transfer must encode `data` AND `raw`. A
+  // dropped-then-decoded `raw` fails `isWireDataStruct` on the way back in and is fail-closed
   // (workspaceDatasetParse.ts drops it with no error, per that module's
   // doc), so the failure mode is silent data loss, not a throw — this test
   // exists specifically to keep that branch guarded.
@@ -333,6 +336,44 @@ describe("workbook Copy/Paste transfer package", () => {
 
     expect(parsed.pkg.datasets[0].raw?.values[2][0]).toBeNaN();
     expect(Object.is(parsed.pkg.datasets[0].raw?.time[0], -0)).toBe(true);
+  });
+
+  it("preserves a member frozen figure's NaN/±Infinity/-0 snapshot", () => {
+    const member = ds({ workbookId: "wb1" });
+    const figure = createFigureDocument({
+      id: "figure-1",
+      name: "Frozen member",
+      datasetId: member.id,
+      view: defaultPlotView(),
+      data: {
+        mode: "frozen",
+        snapshot: {
+          time: [Number.NaN, Infinity, -Infinity, -0],
+          values: [[Number.NaN], [Infinity], [-Infinity], [-0]],
+          labels: ["y"],
+          units: [""],
+          metadata: {},
+        },
+      },
+    });
+    const built = buildTransferPackage("wb1", {
+      workbooks: [{ id: "wb1", name: "book" }],
+      datasets: [member],
+      editableFigures: [figure],
+      reports: [],
+      quickPlotTemplates: [],
+    });
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const parsed = parseTransferPackage(built.text);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    const snapshot = parsed.pkg.editableFigures[0].data.snapshot!;
+
+    expect(snapshot.time[0]).toBeNaN();
+    expect(snapshot.time[1]).toBe(Infinity);
+    expect(snapshot.time[2]).toBe(-Infinity);
+    expect(Object.is(snapshot.time[3], -0)).toBe(true);
   });
 });
 

@@ -98,7 +98,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-020 | P2 | Durable dataset identity | A derived/imported dataset took its id from a private page-lifetime counter (`cut-1`, `magbg-1`, etc.) instead of `store/idSeq.ts`, so a reopened workspace plus one new operation could hold TWO datasets with that id: the app could plot the old result and one delete could destroy both | Claude + ChatGPT-Sol (agents) | Cut landing fixed 2026-09-19. **Repository-wide source audit completed 2026-09-20 (ChatGPT-Sol):** the initially reported four workshop hooks plus demo/sample loading, folder/template batches, worksheet extraction/transforms, Import Wizard, SQLite, Dataset Math, Digitizer, Tabulate and both FFT reductions now use `nextDatasetId()`. Counters remain only where they number a human-readable name. A source-level architecture ratchet pins all migrated producers to the shared sequence and rejects every retired durable-id prefix. Owner verification remains. |
 | BUG-021 | P0 | Magnetometry workshop — Background tab | The tab ran the M(T) one-sided high-T fit (`subtract_mag_background`) on an M(H) hysteresis loop, whose own docstring forbids exactly that: the window sits entirely in the +H tail, so the intercept removed carries +Ms and the corrected loop is sheared down by Ms (measured: plateaus at 0 and −2·Ms, squareness a meaningless 1.0000). Surfaced to the owner as `[object Object],[object Object],[object Object],[object Object]` — `ensureOk`'s `as { detail?: string }` cast stringifying FastAPI's array-shaped 422 `detail`, one entry per NaN gap that `JSON.stringify` had written as `null` | Claude (agent) | Reported 2026-09-19 by owner on a real VSM loop (filed as BUG-019 on the branch, renumbered on rebase); all four reported defects reproduced by measurement before any code changed. **FIXED 2026-09-20** — dispatch on the DECLARED x label/unit (`lib/magDataKind.ts`, reading `x_column_long` first so an Origin SHORT column name cannot masquerade as a field symbol), failing closed to a user choice when it cannot be determined; gaps dropped before every fit request and restored on their original rows, and SUBSTITUTED per axis on the elementwise conversion path (`lib/api/finitePairs.ts`); all five magnetometry call sites filtered, including the Hysteresis workshop's automatic analysis; any `detail` shape rendered readably (`lib/api/errorDetail.ts`, lazily imported to keep it out of the eager bundle); panel wording, control label, per-path default and the reported quantity (offset, not intercept) follow the path actually selected; a documented no-op is reported as a no-op; the readout is tagged with the datasets it is about so a dataset switch cannot leave a stale one on screen. 13 sabotages over two rounds, each restored byte-identical. Owner verification on the reported file remains |
 | BUG-022 | P1 | Fitting and peak-analysis request boundaries | `selectedFitData` deliberately preserves non-finite values, but consumers posted them to pydantic `list[float]` routes, turning NaN into rejected `null` values | ChatGPT-Sol | **FIXED 2026-09-20, widened by critical self-review:** direct Curve/Equation/Bumps fits, auto-guess, model scan, Peak Analyzer, the older Peaks workshop, saved-fit recomputation and pipeline replay now apply `dropGapRows`. Fitted curves are scattered back through `restoreGapRows`; weighting follows the same kept indices; pipeline logs and interactive notices disclose exclusions. Grouped fits and ROI gadgets were audited and already filtered finite pairs. The selector remains unchanged, preserving the original design ruling. |
-| BUG-023 | P2 | Frozen figure and snapshot-window persistence | Frozen `FigureDocument` snapshots and `kind:"snapshot"` plot windows bypass BUG-017's non-finite-cell codec: JSON converts NaN/±Infinity to `null` and `-0` to `0`; reopen cannot recover infinity kind/sign or signed zero | ChatGPT-Sol | Code-proven at both independent data-bearing persistence boundaries in the v0.26.1 post-release audit; full pickup brief in `POST_RELEASE_PROBLEM_AUDIT.md` |
+| BUG-023 | P2 | Frozen figure and snapshot-window persistence | Frozen `FigureDocument` snapshots and `kind:"snapshot"` plot windows bypassed BUG-017's non-finite-cell codec: JSON converted NaN/±Infinity to `null` and `-0` to `0`; reopen could not recover infinity kind/sign or signed zero | Codex | **FIXED 2026-09-20** — one shared JSON-boundary encoder preserves all four identities across standalone figures, workspaces, static plot bundles, and workbook transfer; legacy finite/`null` files remain valid; direct/full regressions cover every affected array |
 | UX-005 | P1 | Quick Plot refusal guidance | The current release tells users Configure Quick Plot “arrives with the Quick Figure Builder (PR G)” even though **Configure Quick Plot…** and the builder already shipped and appear beside Quick Plot | ChatGPT-Sol | Code-proven user-facing stale copy at both refusal constants; tests currently pin the wrong wording. Full pickup brief in `POST_RELEASE_PROBLEM_AUDIT.md` |
 | UX-006 | P3 | Installed-version diagnostics | `qz --version` is rejected, so users and support agents cannot identify an installed CLI/package build using the conventional command; the release smoke test must import Python internals instead | ChatGPT-Sol | Reproduced against the published v0.26.1 wheel and confirmed absent from `cli.py`; full pickup brief in `POST_RELEASE_PROBLEM_AUDIT.md` |
 | UX-007 | P2 | Workbook Properties command | The workbook right-click menu shows **Properties…** permanently disabled and explains it with the internal roadmap text “arrives with Details/Properties (PR D)”, even though PR D shipped; the result is a prominent dead end in the new Origin-like Library | ChatGPT-Sol | Code-proven in the v0.26.1 action registry and pinned by its unit test. Full pickup brief in `POST_RELEASE_PROBLEM_AUDIT.md` |
@@ -8114,7 +8114,7 @@ requests, so they needed no behavior change.
 ## BUG-023 — frozen figures and static snapshot windows lose non-finite identity
 
 **Priority:** P2
-**State:** Open — code-proven in the v0.26.1 independent audit
+**State:** Fixed 2026-09-20
 **Reported/investigated:** 2026-09-20 by ChatGPT-Sol
 **Suggested owner/model:** Claude Sonnet for the persistence contract; ChatGPT-Sol for reopen/export acceptance
 
@@ -8124,10 +8124,32 @@ NaN and both infinities to `null`, and `-0` to `0`; the load sanitizers cannot
 recover the original value. The affected static-window fields include plotted
 data, error bars, and colour-by values. Ordinary datasets are already protected.
 
-- [ ] Reuse one established non-finite codec at both frozen payload boundaries.
-- [ ] Preserve backward compatibility with existing finite/`null` projects.
-- [ ] Add direct and full-workspace round trips for NaN, ±Infinity, and -0.
-- [ ] Compare a reopened frozen figure and snapshot window with the pre-save display/export.
+- [x] Reuse one established non-finite codec at both frozen payload boundaries.
+- [x] Preserve backward compatibility with existing finite/`null` projects.
+- [x] Add direct and full-workspace round trips for NaN, ±Infinity, and -0.
+- [x] Compare the reopened frozen figure and snapshot-window render/export
+  inputs with their pre-save values at the persistence boundary.
+
+### Completion record (2026-09-20)
+
+The BUG-017 codec now owns a compact `JSON.stringify` replacer for the four
+numeric identities native JSON loses. Standalone FigureDocument serialization,
+workspace serialization, and workbook-transfer serialization use it at their
+actual text boundary, so the in-memory FigureDocuments, plot bundles, and live
+datasets are not rewritten. FigureDocument load decodes exact sentinels while
+retaining the old `null` → NaN fallback; snapshot-window load preserves its
+intentional `null` gaps and decodes sentinels in `payload.data`, `errorBars`,
+and colour-by `z`.
+
+Direct and full-workspace tests preserve NaN, +Infinity, -Infinity, and -0 in
+all affected arrays and pin ordinary finite JSON bytes. Workbook transfer has
+its own frozen-figure regression because it is an independent JSON boundary.
+Verification passed: focused plus architecture 271/271; full frontend 694
+files, 11,755 passed and 2 expected failures; forced TypeScript; ESLint;
+production build/bundle; and repository integrity 13/13. Eager JS measured
+877,160 B, 1,022 B below the unchanged 878,182 B budget and 743 B below the
+`origin/main` baseline. Implementation commit and PR are appended here after
+publication.
 
 Full evidence, reproduction, and gate expectations are in
 `POST_RELEASE_PROBLEM_AUDIT.md`.

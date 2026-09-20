@@ -11,19 +11,22 @@
 //    to New Window" command reads it back at trigger time.
 //
 // 2. The FROZEN bundle: `freezePlotSnapshot` deep-copies the live bundle
-//    into a JSON-safe value (`Map` error bars → entries; `undefined` array
-//    holes → null) so a snapshot window rides the existing `.dwk`
-//    `plotWindows` persistence unchanged. `sanitizeFrozenBundle` is its
-//    untrusted-.dwk-boundary validator (drop-on-malformed, never throw — the
-//    `sanitizePlotWindows` discipline), and the `thaw*` helpers convert back
-//    to the render-side shapes `PlotViewport` expects.
+//    into its in-memory at-rest shape (`Map` error bars → entries;
+//    `undefined` array holes → null). The workspace persistence seam applies
+//    the BUG-017 numeric codec at the `.dwk` JSON boundary, and
+//    `sanitizeFrozenBundle` decodes/validates it on read. The `thaw*` helpers
+//    convert back to the render-side shapes `PlotViewport` expects.
 //
 // Pure lib module — no store import (the command layer in
 // `components/windows/useWindowCommands.ts` wires the two ends together).
 
 import type { ColorScatterSpec } from "./colorscatter";
+import { decodeCell } from "./nonFiniteCells";
 import type { PlotPayload, PlotSeriesSpec } from "./plotdata";
 import type { SeriesStyle } from "./types";
+
+const mapNullish = <T, U>(list: readonly T[] | null | undefined, fallback: U) =>
+  list ? list.map((item) => item ?? fallback) : fallback;
 
 /** The focused plot's live composed display bundle — field-for-field the
  *  slice of `usePlotPayload`'s result that `PlotViewport` renders from, with one
@@ -85,57 +88,28 @@ export function readLivePlotSnapshot(): LivePlotSnapshot | null {
  *  objects throughout — frozen means frozen: nothing the live pipeline later
  *  does to its own arrays can reach back into a snapshot window's record. */
 export function freezePlotSnapshot(s: LivePlotSnapshot): FrozenPlotBundle {
-  const cols = s.payload.data as (number | null)[][];
-  return {
-    payload: {
-      data: cols.map((col) => [...col]) as PlotPayload["data"],
-      series: s.payload.series.map((sp) => ({ ...sp })),
-      xLabel: s.payload.xLabel,
-      xUnit: s.payload.xUnit,
-      ...(s.payload.xCategories ? { xCategories: [...s.payload.xCategories] } : {}),
-    },
-    styleList: s.styleList ? s.styleList.map((st) => (st ? { ...st } : null)) : null,
-    labelList: s.labelList ? s.labelList.map((l) => l ?? null) : null,
-    errorBars: [...s.errorBars.entries()].map(([k, col]) => [k, [...col]]),
-    plotted: [...s.plotted],
-    colorByColumns: [...s.colorByColumns.entries()].map(([k, spec]) => [
-      k,
-      { ...spec, z: [...spec.z] },
-    ]),
-    hidden: s.hidden ? [...s.hidden] : null,
-  };
+  return structuredClone({
+    ...s,
+    styleList: mapNullish(s.styleList, null),
+    labelList: mapNullish(s.labelList, null),
+    errorBars: [...s.errorBars],
+    colorByColumns: [...s.colorByColumns],
+    hidden: s.hidden ?? null,
+  });
 }
 
-/** Frozen error-bar entries back to the `Map` shape `PlotViewport` expects. */
-export function thawErrorBars(entries: FrozenPlotBundle["errorBars"]): Map<number, (number | null)[]> {
-  return new Map(entries);
-}
+/** Frozen entries back to the `Map` shape `PlotViewport` expects. */
+export const thawEntries = <T>(entries: readonly (readonly [number, T])[]) => new Map(entries);
 
-/** Frozen colour-scatter entries back to the `Map` shape `PlotViewport` expects. */
-export function thawColorByColumns(
-  entries: FrozenPlotBundle["colorByColumns"],
-): Map<number, ColorScatterSpec> {
-  return new Map(entries);
-}
-
-/** Frozen null-normalized style list back to the `undefined`-holed render
- *  shape (`BuildOptsArgs.seriesStyles`). */
-export function thawStyleList(
-  list: FrozenPlotBundle["styleList"],
-): (SeriesStyle | undefined)[] | undefined {
-  return list ? list.map((st) => st ?? undefined) : undefined;
-}
-
-/** Frozen null-normalized label list back to the render shape. */
-export function thawLabelList(list: FrozenPlotBundle["labelList"]): (string | undefined)[] | undefined {
-  return list ? list.map((l) => l ?? undefined) : undefined;
-}
+/** Frozen null-normalized lists back to their `undefined`-holed render shape. */
+export const thawList = <T>(list: (T | null)[] | null): (T | undefined)[] | undefined =>
+  mapNullish(list, undefined);
 
 // ── Untrusted-boundary sanitizer (called by lib/plotview's
 //    sanitizePlotWindows for kind:"snapshot" entries) ────────────────────────
 
-function isCell(v: unknown): v is number | null {
-  return v === null || typeof v === "number";
+function persistedCell(v: unknown): number | null {
+  return decodeCell(v) ?? null;
 }
 
 /** Validate a persisted frozen bundle. Returns null when the core payload is
@@ -166,7 +140,7 @@ export function sanitizeFrozenBundle(v: unknown): FrozenPlotBundle | null {
       ...(typeof so.selected === "boolean" ? { selected: so.selected } : {}),
     });
   }
-  const data = (p.data as unknown[][]).map((col) => col.map((cell) => (isCell(cell) ? cell : null)));
+  const data = (p.data as unknown[][]).map((col) => col.map(persistedCell));
   const xCategories = Array.isArray(p.xCategories)
     ? p.xCategories.filter((s): s is string => typeof s === "string")
     : undefined;
@@ -174,7 +148,7 @@ export function sanitizeFrozenBundle(v: unknown): FrozenPlotBundle | null {
   if (Array.isArray(o.errorBars)) {
     for (const e of o.errorBars) {
       if (Array.isArray(e) && e.length === 2 && typeof e[0] === "number" && Array.isArray(e[1])) {
-        errorBars.push([e[0], (e[1] as unknown[]).map((cell) => (isCell(cell) ? cell : null))]);
+        errorBars.push([e[0], (e[1] as unknown[]).map(persistedCell)]);
       }
     }
   }
@@ -206,7 +180,7 @@ export function sanitizeFrozenBundle(v: unknown): FrozenPlotBundle | null {
               colormap: spec.colormap as ColorScatterSpec["colormap"],
               lo: spec.lo,
               hi: spec.hi,
-              z: (spec.z as unknown[]).map((cell) => (isCell(cell) ? cell : null)),
+              z: (spec.z as unknown[]).map(persistedCell),
             },
           ]);
         }

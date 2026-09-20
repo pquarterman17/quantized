@@ -41,7 +41,7 @@
 //      invalid data structure` — the same clear refusal it already gave for
 //      that dataset before this fix, never a silently wrong number.
 
-import type { Dataset, DataStruct } from "./types";
+import type { DataStruct } from "./types";
 
 /** A `DataStruct` cell as it appears in JSON: a finite number, or one of the
  *  four sentinel strings for the values JSON cannot represent. */
@@ -50,17 +50,11 @@ export type WireCell = number | "NaN" | "Infinity" | "-Infinity" | "-0";
 /** A `DataStruct` as it appears in JSON — identical except that `time` and
  *  `values` hold `WireCell`s. Every other field (labels/units/metadata/
  *  cat_levels/…) is written and read verbatim, exactly as before. */
-export type WireDataStruct = Omit<DataStruct, "time" | "values"> & {
-  time: readonly WireCell[];
-  values: readonly (readonly WireCell[])[];
+type DataStructCells<T extends WireCell> = Omit<DataStruct, "time" | "values"> & {
+  time: readonly T[];
+  values: readonly (readonly T[])[];
 };
-
-/** A `Dataset` as it appears in JSON — only its two DataStruct-valued fields
- *  differ from the in-memory type. */
-export type WireDataset = Omit<Dataset, "data" | "raw"> & {
-  data: WireDataStruct;
-  raw?: WireDataStruct;
-};
+export type WireDataStruct = DataStructCells<WireCell>;
 
 /** Does this cell survive `JSON.stringify` unchanged? `-0` does not (it
  *  writes as `0`), which is why it is checked separately from finiteness. */
@@ -69,18 +63,35 @@ function needsSentinel(v: number): boolean {
 }
 
 export function encodeCell(v: number): WireCell {
-  if (Number.isNaN(v)) return "NaN";
-  if (v === Infinity) return "Infinity";
-  if (v === -Infinity) return "-Infinity";
-  return Object.is(v, -0) ? "-0" : v;
+  if (Object.is(v, -0)) return "-0";
+  return Number.isFinite(v) ? v : String(v) as WireCell;
 }
 
-export function decodeCell(v: WireCell): number {
+/** JSON boundary hook shared by every persistence container. It recognizes
+ *  only the numeric-array shapes whose readers decode this sentinel contract;
+ *  unrelated numeric configuration fields keep native JSON behavior. */
+export function encodePersistedCells(this: unknown, key: string, value: unknown): unknown {
+  if (!Array.isArray(value)) return value;
+  const owner = this as Record<string, unknown>;
+  const row = (cells: (number | null)[]) => cells.map((cell) => cell === null ? null : encodeCell(cell));
+  if ((key === "time" || key === "z") && (owner.metadata || owner.colormap)) return row(value);
+  if ((key === "values" && owner.metadata) || (key === "data" && owner.series)) {
+    return (value as number[][]).map(row);
+  }
+  if (key === "errorBars" && owner.payload) {
+    return (value as [number, number[]][]).map(([index, cells]) => [index, row(cells)]);
+  }
+  return value;
+}
+
+export function decodeCell(v: WireCell): number;
+export function decodeCell(v: unknown): number | undefined;
+export function decodeCell(v: unknown): number | undefined {
   if (typeof v === "number") return v;
   if (v === "NaN") return Number.NaN;
   if (v === "Infinity") return Infinity;
   if (v === "-Infinity") return -Infinity;
-  return -0;
+  return v === "-0" ? -0 : undefined;
 }
 
 /** Is `v` a legal serialized cell array — every element a number or one of
@@ -88,17 +99,7 @@ export function decodeCell(v: WireCell): number {
  *  `lib/workspaceDatasetParse.ts` used to carry; `null` and every other
  *  string still fail it, so genuinely malformed data is still rejected. */
 export function isWireCellArray(v: unknown): v is WireCell[] {
-  return (
-    Array.isArray(v) &&
-    v.every(
-      (x) =>
-        typeof x === "number" ||
-        x === "NaN" ||
-        x === "Infinity" ||
-        x === "-Infinity" ||
-        x === "-0",
-    )
-  );
+  return Array.isArray(v) && v.every((cell) => decodeCell(cell) !== undefined);
 }
 
 /** Encode one numeric row. Returns `row` ITSELF when every cell is a finite,
@@ -111,42 +112,32 @@ export function encodeCells(row: readonly number[]): readonly WireCell[] {
  *  sentinels, so a pre-fix document is handed on untouched. */
 export function decodeCells(row: readonly WireCell[]): number[] {
   return row.some((c) => typeof c !== "number")
-    ? row.map(decodeCell)
+    ? row.map((cell) => decodeCell(cell))
     : (row as number[]);
+}
+
+function mapDataStruct<T extends WireCell, U extends WireCell>(
+  d: DataStructCells<T>,
+  transform: (row: readonly T[]) => readonly U[],
+): DataStructCells<U> {
+  const time = transform(d.time);
+  let changed = time !== d.time as readonly unknown[];
+  const values = d.values.map((row) => {
+    const next = transform(row);
+    if (next !== row as readonly unknown[]) changed = true;
+    return next;
+  });
+  return changed ? { ...d, time, values } : d as unknown as DataStructCells<U>;
 }
 
 /** Encode a DataStruct's `time` and `values` for JSON. Returns `d` itself
  *  when nothing needed a sentinel. */
 export function encodeDataStruct(d: DataStruct): WireDataStruct {
-  const time = encodeCells(d.time);
-  let changed = time !== d.time;
-  const values = d.values.map((row) => {
-    const encoded = encodeCells(row);
-    if (encoded !== row) changed = true;
-    return encoded;
-  });
-  return changed ? { ...d, time, values } : d;
+  return mapDataStruct(d, encodeCells);
 }
 
 /** Decode a serialized DataStruct's cells. Returns `d` itself (cast — the
  *  arrays are already plain numbers) when it carries no sentinels. */
 export function decodeDataStruct(d: WireDataStruct): DataStruct {
-  const time = decodeCells(d.time);
-  let changed = time !== d.time;
-  const values = d.values.map((row) => {
-    const decoded = decodeCells(row);
-    if (decoded !== row) changed = true;
-    return decoded;
-  });
-  return changed ? { ...d, time, values } : (d as DataStruct);
-}
-
-/** Encode a whole dataset's numeric payload — its `data` and, when present,
- *  its base-only `raw`. Returns `d` itself when neither needed a sentinel, so
- *  a package/document of ordinary data is byte-identical to before. */
-export function encodeDatasetCells(d: Dataset): WireDataset {
-  const data = encodeDataStruct(d.data);
-  const raw = d.raw === undefined ? undefined : encodeDataStruct(d.raw);
-  if (data === d.data && raw === d.raw) return d as WireDataset;
-  return { ...d, data, ...(raw === undefined ? {} : { raw }) };
+  return mapDataStruct(d, decodeCells) as DataStruct;
 }

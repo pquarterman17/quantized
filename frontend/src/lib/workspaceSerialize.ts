@@ -20,7 +20,6 @@ import type { SavedPlotSpec } from "./plotspec";
 import { serializePeakTable } from "./peakTable";
 import type { PlotRecipe } from "./plotRecipe";
 import type { QuickPlotTemplate } from "./quickPlotTemplates";
-import type { PlotWindow } from "./plotview";
 import type { RoiDef } from "./roi";
 import type { LibrarySelection } from "../store/libraryPanel";
 import { serializeRois } from "../store/rois";
@@ -37,10 +36,11 @@ import type { WorkbookNode } from "./workbooks";
 import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
 import { deriveBundleRelativePath } from "./bundlePath";
-import { encodeDataStruct, type WireDataStruct } from "./nonFiniteCells";
+import { encodePersistedCells, type WireDataStruct } from "./nonFiniteCells";
 import type { DatasetSource } from "./datasetSource";
 import type { Dataset, FolderNode } from "./types";
 import { WORKSPACE_FORMAT, WORKSPACE_VERSION, type WorkspaceState } from "./workspace";
+import type { PlotWindow } from "./plotview";
 
 /** A persisted dataset source entry — `kind: "path"` (today's shape,
  *  unchanged) or the P1.7 PR 3 `kind: "bundle"` extension (see
@@ -182,10 +182,10 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
     figureDocs: ws.figureDocs ?? [],
     editableFigures: ws.editableFigures ?? [],
     pages: ws.pages ?? [],
-    // MULTI_PLOT_PLAN item 7: passed through VERBATIM — the caller (the
-    // store's `windowsForSave()`, per the interface doc above) is
-    // responsible for the focused window's live-view snapshot; this module
-    // stays a plain serializer, same as every other field here.
+    // The caller (`windowsForSave()`) still owns the focused window's
+    // save-time-fresh view. The JSON boundary below preserves numeric
+    // identities in frozen documents and snapshot bundles without mutating
+    // these live objects.
     plotWindows: ws.plotWindows ?? [],
     focusedWindowId: ws.focusedWindowId ?? null,
     toolWindowLayout: ws.toolWindowLayout ?? {},
@@ -219,14 +219,11 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,
-      // BUG-017: `data`/`raw` cross the JSON boundary through
-      // lib/nonFiniteCells' encoder, which maps the four values
-      // `JSON.stringify` cannot round-trip (NaN, ±Infinity, -0) to sentinel
-      // strings and returns the SAME object untouched for every other
-      // dataset — so a workspace of ordinary finite data still serializes
-      // byte-for-byte as it did before.
-      data: encodeDataStruct(d.data),
-      ...(d.raw ? { raw: encodeDataStruct(d.raw) } : {}),
+      // BUG-017/BUG-023: the shared replacer at the JSON boundary below
+      // sentinel-encodes the four numeric identities JSON cannot preserve.
+      // These live objects are never rewritten, and finite output is exact.
+      data: d.data,
+      ...(d.raw ? { raw: d.raw } : {}),
       ...(d.corrections ? { corrections: d.corrections } : {}),
       ...(d.bgRef ? { bgRef: d.bgRef } : {}),
       ...(d.notes ? { notes: d.notes } : {}),
@@ -307,5 +304,5 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
       ...(d.versionOf ? { versionOf: d.versionOf } : {}),
     })),
   };
-  return JSON.stringify(doc, null, 2);
+  return JSON.stringify(doc, encodePersistedCells, 2);
 }
