@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { filteredOutRows, isActive, rowPasses, sanitizeFilter } from "./datafilter";
-import type { DataStruct } from "./types";
+import { applicableFilter, filteredOutRows, isActive, rowPasses, sanitizeFilter } from "./datafilter";
+import type { Dataset, DataStruct } from "./types";
 
 const DATA: DataStruct = {
   time: [0, 1, 2, 3],
@@ -72,6 +72,50 @@ describe("filteredOutRows", () => {
   it("is empty for an absent / fully-inactive filter", () => {
     expect(filteredOutRows(undefined, DATA).size).toBe(0);
     expect(filteredOutRows([{ col: 1, kind: "range" }], DATA).size).toBe(0);
+  });
+});
+
+describe("applicableFilter — BUG-003 live column semantics", () => {
+  const dataset = (channelTypes?: Dataset["channelTypes"]): Dataset => ({
+    id: "d1",
+    name: "filter.csv",
+    data: {
+      ...DATA,
+      cat_levels: { 0: ["A", "B"] },
+    },
+    channelTypes,
+    filter: [
+      { col: -1, kind: "range", min: 1 },
+      { col: 0, kind: "set", values: [1] },
+      { col: 1, kind: "range", min: 20 },
+    ],
+  });
+
+  it("keeps representable predicates and reports no mismatch", () => {
+    const ds = dataset();
+    expect(applicableFilter(ds)).toEqual(ds.filter);
+    expect((ds.filter?.length ?? 0) - applicableFilter(ds).length).toBe(0);
+  });
+
+  it("pauses a predicate whose column changed kind without deleting it", () => {
+    const ds = dataset({ 0: "continuous", 1: "nominal" });
+    expect(applicableFilter(ds)).toEqual([{ col: -1, kind: "range", min: 1 }]);
+    expect((ds.filter?.length ?? 0) - applicableFilter(ds).length).toBe(2);
+    expect(ds.filter).toHaveLength(3);
+  });
+
+  it("never treats a set predicate on the x pseudo-column as applicable", () => {
+    const ds = dataset();
+    ds.filter = [{ col: -1, kind: "set", values: [1] }];
+    expect(applicableFilter(ds)).toEqual([]);
+    expect((ds.filter?.length ?? 0) - applicableFilter(ds).length).toBe(1);
+  });
+
+  it("fails closed for an out-of-range predicate in an in-memory dataset", () => {
+    const ds = dataset();
+    ds.filter = [{ col: 99, kind: "range", min: 1 }];
+    expect(applicableFilter(ds)).toEqual([]);
+    expect((ds.filter?.length ?? 0) - applicableFilter(ds).length).toBe(1);
   });
 });
 

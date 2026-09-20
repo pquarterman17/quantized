@@ -184,9 +184,10 @@ describe("useDataFilter — explicit channelTypes override wins over inference",
 // PRIOR classification becomes unrepresentable once `setChannelType` (or a
 // reimport that changes `cat_levels`) reclassifies it. The conservative
 // choice implemented in useDataFilter.ts: mask it from `current` (so neither
-// control renders a foreign predicate shape) without deleting it from the
-// store, and keep the raw filter's `active` flag (the "Clear" affordance)
-// honest about it.
+// control renders a foreign predicate shape) and pause it across every
+// analysis consumer without deleting it from the store. The raw filter's
+// `active` flag keeps the "Clear" affordance reachable, while `mismatched`
+// drives the visible explanation.
 describe("useDataFilter — a stale kind-mismatched predicate is masked, not deleted (BUG-003)", () => {
   it("a set filter on a categorical column survives an override to continuous, hidden from `current`", () => {
     const { result, rerender } = renderHook(() => useDataFilter());
@@ -203,6 +204,10 @@ describe("useDataFilter — a stale kind-mismatched predicate is masked, not del
     expect(filterOf("d1")).toEqual([{ col: 0, kind: "set", values: [0] }]);
     // ...and still visibly active, so "Clear" stays reachable.
     expect(result.current.active).toBe(true);
+    expect(result.current.mismatched).toBe(1);
+    // Crucially, the now-invisible predicate is inert instead of silently
+    // continuing to narrow every plot/fit/statistic.
+    expect(result.current.kept).toBe(result.current.total);
 
     // Reverting the override brings the SAME predicate back as `current`.
     act(() => useApp.getState().setChannelType("d1", 0, null));
@@ -210,6 +215,8 @@ describe("useDataFilter — a stale kind-mismatched predicate is masked, not del
     const grpAgain = result.current.columns.find((c) => c.index === 0)!;
     expect(grpAgain.kind).toBe("set");
     expect(grpAgain.current).toEqual({ col: 0, kind: "set", values: [0] });
+    expect(result.current.mismatched).toBe(0);
+    expect(result.current.kept).toBeLessThan(result.current.total);
   });
 });
 

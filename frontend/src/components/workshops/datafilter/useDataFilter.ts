@@ -9,7 +9,7 @@ import { useMemo } from "react";
 
 import { resolveCategoryLabels } from "../../../lib/barlayout";
 import { categoryLevels } from "../../../lib/categorical";
-import { filteredOutRows, isActive } from "../../../lib/datafilter";
+import { applicableFilter, filteredOutRows, isActive } from "../../../lib/datafilter";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import type { ColumnFilter, DataFilter } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -44,6 +44,9 @@ export interface DataFilterState {
   kept: number;
   total: number;
   active: boolean;
+  /** Stored predicates that are currently inert because their column changed
+   *  between continuous and categorical. */
+  mismatched: number;
   setRange: (col: number, min: number | undefined, max: number | undefined) => void;
   toggleLevel: (col: number, value: number) => void;
   clear: () => void;
@@ -162,9 +165,10 @@ export function useDataFilter(): DataFilterState {
 
   const { kept, total } = useMemo(() => {
     const n = active?.data.time.length ?? 0;
-    const out = active ? filteredOutRows(active.filter, active.data).size : 0;
+    const out = active ? filteredOutRows(applicableFilter(active), active.data).size : 0;
     return { kept: n - out, total: n };
   }, [active]);
+  const mismatched = active ? filter.length - applicableFilter(active).length : 0;
 
   /** Replace the whole filter with `next`, dropping inactive predicates. */
   function commit(next: DataFilter): void {
@@ -207,6 +211,7 @@ export function useDataFilter(): DataFilterState {
     kept,
     total,
     active: filter.some(isActive),
+    mismatched,
     setRange,
     toggleLevel,
     clear,

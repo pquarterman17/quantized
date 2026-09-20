@@ -76,6 +76,12 @@ export default function DataFilterPanel() {
         </div>
       ) : (
         <>
+          {f.mismatched > 0 && (
+            <div role="status" className="qzk-ds-meta" style={{ marginBottom: 10, color: "var(--warning, #d6a84b)" }}>
+              {f.mismatched} saved filter {f.mismatched === 1 ? "rule is" : "rules are"} paused because the column type changed.
+              Change the type back to restore {f.mismatched === 1 ? "it" : "them"}, edit that column to replace it, or Clear all filters.
+            </div>
+          )}
           <div style={{ maxHeight: 320, overflowY: "auto", display: "grid", gap: 10 }}>
             {f.columns.map((c) => (
               <div key={c.index}>
