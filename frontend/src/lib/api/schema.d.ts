@@ -5733,6 +5733,10 @@ export interface components {
             dataset: {
                 [key: string]: unknown;
             };
+            /** Error Bindings */
+            error_bindings?: {
+                [key: string]: unknown;
+            }[] | null;
             params?: components["schemas"]["CorrectionParams"];
         };
         /** CorrelationHeatmapFigureRequest */

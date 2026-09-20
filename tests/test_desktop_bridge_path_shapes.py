@@ -263,7 +263,15 @@ def test_write_project_file_handles_a_path_deeper_than_windows_max_path(tmp_path
     deep = tmp_path
     for i in range(12):
         deep = deep / f"segment-{i:02d}-with-some-length"
-    deep.mkdir(parents=True)
+    try:
+        deep.mkdir(parents=True)
+    except OSError as exc:
+        if os.name == "nt":
+            pytest.skip(
+                "this Windows host does not permit >260-character paths; "
+                f"fixture creation failed before bridge code ran: {exc}"
+            )
+        raise
     dest = deep / "run.dwk"
     assert len(str(dest)) > 260
     api = DesktopApi()
@@ -274,6 +282,11 @@ def test_write_project_file_handles_a_path_deeper_than_windows_max_path(tmp_path
     assert dest.read_text(encoding="utf-8") == content
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="this POSIX NAME_MAX test can exceed Windows' legacy total-path limit "
+    "before the bridge can create the destination",
+)
 def test_write_project_file_handles_a_near_max_length_filename_component(tmp_path: Path) -> None:
     """A single component near Linux's 255-byte NAME_MAX. The write's temp
     file must not fail or collide -- it lives in the SAME directory but

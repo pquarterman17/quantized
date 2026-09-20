@@ -71,6 +71,21 @@ beforeEach(() => {
 });
 
 describe("applyCorrections + computed columns (data loss)", () => {
+  it("sends the dataset's explicit error roles to the correction contract", async () => {
+    const errorRoles = [{ channel: 1, target: 0, axis: "y" as const, side: "both" as const }];
+    const withSigma: DataStruct = {
+      ...base,
+      values: [[10, 1], [20, 1], [30, 1]],
+      labels: ["m", "sigma"],
+      units: ["emu", "emu"],
+    };
+    useApp.setState({ datasets: [{ id: "d1", name: "sample", data: withSigma, errorRoles }] });
+
+    await useApp.getState().applyCorrections("d1", { yOff: 5 });
+
+    expect(vi.mocked(applyCorrectionsApi).mock.calls[0][0].error_bindings).toEqual(errorRoles);
+  });
+
   it("preserves categorical codes, levels, order, raw data, and their workspace round trip", async () => {
     const categorical: DataStruct = {
       time: [1, 2, 3],

@@ -117,6 +117,147 @@ def test_corrections_bg_from_file_zero_fill_outside_range() -> None:
     assert_allclose(out.values[inside, 0], 90.0)
 
 
+def test_bound_y_uncertainty_ignores_additive_background_and_offset() -> None:
+    data = DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [[10.0, 1.0], [20.0, 1.0], [30.0, 1.0]],
+        labels=["signal", "sigma"],
+        units=["V", "V"],
+    )
+    bindings = [{"channel": 1, "target": 0, "axis": "y", "side": "both"}]
+    out = apply_corrections(
+        data,
+        {"bgInt": 5.0, "yOff": 2.0},
+        error_bindings=bindings,
+    )
+    assert_allclose(out.values[:, 0], [3.0, 13.0, 23.0])
+    assert_allclose(out.values[:, 1], [1.0, 1.0, 1.0])
+
+
+def test_bound_x_and_y_uncertainty_follow_only_their_axis_scale() -> None:
+    data = DataStruct.create(
+        [1.0, 2.0],
+        [[10.0, 0.1, 2.0], [20.0, 0.2, 3.0]],
+        labels=["signal", "dx", "dy"],
+        units=["V", "s", "V"],
+    )
+    bindings = [
+        {"channel": 1, "target": 0, "axis": "x", "side": "both"},
+        {"channel": 2, "target": 0, "axis": "y", "side": "both"},
+    ]
+    out = apply_corrections(
+        data,
+        {"xScale": -10.0, "yScale": -2.0},
+        error_bindings=bindings,
+    )
+    assert_allclose(out.time, [-10.0, -20.0])
+    assert_allclose(out.values[:, 0], [-20.0, -40.0])
+    assert_allclose(out.values[:, 1], [1.0, 2.0])
+    assert_allclose(out.values[:, 2], [4.0, 6.0])
+
+
+@pytest.mark.parametrize("param", [
+    {"smoothEnabled": True, "smoothMethod": "moving", "smoothWindow": 1},
+    {"derivativeMode": "dY/dX"},
+    {"derivativeMode": "d²Y/dX²"},
+    {"derivativeMode": "∫Y dx"},
+    {"derivativeMode": "dlog/dlog"},
+])
+def test_bound_y_uncertainty_refuses_undefined_nonlinear_propagation(
+    param: dict[str, Any],
+) -> None:
+    data = DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [[10.0, 1.0], [20.0, 1.0], [30.0, 1.0]],
+        labels=["signal", "sigma"],
+        units=["V", "V"],
+    )
+    with pytest.raises(ValueError, match="bound Y uncertainty"):
+        apply_corrections(
+            data,
+            param,
+            error_bindings=[
+                {"channel": 1, "target": 0, "axis": "y", "side": "both"}
+            ],
+        )
+
+
+@pytest.mark.parametrize(
+    ("method", "expected_signal", "expected_sigma"),
+    [
+        ("Range [0,1]", [0.0, 0.5, 1.0], [0.05, 0.05, 0.05]),
+        ("Peak (max=1)", [1 / 3, 2 / 3, 1.0], [1 / 30, 1 / 30, 1 / 30]),
+        ("Z-score", [-1.0, 0.0, 1.0], [0.1, 0.1, 0.1]),
+        ("Area (integral=1)", [0.25, 0.5, 0.75], [0.025, 0.025, 0.025]),
+    ],
+)
+def test_bound_y_uncertainty_follows_normalization_scale(
+    method: str, expected_signal: list[float], expected_sigma: list[float]
+) -> None:
+    data = DataStruct.create(
+        [1.0, 2.0, 3.0],
+        [[10.0, 1.0], [20.0, 1.0], [30.0, 1.0]],
+        labels=["signal", "sigma"],
+        units=["V", "V"],
+    )
+    out = apply_corrections(
+        data,
+        {"normMethod": method},
+        error_bindings=[{"channel": 1, "target": 0, "axis": "y", "side": "+"}],
+    )
+    assert_allclose(out.values[:, 0], expected_signal)
+    assert_allclose(out.values[:, 1], expected_sigma)
+
+
+@pytest.mark.parametrize(
+    ("params", "factor"),
+    [
+        ({"isNeutron": True, "yOff": -3.0}, 3.0),
+        ({"isMag": True, "momentUnit": "emu/g", "sampleMass": 2.0}, 0.5),
+        ({"isMag": True, "momentUnit": "emu/cm³", "sampleVolume": 4.0}, 0.25),
+        ({"isMag": True, "momentUnit": "A·m²"}, 1e-3),
+    ],
+)
+def test_bound_y_uncertainty_follows_domain_scale(
+    params: dict[str, Any], factor: float
+) -> None:
+    data = DataStruct.create(
+        [1.0, 2.0], [[10.0, 2.0], [20.0, 3.0]], labels=["signal", "sigma"]
+    )
+    out = apply_corrections(
+        data,
+        params,
+        error_bindings=[{"channel": 1, "target": 0, "axis": "y", "side": "-"}],
+    )
+    assert_allclose(np.abs(out.values[:, 0]), np.array([10.0, 20.0]) * factor)
+    assert_allclose(out.values[:, 1], np.array([2.0, 3.0]) * factor)
+
+
+def test_bound_uncertainty_follows_footprint_and_field_unit_scales() -> None:
+    data = DataStruct.create(
+        [0.1, 0.2],
+        [[10.0, 1.0, 2.0], [20.0, 1.0, 3.0]],
+        labels=["signal", "dx", "dy"],
+    )
+    bindings = [
+        {"channel": 1, "target": -1, "axis": "x", "side": "both"},
+        {"channel": 2, "target": 0, "axis": "y", "side": "both"},
+    ]
+    out = apply_corrections(
+        data,
+        {
+            "footprintW": 1.0,
+            "footprintL": 100.0,
+            "isMag": True,
+            "fieldUnit": "T",
+        },
+        error_bindings=bindings,
+    )
+    assert_allclose(out.time, [0.01, 0.02])
+    assert_allclose(out.values[:, 1], [0.1, 0.1])
+    assert_allclose(out.values[:, 2] / np.abs(out.values[:, 0]), [0.2, 0.15])
+
+
 def test_corrections_trim_and_offset() -> None:
     x = np.linspace(0.0, 10.0, 11)
     y = np.arange(11.0)

@@ -79,6 +79,28 @@ def test_apply_y_offset_subtracts() -> None:
     assert out["values"] == [[5.0], [15.0], [25.0]]
 
 
+def test_apply_preserves_bound_uncertainty_through_additive_correction() -> None:
+    dataset = {
+        "time": [1.0, 2.0, 3.0],
+        "values": [[10.0, 1.0], [20.0, 1.0], [30.0, 1.0]],
+        "labels": ["m", "sigma"],
+        "units": ["emu", "emu"],
+        "metadata": {},
+    }
+    resp = client.post(
+        "/api/corrections/apply",
+        json={
+            "dataset": dataset,
+            "params": {"bgInt": 5.0},
+            "error_bindings": [
+                {"channel": 1, "target": 0, "axis": "y", "side": "both"}
+            ],
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["values"] == [[5.0, 1.0], [15.0, 1.0], [25.0, 1.0]]
+
+
 def test_apply_y_correction_preserves_categorical_codes_levels_and_order() -> None:
     """BUG-005 at the HTTP boundary used by the SPA and Python client."""
     dataset = {

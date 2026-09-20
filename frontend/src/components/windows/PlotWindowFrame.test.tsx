@@ -83,6 +83,85 @@ describe("PlotWindowFrame", () => {
     });
   });
 
+  it("commits the final move when pointerup beats the queued animation frame", () => {
+    let queued: FrameRequestCallback | null = null;
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      queued = cb;
+      return 17;
+    });
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const titlebar = container.querySelector(".qzk-plotwin-titlebar")!;
+    fireEvent.pointerDown(titlebar, { clientX: 100, clientY: 100, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 140, clientY: 130 });
+    expect(geomOf("w1")).toEqual({ x: 100, y: 80, w: 480, h: 360 });
+    fireEvent.pointerUp(window);
+    expect(geomOf("w1")).toEqual({ x: 140, y: 110, w: 480, h: 360 });
+    act(() => queued?.(0));
+    expect(geomOf("w1")).toEqual({ x: 140, y: 110, w: 480, h: 360 });
+  });
+
+  it("commits the final resize when pointerup beats the queued animation frame", () => {
+    let queued: FrameRequestCallback | null = null;
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      queued = cb;
+      return 19;
+    });
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const grip = container.querySelector(".qzk-plotwin-resize")!;
+    fireEvent.pointerDown(grip, { clientX: 0, clientY: 0, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 60, clientY: 40 });
+    expect(geomOf("w1")).toEqual({ x: 100, y: 80, w: 480, h: 360 });
+    fireEvent.pointerUp(window);
+    expect(geomOf("w1")).toEqual({ x: 100, y: 80, w: 540, h: 400 });
+    act(() => queued?.(0));
+    expect(geomOf("w1")).toEqual({ x: 100, y: 80, w: 540, h: 400 });
+  });
+
+  it.each(["pointercancel", "blur"])("%s ends a gesture and later movement is ignored", (event) => {
+    let queued: FrameRequestCallback | null = null;
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      queued = cb;
+      return 18;
+    });
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const titlebar = container.querySelector(".qzk-plotwin-titlebar")!;
+    fireEvent.pointerDown(titlebar, { clientX: 100, clientY: 100, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 120, clientY: 120 });
+    fireEvent(window, new Event(event));
+    const finished = geomOf("w1");
+    fireEvent.pointerMove(window, { clientX: 300, clientY: 300 });
+    act(() => queued?.(0));
+    expect(geomOf("w1")).toEqual(finished);
+  });
+
+  it("a click without movement creates no undo entry", () => {
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const before = useApp.getState().history.length;
+    fireEvent.pointerDown(container.querySelector(".qzk-plotwin-titlebar")!, {
+      clientX: 100,
+      clientY: 100,
+      button: 0,
+    });
+    fireEvent.pointerUp(window);
+    expect(useApp.getState().history).toHaveLength(before);
+  });
+
   it("no resize grip renders for a maximized window", () => {
     const { container } = render(
       <PlotWindowFrame win={win({ id: "w1", winState: "maximized" })} focused datasetName="ds1">

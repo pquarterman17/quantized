@@ -9,8 +9,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { mergeCommands, PALETTE_LABEL, PALETTE_SHORTCUT, runAction, useCommands, type Action } from "../../store/commands";
 import { useEscapeSurface } from "../../lib/escapeStack";
 import { reopenRecent } from "../../lib/reopenRecent";
-import type { RecentFile } from "../../lib/recentFiles";
-import { relativeTime } from "../../lib/recentFiles";
+import { recentKey, recentParentLabel, relativeTime, type RecentFile } from "../../lib/recentFiles";
 import { withSectionHeaders } from "../../lib/menuSections";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
@@ -92,14 +91,14 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
     if (!entry.path) useApp.getState().setStatus(`re-select "${entry.name}" to import it`);
     void reopenRecent(useApp.getState(), entry);
   };
-  const forget = (e: React.MouseEvent, name: string) => {
+  const forget = (e: React.MouseEvent, entry: RecentFile) => {
     // Removing a stale entry must not also re-import it.
     e.stopPropagation();
     // Hardening review fix: the ✕ span's ancestor <button> unmounts with the
     // entry, and Chromium then drops focus to <body> — arming the global
     // Delete against the active dataset. removeRowSafely's contract: focus a
     // SURVIVING container synchronously in the same click. The nav persists.
-    removeRowSafely(navRef.current, () => useApp.getState().removeRecent(name));
+    removeRowSafely(navRef.current, () => useApp.getState().removeRecent(entry));
   };
 
   // `onOpen` fires only on a closed→open transition (click from nothing, or
@@ -185,7 +184,7 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
                     <div className="qzk-menu-label">Recent</div>
                     {recent.map((r) => (
                       <button
-                        key={r.name}
+                        key={recentKey(r)}
                         className="qzk-menu-item"
                         title={
                           r.path
@@ -194,7 +193,9 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
                         }
                         onClick={() => reopen(r)}
                       >
-                        <span className="qzk-menu-trunc">{r.name}</span>
+                        <span className="qzk-menu-trunc">
+                          {r.name}{r.path ? ` — ${recentParentLabel(r.path)}` : ""}
+                        </span>
                         <span className="qz-shortcut">{relativeTime(r.at, now)}</span>
                         {/* Retrospective-audit P2 fix: no tabIndex — any
                             tabindex makes an element click-focusable, and
@@ -205,7 +206,7 @@ export default function MenuBar({ actions, onOpenPalette }: MenuBarProps) {
                           aria-label={`Remove ${r.name} from recent`}
                           title="Remove from recent"
                           className="qz-shortcut"
-                          onClick={(e) => forget(e, r.name)}
+                          onClick={(e) => forget(e, r)}
                         >
                           ✕
                         </span>

@@ -118,6 +118,10 @@ def test_cleanup_does_not_descend_into_symlinked_subdir(tmp_path: Path) -> None:
 # ── happy path ───────────────────────────────────────────────────────────
 
 
+@pytest.mark.skipif(
+    os.name == "nt",
+    reason="the POSIX long-component fixture exceeds Windows' legacy total-path limit",
+)
 def test_happy_path_stages_three_files_with_verified_checksums(tmp_path: Path) -> None:
     src_dir = tmp_path / "src"
     src_dir.mkdir()

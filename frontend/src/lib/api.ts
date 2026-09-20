@@ -132,6 +132,7 @@ export interface CorrectionsRequest {
   params: CorrectionParams;
   bg_dataset?: DataStruct | null;
   bg_interp?: string;
+  error_bindings?: import("./errorRoles").ErrorBinding[];
 }
 
 /** Apply the correction pipeline to a DataStruct → corrected DataStruct. */

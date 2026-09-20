@@ -1374,6 +1374,29 @@ def test_write_refuses_a_payload_declared_source_with_no_project_open(tmp_path: 
     assert [p.name for p in tmp_path.iterdir()] == ["raw.csv"]  # no temp, no stray
 
 
+def test_write_refuses_a_workbook_only_source_with_no_project_open(tmp_path: Path) -> None:
+    raw = tmp_path / "source.opju"
+    original = b"origin-project-bytes"
+    raw.write_bytes(original)
+    api = DesktopApi()
+    path = _grant_write(api, raw)
+    content = json.dumps(
+        {
+            "format": "quantized-workspace",
+            "version": 4,
+            "datasets": [],
+            "workbooks": [
+                {"id": "book-1", "name": "Book1", "datasetIds": [],
+                 "source": {"kind": "path", "path": str(raw)}}
+            ],
+        }
+    )
+    out = api.write_project_file(path, content)
+    assert out["ok"] is False
+    assert "data source of this workspace" in out["error"]
+    assert raw.read_bytes() == original
+
+
 def test_write_refuses_an_alias_spelling_of_a_payload_declared_source(tmp_path: Path) -> None:
     sub = tmp_path / "sub"
     sub.mkdir()

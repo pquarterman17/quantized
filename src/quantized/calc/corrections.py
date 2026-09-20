@@ -83,6 +83,7 @@ def apply_corrections(
     *,
     bg_dataset: DataStruct | None = None,
     bg_interp: str = "linear",
+    error_bindings: list[dict[str, Any]] | None = None,
 ) -> DataStruct:
     """Apply the correction pipeline to ``data``. Port of bosonPlotter.applyCorrections.
 
@@ -110,8 +111,58 @@ def apply_corrections(
     # survive a derivative, normalization, or scale by coincidence while their
     # meaning has still been destroyed.
     categorical = set(data.cat_levels or ())
-    numeric = [k for k in range(values.shape[1]) if k not in categorical]
+    error_roles: dict[int, tuple[int, str, str]] = {}
+    for binding in error_bindings or ():
+        try:
+            channel = int(binding["channel"])
+            target = int(binding["target"])
+            axis = str(binding["axis"])
+            side = str(binding["side"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError("invalid error binding") from exc
+        if channel < 0 or channel >= values.shape[1]:
+            raise ValueError(f"error channel {channel} is out of range")
+        if target < -1 or target >= values.shape[1] or target == channel:
+            raise ValueError(f"error target {target} is invalid")
+        if axis not in ("x", "y"):
+            raise ValueError(f"error axis must be x or y, got {axis!r}")
+        if side not in ("both", "+", "-"):
+            raise ValueError(f"error side must be both, +, or -, got {side!r}")
+        prior = error_roles.get(channel)
+        role = (target, axis, side)
+        if prior is not None and prior != role:
+            raise ValueError(f"error channel {channel} has conflicting bindings")
+        error_roles[channel] = role
+    error_channels = set(error_roles)
+    if categorical & error_channels:
+        raise ValueError("a categorical channel cannot also be an uncertainty channel")
+    numeric = [
+        k
+        for k in range(values.shape[1])
+        if k not in categorical and k not in error_channels
+    ]
+    measured = set(numeric)
+    for channel, (target, axis, _) in error_roles.items():
+        if axis == "y" and target not in measured:
+            raise ValueError(
+                f"Y-error channel {channel} must target a measured value channel"
+            )
     labels = list(data.labels)
+
+    def scale_errors(axis: str, factor: float | np.ndarray, target: int | None = None) -> None:
+        """Scale bound uncertainty magnitudes without changing their sign.
+
+        Error channels are independent data columns and may be asymmetric; both
+        halves obey the same magnitude rule.  ``target`` restricts a Y scale to
+        the measured channel whose transform produced it.
+        """
+
+        magnitude = np.abs(factor)
+        for channel, (bound_target, bound_axis, _) in error_roles.items():
+            if bound_axis == axis and (target is None or bound_target == target):
+                values[:, channel] = values[:, channel] * magnitude
+
+    has_y_errors = any(axis == "y" for _, axis, _ in error_roles.values())
 
     # 0. Arbitrary X/Y rescaling (MAIN_PLAN #37) — a non-destructive unit
     # re-expression, so it runs FIRST and everything downstream is expressed in
@@ -123,16 +174,18 @@ def apply_corrections(
     #     d(y·sy)/d(x·sx) = (sy/sx)·dy/dx falls out correctly. Scaling at the END
     #     instead would multiply the derivative by sy alone — plainly wrong.
     #   * step 7's normalizations are scale-invariant, so they don't interact.
-    # yScale multiplies every NUMERIC value channel, so a y-channel and its paired
-    # error channel scale together and error bars stay consistent for free (same
-    # uniform treatment step 5's emu/g conversion already applies). Categorical
-    # channels carry codes and are excluded by BUG-005's mask below.
+    # yScale multiplies measured channels and bound Y-error magnitudes by the
+    # absolute factor. Categorical channels carry codes and are excluded by
+    # BUG-005's mask below.
     x_scale = _finite_scale(params.get("xScale"), "xScale")
     y_scale = _finite_scale(params.get("yScale"), "yScale")
     if x_scale != 1.0:
         time = time * x_scale
-    if y_scale != 1.0 and numeric:
-        values[:, numeric] = values[:, numeric] * y_scale
+        scale_errors("x", x_scale)
+    if y_scale != 1.0:
+        if numeric:
+            values[:, numeric] = values[:, numeric] * y_scale
+        scale_errors("y", y_scale)
 
     # 1. Trim on x.
     x_min = params.get("xTrimMin", float("nan"))
@@ -174,6 +227,7 @@ def apply_corrections(
         for k in numeric:
             if labels[k].lower() != "dq":
                 values[:, k] = values[:, k] / factor
+                scale_errors("y", 1.0 / factor, k)
 
     # 3. Neutron R-scale, or background subtraction + y-offset.
     y_off = params.get("yOff", 0.0)
@@ -181,6 +235,7 @@ def apply_corrections(
         for k in numeric:
             if labels[k].lower() != "dq":
                 values[:, k] = values[:, k] * y_off
+                scale_errors("y", y_off, k)
     else:
         # An anchor-point baseline (GOTO #2) beats the polynomial/slope forms.
         bg_anchors = params.get("bgAnchors")
@@ -223,19 +278,31 @@ def apply_corrections(
         if f_unit and f_unit != "Oe (raw)":
             target = f_unit.replace(" (raw)", "")
             time = np.asarray(convert_units(time, "Oe", target)[0], dtype=float)
+            converted = convert_units(np.asarray([0.0, 1.0]), "Oe", target)[0]
+            scale_errors("x", float(converted[1] - converted[0]))
         m_unit = params.get("momentUnit", "")
         if m_unit == "emu/g" and params.get("sampleMass", 0.0) > 0 and numeric:
-            values[:, numeric] = values[:, numeric] / params["sampleMass"]
+            factor = 1.0 / params["sampleMass"]
+            values[:, numeric] = values[:, numeric] * factor
+            scale_errors("y", factor)
         elif (
             m_unit in ("emu/cm³", "kA/m")
             and params.get("sampleVolume", 0.0) > 0
             and numeric
         ):
-            values[:, numeric] = values[:, numeric] / params["sampleVolume"]
+            factor = 1.0 / params["sampleVolume"]
+            values[:, numeric] = values[:, numeric] * factor
+            scale_errors("y", factor)
         elif m_unit == "A·m²" and numeric:
             values[:, numeric] = values[:, numeric] * 1e-3
+            scale_errors("y", 1e-3)
 
     # 6. Smoothing.
+    if params.get("smoothEnabled", False) and has_y_errors:
+        raise ValueError(
+            "smoothing data with bound Y uncertainty is not supported; "
+            "unassign the error columns or smooth before assigning them"
+        )
     if params.get("smoothEnabled", False) and numeric:
         win = max(1, _matlab_round(params.get("smoothWindow", 5)))
         smoothed = smooth_data(
@@ -245,20 +312,39 @@ def apply_corrections(
 
     # 7. Normalization.
     norm = params.get("normMethod", "None")
-    if norm == "Range [0,1]" and numeric:
-        values[:, numeric] = normalize(values[:, numeric], method="range")
-    elif norm == "Peak (max=1)" and numeric:
-        values[:, numeric] = normalize(values[:, numeric], method="peak")
-    elif norm == "Z-score" and numeric:
-        values[:, numeric] = normalize(values[:, numeric], method="zscore")
+    if norm in ("Range [0,1]", "Peak (max=1)", "Z-score"):
+        method = {
+            "Range [0,1]": "range",
+            "Peak (max=1)": "peak",
+            "Z-score": "zscore",
+        }[norm]
+        for k in numeric:
+            col = values[:, k].copy()
+            if method == "range":
+                span = float(np.nanmax(col) - np.nanmin(col)) if col.size else 0.0
+                norm_factor = 1.0 if span == 0 else 1.0 / span
+            elif method == "peak":
+                peak = float(np.nanmax(np.abs(col))) if col.size else 0.0
+                norm_factor = 1.0 if peak == 0 else 1.0 / peak
+            else:
+                sigma = float(np.nanstd(col, ddof=1)) if col.size else 0.0
+                norm_factor = 1.0 if sigma == 0 else 1.0 / sigma
+            values[:, k] = normalize(col, method=method)
+            scale_errors("y", norm_factor, k)
     elif norm == "Area (integral=1)":
         for k in numeric:
             area = float(np.trapezoid(values[:, k], time))
             if area != 0:
                 values[:, k] = values[:, k] / area
+                scale_errors("y", 1.0 / area, k)
 
     # 8. Derivative / integral transforms.
     deriv = params.get("derivativeMode", "None")
+    if deriv != "None" and has_y_errors:
+        raise ValueError(
+            "derivative/integral transforms with bound Y uncertainty are not "
+            "supported; unassign the error columns or transform before assigning them"
+        )
     if deriv == "dY/dX" and numeric:
         values[:, numeric] = derivative(time, values[:, numeric], order=1)
     elif deriv == "d²Y/dX²" and numeric:
