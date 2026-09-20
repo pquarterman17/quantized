@@ -51,6 +51,30 @@ function offenders(re: RegExp, allow: string[]): string[] {
     .filter((p) => !allow.some((a) => p.endsWith(a)));
 }
 
+// BUG-020 follow-up: these workshop hooks used page-lifetime counters for
+// durable dataset ids.  A restored project can already contain any id minted
+// during an earlier page lifetime, so every dataset producer must draw from
+// the workspace-wide sequence instead of restarting at 1 after reload.
+describe("workshop dataset identity", () => {
+  const migrated = [
+    "/components/workshops/baseline/useBaseline.ts",
+    "/components/workshops/hysteresis/useHysteresis.ts",
+    "/components/workshops/magtools/useMagTools.ts",
+    "/components/workshops/reflectivity/useReflectivity.ts",
+  ];
+
+  it("keeps the BUG-020 workshop producers on the shared dataset-id sequence", () => {
+    const workshopSources = sources().filter(([path]) => migrated.some((suffix) => path.endsWith(suffix)));
+    expect(workshopSources.map(([path]) => path)).toHaveLength(migrated.length);
+    for (const [path, src] of workshopSources) {
+      expect(src, `${path} must mint durable ids through store/idSeq.ts`).toContain("nextDatasetId()");
+      expect(src, `${path} must not restore a page-lifetime dataset-id prefix`).not.toMatch(
+        /(?:bgsub|hystbg|magbg|magunit|refl-model|refl-sld)-/,
+      );
+    }
+  });
+});
+
 // Component-ceiling ratchet (PROJECT_ORGANIZATION_PLAN #7 / PORT_PLAN W7).
 // Convention: a .tsx component is <=400 lines; heavy features decompose via the
 // workshop pattern (state hook + view + sub-components). This is a RATCHET, not

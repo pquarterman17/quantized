@@ -12,6 +12,7 @@ import { hysteresisAnalysis, subtractHysteresisBackground } from "../../../lib/a
 import { selectedFitData } from "../../../lib/fitselection";
 import { analysisData } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, DataStruct } from "../../../lib/types";
+import { nextDatasetId } from "../../../store/idSeq";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
 /** H = plotted X, M = primary plotted Y over the analysis view (excluded/
@@ -42,8 +43,6 @@ export interface HysteresisState {
   bgBusy: boolean;
   subtractBackground: () => Promise<void>;
 }
-
-let _bgCounter = 0;
 
 export function useHysteresis(): HysteresisState {
   const active = useActiveDataset();
@@ -137,7 +136,7 @@ export function useHysteresis(): HysteresisState {
         metadata: { ...ds.data.metadata, hysteresis_bg_subtracted: true },
       };
       const stem = ds.name.replace(/\.[^.]+$/, "");
-      addDataset({ id: `hystbg-${++_bgCounter}`, name: `${stem} (bg-sub)`, data });
+      addDataset({ id: nextDatasetId(), name: `${stem} (bg-sub)`, data });
       setStatus(
         res.slope === 0 && res.offset === 0
           ? "no high-field background found (too few tail points)"

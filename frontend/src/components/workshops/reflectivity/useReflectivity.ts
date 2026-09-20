@@ -7,6 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { reflPresets, reflSimulate, reflSldProfile, type ReflLayer } from "../../../lib/api/reflectivity";
 import type { DataStruct, SldPreset } from "../../../lib/types";
+import { nextDatasetId } from "../../../store/idSeq";
 import { useApp } from "../../../store/useApp";
 
 export type Radiation = "xray" | "neutron";
@@ -149,7 +150,7 @@ export function useReflectivity(): ReflectivityState {
         units: ["a.u."],
         metadata: { source: "reflectivity-sim", radiation, layers: layers.length },
       };
-      addDataset({ id: `refl-model-${n}`, name: `Reflectivity model ${n}`, data });
+      addDataset({ id: nextDatasetId(), name: `Reflectivity model ${n}`, data });
       setStatus(`simulated R(Q) — ${res.q.length} points`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "simulation failed");
@@ -173,7 +174,7 @@ export function useReflectivity(): ReflectivityState {
         units: ["Å⁻²"],
         metadata: { source: "reflectivity-sld", radiation, layers: layers.length },
       };
-      addDataset({ id: `refl-sld-${n}`, name: `SLD profile ${n}`, data });
+      addDataset({ id: nextDatasetId(), name: `SLD profile ${n}`, data });
       setStatus(`SLD profile — ${res.z.length} points`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "SLD profile failed");
