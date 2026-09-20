@@ -117,6 +117,8 @@ import os
 from collections import OrderedDict
 from collections.abc import Iterable
 
+from quantized.desktop_source_identity import matches_declared_source
+
 __all__ = [
     "clear_consent",
     "clear_dir_grants",
@@ -320,8 +322,18 @@ def set_declared_sources(paths: Iterable[str]) -> None:
 def is_declared_source(resolved_path: str) -> bool:
     """True when `resolved_path` was named as a dataset source by the
     CURRENTLY open project's own payload. Callers must pass an already-
-    ``realpath``-normalized string, same convention as `is_consented`."""
-    return resolved_path in _declared_sources
+    ``realpath``-normalized string, same convention as `is_consented`.
+
+    Unlike the ordinary consent stores, this is an overwrite-safety guard,
+    so equality is by filesystem identity as well as canonical path: a hard
+    link or a normalization-insensitive alias of a declared source is still
+    that source for write-protection purposes.
+    """
+    if resolved_path in _declared_sources:
+        # Preserve the O(1) hot path used by pack/relink eligibility checks;
+        # filesystem identity is needed only for a differently named alias.
+        return True
+    return matches_declared_source(resolved_path, _declared_sources)
 
 
 def declared_source_count() -> int:

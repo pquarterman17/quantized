@@ -28,6 +28,7 @@ from quantized.desktop_bridge import DesktopApi
 from quantized.desktop_consent import (
     clear_consent,
     consented_path,
+    grant_write_path,
     is_consented,
     is_declared_source,
 )
@@ -115,6 +116,24 @@ requires_hardlinks = pytest.mark.skipif(
 )
 
 
+def _symlinks_available() -> bool:
+    """Probe the current filesystem instead of guessing from the OS name."""
+    with tempfile.TemporaryDirectory() as d:
+        src = Path(d) / "src"
+        src.write_text("x", encoding="utf-8")
+        try:
+            (Path(d) / "link").symlink_to(src)
+        except (OSError, NotImplementedError, AttributeError):
+            return False
+        return True
+
+
+requires_symlinks = pytest.mark.skipif(
+    not _symlinks_available(),
+    reason="this filesystem cannot create symbolic links (probed, not assumed)",
+)
+
+
 UNICODE_NAMES = [
     "運行データ.csv",  # CJK
     "Ω-résumé.csv",  # Greek + Latin-1 supplement
@@ -157,14 +176,13 @@ def test_path_status_and_probe_source_handle_unicode_paths(tmp_path: Path, name:
     assert out["checksum"].startswith("sha256:")
 
 
-def test_declared_source_matches_only_the_identical_unicode_spelling(tmp_path: Path) -> None:
-    """`is_declared_source` is exact-string keyed (desktop_consent.py's own
-    doc: "not a prefix rule... per exact resolved path"). A Unicode filename
-    behaves exactly like an ASCII one here: the SAME spelling matches, a
-    VISUALLY similar but byte-different spelling of a DIFFERENT real file
-    does not. This is the control for the NFC/NFD finding below — it shows
-    the exact-match rule is applied consistently, not that normalization is
-    handled specially."""
+def test_declared_source_uses_filesystem_identity_for_unicode_spellings(tmp_path: Path) -> None:
+    """NFC/NFD aliases match only when this filesystem says they are one file.
+
+    APFS/HFS+ commonly resolve the two spellings to one file; ext4 commonly
+    permits two distinct files.  The guard follows that observable identity,
+    not an OS-name guess and not Unicode text equality by itself.
+    """
     composed = unicodedata.normalize("NFC", "café.csv")
     decomposed = unicodedata.normalize("NFD", "café.csv")
     assert composed != decomposed  # they are different byte strings in Python, too
@@ -176,8 +194,18 @@ def test_declared_source_matches_only_the_identical_unicode_spelling(tmp_path: P
     api.attach(FakeWindow([str(project)]))
     api.open_project_file()
     assert is_declared_source(os.path.realpath(str(f_nfc)))
-    # A DIFFERENT real file whose name is the decomposed spelling is not the
-    # declared source, exactly as a wholly different filename would not be.
+
+    resolved_nfd = os.path.realpath(str(tmp_path / decomposed))
+    if os.path.exists(resolved_nfd) and os.path.samefile(f_nfc, resolved_nfd):
+        assert is_declared_source(resolved_nfd)
+        assert payload_declares_source(
+            {"datasets": [{"source": {"kind": "path", "path": str(f_nfc)}}]},
+            resolved_nfd,
+        )
+        return
+
+    # On a normalization-sensitive filesystem this is a genuinely different
+    # file and must not become a false positive merely because NFC keys match.
     f_nfd = tmp_path / decomposed
     f_nfd.write_text("nfd", encoding="utf-8")
     assert not is_declared_source(os.path.realpath(str(f_nfd)))
@@ -455,45 +483,38 @@ def test_write_project_file_refuses_cleanly_when_the_directory_vanishes_after_co
     assert list(tmp_path.iterdir()) == []
 
 
-# === Write-consent bypass via a filesystem alias (the finding) =============
+# === Declared-source aliases: same path, symlink, and hard link =============
 #
-# `is_declared_source` / `payload_declares_source` (desktop_consent.py,
-# desktop_project_file.py) both key their comparison on a path STRING after
-# `os.path.realpath` / `os.path.normcase(os.path.normpath(...))` -- never on
-# filesystem identity (dev/ino, which `desktop_source_probe.probe_source_path`
-# computes for an unrelated purpose and which these two functions do not
-# consult). `os.path.realpath` only resolves symlink and `.`/`..` components;
-# it does not resolve a HARD LINK to any canonical name (a hard link has
-# none), and on a normalization-insensitive filesystem (documented behavior
-# of macOS's HFS+/APFS, NOT reproducible on this Linux gate) it would not
-# resolve an NFC/NFD respelling of the same file to one string either.
-#
-# The test below proves the hard-link case concretely, on Linux, with a real
-# file: two directory entries, same inode, and the SECOND one silently
-# passes `is_declared_source`'s check meant to block exactly this. See this
-# repo's task write-up for the full analysis, including why the practical
-# damage is bounded (the atomic replace-by-rename write never mutates a
-# shared inode's bytes in place -- confirmed by the second assertion below).
+# Canonical path comparison covers the first two; filesystem identity is
+# required for the third because a hard link has no preferred/canonical name.
+
+
+def test_payload_source_guard_matches_same_path_but_not_an_independent_file(
+    tmp_path: Path,
+) -> None:
+    raw = tmp_path / "raw.csv"
+    raw.write_text("same bytes", encoding="utf-8")
+    independent = tmp_path / "independent.csv"
+    independent.write_text("same bytes", encoding="utf-8")
+    payload = {"datasets": [{"source": {"kind": "path", "path": str(raw)}}]}
+
+    assert payload_declares_source(payload, os.path.realpath(str(raw)))
+    assert not payload_declares_source(payload, os.path.realpath(str(independent)))
+
+
+@requires_symlinks
+def test_payload_source_guard_matches_a_symlink_alias(tmp_path: Path) -> None:
+    raw = tmp_path / "raw.csv"
+    raw.write_text("data", encoding="utf-8")
+    link = tmp_path / "raw-link.csv"
+    link.symlink_to(raw)
+    payload = {"datasets": [{"source": {"kind": "path", "path": str(raw)}}]}
+
+    assert payload_declares_source(payload, os.path.realpath(str(link)))
 
 
 @requires_hardlinks
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "KNOWN GAP (not fixed this slice -- needs a design decision, see "
-        "task write-up): is_declared_source/payload_declares_source key on "
-        "a path STRING post-realpath, not filesystem identity (dev/ino). A "
-        "hard-linked alias of a declared/open source is NOT recognized as "
-        "that source, so write_project_file wrongly permits a save through "
-        "it. Fixing this means stat-ing every declared source at every "
-        "quick-save to compare dev/ino against the destination -- exactly "
-        "the extra per-source I/O payload_declares_source's own docstring "
-        "says was deliberately avoided (an unreachable network source would "
-        "pay a full SMB-timeout stat on every save) -- so a real fix needs "
-        "a design call, not a silent patch here."
-    ),
-)
-def test_a_hardlinked_alias_of_the_declared_source_is_wrongly_permitted_as_a_write_target(
+def test_save_dialog_refuses_a_hardlinked_alias_of_the_open_projects_source(
     tmp_path: Path,
 ) -> None:
     raw = tmp_path / "raw.csv"
@@ -508,16 +529,28 @@ def test_a_hardlinked_alias_of_the_declared_source_is_wrongly_permitted_as_a_wri
     api.attach(FakeWindow([str(project)]))
     api.open_project_file()
     assert is_declared_source(os.path.realpath(str(raw)))
+    assert is_declared_source(os.path.realpath(str(alias)))
 
-    path = _grant_write(api, alias)
-    # `content` still declares `raw` (unchanged) as the project's source --
-    # the save is going through the ALIAS name, not the declared one.
-    content = _workspace_json_declaring(str(raw))
-    out = api.write_project_file(path, content)
-    assert out["ok"] is False, (
-        "write through a hard-linked alias of the declared source must be "
-        f"refused exactly like the direct spelling is -- got {out!r}"
-    )
+    api.attach(FakeWindow([str(alias)]))
+    out = api.save_file_dialog(alias.name)
+    assert out["path"] is None
+    assert "data source of the open project" in out["error"]
+
+
+@requires_hardlinks
+def test_write_refuses_a_hardlinked_alias_declared_only_by_the_payload(tmp_path: Path) -> None:
+    """The authoritative payload guard works without a native project open."""
+    raw = tmp_path / "raw.csv"
+    raw.write_text("T,M\n1,10\n", encoding="utf-8")
+    alias = tmp_path / "raw-alias.csv"
+    os.link(raw, alias)
+    granted = grant_write_path(str(alias))
+    assert granted is not None
+
+    out = DesktopApi().write_project_file(granted, _workspace_json_declaring(str(raw)))
+    assert out["ok"] is False
+    assert "data source of this workspace" in out["error"]
+    assert raw.read_text(encoding="utf-8") == "T,M\n1,10\n"
 
 
 @requires_hardlinks
@@ -549,10 +582,8 @@ def test_hardlink_bypass_does_not_actually_corrupt_the_shared_inodes_bytes(
 
 
 @requires_hardlinks
-def test_payload_declares_source_misses_a_hardlinked_alias(tmp_path: Path) -> None:
-    """Same finding, isolated to the pure function
-    (desktop_project_file.payload_declares_source) with no DesktopApi/
-    consent machinery involved -- pins the exact boundary of the gap."""
+def test_payload_declares_source_matches_a_hardlinked_alias(tmp_path: Path) -> None:
+    """The pure-function half uses the same filesystem-identity rule."""
     raw = tmp_path / "raw.csv"
     raw.write_text("data", encoding="utf-8")
     alias = tmp_path / "raw-alias.csv"
@@ -562,7 +593,73 @@ def test_payload_declares_source_misses_a_hardlinked_alias(tmp_path: Path) -> No
     }
     resolved_alias = os.path.realpath(str(alias))
     assert os.stat(str(raw)).st_ino == os.stat(resolved_alias).st_ino
-    assert payload_declares_source(payload, resolved_alias) is False
+    assert payload_declares_source(payload, resolved_alias) is True
     # Control: the identical spelling IS caught, same function.
     resolved_raw = os.path.realpath(str(raw))
     assert payload_declares_source(payload, resolved_raw) is True
+
+
+@requires_hardlinks
+def test_unrelated_hardlinked_destination_remains_a_valid_project_save(tmp_path: Path) -> None:
+    """Link count alone is not a refusal; identity must match a source."""
+    raw = tmp_path / "raw.csv"
+    raw.write_text("source", encoding="utf-8")
+    unrelated = tmp_path / "unrelated.bin"
+    unrelated.write_text("unrelated", encoding="utf-8")
+    dest = tmp_path / "workspace.dwk"
+    os.link(unrelated, dest)
+    assert os.stat(unrelated).st_ino == os.stat(dest).st_ino
+
+    api = DesktopApi()
+    path = _grant_write(api, dest)
+    content = _workspace_json_declaring(str(raw))
+    out = api.write_project_file(path, content)
+
+    assert out["ok"] is True, out
+    assert dest.read_text(encoding="utf-8") == content
+    assert unrelated.read_text(encoding="utf-8") == "unrelated"
+
+
+def test_unreachable_source_resolution_does_not_block_an_ordinary_destination(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Offline-source errors keep the normal save path's skip-on-error rule."""
+    source = tmp_path / "offline.csv"
+    dest = tmp_path / "workspace.dwk"
+    dest.write_text("old project", encoding="utf-8")
+    resolved_dest = os.path.realpath(str(dest))
+    payload = {"datasets": [{"source": {"kind": "path", "path": str(source)}}]}
+    real_realpath = os.path.realpath
+
+    def unavailable_realpath(path: os.PathLike[str] | str, *args: Any, **kwargs: Any) -> str:
+        if os.path.normcase(os.fspath(path)) == os.path.normcase(str(source)):
+            raise OSError("source volume unavailable")
+        return real_realpath(path, *args, **kwargs)
+
+    monkeypatch.setattr("quantized.desktop_source_identity.os.path.realpath", unavailable_realpath)
+    assert not payload_declares_source(payload, resolved_dest)
+
+
+@requires_hardlinks
+def test_missing_source_is_skipped_but_an_unexpected_identity_error_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unrelated = tmp_path / "unrelated.bin"
+    unrelated.write_text("unrelated", encoding="utf-8")
+    dest = tmp_path / "workspace.dwk"
+    os.link(unrelated, dest)
+    missing = tmp_path / "offline.csv"
+    payload = {"datasets": [{"source": {"kind": "path", "path": str(missing)}}]}
+
+    # A definitely absent source cannot share the destination's identity.
+    assert not payload_declares_source(payload, os.path.realpath(str(dest)))
+
+    real_stat = os.stat
+
+    def unavailable_stat(path: os.PathLike[str] | str, *args: Any, **kwargs: Any) -> os.stat_result:
+        if os.path.normcase(os.fspath(path)) == os.path.normcase(str(missing)):
+            raise OSError("source volume unavailable")
+        return real_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr("quantized.desktop_source_identity.os.stat", unavailable_stat)
+    assert payload_declares_source(payload, os.path.realpath(str(dest)))
