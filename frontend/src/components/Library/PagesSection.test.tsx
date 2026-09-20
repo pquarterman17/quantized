@@ -19,6 +19,7 @@ vi.mock("../overlays/ParamDialog", () => ({
 
 vi.mock("../../lib/api", () => ({ exportFigurePage: vi.fn().mockResolvedValue(undefined) }));
 
+import { LIBRARY_NODE_GLYPH } from "./nodeIcons";
 import PagesSection from "./PagesSection";
 import { exportFigurePage } from "../../lib/api";
 import { createFigureDocument } from "../../lib/figureDocument";
@@ -62,7 +63,14 @@ describe("PagesSection", () => {
     useApp.setState({ pages: [older, newer] });
     render(<PagesSection />);
     const rows = screen.getAllByText(/page$/);
-    expect(rows.map((r) => r.textContent)).toEqual(["▦ Newer page", "▦ Older page"]);
+    // UX-004: the leading mark is now the shared Figure-page glyph (it was
+    // ▦, which the tree also gave a Folder), and it is a titled span rather
+    // than a bare character prefix — so the order, not the spelling, is what
+    // this case is about.
+    expect(rows.map((r) => r.textContent)).toEqual([
+      `${LIBRARY_NODE_GLYPH.page}Newer page`,
+      `${LIBRARY_NODE_GLYPH.page}Older page`,
+    ]);
   });
 
   it("opens a page: seeds pageDocSeed and raises the workshop", () => {

@@ -13,9 +13,8 @@ import { useState } from "react";
 
 import { cutName } from "../../lib/mapcuts";
 import type { DataStruct } from "../../lib/types";
+import { nextDatasetId } from "../../store/idSeq";
 import { useApp } from "../../store/useApp";
-
-let _seq = 0;
 
 export interface CutLandingState {
   busy: boolean;
@@ -45,7 +44,14 @@ export function useCutLanding(): CutLandingState {
     try {
       const data = await promise;
       const name = namePrefix ? `${namePrefix}${cutName(data)}` : cutName(data);
-      const id = `cut-${++_seq}`;
+      // BUG-020: ids come from `store/idSeq.ts`'s shared, collision-free
+      // sequence, NOT a private counter. A private `let _seq = 0` minted
+      // "cut-1", "cut-2", … and reset on every page load, so a workspace
+      // restored with a `cut-1` in it (autosave restore runs at startup) and
+      // then given one new cut held TWO datasets with that id: `activeId`
+      // resolves to the first, so Apply plotted the OLD cut's rows, and
+      // `removeDatasets` filters by id, so deleting either destroyed both.
+      const id = nextDatasetId();
       addDataset({ id, name, data });
       setStatus(`cut added: ${name}`);
       return id;

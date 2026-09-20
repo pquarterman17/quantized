@@ -45,7 +45,40 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
- *  2026-09-19 (bundle diet slice 6, `plans/BUNDLE_HEADROOM.md`) — pin LOWERED
+ *  2026-09-20 - pin RAISED 876,469 -> 878,182 for batch 9. This is rule 2's
+ *  last resort and the try-a-lazy-split-first requirement was met the hard
+ *  way: bundle diet slice 7 was built to fund this batch, recovered 3,603 B
+ *  by deferring window chrome, and was then REVERTED because CI proved the
+ *  premise wrong - e2e's group-facet-journey right-clicks a window titlebar
+ *  and timed out waiting for "Close Window", because windowMenu.ts had gone
+ *  lazy with WindowTitleButtons. A titlebar menu is immediately interactive,
+ *  not furniture. An earlier cut of the same slice deferred PlotWindowFrame's
+ *  children including <PlotStage/> and would have blanked the plot on every
+ *  multi-window path. Both granularities failed, so there is no lazy split
+ *  left to try here.
+ *
+ *  Measured after `npm ci` with the vite cache cleared: 877,158 B, so the
+ *  capped margin is 877,158 + 1,024 = 878,182. Never the 40 kB SLACK.
+ *
+ *  WHAT GREW, and why none of it can be deferred:
+ *    UX-003 boundaries   +682 B - an error boundary for the 30 lazy() seams.
+ *                                 Making it lazy is incoherent: it would have
+ *                                 to load before it could catch a load
+ *                                 failure.
+ *    BUG-019 projection  +263 B - a store-layer capture projection. Store
+ *                                 code runs on every dataset switch and
+ *                                 every save; there is no panel behind it.
+ *    UX-004 node icons   +439 B - one shared kind->glyph map read by every
+ *                                 Library row on first paint.
+ *
+ *  All three are the "measured, irreducible eager logic with no lazy-able
+ *  panel behind it" this rule reserves a raise for. The ratchet still only
+ *  moves down from here: the next diet slice should take it back, and
+ *  plans/BUNDLE_HEADROOM.md records what slice 7 established about which
+ *  seams are NOT available (the window-frame family is disqualified; and
+ *  lib/plotRecipeIO.ts is measured-rejected at a 474 B ceiling).
+ *
+ *   *  2026-09-19 (bundle diet slice 6, `plans/BUNDLE_HEADROOM.md`) — pin LOWERED
  *  920,400 -> 876,469. The PRIOR PIN was 920,400; 888,562 below is the
  *  PARENT COMMIT's measured eager bytes, a different quantity (an earlier
  *  draft of this entry wrongly wrote 888,562 as "the pin" — corrected after
@@ -1617,7 +1650,7 @@ import { fileURLToPath } from "node:url";
  *    bc8f14fa   916,182   parent (greyscale export commit)
  *    this work  916,380   +198 B, 4,020 B under the unmoved 920,400 budget
  */
-const EAGER_JS_BUDGET = 876_469;
+const EAGER_JS_BUDGET = 878_182;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

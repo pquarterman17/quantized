@@ -54,7 +54,7 @@
 // null`), so its conversion adds one — a behavior-preserving change, not a
 // violation of that byte-identical rule.
 
-import { lazy, Suspense, useEffect, useState, type ComponentType } from "react";
+import { useEffect, useState, type ComponentType } from "react";
 import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import ParamDialog from "./components/overlays/ParamDialog";
 import Toaster from "./components/overlays/Toaster";
@@ -76,22 +76,23 @@ import { useRecode } from "./store/recode";
 import { useLevelOrderPanel } from "./store/levelOrderPanel";
 import { useCombineDialog } from "./store/combineDialog";
 import { useRecipeManager } from "./store/recipeManager";
+import { lazyRegion } from "./lib/lazyRegion";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
- *  Suspense boundary. The per-panel boundary is the point: with one shared
- *  boundary, opening a second panel would suspend the whole subtree and blank
- *  an already-open panel while the new chunk loaded. `fallback={null}` because
- *  these are overlays served from localhost — the chunk arrives in a frame or
- *  two, and a spinner would flash more than it informs. */
-function lazyPanel(load: () => Promise<{ default: ComponentType }>): ComponentType {
-  const Panel = lazy(load);
-  return function LazyPanel() {
-    return (
-      <Suspense fallback={null}>
-        <Panel />
-      </Suspense>
-    );
-  };
+ *  error boundary + Suspense (lazyRegion — UX-003). The per-panel boundary
+ *  is the point: with one shared boundary, opening a second panel would
+ *  suspend the whole subtree and blank an already-open panel while the new
+ *  chunk loaded, and a failed one would take every other panel down with
+ *  it. `fallback={null}` because these are overlays served from
+ *  localhost — the chunk arrives in a frame or two, and a spinner would
+ *  flash more than it informs. `label` names the panel in the fallback and
+ *  the console log (review finding #6: 52 panels sharing one "Panel" label
+ *  left no way to tell which one failed). */
+function lazyPanel(
+  load: () => Promise<{ default: ComponentType }>,
+  label: string,
+): ComponentType {
+  return lazyRegion(load, label);
 }
 
 /** Load an on-demand dialog only after its first opening, then leave it mounted
@@ -105,92 +106,92 @@ function useKeepMountedAfterOpen(open: boolean): boolean {
   return mounted;
 }
 
-const SqliteQueryDialog = lazyPanel(() => import("./components/workshops/database/SqliteQueryDialog"));
-const BaselinePanel = lazyPanel(() => import("./components/workshops/baseline/BaselinePanel"));
-const CalculatorsPanel = lazyPanel(() => import("./components/workshops/calculators/CalculatorsPanel"));
-const DatasetMathPanel = lazyPanel(() => import("./components/workshops/datasetmath/DatasetMathPanel"));
-const TabulatePanel = lazyPanel(() => import("./components/workshops/tabulate/TabulatePanel"));
-const DistributionPanel = lazyPanel(() => import("./components/workshops/distribution/DistributionPanel"));
-const FitYByXPanel = lazyPanel(() => import("./components/workshops/fityx/FitYByXPanel"));
-const OutlierScreeningPanel = lazyPanel(() => import("./components/workshops/outliers/OutlierScreeningPanel"));
-const MultivarPanel = lazyPanel(() => import("./components/workshops/multivar/MultivarPanel"));
-const VariabilityChartPanel = lazyPanel(() => import("./components/workshops/variability/VariabilityChartPanel"));
-const ReportPanel = lazyPanel(() => import("./components/workshops/report/ReportPanel"));
-const StatsChooserPanel = lazyPanel(() => import("./components/workshops/statschooser/StatsChooserPanel"));
-const PeakWizardPanel = lazyPanel(() => import("./components/workshops/peakwizard/PeakWizardPanel"));
-const ImportWizardPanel = lazyPanel(() => import("./components/workshops/importwizard/ImportWizardPanel"));
-const PipelinePanel = lazyPanel(() => import("./components/workshops/pipeline/PipelinePanel"));
-const DataFilterPanel = lazyPanel(() => import("./components/workshops/datafilter/DataFilterPanel"));
-const ColumnSwitcher = lazyPanel(() => import("./components/workshops/switcher/ColumnSwitcher"));
-const FigureBuilderView = lazyPanel(() => import("./components/workshops/figurebuilder/FigureBuilderView"));
-const FigurePageView = lazyPanel(() => import("./components/workshops/figurepage/FigurePageView"));
-const GraphBuilderPanel = lazyPanel(() => import("./components/workshops/graphbuilder/GraphBuilderPanel"));
-const CurveFitPanel = lazyPanel(() => import("./components/workshops/curvefit/CurveFitPanel"));
-const HysteresisPanel = lazyPanel(() => import("./components/workshops/hysteresis/HysteresisPanel"));
-const MagToolsPanel = lazyPanel(() => import("./components/workshops/magtools/MagToolsPanel"));
-const PeaksPanel = lazyPanel(() => import("./components/workshops/peaks/PeaksPanel"));
-const ReflectivityPanel = lazyPanel(() => import("./components/workshops/reflectivity/ReflectivityPanel"));
-const ReductionsPanel = lazyPanel(() => import("./components/workshops/reductions/ReductionsPanel"));
-const RsmPanel = lazyPanel(() => import("./components/workshops/rsm/RsmPanel"));
-const RoiCutsPanel = lazyPanel(() => import("./components/workshops/roicuts/RoiCutsPanel"));
-const DigitizerView = lazyPanel(() => import("./components/workshops/digitizer/DigitizerView"));
-const WaterfallView = lazyPanel(() => import("./components/workshops/waterfall/WaterfallView"));
-const ReflView = lazyPanel(() => import("./components/workshops/reflview/ReflView"));
-const TrashPanel = lazyPanel(() => import("./components/workshops/trash/TrashPanel"));
-const SearchPanel = lazyPanel(() => import("./components/workshops/search/SearchPanel"));
-const HelpDialog = lazyPanel(() => import("./components/overlays/HelpDialog"));
+const SqliteQueryDialog = lazyPanel(() => import("./components/workshops/database/SqliteQueryDialog"), "SqliteQueryDialog");
+const BaselinePanel = lazyPanel(() => import("./components/workshops/baseline/BaselinePanel"), "BaselinePanel");
+const CalculatorsPanel = lazyPanel(() => import("./components/workshops/calculators/CalculatorsPanel"), "CalculatorsPanel");
+const DatasetMathPanel = lazyPanel(() => import("./components/workshops/datasetmath/DatasetMathPanel"), "DatasetMathPanel");
+const TabulatePanel = lazyPanel(() => import("./components/workshops/tabulate/TabulatePanel"), "TabulatePanel");
+const DistributionPanel = lazyPanel(() => import("./components/workshops/distribution/DistributionPanel"), "DistributionPanel");
+const FitYByXPanel = lazyPanel(() => import("./components/workshops/fityx/FitYByXPanel"), "FitYByXPanel");
+const OutlierScreeningPanel = lazyPanel(() => import("./components/workshops/outliers/OutlierScreeningPanel"), "OutlierScreeningPanel");
+const MultivarPanel = lazyPanel(() => import("./components/workshops/multivar/MultivarPanel"), "MultivarPanel");
+const VariabilityChartPanel = lazyPanel(() => import("./components/workshops/variability/VariabilityChartPanel"), "VariabilityChartPanel");
+const ReportPanel = lazyPanel(() => import("./components/workshops/report/ReportPanel"), "ReportPanel");
+const StatsChooserPanel = lazyPanel(() => import("./components/workshops/statschooser/StatsChooserPanel"), "StatsChooserPanel");
+const PeakWizardPanel = lazyPanel(() => import("./components/workshops/peakwizard/PeakWizardPanel"), "PeakWizardPanel");
+const ImportWizardPanel = lazyPanel(() => import("./components/workshops/importwizard/ImportWizardPanel"), "ImportWizardPanel");
+const PipelinePanel = lazyPanel(() => import("./components/workshops/pipeline/PipelinePanel"), "PipelinePanel");
+const DataFilterPanel = lazyPanel(() => import("./components/workshops/datafilter/DataFilterPanel"), "DataFilterPanel");
+const ColumnSwitcher = lazyPanel(() => import("./components/workshops/switcher/ColumnSwitcher"), "ColumnSwitcher");
+const FigureBuilderView = lazyPanel(() => import("./components/workshops/figurebuilder/FigureBuilderView"), "FigureBuilderView");
+const FigurePageView = lazyPanel(() => import("./components/workshops/figurepage/FigurePageView"), "FigurePageView");
+const GraphBuilderPanel = lazyPanel(() => import("./components/workshops/graphbuilder/GraphBuilderPanel"), "GraphBuilderPanel");
+const CurveFitPanel = lazyPanel(() => import("./components/workshops/curvefit/CurveFitPanel"), "CurveFitPanel");
+const HysteresisPanel = lazyPanel(() => import("./components/workshops/hysteresis/HysteresisPanel"), "HysteresisPanel");
+const MagToolsPanel = lazyPanel(() => import("./components/workshops/magtools/MagToolsPanel"), "MagToolsPanel");
+const PeaksPanel = lazyPanel(() => import("./components/workshops/peaks/PeaksPanel"), "PeaksPanel");
+const ReflectivityPanel = lazyPanel(() => import("./components/workshops/reflectivity/ReflectivityPanel"), "ReflectivityPanel");
+const ReductionsPanel = lazyPanel(() => import("./components/workshops/reductions/ReductionsPanel"), "ReductionsPanel");
+const RsmPanel = lazyPanel(() => import("./components/workshops/rsm/RsmPanel"), "RsmPanel");
+const RoiCutsPanel = lazyPanel(() => import("./components/workshops/roicuts/RoiCutsPanel"), "RoiCutsPanel");
+const DigitizerView = lazyPanel(() => import("./components/workshops/digitizer/DigitizerView"), "DigitizerView");
+const WaterfallView = lazyPanel(() => import("./components/workshops/waterfall/WaterfallView"), "WaterfallView");
+const ReflView = lazyPanel(() => import("./components/workshops/reflview/ReflView"), "ReflView");
+const TrashPanel = lazyPanel(() => import("./components/workshops/trash/TrashPanel"), "TrashPanel");
+const SearchPanel = lazyPanel(() => import("./components/workshops/search/SearchPanel"), "SearchPanel");
+const HelpDialog = lazyPanel(() => import("./components/overlays/HelpDialog"), "HelpDialog");
 // These ordinary dialogs have no startup responsibility: their store flags are
 // already in this composition root, so loading them only when opened removes
 // their implementation (and dialog-only helpers) from first-paint JS.
-const SplitDatasetDialog = lazyPanel(() => import("./components/overlays/SplitDatasetDialog"));
+const SplitDatasetDialog = lazyPanel(() => import("./components/overlays/SplitDatasetDialog"), "SplitDatasetDialog");
 // LIBRARY_WORKBOOK_UX_PLAN PR J slice 2 (L0.32-L0.34/L0.51): same "on-demand
 // dialog with no startup responsibility" class as SplitDatasetDialog above.
-const CombineWorkbooksDialog = lazyPanel(() => import("./components/overlays/CombineWorkbooksDialog"));
-const SeparateWorksheetsDialog = lazyPanel(() => import("./components/overlays/SeparateWorksheetsDialog"));
+const CombineWorkbooksDialog = lazyPanel(() => import("./components/overlays/CombineWorkbooksDialog"), "CombineWorkbooksDialog");
+const SeparateWorksheetsDialog = lazyPanel(() => import("./components/overlays/SeparateWorksheetsDialog"), "SeparateWorksheetsDialog");
 // L0.33 (PR M): the transactional multi-source Reimport All / Reimport
 // Available Sources problem report — same "on-demand dialog with no
 // startup responsibility" class as SeparateWorksheetsDialog right above.
-const ReimportAllDialog = lazyPanel(() => import("./components/overlays/ReimportAllDialog"));
-const QuickPlotWithDialog = lazyPanel(() => import("./components/overlays/QuickPlotWithDialog"));
+const ReimportAllDialog = lazyPanel(() => import("./components/overlays/ReimportAllDialog"), "ReimportAllDialog");
+const QuickPlotWithDialog = lazyPanel(() => import("./components/overlays/QuickPlotWithDialog"), "QuickPlotWithDialog");
 // P1.3 wave 3, Lane D: the plot-recipe apply preview+confirm dialog -- same
 // "on-demand dialog with no startup responsibility" class as QuickPlotWithDialog.
-const PlotRecipeApplyDialog = lazyPanel(() => import("./components/overlays/PlotRecipeApplyDialog"));
+const PlotRecipeApplyDialog = lazyPanel(() => import("./components/overlays/PlotRecipeApplyDialog"), "PlotRecipeApplyDialog");
 // The Recipe Manager panel -- rare-ish, on-demand (opened from the command
 // palette / a menu), so it stays out of the eager bundle like every other
 // workshop panel above.
-const RecipeManagerPanel = lazyPanel(() => import("./components/workshops/recipemanager/RecipeManagerPanel"));
+const RecipeManagerPanel = lazyPanel(() => import("./components/workshops/recipemanager/RecipeManagerPanel"), "RecipeManagerPanel");
 // P3.5: the cross-kind Recipe Library is a separate, browse-first surface.
 // The existing Plot Recipe Manager remains the advanced plot-specific editor.
-const RecipeLibraryPanel = lazyPanel(() => import("./components/workshops/recipelibrary/RecipeLibraryPanel"));
-const AnnotationTextDialog = lazyPanel(() => import("./components/overlays/AnnotationTextDialog"));
-const ShortcutsDialog = lazyPanel(() => import("./components/overlays/ShortcutsDialog"));
-const TextFormatHelp = lazyPanel(() => import("./components/overlays/TextFormatHelp"));
-const PreferencesDialog = lazyPanel(() => import("./components/overlays/PreferencesDialog"));
+const RecipeLibraryPanel = lazyPanel(() => import("./components/workshops/recipelibrary/RecipeLibraryPanel"), "RecipeLibraryPanel");
+const AnnotationTextDialog = lazyPanel(() => import("./components/overlays/AnnotationTextDialog"), "AnnotationTextDialog");
+const ShortcutsDialog = lazyPanel(() => import("./components/overlays/ShortcutsDialog"), "ShortcutsDialog");
+const TextFormatHelp = lazyPanel(() => import("./components/overlays/TextFormatHelp"), "TextFormatHelp");
+const PreferencesDialog = lazyPanel(() => import("./components/overlays/PreferencesDialog"), "PreferencesDialog");
 // No local state to preserve across toggles (purely `useHelp`-flag-driven),
 // so a plain lazyPanel — not useKeepMountedAfterOpen — matches its former
 // always-mounted-but-self-hiding behavior exactly.
-const WhatIsThis = lazyPanel(() => import("./components/overlays/WhatIsThis"));
+const WhatIsThis = lazyPanel(() => import("./components/overlays/WhatIsThis"), "WhatIsThis");
 // P1.2 box 5: the crash-recovery chooser. Rare (only when a startup autosave
 // candidate outdates the last-known named project — see
 // lib/recoveryChoice.ts), so it stays out of the eager bundle like every
 // other on-demand dialog above.
-const RecoveryChoiceDialog = lazyPanel(() => import("./components/overlays/RecoveryChoiceDialog"));
+const RecoveryChoiceDialog = lazyPanel(() => import("./components/overlays/RecoveryChoiceDialog"), "RecoveryChoiceDialog");
 // P1.7: relink-one/relink-folder dry-run + commit. Rare-ish, on-demand
 // action (opened from the command palette, never on startup), so it stays
 // out of the eager bundle like every other workshop panel above.
-const RelinkPanel = lazyPanel(() => import("./components/workshops/relink/RelinkPanel"));
-const PackProjectPanel = lazyPanel(() => import("./components/workshops/packproject/PackProjectPanel"));
+const RelinkPanel = lazyPanel(() => import("./components/workshops/relink/RelinkPanel"), "RelinkPanel");
+const PackProjectPanel = lazyPanel(() => import("./components/workshops/packproject/PackProjectPanel"), "PackProjectPanel");
 // J2: the Recode workshop, opened from the worksheet's column context menu
 // (a categorical column only) — rare-ish, on-demand, so it stays out of the
 // eager bundle like every other workshop panel above.
-const RecodePanel = lazyPanel(() => import("./components/workshops/recode/RecodePanel"));
+const RecodePanel = lazyPanel(() => import("./components/workshops/recode/RecodePanel"), "RecodePanel");
 // JMP_GAP J1 (Group O-2b): the level-order reorder workshop, opened from the
 // same worksheet column context menu as Recode (categorical columns only) —
 // same "rare-ish, on-demand" class as every other workshop panel above. Its
 // OPEN FLAG is the tiny store/levelOrderPanel.ts (below), not the heavy
 // store/levelOrder.ts — see that file's header: only THIS lazy import ever
 // reaches the heavy store, keeping it off the eager bundle entirely.
-const LevelOrderPanel = lazyPanel(() => import("./components/workshops/levelorder/LevelOrderPanel"));
+const LevelOrderPanel = lazyPanel(() => import("./components/workshops/levelorder/LevelOrderPanel"), "LevelOrderPanel");
 
 export default function AppOverlays() {
   const helpOpen = useHelp((s) => s.open);

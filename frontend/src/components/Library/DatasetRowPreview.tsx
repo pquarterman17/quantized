@@ -37,7 +37,17 @@ export default function DatasetRowPreview({ dataset: d }: { dataset: Dataset }) 
     <>
       <button
         type="button"
-        className="qz-icon-btn"
+        // UX-004 density: this toggle used to be the one control still painted
+        // at rest on every worksheet row — the most numerous row by far in an
+        // imported Origin project. It now follows the SAME resting-cue recipe
+        // the drag handle and the "⋯" menu button already use (shell.css:
+        // opacity 0, revealed on row hover and on :focus-visible). Opacity
+        // only — never `display`/`visibility`/`hidden` — so the button stays
+        // in the tab order and keeps its `aria-label`/`aria-pressed` for a
+        // screen reader, exactly as those two do. An EXPANDED row keeps it
+        // painted (aria-pressed="true" rule), so the control that hides the
+        // sparkline is never itself invisible.
+        className="qz-icon-btn qzk-ds-preview-btn"
         title={label}
         aria-label={label}
         aria-pressed={expanded}

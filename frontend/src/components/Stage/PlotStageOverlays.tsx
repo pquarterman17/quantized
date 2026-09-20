@@ -11,9 +11,8 @@
 // PlotStageMenus mounting SelectionMiniToolbar, which reads its own store
 // slice instead of taking it as a prop).
 
-import { lazy, Suspense } from "react";
-
 import type { ColorScatterSpec } from "../../lib/colorscatter";
+import { lazyRegion } from "../../lib/lazyRegion";
 import type { Measurement } from "../../lib/measure";
 import type { FwhmResult } from "../../lib/peakwidth";
 import type { PlotPayload } from "../../lib/plotdata";
@@ -40,7 +39,7 @@ import type { GadgetChipState } from "./useGadgetChip";
 // dataset and the workspace format never serializes them). The gate below is
 // the component's OWN visibility predicate, shared through
 // `resultChipsVisible` so the gate and the component cannot drift apart.
-const PlotResultChips = lazy(() => import("./PlotResultChips"));
+const PlotResultChips = lazyRegion(() => import("./PlotResultChips"), "Plot");
 
 export interface PlotStageOverlaysProps {
   displayPayload: PlotPayload | null;
@@ -102,15 +101,13 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
 
       <PlotReadouts tool={p.tool} readout={p.readout} measurement={p.measurement} stats={p.stats} />
       {resultChipsVisible({ integral: p.integral, fwhm: p.fwhm, gadget: p.gadget }) && (
-        <Suspense fallback={null}>
-          <PlotResultChips
-            integral={p.integral}
-            fwhm={p.fwhm}
-            onClearIntegral={p.onClearIntegral}
-            onClearFwhm={p.onClearFwhm}
-            gadget={p.gadget}
-          />
-        </Suspense>
+        <PlotResultChips
+          integral={p.integral}
+          fwhm={p.fwhm}
+          onClearIntegral={p.onClearIntegral}
+          onClearFwhm={p.onClearFwhm}
+          gadget={p.gadget}
+        />
       )}
       {p.displayPayload && p.showLegend && (
         <PlotLegend

@@ -352,6 +352,37 @@
   animation: none;
 }
 
+/* ── lazy-region error boundary fallback (UX-003) — a failed chunk fetch
+   degrades just this region instead of the whole app, and offers a retry
+   that actually re-fetches (see lib/lazyRegion.tsx). ── */
+.qzk-lazy-fail {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 14px;
+  margin: 8px;
+  font-family: var(--font-ui);
+  font-size: var(--font-size-sm);
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--glass-border));
+  border-radius: var(--radius);
+}
+.qzk-lazy-fail button {
+  padding: 3px 10px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+.qzk-lazy-fail button:hover {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+}
+
 /* ── hover/focus tooltip (mounted at document body). GUI_INTERACTION_PLAN #7:
    a bold name row (+ optional shortcut chip) and an optional one-line
    behaviour description underneath — still a single-line pill when a caller

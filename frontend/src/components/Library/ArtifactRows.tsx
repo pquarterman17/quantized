@@ -21,6 +21,12 @@ import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import { openLibraryNode } from "./libraryOpen";
+import {
+  FROZEN_MARK,
+  FROZEN_TITLE,
+  LIBRARY_NODE_GLYPH,
+  LIBRARY_NODE_LABEL,
+} from "./nodeIcons";
 
 type ArtifactNode = Extract<
   LibraryNode,
@@ -41,16 +47,24 @@ function useDatasetName(datasetId: string | null | undefined): string {
   return datasets.find((d) => d.id === datasetId)?.name ?? "unbound";
 }
 
-function glyphAndMeta(node: ArtifactNode, datasetName: string): { glyph: string; meta: string } {
+/** UX-004: the glyph now comes from the ONE shared vocabulary
+ *  (`nodeIcons.ts`), not from a literal here. Before, `page` wore ▦ — the
+ *  same mark FolderRow gave a Folder — and `report` wore ▤, the same mark
+ *  WorkbookRow gave a Workbook, so three entity kinds were indistinguishable
+ *  in one tree. A publication figure swapped its TYPE mark (◉ -> ❄) to say
+ *  "frozen", which left a frozen one with no type mark at all; frozen-ness is
+ *  now a separate ❄ status mark beside the name, so type and status are two
+ *  channels instead of one overloaded slot. */
+function metaOf(node: ArtifactNode, datasetName: string): string {
   switch (node.kind) {
     case "editable-figure":
-      return { glyph: "◇", meta: datasetName };
+      return datasetName;
     case "publication-figure":
-      return { glyph: node.entity.live ? "◉" : "❄", meta: node.entity.config.style };
+      return node.entity.config.style;
     case "page":
-      return { glyph: "▦", meta: `${node.entity.rows}×${node.entity.cols}` };
+      return `${node.entity.rows}×${node.entity.cols}`;
     case "report":
-      return { glyph: "▤", meta: datasetName };
+      return datasetName;
   }
 }
 
@@ -82,7 +96,8 @@ export default function ArtifactRow({ node, depth }: Props) {
   const datasetName = useDatasetName(datasetId);
   const selection = useLibraryStore((s) => s.librarySelection);
   const selected = selection?.kind === node.kind && selection.id === node.entityId;
-  const { glyph, meta } = glyphAndMeta(node, datasetName);
+  const meta = metaOf(node, datasetName);
+  const frozen = node.kind === "publication-figure" && !node.entity.live;
   // L0.25 (PR #139 review): single click SELECTS (librarySelection now
   // carries artifact kinds), double-click — and Enter, via LibraryTree —
   // opens; right-click selects (its menu arrives with L0.39/L0.40).
@@ -98,7 +113,13 @@ export default function ArtifactRow({ node, depth }: Props) {
       onDoubleClick={() => openLibraryNode(node)}
       onContextMenu={select}
     >
-      <span className="qzk-fig-name">{glyph} {node.name}</span>
+      <span className="qzk-fig-name">
+        <span className="qzk-ds-icon" aria-hidden="true" title={LIBRARY_NODE_LABEL[node.kind]}>
+          {LIBRARY_NODE_GLYPH[node.kind]}
+        </span>
+        {node.name}
+        {frozen && <span className="qzk-frozen-mark" title={FROZEN_TITLE}>{FROZEN_MARK}</span>}
+      </span>
       <span className="qzk-fig-meta">{meta}</span>
     </button>
   );

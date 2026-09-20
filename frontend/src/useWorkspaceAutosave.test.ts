@@ -236,6 +236,68 @@ describe("dirty tracking (P1.2 box 1)", () => {
 // P1.2 box 5: crash recovery must EXPLAIN itself (source/time/choices) and
 // never silently auto-restore over a named project — only when there IS a
 // named "last project" AND the autosave candidate is newer than it.
+// BUG-019 review finding 3: the failure STATUS was hardcoded to "storage
+// full or unavailable", but `saveAutosave`'s single catch also covers
+// `serializeWorkspace` — so a workspace that has grown too large to
+// `JSON.stringify` (the BUG-019 failure mode, `RangeError: Invalid string
+// length`) was reported as a disk problem. The real reason is already in
+// `autosaveHealth().error`; the status line must use it.
+describe("autosave failure status names the real reason", () => {
+  beforeEach(() => {
+    useProjectLock.setState({ path: null, status: "unlocked", record: null, openedAsCopy: false });
+    // A non-empty library: `saveAutosave` short-circuits an empty one to
+    // `backend.clear()` and never reaches the write that fails here.
+    useApp.setState({ datasets: [ds], plotWindows: [], focusedWindowId: null });
+  });
+
+  afterEach(() => {
+    setAutosaveBackend(memoryBackend());
+    useApp.setState({ datasets: [] });
+  });
+
+  it("reports a serialization failure as itself, not as a storage problem", async () => {
+    setAutosaveBackend({
+      kind: "memory",
+      async read() {
+        return [];
+      },
+      async write() {
+        throw new RangeError("Invalid string length");
+      },
+      async clear() {},
+    });
+
+    await flushAutosaveNow();
+
+    expect(autosaveHealth().error).toBe("Invalid string length");
+    const status = useApp.getState().status;
+    expect(status).toContain("Invalid string length");
+    expect(status).not.toContain("storage full");
+  });
+
+  it("keeps a generic reason when the failure carries no message", async () => {
+    // A storage backend can reject with anything (a DOMException-less string
+    // from a quota path, say). Typed `unknown` so the throw is honest about
+    // that without tripping `@typescript-eslint/only-throw-error`.
+    const notAnError: unknown = "not an Error";
+    setAutosaveBackend({
+      kind: "memory",
+      async read() {
+        return [];
+      },
+      async write() {
+        throw notAnError;
+      },
+      async clear() {},
+    });
+
+    await flushAutosaveNow();
+
+    // `saveAutosave`'s own fallback for a non-Error throw.
+    expect(useApp.getState().status).toContain("storage unavailable");
+  });
+});
+
 describe("startup recovery choice (P1.2 box 5)", () => {
   beforeEach(() => {
     useApp.setState({ datasets: [], currentProject: null, projectDirty: false });

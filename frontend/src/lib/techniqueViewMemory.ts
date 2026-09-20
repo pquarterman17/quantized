@@ -43,7 +43,10 @@ import type { AxisScale, Dataset, SeriesStyle, Technique } from "./types";
  *  capture is a straight field copy and an apply patch is a straight field
  *  overlay. `AppState` (the focused window's live singleton fields) and a
  *  background `PlotWindow.view` (a full `PlotView`) both satisfy this
- *  structurally -- no adapter needed at either call site. */
+ *  structurally, so neither call site needs an adapter -- but BOTH are much
+ *  WIDER than this interface, which is why `captureTechniqueView` projects
+ *  down to exactly these fields instead of spreading its argument (BUG-019;
+ *  see `projectLiveView`). */
 export interface LiveViewSource {
   xKey: number | null;
   yKeys: number[] | null;
@@ -87,14 +90,53 @@ function referencedChannels(view: LiveViewSource): number[] {
   return out;
 }
 
+/** Project a capture source down to EXACTLY the nine fields this module
+ *  stores (BUG-019). Every call site hands in something much wider than
+ *  `LiveViewSource` -- structural typing accepts them, which is the whole
+ *  point of the interface, but a `{ ...liveView }` spread then copied every
+ *  OTHER field too. For `store/windows.ts`'s `focusedRebindPatch`,
+ *  `useWorkspaceAutosave.ts`'s debounced save and `store/workspaceIO.ts`'s
+ *  Save/Save As that source is the WHOLE `AppState`, so each entry carried
+ *  `datasets`, `plotWindows` AND the previous `techniqueViewMemory`.
+ *
+ *  Only the slot being WRITTEN is replaced, so one technique captured over
+ *  and over recurses linearly; ALTERNATING two -- switch to the map, switch
+ *  back, the owner's exact gesture -- makes each slot absorb the other one
+ *  generation late: `size(k) ~ size(k-1) + size(k-2) + C`, Fibonacci-like,
+ *  with the ratio tending to phi ~ 1.62 (measured: 80,340 -> 241,003 ->
+ *  482,002 -> 883,664 -> 1,526,325 -> 2,570,648 -> 4,257,632 -> 6,988,939 B
+ *  on a trivial library; `C` is the size of `datasets`, so a 3-D RSM makes
+ *  it fatal in a handful of switches). Autosave `JSON.stringify`s that map
+ *  on an 800 ms debounce after every switch, ON THE THREAD THAT DRAWS, so
+ *  the growth turns into a stall that blanks every plot -- not just a
+ *  wasted allocation. Naming the fields is what keeps the entry's size a
+ *  function of the VIEW rather than of the library; the return type is
+ *  annotated so omitting a newly-added `LiveViewSource` field is a compile
+ *  error rather than a silently forgotten setting. */
+function projectLiveView(v: LiveViewSource): LiveViewSource {
+  return {
+    xKey: v.xKey,
+    yKeys: v.yKeys,
+    yScale: v.yScale,
+    xScale: v.xScale,
+    seriesStyles: v.seriesStyles,
+    seriesLabels: v.seriesLabels,
+    seriesOrder: v.seriesOrder,
+    errKeys: v.errKeys,
+    hiddenChannels: v.hiddenChannels,
+  };
+}
+
 /** Snapshot `prevDs`'s CURRENT live view into `memory`, keyed by its
  *  technique -- the capture half of item 5, called at every "the active
  *  dataset switches away" site alongside `datasetViewDefaults` (and at
  *  save time, folding in the still-focused dataset's unswitched-away
- *  edits). Returns `memory` UNCHANGED (identity) when there's nothing to
- *  capture: no outgoing dataset (a fresh import/split/reimport -- nothing
- *  was "showing" before) or its technique is `"generic"`. Pure -- a new
- *  map, never mutates `memory` in place. */
+ *  edits). Stores ONLY the `LiveViewSource` fields (see `projectLiveView`),
+ *  never whatever wider object the caller happened to pass. Returns
+ *  `memory` UNCHANGED (identity) when there's nothing to capture: no
+ *  outgoing dataset (a fresh import/split/reimport -- nothing was "showing"
+ *  before) or its technique is `"generic"`. Pure -- a new map, never
+ *  mutates `memory` in place. */
 export function captureTechniqueView(
   prevDs: Dataset | undefined,
   liveView: LiveViewSource,
@@ -109,7 +151,7 @@ export function captureTechniqueView(
     const lbl = dsLabels[ch];
     if (typeof lbl === "string" && lbl.length > 0) labels[ch] = lbl;
   }
-  return { ...memory, [tech]: { ...liveView, labels } };
+  return { ...memory, [tech]: { ...projectLiveView(liveView), labels } };
 }
 
 /** Resolve `memory`'s entry for `ds`'s technique against `ds`'s CURRENT

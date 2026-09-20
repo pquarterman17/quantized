@@ -14,6 +14,23 @@ import {
   type TechniqueViewMemoryMap,
 } from "./techniqueViewMemory";
 
+/** The field names `LiveViewSource` declares, read out of the module's own
+ *  source — the `PlotView` precedent in `architecture.test.ts`, for the same
+ *  reason: a hand-maintained copy of an interface's key list silently stops
+ *  matching the interface. */
+const techniqueViewMemorySrc = Object.values(
+  import.meta.glob("./techniqueViewMemory.ts", { query: "?raw", import: "default", eager: true }),
+)[0] as string;
+
+function liveViewSourceFields(): string[] {
+  const body = /export interface LiveViewSource\s*{([\s\S]*?)^}/m.exec(techniqueViewMemorySrc)?.[1] ?? "";
+  const fields = [...body.matchAll(/^\s*(\w+)\??\s*:/gm)].map((m) => m[1]);
+  // Guard the guard: a parse that degrades to nothing would make the key-set
+  // assertion below vacuously weak instead of failing loudly.
+  if (fields.length < 9) throw new Error("LiveViewSource parse degraded — guard would silently weaken");
+  return fields;
+}
+
 function ds(id: string, technique: string, labels: string[]): Dataset {
   return {
     id,
@@ -66,6 +83,55 @@ describe("captureTechniqueView", () => {
     expect(entry?.seriesStyles).toEqual({ 1: { color: "red" } });
     expect(entry?.labels).toEqual({ 0: "2theta", 1: "Intensity" });
   });
+
+  // BUG-019. `LiveViewSource` is satisfied structurally, so both real call
+  // sites hand in something far wider than it: `store/windows.ts`'s
+  // `focusedRebindPatch` and `store/workspaceIO.ts`'s save path both pass the
+  // WHOLE `AppState` (which carries `datasets`, `plotWindows` and the
+  // previous `techniqueViewMemory`), and the background-window rebind passes
+  // a full `PlotView`. A `{ ...liveView }` spread copied all of it, so every
+  // capture nested the previous map inside the new one and the serialized
+  // size compounded per dataset switch. The entry must hold the nine declared
+  // fields plus `labels` and NOTHING else.
+  it("stores only the nine declared view fields, never the wider object handed in", () => {
+    const xrd = ds("d1", "xrd.powder", ["2theta", "Intensity"]);
+    const wide = {
+      ...view({ xKey: 0, yKeys: [1] }),
+      // The AppState fields that made this unbounded.
+      datasets: [ds("bulk", "xrd.powder", ["2theta", "Intensity"])],
+      plotWindows: [{ id: "win-1" }],
+      techniqueViewMemory: { "xrd.rsm": { nested: true } },
+      addDataset: () => undefined,
+    } as unknown as LiveViewSource;
+
+    const entry = captureTechniqueView(xrd, wide, {})["xrd.powder"];
+    // The expected key list is PARSED from the `LiveViewSource` interface
+    // rather than hardcoded, following `architecture.test.ts`'s `PlotView`
+    // precedent: a hardcoded list rots the moment the interface gains a
+    // field, and this test's whole job is to notice a mismatch between what
+    // the interface declares and what the capture stores.
+    expect(Object.keys(entry ?? {}).sort()).toEqual([...liveViewSourceFields(), "labels"].sort());
+  });
+
+  // The measurable consequence, at this layer: feeding each capture's OWN
+  // output back in as part of the next source (exactly what the store does —
+  // `captureTechniqueView(prevDs, s, s.techniqueViewMemory)` where
+  // `s.techniqueViewMemory` is the previous result) must not compound.
+  it("repeated captures that re-feed the previous map do not grow it", () => {
+    const a = ds("d1", "xrd.powder", ["2theta", "Intensity"]);
+    const b = ds("d2", "xrd.rsm", ["2theta", "Intensity"]);
+    let memory: TechniqueViewMemoryMap = {};
+    const sizes: number[] = [];
+    for (let i = 0; i < 12; i++) {
+      const source = { ...view({ yKeys: [1] }), techniqueViewMemory: memory } as unknown as LiveViewSource;
+      memory = captureTechniqueView(i % 2 === 0 ? a : b, source, memory);
+      sizes.push(JSON.stringify(memory).length);
+    }
+    // Both techniques are present from the second capture on, and the size
+    // never moves after that — no nesting, no compounding.
+    expect(new Set(sizes.slice(1)).size).toBe(1);
+    expect(sizes[sizes.length - 1]).toBeLessThan(1000);
+  });
 });
 
 describe("applyTechniqueMemory — capture-on-switch + apply-on-return round trip", () => {
@@ -81,6 +147,22 @@ describe("applyTechniqueMemory — capture-on-switch + apply-on-return round tri
     expect(resolved).not.toBeNull();
     expect(resolved?.xKey).toBe(0);
     expect(resolved?.yKeys).toEqual([1]);
+    expect(resolved?.yScale).toBe("log");
+  });
+
+  // BOTH axis scales are in the remembered field set, and `xScale` is the one
+  // that had no coverage at all: replacing `xScale: v.xScale` with a literal
+  // `"linear"` in `projectLiveView` passed the entire 11,592-test suite
+  // (review of `f8d72f43`). A log x-axis is the normal view for a
+  // reflectometry or SIMS depth profile, so silently forgetting it per
+  // technique is a real regression with no other guard.
+  it("remembers a log X axis, not just a log Y", () => {
+    const first = ds("d1", "reflectometry", ["Q", "R"]);
+    const memory = captureTechniqueView(first, view({ yKeys: [1], xScale: "log", yScale: "log" }), {});
+    expect(memory["reflectometry"]?.xScale).toBe("log");
+
+    const resolved = applyTechniqueMemory(ds("d2", "reflectometry", ["Q", "R"]), memory);
+    expect(resolved?.xScale).toBe("log");
     expect(resolved?.yScale).toBe("log");
   });
 

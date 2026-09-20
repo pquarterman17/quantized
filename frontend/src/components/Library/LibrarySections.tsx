@@ -20,20 +20,19 @@
 // would mean recomputing that grouping in this component on every dataset
 // change just to decide whether to fetch a 1 kB chunk.
 
-import { lazy, Suspense } from "react";
-
 import BookFamiliesSection from "./BookFamiliesSection";
 import type { LibraryHierarchy, LibraryNode } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
+import { lazyRegion } from "../../lib/lazyRegion";
 
-const CollectionsSection = lazy(() => import("./CollectionsSection"));
-const EditableFiguresSection = lazy(() => import("./EditableFiguresSection"));
-const FiguresSection = lazy(() => import("./FiguresSection"));
-const OriginFidelitySection = lazy(() => import("./OriginFidelitySection"));
-const PagesSection = lazy(() => import("./PagesSection"));
-const ReportsSection = lazy(() => import("./ReportsSection"));
-const SavedFiguresSection = lazy(() => import("./SavedFiguresSection"));
-const SmartFoldersSection = lazy(() => import("./SmartFoldersSection"));
+const CollectionsSection = lazyRegion(() => import("./CollectionsSection"), "Library");
+const EditableFiguresSection = lazyRegion(() => import("./EditableFiguresSection"), "Library");
+const FiguresSection = lazyRegion(() => import("./FiguresSection"), "Library");
+const OriginFidelitySection = lazyRegion(() => import("./OriginFidelitySection"), "Library");
+const PagesSection = lazyRegion(() => import("./PagesSection"), "Library");
+const ReportsSection = lazyRegion(() => import("./ReportsSection"), "Library");
+const SavedFiguresSection = lazyRegion(() => import("./SavedFiguresSection"), "Library");
+const SmartFoldersSection = lazyRegion(() => import("./SmartFoldersSection"), "Library");
 
 export interface LibrarySectionsProps {
   /** True while the hierarchy tree is rendering — the sections whose items
@@ -58,46 +57,16 @@ export default function LibrarySections(p: LibrarySectionsProps) {
   const flat = !p.inHierarchy && !p.searchActive;
   return (
     <>
-      {flat && originFigureCount > 0 && (
-        <Suspense fallback={null}>
-          <FiguresSection />
-        </Suspense>
-      )}
-      {!p.searchActive && originFidelityCount > 0 && (
-        <Suspense fallback={null}>
-          <OriginFidelitySection />
-        </Suspense>
-      )}
-      {flat && (
-        <Suspense fallback={null}>
-          <EditableFiguresSection />
-        </Suspense>
-      )}
-      {flat && figureDocCount > 0 && (
-        <Suspense fallback={null}>
-          <SavedFiguresSection />
-        </Suspense>
-      )}
-      {flat && (
-        <Suspense fallback={null}>
-          <PagesSection />
-        </Suspense>
-      )}
-      {flat && reportCount > 0 && (
-        <Suspense fallback={null}>
-          <ReportsSection />
-        </Suspense>
-      )}
+      {flat && originFigureCount > 0 && <FiguresSection />}
+      {!p.searchActive && originFidelityCount > 0 && <OriginFidelitySection />}
+      {flat && <EditableFiguresSection />}
+      {flat && figureDocCount > 0 && <SavedFiguresSection />}
+      {flat && <PagesSection />}
+      {flat && reportCount > 0 && <ReportsSection />}
       {!p.searchActive && <BookFamiliesSection />}
-      {smartFolderCount > 0 && (
-        <Suspense fallback={null}>
-          <SmartFoldersSection onFilterTag={p.onFilterTag} />
-        </Suspense>
-      )}
+      {smartFolderCount > 0 && <SmartFoldersSection onFilterTag={p.onFilterTag} />}
       {collectionCount > 0 && (
-        <Suspense fallback={null}>
-          <CollectionsSection hierarchy={p.hierarchy} onShowInLibrary={p.onShowInLibrary} />
-        </Suspense>
+        <CollectionsSection hierarchy={p.hierarchy} onShowInLibrary={p.onShowInLibrary} />
       )}
     </>
   );

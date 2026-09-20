@@ -18,9 +18,11 @@
 // the true-empty state; each hides while the tree renders so nothing is
 // ever a Library item twice.
 
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { lazyRegion } from "../../lib/lazyRegion";
 import LibrarySections from "./LibrarySections";
+import { LIBRARY_NODE_GLYPH } from "./nodeIcons";
 import LibraryViewSelector from "./LibraryViewSelector";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import { useLibraryResize } from "./useLibraryResize";
@@ -40,17 +42,17 @@ import { selectLibraryNode } from "./libraryOpen";
 // renders null below two selected rows, so its chunk waits for the second row
 // the user picks. The flat sections are deferred the same way, one gate each,
 // inside LibrarySections.tsx.
-const MultiSelectBar = lazy(() => import("./MultiSelectBar"));
+const MultiSelectBar = lazyRegion(() => import("./MultiSelectBar"), "Library");
 // PR C: LibraryTree pulls in WorkbookRow/ArtifactRows/the workbook menu
 // registry/FolderRow — lazy like the sections (MAIN_PLAN #29's
 // eager-bundle budget; the pure hierarchy build itself stays eager via
 // useLibraryHierarchyRows since `rows.length` drives inTree/HomeScreen).
-const LibraryTree = lazy(() => import("./LibraryTree"));
-const LibraryDetails = lazy(() => import("./LibraryDetails"));
+const LibraryTree = lazyRegion(() => import("./LibraryTree"), "Library");
+const LibraryDetails = lazyRegion(() => import("./LibraryDetails"), "Library");
 // Bundle diet slice 6 (plans/BUNDLE_HEADROOM.md): the flat-list fallback body
 // (query empty, hierarchy empty) — see LibraryFlatRows.tsx's own header for
 // why this is the only static edge that kept DatasetRow.tsx eager.
-const LibraryFlatRows = lazy(() => import("./LibraryFlatRows"));
+const LibraryFlatRows = lazyRegion(() => import("./LibraryFlatRows"), "Library");
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
@@ -210,24 +212,14 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   let body: React.ReactNode;
   if (query.trim() !== "") {
     body = (
-      <Suspense fallback={null}>
-        <LibraryDetails hierarchy={hierarchy} searchQuery={query} onShowInLibrary={showInLibrary} panelRef={panelRef} />
-      </Suspense>
+      <LibraryDetails hierarchy={hierarchy} searchQuery={query} onShowInLibrary={showInLibrary} panelRef={panelRef} />
     );
   } else if (inHierarchy && viewMode === "details") {
-    body = (
-      <Suspense fallback={null}>
-        <LibraryDetails hierarchy={hierarchy} panelRef={panelRef} />
-      </Suspense>
-    );
+    body = <LibraryDetails hierarchy={hierarchy} panelRef={panelRef} />;
   } else if (inHierarchy) {
     // Tiles owns the main workspace; the narrow Library deliberately remains
     // an Origin-like tree navigator while that workspace is open (L0.15).
-    body = (
-      <Suspense fallback={null}>
-        <LibraryTree rows={rows} onFilterTag={setQuery} panelRef={panelRef} />
-      </Suspense>
-    );
+    body = <LibraryTree rows={rows} onFilterTag={setQuery} panelRef={panelRef} />;
   } else if (shown.length > 0) {
     // This branch is unreachable in today's app (PR C: `rows.length === 0`
     // implies `datasets.length === 0`, which implies `shown.length === 0`
@@ -241,17 +233,15 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
     // round trip on exactly the surface this seam's cost argument rests on
     // being free.
     body = (
-      <Suspense fallback={null}>
-        <LibraryFlatRows
-          shown={shown}
-          datasets={datasets}
-          activeId={activeId}
-          selectedIds={selectedIds}
-          canReorder={canReorder}
-          sheetOf={sheetOf}
-          onFilterTag={setQuery}
-        />
-      </Suspense>
+      <LibraryFlatRows
+        shown={shown}
+        datasets={datasets}
+        activeId={activeId}
+        selectedIds={selectedIds}
+        canReorder={canReorder}
+        sheetOf={sheetOf}
+        onFilterTag={setQuery}
+      />
     );
   } else {
     body = null;
@@ -282,7 +272,10 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
             title="New folder"
             onClick={() => createFolder(null, "New Folder")}
           >
-            ▦
+            {/* UX-004 (the ONLY change this file takes: this command names a
+             *  node kind, so it wears that kind's mark from `nodeIcons.ts`
+             *  instead of a literal ▦ that no longer means "folder"). */}
+            {LIBRARY_NODE_GLYPH.folder}
           </button>
           <button className="qz-icon-btn" title="Add demo dataset" onClick={onDemo}>
             ✚
@@ -339,11 +332,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
         )}
       </div>
 
-      {selectedIds.length > 1 && (
-        <Suspense fallback={null}>
-          <MultiSelectBar />
-        </Suspense>
-      )}
+      {selectedIds.length > 1 && <MultiSelectBar />}
 
       <LibrarySections
         inHierarchy={inHierarchy}

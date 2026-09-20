@@ -3,7 +3,7 @@
 // command registry lives in appCommands.ts, the global keymap in
 // useGlobalShortcuts.ts, and the overlay/workshop mounts in AppOverlays.tsx.
 
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import AppOverlays from "./AppOverlays";
 import Library from "./components/Library/Library";
@@ -15,6 +15,7 @@ import CommandPalette, { type Action } from "./components/overlays/CommandPalett
 import { buildAppActions } from "./appCommands";
 import { appRootFocusProps } from "./lib/appRoot";
 import { health } from "./lib/api";
+import { lazyRegion } from "./lib/lazyRegion";
 import { hasDesktopShell } from "./lib/desktopBridge";
 import {
   loadLibraryViewMode,
@@ -32,12 +33,24 @@ import {
   useWorkspaceAutosave,
 } from "./useWorkspaceAutosave";
 
-const LibraryWorkspace = lazy(() => import("./components/Library/LibraryWorkspace"));
-const QuickFigureBuilderWorkspace = lazy(() => import("./components/workshops/quickfigurebuilder/QuickFigureBuilderWorkspace"));
+const LibraryWorkspace = lazyRegion(
+  () => import("./components/Library/LibraryWorkspace"),
+  "Library workspace",
+  <section className="qzk-library-workspace" aria-label="Library workspace" />,
+);
+const QuickFigureBuilderWorkspace = lazyRegion(
+  () => import("./components/workshops/quickfigurebuilder/QuickFigureBuilderWorkspace"),
+  "Quick Figure Builder",
+  <section className="qzk-quick-builder" aria-label="Quick Figure Builder" />,
+);
 // E-c1 bundle pass: ~45 kB of Inspector cards off the pre-paint parse path.
 // The fallback keeps the grid column (same root class) so nothing shifts
 // while the chunk loads; the cards fill in immediately after first paint.
-const Inspector = lazy(() => import("./components/Inspector/Inspector"));
+const Inspector = lazyRegion(
+  () => import("./components/Inspector/Inspector"),
+  "Inspector",
+  <aside className="qzk-inspector" />,
+);
 
 export default function App() {
   const leftCollapsed = useApp((s) => s.leftCollapsed);
@@ -210,19 +223,13 @@ export default function App() {
       <div className={mainCls}>
         <Library viewMode={libraryViewMode} onViewModeChange={changeLibraryViewMode} />
         {quickFigureBuilderDatasetId ? (
-          <Suspense fallback={<section className="qzk-quick-builder" aria-label="Quick Figure Builder" />}>
-            <QuickFigureBuilderWorkspace />
-          </Suspense>
+          <QuickFigureBuilderWorkspace />
         ) : libraryViewMode === "tiles" ? (
-          <Suspense fallback={<section className="qzk-library-workspace" aria-label="Library workspace" />}>
-            <LibraryWorkspace onClose={closeLibraryWorkspace} />
-          </Suspense>
+          <LibraryWorkspace onClose={closeLibraryWorkspace} />
         ) : (
           <Stage />
         )}
-        <Suspense fallback={<aside className="qzk-inspector" />}>
-          <Inspector />
-        </Suspense>
+        <Inspector />
       </div>
       <StatusBar />
       <CommandPalette actions={actions} />

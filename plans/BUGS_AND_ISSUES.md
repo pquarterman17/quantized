@@ -2,7 +2,35 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-19 (BUG-018 FIXED in `5d6ef1b9`: `lib/escapeStack.ts` gains a `modal` layer above `menu` and all ten backdrop dialogs became surfaces on it, so one Escape closes the innermost dialog only and a pending `ConfirmDialog` underneath stays pending — the bypass of the dispatcher's three early returns is keyed on the CLAIMANT resolving to a modal, so the four editing-target landing spots that killed the reverted first attempt all close on one Escape, and the modal's claim resolves synchronously at keydown and marks the event so a window-bubble `preventDefault()` claimant behind the dialog cannot kill it; P3.3 residual R1 closed and R13 closed, R12 untouched; 2026-09-19 earlier: BUG-018 filed: stacked backdrop dialogs all claim the same Escape, so one keystroke closes two dialogs and can answer a pending confirmation — pinned by test, not fixed; P3.3 residual R1 narrowed from CLOSED to focus-half-only and its bundle pair re-measured against the right parent; 2026-09-18: UX-003's `lazy()` site count corrected 17 -> 19 -> 28
+**Updated:** 2026-09-19 (UX-004 filed and its collision half FIXED: the
+Library's node-type marks collided across three contradicting per-view maps —
+`▦` alone meant Folder, Figure page, Worksheet and two different commands —
+and nothing checked, because UX-001's icon audit asserted each mark was
+LABELLED, never that two marks were DISTINGUISHABLE. One source of truth
+(`components/Library/nodeIcons.ts`) separated by silhouette rather than hatch,
+an injectivity test over the complete kind set, `▦`/`▥` retired outright, and
+the preview toggle `∿` joins `⠿`/`⋯` as a resting cue; the mark choice and
+that density change are design judgement and still need the owner's eye; BUG-019 + BUG-020 FIXED: `captureTechniqueView` (`lib/techniqueViewMemory.ts`) spread its capture source whole, and three of its four callers hand it the ENTIRE `AppState` — so every per-technique view memory entry carried `datasets`, `plotWindows` AND the previous `techniqueViewMemory`, and alternating between two techniques compounded the map Fibonacci-wise (ratio -> phi ~ 1.62; measured on the owner's own sequence: 5.4 MB -> 16.3 -> 32.4 -> 70.0 -> 123.6 -> 214.8 -> 359.6 MB, then `JSON.stringify` throwing `Invalid string length`, then the page unresponsive for >45 s). The autosave that stringifies it runs on the thread that draws, which is why an ROI box integration's Apply produced an empty plot AND blanked previously plotted datasets; the StatusBar's persistent autosave-failing alert DOES fire, but its status line blamed storage for what was a serialization failure, and that wording is fixed too. Fixed by projecting the capture source down to its nine declared fields; same sequence now flat at 344 B. BUG-020, found alongside it and filed separately: `useCutLanding` minted cut ids from a private page-lifetime counter, so a reopened workspace holding `cut-1` plus one new cut held two datasets with that id — Apply plotted the OLD one and a single delete destroyed both; it now draws from `store/idSeq.ts`. UX-003 FIXED across three rounds: `lib/lazyRegion.tsx`,
+a drop-in `lazy()` replacement, gives every code-split seam its own error
+boundary and a retry that rebuilds `lazy()` — the only way to defeat React's
+permanent memoization of a rejected lazy() promise. Re-measured the seam
+count myself before touching anything: 30, not the filed 28. All 30
+converted, plus AppOverlays' 52-panel `lazyPanel()` family via its one
+shared call site. Two adversarial-review rounds each found and closed real
+defects — round 2: the boundary was catching every descendant error, not
+just a load failure, mislabeling genuine render bugs (fixed with a tagged
+`LoadFailure` wrapper class + a re-throw for anything else), and a
+module-scoped mutable "current lazy" let one instance's retry silently
+remount every sibling instance of the same seam (fixed with a per-instance
+retry + a success-only, mount-time-read cache so the common case stays
+cheap); round 3: the tag was applied by mutating the caught rejection
+(fails on a frozen value), the loader's synchronous path wasn't wrapped,
+and this record's own numbers had drifted from the code and misattributed
+a real cost delta to a "stale cache". 13 tests total, 7 sabotage rounds
+each reddening the exactly-expected tests. Eager bytes, measured after
+`npm ci` + a cleared vite cache: 876,437 B against the unmoved 876,469 B
+budget — 32 B of headroom (see the entry's Completion record for the full,
+corrected accounting); 2026-09-19 earlier: BUG-018 FIXED in `5d6ef1b9`: `lib/escapeStack.ts` gains a `modal` layer above `menu` and all ten backdrop dialogs became surfaces on it, so one Escape closes the innermost dialog only and a pending `ConfirmDialog` underneath stays pending — the bypass of the dispatcher's three early returns is keyed on the CLAIMANT resolving to a modal, so the four editing-target landing spots that killed the reverted first attempt all close on one Escape, and the modal's claim resolves synchronously at keydown and marks the event so a window-bubble `preventDefault()` claimant behind the dialog cannot kill it; P3.3 residual R1 closed and R13 closed, R12 untouched; 2026-09-19 earlier: BUG-018 filed: stacked backdrop dialogs all claim the same Escape, so one keystroke closes two dialogs and can answer a pending confirmation — pinned by test, not fixed; P3.3 residual R1 narrowed from CLOSED to focus-half-only and its bundle pair re-measured against the right parent; 2026-09-18: UX-003's `lazy()` site count corrected 17 -> 19 -> 28
 — `plans/BUNDLE_HEADROOM.md` slice 3 added two more sites in modules the
 record already named, then slice 4's own 2026-09-18 review round re-measured
 after slice 4 added nine seams across three new modules, landing at 28;
@@ -27,8 +55,9 @@ This is a working document, not a claim that every observation is already reprod
 | ID | Priority | Area | Issue | Owner | Status/evidence |
 |---|---:|---|---|---|---|
 | BUG-001 | P0 | NCNR `.refl` import/plot | Uncertainty and resolution are plotted as ordinary Y curves | Claude | Every code-verifiable box closed 2026-09-12; owner Windows visual check + a Reductus variant check remain |
-| UX-001 | P1 | Origin project Library | Large worksheet cards are difficult to interpret and consume too much space | Claude | Compact Tree row + both residuals (icon audit, selected-vs-open) test-verified 2026-09-12; owner visual verification of the reported project remains |
+| UX-001 | P1 | Origin project Library | Large worksheet cards are difficult to interpret and consume too much space | Claude | Compact Tree row + both residuals (icon audit, selected-vs-open) test-verified 2026-09-12; owner visual verification of the reported project remains. **Its icon-audit residual proved to be only half an audit — see UX-004**, which finishes it without reverting anything here |
 | BUG-002 | P2 | Desktop bridge write consent | A hard-linked alias of a declared raw source defeats the never-overwrite-your-own-source check | Unassigned | Reproduced by strict `xfail`, 2026-09-09 |
+| UX-004 | P1 | Origin project Library | Node-type marks COLLIDE — `▦` meant Folder, Figure page, Worksheet and two commands; `▤` meant Workbook and Report; `▥` meant Worksheet and five artifact kinds — across three contradicting per-view maps, and `▦ ▥ ▤` differ only by hatch at row size | Claude (agent) | **Collision half FIXED 2026-09-19** and locked by an injectivity test over the complete kind set (`nodeIcons.test.ts`); one shared vocabulary separated by silhouette. Density change (`∿` becomes a resting cue) and the choice of the eight marks are design judgement — owner eyeball on the reported project still required |
 | UX-002 | P3 | Workbook copy/paste | Cross-workbook lineage (`versionOf`, external `derivedFrom`) is dropped silently — the count is computed but never shown | Unassigned | Found in review, pinned by test, 2026-09-09 |
 | BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
@@ -45,9 +74,11 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-15** — the rename rides its own per-series presentation field (`series_styles[i].legend`), used VERBATIM by `calc.figure_labels.series_display_name`, and the wire `dataset` keeps the DATA's labels/units. The divergence test is inverted. **Review round 2026-09-16** closed the FACET branch, which still shipped `"Loop 1 (au)"` (and showed no rename at all on screen), and `lib/spatialPageExport.ts`'s decoded Origin captions; an EMPTY rename stays a named residual. **Review rounds 3-4 (2026-09-17)** closed the remaining screen/export splits: a background window's facet grid, then the plain per-channel stack and the paneled x-break panels (all three multi-panel legs show a rename in the panel's y-axis label now), and a non-string rename in a hand-edited `.dwk` is dropped at the sanitizer instead of crashing the canvas. **Round 5 (2026-09-17)** reverses a regression round 4 introduced: the x-break leg re-derived one channel list over the whole dataset and mislabeled panels whose own channel lists differ, so each `BreakPanel` now carries its `channels` and the renames project per panel; technique-memory keys stay numeric. **Review round 5 (2026-09-17)** closed CLEAN: fixed 2 low-severity `numKeyedRecord` findings (a blank/whitespace key silently relocating onto channel 0; a key collision resolving to the non-canonical spelling regardless of file order) and corrected the round-5 sabotage table's undercounted rows 6/7 |
 | BUG-015 | P2 | Figure export — hidden series palette | Hiding a series shifts later series' palette colour on export only; the canvas keeps a hidden series in the display list with `show:false` so later series keep their position, but the export's filtered channel list recolours them by their new, filtered index | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `lib/figureSpec.ts` derives each plotted channel's UNFILTERED display position unconditionally and `buildExportStyles` colours by it always (the P3.3 dash/marker cycle stays opt-in on top of the same positions). The divergence test is inverted, and `hidden` is now a full matrix fixture (screen ≡ export ≡ reopen + golden) |
 | BUG-016 | P2 | Figure export — grouped per-series styling | A grouped figure's per-series style (colour/width/dash/marker) reaches the canvas — every level of the channel draws with it — but `routes/export_figures.py`'s `group_col` branch drops `series_styles` entirely, so the exported figure draws default-coloured, solid, default-width curves | Claude (agent) | Found by the 2026-09-14 review round of the P4.2 regression matrix; **FIXED 2026-09-17** — the `group_col` branch now expands the `y_keys`-aligned `series_styles` onto the synthetic per-level series (`calc.figure_group_styles`, pure), so every level draws with its channel's dash/width/marker/step/fill and explicit colour, exactly as the canvas does. COLOUR is honoured only when the user CHOSE one: an unstyled level takes the palette slot at its own display position, which one channel-aligned wire entry cannot carry, so `lib/exportStyles.ts` omits a palette-derived colour for a grouped request and both sides cycle per level. The divergence test is inverted, `styleComparable("group")` compares the style's SHAPE half again, and the `group` golden moved to record it. **Review round 2 (2026-09-17)** closed the three CONFIRMED findings: a PINNED `publication.seriesStyles` array bypassed the colour rule and made the backend paint every level ONE hue (a regression against the pre-fix cycle — round 2 recovered "derived vs chosen" from the palette slot itself in `lib/exportStyles.stripDerivedColors`, a function round 3 DELETED); the Graph Builder → Publication Preview handoff (`lib/plotSpecFigure.ts`) still dropped grouped styling outright, on the very half-truth this commit corrected elsewhere; and the legacy path's `grouped` flag was guarded by nothing (sabotage left the suite green). **Review round 3 (2026-09-18)** replaced round 2's recovery-by-comparison with PROVENANCE: `buildExportStyles` records `ExportSeriesStyle.colorDerived` on every colour it emits, the document persists it, and the single wire boundary `exportStyles.toWireSeriesStyles` applies the grouped rule and strips the flag — so a theme flip, a palette preset or a display-position shift between the pin and the export can no longer resurrect the one-hue regression, and a grouped request never sends a derived colour while an explicit one is always sent. The residual colour gap is now recorded precisely: different palettes **and** different cycle offsets; plus one scoped migration residual for documents saved before provenance existed. **Review round 4 (2026-09-18)** moved that migration to LOAD time — `publicationStyles.sanitizeExportSeriesStyles` decides a flagless colour once, when the document arrives, and the `.dwk` FigureDoc path now runs that sanitizer at all — so a re-save really does persist provenance, a malformed persisted flag cannot flip it, an imported Origin template records its decoded colours as CHOSEN, a pinned array is re-cut to `y_keys` when a channel was hidden after the pin, and the export route refuses a leaked `colorDerived` with a 422. **Review round 5 (2026-09-18)** removed the palette inference from BOTH places it had lived: the palette a pin was taken under is persisted in no document, so round 4's load-time comparison read the READER's theme and then FROZE a possibly-wrong answer on the next save (measured: a figure saved under one palette and opened under another shipped both derived colours to a grouped export — round 1's regression — permanently). Provenance is now recorded ONLY by the five producers; an unflagged colour is UNVOUCHED and fails closed, omitted from a grouped export and kept on a flat one, until the figure is RE-PINNED (loading and re-saving retire nothing). The pin re-cut is reduced to a hidden-channel filter over the pin, closing the three guard clauses round 4's review sabotaged green, and `/figure-hitmap`'s 422 gains the test the claim rested on |
-| UX-003 | P3 | Lazy chunk loading (whole app) | A failed `lazy()` chunk fetch unmounts the React root — 28 `lazy()` sites (17 at filing, +2 from `BUNDLE_HEADROOM.md` slice 3, +9 from slice 4, 2026-09-18), zero error boundaries, so the window goes blank with no toast, no status and no console error, and React caches the rejection so the gesture cannot retry | Unassigned | Found in the 2026-09-15 adversarial review of the `b749f804` bundle diet; measured (0 boundary files vs 17 `= lazy(` sites at filing, 19 after slice 3, 28 after slice 4) and reproduced in a scratch spec, not fixed — the two over-broad plan claims were narrowed instead |
+| UX-003 | P3 | Lazy chunk loading (whole app) | A failed `lazy()` chunk fetch unmounted the React root — 30 `lazy()` sites measured 2026-09-19 (17 at filing, +2 slice 3, +9 slice 4, +2 more found unfiled at this fix's start), zero error boundaries, so the window went blank with no toast, no status, no console error, and React cached the rejection so the gesture could not retry | Claude (agent) | **FIXED** 2026-09-19, three rounds — `lib/lazyRegion.tsx`, a drop-in `lazy()` replacement: one error boundary per region distinguishing a load failure (a tagged `LoadFailure` wrapper, never a value mutation) from a genuine render bug (re-thrown, not mislabeled), plus a per-instance retry that rebuilds `lazy()` without ever remounting a sibling instance of the same seam. Wired to all 30 seams plus AppOverlays' 52-panel `lazyPanel()` family via one shared call site. 13 tests, 7 sabotage rounds each reddening the exactly-expected tests. Eager bytes (measured post `npm ci` with a cleared cache): 876,437 B vs 876,469 B budget (32 B headroom) — see the entry for the full accounting and a correction to an earlier mismeasurement |
 | BUG-017 | P1 | Workspace save/reopen — NaN/±Infinity cells | `workspaceSerialize.ts`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts`'s `isNumberArray` rejects `null` and throws — so the WHOLE workspace fails to reopen after saving a dataset with one such cell (reachable by a plain `insertRows`, whose blank rows are minted as `Number.NaN`); `-0` separately round-trips silently to `0` | Claude (agent) | Found by the P2.1 round-3 review (pre-existing, outside that commit); **FIXED 2026-09-16** — the new `lib/nonFiniteCells.ts` encodes the four values JSON cannot represent as the sentinel strings `"NaN"`/`"Infinity"`/`"-Infinity"`/`"-0"` on the way out and decodes them on the way in, applied symmetrically by `workspaceSerialize.ts` (`.dwk`, autosave, Pack Project) and `workspaceDatasetParse.ts`, plus the same-shaped hole in `lib/workbookTransfer.ts`'s clipboard package. The encoders return their input by reference when nothing needs a sentinel, so an ordinary document is byte-identical to before (no schema bump); `null` deliberately stays a rejection and a malformed entry deliberately still refuses the whole workspace — see the entry for both rulings |
 | BUG-018 | P2 | Backdrop dialogs — stacked Escape | Two backdrop dialogs can be open at once (`Ctrl+,` then `?`, no mouse) and ONE Escape closes BOTH, because all ten use `window` capture + `stopPropagation()`, which does not stop a same-node same-phase sibling; over a pending `ConfirmDialog` the same keystroke silently resolves the confirmation `false` | Claude (agent) | Found in the 2026-09-19 adversarial review of `cee0494f`; reproduced by the reviewer in real Chromium (keyboard only) and re-measured in jsdom on `490243f9`. **FIXED 2026-09-19** (`5d6ef1b9`) — the entry's option 1: `lib/escapeStack.ts` gains a `modal` layer above `menu`, and all ten backdrop dialogs are surfaces on it, so the innermost closes and nothing below it acts on the same keystroke (2 → 1 → 0 on the three stacked pairs; a pending confirm stays PENDING and resolves `false` only on the second Escape; the lone-dialog control is unchanged). The bypass of `isEditingTarget`/`cmdkOpen`/`.qzk-ctx` is keyed on THE CLAIMANT resolving to a modal, nothing below a modal is offered the key even when the modal declines, and (round-9 review) the claim resolves SYNCHRONOUSLY at keydown and marks the event, so a window-bubble listener that honours `defaultPrevented` — `usePeakWizard`'s marker-edit pause — can no longer kill the dialog's close mid-dispatch. The bypass is what the reverted first attempt lacked: all four editing-target landing spots (Help's search box, Separate's and Combine's Name field, Split's Column select) are measured closing on ONE Escape, one test each. A second blocker was found on the way: Combine/Separate/Split stopped EVERY key in the dialog box's React `onKeyDown`, and a React synthetic `stopPropagation()` stops the NATIVE event at the React root — below `window` — so Escape is now let through there. R13's three missing reachability pins are closed with it; R12 is untouched and its wording unchanged |
+| BUG-019 | P1 | Per-technique view memory / dataset switch / autosave | `captureTechniqueView` stored the WHOLE object handed to it, and three callers hand it the entire `AppState` — so each entry held the library, the windows and the PREVIOUS memory map, compounding the serialized workspace on every dataset switch (Fibonacci-wise when alternating two techniques, ratio -> phi ~ 1.62) until autosave's `JSON.stringify` stalled the main thread and every plot, new and old, stopped drawing | Claude (agent) | Owner-reported 2026-09-19 (XRDML 3-D map + box integration); **FIXED 2026-09-19** — the capture projects down to its nine declared fields. Measured before/after on the owner's exact sequence in the running app: 5.4 MB -> 359.6 MB -> `RangeError` -> unresponsive, versus a flat 344 B |
+| BUG-020 | P2 | Cut landing (`Stage/useCutLanding.ts`) | A landed cut took its id from a private page-lifetime counter (`cut-1`, `cut-2`, …) instead of `store/idSeq.ts`, so a workspace reopened with a `cut-1` in it plus one new cut held TWO datasets with that id: Apply plotted the OLD cut's rows and one delete destroyed both | Claude (agent) | Found 2026-09-19 investigating BUG-019, confirmed by that fix's adversarial review; **FIXED 2026-09-19** — ids now come from the shared collision-free sequence. Probed on both trees: `['cut-1','cut-1']` / old rows / empty library before, unique ids and an independent delete after |
 
 ---
 
@@ -6793,15 +6824,15 @@ ratchet tighter than it has been all session. Full rationale in
 
 ---
 
-## UX-003 — a failed lazy chunk load unmounts the React root: 28 `lazy()` sites, no error boundary
+## UX-003 — a failed lazy chunk load unmounts the React root: 30 `lazy()` sites, no error boundary
 
 **Priority:** P3 — recoverable by reloading the page, and it needs a chunk
 fetch to fail (offline right after a deploy, or a stale cached `index.html`
 referencing a since-rotated hash); but when it does happen the whole app
 goes blank with no message at all
-**State:** Open
+**State:** **FIXED** 2026-09-19 — see Completion record below
 **Reported:** 2026-09-15 by agent (adversarial review of the `b749f804` bundle diet)
-**Investigated:** measured, not fixed — see below
+**Investigated:** measured, then fixed — see below
 **Suggested implementation owner/model:** Unassigned
 **Related plan:** `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.1 (the lazy-seam
 diet), `plans/BUNDLE_HEADROOM.md` slice 2
@@ -6832,6 +6863,20 @@ and `components/Stage/PlotStageMenus.tsx` (one seam each — `PlotResultChips`,
 `components/Stage/PlotStageOverlays.tsx` 1, `components/Stage/PlotStageMenus.tsx`
 1, `components/windows/WindowCanvas.tsx` 2, `components/windows/DocumentWindow.tsx`
 2 — sums to 28.
+
+**Re-measured 2026-09-19 (this fix, before touching any file):** the same
+`grep -rn "= lazy(" src --include="*.ts*" | grep -v "\.test\."` returns **30**
+on the tree this fix started from, not 28 — `components/windows/WindowCanvas.tsx`
+had gained a third site (`BackgroundPlotWindow`, present since the original
+E-c1 bundle pass and apparently never folded into this count) and
+`components/Library/Library.tsx` a fourth (`LibraryFlatRows`, added by
+`BUNDLE_HEADROOM.md` slice 6, 2026-09-19, after this entry's count was last
+updated). Both are now accounted for in the fix below, which reaches every
+one of the 30 by construction (each was mechanically converted from
+`lazy(load)` to `lazyRegion(load, label)`, verified by
+`grep -rn "= lazy(" src --include="*.ts*" | grep -v "\.test\."` returning
+**0** afterward — the only 3 remaining hits are inside `lib/lazyRegion.tsx`
+itself, the one place `lazy()` is still called).
 
 So the failure mode is: the user clicks something that opens a lazy panel,
 the fetch fails, and **the entire React root unmounts** — a blank window,
@@ -6865,53 +6910,215 @@ one-line patch to slip into a bundle-diet follow-up.
   (`vi.mock` of the lazy module throwing, then clicking "▣" on a
   `saved_preview` row): root HTML length after the click **0**, row present
   **false**, toasts **0**, `console.error` lines **0**
-- [ ] Expected result recorded — owner call: the decision below
+- [x] Expected result recorded — a failed panel/window/section degrades only
+  that region; the rest of the app (and every other open window/panel) stays
+  usable; the failure is visible (a named message, not silence); a retry
+  after the underlying fetch would now succeed actually recovers
 - [x] Reproduced by an agent
 
 #### Investigation
 
-- [x] Likely owning components/modules identified — the nine modules listed
-  above; a fix belongs at/near `src/main.tsx`'s root render and each
-  `<Suspense>` boundary, not in any individual panel
+- [x] Likely owning components/modules identified — the twelve modules that
+  hold a `lazy()` declaration (see the per-module count above, now 30 sites
+  across 12 modules) plus `AppOverlays.tsx`'s `lazyPanel()` factory, which is
+  the ONE call site 52 workshop-panel/dialog seams already funnel through
 - [x] Root cause confirmed rather than inferred — measured, both halves
-  (0 boundaries, 17 sites) counted by grep on 2026-09-15
-- [ ] Related workflows and persistence paths checked — in particular
-  whether autosave (`useWorkspaceAutosave`) has already written before a
-  root unmount, i.e. how much is actually lost
-- [ ] Existing plan overlap reconciled — P4.1 will keep ADDING `lazy()`
-  seams for bundle headroom, so this grows with every future slice
+  (0 boundaries, 30 sites) by the same greps, 2026-09-19
+- [x] Related workflows and persistence paths checked — autosave is
+  untouched by this fix (a failed chunk fetch no longer takes down the tree
+  that `useWorkspaceAutosave` runs inside, which is itself strictly safer
+  than before, but forcing an autosave from inside the boundary was
+  considered and rejected — see Implementation below)
+- [x] Existing plan overlap reconciled — `lazyRegion()` is now the seam
+  itself (every `BUNDLE_HEADROOM.md` slice already converts a bare `lazy()`
+  call to a `lazyRegion()` call with a one-word label), so a future slice
+  adding a seam adds boundary coverage for free instead of growing this gap
 
 #### Implementation
 
-- [ ] Minimal safe behavior defined — owner call between: (a) one root
-  boundary that shows a "something went wrong, reload" panel; (b) a boundary
-  per `<Suspense>` so only the failing panel dies and the rest of the app
-  keeps working; (c) (b) plus a Retry that remounts with a fresh `lazy()`,
-  which is the only way to defeat React's cached rejection
-- [ ] Failure and ambiguous-data behavior defined — a boundary must not
-  swallow non-chunk errors into a generic message that hides a real bug
-- [ ] Data integrity and backward compatibility considered — whether the
-  boundary should force an autosave before showing its fallback
-- [ ] UI wording/tooltips/accessibility included where relevant
+- [x] Minimal safe behavior defined — **decision: (b) one boundary per
+  region, not (a) one root boundary** (too coarse: the whole app still goes
+  away with an app-wide message for a one-panel failure) **— plus (c), a
+  retry that rebuilds `lazy()`** (the only way to defeat React's cached
+  rejection; see `src/lib/lazyRegion.tsx`'s header for the mechanism).
+  Granularity follows how the seams are already grouped in
+  `architecture.test.ts`'s own `SEAMS` list and the modules that hold a
+  `lazy()` declaration: Library (`Library.tsx`/`LibrarySections.tsx`/
+  `FigureRow.tsx`, label `"Library"`/`"Preview"`), Plot
+  (`PlotStage.tsx`/`PlotStageMenus.tsx`/`PlotStageOverlays.tsx`, label
+  `"Plot"`), Stage tabs (`Stage.tsx`, label `"Map"`/`"Worksheet"`), Window
+  (`WindowCanvas.tsx`/`DocumentWindow.tsx`, label `"Window"`), the three
+  App-shell workspaces (`App.tsx`, each its own label), the calc-only deep
+  link (`main.tsx`), and the AppOverlays panel/dialog family (label
+  `"Panel"`, one factory covering 52 call sites). A failed panel/window/
+  section degrades only itself; a failed Library section does not take the
+  Stage down, and vice versa.
+  **Review round 2 residual (deliberately NOT finished):** within the 30
+  direct seams, several distinct components still share one coarse label
+  (`"Library"` × 9, `"Window"` × 5, `"Plot"` × 5) — "which region failed?"
+  is only fully answered for the 52 `lazyPanel()` sites, each of which DOES
+  carry a distinguishable label. Splitting the 30 to match was built and
+  measured: it pushed eager bytes from 876,437 B to 876,645 B, over the
+  876,469 B budget by 176 B. Reverted rather than touch the pin — the
+  per-call-site label strings cost real, permanent eager bytes for a
+  diagnostic that already narrows to one of ~5 components per coarse label
+  via the stack trace `componentDidCatch` logs. Revisit if/when a diet
+  slice reopens enough headroom.
+- [x] Failure and ambiguous-data behavior defined — the boundary
+  distinguishes a load failure from a render error rather than catching
+  everything: `taggedLoader()` wraps only the loader's own failure (sync
+  throw or async rejection) in a `LoadFailure` marker class (`instanceof`
+  checked, never by mutating the caught value, which would throw on a
+  frozen/non-extensible rejection and lose the tag); `getDerivedStateFromError`
+  re-throws anything that isn't a `LoadFailure`, handing it to the next
+  boundary up (or letting it crash) exactly as if lazyRegion were not
+  there. A genuine bug in an already-loaded component's own render is
+  therefore never mislabeled "failed to load" — round 2's HIGH finding.
+- [x] Data integrity and backward compatibility considered — no autosave
+  hook added: the boundary is a pure render-layer catch, forcing a save
+  from inside `componentDidCatch`/`getDerivedStateFromError` would run
+  arbitrary async I/O from an error path or during a React render commit,
+  which is a bigger risk than the failure being fixed. In-memory state
+  elsewhere in the app is untouched by design (criterion 1) — nothing new
+  is lost by not writing
+- [x] UI wording/tooltips/accessibility included — `role="alert"` (assistive
+  tech announces it immediately, matching `Toaster`'s own live region
+  convention), the Unicode glyphs `⚠`/`↻` per CLAUDE.md's icon rule (no
+  emoji), and colors read from the `--danger`/`--glass-border` design
+  tokens (`src/styles/platform.css`'s `.qzk-lazy-fail` block) — never
+  hardcoded
 
 #### Tests and acceptance
 
-- [ ] Regression test fails before the fix and passes afterward — a spec
-  that makes one `lazy()` chunk reject and asserts the root is still mounted
-- [ ] Relevant focused tests pass
-- [ ] Type-check/build/repository gates pass
-- [ ] Agent verifies acceptance criteria
+- [x] Regression test fails before the fix and passes afterward — sabotage-
+  verified three ways, see Completion record
+- [x] Relevant focused tests pass
+- [x] Type-check/build/repository gates pass
+- [x] Agent verifies acceptance criteria
 - [ ] Owner verifies when required
 
 #### Completion record
 
-- PR/commit: —
-- Automated tests: —
-- Agent verification: —
+- PR/commit: fixed in this worktree's branch across three rounds — initial
+  fix, then two adversarial-review rounds each finding and closing real
+  defects (see the session's reported SHAs); not yet merged
+- Automated tests: `src/lib/lazyRegion.test.tsx` (12 tests) +
+  `src/AppOverlays.lazyFailure.test.tsx` (1 test) = **13 tests total**:
+  root/sibling survival, retry recovery against a loader that rejects once
+  then resolves, a second failure+retry, props pass through, an unaffected
+  sibling region, a render error from a successfully-loaded component
+  propagating to an OUTER boundary instead of showing the retry UI (and the
+  mirror case — a real load failure still shows it), a retry on one
+  mounted instance NOT remounting or resetting a sibling instance of the
+  same seam (mount count + local state both asserted unchanged), a fresh
+  mount of a previously-failed seam recovering without Retry, N simultaneous
+  fresh mounts of one seam all settling within a single fixed microtask
+  batch (proof the per-instance design stays cheap — no serialization), a
+  frozen/non-extensible rejection still showing the retry UI (proof tagging
+  doesn't mutate the caught value), and a loader that throws synchronously
+  still being caught. Plus the REAL AppOverlays composition root
+  (`AppOverlays.lazyFailure.test.tsx`) with a real module path
+  (`ShortcutsDialog`) mocked to reject then resolve, and a SECOND, healthy
+  overlay (`WhatIsThis`) opened alongside it whose content is asserted
+  present throughout — real evidence a sibling survives, not the vacuous
+  `container.isConnected` check round 2's review correctly rejected. One
+  pre-existing test (`components/windows/WindowCanvas.test.tsx`'s w2 polar
+  canvas check) was changed from a fixed `setTimeout(10)` sleep to a
+  `waitFor` on the canvas's own presence — kept, a strict improvement. A
+  second change to that file (a `waitFor` around a "No dataset" text check)
+  was tried in round 1, challenged in round 2 as unmotivated, re-measured
+  (the synchronous check passes 3/3 when the WHOLE file runs, because
+  earlier tests in the file warm the seam's `resolved` cache before this
+  one reaches it — it only fails when run in isolation, which the gate
+  never does) and reverted to the parent's synchronous form. The full
+  frontend suite is green.
+- Agent verification: sabotage table (7 sabotages across the fix's three
+  rounds; each applied, run, confirmed reddened, then reverted and
+  re-confirmed clean) —
+
+  | # | Sabotage | Tests that reddened |
+  |---|---|---|
+  | 1 | Remove the boundary (`getDerivedStateFromError` commented out) | 8/10 unit tests in `lazyRegion.test.tsx` (root-survival, both retry tests, sibling-unaffected, fresh-mount, N-mounts-batch excluded) + the `AppOverlays.lazyFailure.test.tsx` test |
+  | 2 | Break retry's cache-busting (skip building a fresh `lazy()` on retry) | exactly the two retry-recovery tests in `lazyRegion.test.tsx` + the `AppOverlays.lazyFailure.test.tsx` test |
+  | 3 | Fallback renders `null` instead of the message+button | 7/10 unit tests + the `AppOverlays.lazyFailure.test.tsx` test |
+  | 4 | Catch every descendant error unconditionally (finding #1 — no load-vs-render distinction) | exactly "does NOT show the load-failure UI for a render error…" |
+  | 5 | Reintroduce ONE module-scoped `current`, re-read by every render, reassigned by any instance's retry (finding #2) | **3 tests**, not 1 as first reported: "retrying one mounted instance does not remount or reset a sibling…", "a fresh mount of a previously-failed seam is not stuck…", and "N simultaneous mounts…" (a correction — the first report of this sabotage understated it) |
+  | 6 | Tag a load failure by mutating the caught value (finding #2, round 2 LOW) instead of wrapping it | exactly "still shows the retry UI for a load failure that cannot be mutated (frozen rejection)" |
+  | 7 | Drop the try/catch around the loader's synchronous call (finding #3, round 2 LOW) | exactly "still shows the retry UI for a loader that throws synchronously" |
+
 - Owner verification: —
 - Notes: filed by the 2026-09-15 review round of `b749f804`; that round
   narrowed the two over-broad claims in the plans and left the boundary
-  itself to this item.
+  itself to this item. Fixed 2026-09-19 across three rounds:
+  - **Round 1:** `src/lib/lazyRegion.tsx` (new) is a drop-in replacement
+    for `lazy()`. All 30 `lazy()` declarations were converted; AppOverlays'
+    `lazyPanel()` factory (52 call sites) now delegates to
+    `lazyRegion(load, "Panel")` in one place. Every now-redundant
+    per-call-site `<Suspense>` wrapper was removed (lazyRegion carries its
+    own).
+  - **Round 2** (adversarial review found two HIGH + three MED): fixed the
+    load-vs-render conflation (finding #1 — see Implementation) and the
+    module-scoped mutable "current" that let one instance's retry silently
+    remount a sibling instance of the same seam (finding #2). The fix is a
+    hybrid, not a pure per-instance rebuild: each mounted `Region` owns its
+    own retryable `lazy()` via `useState`'s lazy-initializer form (set once
+    per mount, replaced only by THAT instance's own retry — this is what
+    makes retry safe for siblings), but a fresh mount's initializer first
+    checks `resolved`, a plain module-scoped cache written ONLY by a
+    successful resolution and read ONLY by a fresh instance's own
+    initializer, never by an already-mounted one. That keeps the common
+    (never-fails) case behavior-identical to plain `lazy()` — once any
+    instance has loaded a seam, every LATER mount renders synchronously
+    from the cache — while a failure is never cached past its own
+    instance, which also closed finding #3 (a plain remount recovers) for
+    free. Also fixed: the vacuous `AppOverlays.lazyFailure.test.tsx`
+    assertion (finding #4) and the 52 `lazyPanel()` labels, mechanically
+    derived per import-path basename instead of one shared `"Panel"`
+    string (finding #6).
+  - **Round 3** (second adversarial review, both HIGH fixes confirmed
+    sound; three LOW + one factual correction remained): the load-failure
+    tag moved from mutating the caught rejection (`err[SYMBOL] = true`,
+    which throws on a frozen/non-extensible value and loses the tag — the
+    original bug, reappearing under a corner case) to wrapping it in a
+    `LoadFailure` marker class carrying the original as `.cause`, checked
+    with `instanceof` — tagging can now never fail. The loader's call is
+    also wrapped in try/catch, not just `.catch()`, so a loader that throws
+    synchronously (not reachable through today's 30+ `() => import(...)`
+    call sites, but defensive) is tagged the same way. Reverted a
+    `WindowCanvas.test.tsx` change round 1 made without justification (see
+    Automated tests above), corrected this record's own sabotage-count
+    claim (5→3, see the table), and closed a stale raw-source-text
+    assertion in `HelpDialog.test.tsx` that the per-panel labels broke
+    (asserted the exact `lazyPanel(() => import(...))` call text, which
+    gained a second argument).
+
+  **Eager bundle cost** (measured after `npm ci` + a cleared
+  `node_modules/.vite`, via the repo's `exactbytes.mjs`; every prior number
+  quoted for this fix before this round used a STALE cache and is
+  corrected here — see the strikethrough note below): base `281ee552`
+  measures **875,755 B**, round 1's tree (`4735f944`) measures
+  **875,005 B** (−750 B — removing ~30 `<Suspense>` wrappers outweighed the
+  new boundary code), and this final tree measures **876,437 B** — **+682 B**
+  over round 1 (the `LoadFailure` wrapper class, the load-vs-render
+  distinction, and the hybrid per-instance/cache design all cost real,
+  permanent bytes) and **+682 B over the base**, against the unmoved
+  `876,469 B` `EAGER_JS_BUDGET`: **32 B of headroom**. The budget pin was
+  not touched, and the per-seam label split described in Implementation
+  above was reverted specifically because it would have crossed this line.
+
+  ~~Earlier note (superseded, kept for the record per the doc-promise
+  audit rule): a prior version of this entry reported round 1 at
+  `875,005 B` / `1,464 B` headroom and attributed later movement to "a
+  stale `.vite` cache". That attribution was WRONG. `875,005 B` is exactly
+  reproducible for `4735f944` with a genuinely cleared cache — the number
+  was correct, not stale. The `1,323 B` gap to this round's `876,328 B`
+  interim measurement (before the label revert) was this fix's OWN round 2
+  delta (the `LoadFailure` class, try/catch, `componentDidCatch`
+  cause-extraction, and the per-instance/cache hybrid), mistaken for a
+  cache artifact. No cache lied; a commit's real cost was misattributed.
+  `CLAUDE.md`'s existing "vite's transform cache also lies" lesson records
+  a genuine instance of that failure mode elsewhere — this was not a
+  second one, and is corrected rather than left to imply it was.~~
 
 ---
 
@@ -7197,6 +7404,348 @@ hoisting design decision R12 records.
 
 ---
 
+## BUG-019 — the per-technique view memory stored the whole app state, so every dataset switch compounded the workspace until the main thread stalled
+
+**Priority:** P1 — silent state corruption that grows without bound; the visible failure is "every plot is blank"  
+**State:** Verified complete (agent); owner verification on real data outstanding  
+**Reported:** 2026-09-19 by owner  
+**Investigated:** 2026-09-19, Claude (agent); adversarially reviewed the same day  
+**Suggested implementation owner/model:** —  
+**Related plan:** PLOT_WORKFLOW_PLAN item 5 (per-technique view memory); reported against RSM_CUTS_PLAN's box-integration flow, which is NOT where the defect lives
+
+### User-visible problem
+
+Verbatim: *"when I did a xrdml 3d data set and a box integration, the preview looked good, but then when I hit apply, it made a new plot that was empty, and when I toggled to previously plotted right data, they are also blank."*
+
+The ROI box preview is pure client-side math in a rAF (`lib/roiMath.ts`), so it
+is unaffected and looks correct. Apply lands a perfectly good dataset — and
+then the plot area is empty, and so is every previously plotted dataset the
+user switches back to.
+
+**What the user IS told, corrected after review.** An earlier version of this
+entry claimed "nothing is reported". That is false, and the claim is narrowed
+here: `lib/autosave.ts:88` stores the real failure message in `health.error`,
+`useWorkspaceAutosave.ts` calls `reportAutosaveHealth` **and** `setStatus`, and
+`components/Shell/StatusBar.tsx:139-145` renders a persistent `role="alert"`
+"⚠ autosave failing" carrying that message in its tooltip (pinned by
+`StatusBar.test.tsx:96,102`) — the owner's screenshot showed that indicator.
+What is NOT reported is the stall itself: while the main thread is inside the
+serialize there is no frame to paint, and nothing anywhere names "your
+workspace has grown too large to save". The one genuinely wrong surface was
+the status wording, fixed with this entry: `flushAutosaveNow` hardcoded
+"autosave failed (storage full or unavailable)" for every failure, but
+`saveAutosave`'s single catch also covers `serializeWorkspace`, so a
+`RangeError: Invalid string length` was blamed on the disk. It now names the
+real reason and keeps the generic wording only when there is none.
+
+### Reproduction
+
+- [x] Starting state and sample data identified
+- [x] Exact actions recorded
+- [x] Actual result recorded
+- [x] Expected result recorded
+- [x] Reproduced by an agent
+
+Driven against the RUNNING app (`qz --no-browser`, real backend, real built
+SPA, Chromium via Playwright, `?harness` for state reads), on the owner's
+sequence: import a 1-D XRDML scan and plot it, open a 220x220x5 RSM
+(`metadata.is2D`/`map_shape`/`axis1_name`, the shape `io/xrdml.py::_build_2d`
+emits — the owner's `m3learning_rsm.xrdml` is 465,885 x 5, roughly 10x this),
+arm the Integration box, set `store.mapRoi`, click the commit bar's `∫ 2Theta`,
+then toggle between the cut and the previously plotted scan.
+
+`JSON.stringify(techniqueViewMemory).length`, measured at each step:
+
+| step | with the defect | after the fix |
+|---|---|---|
+| prior scan plotted | 5,440,727 | 171 |
+| on the map | 16,322,222 | 344 |
+| after Apply (new cut plot) | 16,322,222 | 344 |
+| toggle 1 (back to the prior scan) | 16,322,222 | 344 |
+| toggle 2 | 32,387,084 | 344 |
+| toggle 3 | 69,957,577 | 344 |
+| toggle 4 | 123,592,932 | 344 |
+| toggle 5 | 214,798,775 | 344 |
+| toggle 6 | 359,639,968 | 344 |
+| toggle 7 | `RangeError: Invalid string length` | 344 |
+| toggle 10 | page unresponsive, >45 s, measurement abandoned | 344 |
+
+A second run on two ordinary imported XRDML files (no synthetic data, 6,474
+and 50 rows) reached 73.9 MB in ten switches and then stopped answering ANY
+page evaluation from switch nine onward — no further output in the remaining
+600 s. On the fixed build the identical probe runs all 26 switches, the map
+stays at 344 bytes, and both datasets keep the same canvas ink every time
+(537,953 / 51,795 — byte-identical measurements, so nothing about the drawing
+changed).
+
+**Expected:** the remembered view for a technique is a handful of channel
+indices and two axis scales. It must not grow with the library, and must not
+grow at all as the user moves between datasets.
+
+### Investigation
+
+- [x] Likely owning components/modules identified
+- [x] Root cause confirmed rather than inferred
+- [x] Related workflows and persistence paths checked
+- [x] Existing plan overlap reconciled
+
+**Root cause.** `lib/techniqueViewMemory.ts`'s `captureTechniqueView` ended
+with `return { ...memory, [tech]: { ...liveView, labels } };`. `liveView` is
+typed `LiveViewSource` — nine fields — but that interface is satisfied
+STRUCTURALLY, and three of its four callers pass something enormously wider:
+
+| call site | what it passes | probed size of one entry (`281ee552` vs fixed) |
+|---|---|---|
+| `store/windows.ts:151` (`focusedRebindPatch` — the shared body of `setActive` and `rebindWindow`'s focused branch, i.e. every Library click and every plot-intent activation) | the whole `AppState` | 177 B -> 347 B on a trivial library, unbounded on a real one |
+| `useWorkspaceAutosave.ts:283` (the 800 ms-debounced autosave, which then `JSON.stringify`s the result) | the whole `AppState` | 1,567,653 B -> 347 B |
+| `store/workspaceIO.ts:102` (File ▸ Save / Save As, into the `.dwk`) | the whole `AppState` | same path as autosave |
+| `store/windows.ts:492` (background-window rebind) | a full `PlotView` | 177 B -> 347 B — over-wide but bounded and non-recursive |
+
+**The growth relation, corrected after review.** It is NOT `2 x size(k-1)`.
+The copied state includes `techniqueViewMemory` itself, so each capture nests
+the map built by the one before it — but only the slot being written is
+replaced, and the OTHER slots are left holding their own older copies. With a
+single technique repeatedly captured the recursion is therefore LINEAR
+(`size(k) = size(k-1) + C`). Alternating between two techniques — exactly what
+"switch to the map, switch back" does — makes each slot absorb the other one
+generation late: `size(k) ≈ size(k-1) + size(k-2) + C`, i.e. Fibonacci-like,
+with the ratio tending to φ ≈ 1.62. Measured on `281ee552` alternating two
+techniques: 80,340 -> 241,003 -> 482,002 -> 883,664 -> 1,526,325 -> 2,570,648
+-> 4,257,632 -> 6,988,939 (ratios 3.0, 2.0, 1.83, 1.73, 1.68, 1.66, 1.64).
+The field numbers in the reproduction table show the same 1.6x. More
+techniques in rotation compound faster still. `datasets` sets the constant `C`,
+which is why a 3-D RSM — the biggest single object the library ever holds —
+makes it fatal after a handful of switches instead of dozens.
+
+**Why Apply produces an empty plot, and why previously plotted data blanks
+too.** Neither plot's DATA is wrong; nothing is mutated and no view field is
+clobbered. Every measured payload was correct and complete at every step. The
+failure is that the thread that draws is the thread that serializes. Autosave
+subscribes to the store, and a changed `activeId`/`datasets` passes
+`shouldAutosave`, so **every dataset switch and every dataset add schedules a
+full workspace `JSON.stringify` 800 ms later** — of a structure that has just
+grown by a factor of ~1.6. Landing the cut adds a dataset (bigger `C`) and
+makes it active; the switch back to the previously plotted dataset compounds
+again. React has already torn down the old uPlot instance and the
+`/api/plot/series` promise has not resolved, so what the user is looking at
+while the main thread is inside that `JSON.stringify` is an EMPTY plot frame —
+for the new cut and, on the next toggle, for the old dataset as well.
+
+**What was ruled out, by measurement rather than by reading.** The backend box
+cut is correct (`POST /api/rsm/box` against a synthetic RSM returns a 21-row,
+2-column DataStruct with the right `time`/`values`/`labels`/metadata, grid path,
+`is2D` cleared). `cut_result` does not leak `is2D`/`map_shape` into the cut, so
+the Stage correctly routes to the plot tab. No DataStruct is mutated in place:
+`useCutLanding` → `addDataset` stores the parsed response as-is and
+`buildSelectionOverlay`/`assembleOverlay` allocate fresh arrays. The
+dataset-handle cache (`lib/api/datasetCache.ts` + `routes/_datasetcache.py`)
+resends the full dataset on a 409 and was never implicated. The full ROI flow —
+canvas commit bar, ROI panel Run, and batch "Apply to selected", in both
+angular and Q space, on 50-point and 90,000-point maps — lands correct data and
+keeps every plot drawing once the memory growth is removed.
+
+**Separately filed:** the cut-id collision first noted here as a footnote is
+now BUG-020, with its own reproduction. It reproduces the owner's symptom
+class ("Apply made a new plot that was empty/wrong") independently of this
+stall, which is why demoting it to a footnote was wrong.
+
+### Implementation
+
+- [x] Minimal safe behavior defined
+- [x] Failure and ambiguous-data behavior defined
+- [x] Data integrity and backward compatibility considered
+- [x] UI wording/tooltips/accessibility included where relevant
+
+One change, in the pure layer, at the single point every caller funnels
+through: `captureTechniqueView` now stores
+`{ ...projectLiveView(liveView), labels }`, where `projectLiveView` names the
+nine `LiveViewSource` fields explicitly and is annotated `: LiveViewSource`, so
+omitting a newly-added field is a compile error. Fixing it inside the capture
+(rather than adapting each call site) is what makes it hold for all four
+callers and for any future one — the interface stays structurally satisfiable,
+which is what the call sites rely on, but what gets STORED no longer depends on
+how wide the caller's object happens to be.
+
+Behaviour of the memory itself is unchanged: the same nine fields are captured,
+re-keyed by label and applied exactly as before (the existing round-trip,
+re-key, shape-mismatch and sanitizer tests all still pass untouched). No schema
+change: a `.dwk` written before this fix is read through
+`sanitizeTechniqueViewMemory`, which already projected to these same fields on
+load, so an oversized persisted map degrades to a correct small one rather than
+failing. `LiveViewSource`'s doc comment now says why the projection exists,
+since the sentence it replaces ("no adapter needed at either call site") is
+what invited the bug.
+
+Second, smaller change (see "What the user IS told" above): the autosave
+failure status now names the real reason instead of always blaming storage.
+
+### Tests and acceptance
+
+- [x] Regression test fails before the fix and passes afterward
+- [x] Relevant focused tests pass
+- [x] Type-check/build/repository gates pass
+- [x] Agent verifies acceptance criteria
+- [ ] Owner verifies on the real `m3learning_rsm.xrdml` workflow
+
+`lib/techniqueViewMemory.test.ts`
+- "stores only the nine declared view fields, never the wider object handed
+  in" — captures from an `AppState`-shaped source and asserts the entry's key
+  set exactly. The expected list is PARSED out of the `LiveViewSource`
+  interface (the `PlotView` precedent at `architecture.test.ts:2238`), with a
+  degraded-parse guard, so it cannot rot as the interface changes.
+- "repeated captures that re-feed the previous map do not grow it" — feeds each
+  capture's own output back in, as the store does, and asserts the serialized
+  size stops moving.
+- "remembers a log X axis, not just a log Y" — added after review found
+  `xScale` was the one projected field with NO coverage anywhere: replacing it
+  with a literal `"linear"` passed all 684 files / 11,592 tests.
+
+`store/techniqueMemoryGrowth.test.ts` (new file) drives the owner's sequence
+through the REAL store actions — `setActive`, then `useCutLanding.land()` with
+the measured `/api/rsm/box` response, then `setActive` back:
+- asserts the cut lands, and that both the new cut and the previously plotted
+  dataset still produce drawable columns through the stage's own
+  `effectiveChannels` + column packing;
+- asserts no entry carries `datasets`/`plotWindows`/`techniqueViewMemory`, and
+  that the map stays under 4 kB across ten switches and stops changing.
+
+`useWorkspaceAutosave.test.ts` — two cases pinning that a serialization failure
+is reported as itself and that the generic wording survives a message-less
+throw.
+
+Both memory files guard against vacuity (the store test asserts a capture
+actually happened and that both technique slots are populated — without a real
+`metadata.technique` tag, `techniqueOf` returns `"generic"` and every
+assertion would hold on an empty map).
+
+**What these tests deliberately do NOT claim.** The blank canvas is a
+main-thread stall, not a data change; jsdom has no rendering and no autosave
+timer pressure, so it cannot show a canvas going blank. These tests pin the
+state size and shape that DECIDE whether the stall happens; the user-visible
+half is the before/after table above, measured against the running app.
+
+#### Completion record
+
+- PR/commit: the branch's `fix(store): the technique view memory must store a view, not the whole app state`
+- Automated tests: 7 new across three files, every one sabotage-verified
+- Agent verification: before/after measured against the running app on the owner's own sequence (table above)
+- Owner verification: outstanding
+- Notes: the adjacent cut-id defect is now BUG-020, filed and fixed in the same commit
+
+---
+
+## BUG-020 — a landed cut reused an id already in the library, so Apply plotted the old cut and one delete destroyed both
+
+**Priority:** P2 — silent data loss (one delete removes two datasets) and a wrong plot, reachable by a plain reopen-and-cut  
+**State:** Verified complete (agent); owner verification outstanding  
+**Reported:** 2026-09-19, found by Claude (agent) while investigating BUG-019; confirmed by the adversarial review of `f8d72f43`  
+**Investigated:** 2026-09-19, Claude (agent)  
+**Suggested implementation owner/model:** —  
+**Related plan:** RSM_CUTS_PLAN item 8 (the shared cut-landing hook)
+
+### User-visible problem
+
+`components/Stage/useCutLanding.ts` — the ONE landing path every cut commit
+shares (the map's inline ∫ bar, the ROI panel's Run, and the batch "Apply to
+selected") — minted dataset ids from a PRIVATE module counter:
+
+```ts
+let _seq = 0;
+…
+const id = `cut-${++_seq}`;
+```
+
+That counter resets on every page load; the library does not. Autosave restore
+runs at startup, so a session that reopens a workspace containing `cut-1` and
+then lands one new cut ends up with two datasets carrying that id. Nothing
+dedupes: `store/useApp.ts:817`'s `addDataset` appends, and
+`store/removeDatasets.ts:48` filters by id. Every id-keyed lookup in the app
+then resolves to whichever came first.
+
+This reproduces the owner's reported symptom class — "Apply made a new plot
+that was empty/wrong" — independently of BUG-019's stall, which is why it is
+its own entry rather than a note inside that one.
+
+`store/idSeq.ts`'s whole documented purpose is to prevent exactly this: "One
+counter per PROCESS … Ids are therefore unique across the whole workspace
+regardless of prefix." This hook was the one minting site that did not use it.
+
+### Reproduction
+
+- [x] Starting state and sample data identified
+- [x] Exact actions recorded
+- [x] Actual result recorded
+- [x] Expected result recorded
+- [x] Reproduced by an agent
+
+Reload the app (fresh module graph, so the private counter restarts) with a
+library restored from autosave that already holds `cut-1`, then land one cut.
+Measured with the defect present:
+
+- the library holds `['cut-1', 'cut-1']` — the landed dataset never becomes
+  separately addressable;
+- `activeId` is `cut-1`, and `datasets.find(...)` returns the FIRST match, so
+  the plot shows the OLD cut's rows (`values[0] === [10]`, not the new `[99]`);
+- `removeDatasets(['cut-1'])` leaves `[]` — one delete destroys both.
+
+**Expected:** a landed cut gets a library-unique id; Apply plots the cut just
+made; deleting it leaves everything else alone.
+
+### Investigation
+
+- [x] Likely owning components/modules identified
+- [x] Root cause confirmed rather than inferred
+- [x] Related workflows and persistence paths checked
+- [x] Existing plan overlap reconciled
+
+No code anywhere depends on the `cut-` prefix (grepped: the only occurrences
+were the minting line itself). The collision is confined to this one minting
+site; every other dataset-minting path in the store already draws from
+`store/idSeq.ts`.
+
+### Implementation
+
+- [x] Minimal safe behavior defined
+- [x] Failure and ambiguous-data behavior defined
+- [x] Data integrity and backward compatibility considered
+- [x] UI wording/tooltips/accessibility included where relevant (none — ids are not user-visible)
+
+`useCutLanding` now calls `nextDatasetId()` from `store/idSeq.ts`. Ids become
+`ds-<t36>-<n>` like every other minted dataset, which embeds a timestamp as
+well as the per-process counter, so a restored id from an earlier session
+cannot be reminted. Nothing else changes: the returned id still flows to the
+batch tool's `plotSelectedTogether`, and the name/status/error contract is
+untouched.
+
+Datasets already saved with a `cut-N` id keep it and keep working — the fix
+only changes what NEW cuts are named, which is what removes the collision.
+
+### Tests and acceptance
+
+- [x] Regression test fails before the fix and passes afterward
+- [x] Relevant focused tests pass
+- [x] Type-check/build/repository gates pass
+- [x] Agent verifies acceptance criteria
+- [ ] Owner verifies
+
+`components/Stage/useCutLanding.test.ts` (new file), three cases against a
+`vi.resetModules()` reload with a restored `cut-1` in the library — the reload
+is what makes the page-load half real, and the store is taken from the SAME
+fresh module graph as the hook so the assertions read what the hook wrote:
+unique ids after landing; the ACTIVE dataset holds the new cut's rows; deleting
+the landed id leaves the restored dataset alive. All three fail with the
+private counter restored.
+
+#### Completion record
+
+- PR/commit: the branch's `fix(store): the technique view memory must store a view, not the whole app state`
+- Automated tests: 3 new, sabotage-verified (restoring the private counter reddens all three)
+- Agent verification: reproduction above measured on both trees
+- Owner verification: outstanding
+- Notes: found while investigating BUG-019; filed separately because it stands on its own
+
+---
+
 ## New issue template
 
 Copy this section for each new report. Assign the next stable ID (`BUG-###`, `UX-###`, `PERF-###`, or `FEATURE-###`). Never renumber an existing item.
@@ -7254,6 +7803,223 @@ Describe what the user did, what happened, and why it matters. Include filenames
 
 ---
 
+## UX-004 — the Library's node-type marks collide: one glyph meant up to five different things
+
+**Priority:** P1 — the same surface and the same workflow as UX-001, and the
+reason UX-001's own "make the node type explicit" fix did not land for the
+owner.
+**State:** Fixed and test-locked on the collision half (objective, measured).
+The density half is a design judgement awaiting the owner's eye — see
+"What is measured and what is judgement" below.
+**Reported:** 2026-09-19 by owner — *"loading this origin project, it's pretty
+impossible to parse that many icons"*.
+**Related:** UX-001 (same surface; this is its icon-audit residual finished
+properly, not a contradiction of it — see "Reconciliation with UX-001").
+
+### User-visible problem
+
+Importing an Origin project brings in folders, workbooks, worksheets, graphs,
+pages and notes at once — hundreds of Library rows. Their type marks are not
+telling them apart, because several kinds wear the *same* mark and the marks
+that do differ differ only by hatch direction at 12px.
+
+### Measured collision inventory (2026-09-19, before the fix)
+
+Three mutually contradicting kind→glyph maps existed, none aware of the
+others. Every site was read, not sampled:
+
+| glyph | code point | everything it meant | sites |
+|---|---|---|---|
+| `▦` | U+25A6 | **Folder**, **Figure page**, **Worksheet**, *"open the source workbook"* (command), *"New folder"* (command) | `FolderRow.tsx:301`, `ArtifactRows.tsx:51`, `PagesSection.tsx:72`, `TilePreview.tsx:31`, `CollectionsSection.tsx:29`, `DetailsRow.tsx:266`, `FigureRow.tsx:112`, `Library.tsx:285` |
+| `▤` | U+25A4 | **Workbook**, **Report** | `WorkbookRow.tsx:137`, `ArtifactRows.tsx:53`, `ReportsSection.tsx:36`, `TilePreview.tsx:30`, `CollectionsSection.tsx:29`, `DetailsRow.tsx:266` |
+| `▥` | U+25A5 | **Worksheet**, and **Origin figure + Editable figure + Publication figure + Figure page + Report** (all five at once) | `DatasetRow.tsx:317`, `CollectionsSection.tsx:29-30` |
+| `⌁` | U+2301 | **Origin figure**, and in Tiles *all three* figure kinds | `FigureRow.tsx:91`, `TilePreview.tsx:33-35` |
+| `◇` | U+25C7 | **Editable figure** | `ArtifactRows.tsx:47`, `EditableFiguresSection.tsx:49` |
+| `◉`/`❄` | U+25C9 / U+2744 | **Publication figure**, live vs frozen — the *type* mark was swapped out to carry a *status*, so a frozen publication figure had no type mark at all | `ArtifactRows.tsx:49`, `SavedFiguresSection.tsx:66` |
+| `▰` `▧` `≡` | | **Folder**, **Figure page**, **Report** — but only in Tiles | `TilePreview.tsx:29,36,37` |
+| `·` | | **Worksheet** (Collections) and **everything that is not a folder or a workbook** (Details) | `CollectionsSection.tsx:29`, `DetailsRow.tsx:266` |
+
+Two corrections to the report that prompted this entry: there is **no Matrix
+node kind** — `ArtifactRows.tsx:51`'s `rows×cols` row is a figure **page**, and
+`LibraryNodeKind` has exactly eight members; and the drag handle `⠿` and menu
+cue `⋯` were **already** resting cues (`shell.css:390,468`: `opacity: 0`,
+revealed on row hover and on focus), so they were never part of the resting
+noise.
+
+Non-type glyphs a Library row can also paint, for completeness: `⠿` drag
+(resting cue), `⋯` more actions (resting cue), `▸`/`▾` caret, `●` stale,
+`↻` recomputed-from-fit, `⇢` derived worksheet, `∿` preview toggle,
+`⊞` open in a new window, `▣` saved Origin preview, `G` remake in Graph
+Builder, `▲`/`▼` move (flat card only), `└ sheet N` chip.
+
+### What changed
+
+- **One source of truth:** `frontend/src/components/Library/nodeIcons.ts`
+  (`LIBRARY_NODE_GLYPH`, `LIBRARY_NODE_LABEL`, `FROZEN_MARK`). The three rival
+  maps are deleted; every Library view (Tree, Tiles, Details, Collections and
+  the five flat sections) reads this one.
+- **A vocabulary separated by SILHOUETTE, not hatch:** folder `▰` (solid
+  slanted bar), workbook `▤` (the one ruled box), worksheet `≡` (free rules,
+  no box), origin-figure `⌁` (zigzag trace), editable-figure `◇` (outline
+  diamond), publication-figure `◆` (solid diamond), page `▭` (wide empty
+  rectangle), report `¶` (pilcrow). `▦` and `▥` — the two marks that meant
+  several things at once — are **removed from the vocabulary entirely**.
+- **Type and status are two channels:** a publication figure keeps a stable
+  `◆` and, when frozen, a separate `❄` mark beside the name. Previously the
+  type mark itself was replaced.
+- **The two commands that NAME a kind wear that kind's mark** rather than
+  inventing one: "New folder" (`Library.tsx`) and "open the source workbook"
+  (`FigureRow.tsx`, which wore the *folder* mark `▦`).
+- **Density (judgement, not measurement):** the preview toggle `∿` was the
+  last control still painted at rest on every worksheet row. It now follows
+  the drag handle's and menu button's existing resting-cue recipe —
+  `opacity: 0`, revealed on row hover, on `:focus-visible`, and whenever the
+  preview is open. Opacity only: it keeps its box, its tab order and its
+  `aria-label`/`aria-pressed`. A worksheet row at rest now paints exactly one
+  mark (its type glyph) plus text.
+- **Colour is not a channel.** Every glyph inherits `currentColor` from its
+  row's design tokens, so the vocabulary is identical in every theme, accent,
+  density and the greyscale/print paths, and no information is carried by hue
+  (the CVD concern from `PRIMARY_SOFTWARE_AUDIT_PLAN.md` P3.3 does not arise).
+  `FolderRow`'s existing folder-colour tint stays, as decoration on top of an
+  already-distinct shape.
+
+### What the design system specified
+
+`plans/design/DESIGN_GUIDE.md` §Iconography specifies the **medium**, not a
+node vocabulary: inline Unicode glyphs inheriting `currentColor` and the
+surrounding font-size, thin/geometric, no icon font, no SVG sprite, **never
+emoji**, and a substitution rule (a thin ~1.5px-stroke line set, flagged) if
+the Unicode set runs out. It names tool glyphs only — `✥` pan, `⛶` box-zoom,
+`✛` cursor, `▾`/`▸` chevrons — and, notably, assigns **`▤`/`▥` to panel
+toggles**, so using them as node types was already double duty. No Library
+node-type vocabulary was specified, so this defines one in that idiom; the
+guide's constraints are all met (single BMP codepoints, no emoji presentation,
+asserted by test).
+
+### Enforcement (the most valuable artifact here)
+
+`frontend/src/components/Library/nodeIcons.test.ts` — 11 cases:
+
+- **injectivity** over the complete kind set (no two kinds share a glyph; the
+  label map too), and completeness (the hand-written kind list must match
+  `LibraryNodeKind`, so a ninth kind cannot slip in unmarked);
+- each glyph is one non-blank BMP character below U+1F300 with no U+FE0F —
+  the repo's "Unicode glyphs, never emoji" rule, made checkable;
+- **disjointness**: no command/status glyph reuses a type mark, *unless* the
+  table declares that the command names that kind — and then it must really
+  wear that kind's mark;
+- **non-rot**: every command/status glyph in that table still appears in the
+  file the table names, no Library component declares a kind-keyed
+  `KIND_GLYPH` of its own any more, and the two retired marks `▦`/`▥` appear
+  nowhere in this directory's rendered code (comments excepted — they are the
+  record of what each site used to draw).
+
+`nodeIconRenderSites.test.tsx` (new, review round 1) closes the level below
+that: injectivity proves the *vocabulary* is sound and the accessibility audit
+proves each mark is *labelled*, but neither proved the **wiring** — that a
+given render site reaches for its OWN kind's entry. The reviewer pointed
+`ReportsSection.tsx` and `SavedFiguresSection.tsx` at `LIBRARY_NODE_GLYPH
+.folder` and the whole suite stayed green, i.e. a Report/Folder and a
+Publication-figure/Folder collision could be reintroduced with nothing red.
+The closure is **table-driven** rather than two more one-off cases, so the
+next kind added cannot be missed: the table is asserted to cover every member
+of `LIBRARY_NODE_KINDS`, and each entry renders its site and asserts the glyph
+under that kind's title, plus that no other kind's mark leaked into the row.
+It lists the eight sites that name a kind **literally** — the only ones that
+can be miswired; `ArtifactRows`, `CollectionsSection`, `DetailsRow` and
+`TilePreview` index the map by `node.kind` and are correct by construction,
+and `Library.tsx`'s toolbar button is a command covered by `nodeIcons.test.ts`.
+
+`rowIconAccessibility.test.tsx` gains two describe blocks: the rendered mark
+of each row kind **is** the one the shared map declares (four kinds rendered
+together produce four different characters — the owner's complaint, at the DOM
+layer), and the preview toggle stays in the DOM, focusable, named, hidden by
+`opacity` only with the hover/focus/`aria-pressed` rules parsed out of
+`shell.css` rather than assumed. That file's header now records *why* the
+earlier audit missed this: it asserted each mark was **labelled**, never that
+two marks were **distinguishable** — the gap this entry closes.
+
+### Reconciliation with UX-001
+
+UX-001's interaction checklist item "make the node type explicit" stays ticked
+and is **not** reverted: every kind still carries a type mark, and no mark was
+deleted for the sake of deleting one. What that pass could not know is that
+the marks it chose (`▥` for worksheet, keeping `▦`/`▤`) already meant other
+things in five files it did not touch. UX-001's own open research box —
+"a full icon/badge audit across every row kind is still open", closed
+2026-09-12 as an *accessibility* audit — is what left the distinguishability
+half unchecked. `LibraryTree.compactRows.test.tsx`'s "≥6 worksheet rows"
+acceptance evidence is untouched and still passes.
+
+### What is measured and what is judgement
+
+- **Measured, objective:** every collision in the table above was read out of
+  the source at the cited line, and the injectivity test would have failed on
+  the pre-fix map. The fix to that half is not a matter of taste.
+- **Judgement, needs the owner's eye — one case named explicitly** (review
+  round 1): editable-figure `◇` and publication-figure `◆` are distinguished
+  **only by fill**. That is the same class of hairline distinction this entry
+  condemns in `▦`/`▥`/`▤`'s hatch direction, softened only by the argument
+  that solid-vs-outline is a coarser contrast than hatch and that the two are
+  genuinely one family. It is a judgement call, not a measured result: if the
+  owner cannot tell them apart in the tree, `◆` should move to a different
+  shape rather than a different fill.
+- **Judgement, needs the owner's eye:** the *choice* of the eight marks, and
+  the density change (hiding `∿` at rest). No screenshot of the owner's actual
+  Origin project exists here, so the aggregate-density claim — "a worksheet
+  row at rest now paints one mark plus text" — is derived from the code and
+  the stylesheet, not from a rendered tree at the owner's row count, font and
+  density setting. It is exactly the sort of claim `jsdom` cannot settle.
+
+### Deliberately NOT done
+
+- **No mark was deleted.** Dropping the worksheet glyph outright was
+  considered (it is the most numerous row, has no caret, and carries unique
+  `N pts · Mch` meta, so hierarchy alone nearly identifies it) and rejected:
+  it would silently un-tick UX-001's "make the node type explicit" box across
+  Tree, Tiles, Details and Collections. It is the obvious next density lever
+  if the owner still finds the tree noisy — raise it with a screenshot.
+- `⠿` and `⋯` were left alone: already resting cues, already correct.
+- `Library.tsx` took the single minimal edit its in-flight state allows (the
+  "New folder" button's glyph, now the shared constant + an import);
+  `LibraryFlatRows.tsx` was not touched at all.
+- Command glyphs outside a Library row (`Shell/TitleBar.tsx`'s `▤`/`▥` panel
+  toggles, `Stage/*`, the workshops) are out of scope — they are a different
+  surface and the design guide assigns `▤`/`▥` to panel toggles there.
+
+### Acceptance criteria
+
+- [x] No two Library node kinds render the same mark, over the complete kind
+  set — `nodeIcons.test.ts`, sabotage-verified.
+- [x] One source of truth; no component declares its own kind→glyph map —
+  `nodeIcons.test.ts`, sabotage-verified.
+- [x] Every render site draws its OWN kind's mark, over the complete kind set
+  — `nodeIconRenderSites.test.tsx`, sabotage-verified at both sites the
+  review round found unguarded.
+- [x] The same entity looks the same in Tree, Tiles, Details and Collections
+  — all four now read `LIBRARY_NODE_GLYPH`.
+- [x] Accessibility does not regress: every icon-only control keeps an
+  accessible name, every badge a title, and the newly hidden resting cue
+  stays focusable and announced — `rowIconAccessibility.test.tsx`.
+- [x] Marks work in every theme/accent/density and in greyscale — they carry
+  no colour information; enforced by construction (`currentColor`), stated
+  here rather than test-claimed.
+- [ ] Owner confirms, on the reported Origin project, that the eight marks
+  read apart at a glance and that the tree is quieter.
+
+### Completion record
+
+- PR/commit: committed on the worktree branch (not pushed, per task
+  instructions).
+- Automated tests: `nodeIcons.test.ts` (new, 11 cases),
+  `nodeIconRenderSites.test.tsx` (new, 9 cases — review round 1),
+  `rowIconAccessibility.test.tsx` (+7 cases), `PagesSection.test.tsx`
+  (expectation updated to the shared constant).
+- Owner verification: pending — the density and mark-choice halves above.
+
+---
+
 ## Change log
 
 | Date | Author | Change | Evidence/status |
@@ -7272,7 +8038,9 @@ Describe what the user did, what happened, and why it matters. Include filenames
 | 2026-09-13 | Claude | Closed BUG-011's last recorded residual: `store/workspaceIO.ts`'s `prepareWorkspaceState` (the shared preface for Save and Save As) now re-checks `pending` on the store it re-reads after `resolvePendingDatasets()`, mirroring `packProjectContent.ts`'s own finding #2 fix, and refuses the save by name rather than serializing a book that turns pending during that await. `lib/workspaceSerialize.ts`'s `pending` comment updated to say the guarantee now holds on every explicit export path (Save, Save As, workbook transfer, Pack Project) | 1 new spec (`workspaceIO.test.ts`), sabotage-verified (removing the re-check fails exactly this spec, 41 others in the file untouched), source restored byte-identical; `tsc -b --force`/`eslint --max-warnings=0` clean; scoped vitest (`workspaceIO.test.ts` + `src/store` + `architecture.test.ts`; the row first cited a `workspaceSerialize.test.ts` that does not exist) 1755 passed, 0 `FAIL`; `npm run build` clean after `rm -rf node_modules/.vite`, eager bundle 916,466 B at the real parent `dafaa333` (the agent cited `2920e34a`, an ancestor with the identical tree) -> 916,645 B here, +179 B, 3,755 B under the unmoved 920,400 B budget; `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
 | 2026-09-14 | Claude (agent) | Filed BUG-012..BUG-015, one per divergence documented as an `it.fails` by the P4.2 canonical regression matrix (commit `1593cdee`, `frontend/src/lib/regressionMatrix.test.ts`): D1 a saved x-axis break reaches export/reopen but never renders on screen after reopen (P2); D2 a waterfall view's offset never reaches the export wire (P2); D3 a legend rename loses its unit on screen but keeps it on export (P3); D4 hiding a series shifts later series' export palette colour but not the canvas' (P2). Each entry cites the underlying code by file:line (re-verified against the code, not copied from the test's own comments) and names its reproducing `it.fails` test; none is fixed here — plans-only, tests-only slice, no source touched | Design-time findings, code-read and file:line-cited; reproducing tests are the pre-existing `it.fails` block in `regressionMatrix.test.ts` (not new); `uv run pytest -q tests/test_repo_integrity.py` run to confirm the plan edit alone does not break repository-integrity checks |
 | 2026-09-14 | Claude (agent) | Filed BUG-016 (P2): a grouped figure's per-series styling reaches the canvas — `plotGroupSplit.ts`'s channel map gives every level its source channel's style and `buildOpts` applies it — but `routes/export_figures.py`'s `group_col` branch (`:81-85` documents the choice, `:236-238` returns `_ResolvedFigure(..., None, ...)`) drops `series_styles` outright, so the exported curves are solid, default-width and default-coloured. Found by the 2026-09-14 adversarial review round of the P4.2 regression matrix, which showed the matrix's own GROUP style comparison was reading a wire field the renderer never consults. Same round: renamed BUG-012..BUG-015's reproducing tests (the five bare `it.fails` pins became explicit `DIVERGENCE (BUG-01x)` tests asserting BOTH concrete values and their difference) and updated each entry's fix checklist to say the fix INVERTS the assertion rather than flipping an `it.fails`. Not fixed here — tests/fixtures/plans only, no product code touched | Design-time finding, code-read and file:line-cited, and measured on both paths (canvas: three levels at `dash: [8, 4]`, `width: 2`; resolver: `styles=None` under `group_col`). Reproducing test: `regressionMatrix.test.ts`'s `DIVERGENCE (BUG-016)` (new this round). `uv run pytest -q tests/test_repo_integrity.py`; `npx tsc -b --force`; `npx eslint src --max-warnings=0`; `npx vitest run src/lib/regressionMatrix.test.ts src/lib/figureSpec.a8.test.ts src/architecture.test.ts` |
+| 2026-09-19 | Claude (agent) | Filed UX-004 (P1) from an owner report on the same surface as UX-001, and fixed its objective half. Measured, by reading every site: three mutually contradicting kind→glyph maps, in which `▦` meant Folder AND Figure page AND Worksheet AND two different commands, `▤` meant Workbook AND Report, `▥` meant Worksheet AND all five artifact kinds at once, and a frozen publication figure had NO type mark because `❄` replaced it. Corrected two details of the report while confirming it: there is no Matrix node kind (the `rows×cols` row is a figure page; `LibraryNodeKind` has eight members), and `⠿`/`⋯` were already resting cues. Fixed with one source of truth, `frontend/src/components/Library/nodeIcons.ts`, a vocabulary separated by SILHOUETTE rather than hatch (`▰ ▤ ≡ ⌁ ◇ ◆ ▭ ¶`), `▦`/`▥` retired from the vocabulary outright, type and status split into two channels, and the two kind-naming commands wearing their kind's mark. Density: the preview toggle `∿` joins the drag handle and menu button as an opacity-only resting cue (still focusable, still announced). Recorded in the entry which half is measured and which is design judgement the owner must eyeball, since no screenshot of the reported project exists here | `nodeIcons.test.ts` (new, 11 cases — injectivity over the complete kind set, completeness, no-emoji, command/status disjointness, and three non-rot checks) + 7 new cases in `rowIconAccessibility.test.tsx`, whose header now records that the earlier UX-001 audit checked marks were LABELLED, never DISTINGUISHABLE — the gap that let this ship. Every new assertion sabotage-verified (see the commit body's table); `npx tsc -b --force`, `npx eslint src --max-warnings=0`, full `npx vitest run`, `npm run build` + bundle ratchet, and `uv run pytest -q tests/test_repo_integrity.py` all clean — numbers in the commit body |
 | 2026-09-15 | Claude (agent) | Filed UX-003 (P3) from the adversarial review of `b749f804` (the four-lazy-seam bundle diet): that commit claimed "chunk-load failures are reported, never silent" and "a failed load is never cached, so the next gesture retries" without qualification, but neither holds for a `lazy()`-shaped seam — measured 2026-09-15, `frontend/src` has **0** files matching `componentDidCatch\|getDerivedStateFromError\|ErrorBoundary` against **17** `= lazy(` sites in nine modules, so a failed chunk unmounts the React root with no toast, no status and no console error. Narrowed the claim in `PRIMARY_SOFTWARE_AUDIT_PLAN.md` P4.1 and `BUNDLE_HEADROOM.md` slice 2 rather than adding a boundary, which is its own design decision. Same round: `lib/clipboard.ts` gained `copyTextAsync` so workbook Copy starts its clipboard write inside the click's own task (the chunk `await` was spending the user activation), and every `runLazy(...).then(f).catch(...)` became the two-argument `.then(f, onLoadFailure)` so a loaded handler's throw is no longer swallowed with the load's | Design-time finding for UX-003, code-read and measured by grep; the two code fixes ship with it and are sabotage-verified. `uv run pytest -q tests/test_repo_integrity.py`; `npx tsc -b --force`; `npx eslint src --max-warnings=0`; scoped vitest; `node scripts/check-bundle-size.mjs` |
 | 2026-09-15 | Claude (agent) | Filed BUG-017 (P1): a dataset with a NaN or ±Infinity cell cannot be reopened after Save — `workspaceSerialize.ts:198`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts:38-40`'s `isNumberArray` rejects `null`, so `parseWorkspaceDataset` throws and takes the WHOLE workspace load down with it (not just the one dataset); `cellEdit.ts:129-131`'s `insertRows` mints `Number.NaN` for every blank inserted row, so it is reachable by a plain, common edit. `-0` separately round-trips silently to `0` (fail-safe only where a peak-table fingerprint is watching it). Found closing the round-3 review of the P2.1 peak-table digest (`xrd_review3.md` NIT 4) as a pre-existing bug outside that commit's diff; not fixed here — plans-only. Verified by a probe against the real `serializeWorkspace`/`parseWorkspace` before filing (run in a scratch, uncommitted `*.test.ts`, then removed) | Probe result: NaN case throws exactly `dataset 0 ("scan.dat") has an invalid data structure`; `-0` case reads back as `0` (`Object.is` false). `uv run pytest -q tests/test_repo_integrity.py` run to confirm the plan/bugs-doc edit alone does not break repository-integrity checks; no product code touched, no regression test committed yet (see the entry's Tests and acceptance) |
 | 2026-09-16 | Claude (agent) | **BUG-017 fixed** (P1, data loss): a dataset holding a `NaN`, `±Infinity` or `-0` cell now survives every JSON boundary the app puts it through. New `frontend/src/lib/nonFiniteCells.ts` owns ONE encoder/decoder pair — a value `JSON.stringify` cannot represent is written as the string `String(value)` gives for it (`"NaN"`, `"Infinity"`, `"-Infinity"`, `"-0"`) and read straight back — applied symmetrically by `lib/workspaceSerialize.ts` (`data` and `raw`) and `lib/workspaceDatasetParse.ts` (`isWireCellArray` + `decodeDataStruct` before `sanitizeDataStruct`). Its own module so neither of those files (282/264 lines) is bulked toward the 500-line ceiling. The same hole existed separately in `lib/workbookTransfer.ts`'s `buildTransferPackage` (its own `JSON.stringify(pkg)`, re-parsed through `parseWorkspace`, so workbook Copy/Paste and Duplicate refused the whole workbook) and is fixed with the same helper; `lib/autosave.ts` and `store/packProjectContent.ts` share `serializeWorkspace` and are covered by the one change. NO schema bump and NO output change for ordinary data: the encoders return their INPUT object when nothing needs a sentinel, so the graph `JSON.stringify` walks is literally the pre-fix one. Two rulings recorded in the code and the entry: a pre-fix `null` cell stays a REJECTION (it meant NaN, +Infinity OR -Infinity — reading it as NaN would fabricate a value the file does not contain), and a malformed entry still refuses the WHOLE workspace rather than skipping one dataset with a warning (a skipped dataset is invisible and the next Save would delete it permanently; refusing leaves the file intact — and the throw is now unreachable for any file the app itself wrote). One residual recorded, not fixed: `lib/figureDocument.ts:442`'s frozen figure snapshot never throws but is lossy for `±Infinity` (both become `NaN`) and `-0` | 17 new specs (`frontend/src/lib/nonFiniteCells.test.ts`), the NaN minted through the app's own `insertRows`; every one sabotage-verified across 7 sabotages (encoder NaN/±Inf branches → 9 fail; encoder `-0` branch → 5; decoder → 8; cell check reverted to number-only → 10; byte-identity by-reference return → 1; `workbookTransfer` call site → 1; cell check widened to accept `null` → 2), source restored byte-identical. `npx tsc -b --force` exit 0; `npx eslint src --max-warnings=0` exit 0; `npx vitest run src/lib src/store src/architecture.test.ts` 358 files / 7,076 tests, 7,075 passed — the single failure, `freezeRegressionMatrixCheck.test.ts`, is an unrelated 30 s timeout under full-scope parallelism (it spawns a NESTED vitest run) and passes in 19.6 s alone on the same tree. `npm run build` after `rm -rf node_modules/.vite`: eager bundle 910,971 B at the real parent `56bb3599` → 911,835 B here, **+864 B**, 8,565 B under the unmoved 920,400 B budget. `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
 | 2026-09-19 | Claude (agent) | Filed BUG-018 (P2): all ten backdrop dialogs in `components/overlays/` claim Escape with `window.addEventListener("keydown", …, true)` + `stopPropagation()`, which does not stop a same-node same-phase sibling, so two stacked dialogs both act on ONE keystroke — measured 2 → 0 open `[role="dialog"]` for Preferences+Shortcuts, Preferences+Help and Preferences over a pending `ConfirmDialog`, the last also resolving the confirmation `false` on the keystroke that dismissed Preferences. Pre-existing (the Escape effects are byte-identical to before `cee0494f`); what was new was R1 being CLOSED and the audit row flipped to "window capture, kept" on the claim that a backdrop dialog can never be out-ranked — true over a non-dialog surface, false dialog-over-dialog. The preferred fix was BUILT and MEASURED (all ten onto `useEscapeSurface("window", …)`; it does fix the ladder, confirm stays pending on the first Escape) and then REVERTED: `escapeStack`'s `isEditingTarget` early return made Help, Separate, Combine and Split Escape-DEAD from their own documented landing spots (an `<input>`/`<select>` each), 9 failed / 264 passed. Narrowed R1 instead, corrected the audit row, recorded NITs 4 and 5 as residuals R12/R13, and fixed review NIT 3 (Preferences landed on the first Theme segment, which under `theme: "light"` is an `aria-selected="false"` "Dark" button; it now lands on the SELECTED one, pinned in both themes) | 3 new specs (`components/overlays/stackedDialogEscape.test.tsx`) + 1 new 2-case `it.each` (`PreferencesDialog.test.tsx`), all sabotage-verified across 5 sabotages, source restored byte-identical; round 7's per-dialog focus-hook sabotage property re-verified after the landing-spot change (Preferences alone → RED 2/10). Also corrected the FIFTH-recurrence wrong-parent bundle record on `cee0494f`: its parent is `4179b166`, not `b10bcad3` (three commits back, with two P4.1 commits that moved 218 eager lines between them) — re-measured in a throwaway worktree, `4179b166` **889,496 B** → `cee0494f` **889,498 B**, +2 B; the delta was right, both absolute numbers were wrong by 21 B |
+| 2026-09-19 | Claude (agent) | **BUG-019 fixed** (P1, silent state corruption) and **BUG-020 filed + fixed** (P2, silent data loss). BUG-019: `lib/techniqueViewMemory.ts`'s `captureTechniqueView` spread its capture source whole (`{ ...liveView, labels }`), and `LiveViewSource` is satisfied STRUCTURALLY — so the three callers that hand it the entire `AppState` (`store/windows.ts:151`'s `focusedRebindPatch`, `useWorkspaceAutosave.ts:283`'s debounced autosave, `store/workspaceIO.ts:102`'s Save/Save As) stored `datasets`, `plotWindows` AND the PREVIOUS `techniqueViewMemory` in every entry. Only the slot being written is replaced, so a single technique recurses linearly but ALTERNATING two — switch to the map, switch back — makes each slot absorb the other one generation late: `size(k) ~ size(k-1) + size(k-2) + C`, Fibonacci-like, ratio -> phi ~ 1.62 (an earlier revision of this row said `2 x size(k-1) + C`; measured on `281ee552`: 80,340 -> 241,003 -> 482,002 -> 883,664 -> 1,526,325 -> 2,570,648 -> 4,257,632 -> 6,988,939, ratios 3.0, 2.0, 1.83, 1.73, 1.68, 1.66, 1.64). Autosave `JSON.stringify`s that map on the thread that draws, 800 ms after every dataset switch and every dataset add, which is why the owner's ROI box integration produced an empty new plot AND blanked previously plotted datasets — the data was never wrong, the main thread simply stopped. Fixed by projecting the capture source down to its nine declared fields inside `captureTechniqueView`, so it holds for all four callers and any future one; no schema change and no behaviour change to the memory itself. Two review corrections carried in the same commit: the earlier claim that "nothing is reported" was FALSE — `lib/autosave.ts:88` + `StatusBar.tsx:139-145` do render a persistent `role="alert"` autosave-failing indicator — so the claim is narrowed to the stall itself, and the one genuinely wrong surface (a status line hardcoded to "storage full or unavailable" for what was a `serializeWorkspace` failure) now names the real reason. BUG-020: `Stage/useCutLanding.ts` minted `cut-N` ids from a private page-lifetime counter instead of `store/idSeq.ts`'s collision-free sequence — filed with its own reproduction rather than left as a footnote, since it reproduces the owner's "Apply made a new plot that was empty/wrong" symptom class independently of the stall | Measured before/after against the RUNNING app (Playwright + real backend) on the owner's exact sequence: `JSON.stringify(techniqueViewMemory).length` 5,440,727 -> 16,322,222 -> 32,387,084 -> 69,957,577 -> 123,592,932 -> 214,798,775 -> 359,639,968 -> `RangeError: Invalid string length` -> page unresponsive >45 s; after the fix a flat 344 B across all 26 switches with identical canvas ink (537,953 / 51,795) every time. A second run on two ordinary imported XRDML files hit 73.9 MB in ten switches and stopped answering any page evaluation from switch nine for the remaining 600 s. BUG-020 probed on both trees: `['cut-1','cut-1']`, `activeId` resolving to the OLD rows, and `removeDatasets` emptying the library, versus unique ids and an independent delete after. 10 new tests across four files, all sabotage-verified — the whole-object spread and the recursion-only variant each redden 4 (2 in `lib/techniqueViewMemory.test.ts`, 2 in `store/techniqueMemoryGrowth.test.ts`); restoring the private cut counter reddens all 3 in `Stage/useCutLanding.test.ts`; hardcoding the autosave wording reddens both new `useWorkspaceAutosave.test.ts` cases; and a per-field sweep of `projectLiveView` (scope: the two memory files + `store/windows.test.ts`) now reddens on EVERY one of the nine — xKey 4, yKeys 8, yScale 5, xScale 2, seriesStyles 9, seriesLabels 8, seriesOrder 2, errKeys 8, hiddenChannels 8 (the previous row claimed 1 for a dropped field, which was the weaker `hiddenChannels: []` variant, and `xScale` had NO coverage at all before this round). `npx tsc -b --force` 0; `npx eslint src --max-warnings=0` 0; SCOPED `npx vitest run` over the six affected/adjacent files (`lib/techniqueViewMemory.test.ts`, `store/techniqueMemoryGrowth.test.ts`, `Stage/useCutLanding.test.ts`, `useWorkspaceAutosave.test.ts`, `store/windows.test.ts`, `architecture.test.ts`) 6 files / 138 passed, 0 `FAIL` — the FULL suite is NOT verified on this tree: two attempts were killed by host contention (a second agent's gate running concurrently), not by a test failure, so CI is the remaining gate; `uv run ruff check src tests tools` 0; `uv run mypy src` 0 (297 files); `uv run pytest -q tests/test_repo_integrity.py` 13 passed (12 + the new heading guard). Eager bundle 875,755 B at the parent `281ee552` -> 876,018 B here, +263 B, 451 B under the unmoved 876,469 B budget |

@@ -8,28 +8,30 @@
 // instead of overwriting the focused one — the payoff for an `.opj` import
 // with many graph windows.
 
-import { lazy, Suspense, useState } from "react";
+import { useState } from "react";
 import { plural } from "../../lib/plural";
 
 import { recordWorkbookOpen } from "./libraryOpen";
+import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { originFidelityLabel, originFidelityStatusLabel } from "../../lib/originFidelity";
 import { figureLabel, type OriginFigureEntry } from "../../lib/originFigures";
 import { originPreviewDataUrl } from "../../lib/originPreview";
 import { resolveOriginFigureSources } from "../../lib/originSources";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
+import { lazyRegion } from "../../lib/lazyRegion";
 
 /** The saved-preview ToolWindow renders only after the "▣" button is clicked,
  *  and nothing else in the entry graph imported it — so a static import here
  *  put the window, `components/overlays/ToolWindow.tsx` and `lib/workshopHelp.ts`
- *  in the eager bundle for a control most sessions never press. `lazy` + a
- *  `<Suspense fallback={null}>` is the same shape `Library.tsx` already uses
- *  for `EditableFiguresSection` and `AppOverlays.tsx`'s `lazyPanel()` uses for
- *  every on-demand panel: the row itself, its glyph button and the toggle are
- *  untouched and still eager, so the ONLY difference is that the window paints
- *  one chunk-fetch later the first time it is opened in a session.
- *  Measured: 917,136 -> 912,461 B eager. */
-const OriginSavedPreviewWindow = lazy(() => import("./OriginSavedPreviewWindow"));
+ *  in the eager bundle for a control most sessions never press. `lazyRegion`
+ *  (UX-003's error boundary + retry) is the same shape `Library.tsx` already
+ *  uses for `EditableFiguresSection` and `AppOverlays.tsx`'s `lazyPanel()`
+ *  uses for every on-demand panel: the row itself, its glyph button and the
+ *  toggle are untouched and still eager, so the ONLY difference is that the
+ *  window paints one chunk-fetch later the first time it is opened in a
+ *  session. Measured: 917,136 -> 912,461 B eager. */
+const OriginSavedPreviewWindow = lazyRegion(() => import("./OriginSavedPreviewWindow"), "Preview");
 
 export default function FigureRow({ entry, depth = 0, treeMode = false }: {
   entry: OriginFigureEntry;
@@ -37,7 +39,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
   /** L0.25 (PR #139 review) — set by LibraryTree only: single click SELECTS
    *  (librarySelection, visible highlight), double-click/Enter opens;
    *  right-click selects. Unset (flat FiguresSection): the established
-   *  click-applies behavior is unchanged. The ⊞/▦/G/▣ buttons keep their
+   *  click-applies behavior is unchanged. The ⊞/▤/G/▣ buttons keep their
    *  one-click actions in both modes — they're commands, not the row. */
   treeMode?: boolean;
 }) {
@@ -86,9 +88,11 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
         onDoubleClick={treeMode ? () => openAndRemember() : undefined}
         onContextMenu={treeMode ? select : undefined}
       >
-        {/* Node-type glyph (UX-001): same aria-hidden+title convention as
-         *  Tree's Folder (▦)/Workbook (▤)/Worksheet (▥) glyphs. */}
-        <span className="qzk-ds-icon" aria-hidden="true" title="Graph">⌁</span>
+        {/* Node-type glyph (UX-001), from the one shared vocabulary
+         *  (UX-004) every Library view now reads. */}
+        <span className="qzk-ds-icon" aria-hidden="true" title={LIBRARY_NODE_LABEL["origin-figure"]}>
+          {LIBRARY_NODE_GLYPH["origin-figure"]}
+        </span>
         <span className="qzk-fig-name">{figureLabel(entry)}</span>
         <span className="qzk-fig-meta">
           {entry.stem}{fidelity ? ` · ${fidelity.status === "exact" ? "=" : "≈"}` : ""}
@@ -109,7 +113,11 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
           title={`Open source workbook ${source.book}; select X/Y/error columns`}
           onClick={() => void openOriginFigureSource(entry.id, source.datasetId)}
         >
-          ▦
+          {/* This command NAMES a node kind ("open the source workbook"), so
+           *  it deliberately wears that kind's mark rather than inventing one.
+           *  It used to wear ▦ — which meant Folder in the very same tree
+           *  (UX-004). */}
+          {LIBRARY_NODE_GLYPH.workbook}
         </button>
       ))}
       <button
@@ -150,13 +158,11 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
       )}
       </div>
       {showSavedPreview && savedPreviewSrc && (
-        <Suspense fallback={null}>
-          <OriginSavedPreviewWindow
-            entry={entry}
-            src={savedPreviewSrc}
-            onClose={() => setShowSavedPreview(false)}
-          />
-        </Suspense>
+        <OriginSavedPreviewWindow
+          entry={entry}
+          src={savedPreviewSrc}
+          onClose={() => setShowSavedPreview(false)}
+        />
       )}
     </div>
   );

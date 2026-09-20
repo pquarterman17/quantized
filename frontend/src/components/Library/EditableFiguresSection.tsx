@@ -5,6 +5,7 @@ import { useState } from "react";
 import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
 import { SESSION_BUSY_MSG } from "../../store/figureLifecycle";
 import { figurePublicationSourceUnavailable } from "../../store/figurePublicationLibrary";
+import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { useApp } from "../../store/useApp";
 import { askConfirm } from "../overlays/ConfirmDialog";
 
@@ -46,7 +47,16 @@ export default function EditableFiguresSection() {
               title={`open editable figure "${document.name}"`}
               onClick={() => open(document.id)}
             >
-              <span className="qzk-fig-name">◇ {document.name}</span>
+              <span className="qzk-fig-name">
+                <span
+                  className="qzk-ds-icon"
+                  aria-hidden="true"
+                  title={LIBRARY_NODE_LABEL["editable-figure"]}
+                >
+                  {LIBRARY_NODE_GLYPH["editable-figure"]}
+                </span>
+                {document.name}
+              </span>
               <span className="qzk-fig-meta">{dataset?.name ?? "unbound"}</span>
             </button>
             <button

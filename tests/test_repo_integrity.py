@@ -558,3 +558,49 @@ def test_route_error_details_are_ascii() -> None:
         "Non-ASCII HTTPException(detail=...) literal(s) in routes/ (use "
         "plain ASCII, e.g. '--' not an em dash):\n  " + "\n  ".join(offenders)
     )
+
+
+def test_bug_tracker_headings_are_well_formed() -> None:
+    """A spliced plan edit must not be able to hide behind a green suite.
+
+    BUG-019's own entry was written into ``plans/BUGS_AND_ISSUES.md`` by
+    inserting before the first match of ``## New issue template`` -- which
+    was a backtick-quoted MENTION of that heading inside BUG-010's review
+    prose, not the heading itself. The entry landed mid-sentence inside
+    another entry, its own ``## BUG-019 -- ...`` title became prose, and the
+    displaced tail created a second, malformed ``## New issue template``
+    heading. Every existing check passed, so nothing said a word.
+
+    Two cheap invariants catch that shape:
+
+    1. The three structural headings appear exactly once each.
+    2. Every ``BUG-``/``UX-``/``PERF-``/``FEATURE-`` id that the Active
+       queue table lists has a matching ``## <ID>`` section heading -- a
+       title demoted to prose (or an id filed with no entry at all) fails
+       here.
+    """
+    doc = (ROOT / "plans" / "BUGS_AND_ISSUES.md").read_text(encoding="utf-8")
+    lines = doc.splitlines()
+
+    for heading in ("## Active queue", "## New issue template", "## Change log"):
+        count = sum(1 for line in lines if line.strip() == heading)
+        assert count == 1, (
+            f"{heading!r} appears {count} times in plans/BUGS_AND_ISSUES.md "
+            "(expected exactly 1) -- a duplicated or malformed structural "
+            "heading usually means an entry was spliced at the wrong anchor."
+        )
+
+    # Ids whose own ## section heading starts the line. A heading may be
+    # struck through (## ~~BUG-012 -- ...~~), which is the documented way a
+    # fixed entry is marked.
+    entry_ids = set(re.findall(r"^## ~*((?:BUG|UX|PERF|FEATURE)-\d+)", doc, flags=re.MULTILINE))
+    # Ids the Active queue lists in its first column.
+    queue_ids = set(re.findall(r"^\| ((?:BUG|UX|PERF|FEATURE)-\d+) \|", doc, flags=re.MULTILINE))
+
+    missing = sorted(queue_ids - entry_ids)
+    assert not missing, (
+        "plans/BUGS_AND_ISSUES.md lists these ids in the Active queue but has "
+        "no '## <ID>' section heading for them: " + ", ".join(missing) + ". "
+        "Either the entry is absent, or its heading was demoted to prose by a "
+        "mis-anchored insert."
+    )
