@@ -5,6 +5,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { buildWorkbookRowMenu } from "./workbookRowMenu";
+import { buildLibraryTileMenu } from "./libraryTileMenu";
 import { buildLibraryHierarchy, type LibraryNode } from "../../lib/libraryHierarchy";
 import type { WorkbookNode } from "../../lib/workbooks";
 import { useApp } from "../../store/useApp";
@@ -65,5 +66,14 @@ describe("buildWorkbookRowMenu — dynamic Move-to-folder list", () => {
     const wb: WorkbookNode = { id: "w1", name: "W" };
     const items = buildWorkbookRowMenu(node(wb), () => {});
     expect(items.some((i) => "label" in i && i.label.startsWith("Move to"))).toBe(false);
+  });
+
+  it("exposes the same enabled Properties command through the Tree and shared Details/Tiles builder", () => {
+    const workbook: WorkbookNode = { id: "w1", name: "W" };
+    const workbookNode = node(workbook);
+    const tree = label(buildWorkbookRowMenu(workbookNode, () => {}), "Properties…");
+    const shared = label(buildLibraryTileMenu(workbookNode, { open: () => {}, stageReturn: () => {} }), "Properties…");
+    expect(tree?.disabled).toBe(false);
+    expect(shared?.disabled).toBe(false);
   });
 });

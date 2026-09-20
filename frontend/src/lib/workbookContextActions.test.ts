@@ -16,6 +16,7 @@ import type { WorkbookNode } from "./workbooks";
 import { useApp } from "../store/useApp";
 import { useQuickPlotWithDialog } from "../store/quickPlotWithDialog";
 import { useCombineDialog } from "../store/combineDialog";
+import { useWorkbookPropertiesDialog } from "../store/workbookPropertiesDialog";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import type { ContextMenuItem } from "../components/overlays/ContextMenu";
 
@@ -67,6 +68,7 @@ beforeEach(() => {
     workbookLastChild: {},
     plotWindows: [],
   });
+  useWorkbookPropertiesDialog.setState({ properties: null });
 });
 
 describe("workbook menu — Quick Plot (PR F, L0.36)", () => {
@@ -190,10 +192,18 @@ describe("workbook menu — disabled-with-reason items (L0.36)", () => {
     expect(onBrowse).toHaveBeenCalledOnce();
   });
 
-  it("Properties is always disabled with its PR D reason", () => {
-    const item = menuItemFor(workbookSourceActions.find((a) => a.id === "workbook.properties")!, target({ id: "w1", name: "W" }));
-    expect(item.disabled).toBe(true);
-    expect(item.title).toBe("arrives with Details/Properties (PR D)");
+  it("Properties is enabled and opens the canonical read-only projection", () => {
+    useApp.setState({ folders: [{ id: "f1", name: "Runs", parentId: null, order: 0 }] });
+    const item = menuItemFor(
+      workbookSourceActions.find((a) => a.id === "workbook.properties")!,
+      target({ id: "w1", name: "W", folderId: "f1", source: { kind: "path", path: "C:/source.dat" } }),
+    );
+    expect(item.disabled).toBe(false);
+    expect(item.title).toBeUndefined();
+    item.run();
+    expect(useWorkbookPropertiesDialog.getState().properties).toMatchObject({
+      name: "W", location: "Project / Runs", sourcePath: "C:/source.dat", worksheetCount: 0,
+    });
   });
 
   it("Reveal Source is disabled with a reason when no source is recorded", () => {

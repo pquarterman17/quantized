@@ -76,6 +76,7 @@ import { useRecode } from "./store/recode";
 import { useLevelOrderPanel } from "./store/levelOrderPanel";
 import { useCombineDialog } from "./store/combineDialog";
 import { useRecipeManager } from "./store/recipeManager";
+import { useWorkbookPropertiesDialog } from "./store/workbookPropertiesDialog";
 import { lazyRegion } from "./lib/lazyRegion";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
@@ -192,6 +193,9 @@ const RecodePanel = lazyPanel(() => import("./components/workshops/recode/Recode
 // store/levelOrder.ts — see that file's header: only THIS lazy import ever
 // reaches the heavy store, keeping it off the eager bundle entirely.
 const LevelOrderPanel = lazyPanel(() => import("./components/workshops/levelorder/LevelOrderPanel"), "LevelOrderPanel");
+// UX-007: invoked from the shared workbook menu registry, so its tiny store
+// keeps this dialog out of the eager Library renderer graph.
+const WorkbookPropertiesDialog = lazyPanel(() => import("./components/Library/WorkbookPropertiesDialog"), "WorkbookPropertiesDialog");
 
 export default function AppOverlays() {
   const helpOpen = useHelp((s) => s.open);
@@ -254,6 +258,7 @@ export default function AppOverlays() {
   const packProjectOpen = usePackProjectPanel((s) => s.open);
   const recodeOpen = useRecode((s) => s.open);
   const levelOrderOpen = useLevelOrderPanel((s) => s.open);
+  const workbookPropertiesOpen = useWorkbookPropertiesDialog((s) => s.properties !== null);
   // Heard while the dialog chunk is still unloaded -- the store owns the
   // listener so the Data command can dispatch before anything is mounted.
   useEffect(listenForSqliteQuery, []);
@@ -325,6 +330,7 @@ export default function AppOverlays() {
       {packProjectOpen && <PackProjectPanel />}
       {recodeOpen && <RecodePanel />}
       {levelOrderOpen && <LevelOrderPanel />}
+      {workbookPropertiesOpen && <WorkbookPropertiesDialog />}
       <Toaster />
     </>
   );
