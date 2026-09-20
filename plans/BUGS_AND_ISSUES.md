@@ -8148,8 +8148,8 @@ Verification passed: focused plus architecture 271/271; full frontend 694
 files, 11,755 passed and 2 expected failures; forced TypeScript; ESLint;
 production build/bundle; and repository integrity 13/13. Eager JS measured
 877,160 B, 1,022 B below the unchanged 878,182 B budget and 743 B below the
-`origin/main` baseline. Implementation commit and PR are appended here after
-publication.
+`origin/main` baseline. Implementation commit: `84679e60`; PR:
+https://github.com/pquarterman17/quantized/pull/381.
 
 Full evidence, reproduction, and gate expectations are in
 `POST_RELEASE_PROBLEM_AUDIT.md`.

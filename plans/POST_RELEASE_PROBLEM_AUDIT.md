@@ -147,8 +147,8 @@ identity contract. Verification: focused/architecture 271 tests; full frontend
 694 files / 11,755 passed / 2 expected failures; forced TypeScript, ESLint,
 production build and bundle gate; repository integrity 13/13. Eager JS is
 877,160 B, 1,022 B under the unchanged 878,182 B ceiling and 743 B smaller than
-the `origin/main` baseline. Implementation commit and PR are recorded in the
-living tracker's matching completion record.
+the `origin/main` baseline. Implementation commit: `84679e60`; PR:
+https://github.com/pquarterman17/quantized/pull/381.
 
 **Suggested owner/model:** Claude Sonnet-class model for persistence-contract
 reliability; ChatGPT-Sol for the final UI/reopen acceptance check.
