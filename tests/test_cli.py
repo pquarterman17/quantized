@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Iterator
 from unittest.mock import patch
 
 import pytest
 
-from quantized import cli
+from quantized import __version__, cli
 
 
 @pytest.fixture(autouse=True)
@@ -105,6 +106,30 @@ def test_dev_and_desktop_are_mutually_exclusive() -> None:
     with pytest.raises(SystemExit) as exc:
         cli.main(["--dev", "--desktop"])
     assert exc.value.code == 2
+
+
+@pytest.mark.parametrize("alias", ["qz", "quantized"])
+def test_version_exits_before_server_or_browser(
+    alias: str, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Both installed console-script aliases expose the package version.
+
+    The aliases share ``quantized.cli:main``; invoking the entry point with
+    either command's conventional arguments must terminate in argparse before
+    any server or browser startup path is reached.
+    """
+    with (
+        patch("quantized.cli.uvicorn.run") as run,
+        patch("quantized.cli._open_when_healthy") as opener,
+    ):
+        monkeypatch.setattr(sys, "argv", [alias, "--version"])
+        with pytest.raises(SystemExit) as exc:
+            cli.main()
+
+    assert exc.value.code == 0
+    assert capsys.readouterr().out == f"{__version__}\n"
+    run.assert_not_called()
+    opener.assert_not_called()
 
 
 # ── --calc (standalone DiraCulator launcher, MAIN_PLAN #22) ─────────────────

@@ -76,7 +76,9 @@ jobs:
           source .smoke-venv/bin/activate
           uv pip install "$wheel"
           qz --help
-          python -c "import quantized; print('quantized', quantized.__version__)"
+          qz --version
+          quantized --version
+          python -c "import quantized; qz_version = quantized.__version__; print('quantized', qz_version)"
           python -c "
           import importlib.resources
           pkg = importlib.resources.files('quantized')
