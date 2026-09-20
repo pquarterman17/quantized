@@ -5,13 +5,27 @@
 // every view that reads the analysis view (Tabulate, Distribution, …) honors the
 // filter for free. Pure: filter + data in → the set of failing row indices out.
 
-import type { ColumnFilter, DataFilter, DataStruct } from "./types";
+import { channelModelingType } from "./modeling";
+import type { ColumnFilter, DataFilter, DataStruct, Dataset } from "./types";
+
+/** Only predicates whose shape still matches the live column meaning are
+ * eligible to affect analysis.  A type override or re-import can invalidate a
+ * saved predicate; keeping it in the document makes the change reversible,
+ * while making it inert prevents an invisible constraint from changing plots,
+ * fits, exports, or statistics. */
+export function applicableFilter(ds: Dataset): DataFilter {
+  return (ds.filter || []).filter(
+    (f) =>
+      (f.col === -1 || f.col in ds.data.labels) &&
+      f.kind === (f.col >= 0 && channelModelingType(ds, f.col) !== "continuous" ? "set" : "range"),
+  );
+}
 
 /** Is a predicate actually constraining anything? An inactive one passes every
  *  row (so a half-configured card doesn't hide all data). */
 export function isActive(f: ColumnFilter): boolean {
   if (f.kind === "range") return Number.isFinite(f.min) || Number.isFinite(f.max);
-  return Array.isArray(f.values) && f.values.length > 0;
+  return !!f.values?.length;
 }
 
 /** Does row value `v` pass a single (assumed-active) predicate? */
@@ -22,17 +36,13 @@ function passesOne(f: ColumnFilter, v: number): boolean {
     if (Number.isFinite(f.max) && v > (f.max as number)) return false;
     return true;
   }
-  return (f.values ?? []).includes(v);
+  return f.values!.includes(v);
 }
-
-const colValue = (data: DataStruct, col: number, row: number): number =>
-  col < 0 ? data.time[row] : data.values[row]?.[col];
 
 /** Does `row` pass ALL active predicates (AND across columns)? */
 export function rowPasses(filter: DataFilter | undefined, data: DataStruct, row: number): boolean {
-  if (!filter) return true;
-  for (const f of filter) {
-    if (isActive(f) && !passesOne(f, colValue(data, f.col, row))) return false;
+  for (const f of filter ?? []) {
+    if (isActive(f) && !passesOne(f, f.col < 0 ? data.time[row] : data.values[row][f.col])) return false;
   }
   return true;
 }
@@ -42,7 +52,7 @@ export function rowPasses(filter: DataFilter | undefined, data: DataStruct, row:
  *  can then skip pruning entirely (identity fast-path in rowstate). */
 export function filteredOutRows(filter: DataFilter | undefined, data: DataStruct): Set<number> {
   const out = new Set<number>();
-  if (!filter || !filter.some(isActive)) return out;
+  if (!filter?.length) return out;
   const n = data.time.length;
   for (let r = 0; r < n; r++) {
     if (!rowPasses(filter, data, r)) out.add(r);

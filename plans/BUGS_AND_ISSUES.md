@@ -81,7 +81,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-002 | P2 | Desktop bridge write consent | A hard-linked alias of a declared raw source defeats the never-overwrite-your-own-source check | Codex | **FIXED 2026-09-20** — filesystem-identity guard shared by cached and payload checks; strict `xfail` converted to passing cross-platform coverage; PR #382 |
 | UX-004 | P1 | Origin project Library | Node-type marks COLLIDE — `▦` meant Folder, Figure page, Worksheet and two commands; `▤` meant Workbook and Report; `▥` meant Worksheet and five artifact kinds — across three contradicting per-view maps, and `▦ ▥ ▤` differ only by hatch at row size | Claude (agent) | **Collision half FIXED 2026-09-19** and locked by an injectivity test over the complete kind set (`nodeIcons.test.ts`); one shared vocabulary separated by silhouette. Density change (`∿` becomes a resting cue) and the choice of the eight marks are design judgement — owner eyeball on the reported project still required |
 | UX-002 | P3 | Workbook copy/paste | Cross-workbook lineage (`versionOf`, external `derivedFrom`) is dropped silently — the count is computed but never shown | Unassigned | Found in review, pinned by test, 2026-09-09 |
-| BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | Unassigned | Design-time finding, sabotage-verified, 2026-09-09 |
+| BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | ChatGPT-Sol | **FIX IMPLEMENTED 2026-09-20, pending PR/CI** — incompatible saved rules become globally inert without being deleted, the panel explains why they are paused and how to restore/replace/clear them, and every analysis/export consumer shares the same applicability gate |
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
 | BUG-005 | P2 | Corrections / Resample | A categorical channel was transformed like numeric data — its level codes became fractional and its meaning was discarded | Codex | **FIXED 2026-09-20** in `df06a518`: Corrections passes categorical codes through every y transform; Resample preserves a coincident grid and refuses a new one; reimport/persistence preserve levels and order |
 | BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **10 of 10 code sites fixed, re-verified 2026-09-14 by grepping every call site rather than trusting the count** (see the entry's "Every caller covered" box); `lib/barlayout.ts`'s label path was the last one, shipped 2026-09-12. The deferred end-to-end reproduction test (filter + Extract, at the `planExtract` layer) was added 2026-09-14 — see the entry's Reproduction checklist. Declared closed three times before it actually was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite had caught essentially none of it; adversarial review, per-branch sabotage and measuring claims caught all of it. Owner's real-data visual confirmation remains open |
@@ -803,24 +803,18 @@ deleted" test (see the PR that introduced this entry for the sabotage
 transcript — reverting the `stored?.kind === expectedKind ? stored :
 undefined` masking makes it fail as expected).
 
-#### What is NOT decided (needs an owner call)
+#### Resolution implemented 2026-09-20
 
-- Should `lib/datafilter.ts`'s row-filtering (`rowPasses`/`filteredOutRows`
-  — shared by Tabulate/Distribution/every `analysisData` consumer, all out
-  of scope for this slice) keep applying a kind-mismatched predicate at
-  all, or should it stop counting a predicate that no longer matches its
-  column's live classification as active anywhere in the app, not just in
-  this one panel's display?
-- If it should stop being applied everywhere: should the stale entry then
-  be auto-dropped from `dataset.filter` (simplest, but a silent auto-
-  mutation of saved state with no user action) or just made globally inert
-  while still stored (matches this slice's local masking, but means
-  `lib/datafilter.ts` itself needs to know about column classification —
-  a `DataStruct`/`Dataset`-level concern it currently has zero dependency
-  on)?
-- Should the panel instead surface the mismatch explicitly (a small
-  "N hidden filter(s) don't match this column's current type" notice) so
-  the inconsistency is visible rather than merely non-corrupting?
+- A kind-mismatched rule no longer affects rows anywhere. `applicableFilter`
+  is the shared gate used by the row-state chokepoint, so plots, fits,
+  statistics, worksheet counts, and exports cannot disagree.
+- The saved rule remains in `dataset.filter`. This makes an explicit type
+  override reversible: changing the column back restores the exact rule,
+  while silently deleting user work would not.
+- The Data Filter panel reports how many rules are paused and says how to
+  restore, replace, or clear them. Its kept-row count uses the same gate as
+  downstream analysis. A malformed/out-of-range in-memory rule also fails
+  closed instead of reaching analysis.
 
 #### Reproduction
 
@@ -859,13 +853,14 @@ undefined` masking makes it fail as expected).
 
 - [x] Minimal safe behavior defined — see "Conservative behaviour
   implemented" above.
-- [ ] Failure and ambiguous-data behavior defined for the UNRESOLVED
-  `lib/datafilter.ts` row-filtering side — owner call needed.
+- [x] Failure and ambiguous-data behavior defined for the row-filtering side:
+  mismatched and out-of-range rules are inert but retained for reversible
+  recovery.
 - [x] Data integrity and backward compatibility considered — no auto-
   deletion; a saved project with a now-mismatched predicate still opens and
   round-trips it unchanged.
-- [ ] UI wording/tooltips/accessibility for a "hidden filter" notice — not
-  built; see "What is NOT decided."
+- [x] UI wording/accessibility for a paused-filter notice — a visible
+  `role="status"` explanation includes the count and recovery choices.
 
 #### Tests and acceptance
 
@@ -874,18 +869,18 @@ undefined` masking makes it fail as expected).
 - [x] Relevant focused tests pass — full `datafilter` workshop suite green.
 - [x] Type-check/build/repository gates pass — see the PR that introduced
   this entry.
-- [ ] Agent verifies acceptance criteria for the unresolved half — blocked
-  on the owner call above.
+- [x] Agent verifies the resolved half through the shared row-state path,
+  hook count, and rendered panel notice.
 - [ ] Owner verifies when required.
 
 #### Completion record
 
-- PR/commit: — (Data Filter's display-masking half shipped in the commit
-  that added this entry; the `lib/datafilter.ts` row-filtering half is
-  still open.)
-- Automated tests: `useDataFilter.test.ts` — "a stale kind-mismatched
-  predicate is masked, not deleted (BUG-003)".
-- Agent verification: display-masking half only.
+- PR/commit: pending PR/CI on `codex/bug-003-visible-filter-semantics`.
+- Automated tests: `datafilter.test.ts`, `useDataFilter.test.ts`, and
+  `DataFilterPanel.test.tsx` cover the shared applicability gate, reversible
+  preservation, fail-closed invalid columns, kept count, notice, and Clear.
+- Agent verification: focused 66 tests, forced typecheck, and touched-file
+  lint pass before the full gate.
 - Owner verification: —
 - Notes: Tabulate and Stat Stage were out of scope for the slice that filed
   this — worth checking whether either has the same

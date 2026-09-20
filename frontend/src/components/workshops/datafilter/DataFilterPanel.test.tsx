@@ -108,6 +108,33 @@ describe("DataFilterPanel — categorical labels (P1.4/P1.5)", () => {
   });
 });
 
+describe("DataFilterPanel — incompatible saved rules (BUG-003)", () => {
+  it("explains a paused rule and reports the unfiltered row count", () => {
+    useApp.setState({
+      datasets: [{
+        id: "d1",
+        name: "samples.csv",
+        data: {
+          time: [0, 1, 2, 3],
+          values: [[0], [0], [1], [1]],
+          labels: ["Treatment"],
+          units: [""],
+          metadata: {},
+          cat_levels: { 0: ["Reference", "Annealed"] },
+        },
+        channelTypes: { 0: "continuous" },
+        filter: [{ col: 0, kind: "set", values: [1] }],
+      }],
+      activeId: "d1",
+    });
+
+    render(<DataFilterPanel />);
+    expect(screen.getByRole("status")).toHaveTextContent("1 saved filter rule is paused because the column type changed");
+    expect(screen.getByText("showing 4 of 4 rows")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Clear" })).toBeEnabled();
+  });
+});
+
 describe("DataFilterPanel — one undo step per editing run (Group S)", () => {
   // The store-level rules live in store/rowState.test.ts. What is pinned HERE
   // is the thing that made this fix non-trivial: the control fires on every

@@ -9,7 +9,7 @@
 // this model. Read exclusion via excludedSet()/pruneExcluded(), never a local
 // component mask.
 
-import { filteredOutRows } from "./datafilter";
+import { applicableFilter, filteredOutRows } from "./datafilter";
 import { sliceRowSidecars } from "./rowSidecars";
 import type { DataStruct, Dataset } from "./types";
 
@@ -17,17 +17,17 @@ type HasExcluded = Pick<Dataset, "excludedRows"> | null | undefined;
 
 /** Excluded original-row indices as an O(1)-membership Set. */
 export function excludedSet(ds: HasExcluded): Set<number> {
-  return new Set(ds?.excludedRows ?? []);
+  return new Set(ds?.excludedRows);
 }
 
 /** Is original row `row` excluded on `ds`? */
 export function isRowExcluded(ds: HasExcluded, row: number): boolean {
-  return (ds?.excludedRows ?? []).includes(row);
+  return !!ds?.excludedRows?.includes(row);
 }
 
 /** Toggle `row` in an exclusion list, returning a new sorted, de-duped array. */
 export function toggleExcluded(current: readonly number[] | undefined, row: number): number[] {
-  const set = new Set(current ?? []);
+  const set = new Set(current);
   if (set.has(row)) set.delete(row);
   else set.add(row);
   return [...set].sort((a, b) => a - b);
@@ -63,7 +63,7 @@ export function activeRowIndices(n: number, excluded: Iterable<number>): number[
  *  Returns the input unchanged when nothing is excluded (identity fast-path). */
 export function pruneExcluded(data: DataStruct, excluded: Iterable<number>): DataStruct {
   const ex = excluded instanceof Set ? excluded : new Set(excluded);
-  if (ex.size === 0) return data;
+  if (!ex.size) return data;
   const keep = activeRowIndices(data.time.length, ex);
   return {
     ...data,
@@ -95,12 +95,9 @@ export function rowStateIdentity(ds: Dataset | null | undefined): readonly [unkn
  *  (#53). The single "what's out" set — the plot masks by it, analysisData
  *  prunes by it, and consumers realign fits by its complement. */
 export function droppedRows(ds: Dataset | null | undefined): Set<number> {
-  if (!ds) return new Set();
-  const excluded = excludedSet(ds);
-  const filtered = filteredOutRows(ds.filter, ds.data);
-  if (filtered.size === 0) return excluded;
-  if (excluded.size === 0) return filtered;
-  return new Set([...excluded, ...filtered]);
+  return ds
+    ? new Set([...excludedSet(ds), ...filteredOutRows(applicableFilter(ds), ds.data)])
+    : new Set();
 }
 
 /** Rows dropped by the local filter ONLY (#53) — distinct from manual
@@ -111,7 +108,7 @@ export function droppedRows(ds: Dataset | null | undefined): Set<number> {
  *  import it directly (the architecture guard only allowlists this file). */
 export function filteredOutSet(ds: Dataset | null | undefined): Set<number> {
   if (!ds) return new Set();
-  return filteredOutRows(ds.filter, ds.data);
+  return filteredOutRows(applicableFilter(ds), ds.data);
 }
 
 /** The dataset's analysis view: its DataStruct with both manually-excluded rows
