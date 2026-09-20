@@ -200,7 +200,7 @@ argparse's version action from the canonical `quantized.__version__`; both
 console-script aliases therefore print the version and exit before browser or
 server startup. Focused tests assert the zero exit and no startup calls, and
 the PyPI workflow smoke test invokes both installed aliases. Implementation
-commit: `6e893712` (PR opened from `codex/ux-006-version`).
+implementation commit: `26e5272e` (PR opened from `codex/ux-006-version`).
 
 **Suggested owner/model:** Claude Haiku-class or inexpensive Codex model; small
 backend/packaging task with straightforward tests.
