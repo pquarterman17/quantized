@@ -33,6 +33,8 @@ import { useApp } from "../store/useApp";
 import { openQuickPlotWith, openQuickPlotWithForWorkbook } from "../store/quickPlotWithDialog";
 import { openCombineDialog } from "../store/combineDialog";
 import { workbookDeleteBlockers } from "../store/workbookActions";
+import { workbookProperties } from "./workbookProperties";
+import { useWorkbookPropertiesDialog } from "../store/workbookPropertiesDialog";
 
 export interface WorkbookActionTarget {
   node: Extract<LibraryNode, { kind: "workbook" }>;
@@ -201,9 +203,9 @@ export const workbookSourceActions: ContextAction<WorkbookActionTarget>[] = [
   {
     id: "workbook.properties",
     label: "Properties…",
-    enabled: () => false,
-    disabledReason: () => "arrives with Details/Properties (PR D)",
-    run: () => {},
+    run: (t) => useWorkbookPropertiesDialog.getState().open(
+      workbookProperties(t.node, useApp.getState().folders),
+    ),
   },
 ];
 

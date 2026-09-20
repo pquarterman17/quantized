@@ -233,7 +233,7 @@ backend/packaging task with straightforward tests.
 
 ---
 
-### UX-007 — workbook Properties is a disabled roadmap placeholder, not a command
+### UX-007 — workbook Properties is a disabled roadmap placeholder, not a command — fixed 2026-09-20
 
 **Priority:** P2. The Library is the user's main way to understand a dense
 Origin import. A visible but permanently disabled **Properties…** command is a
@@ -260,16 +260,16 @@ the dead item rather than advertising an internal PR milestone.
 
 **Implementation checklist:**
 
-- [ ] Decide between a small read-only inspector and temporary menu removal;
+- [x] Decide between a small read-only inspector and temporary menu removal;
   do not retain a permanently disabled roadmap placeholder.
-- [ ] Reuse the canonical workbook projection/source status rather than
+- [x] Reuse the canonical workbook projection/source status rather than
   computing a second interpretation of imported Origin structure.
-- [ ] If implemented, make it reachable consistently from Tree, Details, and
+- [x] If implemented, make it reachable consistently from Tree, Details, and
   Tiles and return focus to its invoking row/tile on close.
-- [ ] Keep the first version bounded: no raw-metadata editor or destructive
+- [x] Keep the first version bounded: no raw-metadata editor or destructive
   action belongs in this dialog.
-- [ ] Replace the pinned stale-copy test with behavior/accessibility coverage.
-- [ ] Run focused Library tests, forced typecheck, lint, build, and the Library
+- [x] Replace the pinned stale-copy test with behavior/accessibility coverage.
+- [x] Run focused Library tests, forced typecheck, lint, build, and the Library
   Playwright journeys.
 
 **Suggested owner/model:** ChatGPT/Codex mid-tier frontend model for the
@@ -299,7 +299,7 @@ inexpensive model.
 
 1. [ ] Fix UX-005 first: tiny, immediately visible, and removes misleading
    guidance from a primary workflow.
-2. [ ] Resolve UX-007 next: remove the dead-end wording immediately, then use a
+2. [x] Resolve UX-007 next: remove the dead-end wording immediately, then use a
    small read-only inspector if it fits the current Library projection cleanly.
 3. [x] Fix BUG-023 next: reuse an existing codec across both affected frozen
    payloads, with direct and workspace round-trip tests.
@@ -316,3 +316,4 @@ inexpensive model.
 | 2026-09-20 | Codex | Fixed BUG-023 with the shared BUG-017 sentinel codec across frozen FigureDocuments, snapshot-window numeric arrays, workspace saves, and workbook transfer | Direct/full round trips; focused 271; full frontend 11,755; typecheck/lint/build/bundle; integrity 13 |
 | 2026-09-20 | ChatGPT-Sol | Extended BUG-023 to the independent static snapshot-window payload; filed UX-007 for the dead workbook Properties placeholder; completed the saved numeric-payload boundary pass | Serializer/sanitizer tracing, persistence tests, action-registry and plan reconciliation |
 | 2026-09-20 | ChatGPT-Sol | Created independent v0.26.1 audit; filed BUG-023, UX-005, and UX-006; reconciled the highest-priority existing open items | Static call-path inspection, published-wheel probe, release artifact/API verification |
+| 2026-09-20 | Codex | Fixed UX-007: shared workbook Properties action opens a read-only canonical-inspector dialog with Tree/Details/Tiles parity and restored invoking focus | Focused 42 tests, full frontend suite, forced typecheck, lint, build/bundle, and integrity gates |

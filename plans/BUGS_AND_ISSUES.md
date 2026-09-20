@@ -101,7 +101,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-023 | P2 | Frozen figure and snapshot-window persistence | Frozen `FigureDocument` snapshots and `kind:"snapshot"` plot windows bypassed BUG-017's non-finite-cell codec: JSON converted NaN/±Infinity to `null` and `-0` to `0`; reopen could not recover infinity kind/sign or signed zero | Codex | **FIXED 2026-09-20** — one shared JSON-boundary encoder preserves all four identities across standalone figures, workspaces, static plot bundles, and workbook transfer; legacy finite/`null` files remain valid; direct/full regressions cover every affected array |
 | UX-005 | P1 | Quick Plot refusal guidance | The current release tells users Configure Quick Plot “arrives with the Quick Figure Builder (PR G)” even though **Configure Quick Plot…** and the builder already shipped and appear beside Quick Plot | ChatGPT-Sol | Code-proven user-facing stale copy at both refusal constants; tests currently pin the wrong wording. Full pickup brief in `POST_RELEASE_PROBLEM_AUDIT.md` |
 | UX-006 | P3 | Installed-version diagnostics | `qz --version` is rejected, so users and support agents cannot identify an installed CLI/package build using the conventional command; the release smoke test must import Python internals instead | ChatGPT-Sol | **FIXED 2026-09-20** — `qz` and `quantized` now use argparse's version action backed by canonical `quantized.__version__`, exiting before server/browser startup; focused CLI tests and both-alias wheel smoke coverage added. Commit/PR recorded in the audit completion entry. |
-| UX-007 | P2 | Workbook Properties command | The workbook right-click menu shows **Properties…** permanently disabled and explains it with the internal roadmap text “arrives with Details/Properties (PR D)”, even though PR D shipped; the result is a prominent dead end in the new Origin-like Library | ChatGPT-Sol | Code-proven in the v0.26.1 action registry and pinned by its unit test. Full pickup brief in `POST_RELEASE_PROBLEM_AUDIT.md` |
+| UX-007 | P2 | Workbook Properties command | The workbook right-click menu showed **Properties…** permanently disabled and explained it with the internal roadmap text “arrives with Details/Properties (PR D)”, even though PR D shipped; the result was a prominent dead end in the new Origin-like Library | ChatGPT-Sol | **FIXED 2026-09-20** — Properties now opens a bounded read-only inspector from the shared workbook action registry in Tree, Details, and Tiles. It projects canonical workbook children, location, recorded source/Origin provenance, availability, member/artifact counts, member tags, and import time only when present; Close/Escape restores its invoking row/tile focus. Editing remains in existing commands. Focused 42 tests, full frontend suite, forced typecheck, lint, build/bundle, and integrity gates run; full pickup brief retained in `POST_RELEASE_PROBLEM_AUDIT.md` |
 
 ---
 
@@ -8201,7 +8201,7 @@ Full reproduction and acceptance expectations are in
 ## UX-007 — workbook Properties is a disabled roadmap placeholder
 
 **Priority:** P2
-**State:** Open — code-proven in the v0.26.1 action registry
+**State:** Fixed 2026-09-20 — a bounded read-only inspector replaces the stale disabled placeholder
 **Reported/investigated:** 2026-09-20 by ChatGPT-Sol
 **Suggested owner/model:** ChatGPT/Codex mid-tier frontend model; Claude review for projection consistency
 
@@ -8212,10 +8212,10 @@ remained deferred. Prefer a bounded read-only inspector built from the
 canonical workbook projection; otherwise remove the dead menu item until that
 surface exists.
 
-- [ ] Choose the read-only-inspector or temporary-removal contract.
-- [ ] Do not create a second interpretation of Origin workbook structure.
-- [ ] Keep Tree/Details/Tiles behavior and focus restoration consistent.
-- [ ] Replace the stale-copy assertion with behavior/accessibility coverage.
+- [x] Choose the read-only-inspector contract.
+- [x] Do not create a second interpretation of Origin workbook structure.
+- [x] Keep Tree/Details/Tiles behavior and focus restoration consistent.
+- [x] Replace the stale-copy assertion with behavior/accessibility coverage.
 
 Full scope and acceptance criteria are in `POST_RELEASE_PROBLEM_AUDIT.md`.
 
