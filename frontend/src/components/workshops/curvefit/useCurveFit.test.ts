@@ -66,6 +66,7 @@ describe("useCurveFit exclusion honoring (#50/#53)", () => {
 
     expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 2, 3], y: [10, 30, 40] });
     expect(useApp.getState().fitOverlay?.y).toEqual([11, Number.NaN, 31, 41]);
+    expect(useApp.getState().datasets[0]?.fitSpec?.nPoints).toBe(3);
     expect(useToasts.getState().toasts.at(-1)?.msg).toBe(
       "1 of 4 rows are gaps; they were excluded from the fit.",
     );

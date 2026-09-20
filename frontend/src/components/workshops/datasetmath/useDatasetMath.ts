@@ -5,7 +5,7 @@
 import { useState } from "react";
 
 import { datasetAlgebra } from "../../../lib/api/datasetAlgebra";
-import { useApp } from "../../../store/useApp";
+import { nextDatasetId, useApp } from "../../../store/useApp";
 
 export const OPERATIONS: { value: string; label: string }[] = [
   { value: "A+B", label: "A + B" },
@@ -18,8 +18,6 @@ export const OPERATIONS: { value: string; label: string }[] = [
 const SYMBOL: Record<string, string> = {
   "A+B": "+", "A-B": "−", "A*B": "×", "A/B": "/", "(A-B)/(A+B)": "asym",
 };
-
-let _seq = 0;
 
 export interface DatasetMathState {
   datasets: { id: string; name: string }[];
@@ -79,7 +77,7 @@ export function useDatasetMath(): DatasetMathState {
         interp_method: interp,
       });
       const name = `${stem(a.name)} ${SYMBOL[operation] ?? operation} ${stem(b.name)}`;
-      addDataset({ id: `math-${++_seq}`, name, data });
+      addDataset({ id: nextDatasetId(), name, data });
       setStatus(`combined ${a.name} ${SYMBOL[operation] ?? operation} ${b.name}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "dataset math failed");

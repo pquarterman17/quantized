@@ -61,6 +61,19 @@ describe("workshop dataset identity", () => {
     "/components/workshops/hysteresis/useHysteresis.ts",
     "/components/workshops/magtools/useMagTools.ts",
     "/components/workshops/reflectivity/useReflectivity.ts",
+    "/commands/fileCommands.ts",
+    "/components/Library/Library.tsx",
+    "/components/Library/folderOps.ts",
+    "/components/Stage/worksheet/useWorksheetView.ts",
+    "/components/workshops/database/SqliteQueryDialog.tsx",
+    "/components/workshops/datasetmath/useDatasetMath.ts",
+    "/components/workshops/digitizer/useDigitizer.ts",
+    "/components/workshops/importwizard/useImportWizard.ts",
+    "/components/workshops/pipeline/useTemplates.ts",
+    "/components/workshops/reductions/useFftThickness.ts",
+    "/components/workshops/reductions/useReflectivityFft.ts",
+    "/components/workshops/tabulate/useTabulate.ts",
+    "/lib/worksheetTransformCommands.ts",
   ];
 
   it("keeps the BUG-020 workshop producers on the shared dataset-id sequence", () => {
@@ -68,8 +81,8 @@ describe("workshop dataset identity", () => {
     expect(workshopSources.map(([path]) => path)).toHaveLength(migrated.length);
     for (const [path, src] of workshopSources) {
       expect(src, `${path} must mint durable ids through store/idSeq.ts`).toContain("nextDatasetId()");
-      expect(src, `${path} must not restore a page-lifetime dataset-id prefix`).not.toMatch(
-        /(?:bgsub|hystbg|magbg|magunit|refl-model|refl-sld)-/,
+      expect(src, `${path} must not restore a private durable dataset-id sequence`).not.toMatch(
+        /(?:const\s+id\s*=|id:)\s*`(?:bgsub|hystbg|magbg|magunit|refl-model|refl-sld|demo|sample|tplf|subset|sqlite|math|digi|impwiz|tplb|tplsum|fftthk|reflfft|tab|transform)-/,
       );
     }
   });

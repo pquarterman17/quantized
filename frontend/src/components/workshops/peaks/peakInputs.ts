@@ -5,6 +5,7 @@
 // carry, which is exactly what the ceiling asks to be extracted first.
 
 import { selectedFitData } from "../../../lib/fitselection";
+import { dropGapRows } from "../../../lib/api/finitePairs";
 import { fullPlottedX } from "../../../lib/fitselectionActions";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset } from "../../../lib/types";
@@ -30,6 +31,8 @@ export interface PeakInputs {
    *  the label and unit of the plotted column — the exact misattribution the
    *  provenance field exists to prevent. */
   xKeyUsed: number | null;
+  gapCount: number;
+  sourceCount: number;
 }
 
 /** The (x, y) the peak tools DETECT/FIT on — the PLOTTED X + primary Y over the
@@ -44,7 +47,25 @@ export function peakInputs(
 ): PeakInputs {
   const fullX = fullPlottedX(ds.data, xKey);
   const sel = selectedFitData(ds, xKey, yKeys, seriesOrder);
-  if (sel) return { x: sel.x, y: sel.y, fullX, xKeyUsed: xKey };
+  if (sel) {
+    const pairs = dropGapRows(sel.x, sel.y);
+    return {
+      x: pairs.x,
+      y: pairs.y,
+      fullX,
+      xKeyUsed: xKey,
+      gapCount: pairs.n - pairs.keep.length,
+      sourceCount: pairs.n,
+    };
+  }
   const d = analysisData(ds) ?? ds.data;
-  return { x: d.time, y: d.values.map((row) => row[0]), fullX, xKeyUsed: null };
+  const pairs = dropGapRows(d.time, d.values.map((row) => row[0]));
+  return {
+    x: pairs.x,
+    y: pairs.y,
+    fullX,
+    xKeyUsed: null,
+    gapCount: pairs.n - pairs.keep.length,
+    sourceCount: pairs.n,
+  };
 }

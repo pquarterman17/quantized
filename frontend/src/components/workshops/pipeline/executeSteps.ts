@@ -4,6 +4,7 @@
 // runner can drive it per file; callers own the pipelineRunning flag.
 
 import { fitModel } from "../../../lib/api";
+import { dropGapRows } from "../../../lib/api/finitePairs";
 import { fitDataForSpec, fitSpecFromStepParams } from "../../../lib/fitselection";
 import { dyForFit } from "../../../lib/fitweights";
 import { validateExpression, type PipelineStep } from "../../../lib/pipeline";
@@ -119,10 +120,14 @@ export async function executeSteps(
               wnote = ` (${dyForFit(ds, sel.yKey, spec.weight).issue ?? "weight column missing"})`;
             }
           }
-          const r = await fitModel({ model: spec.model, x, y, ...(dy ? { dy } : {}) });
+          const pairs = dropGapRows(x, y);
+          if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
+          const finiteDy = dy ? pairs.keep.map((i) => dy![i]!) : undefined;
+          const gapNote = pairs.complete ? "" : ` (${pairs.n - pairs.keep.length} gap rows excluded)`;
+          const r = await fitModel({ model: spec.model, x: pairs.x, y: pairs.y, ...(finiteDy ? { dy: finiteDy } : {}) });
           fits.push(r);
           const r2 = typeof r.R2 === "number" ? ` R²=${r.R2.toFixed(4)}` : "";
-          log[step.id] = { status: "ok", note: `fit${r2}${wnote}` };
+          log[step.id] = { status: "ok", note: `fit${r2}${wnote}${gapNote}` };
           break;
         }
         default:

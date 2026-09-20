@@ -35,8 +35,7 @@ import {
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
 import { detectMagXKind, type MagXDetection } from "../../../lib/magDataKind";
 import type { Dataset, DataStruct } from "../../../lib/types";
-import { nextDatasetId } from "../../../store/idSeq";
-import { useActiveDataset, useApp } from "../../../store/useApp";
+import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 
 /** The plotted X (independent variable — T or field) + primary Y (moment)
  *  CHANNELS over the FULL data (magnetometry transforms convert every row, so

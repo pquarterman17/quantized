@@ -54,7 +54,7 @@ const LibraryDetails = lazyRegion(() => import("./LibraryDetails"), "Library");
 // why this is the only static edge that kept DatasetRow.tsx eager.
 const LibraryFlatRows = lazyRegion(() => import("./LibraryFlatRows"), "Library");
 import type { Dataset } from "../../lib/types";
-import { useApp } from "../../store/useApp";
+import { nextDatasetId, useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import { askParams } from "../overlays/ParamDialog";
 
@@ -154,8 +154,8 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
 
   const onDemo = () => {
     const ds: Dataset = {
-      id: `demo-${++demoSeq}`,
-      name: `demo-vsm-${demoSeq}.dat`,
+      id: nextDatasetId(),
+      name: `demo-vsm-${++demoSeq}.dat`,
       data: makeDemoDataset(),
     };
     addDataset(ds);

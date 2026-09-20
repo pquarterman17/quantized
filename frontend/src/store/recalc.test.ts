@@ -40,12 +40,33 @@ beforeEach(() => {
     staleDatasets: [],
     staleFits: [],
     fitOverlay: null,
+    xKey: null,
+    yKeys: null,
+    seriesOrder: null,
     macroRecording: false,
     macroSteps: [],
   });
 });
 
 describe("recalc engine (#1)", () => {
+  it("replays a saved fit over finite pairs and restores the overlay gaps", async () => {
+    const gapped = data();
+    gapped.values[1]![0] = Number.NaN;
+    vi.mocked(fitModel).mockResolvedValue({ params: [2, 0], yFit: [2, 6] });
+    useApp.setState({
+      datasets: [ds("a", { data: gapped, fitSpec: { model: "Linear", xKey: null, yKey: 0 } })],
+      activeId: "a",
+      staleFits: ["a"],
+      fitOverlay: { datasetId: "a", y: [2, Number.NaN, 6] },
+    });
+
+    await useApp.getState().recalcNow();
+
+    expect(fitModel).toHaveBeenCalledWith(expect.objectContaining({ x: [1, 3], y: [2, 6] }));
+    expect(useApp.getState().fitOverlay?.y).toEqual([2, Number.NaN, 6]);
+    expect(useApp.getState().staleFits).toEqual([]);
+  });
+
   it("auto mode: a cell edit re-runs the dependent fit, debounced, no user action", async () => {
     vi.useFakeTimers();
     vi.mocked(fitModel).mockResolvedValue({ params: [2, 0], R2: 1, yFit: [2, 4, 99] });

@@ -99,6 +99,18 @@ describe("usePeaks find", () => {
     expect(useApp.getState().peakOverlay?.datasetId).toBe("d1");
   });
 
+  it("drops gapped pairs before automatic peak finding and tells the user", async () => {
+    const gapped = { ...DATA, values: [[1], [5], [Number.NaN], [6], [2], [1]] };
+    useApp.setState({ datasets: [{ id: "d1", name: "gapped.dat", data: gapped }], activeId: "d1" });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    expect(findPeaks).toHaveBeenCalledWith({ x: [0, 1, 3, 4, 5], y: [1, 5, 6, 2, 1] });
+    expect(useToasts.getState().toasts.at(-1)?.msg).toBe(
+      "1 of 6 rows are gaps; they were excluded from peak analysis.",
+    );
+  });
+
   it("resolves a still-pending active dataset before auto-finding (#38)", async () => {
     const full: DataStruct = {
       time: [0, 1, 2, 3, 4, 5, 6],

@@ -14,9 +14,7 @@ import { fftThickness } from "../../../lib/api/reductions";
 import type { FftThicknessResult } from "../../../lib/reductionTypes";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, DataStruct } from "../../../lib/types";
-import { useActiveDataset, useApp } from "../../../store/useApp";
-
-let _seq = 0;
+import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 
 export interface ReductionColumn {
   index: number;
@@ -111,7 +109,7 @@ export function useFftThickness(): FftThicknessState {
       metadata: { reduction: "fft-thickness", thickness_nm: result.thickness_nm },
     };
     addDataset({
-      id: `fftthk-${++_seq}`,
+      id: nextDatasetId(),
       name: `${active?.name ?? "scan"} (FFT thickness)`,
       data,
     });

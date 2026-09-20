@@ -2,12 +2,10 @@ import { useState } from "react";
 
 import { querySqlite } from "../../../lib/api";
 import { useSqliteQueryDialog } from "../../../store/sqliteQueryDialog";
-import { useApp } from "../../../store/useApp";
+import { nextDatasetId, useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
 import { Button } from "../../primitives";
-
-let sequence = 0;
 
 /** Loaded lazily on first open and then KEPT MOUNTED while closed, the same
  *  `useKeepMountedAfterOpen` + self-hide shape as SplitDatasetDialog. Mounting
@@ -41,7 +39,7 @@ export default function SqliteQueryDialog() {
         max_rows: maxRows,
       });
       const base = path.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, "") || "SQLite query";
-      addDataset({ id: `sqlite-${Date.now().toString(36)}-${++sequence}`, name: `${base} (query)`, data });
+      addDataset({ id: nextDatasetId(), name: `${base} (query)`, data });
       setStatus(`loaded ${data.time.length} rows from SQLite`);
       close();
     } catch (reason) {
@@ -74,4 +72,3 @@ export default function SqliteQueryDialog() {
     </ToolWindow>
   );
 }
-

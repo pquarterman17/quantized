@@ -27,7 +27,7 @@ import {
 } from "../../../lib/template";
 import { recordUse } from "../../../lib/recipeIndex";
 import { toast } from "../../../store/toasts";
-import { useApp } from "../../../store/useApp";
+import { nextDatasetId, useApp } from "../../../store/useApp";
 
 export interface BatchProgress {
   done: number;
@@ -46,8 +46,6 @@ export interface TemplatesState {
   importFile: (file: File) => Promise<string | null>;
   runBatch: (name: string, files: File[]) => Promise<void>;
 }
-
-let _seq = 0;
 
 /** The declared outputs for a step list: the LAST fit step's parameter names
  *  (from the model registry) + R2; empty when the pipeline has no fit. */
@@ -132,7 +130,7 @@ export function useTemplates(): TemplatesState {
           setBatch({ done: i, total: files.length, current: file.name, failures });
           try {
             const data = await uploadFile(file);
-            const id = `tplb-${Date.now().toString(36)}-${++_seq}`;
+            const id = nextDatasetId();
             addDataset({ id, name: file.name, data });
             // Shared core: steps + output extraction + the per-file #36 report.
             const row = await runTemplateOnDataset(t, id, file.name);
@@ -146,7 +144,7 @@ export function useTemplates(): TemplatesState {
           }
         }
         addDataset({
-          id: `tplsum-${Date.now().toString(36)}-${++_seq}`,
+          id: nextDatasetId(),
           name: `${t.name} summary (${rows.length} files)`,
           data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows),
         });

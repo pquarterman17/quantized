@@ -7,8 +7,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { reflPresets, reflSimulate, reflSldProfile, type ReflLayer } from "../../../lib/api/reflectivity";
 import type { DataStruct, SldPreset } from "../../../lib/types";
-import { nextDatasetId } from "../../../store/idSeq";
-import { useApp } from "../../../store/useApp";
+import { nextDatasetId, useApp } from "../../../store/useApp";
 
 export type Radiation = "xray" | "neutron";
 

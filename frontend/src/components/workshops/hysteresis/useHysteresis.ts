@@ -12,8 +12,7 @@ import { hysteresisAnalysis, subtractHysteresisBackground } from "../../../lib/a
 import { selectedFitData } from "../../../lib/fitselection";
 import { analysisData } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, DataStruct } from "../../../lib/types";
-import { nextDatasetId } from "../../../store/idSeq";
-import { useActiveDataset, useApp } from "../../../store/useApp";
+import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 
 /** H = plotted X, M = primary plotted Y over the analysis view (excluded/
  *  filtered rows dropped, #50/#53) so a masked outlier doesn't skew Hc/Mr/Ms.

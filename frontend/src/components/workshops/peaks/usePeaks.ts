@@ -167,7 +167,11 @@ export function usePeaks(): PeaksState {
         // the RESOLVED `ds`, never a still-pending preview (not staleness).
         const saved = useApp.getState().datasets.find((d) => d.id === activeId)?.peakTable;
         if (saved && peakTableMatchesData(saved, ds)) setFitResult(peakTableToFitResult(saved));
-        const { x, y, fullX } = peakInputs(ds, xKey, yKeys, seriesOrder);
+        const { x, y, fullX, gapCount, sourceCount } = peakInputs(ds, xKey, yKeys, seriesOrder);
+        if (x.length === 0) throw new Error("no finite X/Y pairs are available to analyze");
+        if (gapCount > 0) {
+          toast(`${gapCount} of ${sourceCount} rows are gaps; they were excluded from peak analysis.`);
+        }
         const res = await findPeaks({ x, y });
         if (cancelled) return;
         setPeaks(res.peaks);

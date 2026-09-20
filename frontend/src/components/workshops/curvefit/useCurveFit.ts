@@ -244,7 +244,7 @@ export function useCurveFit(): CurveFitState {
         const spec = fitSpecFrom(
           modelName,
           state.xKey,
-          localXy,
+          { ...localXy, x: pairs.x, y: pairs.y },
           r,
           effWeight,
           activeCorrectionNames(ds.corrections),
