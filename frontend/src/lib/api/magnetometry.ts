@@ -17,7 +17,12 @@ export function hysteresisAnalysis(body: {
   return postJSON("/api/magnetometry/hysteresis", body);
 }
 
-/** Subtract a linear high-T background from M(T) -> corrected moment + fit. */
+/** Subtract a linear high-T background from M(T) -> corrected moment + fit.
+ *  M-vs-T ONLY: the window is one-sided, so on a hysteresis loop the intercept
+ *  it removes carries +Ms and the loop is sheared down by that much. Use
+ *  {@link subtractHysteresisBackground} for M(H) (BUG-021). Both routes take
+ *  pydantic `list[float]`, which rejects the `null` a NaN stringifies to —
+ *  drop gaps with `lib/api/finitePairs.ts` before calling. */
 export function subtractMagBackground(body: {
   temperature: number[];
   moment: number[];
@@ -27,6 +32,11 @@ export function subtractMagBackground(body: {
   return postJSON("/api/magnetometry/subtract-background", body);
 }
 
+/** Remove a linear dia/paramagnetic background from an M(H) loop: both
+ *  saturated tails are fit separately, the average slope (susceptibility χ) is
+ *  removed, and the loop is re-centred on its saturation midpoint. The third
+ *  returned quantity is an `offset` — the vertical shift removed — NOT the
+ *  intercept `subtractMagBackground` reports. */
 export function subtractHysteresisBackground(body: {
   h: number[];
   m: number[];

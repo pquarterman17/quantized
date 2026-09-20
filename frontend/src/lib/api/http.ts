@@ -75,13 +75,28 @@ export async function deleteJSON<T>(path: string): Promise<T> {
  *  status line) otherwise. The SINGLE error-extraction path — every backend
  *  fetch funnels through here (via `unwrap`/`postForm`/`postBlob`/
  *  `postDownload`), so error-message behaviour can't drift between endpoints
- *  (review 2026-07-11, MAIN #8b — four copies of this block had drifted). */
+ *  (review 2026-07-11, MAIN #8b — four copies of this block had drifted).
+ *
+ *  `detail` is NOT always a string. FastAPI's 422 sends an ARRAY of
+ *  `ValidationError` objects (see `schema.d.ts`), and the old
+ *  `as { detail?: string }` cast assigned that array straight into the message
+ *  — which rendered as `[object Object],[object Object],…` in the UI on every
+ *  endpoint (BUG-021). Strings are still used verbatim and inline; every other
+ *  shape goes through `./errorDetail`, loaded lazily so the formatter's bytes
+ *  stay out of the eager bundle (that module's header explains why). A body
+ *  that is not JSON, or whose detail is empty, keeps the status line. */
 async function ensureOk(res: Response): Promise<Response> {
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`;
     try {
-      const j = (await res.json()) as { detail?: string };
-      if (j.detail) detail = j.detail;
+      const j = (await res.json()) as { detail?: unknown };
+      const raw: unknown = j?.detail;
+      if (typeof raw === "string") {
+        if (raw) detail = raw;
+      } else if (raw != null) {
+        const { formatErrorDetail } = await import("./errorDetail");
+        detail = formatErrorDetail(raw) ?? detail;
+      }
     } catch {
       /* non-JSON error body — keep the status line */
     }

@@ -2,7 +2,24 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-19 (UX-004 filed and its collision half FIXED: the
+**Updated:** 2026-09-20 (BUG-021 FIXED — owner-reported, from a real VSM
+hysteresis loop: the Magnetometry ▸ Background tab ran the M(T) one-sided
+high-T fit on M(H) data, which shears a saturated loop down by Ms
+(measured: plateaus at 0 and −2·Ms, squareness a meaningless 1.0000). It now
+dispatches on what the x axis DECLARES itself to be — reading `x_column_long`
+first, so an Origin SHORT column name cannot masquerade as a field symbol —
+and fails closed, letting the user pick, when that cannot be determined. With
+it: `ensureOk`, the app-wide single error-extraction path, no longer
+stringifies FastAPI's array-shaped 422 `detail` to
+`[object Object],[object Object],…`, and the NaN gaps that caused that 422 are
+filtered at all five magnetometry request sites — dropped before a fit and
+restored on their original rows, substituted per axis on the elementwise
+conversion path (BUG-017's contract, extended to the API request path). The
+"autosave failing" banner the owner saw alongside it is BUG-019 above, not a
+NaN failure: `saveAutosave` is measured succeeding with NaN/-0 cells. Filed as
+BUG-019 on the branch and renumbered on rebase (BUG-020 was drafted for the
+autosave banner and dropped, never used). Earlier 2026-09-19:
+UX-004 filed and its collision half FIXED: the
 Library's node-type marks collided across three contradicting per-view maps —
 `▦` alone meant Folder, Figure page, Worksheet and two different commands —
 and nothing checked, because UX-001's icon audit asserted each mark was
@@ -78,7 +95,9 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-017 | P1 | Workspace save/reopen — NaN/±Infinity cells | `workspaceSerialize.ts`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts`'s `isNumberArray` rejects `null` and throws — so the WHOLE workspace fails to reopen after saving a dataset with one such cell (reachable by a plain `insertRows`, whose blank rows are minted as `Number.NaN`); `-0` separately round-trips silently to `0` | Claude (agent) | Found by the P2.1 round-3 review (pre-existing, outside that commit); **FIXED 2026-09-16** — the new `lib/nonFiniteCells.ts` encodes the four values JSON cannot represent as the sentinel strings `"NaN"`/`"Infinity"`/`"-Infinity"`/`"-0"` on the way out and decodes them on the way in, applied symmetrically by `workspaceSerialize.ts` (`.dwk`, autosave, Pack Project) and `workspaceDatasetParse.ts`, plus the same-shaped hole in `lib/workbookTransfer.ts`'s clipboard package. The encoders return their input by reference when nothing needs a sentinel, so an ordinary document is byte-identical to before (no schema bump); `null` deliberately stays a rejection and a malformed entry deliberately still refuses the whole workspace — see the entry for both rulings |
 | BUG-018 | P2 | Backdrop dialogs — stacked Escape | Two backdrop dialogs can be open at once (`Ctrl+,` then `?`, no mouse) and ONE Escape closes BOTH, because all ten use `window` capture + `stopPropagation()`, which does not stop a same-node same-phase sibling; over a pending `ConfirmDialog` the same keystroke silently resolves the confirmation `false` | Claude (agent) | Found in the 2026-09-19 adversarial review of `cee0494f`; reproduced by the reviewer in real Chromium (keyboard only) and re-measured in jsdom on `490243f9`. **FIXED 2026-09-19** (`5d6ef1b9`) — the entry's option 1: `lib/escapeStack.ts` gains a `modal` layer above `menu`, and all ten backdrop dialogs are surfaces on it, so the innermost closes and nothing below it acts on the same keystroke (2 → 1 → 0 on the three stacked pairs; a pending confirm stays PENDING and resolves `false` only on the second Escape; the lone-dialog control is unchanged). The bypass of `isEditingTarget`/`cmdkOpen`/`.qzk-ctx` is keyed on THE CLAIMANT resolving to a modal, nothing below a modal is offered the key even when the modal declines, and (round-9 review) the claim resolves SYNCHRONOUSLY at keydown and marks the event, so a window-bubble listener that honours `defaultPrevented` — `usePeakWizard`'s marker-edit pause — can no longer kill the dialog's close mid-dispatch. The bypass is what the reverted first attempt lacked: all four editing-target landing spots (Help's search box, Separate's and Combine's Name field, Split's Column select) are measured closing on ONE Escape, one test each. A second blocker was found on the way: Combine/Separate/Split stopped EVERY key in the dialog box's React `onKeyDown`, and a React synthetic `stopPropagation()` stops the NATIVE event at the React root — below `window` — so Escape is now let through there. R13's three missing reachability pins are closed with it; R12 is untouched and its wording unchanged |
 | BUG-019 | P1 | Per-technique view memory / dataset switch / autosave | `captureTechniqueView` stored the WHOLE object handed to it, and three callers hand it the entire `AppState` — so each entry held the library, the windows and the PREVIOUS memory map, compounding the serialized workspace on every dataset switch (Fibonacci-wise when alternating two techniques, ratio -> phi ~ 1.62) until autosave's `JSON.stringify` stalled the main thread and every plot, new and old, stopped drawing | Claude (agent) | Owner-reported 2026-09-19 (XRDML 3-D map + box integration); **FIXED 2026-09-19** — the capture projects down to its nine declared fields. Measured before/after on the owner's exact sequence in the running app: 5.4 MB -> 359.6 MB -> `RangeError` -> unresponsive, versus a flat 344 B |
-| BUG-020 | P2 | Cut landing (`Stage/useCutLanding.ts`) | A landed cut took its id from a private page-lifetime counter (`cut-1`, `cut-2`, …) instead of `store/idSeq.ts`, so a workspace reopened with a `cut-1` in it plus one new cut held TWO datasets with that id: Apply plotted the OLD cut's rows and one delete destroyed both | Claude (agent) | Found 2026-09-19 investigating BUG-019, confirmed by that fix's adversarial review; **FIXED 2026-09-19** — ids now come from the shared collision-free sequence. Probed on both trees: `['cut-1','cut-1']` / old rows / empty library before, unique ids and an independent delete after |
+| BUG-020 | P2 | Cut landing (`Stage/useCutLanding.ts`) | A landed cut took its id from a private page-lifetime counter (`cut-1`, `cut-2`, …) instead of `store/idSeq.ts`, so a workspace reopened with a `cut-1` in it plus one new cut held TWO datasets with that id: Apply plotted the OLD cut's rows and one delete destroyed both | Claude (agent) | Found 2026-09-19 investigating BUG-019, confirmed by that fix's adversarial review; **FIXED 2026-09-19** — ids now come from the shared collision-free sequence. Probed on both trees: `['cut-1','cut-1']` / old rows / empty library before, unique ids and an independent delete after. **2026-09-20: the same root cause has FOUR more call sites, still open** — `useMagTools.ts` (`magbg-N`/`magunit-N`), `useHysteresis.ts` (`hystbg-N`), `useBaseline.ts` and `useReflectivity.ts` all mint from a page-lifetime module counter rather than `store/idSeq.ts`, and `workspaceSerialize.ts:220` round-trips ids, so a reopened workspace plus one new run yields two `magbg-1`. Found in the round-3 re-review of BUG-021, which also made it a STALE-READOUT path: that fix's readout ownership keys on these ids, so a collision shows one dataset's fit under another's |
+| BUG-021 | P0 | Magnetometry workshop — Background tab | The tab ran the M(T) one-sided high-T fit (`subtract_mag_background`) on an M(H) hysteresis loop, whose own docstring forbids exactly that: the window sits entirely in the +H tail, so the intercept removed carries +Ms and the corrected loop is sheared down by Ms (measured: plateaus at 0 and −2·Ms, squareness a meaningless 1.0000). Surfaced to the owner as `[object Object],[object Object],[object Object],[object Object]` — `ensureOk`'s `as { detail?: string }` cast stringifying FastAPI's array-shaped 422 `detail`, one entry per NaN gap that `JSON.stringify` had written as `null` | Claude (agent) | Reported 2026-09-19 by owner on a real VSM loop (filed as BUG-019 on the branch, renumbered on rebase); all four reported defects reproduced by measurement before any code changed. **FIXED 2026-09-20** — dispatch on the DECLARED x label/unit (`lib/magDataKind.ts`, reading `x_column_long` first so an Origin SHORT column name cannot masquerade as a field symbol), failing closed to a user choice when it cannot be determined; gaps dropped before every fit request and restored on their original rows, and SUBSTITUTED per axis on the elementwise conversion path (`lib/api/finitePairs.ts`); all five magnetometry call sites filtered, including the Hysteresis workshop's automatic analysis; any `detail` shape rendered readably (`lib/api/errorDetail.ts`, lazily imported to keep it out of the eager bundle); panel wording, control label, per-path default and the reported quantity (offset, not intercept) follow the path actually selected; a documented no-op is reported as a no-op; the readout is tagged with the datasets it is about so a dataset switch cannot leave a stale one on screen. 13 sabotages over two rounds, each restored byte-identical. Owner verification on the reported file remains |
+| BUG-022 | P1 | Curve Fit / Equation Fit / Model Scan / Bumps / Peak Wizard / autoGuess | `lib/fitselection.ts`'s `selectedFitData` does not filter non-finite values, and all six consumers post that `x`/`y` to pydantic `list[float]` routes — so a `JSON.stringify`d NaN arrives as `null` and is rejected once per element. **The owner's same gapped hysteresis loop still 422s in Curve Fit**, legible since BUG-021's `errorDetail.ts` but still a failure | Unassigned | Found 2026-09-20 in the round-3 re-review of BUG-021; every call site and route code-read and named in the entry. NOT fixed there, deliberately: the filtering belongs at the request boundary, not inside the shared selector. `lib/api/finitePairs.ts` already has the contract to apply, including the row-alignment guarantee |
 
 ---
 
@@ -7745,6 +7764,308 @@ private counter restored.
 - Notes: found while investigating BUG-019; filed separately because it stands on its own
 
 ---
+## BUG-021 — the Background tab runs the M(T) tool on an M(H) loop, and reports the 422 as `[object Object]`
+
+**Priority:** P0 — a silently wrong scientific result (the corrected loop is
+sheared down by Ms), reported by the owner from real VSM data  
+**State:** **FIXED** 2026-09-20 — four reported defects plus six more found in
+adversarial review, each reproduced first and each guarded by a
+sabotage-verified test; owner verification on the reported file remains  
+**Reported:** 2026-09-19 by owner, using the Magnetometry workshop ▸ Background
+tab on a real M(H) hysteresis loop (x = Magnetic Field, −15,000…+15,000 Oe;
+y = Moment, emu; strong linear diamagnetic slope; visible gaps where branches
+break off mid-curve)  
+**Investigated:** 2026-09-19 by Claude (agent) — every defect reproduced by
+measurement before any code changed  
+**Numbering note:** filed as BUG-019 on the branch and renumbered on rebase —
+`main` had already taken BUG-019/BUG-020 for unrelated defects.
+
+### User-visible problem
+
+Pressing "Subtract background →" printed, in red, literally:
+
+```
+[object Object],[object Object],[object Object],[object Object]
+```
+
+and the owner separately asked why the control is called "High-T fraction",
+which makes no sense for M(H). They were right, and that complaint was the
+visible symptom of the deeper defect: the tab was running the M(T) analysis on
+an M(H) loop.
+
+### The four reported defects, and how each was reproduced
+
+**1. The error-extraction path mis-rendered a FastAPI validation error.**
+`frontend/src/lib/api/http.ts`'s `ensureOk` read the body as
+`{ detail?: string }` — an unchecked cast. FastAPI's 422 sends `detail` as an
+ARRAY of `ValidationError` objects (the repo's own generated
+`frontend/src/lib/api/schema.d.ts` says so), so the array was assigned to a
+`string` and interpolated. `ensureOk` is the SINGLE error-extraction path for
+every backend fetch in the app (its own header says so), so this was reachable
+from every endpoint.
+*Measured:* posting the loop's body to the real route returned a 422 whose
+`detail` was a 4-element list; `String(detail)` is exactly the reported line.
+
+**2. The 422 itself: non-finite values become `null` in the request body.**
+`JSON.stringify(Number.NaN)` is `null`, and every series field on these routes
+is pydantic `list[float]`, which rejects `null` once per element. The loop's
+four gaps produced exactly four validation entries — which is why there were
+four `[object Object]`s.
+*Measured:* the request body was built with **node**'s own `JSON.stringify`
+(Python's `json.dumps` writes a non-standard bare `NaN` literal and would have
+masked the bug — the first attempt at this reproduction returned 200) and
+posted to the live route: `null` count 4, status 422, `detail` a 4-entry list
+with `loc` `["body","moment",7/8/22/31]` and `msg` "Input should be a valid
+number". Same family as BUG-017; the `.dwk`/autosave/Pack Project/clipboard
+paths were fixed there, the API REQUEST path never was.
+
+**3. The scientific bug: the Background tab used the M(T) tool on M(H) data.**
+`useMagTools.ts` unconditionally called `subtractMagBackground` →
+`calc.magnetometry.subtract_mag_background`, a ONE-SIDED linear fit over the
+top `auto_fraction` of the x-range, correct for a high-temperature tail and
+wrong for a loop. That function's own docstring says "Do not use that on a
+hysteresis loop." The hook also named the x axis `temperature`
+unconditionally, which is how it went unnoticed.
+*Measured*, on a synthetic saturated loop (Ms 1e-3 emu, Hc 200 Oe, true
+χ −3e-8 emu/Oe, true offset 5e-5 emu):
+
+| | slope | second value | Ms pair | squareness | mean M at &#124;H&#124;>0.9·Hmax |
+|---|---|---|---|---|---|
+| raw | — | — | (+6.44e-4, −5.43e-4) | 0.7733 | +5.00e-5 |
+| M(T) tool (what shipped) | −3.0000e-08 | intercept **1.0500e-03** | (+2.1e-19, **−2.000e-03**) | **1.0000** | **−1.00e-03** |
+| M(H) tool (correct) | −3.0000e-08 | offset **5.0000e-05** | (+1.000e-03, −1.000e-03) | 0.4589 | −1.3e-19 |
+
+The one-sided window sits entirely in the +H tail, so the intercept it removes
+is `offset + Ms`, not `offset`. The corrected loop's plateaus land on `0` and
+`−2·Ms`, and squareness reads a meaningless 1.0000. Both tools recover the
+susceptibility correctly; only the vertical term differs, and it is the one
+that destroys the result.
+
+**4. The labelling.** "High-T fraction" and "Fits a line to the high-T tail of
+M(T) and subtracts it" are correct ONLY for M(T). The two paths also have
+different natural defaults (`auto_fraction` 0.1 vs `hi_fraction` 0.7).
+
+### Six more found in adversarial review of the first cut
+
+**5. The first fix REINTRODUCED the silent misdispatch, mirror-imaged.**
+`magXAxis` read `metadata.x_column_name` alone, while the app's six other
+label resolvers (`plotdata.ts`, `plotspec.ts`, `ChannelsCard.tsx`,
+`quickFigureMapping.ts`, `panelwindow.ts`, `peakTableFit.ts`) all read
+`x_column_long || x_column_name`. `io/origin_project/opj.py` puts Origin's
+SHORT column name there — a bare letter — and the human label in
+`x_column_long`, so `detectMagXKind`'s whole-word symbol rule fired on it: an
+M(T) curve with `x_column_name:"B"`, `x_column_long:"Temperature"` classified
+as **field** and silently ran the hysteresis routine. Fixed by reading
+`x_column_long` first; Origin's unrecovered-x `"Row"` then correctly lands on
+`unknown` and fails closed.
+
+**6. Defect 2 was fixed at 1 of 3 call sites.** `useHysteresis.ts` still sent
+raw series from both `hysteresisAnalysis` (fired AUTOMATICALLY in an effect on
+dataset activation) and `subtractHysteresisBackground`, so the owner's same
+gapped loop still 422'd in the Hysteresis workshop — legible after fix 1, but
+still broken. Both now filter. `selectedFitData` (`fitselection.ts`) is
+deliberately left alone: it is a shared primitive behind every fit path, and
+the filtering belongs at the request boundary, not in it.
+
+**7. A documented no-op was reported as success.** `subtract_hysteresis_background`
+returns `(m, 0.0, 0.0)` unchanged when fewer than `min_points` exceed
+`hi_fraction*max|H|` or the span is degenerate; the panel printed "removed:
+χ 0, offset 0" and "removed χ·H background and re-centred the loop". It now
+says no background was found, as the sibling `useHysteresis` already did.
+Reachable by raising High-field fraction, or on a minor loop.
+
+**8. A stale readout survived a dataset change.** `fit`/`warning`/`error`
+cleared only on `setBgMode`. Run M(T) on dataset A, click loop B: the panel
+re-labelled to M(H) and still showed A's slope/intercept. The readout is now
+tagged with the dataset ids it is ABOUT (its source and the corrected dataset
+it wrote) and shown only while one of those is active. **Ownership is derived,
+not cleared by an effect** — an effect keyed on the active id fires on the
+app's own `addDataset`, which activates the dataset just written, wiping the
+readout in the same turn that produced it (measured: 8 tests red).
+
+**9. The Units tab destroyed good x.** `dropGapRows` pairs the coordinates, so
+a finite field value on a moment-gap row came back `NaN`, and the first
+commit's own test pinned that. A unit conversion is a scalar multiply per
+axis, so no row can influence another: `substituteGaps`/`restoreSubstituted`
+(new, in the same module, with the distinction documented) send a finite
+placeholder per gap PER AXIS and discard its converted result, so each axis
+keeps exactly the gaps it started with. `convert()` also gained the
+minimum-data guard it lacked.
+
+**10. Record drift.** A line count and a missing bundle number, corrected here.
+
+### Five more from the re-review (round 3)
+
+**11. The bare-letter hole — the SAME defect class, third recurrence.**
+Reading `x_column_long` first was right but not sufficient:
+`io/origin_project/opj.py`'s `_label_for` falls back to the bare Origin SHORT
+designation when the worksheet carried no Long Name, so `x_column_long` can
+ITSELF be "B", "H" or "T". With a blank Unit row the whole-word symbol rule
+fired on that letter and an M(T) curve in Origin column B or H silently ran
+the hysteresis routine (an M(H) loop in column T, the M(T) one). Closed at the
+root: a LONE symbol — the whole label is one letter — is not evidence of a
+quantity and now yields `unknown`, the same fail-closed answer Origin's "Row"
+already got. A recognisable unit is consulted first and still decides on its
+own, so "H"/"Oe" and "T"/"K" are unaffected; only a bare letter with no
+corroborating unit falls through to the user.
+
+**12. The derived dataset recorded no x identity.** A derived dataset's x is a
+bare `time` column, so the inherited `x_column_*` hints are all any later
+reader has. When x came from a CHANNEL they described the SOURCE's original
+time column, so the panel could flip to "Cannot tell M(T) from M(H)" the
+instant its own output became active, and a second run could dispatch off
+metadata for a different quantity. Both outputs now stamp the real identity
+(`stampXIdentity`), and the converted dataset stamps `x_column_long` too —
+without it the new precedence would read a stale inherited long name.
+
+**13. A minor loop was claimed to be re-centred.** The one-sided branch of
+`subtract_hysteresis_background` removes a slope and deliberately does NOT
+centre (offset exactly 0, a symmetric centre being undefined). The status line
+now says "not centred — high field on one side only" in that case.
+
+**14. The Hysteresis workshop dropped gap rows with no notice.** Its automatic
+analysis now surfaces the same "N of M rows are gaps" warning the Background
+tab gives, on both its paths, rendered in the panel.
+
+**15. `convert()` refused too little and too much.** Its guard only fired when
+BOTH axes were all-gap; one all-gap axis now converts the other and warns that
+the output column is empty, rather than silently minting it.
+
+### The fix
+
+- `lib/api/errorDetail.ts` (new) renders any `detail` shape as one short line
+  — `body.moment.7: Input should be a valid number`, deduplicated, capped at
+  three, with the TOTAL entry count appended when anything is left out (a
+  "+N more" computed off deduplicated lines would be a lie). It never throws:
+  it runs while another error is already being reported. `ensureOk` handles a
+  string detail inline and `await import()`s this module only on the
+  non-string path, so the formatter's bytes stay out of the eager bundle.
+- `lib/api/finitePairs.ts` (new) holds BOTH gap contracts and the reason they
+  differ. For a FIT, **drop**: `dropGapRows` removes a row when either
+  coordinate is non-finite and records that row's original index;
+  `restoreGapRows` scatters the result back to those indices, leaving `NaN` at
+  the gaps, and THROWS on a length mismatch rather than returning a shifted
+  column. **Ruling:** a gap in a measured loop is missing data, so the fit must
+  never see a stand-in — dropping is the only encoding under which
+  `np.polyfit` cannot be handed an invented value — and row alignment is
+  preserved by construction. The alternative (teach the backend to accept and
+  ignore non-finite entries) was rejected: it changes the wire contract and the
+  OpenAPI schema for every caller, and moves the "which rows were real"
+  bookkeeping to the side of the boundary that does not own the dataset. For a
+  row-INDEPENDENT transform, **substitute** (finding 9).
+- `lib/magDataKind.ts` (new) decides M(T) from M(H) **from declared metadata
+  only**: the x unit when recognisable (Oe/kOe/T/mT/G/A/m… ⇒ field; K/°C/°F ⇒
+  temperature), else the x label ("field"/"magnetic"/whole-word H or B ⇒ field;
+  "temp"/"kelvin"/whole-word T ⇒ temperature), and a label and unit that
+  DISAGREE yield `unknown` rather than a winner. Shape heuristics
+  (non-monotonic x, symmetry about zero) are deliberately NOT a decider:
+  guessing the analysis from the shape of the data is the failure mode being
+  fixed, in a new costume. **Unknown fails closed** — the panel disables the
+  action, says what it could not determine, and offers Auto / M(T) / M(H).
+- `useMagTools.ts` dispatches on that, keeps the two fractions in SEPARATE
+  state (0.1 for M(T), 0.7 for the loop, never crossed), and reports the right
+  quantity for each path — the M(H) route returns an **offset**, not an
+  intercept. `magXY`'s output is no longer called `temperature`.
+- Prose swept: `routes/magnetometry.py`'s module docstring, both frontend API
+  wrappers, the hook and the panel headers now say the tab covers two distinct
+  routines. The backend function is genuinely about high-T and still says so.
+
+### Tests and acceptance
+
+- [x] Reproduction recorded for all four reported defects (above), each
+      measured before any code changed
+- [x] Regression test per defect and per review finding, each sabotage-verified
+- [x] Relevant focused tests pass
+- [x] Type-check/build/repository gates pass
+- [ ] Owner verifies on the reported VSM file
+
+#### Completion record
+
+- PR/commit: see the branch's commit
+- Automated tests: `lib/api/errorDetail.test.ts`, `lib/api/http.test.ts`,
+  `lib/api/finitePairs.test.ts`, `lib/magDataKind.test.ts`,
+  `components/workshops/magtools/useMagTools.test.ts`,
+  `components/workshops/magtools/MagToolsPanel.test.tsx`,
+  `components/workshops/hysteresis/useHysteresis.test.ts`,
+  `tests/test_api_magnetometry.py`
+- Agent verification: 19 sabotages over three rounds, each restored
+  byte-identical — see the commit body's table
+- Owner verification: pending
+- Line counts (measured with `wc -l`, no new pin): `useMagTools.ts` 472 of
+  500, `MagToolsPanel.tsx` 201 of 400, `useHysteresis.ts` 155,
+  `magDataKind.ts` 152, `finitePairs.ts` 137, `errorDetail.ts` 101,
+  `HysteresisPanel.tsx` 75
+- Bundle, re-measured on the CURRENT base (`2e9ed223`, which carries vite
+  8.3.0 and vitest 5.0.1 — a re-chunk would have moved this, so it was
+  measured there rather than carried over): 877,081 B eager at the parent ->
+  877,336 B here, **+255 B**, 846 B under the unmoved 878,182 B budget. Both
+  measured after `npm ci`, main's in a throwaway worktree removed afterwards.
+  `errorDetail` is still emitted as its own chunk with zero `modulepreload`
+  references in `index.html`, so the lazy-import claim still holds under the
+  new vite
+- Notes: no route or request/response model changed — only a module docstring
+  — so `schema.d.ts` needs no regeneration and
+  `tests/test_openapi_snapshot.py` passes. The "autosave failing" banner the
+  owner saw at the same time was investigated and is NOT this bug's NaN cause
+  (`saveAutosave` is measured returning `true` with `autosaveHealth().error`
+  null on NaN/`-0` cells, because `serializeWorkspace` applies BUG-017's
+  sentinel encoder); it is **BUG-019 on `main`** — the per-technique
+  view-memory compounding, whose `JSON.stringify` failure raises that exact
+  banner. A separate filing was drafted and dropped as a duplicate.
+
+---
+
+## BUG-022 — `selectedFitData` leaves reachable 422s on six fit call sites
+
+**Priority:** P1 — the owner's own gapped hysteresis loop still fails in Curve
+Fit; legible since BUG-021's `errorDetail.ts`, but still a failure
+**State:** Open — found in the round-3 re-review of BUG-021, not fixed there
+(out of that commit's scope); every site named below is code-read
+**Reported:** 2026-09-20 by Claude (agent), reviewing BUG-021
+**Likely scope:** `frontend/src/lib/fitselection.ts` and the six hooks listed
+
+### The defect
+
+`lib/fitselection.ts`'s `selectedFitData` (`:33-53`) packs `x`/`y` straight
+out of the analysis view and does **not** filter non-finite values. Every
+consumer posts that pair to a pydantic `list[float]` route, where a
+`JSON.stringify`d `NaN` arrives as `null` and is rejected once per element —
+the identical mechanism BUG-021 fixed for magnetometry:
+
+| Caller | Route |
+|---|---|
+| `useCurveFit.ts:211-212` | `routes/fitting.py:49` |
+| `useEquationFit.ts:181+` | `routes/fitting.py:55` |
+| `useModelScan.ts:67` | `routes/fitting.py:129` |
+| `useBumpsFit.ts:74` | `routes/fitting.py:184` |
+| `usePeakWizard.ts:154` | `routes/fitting.py:263` |
+| `autoGuess` | `routes/fitting.py:342` |
+
+A measured loop with gaps therefore 422s in Curve Fit exactly as it did in the
+Background tab.
+
+### The ruling BUG-021 already made, and why it was not applied here
+
+BUG-021 deliberately left `selectedFitData` alone: it is a shared primitive
+behind every fit path, and the filtering belongs at the REQUEST BOUNDARY, not
+inside a selection helper (a fit hook may legitimately want to know that rows
+were dropped, and a silent filter inside the selector would hide that from all
+six). That reasoning stands; this entry is the boundary work not yet done.
+
+`lib/api/finitePairs.ts` already provides the contract to apply —
+`dropGapRows` + `restoreGapRows` for anything that fits, `substituteGaps` +
+`restoreSubstituted` for anything elementwise — including the row-alignment
+guarantee and the throw-on-mismatch that keeps a corrected column from
+shifting. Each site also needs BUG-021's user notice ("N of M rows are gaps"),
+not a silent drop.
+
+### Reproduction
+
+- [x] Mechanism identified and each call site named (above), code-read
+- [ ] Reproduced end to end per site
+- [ ] Regression test per site
+
+---
 
 ## New issue template
 
@@ -8044,3 +8365,4 @@ acceptance evidence is untouched and still passes.
 | 2026-09-16 | Claude (agent) | **BUG-017 fixed** (P1, data loss): a dataset holding a `NaN`, `±Infinity` or `-0` cell now survives every JSON boundary the app puts it through. New `frontend/src/lib/nonFiniteCells.ts` owns ONE encoder/decoder pair — a value `JSON.stringify` cannot represent is written as the string `String(value)` gives for it (`"NaN"`, `"Infinity"`, `"-Infinity"`, `"-0"`) and read straight back — applied symmetrically by `lib/workspaceSerialize.ts` (`data` and `raw`) and `lib/workspaceDatasetParse.ts` (`isWireCellArray` + `decodeDataStruct` before `sanitizeDataStruct`). Its own module so neither of those files (282/264 lines) is bulked toward the 500-line ceiling. The same hole existed separately in `lib/workbookTransfer.ts`'s `buildTransferPackage` (its own `JSON.stringify(pkg)`, re-parsed through `parseWorkspace`, so workbook Copy/Paste and Duplicate refused the whole workbook) and is fixed with the same helper; `lib/autosave.ts` and `store/packProjectContent.ts` share `serializeWorkspace` and are covered by the one change. NO schema bump and NO output change for ordinary data: the encoders return their INPUT object when nothing needs a sentinel, so the graph `JSON.stringify` walks is literally the pre-fix one. Two rulings recorded in the code and the entry: a pre-fix `null` cell stays a REJECTION (it meant NaN, +Infinity OR -Infinity — reading it as NaN would fabricate a value the file does not contain), and a malformed entry still refuses the WHOLE workspace rather than skipping one dataset with a warning (a skipped dataset is invisible and the next Save would delete it permanently; refusing leaves the file intact — and the throw is now unreachable for any file the app itself wrote). One residual recorded, not fixed: `lib/figureDocument.ts:442`'s frozen figure snapshot never throws but is lossy for `±Infinity` (both become `NaN`) and `-0` | 17 new specs (`frontend/src/lib/nonFiniteCells.test.ts`), the NaN minted through the app's own `insertRows`; every one sabotage-verified across 7 sabotages (encoder NaN/±Inf branches → 9 fail; encoder `-0` branch → 5; decoder → 8; cell check reverted to number-only → 10; byte-identity by-reference return → 1; `workbookTransfer` call site → 1; cell check widened to accept `null` → 2), source restored byte-identical. `npx tsc -b --force` exit 0; `npx eslint src --max-warnings=0` exit 0; `npx vitest run src/lib src/store src/architecture.test.ts` 358 files / 7,076 tests, 7,075 passed — the single failure, `freezeRegressionMatrixCheck.test.ts`, is an unrelated 30 s timeout under full-scope parallelism (it spawns a NESTED vitest run) and passes in 19.6 s alone on the same tree. `npm run build` after `rm -rf node_modules/.vite`: eager bundle 910,971 B at the real parent `56bb3599` → 911,835 B here, **+864 B**, 8,565 B under the unmoved 920,400 B budget. `uv run pytest -q tests/test_repo_integrity.py` 12 passed |
 | 2026-09-19 | Claude (agent) | Filed BUG-018 (P2): all ten backdrop dialogs in `components/overlays/` claim Escape with `window.addEventListener("keydown", …, true)` + `stopPropagation()`, which does not stop a same-node same-phase sibling, so two stacked dialogs both act on ONE keystroke — measured 2 → 0 open `[role="dialog"]` for Preferences+Shortcuts, Preferences+Help and Preferences over a pending `ConfirmDialog`, the last also resolving the confirmation `false` on the keystroke that dismissed Preferences. Pre-existing (the Escape effects are byte-identical to before `cee0494f`); what was new was R1 being CLOSED and the audit row flipped to "window capture, kept" on the claim that a backdrop dialog can never be out-ranked — true over a non-dialog surface, false dialog-over-dialog. The preferred fix was BUILT and MEASURED (all ten onto `useEscapeSurface("window", …)`; it does fix the ladder, confirm stays pending on the first Escape) and then REVERTED: `escapeStack`'s `isEditingTarget` early return made Help, Separate, Combine and Split Escape-DEAD from their own documented landing spots (an `<input>`/`<select>` each), 9 failed / 264 passed. Narrowed R1 instead, corrected the audit row, recorded NITs 4 and 5 as residuals R12/R13, and fixed review NIT 3 (Preferences landed on the first Theme segment, which under `theme: "light"` is an `aria-selected="false"` "Dark" button; it now lands on the SELECTED one, pinned in both themes) | 3 new specs (`components/overlays/stackedDialogEscape.test.tsx`) + 1 new 2-case `it.each` (`PreferencesDialog.test.tsx`), all sabotage-verified across 5 sabotages, source restored byte-identical; round 7's per-dialog focus-hook sabotage property re-verified after the landing-spot change (Preferences alone → RED 2/10). Also corrected the FIFTH-recurrence wrong-parent bundle record on `cee0494f`: its parent is `4179b166`, not `b10bcad3` (three commits back, with two P4.1 commits that moved 218 eager lines between them) — re-measured in a throwaway worktree, `4179b166` **889,496 B** → `cee0494f` **889,498 B**, +2 B; the delta was right, both absolute numbers were wrong by 21 B |
 | 2026-09-19 | Claude (agent) | **BUG-019 fixed** (P1, silent state corruption) and **BUG-020 filed + fixed** (P2, silent data loss). BUG-019: `lib/techniqueViewMemory.ts`'s `captureTechniqueView` spread its capture source whole (`{ ...liveView, labels }`), and `LiveViewSource` is satisfied STRUCTURALLY — so the three callers that hand it the entire `AppState` (`store/windows.ts:151`'s `focusedRebindPatch`, `useWorkspaceAutosave.ts:283`'s debounced autosave, `store/workspaceIO.ts:102`'s Save/Save As) stored `datasets`, `plotWindows` AND the PREVIOUS `techniqueViewMemory` in every entry. Only the slot being written is replaced, so a single technique recurses linearly but ALTERNATING two — switch to the map, switch back — makes each slot absorb the other one generation late: `size(k) ~ size(k-1) + size(k-2) + C`, Fibonacci-like, ratio -> phi ~ 1.62 (an earlier revision of this row said `2 x size(k-1) + C`; measured on `281ee552`: 80,340 -> 241,003 -> 482,002 -> 883,664 -> 1,526,325 -> 2,570,648 -> 4,257,632 -> 6,988,939, ratios 3.0, 2.0, 1.83, 1.73, 1.68, 1.66, 1.64). Autosave `JSON.stringify`s that map on the thread that draws, 800 ms after every dataset switch and every dataset add, which is why the owner's ROI box integration produced an empty new plot AND blanked previously plotted datasets — the data was never wrong, the main thread simply stopped. Fixed by projecting the capture source down to its nine declared fields inside `captureTechniqueView`, so it holds for all four callers and any future one; no schema change and no behaviour change to the memory itself. Two review corrections carried in the same commit: the earlier claim that "nothing is reported" was FALSE — `lib/autosave.ts:88` + `StatusBar.tsx:139-145` do render a persistent `role="alert"` autosave-failing indicator — so the claim is narrowed to the stall itself, and the one genuinely wrong surface (a status line hardcoded to "storage full or unavailable" for what was a `serializeWorkspace` failure) now names the real reason. BUG-020: `Stage/useCutLanding.ts` minted `cut-N` ids from a private page-lifetime counter instead of `store/idSeq.ts`'s collision-free sequence — filed with its own reproduction rather than left as a footnote, since it reproduces the owner's "Apply made a new plot that was empty/wrong" symptom class independently of the stall | Measured before/after against the RUNNING app (Playwright + real backend) on the owner's exact sequence: `JSON.stringify(techniqueViewMemory).length` 5,440,727 -> 16,322,222 -> 32,387,084 -> 69,957,577 -> 123,592,932 -> 214,798,775 -> 359,639,968 -> `RangeError: Invalid string length` -> page unresponsive >45 s; after the fix a flat 344 B across all 26 switches with identical canvas ink (537,953 / 51,795) every time. A second run on two ordinary imported XRDML files hit 73.9 MB in ten switches and stopped answering any page evaluation from switch nine for the remaining 600 s. BUG-020 probed on both trees: `['cut-1','cut-1']`, `activeId` resolving to the OLD rows, and `removeDatasets` emptying the library, versus unique ids and an independent delete after. 10 new tests across four files, all sabotage-verified — the whole-object spread and the recursion-only variant each redden 4 (2 in `lib/techniqueViewMemory.test.ts`, 2 in `store/techniqueMemoryGrowth.test.ts`); restoring the private cut counter reddens all 3 in `Stage/useCutLanding.test.ts`; hardcoding the autosave wording reddens both new `useWorkspaceAutosave.test.ts` cases; and a per-field sweep of `projectLiveView` (scope: the two memory files + `store/windows.test.ts`) now reddens on EVERY one of the nine — xKey 4, yKeys 8, yScale 5, xScale 2, seriesStyles 9, seriesLabels 8, seriesOrder 2, errKeys 8, hiddenChannels 8 (the previous row claimed 1 for a dropped field, which was the weaker `hiddenChannels: []` variant, and `xScale` had NO coverage at all before this round). `npx tsc -b --force` 0; `npx eslint src --max-warnings=0` 0; SCOPED `npx vitest run` over the six affected/adjacent files (`lib/techniqueViewMemory.test.ts`, `store/techniqueMemoryGrowth.test.ts`, `Stage/useCutLanding.test.ts`, `useWorkspaceAutosave.test.ts`, `store/windows.test.ts`, `architecture.test.ts`) 6 files / 138 passed, 0 `FAIL` — the FULL suite is NOT verified on this tree: two attempts were killed by host contention (a second agent's gate running concurrently), not by a test failure, so CI is the remaining gate; `uv run ruff check src tests tools` 0; `uv run mypy src` 0 (297 files); `uv run pytest -q tests/test_repo_integrity.py` 13 passed (12 + the new heading guard). Eager bundle 875,755 B at the parent `281ee552` -> 876,018 B here, +263 B, 451 B under the unmoved 876,469 B budget |
+| 2026-09-20 | Claude (agent) | **BUG-021 fixed** (P0, owner-reported from a real VSM hysteresis loop; filed as BUG-019 on the branch and renumbered on rebase, `main` having taken that number). Four reported defects, each reproduced by measurement first: (1) `lib/api/http.ts`'s `ensureOk` — the app's SINGLE error-extraction path — cast the error body to `{ detail?: string }`, so FastAPI's array-shaped 422 `detail` rendered as `[object Object],[object Object],[object Object],[object Object]`; new `lib/api/errorDetail.ts` formats any shape, `await import()`ed only on the non-string path so its bytes stay out of the eager bundle. (2) The 422 itself: `JSON.stringify(NaN)` is `null` and every series field is pydantic `list[float]`, one error per gap — new `lib/api/finitePairs.ts` DROPS gap rows before a fit and scatters the result back to their original indices, throwing rather than returning a shifted column. (3) The scientific bug: the Background tab always called the M(T) one-sided high-T fit, which `subtract_mag_background`'s own docstring forbids on a loop — new `lib/magDataKind.ts` decides from the DECLARED x label/unit and `useMagTools.ts` dispatches, failing closed to a user choice when unknown. (4) The labelling: description, control label, per-path default (0.1 vs 0.7, separate state) and reported quantity (offset, NOT intercept) follow the path actually selected. Adversarial review then found six more, all closed here: the first cut read `x_column_name` ALONE while six other resolvers read `x_column_long || x_column_name`, so an Origin short column name ("B", "H", "T") reintroduced the silent misdispatch mirror-imaged; the NaN filter covered 1 of 5 call sites, leaving the Hysteresis workshop's AUTOMATIC analysis still 422ing on the owner's same loop; a documented no-op (`slope=offset=0`) was reported as a successful subtraction; the readout survived a dataset change and sat under the other path's label; the Units tab paired the coordinates and so destroyed a good field value over a moment gap (fixed with a substitute-not-drop pair for elementwise transforms, plus the minimum-data guard it lacked); and a line count and a missing bundle number were corrected. The readout's ownership is DERIVED, not cleared by an effect — an effect keyed on the active id fires on the app's own `addDataset` and wiped the readout in the same turn that produced it (measured: 8 tests red). The co-occurring "autosave failing" banner was investigated and NOT filed separately: it is BUG-019's `JSON.stringify` failure, not a NaN failure. A THIRD round then closed five more: `_label_for` falls back to the bare Origin SHORT designation when there is no Long Name, so `x_column_long` can ITSELF be "B"/"H"/"T" and the bare letter still reached the detector (closed at the root — a LONE symbol no longer classifies on its own and fails closed, while a recognisable unit still decides alone); a derived dataset recorded no x identity, so the panel could flip to "Cannot tell M(T) from M(H)" the instant its own output became active; a minor loop was claimed to be "re-centred" when that branch deliberately does not centre; the Hysteresis workshop dropped gap rows with no user notice; and `convert()`'s guard refused only when BOTH axes were all-gap. Two pre-existing defects were FILED, not fixed: **BUG-022** (`selectedFitData` does not filter, and all six consumers post to `list[float]` routes — the owner's same loop still 422s in Curve Fit) and a note on **BUG-020** that four more call sites mint ids from a page-lifetime counter, which this fix's readout ownership now keys on | Measured before the fix: a node-`JSON.stringify` body → 4 `null`s → HTTP 422 with a 4-entry `detail` list (`loc` `["body","moment",7/8/22/31]`); and on a synthetic saturated loop the M(T) tool removed intercept 1.0500e-03 (true offset 5.0000e-05), leaving plateaus at 0 / −2.000e-03 and squareness 1.0000 against the M(H) tool's ±1.000e-03. Autosave ruled out by `lib/nonFiniteCells.test.ts`'s two autosave cases passing on this tree. Re-gated on the CURRENT base `2e9ed223` (vite 8.3.0 + vitest 5.0.1) after `npm ci`, not carried over from the earlier base: `npx tsc -b --force` exit 0; `npx eslint src --max-warnings=0` exit 0; full `npx vitest run` 693 files / 11,740 passed + 2 expected fail, 0 `FAIL`; `npm run build` clean, eager bundle 877,081 B at the parent -> 877,336 B here, **+255 B**, 846 B under the unmoved 878,182 B budget, with `errorDetail` still emitted as its own chunk and zero `modulepreload` references to it in `index.html` (main's own bytes re-measured on this base in a throwaway worktree, removed after); `uv run ruff check src tests tools` 0; `uv run mypy src` 0 (297 files); `uv run pytest -q -n auto tests -k magnetometry` 22 passed / 2 skipped; `uv run pytest -q tests/test_repo_integrity.py tests/test_openapi_snapshot.py` 14 passed (no schema drift). 19 sabotages over three rounds, every source file restored byte-identical. |
