@@ -55,7 +55,7 @@ describe("buildDatasetRowMenu — Quick Plot ordering (L0.38)", () => {
     const quickPlot = items.find((i) => labelOf(i) === "Quick Plot") as { disabled?: boolean; title?: string };
     expect(quickPlot.disabled).toBe(true);
     expect(quickPlot.title).toBe(
-      "unrecognized data — Configure Quick Plot arrives with the Quick Figure Builder (PR G)",
+      "unrecognized data — choose Configure Quick Plot… to assign columns and preview an editable figure",
     );
   });
 });

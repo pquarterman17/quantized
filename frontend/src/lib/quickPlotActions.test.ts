@@ -61,7 +61,7 @@ describe("dataset.quickPlot", () => {
     const item = menuItemFor(find("dataset.quickPlot"), target(ds));
     expect(item.disabled).toBe(true);
     expect(item.title).toBe(
-      "unrecognized data — Configure Quick Plot arrives with the Quick Figure Builder (PR G)",
+      "unrecognized data — choose Configure Quick Plot… to assign columns and preview an editable figure",
     );
   });
 

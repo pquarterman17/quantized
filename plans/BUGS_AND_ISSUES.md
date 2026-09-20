@@ -100,7 +100,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-022 | P1 | Fitting and peak-analysis request boundaries | `selectedFitData` deliberately preserves non-finite values, but consumers posted them to pydantic `list[float]` routes, turning NaN into rejected `null` values | ChatGPT-Sol | **FIXED 2026-09-20, widened by critical self-review:** direct Curve/Equation/Bumps fits, auto-guess, model scan, Peak Analyzer, the older Peaks workshop, saved-fit recomputation and pipeline replay now apply `dropGapRows`. Fitted curves are scattered back through `restoreGapRows`; weighting follows the same kept indices; pipeline logs and interactive notices disclose exclusions. Grouped fits and ROI gadgets were audited and already filtered finite pairs. The selector remains unchanged, preserving the original design ruling. |
 | BUG-023 | P2 | Frozen figure and snapshot-window persistence | Frozen `FigureDocument` snapshots and `kind:"snapshot"` plot windows bypassed BUG-017's non-finite-cell codec: JSON converted NaN/±Infinity to `null` and `-0` to `0`; reopen could not recover infinity kind/sign or signed zero | Codex | **FIXED 2026-09-20** — one shared JSON-boundary encoder preserves all four identities across standalone figures, workspaces, static plot bundles, and workbook transfer; legacy finite/`null` files remain valid; direct/full regressions cover every affected array |
 | UX-005 | P1 | Quick Plot refusal guidance | The current release tells users Configure Quick Plot “arrives with the Quick Figure Builder (PR G)” even though **Configure Quick Plot…** and the builder already shipped and appear beside Quick Plot | ChatGPT-Sol | Code-proven user-facing stale copy at both refusal constants; tests currently pin the wrong wording. Full pickup brief in `POST_RELEASE_PROBLEM_AUDIT.md` |
-| UX-006 | P3 | Installed-version diagnostics | `qz --version` is rejected, so users and support agents cannot identify an installed CLI/package build using the conventional command; the release smoke test must import Python internals instead | ChatGPT-Sol | Reproduced against the published v0.26.1 wheel and confirmed absent from `cli.py`; full pickup brief in `POST_RELEASE_PROBLEM_AUDIT.md` |
+| UX-006 | P3 | Installed-version diagnostics | `qz --version` is rejected, so users and support agents cannot identify an installed CLI/package build using the conventional command; the release smoke test must import Python internals instead | ChatGPT-Sol | **FIXED 2026-09-20** — `qz` and `quantized` now use argparse's version action backed by canonical `quantized.__version__`, exiting before server/browser startup; focused CLI tests and both-alias wheel smoke coverage added. Commit/PR recorded in the audit completion entry. |
 | UX-007 | P2 | Workbook Properties command | The workbook right-click menu shows **Properties…** permanently disabled and explains it with the internal roadmap text “arrives with Details/Properties (PR D)”, even though PR D shipped; the result is a prominent dead end in the new Origin-like Library | ChatGPT-Sol | Code-proven in the v0.26.1 action registry and pinned by its unit test. Full pickup brief in `POST_RELEASE_PROBLEM_AUDIT.md` |
 
 ---
@@ -8157,7 +8157,7 @@ Full evidence, reproduction, and gate expectations are in
 ## UX-005 — Quick Plot refusal guidance advertises an already-shipped feature
 
 **Priority:** P1
-**State:** Open — code-proven user-visible stale copy
+**State:** Complete — present-tense actionable refusal guidance shipped
 **Reported/investigated:** 2026-09-20 by ChatGPT-Sol
 **Suggested owner/model:** Inexpensive ChatGPT/Codex frontend model
 
@@ -8167,9 +8167,17 @@ builder already ship beside Quick Plot. Replace the internal roadmap sentence
 with a concise present-tense instruction naming the available next action, and
 update the tests that currently pin the stale copy.
 
-- [ ] Replace both refusal messages and keep map-specific advice accurate.
-- [ ] Remove internal PR labels from rendered copy in the touched workflow.
-- [ ] Update focused menu/palette/workbook tests and run the frontend gate.
+- [x] Replace both refusal messages and keep map-specific advice accurate.
+- [x] Remove internal PR labels from rendered copy in the touched workflow.
+- [x] Update focused menu/palette/workbook tests and run the frontend gate.
+
+**Evidence (2026-09-20):** Generic and unsupported data now direct users to
+**Configure Quick Plot…** to assign columns and preview an editable figure;
+2-D map data retains the scientifically specific Map view guidance. The four
+focused Quick Plot/Library test files pass (81 tests), forced TypeScript,
+frontend lint, clean frontend build/bundle (857.4 kB eager, within the 857.6
+kB budget), and repository-integrity tests (13 passed). Implementation commit:
+[`4997396a`](https://github.com/pquarterman17/quantized/commit/4997396aa39b7f68fed3a07b1565c34bd7bd5958).
 
 Full evidence and acceptance wording are in `POST_RELEASE_PROBLEM_AUDIT.md`.
 

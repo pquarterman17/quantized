@@ -177,15 +177,24 @@ preview an editable figure.” Do not expose internal PR labels to users.
 
 **Implementation checklist:**
 
-- [ ] Replace both refusal constants with concise present-tense guidance.
-- [ ] Keep the map-specific refusal focused on opening Map view; offer
+- [x] Replace both refusal constants with concise present-tense guidance.
+- [x] Keep the map-specific refusal focused on opening Map view; offer
   configuration only where a 1-D mapping is meaningful.
-- [ ] Update every pinned menu/palette/workbook test.
-- [ ] Search all rendered copy for `PR G`, `arrives with`, and similar internal
+- [x] Update every pinned menu/palette/workbook test.
+- [x] Search all rendered copy for `PR G`, `arrives with`, and similar internal
   roadmap language.
-- [ ] Verify disabled menu tooltips are one short sentence and name the exact
+- [x] Verify disabled menu tooltips are one short sentence and name the exact
   adjacent action.
-- [ ] Run focused Quick Plot/Library tests, forced typecheck, lint, and build.
+- [x] Run focused Quick Plot/Library tests, forced typecheck, lint, and build.
+
+**Status:** Complete (2026-09-20). Generic and unsupported-technique refusal
+copy now names the adjacent **Configure Quick Plot…** action and explains that
+it assigns columns and previews an editable figure. The 2-D map refusal still
+directs users to Map view because Quick Plot creates line figures and is not a
+scientifically valid map renderer. Focused tests pass (4 files, 81 tests), as
+do forced TypeScript, lint, clean build/bundle (857.4 kB eager, under the
+857.6 kB budget), and repository-integrity tests (13 passed). Implementation
+commit: [`4997396a`](https://github.com/pquarterman17/quantized/commit/4997396aa39b7f68fed3a07b1565c34bd7bd5958).
 
 **Suggested owner/model:** ChatGPT/Codex inexpensive implementation model; this
 is bounded frontend wording plus tests and does not need an expensive model.
@@ -204,13 +213,20 @@ importing `quantized.__version__` through Python.
 
 **Implementation checklist:**
 
-- [ ] Add the conventional `--version` argument using the canonical
+- [x] Add the conventional `--version` argument using the canonical
   `quantized.__version__` value.
-- [ ] Test both `qz --version` and the `quantized` alias without starting the
+- [x] Test both `qz --version` and the `quantized` alias without starting the
   server or opening a browser.
-- [ ] Add this check to the wheel smoke test so published metadata and runtime
+- [x] Add this check to the wheel smoke test so published metadata and runtime
   identity remain aligned.
-- [ ] Run backend lint, typecheck, CLI tests, and package build/smoke test.
+- [x] Run backend lint, typecheck, CLI tests, and package build/smoke test.
+
+**Completion evidence (2026-09-20):** `quantized.cli._serve` now registers
+argparse's version action from the canonical `quantized.__version__`; both
+console-script aliases therefore print the version and exit before browser or
+server startup. Focused tests assert the zero exit and no startup calls, and
+the PyPI workflow smoke test invokes both installed aliases. Implementation
+implementation commit: `26e5272e` (PR opened from `codex/ux-006-version`).
 
 **Suggested owner/model:** Claude Haiku-class or inexpensive Codex model; small
 backend/packaging task with straightforward tests.
@@ -287,7 +303,7 @@ inexpensive model.
    small read-only inspector if it fits the current Library projection cleanly.
 3. [x] Fix BUG-023 next: reuse an existing codec across both affected frozen
    payloads, with direct and workspace round-trip tests.
-4. [ ] Add UX-006 alongside other packaging work or as a tiny independent PR.
+4. [x] Add UX-006 alongside other packaging work or as a tiny independent PR.
 5. [ ] Perform the owner acceptance pass for BUG-001 and UX-001/UX-004 on the
    actual files; convert every observed failure into a numbered entry here.
 6. [ ] Then take BUG-005 before lower-value polish because silently corrupting
