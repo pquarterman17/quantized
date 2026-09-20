@@ -81,7 +81,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-002 | P2 | Desktop bridge write consent | A hard-linked alias of a declared raw source defeats the never-overwrite-your-own-source check | Codex | **FIXED 2026-09-20** — filesystem-identity guard shared by cached and payload checks; strict `xfail` converted to passing cross-platform coverage; PR #382 |
 | UX-004 | P1 | Origin project Library | Node-type marks COLLIDE — `▦` meant Folder, Figure page, Worksheet and two commands; `▤` meant Workbook and Report; `▥` meant Worksheet and five artifact kinds — across three contradicting per-view maps, and `▦ ▥ ▤` differ only by hatch at row size | Claude (agent) | **Collision half FIXED 2026-09-19** and locked by an injectivity test over the complete kind set (`nodeIcons.test.ts`); one shared vocabulary separated by silhouette. Density change (`∿` becomes a resting cue) and the choice of the eight marks are design judgement — owner eyeball on the reported project still required |
 | UX-002 | P3 | Workbook copy/paste | Cross-workbook lineage (`versionOf`, external `derivedFrom`) is dropped silently — the count is computed but never shown | Unassigned | Found in review, pinned by test, 2026-09-09 |
-| BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | ChatGPT-Sol | **FIX IMPLEMENTED 2026-09-20, pending PR/CI** — incompatible saved rules become globally inert without being deleted, the panel explains why they are paused and how to restore/replace/clear them, and every analysis/export consumer shares the same applicability gate |
+| BUG-003 | P2 | Data Filter workbench | A filter predicate survives a column's type change with a stale `kind`, applied everywhere but invisible/uneditable in the panel that wrote it | ChatGPT-Sol | **FIXED 2026-09-20** — PR #387 / `922e58f6`; incompatible saved rules become globally inert without being deleted, the panel explains why they are paused and how to restore/replace/clear them, and every analysis/export consumer shares the same applicability gate |
 | BUG-004 | P3 | Stat Stage workbench | A picked "group by" column survives a `channelTypes` override that de-categorizes it, stranding a stale index the picker no longer offers (facet is deliberately NOT affected — see the entry) | Unassigned | Design-time finding, fixed + sabotage-verified, 2026-09-09 |
 | BUG-005 | P2 | Corrections / Resample | A categorical channel was transformed like numeric data — its level codes became fractional and its meaning was discarded | Codex | **FIXED 2026-09-20** in `df06a518`: Corrections passes categorical codes through every y transform; Resample preserves a coincident grid and refuses a new one; reimport/persistence preserve levels and order |
 | BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **10 of 10 code sites fixed, re-verified 2026-09-14 by grepping every call site rather than trusting the count** (see the entry's "Every caller covered" box); `lib/barlayout.ts`'s label path was the last one, shipped 2026-09-12. The deferred end-to-end reproduction test (filter + Extract, at the `planExtract` layer) was added 2026-09-14 — see the entry's Reproduction checklist. Declared closed three times before it actually was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite had caught essentially none of it; adversarial review, per-branch sabotage and measuring claims caught all of it. Owner's real-data visual confirmation remains open |
@@ -2051,7 +2051,7 @@ lose an edit:
     still-open `#50`/`#53` product decision, not something this fix should
     have settled by fiat.
 
-  **Plan of record (not built):** keep the restored row state in PREVIEW space
+  **IMPLEMENTED 2026-09-20, pending PR/CI:** keep the restored row state in PREVIEW space
   through the pending phase — i.e. restore it as today, unguarded — and make
   `lib/bookData.ts`'s `installBookData` COMPOSE it through the
   `lib/rowSidecars.PREVIEW_SOURCE_ROWS` map (Group T) into source space at the
@@ -2062,7 +2062,14 @@ lose an edit:
   is, so a value that is always in the same space as the `data` it travels
   with needs no reader change. This touches `lib/bookData.ts`, whose clearing
   behaviour is itself a deliberate #50/#53 fix, so it is a separate,
-  owner-visible change — not attempted here either.
+  owner-visible change. PR pending on `codex/pending-preview-rowstate`:
+  `installBookData` now validates the persisted preview-to-source map against
+  both row spaces, maps and sorts exclusions at the single swap point, and
+  fails closed to the historical drop when correspondence is absent,
+  malformed, duplicated, or out of range. Prefix previews use their declared
+  identity correspondence. Value-based filters are preserved across the swap.
+  Focused coverage includes sampled, unsorted, prefix, missing, repeated, and
+  out-of-range mappings.
 
 - [x] **Also booked:** `setDatasetFilter`/`clearDatasetFilter` record NO history,
   while `clearRowExclusions` does. So building a filter and pressing undo restores a

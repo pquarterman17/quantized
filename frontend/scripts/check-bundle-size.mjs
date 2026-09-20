@@ -1650,7 +1650,23 @@ import { fileURLToPath } from "node:url";
  *    bc8f14fa   916,182   parent (greyscale export commit)
  *    this work  916,380   +198 B, 4,020 B under the unmoved 920,400 budget
  */
-const EAGER_JS_BUDGET = 878_182;
+/**
+ * 2026-09-20 — pin RAISED 878,182 -> 879,420 for BUG-009 preview-row-state
+ * migration. Measured eager JS is 878,396 B; the new pin is the required
+ * measured + 1,024 B margin. This is store lifecycle code: when a lazy Origin
+ * preview is replaced, exclusions must be translated before the atomic data
+ * swap and value filters must survive. Deferring it would briefly publish a
+ * full dataset with preview indices, so it cannot sit behind a panel.
+ *
+ * Two lazy splits were tried first and rejected by measurement. Dynamically
+ * importing only the 0.39 kB mapper still measured 858.0 kB rounded, 0.4 kB
+ * over the old pin because its loader consumed the same eager bytes. Moving
+ * the whole installer behind the action boundary measured 858.7 kB rounded,
+ * 1.1 kB over, because Vite promoted its already-shared API dependencies into
+ * modulepreloads. A clipboard-import split was also measured at 858.5 kB and
+ * rejected. All three changes were reverted.
+ */
+const EAGER_JS_BUDGET = 879_420;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
