@@ -27,6 +27,7 @@ import type { Action } from "../store/commands";
 import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importDatasets";
 import { withOp } from "../store/pendingOps";
 import { toast } from "../store/toasts";
+import { nextDatasetId } from "../store/useApp";
 
 // P3.4 slice 1, 2026-07-26 audit gap #1: the double-import guard. The real
 // chokepoint lives in store/importDatasets.ts's `runImport` (covers ⌘O, the
@@ -107,7 +108,6 @@ export const onLoadFailure = (): void => {
 };
 
 let demoCounter = 0;
-let sampleCounter = 0;
 
 // replaceWorkspace/replaceWorkspaceSafely/hasWorkspaceContent/
 // replaceConfirmMessage — the "open workspace" replace-and-confirm helpers
@@ -185,8 +185,8 @@ export function buildFileCommands(s: StoreGet): Action[] {
       description: "Add a generated demonstration dataset for quickly trying plots and analysis.",
       run: () =>
         s().addDataset({
-          id: `demo-${++demoCounter}`,
-          name: `demo-${demoCounter}.dat`,
+          id: nextDatasetId(),
+          name: `demo-${++demoCounter}.dat`,
           data: makeDemoDataset(),
         }),
     },
@@ -198,7 +198,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       keywords: "demo example first-run VSM hysteresis try this",
       run: () => {
         void loadSampleDataset().then(({ data, name, offline }) => {
-          s().addDataset({ id: `sample-${++sampleCounter}`, name, data });
+          s().addDataset({ id: nextDatasetId(), name, data });
           const msg = offline
             ? "sample endpoint unavailable — added offline demo instead"
             : `loaded sample dataset (${name})`;

@@ -3,6 +3,7 @@ import type { StoreGet } from "./exportActive";
 import { analysisData } from "./rowstate";
 import type { DataStruct, Dataset } from "./types";
 import type { AggregateMode, JoinMode } from "./worksheetTransforms";
+import { nextDatasetId } from "../store/useApp";
 
 /** `lib/worksheetTransforms.ts` holds ~200 lines of reshape math (transpose,
  *  stack, unstack, join, with their own cell-count guards) that nothing needs
@@ -19,8 +20,6 @@ import type { AggregateMode, JoinMode } from "./worksheetTransforms";
  *  surfaces through `withErrors` below as Vite's own message. */
 const transforms = () => import("./worksheetTransforms");
 
-let sequence = 0;
-
 function columnOptions(data: DataStruct): string[] {
   return ["-1: X / time", ...data.labels.map((label, index) => `${index}: ${label}`)];
 }
@@ -30,7 +29,7 @@ function optionIndex(value: unknown): number {
 }
 
 function addDerived(s: StoreGet, sourceName: string, suffix: string, data: DataStruct): void {
-  const id = `transform-${Date.now().toString(36)}-${++sequence}`;
+  const id = nextDatasetId();
   s().addDataset({ id, name: `${sourceName} (${suffix})`, data });
   s().setStatus(`created ${sourceName} (${suffix})`);
 }

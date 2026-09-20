@@ -13,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { setActiveGestureCancel } from "../../../lib/gestureCancel";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useToasts } from "../../../store/toasts";
 import { pressEscape } from "../../../test/pressEscape";
 import { useGlobalShortcuts } from "../../../useGlobalShortcuts";
 import { usePeakWizard } from "./usePeakWizard";
@@ -301,6 +302,33 @@ describe("usePeakWizard — plotted-channel selection (audit P1 #1)", () => {
     const body = vi.mocked(findPeaks).mock.calls[0][0];
     expect(body.x).toEqual([100, 200, 300, 400]); // angle channel, not time
     expect(body.y).toEqual([10, 50, 20, 5]); // counts channel, not values[0]
+  });
+
+  it("drops gapped X/Y pairs before peak analysis and tells the user", async () => {
+    const { findPeaks } = await import("../../../lib/api/peaks");
+    vi.mocked(findPeaks).mockResolvedValue({ peaks: [], background: [] });
+    useToasts.setState({ toasts: [] });
+    useApp.setState({
+      datasets: [{
+        id: "d1",
+        name: "gapped.dat",
+        data: { ...DATA, values: [[1], [Number.NaN], [4], [2], [1]] },
+      }],
+      activeId: "d1",
+      xKey: null,
+      yKeys: null,
+      seriesOrder: null,
+    });
+    const { result } = renderHook(() => usePeakWizard());
+    await act(async () => result.current.runFind());
+
+    expect(findPeaks).toHaveBeenCalledWith(expect.objectContaining({
+      x: [0, 2, 3, 4],
+      y: [1, 4, 2, 1],
+    }));
+    expect(useToasts.getState().toasts.at(-1)?.msg).toBe(
+      "1 of 5 rows are gaps; they were excluded from peak analysis.",
+    );
   });
 });
 

@@ -80,6 +80,23 @@ describe("executeSteps fit replay (#6)", () => {
     });
   });
 
+  it("drops gapped pairs and matching weights, and records that in the step log", async () => {
+    const gapped = data();
+    gapped.values[1]![1] = Number.NaN;
+    useApp.setState({ datasets: [ds({ data: gapped })] });
+    const { entry } = await runFit(
+      fitStep({ model: "Linear", xKey: 0, yKey: 1, weight: { mode: "yerr", errKey: 2 } }),
+    );
+
+    expect(fitModel).toHaveBeenCalledWith({
+      model: "Linear",
+      x: [100, 300, 400],
+      y: [10, 30, 40],
+      dy: [0.5, 0.7, 0.8],
+    });
+    expect(entry.note).toContain("1 gap rows excluded");
+  });
+
   it("honors the TARGET's row exclusions (analysisData) on replay", async () => {
     useApp.setState({ datasets: [ds({ excludedRows: [1] })] });
     await runFit(fitStep({ model: "Linear", xKey: 0, yKey: 1, weight: { mode: "yerr", errKey: 2 } }));

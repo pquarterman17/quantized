@@ -12,6 +12,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePeakBaseline } from "./usePeakBaseline";
 
 import { findPeaks, fitMultiPeak } from "../../../lib/api/peaks";
+import { dropGapRows } from "../../../lib/api/finitePairs";
 import { peaksIntegrate, reportEmit, type IntegratedPeak } from "../../../lib/api";
 import { visiblePeakMarkers } from "../../../lib/peakMarkerHit";
 import {
@@ -153,7 +154,15 @@ export function usePeakWizard(): PeakWizardState {
   const segment = useMemo(() => {
     const sel = selectedFitData(active, xKey, yKeys, seriesOrder);
     if (!sel || sel.x.length === 0) return null;
-    return cutRange(sel.x, sel.y, recipe.range.lo, recipe.range.hi);
+    const cut = cutRange(sel.x, sel.y, recipe.range.lo, recipe.range.hi);
+    const pairs = dropGapRows(cut.x, cut.y);
+    return {
+      x: pairs.x,
+      y: pairs.y,
+      kept: pairs.keep.map((i) => cut.kept[i]!),
+      gapCount: pairs.n - pairs.keep.length,
+      sourceCount: pairs.n,
+    };
   }, [active, xKey, yKeys, seriesOrder, recipe.range.lo, recipe.range.hi]);
 
   const { baseline, baselineBusy, baselineError } = usePeakBaseline(
@@ -177,6 +186,10 @@ export function usePeakWizard(): PeakWizardState {
     setFindBusy(true);
     setFindError(null);
     try {
+      if (segment.x.length === 0) throw new Error("no finite X/Y pairs are available to analyze");
+      if (segment.gapCount > 0) {
+        toast(`${segment.gapCount} of ${segment.sourceCount} rows are gaps; they were excluded from peak analysis.`);
+      }
       const res = await findPeaks({
         x: segment.x,
         y: workingY,
@@ -338,6 +351,10 @@ export function usePeakWizard(): PeakWizardState {
     setFitBusy(true);
     setFitError(null);
     try {
+      if (segment.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
+      if (segment.gapCount > 0) {
+        toast(`${segment.gapCount} of ${segment.sourceCount} rows are gaps; they were excluded from the fit.`);
+      }
       const res = await fitMultiPeak({
         x: segment.x,
         y: workingY,
@@ -369,6 +386,10 @@ export function usePeakWizard(): PeakWizardState {
     setFitBusy(true);
     setFitError(null);
     try {
+      if (segment.x.length === 0) throw new Error("no finite X/Y pairs are available to integrate");
+      if (segment.gapCount > 0) {
+        toast(`${segment.gapCount} of ${segment.sourceCount} rows are gaps; they were excluded from integration.`);
+      }
       const regions = regionsFromPeaks(
         source.map((p) => ({ center: p.center, fwhm: p.fwhm })),
         recipe.report.regionWidth,

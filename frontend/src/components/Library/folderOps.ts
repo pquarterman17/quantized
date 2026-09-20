@@ -16,11 +16,9 @@ import {
 import type { Dataset, FolderNode } from "../../lib/types";
 import { ACCENTS } from "../../store/prefs";
 import { toast } from "../../store/toasts";
-import { useApp } from "../../store/useApp";
+import { nextDatasetId, useApp } from "../../store/useApp";
 import { askParams, type ParamField } from "../overlays/ParamDialog";
 import { runTemplateOnDataset } from "../workshops/pipeline/runTemplate";
-
-let _seq = 0;
 
 /** The folder's whole-subtree datasets, in Library render order. */
 export function folderContents(folderId: string): Dataset[] {
@@ -176,7 +174,7 @@ export async function runTemplateOnFolder(folder: FolderNode): Promise<void> {
       }
     }
     useApp.getState().addDataset({
-      id: `tplf-${Date.now().toString(36)}-${++_seq}`,
+      id: nextDatasetId(),
       name: `${t.name} — ${folder.name} (${rows.length})`,
       data: summaryDataset(t.name, t.outputs.length ? t.outputs : ["R2"], rows),
     });

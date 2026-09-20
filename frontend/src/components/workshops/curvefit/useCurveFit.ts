@@ -5,11 +5,13 @@
 import { useEffect, useMemo, useState } from "react";
 
 import { autoGuess, bootstrapFit, listFitModels } from "../../../lib/api/curvefit";
+import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { exportCornerFigure } from "../../../lib/api/figures";
 import { fitModel } from "../../../lib/api";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { toast } from "../../../store/toasts";
 import { fitStepParams, selectedFitData } from "../../../lib/fitselection";
 import { activeCorrectionNames, fitSpecFrom } from "../../../lib/fitselectionActions";
 import {
@@ -191,8 +193,13 @@ export function useCurveFit(): CurveFitState {
       const state = useApp.getState();
       const localXy = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
       if (!localXy) return;
+      const pairs = dropGapRows(localXy.x, localXy.y);
+      if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
+      if (!pairs.complete) {
+        toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the fit.`);
+      }
       if (kind === "guess") {
-        const g = await autoGuess(modelName, localXy.x, localXy.y);
+        const g = await autoGuess(modelName, pairs.x, pairs.y);
         setResult({ params: g.p0 });
         setGuessOnly(true);
       } else {
@@ -200,6 +207,7 @@ export function useCurveFit(): CurveFitState {
         // missing/invalid error column refits unweighted with a surfaced note.
         const weight = weightingFor(localXy.yKey);
         const { dy, issue } = dyForFit(ds, localXy.yKey, weight);
+        const finiteDy = dy ? pairs.keep.map((i) => dy[i]!) : null;
         setWeightNote(issue ?? null);
         // #30: the user's starting values / bounds / fixed flags. An
         // UNTOUCHED table is the registry default, so it is neither sent nor
@@ -213,9 +221,9 @@ export function useCurveFit(): CurveFitState {
         const custom = !rowsAreDefault(paramRows, model);
         const r = await fitModel({
           model: modelName,
-          x: localXy.x,
-          y: localXy.y,
-          ...(dy ? { dy } : {}),
+          x: pairs.x,
+          y: pairs.y,
+          ...(finiteDy ? { dy: finiteDy } : {}),
           ...(custom
             ? {
                 p0: parsed.p0,
@@ -230,13 +238,13 @@ export function useCurveFit(): CurveFitState {
         // Durable fit spec (audit P1 #3): records the plotted channels + the
         // weighting ACTUALLY used (unweighted if dy couldn't resolve) so the
         // recalc graph (#1) reproduces the original fit, not time/values[0].
-        const effWeight: FitWeighting = dy ? weight : { mode: "none" };
+        const effWeight: FitWeighting = finiteDy ? weight : { mode: "none" };
         // #30: record WHICH corrections the source carried, so a reproduction
         // cannot silently run on differently-preprocessed data.
         const spec = fitSpecFrom(
           modelName,
           state.xKey,
-          localXy,
+          { ...localXy, x: pairs.x, y: pairs.y },
           r,
           effWeight,
           activeCorrectionNames(ds.corrections),
@@ -264,7 +272,8 @@ export function useCurveFit(): CurveFitState {
           // full-length plot x, whether excluded rows are hidden or greyed.
           const n = ds.data.time.length;
           const kept = activeRowIndices(n, droppedRows(ds));
-          const y = kept.length === n ? yFit : expandToFull(yFit, kept, n);
+          const aligned = restoreGapRows(yFit, pairs);
+          const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
           setFitOverlay({ datasetId: ds.id, y });
         }
       }
@@ -291,10 +300,15 @@ export function useCurveFit(): CurveFitState {
     setCornerBusy(true);
     setError(null);
     try {
+      const pairs = dropGapRows(xy.x, xy.y);
+      if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to bootstrap");
+      if (!pairs.complete) {
+        toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the bootstrap.`);
+      }
       const boot = await bootstrapFit({
         model: modelName,
-        x: xy.x,
-        y: xy.y,
+        x: pairs.x,
+        y: pairs.y,
         p0,
         return_samples: true,
       });

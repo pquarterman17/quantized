@@ -13,10 +13,8 @@ import { reflectivityFft } from "../../../lib/api/reductions";
 import type { ReflectivityFftResult } from "../../../lib/reductionTypes";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset, DataStruct } from "../../../lib/types";
-import { useActiveDataset, useApp } from "../../../store/useApp";
+import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 import type { ReductionColumn } from "./useFftThickness";
-
-let _seq = 0;
 
 export type ReflFftPreprocess = "logR" | "logRQ4" | "R" | "RQ4";
 
@@ -121,7 +119,7 @@ export function useReflectivityFft(): ReflectivityFftState {
       metadata: { reduction: "reflectivity-fft", thicknesses_nm: result.thicknesses_nm },
     };
     addDataset({
-      id: `reflfft-${++_seq}`,
+      id: nextDatasetId(),
       name: `${active?.name ?? "scan"} (refl FFT)`,
       data,
     });

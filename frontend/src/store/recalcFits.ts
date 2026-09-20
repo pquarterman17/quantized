@@ -11,6 +11,7 @@
 // found in the first place.
 
 import { fitModel } from "../lib/api";
+import { dropGapRows, restoreGapRows } from "../lib/api/finitePairs";
 import { boundsFromWire } from "../lib/fitParams";
 import { fitDataForSpec, stampRecompute } from "../lib/fitselection";
 import { activeRowIndices, droppedRows, expandToFull } from "../lib/rowstate";
@@ -32,6 +33,9 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
       // to the live plotted selection for legacy specs — not time/values[0].
       const sel = fitDataForSpec(d, d.fitSpec, get().xKey, get().yKeys, get().seriesOrder);
       if (!sel || sel.x.length === 0) throw new Error("no data");
+      const pairs = dropGapRows(sel.x, sel.y);
+      if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
+      const dy = sel.dy ? pairs.keep.map((i) => sel.dy![i]!) : undefined;
       // MAIN #30: replay the RECORDED starting values / bounds / fixed flags
       // too. Without this the recipe records them while the recompute quietly
       // refits from the registry defaults — a recipe that documents a fit it
@@ -39,9 +43,9 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
       const spec = d.fitSpec;
       const r = await fitModel({
         model: spec.model,
-        x: sel.x,
-        y: sel.y,
-        dy: sel.dy,
+        x: pairs.x,
+        y: pairs.y,
+        ...(dy ? { dy } : {}),
         ...(spec.p0 ? { p0: spec.p0 } : {}),
         ...(spec.lower ? { lower: boundsFromWire(spec.lower, -1) } : {}),
         ...(spec.upper ? { upper: boundsFromWire(spec.upper, 1) } : {}),
@@ -52,7 +56,8 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
       if (Array.isArray(yFit) && get().fitOverlay?.datasetId === id) {
         const n = d.data.time.length;
         const kept = activeRowIndices(n, droppedRows(d));
-        const y = kept.length === n ? yFit : expandToFull(yFit, kept, n);
+        const aligned = restoreGapRows(yFit, pairs);
+        const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
         set({ fitOverlay: { datasetId: id, y } });
       }
       // #30: stamp the re-run so the workspace distinguishes a HISTORICAL

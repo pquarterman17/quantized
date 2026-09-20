@@ -35,7 +35,7 @@ import {
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
 import { detectMagXKind, type MagXDetection } from "../../../lib/magDataKind";
 import type { Dataset, DataStruct } from "../../../lib/types";
-import { useActiveDataset, useApp } from "../../../store/useApp";
+import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 
 /** The plotted X (independent variable — T or field) + primary Y (moment)
  *  CHANNELS over the FULL data (magnetometry transforms convert every row, so
@@ -151,8 +151,6 @@ const DEFAULT_UNITS: UnitParams = {
   sampleMass: 0,
   sampleVolume: 0,
 };
-
-let _counter = 0;
 
 /** The panel's result line, tagged with the dataset ids it is ABOUT — the
  *  source it was computed from and the corrected dataset it wrote. Shown only
@@ -348,7 +346,7 @@ export function useMagTools(): MagToolsState {
         ),
       };
       const suffix = bgPath === "mh" ? "loop bg-sub" : "bg-sub";
-      const outId = `magbg-${++_counter}`;
+      const outId = nextDatasetId();
       addDataset({ id: outId, name: `${stem()} (${suffix})`, data });
       setReadout({
         owners: [...owners, outId],
@@ -426,7 +424,7 @@ export function useMagTools(): MagToolsState {
         // converted dataset described by the wrong axis.
         metadata: stampXIdentity({ ...ds.data.metadata }, ds.data, st.xKey, res.x_unit),
       };
-      const outId = `magunit-${++_counter}`;
+      const outId = nextDatasetId();
       addDataset({ id: outId, name: `${stem()} (${res.y_unit})`, data });
       if (res.warning) warnings.push(res.warning);
       setReadout({

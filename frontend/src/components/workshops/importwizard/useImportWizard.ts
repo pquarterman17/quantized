@@ -30,13 +30,11 @@ import type {
   ImportSettingsWire,
 } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
-import { useApp } from "../../../store/useApp";
+import { nextDatasetId, useApp } from "../../../store/useApp";
 import { useImportErrorBindings } from "./useImportErrorBindings";
 
 const PREVIEW_ROWS = 30;
 const DEBOUNCE_MS = 300;
-
-let _seq = 0;
 
 export interface ImportWizardState {
   file: File | null;
@@ -358,7 +356,7 @@ export function useImportWizard(): ImportWizardState {
         text,
         acceptedCategorical.length ? { ...settings, allow_large_categorical: acceptedCategorical } : settings,
       );
-      const id = `impwiz-${++_seq}`;
+      const id = nextDatasetId();
       // P1.6 item 2: only EXPLICITLY assigned error rows (target !== null)
       // become Dataset.errorRoles — an unassigned suggestion contributes
       // nothing, so a column the user never confirmed a target for imports

@@ -25,7 +25,7 @@ import {
 } from "../../../lib/tabulate";
 import type { DataStruct } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
-import { useActiveDataset, useApp } from "../../../store/useApp";
+import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 import { pendingStatusMessage } from "../../../store/pendingEdit";
 
 /** A selectable column: -1 is the x column, 0.. are channels. */
@@ -120,8 +120,6 @@ function moveInArray<T>(arr: readonly T[], item: T, direction: -1 | 1): T[] {
   [next[i], next[j]] = [next[j], next[i]];
   return next;
 }
-
-let _seq = 0;
 
 export function useTabulate(): TabulateState {
   const active = useActiveDataset();
@@ -234,7 +232,7 @@ export function useTabulate(): TabulateState {
       metadata: { x_column_name: "row", source: "tabulate" },
     };
     const name = `${valueLabels.join(", ")} by ${groupLabels.join(" × ")}`;
-    addDataset({ id: `tab-${++_seq}`, name, data: out });
+    addDataset({ id: nextDatasetId(), name, data: out });
     setStatus(`tabulated ${name} (${dataRows.length} rows)`);
   }
 

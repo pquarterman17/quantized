@@ -95,9 +95,9 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-017 | P1 | Workspace save/reopen — NaN/±Infinity cells | `workspaceSerialize.ts`'s `data: d.data` has no NaN/±Infinity replacer, `JSON.stringify` turns them into `null`, and `workspaceDatasetParse.ts`'s `isNumberArray` rejects `null` and throws — so the WHOLE workspace fails to reopen after saving a dataset with one such cell (reachable by a plain `insertRows`, whose blank rows are minted as `Number.NaN`); `-0` separately round-trips silently to `0` | Claude (agent) | Found by the P2.1 round-3 review (pre-existing, outside that commit); **FIXED 2026-09-16** — the new `lib/nonFiniteCells.ts` encodes the four values JSON cannot represent as the sentinel strings `"NaN"`/`"Infinity"`/`"-Infinity"`/`"-0"` on the way out and decodes them on the way in, applied symmetrically by `workspaceSerialize.ts` (`.dwk`, autosave, Pack Project) and `workspaceDatasetParse.ts`, plus the same-shaped hole in `lib/workbookTransfer.ts`'s clipboard package. The encoders return their input by reference when nothing needs a sentinel, so an ordinary document is byte-identical to before (no schema bump); `null` deliberately stays a rejection and a malformed entry deliberately still refuses the whole workspace — see the entry for both rulings |
 | BUG-018 | P2 | Backdrop dialogs — stacked Escape | Two backdrop dialogs can be open at once (`Ctrl+,` then `?`, no mouse) and ONE Escape closes BOTH, because all ten use `window` capture + `stopPropagation()`, which does not stop a same-node same-phase sibling; over a pending `ConfirmDialog` the same keystroke silently resolves the confirmation `false` | Claude (agent) | Found in the 2026-09-19 adversarial review of `cee0494f`; reproduced by the reviewer in real Chromium (keyboard only) and re-measured in jsdom on `490243f9`. **FIXED 2026-09-19** (`5d6ef1b9`) — the entry's option 1: `lib/escapeStack.ts` gains a `modal` layer above `menu`, and all ten backdrop dialogs are surfaces on it, so the innermost closes and nothing below it acts on the same keystroke (2 → 1 → 0 on the three stacked pairs; a pending confirm stays PENDING and resolves `false` only on the second Escape; the lone-dialog control is unchanged). The bypass of `isEditingTarget`/`cmdkOpen`/`.qzk-ctx` is keyed on THE CLAIMANT resolving to a modal, nothing below a modal is offered the key even when the modal declines, and (round-9 review) the claim resolves SYNCHRONOUSLY at keydown and marks the event, so a window-bubble listener that honours `defaultPrevented` — `usePeakWizard`'s marker-edit pause — can no longer kill the dialog's close mid-dispatch. The bypass is what the reverted first attempt lacked: all four editing-target landing spots (Help's search box, Separate's and Combine's Name field, Split's Column select) are measured closing on ONE Escape, one test each. A second blocker was found on the way: Combine/Separate/Split stopped EVERY key in the dialog box's React `onKeyDown`, and a React synthetic `stopPropagation()` stops the NATIVE event at the React root — below `window` — so Escape is now let through there. R13's three missing reachability pins are closed with it; R12 is untouched and its wording unchanged |
 | BUG-019 | P1 | Per-technique view memory / dataset switch / autosave | `captureTechniqueView` stored the WHOLE object handed to it, and three callers hand it the entire `AppState` — so each entry held the library, the windows and the PREVIOUS memory map, compounding the serialized workspace on every dataset switch (Fibonacci-wise when alternating two techniques, ratio -> phi ~ 1.62) until autosave's `JSON.stringify` stalled the main thread and every plot, new and old, stopped drawing | Claude (agent) | Owner-reported 2026-09-19 (XRDML 3-D map + box integration); **FIXED 2026-09-19** — the capture projects down to its nine declared fields. Measured before/after on the owner's exact sequence in the running app: 5.4 MB -> 359.6 MB -> `RangeError` -> unresponsive, versus a flat 344 B |
-| BUG-020 | P2 | Cut landing (`Stage/useCutLanding.ts`) | A landed cut took its id from a private page-lifetime counter (`cut-1`, `cut-2`, …) instead of `store/idSeq.ts`, so a workspace reopened with a `cut-1` in it plus one new cut held TWO datasets with that id: Apply plotted the OLD cut's rows and one delete destroyed both | Claude (agent) | Found 2026-09-19 investigating BUG-019, confirmed by that fix's adversarial review; **FIXED 2026-09-19** — ids now come from the shared collision-free sequence. Probed on both trees: `['cut-1','cut-1']` / old rows / empty library before, unique ids and an independent delete after. **2026-09-20: the same root cause has FOUR more call sites, still open** — `useMagTools.ts` (`magbg-N`/`magunit-N`), `useHysteresis.ts` (`hystbg-N`), `useBaseline.ts` and `useReflectivity.ts` all mint from a page-lifetime module counter rather than `store/idSeq.ts`, and `workspaceSerialize.ts:220` round-trips ids, so a reopened workspace plus one new run yields two `magbg-1`. Found in the round-3 re-review of BUG-021, which also made it a STALE-READOUT path: that fix's readout ownership keys on these ids, so a collision shows one dataset's fit under another's |
+| BUG-020 | P2 | Durable dataset identity | A derived/imported dataset took its id from a private page-lifetime counter (`cut-1`, `magbg-1`, etc.) instead of `store/idSeq.ts`, so a reopened workspace plus one new operation could hold TWO datasets with that id: the app could plot the old result and one delete could destroy both | Claude + ChatGPT-Sol (agents) | Cut landing fixed 2026-09-19. **Repository-wide source audit completed 2026-09-20 (ChatGPT-Sol):** the initially reported four workshop hooks plus demo/sample loading, folder/template batches, worksheet extraction/transforms, Import Wizard, SQLite, Dataset Math, Digitizer, Tabulate and both FFT reductions now use `nextDatasetId()`. Counters remain only where they number a human-readable name. A source-level architecture ratchet pins all migrated producers to the shared sequence and rejects every retired durable-id prefix. Owner verification remains. |
 | BUG-021 | P0 | Magnetometry workshop — Background tab | The tab ran the M(T) one-sided high-T fit (`subtract_mag_background`) on an M(H) hysteresis loop, whose own docstring forbids exactly that: the window sits entirely in the +H tail, so the intercept removed carries +Ms and the corrected loop is sheared down by Ms (measured: plateaus at 0 and −2·Ms, squareness a meaningless 1.0000). Surfaced to the owner as `[object Object],[object Object],[object Object],[object Object]` — `ensureOk`'s `as { detail?: string }` cast stringifying FastAPI's array-shaped 422 `detail`, one entry per NaN gap that `JSON.stringify` had written as `null` | Claude (agent) | Reported 2026-09-19 by owner on a real VSM loop (filed as BUG-019 on the branch, renumbered on rebase); all four reported defects reproduced by measurement before any code changed. **FIXED 2026-09-20** — dispatch on the DECLARED x label/unit (`lib/magDataKind.ts`, reading `x_column_long` first so an Origin SHORT column name cannot masquerade as a field symbol), failing closed to a user choice when it cannot be determined; gaps dropped before every fit request and restored on their original rows, and SUBSTITUTED per axis on the elementwise conversion path (`lib/api/finitePairs.ts`); all five magnetometry call sites filtered, including the Hysteresis workshop's automatic analysis; any `detail` shape rendered readably (`lib/api/errorDetail.ts`, lazily imported to keep it out of the eager bundle); panel wording, control label, per-path default and the reported quantity (offset, not intercept) follow the path actually selected; a documented no-op is reported as a no-op; the readout is tagged with the datasets it is about so a dataset switch cannot leave a stale one on screen. 13 sabotages over two rounds, each restored byte-identical. Owner verification on the reported file remains |
-| BUG-022 | P1 | Curve Fit / Equation Fit / Model Scan / Bumps / Peak Wizard / autoGuess | `lib/fitselection.ts`'s `selectedFitData` does not filter non-finite values, and all six consumers post that `x`/`y` to pydantic `list[float]` routes — so a `JSON.stringify`d NaN arrives as `null` and is rejected once per element. **The owner's same gapped hysteresis loop still 422s in Curve Fit**, legible since BUG-021's `errorDetail.ts` but still a failure | Unassigned | Found 2026-09-20 in the round-3 re-review of BUG-021; every call site and route code-read and named in the entry. NOT fixed there, deliberately: the filtering belongs at the request boundary, not inside the shared selector. `lib/api/finitePairs.ts` already has the contract to apply, including the row-alignment guarantee |
+| BUG-022 | P1 | Fitting and peak-analysis request boundaries | `selectedFitData` deliberately preserves non-finite values, but consumers posted them to pydantic `list[float]` routes, turning NaN into rejected `null` values | ChatGPT-Sol | **FIXED 2026-09-20, widened by critical self-review:** direct Curve/Equation/Bumps fits, auto-guess, model scan, Peak Analyzer, the older Peaks workshop, saved-fit recomputation and pipeline replay now apply `dropGapRows`. Fitted curves are scattered back through `restoreGapRows`; weighting follows the same kept indices; pipeline logs and interactive notices disclose exclusions. Grouped fits and ROI gadgets were audited and already filtered finite pairs. The selector remains unchanged, preserving the original design ruling. |
 
 ---
 
@@ -7656,7 +7656,7 @@ half is the before/after table above, measured against the running app.
 ## BUG-020 — a landed cut reused an id already in the library, so Apply plotted the old cut and one delete destroyed both
 
 **Priority:** P2 — silent data loss (one delete removes two datasets) and a wrong plot, reachable by a plain reopen-and-cut  
-**State:** Verified complete (agent); owner verification outstanding  
+**State:** Verified complete (agent), including the four workshop follow-ups; owner verification outstanding
 **Reported:** 2026-09-19, found by Claude (agent) while investigating BUG-019; confirmed by the adversarial review of `f8d72f43`  
 **Investigated:** 2026-09-19, Claude (agent)  
 **Suggested implementation owner/model:** —  
@@ -7762,6 +7762,21 @@ private counter restored.
 - Agent verification: reproduction above measured on both trees
 - Owner verification: outstanding
 - Notes: found while investigating BUG-019; filed separately because it stands on its own
+
+#### 2026-09-20 follow-up — repository-wide producer audit (ChatGPT-Sol)
+
+The later BUG-021 review found the same collision shape in four workshop
+hooks. `useBaseline`, `useHysteresis`, `useMagTools` (both Background and
+Units), and `useReflectivity` (both simulation outputs) now mint their durable
+dataset ids with `nextDatasetId()`. Critical self-review then found that
+inventory was incomplete: demo/sample loading, folder/template batch outputs,
+worksheet extraction/transforms, Import Wizard, SQLite, Dataset Math,
+Digitizer, Tabulate and both FFT reductions had the same durable private-id
+shape and now use the shared sequence too. Reflectivity's private counter remains only
+for the visible names “Reflectivity model N” and “SLD profile N”; it no longer
+defines identity. `architecture.test.ts` pins all four producers to the shared
+sequence and rejects the six retired id prefixes. The four focused hook suites
+pass (80 tests).
 
 ---
 ## BUG-021 — the Background tab runs the M(T) tool on an M(H) loop, and reports the 422 as `[object Object]`
@@ -8019,10 +8034,9 @@ the output column is empty, rather than silently minting it.
 
 **Priority:** P1 — the owner's own gapped hysteresis loop still fails in Curve
 Fit; legible since BUG-021's `errorDetail.ts`, but still a failure
-**State:** Open — found in the round-3 re-review of BUG-021, not fixed there
-(out of that commit's scope); every site named below is code-read
+**State:** Verified complete (agent); owner verification outstanding
 **Reported:** 2026-09-20 by Claude (agent), reviewing BUG-021
-**Likely scope:** `frontend/src/lib/fitselection.ts` and the six hooks listed
+**Implemented scope:** the six request boundaries listed below; `selectedFitData` intentionally unchanged
 
 ### The defect
 
@@ -8059,11 +8073,37 @@ guarantee and the throw-on-mismatch that keeps a corrected column from
 shifting. Each site also needs BUG-021's user notice ("N of M rows are gaps"),
 not a silent drop.
 
-### Reproduction
+### Reproduction and acceptance
 
 - [x] Mechanism identified and each call site named (above), code-read
-- [ ] Reproduced end to end per site
-- [ ] Regression test per site
+- [x] Regression coverage for Curve Fit, auto-guess, Equation Fit, Model Scan,
+  Bumps, and Peak Analyzer
+- [x] Fitted overlays restore gaps at their original row indices
+- [x] User notice names the number of excluded rows
+- [x] Type-check and focused tests pass
+- [ ] Owner verifies the original gapped hysteresis file in Curve Fit
+
+### Implementation record — 2026-09-20 (ChatGPT-Sol)
+
+Filtering is applied immediately before each backend request, not inside
+`selectedFitData`. Curve Fit also projects a resolved `dy` vector through the
+same `keep` indices, so weighted and unweighted fits see identical rows. For
+the three paths that return a per-input fitted curve (registry, equation and
+Bumps), `restoreGapRows` reconstructs the analysis-row result before the
+existing excluded/filter-row expansion reconstructs full dataset length.
+Peak Analyzer filters its range-cut working segment once, remaps `kept` to the
+original rows, and therefore keeps baseline overlays aligned while making
+baseline, find, fit and integrate requests safe. Zero finite pairs fail with a
+plain-language error rather than making a guaranteed-invalid request.
+
+Critical self-review found the original six-site inventory was incomplete.
+The durable recalc path and pipeline replay could reintroduce the same 422
+after a successful interactive fit; both now filter at their own request
+boundary, align `dy` through the same kept indices, and restore recalc
+overlays. The older Peaks workshop now gets finite inputs from `peakInputs` and
+notifies once when its automatic analysis excludes gaps. Grouped fits and ROI
+fit/integrate were inspected and already filter both coordinates before their
+requests, so they needed no behavior change.
 
 ---
 

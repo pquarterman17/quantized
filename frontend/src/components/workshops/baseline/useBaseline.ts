@@ -14,7 +14,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { baselineALS, baselineAnchor, baselineEstimate, baselineModPoly, baselineRegion, baselineRollingBall, baselineShirley, baselineXrdLowAngle } from "../../../lib/api/baseline";
 import { fullPlottedX, plottedYKey } from "../../../lib/fitselectionActions";
 import type { CorrectionParams, Dataset, DataStruct } from "../../../lib/types";
-import { useActiveDataset, useApp } from "../../../store/useApp";
+import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 
 export type BaselineMethod =
   | "als"
@@ -53,8 +53,6 @@ const DEFAULTS: BaselineParams = {
   regionYMin: Number.NaN, regionYMax: Number.NaN,
   maxIter: 50, anchorMethod: "pchip",
 };
-
-let _subCounter = 0;
 
 export interface BaselineState {
   active: Dataset | null;
@@ -339,7 +337,7 @@ export function useBaseline(): BaselineState {
       },
     };
     const stem = ds.name.replace(/\.[^.]+$/, "");
-    addDataset({ id: `bgsub-${++_subCounter}`, name: `${stem} (bg-sub)`, data });
+    addDataset({ id: nextDatasetId(), name: `${stem} (bg-sub)`, data });
     setStatus(`subtracted ${method} baseline`);
   }
 

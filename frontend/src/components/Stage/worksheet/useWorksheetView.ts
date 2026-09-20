@@ -47,7 +47,7 @@ import { excludedSet, filteredOutSet } from "../../../lib/rowstate";
 import { resolveSelectionPlot, selectionToSpec } from "../../../lib/selectionplot";
 import { useWorksheetBlockOps, type BlockOpsApi } from "./useWorksheetBlockOps";
 import type { CalcResult, ChannelRole, Dataset, DataStruct } from "../../../lib/types";
-import { plotIntentStageTab, useApp } from "../../../store/useApp";
+import { nextDatasetId, plotIntentStageTab, useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
 import { describeExtract, planExtract } from "./extractRows";
 import { fmtCell } from "./cellFormat";
@@ -67,8 +67,6 @@ function passesFilter(v: number | undefined, op: string, a: number, b: number): 
     default: return true;
   }
 }
-
-let _seq = 0;
 
 export interface WorksheetView {
   data: DataStruct;
@@ -454,7 +452,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     const plan = planExtract(ds.data, analysisRows);
     if (plan) {
       const stem = ds.name.replace(/\.[^.]+$/, "");
-      addDataset({ id: `subset-${++_seq}`, name: `${stem} (subset)`, data: plan.data });
+      addDataset({ id: nextDatasetId(), name: `${stem} (subset)`, data: plan.data });
     }
     setStatus(describeExtract(plan, time.length));
   }

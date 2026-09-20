@@ -8,6 +8,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { fitEquation, validateEquation } from "../../../lib/api/curvefit";
+import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { recordUse } from "../../../lib/recipeIndex";
 import {
   deleteCustomModel,
@@ -18,6 +19,7 @@ import {
 import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { toast } from "../../../store/toasts";
 import { selectedFitData } from "../../../lib/fitselection";
 
 export interface EquationParamRow {
@@ -180,10 +182,15 @@ export function useEquationFit(
       const state = useApp.getState();
       const d = selectedFitData(ds, state.xKey, state.yKeys, state.seriesOrder);
       if (!d) return;
+      const pairs = dropGapRows(d.x, d.y);
+      if (pairs.x.length === 0) throw new Error("no finite X/Y pairs are available to fit");
+      if (!pairs.complete) {
+        toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the fit.`);
+      }
       const r = await fitEquation({
         equation,
-        x: d.x,
-        y: d.y,
+        x: pairs.x,
+        y: pairs.y,
         guesses,
         ...(lower.some((v) => v !== null) ? { lower } : {}),
         ...(upper.some((v) => v !== null) ? { upper } : {}),
@@ -208,7 +215,8 @@ export function useEquationFit(
       if (Array.isArray(yFit)) {
         const n = ds.data.time.length;
         const kept = activeRowIndices(n, droppedRows(ds));
-        const y = kept.length === n ? yFit : expandToFull(yFit, kept, n);
+        const aligned = restoreGapRows(yFit, pairs);
+        const y = kept.length === n ? aligned : expandToFull(aligned, kept, n);
         setFitOverlay({ datasetId: ds.id, y });
       }
     } catch (e) {

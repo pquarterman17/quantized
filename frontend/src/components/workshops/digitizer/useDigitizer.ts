@@ -7,7 +7,7 @@ import { useState } from "react";
 
 import { calibrate, tracedToData } from "../../../lib/digitizer";
 import type { DataStruct } from "../../../lib/types";
-import { useApp } from "../../../store/useApp";
+import { nextDatasetId, useApp } from "../../../store/useApp";
 
 type CalMode = "x1" | "x2" | "y1" | "y2";
 export type Mode = CalMode | "trace";
@@ -38,8 +38,6 @@ export interface DigitizerState {
   reset: () => void;
   create: (name: string) => void;
 }
-
-let _seq = 0;
 
 export function useDigitizer(): DigitizerState {
   const addDataset = useApp((s) => s.addDataset);
@@ -100,7 +98,7 @@ export function useDigitizer(): DigitizerState {
       units: [""],
       metadata: { x_column_name: "x", x_column_unit: "", source: "digitized" },
     };
-    addDataset({ id: `digi-${++_seq}`, name: name.trim() || "digitized", data });
+    addDataset({ id: nextDatasetId(), name: name.trim() || "digitized", data });
     setStatus(`digitized ${x.length} points → ${name.trim() || "digitized"}`);
   }
 

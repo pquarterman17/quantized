@@ -13,8 +13,7 @@ import { useState } from "react";
 
 import { cutName } from "../../lib/mapcuts";
 import type { DataStruct } from "../../lib/types";
-import { nextDatasetId } from "../../store/idSeq";
-import { useApp } from "../../store/useApp";
+import { nextDatasetId, useApp } from "../../store/useApp";
 
 export interface CutLandingState {
   busy: boolean;
