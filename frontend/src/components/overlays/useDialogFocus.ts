@@ -271,9 +271,9 @@ export function useOpenerRestore(ref: RefObject<HTMLElement | null>, open: boole
  *  silently undo it. Otherwise the first focusable control is taken, falling
  *  back to the container itself (needs `tabIndex={-1}`) for a dialog that has
  *  none. */
-export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean): void {
+export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean): () => void {
   useFocusTrap(ref, open);
-  useOpenerRestore(ref, open);
+  const restore = useOpenerRestore(ref, open);
 
   useEffect(() => {
     if (!open) return;
@@ -282,4 +282,5 @@ export function useDialogFocus(ref: RefObject<HTMLElement | null>, open: boolean
       (focusablesIn(root)[0] ?? root).focus();
     }
   }, [ref, open]);
+  return restore;
 }
