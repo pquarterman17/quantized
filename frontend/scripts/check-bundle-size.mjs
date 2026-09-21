@@ -1651,6 +1651,20 @@ import { fileURLToPath } from "node:url";
  *    this work  916,380   +198 B, 4,020 B under the unmoved 920,400 budget
  */
 /**
+ * 2026-09-20 — pin RAISED 879,420 -> 881,442 for BUG-009's first
+ * resolve-then-apply slice. Measured eager JS is 880,418 B; the new pin is
+ * measured + 1,024 B. This is the store contract that queues row exclusion
+ * and filter intent until a lazy Origin book resolves, cancels older queued
+ * writes when a newer Clear supersedes them, and prevents a stale fetch/edit
+ * from crossing into an unrelated replacement dataset that reused the id.
+ *
+ * A lazy split was tried first: moving the await/error/status machinery behind
+ * resolvePendingEdit's user-action import measured 860.2 kB rounded, versus
+ * 859.8 kB inline, because Vite added its shared dependencies to modulepreload.
+ * The split was reverted. The remaining code must be eager: row-state actions
+ * and Clear invalidation decide whether to queue before any mutation/history
+ * write, and lazy-loading that decision would itself reorder the edit.
+ *
  * 2026-09-20 — pin RAISED 878,182 -> 879,420 for BUG-009 preview-row-state
  * migration. Measured eager JS is 878,396 B; the new pin is the required
  * measured + 1,024 B margin. This is store lifecycle code: when a lazy Origin
@@ -1666,7 +1680,7 @@ import { fileURLToPath } from "node:url";
  * modulepreloads. A clipboard-import split was also measured at 858.5 kB and
  * rejected. All three changes were reverted.
  */
-const EAGER_JS_BUDGET = 879_420;
+const EAGER_JS_BUDGET = 881_442;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

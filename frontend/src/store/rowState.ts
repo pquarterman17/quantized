@@ -11,17 +11,10 @@
 // under its pin, and the repo's rule is to extract a cohesive sibling rather
 // than shave comments to fit a ceiling.
 //
-// BUG-009 (plans/BUGS_AND_ISSUES.md): every action here that WRITES a row
-// preference now goes through `refusePendingEdit` first. A pending dataset's
-// `.data` is a decimated display projection, so a row INDEX taken against it
-// does not mean the same row once the real book lands — which is exactly why
-// `lib/bookData.ts`'s `installBookData` clears `excludedRows` and `filter`
-// outright when the fetch resolves (a deliberate earlier fix, #50/#53). Before
-// this guard the two halves combined into silent LOSS: the user excluded rows
-// or built a filter on a preview, the fetch landed, and their work vanished
-// with no message and no undo entry to notice. Refusing up front, with the
-// "still loading its full data" status every other pending-guarded action
-// uses, says so instead.
+// BUG-009 (plans/BUGS_AND_ISSUES.md): a write requested against a lazy Origin
+// preview resolves the full book and then applies to real data automatically.
+// It never records preview row indices. Clears remain immediate and invalidate
+// older queued writes, so a late resolution cannot undo a newer user command.
 //
 // WHAT IS DELIBERATELY *NOT* GUARDED: `clearRowExclusions` and
 // `clearDatasetFilter`. Clearing cannot lose user intent — it destroys a
@@ -42,14 +35,14 @@
 // hand-edited one — loads pending WITH row state, and the unguarded clear is
 // what lets the user get rid of it.
 //
-// This slice does NOT solve BUG-009's other half — refuse-vs-resolve-then-apply
-// is a store-wide product decision (see store/pendingEdit.ts's "KNOWN
-// INCOMPLETE, DELIBERATELY" note) and is not attempted here.
+// This is the first resolve-then-apply slice. Cell edits, computed columns,
+// level order, recode and local analysis guards still use the older refusal
+// contract and remain tracked in BUG-009.
 
 import { isActive } from "../lib/datafilter";
 import { keepOnlyExcluded, mergeExcluded, sanitizeExcluded, toggleExcluded } from "../lib/rowstate";
 import type { ColumnFilter, DataFilter, Dataset } from "../lib/types";
-import { refusePendingEdit } from "./pendingEdit";
+import { resolvePendingEdit } from "./pendingEdit";
 import type { AppState } from "./useApp";
 
 export interface RowStateSlice {
@@ -91,11 +84,11 @@ function worksheetOrActiveSelection(
 }
 
 /** The dataset `id` names, or null. A lookup ONLY: each action below calls
- *  `refusePendingEdit` itself rather than going through a wrapper.
+ *  `resolvePendingEdit` itself rather than going through a wrapper.
  *
  *  That is deliberate, and sabotage is what found it. `architecture.test.ts`'s
- *  pending-edit ratchet detects a guard by walking back from the offending
- *  updater for the literal `refusePendingEdit` inside the SAME action — a
+ *  pending-edit ratchet detects a boundary by walking back from the offending
+ *  updater for the literal `resolvePendingEdit` inside the SAME action — a
  *  wrapper hid the call, so every writer in this file was reported unguarded
  *  even though all five were guarded. Naming the real function at each site is
  *  what lets the ratchet VERIFY the guard rather than take its word, and it
@@ -105,6 +98,13 @@ function worksheetOrActiveSelection(
 function datasetOf(get: () => AppState, id: string): Dataset | null {
   return get().datasets.find((d) => d.id === id) ?? null;
 }
+
+// A clear is allowed immediately on a pending preview. It must also supersede
+// older queued writes, or the old write would land after the newer Clear once
+// full data arrives. Exclusions and filters have independent intent streams.
+const editEpochs = new Map<string, number>();
+const editEpoch = (key: string): number => editEpochs.get(key) ?? 0;
+const invalidateEdits = (key: string): void => { editEpochs.set(key, editEpoch(key) + 1); };
 
 /** Are these two filters the same CONSTRAINT? Compared field by field rather
  *  than by JSON, so key order cannot make two identical filters look different,
@@ -135,7 +135,12 @@ export function createRowStateSlice(
 
     toggleRowExcluded: (id, row) => {
       const ds = datasetOf(get, id);
-      if (!ds || refusePendingEdit(get, ds, "excluding rows")) return;
+      if (!ds) return;
+      const epoch = editEpoch(`rows:${id}`);
+      if (resolvePendingEdit(get, ds, "excluding rows", () => {
+        if (editEpoch(`rows:${id}`) !== epoch) return false;
+        get().toggleRowExcluded(id, row);
+      })) return;
       get().recordHistory("row exclusion");
       set((s) => ({
         datasets: s.datasets.map((d) => {
@@ -148,7 +153,12 @@ export function createRowStateSlice(
 
     setRowsExcluded: (id, rows) => {
       const ds = datasetOf(get, id);
-      if (!ds || refusePendingEdit(get, ds, "excluding rows")) return;
+      if (!ds) return;
+      const epoch = editEpoch(`rows:${id}`);
+      if (resolvePendingEdit(get, ds, "excluding rows", () => {
+        if (editEpoch(`rows:${id}`) !== epoch) return false;
+        get().setRowsExcluded(id, rows);
+      })) return;
       get().recordHistory("row exclusion");
       set((s) => ({
         datasets: s.datasets.map((d) => {
@@ -163,6 +173,7 @@ export function createRowStateSlice(
 
     // NOT pending-guarded, deliberately — see the module header.
     clearRowExclusions: (id) => {
+      invalidateEdits(`rows:${id}`);
       get().recordHistory("clear row exclusions");
       set((s) => ({
         datasets: s.datasets.map((d) => (d.id === id ? { ...d, excludedRows: undefined } : d)),
@@ -194,7 +205,19 @@ export function createRowStateSlice(
       const sel = worksheetOrActiveSelection(get(), windowId);
       if (!sel?.rows.length) return;
       const ds = datasetOf(get, sel.datasetId);
-      if (!ds || refusePendingEdit(get, ds, "excluding rows")) return;
+      if (!ds) return;
+      const epoch = editEpoch(`rows:${sel.datasetId}`);
+      if (resolvePendingEdit(get, ds, "excluding rows", () => {
+        if (editEpoch(`rows:${sel.datasetId}`) !== epoch) return false;
+        get().recordHistory("row exclusion");
+        set((s) => ({
+          datasets: s.datasets.map((d) =>
+            d.id === sel.datasetId ? { ...d, excludedRows: mergeExcluded(d.excludedRows, sel.rows) } : d,
+          ),
+        }));
+        if (windowId) get().clearWorksheetRowSelection(windowId);
+        else set(() => ({ selection: null }));
+      })) return;
       get().recordHistory("row exclusion");
       set((s) => ({
         datasets: s.datasets.map((d) =>
@@ -209,7 +232,19 @@ export function createRowStateSlice(
       const sel = worksheetOrActiveSelection(get(), windowId);
       if (!sel?.rows.length) return;
       const ds = datasetOf(get, sel.datasetId);
-      if (!ds || refusePendingEdit(get, ds, "excluding rows")) return;
+      if (!ds) return;
+      const epoch = editEpoch(`rows:${sel.datasetId}`);
+      if (resolvePendingEdit(get, ds, "excluding rows", (resolved) => {
+        if (editEpoch(`rows:${sel.datasetId}`) !== epoch) return false;
+        get().recordHistory("row exclusion");
+        set((s) => ({
+          datasets: s.datasets.map((d) => d.id === sel.datasetId
+            ? { ...d, excludedRows: keepOnlyExcluded(sel.rows, resolved.data.time.length) }
+            : d),
+        }));
+        if (windowId) get().clearWorksheetRowSelection(windowId);
+        else set(() => ({ selection: null }));
+      })) return;
       get().recordHistory("row exclusion");
       set((s) => ({
         datasets: s.datasets.map((d) =>
@@ -225,7 +260,12 @@ export function createRowStateSlice(
 
     setDatasetFilter: (id, filter) => {
       const ds = datasetOf(get, id);
-      if (!ds || refusePendingEdit(get, ds, "filtering")) return;
+      if (!ds) return;
+      const epoch = editEpoch(`filter:${id}`);
+      if (resolvePendingEdit(get, ds, "filtering", () => {
+        if (editEpoch(`filter:${id}`) !== epoch) return false;
+        get().setDatasetFilter(id, filter);
+      })) return;
       // Group S: the filter is part of the dataset's ANALYSIS VIEW exactly as
       // `excludedRows` is, and every exclusion path above records history.
       // This one did not, which cost more than a missing "Undo data filter":
@@ -256,6 +296,7 @@ export function createRowStateSlice(
 
     // NOT pending-guarded, deliberately — see the module header.
     clearDatasetFilter: (id) => {
+      invalidateEdits(`filter:${id}`);
       // Nothing to clear is not an edit: recording here would push an undo
       // entry for a no-op, and (worse) break a preceding "data filter" run's
       // coalescing so the next slider nudge started a second entry.

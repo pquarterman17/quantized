@@ -8,11 +8,25 @@
 // still allowed, or the guard would trap a user looking at row state they want
 // gone.
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { fetchBookData } from "../lib/api";
 import type { Dataset } from "../lib/types";
 import { useApp } from "./useApp";
 import { resetBookTransportForTests } from "../lib/bookData";
+
+vi.mock("../lib/api", async (orig) => ({
+  ...(await orig<typeof import("../lib/api")>()),
+  fetchBookData: vi.fn(),
+}));
+
+const fullData = {
+  time: [0, 1, 2, 3, 4, 5],
+  values: [[10], [20], [30], [40], [50], [60]],
+  labels: ["Signal"],
+  units: [""],
+  metadata: {},
+};
 
 function dataset(over: Partial<Dataset> = {}): Dataset {
   return {
@@ -43,56 +57,92 @@ beforeEach(() => {
   // BUG-009: the guard kicks a real fetch that rejects under jsdom and records
   // the reason in module scope; clear it so one test cannot answer for the next.
   resetBookTransportForTests();
+  vi.mocked(fetchBookData).mockReset().mockResolvedValue(fullData);
   useApp.setState({ datasets: [dataset()], activeId: "d1", selection: null, history: [], status: "" });
 });
 
-describe("row-state writes are refused while a dataset is pending (BUG-009)", () => {
+describe("row-state writes resolve pending data and then apply (BUG-009)", () => {
   beforeEach(() => {
     useApp.setState({ datasets: [pendingDataset()], activeId: "d1", selection: null, history: [], status: "" });
   });
 
-  it("toggleRowExcluded records nothing and leaves no undo entry", () => {
+  it("toggleRowExcluded applies to the full rows with one undo entry", async () => {
     useApp.getState().toggleRowExcluded("d1", 2);
-    expect(ds().excludedRows).toBeUndefined();
-    expect(useApp.getState().history).toHaveLength(0);
-    expect(useApp.getState().status).toMatch(/still loading its full data/);
+    expect(ds().excludedRows).toBeUndefined(); // never writes the preview
+    await vi.waitFor(() => expect(ds().excludedRows).toEqual([2]));
+    expect(ds().data.time).toHaveLength(6);
+    expect(useApp.getState().history).toHaveLength(1);
+    expect(useApp.getState().status).toMatch(/finished excluding rows/);
   });
 
-  it("setRowsExcluded records nothing", () => {
+  it("setRowsExcluded applies after resolution", async () => {
     useApp.getState().setRowsExcluded("d1", [0, 1]);
-    expect(ds().excludedRows).toBeUndefined();
-    expect(useApp.getState().history).toHaveLength(0);
+    await vi.waitFor(() => expect(ds().excludedRows).toEqual([0, 1]));
+    expect(useApp.getState().history).toHaveLength(1);
   });
 
-  it("excludeSelectedRows — the worksheet toolbar's Exclude button — records nothing", () => {
+  it("excludeSelectedRows preserves the invoked selection and applies it", async () => {
     useApp.setState({ selection: { datasetId: "d1", rows: [1, 2] } });
     useApp.getState().excludeSelectedRows();
     expect(ds().excludedRows).toBeUndefined();
     expect(useApp.getState().history).toHaveLength(0);
-    // The selection survives the refusal, so the retry the message suggests
-    // still has something to act on.
     expect(useApp.getState().selection).toEqual({ datasetId: "d1", rows: [1, 2] });
+    await vi.waitFor(() => expect(ds().excludedRows).toEqual([1, 2]));
+    expect(useApp.getState().selection).toBeNull();
   });
 
-  it("keepOnlySelectedRows records nothing — its complement would be taken over the PREVIEW row count", () => {
+  it("keepOnlySelectedRows takes its complement over the resolved row count", async () => {
     useApp.setState({ selection: { datasetId: "d1", rows: [1] } });
     useApp.getState().keepOnlySelectedRows();
-    expect(ds().excludedRows).toBeUndefined();
-    expect(useApp.getState().history).toHaveLength(0);
+    await vi.waitFor(() => expect(ds().excludedRows).toEqual([0, 2, 3, 4, 5]));
+    expect(useApp.getState().history).toHaveLength(1);
   });
 
-  it("setDatasetFilter records nothing", () => {
+  it("setDatasetFilter applies after resolution and remains undoable", async () => {
     useApp.getState().setDatasetFilter("d1", [{ col: 0, kind: "range", min: 15, max: 35 }]);
     expect(ds().filter).toBeUndefined();
-    expect(useApp.getState().status).toMatch(/still loading its full data/);
-    // The history assertion its four siblings in this block all have, and the
-    // one this test was missing — which let a sabotage that moved the recorder
-    // ABOVE the pending guard pass the whole suite (review finding 6). Ordering
-    // is the point: a refused edit must leave no entry, or Ctrl+Z would restore
-    // a snapshot reached by an action that never happened, and BUG-009's own
-    // symptom ("no undo entry to notice") comes back inverted.
-    expect(useApp.getState().history).toHaveLength(0);
+    await vi.waitFor(() => expect(ds().filter).toEqual([{ col: 0, kind: "range", min: 15, max: 35 }]));
+    expect(useApp.getState().history).toHaveLength(1);
     expect(useApp.getState().future).toHaveLength(0);
+  });
+
+  it("a newer Clear exclusions supersedes an older queued exclusion", async () => {
+    useApp.getState().toggleRowExcluded("d1", 2);
+    useApp.getState().clearRowExclusions("d1");
+    await vi.waitFor(() => expect(ds().pending).toBeUndefined());
+    expect(ds().excludedRows).toBeUndefined();
+    expect(useApp.getState().status).toMatch(/newer action replaced it/);
+  });
+
+  it("a newer Clear filter supersedes an older queued filter", async () => {
+    useApp.getState().setDatasetFilter("d1", [{ col: 0, kind: "range", min: 15 }]);
+    useApp.getState().clearDatasetFilter("d1");
+    await vi.waitFor(() => expect(ds().pending).toBeUndefined());
+    expect(ds().filter).toBeUndefined();
+  });
+
+  it("a failed resolution changes no row state or history and explains recovery", async () => {
+    vi.mocked(fetchBookData).mockRejectedValueOnce(new Error("source unavailable"));
+    useApp.getState().toggleRowExcluded("d1", 2);
+    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/source unavailable/));
+    expect(ds().excludedRows).toBeUndefined();
+    expect(ds().pending).toBeDefined();
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().status).toMatch(/Nothing was changed; re-import/);
+  });
+
+  it("does not apply an old project's queued edit to a replacement dataset with the same id", async () => {
+    let finish!: (value: typeof fullData) => void;
+    vi.mocked(fetchBookData).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    useApp.getState().toggleRowExcluded("d1", 2);
+    const replacement = dataset({ name: "new project", data: { ...fullData, time: [99], values: [[99]] } });
+    useApp.setState({ datasets: [replacement], activeId: "d1", history: [] });
+    finish(fullData);
+    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/full data is unavailable/));
+    expect(ds().name).toBe("new project");
+    expect(ds().data.time).toEqual([99]);
+    expect(ds().excludedRows).toBeUndefined();
+    expect(useApp.getState().history).toHaveLength(0);
   });
 });
 
@@ -120,7 +170,7 @@ describe("CLEARING row state is still allowed while pending, deliberately", () =
   });
 });
 
-describe("the guard changes nothing for a dataset that is NOT pending", () => {
+describe("the resolver changes nothing for a dataset that is NOT pending", () => {
   it("toggleRowExcluded still excludes, with one undo entry", () => {
     useApp.getState().toggleRowExcluded("d1", 2);
     expect(ds().excludedRows).toEqual([2]);
@@ -197,12 +247,8 @@ describe("an id that resolves to no dataset aborts before recording anything", (
   });
 });
 
-describe("a refusal PRESERVES existing row state (review L6)", () => {
-  it("does not clear exclusions or the filter it declined to change", () => {
-    // Every refusal test above starts from a dataset with no row state, so an
-    // implementation that CLEARED it on refusal passed all of them —
-    // `undefined` on both sides. Seed it, so the assertion has something to
-    // lose.
+describe("queued row-state edits preserve their invocation-time intent", () => {
+  it("applies two edits sharing one in-flight resolution in invocation order", async () => {
     useApp.setState({
       datasets: [pendingDataset({ excludedRows: [0], filter: [{ col: 0, kind: "range", min: 5, max: 25 }] })],
       activeId: "d1",
@@ -210,12 +256,14 @@ describe("a refusal PRESERVES existing row state (review L6)", () => {
     });
     useApp.getState().toggleRowExcluded("d1", 2);
     useApp.getState().setDatasetFilter("d1", [{ col: 0, kind: "range", min: 100, max: 200 }]);
-    expect(ds().excludedRows).toEqual([0]);
-    expect(ds().filter).toEqual([{ col: 0, kind: "range", min: 5, max: 25 }]);
+    await vi.waitFor(() => expect(ds().excludedRows).toEqual([2]));
+    await vi.waitFor(() => expect(ds().filter).toEqual([{ col: 0, kind: "range", min: 100, max: 200 }]));
+    expect(fetchBookData).toHaveBeenCalledTimes(1);
+    expect(useApp.getState().history).toHaveLength(2);
   });
 });
 
-describe("the windowId (MDI worksheet) route is guarded too (review L5)", () => {
+describe("the windowId (MDI worksheet) route resolves too", () => {
   beforeEach(() => {
     useApp.setState({
       datasets: [pendingDataset()],
@@ -227,19 +275,19 @@ describe("the windowId (MDI worksheet) route is guarded too (review L5)", () => 
     });
   });
 
-  it("excludeSelectedRows(windowId) refuses, and leaves that window's selection intact", () => {
+  it("excludeSelectedRows(windowId) keeps selection until the full-data edit lands", async () => {
     useApp.getState().excludeSelectedRows("ws1");
     expect(ds().excludedRows).toBeUndefined();
     expect(useApp.getState().history).toHaveLength(0);
-    // The refusal returns BEFORE clearWorksheetRowSelection, so the retry the
-    // message suggests still has a selection to act on.
     expect(useApp.getState().worksheetSelections.ws1).toEqual({ datasetId: "d1", rows: [1, 2] });
+    await vi.waitFor(() => expect(ds().excludedRows).toEqual([1, 2]));
+    expect(useApp.getState().worksheetSelections.ws1).toBeUndefined();
   });
 
-  it("keepOnlySelectedRows(windowId) refuses the same way", () => {
+  it("keepOnlySelectedRows(windowId) uses the full row count", async () => {
     useApp.getState().keepOnlySelectedRows("ws1");
-    expect(ds().excludedRows).toBeUndefined();
-    expect(useApp.getState().worksheetSelections.ws1).toEqual({ datasetId: "d1", rows: [1, 2] });
+    await vi.waitFor(() => expect(ds().excludedRows).toEqual([0, 3, 4, 5]));
+    expect(useApp.getState().worksheetSelections.ws1).toBeUndefined();
   });
 
   it("and both still work through that route on a non-pending dataset", () => {

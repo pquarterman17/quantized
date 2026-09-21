@@ -2051,7 +2051,7 @@ lose an edit:
     still-open `#50`/`#53` product decision, not something this fix should
     have settled by fiat.
 
-  **IMPLEMENTED 2026-09-20, pending PR/CI:** keep the restored row state in PREVIEW space
+  **SHIPPED 2026-09-20 — PR #388 / `d547f262`:** keep the restored row state in PREVIEW space
   through the pending phase — i.e. restore it as today, unguarded — and make
   `lib/bookData.ts`'s `installBookData` COMPOSE it through the
   `lib/rowSidecars.PREVIEW_SOURCE_ROWS` map (Group T) into source space at the
@@ -2062,7 +2062,7 @@ lose an edit:
   is, so a value that is always in the same space as the `data` it travels
   with needs no reader change. This touches `lib/bookData.ts`, whose clearing
   behaviour is itself a deliberate #50/#53 fix, so it is a separate,
-  owner-visible change. PR pending on `codex/pending-preview-rowstate`:
+  owner-visible change. `installBookData` now:
   `installBookData` now validates the persisted preview-to-source map against
   both row spaces, maps and sorts exclusions at the single swap point, and
   fails closed to the historical drop when correspondence is absent,
@@ -2098,6 +2098,17 @@ lose an edit:
   wrapper would make the safe path the DEFAULT rather than something each new action
   must remember — which is the actual defect. Deliberately NOT attempted inside a PR
   that has already taken five review rounds.
+
+  **First implementation slice complete 2026-09-20, pending PR/CI:** all five
+  row-state writers now resolve the full Origin book and automatically apply
+  the original exclusion/filter intent. Multiple edits share the single-flight
+  fetch and keep invocation order; a newer Clear cancels older queued writes;
+  failure changes neither data nor history and gives re-import guidance. The
+  same review found and closed a cross-project race: full-book requests are now
+  keyed by dataset plus source, install only into the still-matching pending
+  dataset, and `resolveDataset` returns unavailable rather than handing a queued
+  edit to an unrelated replacement dataset that reused the id. Remaining refusal families:
+  cell editing, computed columns, level order/recode, and local analysis guards.
 ### CLOSED (2026-09-10) — "in flight" vs "failed, will never arrive"
 
 - [x] `lib/bookData.ts` records why the last fetch for a `pending` book failed
