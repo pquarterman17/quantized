@@ -2,14 +2,20 @@
 // property is that a paste is ONE undoable operation — as N setCellValue calls
 // it would take N presses of Ctrl+Z to reverse, which is not a usable model.
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { fetchBookData } from "../lib/api";
 import { useApp } from "./useApp";
 import { recomputeFromBase } from "../lib/formulaInputs";
 import type { PeakTable } from "../lib/peakTable";
 import { peakTableFromFit } from "../lib/peakTableFit";
 import type { ComputedColumn, DataStruct, Dataset } from "../lib/types";
 import { resetBookTransportForTests } from "../lib/bookData";
+
+vi.mock("../lib/api", async (orig) => ({
+  ...(await orig<typeof import("../lib/api")>()),
+  fetchBookData: vi.fn(),
+}));
 
 const ds = (): Dataset => ({
   id: "d1",
@@ -35,6 +41,7 @@ beforeEach(() => {
   // the next. Without this these suites pass only because the one test that
   // asserts the message happens to run first (proven with --sequence.shuffle).
   resetBookTransportForTests();
+  vi.mocked(fetchBookData).mockReset().mockReturnValue(new Promise(() => {}));
   useApp.setState({ datasets: [ds()], activeId: "d1" });
 });
 
@@ -728,7 +735,7 @@ describe("row edits shift the row-indexed metadata sidecars (BUG-006)", () => {
 // the DECIMATED preview's numbers — so one "insert row" padded the grid to the
 // full book's length in NaN and persisted it, and `installBookData` then replaced
 // `data` wholesale so the edit vanished without a word.
-describe("row edits refuse a dataset whose full data is still pending", () => {
+describe("worksheet edits leave preview data untouched while full data is pending", () => {
   const seedPending = () => {
     useApp.setState({
       datasets: [
@@ -758,7 +765,7 @@ describe("row edits refuse a dataset whose full data is still pending", () => {
     expect(d.time).toEqual([0, 40, 90]);
     expect(d.values).toHaveLength(3);
     expect(useApp.getState().history).toHaveLength(0);
-    expect(useApp.getState().status).toMatch(/still loading its full data/);
+    expect(useApp.getState().status).toMatch(/will continue automatically/);
   });
 
   it("deleteRows does nothing either — the request is filtered against the FULL span", () => {
@@ -772,7 +779,7 @@ describe("row edits refuse a dataset whose full data is still pending", () => {
     expect(useApp.getState().history).toHaveLength(0);
   });
 
-  it("refuses edits on a pending book even when its preview is NOT a sample", () => {
+  it("defers edits on a pending book even when its preview is NOT a sample", () => {
     // Round 4's HIGH, and a regression round 3 introduced by loosening this guard
     // from `pending` to `rowsAreSampled`. The two answer different questions:
     // `rowsAreSampled` is about whether SIDECARS may be indexed; this guard is about
@@ -802,10 +809,10 @@ describe("row edits refuse a dataset whose full data is still pending", () => {
     useApp.getState().insertRows("p3", 5, 1);
     expect(useApp.getState().datasets[0].data.time).toHaveLength(161); // untouched
     expect(useApp.getState().history).toHaveLength(0);
-    expect(useApp.getState().status).toMatch(/still loading its full data/);
+    expect(useApp.getState().status).toMatch(/will continue automatically/);
   });
 
-  it("refuses CELL writes on a pending book too, not just row edits", () => {
+  it("defers CELL writes on a pending book too, not just row edits", () => {
     // The commonest edit, and it was unguarded: it wrote into the preview, recorded
     // undo and a macro line, and was wiped by the resolve without a word. Guarding
     // only row edits was not a coherent contract.
@@ -881,15 +888,15 @@ describe("row edits refuse a dataset whose full data is still pending", () => {
 
     seedTextOnly();
     useApp.getState().setCellValue("p5", 0, 0, 42);
-    expect(useApp.getState().status).toMatch(/still loading its full data/);
+    expect(useApp.getState().status).toMatch(/will continue automatically/);
 
     seedTextOnly();
     useApp.getState().setCategoricalCell("p5", 0, 0, "red");
-    expect(useApp.getState().status).toMatch(/still loading its full data/);
+    expect(useApp.getState().status).toMatch(/will continue automatically/);
 
     seedTextOnly();
     useApp.getState().setCellBlock("p5", [{ row: 0, col: 0, value: 7 }], "paste");
-    expect(useApp.getState().status).toMatch(/still loading its full data/);
+    expect(useApp.getState().status).toMatch(/will continue automatically/);
 
     expect(useApp.getState().history).toHaveLength(0);
   });
@@ -940,6 +947,73 @@ describe("row edits refuse a dataset whose full data is still pending", () => {
     useApp.setState({ datasets: [resolved] } as unknown as Parameters<typeof useApp.setState>[0]);
     useApp.getState().insertRows("p1", 1, 1);
     expect(useApp.getState().datasets[0].data.time).toHaveLength(13);
+  });
+});
+
+describe("pending worksheet edits resolve and continue automatically (BUG-009)", () => {
+  const pending = (over: Partial<Dataset> = {}): Dataset => ({
+    id: "lazy",
+    name: "book.opj",
+    data: { time: [0, 2], values: [[10], [30]], labels: ["Y"], units: [""], metadata: {} },
+    pending: { kind: "path", path: "book.opj", bookId: "book", rows: 4, cols: 1, previewSampled: true },
+    ...over,
+  });
+  const full = (over: Partial<DataStruct> = {}): DataStruct => ({
+    time: [0, 1, 2, 3],
+    values: [[10], [20], [30], [40]],
+    labels: ["Y"],
+    units: [""],
+    metadata: {},
+    ...over,
+  });
+  const seedLazy = (over: Partial<Dataset> = {}): void => {
+    useApp.setState({ datasets: [pending(over)], activeId: "lazy", history: [], status: "" });
+  };
+  const current = (): Dataset => useApp.getState().datasets[0];
+
+  it("inserts rows only after the full book arrives", async () => {
+    seedLazy();
+    vi.mocked(fetchBookData).mockResolvedValueOnce(full());
+    useApp.getState().insertRows("lazy", 1, 1);
+    expect(current().data.time).toEqual([0, 2]);
+    await vi.waitFor(() => expect(current().data.time).toHaveLength(5));
+    expect(current().data.time[1]).toBeNaN();
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+
+  it("revalidates deletion against the full row domain", async () => {
+    seedLazy();
+    vi.mocked(fetchBookData).mockResolvedValueOnce(full());
+    const rows = [2];
+    useApp.getState().deleteRows("lazy", rows);
+    rows[0] = 0;
+    await vi.waitFor(() => expect(current().data.time).toEqual([0, 1, 3]));
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+
+  it("applies single and block cell edits to full data, in request order", async () => {
+    seedLazy();
+    vi.mocked(fetchBookData).mockResolvedValueOnce(full());
+    useApp.getState().setCellValue("lazy", 1, 0, 999);
+    const edits = [{ row: 2, col: 0, value: 777 }];
+    useApp.getState().setCellBlock("lazy", edits, "paste");
+    edits[0].row = 0;
+    await vi.waitFor(() => expect(current().data.values[1][0]).toBe(999));
+    await vi.waitFor(() => expect(current().data.values[2][0]).toBe(777));
+    expect(fetchBookData).toHaveBeenCalledTimes(1);
+    expect(useApp.getState().history).toHaveLength(2);
+  });
+
+  it("applies a categorical label edit after resolving its level table", async () => {
+    seedLazy();
+    vi.mocked(fetchBookData).mockResolvedValueOnce(full({
+      values: [[0], [1], [0], [1]],
+      cat_levels: { 0: ["red", "blue"] },
+    }));
+    useApp.getState().setCategoricalCell("lazy", 1, 0, "red");
+    await vi.waitFor(() => expect(current().data.values[1][0]).toBe(0));
+    expect(current().data.cat_levels?.[0]).toEqual(["red", "blue"]);
+    expect(useApp.getState().history).toHaveLength(1);
   });
 });
 
