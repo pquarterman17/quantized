@@ -64,7 +64,7 @@ import {
 } from "../lib/recode";
 import type { ComputedColumn } from "../lib/types";
 import { toast } from "./toasts";
-import { refusePendingEdit } from "./pendingEdit";
+import { resolvePendingEdit } from "./pendingEdit";
 import { useApp } from "./useApp";
 
 let _savedSeq = 0;
@@ -190,6 +190,26 @@ export const useRecode = create<RecodeState>((set, get) => ({
       toast("can't recode: dataset not found", "danger");
       return null;
     }
+    if (ds.pending != null) {
+      const requestedMapping: RecodeMapping = {
+        groups: mapping.groups.map((group) => ({ ...group, from: [...group.from] })),
+      };
+      const requestedMappingKey = JSON.stringify(requestedMapping);
+      resolvePendingEdit(() => useApp.getState(), ds, "recoding a column", () => {
+        const current = get();
+        const unchanged = current.open
+          && current.datasetId === datasetId
+          && current.channel === channel
+          && current.openLabel === openLabel
+          && current.newColumnName === newColumnName
+          && JSON.stringify(current.mapping) === requestedMappingKey;
+        if (!unchanged) return false;
+        const committed = current.commitRecode();
+        if (committed == null) useApp.getState().setStatus("Full data loaded, but the recode could not be applied — review the open panel");
+        return true;
+      });
+      return null;
+    }
     // DEFECT B (Sol audit P1-3): `channel` is a plain index that can have
     // gone stale (a column removed/reimported elsewhere) since `openRecode`
     // captured it — re-resolve the LABEL identity before trusting it at all.
@@ -230,10 +250,6 @@ export const useRecode = create<RecodeState>((set, get) => ({
       toast(`can't add recode column "${name}": ${reason}`, "danger");
       return null;
     }
-    // Same site class as computedColumns' addFormula (BUG-006 site 9, round 5): a
-    // recode is a computed column, so on a pending dataset it survives the resolve
-    // while the preview's labels do not, and a real channel then gets overwritten.
-    if (refusePendingEdit(() => useApp.getState(), ds, "recoding a column")) return null;
     app.recordHistory("recode column");
     useApp.setState((s) => ({
       datasets: s.datasets.map((d) => {
