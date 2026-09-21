@@ -51,22 +51,8 @@ import { nextDatasetId, plotIntentStageTab, useApp } from "../../../store/useApp
 import { askParams } from "../../overlays/ParamDialog";
 import { describeExtract, planExtract } from "./extractRows";
 import { fmtCell } from "./cellFormat";
-import { refusePendingEdit } from "../../../store/pendingEdit";
-
-/** Does value `v` pass `op` against `a` (and `b` for "between")? Non-finite fails. */
-function passesFilter(v: number | undefined, op: string, a: number, b: number): boolean {
-  if (v == null || !Number.isFinite(v)) return false;
-  switch (op) {
-    case ">": return v > a;
-    case ">=": return v >= a;
-    case "<": return v < a;
-    case "<=": return v <= a;
-    case "==": return v === a;
-    case "!=": return v !== a;
-    case "between": return v >= a && v <= b;
-    default: return true;
-  }
-}
+import { resolvePendingEdit } from "../../../store/pendingEdit";
+import { resolvedSourceRow, resolveWorksheetRows, worksheetTsvHeaders } from "./worksheetRows";
 
 export interface WorksheetView {
   data: DataStruct;
@@ -352,34 +338,14 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   const textCols = useMemo(() => worksheetTextColumns(ds.data, ds.pending), [ds.data, ds.pending]);
   const textRowCount = useMemo(() => textColumnRowCount(textCols), [textCols]);
 
-  const filtered = useMemo(() => {
-    const n = Math.max(ds.data.time.length, textRowCount);
-    const all = Array.from({ length: n }, (_, i) => i);
-    if (filterCol === "") return all;
-    const col = Number(filterCol);
-    // Empty string -> NaN (Number("") is 0, which would wrongly filter on "> 0").
-    const num = (s: string) => (s.trim() === "" ? Number.NaN : Number(s));
-    const a = num(filterV1);
-    const b = num(filterV2);
-    if (Number.isNaN(a) || (filterOp === "between" && Number.isNaN(b))) return all;
-    const { time, values } = ds.data;
-    const valOf = (r: number) => (col < 0 ? time[r] : values[r]?.[col]);
-    return all.filter((r) => passesFilter(valOf(r), filterOp, a, b));
-  }, [ds, filterCol, filterOp, filterV1, filterV2, textRowCount]);
-
-  const order = useMemo(() => {
-    if (!sort) return filtered;
-    const key = (r: number) => (sort.col < 0 ? ds.data.time[r] : ds.data.values[r]?.[sort.col]);
-    return [...filtered].sort((a, b) => {
-      const va = key(a);
-      const vb = key(b);
-      if (!Number.isFinite(va)) return 1;
-      if (!Number.isFinite(vb)) return -1;
-      return (va - vb) * sort.dir;
-    });
-  }, [ds, filtered, sort]);
-
-  const analysisRows = useMemo(() => filtered.filter((r) => !masked.has(r)), [filtered, masked]);
+  const resolvedRows = useMemo(
+    () => resolveWorksheetRows(ds, { filterCol, filterOp, filterV1, filterV2, sort }),
+    [ds, filterCol, filterOp, filterV1, filterV2, sort],
+  );
+  const rowRules = { filterCol, filterOp, filterV1, filterV2, sort };
+  const filtered = resolvedRows.visible;
+  const order = resolvedRows.ordered;
+  const analysisRows = resolvedRows.analysis;
 
   // Fetch per-column descriptive stats (golden /api/stats/descriptive) over
   // the ANALYSIS rows — independent of the windowed display range and the
@@ -432,53 +398,51 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   const toggleMask = (r: number) => toggleRowExcluded(ds.id, r);
   const unmaskAll = () => clearRowExclusions(ds.id);
 
-  // #38: a pending dataset's `data` is REPLACED WHOLESALE when the fetch lands, so
-  // a subset or clipboard payload from it uses numbers about to cease to exist.
-  // Gated on `pending`, NOT `rowsAreSampled` — see `store/pendingEdit.ts`'s header
-  // for the full reasoning, and for why this comment's old "min/max-DECIMATED
-  // SAMPLE, not a prefix" justification was false.
-  // BUG-009: this was a hand-rolled COPY of that rule — one of four — still
-  // promising "try again in a moment" for books whose fetch had failed for good.
-  // It is now the rule itself: `setStatus` above is the store's own, so
-  // `refusePendingEdit` is a drop-in and the file loses a duplicate, not gains a line.
-  const pendingGuard = (action: string) => refusePendingEdit(useApp.getState, ds, action);
-
   function extractSubset() {
     if (!canExtract) return;
-    if (pendingGuard("Extract")) return;
-    // Row clamping, the DataStruct build and the wording all live in
-    // ./extractRows.ts, which carries the reasoning and the BUG-006 booking:
-    // an index here can run past `values` on a text-heavy Origin sheet.
-    const plan = planExtract(ds.data, analysisRows);
-    if (plan) {
-      const stem = ds.name.replace(/\.[^.]+$/, "");
-      addDataset({ id: nextDatasetId(), name: `${stem} (subset)`, data: plan.data });
-    }
-    setStatus(describeExtract(plan, time.length));
-  }
-
-  function tsvHeaders(): string[] {
-    return [
-      xUnit ? `${xName} (${xUnit})` : xName,
-      ...labels.map((lab, c) => (units[c] ? `${lab} (${units[c]})` : lab)),
-    ];
+    const apply = (source: Dataset) => {
+      // Re-evaluate the value-based local filter and the resolved exclusion
+      // mapping against full data. Preview row numbers are not source row
+      // numbers when Origin supplied a sampled preview.
+      const rows = source === ds ? analysisRows : resolveWorksheetRows(source, rowRules).analysis;
+      const plan = planExtract(source.data, rows);
+      if (plan) {
+        const stem = source.name.replace(/\.[^.]+$/, "");
+        addDataset({ id: nextDatasetId(), name: `${stem} (subset)`, data: plan.data });
+      }
+      setStatus(describeExtract(plan, source.data.time.length));
+    };
+    if (resolvePendingEdit(useApp.getState, ds, "extracting rows", apply)) return;
+    apply(ds);
   }
 
   function copyRows() {
-    if (pendingGuard("Copy")) return;
-    const rows = order.filter((r) => !masked.has(r));
-    const data = rows.map((r) => [time[r], ...labels.map((_, c) => values[r]?.[c])]);
-    void copyText(tableToTSV(tsvHeaders(), data)).then((ok) =>
-      setStatus(ok ? `copied ${rows.length} rows to clipboard` : "clipboard unavailable"),
-    );
+    const apply = (source: Dataset) => {
+      const rows = (source === ds ? order : resolveWorksheetRows(source, rowRules).ordered)
+        .filter((r) => !excludedSet(source).has(r));
+      const data = rows.map((r) => [source.data.time[r], ...source.data.labels.map((_, c) => source.data.values[r]?.[c])]);
+      void copyText(tableToTSV(worksheetTsvHeaders(source), data)).then((ok) =>
+        setStatus(ok ? `copied ${rows.length} rows to clipboard` : "clipboard unavailable"),
+      );
+    };
+    if (resolvePendingEdit(useApp.getState, ds, "copying rows", apply)) return;
+    apply(ds);
   }
 
   function copyRow(r: number) {
-    if (pendingGuard("Copy")) return;
-    const data = [[time[r], ...labels.map((_, c) => values[r]?.[c])]];
-    void copyText(tableToTSV(tsvHeaders(), data)).then((ok) =>
-      setStatus(ok ? `copied row ${r + 1}` : "clipboard unavailable"),
-    );
+    const sourceRow = resolvedSourceRow(ds, r);
+    const apply = (source: Dataset) => {
+      if (sourceRow == null || sourceRow >= source.data.time.length) {
+        setStatus("Full data loaded, but that preview row could not be matched — select the row again");
+        return;
+      }
+      const data = [[source.data.time[sourceRow], ...source.data.labels.map((_, c) => source.data.values[sourceRow!]?.[c])]];
+      void copyText(tableToTSV(worksheetTsvHeaders(source), data)).then((ok) =>
+        setStatus(ok ? `copied row ${sourceRow! + 1}` : "clipboard unavailable"),
+      );
+    };
+    if (resolvePendingEdit(useApp.getState, ds, "copying a row", apply)) return;
+    apply(ds);
   }
 
   async function promptColumn() {
