@@ -5,6 +5,7 @@
 // setter comes in as a parameter, so there's no store import and no cycle.
 
 import { fetchBookData } from "./api";
+import { applyFormulas, formulaErrors } from "./formula";
 import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "./rowSidecars";
 import type { BookSource, Dataset } from "./types";
 
@@ -108,6 +109,13 @@ function resolvedExcludedRows(ds: Dataset, sourceRows: number): number[] | undef
   return excluded.map((i) => map[i]).sort((a, b) => a - b);
 }
 
+function restoreComputedColumns(ds: Dataset, full: Dataset["data"]): Pick<Dataset, "data" | "formulaErrors"> {
+  if (!ds.formulas?.length) return { data: full, formulaErrors: undefined };
+  const data = applyFormulas(full, ds.formulas);
+  const errors = formulaErrors(full, ds.formulas);
+  return { data, formulaErrors: Object.keys(errors).length ? errors : undefined };
+}
+
 /** Fetch one dataset's full data and install it, single-flight. Resolves true
  *  when the matching pending dataset was swapped, false if it disappeared or
  *  changed source while loading, and rejects on transport failure. */
@@ -123,7 +131,7 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
           d.id === id && d.pending != null && sameBookSource(d.pending, source)
             ? {
                 ...d,
-                data: full,
+                ...restoreComputedColumns(d, full),
                 pending: undefined,
                 // Exclusions are row-indexed: translate them only when the
                 // preview-to-source correspondence is proven. Filters are
