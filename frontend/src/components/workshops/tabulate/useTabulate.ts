@@ -11,7 +11,7 @@
 // convenience and is not part of that export) or emitted as a #36 report
 // sheet (one record per row, group columns holding their resolved labels).
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { reportEmit } from "../../../lib/api";
 import { categoryLevels, resolveCategoryLabels } from "../../../lib/barlayout";
@@ -23,10 +23,9 @@ import {
   type TabRow,
   tabulateNested,
 } from "../../../lib/tabulate";
-import type { DataStruct } from "../../../lib/types";
+import type { DataStruct, Dataset } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
-import { pendingStatusMessage } from "../../../store/pendingEdit";
 
 /** A selectable column: -1 is the x column, 0.. are channels. */
 export interface TabulateColumn {
@@ -79,6 +78,8 @@ export interface TabulateState {
   groupIsCategorical: boolean;
   exportDataset: () => void;
   toTSV: () => string;
+  /** Resolve a pending Origin preview before returning clipboard text. */
+  copyTSV: () => Promise<{ text: string; rows: number } | null>;
   /** True while the #36 report emission is in flight (disables the button). */
   reportBusy: boolean;
   /** Emit the on-screen table as a #36 stats_table report (one record per
@@ -149,6 +150,9 @@ export function useTabulate(): TabulateState {
   ]);
   const [statKeys, setStatKeys] = useState<StatKey[]>(() => [...DEFAULT_STAT_KEYS]);
   const [grandTotal, setGrandTotal] = useState(false);
+  const [queuedAction, setQueuedAction] = useState<{ kind: "export" | "report"; key: string } | null>(null);
+  const pendingSeq = useRef(0);
+  const copySeq = useRef(0);
 
   const rows = useMemo(() => {
     if (!data || groupCols.length === 0 || valueCols.length === 0) return [];
@@ -195,20 +199,40 @@ export function useTabulate(): TabulateState {
     return [...groupCells, ...statCells];
   }
 
-  // #38 deferred edge: `rows` is derived from the possibly-preview `active`
-  // dataset — self-corrects on the next render once the fetch lands, but a
-  // click BEFORE that would silently export/report the incomplete summary.
-  // Abort (kick the fetch, ask the user to retry) rather than proceed.
-  function pendingGuard(action: string): boolean {
+  const actionKey = JSON.stringify({
+    datasetId: active?.id ?? null,
+    groupCols,
+    valueCols,
+    statKeys,
+    grandTotal,
+  });
+  const actionKeyRef = useRef(actionKey);
+  actionKeyRef.current = actionKey;
+
+  function queuePending(kind: "export" | "report"): boolean {
     if (!active?.pending) return false;
-    useApp.getState().ensureBookData(active.id);
-    setStatus(pendingStatusMessage(active, action)); // BUG-009: one home for the wording
+    const id = active.id;
+    const request = ++pendingSeq.current;
+    setQueuedAction({ kind, key: actionKey });
+    if (kind === "report") setReportBusy(true);
+    setStatus(`Loading full data for "${active.name}" — ${kind} will continue automatically`);
+    void useApp.getState().resolveDataset(id).then((resolved) => {
+      if (request !== pendingSeq.current || resolved) return;
+      setQueuedAction(null);
+      setReportBusy(false);
+      setStatus(`Could not finish ${kind} because the full dataset is unavailable; re-import the source to continue`);
+    }).catch((e: unknown) => {
+      if (request !== pendingSeq.current) return;
+      setQueuedAction(null);
+      setReportBusy(false);
+      setStatus(`Could not finish ${kind} because the full dataset failed to load (${e instanceof Error ? e.message : "unknown error"})`);
+    });
     return true;
   }
 
   function exportDataset(): void {
+    if (queuePending("export")) return;
     if (!rows.length) return;
-    if (pendingGuard("Export")) return;
     const dataRows = rows.filter((r) => !r.isTotal);
     if (!dataRows.length) {
       setStatus("nothing to export (only the grand-total row is present)");
@@ -240,6 +264,64 @@ export function useTabulate(): TabulateState {
     const header = headerLabels().join("\t");
     const body = rows.map((r) => rowCells(r).join("\t"));
     return [header, ...body].join("\n");
+  }
+
+  function tsvForDataset(source: Dataset): { text: string; rows: number } | null {
+    const resolved = analysisData(source);
+    if (!resolved) return null;
+    const resolvedRows = tabulateNested(
+      groupCols.map((c) => colValues(resolved, c)),
+      valueCols.map((c) => colValues(resolved, c)),
+      { grandTotal },
+    );
+    const sourceLabel = (i: number) => i < 0
+      ? String(source.data.metadata?.["x_column_name"] ?? "x")
+      : (source.data.labels[i] ?? `col ${i}`);
+    const resolvedGroupLabels = groupCols.map(sourceLabel);
+    const resolvedValueLabels = valueCols.map(sourceLabel);
+    const maps = groupCols.map((c) => {
+      const levels = categoryLevels(resolved, c);
+      const labels = resolveCategoryLabels(resolved, c, levels);
+      return new Map(levels.map((level, i) => [level, labels[i]]));
+    });
+    const headers = [
+      ...resolvedGroupLabels,
+      ...resolvedValueLabels.flatMap((label) => statKeys.map((key) => `${label} ${key}`)),
+    ];
+    const body = resolvedRows.map((row) => {
+      const groups = groupCols.map((_, depth) => row.isTotal
+        ? (depth === 0 ? "Total" : "")
+        : (maps[depth]?.get(row.levels[depth]) ?? String(row.levels[depth])));
+      const stats = valueCols.flatMap((_, vi) => statKeys.map((key) => row.values[vi][key]));
+      return [...groups, ...stats].join("\t");
+    });
+    return { text: [headers.join("\t"), ...body].join("\n"), rows: resolvedRows.length };
+  }
+
+  async function copyTSV(): Promise<{ text: string; rows: number } | null> {
+    if (!active) return null;
+    if (!active.pending) return { text: toTSV(), rows: rows.length };
+    const key = actionKey;
+    const request = ++copySeq.current;
+    setStatus(`Loading full data for "${active.name}" — copy will continue automatically`);
+    try {
+      const resolved = await useApp.getState().resolveDataset(active.id);
+      if (request !== copySeq.current) return null;
+      if (!resolved) {
+        setStatus("Could not copy the table because the full dataset is unavailable; re-import the source to continue");
+        return null;
+      }
+      if (actionKeyRef.current !== key) {
+        setStatus("Full data loaded, but copy was skipped because the Tabulate setup changed");
+        return null;
+      }
+      return tsvForDataset(resolved);
+    } catch (e) {
+      if (request === copySeq.current) {
+        setStatus(`Could not copy the table because the full dataset failed to load (${e instanceof Error ? e.message : "unknown error"})`);
+      }
+      return null;
+    }
   }
 
   // Functional (prev-based) setState throughout this block — several
@@ -294,8 +376,12 @@ export function useTabulate(): TabulateState {
   }
 
   async function toReport(): Promise<void> {
-    if (!rows.length || !active) return;
-    if (pendingGuard("report")) return;
+    if (!active) return;
+    if (queuePending("report")) return;
+    if (!rows.length) {
+      setReportBusy(false);
+      return;
+    }
     setReportBusy(true);
     try {
       const headers = headerLabels();
@@ -323,6 +409,22 @@ export function useTabulate(): TabulateState {
     }
   }
 
+  useEffect(() => {
+    if (queuedAction == null || active?.pending) return;
+    const requested = queuedAction;
+    setQueuedAction(null);
+    if (!active || requested.key !== actionKey) {
+      pendingSeq.current++;
+      setReportBusy(false);
+      setStatus(`Full data loaded, but ${requested.kind} was skipped because the Tabulate setup changed`);
+      return;
+    }
+    if (requested.kind === "export") exportDataset();
+    else void toReport();
+    // `actionKey` captures every control that changes the generated table.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.pending, actionKey, queuedAction]);
+
   return {
     hasData: !!active,
     datasetId: active?.id ?? null,
@@ -346,6 +448,7 @@ export function useTabulate(): TabulateState {
     groupIsCategorical,
     exportDataset,
     toTSV,
+    copyTSV,
     reportBusy,
     toReport,
   };

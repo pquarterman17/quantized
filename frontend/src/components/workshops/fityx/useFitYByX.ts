@@ -20,7 +20,7 @@
 // minimums (runLeg's thrown "need at least …" errors) surfaces as an honest
 // "not enough data (n=…)" line instead of an error toast/crash.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { reportEmit } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
@@ -32,7 +32,6 @@ import { useActiveDataset, useApp } from "../../../store/useApp";
 import { colValues, groupsForOneway, runLeg } from "./runLeg";
 import type { BivariateResult, ContingencyResult, FitYByXKind, OnewayResult } from "./runLeg";
 import { type ByColumnOption, type ByLevel, useByPartition } from "../useByPartition";
-import { pendingStatusMessage } from "../../../store/pendingEdit";
 
 export type { BivariateResult, ContingencyResult, FitYByXKind, OnewayGroup, OnewayResult } from "./runLeg";
 
@@ -133,6 +132,8 @@ export function useFitYByX(): FitYByXState {
   const addReport = useApp((s) => s.addReport);
   const setStatus = useApp((s) => s.setStatus);
   const [reportBusy, setReportBusy] = useState(false);
+  const [queuedReport, setQueuedReport] = useState<string | null>(null);
+  const pendingSeq = useRef(0);
   const [order, setOrder] = useState(1);
   const [bandInterval, setBandInterval] = useState<"confidence" | "prediction">("confidence");
 
@@ -257,10 +258,33 @@ export function useFitYByX(): FitYByXState {
     };
   }, [byPartition.levels, kind, xCol, yCol, order, bandInterval]);
 
-  function pendingGuard(action: string): boolean {
+  const reportKey = JSON.stringify({
+    datasetId: active?.id ?? null,
+    xCol,
+    yCol,
+    order,
+    bandInterval,
+    byCol: byPartition.byCol,
+  });
+
+  function queuePendingReport(): boolean {
     if (!active?.pending) return false;
-    useApp.getState().ensureBookData(active.id);
-    setStatus(pendingStatusMessage(active, action)); // BUG-009: one home for the wording
+    const id = active.id;
+    const request = ++pendingSeq.current;
+    setQueuedReport(reportKey);
+    setReportBusy(true);
+    setStatus(`Loading full data for "${active.name}" — report will continue automatically`);
+    void useApp.getState().resolveDataset(id).then((resolved) => {
+      if (request !== pendingSeq.current || resolved) return;
+      setQueuedReport(null);
+      setReportBusy(false);
+      setStatus("Could not create the report because the full dataset is unavailable; re-import the source to continue");
+    }).catch((e: unknown) => {
+      if (request !== pendingSeq.current) return;
+      setQueuedReport(null);
+      setReportBusy(false);
+      setStatus(`Could not create the report because the full dataset failed to load (${e instanceof Error ? e.message : "unknown error"})`);
+    });
     return true;
   }
 
@@ -306,35 +330,60 @@ export function useFitYByX(): FitYByXState {
     return [];
   }
 
-  async function toReport(): Promise<void> {
+  async function toReport(recompute = false): Promise<void> {
     if (!active) return;
-    if (pendingGuard("report")) return;
+    if (queuePendingReport()) return;
     setReportBusy(true);
     try {
       const refs = [{ kind: "dataset", id: active.id, name: active.name }];
       let title: string;
       let records: Record<string, unknown>[];
       let caption: string | undefined;
+      let reportOneway = oneway;
+      let reportBivariate = bivariate;
+      let reportContingency = contingency;
+      let reportByResults = byResults;
+
+      // A queued report must not reuse results computed from the preview.
+      // Re-run the selected leg against the resolved analysis view before
+      // constructing records; ordinary clicks keep using the landed result.
+      if (recompute && data) {
+        if (byPartition.levels.length > 0) {
+          reportByResults = await Promise.all(byPartition.levels.map(async (lvl): Promise<FitYByXLevelResult> => {
+            try {
+              const leg = await runLeg(lvl.data, kind, xCol, yCol, order, bandInterval);
+              return { label: lvl.label, n: lvl.data.time.length, ...leg, error: null };
+            } catch (_e) {
+              return { label: lvl.label, n: lvl.data.time.length, error: `not enough data (n=${lvl.data.time.length})` };
+            }
+          }));
+        } else {
+          const leg = await runLeg(data, kind, xCol, yCol, order, bandInterval);
+          reportOneway = leg.oneway ?? null;
+          reportBivariate = leg.bivariate ?? null;
+          reportContingency = leg.contingency ?? null;
+        }
+      }
 
       if (byPartition.levels.length > 0) {
         const byLabel = byPartition.byOptions.find((c) => c.index === byPartition.byCol)?.label ?? "level";
         title = `${yLabel} by ${xLabel} — ${kind} — by ${byLabel}`;
-        records = byResults.flatMap((r) => (r.error ? [] : legRecords(r, r.label)));
+        records = reportByResults.flatMap((r) => (r.error ? [] : legRecords(r, r.label)));
         if (records.length === 0) {
           setReportBusy(false);
           return;
         }
-      } else if (kind === "oneway" && oneway) {
+      } else if (kind === "oneway" && reportOneway) {
         title = `${yLabel} by ${xLabel} — oneway`;
-        records = legRecords({ oneway });
-        caption = `ANOVA F=${fmtNum(oneway.anova.fStat)}, p=${fmtNum(oneway.anova.pValue)}`;
-      } else if (kind === "bivariate" && bivariate) {
+        records = legRecords({ oneway: reportOneway });
+        caption = `ANOVA F=${fmtNum(reportOneway.anova.fStat)}, p=${fmtNum(reportOneway.anova.pValue)}`;
+      } else if (kind === "bivariate" && reportBivariate) {
         title = `${yLabel} by ${xLabel} — bivariate fit`;
-        records = legRecords({ bivariate });
-      } else if (kind === "contingency" && contingency) {
+        records = legRecords({ bivariate: reportBivariate });
+      } else if (kind === "contingency" && reportContingency) {
         title = `${xLabel} x ${yLabel} — contingency`;
-        records = legRecords({ contingency });
-        caption = `chi2=${fmtNum(contingency.chiSquare.chi2)}, p=${fmtNum(contingency.chiSquare.p_value)}`;
+        records = legRecords({ contingency: reportContingency });
+        caption = `chi2=${fmtNum(reportContingency.chiSquare.chi2)}, p=${fmtNum(reportContingency.chiSquare.p_value)}`;
       } else {
         setReportBusy(false);
         return;
@@ -351,6 +400,20 @@ export function useFitYByX(): FitYByXState {
       setReportBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (queuedReport == null || active?.pending) return;
+    setQueuedReport(null);
+    if (!active || queuedReport !== reportKey) {
+      pendingSeq.current++;
+      setReportBusy(false);
+      setStatus("Full data loaded, but the report was skipped because the Fit Y by X setup changed");
+      return;
+    }
+    void toReport(true);
+    // `reportKey` captures every control that changes the emitted analysis.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.pending, queuedReport, reportKey]);
 
   return {
     hasData: !!active,
@@ -373,7 +436,7 @@ export function useFitYByX(): FitYByXState {
     bivariate,
     contingency,
     reportBusy,
-    toReport,
+    toReport: () => toReport(),
     byOptions: byPartition.byOptions,
     byCol: byPartition.byCol,
     setByCol: byPartition.setByCol,

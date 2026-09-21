@@ -5,7 +5,7 @@
 // recommended test one-click and can land the result as a #36 report. Reads
 // the ANALYSIS view (rowstate.analysisData) so exclusions/filters are honored.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { reportEmit, statsRecommend, statsRunTest } from "../../../lib/api";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
@@ -21,7 +21,6 @@ import {
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { pendingStatusMessage } from "../../../store/pendingEdit";
 
 export type ChooserMode = "columns" | "groupby";
 
@@ -85,6 +84,8 @@ export function useStatsChooser(): StatsChooserState {
   const [error, setError] = useState<string | null>(null);
   const [rec, setRec] = useState<Recommendation | null>(null);
   const [testResult, setTestResult] = useState<CalcResult | null>(null);
+  const [queuedRecommendation, setQueuedRecommendation] = useState<string | null>(null);
+  const pendingSeq = useRef(0);
 
   const groups = useMemo<GroupSpec[]>(() => {
     if (!data) return [];
@@ -107,17 +108,37 @@ export function useStatsChooser(): StatsChooserState {
     setError(null);
   };
 
+  const recommendationKey = JSON.stringify({
+    datasetId: active?.id ?? null,
+    mode,
+    cols,
+    valueCol,
+    byCol,
+    paired,
+  });
+
   async function recommend(): Promise<void> {
-    if (groups.length === 0) return;
-    // #38 deferred edge: `groups` derives from the possibly-preview `active`
-    // dataset — self-corrects on the next render once the fetch lands, but a
-    // click BEFORE that would silently recommend/run a test against the
-    // incomplete preview. Abort (kick the fetch, ask the user to retry).
     if (active?.pending) {
-      useApp.getState().ensureBookData(active.id);
-      setError(pendingStatusMessage(active, "this")); // BUG-009: one home for the wording
+      const id = active.id;
+      const request = ++pendingSeq.current;
+      setQueuedRecommendation(recommendationKey);
+      setBusy(true);
+      setError(null);
+      useApp.getState().setStatus(`Loading full data for "${active.name}" — test recommendation will continue automatically`);
+      void useApp.getState().resolveDataset(id).then((resolved) => {
+        if (request !== pendingSeq.current || resolved) return;
+        setQueuedRecommendation(null);
+        setBusy(false);
+        setError("Could not recommend a test because the full dataset is unavailable; re-import the source to continue.");
+      }).catch((e: unknown) => {
+        if (request !== pendingSeq.current) return;
+        setQueuedRecommendation(null);
+        setBusy(false);
+        setError(`Could not recommend a test because the full dataset failed to load: ${e instanceof Error ? e.message : "unknown error"}`);
+      });
       return;
     }
+    if (groups.length === 0) return;
     setBusy(true);
     setError(null);
     setTestResult(null);
@@ -134,6 +155,20 @@ export function useStatsChooser(): StatsChooserState {
       setBusy(false);
     }
   }
+
+  useEffect(() => {
+    if (queuedRecommendation == null || active?.pending) return;
+    setQueuedRecommendation(null);
+    if (!active || queuedRecommendation !== recommendationKey) {
+      pendingSeq.current++;
+      setBusy(false);
+      setError("Full data loaded, but the recommendation was skipped because the selected columns changed.");
+      return;
+    }
+    void recommend();
+    // `recommendationKey` captures every user choice that can change groups.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active?.pending, recommendationKey, queuedRecommendation]);
 
   async function runRecommended(): Promise<void> {
     if (!rec) return;
