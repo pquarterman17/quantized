@@ -25,8 +25,10 @@ export default function TabulatePanel() {
   const t = useTabulate();
 
   async function copy(): Promise<void> {
-    const ok = await copyText(t.toTSV());
-    setStatus(ok ? `copied ${t.rows.length} rows to clipboard` : "clipboard unavailable");
+    const payload = await t.copyTSV();
+    if (!payload) return;
+    const ok = await copyText(payload.text);
+    setStatus(ok ? `copied ${payload.rows} rows to clipboard` : "clipboard unavailable");
   }
 
   return (

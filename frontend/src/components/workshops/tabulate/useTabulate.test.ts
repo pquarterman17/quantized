@@ -1,7 +1,8 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { reportEmit } from "../../../lib/api";
+import { fetchBookData, reportEmit } from "../../../lib/api";
+import { resetBookTransportForTests } from "../../../lib/bookData";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { MAX_GROUP_COLS, useTabulate } from "./useTabulate";
@@ -9,6 +10,7 @@ import { MAX_GROUP_COLS, useTabulate } from "./useTabulate";
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
   reportEmit: vi.fn(),
+  fetchBookData: vi.fn(),
 }));
 
 // 12 rows: channel 0 is a 2-level categorical grouping column (nominal fires at
@@ -36,7 +38,9 @@ const DATA: DataStruct = {
 };
 
 beforeEach(() => {
+  resetBookTransportForTests();
   vi.clearAllMocks();
+  vi.mocked(fetchBookData).mockReset().mockReturnValue(new Promise(() => {}));
   useApp.setState({
     datasets: [{ id: "d1", name: "run.dat", data: DATA }],
     activeId: "d1",
@@ -46,6 +50,58 @@ beforeEach(() => {
 });
 
 describe("useTabulate", () => {
+  it("loads the full Origin book before exporting a queued table", async () => {
+    const preview: DataStruct = { ...DATA, time: DATA.time.slice(0, 4), values: DATA.values.slice(0, 4) };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: preview, pending: { kind: "upload", bookId: "b1", rows: 12, cols: 3, previewSampled: true } }],
+      activeId: "d1",
+    });
+    vi.mocked(fetchBookData).mockResolvedValueOnce(DATA);
+    const { result } = renderHook(() => useTabulate());
+
+    act(() => result.current.exportDataset());
+
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
+    expect(useApp.getState().datasets[1].data.values).toHaveLength(2);
+    expect(useApp.getState().datasets[1].data.values[0][1]).toBe(6);
+  });
+
+  it("copies TSV from the full Origin book rather than the preview", async () => {
+    const preview: DataStruct = { ...DATA, time: DATA.time.slice(0, 4), values: DATA.values.slice(0, 4) };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: preview, pending: { kind: "upload", bookId: "b1", rows: 12, cols: 3, previewSampled: true } }],
+      activeId: "d1",
+    });
+    vi.mocked(fetchBookData).mockResolvedValueOnce(DATA);
+    const { result } = renderHook(() => useTabulate());
+
+    const copied = await act(() => result.current.copyTSV());
+
+    expect(copied?.rows).toBe(2);
+    // The user's preview-visible selection (sub) stays selected; only its
+    // statistics are recomputed over all twelve rows.
+    expect(copied?.text).toContain("0\t6\t1");
+    expect(copied?.text).toContain("1\t6\t1");
+  });
+
+  it("skips a queued export when the Tabulate setup changes", async () => {
+    const preview: DataStruct = { ...DATA, time: DATA.time.slice(0, 4), values: DATA.values.slice(0, 4) };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: preview, pending: { kind: "upload", bookId: "b1", rows: 12, cols: 3, previewSampled: true } }],
+      activeId: "d1",
+    });
+    let finish!: (data: DataStruct) => void;
+    vi.mocked(fetchBookData).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const { result } = renderHook(() => useTabulate());
+
+    act(() => result.current.exportDataset());
+    act(() => result.current.addValueCol(2));
+    act(() => finish(DATA));
+
+    await waitFor(() => expect(useApp.getState().status).toMatch(/skipped because.*setup changed/i));
+    expect(useApp.getState().datasets).toHaveLength(1);
+  });
+
   it("defaults to a single group-by (first categorical) and a single value (first continuous)", () => {
     const { result } = renderHook(() => useTabulate());
     expect(result.current.groupCols).toEqual([0]);

@@ -1,7 +1,8 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { reportEmit, statsAnova, statsChiSquareIndependence, statsFisherExact, statsLevene, statsRecommend, statsRegression, statsTukey } from "../../../lib/api";
+import { fetchBookData, reportEmit, statsAnova, statsChiSquareIndependence, statsFisherExact, statsLevene, statsRecommend, statsRegression, statsTukey } from "../../../lib/api";
+import { resetBookTransportForTests } from "../../../lib/bookData";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useFitYByX } from "./useFitYByX";
@@ -16,6 +17,7 @@ vi.mock("../../../lib/api", async (importOriginal) => ({
   statsChiSquareIndependence: vi.fn(),
   statsFisherExact: vi.fn(),
   reportEmit: vi.fn(),
+  fetchBookData: vi.fn(),
 }));
 
 // 12 rows: col0 "xcat" (2-level nominal, factor), col1 "ycat" (2-level
@@ -89,7 +91,9 @@ const CHI2 = {
 const FISHER = { odds_ratio: 1, p_value: 1, alternative: "two-sided", n: 12, method: "Fisher exact test" };
 
 beforeEach(() => {
+  resetBookTransportForTests();
   vi.clearAllMocks();
+  vi.mocked(fetchBookData).mockReset().mockReturnValue(new Promise(() => {}));
   vi.mocked(statsAnova).mockResolvedValue(ANOVA);
   vi.mocked(statsLevene).mockResolvedValue(LEVENE);
   vi.mocked(statsTukey).mockResolvedValue(TUKEY);
@@ -273,6 +277,47 @@ describe("useFitYByX — contingency leg", () => {
 });
 
 describe("useFitYByX — report emission", () => {
+  it("loads the full Origin book and recomputes before emitting a queued report", async () => {
+    const preview: DataStruct = { ...DATA, time: DATA.time.slice(0, 6), values: DATA.values.slice(0, 6) };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: preview, pending: { kind: "upload", bookId: "b1", rows: 12, cols: 4, previewSampled: true } }],
+      activeId: "d1",
+      reports: [],
+    });
+    vi.mocked(fetchBookData).mockResolvedValueOnce(DATA);
+    vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } });
+    const { result } = renderHook(() => useFitYByX());
+
+    await act(async () => { await result.current.toReport(); });
+
+    await waitFor(() => expect(useApp.getState().reports).toHaveLength(1));
+    expect(reportEmit).toHaveBeenCalledWith(expect.objectContaining({
+      kind: "stats_table",
+      title: "xcat x ycat — contingency",
+      records: expect.arrayContaining([expect.objectContaining({ observed: 3 })]),
+    }));
+  });
+
+  it("does not emit a stale queued report after the selected columns change", async () => {
+    const preview: DataStruct = { ...DATA, time: DATA.time.slice(0, 6), values: DATA.values.slice(0, 6) };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: preview, pending: { kind: "upload", bookId: "b1", rows: 12, cols: 4, previewSampled: true } }],
+      activeId: "d1",
+      reports: [],
+    });
+    let finish!: (data: DataStruct) => void;
+    vi.mocked(fetchBookData).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const { result } = renderHook(() => useFitYByX());
+
+    await act(async () => { await result.current.toReport(); });
+    act(() => result.current.setYCol(2));
+    act(() => finish(DATA));
+
+    await waitFor(() => expect(useApp.getState().status).toMatch(/skipped because.*setup changed/i));
+    expect(reportEmit).not.toHaveBeenCalled();
+    expect(result.current.reportBusy).toBe(false);
+  });
+
   it("emits a stats_table report for the oneway leg", async () => {
     vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } });
     const { result } = renderHook(() => useFitYByX());
