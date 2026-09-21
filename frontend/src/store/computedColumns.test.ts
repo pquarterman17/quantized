@@ -1,8 +1,9 @@
 // LIBRARY_WORKBOOK_UX_PLAN PR K, K4/K5b: addFormula/updateFormula write-time
 // cycle rejection, deps capture (K1/K2), and per-column error state (K5b).
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { fetchBookData } from "../lib/api";
 import { categoricalLevels, isCategoricalChannel } from "../lib/categorical";
 import { facetComposition } from "../lib/composition";
 import { buildErrorSpans } from "../lib/errorbars";
@@ -10,10 +11,15 @@ import { facetCompositionFromBinding, facetPayloads } from "../lib/facet";
 import { createFigureDocument } from "../lib/figureDocument";
 import { fitDataForSpec } from "../lib/fitselection";
 import { defaultPlotView } from "../lib/plotview";
-import type { ComputedColumn, Dataset, FitSpec } from "../lib/types";
+import type { ComputedColumn, Dataset, DataStruct, FitSpec } from "../lib/types";
 import { formulaLetter } from "./computedColumns";
 import { useApp } from "./useApp";
 import { resetBookTransportForTests } from "../lib/bookData";
+
+vi.mock("../lib/api", async (orig) => ({
+  ...(await orig<typeof import("../lib/api")>()),
+  fetchBookData: vi.fn(),
+}));
 
 // A base dataset with ONE real column, "A".
 const baseDs = (id: string, over: Partial<Dataset> = {}): Dataset => ({
@@ -61,6 +67,7 @@ beforeEach(() => {
   // the next. Without this these suites pass only because the one test that
   // asserts the message happens to run first (proven with --sequence.shuffle).
   resetBookTransportForTests();
+  vi.mocked(fetchBookData).mockReset().mockReturnValue(new Promise(() => {}));
   useApp.setState({
     datasets: [],
     activeId: null,
@@ -496,6 +503,16 @@ describe("removeFormula never records a phantom no-op undo entry (P2-2)", () => 
     const before = useApp.getState().history.length;
     useApp.getState().removeFormula("a", 0);
     expect(useApp.getState().history.length).toBe(before);
+  });
+
+  it("an out-of-range formula index records no history or channel remap", () => {
+    const dataset = dsWithFormulas("a", [{ name: "b", expr: "A * 2", deps: ["A"] }]);
+    useApp.setState({ datasets: [dataset], yKeys: [1] });
+    const before = useApp.getState().history.length;
+    useApp.getState().removeFormula("a", 7);
+    expect(useApp.getState().history.length).toBe(before);
+    expect(useApp.getState().datasets[0]).toBe(dataset);
+    expect(useApp.getState().yKeys).toEqual([1]);
   });
 
   it("a genuine removal still records exactly one history entry", () => {
@@ -963,7 +980,14 @@ describe("removeFormula (finding 3, review round 2): composition is invalidated 
 // legitimate edit computes `baseCount = labels.length - formulas.length`, treats a REAL
 // measured channel as the computed one, and overwrites its imported values under that
 // channel's own label.
-describe("formula actions refuse a dataset whose full data is still pending", () => {
+describe("pending formula actions resolve and continue automatically (BUG-009)", () => {
+  const full: DataStruct = {
+    time: [0, 1, 2],
+    values: [[1, 100], [2, 200], [3, 300]],
+    labels: ["Ya", "Yb"],
+    units: ["", ""],
+    metadata: {},
+  };
   const seedPending = () =>
     useApp.setState({
       datasets: [
@@ -978,7 +1002,7 @@ describe("formula actions refuse a dataset whose full data is still pending", ()
             metadata: {},
           },
           formulas: [],
-          pending: { bookId: "b", rows: 5000, cols: 2, previewSampled: true },
+          pending: { kind: "path", path: "book.opj", bookId: "b", rows: 5000, cols: 2, previewSampled: true },
         },
       ],
       activeId: "pf",
@@ -986,42 +1010,81 @@ describe("formula actions refuse a dataset whose full data is still pending", ()
       status: "",
     } as unknown as Parameters<typeof useApp.setState>[0]);
 
-  it("addFormula refuses, returns false, and writes nothing", () => {
+  const seedExisting = () => {
     seedPending();
-    expect(useApp.getState().addFormula("pf", "Calc", "A*2")).toBe(false);
+    useApp.setState({
+      datasets: [{
+        ...useApp.getState().datasets[0],
+        data: {
+          ...useApp.getState().datasets[0].data,
+          values: [[1, 100, 2], [2, 200, 4]],
+          labels: ["Ya", "Yb", "C"],
+          units: ["", "", ""],
+        },
+        formulas: [{ name: "C", expr: "A*2", deps: ["A"] }],
+      }],
+    });
+  };
+
+  it("adds a formula only after full measured columns arrive", async () => {
+    seedPending();
+    vi.mocked(fetchBookData).mockResolvedValueOnce(full);
+    expect(useApp.getState().addFormula("pf", "Calc", "A*2")).toBe(true); // accepted and queued
+    expect(useApp.getState().datasets[0].formulas).toEqual([]);
+    expect(useApp.getState().history).toHaveLength(0);
+    await vi.waitFor(() => expect(useApp.getState().datasets[0].formulas).toHaveLength(1));
     const d = useApp.getState().datasets[0];
-    expect(d.formulas).toEqual([]);
-    expect(d.data.labels).toEqual(["Ya", "Yb"]); // no phantom column
-    expect(useApp.getState().history).toHaveLength(0);
-    expect(useApp.getState().status).toMatch(/still loading its full data/);
+    expect(d.data.labels).toEqual(["Ya", "Yb", "Calc"]);
+    expect(d.data.values).toEqual([[1, 100, 2], [2, 200, 4], [3, 300, 6]]);
+    expect(useApp.getState().history).toHaveLength(1);
   });
 
-  it("updateFormula refuses", () => {
-    seedPending();
-    useApp.setState({
-      datasets: [{ ...useApp.getState().datasets[0], formulas: [{ name: "C", expr: "A", deps: ["A"] }] }],
-    } as unknown as Parameters<typeof useApp.setState>[0]);
-    expect(useApp.getState().updateFormula("pf", 0, { expr: "A*3" })).toBe(false);
-    expect(useApp.getState().datasets[0].formulas?.[0].expr).toBe("A");
-    expect(useApp.getState().history).toHaveLength(0);
+  it("restores persisted computed columns over full data before updating one", async () => {
+    seedExisting();
+    vi.mocked(fetchBookData).mockResolvedValueOnce(full);
+    const patch = { expr: "A*3" };
+    expect(useApp.getState().updateFormula("pf", 0, patch)).toBe(true);
+    patch.expr = "A*999"; // the queued request owns an invocation-time snapshot
+    await vi.waitFor(() => expect(useApp.getState().datasets[0].formulas?.[0].expr).toBe("A*3"));
+    expect(useApp.getState().datasets[0].data.values).toEqual([[1, 100, 3], [2, 200, 6], [3, 300, 9]]);
   });
 
-  it("removeFormula refuses", () => {
-    seedPending();
-    useApp.setState({
-      datasets: [{ ...useApp.getState().datasets[0], formulas: [{ name: "C", expr: "A", deps: ["A"] }] }],
-    } as unknown as Parameters<typeof useApp.setState>[0]);
+  it("restores then removes a persisted computed column without dropping a measured channel", async () => {
+    seedExisting();
+    vi.mocked(fetchBookData).mockResolvedValueOnce(full);
     useApp.getState().removeFormula("pf", 0);
-    expect(useApp.getState().datasets[0].formulas).toHaveLength(1);
+    await vi.waitFor(() => expect(useApp.getState().datasets[0].formulas).toBeUndefined());
+    expect(useApp.getState().datasets[0].data).toEqual(full);
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+
+  it("shares one fetch and applies queued additions in request order", async () => {
+    seedPending();
+    vi.mocked(fetchBookData).mockResolvedValueOnce(full);
+    useApp.getState().addFormula("pf", "Double", "A*2");
+    useApp.getState().addFormula("pf", "Triple", "A*3");
+    await vi.waitFor(() => expect(useApp.getState().datasets[0].formulas).toHaveLength(2));
+    expect(fetchBookData).toHaveBeenCalledTimes(1);
+    expect(useApp.getState().datasets[0].data.labels).toEqual(["Ya", "Yb", "Double", "Triple"]);
+    expect(useApp.getState().history).toHaveLength(2);
+  });
+
+  it("revalidates a queued formula and preserves the cycle error after loading", async () => {
+    seedPending();
+    vi.mocked(fetchBookData).mockResolvedValueOnce(full);
+    expect(useApp.getState().addFormula("pf", "Recursive", "C + 1")).toBe(true);
+    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/Can't add column/));
+    expect(useApp.getState().datasets[0].formulas).toEqual([]);
     expect(useApp.getState().history).toHaveLength(0);
   });
 
-  it("the SAME calls succeed once the book has resolved — the positive control", () => {
+  it("changes nothing and explains a full-book fetch failure", async () => {
     seedPending();
-    useApp.setState({
-      datasets: [{ ...useApp.getState().datasets[0], pending: undefined }],
-    } as unknown as Parameters<typeof useApp.setState>[0]);
+    vi.mocked(fetchBookData).mockRejectedValueOnce(new Error("network unavailable"));
     expect(useApp.getState().addFormula("pf", "Calc", "A*2")).toBe(true);
-    expect(useApp.getState().datasets[0].formulas).toHaveLength(1);
+    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/network unavailable/));
+    expect(useApp.getState().datasets[0].formulas).toEqual([]);
+    expect(useApp.getState().datasets[0].pending).toBeDefined();
+    expect(useApp.getState().history).toHaveLength(0);
   });
 });

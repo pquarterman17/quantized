@@ -94,12 +94,12 @@ export function resolvePendingEdit(
     }
     const status = get().status;
     const applied = apply(resolved);
-    if (applied === false) {
-      get().setStatus(`Full data loaded — skipped ${action} because a newer action replaced it`);
-    } else if (get().status === status) {
-      // Keep a more specific message produced by the applied action (for
-      // example, a paste that skipped invalid categorical cells).
-      get().setStatus(`Full data loaded — finished ${action} in "${resolved.name}"`);
+    // Keep a more specific message produced by the applied action (for example,
+    // a paste warning or formula validation failure after full data arrived).
+    if (get().status === status) {
+      get().setStatus(applied === false
+        ? `Full data loaded — skipped ${action} because a newer action replaced it`
+        : `Full data loaded — finished ${action} in "${resolved.name}"`);
     }
   })();
   return true;
