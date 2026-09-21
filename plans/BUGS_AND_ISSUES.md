@@ -2099,7 +2099,7 @@ lose an edit:
   must remember — which is the actual defect. Deliberately NOT attempted inside a PR
   that has already taken five review rounds.
 
-  **First implementation slice complete 2026-09-20, pending PR/CI:** all five
+  **First implementation slice complete 2026-09-20 — PR #389, CI pending:** all five
   row-state writers now resolve the full Origin book and automatically apply
   the original exclusion/filter intent. Multiple edits share the single-flight
   fetch and keep invocation order; a newer Clear cancels older queued writes;

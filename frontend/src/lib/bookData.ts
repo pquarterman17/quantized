@@ -108,11 +108,9 @@ function resolvedExcludedRows(ds: Dataset, sourceRows: number): number[] | undef
   return excluded.map((i) => map[i]).sort((a, b) => a - b);
 }
 
-/** Fetch one dataset's full data and install it, single-flight. Resolves
- *  (not rejects) once the swap lands — `ensureBookData` (fire-and-forget UI
- *  trigger) attaches its own `.catch` for the toast; `resolvePendingDatasets`
- *  (the .dwk pre-save resolver) awaits the SAME promise and lets a failure
- *  propagate so the caller can abort the save. */
+/** Fetch one dataset's full data and install it, single-flight. Resolves true
+ *  when the matching pending dataset was swapped, false if it disappeared or
+ *  changed source while loading, and rejects on transport failure. */
 export function installBookData(set: DatasetsSetter, id: string, source: BookSource): Promise<boolean> {
   const key = bookRequestKey(id, source);
   const inFlight = _bookFetches.get(key);
