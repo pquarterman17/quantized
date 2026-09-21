@@ -63,7 +63,7 @@ import {
 } from "../lib/categorical";
 import { resolveRecodeChannel } from "../lib/recode";
 import type { DataStruct } from "../lib/types";
-import { refusePendingEdit } from "./pendingEdit";
+import { resolvePendingEdit } from "./pendingEdit";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
 
@@ -234,6 +234,22 @@ export const useLevelOrder = create<LevelOrderState>((set, get) => ({
       toast("can't reorder levels: dataset not found", "danger");
       return false;
     }
+    if (ds.pending != null) {
+      const requestedDraft = [...draft];
+      resolvePendingEdit(() => useApp.getState(), ds, "reordering levels", () => {
+        const current = get();
+        const unchanged = current.open
+          && current.datasetId === datasetId
+          && current.channel === channel
+          && current.openLabel === openLabel
+          && arraysEqual(current.draft, requestedDraft);
+        if (!unchanged) return false;
+        const committed = current.commit();
+        if (!committed) useApp.getState().setStatus("Full data loaded, but the level order could not be applied — review the open panel");
+        return true;
+      });
+      return true;
+    }
     // DEFECT B — re-resolve the LABEL identity before trusting `channel` at
     // all (see module header). A resolved retarget updates `channel` in the
     // panel state too; a refusal leaves the draft untouched.
@@ -274,11 +290,6 @@ export const useLevelOrder = create<LevelOrderState>((set, get) => ({
     const data: DataStruct = Object.keys(nextOrder).length
       ? { ...restData, level_order: nextOrder }
       : (restData as DataStruct);
-    // Same site class as `commitRecode`/`setCategoricalCell` (BUG-006 site 9):
-    // a pending dataset's `.data` is a read-only display projection that gets
-    // replaced wholesale once the real fetch lands, so a `level_order` write
-    // here would be silently discarded — refuse instead of losing it quietly.
-    if (refusePendingEdit(() => useApp.getState(), ds, "reordering levels")) return false;
     // No `recordMacro` call, deliberately: this is a pure DISPLAY-order
     // change, the same class `setSeriesOrder` ("reorder curves", store/
     // useApp.ts) is — that action records history for undo but has no

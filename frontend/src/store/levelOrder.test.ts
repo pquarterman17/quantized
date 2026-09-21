@@ -4,6 +4,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { filteredOutRows } from "../lib/datafilter";
+import { fetchBookData } from "../lib/api";
 import type { ComputedColumn, Dataset } from "../lib/types";
 import { useLevelOrder } from "./levelOrder";
 import { toast } from "./toasts";
@@ -11,6 +12,10 @@ import { useApp } from "./useApp";
 import { resetBookTransportForTests } from "../lib/bookData";
 
 vi.mock("./toasts", () => ({ toast: vi.fn() }));
+vi.mock("../lib/api", async (orig) => ({
+  ...(await orig<typeof import("../lib/api")>()),
+  fetchBookData: vi.fn(),
+}));
 
 function catDataset(over: Partial<Dataset> = {}): Dataset {
   return {
@@ -37,6 +42,7 @@ beforeEach(() => {
   // BUG-009: the guard kicks a real fetch that rejects under jsdom and records
   // the reason in module scope; clear it so one test cannot answer for the next.
   resetBookTransportForTests();
+  vi.mocked(fetchBookData).mockReset().mockReturnValue(new Promise(() => {}));
   vi.clearAllMocks();
   useApp.setState({ datasets: [catDataset()], activeId: "d1" });
   resetPanel();
@@ -297,25 +303,32 @@ describe("commit — DEFECT B: stale-index resync/refuse", () => {
     expect(active().data.level_order?.[2]).toBeUndefined();
   });
 
-  it("updates `channel` in the panel state on a resolved retarget, observable even when a LATER guard still refuses the commit", () => {
+  it("re-resolves a shifted channel after full data arrives before committing", async () => {
     useApp.setState({ datasets: [shiftableDataset()], activeId: "d1" });
     useLevelOrder.getState().openLevelOrder("d1", 2); // "Grade2" — channel=2
     useApp.getState().removeFormula("d1", 0); // Grade2 shifts C(2)->B(1) — real shift, no pending yet
 
-    // NOW mark the dataset pending, directly (removeFormula itself also
-    // refuses on a pending dataset, so it has to happen after the shift) —
-    // refusePendingEdit fires AFTER the retarget `set` but before anything
-    // else in `commit`, so the resync is observable without the success
-    // path's own panel-close hiding it.
+    useLevelOrder.getState().moveUp(2);
+    // The book endpoint returns measured columns only.  Computed columns are
+    // restored by installBookData after the full payload arrives.
+    const full = {
+      time: [0, 1, 2, 3],
+      values: [[0], [1], [2], [1]],
+      labels: ["Grade"],
+      units: [""],
+      metadata: {},
+      cat_levels: { 0: ["Pass", "OK", "Fail"] },
+    };
     useApp.setState((s) => ({
       datasets: s.datasets.map((d) => (d.id === "d1" ? { ...d, pending: { kind: "upload", bookId: "b1", rows: 4, cols: 1, previewSampled: true } } : d)),
     }));
+    vi.mocked(fetchBookData).mockResolvedValueOnce(full);
 
     const ok = useLevelOrder.getState().commit();
 
-    expect(ok).toBe(false); // still refused (pending)
-    expect(useLevelOrder.getState().channel).toBe(1); // but the resync itself already ran
-    expect(useLevelOrder.getState().open).toBe(true);
+    expect(ok).toBe(true); // accepted while loading
+    await vi.waitFor(() => expect(useLevelOrder.getState().open).toBe(false));
+    expect(active().data.level_order?.[1]).toEqual([0, 2, 1]);
   });
 
   it("REFUSES (panel stays open, draft intact, zero mutation) when the opened column no longer exists anywhere", () => {
@@ -355,8 +368,8 @@ describe("commit — DEFECT B: stale-index resync/refuse", () => {
   });
 });
 
-describe("commit — refuses on a pending dataset (BUG-006 site 9 class)", () => {
-  it("does nothing, records no undo entry, and says why", () => {
+describe("commit — resolves a pending dataset before applying (BUG-009)", () => {
+  it("waits for full levels, then applies once and closes", async () => {
     useApp.setState({
       datasets: [{ ...catDataset(), pending: { kind: "upload", bookId: "b1", rows: 4, cols: 1, previewSampled: true } }],
       activeId: "d1",
@@ -364,14 +377,37 @@ describe("commit — refuses on a pending dataset (BUG-006 site 9 class)", () =>
     } as unknown as Parameters<typeof useApp.setState>[0]);
     useLevelOrder.getState().openLevelOrder("d1", 0);
     useLevelOrder.getState().moveUp(3);
+    vi.mocked(fetchBookData).mockResolvedValueOnce(catDataset().data);
 
     const ok = useLevelOrder.getState().commit();
 
-    expect(ok).toBe(false);
+    expect(ok).toBe(true);
     expect(active().data.level_order).toBeUndefined();
     expect(useApp.getState().history).toHaveLength(0);
-    expect(useApp.getState().status).toMatch(/still loading its full data/);
-    expect(useLevelOrder.getState().open).toBe(true); // panel stays open
+    await vi.waitFor(() => expect(useLevelOrder.getState().open).toBe(false));
+    expect(active().data.level_order?.[0]).toEqual([0, 1, 3, 2]);
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+
+  it("keeps a newer draft open and skips the queued order", async () => {
+    useApp.setState({
+      datasets: [{ ...catDataset(), pending: { kind: "upload", bookId: "b1", rows: 4, cols: 1, previewSampled: true } }],
+      activeId: "d1",
+      history: [],
+    } as unknown as Parameters<typeof useApp.setState>[0]);
+    useLevelOrder.getState().openLevelOrder("d1", 0);
+    useLevelOrder.getState().moveUp(3);
+    let finish!: (data: ReturnType<typeof catDataset>["data"]) => void;
+    vi.mocked(fetchBookData).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+
+    expect(useLevelOrder.getState().commit()).toBe(true);
+    useLevelOrder.getState().moveUp(2); // newer user action while the load is in flight
+    finish(catDataset().data);
+
+    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/newer action replaced it/));
+    expect(useLevelOrder.getState().open).toBe(true);
+    expect(active().data.level_order).toBeUndefined();
+    expect(useApp.getState().history).toHaveLength(0);
   });
 });
 

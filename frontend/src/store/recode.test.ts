@@ -2,12 +2,18 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { fetchBookData } from "../lib/api";
+import { resetBookTransportForTests } from "../lib/bookData";
 import type { ComputedColumn, Dataset } from "../lib/types";
 import { activeRecodePreview, useRecode } from "./recode";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
 
 vi.mock("./toasts", () => ({ toast: vi.fn() }));
+vi.mock("../lib/api", async (orig) => ({
+  ...(await orig<typeof import("../lib/api")>()),
+  fetchBookData: vi.fn(),
+}));
 
 function catDataset(over: Partial<Dataset> = {}): Dataset {
   return {
@@ -28,6 +34,8 @@ function catDataset(over: Partial<Dataset> = {}): Dataset {
 const active = () => useApp.getState().datasets.find((d) => d.id === "d1")!;
 
 beforeEach(() => {
+  resetBookTransportForTests();
+  vi.mocked(fetchBookData).mockReset().mockReturnValue(new Promise(() => {}));
   vi.clearAllMocks();
   useApp.setState({ datasets: [catDataset()], activeId: "d1" });
   useRecode.setState({ open: false, datasetId: null, channel: null, mapping: { groups: [] }, newColumnName: "", savedMappings: [] });
@@ -129,6 +137,43 @@ describe("commitRecode", () => {
     const letter = useRecode.getState().commitRecode();
     expect(letter).toBeNull();
     expect(active()).toBe(before);
+  });
+
+  it("waits for full categorical data, then commits the requested mapping once", async () => {
+    const lazy = catDataset({
+      pending: { kind: "path", path: "grades.opj", bookId: "b1", rows: 4, cols: 1, previewSampled: true },
+    });
+    useApp.setState({ datasets: [lazy], activeId: "d1", history: [] });
+    useRecode.getState().openRecode("d1", 0);
+    useRecode.getState().setGroup("Passing", ["Pass", "OK"]);
+    vi.mocked(fetchBookData).mockResolvedValueOnce(catDataset().data);
+
+    expect(useRecode.getState().commitRecode()).toBeNull(); // queued; target letter is known only after load
+    expect(active().formulas).toBeUndefined();
+    await vi.waitFor(() => expect(useRecode.getState().open).toBe(false));
+    expect(active().formulas?.[0].recode?.mapping.groups).toEqual([{ newLabel: "Passing", from: ["Pass", "OK"] }]);
+    expect(active().data.labels).toEqual(["Grade", "Grade (recoded)"]);
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+
+  it("keeps newer panel edits open and skips the queued recode", async () => {
+    const lazy = catDataset({
+      pending: { kind: "path", path: "grades.opj", bookId: "b1", rows: 4, cols: 1, previewSampled: true },
+    });
+    useApp.setState({ datasets: [lazy], activeId: "d1", history: [] });
+    useRecode.getState().openRecode("d1", 0);
+    useRecode.getState().setGroup("Passing", ["Pass", "OK"]);
+    let finish!: (data: ReturnType<typeof catDataset>["data"]) => void;
+    vi.mocked(fetchBookData).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+
+    expect(useRecode.getState().commitRecode()).toBeNull();
+    useRecode.getState().setNewColumnName("My newer choice");
+    finish(catDataset().data);
+
+    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/newer action replaced it/));
+    expect(useRecode.getState().open).toBe(true);
+    expect(active().formulas).toBeUndefined();
+    expect(useApp.getState().history).toHaveLength(0);
   });
 });
 
