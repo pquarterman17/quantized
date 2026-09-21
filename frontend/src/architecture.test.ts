@@ -955,7 +955,7 @@ const PENDING_EDIT_WINDOW = 1400;
 
 const lineOf = (src: string, at: number): number => src.slice(0, at).split("\n").length;
 
-/** Does the ACTION enclosing `at` call `refusePendingEdit`?
+/** Does the ACTION enclosing `at` call a pending-edit boundary?
  *
  *  Walks backward LINE by line to the nearest action boundary — a slice action
  *  (`  name: (args) =>`) or a top-level function — and looks for the guard between
@@ -974,7 +974,7 @@ function hasGuardInEnclosingAction(src: string, at: number): boolean {
   const boundary =
     /^(?:(?:export\s+)?(?:async\s+)?function\s|(?:export\s+)?const\s+\w[\w$]*\s*=)|^\s{2,4}\w[\w$]*\s*:\s*(?:async\s*)?\(/;
   for (let i = lines.length - 1; i >= 0; i -= 1) {
-    if (lines[i].includes("refusePendingEdit")) return true;
+    if (/\b(?:refuse|resolve)PendingEdit\b/.test(lines[i])) return true;
     if (boundary.test(lines[i])) return false;
   }
   return false;
@@ -1062,7 +1062,7 @@ describe("pending-edit guard ratchet (BUG-006 site 9)", () => {
     }
     expect(
       offenders,
-      "route the mutation through store/pendingEdit.refusePendingEdit (a pending " +
+      "route the mutation through store/pendingEdit's refusePendingEdit or resolvePendingEdit (a pending " +
         "dataset's `data` is replaced wholesale when its fetch lands, so anything " +
         "written into it is discarded silently), or add it to PENDING_EDIT_EXEMPT " +
         "with the reason it is safe",

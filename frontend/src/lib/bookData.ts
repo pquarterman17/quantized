@@ -17,7 +17,14 @@ type DatasetsSetter = (fn: (s: { datasets: Dataset[] }) => { datasets: Dataset[]
  *  exactly one HTTP fetch. Module scope, not store state: a Promise has no
  *  business flowing through Zustand subscribers or (accidentally) a .dwk
  *  serialize. */
-const _bookFetches = new Map<string, Promise<void>>();
+const _bookFetches = new Map<string, Promise<boolean>>();
+
+function sameBookSource(a: BookSource, b: BookSource): boolean {
+  return a.kind === b.kind && a.path === b.path && a.token === b.token && a.bookId === b.bookId;
+}
+
+const bookRequestKey = (id: string, source: BookSource): string =>
+  JSON.stringify([id, source.kind, source.path, source.token, source.bookId]);
 
 /** BUG-009: why the LAST fetch for a dataset failed, or no entry if none has.
  *  `store/pendingEdit.ts` reads it so a guarded action can say what actually
@@ -60,13 +67,7 @@ const _bookErrors = new Map<string, { source: BookSource; message: string }>();
 export function lastBookError(id: string, source: BookSource): string | null {
   const rec = _bookErrors.get(id);
   if (!rec) return null;
-  const s = rec.source;
-  return s.kind === source.kind &&
-    s.path === source.path &&
-    s.token === source.token &&
-    s.bookId === source.bookId
-    ? rec.message
-    : null;
+  return sameBookSource(rec.source, source) ? rec.message : null;
 }
 
 /** A backend `detail` can be arbitrarily long — and for a FastAPI 422 it is an
@@ -107,19 +108,19 @@ function resolvedExcludedRows(ds: Dataset, sourceRows: number): number[] | undef
   return excluded.map((i) => map[i]).sort((a, b) => a - b);
 }
 
-/** Fetch one dataset's full data and install it, single-flight. Resolves
- *  (not rejects) once the swap lands — `ensureBookData` (fire-and-forget UI
- *  trigger) attaches its own `.catch` for the toast; `resolvePendingDatasets`
- *  (the .dwk pre-save resolver) awaits the SAME promise and lets a failure
- *  propagate so the caller can abort the save. */
-export function installBookData(set: DatasetsSetter, id: string, source: BookSource): Promise<void> {
-  const inFlight = _bookFetches.get(id);
+/** Fetch one dataset's full data and install it, single-flight. Resolves true
+ *  when the matching pending dataset was swapped, false if it disappeared or
+ *  changed source while loading, and rejects on transport failure. */
+export function installBookData(set: DatasetsSetter, id: string, source: BookSource): Promise<boolean> {
+  const key = bookRequestKey(id, source);
+  const inFlight = _bookFetches.get(key);
   if (inFlight) return inFlight;
   const p = fetchBookData(source)
     .then((full) => {
-      set((s) => ({
-        datasets: s.datasets.map((d) =>
-          d.id === id
+      let installed = false;
+      set((s) => {
+        const datasets = s.datasets.map((d) =>
+          d.id === id && d.pending != null && sameBookSource(d.pending, source)
             ? {
                 ...d,
                 data: full,
@@ -130,10 +131,12 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
                 excludedRows: resolvedExcludedRows(d, full.time.length),
               }
             : d,
-        ),
-      }));
-      // The book arrived: whatever the last attempt failed with is history.
-      _bookErrors.delete(id);
+        );
+        installed = datasets.some((d, i) => d !== s.datasets[i]);
+        return { datasets: installed ? datasets : s.datasets };
+      });
+      if (installed) _bookErrors.delete(id);
+      return installed;
     })
     .then(undefined, (e: unknown) => {
       // Keep the pending source for retry and record the transport reason for
@@ -142,8 +145,8 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
       throw e;
     })
     .finally(() => {
-      _bookFetches.delete(id);
+      _bookFetches.delete(key);
     });
-  _bookFetches.set(id, p);
+  _bookFetches.set(key, p);
   return p;
 }

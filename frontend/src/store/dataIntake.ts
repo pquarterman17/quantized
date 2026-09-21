@@ -91,7 +91,7 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
    *
    *  Closing the run means the next filter edit pushes a snapshot that includes
    *  the arrived book, which is the behaviour plain `recordHistory` had. */
-  const install = (id: string, source: BookSource): Promise<void> =>
+  const install = (id: string, source: BookSource): Promise<boolean> =>
     installBookData(set, id, source).finally(() => get().endHistoryRun());
 
   return {
@@ -118,7 +118,8 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
         toast(`fetching full data for "${ds.name}"…`);
       }, 400);
       try {
-        await install(id, ds.pending);
+        const installed = await install(id, ds.pending);
+        if (!installed) return undefined;
       } finally {
         clearTimeout(timer);
       }

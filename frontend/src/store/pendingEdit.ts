@@ -63,6 +63,45 @@ export function refusePendingEdit(
   return true;
 }
 
+type ResolveEditState = Pick<AppState, "datasets" | "resolveDataset" | "setStatus">;
+
+/** Resolve a pending Origin preview and then perform the exact edit the user
+ * requested. Returns true when the edit has been scheduled, so the caller must
+ * return without also applying it to preview data. The callback receives the
+ * current, fully resolved dataset and therefore cannot accidentally reuse the
+ * preview object captured before the await. */
+export function resolvePendingEdit(
+  get: () => ResolveEditState,
+  ds: Dataset,
+  action: string,
+  apply: (resolved: Dataset) => void | boolean,
+): boolean {
+  if (ds.pending == null) return false;
+  get().setStatus(`Loading full data for "${ds.name}" — ${action} will continue automatically`);
+  void (async () => {
+    let resolved: Dataset | undefined;
+    try {
+      resolved = await get().resolveDataset(ds.id);
+    } catch (error) {
+      const reason = truncateReason(error instanceof Error ? error.message : String(error));
+      get().setStatus(
+        `Could not finish ${action} in "${ds.name}" because its full data failed to load (${reason}). ` +
+        "Nothing was changed; re-import the file to continue.",
+      );
+      return;
+    }
+    if (!resolved || resolved.pending) {
+      get().setStatus(`Could not finish ${action} in "${ds.name}" because its full data is unavailable; nothing was changed`);
+      return;
+    }
+    const applied = apply(resolved);
+    get().setStatus(applied === false
+      ? `Full data loaded — skipped ${action} because a newer action replaced it`
+      : `Full data loaded — finished ${action} in "${resolved.name}"`);
+  })();
+  return true;
+}
+
 /** What to TELL the user about a `pending` dataset they just tried to act on —
  *  "still loading" while nothing has failed, or what the last attempt failed
  *  with once something has.
