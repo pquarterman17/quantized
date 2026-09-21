@@ -18,21 +18,19 @@
 // padding-trimmed prefix, whose cells line up). Round 3 unified the two because they
 // looked alike and re-opened the data loss. Two questions, two predicates.
 //
-// KNOWN INCOMPLETE, DELIBERATELY — NOW HALF DONE. This refuses; it does not defer.
-// A permanently failed fetch (moved source, expired upload token) leaves `pending`
-// set forever, so the refusal is still a lockout — but it no longer LIES about it:
+// TWO POLICIES, ONE BOUNDARY. `resolvePendingEdit` is the preferred path for an
+// action that can safely resume after loading; `refusePendingEdit` remains for
+// call sites whose UI-local state cannot yet be replayed. A permanently failed
+// fetch (moved source, expired upload token) leaves `pending` set, but neither path
+// lies about it:
 // `lib/bookData.lastBookError` (BUG-009) reports why the last fetch for this book
 // failed, and the status below says so instead of promising a retry "in a moment"
 // that cannot succeed. That reason lives in `lib/bookData.ts`'s module scope
 // beside the in-flight registry, NOT on `Dataset` — see its own comment for the
 // request storm and the starved autosave that putting it on `Dataset` caused.
 //
-// What remains is the DEFERRAL itself. The right shape is resolve-THEN-apply
-// (`store/corrections.ts` already does it: `await get().resolveDataset(id)`
-// first), wrapped so the safe path is the DEFAULT rather than something each new
-// action must remember. That is a store-wide refactor, tracked in
-// plans/BUGS_AND_ISSUES.md as BUG-009, and deliberately not attempted inside a
-// PR that has already taken five review rounds.
+// BUG-009 tracks migrating the remaining refusal sites. Keep both policies here
+// while that proceeds so every call site shares the same pending-data invariant.
 
 import { lastBookError, truncateReason } from "../lib/bookData";
 import type { Dataset } from "../lib/types";
@@ -63,7 +61,7 @@ export function refusePendingEdit(
   return true;
 }
 
-type ResolveEditState = Pick<AppState, "datasets" | "resolveDataset" | "setStatus">;
+type ResolveEditState = Pick<AppState, "datasets" | "resolveDataset" | "setStatus" | "status">;
 
 /** Resolve a pending Origin preview and then perform the exact edit the user
  * requested. Returns true when the edit has been scheduled, so the caller must
@@ -94,10 +92,15 @@ export function resolvePendingEdit(
       get().setStatus(`Could not finish ${action} in "${ds.name}" because its full data is unavailable; nothing was changed`);
       return;
     }
+    const status = get().status;
     const applied = apply(resolved);
-    get().setStatus(applied === false
-      ? `Full data loaded — skipped ${action} because a newer action replaced it`
-      : `Full data loaded — finished ${action} in "${resolved.name}"`);
+    if (applied === false) {
+      get().setStatus(`Full data loaded — skipped ${action} because a newer action replaced it`);
+    } else if (get().status === status) {
+      // Keep a more specific message produced by the applied action (for
+      // example, a paste that skipped invalid categorical cells).
+      get().setStatus(`Full data loaded — finished ${action} in "${resolved.name}"`);
+    }
   })();
   return true;
 }
