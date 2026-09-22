@@ -99,6 +99,33 @@ describe("StatsChooserPanel", () => {
     expect(recommendMock).not.toHaveBeenCalled();
   });
 
+  it("does not recommend from a same-ID replacement while the original book is loading", async () => {
+    let finish!: (data: Dataset["data"]) => void;
+    fetchBookDataMock.mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    useApp.setState({ datasets: [{ ...ds, data: { ...ds.data, time: [1, 2], values: ds.data.values.slice(0, 2) }, pending: { kind: "upload", bookId: "b1", rows: 5, cols: 2, previewSampled: true } }] });
+    render(<StatsChooserPanel />);
+    fireEvent.click(screen.getByText("B"));
+    fireEvent.click(screen.getByRole("button", { name: "Which test?" }));
+
+    act(() => useApp.setState({ datasets: [{ ...ds, name: "replacement" }] }));
+    expect(recommendMock).not.toHaveBeenCalled();
+    await act(async () => { finish(ds.data); });
+    expect(recommendMock).not.toHaveBeenCalled();
+    expect(screen.getByText(/full dataset is unavailable/i)).toBeInTheDocument();
+  });
+
+  it("clears the queued busy state when the full group-by view has no groups", async () => {
+    fetchBookDataMock.mockResolvedValueOnce({ ...ds.data, time: [], values: [] });
+    useApp.setState({ datasets: [{ ...ds, data: { ...ds.data, time: [1, 2], values: ds.data.values.slice(0, 2) }, pending: { kind: "upload", bookId: "b1", rows: 5, cols: 2, previewSampled: true } }] });
+    render(<StatsChooserPanel />);
+    fireEvent.click(screen.getByText("Value by category"));
+    fireEvent.click(screen.getByRole("button", { name: "Which test?" }));
+
+    await waitFor(() => expect(screen.getByText(/No groups remain in the selected data/i)).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: "Checking…" })).not.toBeInTheDocument();
+    expect(recommendMock).not.toHaveBeenCalled();
+  });
+
   it("recommends a test and shows the plain-language reasons", async () => {
     recommendMock.mockResolvedValue(REC);
     render(<StatsChooserPanel />);

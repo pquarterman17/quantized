@@ -150,7 +150,7 @@ export function useTabulate(): TabulateState {
   ]);
   const [statKeys, setStatKeys] = useState<StatKey[]>(() => [...DEFAULT_STAT_KEYS]);
   const [grandTotal, setGrandTotal] = useState(false);
-  const [queuedAction, setQueuedAction] = useState<{ kind: "export" | "report"; key: string } | null>(null);
+  const [queuedAction, setQueuedAction] = useState<{ kind: "export" | "report"; key: string; resolved: Dataset | null } | null>(null);
   const pendingSeq = useRef(0);
   const copySeq = useRef(0);
 
@@ -213,14 +213,18 @@ export function useTabulate(): TabulateState {
     if (!active?.pending) return false;
     const id = active.id;
     const request = ++pendingSeq.current;
-    setQueuedAction({ kind, key: actionKey });
+    setQueuedAction({ kind, key: actionKey, resolved: null });
     if (kind === "report") setReportBusy(true);
     setStatus(`Loading full data for "${active.name}" — ${kind} will continue automatically`);
     void useApp.getState().resolveDataset(id).then((resolved) => {
-      if (request !== pendingSeq.current || resolved) return;
-      setQueuedAction(null);
-      setReportBusy(false);
-      setStatus(`Could not finish ${kind} because the full dataset is unavailable; re-import the source to continue`);
+      if (request !== pendingSeq.current) return;
+      if (resolved) {
+        setQueuedAction({ kind, key: actionKey, resolved });
+      } else {
+        setQueuedAction(null);
+        setReportBusy(false);
+        setStatus(`Could not finish ${kind} because the full dataset is unavailable; re-import the source to continue`);
+      }
     }).catch((e: unknown) => {
       if (request !== pendingSeq.current) return;
       setQueuedAction(null);
@@ -410,20 +414,20 @@ export function useTabulate(): TabulateState {
   }
 
   useEffect(() => {
-    if (queuedAction == null || active?.pending) return;
+    if (!queuedAction?.resolved) return;
     const requested = queuedAction;
     setQueuedAction(null);
-    if (!active || requested.key !== actionKey) {
+    if (active !== requested.resolved || requested.key !== actionKey) {
       pendingSeq.current++;
       setReportBusy(false);
-      setStatus(`Full data loaded, but ${requested.kind} was skipped because the Tabulate setup changed`);
+      setStatus(`${requested.kind} was skipped because the Tabulate setup changed or the dataset was replaced while loading`);
       return;
     }
     if (requested.kind === "export") exportDataset();
     else void toReport();
     // `actionKey` captures every control that changes the generated table.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.pending, actionKey, queuedAction]);
+  }, [active, actionKey, queuedAction]);
 
   return {
     hasData: !!active,
