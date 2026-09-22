@@ -255,6 +255,19 @@ describe("breakPayloads", () => {
   };
   const oneBreak: [number, number][] = [[9, 60]];
 
+  it("handles a large x column without exceeding the JavaScript argument limit", () => {
+    const count = 200_000;
+    const large: DataStruct = {
+      time: Array.from({ length: count }, (_, i) => i),
+      values: Array.from({ length: count }, (_, i) => [i]),
+      labels: ["y"],
+      units: [""],
+      metadata: {},
+    };
+    const panels = breakPayloads(large, null, [0], [[99_999, 100_000]]);
+    expect(panels.map((p) => p.xRange)).toEqual([[0, 99_999], [100_000, count - 1]]);
+  });
+
   it("splits a single gap into two contiguous panels", () => {
     const panels = breakPayloads(ds, null, [0], oneBreak);
     expect(panels).toHaveLength(2);
@@ -316,8 +329,8 @@ describe("breakPayloads", () => {
     // The genuine out-of-range case NIT 6's rename freed up. Nothing is
     // clamped: the segment above the break has no rows at all, so it is
     // dropped and a single panel survives -- which `breakCompositionFromData`
-    // then refuses, collapsing the screen to an ordinary plot. The export
-    // renderer draws two panels for the same document (residual below).
+    // then refuses, collapsing the screen to an ordinary plot. Export now
+    // also drops the empty panel.
     const grid: DataStruct = {
       time: [10, 11, 12, 13],
       values: Array.from({ length: 4 }, (_unused, i) => [i]),
@@ -331,18 +344,9 @@ describe("breakPayloads", () => {
     expect(below.map((p) => p.xRange)).toEqual([[10, 13]]);
   });
 
-  // Round 3, finding 5 -- the ONE pin on the recorded screen/export residual,
-  // in the same spirit as the matrix's `DIVERGENCE` tests: the break bounds
-  // are the export's `bounds` list ONLY while every break lies inside the data
-  // extent and leaves at least one row in every segment. `breakPayloads` drops
-  // an empty segment (`rows.length === 0` above); `calc/figure_break`'s
-  // `render_breaks_impl` emits `len(breaks) + 1` panels unconditionally
-  // (`bounds.append` per break plus the final one) and
-  // `calc/figure_overrides._validate_overrides` accepts the shape, so the same
-  // document draws 3 panels on export against these 2 on screen. Behaviour
-  // unchanged from before BUG-012's fix -- pinned so it cannot change
-  // silently, NOT asserted as correct. See BUG-012's residual list.
-  it("DIVERGENCE (residual): an EMPTY middle segment is dropped on screen, kept on export", () => {
+  // The backend's _visible_bounds now follows this same non-empty-segment
+  // rule; its parametric test pins the corresponding export ranges.
+  it("drops an empty middle segment instead of rendering a blank panel", () => {
     const grid: DataStruct = {
       time: [0, 1, 2, 3, 4, 5],
       values: Array.from({ length: 6 }, (_unused, i) => [i * 10]),
@@ -355,13 +359,12 @@ describe("breakPayloads", () => {
       [1.2, 1.4],
       [1.6, 1.8],
     ]);
-    expect(panels).toHaveLength(2); // export: 3 (bounds 0-1.2, 1.4-1.6, 1.8-5)
+    expect(panels).toHaveLength(2);
     expect(panels.map((p) => p.xRange)).toEqual([
       [0, 1.2],
       [1.8, 5],
     ]);
-    // Panel WIDTH RATIOS diverge with the count: 1.2 : 3.2 here against the
-    // export's 1.2 : 0.2 : 3.2 (`width_ratios=[max(hi - lo, 1e-9)]`).
+    // Export now uses the same 1.2 : 3.2 width ratio.
     expect(panels.map((p) => p.xRange[1] - p.xRange[0])).toEqual([1.2, 3.2]);
   });
 

@@ -289,10 +289,10 @@ inexpensive model.
   remain required before uncertainty-role handling can honestly close.
 - [ ] **UX-001 + UX-004 / P1:** compact rows and unique marks landed, but the
   dense reported Origin project still needs a real readability verdict.
-- [ ] **BUG-002 / P2:** hard-linked source aliases can bypass raw-source write
-  protection; strict expected-failure test remains open.
-- [ ] **BUG-003 / P2:** a hidden stale Data Filter predicate remains a contract
-  problem pending the product decision recorded in the living tracker.
+- [x] **BUG-002 / P2:** hard-linked source aliases are blocked by filesystem
+  identity checks (PR #382).
+- [x] **BUG-003 / P2:** incompatible Data Filter rules are paused consistently
+  across the panel and its consumers (PR #387).
 - [x] **BUG-005 / P2 (fixed 2026-09-20, `df06a518`):** Corrections passes
   categorical codes through all y transforms; Resample preserves a coincident
   grid and refuses a new one; reimport/workspace round trips preserve levels and
@@ -323,6 +323,7 @@ inexpensive model.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-09-21 | ChatGPT-Sol | Reconciled the stale BUG-002/003 entries; aligned x-break export panels with the screen for empty/out-of-range segments and removed the large-column argument-limit crash in the screen builder | Focused Python/TypeScript regression tests; PR #400 |
 | 2026-09-20 | Codex | Fixed BUG-005 across Corrections, Resample, browser reimport, raw/corrected workspace persistence and client/API boundaries | `df06a518`; focused backend 175/1 skip; frontend architecture/affected 311; full frontend 11,758/2 expected failures; full backend 5,417/87 skip/9 xfail excluding three host MAX_PATH setup cases; forced typecheck/lint/Ruff/mypy/build/integrity green |
 | 2026-09-20 | Codex | Fixed BUG-023 with the shared BUG-017 sentinel codec across frozen FigureDocuments, snapshot-window numeric arrays, workspace saves, and workbook transfer | Direct/full round trips; focused 271; full frontend 11,755; typecheck/lint/build/bundle; integrity 13 |
 | 2026-09-20 | ChatGPT-Sol | Extended BUG-023 to the independent static snapshot-window payload; filed UX-007 for the dead workbook Properties placeholder; completed the saved numeric-payload boundary pass | Serializer/sanitizer tracing, persistence tests, action-registry and plan reconciliation |

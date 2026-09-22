@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-21 (BUG-009 final queued-analysis race fixes merged in PR #398;
+**Updated:** 2026-09-21 (BUG-012 screen/export break-panel residual and large-column crash fixed; BUG-009 final queued-analysis race fixes merged in PR #398;
 earlier: BUG-024 through BUG-028 merged in PR #385;
 BUG-002 FIXED — declared-source write protection now
 compares filesystem identity as well as canonical path, so hard-link and
@@ -3571,7 +3571,7 @@ F5 DOM test asserts TWO uPlot instances INSIDE EACH window frame instead of a
 total of four (a regression moving a panel between the windows would have
 passed).
 
-**Residuals added (measured, deliberately not fixed here):**
+**Residuals added in round 3 (historical; first item closed 2026-09-21):**
 
 - **Three wire-valid break shapes draw differently on screen and on export.**
   `lib/facet.breakPayloads` drops a segment with no rows (`rows.length === 0`)
@@ -3606,6 +3606,18 @@ passed).
   path, so an `x_breaks` pair that would 400 the flat export is accepted in
   silence. Precedence itself is correct and tested; this is the missing
   authoring feedback beside it.
+
+**2026-09-21 follow-up (ChatGPT-Sol):** The first residual above is fixed:
+`calc.figure_break._visible_bounds` now drops data-empty segments and clamps
+surviving bounds to the finite x extent, matching `lib/facet.breakPayloads`.
+When fewer than two panels survive, the production export dispatch uses its
+ordinary plot path, so single-axis properties such as `x_lim` remain active.
+The export test checks both the computed ranges and actual SVG panel count for
+out-of-range, empty-middle, and partially out-of-range cases. Independently,
+`breakPayloads` no longer spreads a potentially huge x column into
+`Math.min`/`Math.max`, which crashed on large imported scans; a 200,000-row
+regression test pins that path. The facet-plus-break feedback residual above
+remains open; the screen/export parity fix does not change that precedence.
 
 **Round-3 verification:** `tsc -b --force`, `eslint src --max-warnings=0`,
 `vitest run src/lib src/store src/components/Stage src/components/windows
