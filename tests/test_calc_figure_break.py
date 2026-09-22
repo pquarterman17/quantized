@@ -8,13 +8,41 @@ import numpy as np
 import pytest
 
 from quantized.calc.figure import _validate_overrides, render_figure
-from quantized.calc.figure_break import render_breaks_impl
+from quantized.calc.figure_break import _visible_bounds, render_breaks_impl
 from quantized.calc.figure_styles import figure_style
 
 
 def _gapped_x() -> np.ndarray:
     # Typical spacing 1 throughout each cluster; one big gap between 9 and 60.
     return np.concatenate([np.linspace(0, 9, 20), np.linspace(60, 63, 8)])
+
+
+@pytest.mark.parametrize(
+    ("breaks", "expected"),
+    [
+        ([(7.0, 8.0)], [(0.0, 5.0)]),
+        ([(-3.0, -2.0)], [(0.0, 5.0)]),
+        ([(1.2, 1.4), (1.6, 1.8)], [(0.0, 1.2), (1.8, 5.0)]),
+        ([(2.0, 3.0), (7.0, 8.0)], [(0.0, 2.0), (3.0, 5.0)]),
+        ([(-1.0, 6.0)], [(0.0, 5.0)]),
+    ],
+)
+def test_export_break_panels_match_nonempty_screen_segments(breaks, expected):
+    assert _visible_bounds(np.arange(6, dtype=float), breaks) == expected
+
+
+@pytest.mark.parametrize(
+    ("breaks", "panel_count"),
+    [
+        ([[7.0, 8.0]], 1),
+        ([[1.2, 1.4], [1.6, 1.8]], 2),
+        ([[2.0, 3.0], [7.0, 8.0]], 2),
+    ],
+)
+def test_export_renders_only_nonempty_break_panels(breaks, panel_count):
+    x = np.arange(6, dtype=float)
+    svg = render_figure(x, [("sig", x)], fmt="svg", overrides={"x_breaks": breaks})
+    assert svg.count(b'<g id="axes_') == panel_count
 
 
 class TestValidation:
