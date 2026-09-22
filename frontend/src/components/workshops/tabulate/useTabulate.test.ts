@@ -132,6 +132,17 @@ describe("useTabulate", () => {
     expect(result.current.reportBusy).toBe(false);
   });
 
+  it("clears report busy when the active dataset changes during a stalled load", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA, pending: { kind: "upload", bookId: "b1", rows: 12, cols: 3, previewSampled: true } }, { id: "d2", name: "other", data: DATA }] });
+    const { result } = renderHook(() => useTabulate());
+    await act(async () => { await result.current.toReport(); });
+    act(() => useApp.setState({ activeId: "d2" }));
+
+    expect(result.current.reportBusy).toBe(false);
+    expect(useApp.getState().status).toMatch(/active dataset changed while loading/i);
+    expect(reportEmit).not.toHaveBeenCalled();
+  });
+
   it("defaults to a single group-by (first categorical) and a single value (first continuous)", () => {
     const { result } = renderHook(() => useTabulate());
     expect(result.current.groupCols).toEqual([0]);

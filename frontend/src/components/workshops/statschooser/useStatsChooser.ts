@@ -84,7 +84,7 @@ export function useStatsChooser(): StatsChooserState {
   const [error, setError] = useState<string | null>(null);
   const [rec, setRec] = useState<Recommendation | null>(null);
   const [testResult, setTestResult] = useState<CalcResult | null>(null);
-  const [queuedRecommendation, setQueuedRecommendation] = useState<{ key: string; resolved: Dataset | null } | null>(null);
+  const [queuedRecommendation, setQueuedRecommendation] = useState<{ key: string; id: string; resolved: Dataset | null } | null>(null);
   const pendingSeq = useRef(0);
 
   const groups = useMemo<GroupSpec[]>(() => {
@@ -121,14 +121,14 @@ export function useStatsChooser(): StatsChooserState {
     if (active?.pending) {
       const id = active.id;
       const request = ++pendingSeq.current;
-      setQueuedRecommendation({ key: recommendationKey, resolved: null });
+      setQueuedRecommendation({ key: recommendationKey, id, resolved: null });
       setBusy(true);
       setError(null);
       useApp.getState().setStatus(`Loading full data for "${active.name}" — test recommendation will continue automatically`);
       void useApp.getState().resolveDataset(id).then((resolved) => {
         if (request !== pendingSeq.current) return;
         if (resolved) {
-          setQueuedRecommendation({ key: recommendationKey, resolved });
+          setQueuedRecommendation({ key: recommendationKey, id, resolved });
         } else {
           setQueuedRecommendation(null);
           setBusy(false);
@@ -167,6 +167,13 @@ export function useStatsChooser(): StatsChooserState {
   }
 
   useEffect(() => {
+    if (queuedRecommendation && !queuedRecommendation.resolved && active?.id !== queuedRecommendation.id) {
+      pendingSeq.current++;
+      setQueuedRecommendation(null);
+      setBusy(false);
+      setError("The recommendation was skipped because the active dataset changed while loading.");
+      return;
+    }
     if (!queuedRecommendation?.resolved) return;
     setQueuedRecommendation(null);
     if (active !== queuedRecommendation.resolved || queuedRecommendation.key !== recommendationKey) {

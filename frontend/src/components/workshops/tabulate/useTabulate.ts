@@ -150,7 +150,7 @@ export function useTabulate(): TabulateState {
   ]);
   const [statKeys, setStatKeys] = useState<StatKey[]>(() => [...DEFAULT_STAT_KEYS]);
   const [grandTotal, setGrandTotal] = useState(false);
-  const [queuedAction, setQueuedAction] = useState<{ kind: "export" | "report"; key: string; resolved: Dataset | null } | null>(null);
+  const [queuedAction, setQueuedAction] = useState<{ kind: "export" | "report"; key: string; id: string; resolved: Dataset | null } | null>(null);
   const pendingSeq = useRef(0);
   const copySeq = useRef(0);
 
@@ -213,13 +213,13 @@ export function useTabulate(): TabulateState {
     if (!active?.pending) return false;
     const id = active.id;
     const request = ++pendingSeq.current;
-    setQueuedAction({ kind, key: actionKey, resolved: null });
+    setQueuedAction({ kind, key: actionKey, id, resolved: null });
     if (kind === "report") setReportBusy(true);
     setStatus(`Loading full data for "${active.name}" — ${kind} will continue automatically`);
     void useApp.getState().resolveDataset(id).then((resolved) => {
       if (request !== pendingSeq.current) return;
       if (resolved) {
-        setQueuedAction({ kind, key: actionKey, resolved });
+        setQueuedAction({ kind, key: actionKey, id, resolved });
       } else {
         setQueuedAction(null);
         setReportBusy(false);
@@ -414,6 +414,13 @@ export function useTabulate(): TabulateState {
   }
 
   useEffect(() => {
+    if (queuedAction && !queuedAction.resolved && active?.id !== queuedAction.id) {
+      pendingSeq.current++;
+      setQueuedAction(null);
+      setReportBusy(false);
+      setStatus(`${queuedAction.kind} was skipped because the active dataset changed while loading`);
+      return;
+    }
     if (!queuedAction?.resolved) return;
     const requested = queuedAction;
     setQueuedAction(null);

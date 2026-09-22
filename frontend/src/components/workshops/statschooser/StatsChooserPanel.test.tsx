@@ -114,6 +114,17 @@ describe("StatsChooserPanel", () => {
     expect(screen.getByText(/full dataset is unavailable/i)).toBeInTheDocument();
   });
 
+  it("stops waiting when the user switches datasets during a stalled load", async () => {
+    useApp.setState({ datasets: [{ ...ds, data: { ...ds.data, time: [1, 2], values: ds.data.values.slice(0, 2) }, pending: { kind: "upload", bookId: "b1", rows: 5, cols: 2, previewSampled: true } }, { ...ds, id: "d2", name: "other" }] });
+    render(<StatsChooserPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "Which test?" }));
+    act(() => useApp.setState({ activeId: "d2" }));
+
+    expect(screen.getByText(/active dataset changed while loading/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Which test?" })).toBeEnabled();
+    expect(recommendMock).not.toHaveBeenCalled();
+  });
+
   it("clears the queued busy state when the full group-by view has no groups", async () => {
     fetchBookDataMock.mockResolvedValueOnce({ ...ds.data, time: [], values: [] });
     useApp.setState({ datasets: [{ ...ds, data: { ...ds.data, time: [1, 2], values: ds.data.values.slice(0, 2) }, pending: { kind: "upload", bookId: "b1", rows: 5, cols: 2, previewSampled: true } }] });

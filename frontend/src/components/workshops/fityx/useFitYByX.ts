@@ -132,7 +132,7 @@ export function useFitYByX(): FitYByXState {
   const addReport = useApp((s) => s.addReport);
   const setStatus = useApp((s) => s.setStatus);
   const [reportBusy, setReportBusy] = useState(false);
-  const [queuedReport, setQueuedReport] = useState<{ key: string; resolved: Dataset | null } | null>(null);
+  const [queuedReport, setQueuedReport] = useState<{ key: string; id: string; resolved: Dataset | null } | null>(null);
   const pendingSeq = useRef(0);
   const [order, setOrder] = useState(1);
   const [bandInterval, setBandInterval] = useState<"confidence" | "prediction">("confidence");
@@ -278,13 +278,13 @@ export function useFitYByX(): FitYByXState {
     if (!active?.pending) return false;
     const id = active.id;
     const request = ++pendingSeq.current;
-    setQueuedReport({ key: reportKey, resolved: null });
+    setQueuedReport({ key: reportKey, id, resolved: null });
     setReportBusy(true);
     setStatus(`Loading full data for "${active.name}" — report will continue automatically`);
     void useApp.getState().resolveDataset(id).then((resolved) => {
       if (request !== pendingSeq.current) return;
       if (resolved) {
-        setQueuedReport({ key: reportKey, resolved });
+        setQueuedReport({ key: reportKey, id, resolved });
       } else {
         setQueuedReport(null);
         setReportBusy(false);
@@ -414,6 +414,13 @@ export function useFitYByX(): FitYByXState {
   }
 
   useEffect(() => {
+    if (queuedReport && !queuedReport.resolved && active?.id !== queuedReport.id) {
+      pendingSeq.current++;
+      setQueuedReport(null);
+      setReportBusy(false);
+      setStatus("The report was skipped because the active dataset changed while loading");
+      return;
+    }
     if (!queuedReport?.resolved) return;
     setQueuedReport(null);
     if (active !== queuedReport.resolved || queuedReport.key !== reportKey) {
