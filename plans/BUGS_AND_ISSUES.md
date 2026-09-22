@@ -3610,6 +3610,8 @@ passed).
 **2026-09-21 follow-up (ChatGPT-Sol):** The first residual above is fixed:
 `calc.figure_break._visible_bounds` now drops data-empty segments and clamps
 surviving bounds to the finite x extent, matching `lib/facet.breakPayloads`.
+When fewer than two panels survive, the production export dispatch uses its
+ordinary plot path, so single-axis properties such as `x_lim` remain active.
 The export test checks both the computed ranges and actual SVG panel count for
 out-of-range, empty-middle, and partially out-of-range cases. Independently,
 `breakPayloads` no longer spreads a potentially huge x column into

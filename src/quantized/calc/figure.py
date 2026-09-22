@@ -388,31 +388,33 @@ def _render_impl(
         # not applied together with x_breaks in this pass.
         if x_breaks and not collect_map:
             # Lazy import: split out purely to stay under the 500-line ceiling.
-            from quantized.calc.figure_break import render_breaks_impl
+            from quantized.calc.figure_break import _visible_bounds, render_breaks_impl
 
-            return render_breaks_impl(
-                xv,
-                series,
-                breaks=[(float(b[0]), float(b[1])) for b in x_breaks],
-                x_log=x_log,
-                y_log=y_log,
-                x_scale=x_scale,
-                y_scale=y_scale,
-                title=title,
-                x_label=x_label,
-                y_label=y_label,
-                fmt=fmt,
-                st=st,
-                ov=ov,
-                transparent=transparent,
-                dpi=resolved_dpi,
-                figsize=figsize,
-                series_styles=series_styles,
-                x_fmt=x_fmt,
-                y_fmt=y_fmt,
-                x_step=x_step,
-                y_step=y_step,
-            )
+            visible_breaks = [(float(b[0]), float(b[1])) for b in x_breaks]
+            if len(_visible_bounds(xv, visible_breaks)) >= 2:
+                return render_breaks_impl(
+                    xv,
+                    series,
+                    breaks=visible_breaks,
+                    x_log=x_log,
+                    y_log=y_log,
+                    x_scale=x_scale,
+                    y_scale=y_scale,
+                    title=title,
+                    x_label=x_label,
+                    y_label=y_label,
+                    fmt=fmt,
+                    st=st,
+                    ov=ov,
+                    transparent=transparent,
+                    dpi=resolved_dpi,
+                    figsize=figsize,
+                    series_styles=series_styles,
+                    x_fmt=x_fmt,
+                    y_fmt=y_fmt,
+                    x_step=x_step,
+                    y_step=y_step,
+                )
         fig, ax = plt.subplots(figsize=figsize)
         try:
             if has_y2:
