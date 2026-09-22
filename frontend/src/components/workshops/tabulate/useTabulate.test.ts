@@ -102,7 +102,7 @@ describe("useTabulate", () => {
     expect(useApp.getState().datasets).toHaveLength(1);
   });
 
-  it("does not export or report a same-ID replacement while the original book loads", async () => {
+  it("does not export a same-ID replacement while the original book loads", async () => {
     const preview: DataStruct = { ...DATA, time: DATA.time.slice(0, 4), values: DATA.values.slice(0, 4) };
     useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: preview, pending: { kind: "upload", bookId: "b1", rows: 12, cols: 3, previewSampled: true } }] });
     let finish!: (data: DataStruct) => void;
@@ -115,6 +115,21 @@ describe("useTabulate", () => {
     await act(async () => { finish(DATA); });
     expect(useApp.getState().datasets).toHaveLength(1);
     expect(reportEmit).not.toHaveBeenCalled();
+  });
+
+  it("does not report a same-ID replacement while the original book loads", async () => {
+    const preview: DataStruct = { ...DATA, time: DATA.time.slice(0, 4), values: DATA.values.slice(0, 4) };
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: preview, pending: { kind: "upload", bookId: "b1", rows: 12, cols: 3, previewSampled: true } }] });
+    let finish!: (data: DataStruct) => void;
+    vi.mocked(fetchBookData).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const { result } = renderHook(() => useTabulate());
+    await act(async () => { await result.current.toReport(); });
+
+    act(() => useApp.setState({ datasets: [{ id: "d1", name: "replacement", data: DATA }] }));
+    expect(reportEmit).not.toHaveBeenCalled();
+    await act(async () => { finish(DATA); });
+    expect(reportEmit).not.toHaveBeenCalled();
+    expect(result.current.reportBusy).toBe(false);
   });
 
   it("defaults to a single group-by (first categorical) and a single value (first continuous)", () => {

@@ -144,6 +144,8 @@ export function useStatsChooser(): StatsChooserState {
     }
     if (groups.length === 0) {
       setBusy(false);
+      setRec(null);
+      setTestResult(null);
       setError("No groups remain in the selected data; check the columns, filters, and excluded rows.");
       return;
     }
