@@ -268,6 +268,32 @@ describe("PropertyPanels y2 fields (item 2)", () => {
 // overrides.x_breaks entirely, so a canonical session's panel and its
 // rendered figure can never disagree about which breaks are active.
 describe("PropertyPanels x-axis breaks (item 3)", () => {
+  it("explains and blocks adding an inert break while faceting, but lets an existing break be removed", () => {
+    const setXBreaks = vi.fn();
+    const clearFacet = vi.fn();
+    const props = {
+      overrides: {},
+      openGroup: "Axes & ticks",
+      hasY2: false,
+      xBreaks: [[1, 2]] as [number, number][],
+      setXBreaks,
+      setOverrides: vi.fn(),
+    };
+    const { rerender } = render(<PropertyPanels {...props} facetActive clearFacet={clearFacet} />);
+    expect(screen.getByRole("status")).toHaveTextContent("inactive while this figure is faceted");
+    fireEvent.click(screen.getByRole("button", { name: "Remove faceting and use breaks" }));
+    expect(clearFacet).toHaveBeenCalledOnce();
+    fireEvent.change(screen.getByLabelText("break from"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("break to"), { target: { value: "4" } });
+    expect(screen.getByRole("button", { name: "Add break" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Remove x-axis break 1" }));
+    expect(setXBreaks).toHaveBeenLastCalledWith([]);
+
+    rerender(<PropertyPanels {...props} facetActive={false} />);
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add break" })).toBeEnabled();
+  });
+
   it("legacy mode (no xBreaks prop) reads and writes overrides.x_breaks as before", () => {
     const onChange = vi.fn();
     render(<Harness initial={{ x_breaks: [[1, 2]] }} openGroup="Axes & ticks" onChange={onChange} />);

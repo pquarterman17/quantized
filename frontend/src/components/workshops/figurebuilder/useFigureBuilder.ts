@@ -301,6 +301,12 @@ export function useFigureBuilder() {
   const groupKey = canonicalDocument?.bindings.groupKey ?? null;
   const setGroupKey = (next: number | null) =>
     patchCanonical((document) => ({ ...document, bindings: { ...document.bindings, groupKey: next } }));
+  const clearFacet = () =>
+    patchCanonical((document) => ({
+      ...document,
+      bindings: { ...document.bindings, facetKey: null },
+      plot: { ...document.plot, view: { ...document.plot.view, stackMode: false } },
+    }));
 
   // The request spec shared by the preview (PNG) and the export (chosen format) —
   // mirrors the on-screen plot: channel selection, log scales, per-series styles.
@@ -424,6 +430,8 @@ export function useFigureBuilder() {
     overrides: activeOverrides,
     setOverrides: setActiveOverrides,
     hasY2,
+    facetActive: canonicalDocument?.bindings.facetKey != null,
+    clearFacet,
     xBreaks,
     setXBreaks,
     // F2.3b: canonical-only (empty/no-op in legacy mode — see the field doc above).

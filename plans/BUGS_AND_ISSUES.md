@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-21 (BUG-012 screen/export break-panel residual and large-column crash fixed; BUG-009 final queued-analysis race fixes merged in PR #398;
+**Updated:** 2026-09-21 (BUG-012 facet-plus-break no-op now surfaced and removable in Publication Preview; screen/export break-panel residual and large-column crash fixed; BUG-009 final queued-analysis race fixes merged in PR #398;
 earlier: BUG-024 through BUG-028 merged in PR #385;
 BUG-002 FIXED — declared-source write protection now
 compares filesystem identity as well as canonical path, so hard-link and
@@ -3617,7 +3617,20 @@ out-of-range, empty-middle, and partially out-of-range cases. Independently,
 `breakPayloads` no longer spreads a potentially huge x column into
 `Math.min`/`Math.max`, which crashed on large imported scans; a 200,000-row
 regression test pins that path. The facet-plus-break feedback residual above
-remains open; the screen/export parity fix does not change that precedence.
+remained open at this point; the screen/export parity fix did not change that
+precedence.
+
+**2026-09-21 follow-up (ChatGPT-Sol):** The second residual is addressed in
+Publication Preview without adding the still-deferred full facet editor. When
+the draft carries `facetKey`, the x-break panel explicitly says the ranges are
+inactive and disables Add. An explicit **Remove faceting and use breaks**
+action clears that binding and `stackMode` in the draft, preserving saved
+breaks; removing a previously saved break remains available. Applying the
+draft clears a focused facet render cache, so Stage derives the break
+arrangement instead of continuing to draw the old facet grid. The existing
+facet-over-break precedence is unchanged. Focused panel, draft, and Apply
+regressions pin the transition; full facet editing remains a separate owner-
+gated feature.
 
 **Round-3 verification:** `tsc -b --force`, `eslint src --max-warnings=0`,
 `vitest run src/lib src/store src/components/Stage src/components/windows

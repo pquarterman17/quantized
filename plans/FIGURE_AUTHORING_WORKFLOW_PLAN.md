@@ -350,6 +350,11 @@ decisions are merged.
         from opening Publication Preview for exactly this reason. Unblocks
         if/when the preview grows a multi-panel contract (relates to F3's
         PageDocument, but per-figure faceting is a different mechanism).
+        **2026-09-21 narrow follow-up:** A faceted FigureDocument can now
+        reach the canonical preview through later Stage work. Its x-break
+        control explains that facet takes precedence and offers an explicit
+        clear-facet action before adding a break. This is removal of a binding,
+        not a facet layout editor; keep F2.3i unchecked.
   - [x] **F2.3j Region-shade editing (owner DECIDED editable, 2026-08-13;
         shipped same day, Claude Sonnet 5).** Resolves the question F2.3d
         deliberately left open: decoded film-stack shades are NOT immutable
