@@ -229,6 +229,48 @@ def test_axis_limits_match_the_requested_overrides() -> None:
     assert axes["ylim"] == [-1.5, 1.5]
 
 
+def test_json_null_gap_breaks_the_exported_curve_instead_of_joining_it() -> None:
+    # The frontend's JSON.stringify converts a frozen NaN gap to null on the
+    # request wire. The route must recover a NaN and Matplotlib must leave an
+    # actual discontinuity, not connect points across the missing row.
+    payload = {
+        "dataset": {
+            "time": [0, 1, 2, 3, 4],
+            "values": [[1], [2], [None], [4], [5]],
+            "labels": ["signal"],
+            "units": [""],
+            "metadata": {},
+        },
+        "y_keys": [0],
+        "fmt": "svg",
+        "title": "gap",
+    }
+    resp = client.post("/api/export/figure", json=payload)
+    assert resp.status_code == 200, resp.text
+    svg = resp.content.decode("utf-8", "ignore")
+    # Tick marks also use line2d ids; this one-series fixture's curve is the
+    # last line2d group, without a legend/reference-line overlay after it.
+    curve_ids = re.findall(r'<g id="(line2d_\d+)"', svg)
+    assert curve_ids
+    curve = _extract_group(svg, curve_ids[-1])
+    path = re.search(r'<path d="([^"]+)"', curve)
+    assert path, "the signal curve is missing from the SVG"
+    assert len(re.findall(r"\bM\s", path.group(1))) == 2, path.group(1)
+
+    # Negative control: filling only the missing point must join those two
+    # segments into one path. This also pins that we selected the data curve
+    # rather than a tick/grid group with an unrelated number of M commands.
+    payload["dataset"]["values"][2] = [3]
+    joined = client.post("/api/export/figure", json=payload)
+    assert joined.status_code == 200, joined.text
+    joined_svg = joined.content.decode("utf-8", "ignore")
+    joined_ids = re.findall(r'<g id="(line2d_\d+)"', joined_svg)
+    joined_curve = _extract_group(joined_svg, joined_ids[-1])
+    joined_path = re.search(r'<path d="([^"]+)"', joined_curve)
+    assert joined_path
+    assert len(re.findall(r"\bM\s", joined_path.group(1))) == 1, joined_path.group(1)
+
+
 def test_axis_limits_clip_the_ticks_to_the_requested_range() -> None:
     # The x_lim=[1, 9] + x_step=1 combination is only meaningful if BOTH
     # applied: a dropped x_lim would still show a step-1 sequence, just not
