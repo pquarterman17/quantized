@@ -12,6 +12,7 @@ import { Select } from "../../primitives";
 import AnnotationEditor from "./AnnotationEditor";
 import ChannelsPanel from "./ChannelsPanel";
 import ErrorColumnsPanel from "./ErrorColumnsPanel";
+import FacetBreakNotice from "./FacetBreakNotice";
 import GroupingPanel from "./GroupingPanel";
 import Num from "./PropertyNumberField";
 import SeriesPropertiesPanel from "./SeriesPropertiesPanel";
@@ -95,9 +96,7 @@ export default function PropertyPanels({
    *  it -- without one the y2 min/max fields are placebo (the backend gate
    *  drops y2_lim), so they render only when this is true. */
   hasY2: boolean;
-  /** A facet grid takes precedence over x-axis breaks on screen and export. */
   facetActive?: boolean;
-  /** Explicitly drop the draft's facet binding, leaving any authored breaks intact. */
   clearFacet?: () => void;
   /** Item 3: the canonical home for x-axis breaks (document.plot.axisBreaks.x,
    *  merged with a legacy-imported document's publication delta -- see
@@ -216,19 +215,7 @@ export default function PropertyPanels({
           style={{ display: "flex", flexWrap: "wrap", gap: 6, width: "100%", alignItems: "end" }}
         >
           <span className="qzk-field-lbl" style={{ width: "100%" }}>x-axis breaks</span>
-          {facetActive && (
-            <div role="status" className="qzk-ds-meta" style={{ width: "100%" }}>
-              X-axis breaks are inactive while this figure is faceted.
-              {clearFacet && (
-                <button
-                  className="qz-btn qz-ghost qz-sm"
-                  onClick={() => removeRowSafely(breaksRef.current, clearFacet)}
-                >
-                  Remove faceting and use breaks
-                </button>
-              )}
-            </div>
-          )}
+          {facetActive && <FacetBreakNotice onClear={clearFacet ? () => removeRowSafely(breaksRef.current, clearFacet) : undefined} />}
           {currentBreaks.map(([lo, hi], index) => (
             <div key={`${lo}:${hi}:${index}`} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
               <span className="qzk-ds-meta">{lo} to {hi}</span>
