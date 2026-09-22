@@ -98,6 +98,8 @@ export default function FigureBuilderView() {
               overrides={f.overrides}
               setOverrides={f.setOverrides}
               hasY2={f.hasY2}
+              facetActive={f.facetActive}
+              clearFacet={f.clearFacet}
               xBreaks={f.xBreaks}
               setXBreaks={f.setXBreaks}
               // F2.3g: gated on `canonical` only, like reference lines/error

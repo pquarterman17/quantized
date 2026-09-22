@@ -9,6 +9,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { FigureSpec } from "../../../lib/api/figures";
 import { appendErrorBinding, patchErrorBindingList, removeErrorBindingFromList } from "./canonicalErrors";
 import { toggleChannelPlotted, toggleChannelSecondary, type ChannelMembership } from "./canonicalChannels";
+import { withoutFacet } from "./canonicalFacet";
 import { effectiveFigureOverrides, effectiveXBreaks, migrateXBreaksPatch, publicationOverridesDelta } from "./canonicalOverrides";
 import { computeCanonicalReadiness, type CanonicalReadiness } from "./canonicalReadiness";
 import { appendRefLine, patchRefLineList, removeRefLineFromList } from "./canonicalRefLines";
@@ -295,13 +296,11 @@ export function useFigureBuilder() {
   // F2.3h: same `document.bindings` shape as F2.3f's error bindings above
   // (not the PlotView) -- patches the document directly. Already reaches
   // the renderer (`group_col`); the panel was the only missing piece.
-  // Facet editing is deliberately STILL NOT exposed HERE -- F4.4 gave
-  // `bindings.facetKey` a real Stage wire (`facetCompositionFromBinding`) and
-  // creation surface (`facetByColumn`), neither reaching this panel (F2.3d).
+  // Full facet editing remains deferred; this preview only exposes removal.
   const groupKey = canonicalDocument?.bindings.groupKey ?? null;
   const setGroupKey = (next: number | null) =>
     patchCanonical((document) => ({ ...document, bindings: { ...document.bindings, groupKey: next } }));
-
+  const clearFacet = () => patchCanonical(withoutFacet);
   // The request spec shared by the preview (PNG) and the export (chosen format) —
   // mirrors the on-screen plot: channel selection, log scales, per-series styles.
   const data = canonical ? canonicalData : (frozenData ?? active?.data ?? null);
@@ -424,6 +423,8 @@ export function useFigureBuilder() {
     overrides: activeOverrides,
     setOverrides: setActiveOverrides,
     hasY2,
+    facetActive: canonicalDocument?.bindings.facetKey != null,
+    clearFacet,
     xBreaks,
     setXBreaks,
     // F2.3b: canonical-only (empty/no-op in legacy mode — see the field doc above).
