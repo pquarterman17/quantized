@@ -2,7 +2,8 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-20 (BUG-024 through BUG-028 merged in PR #385;
+**Updated:** 2026-09-21 (BUG-009 final queued-analysis race fixes merged in PR #398;
+earlier: BUG-024 through BUG-028 merged in PR #385;
 BUG-002 FIXED — declared-source write protection now
 compares filesystem identity as well as canonical path, so hard-link and
 normalization-insensitive aliases are refused without adding source I/O to the
@@ -87,7 +88,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **10 of 10 code sites fixed, re-verified 2026-09-14 by grepping every call site rather than trusting the count** (see the entry's "Every caller covered" box); `lib/barlayout.ts`'s label path was the last one, shipped 2026-09-12. The deferred end-to-end reproduction test (filter + Extract, at the `planExtract` layer) was added 2026-09-14 — see the entry's Reproduction checklist. Declared closed three times before it actually was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite had caught essentially none of it; adversarial review, per-branch sabotage and measuring claims caught all of it. Owner's real-data visual confirmation remains open |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | BUG-008 | P2 | Split Dataset | An explicit `cat_levels` level table was invisible to Split, so a few-row categorical column MERGED all its samples into one child dataset (and, at row counts where the shape heuristic agreed, named the children after raw float codes) | Claude | **FIXED** 2026-09-10 after ONE review round that found 2 HIGH — the first cut fixed only the `cat_levels` shape and its chokepoint ratchet was evadable by an aliased import. 22 behaviour tests + a 2-test ratchet, every fix sabotage-verified |
-| BUG-009 | P2 | Pending-dataset contract | Mutating and outward analysis actions now resolve the complete Origin book and resume automatically; stale queued intent is cancelled rather than applied | ChatGPT-Sol | **FIXED 2026-09-20** — PRs #389–393 shipped; final analysis actions are PR #394 (CI pending) |
+| BUG-009 | P2 | Pending-dataset contract | Mutating and outward analysis actions now resolve the complete Origin book and resume automatically; stale queued intent is cancelled rather than applied | ChatGPT-Sol | **FIXED 2026-09-21** — PRs #389–394 shipped; PR #398 closed the post-merge queued-replay race and failure-state gaps. CI green on #398; owner real-file acceptance remains open. |
 | BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal. Adversarial review round (2026-09-13) closed the one real gap the fix missed — File ▸ Open itself never joined the toast channel — plus doc/citation cleanup; see the entry |
 | BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review rounds 2/3 (2026-09-13) closed further regressions, finished the finding #5 fix, and widened the terminal-status fix to every `failed`/`cancelled` transition. Residual closed 2026-09-13: `store/workspaceIO.ts`'s Save/Save As now shares the identical post-await `pending` re-check (see the entry) — every explicit export path (Save, Save As, workbook transfer, Pack Project) now closes finding #2's window. Owner call on abort-vs-partial-pack still open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
@@ -2140,8 +2141,8 @@ lose an edit:
   once, only after the resumed edit succeeds. Remaining refusal family: local
   analysis guards.
 
-  **Sixth and final implementation slice complete 2026-09-20 — PR #394,
-  CI pending:** Stats Chooser recommendations, Fit Y by X reports, and
+  **Sixth implementation slice shipped 2026-09-20 — PR #394:**
+  Stats Chooser recommendations, Fit Y by X reports, and
   Tabulate dataset/report exports now resume automatically against the full
   Origin book. The adversarial pass found a fourth outward path omitted from
   the plan: Copy TSV; it now resolves first as well. Every queued action
@@ -2151,6 +2152,20 @@ lose an edit:
   calculated from the preview can never leak into the report. No production
   caller of `refusePendingEdit` or `pendingStatusMessage` remains; the legacy
   helper stays only as tested fallback infrastructure.
+
+  **Post-merge critical-review fix shipped 2026-09-21 — PR #398:** the three
+  queued replay effects had treated any cleared `pending` flag as their own
+  successful resolution. A same-ID replacement/reimport could therefore run
+  a queued action on different data before the original fetch reported that
+  its install was rejected. Replay now requires that request's successful
+  `resolveDataset` result and the same active dataset object; switching to a
+  different active dataset cancels a stalled request immediately. Stats Chooser
+  clears busy and stale results when the full analysis view has no groups.
+  Fit Y by X omits only typed local insufficient-data levels; a service failure
+  aborts a per-level report instead of silently emitting a partial one.
+  Regression tests cover same-ID replacement, stalled active-dataset switch,
+  empty groups, and a one-level service failure. Forced TypeScript, lint,
+  697 frontend test files locally, and every GitHub CI check passed.
 ### CLOSED (2026-09-10) — "in flight" vs "failed, will never arrive"
 
 - [x] `lib/bookData.ts` records why the last fetch for a `pending` book failed

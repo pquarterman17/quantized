@@ -74,7 +74,13 @@ agent can implement a fix without repeating the investigation.
   against the packaged build: errors, y2, hidden/reordered series, grouping,
   facets, 2x2 pages, PNG clipboard, SVG, and PDF.
 - [ ] Compare at least one saved/reopened frozen figure containing gaps with
-  its live source and export.
+  its live source and export. **Automated structural half added 2026-09-21:**
+  `regressionMatrixFrozen.test.ts` compares the frozen figure's screen/export/
+  reopened projections, proves its snapshot keeps NaN and signed zero while
+  the live source differs, and checks the export wire before and after reopen.
+  `test_export_vector_structure.py` independently proves a JSON-null gap
+  becomes two disconnected SVG segments through the real export route. The
+  rendered desktop/Office visual comparison still needs the owner.
 
 ## Confirmed problems to solve
 
@@ -291,15 +297,17 @@ inexpensive model.
   categorical codes through all y transforms; Resample preserves a coincident
   grid and refuses a new one; reimport/workspace round trips preserve levels and
   order.
-- [ ] **BUG-009 / P2:** pending-dataset handling remains several guards rather
-  than a resolve-then-apply contract.
+- [x] **BUG-009 / P2 (fixed in #389–394, hardened in #398):** mutating and
+  outward analysis actions resolve the full Origin book before applying;
+  queued actions require their own successful resolution and cancel stale
+  intent. Owner real-file acceptance remains open in `BUGS_AND_ISSUES.md`.
 - [ ] **FEATURE-001 / P3:** faceted per-series styling remains deliberately
   unresolved; do not reapply the reverted one-style-list patch without first
   deciding whether styles are grid-wide or panel-specific.
 
 ## Recommended execution order
 
-1. [ ] Fix UX-005 first: tiny, immediately visible, and removes misleading
+1. [x] Fix UX-005 first: tiny, immediately visible, and removes misleading
    guidance from a primary workflow.
 2. [x] Resolve UX-007 next: remove the dead-end wording immediately, then use a
    small read-only inspector if it fits the current Library projection cleanly.
