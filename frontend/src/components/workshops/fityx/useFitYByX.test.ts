@@ -318,6 +318,32 @@ describe("useFitYByX — report emission", () => {
     expect(result.current.reportBusy).toBe(false);
   });
 
+  it("does not emit a queued report from a same-ID replacement", async () => {
+    const preview: DataStruct = { ...DATA, time: DATA.time.slice(0, 6), values: DATA.values.slice(0, 6) };
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: preview, pending: { kind: "upload", bookId: "b1", rows: 12, cols: 4, previewSampled: true } }] });
+    let finish!: (data: DataStruct) => void;
+    vi.mocked(fetchBookData).mockReturnValueOnce(new Promise((resolve) => { finish = resolve; }));
+    const { result } = renderHook(() => useFitYByX());
+    await act(async () => { await result.current.toReport(); });
+
+    act(() => useApp.setState({ datasets: [{ id: "d1", name: "replacement", data: DATA }] }));
+    expect(reportEmit).not.toHaveBeenCalled();
+    await act(async () => { finish(DATA); });
+    expect(reportEmit).not.toHaveBeenCalled();
+    expect(result.current.reportBusy).toBe(false);
+  });
+
+  it("clears report busy when the active dataset changes during a stalled load", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA, pending: { kind: "upload", bookId: "b1", rows: 12, cols: 4, previewSampled: true } }, { id: "d2", name: "other", data: DATA }] });
+    const { result } = renderHook(() => useFitYByX());
+    await act(async () => { await result.current.toReport(); });
+    act(() => useApp.setState({ activeId: "d2" }));
+
+    expect(result.current.reportBusy).toBe(false);
+    expect(useApp.getState().status).toMatch(/active dataset changed while loading/i);
+    expect(reportEmit).not.toHaveBeenCalled();
+  });
+
   it("emits a stats_table report for the oneway leg", async () => {
     vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } });
     const { result } = renderHook(() => useFitYByX());
@@ -442,5 +468,26 @@ describe("useFitYByX — By grouping (JMP_GAP_PLAN J7)", () => {
       }),
     );
     expect(useApp.getState().reports).toHaveLength(1);
+  });
+
+  it("does not turn a backend failure into a partial per-level report", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA, pending: { kind: "upload", bookId: "b1", rows: 12, cols: 3, previewSampled: true } }] });
+    vi.mocked(fetchBookData).mockResolvedValueOnce(BY_DATA);
+    vi.mocked(statsAnova).mockImplementation((groups) =>
+      groups[0]?.[0] === 15
+        ? Promise.reject(new Error("service unavailable"))
+        : Promise.resolve(ANOVA),
+    );
+    const { result } = renderHook(() => useFitYByX());
+    act(() => {
+      result.current.setXCol(1);
+      result.current.setYCol(2);
+    });
+    act(() => result.current.setByCol(0));
+
+    await act(async () => { await result.current.toReport(); });
+    await waitFor(() => expect(result.current.reportBusy).toBe(false));
+    expect(reportEmit).not.toHaveBeenCalled();
+    expect(result.current.error).toMatch(/service unavailable/i);
   });
 });

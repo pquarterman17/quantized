@@ -84,7 +84,7 @@ export function useStatsChooser(): StatsChooserState {
   const [error, setError] = useState<string | null>(null);
   const [rec, setRec] = useState<Recommendation | null>(null);
   const [testResult, setTestResult] = useState<CalcResult | null>(null);
-  const [queuedRecommendation, setQueuedRecommendation] = useState<string | null>(null);
+  const [queuedRecommendation, setQueuedRecommendation] = useState<{ key: string; id: string; resolved: Dataset | null } | null>(null);
   const pendingSeq = useRef(0);
 
   const groups = useMemo<GroupSpec[]>(() => {
@@ -121,15 +121,19 @@ export function useStatsChooser(): StatsChooserState {
     if (active?.pending) {
       const id = active.id;
       const request = ++pendingSeq.current;
-      setQueuedRecommendation(recommendationKey);
+      setQueuedRecommendation({ key: recommendationKey, id, resolved: null });
       setBusy(true);
       setError(null);
       useApp.getState().setStatus(`Loading full data for "${active.name}" — test recommendation will continue automatically`);
       void useApp.getState().resolveDataset(id).then((resolved) => {
-        if (request !== pendingSeq.current || resolved) return;
-        setQueuedRecommendation(null);
-        setBusy(false);
-        setError("Could not recommend a test because the full dataset is unavailable; re-import the source to continue.");
+        if (request !== pendingSeq.current) return;
+        if (resolved) {
+          setQueuedRecommendation({ key: recommendationKey, id, resolved });
+        } else {
+          setQueuedRecommendation(null);
+          setBusy(false);
+          setError("Could not recommend a test because the full dataset is unavailable; re-import the source to continue.");
+        }
       }).catch((e: unknown) => {
         if (request !== pendingSeq.current) return;
         setQueuedRecommendation(null);
@@ -138,7 +142,13 @@ export function useStatsChooser(): StatsChooserState {
       });
       return;
     }
-    if (groups.length === 0) return;
+    if (groups.length === 0) {
+      setBusy(false);
+      setRec(null);
+      setTestResult(null);
+      setError("No groups remain in the selected data; check the columns, filters, and excluded rows.");
+      return;
+    }
     setBusy(true);
     setError(null);
     setTestResult(null);
@@ -157,18 +167,25 @@ export function useStatsChooser(): StatsChooserState {
   }
 
   useEffect(() => {
-    if (queuedRecommendation == null || active?.pending) return;
+    if (queuedRecommendation && !queuedRecommendation.resolved && active?.id !== queuedRecommendation.id) {
+      pendingSeq.current++;
+      setQueuedRecommendation(null);
+      setBusy(false);
+      setError("The recommendation was skipped because the active dataset changed while loading.");
+      return;
+    }
+    if (!queuedRecommendation?.resolved) return;
     setQueuedRecommendation(null);
-    if (!active || queuedRecommendation !== recommendationKey) {
+    if (active !== queuedRecommendation.resolved || queuedRecommendation.key !== recommendationKey) {
       pendingSeq.current++;
       setBusy(false);
-      setError("Full data loaded, but the recommendation was skipped because the selected columns changed.");
+      setError("The recommendation was skipped because the selected columns changed or the dataset was replaced while loading.");
       return;
     }
     void recommend();
     // `recommendationKey` captures every user choice that can change groups.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.pending, recommendationKey, queuedRecommendation]);
+  }, [active, recommendationKey, queuedRecommendation]);
 
   async function runRecommended(): Promise<void> {
     if (!rec) return;

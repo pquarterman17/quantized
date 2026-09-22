@@ -58,6 +58,9 @@ export interface LegResult {
   contingency?: ContingencyResult;
 }
 
+/** Only local minimum-sample validation is safe to omit from a By report. */
+export class InsufficientDataError extends Error {}
+
 export const colValues = (data: DataStruct, index: number): number[] =>
   index < 0 ? data.time : data.values.map((row) => row[index]);
 
@@ -108,7 +111,7 @@ export async function runLeg(
 ): Promise<LegResult> {
   if (kind === "oneway") {
     const groups = groupsForOneway(data, xCol, yCol).filter((g) => g.values.length > 0);
-    if (groups.length < 2) throw new Error("need at least 2 non-empty levels for oneway");
+    if (groups.length < 2) throw new InsufficientDataError("need at least 2 non-empty levels for oneway");
     const valueArrays = groups.map((g) => g.values);
     const [anova, levene, recommend] = await Promise.all([
       statsAnova(valueArrays),
@@ -132,7 +135,7 @@ export async function runLeg(
       }
     }
     if (xs.length < order + 2) {
-      throw new Error(`need at least ${order + 2} paired points for order-${order} regression`);
+      throw new InsufficientDataError(`need at least ${order + 2} paired points for order-${order} regression`);
     }
     const regression = await statsRegression({
       x: xs, y: ys, order, band_x: bandGrid(xs), band_interval: bandInterval,
@@ -145,7 +148,7 @@ export async function runLeg(
     const xLevels = categoryLevels(data, xCol);
     const yLevels = categoryLevels(data, yCol);
     if (xLevels.length < 2 || yLevels.length < 2) {
-      throw new Error("need at least 2 levels in both columns for a contingency table");
+      throw new InsufficientDataError("need at least 2 levels in both columns for a contingency table");
     }
     const rowLabels = resolveCategoryLabels(data, xCol, xLevels);
     const colLabels = resolveCategoryLabels(data, yCol, yLevels);
