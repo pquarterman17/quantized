@@ -54,12 +54,14 @@ export function usePawley(): PawleyState {
   const [profileFwhm, setProfileFwhm] = useState(0.12);
   const [refineCell, setRefineCell] = useState(true);
   const [result, setResult] = useState<PawleyResult | null>(null);
+  const [fitInput, setFitInput] = useState<{ x: number[]; y: number[] } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     setCol(0);
     setResult(null);
+    setFitInput(null);
     setError(null);
   }, [active?.id]);
 
@@ -85,8 +87,10 @@ export function usePawley(): PawleyState {
         refine_cell: refineCell,
       });
       setResult(res);
+      setFitInput({ x: pairs.x, y: pairs.y });
     } catch (e) {
       setResult(null);
+      setFitInput(null);
       setError(e instanceof Error ? e.message : "Pawley refinement failed");
     } finally {
       setBusy(false);
@@ -94,13 +98,10 @@ export function usePawley(): PawleyState {
   }
 
   function toLibrary(): void {
-    if (!active || !result) return;
-    const source = analysisData(active) ?? active.data;
-    const y = source.values.map((row) => row[col]);
-    const pairs = dropGapRows(source.time, y);
+    if (!active || !result || !fitInput) return;
     const data: DataStruct = {
-      time: pairs.x,
-      values: pairs.x.map((_, i) => [pairs.y[i], result.model[i], result.residual[i]]),
+      time: fitInput.x,
+      values: fitInput.x.map((_, i) => [fitInput.y[i], result.model[i], result.residual[i]]),
       labels: [active.data.labels[col] || "Observed", "Pawley model", "Residual"],
       units: [active.data.units[col] || "", active.data.units[col] || "", active.data.units[col] || ""],
       metadata: {
