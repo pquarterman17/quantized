@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { MultiFitResult } from "../lib/peakTable";
 import { includedPeaks, peakDataFingerprint, peakTableMatchesData } from "../lib/peakTableFit";
 import type { DataStruct } from "../lib/types";
-import { publishFitResult, publishPeakTable, setPeakExcluded } from "./peakTables";
+import { editPeak, publishFitResult, publishPeakTable, removePeaks, setPeakExcluded } from "./peakTables";
 import { useApp } from "./useApp";
 
 const data = (metadata: Record<string, unknown> = {}): DataStruct => ({
@@ -158,5 +158,42 @@ describe("publishFitResult — the round-2 provenance (data fingerprint + x axis
     const prov = useApp.getState().datasets[0].peakTable!.provenance;
     expect(prov.xLabel).toBe("q");
     expect(prov.xUnit).toBe("1/A");
+  });
+});
+
+
+describe("manual durable peak edits", () => {
+  it("edits by stable id, clears affected uncertainty/global metrics, and keeps raw data untouched", () => {
+    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    const before = useApp.getState().datasets[0];
+    const id = before.peakTable!.peaks[0].id;
+    const next = editPeak("d1", id, { center: 30.25, fwhm: 0.22, height: 95, area: 20 });
+    expect(next?.peaks[0]).toEqual(expect.objectContaining({
+      id,
+      center: 30.25,
+      fwhm: 0.22,
+      height: 95,
+      area: 20,
+      status: "manual-edit",
+      centerErr: null,
+      fwhmErr: null,
+      heightErr: null,
+    }));
+    expect(next?.provenance.R2).toBeNull();
+    expect(next?.provenance.rmse).toBeNull();
+    expect(useApp.getState().datasets[0].data).toBe(before.data);
+    expect(next?.provenance.fingerprint).toBe(before.peakTable!.provenance.fingerprint);
+  });
+
+  it("removes addressed peaks and removes the artifact entirely when the last row is deleted", () => {
+    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    const table = useApp.getState().datasets[0].peakTable!;
+    const one = removePeaks("d1", new Set([table.peaks[0].id]));
+    expect(one?.peaks).toHaveLength(1);
+    expect(one?.peaks[0].id).toBe(table.peaks[1].id);
+    expect(one?.provenance.R2).toBeNull();
+
+    removePeaks("d1", new Set([table.peaks[1].id]));
+    expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
   });
 });
