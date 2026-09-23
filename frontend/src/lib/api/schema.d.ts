@@ -2420,6 +2420,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reductions/pawley": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pawley Route
+         * @description Whole-pattern Pawley unit-cell refinement for powder XRD.
+         */
+        post: operations["pawley_route_api_reductions_pawley_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reductions/reflectivity-fft": {
         parameters: {
             query?: never;
@@ -7627,6 +7647,69 @@ export interface components {
              */
             y_label?: string;
         };
+        /** PawleyRequest */
+        PawleyRequest: {
+            /** A */
+            a: number;
+            /**
+             * Alpha
+             * @default 90
+             */
+            alpha?: number;
+            /** B */
+            b: number;
+            /**
+             * Beta
+             * @default 90
+             */
+            beta?: number;
+            /** C */
+            c: number;
+            /**
+             * Gamma
+             * @default 90
+             */
+            gamma?: number;
+            /**
+             * Hkl Max
+             * @default 6
+             */
+            hkl_max?: number;
+            /** Intensity */
+            intensity: number[];
+            /**
+             * Max Iter
+             * @default 20
+             */
+            max_iter?: number;
+            /**
+             * Max Two Theta
+             * @default 120
+             */
+            max_two_theta?: number;
+            /**
+             * Profile Fwhm
+             * @default 0.05
+             */
+            profile_fwhm?: number;
+            /**
+             * Refine Cell
+             * @default true
+             */
+            refine_cell?: boolean;
+            /**
+             * Symmetry
+             * @default P
+             */
+            symmetry?: string;
+            /** Two Theta */
+            two_theta: number[];
+            /**
+             * Wavelength
+             * @default 1.5406
+             */
+            wavelength?: number;
+        };
         /** PcaScreeFigureRequest */
         PcaScreeFigureRequest: {
             /** Cumulative */
@@ -12665,6 +12748,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["FFTThicknessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pawley_route_api_reductions_pawley_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PawleyRequest"];
             };
         };
         responses: {
