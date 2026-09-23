@@ -7,11 +7,14 @@ spin asymmetry. All math lives in calc; this only validates + serializes.
 
 from __future__ import annotations
 
+import math
 from typing import Any
 
+import numpy as np
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from quantized.calc.pawley import pawley_refine
 from quantized.calc.reductions import (
     fft_thickness,
     reflectivity_fft,
@@ -108,3 +111,55 @@ class SpinAsymmetryRequest(BaseModel):
 def spin_asymmetry_route(req: SpinAsymmetryRequest) -> dict[str, Any]:
     """Neutron spin asymmetry (R++ - R--)/(R++ + R--) with propagated error."""
     return call_calc(spin_asymmetry, req.r_pp, req.r_mm, req.dr_pp, req.dr_mm)
+
+
+class PawleyRequest(BaseModel):
+    two_theta: list[float]
+    intensity: list[float]
+    a: float
+    b: float
+    c: float
+    symmetry: str = "P"
+    alpha: float = 90.0
+    beta: float = 90.0
+    gamma: float = 90.0
+    hkl_max: int = 6
+    wavelength: float = 1.5406
+    max_two_theta: float = 120.0
+    profile_fwhm: float = 0.05
+    refine_cell: bool = True
+    max_iter: int = 20
+
+
+@router.post("/pawley")
+def pawley_route(req: PawleyRequest) -> dict[str, Any]:
+    """Whole-pattern Pawley unit-cell refinement for powder XRD."""
+    out = call_calc(
+        pawley_refine,
+        req.two_theta,
+        req.intensity,
+        {
+            "a": req.a,
+            "b": req.b,
+            "c": req.c,
+            "alpha": req.alpha,
+            "beta": req.beta,
+            "gamma": req.gamma,
+            "symmetry": req.symmetry,
+            "hklMax": req.hkl_max,
+        },
+        wavelength=req.wavelength,
+        max_two_theta=req.max_two_theta,
+        profile_fwhm=req.profile_fwhm,
+        refine_cell=req.refine_cell,
+        max_iter=req.max_iter,
+    )
+    # Pure calc returns ndarrays + a NaN scale placeholder; normalize only at
+    # the transport boundary so the calc contract stays untouched.
+    return {
+        **out,
+        "scale": out["scale"] if math.isfinite(float(out["scale"])) else None,
+        "background": np.asarray(out["background"], dtype=float).tolist(),
+        "model": np.asarray(out["model"], dtype=float).tolist(),
+        "residual": np.asarray(out["residual"], dtype=float).tolist(),
+    }
