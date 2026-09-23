@@ -46,6 +46,12 @@ export default function PawleySection() {
         <NumberField value={s.b} width={88} step={0.001} onChange={(v) => s.setB(Number(v) || 0)} />
         <label className="qzk-field-lbl" style={{ margin: 0 }}>c (Å)</label>
         <NumberField value={s.c} width={88} step={0.001} onChange={(v) => s.setC(Number(v) || 0)} />
+        <label className="qzk-field-lbl" style={{ margin: 0 }}>α (°)</label>
+        <NumberField value={s.alpha} width={88} step={0.1} onChange={(v) => s.setAlpha(Number(v) || 0)} />
+        <label className="qzk-field-lbl" style={{ margin: 0 }}>β (°)</label>
+        <NumberField value={s.beta} width={88} step={0.1} onChange={(v) => s.setBeta(Number(v) || 0)} />
+        <label className="qzk-field-lbl" style={{ margin: 0 }}>γ (°)</label>
+        <NumberField value={s.gamma} width={88} step={0.1} onChange={(v) => s.setGamma(Number(v) || 0)} />
         <label className="qzk-field-lbl" style={{ margin: 0 }}>Centering</label>
         <Select options={CENTERING} value={s.symmetry} onChange={(e) => s.setSymmetry(e.target.value)} />
         <label className="qzk-field-lbl" style={{ margin: 0 }}>Wavelength (Å)</label>
