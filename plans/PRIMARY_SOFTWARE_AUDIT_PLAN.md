@@ -2686,16 +2686,19 @@ physics, which already existed and was already golden. The map:
   (asserts the API call carries only the included peaks), "adopts the
   wavelength the pattern was measured at", "names the provenance of the loaded
   rows", "drops the provenance line the moment a row is edited by hand".
-- [ ] Expose the Pawley engine. `calc/pawley.py::pawley_refine` exists and is
-  tested (`tests/test_calc_pawley.py`) but is reachable from NOWHERE: no route
-  in `routes/`, no `lib/api` wrapper, no UI (measured 2026-09-14: a case-
-  insensitive grep for "pawley" over `src/quantized/routes/` returns nothing,
-  and over `frontend/src` returns exactly one hit — a doc comment in
-  `lib/peakTableFit.ts` naming a future entry point, added by this item).
-  It is also NOT a peak-table consumer — it refines a unit cell
-  against the WHOLE pattern (`two_theta`, `intensity`) plus a `phase_info`
-  cell, so the missing piece is a route + phase-cell entry point, not the
-  wiring this item shipped.
+- [x] Expose the Pawley engine. **Implemented 2026-09-23 in PR #403.**
+  `calc/pawley.py::pawley_refine` is now reachable through
+  `POST /api/reductions/pawley`, a typed frontend wrapper, and the existing
+  Reductions workshop under Analyze → XRD & reflectivity. The UI accepts the
+  active powder-XRD intensity channel, starting cell, Bravais centering,
+  wavelength, fixed profile FWHM, and a refine-cell toggle; it reports the
+  refined a/b/c, Rwp, and reflection count. The derived Library output keeps
+  the exact full-resolution finite rows used in the refinement and adds
+  observed/model/residual columns without modifying the raw dataset. API,
+  hook, panel/command, OpenAPI, and generated-type coverage ship with the PR.
+  Deliberate first-slice limits: alpha/beta/gamma, hklMax, and max iterations
+  remain at backend defaults; richer Pawley reports/figure objects should be
+  driven by real use rather than added pre-emptively.
 - [x] Durable peak identity, uncertainty, exclusion, model, and provenance —
   **the columns; the uncertainty NUMBERS are the next box.** **(2026-09-14)**
   `lib/peakTable.ts` defines `PeakTable`: per-peak durable `id`,
