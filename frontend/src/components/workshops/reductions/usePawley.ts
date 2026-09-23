@@ -24,6 +24,12 @@ export interface PawleyState {
   setC: (v: number) => void;
   symmetry: string;
   setSymmetry: (v: string) => void;
+  alpha: number;
+  beta: number;
+  gamma: number;
+  setAlpha: (v: number) => void;
+  setBeta: (v: number) => void;
+  setGamma: (v: number) => void;
   wavelength: number;
   setWavelength: (v: number) => void;
   profileFwhm: number;
@@ -50,11 +56,23 @@ export function usePawley(): PawleyState {
   const [b, setB] = useState(5.43);
   const [c, setC] = useState(5.43);
   const [symmetry, setSymmetry] = useState("P");
+  const [alpha, setAlpha] = useState(90);
+  const [beta, setBeta] = useState(90);
+  const [gamma, setGamma] = useState(90);
   const [wavelength, setWavelength] = useState(1.5406);
   const [profileFwhm, setProfileFwhm] = useState(0.12);
   const [refineCell, setRefineCell] = useState(true);
   const [result, setResult] = useState<PawleyResult | null>(null);
-  const [fitInput, setFitInput] = useState<{ x: number[]; y: number[] } | null>(null);
+  const [fitInput, setFitInput] = useState<{
+    x: number[];
+    y: number[];
+    sourceId: string;
+    sourceName: string;
+    label: string;
+    unit: string;
+    symmetry: string;
+    wavelength: number;
+  } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,12 +100,24 @@ export function usePawley(): PawleyState {
         b,
         c,
         symmetry,
+        alpha,
+        beta,
+        gamma,
         wavelength,
         profile_fwhm: profileFwhm,
         refine_cell: refineCell,
       });
       setResult(res);
-      setFitInput({ x: pairs.x, y: pairs.y });
+      setFitInput({
+        x: pairs.x,
+        y: pairs.y,
+        sourceId: ds.id,
+        sourceName: ds.name,
+        label: ds.data.labels[col] || "Observed",
+        unit: ds.data.units[col] || "",
+        symmetry,
+        wavelength,
+      });
     } catch (e) {
       setResult(null);
       setFitInput(null);
@@ -98,22 +128,22 @@ export function usePawley(): PawleyState {
   }
 
   function toLibrary(): void {
-    if (!active || !result || !fitInput) return;
+    if (!result || !fitInput) return;
     const data: DataStruct = {
       time: fitInput.x,
       values: fitInput.x.map((_, i) => [fitInput.y[i], result.model[i], result.residual[i]]),
-      labels: [active.data.labels[col] || "Observed", "Pawley model", "Residual"],
-      units: [active.data.units[col] || "", active.data.units[col] || "", active.data.units[col] || ""],
+      labels: [fitInput.label, "Pawley model", "Residual"],
+      units: [fitInput.unit, fitInput.unit, fitInput.unit],
       metadata: {
         reduction: "pawley",
-        source_dataset_id: active.id,
+        source_dataset_id: fitInput.sourceId,
         refined_cell: result.cell,
         rwp: result.rwp,
-        symmetry,
-        wavelength_a: wavelength,
+        symmetry: fitInput.symmetry,
+        wavelength_a: fitInput.wavelength,
       },
     };
-    addDataset({ id: nextDatasetId(), name: `${active.name} (Pawley)`, data });
+    addDataset({ id: nextDatasetId(), name: `${fitInput.sourceName} (Pawley)`, data });
     setStatus("added Pawley observed/model/residual dataset");
   }
 
@@ -121,6 +151,7 @@ export function usePawley(): PawleyState {
     active, columns, col, setCol,
     a, b, c, setA, setB, setC,
     symmetry, setSymmetry,
+    alpha, beta, gamma, setAlpha, setBeta, setGamma,
     wavelength, setWavelength,
     profileFwhm, setProfileFwhm,
     refineCell, setRefineCell,
