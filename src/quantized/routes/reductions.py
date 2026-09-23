@@ -159,6 +159,7 @@ def pawley_route(req: PawleyRequest) -> dict[str, Any]:
     return {
         **out,
         "scale": out["scale"] if math.isfinite(float(out["scale"])) else None,
+        "rwp": out["rwp"] if math.isfinite(float(out["rwp"])) else None,
         "background": np.asarray(out["background"], dtype=float).tolist(),
         "model": np.asarray(out["model"], dtype=float).tolist(),
         "residual": np.asarray(out["residual"], dtype=float).tolist(),
