@@ -368,3 +368,39 @@ export function withPeakExcluded(table: PeakTable, id: string, excluded: boolean
   };
 }
 
+
+
+export type PeakManualPatch = Partial<Pick<PeakTableEntry, "center" | "fwhm" | "height" | "area">>;
+
+/** Manually revise one durable fitted-peak row. Manual numbers supersede the
+ * fit-derived value, so the corresponding uncertainty is cleared and global
+ * fit metrics are invalidated. Raw data and the data fingerprint are unchanged. */
+export function withPeakManualEdit(table: PeakTable, id: string, patch: PeakManualPatch): PeakTable {
+  const index = table.peaks.findIndex((p) => p.id === id);
+  if (index < 0) return table;
+  const current = table.peaks[index];
+  const next = { ...current, ...patch, status: "manual-edit" };
+  if ("center" in patch) next.centerErr = null;
+  if ("fwhm" in patch) next.fwhmErr = null;
+  if ("height" in patch) next.heightErr = null;
+  const peaks = [...table.peaks];
+  peaks[index] = next;
+  return {
+    ...table,
+    peaks,
+    provenance: { ...table.provenance, R2: null, rmse: null },
+  };
+}
+
+/** Remove fitted peaks by durable id. Refuses to create an empty PeakTable:
+ * zero fitted rows means the dataset has no peak-analysis artifact at all. */
+export function withoutPeaks(table: PeakTable, ids: ReadonlySet<string>): PeakTable | null {
+  const peaks = table.peaks.filter((p) => !ids.has(p.id));
+  if (peaks.length === table.peaks.length) return table;
+  if (peaks.length === 0) return null;
+  return {
+    ...table,
+    peaks,
+    provenance: { ...table.provenance, R2: null, rmse: null },
+  };
+}
