@@ -105,3 +105,25 @@ export interface RsmStrainResponse {
   relaxation: number | null;
   warnings: string[];
 }
+
+
+export interface PawleyPeak {
+  hkl: number[];
+  two_theta: number;
+  d: number;
+  multiplicity: number;
+  intensity: number;
+}
+
+/** Response of POST /api/reductions/pawley. */
+export interface PawleyResult {
+  cell: [number, number, number, number, number, number];
+  cell_initial: [number, number, number, number, number, number];
+  scale: number | null;
+  peaks: PawleyPeak[];
+  background: number[];
+  model: number[];
+  residual: number[];
+  rwp: number | null;
+  n_peaks: number;
+}
