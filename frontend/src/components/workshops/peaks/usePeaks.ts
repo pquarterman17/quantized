@@ -28,7 +28,7 @@ import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/typ
 import { peakInputs } from "./peakInputs";
 import { finiteRange } from "./peakRanges";
 import { askParams } from "../../overlays/ParamDialog";
-import { publishFitResult, setPeakExcluded } from "../../../store/peakTables";
+import { editPeak, publishFitResult, removePeaks, setPeakExcluded } from "../../../store/peakTables";
 import { beginOp, endOp, updateOp } from "../../../store/pendingOps";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -84,6 +84,8 @@ export interface PeaksState {
    *  the table (reviewable) but are dropped by every consumer — see
    *  lib/peakTable's `includedPeaks`. */
   toggleExcluded: (peakId: string, excluded: boolean) => void;
+  editFittedPeak: (peakId: string, patch: { center: number; fwhm: number; height: number; area: number }) => Promise<void>;
+  removeFittedPeaks: (peakIds: ReadonlySet<string>) => Promise<void>;
   fitting: boolean;
   fitError: string | null;
   fitTogether: (opts: PeakFitOptions) => Promise<void>;
@@ -474,8 +476,37 @@ export function usePeaks(): PeaksState {
     [activeId],
   );
 
+  const refreshManualTable = useCallback(async (table: PeakTable | null) => {
+    if (!activeId) return;
+    if (!table) {
+      setFitResult(null);
+      setPeakOverlay(null);
+      return;
+    }
+    const next = peakTableToFitResult(table);
+    setFitResult(next);
+    const ds = await useApp.getState().resolveDataset(activeId);
+    if (!ds || ds.id !== activeId) return;
+    const st = useApp.getState();
+    const { fullX } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
+    overlayFitted(ds, next.peaks, fullX);
+  }, [activeId, overlayFitted, setPeakOverlay]);
+
+  const editFittedPeak = useCallback(async (
+    peakId: string,
+    patch: { center: number; fwhm: number; height: number; area: number },
+  ) => {
+    if (!activeId) return;
+    await refreshManualTable(editPeak(activeId, peakId, patch));
+  }, [activeId, refreshManualTable]);
+
+  const removeFittedPeaks = useCallback(async (peakIds: ReadonlySet<string>) => {
+    if (!activeId || peakIds.size === 0) return;
+    await refreshManualTable(removePeaks(activeId, peakIds));
+  }, [activeId, refreshManualTable]);
+
   return {
     active, peaks, busy, error, fitResult, peakTable: activeTable, toggleExcluded,
-    fitting, fitError, fitTogether, fitEach, labelPeaks,
+    editFittedPeak, removeFittedPeaks, fitting, fitError, fitTogether, fitEach, labelPeaks,
   };
 }
