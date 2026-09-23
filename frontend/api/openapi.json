@@ -6549,6 +6549,95 @@
         "title": "PartialCorrelationRequest",
         "type": "object"
       },
+      "PawleyRequest": {
+        "properties": {
+          "a": {
+            "title": "A",
+            "type": "number"
+          },
+          "alpha": {
+            "default": 90.0,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "b": {
+            "title": "B",
+            "type": "number"
+          },
+          "beta": {
+            "default": 90.0,
+            "title": "Beta",
+            "type": "number"
+          },
+          "c": {
+            "title": "C",
+            "type": "number"
+          },
+          "gamma": {
+            "default": 90.0,
+            "title": "Gamma",
+            "type": "number"
+          },
+          "hkl_max": {
+            "default": 6,
+            "title": "Hkl Max",
+            "type": "integer"
+          },
+          "intensity": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Intensity",
+            "type": "array"
+          },
+          "max_iter": {
+            "default": 20,
+            "title": "Max Iter",
+            "type": "integer"
+          },
+          "max_two_theta": {
+            "default": 120.0,
+            "title": "Max Two Theta",
+            "type": "number"
+          },
+          "profile_fwhm": {
+            "default": 0.05,
+            "title": "Profile Fwhm",
+            "type": "number"
+          },
+          "refine_cell": {
+            "default": true,
+            "title": "Refine Cell",
+            "type": "boolean"
+          },
+          "symmetry": {
+            "default": "P",
+            "title": "Symmetry",
+            "type": "string"
+          },
+          "two_theta": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Two Theta",
+            "type": "array"
+          },
+          "wavelength": {
+            "default": 1.5406,
+            "title": "Wavelength",
+            "type": "number"
+          }
+        },
+        "required": [
+          "two_theta",
+          "intensity",
+          "a",
+          "b",
+          "c"
+        ],
+        "title": "PawleyRequest",
+        "type": "object"
+      },
       "PcaFigureRequest": {
         "properties": {
           "dpi": {
@@ -6659,95 +6748,6 @@
           "mode"
         ],
         "title": "PcaFigureRequest",
-        "type": "object"
-      },
-      "PawleyRequest": {
-        "properties": {
-          "a": {
-            "title": "A",
-            "type": "number"
-          },
-          "alpha": {
-            "default": 90.0,
-            "title": "Alpha",
-            "type": "number"
-          },
-          "b": {
-            "title": "B",
-            "type": "number"
-          },
-          "beta": {
-            "default": 90.0,
-            "title": "Beta",
-            "type": "number"
-          },
-          "c": {
-            "title": "C",
-            "type": "number"
-          },
-          "gamma": {
-            "default": 90.0,
-            "title": "Gamma",
-            "type": "number"
-          },
-          "hkl_max": {
-            "default": 6,
-            "title": "Hkl Max",
-            "type": "integer"
-          },
-          "intensity": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Intensity",
-            "type": "array"
-          },
-          "max_iter": {
-            "default": 20,
-            "title": "Max Iter",
-            "type": "integer"
-          },
-          "max_two_theta": {
-            "default": 120.0,
-            "title": "Max Two Theta",
-            "type": "number"
-          },
-          "profile_fwhm": {
-            "default": 0.05,
-            "title": "Profile Fwhm",
-            "type": "number"
-          },
-          "refine_cell": {
-            "default": true,
-            "title": "Refine Cell",
-            "type": "boolean"
-          },
-          "symmetry": {
-            "default": "P",
-            "title": "Symmetry",
-            "type": "string"
-          },
-          "two_theta": {
-            "items": {
-              "type": "number"
-            },
-            "title": "Two Theta",
-            "type": "array"
-          },
-          "wavelength": {
-            "default": 1.5406,
-            "title": "Wavelength",
-            "type": "number"
-          }
-        },
-        "required": [
-          "two_theta",
-          "intensity",
-          "a",
-          "b",
-          "c"
-        ],
-        "title": "PawleyRequest",
         "type": "object"
       },
       "PcaScreeFigureRequest": {
