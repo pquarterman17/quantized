@@ -2696,7 +2696,8 @@ physics, which already existed and was already golden. The map:
   the exact full-resolution finite rows used in the refinement and adds
   observed/model/residual columns without modifying the raw dataset. API,
   hook, panel/command, OpenAPI, and generated-type coverage ship with the PR.
-  Deliberate first-slice limits: alpha/beta/gamma, hklMax, and max iterations
+  The initial UI also exposes α/β/γ so non-orthogonal cells are not silently
+  forced to 90°. Deliberate first-slice limits: hklMax and max iterations
   remain at backend defaults; richer Pawley reports/figure objects should be
   driven by real use rather than added pre-emptively.
 - [x] Durable peak identity, uncertainty, exclusion, model, and provenance —
