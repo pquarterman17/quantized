@@ -104,7 +104,7 @@ def test_pawley_refinement_route_serializes_model() -> None:
     )
     assert r.status_code == 200
     body = r.json()
-    assert body["cell"][:3] == pytest.approx([5.43, 5.43, 5.43])
+    assert np.allclose(body["cell"][:3], [5.43, 5.43, 5.43])
     assert body["n_peaks"] > 0
     assert len(body["model"]) == len(two_theta)
     assert len(body["background"]) == len(two_theta)
