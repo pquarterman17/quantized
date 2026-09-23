@@ -185,8 +185,10 @@ export default function FigureBuilderView() {
               // columns -- choosing a group column needs no live canvas.
               grouping={f.canonical ? {
                 groupKey: f.groupKey,
+                facetKey: f.facetKey,
                 labels: f.data?.labels ?? [],
                 onGroupKey: f.setGroupKey,
+                onFacetKey: f.setFacetKey,
               } : undefined}
               openGroup={f.focusGroup}
               openNonce={f.focusNonce}

@@ -5,10 +5,11 @@ import GroupingPanel from "./GroupingPanel";
 
 const LABELS = ["X", "R", "dR"];
 
-function renderPanel(groupKey: number | null, labels: readonly string[] = LABELS) {
+function renderPanel(groupKey: number | null, labels: readonly string[] = LABELS, facetKey: number | null = null) {
   const onGroupKey = vi.fn();
-  render(<GroupingPanel groupKey={groupKey} labels={labels} onGroupKey={onGroupKey} />);
-  return { onGroupKey };
+  const onFacetKey = vi.fn();
+  render(<GroupingPanel groupKey={groupKey} facetKey={facetKey} labels={labels} onGroupKey={onGroupKey} onFacetKey={onFacetKey} />);
+  return { onGroupKey, onFacetKey };
 }
 
 describe("GroupingPanel", () => {
@@ -48,6 +49,15 @@ describe("GroupingPanel", () => {
     const { onGroupKey } = renderPanel(0);
     fireEvent.change(screen.getByLabelText("group by"), { target: { value: "" } });
     expect(onGroupKey).toHaveBeenCalledWith(null);
+  });
+
+  it("shows and updates the independent facet binding", () => {
+    const { onFacetKey } = renderPanel(null, LABELS, 1);
+    expect(screen.getByLabelText("facet by")).toHaveValue("1");
+    fireEvent.change(screen.getByLabelText("facet by"), { target: { value: "2" } });
+    expect(onFacetKey).toHaveBeenCalledWith(2);
+    fireEvent.change(screen.getByLabelText("facet by"), { target: { value: "" } });
+    expect(onFacetKey).toHaveBeenCalledWith(null);
   });
 
   it("renders with no columns without crashing -- None is still a valid choice", () => {

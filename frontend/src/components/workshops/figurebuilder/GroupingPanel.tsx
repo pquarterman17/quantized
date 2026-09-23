@@ -23,26 +23,29 @@
 // to sit between them was deleted, round-5-review NIT 9), and duplicating
 // it here would just be a second, potentially stale copy.
 //
-// Facet editing is deliberately NOT in THIS panel -- see useFigureBuilder.ts's
-// `setGroupKey` doc for the full reasoning (F4.4, 2026-08-23, gave
-// `document.bindings.facetKey` a real Stage render wire and creation
-// surface -- `facetByColumn` -- neither of which reaches the Figure
-// Builder/Publication Preview draft this panel edits; the F2.3d
-// region-shades precedent).
+// Facet editing joined this panel once F4.4 made `bindings.facetKey` a real
+// screen/export wire and the canonical preview learned to render faceted
+// documents. The binding remains separate from Group: facets create panels,
+// while groups split series within each panel.
 
 import { Select } from "../../primitives";
 
 export default function GroupingPanel({
   groupKey,
+  facetKey,
   labels,
   onGroupKey,
+  onFacetKey,
 }: {
   /** The draft's group-by binding, or null for "no grouping" (every
    *  plotted channel renders as its own series, today's default). */
   groupKey: number | null;
+  /** The draft's facet-by binding, or null for a single plot. */
+  facetKey: number | null;
   /** The bound dataset's raw channel labels, indexed by channel. */
   labels: readonly string[];
   onGroupKey: (next: number | null) => void;
+  onFacetKey: (next: number | null) => void;
 }) {
   const options = [
     { value: "", label: "None" },
@@ -57,6 +60,15 @@ export default function GroupingPanel({
         value={groupKey === null ? "" : String(groupKey)}
         onChange={(e) => onGroupKey(e.target.value === "" ? null : Number(e.target.value))}
         title="Split the plotted series into one colored line per level of this column. Drawn as a plain, ungrouped overlay instead — on screen and in export — whenever a secondary Y axis is also bound."
+        options={options}
+      />
+      <label className="qzk-field-lbl" style={{ marginTop: 4 }}>facet by</label>
+      <Select
+        aria-label="facet by"
+        style={{ maxWidth: 160, minWidth: 0 }}
+        value={facetKey === null ? "" : String(facetKey)}
+        onChange={(e) => onFacetKey(e.target.value === "" ? null : Number(e.target.value))}
+        title="Split the figure into one panel per level of this column."
         options={options}
       />
     </span>

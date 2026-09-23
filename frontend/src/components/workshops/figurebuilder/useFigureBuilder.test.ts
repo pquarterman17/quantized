@@ -430,6 +430,29 @@ describe("useFigureBuilder", () => {
     expect(result.current.facetActive).toBe(false);
   });
 
+  it("assigns and changes a facet binding on the canonical draft", () => {
+    const document = createFigureDocument({
+      id: "facet-editor", name: "Facet editor", datasetId: "d1",
+      view: { ...defaultPlotView(), yKeys: [0], stackMode: false },
+    });
+    useApp.setState({ figurePublicationSession: {
+      target: "window", windowId: "w1",
+      baseline: structuredClone(document), draft: structuredClone(document),
+    } });
+    const { result } = renderHook(() => useFigureBuilder());
+
+    act(() => result.current.setFacetKey(1));
+    let draft = useApp.getState().figurePublicationSession!.draft;
+    expect(draft.bindings.facetKey).toBe(1);
+    expect(draft.plot.view.stackMode).toBe(true);
+    expect(result.current.facetActive).toBe(true);
+
+    act(() => result.current.setFacetKey(null));
+    draft = useApp.getState().figurePublicationSession!.draft;
+    expect(draft.bindings.facetKey).toBeNull();
+    expect(draft.plot.view.stackMode).toBe(false);
+  });
+
   // Regression: canonical mode read/wrote ONLY `publication.overrides` (the
   // publication-only delta), but the preview renders the MERGE of that delta
   // with view-derived overrides (`lib/figureSpec.ts`'s `buildFigureSpecForView`
