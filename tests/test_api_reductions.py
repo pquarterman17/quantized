@@ -81,3 +81,47 @@ def test_spin_asymmetry_route() -> None:
     body = resp.json()
     assert body["n_valid"] == 2
     assert body["asymmetry"][2] is None or math.isnan(body["asymmetry"][2])
+
+
+
+def test_pawley_refinement_route_serializes_model() -> None:
+    two_theta = [20.0 + 0.25 * i for i in range(241)]
+    intensity = [10.0 for _ in two_theta]
+    r = client.post(
+        "/api/reductions/pawley",
+        json={
+            "two_theta": two_theta,
+            "intensity": intensity,
+            "a": 5.43,
+            "b": 5.43,
+            "c": 5.43,
+            "symmetry": "P",
+            "wavelength": 1.5406,
+            "max_two_theta": 80.0,
+            "profile_fwhm": 0.12,
+            "refine_cell": False,
+        },
+    )
+    assert r.status_code == 200
+    body = r.json()
+    assert body["cell"][:3] == pytest.approx([5.43, 5.43, 5.43])
+    assert body["n_peaks"] > 0
+    assert len(body["model"]) == len(two_theta)
+    assert len(body["background"]) == len(two_theta)
+    assert len(body["residual"]) == len(two_theta)
+    assert body["scale"] is None
+
+
+def test_pawley_refinement_route_rejects_mismatched_arrays() -> None:
+    r = client.post(
+        "/api/reductions/pawley",
+        json={
+            "two_theta": [20.0, 21.0],
+            "intensity": [1.0],
+            "a": 5.43,
+            "b": 5.43,
+            "c": 5.43,
+        },
+    )
+    assert r.status_code == 422
+    assert "same length" in r.json()["detail"]
