@@ -17,6 +17,7 @@ import PeakTable from "./PeakTable";
 import { usePeakTableSelection } from "./peakSelection";
 import { usePeaks } from "./usePeaks";
 import ToolWindow from "../../overlays/ToolWindow";
+import { askParams } from "../../overlays/ParamDialog";
 import { Button } from "../../primitives";
 import { reportEmit } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
@@ -47,6 +48,8 @@ export default function PeaksPanel() {
     fitResult,
     peakTable,
     toggleExcluded,
+    editFittedPeak,
+    removeFittedPeaks,
     fitting,
     fitError,
     fitTogether,
@@ -176,6 +179,41 @@ export default function PeaksPanel() {
   });
   const excludedCount = entries?.filter((p) => p.excluded).length ?? 0;
 
+  const editSelectedPeak = async () => {
+    if (!entries || fittedSelection.selected.size !== 1) return;
+    const index = [...fittedSelection.selected][0];
+    const entry = entries[index];
+    if (!entry) return;
+    const values = await askParams(`Edit fitted peak ${index + 1}`, [
+      { key: "center", label: "Center", type: "number", default: entry.center },
+      { key: "fwhm", label: "FWHM", type: "number", default: entry.fwhm },
+      { key: "height", label: "Height", type: "number", default: entry.height },
+      { key: "area", label: "Area", type: "number", default: entry.area },
+    ]);
+    if (!values) return;
+    const patch = {
+      center: Number(values.center),
+      fwhm: Number(values.fwhm),
+      height: Number(values.height),
+      area: Number(values.area),
+    };
+    if (!Object.values(patch).every(Number.isFinite) || patch.fwhm <= 0) {
+      toast("Peak values must be finite and FWHM must be greater than zero.", "danger");
+      return;
+    }
+    await editFittedPeak(entry.id, patch);
+  };
+
+  const removeSelectedPeaks = async () => {
+    if (!entries || fittedSelection.selected.size === 0) return;
+    const ids = new Set(
+      [...fittedSelection.selected]
+        .map((index) => entries[index]?.id)
+        .filter((id): id is string => typeof id === "string"),
+    );
+    await removeFittedPeaks(ids);
+  };
+
   const faint = { color: "var(--text-faint)" } as const;
 
   return (
@@ -242,7 +280,21 @@ export default function PeaksPanel() {
             selected={fittedSelection.selected}
             onSelect={fittedSelection.select}
           />
-          <div style={{ marginTop: 8 }}>
+          <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <Button
+              size="sm"
+              disabled={fittedSelection.selected.size !== 1}
+              onClick={() => void editSelectedPeak()}
+            >
+              Edit selected…
+            </Button>
+            <Button
+              size="sm"
+              disabled={fittedSelection.selected.size === 0}
+              onClick={() => void removeSelectedPeaks()}
+            >
+              Remove selected
+            </Button>
             <Button size="sm" disabled={reporting} onClick={() => void toReport()}>
               {reporting ? "Reporting…" : "→ Report"}
             </Button>
