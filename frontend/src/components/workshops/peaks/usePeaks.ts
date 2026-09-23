@@ -26,9 +26,10 @@ import { peakOverlayArray } from "../../../lib/plotdata";
 import { rowStateIdentity } from "../../../lib/rowstate";
 import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/types";
 import { peakInputs } from "./peakInputs";
+import { usePeakManualEdits } from "./usePeakManualEdits";
 import { finiteRange } from "./peakRanges";
 import { askParams } from "../../overlays/ParamDialog";
-import { editPeak, publishFitResult, removePeaks, setPeakExcluded } from "../../../store/peakTables";
+import { publishFitResult, setPeakExcluded } from "../../../store/peakTables";
 import { beginOp, endOp, updateOp } from "../../../store/pendingOps";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -476,34 +477,12 @@ export function usePeaks(): PeaksState {
     [activeId],
   );
 
-  const refreshManualTable = useCallback(async (table: PeakTable | null) => {
-    if (!activeId) return;
-    if (!table) {
-      setFitResult(null);
-      setPeakOverlay(null);
-      return;
-    }
-    const next = peakTableToFitResult(table);
-    setFitResult(next);
-    const ds = await useApp.getState().resolveDataset(activeId);
-    if (!ds || ds.id !== activeId) return;
-    const st = useApp.getState();
-    const { fullX } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
-    overlayFitted(ds, next.peaks, fullX);
-  }, [activeId, overlayFitted, setPeakOverlay]);
-
-  const editFittedPeak = useCallback(async (
-    peakId: string,
-    patch: { center: number; fwhm: number; height: number; area: number },
-  ) => {
-    if (!activeId) return;
-    await refreshManualTable(editPeak(activeId, peakId, patch));
-  }, [activeId, refreshManualTable]);
-
-  const removeFittedPeaks = useCallback(async (peakIds: ReadonlySet<string>) => {
-    if (!activeId || peakIds.size === 0) return;
-    await refreshManualTable(removePeaks(activeId, peakIds));
-  }, [activeId, refreshManualTable]);
+  const { editFittedPeak, removeFittedPeaks } = usePeakManualEdits({
+    activeId,
+    setFitResult,
+    setPeakOverlay,
+    overlayFitted,
+  });
 
   return {
     active, peaks, busy, error, fitResult, peakTable: activeTable, toggleExcluded,
