@@ -7599,54 +7599,6 @@ export interface components {
             /** Columns */
             columns: number[][];
         };
-        /** PcaFigureRequest */
-        PcaFigureRequest: {
-            /** Dpi */
-            dpi?: number | null;
-            /**
-             * Filename
-             * @default pca
-             */
-            filename?: string;
-            /**
-             * Fmt
-             * @default pdf
-             */
-            fmt?: string;
-            /** Height In */
-            height_in?: number | null;
-            /**
-             * Mode
-             * @enum {string}
-             */
-            mode: "scores" | "loadings" | "biplot";
-            /** Points */
-            points?: number[][] | null;
-            /**
-             * Style
-             * @default default
-             */
-            style?: string;
-            /**
-             * Title
-             * @default
-             */
-            title?: string;
-            /** Vectors */
-            vectors?: components["schemas"]["PcaVectorWire"][] | null;
-            /** Width In */
-            width_in?: number | null;
-            /**
-             * X Label
-             * @default
-             */
-            x_label?: string;
-            /**
-             * Y Label
-             * @default
-             */
-            y_label?: string;
-        };
         /** PawleyRequest */
         PawleyRequest: {
             /** A */
@@ -7709,6 +7661,54 @@ export interface components {
              * @default 1.5406
              */
             wavelength?: number;
+        };
+        /** PcaFigureRequest */
+        PcaFigureRequest: {
+            /** Dpi */
+            dpi?: number | null;
+            /**
+             * Filename
+             * @default pca
+             */
+            filename?: string;
+            /**
+             * Fmt
+             * @default pdf
+             */
+            fmt?: string;
+            /** Height In */
+            height_in?: number | null;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "scores" | "loadings" | "biplot";
+            /** Points */
+            points?: number[][] | null;
+            /**
+             * Style
+             * @default default
+             */
+            style?: string;
+            /**
+             * Title
+             * @default
+             */
+            title?: string;
+            /** Vectors */
+            vectors?: components["schemas"]["PcaVectorWire"][] | null;
+            /** Width In */
+            width_in?: number | null;
+            /**
+             * X Label
+             * @default
+             */
+            x_label?: string;
+            /**
+             * Y Label
+             * @default
+             */
+            y_label?: string;
         };
         /** PcaScreeFigureRequest */
         PcaScreeFigureRequest: {
