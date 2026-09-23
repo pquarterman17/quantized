@@ -389,6 +389,21 @@ describe("canonical Publication Preview session", () => {
     expect(state.plotWindows[0].document?.plot.axisBreaks.x).toEqual([[0.25, 0.75]]);
   });
 
+  it("assigning a facet clears a stale break composition so the new facet grid can render", () => {
+    useApp.setState({ composition: { kind: "break", panels: [] } });
+    expect(useApp.getState().beginFigurePublicationEdit()).toBe(true);
+    useApp.getState().patchFigurePublicationDraft((draft) => ({
+      ...draft,
+      bindings: { ...draft.bindings, facetKey: 1 },
+      plot: { ...draft.plot, view: { ...draft.plot.view, stackMode: true } },
+    }));
+
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(true);
+    expect(useApp.getState().composition).toBeNull();
+    expect(useApp.getState().facetKey).toBe(1);
+    expect(useApp.getState().stackMode).toBe(true);
+  });
+
   it("rejects same-id concurrent focused-facade drift without recording history, and flags the session staleBaseline", () => {
     useApp.getState().beginFigurePublicationEdit();
     useApp.setState({ plotTitle: "Changed on Stage" });

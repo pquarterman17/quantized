@@ -589,8 +589,10 @@ describe("PropertyPanels Error columns group (F2.3f)", () => {
 describe("PropertyPanels Grouping group (F2.3h)", () => {
   const groupingProp = (overrides: Partial<GroupingPanelProps> = {}): GroupingPanelProps => ({
     groupKey: null,
+    facetKey: null,
     labels: ["R", "dR"],
     onGroupKey: vi.fn(),
+    onFacetKey: vi.fn(),
     ...overrides,
   });
 
@@ -617,17 +619,20 @@ describe("PropertyPanels Grouping group (F2.3h)", () => {
 
   it("renders the group and forwards edits to the supplied callback", () => {
     const onGroupKey = vi.fn();
+    const onFacetKey = vi.fn();
     render(
       <PropertyPanels
         overrides={{}}
         openGroup="Grouping"
         hasY2={false}
-        grouping={groupingProp({ onGroupKey })}
+        grouping={groupingProp({ onGroupKey, onFacetKey })}
         setOverrides={vi.fn()}
       />,
     );
     fireEvent.change(screen.getByLabelText("group by"), { target: { value: "1" } });
     expect(onGroupKey).toHaveBeenCalledWith(1);
+    fireEvent.change(screen.getByLabelText("facet by"), { target: { value: "1" } });
+    expect(onFacetKey).toHaveBeenCalledWith(1);
   });
 });
 

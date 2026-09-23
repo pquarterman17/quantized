@@ -130,7 +130,7 @@ export default function PropertyPanels({
    *  group; present-but-empty still renders it -- see ErrorColumnsPanelProps'
    *  doc. */
   errorColumns?: ErrorColumnsPanelProps;
-  /** F2.3h: canonical group-by binding -- rendered even unset ("None"), like F2.3d/f. */
+  /** Canonical group/facet bindings -- rendered even unset ("None"), like F2.3d/f. */
   grouping?: GroupingPanelProps;
   /** Preview click-to-select can force its matching panel open. */
   openGroup?: string | null;
@@ -336,7 +336,7 @@ export default function PropertyPanels({
 
       {grouping && (
         <Group title="Grouping" forceOpen={openGroup === "Grouping"} openNonce={openNonce}>
-          <GroupingPanel groupKey={grouping.groupKey} labels={grouping.labels} onGroupKey={grouping.onGroupKey} />
+          <GroupingPanel {...grouping} />
         </Group>
       )}
 

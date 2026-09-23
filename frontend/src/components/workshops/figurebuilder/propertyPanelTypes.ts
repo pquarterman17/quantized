@@ -102,12 +102,13 @@ export interface ChannelsPanelProps {
   onToggleY2: (channel: number) => void;
 }
 
-/** F2.3h: the group-by binding on the canonical draft. Gated on `canonical`
- *  only, and renders even when unset (picking the first group key needs no
- *  live canvas -- F2.3d's reasoning). Facet is deliberately absent: see
- *  GroupingPanel.tsx's doc for why `bindings.facetKey` has no editor. */
+/** Group/facet bindings on the canonical draft. Gated on `canonical` only,
+ *  and renders even when both are unset: either choice can be resolved from
+ *  the bound dataset without reaching back into the live Stage. */
 export interface GroupingPanelProps {
   groupKey: number | null;
+  facetKey: number | null;
   labels: readonly string[];
   onGroupKey: (next: number | null) => void;
+  onFacetKey: (next: number | null) => void;
 }

@@ -264,7 +264,7 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
               : candidate,
           ),
           ...(syncFocusedView ? hydrateView(view) : {}),
-          ...(syncFocusedView && document.bindings.facetKey !== session.baseline.bindings.facetKey && current.composition?.kind === "facet"
+          ...(syncFocusedView && document.bindings.facetKey !== session.baseline.bindings.facetKey && current.composition !== null
             ? { composition: null } : {}),
           figurePublicationSession: null,
           figureBuilderOpen: false,
@@ -307,7 +307,7 @@ export function createFigureLifecycleSlice(set: SliceSet, get: SliceGet): Figure
           candidate.id === session.windowId ? withPlotWindowDocument(candidate, document) : candidate,
         ),
         ...hydrateView(view),
-        ...(document.bindings.facetKey !== session.baseline.bindings.facetKey && current.composition?.kind === "facet"
+        ...(document.bindings.facetKey !== session.baseline.bindings.facetKey && current.composition !== null
           ? { composition: null } : {}),
         figurePublicationSession: null,
         figureBuilderOpen: false,
