@@ -50,6 +50,7 @@ describe("usePawley", () => {
       hook.current.setB(4.2);
       hook.current.setC(4.3);
       hook.current.setSymmetry("I");
+      hook.current.setBeta(91);
     });
     await act(async () => {
       await hook.current.compute();
@@ -61,6 +62,7 @@ describe("usePawley", () => {
       b: 4.2,
       c: 4.3,
       symmetry: "I",
+      beta: 91,
     }));
     expect(hook.current.result?.cell[0]).toBe(5.42);
   });
@@ -90,11 +92,17 @@ describe("usePawley", () => {
     await act(async () => {
       await hook.current.compute();
     });
-    // Change the live dataset after refinement; derived output must still use
-    // the rows that produced the result, not a later preview/reimport state.
+    // Change live view/source state and local settings after refinement;
+    // derived output must still use the exact rows and provenance that
+    // produced the result.
     act(() => {
+      hook.current.setCol(1);
+      hook.current.setSymmetry("F");
+      hook.current.setWavelength(0.7107);
       useApp.setState({
-        datasets: [{ id: "d1", name: "powder.xrdml", data: { ...scan, time: [1, 2, 3, 4] } }],
+        datasets: [{ id: "d1", name: "renamed.xrdml", data: {
+          ...scan, time: [1, 2, 3, 4], labels: ["Changed", "Other"], units: ["arb", "cps"],
+        } }],
       });
       hook.current.toLibrary();
     });
@@ -106,6 +114,14 @@ describe("usePawley", () => {
       [300, 290, 10],
       [400, 390, 10],
     ]);
+    expect(added.name).toBe("powder.xrdml (Pawley)");
+    expect(added.data.labels[0]).toBe("Intensity");
+    expect(added.data.units[0]).toBe("cps");
+    expect(added.data.metadata).toEqual(expect.objectContaining({
+      source_dataset_id: "d1",
+      symmetry: "P",
+      wavelength_a: 1.5406,
+    }));
   });
 
   it("surfaces backend validation errors", async () => {
