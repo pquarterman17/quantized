@@ -34,6 +34,12 @@ describe("ReductionsPanel", () => {
     expect(screen.getByText("FWHM (°)")).toBeInTheDocument();
   });
 
+  it("shows the Pawley section's no-dataset hint when preset to that method", () => {
+    useApp.getState().setReductionsMethod("pawley");
+    render(<ReductionsPanel />);
+    expect(screen.getByText(/Select a powder XRD dataset/)).toBeInTheDocument();
+  });
+
   it("shows the FFT-thickness section's no-dataset hint when preset to that method", () => {
     useApp.getState().setReductionsMethod("fft-thickness");
     render(<ReductionsPanel />);
@@ -80,6 +86,11 @@ describe("Analyze-menu command registry entries (MAIN_PLAN #11)", () => {
     expect(commandsSrc).toContain('id: "reductions-wh"');
     expect(commandsSrc).toContain('group: "Analyze"');
     expect(commandsSrc).toContain('openReductions("williamson-hall")');
+  });
+
+  it("registers Pawley refinement in the Analyze group", () => {
+    expect(commandsSrc).toContain('id: "reductions-pawley"');
+    expect(commandsSrc).toContain('openReductions("pawley")');
   });
 
   it("registers Film thickness (FFT) in the Analyze group", () => {
