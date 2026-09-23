@@ -18,7 +18,7 @@
 // toggle rides the same rule so a fit and the review of its peaks behave alike.
 
 import type { MultiFitResult, PeakTable } from "../lib/peakTable";
-import { peakDataFingerprint, peakTableFromFit, withPeakExcluded, xChannelIdentity } from "../lib/peakTableFit";
+import { peakDataFingerprint, peakTableFromFit, withPeakExcluded, withPeakManualEdit, withoutPeaks, xChannelIdentity, type PeakManualPatch } from "../lib/peakTableFit";
 import { wavelengthFromMetadata } from "../lib/xrdWavelength";
 import { useApp } from "./useApp";
 
@@ -86,4 +86,27 @@ export function setPeakExcluded(datasetId: string, peakId: string, excluded: boo
   const next = withPeakExcluded(ds.peakTable, peakId, excluded);
   if (next === ds.peakTable) return;
   publishPeakTable(datasetId, next);
+}
+
+
+export function editPeak(datasetId: string, peakId: string, patch: PeakManualPatch): PeakTable | null {
+  const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
+  if (!ds?.peakTable) return null;
+  const next = withPeakManualEdit(ds.peakTable, peakId, patch);
+  if (next === ds.peakTable) return ds.peakTable;
+  publishPeakTable(datasetId, next);
+  return next;
+}
+
+export function removePeaks(datasetId: string, peakIds: ReadonlySet<string>): PeakTable | null {
+  const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
+  if (!ds?.peakTable) return null;
+  const next = withoutPeaks(ds.peakTable, peakIds);
+  if (next === ds.peakTable) return ds.peakTable;
+  useApp.setState((s) => ({
+    datasets: s.datasets.map((d) =>
+      d.id === datasetId ? { ...d, peakTable: next ?? undefined } : d
+    ),
+  }));
+  return next;
 }
