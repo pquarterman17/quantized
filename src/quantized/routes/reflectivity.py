@@ -8,12 +8,13 @@ physics here; the recursion + Névot-Croce roughness live in ``calc/``.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any, Literal
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from quantized.calc.refl_fit import fit_reflectivity
 from quantized.calc.reflectivity import parratt_refl
 from quantized.calc.sld import refl_sld_presets, sld_profile
 from quantized.routes._errors import call_calc
@@ -84,3 +85,73 @@ def sld_profile_route(req: SldProfileRequest) -> dict[str, Any]:
     _validate_layers(req.layers)
     z, sld = call_calc(sld_profile, req.layers, n_points=req.n_points, padding=req.padding)
     return {"z": to_jsonable(z), "sld": to_jsonable(sld)}
+
+
+# ── fit to measured data (audit P2.2) ────────────────────────────────────────
+
+# A fit evaluates the model ~10-100 times per free parameter, and a resolution-
+# smeared evaluation costs 21x a plain one; these caps keep one request to
+# seconds, not minutes.
+FIT_MAX_POINTS = 20_000
+FIT_MAX_PARAMETERS = 200
+FIT_MAX_CHANNELS = 4
+
+FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
+
+
+class FitParameter(BaseModel):
+    """One model parameter: ``L{i}.{thickness|sld|isld|roughness|msld}``,
+    ``scale``, ``background`` or a per-channel scale/background name."""
+
+    name: str = Field(min_length=1, max_length=64)
+    value: FiniteFloat
+    vary: bool = False
+    min: FiniteFloat | None = None
+    max: FiniteFloat | None = None
+    tie: str | None = Field(default=None, max_length=64)
+
+
+class FitChannel(BaseModel):
+    """One measured curve. ``dq`` is a per-point 1-sigma resolution unless
+    ``dq_is_fwhm``; ``resolution`` is a constant dQ/Q used when ``dq`` is absent."""
+
+    q: list[FiniteFloat] = Field(min_length=2, max_length=FIT_MAX_POINTS)
+    r: list[FiniteFloat] = Field(min_length=2, max_length=FIT_MAX_POINTS)
+    dr: list[FiniteFloat] | None = Field(default=None, max_length=FIT_MAX_POINTS)
+    dq: list[FiniteFloat] | None = Field(default=None, max_length=FIT_MAX_POINTS)
+    dq_is_fwhm: bool = False
+    resolution: float | None = Field(default=None, ge=0.0, le=0.5, allow_inf_nan=False)
+    spin: Literal["+", "-"] | None = None
+    q_min: FiniteFloat | None = None
+    q_max: FiniteFloat | None = None
+    scale: str = Field(default="scale", max_length=64)
+    background: str = Field(default="background", max_length=64)
+    label: str | None = Field(default=None, max_length=120)
+
+
+class FitRequest(BaseModel):
+    parameters: list[FitParameter] = Field(min_length=1, max_length=FIT_MAX_PARAMETERS)
+    channels: list[FitChannel] = Field(min_length=1, max_length=FIT_MAX_CHANNELS)
+    weighting: Literal["dr", "log"] = "dr"
+    max_nfev: int = Field(default=2000, ge=1, le=20_000)
+
+
+@router.post("/fit")
+def fit_route(req: FitRequest) -> dict[str, Any]:
+    """Fit the layer model to one or more measured reflectivity curves."""
+    channels = []
+    for ch in req.channels:
+        c = ch.model_dump()
+        for key in ("q_min", "q_max"):
+            if c[key] is None:
+                del c[key]
+        channels.append(c)
+    out = call_calc(
+        fit_reflectivity,
+        [p.model_dump() for p in req.parameters],
+        channels,
+        weighting=req.weighting,
+        max_nfev=req.max_nfev,
+    )
+    result: dict[str, Any] = to_jsonable(out)
+    return result

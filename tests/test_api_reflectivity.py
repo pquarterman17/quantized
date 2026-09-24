@@ -5,6 +5,8 @@ directly (no serialization drift)."""
 
 from __future__ import annotations
 
+from typing import Any
+
 import numpy as np
 from fastapi.testclient import TestClient
 from numpy.testing import assert_allclose
@@ -83,3 +85,52 @@ def test_presets_nonempty_and_shaped() -> None:
     si = next(p for p in presets if p["formula"] == "Si")
     assert si["name"] == "Silicon"
     assert set(si) >= {"name", "formula", "sldX", "sldN", "sldImag", "density"}
+
+
+# ── /fit (audit P2.2) ─────────────────────────────────────────────────────────
+
+
+def _fit_body(**over: Any) -> dict[str, Any]:
+    q = np.linspace(0.01, 0.2, 200)
+    r = parratt_refl(q, LAYERS)
+    body = {
+        "parameters": [
+            {"name": "L0.sld", "value": 0.0},
+            {"name": "L1.thickness", "value": 190.0, "vary": True, "min": 150.0, "max": 250.0},
+            {"name": "L1.sld", "value": 4e-6},
+            {"name": "L1.roughness", "value": 5.0},
+            {"name": "L2.sld", "value": 2.07e-6},
+            {"name": "L2.roughness", "value": 3.0},
+        ],
+        "channels": [{"q": q.tolist(), "r": r.tolist(), "dr": (0.02 * r).tolist()}],
+    }
+    body.update(over)
+    return body
+
+
+def test_fit_recovers_thickness_and_serializes() -> None:
+    resp = client.post("/api/reflectivity/fit", json=_fit_body())
+    assert resp.status_code == 200, resp.text
+    out = resp.json()
+    p = {x["name"]: x for x in out["parameters"]}
+    assert abs(p["L1.thickness"]["value"] - 200.0) < 0.01
+    assert out["free"] == ["L1.thickness"]
+    assert len(out["curves"][0]["model"]) == 200
+    assert out["sld_profiles"][0]["spin"] is None
+
+
+def test_fit_rejects_unknown_tie_and_bad_weighting() -> None:
+    body = _fit_body()
+    body["parameters"][3]["tie"] = "L9.sld"
+    resp = client.post("/api/reflectivity/fit", json=body)
+    assert resp.status_code == 422 and "unknown parameter" in resp.json()["detail"]
+    assert client.post("/api/reflectivity/fit", json=_fit_body(weighting="chi")).status_code == 422
+
+
+def test_fit_rejects_non_finite_and_oversized_input() -> None:
+    body = _fit_body()
+    body["channels"][0]["spin"] = "x"
+    assert client.post("/api/reflectivity/fit", json=body).status_code == 422
+    body = _fit_body()
+    body["channels"] = body["channels"] * 5
+    assert client.post("/api/reflectivity/fit", json=body).status_code == 422

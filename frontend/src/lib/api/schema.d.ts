@@ -2610,6 +2610,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reflectivity/fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Route
+         * @description Fit the layer model to one or more measured reflectivity curves.
+         */
+        post: operations["fit_route_api_reflectivity_fit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reflectivity/presets": {
         parameters: {
             query?: never;
@@ -6585,6 +6605,46 @@ export interface components {
             /** Table */
             table: number[][];
         };
+        /**
+         * FitChannel
+         * @description One measured curve. ``dq`` is a per-point 1-sigma resolution unless
+         *     ``dq_is_fwhm``; ``resolution`` is a constant dQ/Q used when ``dq`` is absent.
+         */
+        FitChannel: {
+            /**
+             * Background
+             * @default background
+             */
+            background?: string;
+            /** Dq */
+            dq?: number[] | null;
+            /**
+             * Dq Is Fwhm
+             * @default false
+             */
+            dq_is_fwhm?: boolean;
+            /** Dr */
+            dr?: number[] | null;
+            /** Label */
+            label?: string | null;
+            /** Q */
+            q: number[];
+            /** Q Max */
+            q_max?: number | null;
+            /** Q Min */
+            q_min?: number | null;
+            /** R */
+            r: number[];
+            /** Resolution */
+            resolution?: number | null;
+            /**
+             * Scale
+             * @default scale
+             */
+            scale?: string;
+            /** Spin */
+            spin?: ("+" | "-") | null;
+        };
         /** FitDistRequest */
         FitDistRequest: {
             /** Dist */
@@ -6621,6 +6681,28 @@ export interface components {
             /** Y */
             y: number[];
         };
+        /**
+         * FitParameter
+         * @description One model parameter: ``L{i}.{thickness|sld|isld|roughness|msld}``,
+         *     ``scale``, ``background`` or a per-channel scale/background name.
+         */
+        FitParameter: {
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Name */
+            name: string;
+            /** Tie */
+            tie?: string | null;
+            /** Value */
+            value: number;
+            /**
+             * Vary
+             * @default false
+             */
+            vary?: boolean;
+        };
         /** FitPeakRequest */
         FitPeakRequest: {
             /**
@@ -6640,32 +6722,6 @@ export interface components {
             x_hi: number;
             /** X Lo */
             x_lo: number;
-            /** Y */
-            y: number[];
-        };
-        /** FitRequest */
-        FitRequest: {
-            /**
-             * Calc Errors
-             * @default true
-             */
-            calc_errors?: boolean;
-            /** Dy */
-            dy?: number[] | null;
-            /** Fixed */
-            fixed?: boolean[] | null;
-            /** Lower */
-            lower?: number[] | null;
-            /** Model */
-            model: string;
-            /** P0 */
-            p0?: number[] | null;
-            /** Upper */
-            upper?: number[] | null;
-            /** Weights */
-            weights?: number[] | null;
-            /** X */
-            x: number[];
             /** Y */
             y: number[];
         };
@@ -8927,6 +8983,32 @@ export interface components {
             /** Temperature */
             temperature: number | number[];
         };
+        /** FitRequest */
+        quantized__routes__fitting__FitRequest: {
+            /**
+             * Calc Errors
+             * @default true
+             */
+            calc_errors?: boolean;
+            /** Dy */
+            dy?: number[] | null;
+            /** Fixed */
+            fixed?: boolean[] | null;
+            /** Lower */
+            lower?: number[] | null;
+            /** Model */
+            model: string;
+            /** P0 */
+            p0?: number[] | null;
+            /** Upper */
+            upper?: number[] | null;
+            /** Weights */
+            weights?: number[] | null;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** GuessRequest */
         quantized__routes__fitting__GuessRequest: {
             /** Model */
@@ -8940,6 +9022,24 @@ export interface components {
         quantized__routes__import_wizard__GuessRequest: {
             /** Text */
             text: string;
+        };
+        /** FitRequest */
+        quantized__routes__reflectivity__FitRequest: {
+            /** Channels */
+            channels: components["schemas"]["FitChannel"][];
+            /**
+             * Max Nfev
+             * @default 2000
+             */
+            max_nfev?: number;
+            /** Parameters */
+            parameters: components["schemas"]["FitParameter"][];
+            /**
+             * Weighting
+             * @default dr
+             * @enum {string}
+             */
+            weighting?: "dr" | "log";
         };
         /** DiffusionLengthRequest */
         quantized__routes__semiconductor__DiffusionLengthRequest: {
@@ -11097,7 +11197,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["FitRequest"];
+                "application/json": components["schemas"]["quantized__routes__fitting__FitRequest"];
             };
         };
         responses: {
@@ -13048,6 +13148,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    fit_route_api_reflectivity_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["quantized__routes__reflectivity__FitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
