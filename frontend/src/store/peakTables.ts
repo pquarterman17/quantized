@@ -11,11 +11,10 @@
 // in store/useApp.ts, which sits AT its size-ratchet pin
 // (architecture.test.ts's STORE_PINS) with one line of headroom.
 //
-// NOT wrapped in `recordHistory`: a peak table is the RECORD OF A FIT, the same
-// category as `Dataset.fitSpec` (useApp.ts's `setFitSpec`, also unwrapped) — it
-// is produced by an explicit fit the user just ran and is replaced by the next
-// one, not an edit to their data that Ctrl+Z should walk back. The exclusion
-// toggle rides the same rule so a fit and the review of its peaks behave alike.
+// Fit publication and inclusion review are analysis output, not edit-history
+// gestures. Manual value edits and removals are different: they are durable,
+// user-authored changes and record one undo step after proving the mutation is
+// effective (including removal of the final artifact).
 
 import type { MultiFitResult, PeakTable } from "../lib/peakTable";
 import { peakDataFingerprint, peakTableFromFit, withPeakExcluded, withPeakManualEdit, withoutPeaks, xChannelIdentity, type PeakManualPatch } from "../lib/peakTableFit";
@@ -94,6 +93,7 @@ export function editPeak(datasetId: string, peakId: string, patch: PeakManualPat
   if (!ds?.peakTable) return null;
   const next = withPeakManualEdit(ds.peakTable, peakId, patch);
   if (next === ds.peakTable) return ds.peakTable;
+  useApp.getState().recordHistory("edit fitted peak");
   publishPeakTable(datasetId, next);
   return next;
 }
@@ -103,6 +103,7 @@ export function removePeaks(datasetId: string, peakIds: ReadonlySet<string>): Pe
   if (!ds?.peakTable) return null;
   const next = withoutPeaks(ds.peakTable, peakIds);
   if (next === ds.peakTable) return ds.peakTable;
+  useApp.getState().recordHistory("remove fitted peaks");
   useApp.setState((s) => ({
     datasets: s.datasets.map((d) =>
       d.id === datasetId ? { ...d, peakTable: next ?? undefined } : d

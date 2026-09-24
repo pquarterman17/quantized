@@ -379,6 +379,9 @@ export function withPeakManualEdit(table: PeakTable, id: string, patch: PeakManu
   const index = table.peaks.findIndex((p) => p.id === id);
   if (index < 0) return table;
   const current = table.peaks[index];
+  const changed = (Object.keys(patch) as (keyof PeakManualPatch)[])
+    .some((key) => patch[key] !== undefined && patch[key] !== current[key]);
+  if (!changed) return table;
   const next = { ...current, ...patch, status: "manual-edit" };
   if ("center" in patch) next.centerErr = null;
   if ("fwhm" in patch) next.fwhmErr = null;

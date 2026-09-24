@@ -32,6 +32,8 @@ beforeEach(() => {
   useApp.setState({
     datasets: [{ id: "d1", name: "film.xrdml", data: data({ wavelength_a: 1.5406 }) }],
     activeId: "d1",
+    history: [],
+    future: [],
   });
 });
 
@@ -194,6 +196,43 @@ describe("manual durable peak edits", () => {
     expect(one?.provenance.R2).toBeNull();
 
     removePeaks("d1", new Set([table.peaks[1].id]));
+    expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
+  });
+
+  it("undoes and redoes a manual edit as one effective-change-only step", () => {
+    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    const original = useApp.getState().datasets[0].peakTable!;
+    const id = original.peaks[0].id;
+
+    editPeak("d1", id, { center: original.peaks[0].center });
+    expect(useApp.getState().history).toHaveLength(0);
+    editPeak("d1", id, { center: 31.5 });
+    expect(useApp.getState().history.map((entry) => entry.label)).toEqual(["edit fitted peak"]);
+    expect(useApp.getState().datasets[0].peakTable?.peaks[0].center).toBe(31.5);
+
+    useApp.getState().undo();
+    expect(useApp.getState().datasets[0].peakTable).toEqual(original);
+    useApp.getState().redo();
+    expect(useApp.getState().datasets[0].peakTable?.peaks[0].center).toBe(31.5);
+  });
+
+  it("undoes partial and final-row removals without recording no-op removals", () => {
+    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    const original = useApp.getState().datasets[0].peakTable!;
+
+    removePeaks("d1", new Set(["missing"]));
+    expect(useApp.getState().history).toHaveLength(0);
+    removePeaks("d1", new Set([original.peaks[0].id]));
+    expect(useApp.getState().history).toHaveLength(1);
+    expect(useApp.getState().datasets[0].peakTable?.peaks).toHaveLength(1);
+    useApp.getState().undo();
+    expect(useApp.getState().datasets[0].peakTable).toEqual(original);
+
+    removePeaks("d1", new Set(original.peaks.map((peak) => peak.id)));
+    expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
+    useApp.getState().undo();
+    expect(useApp.getState().datasets[0].peakTable).toEqual(original);
+    useApp.getState().redo();
     expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
   });
 });

@@ -2994,6 +2994,11 @@ a plan edit.
   truth, so edits survive save/reopen and feed downstream consumers such as
   Williamson-Hall; edited values clear their fit-derived uncertainty slots and
   invalidate global R²/RMSE rather than leaving stale statistics attached.
+  **Review hardening, 2026-09-23:** effective manual edits and removals now
+  create one undo step (no-op submissions create none); undo/redo rehydrates
+  both the visible fitted table and its overlay from the durable artifact.
+  Async hydration is generation- and active-dataset-guarded, preventing a
+  delayed resolve from restoring an old dataset's fit after navigation.
   Batch recipe remains open, as does direct manual peak creation.
 - [ ] Technique-specific plot recipe is manually chosen, never auto-overwrites.
 - [ ] Validate on representative owner instruments/phases.
