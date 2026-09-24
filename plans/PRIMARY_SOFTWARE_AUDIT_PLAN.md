@@ -3052,9 +3052,33 @@ fit, uncertainty, SLD, residuals, results, and publication output.
 
 **Models:** GPT-5.6 Sol high / Claude Opus 4.8.
 
-- [ ] Bind measured X/Y/errors and fit ranges to layer stack.
-- [ ] Starts, bounds, fixed/shared parameters, resolution/background.
-- [ ] Linked data/model/residual/SLD views.
+- [x] Bind measured X/Y/errors and fit ranges to layer stack. Slice 1 (PR
+  #405): `calc/refl_fit.py` + `POST /api/reflectivity/fit` fit named layer
+  parameters to one or more measured channels (R, dR, per-point dQ or dQ/Q,
+  Q window, spin +/- for a joint PNR pair), dR or log weighting, bounded and
+  time-limited; truth recovered on the committed XRR and PNR fixtures. Slice
+  2 (PR #406): the Fit mode binds library datasets/columns (Q or 2-theta with
+  lambda) in the Reflectivity workshop.
+- [x] Starts, bounds, fixed/shared parameters, resolution/background. Slices
+  1-2 (PRs #405, #406): value/vary/min/max/tie per parameter, scale and
+  background (per-channel names allowed), resolution from a dQ column or
+  dQ/Q; a model that cannot mean what it says is refused.
+- [~] Linked data/model/residual/SLD views. Slices 2-3 (PRs #406, #407): the
+  fitted curve overlays its data, and "Add fit curves" adds each channel's R
+  and model and each SLD profile (log-Y plot one click away). Open: no linked
+  multi-panel view, and residuals are returned but not yet plotted.
+- [x] Posterior uncertainty. Slice 4 (PR TBD, 2026-09-24): "Estimate
+  uncertainty (DREAM)" on a live or saved dR-weighted fit samples the
+  posterior through the job queue (`calc/refl_dream.py`,
+  `POST /api/reflectivity/dream`; progress, cancel, seed, time limit) and
+  shows 68%/95% intervals beside the least-squares values, R-hat (flagged
+  above 1.2), a bound-limited flag, and R(Q)/SLD(z) credible bands as
+  library datasets; a compact summary (never the chains) is stored on the
+  fit record and reaches the report. Validation (synthetic): converged 95%
+  widths 0.93-1.04x least squares on the XRR fixture; 77/80 thickness/SLD
+  truths inside the 95% interval over 20 fresh noise realisations; a
+  degenerate same-material pair gets bound-wide intervals and correlation
+  -1. User doc: `docs/tutorials/reflectivity-fit-workbench.md`.
 - [~] Durable results table and FigureDoc. Slice 3 (2026-09-24): every
   finished fit is a durable record on its channel datasets (`Dataset.reflFits`,
   last 10, `.dwk` round-trip with the BUG-017 sentinels), shown again with a
@@ -3065,7 +3089,9 @@ fit, uncertainty, SLD, residuals, results, and publication output.
   labelled past that), so a saved fit overlays and adds its curves without a
   re-run; fit curves carry the Library's derived mark. Open: no dedicated
   FigureDoc template for data/model/residual/SLD panels.
-- [ ] Validate representative XRR and PNR fits against trusted results.
+- [ ] Validate representative XRR and PNR fits against trusted results. Open:
+  needs the owner's real instrument data and a trusted reference fit (e.g.
+  refl1d/GenX) — the synthetic-fixture checks above do not close it.
 
 ### P2.3 — SIMS depth profiles
 

@@ -174,7 +174,12 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
     try {
       const { report } = await reportEmit({
         kind: "refl_fit",
-        result: record.result as unknown as Record<string, unknown>,
+        // The posterior summary rides along: the report adds its interval
+        // columns and R-hat note (calc/report_emit.from_refl_fit).
+        result: { ...record.result, ...(record.posterior ? { posterior: record.posterior } : {}) } as unknown as Record<
+          string,
+          unknown
+        >,
         title,
         source_refs: recordDatasetIds(record).map((id) => ({
           kind: "dataset",

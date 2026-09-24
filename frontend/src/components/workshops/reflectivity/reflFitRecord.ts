@@ -41,6 +41,8 @@ import type { Dataset } from "../../../lib/types";
 import { objectiveSummary, type RequestParam } from "./reflFitModel";
 import type { ChannelBinding, FitDataSettings, Spin, Weighting, XKind } from "./reflFitData";
 import type { ModelLayer, Radiation } from "./useReflectivity";
+import { Bad, encodeStored, index, isObj, list, need, needNullable, num, numOrNull, oneOf, str } from "./reflFitCodec";
+import { decodePosterior, type SavedPosterior } from "./reflPosterior";
 
 export const REFL_FIT_RECORD_VERSION = 1;
 /** Fits kept per dataset; older ones drop off the end. */
@@ -119,6 +121,9 @@ export interface ReflFitRecord {
   result: SavedFitResult;
   /** Absent on a record written before P2.2 slice 3's follow-up. */
   curves?: SavedCurves;
+  /** The DREAM posterior summary (P2.2 slice 4): intervals, R-hat and draw
+   *  counts, never the chains. Absent until "Estimate uncertainty" ran. */
+  posterior?: SavedPosterior;
 }
 
 /** The result as stored: everything but the curves, plus the objective. */
@@ -145,61 +150,16 @@ export function channelDigest(channel: object): string {
 
 // ── the stored (JSON-safe) form ─────────────────────────────────────────────
 //
-// `encodeCell`/`decodeCell` are lib/nonFiniteCells.ts's, RESTATED rather than
-// imported, deliberately: that module is eager, and importing two of its
-// functions from this lazy chunk makes the eager chunk export them — measured
-// +22 B against an eager budget with no headroom (2026-09-24, vite build). The
-// parity test in reflFitRecord.test.ts runs the real pair as the oracle over
-// every sentinel, so a change to the codec fails there instead of drifting.
+// The codec (the BUG-017 sentinels) and the read-side validators live in
+// reflFitCodec.ts, shared with the posterior summary (reflPosterior.ts).
 
-/** lib/nonFiniteCells.ts `encodeCell`: the sentinel for NaN/±Infinity/-0. */
-export function encodeNum(v: number): number | string {
-  if (Object.is(v, -0)) return "-0";
-  return Number.isFinite(v) ? v : String(v);
-}
-
-/** lib/nonFiniteCells.ts `decodeCell`: a number or sentinel back to a number,
- *  undefined for anything else. */
-export function decodeNum(v: unknown): number | undefined {
-  if (typeof v === "number") return v;
-  if (v === "NaN") return Number.NaN;
-  if (v === "Infinity") return Infinity;
-  if (v === "-Infinity") return -Infinity;
-  return v === "-0" ? -0 : undefined;
-}
+export { decodeNum, encodeNum } from "./reflFitCodec";
 
 /** The record as it is stored on a dataset: a deep, JSON-safe copy whose
  *  non-finite numbers (and -0) are the BUG-017 sentinel strings. */
 export function encodeRecord(record: ReflFitRecord): unknown {
-  return JSON.parse(JSON.stringify(record, (_k, v: unknown) => (typeof v === "number" ? encodeNum(v) : v)));
+  return encodeStored(record);
 }
-
-type Obj = Record<string, unknown>;
-const isObj = (v: unknown): v is Obj => typeof v === "object" && v !== null && !Array.isArray(v);
-const str = (v: unknown): string | null => (typeof v === "string" ? v : null);
-/** A number, decoding the sentinels; undefined when it is neither. */
-const num = (v: unknown): number | undefined => decodeNum(v);
-const numOrNull = (v: unknown): number | null | undefined => (v === null ? null : num(v));
-const index = (v: unknown): number | null | undefined =>
-  v === null ? null : Number.isInteger(v) && (v as number) >= 0 ? (v as number) : undefined;
-
-class Bad extends Error {}
-function need<T>(v: T | undefined | null, what: string): T {
-  if (v === undefined || v === null) throw new Bad(what);
-  return v;
-}
-function needNullable<T>(v: T | undefined, what: string): T {
-  if (v === undefined) throw new Bad(what);
-  return v;
-}
-function list<T>(v: unknown, item: (x: unknown) => T): T[] {
-  if (!Array.isArray(v)) throw new Bad("list");
-  return v.map(item);
-}
-const oneOf = <T extends string>(v: unknown, options: readonly T[]): T => {
-  if (!options.includes(v as T)) throw new Bad("enum");
-  return v as T;
-};
 
 function decodeParam(v: unknown): SavedParam {
   if (!isObj(v)) throw new Bad("param");
@@ -342,8 +302,11 @@ export function decodeRecord(v: unknown): ReflFitRecord | null {
     if (channels.length === 0 || layers.length < 2) return null;
     const seq = num(v.seq);
     const curves = decodeCurves(v.curves);
+    // Like the curves, a bad posterior costs the record its posterior only.
+    const posterior = decodePosterior(v.posterior);
     return {
       ...(curves ? { curves } : {}),
+      ...(posterior ? { posterior } : {}),
       version: REFL_FIT_RECORD_VERSION,
       id: need(str(v.id), "id"),
       seq: seq !== undefined && Number.isInteger(seq) && seq > 0 ? seq : 1,
@@ -441,4 +404,19 @@ export function withFitRecord(datasets: Dataset[], record: ReflFitRecord): Datas
     const next = [stored, ...storedFits(d)].slice(0, HISTORY_LIMIT);
     return { ...d, reflFits: next.map((r, i) => (i < CURVE_HISTORY_LIMIT ? r : withoutCurves(r))) };
   });
+}
+
+/** `datasets` with `posterior` attached to every stored copy of the record
+ *  `recordId` (replacing an earlier one). The SAME array when no dataset
+ *  holds that record. Never mutates: an undo snapshot may hold the original. */
+export function withPosterior(datasets: Dataset[], recordId: string, posterior: SavedPosterior): Dataset[] {
+  const stored = encodeStored(posterior);
+  let hit = false;
+  const next = datasets.map((d) => {
+    const fits = storedFits(d);
+    if (!fits.some((r) => isObj(r) && r.id === recordId)) return d;
+    hit = true;
+    return { ...d, reflFits: fits.map((r) => (isObj(r) && r.id === recordId ? { ...r, posterior: stored } : r)) };
+  });
+  return hit ? next : datasets;
 }

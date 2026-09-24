@@ -7,6 +7,7 @@ import { Button, Select } from "../../primitives";
 import FitResults from "./FitResults";
 import { decimationNote } from "./reflFitCurves";
 import { formatNum } from "./reflFitModel";
+import ReflUncertainty from "./ReflUncertainty";
 import type { ReflFitRecord } from "./reflFitRecord";
 import type { ReflFitState } from "./useReflFit";
 
@@ -101,6 +102,7 @@ export default function SavedFit({ fit }: { fit: ReflFitState }) {
           ? (decimationNote(r.curves) ?? "The fit's curves are stored with it.")
           : "Fit curves were not stored with this fit — re-run to plot: restore its setup and run it again."}
       </div>
+      <ReflUncertainty dream={fit.dream} record={r} />
     </div>
   );
 }

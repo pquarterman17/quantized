@@ -36,6 +36,7 @@ import {
 import { channelDigest, recordGone, recordId, savedResult, type ReflFitRecord } from "./reflFitRecord";
 import { curveDatasets, liveCurves, savedCurves } from "./reflFitCurves";
 import type { RestoredSetup } from "./reflFitRestore";
+import { useReflDream, type ReflDreamState } from "./useReflDream";
 import { useReflFitHistory, type ReflFitHistory } from "./useReflFitHistory";
 import {
   applyBlockedReason,
@@ -81,6 +82,8 @@ export interface ReflFitState {
   liveRecord: ReflFitRecord | null;
   /** The bound dataset's saved fits and what they offer. */
   history: ReflFitHistory;
+  /** "Estimate uncertainty (DREAM)" for the live or a saved fit (slice 4). */
+  dream: ReflDreamState;
   /** Why "Apply to model" is unavailable (the stack or radiation changed
    *  since the fit), or null. */
   applyBlocked: string | null;
@@ -351,6 +354,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     setSettingsState(setup.settings);
   }
 
+  const dream = useReflDream();
   const history = useReflFitHistory({
     hostId: channels[0]?.datasetId ?? null,
     datasets,
@@ -419,6 +423,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     result,
     liveRecord,
     history,
+    dream,
     applyBlocked,
     curvesAdded: curveIds.length > 0,
     selectDataset,
