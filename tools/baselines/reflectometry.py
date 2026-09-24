@@ -27,6 +27,10 @@ from quantized.calc.reflectivity import parratt_refl
 __all__ = ["write_pnr_pair", "write_xrr_refl"]
 
 # [thickness A, SLD_real, SLD_imag, roughness A]; layer 0 = incident medium.
+# SLD_imag is POSITIVE = absorption (refl1d / calc.sld_formula convention);
+# the golden Parratt engine uses the opposite sign (BUG-029), so _refl()
+# negates it. The curves are smeared with the dQ column each file carries
+# (1-sigma), so a fit that uses that column recovers this truth.
 _BILAYER = np.array(
     [
         [0.0, 0.0, 0.0, 0.0],  # air
@@ -35,6 +39,12 @@ _BILAYER = np.array(
         [0.0, 2.07e-6, 0.02e-6, 3.0],  # Si substrate
     ]
 )
+
+
+def _refl(q: np.ndarray, layers: np.ndarray, dq: np.ndarray) -> np.ndarray:
+    engine = layers.copy()
+    engine[:, 2] = -engine[:, 2]
+    return np.asarray(parratt_refl(q, engine, resolution=dq), dtype=float)
 
 
 def _apply_counting_noise(
@@ -56,7 +66,7 @@ def write_xrr_refl(path: Path, *, seed: int, n_points: int = 500) -> None:
     q = np.linspace(0.006, 0.30, n_points)
     dq = 0.02 * q  # constant dQ/Q resolution, a typical reflectometer contract
 
-    r = parratt_refl(q, _BILAYER)
+    r = _refl(q, _BILAYER, dq)
     r_noisy, dr = _apply_counting_noise(r, rng, monitor=2.0e7, background_counts=5.0)
 
     header = [
@@ -84,11 +94,11 @@ def write_pnr_pair(path: Path, *, seed: int, n_points: int = 220) -> None:
     layers_dn = _BILAYER.copy()
     layers_dn[2, 1] -= magnetic_split
 
-    r_up = parratt_refl(q, layers_up)
-    r_dn = parratt_refl(q, layers_dn)
+    dq = 0.02 * q
+    r_up = _refl(q, layers_up, dq)
+    r_dn = _refl(q, layers_dn, dq)
     r_up_noisy, dr_up = _apply_counting_noise(r_up, rng, monitor=1.0e7, background_counts=4.0)
     r_dn_noisy, dr_dn = _apply_counting_noise(r_dn, rng, monitor=1.0e7, background_counts=4.0)
-    dq = 0.02 * q
 
     col_names = ["Q", "dQ", "R++", "dR++", "R--", "dR--"]
     units = ["A-1", "A-1", "arb. units", "arb. units", "arb. units", "arb. units"]
