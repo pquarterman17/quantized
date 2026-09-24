@@ -383,20 +383,41 @@ export function withPeakExcluded(table: PeakTable, id: string, excluded: boolean
 
 export type PeakManualPatch = Partial<Pick<PeakTableEntry, "center" | "fwhm" | "height" | "area">>;
 
+/** Why a manual peak edit is not physical, or null. Shared by the edit dialog
+ *  and the store writer, so no path can store a zero-width or negative peak.
+ *  (Removing a peak is the way to get rid of one, not editing it to zero.) */
+export function peakManualEditProblem(patch: PeakManualPatch): string | null {
+  const vals = Object.values(patch).filter((v): v is number => v !== undefined);
+  if (!vals.every(Number.isFinite)) return "Peak values must be finite numbers.";
+  if (patch.fwhm !== undefined && !(patch.fwhm > 0)) return "FWHM must be greater than zero.";
+  if (patch.height !== undefined && !(patch.height > 0)) return "Height must be greater than zero.";
+  if (patch.area !== undefined && !(patch.area > 0)) return "Area must be greater than zero.";
+  return null;
+}
+
 /** Manually revise one durable fitted-peak row. Manual numbers supersede the
- * fit-derived value, so the corresponding uncertainty is cleared and global
- * fit metrics are invalidated. Raw data and the data fingerprint are unchanged. */
+ * fit-derived value, so the uncertainty of each field that actually CHANGED is
+ * cleared and global fit metrics are invalidated. Raw data and the data
+ * fingerprint are unchanged.
+ *
+ * Area is not independent of height and FWHM: for a fixed profile shape it is
+ * height × FWHM × a shape constant. When height or FWHM changes and the area
+ * was left as it was, the area is rescaled by the same ratio so the row stays
+ * self-consistent; an area the user typed explicitly is kept as typed. */
 export function withPeakManualEdit(table: PeakTable, id: string, patch: PeakManualPatch): PeakTable {
   const index = table.peaks.findIndex((p) => p.id === id);
   if (index < 0) return table;
   const current = table.peaks[index];
-  const changed = (Object.keys(patch) as (keyof PeakManualPatch)[])
-    .some((key) => patch[key] !== undefined && patch[key] !== current[key]);
-  if (!changed) return table;
+  const differs = (key: keyof PeakManualPatch): boolean =>
+    patch[key] !== undefined && patch[key] !== current[key];
+  if (!(["center", "fwhm", "height", "area"] as const).some(differs)) return table;
   const next = { ...current, ...patch, status: "manual-edit" };
-  if ("center" in patch) next.centerErr = null;
-  if ("fwhm" in patch) next.fwhmErr = null;
-  if ("height" in patch) next.heightErr = null;
+  if (!differs("area") && (differs("height") || differs("fwhm")) && current.height !== 0 && current.fwhm !== 0) {
+    next.area = current.area * (next.height / current.height) * (next.fwhm / current.fwhm);
+  }
+  if (differs("center")) next.centerErr = null;
+  if (differs("fwhm")) next.fwhmErr = null;
+  if (differs("height")) next.heightErr = null;
   const peaks = [...table.peaks];
   peaks[index] = next;
   return {
@@ -404,6 +425,11 @@ export function withPeakManualEdit(table: PeakTable, id: string, patch: PeakManu
     peaks,
     provenance: { ...table.provenance, R2: null, rmse: null },
   };
+}
+
+/** How many rows of a table carry hand-edited values. */
+export function manualEditCount(peaks: readonly { status?: string }[]): number {
+  return peaks.filter((p) => p.status === "manual-edit").length;
 }
 
 /** Remove fitted peaks by durable id. Refuses to create an empty PeakTable:

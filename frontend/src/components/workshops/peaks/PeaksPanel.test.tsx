@@ -421,6 +421,41 @@ describe("PeaksPanel — manual durable fitted-peak edits", () => {
     );
     expect(within(screen.getByRole("table", { name: "fitted peaks" })).getByText("1.25")).toBeInTheDocument();
     expect(useApp.getState().datasets[0].peakTable?.provenance.R2).toBeNull();
+    // A simultaneous fit whose metrics were cleared by a hand edit is not an
+    // "independent fits" result, and the edited row is declared as such.
+    expect(screen.getByText(/fit metrics cleared by manual changes/)).toBeInTheDocument();
+    expect(screen.getByText(/1 edited by hand/)).toBeInTheDocument();
+    expect(screen.queryByText(/independent fits/)).toBeNull();
+  });
+
+  it("refuses a zero-width edit without touching the durable table", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue(FIT);
+    vi.mocked(askParams).mockResolvedValue({ center: 1.25, fwhm: 0, height: 5.5, area: 4.4 });
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    fireEvent.click(screen.getByRole("button", { name: /Fit all/ }));
+    const fitted = await screen.findByRole("table", { name: "fitted peaks" });
+    const before = useApp.getState().datasets[0].peakTable;
+    fireEvent.click(within(fitted).getAllByRole("row")[1]);
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Edit selected…" }));
+      await new Promise((r) => setTimeout(r, 0)); // let the dialog promise settle
+    });
+    expect(useApp.getState().datasets[0].peakTable).toBe(before);
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("keeps the fitted-row selection when a peak is excluded", async () => {
+    vi.mocked(fitMultiPeak).mockResolvedValue(FIT);
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    fireEvent.click(screen.getByRole("button", { name: /Fit all/ }));
+    const fitted = await screen.findByRole("table", { name: "fitted peaks" });
+    fireEvent.click(within(fitted).getAllByRole("row")[1]);
+    expect(screen.getByRole("button", { name: "Edit selected…" })).toBeEnabled();
+    fireEvent.click(within(fitted).getAllByRole("checkbox")[1]);
+    await waitFor(() => expect(useApp.getState().datasets[0].peakTable?.peaks[1].excluded).toBe(true));
+    expect(screen.getByRole("button", { name: "Edit selected…" })).toBeEnabled();
   });
 
   it("removes selected fitted rows without deleting or modifying the source dataset", async () => {
@@ -435,6 +470,7 @@ describe("PeaksPanel — manual durable fitted-peak edits", () => {
     await waitFor(() => expect(useApp.getState().datasets[0].peakTable?.peaks).toHaveLength(1));
     expect(useApp.getState().datasets[0].data).toEqual(DATA);
     expect(within(screen.getByRole("table", { name: "fitted peaks" })).getAllByRole("row")).toHaveLength(2);
+    expect(screen.getByText(/fit metrics cleared by manual changes/)).toBeInTheDocument();
   });
 });
 

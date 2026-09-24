@@ -21,6 +21,7 @@ import { askParams } from "../../overlays/ParamDialog";
 import { Button } from "../../primitives";
 import { reportEmit } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
+import { manualEditCount, peakManualEditProblem } from "../../../lib/peakTableFit";
 import type { FittedPeak } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
@@ -197,8 +198,9 @@ export default function PeaksPanel() {
       height: Number(values.height),
       area: Number(values.area),
     };
-    if (!Object.values(patch).every(Number.isFinite) || patch.fwhm <= 0) {
-      toast("Peak values must be finite and FWHM must be greater than zero.", "danger");
+    const problem = peakManualEditProblem(patch);
+    if (problem) {
+      toast(problem, "danger");
       return;
     }
     await editFittedPeak(entry.id, patch);
@@ -269,7 +271,12 @@ export default function PeaksPanel() {
         <div style={{ marginTop: 8 }}>
           <div className="qzk-ds-meta" style={{ ...faint, marginBottom: 4 }}>
             {fitResult.model} ·{" "}
-            {fitResult.R2 == null ? "independent fits" : `R² = ${fmtNum(fitResult.R2)}`}
+            {fitResult.R2 != null
+              ? `R² = ${fmtNum(fitResult.R2)}`
+              : peakTable?.provenance.method === "independent"
+                ? "independent fits"
+                : "fit metrics cleared by manual changes"}
+            {manualEditCount(fitResult.peaks) > 0 && ` · ${manualEditCount(fitResult.peaks)} edited by hand`}
             {fitResult.rmse != null && ` · RMSE = ${fmtNum(fitResult.rmse)}`}
             {excludedCount > 0 && ` · ${excludedCount} excluded`}
           </div>

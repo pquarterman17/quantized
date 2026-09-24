@@ -11,13 +11,29 @@
 // in store/useApp.ts, which sits AT its size-ratchet pin
 // (architecture.test.ts's STORE_PINS) with one line of headroom.
 //
-// Fit publication and inclusion review are analysis output, not edit-history
-// gestures. Manual value edits and removals are different: they are durable,
-// user-authored changes and record one undo step after proving the mutation is
-// effective (including removal of the final artifact).
+// Fit publication is analysis output, not an edit-history gesture. Everything
+// the user authors on the table is: manual value edits, removals, and include/
+// exclude toggles each record one undo step, and only after proving the
+// mutation is effective (including removal of the final artifact).
+//
+// Why exclusion is recorded too: history snapshots the whole `datasets` array,
+// so an unrecorded toggle made after a recorded edit would be silently rolled
+// back by undoing that edit. Recording it makes undo step through both, in
+// order. The same whole-array snapshot means undoing an edit also rolls back a
+// fit published on ANOTHER dataset since that edit (redo restores it); that is
+// shared with every recorded action in the app, not specific to peaks.
 
 import type { MultiFitResult, PeakTable } from "../lib/peakTable";
-import { peakDataFingerprint, peakTableFromFit, withPeakExcluded, withPeakManualEdit, withoutPeaks, xChannelIdentity, type PeakManualPatch } from "../lib/peakTableFit";
+import {
+  peakDataFingerprint,
+  peakManualEditProblem,
+  peakTableFromFit,
+  withPeakExcluded,
+  withPeakManualEdit,
+  withoutPeaks,
+  xChannelIdentity,
+  type PeakManualPatch,
+} from "../lib/peakTableFit";
 import { wavelengthFromMetadata } from "../lib/xrdWavelength";
 import { useApp } from "./useApp";
 
@@ -84,6 +100,7 @@ export function setPeakExcluded(datasetId: string, peakId: string, excluded: boo
   if (!ds?.peakTable) return;
   const next = withPeakExcluded(ds.peakTable, peakId, excluded);
   if (next === ds.peakTable) return;
+  useApp.getState().recordHistory(excluded ? "exclude fitted peak" : "include fitted peak");
   publishPeakTable(datasetId, next);
 }
 
@@ -91,6 +108,7 @@ export function setPeakExcluded(datasetId: string, peakId: string, excluded: boo
 export function editPeak(datasetId: string, peakId: string, patch: PeakManualPatch): PeakTable | null {
   const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
   if (!ds?.peakTable) return null;
+  if (peakManualEditProblem(patch)) return ds.peakTable;
   const next = withPeakManualEdit(ds.peakTable, peakId, patch);
   if (next === ds.peakTable) return ds.peakTable;
   useApp.getState().recordHistory("edit fitted peak");

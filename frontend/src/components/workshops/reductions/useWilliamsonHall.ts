@@ -21,7 +21,7 @@
 import { useMemo, useState } from "react";
 
 import { williamsonHall } from "../../../lib/api/reductions";
-import { includedPeaks, peakTableMatchesData, peakTableXIsDegrees } from "../../../lib/peakTableFit";
+import { includedPeaks, manualEditCount, peakTableMatchesData, peakTableXIsDegrees } from "../../../lib/peakTableFit";
 import type { WilliamsonHallResult } from "../../../lib/reductionTypes";
 import { useActiveDataset } from "../../../store/useApp";
 
@@ -161,9 +161,11 @@ export function useWilliamsonHall(): WilliamsonHallState {
     setResult(null);
     const { datasetName, model, method } = table.provenance;
     const excluded = table.peaks.length - included.length;
+    const edited = manualEditCount(included);
     setFittedSource(
       `${included.length} fitted peak${included.length === 1 ? "" : "s"} from ${datasetName || "the active dataset"}` +
-        ` · ${model} (${method})${excluded > 0 ? ` · ${excluded} excluded` : ""}`,
+        ` · ${model} (${method})${excluded > 0 ? ` · ${excluded} excluded` : ""}` +
+        (edited > 0 ? ` · ${edited} edited by hand` : ""),
     );
   }
 

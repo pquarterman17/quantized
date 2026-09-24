@@ -236,3 +236,82 @@ describe("manual durable peak edits", () => {
     expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
   });
 });
+
+describe("manual edit consistency and validation (review round 2)", () => {
+  function withErrs(): string {
+    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    const t = useApp.getState().datasets[0].peakTable!;
+    // Every current producer writes null uncertainties; give them values so
+    // the per-field clearing below is actually observable.
+    publishPeakTable("d1", {
+      ...t,
+      peaks: t.peaks.map((p) => ({ ...p, centerErr: 0.01, fwhmErr: 0.02, heightErr: 3 })),
+    });
+    useApp.setState({ history: [], future: [] });
+    return t.peaks[0].id;
+  }
+
+  it("clears only the uncertainty of each field that changed", () => {
+    const id = withErrs();
+    const p = useApp.getState().datasets[0].peakTable!.peaks[0];
+    const next = editPeak("d1", id, { center: p.center, fwhm: p.fwhm, height: p.height, area: 25 });
+    expect(next?.peaks[0]).toEqual(expect.objectContaining({
+      area: 25, centerErr: 0.01, fwhmErr: 0.02, heightErr: 3,
+    }));
+    const moved = editPeak("d1", id, { center: 30.4, fwhm: p.fwhm, height: p.height, area: 25 });
+    expect(moved?.peaks[0]).toEqual(expect.objectContaining({
+      centerErr: null, fwhmErr: 0.02, heightErr: 3,
+    }));
+  });
+
+  it("rescales an untouched area when height or FWHM changes, keeping the shape", () => {
+    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    const p = useApp.getState().datasets[0].peakTable!.peaks[0]; // h 100, w 0.2, area 21
+    const next = editPeak("d1", p.id, { center: p.center, fwhm: 0.4, height: 50, area: p.area });
+    expect(next?.peaks[0].area).toBeCloseTo(21 * (50 / 100) * (0.4 / 0.2));
+  });
+
+  it("keeps an area the user typed explicitly", () => {
+    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    const p = useApp.getState().datasets[0].peakTable!.peaks[0];
+    const next = editPeak("d1", p.id, { center: p.center, fwhm: 0.4, height: 50, area: 7 });
+    expect(next?.peaks[0].area).toBe(7);
+  });
+
+  it.each([
+    [{ fwhm: 0 }],
+    [{ height: -1 }],
+    [{ area: 0 }],
+    [{ center: Number.NaN }],
+  ])("refuses a non-physical edit %o without writing or recording history", (patch) => {
+    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    const before = useApp.getState().datasets[0].peakTable!;
+    expect(editPeak("d1", before.peaks[0].id, patch)).toBe(before);
+    expect(useApp.getState().datasets[0].peakTable).toBe(before);
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("records exclusion toggles so undo steps back through edits and exclusions in order", () => {
+    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    const [a, b] = useApp.getState().datasets[0].peakTable!.peaks;
+    editPeak("d1", a.id, { center: 30.4 });
+    setPeakExcluded("d1", b.id, true);
+    expect(useApp.getState().history.map((h) => h.label)).toEqual(["edit fitted peak", "exclude fitted peak"]);
+
+    useApp.getState().undo(); // the exclusion only
+    let t = useApp.getState().datasets[0].peakTable!;
+    expect(t.peaks[1].excluded).toBe(false);
+    expect(t.peaks[0].center).toBe(30.4);
+
+    useApp.getState().undo(); // then the edit
+    t = useApp.getState().datasets[0].peakTable!;
+    expect(t.peaks[0].center).toBe(30.1);
+  });
+
+  it("records one history step for a multi-row removal", () => {
+    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    const ids = new Set(useApp.getState().datasets[0].peakTable!.peaks.map((p) => p.id));
+    removePeaks("d1", ids);
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+});
