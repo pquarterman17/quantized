@@ -7,11 +7,14 @@ spin asymmetry. All math lives in calc; this only validates + serializes.
 
 from __future__ import annotations
 
-from typing import Any
+import math
+from typing import Annotated, Any, Literal
 
-from fastapi import APIRouter
-from pydantic import BaseModel
+import numpy as np
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field, model_validator
 
+from quantized.calc.pawley import pawley_refine
 from quantized.calc.reductions import (
     fft_thickness,
     reflectivity_fft,
@@ -108,3 +111,122 @@ class SpinAsymmetryRequest(BaseModel):
 def spin_asymmetry_route(req: SpinAsymmetryRequest) -> dict[str, Any]:
     """Neutron spin asymmetry (R++ - R--)/(R++ + R--) with propagated error."""
     return call_calc(spin_asymmetry, req.r_pp, req.r_mm, req.dr_pp, req.dr_mm)
+
+
+# Work caps. A refinement runs on the order of 100 grid-search trials, and each
+# trial enumerates reflections (~hkl_max³: 0.19 s at 20, 0.6 s at 30) and then
+# solves a points × reflections least-squares problem (0.25 s at 2M cells,
+# 0.9 s at 10M; measured 2026-09-24). Past these the request would hold a
+# worker for many minutes, so it is refused with advice instead.
+PAWLEY_HKL_LIMIT = 20
+PAWLEY_MAX_POINTS = 50_000
+PAWLEY_MAX_REFLECTIONS = 500
+PAWLEY_MAX_DESIGN_SIZE = 2_000_000
+
+FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
+Length = Annotated[float, Field(gt=0, le=1000, allow_inf_nan=False)]
+Angle = Annotated[float, Field(gt=0, lt=180, allow_inf_nan=False)]
+
+
+class PawleyRequest(BaseModel):
+    two_theta: list[FiniteFloat] = Field(max_length=PAWLEY_MAX_POINTS)
+    intensity: list[FiniteFloat] = Field(max_length=PAWLEY_MAX_POINTS)
+    a: Length
+    b: Length
+    c: Length
+    # Bravais centering. "R" is the hexagonal-axes (obverse) rule of
+    # calc.crystallography.plane_spacings, not a rhombohedral-axes cell.
+    symmetry: Literal["P", "F", "I", "A", "B", "C", "R"] = "P"
+    alpha: Angle = 90.0
+    beta: Angle = 90.0
+    gamma: Angle = 90.0
+    # Which axes move together; None keeps the engine's equality inference.
+    tie: Literal["abc", "ab", "none"] | None = None
+    # None → derived from the cell and max_two_theta (see _auto_hkl_max).
+    hkl_max: int | None = Field(default=None, ge=1, le=PAWLEY_HKL_LIMIT)
+    wavelength: float = Field(default=1.5406, gt=0, le=10, allow_inf_nan=False)
+    min_two_theta: float = Field(default=0.0, ge=0, lt=180, allow_inf_nan=False)
+    max_two_theta: float = Field(default=120.0, gt=0, le=180, allow_inf_nan=False)
+    profile_fwhm: float = Field(default=0.05, gt=0, le=20, allow_inf_nan=False)
+    refine_cell: bool = True
+    max_iter: int = Field(default=20, ge=1, le=200)
+
+    @model_validator(mode="after")
+    def _physical_cell(self) -> PawleyRequest:
+        ca, cb, cg = (math.cos(math.radians(v)) for v in (self.alpha, self.beta, self.gamma))
+        if 1 - ca * ca - cb * cb - cg * cg + 2 * ca * cb * cg <= 0:
+            raise ValueError("alpha, beta and gamma do not describe a real (positive-volume) cell")
+        if self.min_two_theta >= self.max_two_theta:
+            raise ValueError("min_two_theta must be below max_two_theta")
+        return self
+
+
+def _auto_hkl_max(req: PawleyRequest) -> int:
+    """Smallest index bound that enumerates every reflection up to max 2θ.
+
+    ``|h| = |r*·a| ≤ a/d_min`` holds for any cell, with ``d_min = λ/(2 sin θ_max)``;
+    5 % headroom covers the grid search growing the cell. Tied axes take a's
+    value, as the engine does, so a stale b/c cannot inflate the bound.
+    """
+    b = req.a if req.tie in ("abc", "ab") else req.b
+    c = req.a if req.tie == "abc" else req.c
+    d_min = req.wavelength / (2.0 * math.sin(math.radians(req.max_two_theta / 2.0)))
+    return max(1, math.ceil(1.05 * max(req.a, b, c) / d_min))
+
+
+@router.post("/pawley")
+def pawley_route(req: PawleyRequest) -> dict[str, Any]:
+    """Whole-pattern Pawley unit-cell refinement for powder XRD."""
+    hkl_max = req.hkl_max if req.hkl_max is not None else _auto_hkl_max(req)
+    if hkl_max > PAWLEY_HKL_LIMIT:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"This cell needs Miller indices up to {hkl_max} to reach "
+                f"{req.max_two_theta:g} deg 2theta (limit {PAWLEY_HKL_LIMIT}); "
+                "refine over a narrower 2theta range."
+            ),
+        )
+    phase: dict[str, Any] = {
+        "a": req.a,
+        "b": req.b,
+        "c": req.c,
+        "alpha": req.alpha,
+        "beta": req.beta,
+        "gamma": req.gamma,
+        "symmetry": req.symmetry,
+        "hklMax": hkl_max,
+    }
+    if req.tie is not None:
+        phase["tie"] = req.tie
+    out = call_calc(
+        pawley_refine,
+        req.two_theta,
+        req.intensity,
+        phase,
+        wavelength=req.wavelength,
+        min_two_theta=req.min_two_theta,
+        max_two_theta=req.max_two_theta,
+        profile_fwhm=req.profile_fwhm,
+        refine_cell=req.refine_cell,
+        max_iter=req.max_iter,
+        max_reflections=PAWLEY_MAX_REFLECTIONS,
+        max_design_size=PAWLEY_MAX_DESIGN_SIZE,
+    )
+    # Pure calc returns ndarrays + a NaN scale placeholder; normalize only at
+    # the transport boundary so the calc contract stays untouched.
+    return {
+        **out,
+        "hkl_max": hkl_max,
+        "scale": None,
+        "rwp": _finite_or_none(out["rwp"]),
+        "rwp_initial": _finite_or_none(out["rwp_initial"]),
+        "rwp_background": _finite_or_none(out["rwp_background"]),
+        "background": np.asarray(out["background"], dtype=float).tolist(),
+        "model": np.asarray(out["model"], dtype=float).tolist(),
+        "residual": np.asarray(out["residual"], dtype=float).tolist(),
+    }
+
+
+def _finite_or_none(v: float) -> float | None:
+    return v if math.isfinite(float(v)) else None

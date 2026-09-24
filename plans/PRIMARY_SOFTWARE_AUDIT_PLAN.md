@@ -2686,16 +2686,43 @@ physics, which already existed and was already golden. The map:
   (asserts the API call carries only the included peaks), "adopts the
   wavelength the pattern was measured at", "names the provenance of the loaded
   rows", "drops the provenance line the moment a row is edited by hand".
-- [ ] Expose the Pawley engine. `calc/pawley.py::pawley_refine` exists and is
-  tested (`tests/test_calc_pawley.py`) but is reachable from NOWHERE: no route
-  in `routes/`, no `lib/api` wrapper, no UI (measured 2026-09-14: a case-
-  insensitive grep for "pawley" over `src/quantized/routes/` returns nothing,
-  and over `frontend/src` returns exactly one hit — a doc comment in
-  `lib/peakTableFit.ts` naming a future entry point, added by this item).
-  It is also NOT a peak-table consumer — it refines a unit cell
-  against the WHOLE pattern (`two_theta`, `intensity`) plus a `phase_info`
-  cell, so the missing piece is a route + phase-cell entry point, not the
-  wiring this item shipped.
+- [x] Expose the Pawley engine. **Implemented 2026-09-23 in PR #403;
+  hardened 2026-09-24 after review.**
+  `calc/pawley.py::pawley_refine` is reachable through
+  `POST /api/reductions/pawley`, a typed frontend wrapper, and the Reductions
+  workshop under Analyze → XRD & reflectivity.
+  - **Input:** the active dataset's x axis must be a 2θ scan in degrees:
+    the fitted-peak table's rule (`xAxisIsTwoThetaDegrees`), tightened to
+    refuse labels naming another angle (phi, omega, chi, psi), 2-D datasets,
+    and x outside 0–180°. The user picks the intensity channel, the starting
+    cell, an explicit axis tie (cubic / a = b / independent), the centering
+    (R is the hexagonal-axes rule), the wavelength (read from the file when it
+    records one), the fixed profile FWHM, and whether to refine. Empty or
+    out-of-range fields disable Refine with the reason shown, using the
+    route's own bounds; the route re-checks every field (422).
+  - **Scope and cost:** only reflections inside the measured 2θ window are
+    fit and counted. `hkl_max` is derived from the cell and window, capped at
+    20; more than 500 reflections in range, or more than 2M points ×
+    reflections, is refused with advice to narrow the range (each of the ~100
+    grid-search trials solves that least-squares problem). No reflections in
+    range, or no more points than parameters, is a 422 rather than a
+    fake-perfect R_wp.
+  - **Output:** refined a/b/c to 4 decimals, α/β/γ shown as fixed (the
+    engine never refines angles; they are inputs only), and R_wp for the fit,
+    the starting cell and the linear background alone, as percentages, with
+    the in-range reflection count. A warning is shown beside the result (not
+    in place of it) and saved with it when R_wp exceeds 0.6 × the
+    background-only R_wp, when the fit ended worse than its start, or when
+    the search ran out of iterations. The derived Library dataset keeps the
+    exact fitted rows (observed, model, background, residual), is stamped as
+    a 2θ/deg XRD powder pattern, and records the full request, the warning
+    and the per-reflection table under `metadata.pawley`.
+  - **Known limits:** the engine is a local grid search with a small capture
+    radius that depends on peak width (measured: well under 1 % in some
+    cases), and from further out it can settle on a wrong minimum; the 0.6
+    warning ratio is a heuristic measured on synthetic Si; no uncertainties
+    are reported; glide and screw absences are not applied; the fit runs
+    synchronously on the request thread rather than through the job queue.
 - [x] Durable peak identity, uncertainty, exclusion, model, and provenance —
   **the columns; the uncertainty NUMBERS are the next box.** **(2026-09-14)**
   `lib/peakTable.ts` defines `PeakTable`: per-peak durable `id`,

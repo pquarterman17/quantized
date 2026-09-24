@@ -32,11 +32,15 @@ adapter.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from typing import Any, TypeVar
 
 import numpy as np
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 
 _T = TypeVar("_T")
 
@@ -77,3 +81,28 @@ def call_calc(fn: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
         return fn(*args, **kwargs)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+def _json_safe(value: Any) -> Any:
+    """Replace non-finite floats with ``None``, recursively."""
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, list):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    return value
+
+
+async def validation_error_handler(request: Request, exc: Exception) -> JSONResponse:
+    """FastAPI's default 422 body, minus the crash.
+
+    The default handler echoes each error's ``input`` back, and a request body
+    carrying a bare ``NaN``/``Infinity`` token (Python's ``json.dumps`` writes
+    them) then fails ``allow_nan=False`` serialization — a 500 in place of the
+    422. Same shape as the default; non-finite inputs are echoed as ``null``.
+    """
+    assert isinstance(exc, RequestValidationError)
+    return JSONResponse(
+        status_code=422, content={"detail": _json_safe(jsonable_encoder(exc.errors()))}
+    )

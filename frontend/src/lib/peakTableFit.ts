@@ -180,12 +180,23 @@ export function peakTableMatchesData(table: PeakTable, ds: Dataset): boolean {
 const DEGREE_UNITS = new Set(["deg", "°", "degree", "degrees"]);
 const TWO_THETA_LABEL = /2\s*-?\s*(theta|θ)|two[_ -]?theta/i;
 
+/** The rule itself, factored out so every consumer that needs to know "is
+ *  THIS axis 2-theta in degrees" shares one predicate instead of re-deriving
+ *  it — `peakTableXIsDegrees` below delegates to it (no behaviour change),
+ *  and `usePawley` (the Reductions workshop) calls it directly over
+ *  `xChannelIdentity(ds.data, null)` rather than a `PeakTable`'s recorded
+ *  provenance, since Pawley refines straight off the dataset's own x axis
+ *  with no fitted-peak table involved. */
+export function xAxisIsTwoThetaDegrees(x: { xLabel: string; xUnit: string }): boolean {
+  const u = x.xUnit.trim().toLowerCase();
+  return u === "" ? TWO_THETA_LABEL.test(x.xLabel) : DEGREE_UNITS.has(u);
+}
+
 /** Is the axis this table was fit on 2-theta in DEGREES — i.e. may a consumer
  *  that reads `center` as 2-theta (Williamson-Hall) use it? The exact rule is
  *  in the block comment above. */
 export function peakTableXIsDegrees(table: PeakTable): boolean {
-  const u = table.provenance.xUnit.trim().toLowerCase();
-  return u === "" ? TWO_THETA_LABEL.test(table.provenance.xLabel) : DEGREE_UNITS.has(u);
+  return xAxisIsTwoThetaDegrees({ xLabel: table.provenance.xLabel, xUnit: table.provenance.xUnit });
 }
 
 /** The x channel's label/unit as the user sees it, for

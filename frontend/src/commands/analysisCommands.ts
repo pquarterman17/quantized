@@ -111,6 +111,7 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
     },
     // Reductions (MAIN_PLAN #11): one ToolWindow, pre-set to the picked method.
     { id: "reductions-wh", group: "Analyze", section: "XRD & reflectivity", label: "Williamson-Hall…", description: "Estimate crystallite size and microstrain from diffraction peak widths across 2θ.", keywords: "crystallite size microstrain broadening williamson hall xrd", run: () => s().openReductions("williamson-hall") },
+    { id: "reductions-pawley", group: "Analyze", section: "XRD & reflectivity", label: "Pawley refinement…", description: "Refine a powder XRD unit cell from the whole pattern.", keywords: "pawley unit cell powder xrd", run: () => s().openReductions("pawley") },
     { id: "reductions-fft", group: "Analyze", section: "Transform & signal", label: "Film thickness (FFT)…", description: "Estimate film thickness from Kiessig-fringe frequency using a Fourier transform.", keywords: "fft kiessig fringe thickness frequency reflectivity", run: () => s().openReductions("fft-thickness") },
     { id: "reductions-reflfft", group: "Analyze", section: "Transform & signal", label: "Reflectivity FFT…", description: "Extract Kiessig thicknesses and superlattice harmonics from X-ray or neutron reflectivity.", keywords: "fft superlattice harmonic thickness xrr nr", run: () => s().openReductions("reflectivity-fft") },
     {

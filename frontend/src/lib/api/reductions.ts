@@ -5,7 +5,7 @@
 // directly from this path.
 
 import { postJSON } from "./http";
-import type { FftThicknessResult, ReflectivityFftResult, WilliamsonHallResult } from "../reductionTypes";
+import type { FftThicknessResult, PawleyResult, ReflectivityFftResult, WilliamsonHallResult } from "../reductionTypes";
 
 /** Crystallite size + microstrain from XRD peak positions and widths. */
 export function williamsonHall(body: {
@@ -45,4 +45,28 @@ export function reflectivityFft(body: {
   peak_prominence_threshold?: number;
 }): Promise<ReflectivityFftResult> {
   return postJSON("/api/reductions/reflectivity-fft", body);
+}
+
+
+/** Whole-pattern Pawley unit-cell refinement for powder XRD. */
+export function pawleyRefine(body: {
+  two_theta: number[];
+  intensity: number[];
+  a: number;
+  b: number;
+  c: number;
+  symmetry?: "P" | "F" | "I" | "A" | "B" | "C" | "R";
+  alpha?: number;
+  beta?: number;
+  gamma?: number;
+  tie?: "abc" | "ab" | "none";
+  hkl_max?: number;
+  wavelength?: number;
+  min_two_theta?: number;
+  max_two_theta?: number;
+  profile_fwhm?: number;
+  refine_cell?: boolean;
+  max_iter?: number;
+}): Promise<PawleyResult> {
+  return postJSON("/api/reductions/pawley", body);
 }
