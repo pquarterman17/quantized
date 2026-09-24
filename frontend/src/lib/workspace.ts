@@ -53,6 +53,10 @@ export const WORKSPACE_FORMAT = "quantized-workspace";
 // ported verbatim from PR A1) — see that call site below for the exact per-version behavior, including
 // the v1 `group`-string case (deliberate — see workspace.workbooks.test.ts for the pinned test). Older
 // docs still load — migrated on parse with safe defaults.
+// Additive-optional per-dataset records since v4, no bump needed (absent = none): `peakTable`
+// (audit P2.1; own schema `version` + sanitizer, lib/peakTable.ts) and `reflFits` (P2.2 slice 3;
+// passed through verbatim, each record carrying its own schema `version` and validated on read by
+// workshops/reflectivity/reflFitRecord.ts's `decodeRecord`, where an unknown version is skipped).
 export const WORKSPACE_VERSION = 4;
 
 /** The persistable slice of app state (input to serialize). The store's AppState

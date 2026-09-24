@@ -1797,6 +1797,8 @@ const DATASET_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   workbookId: "Library organization only, not channel-indexed",
   peakTable:
     "fitted-peak records in the dataset's own x/y UNITS (2-theta, FWHM, intensity) plus a provenance record -- it stores no channel index at all, so a column removal cannot leave it pointing at the wrong one",
+  reflFits:
+    "a HISTORY of reflectivity fits (P2.2 slice 3): its column indices are hints recorded beside each column's LABEL, and every reader re-resolves them by label and fails closed on a mismatch (workshops/reflectivity/reflFitRestore.ts's resolveBinding) -- remapping would rewrite what a past fit ran on, and nothing reads an index without that check",
 };
 
 const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {

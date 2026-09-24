@@ -1,18 +1,22 @@
 // Reflectivity workshop — Fit mode body: data binding, parameter table,
 // Run/Cancel, the error line and the results with their follow-up actions.
 // Thin: all state lives in useReflFit (owned by ReflectivityPanel so it
-// survives a Model ⇄ Fit switch).
+// survives a Model ⇄ Fit switch). Slice 3: the history picker, and a saved
+// fit (SavedFit) whenever the picked fit is not the one just run.
 
 import { Button } from "../../primitives";
 import FitDataBinding from "./FitDataBinding";
 import FitParamTable from "./FitParamTable";
 import FitResults from "./FitResults";
+import SavedFit, { FitHistoryPicker } from "./SavedFit";
 import type { ReflFitState } from "./useReflFit";
 
 const SECTION = { marginTop: 12, marginBottom: 6 } as const;
 
 export default function ReflFitView({ fit }: { fit: ReflFitState }) {
   const lambdaMissing = fit.settings.xKind === "twotheta" && fit.lambda == null;
+  const h = fit.history;
+  const live = fit.result != null && (h.pickedId === null || h.pickedId === fit.liveRecord?.id);
   return (
     <div>
       <div className="qzk-field-lbl" style={SECTION}>Data</div>
@@ -41,7 +45,10 @@ export default function ReflFitView({ fit }: { fit: ReflFitState }) {
         </div>
       )}
 
-      {fit.result && (
+      <FitHistoryPicker fit={fit} showingLive={live} />
+      {!live && <SavedFit fit={fit} />}
+
+      {live && fit.result && (
         <>
           <div className="qzk-field-lbl" style={SECTION}>Result</div>
           <FitResults result={fit.result} />
@@ -55,6 +62,11 @@ export default function ReflFitView({ fit }: { fit: ReflFitState }) {
             <Button size="sm" onClick={fit.openLogPlot}>
               Open log-Y plot
             </Button>
+            {fit.liveRecord && (
+              <Button size="sm" disabled={h.reporting} onClick={() => fit.liveRecord && void h.addToReport(fit.liveRecord)}>
+                Add to report
+              </Button>
+            )}
           </div>
           {fit.applyBlocked && (
             <div className="qzk-ds-meta qzk-msg" role="note" style={{ marginTop: 6, color: "var(--warn)" }}>

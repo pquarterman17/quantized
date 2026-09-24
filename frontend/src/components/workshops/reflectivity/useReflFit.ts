@@ -5,6 +5,8 @@
 // curves / SLD profiles to the library, and writes fitted values back.
 // The rules (parameter names, bounds, channel building) live in the pure
 // reflFitModel.ts / reflFitData.ts; the fit itself lives in calc/refl_fit.py.
+// Slice 3: every finished fit is stored as a durable record on its datasets
+// (reflFitRecord.ts); the saved-fit half lives in useReflFitHistory.ts.
 //
 // Store access is by selector only — no imperative store snapshot reads (the
 // getState file-count ratchet in architecture.test.ts counts this file if it
@@ -15,7 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { reflFit, type ReflFitResult } from "../../../lib/api/reflectivity";
 import { defaultPlotView } from "../../../lib/plotview";
 import { droppedRows } from "../../../lib/rowstate";
-import type { DataStruct, Dataset, FitOverlay, SldPreset } from "../../../lib/types";
+import type { Dataset, FitOverlay, SldPreset } from "../../../lib/types";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 import {
   alignToRows,
@@ -31,6 +33,10 @@ import {
   type FitDataSettings,
   type Weighting,
 } from "./reflFitData";
+import { channelDigest, recordGone, recordId, savedResult, type ReflFitRecord } from "./reflFitRecord";
+import { curveDatasets, liveCurves, savedCurves } from "./reflFitCurves";
+import type { RestoredSetup } from "./reflFitRestore";
+import { useReflFitHistory, type ReflFitHistory } from "./useReflFitHistory";
 import {
   applyBlockedReason,
   applyResults,
@@ -54,6 +60,7 @@ export interface ReflModelHandle {
   presets: SldPreset[];
   radiation: Radiation;
   replaceLayers: (layers: ModelLayer[]) => void;
+  setRadiation: (radiation: Radiation) => void;
 }
 
 export interface ReflFitState {
@@ -67,6 +74,13 @@ export interface ReflFitState {
   busy: boolean;
   error: string | null;
   result: ReflFitResult | null;
+  /** The stored record of `result`. Null when there is no result, when no
+   *  record could be stored (every dataset of the fit was deleted while it
+   *  ran), and after an undo removed the record — the live result is then
+   *  cleared too, and the view falls back to the newest stored fit. */
+  liveRecord: ReflFitRecord | null;
+  /** The bound dataset's saved fits and what they offer. */
+  history: ReflFitHistory;
   /** Why "Apply to model" is unavailable (the stack or radiation changed
    *  since the fit), or null. */
   applyBlocked: string | null;
@@ -88,10 +102,8 @@ function initialChannels(ds: Dataset | undefined): ChannelBinding[] {
   return ds ? defaultChannels(ds) : [];
 }
 
-let _fitCounter = 0;
-
 export function useReflFit(model: ReflModelHandle): ReflFitState {
-  const { layers, presets, radiation, replaceLayers } = model;
+  const { layers, presets, radiation, replaceLayers, setRadiation } = model;
   const datasets = useApp((s) => s.datasets);
   const activeId = useApp((s) => s.activeId);
   const resolveDataset = useApp((s) => s.resolveDataset);
@@ -112,6 +124,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ReflFitResult | null>(null);
+  const [liveRecord, setLiveRecord] = useState<ReflFitRecord | null>(null);
   // The stack + radiation the result's positional names refer to.
   const [basis, setBasis] = useState<{ layers: ModelLayer[]; radiation: Radiation } | null>(null);
   const [curveIds, setCurveIds] = useState<string[]>([]);
@@ -140,6 +153,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
 
   function clearResult(): void {
     setResult(null);
+    setLiveRecord(null);
     setBasis(null);
     setCurveIds([]);
     setError(null);
@@ -251,6 +265,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     }
     const id = ++runIdRef.current;
     const fitBasis = { layers, radiation };
+    const sentParams = toRequestParams(params);
     const controller = new AbortController();
     abortRef.current = controller;
     setBusy(true);
@@ -258,22 +273,48 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     try {
       const built: BuiltChannel[] = [];
       const sizes: number[] = [];
+      const saved: ReflFitRecord["request"]["channels"] = [];
       for (const [i, b] of channels.entries()) {
         const ds = await resolveDataset(b.datasetId);
         if (!ds) throw new Error(`channel ${i + 1}: its dataset is no longer in the library`);
-        const label = `${ds.name} · ${ds.data.labels[b.rCol] ?? "R"}${b.spin === "none" ? "" : ` (${b.spin})`}`;
+        const labels = ds.data.labels;
+        const label = `${ds.name} · ${labels[b.rCol] ?? "R"}${b.spin === "none" ? "" : ` (${b.spin})`}`;
         const lam = settings.xKind === "twotheta" ? channelLambda(settings, ds.data) : null;
-        built.push(buildChannel(ds.data, droppedRows(ds), b, settings, weighting, lam, label));
+        const one = buildChannel(ds.data, droppedRows(ds), b, settings, weighting, lam, label);
+        built.push(one);
         sizes.push(ds.data.time.length);
+        const colLabel = (c: number | null): string | null => (c == null ? null : (labels[c] ?? ""));
+        saved.push({
+          ...b,
+          datasetName: ds.name,
+          rLabel: labels[b.rCol] ?? "",
+          drLabel: colLabel(b.drCol),
+          dqLabel: colLabel(b.dqCol),
+          lambda: lam,
+          digest: channelDigest(one.channel),
+        });
       }
       if (controller.signal.aborted) return;
       const res = await reflFit(
-        { parameters: toRequestParams(params), channels: built.map((b) => b.channel), weighting },
+        { parameters: sentParams, channels: built.map((b) => b.channel), weighting },
         controller.signal,
       );
       if (id !== runIdRef.current) return;
       setResult(res);
       setBasis(fitBasis);
+      // Stored FIRST, so no render ever sees a live record the store lacks;
+      // `publish` numbers it from the library as it is now.
+      const stored = history.publish({
+        version: 1,
+        id: recordId(nextDatasetId),
+        seq: 0,
+        fittedAt: new Date().toISOString(),
+        request: { parameters: sentParams, channels: saved, settings: { ...settings }, weighting },
+        model: { layers: fitBasis.layers, radiation: fitBasis.radiation },
+        result: savedResult(res),
+        curves: savedCurves(res),
+      });
+      setLiveRecord(stored);
       const first = res.curves[0];
       if (first) {
         const sent = { q: built[0].channel.q, rows: built[0].rows };
@@ -298,35 +339,47 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     abortRef.current?.abort();
   }
 
+  /** "Restore fit setup": the saved model, parameter settings and bindings. */
+  function loadSetup(setup: RestoredSetup): void {
+    invalidateRun();
+    clearResult();
+    replaceLayers(setup.layers);
+    setRadiation(setup.radiation);
+    setOverrides(setup.overrides);
+    setGlobals(setup.globals);
+    setChannels(setup.channels);
+    setSettingsState(setup.settings);
+  }
+
+  const history = useReflFitHistory({
+    hostId: channels[0]?.datasetId ?? null,
+    datasets,
+    model,
+    loadSetup,
+    setGlobals,
+    setError,
+  });
+
+  // An undo that removed the live fit's record leaves nothing for the live
+  // result to be the record OF: drop it, so the view falls back to the newest
+  // stored fit and "Add fit curves" can never name a record that is gone.
+  const liveGone = liveRecord != null && recordGone(liveRecord, datasets);
+  useEffect(() => {
+    if (liveGone) clearResult();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clearResult reads the latest overlay; re-run only on the flag
+  }, [liveGone]);
+
   function addCurves(): string[] {
     if (!result) return [];
     if (curveIds.length) return curveIds;
-    const n = ++_fitCounter;
-    const meta = { source: "reflectivity-fit", weighting: result.weighting, radiation };
-    const ids: string[] = [];
-    const add = (name: string, data: DataStruct): void => {
+    // Named for, placed with, and pointing back at the fit's record
+    // (reflFitCurves.ts); a fit whose record could not be stored (its datasets
+    // deleted mid-fit) names them generically.
+    const ids = curveDatasets(liveCurves(result), liveRecord, datasets, { weighting: result.weighting, radiation }).map((c) => {
       const id = nextDatasetId();
-      addDataset({ id, name, data });
-      ids.push(id);
-    };
-    for (const c of result.curves) {
-      add(`Refl fit ${n} · ${c.label}`, {
-        time: c.q,
-        values: c.q.map((_, k) => [c.r[k], c.model[k] ?? Number.NaN]),
-        labels: ["R", "R fit"],
-        units: ["", ""],
-        metadata: { ...meta, spin: c.spin },
-      });
-    }
-    for (const p of result.sld_profiles) {
-      add(`Refl fit ${n} · SLD${p.spin ? ` (${p.spin})` : ""}`, {
-        time: p.z,
-        values: p.sld.map((v) => [v ?? Number.NaN]),
-        labels: ["SLD"],
-        units: ["Å⁻²"],
-        metadata: { ...meta, spin: p.spin },
-      });
-    }
+      addDataset({ id, name: c.name, data: c.data, ...c.placement });
+      return id;
+    });
     setCurveIds(ids);
     setStatus(`added ${ids.length} reflectivity-fit datasets`);
     return ids;
@@ -364,6 +417,8 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     busy,
     error,
     result,
+    liveRecord,
+    history,
     applyBlocked,
     curvesAdded: curveIds.length > 0,
     selectDataset,

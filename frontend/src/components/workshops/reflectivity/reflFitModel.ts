@@ -13,7 +13,7 @@
 // `isld` is POSITIVE = absorption everywhere (presets' `sldImag`, the route,
 // the fit); the backend converts to the Parratt engine's sign (BUG-029).
 
-import type { ReflFitParameter, ReflFitParamResult, ReflFitResult } from "../../../lib/api/reflectivity";
+import type { ReflFitParamResult, ReflFitResult } from "../../../lib/api/reflectivity";
 import type { SldPreset } from "../../../lib/types";
 import type { ModelLayer, Radiation } from "./useReflectivity";
 
@@ -116,6 +116,16 @@ export function defaultBounds(field: LayerField | GlobalField, value: number): [
   }
 }
 
+/** Whether a parameter varies before the user says otherwise: only the
+ *  background. Left fixed, an unmodelled background floor is absorbed by the
+ *  layer parameters instead — measured in slice-2 verification: substrate
+ *  roughness 1.49 Å against a true 3 Å, reduced χ² 1.34 against 1.01. Its
+ *  default bounds (0..1e-4, `defaultBounds`) contain the default value 0.
+ *  Scale stays fixed: it trades off against every SLD. */
+export function defaultVary(field: LayerField | GlobalField): boolean {
+  return field === "background";
+}
+
 function row(
   name: string,
   layer: number | null,
@@ -129,7 +139,7 @@ function row(
     layer,
     field,
     value,
-    vary: over?.vary ?? false,
+    vary: over?.vary ?? defaultVary(field),
     min: over?.min ?? lo,
     max: over?.max ?? hi,
     tie: over?.tie ?? "",
@@ -176,8 +186,19 @@ export function validateRows(rows: FitParamRow[]): string | null {
   return null;
 }
 
+/** One request parameter with every field explicit — assignable to the
+ *  wire's `ReflFitParameter`, and what a saved fit records it sent. */
+export interface RequestParam {
+  name: string;
+  value: number;
+  vary: boolean;
+  min: number;
+  max: number;
+  tie: string | null;
+}
+
 /** Rows → the request's `parameters`. */
-export function toRequestParams(rows: FitParamRow[]): ReflFitParameter[] {
+export function toRequestParams(rows: FitParamRow[]): RequestParam[] {
   return rows.map((r) => ({
     name: r.name,
     value: r.value,

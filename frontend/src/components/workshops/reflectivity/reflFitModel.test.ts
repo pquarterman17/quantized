@@ -71,7 +71,22 @@ describe("buildParamRows", () => {
     expect(get("L1.isld").value).toBe(5e-7);
     expect(get("L1.thickness").value).toBe(200);
     expect(get("scale").value).toBe(1);
-    expect(rows.every((r) => !r.vary && r.tie === "")).toBe(true);
+    expect(rows.every((r) => r.tie === "")).toBe(true);
+    // Only the background varies by default (see `defaultVary`).
+    expect(rows.filter((r) => r.vary).map((r) => r.name)).toEqual(["background"]);
+  });
+
+  it("varies the background by default inside its default bounds, and keeps scale fixed", () => {
+    const rows = buildParamRows(resolved(), NO_OVERRIDES, GLOBALS, false);
+    const bg = rows.find((r) => r.name === "background")!;
+    const scale = rows.find((r) => r.name === "scale")!;
+    expect(bg).toMatchObject({ vary: true, value: 0, min: 0, max: 1e-4 });
+    expect(scale.vary).toBe(false);
+    // A default table is fittable as-is: the varied background starts inside its bounds.
+    expect(validateRows(rows)).toBeNull();
+    // An explicit choice still wins over the default.
+    const fixed = buildParamRows(resolved(), { layerCount: 3, byName: { background: { vary: false } } }, GLOBALS, false);
+    expect(fixed.find((r) => r.name === "background")!.vary).toBe(false);
   });
 
   it("uses sensible default bounds", () => {

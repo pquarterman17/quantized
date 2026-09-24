@@ -223,9 +223,17 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
       // sentinel-encodes the four numeric identities JSON cannot preserve.
       // These live objects are never rewritten, and finite output is exact.
       data: d.data,
-      ...(d.raw ? { raw: d.raw } : {}),
-      ...(d.corrections ? { corrections: d.corrections } : {}),
-      ...(d.bgRef ? { bgRef: d.bgRef } : {}),
+      // The object-valued optional fields below are written as PLAIN
+      // properties, not `...(d.x ? { x: d.x } : {})` spreads: JSON.stringify
+      // drops an `undefined` property exactly as the spread omitted it, so the
+      // document is byte-identical, and each spread cost ~18 eager bytes the
+      // bundle budget did not have (P2.2 slice 3 funded `reflFits` with them).
+      // Only object values qualify — a falsy-but-present value ("" / 0) would
+      // be written where the spread skipped it; for these fields that value
+      // can only be `null`, which no writer produces (and the parser rejects).
+      raw: d.raw,
+      corrections: d.corrections,
+      bgRef: d.bgRef,
       ...(d.notes ? { notes: d.notes } : {}),
       ...(d.tags?.length ? { tags: d.tags } : {}),
       ...(d.group?.trim() ? { group: d.group } : {}),
@@ -240,13 +248,19 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
       ...(d.channelTypes && Object.keys(d.channelTypes).length ? { channelTypes: d.channelTypes } : {}),
       ...(d.excludedRows?.length ? { excludedRows: d.excludedRows } : {}),
       ...(d.filter?.length ? { filter: d.filter } : {}),
-      ...(d.fitSpec ? { fitSpec: d.fitSpec } : {}),
+      fitSpec: d.fitSpec,
       // Audit P2.1: the durable fitted-peak table, additive-optional (absent =
       // no table, so a pre-P2.1 doc round-trips byte-identically). Copied
       // through lib/peakTable's own serializer for the same reason `savedRois`
       // goes through `serializeRois` — a live store object must never be
       // aliased into the saved doc.
       ...(d.peakTable ? { peakTable: serializePeakTable(d.peakTable) } : {}),
+      // P2.2 slice 3: the reflectivity fit history, verbatim (absent when
+      // undefined, like the plain properties above). The workshop stores each
+      // record already JSON-safe (non-finite numbers as the BUG-017 sentinels)
+      // and validates it on READ, so this eager path only passes it through —
+      // see workshops/reflectivity/reflFitRecord.ts.
+      reflFits: d.reflFits,
       // ORIGIN_FILE_DECODE_PLAN #38: EVERY explicit export path resolves
       // every pending dataset FIRST, and aborts with a named status/toast
       // if a book can't be fetched rather than exporting the preview —
@@ -295,7 +309,7 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
       // LEGITIMATELY still have one — that round-trip is fine, since the
       // render-side ensureBookData hooks re-fetch it the next time that
       // dataset is shown after a reload.
-      ...(d.pending ? { pending: d.pending } : {}),
+      pending: d.pending,
       ...(d.source ? { source: serializeDatasetSource(d.source, projectDir) } : {}),
       // P1.7 box 5: the lineage breadcrumb for "Import as new version" —
       // dropped entirely before (not just narrowed like `source`), so a

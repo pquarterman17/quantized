@@ -9,6 +9,7 @@ re-shaping.
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping, Sequence
 from typing import Any
 
@@ -26,6 +27,7 @@ __all__ = [
     "from_curve_fit",
     "from_integrate",
     "from_multipeak_fit",
+    "from_refl_fit",
     "from_stats_table",
 ]
 
@@ -113,6 +115,82 @@ def from_multipeak_fit(
     return ReportSheet(
         title=title,
         sections=(section("Peak fit", blocks),),
+        source_refs=tuple(dict(r) for r in (source_refs or ())),
+    )
+
+
+# The objective each reflectivity weighting minimises, labelled for what it is:
+# only dR weighting is a chi-square (calc/refl_fit.py). Same labels as the
+# frontend's reflFitModel.objectiveSummary.
+_REFL_OBJECTIVE: dict[str, tuple[str, str]] = {
+    "dr": ("Reduced χ²", "reduced_chi2"),
+    "log": ("Reduced Σ(Δlog₁₀R)²", "reduced_sum_sq_log"),
+}
+_NONE = "—"
+
+
+def _finite(v: Any) -> float | None:
+    """``v`` as a float when it is a finite number, else None."""
+    if isinstance(v, bool) or not isinstance(v, (int, float)):
+        return None
+    return float(v) if math.isfinite(v) else None
+
+
+def _refl_status(p: Mapping[str, Any]) -> str:
+    if p.get("tie"):
+        return f"tied to {p['tie']}"
+    if not p.get("vary"):
+        return "fixed"
+    return "at bound" if p.get("at_bound") else "free"
+
+
+def from_refl_fit(
+    result: Mapping[str, Any],
+    *,
+    title: str = "Reflectivity fit",
+    source_refs: Sequence[Mapping[str, Any]] | None = None,
+) -> ReportSheet:
+    """Build a report from a ``calc.refl_fit.fit_reflectivity`` result dict.
+
+    A parameter table (value and standard error, "—" where the fit reports
+    none: a fixed or tied parameter, one that ended on a bound, or one the
+    data do not determine), a stats line (the objective under its honest
+    label, points, free parameters, convergence) and one line per warning.
+    Fitted curves, if present, are ignored.
+    """
+    weighting = result.get("weighting")
+    if weighting not in _REFL_OBJECTIVE:
+        raise ValueError("from_refl_fit needs weighting 'dr' or 'log'")
+    params = list(result.get("parameters") or [])
+    if not params:
+        raise ValueError("from_refl_fit needs a result with parameters")
+    rows = []
+    for p in params:
+        err = _finite(p.get("stderr"))
+        rows.append([
+            p.get("name", ""), _finite(p.get("value")),
+            _NONE if err is None else err, _refl_status(p),
+        ])
+    label, key = _REFL_OBJECTIVE[weighting]
+    value = _finite(result.get(key))
+    shown = _NONE if value is None else format(value, ".6g")
+    converged = "yes" if result.get("success") else "no"
+    stats = (
+        f"{label} = {shown} · points = {result.get('n_points')} · "
+        f"free parameters = {result.get('n_free')} · converged: {converged}"
+    )
+    blocks: list[dict[str, Any]] = [
+        table_block(
+            ["Parameter", "Value", "± stderr", "Status"], rows, caption="Fitted parameters"
+        ),
+        text_block(stats),
+    ]
+    if result.get("message"):
+        blocks.append(text_block(f"Optimizer: {result['message']}"))
+    blocks.extend(text_block(f"Warning: {w}") for w in result.get("warnings") or [])
+    return ReportSheet(
+        title=title,
+        sections=(section("Fit results", blocks),),
         source_refs=tuple(dict(r) for r in (source_refs or ())),
     )
 

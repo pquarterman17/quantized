@@ -14,7 +14,7 @@ import type { ReportSheet } from "../report";
 /** Shape an analysis result into a #36 report sheet via the backend emitters
  *  (one emission source of truth — the frontend never re-shapes results). */
 export function reportEmit(body: {
-  kind: "curve_fit" | "multipeak_fit" | "integrate" | "batch_integrate" | "anova" | "stats_table";
+  kind: "curve_fit" | "multipeak_fit" | "refl_fit" | "integrate" | "batch_integrate" | "anova" | "stats_table";
   result?: Record<string, unknown>;
   records?: Record<string, unknown>[];
   title?: string;
