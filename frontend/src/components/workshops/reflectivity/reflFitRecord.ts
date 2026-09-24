@@ -45,6 +45,12 @@ import type { ModelLayer, Radiation } from "./useReflectivity";
 export const REFL_FIT_RECORD_VERSION = 1;
 /** Fits kept per dataset; older ones drop off the end. */
 export const HISTORY_LIMIT = 10;
+/** Of those, only the newest this many keep their stored curves. A curve is
+ *  up to 2,000 points (reflFitCurves.ts), so ten records of four channels
+ *  could reach megabytes in a .dwk and in autosave's browser storage; older
+ *  records keep parameters and results, and read "re-run to plot" like a
+ *  record written before curves were stored. */
+export const CURVE_HISTORY_LIMIT = 3;
 
 /** One parameter as it was SENT (the fit's starting point and constraints). */
 export type SavedParam = RequestParam;
@@ -415,13 +421,24 @@ export function recordGone(record: ReflFitRecord, datasets: readonly Dataset[]):
   return present.length > 0 && !present.some((d) => recordsFor(d).some((r) => r.id === record.id));
 }
 
+/** A stored record without its curves; the same object when it has none.
+ *  Never mutates: an undo snapshot may still hold the original. */
+function withoutCurves(stored: unknown): unknown {
+  if (!isObj(stored) || !("curves" in stored)) return stored;
+  const { curves: _dropped, ...rest } = stored;
+  return rest;
+}
+
 /** `datasets` with `record` put at the head of each of its datasets' history
- *  (trimmed to HISTORY_LIMIT). The SAME array when none of them exists. */
+ *  (trimmed to HISTORY_LIMIT; curves kept on the newest CURVE_HISTORY_LIMIT
+ *  only). The SAME array when none of them exists. */
 export function withFitRecord(datasets: Dataset[], record: ReflFitRecord): Dataset[] {
   const ids = recordDatasetIds(record);
   if (!datasets.some((d) => ids.includes(d.id))) return datasets;
   const stored = encodeRecord(record);
-  return datasets.map((d) =>
-    ids.includes(d.id) ? { ...d, reflFits: [stored, ...storedFits(d)].slice(0, HISTORY_LIMIT) } : d,
-  );
+  return datasets.map((d) => {
+    if (!ids.includes(d.id)) return d;
+    const next = [stored, ...storedFits(d)].slice(0, HISTORY_LIMIT);
+    return { ...d, reflFits: next.map((r, i) => (i < CURVE_HISTORY_LIMIT ? r : withoutCurves(r))) };
+  });
 }

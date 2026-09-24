@@ -12,7 +12,16 @@ import {
   savedCurves,
   savedOverlay,
 } from "./reflFitCurves";
-import { channelDigest, decodeRecord, encodeRecord, recordsFor, withFitRecord, type ReflFitRecord } from "./reflFitRecord";
+import { useApp } from "../../../store/useApp";
+import {
+  CURVE_HISTORY_LIMIT,
+  channelDigest,
+  decodeRecord,
+  encodeRecord,
+  recordsFor,
+  withFitRecord,
+  type ReflFitRecord,
+} from "./reflFitRecord";
 
 /** A record of a fit of `d`'s channel (R, dR, dQ columns) whose digest
  *  matches the data as it is now, carrying `fitResponse()`'s curves. */
@@ -107,5 +116,46 @@ describe("the saved overlay", () => {
     const edited = { ...d, data: { ...d.data, time: d.data.time.map((q) => q * 1.01) } };
     expect(savedOverlay(rec, [edited])).toMatch(/changed since this fit — re-run it to overlay/);
     expect(savedOverlay(rec, [])).toMatch(/no longer in the library/);
+  });
+});
+
+describe("curve retention: only the newest records keep their curves", () => {
+  /** `d` after `n` fits (#1..#n), each carrying curves. */
+  function fitted(n: number) {
+    let datasets = [xrrDataset("xrr")];
+    for (let i = 1; i <= n; i++) {
+      datasets = withFitRecord(datasets, { ...fittedRecord(datasets[0]), id: `rfit-${i}`, seq: i });
+    }
+    return datasets;
+  }
+  const withCurves = (d: Dataset) => recordsFor(d).map((r) => [r.seq, r.curves !== undefined]);
+
+  it("the 4th-newest record loses its curves, the newest 3 keep theirs", () => {
+    expect(CURVE_HISTORY_LIMIT).toBe(3);
+    expect(withCurves(fitted(3)[0])).toEqual([[3, true], [2, true], [1, true]]);
+    const [d] = fitted(5);
+    expect(withCurves(d)).toEqual([[5, true], [4, true], [3, true], [2, false], [1, false]]);
+    // An older record keeps its parameters and results, and reads "re-run".
+    const old = recordsFor(d)[3];
+    expect(old.result.parameters).toEqual(fittedRecord(xrrDataset("xrr")).result.parameters);
+    expect(savedOverlay(old, [d])).toMatch(/re-run/);
+  });
+
+  it("survives save -> reopen as it was", () => {
+    const [reopened] = parseWorkspace(serializeWorkspace({ datasets: fitted(4) })).datasets;
+    expect(withCurves(reopened)).toEqual([[4, true], [3, true], [2, true], [1, false]]);
+  });
+
+  it("undo restores the previous state exactly, curves included", () => {
+    const before = fitted(3);
+    const frozen = JSON.parse(JSON.stringify(before[0].reflFits));
+    useApp.setState({ datasets: before, history: [], future: [] });
+    useApp.getState().recordHistory("reflectivity fit");
+    useApp.setState((s) => ({ datasets: withFitRecord(s.datasets, { ...fittedRecord(s.datasets[0]), id: "rfit-4", seq: 4 }) }));
+    expect(withCurves(useApp.getState().datasets[0])[3]).toEqual([1, false]);
+    useApp.getState().undo();
+    const restored = useApp.getState().datasets[0];
+    expect(restored.reflFits).toEqual(frozen); // the stripped #1 comes back with its curves
+    expect(withCurves(restored)).toEqual([[3, true], [2, true], [1, true]]);
   });
 });
