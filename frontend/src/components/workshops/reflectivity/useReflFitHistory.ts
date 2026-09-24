@@ -8,13 +8,13 @@
 // Store access is by selector plus `useApp.setState` — no imperative store
 // snapshot reads (architecture.test.ts's getState file-count ratchet).
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { reportEmit } from "../../../lib/api/report";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { applyBlockedReason, applyResults, fittedGlobals, type FitGlobals } from "./reflFitModel";
-import { recordDatasetIds, recordsFor, withFitRecord, type ReflFitRecord } from "./reflFitRecord";
+import { nextSeq, recordDatasetIds, recordsFor, withFitRecord, type ReflFitRecord } from "./reflFitRecord";
 import { recordIssues, restoreSetup, type RecordIssues, type RestoredSetup } from "./reflFitRestore";
 import type { ModelLayer, Radiation } from "./useReflectivity";
 import type { ReflModelHandle } from "./useReflFit";
@@ -34,7 +34,10 @@ export interface ReflFitHistory {
   pick: (id: string | null) => void;
   applySaved: () => void;
   restore: () => void;
-  publish: (record: ReflFitRecord) => void;
+  /** Store a finished fit, numbered from the CURRENT library. Returns the
+   *  stored record, or null when none of its datasets is left (deleted while
+   *  the fit ran) — then nothing is written, not even an undo step. */
+  publish: (record: ReflFitRecord) => ReflFitRecord | null;
   addToReport: (record: ReflFitRecord) => Promise<void>;
 }
 
@@ -69,6 +72,18 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
   // After a saved fit is applied, re-applying it stays allowed against the
   // stack it produced (the live fit's `basis` rule in useReflFit).
   const [appliedBasis, setAppliedBasis] = useState<{ id: string; layers: ModelLayer[]; radiation: Radiation } | null>(null);
+  // The library as it is NOW, for `publish`: it runs after the fit's network
+  // round trip, from a closure whose `datasets` is the render before it.
+  // Tracked by subscription, not an imperative store read (the getState
+  // ratchet); null until the store changes, when the render's copy is current.
+  const liveDatasets = useRef<Dataset[] | null>(null);
+  useEffect(
+    () =>
+      useApp.subscribe((s) => {
+        liveDatasets.current = s.datasets;
+      }),
+    [],
+  );
 
   const selected = records.find((r) => r.id === pickedId) ?? records[0] ?? null;
   const issues = selected ? recordIssues(selected, datasets) : NO_ISSUES; // cached per channel dataset
@@ -103,12 +118,15 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
     setStatus(`restored the setup of reflectivity fit #${selected.seq}`);
   }
 
-  function publish(record: ReflFitRecord): void {
+  function publish(record: ReflFitRecord): ReflFitRecord | null {
     setPickedId(null); // a new fit is the one on show
+    const now = liveDatasets.current ?? datasets;
     const ids = recordDatasetIds(record);
-    if (!datasets.some((d) => ids.includes(d.id))) return; // deleted mid-fit
+    if (!now.some((d) => ids.includes(d.id))) return null; // deleted mid-fit
+    const numbered = { ...record, seq: nextSeq(now, ids) };
     recordHistory("reflectivity fit");
-    useApp.setState((s) => ({ datasets: withFitRecord(s.datasets, record) }));
+    useApp.setState((s) => ({ datasets: withFitRecord(s.datasets, numbered) }));
+    return numbered;
   }
 
   async function addToReport(record: ReflFitRecord): Promise<void> {

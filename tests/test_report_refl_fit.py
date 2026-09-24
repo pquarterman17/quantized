@@ -20,6 +20,7 @@ from quantized.app import app
 from quantized.calc.refl_fit import fit_reflectivity
 from quantized.calc.report import validate_report
 from quantized.calc.report_emit import from_refl_fit
+from quantized.io.report_export import to_latex
 
 client = TestClient(app)
 
@@ -153,3 +154,18 @@ def test_emit_route_refuses_a_result_without_a_weighting_with_ascii_text() -> No
         resp = client.post("/api/report/emit", json={"kind": "refl_fit", "result": bad})
         assert resp.status_code == 422
         assert resp.json()["detail"].isascii()
+
+
+def test_the_latex_render_is_pure_ascii_for_both_weightings() -> None:
+    # io.report_export promises output that compiles under plain pdfLaTeX, so
+    # every glyph the refl-fit report emits (chi, Sigma, subscript digits, the
+    # em dash of an unreported error) must be mapped to a LaTeX token.
+    log = _result(weighting="log", chi2=None, reduced_chi2=None, sum_sq_log=0.5,
+                  reduced_sum_sq_log=0.0089)
+    for result in (_result(), log, _result(reduced_chi2=None)):
+        tex = to_latex(from_refl_fit(result, title="Reflectivity fit #1 — film.refl").to_dict())
+        bad = sorted({ch for ch in tex if not ch.isascii()})
+        assert bad == [], bad
+    tex = to_latex(from_refl_fit(log).to_dict())
+    assert r"$\Sigma$" in tex and r"log$_1$$_0$R" in tex
+    assert "---" in tex  # the unreported stderr

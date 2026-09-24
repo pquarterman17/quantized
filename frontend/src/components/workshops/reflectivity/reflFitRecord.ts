@@ -310,7 +310,7 @@ function decodeAll(stored: readonly unknown[] | undefined): ReflFitRecord[] {
  *  name THIS dataset (a copy carrying another dataset's history shows none). */
 export function recordsFor(ds: Dataset | undefined): ReflFitRecord[] {
   if (!ds) return [];
-  return decodeAll(ds.reflFits).filter((r) => r.request.channels.some((c) => c.datasetId === ds.id));
+  return decodeAll(storedFits(ds)).filter((r) => r.request.channels.some((c) => c.datasetId === ds.id));
 }
 
 /** The distinct dataset ids a record is attached to, in channel order. */
@@ -318,13 +318,36 @@ export function recordDatasetIds(record: Pick<ReflFitRecord, "request">): string
   return [...new Set(record.request.channels.map((c) => c.datasetId))];
 }
 
-/** The next "#n" for a fit on these datasets: one past the highest stored. */
+/** The stored history array, or none: a hand-edited `.dwk` can carry any
+ *  JSON value here (`{"0":1}`, a string), and the eager parser passes it
+ *  through verbatim, so every reader goes through this. */
+export function storedFits(ds: Pick<Dataset, "reflFits">): readonly unknown[] {
+  return Array.isArray(ds.reflFits) ? ds.reflFits : [];
+}
+
+/** The next "#n" for a fit on these datasets: one past the highest number
+ *  any library dataset still carries for them — a stored record, or a fit
+ *  curve's `metadata.reflFit` — so a number that is still visible anywhere
+ *  is never handed out twice. */
 export function nextSeq(datasets: readonly Dataset[], ids: readonly string[]): number {
   let max = 0;
   for (const d of datasets) {
     if (ids.includes(d.id)) for (const r of recordsFor(d)) max = Math.max(max, r.seq);
+    const prov = d.data.metadata?.reflFit as { seq?: unknown; sourceIds?: unknown } | undefined;
+    if (prov && typeof prov.seq === "number" && Array.isArray(prov.sourceIds) && prov.sourceIds.some((s) => ids.includes(s as string))) {
+      max = Math.max(max, prov.seq);
+    }
   }
   return max + 1;
+}
+
+/** Is `record` known to be GONE from the library — at least one of its
+ *  datasets is present and none of those holds it (an undo removed it)? A
+ *  record whose datasets were all deleted is "unknown", not gone. */
+export function recordGone(record: ReflFitRecord, datasets: readonly Dataset[]): boolean {
+  const ids = recordDatasetIds(record);
+  const present = datasets.filter((d) => ids.includes(d.id));
+  return present.length > 0 && !present.some((d) => recordsFor(d).some((r) => r.id === record.id));
 }
 
 /** `datasets` with `record` put at the head of each of its datasets' history
@@ -334,6 +357,6 @@ export function withFitRecord(datasets: Dataset[], record: ReflFitRecord): Datas
   if (!datasets.some((d) => ids.includes(d.id))) return datasets;
   const stored = encodeRecord(record);
   return datasets.map((d) =>
-    ids.includes(d.id) ? { ...d, reflFits: [stored, ...(d.reflFits ?? [])].slice(0, HISTORY_LIMIT) } : d,
+    ids.includes(d.id) ? { ...d, reflFits: [stored, ...storedFits(d)].slice(0, HISTORY_LIMIT) } : d,
   );
 }

@@ -33,7 +33,7 @@ import {
   type FitDataSettings,
   type Weighting,
 } from "./reflFitData";
-import { channelDigest, nextSeq, recordId, savedResult, type ReflFitRecord } from "./reflFitRecord";
+import { channelDigest, recordGone, recordId, savedResult, type ReflFitRecord } from "./reflFitRecord";
 import { curveDatasetFor, type RestoredSetup } from "./reflFitRestore";
 import { useReflFitHistory, type ReflFitHistory } from "./useReflFitHistory";
 import {
@@ -73,8 +73,10 @@ export interface ReflFitState {
   busy: boolean;
   error: string | null;
   result: ReflFitResult | null;
-  /** The durable record of `result` (null only when its datasets were
-   *  deleted while it ran). */
+  /** The stored record of `result`. Null when there is no result, when no
+   *  record could be stored (every dataset of the fit was deleted while it
+   *  ran), and after an undo removed the record — the live result is then
+   *  cleared too, and the view falls back to the newest stored fit. */
   liveRecord: ReflFitRecord | null;
   /** The bound dataset's saved fits and what they offer. */
   history: ReflFitHistory;
@@ -299,17 +301,18 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
       if (id !== runIdRef.current) return;
       setResult(res);
       setBasis(fitBasis);
-      const record: ReflFitRecord = {
+      // Stored FIRST, so no render ever sees a live record the store lacks;
+      // `publish` numbers it from the library as it is now.
+      const stored = history.publish({
         version: 1,
         id: recordId(nextDatasetId),
-        seq: nextSeq(datasets, [...new Set(saved.map((c) => c.datasetId))]),
+        seq: 0,
         fittedAt: new Date().toISOString(),
         request: { parameters: sentParams, channels: saved, settings: { ...settings }, weighting },
         model: { layers: fitBasis.layers, radiation: fitBasis.radiation },
         result: savedResult(res),
-      };
-      setLiveRecord(record);
-      history.publish(record);
+      });
+      setLiveRecord(stored);
       const first = res.curves[0];
       if (first) {
         const sent = { q: built[0].channel.q, rows: built[0].rows };
@@ -354,6 +357,15 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     setGlobals,
     setError,
   });
+
+  // An undo that removed the live fit's record leaves nothing for the live
+  // result to be the record OF: drop it, so the view falls back to the newest
+  // stored fit and "Add fit curves" can never name a record that is gone.
+  const liveGone = liveRecord != null && recordGone(liveRecord, datasets);
+  useEffect(() => {
+    if (liveGone) clearResult();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clearResult reads the latest overlay; re-run only on the flag
+  }, [liveGone]);
 
   function addCurves(): string[] {
     if (!result) return [];
