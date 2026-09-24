@@ -2,10 +2,11 @@
 // Uses the active XRD dataset's time axis as 2θ and a selected intensity channel.
 // Raw data are never modified; the fitted model can be added as a linked derived dataset.
 //
-// Fails closed unless the x axis is demonstrably 2θ in DEGREES, by the same
-// rule the fitted-peak table uses (lib/peakTableFit's `xAxisIsTwoThetaDegrees`
-// over `xChannelIdentity`): a q, time or temperature axis would otherwise be
-// refined as if it were 2θ and return a plausible, meaningless cell. Every
+// Fails closed unless the x axis is demonstrably a 2θ scan in DEGREES
+// (`pawleyAxisProblem`: the fitted-peak table's rule, tightened against other
+// angles, 2-D datasets and out-of-range x): a q, time, temperature or phi axis
+// would otherwise be refined as if it were 2θ and return a plausible,
+// meaningless cell. Every
 // other refusal (a non-physical cell, too few points, a vanished column) is
 // named in `blockedReason` next to the disabled Refine button, the way
 // useWilliamsonHall does it.
@@ -25,13 +26,15 @@ import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
 import { nextDatasetId, useActiveDataset, useApp } from "../../../store/useApp";
 import {
   PAWLEY_DEFAULT_FIELDS,
-  PAWLEY_DEFAULT_WAVELENGTH,
+  PAWLEY_MAX_POINTS,
   type PawleyField,
   type PawleyFields,
   type PawleyTie,
   parseField,
+  pawleyAxisProblem,
   pawleyInputProblem,
   pawleyNumbers,
+  pawleyVerdict,
   scanRange,
 } from "./pawleyInputs";
 
@@ -97,7 +100,7 @@ export function usePawley(): PawleyState {
 
   const [col, setCol] = useState(0);
   const [fields, setFields] = useState<PawleyFields>(PAWLEY_DEFAULT_FIELDS);
-  const [tie, setTie] = useState<PawleyTie>("abc");
+  const [tie, setTieState] = useState<PawleyTie>("abc");
   const [symmetry, setSymmetry] = useState<PawleyCentering>("P");
   const [fileWavelength, setFileWavelength] = useState<number | null>(null);
   const [refineCell, setRefineCell] = useState(true);
@@ -121,10 +124,11 @@ export function usePawley(): PawleyState {
     setError(null);
     setBusy(false);
     // Seed λ from the file, as Williamson-Hall and the peak table do; a typed
-    // Cu default on a Mo pattern refines to a cell ~8 % too large.
+    // Cu default on a Mo pattern refines to a cell ~8 % too large. A dataset
+    // that records none keeps whatever λ the user last had.
     const measured = wavelengthFromMetadata(activeMetadata);
     setFileWavelength(measured);
-    setFields((f) => ({ ...f, wavelength: String(measured ?? PAWLEY_DEFAULT_WAVELENGTH) }));
+    if (measured != null) setFields((f) => ({ ...f, wavelength: String(measured) }));
     // Only a switch of dataset reseeds; a metadata edit on the same dataset
     // must not overwrite what the user typed.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -132,28 +136,37 @@ export function usePawley(): PawleyState {
 
   const setField = (k: PawleyField, v: string): void => setFields((f) => ({ ...f, [k]: v }));
 
+  // Releasing a tie reveals b/c fields the user could not see: give them a's
+  // value, which is what they were showing, rather than stale earlier text.
+  const setTie = (next: PawleyTie): void => {
+    setFields((f) => ({
+      ...f,
+      b: tie !== "none" && next === "none" ? f.a : f.b,
+      c: tie === "abc" && next !== "abc" ? f.a : f.c,
+    }));
+    setTieState(next);
+  };
+
   const xIdentity = active ? xChannelIdentity(active.data, null) : null;
   const numbers = pawleyNumbers(fields, tie);
   const colValid = active != null && col >= 0 && col < active.data.labels.length;
 
-  const hasEnoughPoints = useMemo(() => {
-    if (!active || !colValid) return false;
-    return dropGapRows(active.data.time, active.data.values.map((row) => row[col])).keep.length >= 3;
+  const scan = useMemo(() => {
+    if (!active || !colValid) return null;
+    const pairs = dropGapRows(active.data.time, active.data.values.map((row) => row[col]));
+    return { n: pairs.keep.length, range: pairs.keep.length ? scanRange(pairs.x) : null };
   }, [active, col, colValid]);
 
   let blockedReason: string | null = null;
   if (active && xIdentity) {
-    if (!xAxisIsTwoThetaDegrees(xIdentity)) {
-      blockedReason =
-        `the x axis is ${xIdentity.xLabel || "unlabeled"} (${xIdentity.xUnit || "no unit recorded"}), ` +
-        "not 2θ in degrees";
-    } else if (!colValid) {
-      blockedReason = "pick an intensity channel";
-    } else {
-      blockedReason =
-        pawleyInputProblem(numbers) ??
-        (hasEnoughPoints ? null : "need at least 3 finite points in the selected channel");
-    }
+    blockedReason =
+      pawleyAxisProblem(xIdentity, active.data.metadata, scan?.range ?? null) ??
+      (!colValid ? "pick an intensity channel" : null) ??
+      pawleyInputProblem(numbers) ??
+      (scan && scan.n >= 3 ? null : "need at least 3 finite points in the selected channel") ??
+      (scan && scan.n > PAWLEY_MAX_POINTS
+        ? `the scan has ${scan.n} points; the limit is ${PAWLEY_MAX_POINTS}`
+        : null);
   }
   const canCompute = active != null && blockedReason == null;
 
@@ -183,8 +196,9 @@ export function usePawley(): PawleyState {
         symmetry,
         tie,
         wavelength: n.wavelength,
-        // Only reflections inside the measured scan are fit and counted.
-        min_two_theta: range.min,
+        // Only reflections inside the measured scan are fit and counted. A
+        // scan through the direct beam starts below 0; no reflection lives there.
+        min_two_theta: Math.max(0, range.min),
         max_two_theta: range.max,
         profile_fwhm: n.fwhm,
         refine_cell: refineCell,
@@ -259,6 +273,8 @@ export function usePawley(): PawleyState {
           rwp: result.rwp,
           rwp_initial: result.rwp_initial,
           converged: result.converged,
+          rwp_background: result.rwp_background,
+          warning: pawleyVerdict(result, f.refineCell),
           peaks: result.peaks,
         },
       },

@@ -128,6 +128,8 @@ export interface PawleyResult {
   rwp: number | null;
   /** R_wp of the starting cell, for judging whether the refinement helped. */
   rwp_initial: number | null;
+  /** R_wp of the linear background alone: the yardstick for a weak fit. */
+  rwp_background: number | null;
   /** The grid step shrank to tolerance (always true when the cell was fixed). */
   converged: boolean;
   /** Which axes moved together. */

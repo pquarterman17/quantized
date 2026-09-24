@@ -2691,33 +2691,38 @@ physics, which already existed and was already golden. The map:
   `calc/pawley.py::pawley_refine` is reachable through
   `POST /api/reductions/pawley`, a typed frontend wrapper, and the Reductions
   workshop under Analyze → XRD & reflectivity.
-  - **Input:** the active dataset's x axis must be 2θ in degrees, by the same
-    rule as the fitted-peak table (`xAxisIsTwoThetaDegrees`); q, time and
-    temperature axes are refused. The user picks the intensity channel, the
-    starting cell, an explicit axis tie (cubic / a = b / independent), the
-    centering (R is the hexagonal-axes rule), the wavelength (read from the
-    file when it records one), the fixed profile FWHM, and whether to refine.
-    Empty or non-physical fields disable Refine with the reason shown; the
-    route enforces the same domain (422).
-  - **Scope:** only reflections inside the measured 2θ window are fit and
-    counted. `hkl_max` is derived from the cell and window, capped at 20
-    (larger cells are refused with advice to narrow the range). No
-    reflections in range, or fewer points than parameters, is a 422 rather
-    than a fake-perfect R_wp.
+  - **Input:** the active dataset's x axis must be a 2θ scan in degrees:
+    the fitted-peak table's rule (`xAxisIsTwoThetaDegrees`), tightened to
+    refuse labels naming another angle (phi, omega, chi, psi), 2-D datasets,
+    and x outside 0–180°. The user picks the intensity channel, the starting
+    cell, an explicit axis tie (cubic / a = b / independent), the centering
+    (R is the hexagonal-axes rule), the wavelength (read from the file when it
+    records one), the fixed profile FWHM, and whether to refine. Empty or
+    out-of-range fields disable Refine with the reason shown, using the
+    route's own bounds; the route re-checks every field (422).
+  - **Scope and cost:** only reflections inside the measured 2θ window are
+    fit and counted. `hkl_max` is derived from the cell and window, capped at
+    20; more than 500 reflections in range, or more than 2M points ×
+    reflections, is refused with advice to narrow the range (each of the ~100
+    grid-search trials solves that least-squares problem). No reflections in
+    range, or no more points than parameters, is a 422 rather than a
+    fake-perfect R_wp.
   - **Output:** refined a/b/c to 4 decimals, α/β/γ shown as fixed (the
-    engine never refines angles; they are inputs only), R_wp and the starting
-    cell's R_wp as percentages, and the in-range reflection count. The fit is
-    flagged, not presented as a result, when R_wp ≥ 100 %, when it ended worse
-    than its start, or when the search ran out of iterations. The derived
-    Library dataset keeps the exact fitted rows (observed, model, background,
-    residual), is stamped as a 2θ/deg XRD powder pattern, and records the full
-    request and per-reflection table under `metadata.pawley`.
+    engine never refines angles; they are inputs only), and R_wp for the fit,
+    the starting cell and the linear background alone, as percentages, with
+    the in-range reflection count. A warning is shown beside the result (not
+    in place of it) and saved with it when R_wp exceeds 0.6 × the
+    background-only R_wp, when the fit ended worse than its start, or when
+    the search ran out of iterations. The derived Library dataset keeps the
+    exact fitted rows (observed, model, background, residual), is stamped as
+    a 2θ/deg XRD powder pattern, and records the full request, the warning
+    and the per-reflection table under `metadata.pawley`.
   - **Known limits:** the engine is a local grid search with a small capture
     radius that depends on peak width (measured: well under 1 % in some
-    cases), and from further out it can settle on a wrong minimum; no
-    uncertainties are reported; glide and
-    screw absences are not applied; the fit runs synchronously on the request
-    thread rather than through the job queue.
+    cases), and from further out it can settle on a wrong minimum; the 0.6
+    warning ratio is a heuristic measured on synthetic Si; no uncertainties
+    are reported; glide and screw absences are not applied; the fit runs
+    synchronously on the request thread rather than through the job queue.
 - [x] Durable peak identity, uncertainty, exclusion, model, and provenance —
   **the columns; the uncertainty NUMBERS are the next box.** **(2026-09-14)**
   `lib/peakTable.ts` defines `PeakTable`: per-peak durable `id`,

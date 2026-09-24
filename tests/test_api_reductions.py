@@ -115,14 +115,15 @@ def _pawley(**over: Any) -> Any:
 
 
 def test_pawley_route_refines_toward_the_true_cell() -> None:
-    r = _pawley()
+    r = _pawley(max_iter=60)
     assert r.status_code == 200, r.text
     body = r.json()
     assert abs(body["cell"][0] - 5.4307) < abs(5.45 - 5.4307)  # moved toward truth
     assert body["cell"][0] == body["cell"][1] == body["cell"][2]
     assert body["tie"] == "abc"
     assert body["rwp"] < body["rwp_initial"]
-    assert isinstance(body["converged"], bool)
+    assert body["converged"] is True
+    assert body["rwp"] < 0.5 * body["rwp_background"]
     assert body["scale"] is None
     n = len(body["model"])
     assert n == len(body["background"]) == len(body["residual"]) == 1500
@@ -200,3 +201,18 @@ def test_a_nan_literal_in_an_invalid_body_is_a_422_not_a_500() -> None:
     )
     assert r.status_code == 422
     assert isinstance(r.json()["detail"], list)
+
+
+def test_pawley_route_refuses_too_many_reflections() -> None:
+    # A 16.9 x 15 x 14 A primitive cell stays under the hkl cap at 80 deg but
+    # has thousands of reflections: refused before the grid search starts.
+    r = _pawley(a=16.9, b=15.0, c=14.0, tie="none", symmetry="P")
+    assert r.status_code == 422
+    assert "reflections" in r.json()["detail"]
+
+
+def test_pawley_route_hkl_bound_uses_the_tied_value() -> None:
+    # A stale large b must not inflate the bound when b is tied to a.
+    r = _pawley(b=40.0, c=40.0, tie="abc")
+    assert r.status_code == 200, r.text
+    assert r.json()["cell"][1] == r.json()["cell"][0]

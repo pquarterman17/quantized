@@ -64,6 +64,8 @@ def pawley_refine(
     profile_fwhm: float = 0.05,
     refine_cell: bool = True,
     max_iter: int = 20,
+    max_reflections: int | None = None,
+    max_design_size: int | None = None,
 ) -> dict[str, Any]:
     r"""Pawley refine a powder pattern against a phase's lattice.
 
@@ -95,6 +97,11 @@ def pawley_refine(
         Refine the lattice parameters (else keep the initial cell).
     max_iter
         Outer grid-search iterations.
+    max_reflections, max_design_size
+        Optional work caps: refuse (``ValueError``) when the initial cell has
+        more reflections in range, or more ``points × reflections`` design
+        cells, than this. Each grid-search trial solves that least-squares
+        problem, so these bound the run time. ``None`` (default) = no cap.
 
     Returns
     -------
@@ -105,8 +112,9 @@ def pawley_refine(
         ``[N]``, ``rwp``, ``n_peaks``; plus ``rwp_initial`` (R_wp of the
         initial cell — a refinement that ends ABOVE it went the wrong way),
         ``converged`` (the grid step shrank below tolerance rather than
-        running out of iterations; always True when ``refine_cell`` is off)
-        and ``tie``.
+        running out of iterations; always True when ``refine_cell`` is off),
+        ``rwp_background`` (R_wp of the linear background alone — a model
+        that barely beats it has explained little) and ``tie``.
 
     Raises
     ------
@@ -200,6 +208,16 @@ def pawley_refine(
             f"No allowed reflections between {min_two_theta:g} and {max_two_theta:g} deg 2theta "
             "for this cell, centering and wavelength."
         )
+    if max_reflections is not None and len(peaks0) > max_reflections:
+        raise ValueError(
+            f"{len(peaks0)} reflections in range exceeds the limit of {max_reflections}; "
+            "refine over a narrower 2theta range."
+        )
+    if max_design_size is not None and tt.size * len(peaks0) > max_design_size:
+        raise ValueError(
+            f"{tt.size} points x {len(peaks0)} reflections is too large to refine "
+            f"(limit {max_design_size}); use a narrower 2theta range or a coarser scan."
+        )
     n_free = 0 if not refine_cell else {"abc": 1, "ab": 2, "none": 3}[tie]
     n_params = len(peaks0) + 2 + n_free
     if tt.size <= n_params:
@@ -259,6 +277,8 @@ def pawley_refine(
         rwp_initial = _rwp(obs, obs - model0)
     else:
         rwp_initial = rwp
+    bg_only, _bg, _none = _build_model([], tt, obs, profile_fwhm)
+    rwp_background = _rwp(obs, obs - bg_only)
 
     for k, pk in enumerate(peaks):
         pk["intensity"] = float(peak_i[k]) if k < peak_i.size else 0.0
@@ -273,6 +293,7 @@ def pawley_refine(
         "residual": residual,
         "rwp": rwp,
         "rwp_initial": rwp_initial,
+        "rwp_background": rwp_background,
         "converged": converged,
         "tie": tie,
         "n_peaks": len(peaks),
@@ -299,9 +320,11 @@ def _build_model(
     ``[1, 2θ]``. Solves ``[peaks | bg] · x = I`` and clamps peak intensities ``≥ 0``.
     """
     n_pk = len(peaks)
+    bg_basis = np.column_stack([np.ones_like(two_theta), two_theta])
     if n_pk == 0:
-        zeros = np.zeros_like(two_theta)
-        return zeros, np.zeros_like(two_theta), np.zeros(0, dtype=float)
+        bg_coeff, *_ = np.linalg.lstsq(bg_basis, intensity, rcond=None)
+        bg_only = np.asarray(bg_basis @ bg_coeff, dtype=float)
+        return bg_only, bg_only, np.zeros(0, dtype=float)
 
     w = profile_fwhm / 2.0
     basis = np.zeros((two_theta.size, n_pk), dtype=float)
@@ -311,7 +334,6 @@ def _build_model(
         gauss = np.exp(-0.5 * (dx / (w / math.sqrt(2.0 * math.log(2.0)))) ** 2)
         basis[:, k] = 0.5 * lorentz + 0.5 * gauss
 
-    bg_basis = np.column_stack([np.ones_like(two_theta), two_theta])
     design = np.column_stack([basis, bg_basis])
     coeffs, *_ = np.linalg.lstsq(design, intensity, rcond=None)
 

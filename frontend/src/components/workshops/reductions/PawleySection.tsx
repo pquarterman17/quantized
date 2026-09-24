@@ -128,6 +128,7 @@ export default function PawleySection() {
               ["α, β, γ (fixed)", `${r.cell[3]}°, ${r.cell[4]}°, ${r.cell[5]}°`],
               ["Rwp", pct(r.rwp)],
               ["Rwp (start)", pct(r.rwp_initial)],
+              ["Rwp (background only)", pct(r.rwp_background)],
               [
                 "Reflections",
                 range ? `${r.n_peaks} in ${range.min.toFixed(1)}–${range.max.toFixed(1)}°` : String(r.n_peaks),

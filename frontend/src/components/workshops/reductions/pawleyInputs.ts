@@ -2,6 +2,7 @@
 // checks the backend's PawleyRequest enforces, axis tying, and the verdict on
 // a returned fit. Kept out of usePawley so each rule is testable on its own.
 
+import { xAxisIsTwoThetaDegrees } from "../../../lib/peakTableFit";
 import type { PawleyResult } from "../../../lib/reductionTypes";
 
 export type PawleyField = "a" | "b" | "c" | "alpha" | "beta" | "gamma" | "wavelength" | "fwhm";
@@ -64,20 +65,54 @@ export function pawleyNumbers(fields: PawleyFields, tie: PawleyTie): PawleyNumbe
 
 const positive = (v: number): boolean => Number.isFinite(v) && v > 0;
 const angle = (v: number): boolean => Number.isFinite(v) && v > 0 && v < 180;
+const within = (v: number, max: number): boolean => positive(v) && v <= max;
 
-/** Why these inputs must not be sent, or null when they are physical. */
+/** The route's point cap (routes/reductions.py PAWLEY_MAX_POINTS). */
+export const PAWLEY_MAX_POINTS = 50_000;
+
+/** Why these inputs must not be sent, or null when they are physical. The
+ *  bounds are the route's own (PawleyRequest), checked here so the user sees
+ *  the reason before a request is made. */
 export function pawleyInputProblem(n: PawleyNumbers): string | null {
-  if (!positive(n.a)) return "a must be a positive number";
-  if (!positive(n.b)) return "b must be a positive number";
-  if (!positive(n.c)) return "c must be a positive number";
+  if (!within(n.a, 1000)) return "a must be a positive length up to 1000 Å";
+  if (!within(n.b, 1000)) return "b must be a positive length up to 1000 Å";
+  if (!within(n.c, 1000)) return "c must be a positive length up to 1000 Å";
   if (!angle(n.alpha)) return "α must be between 0° and 180°";
   if (!angle(n.beta)) return "β must be between 0° and 180°";
   if (!angle(n.gamma)) return "γ must be between 0° and 180°";
   if (cellVolumeFactor(n.alpha, n.beta, n.gamma) <= 0) {
     return "these cell angles do not describe a real (positive-volume) cell";
   }
-  if (!positive(n.wavelength)) return "wavelength must be a positive number";
-  if (!positive(n.fwhm)) return "profile FWHM must be a positive number";
+  if (!within(n.wavelength, 10)) return "wavelength must be positive and at most 10 Å";
+  if (!within(n.fwhm, 20)) return "profile FWHM must be positive and at most 20°";
+  return null;
+}
+
+/** Other diffractometer angles, which share the "deg" unit with 2θ. */
+const OTHER_ANGLE = /\b(omega|phi|chi|psi|tilt|rocking)\b|[ωφχψ]/i;
+const TWO_THETA = /2\s*-?\s*(theta|θ)|two[_ -]?theta/i;
+
+/** Why this dataset's x axis is not a usable 2θ scan, or null.
+ *
+ *  Starts from the fitted-peak table's rule (`xAxisIsTwoThetaDegrees`) and
+ *  tightens it for a whole-pattern fit: a label naming a different angle
+ *  (a "Phi"/"Omega" axis in degrees passes the unit rule), a 2-D dataset
+ *  (whose `time` is a row index even when its metadata says 2θ), and x values
+ *  outside a physical 2θ range are all refused. */
+export function pawleyAxisProblem(
+  axis: { xLabel: string; xUnit: string },
+  metadata: Record<string, unknown> | undefined,
+  xRange: { min: number; max: number } | null,
+): string | null {
+  const name = `${axis.xLabel || "unlabeled"} (${axis.xUnit || "no unit recorded"})`;
+  if (!xAxisIsTwoThetaDegrees(axis)) return `the x axis is ${name}, not 2θ in degrees`;
+  if (!TWO_THETA.test(axis.xLabel) && OTHER_ANGLE.test(axis.xLabel)) {
+    return `the x axis is ${name}, a different angle from 2θ`;
+  }
+  if (metadata?.["is2D"] === true) return "this is a 2-D dataset; extract a 2θ line scan first";
+  if (xRange && !(xRange.max > 0 && xRange.max <= 180)) {
+    return `x runs ${xRange.min}–${xRange.max}, outside a 2θ range of 0–180°`;
+  }
   return null;
 }
 
@@ -93,19 +128,31 @@ export function scanRange(x: readonly number[]): { min: number; max: number } {
   return { min, max };
 }
 
+/** R_wp / R_wp(background alone) above which the peaks explain too little.
+ *  Measured on synthetic Si (backgrounds 10–2000, 2026-09-24): right cells
+ *  sit at 0.28–0.42, wrong minima at 0.78–0.89. A heuristic, so it warns
+ *  rather than refuses. */
+export const PAWLEY_WEAK_FIT_RATIO = 0.6;
+
 /** A warning when the returned fit should not be trusted, or null.
  *
  *  The engine is a local grid search: it only finds the right cell from a
- *  start close to it, and it can wander to a wrong minimum that still lowers
- *  its unweighted χ² while R_wp rises. A result that ended no better than its
- *  own starting cell, or with R_wp ≥ 100 % (worse than no model), is exactly
- *  that case, and must not be presented as a refined cell. */
+ *  start close to it, and from further out it can settle on a wrong minimum
+ *  that still lowers its χ². Absolute R_wp cannot tell that apart from a good
+ *  fit (it scales with the background level), so the yardstick is the R_wp of
+ *  the linear background alone. The warning is shown beside the result and
+ *  saved with it; the result itself is not hidden. */
 export function pawleyVerdict(r: PawleyResult, refined: boolean): string | null {
-  if (r.rwp == null) return "R_wp is undefined for this pattern (no positive intensity).";
-  if (r.rwp >= 1) {
-    return "R_wp ≥ 100 %: the model fits worse than none. Check the phase, centering and wavelength.";
+  if (r.rwp == null || r.rwp_background == null) {
+    return "R_wp is undefined for this pattern (no positive intensity).";
   }
-  if (refined && r.rwp_initial != null && r.rwp > r.rwp_initial) {
+  if (r.rwp > PAWLEY_WEAK_FIT_RATIO * r.rwp_background) {
+    return (
+      "The fitted reflections explain little beyond the background: the cell, phase, " +
+      "centering, wavelength or profile width is likely wrong. Start closer to the true cell."
+    );
+  }
+  if (refined && r.rwp_initial != null && r.rwp > r.rwp_initial * (1 + 1e-3)) {
     return "The refinement ended worse than its starting cell. Start closer to the true cell.";
   }
   if (refined && !r.converged) {

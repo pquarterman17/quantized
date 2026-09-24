@@ -113,11 +113,15 @@ def spin_asymmetry_route(req: SpinAsymmetryRequest) -> dict[str, Any]:
     return call_calc(spin_asymmetry, req.r_pp, req.r_mm, req.dr_pp, req.dr_mm)
 
 
-# Enumeration cost grows ~hkl_max³ per grid-search trial (0.19 s at 20, 0.6 s
-# at 30, measured 2026-09-24), and a refinement runs ~100 trials. Past this the
-# request would tie up a worker for minutes, so it is refused instead.
+# Work caps. A refinement runs on the order of 100 grid-search trials, and each
+# trial enumerates reflections (~hkl_max³: 0.19 s at 20, 0.6 s at 30) and then
+# solves a points × reflections least-squares problem (0.25 s at 2M cells,
+# 0.9 s at 10M; measured 2026-09-24). Past these the request would hold a
+# worker for many minutes, so it is refused with advice instead.
 PAWLEY_HKL_LIMIT = 20
 PAWLEY_MAX_POINTS = 50_000
+PAWLEY_MAX_REFLECTIONS = 500
+PAWLEY_MAX_DESIGN_SIZE = 2_000_000
 
 FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
 Length = Annotated[float, Field(gt=0, le=1000, allow_inf_nan=False)]
@@ -161,10 +165,13 @@ def _auto_hkl_max(req: PawleyRequest) -> int:
     """Smallest index bound that enumerates every reflection up to max 2θ.
 
     ``|h| = |r*·a| ≤ a/d_min`` holds for any cell, with ``d_min = λ/(2 sin θ_max)``;
-    5 % headroom covers the grid search growing the cell.
+    5 % headroom covers the grid search growing the cell. Tied axes take a's
+    value, as the engine does, so a stale b/c cannot inflate the bound.
     """
+    b = req.a if req.tie in ("abc", "ab") else req.b
+    c = req.a if req.tie == "abc" else req.c
     d_min = req.wavelength / (2.0 * math.sin(math.radians(req.max_two_theta / 2.0)))
-    return max(1, math.ceil(1.05 * max(req.a, req.b, req.c) / d_min))
+    return max(1, math.ceil(1.05 * max(req.a, b, c) / d_min))
 
 
 @router.post("/pawley")
@@ -203,6 +210,8 @@ def pawley_route(req: PawleyRequest) -> dict[str, Any]:
         profile_fwhm=req.profile_fwhm,
         refine_cell=req.refine_cell,
         max_iter=req.max_iter,
+        max_reflections=PAWLEY_MAX_REFLECTIONS,
+        max_design_size=PAWLEY_MAX_DESIGN_SIZE,
     )
     # Pure calc returns ndarrays + a NaN scale placeholder; normalize only at
     # the transport boundary so the calc contract stays untouched.
@@ -212,6 +221,7 @@ def pawley_route(req: PawleyRequest) -> dict[str, Any]:
         "scale": None,
         "rwp": _finite_or_none(out["rwp"]),
         "rwp_initial": _finite_or_none(out["rwp_initial"]),
+        "rwp_background": _finite_or_none(out["rwp_background"]),
         "background": np.asarray(out["background"], dtype=float).tolist(),
         "model": np.asarray(out["model"], dtype=float).tolist(),
         "residual": np.asarray(out["residual"], dtype=float).tolist(),

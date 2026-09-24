@@ -195,3 +195,40 @@ def test_reports_initial_rwp_and_convergence() -> None:
     fixed = pawley_refine(tt, obs, phase, refine_cell=False)
     assert fixed["converged"] is True
     assert fixed["rwp_initial"] == fixed["rwp"]
+
+
+def test_rwp_background_separates_a_right_cell_from_a_wrong_one() -> None:
+    # The background-only R_wp is the yardstick: a right cell explains most of
+    # it, a wrong minimum (5.40 → ~5.508 here) barely beats it.
+    tt, obs = _synthetic_si()
+    right = pawley_refine(
+        tt, obs, {"a": 5.4307, "b": 5.4307, "c": 5.4307, "symmetry": "F", "hklMax": 8},
+        profile_fwhm=0.12, refine_cell=False,
+    )
+    wrong = pawley_refine(
+        tt, obs, {"a": 5.60, "b": 5.60, "c": 5.60, "symmetry": "F", "hklMax": 8},
+        profile_fwhm=0.12, refine_cell=False,
+    )
+    assert right["rwp"] / right["rwp_background"] < 0.5
+    assert wrong["rwp"] / wrong["rwp_background"] > 0.6
+
+
+def test_work_caps_refuse_oversized_problems() -> None:
+    tt, obs = _synthetic_si()
+    phase = {"a": 5.4307, "b": 5.4307, "c": 5.4307, "symmetry": "F", "hklMax": 8}
+    with pytest.raises(ValueError, match="exceeds the limit"):
+        pawley_refine(tt, obs, phase, max_reflections=5)
+    with pytest.raises(ValueError, match="too large to refine"):
+        pawley_refine(tt, obs, phase, max_design_size=10_000)
+
+
+def test_parameter_count_excludes_cell_axes_when_not_refining() -> None:
+    # 3 reflections + 2 background = 5 parameters: 6 points is enough with
+    # the cell fixed, and not enough once the cubic axis is free (6 params).
+    phase = {"a": 5.4307, "b": 5.4307, "c": 5.4307, "symmetry": "F", "hklMax": 5}
+    tt = np.linspace(20.0, 50.0, 6)
+    obs = 10.0 + tt
+    r = pawley_refine(tt, obs, phase, min_two_theta=20, max_two_theta=50, refine_cell=False)
+    assert r["n_peaks"] == 3
+    with pytest.raises(ValueError, match="free parameters"):
+        pawley_refine(tt, obs, phase, min_two_theta=20, max_two_theta=50, refine_cell=True)

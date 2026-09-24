@@ -30,6 +30,7 @@ const result: PawleyResult = {
   residual: [10, 10, 10, 10],
   rwp: 0.05,
   rwp_initial: 0.2,
+  rwp_background: 0.5,
   converged: true,
   tie: "abc",
   hkl_max: 8,
@@ -95,6 +96,20 @@ describe("usePawley request", () => {
     expect(pawleyRefine).toHaveBeenCalledWith(expect.objectContaining({ a: 5.4, b: 5.4, c: 5.4, tie: "abc" }));
   });
 
+  it("clamps the lower 2θ bound at 0 for a scan through the direct beam", async () => {
+    vi.mocked(pawleyRefine).mockResolvedValue(result);
+    setActive({ ...scan, time: [-2, 30, 40, 50] });
+    const { result: hook } = renderHook(() => usePawley());
+    await act(async () => {
+      await hook.current.compute();
+    });
+    expect(pawleyRefine).toHaveBeenCalledWith(expect.objectContaining({
+      two_theta: [-2, 30, 40, 50],
+      min_two_theta: 0,
+      max_two_theta: 50,
+    }));
+  });
+
   it("drops non-finite rows before calling the float-only API", async () => {
     vi.mocked(pawleyRefine).mockResolvedValue({
       ...result, model: [90, 290, 390], residual: [10, 10, 10], background: [10, 10, 10],
@@ -149,6 +164,19 @@ describe("usePawley wavelength", () => {
     expect(hook.current.fields.wavelength).toBe("1.5406");
     expect(hook.current.wavelengthFromFile).toBe(false);
   });
+
+  it("keeps a typed λ when switching to a dataset that records none", () => {
+    const { result: hook } = renderHook(() => usePawley());
+    act(() => hook.current.setField("wavelength", "0.7093"));
+    act(() => useApp.setState({
+      datasets: [
+        { id: "d1", name: "powder.xrdml", data: scan },
+        { id: "d2", name: "other.xy", data: scan },
+      ],
+      activeId: "d2",
+    }));
+    expect(hook.current.fields.wavelength).toBe("0.7093");
+  });
 });
 
 describe("usePawley axis fail-closed", () => {
@@ -175,12 +203,25 @@ describe("usePawley axis fail-closed", () => {
   });
 });
 
+describe("usePawley axis tie", () => {
+  it("gives released b/c fields a's value, not stale earlier text", () => {
+    const { result: hook } = renderHook(() => usePawley());
+    act(() => hook.current.setField("a", "4.05"));
+    act(() => hook.current.setTie("ab"));
+    expect(hook.current.fields.c).toBe("4.05");
+    expect(hook.current.fields.b).toBe("5.43"); // still tied: follows a when sent
+    act(() => hook.current.setTie("none"));
+    expect(hook.current.fields.b).toBe("4.05");
+    expect(hook.current.fields.c).toBe("4.05");
+  });
+});
+
 describe("usePawley input checks disable Refine", () => {
   it("refuses an emptied field instead of sending 0", async () => {
     const { result: hook } = renderHook(() => usePawley());
     act(() => hook.current.setField("fwhm", ""));
     expect(hook.current.canCompute).toBe(false);
-    expect(hook.current.blockedReason).toMatch(/FWHM must be a positive/);
+    expect(hook.current.blockedReason).toMatch(/FWHM must be positive/);
     await act(async () => {
       await hook.current.compute();
     });
@@ -195,6 +236,12 @@ describe("usePawley input checks disable Refine", () => {
       hook.current.setField("gamma", "170");
     });
     expect(hook.current.blockedReason).toMatch(/positive-volume/);
+  });
+
+  it("refuses a 2-D dataset even when its metadata names 2θ", () => {
+    setActive({ ...scan, metadata: { ...scan.metadata, is2D: true } });
+    const { result: hook } = renderHook(() => usePawley());
+    expect(hook.current.blockedReason).toMatch(/2-D dataset/);
   });
 
   it("refuses a channel index the dataset no longer has", () => {
@@ -258,9 +305,24 @@ describe("usePawley → Library", () => {
         two_theta_range_deg: [20, 50],
         rwp: 0.05,
         rwp_initial: 0.2,
+        rwp_background: 0.5,
+        warning: null,
         cell_refined: result.cell,
         peaks: result.peaks,
       }),
+    }));
+  });
+
+  it("saves the fit warning with the result", async () => {
+    vi.mocked(pawleyRefine).mockResolvedValue({ ...result, rwp: 0.45, rwp_background: 0.5 });
+    const { result: hook } = renderHook(() => usePawley());
+    await act(async () => {
+      await hook.current.compute();
+    });
+    act(() => hook.current.toLibrary());
+    const md = useApp.getState().datasets[1].data.metadata ?? {};
+    expect(md.pawley).toEqual(expect.objectContaining({
+      warning: expect.stringMatching(/explain little beyond the background/),
     }));
   });
 
