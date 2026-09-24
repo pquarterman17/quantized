@@ -176,8 +176,8 @@ def pawley_route(req: PawleyRequest) -> dict[str, Any]:
             status_code=422,
             detail=(
                 f"This cell needs Miller indices up to {hkl_max} to reach "
-                f"{req.max_two_theta:g}° 2θ (limit {PAWLEY_HKL_LIMIT}); "
-                "refine over a narrower 2θ range."
+                f"{req.max_two_theta:g} deg 2theta (limit {PAWLEY_HKL_LIMIT}); "
+                "refine over a narrower 2theta range."
             ),
         )
     phase: dict[str, Any] = {

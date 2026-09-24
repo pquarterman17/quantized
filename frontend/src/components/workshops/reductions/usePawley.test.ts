@@ -123,7 +123,7 @@ describe("usePawley request", () => {
 
   it("surfaces the backend's refusal", async () => {
     vi.mocked(pawleyRefine).mockRejectedValue(
-      new Error("No allowed reflections between 20° and 25° 2θ for this cell, centering and wavelength."),
+      new Error("No allowed reflections between 20 and 25 deg 2theta for this cell, centering and wavelength."),
     );
     const { result: hook } = renderHook(() => usePawley());
     await act(async () => {

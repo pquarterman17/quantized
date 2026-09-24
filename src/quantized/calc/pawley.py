@@ -197,7 +197,7 @@ def pawley_refine(
     peaks0 = compute_peaks(cell0)
     if not peaks0:
         raise ValueError(
-            f"No allowed reflections between {min_two_theta:g}° and {max_two_theta:g}° 2θ "
+            f"No allowed reflections between {min_two_theta:g} and {max_two_theta:g} deg 2theta "
             "for this cell, centering and wavelength."
         )
     n_free = 0 if not refine_cell else {"abc": 1, "ab": 2, "none": 3}[tie]
