@@ -267,7 +267,165 @@ describe("useReflFit", () => {
   });
 });
 
+// Review round 1 (6eb29666) regressions.
+describe("useReflFit — result validity", () => {
+  async function fitted() {
+    vi.mocked(reflFit).mockResolvedValue(fitResult());
+    const view = await mountHook();
+    await act(async () => {
+      await view.result.current.fit.run();
+    });
+    expect(view.result.current.fit.result).not.toBeNull();
+    return view;
+  }
+
+  it("refuses to apply a result by name to a stack whose layers moved (a removed layer)", async () => {
+    const { result } = await fitted();
+    expect(result.current.fit.applyBlocked).toBeNull();
+    act(() => result.current.refl.removeLayer(1)); // Air / Ni / Si -> Air / Si
+    expect(result.current.fit.applyBlocked).toMatch(/layer stack changed/);
+
+    act(() => result.current.fit.applyToModel());
+    // L1.thickness (the film's 187.5 Å) must NOT land on what is now the substrate
+    expect(result.current.refl.layers).toEqual([
+      { preset: "Air / Vacuum", thickness: 0, roughness: 0, sld: 0 },
+      { preset: "Silicon", thickness: 0, roughness: 3, sld: 0 },
+    ]);
+    expect(result.current.fit.error).toMatch(/cannot apply/);
+  });
+
+  it("refuses to apply after a radiation switch (presets would resolve to the other SLD)", async () => {
+    const { result } = await fitted();
+    act(() => result.current.refl.setRadiation("neutron"));
+    expect(result.current.fit.applyBlocked).toMatch(/radiation changed/);
+    act(() => result.current.fit.applyToModel());
+    expect(result.current.refl.layers[1].preset).toBe("Nickel");
+    expect(result.current.refl.layers[1].thickness).toBe(200);
+  });
+
+  it("stays applicable after its own Apply turned a moved SLD row manual", async () => {
+    const { result } = await fitted();
+    act(() => result.current.fit.applyToModel());
+    expect(result.current.refl.layers[2].preset).toBe("");
+    expect(result.current.fit.applyBlocked).toBeNull();
+  });
+
+  it("drops a late response once the data binding changed mid-fit (forced race)", async () => {
+    let finish: (r: ReflFitResult) => void = () => {};
+    let seen: AbortSignal | undefined;
+    // Deliberately ignores the abort, like a response already in flight.
+    vi.mocked(reflFit).mockImplementation((_b, signal) => {
+      seen = signal;
+      return new Promise<ReflFitResult>((resolve) => {
+        finish = resolve;
+      });
+    });
+    const { result } = await mountHook();
+    let pending: Promise<void> = Promise.resolve();
+    act(() => {
+      pending = result.current.fit.run();
+    });
+    await waitFor(() => expect(seen).toBeDefined());
+    expect(result.current.fit.busy).toBe(true);
+
+    act(() => result.current.fit.selectDataset("pnr"));
+    expect(result.current.fit.busy).toBe(false);
+    expect(seen?.aborted).toBe(true);
+
+    await act(async () => {
+      finish(fitResult());
+      await pending;
+    });
+    expect(result.current.fit.result).toBeNull();
+    expect(result.current.fit.channels[0].datasetId).toBe("pnr");
+    expect(useApp.getState().fitOverlay).toBeNull();
+  });
+
+  it("a channel edit or Q-window change mid-fit also abandons the fit", async () => {
+    vi.mocked(reflFit).mockImplementation((_b, signal) => new Promise((_res, rej) => {
+      signal?.addEventListener("abort", () => rej(new DOMException("aborted", "AbortError")));
+    }));
+    const { result } = await mountHook();
+    act(() => void result.current.fit.run());
+    await waitFor(() => expect(result.current.fit.busy).toBe(true));
+    act(() => result.current.fit.setChannel(0, { drCol: null }));
+    expect(result.current.fit.busy).toBe(false);
+
+    act(() => void result.current.fit.run());
+    await waitFor(() => expect(result.current.fit.busy).toBe(true));
+    act(() => result.current.fit.setSettings({ qMin: 0.02 }));
+    expect(result.current.fit.busy).toBe(false);
+    expect(result.current.fit.error).toBeNull();
+  });
+
+  it("clears its own overlay when a new run fails, never another workshop's", async () => {
+    const { result } = await fitted();
+    expect(useApp.getState().fitOverlay?.datasetId).toBe("xrr");
+
+    act(() => result.current.fit.setSettings({ qMin: 0.5 })); // no points left
+    await act(async () => {
+      await result.current.fit.run();
+    });
+    expect(result.current.fit.error).toMatch(/fewer than 2/);
+    expect(useApp.getState().fitOverlay).toBeNull();
+
+    // someone else's overlay on the same dataset survives our next failure
+    const theirs = { datasetId: "xrr", y: [1, 2, 3, 4, 5, 6] };
+    act(() => useApp.getState().setFitOverlay(theirs));
+    await act(async () => {
+      await result.current.fit.run();
+    });
+    expect(useApp.getState().fitOverlay).toBe(theirs);
+  });
+
+  it("binding channel 2 to a PNR file takes the columns of channel 2's spin", async () => {
+    const { result } = await mountHook(); // XRR, one unpolarised channel
+    act(() => result.current.fit.addChannel());
+    expect(result.current.fit.channels.map((c) => c.spin)).toEqual(["+", "-"]);
+    act(() => result.current.fit.setChannel(1, { datasetId: "pnr" }));
+    expect(result.current.fit.channels[1]).toEqual({
+      datasetId: "pnr",
+      rCol: 3, // Rmm
+      drCol: 4, // dRmm
+      dqCol: 0,
+      dqIsFwhm: false,
+      spin: "-",
+    });
+  });
+});
+
 describe("ReflFitView", () => {
+  it("shows SLDs compactly in the parameter table and keeps them editable", async () => {
+    render(<Harness />);
+    const sld = (await screen.findByRole("textbox", { name: "L1.sld value" })) as HTMLInputElement;
+    await waitFor(() => expect(sld.value).toBe("7.18e-5"));
+    fireEvent.change(sld, { target: { value: "0.0000025" } });
+    expect(sld.value).toBe("0.0000025"); // not rewritten mid-entry
+    fireEvent.blur(sld);
+    expect(sld.value).toBe("2.5e-6");
+    expect((screen.getByRole("textbox", { name: "L1.thickness value" }) as HTMLInputElement).value).toBe("200");
+  });
+
+  it("disables Apply and says why once the stack changed", async () => {
+    vi.mocked(reflFit).mockResolvedValue(fitResult());
+    function WithRemove() {
+      const { refl, fit } = useBoth();
+      return (
+        <>
+          <button onClick={() => refl.removeLayer(1)}>remove film</button>
+          <ReflFitView fit={fit} />
+        </>
+      );
+    }
+    render(<WithRemove />);
+    fireEvent.click(await screen.findByRole("button", { name: "Run fit" }));
+    const apply = await screen.findByRole("button", { name: "Apply to model" });
+    expect(apply).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "remove film" }));
+    expect(screen.getByRole("button", { name: "Apply to model" })).toBeDisabled();
+    expect(screen.getByText(/Apply is unavailable: the layer stack changed/)).toBeInTheDocument();
+  });
+
   it("shows the backend's 422 detail through the standard error extraction", async () => {
     const actual = await vi.importActual<typeof import("../../../lib/api/reflectivity")>("../../../lib/api/reflectivity");
     vi.mocked(reflFit).mockImplementation(actual.reflFit);

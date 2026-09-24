@@ -3,13 +3,56 @@
 // model itself), vary, min, max and an optional tie to another parameter.
 // Stateless: edits route back through useReflFit.setParam.
 
+import { useEffect, useState } from "react";
+
 import { Select } from "../../primitives";
-import BufferedNumberField from "../../primitives/BufferedNumberField";
-import type { FitParamRow, ParamSettings } from "./reflFitModel";
+import { NumberField } from "../../primitives/NumberField";
+import { editableNum, type FitParamRow, type ParamSettings } from "./reflFitModel";
 
 const COLS = "96px 86px 34px 78px 78px 1fr";
 
 type Patch = Partial<ParamSettings> & { value?: number };
+
+/** A buffered numeric field that SHOWS its value compactly (`editableNum`:
+ *  "2.007e-5", not a clipped "0.00002") while staying freely editable. Like
+ *  BufferedNumberField, the DOM text is a local buffer committed on every
+ *  keystroke that parses; unlike it, the committed value only replaces the
+ *  buffer when they disagree numerically, so typing "0.0000025" is never
+ *  rewritten to "2e-6" mid-entry. Blur reformats (or reverts an invalid
+ *  buffer). */
+function ParamNumberField({
+  value,
+  onValue,
+  width,
+  disabled,
+  label,
+}: {
+  value: number;
+  onValue: (v: number) => void;
+  width: number;
+  disabled?: boolean;
+  label: string;
+}) {
+  const [text, setText] = useState(() => editableNum(value));
+  useEffect(() => {
+    setText((t) => (t.trim() !== "" && Number(t) === value ? t : editableNum(value)));
+  }, [value]);
+  return (
+    <NumberField
+      aria-label={label}
+      value={text}
+      width={width}
+      disabled={disabled}
+      title={String(value)}
+      onBlur={() => setText(editableNum(value))}
+      onChange={(next) => {
+        setText(next);
+        const v = Number(next);
+        if (next.trim() !== "" && Number.isFinite(v)) onValue(v);
+      }}
+    />
+  );
+}
 
 function ParamRow({
   row,
@@ -26,12 +69,11 @@ function ParamRow({
       <span role="rowheader" style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-sm)", color: "var(--text-dim)" }}>
         {row.name}
       </span>
-      <BufferedNumberField
-        aria-label={`${row.name} value`}
+      <ParamNumberField
+        label={`${row.name} value`}
         value={row.value}
         width={80}
-        required
-        onValue={(v) => v !== undefined && onChange(row.name, { value: v })}
+        onValue={(v) => onChange(row.name, { value: v })}
       />
       {/* The Checkbox primitive names its input by visible text; a table cell
           has none, so the same qz-check markup carries an aria-label. */}
@@ -44,21 +86,19 @@ function ParamRow({
           onChange={(e) => onChange(row.name, { vary: e.target.checked })}
         />
       </label>
-      <BufferedNumberField
-        aria-label={`${row.name} min`}
+      <ParamNumberField
+        label={`${row.name} min`}
         value={row.min}
         width={72}
-        required
         disabled={!row.vary || tied}
-        onValue={(v) => v !== undefined && onChange(row.name, { min: v })}
+        onValue={(v) => onChange(row.name, { min: v })}
       />
-      <BufferedNumberField
-        aria-label={`${row.name} max`}
+      <ParamNumberField
+        label={`${row.name} max`}
         value={row.max}
         width={72}
-        required
         disabled={!row.vary || tied}
-        onValue={(v) => v !== undefined && onChange(row.name, { max: v })}
+        onValue={(v) => onChange(row.name, { max: v })}
       />
       <Select
         aria-label={`${row.name} tie`}

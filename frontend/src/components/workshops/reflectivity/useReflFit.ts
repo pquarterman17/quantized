@@ -15,7 +15,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { reflFit, type ReflFitResult } from "../../../lib/api/reflectivity";
 import { defaultPlotView } from "../../../lib/plotview";
 import { droppedRows } from "../../../lib/rowstate";
-import type { DataStruct, Dataset, SldPreset } from "../../../lib/types";
+import type { DataStruct, Dataset, FitOverlay, SldPreset } from "../../../lib/types";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 import {
   alignToRows,
@@ -32,6 +32,7 @@ import {
   type Weighting,
 } from "./reflFitData";
 import {
+  applyBlockedReason,
   applyResults,
   buildParamRows,
   fittedGlobals,
@@ -66,6 +67,9 @@ export interface ReflFitState {
   busy: boolean;
   error: string | null;
   result: ReflFitResult | null;
+  /** Why "Apply to model" is unavailable (the stack or radiation changed
+   *  since the fit), or null. */
+  applyBlocked: string | null;
   curvesAdded: boolean;
   selectDataset: (id: string) => void;
   setChannel: (index: number, patch: Partial<ChannelBinding>) => void;
@@ -108,10 +112,16 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<ReflFitResult | null>(null);
+  // The stack + radiation the result's positional names refer to.
+  const [basis, setBasis] = useState<{ layers: ModelLayer[]; radiation: Radiation } | null>(null);
   const [curveIds, setCurveIds] = useState<string[]>([]);
+  const fitOverlay = useApp((s) => s.fitOverlay);
   const abortRef = useRef<AbortController | null>(null);
   const runIdRef = useRef(0);
   const selectSeqRef = useRef(0);
+  // The overlay object this hook last set, so clearing never removes an
+  // overlay another workshop has drawn since.
+  const ownOverlayRef = useRef<FitOverlay | null>(null);
 
   // Closing the workshop mid-fit abandons the request rather than leaving it
   // to land in an unmounted hook.
@@ -126,10 +136,26 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
   const firstData = datasets.find((d) => d.id === channels[0]?.datasetId)?.data;
   const lambda = channelLambda(settings, firstData);
 
+  const applyBlocked = result && basis ? applyBlockedReason(basis, layers, radiation) : null;
+
   function clearResult(): void {
     setResult(null);
+    setBasis(null);
     setCurveIds([]);
     setError(null);
+    // A stale fitted curve must not outlive its result on the plot.
+    if (ownOverlayRef.current && fitOverlay === ownOverlayRef.current) setFitOverlay(null);
+    ownOverlayRef.current = null;
+  }
+
+  /** Abandon an in-flight fit: its data binding is about to change, so a
+   *  late response must not land as the result of the new choice. */
+  function invalidateRun(): void {
+    if (!abortRef.current) return;
+    abortRef.current.abort();
+    abortRef.current = null;
+    runIdRef.current++;
+    setBusy(false);
   }
 
   function prefill(ds: Dataset): void {
@@ -142,6 +168,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     const ds = datasets.find((d) => d.id === id);
     if (!ds) return;
     const seq = ++selectSeqRef.current;
+    invalidateRun();
     prefill(ds);
     clearResult();
     // A lazy (not yet fetched) dataset has no columns to suggest from yet:
@@ -158,13 +185,17 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
   }
 
   function setChannel(index: number, patch: Partial<ChannelBinding>): void {
+    invalidateRun();
     setChannels((cs) =>
       cs.map((c, i) => {
         if (i !== index) return c;
         if (patch.datasetId && patch.datasetId !== c.datasetId) {
-          // A new dataset for this channel: take its suggested columns, keep the spin.
+          // A new dataset for this channel: take its suggested columns for THIS
+          // channel's spin (a PNR file suggests one channel per spin state), and
+          // keep the spin.
           const ds = datasets.find((d) => d.id === patch.datasetId);
-          const sug = ds ? defaultChannels(ds)[0] : undefined;
+          const sugs = ds ? defaultChannels(ds) : [];
+          const sug = sugs.find((s) => s.spin === c.spin) ?? sugs[0];
           return sug ? { ...sug, spin: c.spin } : { ...c, datasetId: patch.datasetId, rCol: 0, drCol: null, dqCol: null };
         }
         return { ...c, ...patch };
@@ -173,6 +204,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
   }
 
   function addChannel(): void {
+    invalidateRun();
     setChannels((cs) => {
       if (cs.length === 0 || cs.length >= MAX_CHANNELS) return cs;
       const last = cs[cs.length - 1];
@@ -184,10 +216,12 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
   }
 
   function removeChannel(index: number): void {
+    invalidateRun();
     setChannels((cs) => (cs.length <= 1 ? cs : cs.filter((_, i) => i !== index)));
   }
 
   function setSettings(patch: Partial<FitDataSettings>): void {
+    invalidateRun();
     setSettingsState((s) => ({ ...s, ...patch }));
   }
 
@@ -216,6 +250,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
       return;
     }
     const id = ++runIdRef.current;
+    const fitBasis = { layers, radiation };
     const controller = new AbortController();
     abortRef.current = controller;
     setBusy(true);
@@ -238,10 +273,13 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
       );
       if (id !== runIdRef.current) return;
       setResult(res);
+      setBasis(fitBasis);
       const first = res.curves[0];
       if (first) {
         const sent = { q: built[0].channel.q, rows: built[0].rows };
-        setFitOverlay({ datasetId: channels[0].datasetId, y: alignToRows(first, sent, sizes[0]) });
+        const overlay: FitOverlay = { datasetId: channels[0].datasetId, y: alignToRows(first, sent, sizes[0]) };
+        ownOverlayRef.current = overlay;
+        setFitOverlay(overlay);
       }
       setStatus(`reflectivity fit — ${res.success ? "converged" : "did not converge"} after ${res.n_evaluations} evaluations`);
     } catch (e) {
@@ -301,8 +339,17 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
   }
 
   function applyToModel(): void {
-    if (!result) return;
-    replaceLayers(applyResults(layers, presets, radiation, result.parameters));
+    if (!result || !basis) return;
+    const blocked = applyBlockedReason(basis, layers, radiation);
+    if (blocked) {
+      setError(`cannot apply: ${blocked}`);
+      return;
+    }
+    const next = applyResults(layers, presets, radiation, result.parameters);
+    replaceLayers(next);
+    // Applying turns moved-SLD rows manual; the result still describes this
+    // (same-order) stack, so re-applying stays allowed.
+    setBasis({ layers: next, radiation });
     setGlobals((g) => fittedGlobals(result.parameters, g));
     setStatus("applied the fitted values to the layer model");
   }
@@ -317,6 +364,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     busy,
     error,
     result,
+    applyBlocked,
     curvesAdded: curveIds.length > 0,
     selectDataset,
     setChannel,

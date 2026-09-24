@@ -97,7 +97,7 @@ export default function ReflectivityPanel() {
               onChange={(v) => setGrid({ nPoints: Math.max(2, Math.round(Number(v) || 0)) })}
             />
 
-            <label className="qzk-field-lbl" style={{ margin: 0 }}>
+            <label className="qzk-field-lbl" style={{ margin: 0, textTransform: "none" }}>
               Resolution dQ/Q
             </label>
             <NumberField

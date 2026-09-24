@@ -218,6 +218,30 @@ export function setLayerParam(
   );
 }
 
+/** What a fit result's parameter NAMES are bound to: the layer order and
+ *  each row's material, plus the radiation that resolved their SLDs. Names
+ *  are positional (`L2.sld`), so a result may only be written back into a
+ *  stack with the same signature — after a removed layer, `L2` is a
+ *  different layer (the substrate, say), and after a radiation switch a
+ *  preset's SLD is the other radiation's. */
+export function stackSignature(layers: ModelLayer[], radiation: Radiation): string {
+  return JSON.stringify([radiation, layers.map((l) => l.preset)]);
+}
+
+/** Why a result fitted against `basis` cannot be applied to the current
+ *  stack, or null when it can. */
+export function applyBlockedReason(
+  basis: { layers: ModelLayer[]; radiation: Radiation },
+  layers: ModelLayer[],
+  radiation: Radiation,
+): string | null {
+  if (basis.radiation !== radiation) return "the radiation changed since this fit — run it again to apply";
+  if (stackSignature(basis.layers, radiation) !== stackSignature(layers, radiation)) {
+    return "the layer stack changed since this fit — run it again to apply";
+  }
+  return null;
+}
+
 /** Write fitted values back into the stack: thickness, roughness and msld as
  *  given; SLD/absorption keep the preset when they did not move, and switch
  *  the row to a manual SLD when they did. */
@@ -247,6 +271,14 @@ export function objectiveSummary(res: Pick<ReflFitResult, "weighting" | "reduced
 } {
   if (res.weighting === "dr") return { label: "reduced χ²", value: res.reduced_chi2 };
   return { label: "reduced Σ(Δlog₁₀R)²", value: res.reduced_sum_sq_log };
+}
+
+/** A value as EDITABLE text: lossless (it parses back to the same number) but
+ *  compact, so an SLD reads "2.007e-5" in a narrow field instead of being
+ *  clipped to "0.00002". */
+export function editableNum(v: number): string {
+  const a = Math.abs(v);
+  return a !== 0 && (a < 1e-3 || a >= 1e5) ? v.toExponential() : String(v);
 }
 
 /** Compact number formatting for the tables (engineering-friendly). */

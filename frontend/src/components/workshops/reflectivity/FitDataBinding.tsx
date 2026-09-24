@@ -12,6 +12,9 @@ import { MAX_CHANNELS, type ChannelBinding, type Spin, type XKind } from "./refl
 import type { ReflFitState } from "./useReflFit";
 
 const LBL = { margin: 0 } as const;
+// Field labels are uppercased by CSS; a label that IS a symbol (dR, dQ/Q, λ, σ)
+// must keep its case — "DQ/Q (1Σ)" and "Λ" say something else.
+const SYM = { margin: 0, textTransform: "none" } as const;
 const NONE = "__none__";
 
 function columnOptions(labels: string[], allowNone: boolean): { value: string; label: string }[] {
@@ -64,21 +67,21 @@ function ChannelRow({
         </IconButton>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "auto 1fr auto 1fr", gap: "4px 6px", alignItems: "center" }}>
-        <label className="qzk-field-lbl" style={LBL}>R</label>
+        <label className="qzk-field-lbl" style={SYM}>R</label>
         <Select
           aria-label={`channel ${n} R column`}
           options={columnOptions(labels, false)}
           value={String(ch.rCol)}
           onChange={(e) => fit.setChannel(index, { rCol: Number(e.target.value) })}
         />
-        <label className="qzk-field-lbl" style={LBL}>dR</label>
+        <label className="qzk-field-lbl" style={SYM}>dR</label>
         <Select
           aria-label={`channel ${n} dR column`}
           options={columnOptions(labels, true)}
           value={colValue(ch.drCol)}
           onChange={(e) => fit.setChannel(index, { drCol: colFrom(e.target.value) })}
         />
-        <label className="qzk-field-lbl" style={LBL}>dQ</label>
+        <label className="qzk-field-lbl" style={SYM}>dQ</label>
         <Select
           aria-label={`channel ${n} dQ column`}
           options={columnOptions(labels, true)}
@@ -143,7 +146,7 @@ export default function FitDataBinding({ fit }: { fit: ReflFitState }) {
         />
         {settings.xKind === "twotheta" && (
           <>
-            <label className="qzk-field-lbl" style={LBL}>λ (Å)</label>
+            <label className="qzk-field-lbl" style={SYM}>λ (Å)</label>
             <BufferedNumberField
               aria-label="wavelength override"
               value={settings.lambda ?? undefined}
@@ -184,7 +187,7 @@ export default function FitDataBinding({ fit }: { fit: ReflFitState }) {
           </option>
           <option value="log">log₁₀ R (equal scatter)</option>
         </select>
-        <label className="qzk-field-lbl" style={LBL}>dQ/Q (1σ)</label>
+        <label className="qzk-field-lbl" style={SYM}>dQ/Q (1σ)</label>
         <BufferedNumberField
           aria-label="resolution dQ/Q"
           value={settings.resolution}

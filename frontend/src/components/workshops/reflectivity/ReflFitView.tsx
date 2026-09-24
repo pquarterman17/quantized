@@ -46,7 +46,7 @@ export default function ReflFitView({ fit }: { fit: ReflFitState }) {
           <div className="qzk-field-lbl" style={SECTION}>Result</div>
           <FitResults result={fit.result} />
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-            <Button size="sm" onClick={fit.applyToModel}>
+            <Button size="sm" disabled={fit.applyBlocked != null} title={fit.applyBlocked ?? undefined} onClick={fit.applyToModel}>
               Apply to model
             </Button>
             <Button size="sm" disabled={fit.curvesAdded} onClick={() => void fit.addCurves()}>
@@ -56,6 +56,11 @@ export default function ReflFitView({ fit }: { fit: ReflFitState }) {
               Open log-Y plot
             </Button>
           </div>
+          {fit.applyBlocked && (
+            <div className="qzk-ds-meta qzk-msg" role="note" style={{ marginTop: 6, color: "var(--warn)" }}>
+              Apply is unavailable: {fit.applyBlocked}.
+            </div>
+          )}
           <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>
             The fitted curve of channel 1 is overlaid on its dataset; the fit curves add every channel and SLD profile.
           </div>
