@@ -61,6 +61,7 @@ describe("workshop dataset identity", () => {
     "/components/workshops/hysteresis/useHysteresis.ts",
     "/components/workshops/magtools/useMagTools.ts",
     "/components/workshops/reflectivity/useReflectivity.ts",
+    "/components/workshops/reflectivity/useReflFit.ts",
     "/commands/fileCommands.ts",
     "/components/Library/Library.tsx",
     "/components/Library/folderOps.ts",
