@@ -3015,7 +3015,33 @@ a plan edit.
   williamson_hall` likewise takes no weights. Filling either in is new
   numerics and needs a MATLAB golden first (CLAUDE.md's golden-parity rule) —
   deliberately not invented here.
-- [ ] Manual peak edits and reviewed batch recipe.
+- [~] Manual peak edits and reviewed batch recipe. **2026-09-23 slice:** fitted
+  peak rows can now be selected, edited (center/FWHM/height/area), or removed
+  directly in the Peaks workshop. The durable `PeakTable` is the source of
+  truth, so edits survive save/reopen and feed downstream consumers such as
+  Williamson-Hall. An edit invalidates global R²/RMSE and clears the
+  uncertainty slot of each field it actually changed (every current producer
+  writes null uncertainties, so today this is a contract, not a visible
+  change). Only the fields an edit changes are validated: FWHM must stay
+  positive, and height/area may not become zero or change sign (a fitted dip
+  is a legitimate negative peak and stays editable). When height or FWHM
+  changes and area is left as it was, area is rescaled by the same ratio
+  (exact for Gaussian/Lorentzian/pseudo-Voigt at fixed η, approximate for an
+  independently fitted Split Pearson VII).
+  **Review hardening, 2026-09-23/24:** publishing a fit, and each effective
+  manual edit, removal and include/exclude toggle, creates one undo step
+  (no-op submissions create none); undo/redo rehydrates both the visible fitted table and its overlay
+  from the durable artifact. Async hydration is generation-guarded (a store
+  subscription bumps the generation on any active-dataset switch), so a
+  delayed resolve cannot restore an old dataset's fit after navigation. An
+  exclusion toggle no longer replaces the fit result, so the fitted-row
+  selection survives it. Hand-edited rows are declared as such: the Peaks
+  header ("N edited by hand"; "fit metrics cleared by manual changes" instead
+  of "independent fits"), the Williamson-Hall source caption, and a Source
+  column in the peak-fit report. Recording every writer matters because undo
+  snapshots the whole dataset list: an unrecorded write made after a recorded
+  one is rolled back by undoing it (an unrecorded re-fit was lost this way).
+  Batch recipe remains open, as does direct manual peak creation.
 - [ ] Technique-specific plot recipe is manually chosen, never auto-overwrites.
 - [ ] Validate on representative owner instruments/phases.
 
@@ -3051,7 +3077,9 @@ summary without leaving Quantized.
 
 **Models:** Sol high/Opus 4.8 for fit semantics; Sonnet 5 for UI.
 
-- [ ] Add/edit/delete peaks directly in selection.
+- [~] Add/edit/delete peaks directly in selection. Edit + delete of fitted
+  durable rows shipped in the 2026-09-23 durability slice; direct add remains
+  open.
 - [ ] Mixed functions and shared/fixed/start/bound parameters.
 - [ ] Context submenu: Peak Fitting > Fit this range.
 - [ ] Explicit model metrics/warnings.

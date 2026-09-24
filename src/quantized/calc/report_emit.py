@@ -90,15 +90,24 @@ def from_multipeak_fit(
     """Build a report from a ``calc.peak_multifit`` result dict."""
     peaks = list(result.get("peaks", []))
     cols = ["Peak", "Model", "Center", "FWHM", "Height", "Area", "η"]
+    # Rows the user edited by hand are not fit output; say so rather than let
+    # manual numbers read as fitted values. Only shown when there are any.
+    n_edited = sum(1 for pk in peaks if pk.get("status") == "manual-edit")
+    if n_edited:
+        cols.append("Source")
     rows = []
     for i, pk in enumerate(peaks, start=1):
-        rows.append([
+        row = [
             i, pk.get("model", result.get("model", "")),
             pk.get("center"), pk.get("fwhm"), pk.get("height"),
             pk.get("area"), pk.get("eta"),
-        ])
+        ]
+        if n_edited:
+            row.append("edited by hand" if pk.get("status") == "manual-edit" else "fit")
+        rows.append(row)
+    caption = f"{len(peaks)} peak(s)" + (f", {n_edited} edited by hand" if n_edited else "")
     blocks: list[dict[str, Any]] = [
-        table_block(cols, rows, caption=f"{len(peaks)} peak(s)"),
+        table_block(cols, rows, caption=caption),
         _gof_table(result, [("RMSE", "rmse"), ("Peaks", "nPeaks")]),
     ]
     return ReportSheet(
