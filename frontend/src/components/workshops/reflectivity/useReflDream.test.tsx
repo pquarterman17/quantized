@@ -66,7 +66,7 @@ async function fittedHook() {
 /** A job whose poll reports progress, then waits until `finish` is called. */
 function controllableJob() {
   let finish: (res: ReflPosteriorResult | Error) => void = () => undefined;
-  vi.mocked(reflDream).mockResolvedValue({ job_id: "j1", plan: { n_free: 3, n_chains: 12, n_generations: 1033, n_evaluations: 12500 } });
+  vi.mocked(reflDream).mockResolvedValue({ job_id: "j1", plan: { n_free: 3, n_chains: 12, n_generations: 1033, n_evaluations: 12500, band_draws: 200 } });
   vi.mocked(pollReflJob).mockImplementation((_id, onProgress) => {
     onProgress?.(0.42, "sampling posterior");
     return new Promise((resolve, reject) => {

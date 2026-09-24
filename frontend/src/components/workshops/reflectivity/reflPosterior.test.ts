@@ -75,6 +75,11 @@ describe("the posterior summary", () => {
   it("says plainly when the intervals are not to be trusted", () => {
     const s = posteriorSummary(dreamResult(), DREAM_DEFAULTS, RAN);
     expect(posteriorCaveat(s)).toMatch(/R-hat above 1.2 for background/);
+    // every not-converged state says what to do about it
+    expect(posteriorCaveat(s)).toMatch(/Increase samples or burn-in and re-estimate/);
+    expect(posteriorCaveat({ convergence: { ...s.convergence, flagged: [], rhat_max: 1.05, converged: false } })).toMatch(
+      /did not converge.*Increase samples or burn-in/,
+    );
     expect(posteriorCaveat({ convergence: { ...s.convergence, stopped: "deadline" } })).toMatch(/time limit/);
     expect(posteriorCaveat({ convergence: { ...s.convergence, flagged: [], unmeasured: ["scale"] } })).toMatch(
       /R-hat could not be computed for scale/,

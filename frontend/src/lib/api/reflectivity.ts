@@ -139,6 +139,8 @@ export interface ReflPosteriorResult {
     thin: number;
     n_chains: number;
     n_generations: number;
+    /** Generations kept after burn-in (thinned). */
+    n_kept_generations: number;
     n_generations_requested: number;
     n_draws: number;
     n_band_draws: number;
@@ -157,7 +159,10 @@ export interface ReflPosteriorResult {
  *  the sampler would refuse is rejected here, before anything is queued. */
 export function reflDream(
   body: ReflDreamRequest,
-): Promise<{ job_id: string; plan: { n_free: number; n_chains: number; n_generations: number; n_evaluations: number } }> {
+): Promise<{
+  job_id: string;
+  plan: { n_free: number; n_chains: number; n_generations: number; n_evaluations: number; band_draws: number };
+}> {
   return postJSON("/api/reflectivity/dream", body);
 }
 

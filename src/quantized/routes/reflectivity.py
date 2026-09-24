@@ -200,12 +200,23 @@ def fit_route(req: ReflFitRequest) -> dict[str, Any]:
 
 # ── posterior sampling: DREAM through the job queue (audit P2.2) ─────────────
 
-# A run makes ~(burn + samples/chains) x chains model evaluations; each costs
-# what a /fit evaluation costs (the same per-evaluation cap applies), so the
-# total is capped too, and the deadline returns a partial, flagged posterior.
-# Measured 2026-09-24: 3.7 ms per evaluation on the 500-point smeared XRR
-# fixture, so the cap is ~15 min of that and the deadline cuts it at 5.
+# A run makes ~(burn + samples/chains) x chains model evaluations, each costing
+# what a /fit evaluation costs (so /fit's per-evaluation cap applies). Three
+# more bounds:
+# * the total evaluations (DREAM_MAX_EVALUATIONS);
+# * one GENERATION's cost, chains x eval-units (DREAM_MAX_GENERATION_UNITS):
+#   measured 2026-09-24 at 72-92 ns per unit here (a 4M-unit evaluation took
+#   0.44 s, ~110 ns, on a slower machine), so a generation stays under ~5 s.
+#   The bands cost band_draws x eval-units and are clamped to the same budget
+#   (never below 10 draws: units <= 4M leaves at least 10);
+# * the deadline, which the sampler checks before EVERY model evaluation (not
+#   per generation), so a run stops within one evaluation of it and returns a
+#   partial, flagged posterior - or fails, if not one generation past the
+#   start population had completed. The bands follow, outside it.
+# At 3.7 ms per evaluation (the 500-point smeared XRR fixture) the evaluation
+# cap is ~15 min of work; the deadline cuts it at 5.
 DREAM_MAX_EVALUATIONS = 250_000
+DREAM_MAX_GENERATION_UNITS = 40_000_000
 DREAM_DEADLINE_S = 300.0
 
 
@@ -233,7 +244,9 @@ def dream_route(req: ReflDreamRequest) -> dict[str, Any]:
 
     Poll ``GET /api/jobs/{id}``; ``GET /api/jobs/{id}/result`` is
     ``calc.refl_dream.sample_reflectivity``'s dict. A request the sampler would
-    refuse is a 422 here, before anything is queued.
+    refuse, or one over the limits above, is a 422 here, before anything is
+    queued. ``plan`` carries the sizes, including the band draws after the
+    clamp.
     """
     _check_units(req, "run")
     if not bumps_available():
@@ -243,11 +256,23 @@ def dream_route(req: ReflDreamRequest) -> dict[str, Any]:
         )
     params = [p.model_dump() for p in req.parameters]
     chans = [c.model_dump() for c in req.channels]
+    units = max(1, _eval_units(req))
+    band_draws = min(req.band_draws, max(10, DREAM_MAX_GENERATION_UNITS // units))
     kwargs: dict[str, Any] = {
         "centre": req.centre, "weighting": req.weighting, "samples": req.samples,
-        "burn": req.burn, "pop": req.pop, "thin": req.thin, "band_draws": req.band_draws,
+        "burn": req.burn, "pop": req.pop, "thin": req.thin, "band_draws": band_draws,
     }
     plan = call_calc(plan_sampling, params, chans, **kwargs)
+    if plan["n_chains"] * units > DREAM_MAX_GENERATION_UNITS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"one generation would cost {plan['n_chains'] * units:,} point-layer "
+                f"evaluations ({plan['n_chains']:,} chains x {units:,}; limit "
+                f"{DREAM_MAX_GENERATION_UNITS:,}); lower the chains per parameter, the "
+                "points or the layers"
+            ),
+        )
     if plan["n_evaluations"] > DREAM_MAX_EVALUATIONS:
         raise HTTPException(
             status_code=422,
@@ -271,6 +296,6 @@ def dream_route(req: ReflDreamRequest) -> dict[str, Any]:
         return to_jsonable(out)
 
     try:
-        return {"job_id": jobs.submit(run_job), "plan": plan}
+        return {"job_id": jobs.submit(run_job), "plan": {**plan, "band_draws": band_draws}}
     except JobQueueFullError as exc:
         raise HTTPException(status_code=429, detail=str(exc)) from exc

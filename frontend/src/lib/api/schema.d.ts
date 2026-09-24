@@ -2625,7 +2625,9 @@ export interface paths {
          *
          *     Poll ``GET /api/jobs/{id}``; ``GET /api/jobs/{id}/result`` is
          *     ``calc.refl_dream.sample_reflectivity``'s dict. A request the sampler would
-         *     refuse is a 422 here, before anything is queued.
+         *     refuse, or one over the limits above, is a 422 here, before anything is
+         *     queued. ``plan`` carries the sizes, including the band draws after the
+         *     clamp.
          */
         post: operations["dream_route_api_reflectivity_dream_post"];
         delete?: never;

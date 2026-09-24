@@ -31,7 +31,7 @@ from typing import Any
 import numpy as np
 import pytest
 
-from quantized.calc import dream_seed
+from quantized.calc import dream_seed, refl_dream
 from quantized.calc.refl_dream import RHAT_FLAG, plan_sampling, sample_reflectivity
 from quantized.calc.refl_fit import fit_reflectivity
 from quantized.calc.reflectivity import parratt_refl
@@ -190,11 +190,30 @@ def test_the_seeded_stream_is_restored_when_the_body_raises() -> None:
 # ── bounded work ─────────────────────────────────────────────────────────────
 
 
-def test_the_deadline_returns_a_flagged_partial_posterior() -> None:
+class FakeClock:
+    """``time.monotonic`` that ticks one second per call, so a deadline lands
+    at an exact model evaluation (the sampler checks it before each one)."""
+
+    def __init__(self) -> None:
+        self.calls = 0
+
+    def monotonic(self) -> float:
+        self.calls += 1
+        return float(self.calls)
+
+
+def test_the_deadline_returns_a_flagged_partial_posterior(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Clock read 1 sets the deadline at 26.5; reads 2-4 are the start ball's
+    # Jacobian, 5-14 the start population, 15-24 generation 1, 25 DREAM's own
+    # end-of-generation check, 26-27 generation 2's first evaluations: the run
+    # stops inside generation 2 with generations 0 and 1 recorded.
+    clock = FakeClock()
+    monkeypatch.setattr(refl_dream, "time", clock)
     params, chans = degenerate()
     out = sample_reflectivity(params, chans, samples=100_000, burn=50, pop=5, seed=1,
-                              deadline_s=0.0, band_draws=10)
+                              deadline_s=25.5, band_draws=10)
     c = out["convergence"]
+    assert c["n_generations"] == 1
     assert c["stopped"] == "deadline" and c["converged"] is False
     assert c["n_generations"] < c["n_generations_requested"]
     assert any("time limit" in w for w in out["warnings"])
@@ -206,18 +225,63 @@ def test_the_deadline_returns_a_flagged_partial_posterior() -> None:
     assert len(out["parameters"]) == 2 and out["r_bands"]
 
 
-def test_abort_check_stops_sampling_as_cancelled() -> None:
+def test_the_deadline_is_checked_before_every_evaluation_not_per_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The deadline passes during the start population (clock read 7): the run
+    # stops there, before a single generation, and has nothing to report — it
+    # must not present the start ball as a posterior.
+    clock = FakeClock()
+    monkeypatch.setattr(refl_dream, "time", clock)
+    params, chans = degenerate()
+    with pytest.raises(ValueError, match="time limit ran out before DREAM completed one"):
+        sample_reflectivity(params, chans, samples=1000, burn=50, pop=5, seed=1, deadline_s=5.5)
+    assert clock.calls == 7  # no evaluation ran after the deadline
+
+
+def test_a_cancel_before_the_first_generation_raises_cancelled() -> None:
     params, chans = degenerate()
     calls = {"n": 0}
 
     def abort() -> bool:
         calls["n"] += 1
-        return calls["n"] > 30
+        return calls["n"] >= 3  # inside the start ball's Jacobian
 
-    out = sample_reflectivity(params, chans, samples=100_000, burn=10, pop=5, seed=1,
-                              abort_check=abort, band_draws=10)
-    assert out["convergence"]["stopped"] == "cancelled"
-    assert out["convergence"]["converged"] is False
+    with pytest.raises(dream_seed.DreamCancelled, match="cancelled after 0 generations"):
+        sample_reflectivity(params, chans, samples=1000, seed=1, abort_check=abort)
+    assert calls["n"] == 3
+
+
+def test_the_run_keeps_every_requested_generation_after_burn_in() -> None:
+    # bumps counts the start population as n_chains draws; sized without it,
+    # burn 21 + 10 kept generations ended at generation 30, keeping 9.
+    params, chans = degenerate()
+    out = sample_reflectivity(params, chans, samples=100, burn=21, pop=5, seed=1, band_draws=10)
+    c = out["convergence"]
+    assert c["n_kept_generations"] >= 10 and c["n_draws"] >= 100
+    assert c["burn"] >= 21 and c["stopped"] == "completed"  # rounded up to whole blocks
+    assert not any("burn-in" in w or "ended after" in w for w in out["warnings"])
+
+
+def test_samples_too_few_for_the_minimum_kept_generations_are_refused() -> None:
+    params, chans = degenerate()  # 2 free x pop 5 = 10 chains: at least 100 samples
+    with pytest.raises(ValueError, match="samples \\(90\\) must be at least 100"):
+        sample_reflectivity(params, chans, samples=90, burn=20, pop=5)
+    with pytest.raises(ValueError, match="at least 10 generations are kept"):
+        plan_sampling(params, chans, samples=10, burn=20, pop=5)
+
+
+def test_a_cancel_mid_run_raises_cancelled_rather_than_returning() -> None:
+    params, chans = degenerate()
+    calls = {"n": 0}
+
+    def abort() -> bool:
+        calls["n"] += 1
+        return calls["n"] > 60  # a few generations in
+
+    with pytest.raises(dream_seed.DreamCancelled, match="cancelled after [1-9]"):
+        sample_reflectivity(params, chans, samples=100_000, burn=10, pop=5, seed=1,
+                            abort_check=abort, band_draws=10)
 
 
 def test_progress_is_reported_and_may_cancel() -> None:

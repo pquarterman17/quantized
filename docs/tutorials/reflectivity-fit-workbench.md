@@ -84,10 +84,13 @@ fit, samples the posterior instead and reports what the draws say.
 - **Settings** — *samples* (draws kept, default 10,000), *burn-in*
   (generations discarded first, default 200), *chains/param* (default 4), and
   *seed* (default 1; the same seed reproduces a run exactly on the same
-  install; blank for a fresh one). A typical 9-parameter XRR fit on a
-  500-point smeared scan takes about a minute; a run stops at 5 minutes and
-  reports what it has, marked provisional. Progress shows while it runs;
-  **Cancel** stops it.
+  install; blank for a fresh one). Samples must be at least 10× the chains,
+  so that 10 generations are kept after burn-in. On a 9-parameter XRR fit
+  of a 500-point smeared scan the defaults converge (R-hat 1.10–1.14) in
+  about a minute. A run stops at 5 minutes and reports what it has, marked
+  provisional (or fails, if it had not finished one generation); a request
+  whose single generation would be too costly is refused up front.
+  Progress shows while it runs; **Cancel** stops it and keeps nothing.
 - **What you get** — beside each least-squares value ± stderr: the 68%
   interval (with the median and best draw on hover), the 95% interval, and
   **R-hat**. The line under the table gives the draws, chains, burn-in,

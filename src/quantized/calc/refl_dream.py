@@ -28,12 +28,22 @@ Gaussian ball about ``centre`` (the fitted values) shaped by the local
 Jacobian covariance, each direction's width clamped to [1e-6, 0.1] of the
 span, with one chain exactly at the centre. ``burn`` generations are
 discarded, then ``ceil(samples / chains)`` generations are kept, every
-``thin``-th one. ``seed`` makes a run reproducible (``calc.dream_seed``).
+``thin``-th one — at least ``MIN_KEPT_GENERATIONS`` of them, or the request
+is refused. (bumps counts the start population as one generation's draws,
+so the run is sized to include it: sized without it, a run could end one
+generation short and keep burn-in draws.) ``seed`` makes a run reproducible
+(``calc.dream_seed``).
 
 Bounded work: the caller caps ``samples``/``burn``/``pop``; ``deadline_s``
-stops sampling at a wall-clock budget and returns what was drawn, flagged
-not converged — past burn-in when it got there, else the second half of what
-it has, with a warning either way.
+and ``abort_check`` are checked before EVERY model evaluation — in the start
+ball's Jacobian, the start population and each generation — so neither waits
+for a generation to end. A cancel raises ``DreamCancelled`` wherever it lands
+(sampling or bands). A deadline after at least one generation past the start
+returns what was drawn, flagged not converged (past burn-in when it got
+there, else the second half of what it has, with a warning either way); one
+before that has nothing to report and raises ``ValueError``. The bands are
+computed after sampling, outside the deadline; the caller bounds their cost
+with ``band_draws``.
 
 Output
 ------
@@ -59,20 +69,23 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.calc.dream_seed import DreamCancelled, seed_reproducible, seeded_dream
+from quantized.calc.refl_dream_bands import PERCENTILES, posterior_bands
 from quantized.calc.refl_fit import channel_model, channel_residuals
-from quantized.calc.refl_model import ReflChannel, ReflParams, layer_stack, validate_model
-from quantized.calc.sld import sld_profile
+from quantized.calc.refl_model import ReflChannel, ReflParams, validate_model
 
-__all__ = ["MIN_CHAINS", "PERCENTILES", "RHAT_FLAG", "plan_sampling", "sample_reflectivity"]
+__all__ = [
+    "MIN_CHAINS", "MIN_KEPT_GENERATIONS", "PERCENTILES", "RHAT_FLAG", "plan_sampling",
+    "sample_reflectivity",
+]
 
 #: R-hat above which a parameter's chains count as not mixed.
 RHAT_FLAG = 1.2
-#: The band percentiles, low to high.
-PERCENTILES = (2.5, 16.0, 50.0, 84.0, 97.5)
 #: DREAM's DE step draws up to 3 pairs of OTHER chains per proposal, so it
 #: needs at least 7; 10 leaves the pair choice some room.
 MIN_CHAINS = 10
-_BAND_KEYS = ("lo95", "lo68", "median", "hi68", "hi95")
+#: The fewest generations a run may keep after burn-in: one DREAM block (its
+#: DE step count), and enough for R-hat to be computed.
+MIN_KEPT_GENERATIONS = 10
 _JAC_STEP = 1e-6
 _BALL_SD = (1e-6, 0.1)
 # When do the bounds, not the data, limit a 95% interval? When it ends within
@@ -94,6 +107,10 @@ ProgressFn = Callable[[float], None]
 AbortFn = Callable[[], bool]
 
 
+class _Stop(Exception):
+    """Raised before a model evaluation once the deadline passed or a cancel came."""
+
+
 class _Posterior:
     """The bumps.dream model protocol: ``labels``, ``bounds`` and ``map``."""
 
@@ -104,8 +121,12 @@ class _Posterior:
         self.labels = [params.names[i] for i in params.free]
         self.bounds = np.array([np.zeros(n), np.ones(n)])
         self.n_evaluations = 0
+        #: Called before every evaluation; returns True to stop (raises _Stop).
+        self.should_stop: Callable[[], bool] | None = None
 
     def residuals(self, x: NDArray[np.float64]) -> NDArray[np.float64]:
+        if self.should_stop is not None and self.should_stop():
+            raise _Stop
         self.n_evaluations += 1
         v = self.params.full(x)
         return np.concatenate([
@@ -194,6 +215,13 @@ class _Setup:
             self.x0[k] = (c - lo) / params.span[k]
         self.n_chains = max(pop * self.n_free, MIN_CHAINS)
         self.steps = -(-samples // self.n_chains)
+        if self.steps < MIN_KEPT_GENERATIONS:
+            least = MIN_KEPT_GENERATIONS * self.n_chains
+            raise ValueError(
+                f"samples ({samples:,}) must be at least {least:,}: {MIN_KEPT_GENERATIONS} x the "
+                f"{self.n_chains:,} chains, so that at least {MIN_KEPT_GENERATIONS} generations "
+                "are kept after burn-in; raise samples or lower chains per parameter"
+            )
         # The start ball's Jacobian, the start population, every generation
         # (DREAM checks its budget once per 10-generation block, so it can
         # overrun by 9), and the band draws on every channel.
@@ -248,8 +276,9 @@ def sample_reflectivity(
     about (free parameters only; others are ignored, and a free parameter it
     omits starts at its spec value). ``progress_callback`` gets a fraction in
     [0, 1) per generation and may raise to cancel (the job runner's
-    ``JobCancelled`` propagates); ``abort_check`` returning True stops
-    sampling like the deadline does. Raises ``ValueError`` for log weighting,
+    ``JobCancelled`` propagates); ``abort_check`` returning True, checked
+    before every model evaluation, raises ``DreamCancelled``. Raises
+    ``ValueError`` for a deadline hit before one generation, log weighting,
     a model ``fit_reflectivity`` would refuse, nothing free to sample, a
     centre outside the bounds, bad settings, or a missing bumps install.
     """
@@ -267,6 +296,8 @@ def sample_reflectivity(
     clock: dict[str, float | None] = {"end": None}
 
     def stop() -> bool:
+        if stopped["why"] != "completed":
+            return True
         end = clock["end"]
         if abort_check is not None and abort_check():
             stopped["why"] = "cancelled"
@@ -288,19 +319,41 @@ def sample_reflectivity(
         if abort_check is not None and abort_check():
             raise DreamCancelled("cancelled while waiting for another DREAM run")
 
+    state: Any = None
     with seeded_dream(seed, while_waiting=waiting) as stream:
         # The budget starts once this run holds the sampler, not while it waits.
         clock["end"] = None if deadline_s is None else time.monotonic() + deadline_s
-        start = _start_ball(target, x0, n_chains, stream)
-        sampler = Dream(
-            model=target, population=start[None, :, :], draws=steps * n_chains,
-            burn=burn * n_chains, thinning=thin, monitor=monitor, alpha=0.0,
-            outlier_test="iqr", DE_noise=1e-6,
-        )
-        state = sampler.sample(abort_test=stop)
-    cum, chains_all, _ = state.chains()
+        target.should_stop = stop
+        try:
+            start = _start_ball(target, x0, n_chains, stream)
+            # bumps counts the start population as n_chains draws toward
+            # `draws + burn`, so it goes in the burn-in: sized without it, a
+            # run ends a generation short (and keeps burn-in draws).
+            sampler = Dream(
+                model=target, population=start[None, :, :], draws=steps * n_chains,
+                burn=(burn + 1) * n_chains, thinning=thin, monitor=monitor, alpha=0.0,
+                outlier_test="iqr", DE_noise=1e-6,
+            )
+            try:
+                state = sampler.sample(abort_test=stop)
+            except _Stop:
+                state = sampler.state  # the generations completed before the stop
+        except _Stop:
+            pass  # stopped inside the start ball: nothing sampled
+        finally:
+            target.should_stop = None
+    cum, chains_all = (state.chains()[:2] if state is not None
+                       else (np.zeros(0, dtype=np.int64), np.zeros((0, n_chains, n_free))))
     chains_all = np.asarray(chains_all, dtype=float)
     gen = np.asarray(cum, dtype=np.int64) // n_chains - 1  # the start population is generation 0
+    if stopped["why"] == "cancelled":
+        raise DreamCancelled(f"cancelled after {max(0, int(gen.max(initial=0)))} generations")
+    if not gen.size or int(gen.max()) < 1:
+        # Only the start ball exists: never present it as a posterior.
+        raise ValueError(
+            f"the {deadline_s:g} s time limit ran out before DREAM completed one generation "
+            f"({n_chains:,} chains); lower the chains per parameter or the points"
+        )
     warnings: list[str] = []
     keep = gen > burn
     burn_incomplete = not keep.any()
@@ -310,12 +363,16 @@ def sample_reflectivity(
         warnings.append("sampling stopped during burn-in: the draws are the second half of "
                         "what was sampled and still carry the starting population")
     kept = chains_all[keep]
-    n_gens_run = int(gen.max()) if gen.size else 0
+    n_gens_run = int(gen.max())
+    n_kept_gens = int(np.sum(gen > burn))
+    # Cannot happen with the sizing above; never report such a run as converged.
+    short = stopped["why"] == "completed" and n_gens_run - burn < steps
+    if short:
+        warnings.append(f"the sampler ended after {max(0, n_gens_run - burn)} of {steps} "
+                        "generations past burn-in; the intervals are provisional")
     if stopped["why"] == "deadline":
         warnings.append(f"sampling stopped at the {deadline_s:g} s time limit after {n_gens_run} "
                         f"of {total_gens} generations; the intervals are provisional")
-    elif stopped["why"] == "cancelled":
-        warnings.append(f"sampling was cancelled after {n_gens_run} of {total_gens} generations")
 
     rhat_raw = np.asarray(gelman(kept, portion=1.0), dtype=float) if kept.shape[0] >= 2 \
         else np.full(n_free, np.nan)
@@ -363,8 +420,8 @@ def sample_reflectivity(
     pool = kept.reshape(-1, n_free)
     pick = np.sort(np.random.default_rng(seed).choice(
         pool.shape[0], size=min(band_draws, pool.shape[0]), replace=False))
-    r_bands, sld_bands = _bands(params, chans, masks, n_layers, pool[pick], sld_points,
-                                progress_callback)
+    r_bands, sld_bands = posterior_bands(params, chans, masks, n_layers, pool[pick], sld_points,
+                                progress_callback, abort_check)
 
     completed = stopped["why"] == "completed"
     reproducible = seed is not None and seed_reproducible()
@@ -378,7 +435,8 @@ def sample_reflectivity(
         "map_chi2": _finite(-2.0 * float(best_logp)),
         "n_points": n_points,
         "convergence": {
-            "converged": completed and not flagged and not unmeasured and not burn_incomplete,
+            "converged": (completed and not short and not flagged and not unmeasured
+                          and not burn_incomplete),
             "rhat_threshold": RHAT_FLAG,
             "rhat_max": _finite(float(np.nanmax(rhat))) if np.isfinite(rhat).any() else None,
             "flagged": flagged,
@@ -389,6 +447,7 @@ def sample_reflectivity(
             "thin": thin,
             "n_chains": n_chains,
             "n_generations": n_gens_run,
+            "n_kept_generations": n_kept_gens,
             "n_generations_requested": total_gens,
             "n_draws": int(pool.shape[0]),
             "n_band_draws": int(pick.size),
@@ -400,46 +459,3 @@ def sample_reflectivity(
         "sld_bands": sld_bands,
         "warnings": warnings,
     }
-
-
-def _percentile_rows(stack: NDArray[np.float64]) -> dict[str, list[float]]:
-    rows = np.percentile(stack, PERCENTILES, axis=0)
-    return {key: np.asarray(row, dtype=float).tolist()
-            for key, row in zip(_BAND_KEYS, rows, strict=True)}
-
-
-def _bands(
-    params: ReflParams, chans: list[ReflChannel], masks: list[NDArray[np.bool_]], n_layers: int,
-    xs: NDArray[np.float64], sld_points: int, progress_callback: ProgressFn | None,
-) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """R(Q) percentile bands per channel and SLD(z) bands per spin state."""
-    models: list[list[NDArray[np.float64]]] = [[] for _ in chans]
-    spins = sorted({c.spin for c in chans})
-    Profile = tuple[NDArray[np.float64], NDArray[np.float64]]
-    profiles: dict[int, list[Profile]] = {s: [] for s in spins}
-    for j, x in enumerate(xs):
-        if progress_callback is not None and j % 20 == 0:
-            progress_callback(0.95 + 0.04 * j / max(1, len(xs)))
-        v = params.full(x)
-        for c, m, acc in zip(chans, masks, models, strict=True):
-            acc.append(channel_model(c, params, v, n_layers, m))
-        for s in spins:
-            z, sld = sld_profile(layer_stack(params, v, n_layers, s), n_points=sld_points)
-            profiles[s].append((np.asarray(z, dtype=float), np.asarray(sld, dtype=float)))
-    r_bands = [{
-        "label": c.label, "spin": c.spin_label,
-        "q": c.q_all[m].tolist(), "r": c.r_all[m].tolist(),
-        "dr": None if c.dr is None else c.dr[m].tolist(),
-        **_percentile_rows(np.vstack(acc)),
-    } for c, m, acc in zip(chans, masks, models, strict=True)]
-    sld_bands = []
-    for s in spins:
-        lo = min(float(z[0]) for z, _ in profiles[s])
-        hi = max(float(z[-1]) for z, _ in profiles[s])
-        grid = np.linspace(lo, hi, sld_points)
-        # Outside a draw's own range its profile is flat (ambient / substrate),
-        # which is exactly what np.interp's end-value hold gives.
-        stack = np.vstack([np.interp(grid, z, sld) for z, sld in profiles[s]])
-        sld_bands.append({"spin": {0: None, 1: "+", -1: "-"}[s], "z": grid.tolist(),
-                          **_percentile_rows(stack)})
-    return r_bands, sld_bands

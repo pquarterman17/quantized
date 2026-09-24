@@ -15245,7 +15245,7 @@
     },
     "/api/reflectivity/dream": {
       "post": {
-        "description": "Queue a DREAM posterior for a fit; returns ``{job_id, plan}``.\n\nPoll ``GET /api/jobs/{id}``; ``GET /api/jobs/{id}/result`` is\n``calc.refl_dream.sample_reflectivity``'s dict. A request the sampler would\nrefuse is a 422 here, before anything is queued.",
+        "description": "Queue a DREAM posterior for a fit; returns ``{job_id, plan}``.\n\nPoll ``GET /api/jobs/{id}``; ``GET /api/jobs/{id}/result`` is\n``calc.refl_dream.sample_reflectivity``'s dict. A request the sampler would\nrefuse, or one over the limits above, is a 422 here, before anything is\nqueued. ``plan`` carries the sizes, including the band draws after the\nclamp.",
         "operationId": "dream_route_api_reflectivity_dream_post",
         "requestBody": {
           "content": {
