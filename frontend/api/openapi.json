@@ -7451,6 +7451,248 @@
         "title": "RecommendRequest",
         "type": "object"
       },
+      "ReflFitChannel": {
+        "description": "One measured curve. ``dq`` is a per-point 1-sigma resolution unless\n``dq_is_fwhm``; ``resolution`` is a constant 1-sigma dQ/Q, used instead of\n``dq`` (never together).",
+        "properties": {
+          "background": {
+            "default": "background",
+            "maxLength": 64,
+            "title": "Background",
+            "type": "string"
+          },
+          "dq": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 20000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dq"
+          },
+          "dq_is_fwhm": {
+            "default": false,
+            "title": "Dq Is Fwhm",
+            "type": "boolean"
+          },
+          "dr": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 20000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dr"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "q": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 20000,
+            "minItems": 2,
+            "title": "Q",
+            "type": "array"
+          },
+          "q_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q Max"
+          },
+          "q_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q Min"
+          },
+          "r": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 20000,
+            "minItems": 2,
+            "title": "R",
+            "type": "array"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "maximum": 0.5,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution"
+          },
+          "scale": {
+            "default": "scale",
+            "maxLength": 64,
+            "title": "Scale",
+            "type": "string"
+          },
+          "spin": {
+            "anyOf": [
+              {
+                "enum": [
+                  "+",
+                  "-"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spin"
+          }
+        },
+        "required": [
+          "q",
+          "r"
+        ],
+        "title": "ReflFitChannel",
+        "type": "object"
+      },
+      "ReflFitParameter": {
+        "description": "One model parameter: ``L{i}.{thickness|sld|isld|roughness|msld}``,\n``scale``, ``background`` or a per-channel scale/background name.",
+        "properties": {
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "tie": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tie"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "vary": {
+            "default": false,
+            "title": "Vary",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "ReflFitParameter",
+        "type": "object"
+      },
+      "ReflFitRequest": {
+        "properties": {
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/ReflFitChannel"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Channels",
+            "type": "array"
+          },
+          "max_nfev": {
+            "default": 200,
+            "maximum": 2000.0,
+            "minimum": 1.0,
+            "title": "Max Nfev",
+            "type": "integer"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/ReflFitParameter"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Parameters",
+            "type": "array"
+          },
+          "weighting": {
+            "default": "dr",
+            "enum": [
+              "dr",
+              "log"
+            ],
+            "title": "Weighting",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parameters",
+          "channels"
+        ],
+        "title": "ReflFitRequest",
+        "type": "object"
+      },
       "ReflectivityFFTRequest": {
         "properties": {
           "is_neutron": {
@@ -14897,6 +15139,50 @@
         "summary": "Get Unit Categories",
         "tags": [
           "reference"
+        ]
+      }
+    },
+    "/api/reflectivity/fit": {
+      "post": {
+        "description": "Fit the layer model to one or more measured reflectivity curves.",
+        "operationId": "fit_route_api_reflectivity_fit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReflFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fit Route Api Reflectivity Fit Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fit Route",
+        "tags": [
+          "reflectivity"
         ]
       }
     },

@@ -77,6 +77,7 @@ This is a working document, not a claim that every observation is already reprod
 
 | ID | Priority | Area | Issue | Owner | Status/evidence |
 |---|---:|---|---|---|---|
+| 2026-09-24 | Claude | Added and fixed BUG-029 (Parratt engine +isld = gain) at the simulate/fit boundary | Regression tests in `test_api_reflectivity.py` and `test_calc_refl_fit.py`; MATLAB untouched |
 | BUG-001 | P0 | NCNR `.refl` import/plot | Uncertainty and resolution are plotted as ordinary Y curves | Claude | Every code-verifiable box closed 2026-09-12; owner Windows visual check + a Reductus variant check remain |
 | UX-001 | P1 | Origin project Library | Large worksheet cards are difficult to interpret and consume too much space | Claude | Compact Tree row + both residuals (icon audit, selected-vs-open) test-verified 2026-09-12; owner visual verification of the reported project remains. **Its icon-audit residual proved to be only half an audit — see UX-004**, which finishes it without reverting anything here |
 | BUG-002 | P2 | Desktop bridge write consent | A hard-linked alias of a declared raw source defeats the never-overwrite-your-own-source check | Codex | **FIXED 2026-09-20** — filesystem-identity guard shared by cached and payload checks; strict `xfail` converted to passing cross-platform coverage; PR #382 |
@@ -110,6 +111,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-026 | P2 | Floating plot windows | A rapid drag/resize drops its final pointer position; a cancelled touch/pen gesture can remain armed and move the window later without a pressed button | Codex | **FIXED 2026-09-20** — PR #385; one finish path flushes move/resize, cancels rAF and handles pointer cancel/blur; owner feel-check remains |
 | BUG-027 | P2 | Recent data files | Desktop recent imports deduplicate by bare filename, so importing the same filename from another folder silently removes the first experiment from quick reopen | Codex | **FIXED 2026-09-20** — PR #385; native paths identify rows, same-named files coexist, and parent-folder context disambiguates them |
 | BUG-028 | P3 | Windows test reliability | Long-path bridge tests can fail in fixture setup under normal Windows MAX_PATH policy before Quantized code runs | Codex | **FIXED 2026-09-20** — PR #385; Windows capability failures skip precisely while POSIX and capable hosts retain bridge coverage |
+| BUG-029 | P1 | Reflectivity simulate/fit — imaginary SLD sign | The golden Parratt engine (`calc/reflectivity.py`, port of MATLAB `parrattRefl`) treats a POSITIVE imaginary SLD as gain: a 2000 Å film with isld +0.5e-6 raised R from 0.071 to 0.50, while presets, `sld_formula` and refl1d all use positive = absorption | Claude | **FIXED 2026-09-24** (P2.2 slice 1) at the boundary: `/api/reflectivity/simulate` and `calc/refl_model.layer_stack` negate isld before calling the engine; the golden engine and MATLAB are untouched |
 | UX-005 | P1 | Quick Plot refusal guidance | Quick Plot refusal text exposed obsolete roadmap wording instead of directing users to the shipped configuration workflow | ChatGPT-Sol | **FIXED 2026-09-20** — commit `4997396a`; both refusal paths name **Configure Quick Plot…**, map data retains Map-specific guidance, and focused/full gates passed |
 | UX-006 | P3 | Installed-version diagnostics | The installed CLI previously rejected `qz --version`, obscuring the package version during release support | ChatGPT-Sol | **FIXED 2026-09-20** — `qz` and `quantized` now use argparse's version action backed by canonical `quantized.__version__`, exiting before server/browser startup; focused CLI tests and both-alias wheel smoke coverage added. Commit/PR recorded in the audit completion entry. |
 | UX-007 | P2 | Workbook Properties command | The workbook right-click menu showed **Properties…** permanently disabled and explained it with the internal roadmap text “arrives with Details/Properties (PR D)”, even though PR D shipped; the result was a prominent dead end in the new Origin-like Library | ChatGPT-Sol | **FIXED 2026-09-20** — Properties now opens a bounded read-only inspector from the shared workbook action registry in Tree, Details, and Tiles. It projects canonical workbook children, location, recorded source/Origin provenance, availability, member/artifact counts, member tags, and import time only when present; Close/Escape restores its invoking row/tile focus. Editing remains in existing commands. Focused 42 tests, full frontend suite, forced typecheck, lint, build/bundle, and integrity gates run; full pickup brief retained in `POST_RELEASE_PROBLEM_AUDIT.md` |
@@ -8740,6 +8742,30 @@ behavior, while GitHub runners may pass under a different policy.
 - [x] Ensure capable Windows runners still execute the actual bridge assertion.
 - [x] Keep POSIX coverage unchanged.
 - [x] Mark the separate POSIX `NAME_MAX` test as such instead of misreporting a Windows host-policy failure as a product regression.
+
+---
+
+## BUG-029 — the Parratt engine treats positive imaginary SLD as gain
+
+**Priority:** P1 — absorbing films simulated as amplifying
+**Reported:** 2026-09-24 by Claude during the P2.2 reflectivity-fit review
+**Status:** Fixed 2026-09-24 at the API/model boundary (P2.2 slice 1)
+
+### Problem and impact
+
+`calc.reflectivity.parratt_refl` (golden vs MATLAB `parrattRefl`) forms
+k_z with the sign convention under which `+sld_imag` amplifies the beam.
+Measured: a 2000 Å film on Si with isld +0.5e-6 gives R = 0.50 at a Q where
+the non-absorbing film gives 0.071. Every other place in the app (layer
+presets, `sld_formula`, periodictable, refl1d) means positive = absorption,
+so `/simulate` silently showed absorbing layers as gain media.
+
+### Resolution checklist
+
+- [x] Negate isld at the boundary: `routes/reflectivity._engine_layers` (simulate) and `calc/refl_model.layer_stack` (fit).
+- [x] Regression tests: `test_simulate_treats_positive_sld_imag_as_absorption`, and the positive-isld absorption case in `tests/test_calc_refl_fit.py`.
+- [x] Leave the golden engine and its MATLAB freeze untouched (parity holds for MATLAB's own convention).
+- [ ] Decide deliberately whether MATLAB `parrattRefl` should change sign (sibling repo; not touched here).
 
 ---
 

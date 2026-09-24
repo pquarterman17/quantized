@@ -2610,6 +2610,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reflectivity/fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Route
+         * @description Fit the layer model to one or more measured reflectivity curves.
+         */
+        post: operations["fit_route_api_reflectivity_fit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reflectivity/presets": {
         parameters: {
             query?: never;
@@ -7986,6 +8006,87 @@ export interface components {
              */
             paired?: boolean;
         };
+        /**
+         * ReflFitChannel
+         * @description One measured curve. ``dq`` is a per-point 1-sigma resolution unless
+         *     ``dq_is_fwhm``; ``resolution`` is a constant 1-sigma dQ/Q, used instead of
+         *     ``dq`` (never together).
+         */
+        ReflFitChannel: {
+            /**
+             * Background
+             * @default background
+             */
+            background?: string;
+            /** Dq */
+            dq?: number[] | null;
+            /**
+             * Dq Is Fwhm
+             * @default false
+             */
+            dq_is_fwhm?: boolean;
+            /** Dr */
+            dr?: number[] | null;
+            /** Label */
+            label?: string | null;
+            /** Q */
+            q: number[];
+            /** Q Max */
+            q_max?: number | null;
+            /** Q Min */
+            q_min?: number | null;
+            /** R */
+            r: number[];
+            /** Resolution */
+            resolution?: number | null;
+            /**
+             * Scale
+             * @default scale
+             */
+            scale?: string;
+            /** Spin */
+            spin?: ("+" | "-") | null;
+        };
+        /**
+         * ReflFitParameter
+         * @description One model parameter: ``L{i}.{thickness|sld|isld|roughness|msld}``,
+         *     ``scale``, ``background`` or a per-channel scale/background name.
+         */
+        ReflFitParameter: {
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Name */
+            name: string;
+            /** Tie */
+            tie?: string | null;
+            /** Value */
+            value: number;
+            /**
+             * Vary
+             * @default false
+             */
+            vary?: boolean;
+        };
+        /** ReflFitRequest */
+        ReflFitRequest: {
+            /** Channels */
+            channels: components["schemas"]["ReflFitChannel"][];
+            /**
+             * Max Nfev
+             * @default 200
+             */
+            max_nfev?: number;
+            /** Parameters */
+            parameters: components["schemas"]["ReflFitParameter"][];
+            /**
+             * Weighting
+             * @default dr
+             * @enum {string}
+             */
+            weighting?: "dr" | "log";
+        };
         /** ReflectivityFFTRequest */
         ReflectivityFFTRequest: {
             /**
@@ -13048,6 +13149,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    fit_route_api_reflectivity_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReflFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
