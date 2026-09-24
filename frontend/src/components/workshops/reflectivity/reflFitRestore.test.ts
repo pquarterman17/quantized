@@ -5,7 +5,8 @@ import { parseWorkspace, serializeWorkspace } from "../../../lib/workspace";
 import { makeDataset, makeRecord } from "./reflFit.testkit";
 import { buildChannel, DEFAULT_SETTINGS } from "./reflFitData";
 import { channelDigest, recordsFor, withFitRecord, type ReflFitRecord } from "./reflFitRecord";
-import { curveDatasetFor, recordIssues, resolveBinding, restoreSetup } from "./reflFitRestore";
+import { curveDatasetFor } from "./reflFitCurves";
+import { recordIssues, resolveBinding, restoreSetup } from "./reflFitRestore";
 
 const PRESETS: SldPreset[] = [
   { name: "Air / Vacuum", formula: "", sldX: 0, sldN: 0, sldImag: 0, density: 0 },

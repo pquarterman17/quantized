@@ -96,8 +96,9 @@ describe("the live fit and the stored history stay in step", () => {
     act(() => useApp.getState().undo());
     expect(recordsFor(useApp.getState().datasets[0]).map((r) => r.seq)).toEqual([1]);
     // No live result is left that could be taken for #1 or name a gone #2:
-    // no "Add fit curves", no overlay, and the saved #1 is on show as #1.
-    await waitFor(() => expect(screen.queryByRole("button", { name: "Add fit curves" })).toBeNull());
+    // no live actions (the live-only "Open log-Y plot"), no overlay, and the
+    // saved #1 is on show as #1.
+    await waitFor(() => expect(screen.queryByRole("button", { name: "Open log-Y plot" })).toBeNull());
     expect(useApp.getState().fitOverlay).toBeNull();
     expect(screen.getByLabelText("saved fit")).toBeTruthy();
     expect(screen.getByText(/Saved fit/).textContent).toMatch(/#1/);

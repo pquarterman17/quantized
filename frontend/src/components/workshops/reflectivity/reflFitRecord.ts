@@ -61,11 +61,39 @@ export interface SavedChannel extends ChannelBinding {
   digest: string;
 }
 
-/** The fit response minus its curves (those are large and re-derivable by
- *  re-running), plus the objective with its honest label. */
+/** The fit response minus its curves (stored apart, in `SavedCurves`), plus
+ *  the objective with its honest label. */
 export type SavedFitResult = Omit<ReflFitResult, "curves" | "sld_profiles"> & {
   objective: { label: string; value: number | null };
 };
+
+/** One channel's fitted points as stored: q, the measured R and the model
+ *  (null where the fit reported none). `total` is the point count before
+ *  decimation (reflFitCurves.ts `MAX_CURVE_POINTS`); `total > q.length`
+ *  means the stored curve is thinned. */
+export interface SavedChannelCurve {
+  label: string;
+  spin: "+" | "-" | null;
+  q: number[];
+  r: number[];
+  model: (number | null)[];
+  total: number;
+}
+
+/** One SLD profile as stored, `total` as above. */
+export interface SavedSldProfile {
+  spin: "+" | "-" | null;
+  z: number[];
+  sld: (number | null)[];
+  total: number;
+}
+
+/** The fit's curves, so a saved fit can overlay and add them without
+ *  re-running. Absent on records written before curves were stored. */
+export interface SavedCurves {
+  channels: SavedChannelCurve[];
+  sld: SavedSldProfile[];
+}
 
 export interface ReflFitRecord {
   version: typeof REFL_FIT_RECORD_VERSION;
@@ -83,6 +111,8 @@ export interface ReflFitRecord {
   /** The layer model the parameter NAMES refer to (the Apply guard's basis). */
   model: { layers: ModelLayer[]; radiation: Radiation };
   result: SavedFitResult;
+  /** Absent on a record written before P2.2 slice 3's follow-up. */
+  curves?: SavedCurves;
 }
 
 /** The result as stored: everything but the curves, plus the objective. */
@@ -260,6 +290,39 @@ function decodeResult(v: unknown): SavedFitResult {
   return { ...res, objective: objectiveSummary(res) };
 }
 
+const spinOf = (v: unknown): "+" | "-" | null => (v === "+" || v === "-" ? v : null);
+const nums = (v: unknown): number[] => list(v, (x) => need(num(x), "number"));
+const gappy = (v: unknown): (number | null)[] => list(v, (x) => numOrNull(x) ?? null);
+
+function sized<T extends { total: number }>(curve: T, lengths: number[]): T {
+  if (lengths.some((n) => n !== lengths[0])) throw new Bad("curve lengths");
+  if (!Number.isInteger(curve.total) || curve.total < lengths[0]) curve.total = lengths[0];
+  return curve;
+}
+
+/** Stored curves, or undefined when absent or unusable: a bad curve costs the
+ *  record its curves, never the record itself. */
+function decodeCurves(v: unknown): SavedCurves | undefined {
+  if (!isObj(v)) return undefined;
+  try {
+    return {
+      channels: list(v.channels, (c) => {
+        if (!isObj(c)) throw new Bad("curve");
+        const out = { label: str(c.label) ?? "", spin: spinOf(c.spin), q: nums(c.q), r: nums(c.r), model: gappy(c.model), total: num(c.total) ?? 0 };
+        return sized(out, [out.q.length, out.r.length, out.model.length]);
+      }),
+      sld: list(v.sld, (p) => {
+        if (!isObj(p)) throw new Bad("sld");
+        const out = { spin: spinOf(p.spin), z: nums(p.z), sld: gappy(p.sld), total: num(p.total) ?? 0 };
+        return sized(out, [out.z.length, out.sld.length]);
+      }),
+    };
+  } catch (e) {
+    if (e instanceof Bad) return undefined;
+    throw e;
+  }
+}
+
 /** Validate one stored record, or null when it is unusable (unknown version,
  *  missing fields, wrong types). Never throws. */
 export function decodeRecord(v: unknown): ReflFitRecord | null {
@@ -272,7 +335,9 @@ export function decodeRecord(v: unknown): ReflFitRecord | null {
     const layers = list(model.layers, decodeLayer);
     if (channels.length === 0 || layers.length < 2) return null;
     const seq = num(v.seq);
+    const curves = decodeCurves(v.curves);
     return {
+      ...(curves ? { curves } : {}),
       version: REFL_FIT_RECORD_VERSION,
       id: need(str(v.id), "id"),
       seq: seq !== undefined && Number.isInteger(seq) && seq > 0 ? seq : 1,

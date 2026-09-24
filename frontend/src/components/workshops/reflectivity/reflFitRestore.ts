@@ -5,10 +5,10 @@
 // what setup does "Restore fit setup" load.
 
 import { droppedRows } from "../../../lib/rowstate";
-import type { DataStruct, Dataset, SldPreset } from "../../../lib/types";
+import type { Dataset, SldPreset } from "../../../lib/types";
 import { buildChannel, channelLambda, type ChannelBinding, type FitDataSettings } from "./reflFitData";
 import { applyResults, type FitGlobals, type ParamOverrides } from "./reflFitModel";
-import { channelDigest, recordDatasetIds, type ReflFitRecord, type SavedChannel } from "./reflFitRecord";
+import { channelDigest, type ReflFitRecord, type SavedChannel } from "./reflFitRecord";
 import type { ModelLayer, Radiation } from "./useReflectivity";
 
 /** The column now carrying `label`, preferring the saved index. null when the
@@ -116,40 +116,5 @@ export function restoreSetup(
     channels,
     settings: { ...record.request.settings },
     skipped,
-  };
-}
-
-// ── fit-curve datasets ───────────────────────────────────────────────────────
-
-/** Name, placement and provenance for the datasets "Add fit curves" makes
- *  from `record`: named for the fit ("<source> — refl fit #n model"), placed
- *  in the source's workbook/folder, and pointing back at the source datasets
- *  and the record id in `metadata.reflFit` (the Freeze Copy precedent). */
-export function curveDatasetFor(record: ReflFitRecord, datasets: readonly Dataset[]) {
-  const first = record.request.channels[0];
-  const host = datasets.find((d) => d.id === first.datasetId);
-  const ids = recordDatasetIds(record);
-  const base = `${host?.name ?? first.datasetName} — refl fit #${record.seq}`;
-  const provenance = {
-    fitId: record.id,
-    seq: record.seq,
-    fittedAt: record.fittedAt,
-    sourceIds: ids,
-    sourceNames: ids.map((id) => datasets.find((d) => d.id === id)?.name ?? record.request.channels.find((c) => c.datasetId === id)?.datasetName ?? ""),
-  };
-  const placement = {
-    ...(host?.workbookId ? { workbookId: host.workbookId } : {}),
-    ...(host?.folderId ? { folderId: host.folderId } : {}),
-  };
-  return {
-    base,
-    placement,
-    metadata: (extra: Record<string, unknown>): DataStruct["metadata"] => ({
-      source: "reflectivity-fit",
-      reflFit: provenance,
-      weighting: record.result.weighting,
-      radiation: record.model.radiation,
-      ...extra,
-    }),
   };
 }

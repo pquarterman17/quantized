@@ -5,6 +5,7 @@
 
 import { Button, Select } from "../../primitives";
 import FitResults from "./FitResults";
+import { decimationNote } from "./reflFitCurves";
 import { formatNum } from "./reflFitModel";
 import type { ReflFitRecord } from "./reflFitRecord";
 import type { ReflFitState } from "./useReflFit";
@@ -83,6 +84,12 @@ export default function SavedFit({ fit }: { fit: ReflFitState }) {
         <Button size="sm" disabled={h.reporting} onClick={() => void h.addToReport(r)}>
           Add to report
         </Button>
+        <Button size="sm" disabled={!r.curves} onClick={h.showOverlay}>
+          Overlay on data
+        </Button>
+        <Button size="sm" disabled={!r.curves || h.savedCurvesAdded} onClick={() => void h.addSavedCurves()}>
+          {h.savedCurvesAdded ? "Fit curves added" : "Add fit curves"}
+        </Button>
       </div>
       {h.applyBlocked && (
         <div className="qzk-ds-meta qzk-msg" role="note" style={{ ...NOTE, color: "var(--warn)" }}>
@@ -90,7 +97,9 @@ export default function SavedFit({ fit }: { fit: ReflFitState }) {
         </div>
       )}
       <div className="qzk-ds-meta" style={{ ...NOTE, color: "var(--text-faint)" }}>
-        Fit curves are not stored with a saved fit — restore its setup and run it again to plot them.
+        {r.curves
+          ? (decimationNote(r.curves) ?? "The fit's curves are stored with it.")
+          : "Fit curves were not stored with this fit — re-run to plot: restore its setup and run it again."}
       </div>
     </div>
   );

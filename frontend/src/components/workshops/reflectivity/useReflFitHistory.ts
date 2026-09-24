@@ -12,7 +12,8 @@ import { useEffect, useRef, useState } from "react";
 
 import { reportEmit } from "../../../lib/api/report";
 import type { Dataset } from "../../../lib/types";
-import { useApp } from "../../../store/useApp";
+import { nextDatasetId, useApp } from "../../../store/useApp";
+import { curveDatasets, savedOverlay } from "./reflFitCurves";
 import { applyBlockedReason, applyResults, fittedGlobals, type FitGlobals } from "./reflFitModel";
 import { nextSeq, recordDatasetIds, recordsFor, withFitRecord, type ReflFitRecord } from "./reflFitRecord";
 import { recordIssues, restoreSetup, type RecordIssues, type RestoredSetup } from "./reflFitRestore";
@@ -31,7 +32,13 @@ export interface ReflFitHistory {
   /** Why "Apply to model" is unavailable for `selected`, or null. */
   applyBlocked: string | null;
   reporting: boolean;
+  /** "Add fit curves" already ran for the saved fit on show. */
+  savedCurvesAdded: boolean;
   pick: (id: string | null) => void;
+  /** Overlay the saved fit's channel-1 model on its dataset (no re-run). */
+  showOverlay: () => void;
+  /** Add the saved fit's stored curves to the library (no re-run). */
+  addSavedCurves: () => string[];
   applySaved: () => void;
   restore: () => void;
   /** Store a finished fit, numbered from the CURRENT library. Returns the
@@ -65,6 +72,11 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
   const recordHistory = useApp((s) => s.recordHistory);
   const addReport = useApp((s) => s.addReport);
   const setStatus = useApp((s) => s.setStatus);
+  const addDataset = useApp((s) => s.addDataset);
+  const setFitOverlay = useApp((s) => s.setFitOverlay);
+  // Curve datasets added per saved fit, so the button reads "added" and a
+  // second click adds nothing twice.
+  const [addedFor, setAddedFor] = useState<Record<string, string[]>>({});
   const host = datasets.find((d) => d.id === hostId);
   const records = recordsFor(host);
   const [pickedId, setPickedId] = useState<string | null>(null);
@@ -129,6 +141,32 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
     return numbered;
   }
 
+  function showOverlay(): void {
+    if (!selected) return;
+    const overlay = savedOverlay(selected, datasets);
+    if (typeof overlay === "string") {
+      setError(`cannot overlay: ${overlay}`);
+      return;
+    }
+    setFitOverlay(overlay);
+    setStatus(`overlaid reflectivity fit #${selected.seq} on its data`);
+  }
+
+  function addSavedCurves(): string[] {
+    if (!selected?.curves) return [];
+    const done = addedFor[selected.id];
+    if (done) return done;
+    const fallback = { weighting: selected.result.weighting, radiation: selected.model.radiation };
+    const ids = curveDatasets(selected.curves, selected, datasets, fallback).map((c) => {
+      const id = nextDatasetId();
+      addDataset({ id, name: c.name, data: c.data, ...c.placement });
+      return id;
+    });
+    setAddedFor((m) => ({ ...m, [selected.id]: ids }));
+    setStatus(`added ${ids.length} datasets from reflectivity fit #${selected.seq}`);
+    return ids;
+  }
+
   async function addToReport(record: ReflFitRecord): Promise<void> {
     const name = hostName(record, datasets);
     const title = `Reflectivity fit #${record.seq} — ${name}`;
@@ -160,7 +198,10 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
     issues,
     applyBlocked,
     reporting,
+    savedCurvesAdded: selected != null && selected.id in addedFor,
     pick: setPickedId,
+    showOverlay,
+    addSavedCurves,
     applySaved,
     restore,
     publish,

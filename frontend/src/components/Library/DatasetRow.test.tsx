@@ -612,3 +612,34 @@ describe("DatasetRow derived-worksheet marking (PR K slice 2)", () => {
     expect(screen.getByTitle(/pipeline: yOff=-1/)).toBeInTheDocument();
   });
 });
+
+// P2.2 slice 3: a reflectivity fit curve is marked derived from its
+// `metadata.reflFit` provenance — never from `derivedFrom` (recalc must not
+// touch it).
+describe("DatasetRow derived marking for a reflectivity fit curve (P2.2 slice 3)", () => {
+  const fitCurve = (reflFit: unknown): Dataset => ({
+    ...plain,
+    id: "fit1",
+    name: "sample.dat — refl fit #3 model",
+    data: { ...plain.data, metadata: { source: "reflectivity-fit", reflFit } },
+  });
+
+  it("shows the derived mark naming the source dataset and the fit", () => {
+    const curve = fitCurve({ fitId: "rfit-x-1", seq: 3, sourceIds: ["plain"], sourceNames: ["sample.dat"] });
+    useApp.setState({ datasets: [plain, curve] });
+    render(<DatasetRow dataset={curve} {...baseProps} />);
+    expect(screen.getByTitle(/Derived worksheet — source: sample\.dat/)).toBeInTheDocument();
+    expect(screen.getByTitle(/pipeline: reflectivity fit #3/)).toBeInTheDocument();
+    expect(curve.derivedFrom).toBeUndefined();
+  });
+
+  it("shows no mark (and does not throw) for a malformed provenance record", () => {
+    for (const bad of ["x", 7, { sourceIds: "plain" }, { sourceIds: [3] }, null]) {
+      const curve = fitCurve(bad);
+      useApp.setState({ datasets: [plain, curve] });
+      const { unmount } = render(<DatasetRow dataset={curve} {...baseProps} />);
+      expect(screen.queryByTitle(/Derived worksheet/)).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+});

@@ -3060,8 +3060,11 @@ fit, uncertainty, SLD, residuals, results, and publication output.
   last 10, `.dwk` round-trip with the BUG-017 sentinels), shown again with a
   history picker, Apply-to-model guard, Restore fit setup and Add to report
   (`calc/report_emit.from_refl_fit`); fit curves carry `metadata.reflFit`
-  provenance and export through the existing vector path (tested). Open: no
-  dedicated FigureDoc template for data/model/residual/SLD panels.
+  provenance and export through the existing vector path (tested). Follow-up:
+  records also store the fitted curves (≤ 2,000 points each, thinned and
+  labelled past that), so a saved fit overlays and adds its curves without a
+  re-run; fit curves carry the Library's derived mark. Open: no dedicated
+  FigureDoc template for data/model/residual/SLD panels.
 - [ ] Validate representative XRR and PNR fits against trusted results.
 
 ### P2.3 — SIMS depth profiles

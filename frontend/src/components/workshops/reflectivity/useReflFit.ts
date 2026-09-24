@@ -17,7 +17,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { reflFit, type ReflFitResult } from "../../../lib/api/reflectivity";
 import { defaultPlotView } from "../../../lib/plotview";
 import { droppedRows } from "../../../lib/rowstate";
-import type { DataStruct, Dataset, FitOverlay, SldPreset } from "../../../lib/types";
+import type { Dataset, FitOverlay, SldPreset } from "../../../lib/types";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 import {
   alignToRows,
@@ -34,7 +34,8 @@ import {
   type Weighting,
 } from "./reflFitData";
 import { channelDigest, recordGone, recordId, savedResult, type ReflFitRecord } from "./reflFitRecord";
-import { curveDatasetFor, type RestoredSetup } from "./reflFitRestore";
+import { curveDatasets, liveCurves, savedCurves } from "./reflFitCurves";
+import type { RestoredSetup } from "./reflFitRestore";
 import { useReflFitHistory, type ReflFitHistory } from "./useReflFitHistory";
 import {
   applyBlockedReason,
@@ -311,6 +312,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
         request: { parameters: sentParams, channels: saved, settings: { ...settings }, weighting },
         model: { layers: fitBasis.layers, radiation: fitBasis.radiation },
         result: savedResult(res),
+        curves: savedCurves(res),
       });
       setLiveRecord(stored);
       const first = res.curves[0];
@@ -370,39 +372,14 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
   function addCurves(): string[] {
     if (!result) return [];
     if (curveIds.length) return curveIds;
-    // Named for, placed with, and pointing back at the fit's record (see
-    // reflFitRestore.ts's `curveDatasetFor`). A record that could not be
-    // stored (its datasets deleted mid-fit) still names the curves.
-    const rec = liveRecord;
-    const out = rec ? curveDatasetFor(rec, datasets) : null;
-    const base = out?.base ?? "Reflectivity fit";
-    const meta = (extra: Record<string, unknown>): DataStruct["metadata"] =>
-      out ? out.metadata(extra) : { source: "reflectivity-fit", weighting: result.weighting, radiation, ...extra };
-    const ids: string[] = [];
-    const add = (name: string, data: DataStruct): void => {
+    // Named for, placed with, and pointing back at the fit's record
+    // (reflFitCurves.ts); a fit whose record could not be stored (its datasets
+    // deleted mid-fit) names them generically.
+    const ids = curveDatasets(liveCurves(result), liveRecord, datasets, { weighting: result.weighting, radiation }).map((c) => {
       const id = nextDatasetId();
-      addDataset({ id, name, data, ...out?.placement });
-      ids.push(id);
-    };
-    const many = result.curves.length > 1;
-    result.curves.forEach((c, i) => {
-      add(`${base} model${many ? ` (${c.spin ?? `channel ${i + 1}`})` : ""}`, {
-        time: c.q,
-        values: c.q.map((_, k) => [c.r[k], c.model[k] ?? Number.NaN]),
-        labels: ["R", "R fit"],
-        units: ["", ""],
-        metadata: meta({ spin: c.spin, channel: i + 1 }),
-      });
+      addDataset({ id, name: c.name, data: c.data, ...c.placement });
+      return id;
     });
-    for (const p of result.sld_profiles) {
-      add(`${base} SLD${p.spin ? ` (${p.spin})` : ""}`, {
-        time: p.z,
-        values: p.sld.map((v) => [v ?? Number.NaN]),
-        labels: ["SLD"],
-        units: ["Å⁻²"],
-        metadata: meta({ spin: p.spin }),
-      });
-    }
     setCurveIds(ids);
     setStatus(`added ${ids.length} reflectivity-fit datasets`);
     return ids;
