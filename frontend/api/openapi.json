@@ -6552,56 +6552,90 @@
       "PawleyRequest": {
         "properties": {
           "a": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000.0,
             "title": "A",
             "type": "number"
           },
           "alpha": {
             "default": 90.0,
+            "exclusiveMaximum": 180.0,
+            "exclusiveMinimum": 0.0,
             "title": "Alpha",
             "type": "number"
           },
           "b": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000.0,
             "title": "B",
             "type": "number"
           },
           "beta": {
             "default": 90.0,
+            "exclusiveMaximum": 180.0,
+            "exclusiveMinimum": 0.0,
             "title": "Beta",
             "type": "number"
           },
           "c": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000.0,
             "title": "C",
             "type": "number"
           },
           "gamma": {
             "default": 90.0,
+            "exclusiveMaximum": 180.0,
+            "exclusiveMinimum": 0.0,
             "title": "Gamma",
             "type": "number"
           },
           "hkl_max": {
-            "default": 6,
-            "title": "Hkl Max",
-            "type": "integer"
+            "anyOf": [
+              {
+                "maximum": 20.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hkl Max"
           },
           "intensity": {
             "items": {
               "type": "number"
             },
+            "maxItems": 50000,
             "title": "Intensity",
             "type": "array"
           },
           "max_iter": {
             "default": 20,
+            "maximum": 200.0,
+            "minimum": 1.0,
             "title": "Max Iter",
             "type": "integer"
           },
           "max_two_theta": {
             "default": 120.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 180.0,
             "title": "Max Two Theta",
+            "type": "number"
+          },
+          "min_two_theta": {
+            "default": 0.0,
+            "exclusiveMaximum": 180.0,
+            "minimum": 0.0,
+            "title": "Min Two Theta",
             "type": "number"
           },
           "profile_fwhm": {
             "default": 0.05,
+            "exclusiveMinimum": 0.0,
+            "maximum": 20.0,
             "title": "Profile Fwhm",
             "type": "number"
           },
@@ -6612,18 +6646,46 @@
           },
           "symmetry": {
             "default": "P",
+            "enum": [
+              "P",
+              "F",
+              "I",
+              "A",
+              "B",
+              "C",
+              "R"
+            ],
             "title": "Symmetry",
             "type": "string"
+          },
+          "tie": {
+            "anyOf": [
+              {
+                "enum": [
+                  "abc",
+                  "ab",
+                  "none"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tie"
           },
           "two_theta": {
             "items": {
               "type": "number"
             },
+            "maxItems": 50000,
             "title": "Two Theta",
             "type": "array"
           },
           "wavelength": {
             "default": 1.5406,
+            "exclusiveMinimum": 0.0,
+            "maximum": 10.0,
             "title": "Wavelength",
             "type": "number"
           }

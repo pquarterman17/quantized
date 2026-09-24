@@ -7622,11 +7622,8 @@ export interface components {
              * @default 90
              */
             gamma?: number;
-            /**
-             * Hkl Max
-             * @default 6
-             */
-            hkl_max?: number;
+            /** Hkl Max */
+            hkl_max?: number | null;
             /** Intensity */
             intensity: number[];
             /**
@@ -7640,6 +7637,11 @@ export interface components {
              */
             max_two_theta?: number;
             /**
+             * Min Two Theta
+             * @default 0
+             */
+            min_two_theta?: number;
+            /**
              * Profile Fwhm
              * @default 0.05
              */
@@ -7652,8 +7654,11 @@ export interface components {
             /**
              * Symmetry
              * @default P
+             * @enum {string}
              */
-            symmetry?: string;
+            symmetry?: "P" | "F" | "I" | "A" | "B" | "C" | "R";
+            /** Tie */
+            tie?: ("abc" | "ab" | "none") | null;
             /** Two Theta */
             two_theta: number[];
             /**

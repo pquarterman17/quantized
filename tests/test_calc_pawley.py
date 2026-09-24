@@ -123,3 +123,75 @@ def test_tetragonal_ties_a_and_b() -> None:
     guess = {"a": a + 0.03, "b": a + 0.03, "c": c + 0.03, "symmetry": "P", "hklMax": 3}
     r = pawley_refine(tt, obs, guess, max_two_theta=120, max_iter=25)
     assert r["cell"][0] == pytest.approx(r["cell"][1])  # a == b preserved
+
+
+def test_min_two_theta_scopes_reflections_to_the_scan() -> None:
+    # A 20–50° scan must neither fit nor count reflections it never measured.
+    tt, obs = _synthetic_si()
+    keep = (tt >= 20.0) & (tt <= 50.0)
+    phase = {"a": 5.4307, "b": 5.4307, "c": 5.4307, "symmetry": "F", "hklMax": 5}
+    r = pawley_refine(
+        tt[keep], obs[keep], phase, min_two_theta=20.0, max_two_theta=50.0, refine_cell=False
+    )
+    # F-centering only (no diamond-glide absence): (111) 28.4°, (200) 32.9°, (220) 47.3°
+    assert r["n_peaks"] == 3
+    assert all(20.0 <= pk["two_theta"] <= 50.0 for pk in r["peaks"])
+
+
+def test_explicit_tie_overrides_equality_inference() -> None:
+    # A cubic start whose b/c differ from a is still refined as cubic when the
+    # caller says so — b and c are reset to a, and stay equal through the search.
+    tt, obs = _synthetic_si()
+    phase = {"a": 5.44, "b": 5.43, "c": 5.43, "symmetry": "F", "hklMax": 5, "tie": "abc"}
+    r = pawley_refine(tt, obs, phase, max_iter=30)
+    assert r["tie"] == "abc"
+    assert r["cell_initial"][:3] == [5.44, 5.44, 5.44]
+    assert r["cell"][0] == r["cell"][1] == r["cell"][2]
+
+
+def test_inferred_tie_is_reported() -> None:
+    tt, obs = _synthetic_si()
+    r = pawley_refine(
+        tt, obs, {"a": 5.43, "b": 5.44, "c": 5.45, "symmetry": "F", "hklMax": 5}, max_iter=1
+    )
+    assert r["tie"] == "none"
+
+
+def test_unknown_tie_raises() -> None:
+    tt, obs = _synthetic_si()
+    with pytest.raises(ValueError, match="tie"):
+        pawley_refine(tt, obs, {"a": 5.43, "b": 5.43, "c": 5.43, "symmetry": "F", "tie": "x"})
+
+
+def test_no_reflections_in_range_raises() -> None:
+    # Si has no allowed reflection below 28°: a 10–25° window would otherwise
+    # "fit" perfectly with the linear background alone.
+    tt = np.linspace(10.0, 25.0, 300)
+    obs = 10.0 + 0.1 * tt
+    phase = {"a": 5.4307, "b": 5.4307, "c": 5.4307, "symmetry": "F", "hklMax": 5}
+    with pytest.raises(ValueError, match="No allowed reflections"):
+        pawley_refine(tt, obs, phase, min_two_theta=10.0, max_two_theta=25.0)
+
+
+def test_fewer_points_than_parameters_raises() -> None:
+    phase = {"a": 5.4307, "b": 5.4307, "c": 5.4307, "symmetry": "F", "hklMax": 5}
+    with pytest.raises(ValueError, match="free parameters"):
+        pawley_refine([30.0, 60.0, 90.0], [1.0, 2.0, 3.0], phase)
+
+
+def test_min_two_theta_must_be_below_max() -> None:
+    tt, obs = _synthetic_si()
+    phase = {"a": 5.4307, "b": 5.4307, "c": 5.4307, "symmetry": "F"}
+    with pytest.raises(ValueError, match="below"):
+        pawley_refine(tt, obs, phase, min_two_theta=60.0, max_two_theta=50.0)
+
+
+def test_reports_initial_rwp_and_convergence() -> None:
+    tt, obs = _synthetic_si()
+    phase = {"a": 5.4507, "b": 5.4507, "c": 5.4507, "symmetry": "F", "hklMax": 5}
+    r = pawley_refine(tt, obs, phase, max_two_theta=120, max_iter=30)
+    assert r["converged"] is True
+    assert r["rwp"] < r["rwp_initial"]  # a recovering refinement improves R_wp
+    fixed = pawley_refine(tt, obs, phase, refine_cell=False)
+    assert fixed["converged"] is True
+    assert fixed["rwp_initial"] == fixed["rwp"]
