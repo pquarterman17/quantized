@@ -22,8 +22,15 @@ from quantized.routes._payload import to_jsonable
 
 router = APIRouter(prefix="/api/reflectivity", tags=["reflectivity"])
 
-# A layer row is [thickness Å, SLD_real Å⁻², SLD_imag Å⁻², roughness Å].
+# A layer row is [thickness Å, SLD_real Å⁻², SLD_imag Å⁻², roughness Å], with
+# SLD_imag POSITIVE = absorption (the SLD presets' and sld_formula's
+# convention). The golden Parratt engine uses the opposite sign, so the
+# routes negate it before calling it — see BUG-029.
 Layer = list[float]
+
+
+def _engine_layers(layers: list[Layer]) -> list[Layer]:
+    return [[t, re, -im, sig] for t, re, im, sig in layers]
 
 
 class SimulateRequest(BaseModel):
@@ -70,7 +77,7 @@ def simulate(req: SimulateRequest) -> dict[str, Any]:
     q = np.linspace(req.q_min, req.q_max, req.n_points)
     r = call_calc(parratt_refl,
         q,
-        req.layers,
+        _engine_layers(req.layers),
         roughness=req.roughness,
         scale=req.scale,
         background=req.background,
@@ -89,17 +96,22 @@ def sld_profile_route(req: SldProfileRequest) -> dict[str, Any]:
 
 # ── fit to measured data (audit P2.2) ────────────────────────────────────────
 
-# A fit evaluates the model ~10-100 times per free parameter, and a resolution-
-# smeared evaluation costs 21x a plain one; these caps keep one request to
-# seconds, not minutes.
+# Cost caps. One model evaluation costs ~0.2 us per (point x layer), 21x that
+# with resolution smearing (0.45 s for 20k smeared points in 5 layers,
+# measured 2026-09-24), and a fit makes ~(n_free + 1) evaluations per TRF
+# step. The per-evaluation cap keeps one evaluation near a second; the
+# deadline stops any fit at a wall-clock budget and returns its best point.
 FIT_MAX_POINTS = 20_000
 FIT_MAX_PARAMETERS = 200
 FIT_MAX_CHANNELS = 4
+FIT_MAX_EVAL_UNITS = 4_000_000  # points x layers x (21 if smeared), summed
+FIT_DEADLINE_S = 30.0
+_SMEAR_SAMPLES = 21
 
 FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
 
 
-class FitParameter(BaseModel):
+class ReflFitParameter(BaseModel):
     """One model parameter: ``L{i}.{thickness|sld|isld|roughness|msld}``,
     ``scale``, ``background`` or a per-channel scale/background name."""
 
@@ -111,9 +123,10 @@ class FitParameter(BaseModel):
     tie: str | None = Field(default=None, max_length=64)
 
 
-class FitChannel(BaseModel):
+class ReflFitChannel(BaseModel):
     """One measured curve. ``dq`` is a per-point 1-sigma resolution unless
-    ``dq_is_fwhm``; ``resolution`` is a constant dQ/Q used when ``dq`` is absent."""
+    ``dq_is_fwhm``; ``resolution`` is a constant 1-sigma dQ/Q, used instead of
+    ``dq`` (never together)."""
 
     q: list[FiniteFloat] = Field(min_length=2, max_length=FIT_MAX_POINTS)
     r: list[FiniteFloat] = Field(min_length=2, max_length=FIT_MAX_POINTS)
@@ -129,29 +142,46 @@ class FitChannel(BaseModel):
     label: str | None = Field(default=None, max_length=120)
 
 
-class FitRequest(BaseModel):
-    parameters: list[FitParameter] = Field(min_length=1, max_length=FIT_MAX_PARAMETERS)
-    channels: list[FitChannel] = Field(min_length=1, max_length=FIT_MAX_CHANNELS)
+class ReflFitRequest(BaseModel):
+    parameters: list[ReflFitParameter] = Field(min_length=1, max_length=FIT_MAX_PARAMETERS)
+    channels: list[ReflFitChannel] = Field(min_length=1, max_length=FIT_MAX_CHANNELS)
     weighting: Literal["dr", "log"] = "dr"
-    max_nfev: int = Field(default=2000, ge=1, le=20_000)
+    max_nfev: int = Field(default=200, ge=1, le=2000)
+
+
+def _eval_units(req: ReflFitRequest) -> int:
+    layers = 1 + max(
+        (int(p.name[1:].split(".", 1)[0]) for p in req.parameters
+         if p.name.startswith("L") and p.name[1:].split(".", 1)[0].isdigit()),
+        default=0,
+    )
+    units = 0
+    for ch in req.channels:
+        smeared = ch.dq is not None or (ch.resolution or 0.0) > 0
+        units += len(ch.q) * layers * (_SMEAR_SAMPLES if smeared else 1)
+    return units
 
 
 @router.post("/fit")
-def fit_route(req: FitRequest) -> dict[str, Any]:
+def fit_route(req: ReflFitRequest) -> dict[str, Any]:
     """Fit the layer model to one or more measured reflectivity curves."""
-    channels = []
-    for ch in req.channels:
-        c = ch.model_dump()
-        for key in ("q_min", "q_max"):
-            if c[key] is None:
-                del c[key]
-        channels.append(c)
+    units = _eval_units(req)
+    if units > FIT_MAX_EVAL_UNITS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"this fit would cost {units:,} point-layer evaluations per model "
+                f"evaluation (limit {FIT_MAX_EVAL_UNITS:,}); narrow the Q window, "
+                "use fewer points or layers, or drop resolution smearing"
+            ),
+        )
     out = call_calc(
         fit_reflectivity,
         [p.model_dump() for p in req.parameters],
-        channels,
+        [c.model_dump() for c in req.channels],
         weighting=req.weighting,
         max_nfev=req.max_nfev,
+        deadline_s=FIT_DEADLINE_S,
     )
     result: dict[str, Any] = to_jsonable(out)
     return result

@@ -134,3 +134,25 @@ def test_fit_rejects_non_finite_and_oversized_input() -> None:
     body = _fit_body()
     body["channels"] = body["channels"] * 5
     assert client.post("/api/reflectivity/fit", json=body).status_code == 422
+
+
+def test_simulate_treats_positive_sld_imag_as_absorption() -> None:
+    # BUG-029: the golden engine treats +imag as gain; the route's contract is
+    # the presets' (positive = absorption), so a thick absorbing film must
+    # reflect less than a clear one.
+    def r_at(imag: float) -> float:
+        layers = [[0.0, 0.0, 0.0, 0.0], [2000.0, 4e-6, imag, 0.0], [0.0, 2.07e-6, 0.0, 0.0]]
+        body = {"layers": layers, "q_min": 0.02, "q_max": 0.021, "n_points": 2}
+        return float(client.post("/api/reflectivity/simulate", json=body).json()["r"][0])
+
+    assert r_at(0.5e-6) < r_at(0.0)
+
+
+def test_fit_refuses_a_request_too_costly_to_evaluate() -> None:
+    body = _fit_body()
+    n = 20_000
+    q = np.linspace(0.01, 0.2, n).tolist()
+    body["channels"] = [{"q": q, "r": [1.0] * n, "dr": [0.1] * n, "resolution": 0.02}] * 4
+    resp = client.post("/api/reflectivity/fit", json=body)
+    assert resp.status_code == 422
+    assert "point-layer evaluations" in resp.json()["detail"]
