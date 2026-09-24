@@ -57,7 +57,7 @@ from quantized.calc.refl_model import (
 from quantized.calc.reflectivity import parratt_refl
 from quantized.calc.sld import sld_profile
 
-__all__ = ["fit_reflectivity", "model_curves"]
+__all__ = ["channel_model", "channel_residuals", "fit_reflectivity", "model_curves"]
 
 _WEIGHTINGS = ("dr", "log")
 _TINY = 1e-300
@@ -72,7 +72,7 @@ class _Deadline(Exception):
     pass
 
 
-def _model(ch: ReflChannel, params: ReflParams, v: NDArray[np.float64], n_layers: int,
+def channel_model(ch: ReflChannel, params: ReflParams, v: NDArray[np.float64], n_layers: int,
            m: NDArray[np.bool_]) -> NDArray[np.float64]:
     res: Any = ch.dq[m] if ch.dq is not None else ch.resolution
     return parratt_refl(
@@ -84,7 +84,7 @@ def _model(ch: ReflChannel, params: ReflParams, v: NDArray[np.float64], n_layers
     )
 
 
-def _resid(ch: ReflChannel, model: NDArray[np.float64], m: NDArray[np.bool_],
+def channel_residuals(ch: ReflChannel, model: NDArray[np.float64], m: NDArray[np.bool_],
            weighting: str) -> NDArray[np.float64]:
     if weighting == "dr":
         assert ch.dr is not None
@@ -133,7 +133,7 @@ def fit_reflectivity(
         count["n"] += 1
         v = params.full(x)
         r = np.concatenate([
-            _resid(c, _model(c, params, v, n_layers, m), m, weighting)
+            channel_residuals(c, channel_model(c, params, v, n_layers, m), m, weighting)
             for c, m in zip(chans, masks, strict=True)
         ])
         cost = float(np.sum(r**2))
@@ -216,7 +216,7 @@ def fit_reflectivity(
 
     curves = []
     for c, m in zip(chans, masks, strict=True):
-        model = _model(c, params, v, n_layers, m)
+        model = channel_model(c, params, v, n_layers, m)
         curves.append({
             "label": c.label,
             "spin": c.spin_label,
@@ -224,7 +224,7 @@ def fit_reflectivity(
             "r": c.r_all[m].tolist(),
             "dr": None if c.dr is None else c.dr[m].tolist(),
             "model": model.tolist(),
-            "residual": _resid(c, model, m, weighting).tolist(),
+            "residual": channel_residuals(c, model, m, weighting).tolist(),
         })
 
     profiles = []
@@ -268,7 +268,7 @@ def model_curves(
     out = []
     for i, spec in enumerate(chans):
         ch = ReflChannel(spec, i)
-        out.append(_model(ch, params, v, n_layers, np.ones(qa.size, dtype=bool)))
+        out.append(channel_model(ch, params, v, n_layers, np.ones(qa.size, dtype=bool)))
     return out
 
 

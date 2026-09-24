@@ -157,6 +157,13 @@ def from_refl_fit(
     data do not determine), a stats line (the objective under its honest
     label, points, free parameters, convergence) and one line per warning.
     Fitted curves, if present, are ignored.
+
+    With a DREAM posterior summary in ``result["posterior"]`` (the shape of
+    ``calc.refl_dream.sample_reflectivity``'s parameters and convergence, as a
+    saved fit record keeps it), the table gains 68% and 95% credible-interval
+    columns ("—" for a parameter the posterior does not cover) and two notes
+    give the draws, chains, burn-in and thinning, and the R-hat verdict,
+    naming any parameter above the threshold (its interval is not trustworthy).
     """
     weighting = result.get("weighting")
     if weighting not in _REFL_OBJECTIVE:
@@ -164,13 +171,21 @@ def from_refl_fit(
     params = list(result.get("parameters") or [])
     if not params:
         raise ValueError("from_refl_fit needs a result with parameters")
+    posterior = result.get("posterior")
+    post = posterior if isinstance(posterior, Mapping) else None
+    by_name = {str(q.get("name")): q for q in (post or {}).get("parameters") or []
+               if isinstance(q, Mapping)}
+    columns = ["Parameter", "Value", "± stderr"]
+    if post is not None:
+        columns += ["68% interval", "95% interval"]
     rows = []
     for p in params:
         err = _finite(p.get("stderr"))
-        rows.append([
-            p.get("name", ""), _finite(p.get("value")),
-            _NONE if err is None else err, _refl_status(p),
-        ])
+        row = [p.get("name", ""), _finite(p.get("value")), _NONE if err is None else err]
+        if post is not None:
+            q = by_name.get(str(p.get("name")), {})
+            row += [_interval_text(q.get("interval68")), _interval_text(q.get("interval95"))]
+        rows.append([*row, _refl_status(p)])
     label, key = _REFL_OBJECTIVE[weighting]
     value = _finite(result.get(key))
     shown = _NONE if value is None else format(value, ".6g")
@@ -180,19 +195,52 @@ def from_refl_fit(
         f"free parameters = {result.get('n_free')} · converged: {converged}"
     )
     blocks: list[dict[str, Any]] = [
-        table_block(
-            ["Parameter", "Value", "± stderr", "Status"], rows, caption="Fitted parameters"
-        ),
+        table_block([*columns, "Status"], rows, caption="Fitted parameters"),
         text_block(stats),
     ]
     if result.get("message"):
         blocks.append(text_block(f"Optimizer: {result['message']}"))
     blocks.extend(text_block(f"Warning: {w}") for w in result.get("warnings") or [])
+    if post is not None:
+        blocks.extend(_posterior_notes(post))
     return ReportSheet(
         title=title,
         sections=(section("Fit results", blocks),),
         source_refs=tuple(dict(r) for r in (source_refs or ())),
     )
+
+
+def _interval_text(v: Any) -> str:
+    """``[lo, hi]`` as plain ASCII text (6 significant digits), or the dash."""
+    if not isinstance(v, Sequence) or isinstance(v, str) or len(v) != 2:
+        return _NONE
+    lo, hi = _finite(v[0]), _finite(v[1])
+    return _NONE if lo is None or hi is None else f"[{lo:.6g}, {hi:.6g}]"
+
+
+def _posterior_notes(post: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """The DREAM run in one line, and the R-hat verdict in another."""
+    c = post.get("convergence")
+    conv: Mapping[str, Any] = c if isinstance(c, Mapping) else {}
+    thr = _finite(conv.get("rhat_threshold")) or 1.2
+    rmax = _finite(conv.get("rhat_max"))
+    run = (
+        f"Posterior (DREAM): {conv.get('n_draws', _NONE)} draws from "
+        f"{conv.get('n_chains', _NONE)} chains after {conv.get('burn', _NONE)} burn-in "
+        f"generations, thinned by {conv.get('thin', _NONE)}; the intervals are central "
+        "credible intervals of the draws."
+    )
+    flagged = [str(n) for n in conv.get("flagged") or []]
+    if flagged:
+        verdict = (f"R-hat above {thr:g} for {', '.join(flagged)}: those chains have not "
+                   "mixed, so their intervals are not trustworthy.")
+    elif rmax is None:
+        verdict = "R-hat: not available (too few draws); the intervals are not trustworthy."
+    else:
+        verdict = f"R-hat max = {rmax:.3g} (all at or below {thr:g}): the chains have mixed."
+    if conv.get("stopped") in ("deadline", "cancelled"):
+        verdict += f" Sampling stopped early ({conv['stopped']}): the intervals are provisional."
+    return [text_block(run), text_block(verdict)]
 
 
 # Human labels + display order for the common ANOVA-style row-dict keys.

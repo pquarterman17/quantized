@@ -169,3 +169,77 @@ def test_the_latex_render_is_pure_ascii_for_both_weightings() -> None:
     tex = to_latex(from_refl_fit(log).to_dict())
     assert r"$\Sigma$" in tex and r"log$_1$$_0$R" in tex
     assert "---" in tex  # the unreported stderr
+
+
+# ── with a DREAM posterior (P2.2 slice 4) ────────────────────────────────────
+
+
+def _posterior(**conv: Any) -> dict[str, Any]:
+    """A saved record's compact posterior summary (no chains, no bands)."""
+    convergence: dict[str, Any] = {
+        "converged": True, "rhat_threshold": 1.2, "rhat_max": 1.04, "flagged": [],
+        "stopped": "completed", "burn": 300, "thin": 2, "n_chains": 27, "n_draws": 27000,
+    }
+    convergence.update(conv)
+    return {
+        "parameters": [
+            {"name": "L1.thickness", "median": 187.4, "interval68": [186.6, 188.2],
+             "interval95": [185.9, 189.0], "rhat": 1.01},
+            {"name": "scale", "median": 0.97, "interval68": [0.96, 0.98],
+             "interval95": [0.95, 0.99], "rhat": 1.04},
+            {"name": "L2.roughness", "median": 15.0, "interval68": [None, 15.2],
+             "interval95": [14.0, 15.4], "rhat": None},
+        ],
+        "convergence": convergence,
+    }
+
+
+def test_a_posterior_adds_interval_columns_and_the_run_notes() -> None:
+    sheet = from_refl_fit(_result(posterior=_posterior())).to_dict()
+    validate_report(sheet)
+    table = _table(sheet)
+    assert table["columns"] == [
+        "Parameter", "Value", "± stderr", "68% interval", "95% interval", "Status",
+    ]
+    rows = {r[0]: r for r in table["rows"]}
+    assert rows["L1.thickness"][1:] == [187.5, 0.8, "[186.6, 188.2]", "[185.9, 189]", "free"]
+    assert rows["L2.sld"][3:5] == ["—", "—"]  # fixed: not sampled
+    assert rows["L2.roughness"][3:5] == ["—", "[14, 15.4]"]  # a null end is not a number
+    texts = _texts(sheet)
+    assert (
+        "Posterior (DREAM): 27000 draws from 27 chains after 300 burn-in generations, "
+        "thinned by 2; the intervals are central credible intervals of the draws."
+    ) in texts
+    assert "R-hat max = 1.04 (all at or below 1.2): the chains have mixed." in texts
+
+
+def test_an_r_hat_flag_and_an_early_stop_are_said_plainly() -> None:
+    post = _posterior(flagged=["L1.thickness"], rhat_max=1.6, converged=False,
+                      stopped="deadline")
+    texts = _texts(from_refl_fit(_result(posterior=post)).to_dict())
+    note = next(t for t in texts if t.startswith("R-hat"))
+    assert note.startswith("R-hat above 1.2 for L1.thickness: those chains have not mixed")
+    assert "Sampling stopped early (deadline)" in note
+    texts = _texts(from_refl_fit(_result(posterior=_posterior(rhat_max=None))).to_dict())
+    assert any(t.startswith("R-hat: not available") for t in texts)
+
+
+def test_a_result_without_a_posterior_keeps_the_slice_3_table() -> None:
+    for legacy in (_result(), _result(posterior=None), _result(posterior="garbage")):
+        assert _table(from_refl_fit(legacy).to_dict())["columns"] == [
+            "Parameter", "Value", "± stderr", "Status",
+        ]
+
+
+def test_the_latex_render_with_a_posterior_is_pure_ascii() -> None:
+    post = _posterior(flagged=["scale"], stopped="cancelled")
+    tex = to_latex(from_refl_fit(_result(posterior=post), title="Fit #1 — film").to_dict())
+    assert sorted({ch for ch in tex if not ch.isascii()}) == []
+    assert r"68\% interval" in tex and "[185.9, 189]" in tex
+
+
+def test_emit_route_carries_the_posterior_from_wire_json() -> None:
+    body = {"kind": "refl_fit", "result": {**_result(), "posterior": _posterior()}}
+    resp = client.post("/api/report/emit", json=body)
+    assert resp.status_code == 200, resp.text
+    assert "95% interval" in _table(resp.json()["report"])["columns"]
