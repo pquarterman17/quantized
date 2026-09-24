@@ -4,6 +4,11 @@ Wraps the finished W3 calc helpers (``calc.reflectivity.parratt_refl`` — golde
 MATLAB parrattRefl — and ``calc.sld`` SLD profile / presets). The route builds the
 Q grid, validates the layer stack, calls the pure functions, and serializes. No
 physics here; the recursion + Névot-Croce roughness live in ``calc/``.
+
+Fitting (audit P2.2): ``/fit`` runs ``calc.refl_fit`` synchronously under a
+deadline; ``/dream`` queues ``calc.refl_dream``'s posterior sampling on the
+poll-model job runner (``quantized.jobs``, polled via ``/api/jobs``), the same
+transport the bumps DREAM engine uses.
 """
 
 from __future__ import annotations
@@ -14,10 +19,14 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from quantized.calc.dream_seed import DreamCancelled
+from quantized.calc.fit_bumps import bumps_available
+from quantized.calc.refl_dream import plan_sampling, sample_reflectivity
 from quantized.calc.refl_fit import fit_reflectivity
 from quantized.calc.refl_model import layer_field
 from quantized.calc.reflectivity import parratt_refl
 from quantized.calc.sld import refl_sld_presets, sld_profile
+from quantized.jobs import AbortFn, JobCancelled, JobQueueFullError, ProgressFn, jobs
 from quantized.routes._errors import call_calc
 from quantized.routes._payload import to_jsonable
 
@@ -150,7 +159,7 @@ class ReflFitRequest(BaseModel):
     max_nfev: int = Field(default=200, ge=1, le=2000)
 
 
-def _eval_units(req: ReflFitRequest) -> int:
+def _eval_units(req: ReflFitRequest | ReflDreamRequest) -> int:
     idx = [lf[0] for p in req.parameters if (lf := layer_field(p.name))]
     layers = 1 + max(idx, default=0)
     units = 0
@@ -160,19 +169,23 @@ def _eval_units(req: ReflFitRequest) -> int:
     return units
 
 
-@router.post("/fit")
-def fit_route(req: ReflFitRequest) -> dict[str, Any]:
-    """Fit the layer model to one or more measured reflectivity curves."""
+def _check_units(req: ReflFitRequest | ReflDreamRequest, what: str) -> None:
     units = _eval_units(req)
     if units > FIT_MAX_EVAL_UNITS:
         raise HTTPException(
             status_code=422,
             detail=(
-                f"this fit would cost {units:,} point-layer evaluations per model "
+                f"this {what} would cost {units:,} point-layer evaluations per model "
                 f"evaluation (limit {FIT_MAX_EVAL_UNITS:,}); narrow the Q window, "
                 "use fewer points or layers, or drop resolution smearing"
             ),
         )
+
+
+@router.post("/fit")
+def fit_route(req: ReflFitRequest) -> dict[str, Any]:
+    """Fit the layer model to one or more measured reflectivity curves."""
+    _check_units(req, "fit")
     out = call_calc(
         fit_reflectivity,
         [p.model_dump() for p in req.parameters],
@@ -183,3 +196,106 @@ def fit_route(req: ReflFitRequest) -> dict[str, Any]:
     )
     result: dict[str, Any] = to_jsonable(out)
     return result
+
+
+# ── posterior sampling: DREAM through the job queue (audit P2.2) ─────────────
+
+# A run makes ~(burn + samples/chains) x chains model evaluations, each costing
+# what a /fit evaluation costs (so /fit's per-evaluation cap applies). Three
+# more bounds:
+# * the total evaluations (DREAM_MAX_EVALUATIONS);
+# * one GENERATION's cost, chains x eval-units (DREAM_MAX_GENERATION_UNITS):
+#   measured 2026-09-24 at 72-92 ns per unit here (a 4M-unit evaluation took
+#   0.44 s, ~110 ns, on a slower machine), so a generation stays under ~5 s.
+#   The bands cost band_draws x eval-units and are clamped to the same budget
+#   (never below 10 draws: units <= 4M leaves at least 10);
+# * the deadline, which the sampler checks before EVERY model evaluation (not
+#   per generation), so a run stops within one evaluation of it and returns a
+#   partial, flagged posterior - or fails, if not one generation past the
+#   start population had completed. The bands follow, outside it.
+# At 3.7 ms per evaluation (the 500-point smeared XRR fixture) the evaluation
+# cap is ~15 min of work; the deadline cuts it at 5.
+DREAM_MAX_EVALUATIONS = 250_000
+DREAM_MAX_GENERATION_UNITS = 40_000_000
+DREAM_DEADLINE_S = 300.0
+
+
+class ReflDreamRequest(BaseModel):
+    """A completed fit's parameters and channels (as sent to /fit), the fitted
+    values to start the population about, and the sampling budget. ``pop`` is
+    chains per free parameter; ``burn`` and the kept length are generations;
+    ``seed`` makes the run reproducible."""
+
+    parameters: list[ReflFitParameter] = Field(min_length=1, max_length=FIT_MAX_PARAMETERS)
+    channels: list[ReflFitChannel] = Field(min_length=1, max_length=FIT_MAX_CHANNELS)
+    weighting: Literal["dr", "log"] = "dr"
+    centre: dict[str, FiniteFloat] | None = Field(default=None, max_length=FIT_MAX_PARAMETERS)
+    samples: int = Field(default=10_000, ge=100, le=200_000)
+    burn: int = Field(default=100, ge=0, le=5_000)
+    pop: int = Field(default=10, ge=1, le=20)
+    thin: int = Field(default=1, ge=1, le=100)
+    seed: int | None = Field(default=None, ge=0, le=2**32 - 1)
+    band_draws: int = Field(default=200, ge=10, le=1_000)
+
+
+@router.post("/dream")
+def dream_route(req: ReflDreamRequest) -> dict[str, Any]:
+    """Queue a DREAM posterior for a fit; returns ``{job_id, plan}``.
+
+    Poll ``GET /api/jobs/{id}``; ``GET /api/jobs/{id}/result`` is
+    ``calc.refl_dream.sample_reflectivity``'s dict. A request the sampler would
+    refuse, or one over the limits above, is a 422 here, before anything is
+    queued. ``plan`` carries the sizes, including the band draws after the
+    clamp.
+    """
+    _check_units(req, "run")
+    if not bumps_available():
+        raise HTTPException(
+            status_code=422,
+            detail="bumps is not installed - DREAM sampling needs 'pip install quantized[bumps]'",
+        )
+    params = [p.model_dump() for p in req.parameters]
+    chans = [c.model_dump() for c in req.channels]
+    units = max(1, _eval_units(req))
+    band_draws = min(req.band_draws, max(10, DREAM_MAX_GENERATION_UNITS // units))
+    kwargs: dict[str, Any] = {
+        "centre": req.centre, "weighting": req.weighting, "samples": req.samples,
+        "burn": req.burn, "pop": req.pop, "thin": req.thin, "band_draws": band_draws,
+    }
+    plan = call_calc(plan_sampling, params, chans, **kwargs)
+    if plan["n_chains"] * units > DREAM_MAX_GENERATION_UNITS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"one generation would cost {plan['n_chains'] * units:,} point-layer "
+                f"evaluations ({plan['n_chains']:,} chains x {units:,}; limit "
+                f"{DREAM_MAX_GENERATION_UNITS:,}); lower the chains per parameter, the "
+                "points or the layers"
+            ),
+        )
+    if plan["n_evaluations"] > DREAM_MAX_EVALUATIONS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"this run would make up to {plan['n_evaluations']:,} model evaluations "
+                f"(limit {DREAM_MAX_EVALUATIONS:,}); lower samples, burn-in or chains"
+            ),
+        )
+
+    def run_job(progress: ProgressFn, abort_check: AbortFn) -> Any:
+        def on_fraction(fraction: float) -> None:
+            progress(fraction, "sampling posterior" if fraction < 0.95 else "computing bands")
+
+        try:
+            out = sample_reflectivity(
+                params, chans, seed=req.seed, deadline_s=DREAM_DEADLINE_S,
+                progress_callback=on_fraction, abort_check=abort_check, **kwargs,
+            )
+        except DreamCancelled as exc:  # gave up waiting for another DREAM run
+            raise JobCancelled(str(exc)) from exc
+        return to_jsonable(out)
+
+    try:
+        return {"job_id": jobs.submit(run_job), "plan": {**plan, "band_draws": band_draws}}
+    except JobQueueFullError as exc:
+        raise HTTPException(status_code=429, detail=str(exc)) from exc

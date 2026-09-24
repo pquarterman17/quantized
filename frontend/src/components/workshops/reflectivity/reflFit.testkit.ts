@@ -1,7 +1,7 @@
 // Shared fixtures for the reflectivity fit-record tests (P2.2 slice 3). Test
 // support only: imported by *.test.ts files, never by app code.
 
-import type { ReflFitResult } from "../../../lib/api/reflectivity";
+import type { ReflFitResult, ReflPosteriorResult } from "../../../lib/api/reflectivity";
 import type { Dataset, SldPreset } from "../../../lib/types";
 import type { ReflFitRecord } from "./reflFitRecord";
 
@@ -141,5 +141,34 @@ export function makeDataset(id: string, reflFits?: unknown[]): Dataset {
     name: `${id}.refl`,
     data: { time: [0.01, 0.02], values: [[1, 0.1], [0.5, 0.1]], labels: ["R", "dR"], units: ["", ""], metadata: {} },
     ...(reflFits ? { reflFits } : {}),
+  };
+}
+
+/** A finished DREAM job's result for `makeRecord` (P2.2 slice 4): one
+ *  well-mixed parameter, one flagged at a bound, and one null band point. */
+export function dreamResult(over: Partial<ReflPosteriorResult> = {}): ReflPosteriorResult {
+  return {
+    parameters: [
+      { name: "L1.thickness", tie: null, median: 187.4, interval68: [186.6, 188.2], interval95: [185.9, 189], map: 187.5, rhat: 1.01, rhat_flag: false, at_bound: false },
+      { name: "background", tie: null, median: 1e-7, interval68: [0, 2e-7], interval95: [0, 4e-7], map: 1e-7, rhat: 1.4, rhat_flag: true, at_bound: true },
+    ],
+    free: ["L1.thickness", "background"],
+    correlation: [
+      [1, -0.3],
+      [-0.3, 1],
+    ],
+    map_chi2: 12.1,
+    n_points: 60,
+    convergence: {
+      converged: false, rhat_threshold: 1.2, rhat_max: 1.4, flagged: ["background"], unmeasured: [], stopped: "completed",
+      burn: 200, burn_requested: 200, thin: 1, n_chains: 10, n_generations: 1200, n_kept_generations: 1000, n_generations_requested: 1200,
+      n_draws: 10000, n_band_draws: 200, n_evaluations: 12050, seed: 1, reproducible: true,
+    },
+    r_bands: [
+      { label: "c", spin: null, q: [0.01, 0.02], r: [1, 0.5], dr: [0.01, 0.01], lo95: [0.9, 0.4], lo68: [0.95, 0.45], median: [1, 0.5], hi68: [1.05, 0.55], hi95: [1.1, null] },
+    ],
+    sld_bands: [{ spin: null, z: [-10, 0, 10], lo95: [0, 1, 2], lo68: [0, 1, 2], median: [0, 1, 2], hi68: [0, 1, 2], hi95: [0, 1, 2] }],
+    warnings: ["R-hat above 1.2 (the chains have not mixed) for: background; sample longer or constrain the model"],
+    ...over,
   };
 }

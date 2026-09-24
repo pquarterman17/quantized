@@ -50,8 +50,8 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       group: "Analyze",
       section: "XRD & reflectivity",
       label: "Reflectivity model…",
-      description: "Build a layer stack and simulate an X-ray or neutron reflectivity curve on a chosen Q grid.",
-      keywords: "xrr specular parratt sld layer stack simulate reflectometry",
+      description: "Build a layer stack; simulate or fit X-ray/neutron reflectivity, with DREAM uncertainty.",
+      keywords: "xrr pnr specular parratt sld fit dream posterior reflectometry",
       run: () => s().setReflectivityOpen(true),
     },
     {

@@ -78,6 +78,12 @@ describe("shared command help metadata", () => {
     ["by column", "distribution"],
     ["by column", "fit-y-by-x"],
     ["jsl", "pipeline"],
+    // P2.2: the reflectivity workshop fits data and estimates its uncertainty.
+    ["dream", "reflectivity"],
+    ["uncertainty", "reflectivity"],
+    ["posterior", "reflectivity"],
+    ["pnr", "reflectivity"],
+    ["reflectometry", "reflectivity"],
   ];
 
   it.each(VOCABULARY)("finds a tool by the domain term %j", (term, id) => {

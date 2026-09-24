@@ -7451,6 +7451,107 @@
         "title": "RecommendRequest",
         "type": "object"
       },
+      "ReflDreamRequest": {
+        "description": "A completed fit's parameters and channels (as sent to /fit), the fitted\nvalues to start the population about, and the sampling budget. ``pop`` is\nchains per free parameter; ``burn`` and the kept length are generations;\n``seed`` makes the run reproducible.",
+        "properties": {
+          "band_draws": {
+            "default": 200,
+            "maximum": 1000.0,
+            "minimum": 10.0,
+            "title": "Band Draws",
+            "type": "integer"
+          },
+          "burn": {
+            "default": 100,
+            "maximum": 5000.0,
+            "minimum": 0.0,
+            "title": "Burn",
+            "type": "integer"
+          },
+          "centre": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "maxProperties": 200,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Centre"
+          },
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/ReflFitChannel"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Channels",
+            "type": "array"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/ReflFitParameter"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Parameters",
+            "type": "array"
+          },
+          "pop": {
+            "default": 10,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Pop",
+            "type": "integer"
+          },
+          "samples": {
+            "default": 10000,
+            "maximum": 200000.0,
+            "minimum": 100.0,
+            "title": "Samples",
+            "type": "integer"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maximum": 4294967295.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "thin": {
+            "default": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Thin",
+            "type": "integer"
+          },
+          "weighting": {
+            "default": "dr",
+            "enum": [
+              "dr",
+              "log"
+            ],
+            "title": "Weighting",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parameters",
+          "channels"
+        ],
+        "title": "ReflDreamRequest",
+        "type": "object"
+      },
       "ReflFitChannel": {
         "description": "One measured curve. ``dq`` is a per-point 1-sigma resolution unless\n``dq_is_fwhm``; ``resolution`` is a constant 1-sigma dQ/Q, used instead of\n``dq`` (never together).",
         "properties": {
@@ -15139,6 +15240,50 @@
         "summary": "Get Unit Categories",
         "tags": [
           "reference"
+        ]
+      }
+    },
+    "/api/reflectivity/dream": {
+      "post": {
+        "description": "Queue a DREAM posterior for a fit; returns ``{job_id, plan}``.\n\nPoll ``GET /api/jobs/{id}``; ``GET /api/jobs/{id}/result`` is\n``calc.refl_dream.sample_reflectivity``'s dict. A request the sampler would\nrefuse, or one over the limits above, is a 422 here, before anything is\nqueued. ``plan`` carries the sizes, including the band draws after the\nclamp.",
+        "operationId": "dream_route_api_reflectivity_dream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReflDreamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Dream Route Api Reflectivity Dream Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dream Route",
+        "tags": [
+          "reflectivity"
         ]
       }
     },

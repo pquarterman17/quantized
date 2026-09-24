@@ -2610,6 +2610,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reflectivity/dream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dream Route
+         * @description Queue a DREAM posterior for a fit; returns ``{job_id, plan}``.
+         *
+         *     Poll ``GET /api/jobs/{id}``; ``GET /api/jobs/{id}/result`` is
+         *     ``calc.refl_dream.sample_reflectivity``'s dict. A request the sampler would
+         *     refuse, or one over the limits above, is a 422 here, before anything is
+         *     queued. ``plan`` carries the sizes, including the band draws after the
+         *     clamp.
+         */
+        post: operations["dream_route_api_reflectivity_dream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reflectivity/fit": {
         parameters: {
             query?: never;
@@ -8007,6 +8033,56 @@ export interface components {
             paired?: boolean;
         };
         /**
+         * ReflDreamRequest
+         * @description A completed fit's parameters and channels (as sent to /fit), the fitted
+         *     values to start the population about, and the sampling budget. ``pop`` is
+         *     chains per free parameter; ``burn`` and the kept length are generations;
+         *     ``seed`` makes the run reproducible.
+         */
+        ReflDreamRequest: {
+            /**
+             * Band Draws
+             * @default 200
+             */
+            band_draws?: number;
+            /**
+             * Burn
+             * @default 100
+             */
+            burn?: number;
+            /** Centre */
+            centre?: {
+                [key: string]: number;
+            } | null;
+            /** Channels */
+            channels: components["schemas"]["ReflFitChannel"][];
+            /** Parameters */
+            parameters: components["schemas"]["ReflFitParameter"][];
+            /**
+             * Pop
+             * @default 10
+             */
+            pop?: number;
+            /**
+             * Samples
+             * @default 10000
+             */
+            samples?: number;
+            /** Seed */
+            seed?: number | null;
+            /**
+             * Thin
+             * @default 1
+             */
+            thin?: number;
+            /**
+             * Weighting
+             * @default dr
+             * @enum {string}
+             */
+            weighting?: "dr" | "log";
+        };
+        /**
          * ReflFitChannel
          * @description One measured curve. ``dq`` is a per-point 1-sigma resolution unless
          *     ``dq_is_fwhm``; ``resolution`` is a constant 1-sigma dQ/Q, used instead of
@@ -13149,6 +13225,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    dream_route_api_reflectivity_dream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReflDreamRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

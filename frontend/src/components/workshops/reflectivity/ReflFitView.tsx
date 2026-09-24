@@ -8,6 +8,7 @@ import { Button } from "../../primitives";
 import FitDataBinding from "./FitDataBinding";
 import FitParamTable from "./FitParamTable";
 import FitResults from "./FitResults";
+import ReflUncertainty from "./ReflUncertainty";
 import SavedFit, { FitHistoryPicker } from "./SavedFit";
 import type { ReflFitState } from "./useReflFit";
 
@@ -17,6 +18,8 @@ export default function ReflFitView({ fit }: { fit: ReflFitState }) {
   const lambdaMissing = fit.settings.xKind === "twotheta" && fit.lambda == null;
   const h = fit.history;
   const live = fit.result != null && (h.pickedId === null || h.pickedId === fit.liveRecord?.id);
+  // The live fit's record as the store holds it NOW (with any posterior).
+  const liveRecord = h.records.find((r) => r.id === fit.liveRecord?.id) ?? fit.liveRecord;
   return (
     <div>
       <div className="qzk-field-lbl" style={SECTION}>Data</div>
@@ -62,8 +65,8 @@ export default function ReflFitView({ fit }: { fit: ReflFitState }) {
             <Button size="sm" onClick={fit.openLogPlot}>
               Open log-Y plot
             </Button>
-            {fit.liveRecord && (
-              <Button size="sm" disabled={h.reporting} onClick={() => fit.liveRecord && void h.addToReport(fit.liveRecord)}>
+            {liveRecord && (
+              <Button size="sm" disabled={h.reporting} onClick={() => void h.addToReport(liveRecord)}>
                 Add to report
               </Button>
             )}
@@ -76,6 +79,7 @@ export default function ReflFitView({ fit }: { fit: ReflFitState }) {
           <div className="qzk-ds-meta" style={{ marginTop: 6, color: "var(--text-faint)" }}>
             The fitted curve of channel 1 is overlaid on its dataset; the fit curves add every channel and SLD profile.
           </div>
+          {liveRecord && <ReflUncertainty dream={fit.dream} record={liveRecord} />}
         </>
       )}
     </div>
