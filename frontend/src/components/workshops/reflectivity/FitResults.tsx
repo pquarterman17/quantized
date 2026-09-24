@@ -9,7 +9,10 @@ import { formatNum, objectiveSummary } from "./reflFitModel";
 const MONO = { fontFamily: "var(--font-mono)" } as const;
 const COLS = "96px 1fr 1fr 64px";
 
-export default function FitResults({ result }: { result: ReflFitResult }) {
+/** What the table reads — a live result or a saved one (which has no curves). */
+type FitSummary = Omit<ReflFitResult, "curves" | "sld_profiles">;
+
+export default function FitResults({ result }: { result: FitSummary }) {
   const obj = objectiveSummary(result);
   const shown = result.parameters.filter((p) => p.vary || p.tie);
   return (
