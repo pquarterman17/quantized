@@ -36,6 +36,7 @@ __all__ = [
     "LAYER_FIELDS",
     "ReflChannel",
     "ReflParams",
+    "layer_field",
     "layer_param_name",
     "layer_stack",
     "validate_model",
@@ -43,13 +44,21 @@ __all__ = [
 
 LAYER_FIELDS = ("thickness", "sld", "isld", "roughness", "msld")
 FWHM_TO_SIGMA = 1.0 / (2.0 * math.sqrt(2.0 * math.log(2.0)))
-_LAYER_NAME = re.compile(r"^L(\d+)\.([a-z]+)$")
+# Canonical ASCII only: "L01.sld" or a non-ASCII digit would pass int() yet
+# never match the canonical name layer_stack looks up.
+_LAYER_NAME = re.compile(r"^L(0|[1-9][0-9]*)\.([a-z]+)$", re.ASCII)
 _NON_NEGATIVE = ("thickness", "roughness")
 
 
 def layer_param_name(layer: int, field: str) -> str:
     """The canonical parameter name for a layer field, e.g. ``L1.thickness``."""
     return f"L{layer}.{field}"
+
+
+def layer_field(name: str) -> tuple[int, str] | None:
+    """``(layer, field)`` for a canonical layer parameter name, else None."""
+    m = _LAYER_NAME.match(name)
+    return (int(m.group(1)), m.group(2)) if m else None
 
 
 class ReflParams:
@@ -122,10 +131,12 @@ def validate_model(specs: list[dict[str, Any]], channels: list[dict[str, Any]]) 
 
     A misspelled name, or a varied parameter the model never reads, would
     otherwise be fitted as a flat direction and reported as perfectly
-    determined. Every name must be a layer field or a scale/background some
-    channel uses; every layer needs an SLD and every interior layer a
-    thickness; the fields that mean nothing (incident-medium thickness and
-    roughness, substrate thickness, incident-medium msld) may not vary; and
+    determined. Every name must be a canonical layer field (``L1.sld``, not
+    ``L01.sld``) or a scale/background some channel uses; every layer needs an
+    SLD and every interior layer a thickness; the fields that mean nothing
+    (incident-medium thickness, roughness and msld, substrate thickness) may
+    not vary, and L0.msld must be 0; msld may vary only with a polarised
+    channel; and
     thickness/roughness bounds must be non-negative (the engine treats
     values <= 0 as absent, a region with no gradient).
     """
@@ -134,9 +145,9 @@ def validate_model(specs: list[dict[str, Any]], channels: list[dict[str, Any]]) 
     layers: dict[int, set[str]] = {}
     for s in specs:
         name = str(s["name"])
-        m = _LAYER_NAME.match(name)
-        if m:
-            i, field = int(m.group(1)), m.group(2)
+        lf = layer_field(name)
+        if lf:
+            i, field = lf
             if field not in LAYER_FIELDS:
                 raise ValueError(f"unknown layer field in parameter {name}")
             layers.setdefault(i, set()).add(field)
@@ -156,13 +167,18 @@ def validate_model(specs: list[dict[str, Any]], channels: list[dict[str, Any]]) 
         if 0 < i < n - 1 and "thickness" not in fields:
             raise ValueError(f"interior layer {i} has no L{i}.thickness parameter")
     meaningless = {"L0.thickness", "L0.roughness", "L0.msld", f"L{n - 1}.thickness"}
+    polarised = any(c.get("spin") in ("+", "-") for c in channels)
     for s in specs:
         name = str(s["name"])
         varies = bool(s.get("vary")) and s.get("tie") in (None, "")
-        if name in meaningless and (varies or name == "L0.msld"):
+        lf = layer_field(name)
+        if name in meaningless and varies:
             raise ValueError(f"{name} has no effect on the model and cannot be fitted")
-        m = _LAYER_NAME.match(name)
-        if m and m.group(2) in _NON_NEGATIVE:
+        if name == "L0.msld" and float(s["value"]) != 0:
+            raise ValueError("L0.msld must be 0: the incident medium is not magnetic")
+        if lf and lf[1] == "msld" and varies and not polarised:
+            raise ValueError(f"{name} cannot be fitted without a polarised (+/-) channel")
+        if lf and lf[1] in _NON_NEGATIVE:
             lo = s.get("min")
             if float(s["value"]) < 0 or (varies and lo is not None and float(lo) < 0):
                 raise ValueError(f"{name} must be non-negative (value and min)")

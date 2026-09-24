@@ -15,6 +15,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from quantized.calc.refl_fit import fit_reflectivity
+from quantized.calc.refl_model import layer_field
 from quantized.calc.reflectivity import parratt_refl
 from quantized.calc.sld import refl_sld_presets, sld_profile
 from quantized.routes._errors import call_calc
@@ -150,11 +151,8 @@ class ReflFitRequest(BaseModel):
 
 
 def _eval_units(req: ReflFitRequest) -> int:
-    layers = 1 + max(
-        (int(p.name[1:].split(".", 1)[0]) for p in req.parameters
-         if p.name.startswith("L") and p.name[1:].split(".", 1)[0].isdigit()),
-        default=0,
-    )
+    idx = [lf[0] for p in req.parameters if (lf := layer_field(p.name))]
+    layers = 1 + max(idx, default=0)
     units = 0
     for ch in req.channels:
         smeared = ch.dq is not None or (ch.resolution or 0.0) > 0

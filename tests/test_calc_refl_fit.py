@@ -252,7 +252,11 @@ def test_layer_param_name() -> None:
         (lambda ps: ps[0].update(vary=True, min=0.0, max=10.0), "no effect on the model"),
         (lambda ps: ps[3].update(vary=True, min=0.0, max=10.0), "no effect on the model"),
         (lambda ps: ps[12].update(vary=True, min=0.0, max=10.0), "no effect on the model"),
-        (lambda ps: ps.append(P("L0.msld", 0.0)), "no effect on the model"),
+        (lambda ps: ps.append(P("L0.msld", 1e-7)), "L0.msld must be 0"),
+        (lambda ps: ps.append(P("L1.msld", 0.1e-6, -1e-6, 1e-6)), "polarised"),
+        # Non-canonical names would pass int() but never be read by the model.
+        (lambda ps: ps[5].update(name="L01.sld"), "not a layer field"),
+        (lambda ps: ps[5].update(name="L\u0661.sld"), "not a layer field"),
         (lambda ps: ps[7].update(min=-5.0), "non-negative"),
         (lambda ps: ps.pop(4), "no L1.thickness"),
         (lambda ps: ps.pop(5), "no L1.sld"),
@@ -265,6 +269,12 @@ def test_a_model_that_cannot_mean_what_it_says_is_refused(mutate: Any, match: st
     mutate(ps)
     with pytest.raises(ValueError, match=match):
         fit_reflectivity(ps, [xrr_channel()])
+
+
+def test_fixed_zero_incident_msld_is_accepted() -> None:
+    # A UI that sends every field for every layer must not be refused.
+    out = fit_reflectivity([*bilayer(), P("L0.msld", 0.0)], [xrr_channel()])
+    assert out["n_free"] > 0
 
 
 def test_a_channel_background_typo_leaves_background_unused_and_is_refused() -> None:

@@ -148,6 +148,13 @@ def test_simulate_treats_positive_sld_imag_as_absorption() -> None:
     assert r_at(0.5e-6) < r_at(0.0)
 
 
+def test_fit_non_ascii_layer_digit_is_a_422_not_a_500() -> None:
+    body = _fit_body()
+    body["parameters"].append({"name": "L\u00b2.sld", "value": 1e-6})
+    resp = client.post("/api/reflectivity/fit", json=body)
+    assert resp.status_code == 422
+
+
 def test_fit_refuses_a_request_too_costly_to_evaluate() -> None:
     body = _fit_body()
     n = 20_000

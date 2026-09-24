@@ -178,7 +178,8 @@ def fit_reflectivity(
         for row in vt[weak]:
             for kk in np.nonzero(np.abs(row) > 1e-3)[0]:
                 undetermined[params.free[int(kk)]] = True
-        inv_s2 = np.where(weak, 0.0, 1.0 / np.maximum(s, _TINY) ** 2)
+        inv_s2 = np.zeros_like(s)
+        inv_s2[~weak] = 1.0 / s[~weak] ** 2
         cov = (vt.T * inv_s2) @ vt * red * np.outer(params.span, params.span)
         sd = np.sqrt(np.clip(np.diag(cov), 0.0, None))
         for k, i in enumerate(params.free):
