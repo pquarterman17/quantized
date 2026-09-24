@@ -164,9 +164,53 @@ describe("publishFitResult — the round-2 provenance (data fingerprint + x axis
 });
 
 
+/** Publish a fit, then start history from it: these tests are about what the
+ *  EDIT writers record, and publishing a fit is itself one undo step. */
+function fitFresh(result: MultiFitResult = RESULT): void {
+  publishFitResult("d1", result, "simultaneous", OPTS);
+  useApp.setState({ history: [], future: [] });
+}
+
+describe("fit publication is one undo step", () => {
+  it("records a fit, so fit → exclude → re-fit → undo undoes the re-fit, not the exclusion", () => {
+    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    const [, b] = useApp.getState().datasets[0].peakTable!.peaks;
+    setPeakExcluded("d1", b.id, true);
+    const refit = { ...RESULT, R2: 0.5 };
+    publishFitResult("d1", refit, "simultaneous", OPTS);
+    expect(useApp.getState().history.map((h) => h.label)).toEqual(["fit peaks", "exclude fitted peak", "fit peaks"]);
+
+    useApp.getState().undo();
+    const t = useApp.getState().datasets[0].peakTable!;
+    expect(t.provenance.R2).toBe(0.99); // back to the first fit…
+    expect(t.peaks[1].excluded).toBe(true); // …with the exclusion kept
+  });
+});
+
+describe("negative (dip) peaks stay editable", () => {
+  it("edits a row with negative height and area when only the center changes", () => {
+    fitFresh({
+      ...RESULT,
+      peaks: [{ ...RESULT.peaks[0], height: -12, area: -2.5 }, RESULT.peaks[1]],
+    });
+    const p = useApp.getState().datasets[0].peakTable!.peaks[0];
+    const next = editPeak("d1", p.id, { center: 30.3, fwhm: p.fwhm, height: p.height, area: p.area });
+    expect(next?.peaks[0]).toEqual(expect.objectContaining({ center: 30.3, height: -12, area: -2.5 }));
+  });
+
+  it("refuses flipping a dip's sign", () => {
+    fitFresh({
+      ...RESULT,
+      peaks: [{ ...RESULT.peaks[0], height: -12, area: -2.5 }, RESULT.peaks[1]],
+    });
+    const before = useApp.getState().datasets[0].peakTable!;
+    expect(editPeak("d1", before.peaks[0].id, { height: 12 })).toBe(before);
+  });
+});
+
 describe("manual durable peak edits", () => {
   it("edits by stable id, clears affected uncertainty/global metrics, and keeps raw data untouched", () => {
-    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    fitFresh();
     const before = useApp.getState().datasets[0];
     const id = before.peakTable!.peaks[0].id;
     const next = editPeak("d1", id, { center: 30.25, fwhm: 0.22, height: 95, area: 20 });
@@ -188,7 +232,7 @@ describe("manual durable peak edits", () => {
   });
 
   it("removes addressed peaks and removes the artifact entirely when the last row is deleted", () => {
-    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    fitFresh();
     const table = useApp.getState().datasets[0].peakTable!;
     const one = removePeaks("d1", new Set([table.peaks[0].id]));
     expect(one?.peaks).toHaveLength(1);
@@ -200,7 +244,7 @@ describe("manual durable peak edits", () => {
   });
 
   it("undoes and redoes a manual edit as one effective-change-only step", () => {
-    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    fitFresh();
     const original = useApp.getState().datasets[0].peakTable!;
     const id = original.peaks[0].id;
 
@@ -217,7 +261,7 @@ describe("manual durable peak edits", () => {
   });
 
   it("undoes partial and final-row removals without recording no-op removals", () => {
-    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    fitFresh();
     const original = useApp.getState().datasets[0].peakTable!;
 
     removePeaks("d1", new Set(["missing"]));
@@ -239,7 +283,7 @@ describe("manual durable peak edits", () => {
 
 describe("manual edit consistency and validation (review round 2)", () => {
   function withErrs(): string {
-    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    fitFresh();
     const t = useApp.getState().datasets[0].peakTable!;
     // Every current producer writes null uncertainties; give them values so
     // the per-field clearing below is actually observable.
@@ -265,14 +309,14 @@ describe("manual edit consistency and validation (review round 2)", () => {
   });
 
   it("rescales an untouched area when height or FWHM changes, keeping the shape", () => {
-    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    fitFresh();
     const p = useApp.getState().datasets[0].peakTable!.peaks[0]; // h 100, w 0.2, area 21
     const next = editPeak("d1", p.id, { center: p.center, fwhm: 0.4, height: 50, area: p.area });
     expect(next?.peaks[0].area).toBeCloseTo(21 * (50 / 100) * (0.4 / 0.2));
   });
 
   it("keeps an area the user typed explicitly", () => {
-    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    fitFresh();
     const p = useApp.getState().datasets[0].peakTable!.peaks[0];
     const next = editPeak("d1", p.id, { center: p.center, fwhm: 0.4, height: 50, area: 7 });
     expect(next?.peaks[0].area).toBe(7);
@@ -284,7 +328,7 @@ describe("manual edit consistency and validation (review round 2)", () => {
     [{ area: 0 }],
     [{ center: Number.NaN }],
   ])("refuses a non-physical edit %o without writing or recording history", (patch) => {
-    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    fitFresh();
     const before = useApp.getState().datasets[0].peakTable!;
     expect(editPeak("d1", before.peaks[0].id, patch)).toBe(before);
     expect(useApp.getState().datasets[0].peakTable).toBe(before);
@@ -292,7 +336,7 @@ describe("manual edit consistency and validation (review round 2)", () => {
   });
 
   it("records exclusion toggles so undo steps back through edits and exclusions in order", () => {
-    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    fitFresh();
     const [a, b] = useApp.getState().datasets[0].peakTable!.peaks;
     editPeak("d1", a.id, { center: 30.4 });
     setPeakExcluded("d1", b.id, true);
@@ -309,7 +353,7 @@ describe("manual edit consistency and validation (review round 2)", () => {
   });
 
   it("records one history step for a multi-row removal", () => {
-    publishFitResult("d1", RESULT, "simultaneous", OPTS);
+    fitFresh();
     const ids = new Set(useApp.getState().datasets[0].peakTable!.peaks.map((p) => p.id));
     removePeaks("d1", ids);
     expect(useApp.getState().history).toHaveLength(1);

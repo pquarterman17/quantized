@@ -198,7 +198,7 @@ export default function PeaksPanel() {
       height: Number(values.height),
       area: Number(values.area),
     };
-    const problem = peakManualEditProblem(patch);
+    const problem = peakManualEditProblem(patch, entry);
     if (problem) {
       toast(problem, "danger");
       return;
@@ -273,9 +273,11 @@ export default function PeaksPanel() {
             {fitResult.model} ·{" "}
             {fitResult.R2 != null
               ? `R² = ${fmtNum(fitResult.R2)}`
-              : peakTable?.provenance.method === "independent"
-                ? "independent fits"
-                : "fit metrics cleared by manual changes"}
+              : !entries
+                ? "" // table not yet paired with this fit (one frame on a switch)
+                : peakTable?.provenance.method === "independent"
+                  ? "independent fits"
+                  : "fit metrics cleared by manual changes"}
             {manualEditCount(fitResult.peaks) > 0 && ` · ${manualEditCount(fitResult.peaks)} edited by hand`}
             {fitResult.rmse != null && ` · RMSE = ${fmtNum(fitResult.rmse)}`}
             {excludedCount > 0 && ` · ${excludedCount} excluded`}

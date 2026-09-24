@@ -67,9 +67,10 @@ describe("usePeakManualEdits", () => {
     // The activeId check alone cannot catch this: by the time the first
     // refresh resolves, the store is back on d1. Only the generation counter
     // tells the stale continuation from the current one.
-    const resolvers: ((ds: ReturnType<typeof useApp.getState>["datasets"][number]) => void)[] = [];
+    type Ds = ReturnType<typeof useApp.getState>["datasets"][number];
+    const resolvers: ((ds: Ds | undefined) => void)[] = [];
     useApp.setState({
-      resolveDataset: vi.fn(() => new Promise((resolve) => { resolvers.push(resolve); })),
+      resolveDataset: vi.fn(() => new Promise<Ds | undefined>((resolve) => { resolvers.push(resolve); })),
     });
     const setFitResult = vi.fn();
     const { rerender } = renderHook(

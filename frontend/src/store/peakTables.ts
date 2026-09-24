@@ -11,17 +11,16 @@
 // in store/useApp.ts, which sits AT its size-ratchet pin
 // (architecture.test.ts's STORE_PINS) with one line of headroom.
 //
-// Fit publication is analysis output, not an edit-history gesture. Everything
-// the user authors on the table is: manual value edits, removals, and include/
-// exclude toggles each record one undo step, and only after proving the
-// mutation is effective (including removal of the final artifact).
+// Every change to a dataset's table records one undo step: publishing a fit,
+// manual value edits, removals, and include/exclude toggles (the last three
+// only after proving the mutation is effective, including removal of the
+// final artifact).
 //
-// Why exclusion is recorded too: history snapshots the whole `datasets` array,
-// so an unrecorded toggle made after a recorded edit would be silently rolled
-// back by undoing that edit. Recording it makes undo step through both, in
-// order. The same whole-array snapshot means undoing an edit also rolls back a
-// fit published on ANOTHER dataset since that edit (redo restores it); that is
-// shared with every recorded action in the app, not specific to peaks.
+// Why all of them: history snapshots the whole `datasets` array, so ANY
+// unrecorded write to a table made after a recorded one is silently rolled
+// back by undoing the recorded one. With fits unrecorded, "fit → exclude →
+// re-fit → undo" threw the re-fit away under an "Undo exclude" label.
+// Recording every writer makes undo step back through them in order.
 
 import type { MultiFitResult, PeakTable } from "../lib/peakTable";
 import {
@@ -59,6 +58,7 @@ export function publishFitResult(
 ): void {
   const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
   if (!ds) return;
+  useApp.getState().recordHistory("fit peaks");
   publishPeakTable(
     datasetId,
     peakTableFromFit(
@@ -108,7 +108,8 @@ export function setPeakExcluded(datasetId: string, peakId: string, excluded: boo
 export function editPeak(datasetId: string, peakId: string, patch: PeakManualPatch): PeakTable | null {
   const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
   if (!ds?.peakTable) return null;
-  if (peakManualEditProblem(patch)) return ds.peakTable;
+  const current = ds.peakTable.peaks.find((p) => p.id === peakId);
+  if (!current || peakManualEditProblem(patch, current)) return ds.peakTable;
   const next = withPeakManualEdit(ds.peakTable, peakId, patch);
   if (next === ds.peakTable) return ds.peakTable;
   useApp.getState().recordHistory("edit fitted peak");

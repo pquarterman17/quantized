@@ -436,13 +436,14 @@ describe("PeaksPanel — manual durable fitted-peak edits", () => {
     fireEvent.click(screen.getByRole("button", { name: /Fit all/ }));
     const fitted = await screen.findByRole("table", { name: "fitted peaks" });
     const before = useApp.getState().datasets[0].peakTable;
+    const historyBefore = useApp.getState().history.length;
     fireEvent.click(within(fitted).getAllByRole("row")[1]);
     await act(async () => {
       fireEvent.click(screen.getByRole("button", { name: "Edit selected…" }));
       await new Promise((r) => setTimeout(r, 0)); // let the dialog promise settle
     });
     expect(useApp.getState().datasets[0].peakTable).toBe(before);
-    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().history).toHaveLength(historyBefore);
   });
 
   it("keeps the fitted-row selection when a peak is excluded", async () => {

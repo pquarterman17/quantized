@@ -383,15 +383,28 @@ export function withPeakExcluded(table: PeakTable, id: string, excluded: boolean
 
 export type PeakManualPatch = Partial<Pick<PeakTableEntry, "center" | "fwhm" | "height" | "area">>;
 
-/** Why a manual peak edit is not physical, or null. Shared by the edit dialog
- *  and the store writer, so no path can store a zero-width or negative peak.
- *  (Removing a peak is the way to get rid of one, not editing it to zero.) */
-export function peakManualEditProblem(patch: PeakManualPatch): string | null {
-  const vals = Object.values(patch).filter((v): v is number => v !== undefined);
-  if (!vals.every(Number.isFinite)) return "Peak values must be finite numbers.";
-  if (patch.fwhm !== undefined && !(patch.fwhm > 0)) return "FWHM must be greater than zero.";
-  if (patch.height !== undefined && !(patch.height > 0)) return "Height must be greater than zero.";
-  if (patch.area !== undefined && !(patch.area > 0)) return "Area must be greater than zero.";
+/** Why a manual edit of `current` is not physical, or null. Shared by the
+ *  edit dialog and the store writer. Only fields the edit actually CHANGES
+ *  are judged — the dialog always sends all four, and a row the fit produced
+ *  must stay editable whatever it holds. FWHM must stay positive. Height and
+ *  area may not become zero or flip sign: the fitter leaves height
+ *  unconstrained, so a dip is a legitimate negative peak, but zeroing a peak
+ *  is what Remove is for. */
+export function peakManualEditProblem(
+  patch: PeakManualPatch,
+  current: Pick<PeakTableEntry, "center" | "fwhm" | "height" | "area">,
+): string | null {
+  const changed = (k: keyof PeakManualPatch): number | undefined =>
+    patch[k] !== undefined && patch[k] !== current[k] ? patch[k] : undefined;
+  const c = { center: changed("center"), fwhm: changed("fwhm"), height: changed("height"), area: changed("area") };
+  if (!Object.values(c).every((v) => v === undefined || Number.isFinite(v))) {
+    return "Peak values must be finite numbers.";
+  }
+  if (c.fwhm !== undefined && !(c.fwhm > 0)) return "FWHM must be greater than zero.";
+  const keepsSign = (v: number | undefined, was: number): boolean =>
+    v === undefined || (v !== 0 && (was === 0 || Math.sign(v) === Math.sign(was)));
+  if (!keepsSign(c.height, current.height)) return "Height cannot be zero or change sign; remove the peak instead.";
+  if (!keepsSign(c.area, current.area)) return "Area cannot be zero or change sign; remove the peak instead.";
   return null;
 }
 
@@ -401,9 +414,12 @@ export function peakManualEditProblem(patch: PeakManualPatch): string | null {
  * fingerprint are unchanged.
  *
  * Area is not independent of height and FWHM: for a fixed profile shape it is
- * height × FWHM × a shape constant. When height or FWHM changes and the area
- * was left as it was, the area is rescaled by the same ratio so the row stays
- * self-consistent; an area the user typed explicitly is kept as typed. */
+ * height × FWHM × a shape constant (exact for Gaussian, Lorentzian and
+ * pseudo-Voigt at fixed η; approximate for an independently fitted Split
+ * Pearson VII, whose area is a windowed integral). When height or FWHM changes
+ * and the area field is unchanged, the area is rescaled by the same ratio so
+ * the row stays self-consistent; a changed area is kept as given. A row with a
+ * zero height or FWHM cannot be rescaled and keeps its area. */
 export function withPeakManualEdit(table: PeakTable, id: string, patch: PeakManualPatch): PeakTable {
   const index = table.peaks.findIndex((p) => p.id === id);
   if (index < 0) return table;
