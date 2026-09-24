@@ -11,11 +11,13 @@ import { Select } from "../../primitives";
 import type { ReductionsMethod } from "../../../store/reductions";
 import { useApp } from "../../../store/useApp";
 import FftThicknessSection from "./FftThicknessSection";
+import PawleySection from "./PawleySection";
 import ReflectivityFftSection from "./ReflectivityFftSection";
 import WilliamsonHallSection from "./WilliamsonHallSection";
 
 const METHODS: { value: ReductionsMethod; label: string }[] = [
   { value: "williamson-hall", label: "Williamson-Hall (size + strain)" },
+  { value: "pawley", label: "Pawley refinement (unit cell)" },
   { value: "fft-thickness", label: "Film thickness (XRD FFT)" },
   { value: "reflectivity-fft", label: "Reflectivity FFT (Kiessig / superlattice)" },
 ];
@@ -34,6 +36,7 @@ export default function ReductionsPanel() {
         onChange={(e) => setMethod(e.target.value as ReductionsMethod)}
       />
       {method === "williamson-hall" && <WilliamsonHallSection />}
+      {method === "pawley" && <PawleySection />}
       {method === "fft-thickness" && <FftThicknessSection />}
       {method === "reflectivity-fft" && <ReflectivityFftSection />}
     </ToolWindow>

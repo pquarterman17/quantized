@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -70,6 +71,7 @@ from quantized.routes import (
     vacuum,
     xray,
 )
+from quantized.routes._errors import validation_error_handler
 from quantized.security import host_allowed, origin_allowed
 
 __all__ = ["create_app", "app"]
@@ -148,6 +150,7 @@ async def _app_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
 def create_app() -> FastAPI:
     """Build the FastAPI app and wire the domain routers."""
     application = FastAPI(title="quantized", version=__version__, lifespan=_app_lifespan)
+    application.add_exception_handler(RequestValidationError, validation_error_handler)
     application.add_middleware(
         CORSMiddleware,
         allow_origins=_DEV_ORIGINS,

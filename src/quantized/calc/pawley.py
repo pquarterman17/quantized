@@ -49,6 +49,7 @@ __all__ = ["pawley_refine"]
 
 _REQUIRED_FIELDS = ("a", "b", "c", "symmetry")
 _BACKGROUNDS = ("linear", "polynomial", "cheby")
+_TIES = ("abc", "ab", "none")
 
 
 def pawley_refine(
@@ -58,10 +59,13 @@ def pawley_refine(
     *,
     wavelength: float = 1.5406,
     max_two_theta: float = 120.0,
+    min_two_theta: float = 0.0,
     background: str = "linear",
     profile_fwhm: float = 0.05,
     refine_cell: bool = True,
     max_iter: int = 20,
+    max_reflections: int | None = None,
+    max_design_size: int | None = None,
 ) -> dict[str, Any]:
     r"""Pawley refine a powder pattern against a phase's lattice.
 
@@ -72,11 +76,19 @@ def pawley_refine(
     phase_info
         Dict with ``a``, ``b``, ``c`` (Å) and ``symmetry`` (Bravais letter /
         centering, e.g. ``'F'``); optional ``alpha``/``beta``/``gamma`` (deg,
-        default 90) and ``hklMax`` (default 6).
+        default 90), ``hklMax`` (default 6), and ``tie`` — which lattice axes
+        the grid search moves together: ``'abc'`` (cubic), ``'ab'``
+        (tetragonal/hexagonal), ``'none'`` (all free). Absent → inferred from
+        the initial cell's equalities (the MATLAB scaffold's rule), which
+        makes a cubic start that differs in the 4th decimal refine as
+        orthorhombic — callers with a known crystal system should pass it.
     wavelength
         X-ray wavelength (Å); CuKα1 by default.
     max_two_theta
         Upper ``2θ`` cut-off (deg).
+    min_two_theta
+        Lower ``2θ`` cut-off (deg); reflections below it are neither fit nor
+        counted. ``0`` (default) keeps the scaffold's behaviour.
     background
         ``'linear'`` (only linear is implemented, matching the scaffold).
     profile_fwhm
@@ -85,6 +97,11 @@ def pawley_refine(
         Refine the lattice parameters (else keep the initial cell).
     max_iter
         Outer grid-search iterations.
+    max_reflections, max_design_size
+        Optional work caps: refuse (``ValueError``) when the initial cell has
+        more reflections in range, or more ``points × reflections`` design
+        cells, than this. Each grid-search trial solves that least-squares
+        problem, so these bound the run time. ``None`` (default) = no cap.
 
     Returns
     -------
@@ -92,7 +109,20 @@ def pawley_refine(
         ``cell`` / ``cell_initial`` ``[a b c α β γ]``, ``scale`` (NaN — folded
         into per-peak intensity), ``peaks`` (list of ``hkl``/``two_theta``/``d``/
         ``multiplicity``/``intensity``), ``background``/``model``/``residual``
-        ``[N]``, ``rwp``, ``n_peaks``.
+        ``[N]``, ``rwp``, ``n_peaks``; plus ``rwp_initial`` (R_wp of the
+        initial cell — a refinement that ends ABOVE it went the wrong way),
+        ``converged`` (the grid step shrank below tolerance rather than
+        running out of iterations; always True when ``refine_cell`` is off),
+        ``rwp_background`` (R_wp of the linear background alone — a model
+        that barely beats it has explained little) and ``tie``.
+
+    Raises
+    ------
+    ValueError
+        No allowed reflection lies in ``(min_two_theta, max_two_theta]`` at
+        the initial cell, or the scan has no more points than free parameters
+        (peaks + 2 background + refined axes) — both return a fake-perfect
+        R_wp from the linear background alone otherwise.
     """
     tt = np.asarray(two_theta, dtype=float).ravel()
     obs = np.asarray(intensity, dtype=float).ravel()
@@ -113,6 +143,11 @@ def pawley_refine(
     gamma = float(phase_info.get("gamma", 90.0))
     hkl_max = int(phase_info.get("hklMax", 6))
     symmetry = str(phase_info["symmetry"])
+    tie_raw = phase_info.get("tie")
+    if tie_raw is not None and tie_raw not in _TIES:
+        raise ValueError(f"tie must be one of {_TIES}, got {tie_raw!r}")
+    if not min_two_theta < max_two_theta:
+        raise ValueError("min_two_theta must be below max_two_theta")
     cell0 = [
         float(phase_info["a"]),
         float(phase_info["b"]),
@@ -138,7 +173,7 @@ def pawley_refine(
         for hkl, d, tth, mult in zip(
             ps["hkl"], ps["d"], ps["two_theta"], ps["multiplicity"], strict=True
         ):
-            if math.isnan(tth) or tth > max_two_theta or tth <= 0:
+            if math.isnan(tth) or tth > max_two_theta or tth <= 0 or tth < min_two_theta:
                 continue
             peaks.append(
                 {"hkl": hkl, "two_theta": tth, "d": d, "multiplicity": mult, "intensity": 0.0}
@@ -153,12 +188,52 @@ def pawley_refine(
         resid = model_y - obs
         return float(np.sum(resid**2))
 
+    if tie_raw is None:
+        tol_eq = 1e-4
+        if abs(cell0[0] - cell0[1]) < tol_eq:
+            tie = "abc" if abs(cell0[1] - cell0[2]) < tol_eq else "ab"
+        else:
+            tie = "none"
+    else:
+        tie = str(tie_raw)
+    # A tied axis starts equal to a, whatever the caller typed for it.
+    if tie in ("abc", "ab"):
+        cell0[1] = cell0[0]
+    if tie == "abc":
+        cell0[2] = cell0[0]
+
+    peaks0 = compute_peaks(cell0)
+    if not peaks0:
+        raise ValueError(
+            f"No allowed reflections between {min_two_theta:g} and {max_two_theta:g} deg 2theta "
+            "for this cell, centering and wavelength."
+        )
+    if max_reflections is not None and len(peaks0) > max_reflections:
+        raise ValueError(
+            f"{len(peaks0)} reflections in range exceeds the limit of {max_reflections}; "
+            "refine over a narrower 2theta range."
+        )
+    if max_design_size is not None and tt.size * len(peaks0) > max_design_size:
+        raise ValueError(
+            f"{tt.size} points x {len(peaks0)} reflections is too large to refine "
+            f"(limit {max_design_size}); use a narrower 2theta range or a coarser scan."
+        )
+    n_free = 0 if not refine_cell else {"abc": 1, "ab": 2, "none": 3}[tie]
+    n_params = len(peaks0) + 2 + n_free
+    if tt.size <= n_params:
+        raise ValueError(
+            f"The scan has {tt.size} points but the fit has {n_params} free parameters "
+            f"({len(peaks0)} reflections + 2 background + {n_free} cell); "
+            "use a finer or wider scan."
+        )
+
     # ── Adaptive grid search around the initial cell ────────────────────────
     cell_refined = list(cell0)
+    converged = True
     if refine_cell:
-        tol_eq = 1e-4
-        is_cubic = abs(cell0[0] - cell0[1]) < tol_eq and abs(cell0[1] - cell0[2]) < tol_eq
-        is_tetrag = abs(cell0[0] - cell0[1]) < tol_eq and abs(cell0[1] - cell0[2]) >= tol_eq
+        converged = False
+        is_cubic = tie == "abc"
+        is_tetrag = tie == "ab"
         if is_cubic:
             axes_to_step = [0]  # a only; mirror to b, c
         elif is_tetrag:
@@ -188,6 +263,7 @@ def pawley_refine(
             if not improved:
                 step = [s / 2 for s in step]
                 if max(abs(s) for s in step) < 1e-5:
+                    converged = True
                     break
 
     # ── Final model on the refined cell ─────────────────────────────────────
@@ -195,10 +271,14 @@ def pawley_refine(
     model_y, bg, peak_i = _build_model(peaks, tt, obs, profile_fwhm)
     residual = obs - model_y
 
-    weights = 1.0 / np.maximum(obs, 1.0)  # Poisson-like weights
-    rwp_num = float(np.sum(weights * residual**2))
-    rwp_den = float(np.sum(weights * obs**2))
-    rwp = math.sqrt(rwp_num / rwp_den) if rwp_den > 0 else float("nan")
+    rwp = _rwp(obs, residual)
+    if refine_cell:
+        model0, _bg0, _pi0 = _build_model(peaks0, tt, obs, profile_fwhm)
+        rwp_initial = _rwp(obs, obs - model0)
+    else:
+        rwp_initial = rwp
+    bg_only, _bg, _none = _build_model([], tt, obs, profile_fwhm)
+    rwp_background = _rwp(obs, obs - bg_only)
 
     for k, pk in enumerate(peaks):
         pk["intensity"] = float(peak_i[k]) if k < peak_i.size else 0.0
@@ -212,8 +292,20 @@ def pawley_refine(
         "model": model_y,
         "residual": residual,
         "rwp": rwp,
+        "rwp_initial": rwp_initial,
+        "rwp_background": rwp_background,
+        "converged": converged,
+        "tie": tie,
         "n_peaks": len(peaks),
     }
+
+
+def _rwp(obs: NDArray[np.float64], residual: NDArray[np.float64]) -> float:
+    """``R_wp = sqrt(Σ w·resid² / Σ w·obs²)`` with Poisson-like ``w = 1/max(I, 1)``."""
+    weights = 1.0 / np.maximum(obs, 1.0)
+    num = float(np.sum(weights * residual**2))
+    den = float(np.sum(weights * obs**2))
+    return math.sqrt(num / den) if den > 0 else float("nan")
 
 
 def _build_model(
@@ -228,9 +320,11 @@ def _build_model(
     ``[1, 2θ]``. Solves ``[peaks | bg] · x = I`` and clamps peak intensities ``≥ 0``.
     """
     n_pk = len(peaks)
+    bg_basis = np.column_stack([np.ones_like(two_theta), two_theta])
     if n_pk == 0:
-        zeros = np.zeros_like(two_theta)
-        return zeros, np.zeros_like(two_theta), np.zeros(0, dtype=float)
+        bg_coeff, *_ = np.linalg.lstsq(bg_basis, intensity, rcond=None)
+        bg_only = np.asarray(bg_basis @ bg_coeff, dtype=float)
+        return bg_only, bg_only, np.zeros(0, dtype=float)
 
     w = profile_fwhm / 2.0
     basis = np.zeros((two_theta.size, n_pk), dtype=float)
@@ -240,7 +334,6 @@ def _build_model(
         gauss = np.exp(-0.5 * (dx / (w / math.sqrt(2.0 * math.log(2.0)))) ** 2)
         basis[:, k] = 0.5 * lorentz + 0.5 * gauss
 
-    bg_basis = np.column_stack([np.ones_like(two_theta), two_theta])
     design = np.column_stack([basis, bg_basis])
     coeffs, *_ = np.linalg.lstsq(design, intensity, rcond=None)
 
