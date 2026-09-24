@@ -34,6 +34,7 @@ export interface SavedConvergence {
   rhat_threshold: number;
   rhat_max: number | null;
   flagged: string[];
+  unmeasured: string[];
   stopped: Stopped;
   burn: number;
   thin: number;
@@ -66,6 +67,7 @@ export function posteriorSummary(res: ReflPosteriorResult, settings: DreamSettin
       rhat_threshold: c.rhat_threshold,
       rhat_max: c.rhat_max,
       flagged: [...c.flagged],
+      unmeasured: [...c.unmeasured],
       stopped: c.stopped,
       burn: c.burn,
       thin: c.thin,
@@ -88,8 +90,10 @@ export function posteriorCaveat(p: Pick<SavedPosterior, "convergence">): string 
   if (c.flagged.length) {
     return `R-hat above ${c.rhat_threshold} for ${c.flagged.join(", ")}: the chains have not mixed, so those intervals are not trustworthy. Sample longer (more samples or burn-in).`;
   }
-  if (c.rhat_max == null) return "R-hat could not be computed (too few draws): the intervals are not trustworthy.";
-  return null;
+  if (c.unmeasured.length || c.rhat_max == null) {
+    return `R-hat could not be computed${c.unmeasured.length ? ` for ${c.unmeasured.join(", ")}` : ""} (too few draws): the intervals are not trustworthy. Sample longer.`;
+  }
+  return c.converged ? null : "The run did not converge: the intervals are not trustworthy.";
 }
 
 // ── the stored form, read back ───────────────────────────────────────────────
@@ -120,13 +124,16 @@ function decodeParam(v: unknown): ReflPosteriorParam {
   };
 }
 
+const strings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((f): f is string => typeof f === "string") : []);
+
 function decodeConvergence(v: unknown): SavedConvergence {
   if (!isObj(v)) throw new Bad("convergence");
   return {
     converged: v.converged === true,
     rhat_threshold: num(v.rhat_threshold) ?? 1.2,
     rhat_max: numOrNull(v.rhat_max) ?? null,
-    flagged: Array.isArray(v.flagged) ? v.flagged.filter((f): f is string => typeof f === "string") : [],
+    flagged: strings(v.flagged),
+    unmeasured: strings(v.unmeasured), // absent before the review round: none
     stopped: oneOf<Stopped>(v.stopped, ["completed", "deadline", "cancelled"]),
     burn: count(v.burn),
     thin: count(v.thin),

@@ -231,9 +231,13 @@ def _posterior_notes(post: Mapping[str, Any]) -> list[dict[str, Any]]:
         "credible intervals of the draws."
     )
     flagged = [str(n) for n in conv.get("flagged") or []]
+    unmeasured = [str(n) for n in conv.get("unmeasured") or []]
     if flagged:
         verdict = (f"R-hat above {thr:g} for {', '.join(flagged)}: those chains have not "
                    "mixed, so their intervals are not trustworthy.")
+    elif unmeasured:
+        verdict = (f"R-hat could not be computed for {', '.join(unmeasured)} (too few "
+                   "draws): those intervals are not trustworthy.")
     elif rmax is None:
         verdict = "R-hat: not available (too few draws); the intervals are not trustworthy."
     else:

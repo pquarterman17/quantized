@@ -58,7 +58,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
-from quantized.calc.dream_seed import seed_reproducible, seeded_dream
+from quantized.calc.dream_seed import DreamCancelled, seed_reproducible, seeded_dream
 from quantized.calc.refl_fit import channel_model, channel_residuals
 from quantized.calc.refl_model import ReflChannel, ReflParams, layer_stack, validate_model
 from quantized.calc.sld import sld_profile
@@ -263,22 +263,34 @@ def sample_reflectivity(
     n_free, n_points, x0, n_chains, steps = s.n_free, s.n_points, s.x0, s.n_chains, s.steps
     total_gens = burn + steps
     target = _Posterior(params, chans, masks, n_layers)
-    t_end = None if deadline_s is None else time.monotonic() + deadline_s
     stopped = {"why": "completed"}
+    clock: dict[str, float | None] = {"end": None}
 
     def stop() -> bool:
+        end = clock["end"]
         if abort_check is not None and abort_check():
             stopped["why"] = "cancelled"
-        elif t_end is not None and time.monotonic() > t_end:
+        elif end is not None and time.monotonic() > end:
             stopped["why"] = "deadline"
         return stopped["why"] != "completed"
 
     def monitor(state: Any, _pop: Any, _logp: Any) -> bool:
+        # Sampling reports below 0.95 even through DREAM's overrun past
+        # total_gens; 0.95-0.99 is the bands.
         if progress_callback is not None:
-            progress_callback(min(0.95, 0.95 * state.generation / (total_gens + 1)))
+            progress_callback(min(0.94, 0.95 * state.generation / (total_gens + 1)))
         return True
 
-    with seeded_dream(seed) as stream:
+    def waiting() -> None:
+        # Queued behind another DREAM run: still cancellable.
+        if progress_callback is not None:
+            progress_callback(0.0)
+        if abort_check is not None and abort_check():
+            raise DreamCancelled("cancelled while waiting for another DREAM run")
+
+    with seeded_dream(seed, while_waiting=waiting) as stream:
+        # The budget starts once this run holds the sampler, not while it waits.
+        clock["end"] = None if deadline_s is None else time.monotonic() + deadline_s
         start = _start_ball(target, x0, n_chains, stream)
         sampler = Dream(
             model=target, population=start[None, :, :], draws=steps * n_chains,
@@ -308,10 +320,14 @@ def sample_reflectivity(
     rhat_raw = np.asarray(gelman(kept, portion=1.0), dtype=float) if kept.shape[0] >= 2 \
         else np.full(n_free, np.nan)
     rhat = np.where(rhat_raw > 0, rhat_raw, np.nan)  # bumps writes -2 for "too short"
-    flagged = [target.labels[k] for k in range(n_free) if not (rhat[k] <= RHAT_FLAG)]
+    flagged = [target.labels[k] for k in range(n_free) if rhat[k] > RHAT_FLAG]
+    unmeasured = [target.labels[k] for k in range(n_free) if not np.isfinite(rhat[k])]
     if flagged:
         warnings.append(f"R-hat above {RHAT_FLAG} (the chains have not mixed) for: "
                         + ", ".join(flagged) + "; sample longer or constrain the model")
+    if unmeasured:
+        warnings.append("R-hat could not be computed (too few kept generations) for: "
+                        + ", ".join(unmeasured) + "; sample longer")
 
     draws = params.lo + kept.reshape(-1, n_free) * params.span
     best_x, best_logp = state.best()
@@ -329,7 +345,8 @@ def sample_reflectivity(
         stats[i] = {
             "median": float(np.median(col)), "interval68": _interval(col, 16.0, 84.0),
             "interval95": i95, "map": float(best[k]), "rhat": _finite(rhat[k]),
-            "rhat_flag": params.names[i] in flagged, "at_bound": reaches,
+            "rhat_flag": params.names[i] in flagged or params.names[i] in unmeasured,
+            "at_bound": reaches,
         }
     if edge:
         warnings.append("the bounds, not the data, limit the 95% interval (it ends at a "
@@ -361,10 +378,11 @@ def sample_reflectivity(
         "map_chi2": _finite(-2.0 * float(best_logp)),
         "n_points": n_points,
         "convergence": {
-            "converged": completed and not flagged and not burn_incomplete,
+            "converged": completed and not flagged and not unmeasured and not burn_incomplete,
             "rhat_threshold": RHAT_FLAG,
             "rhat_max": _finite(float(np.nanmax(rhat))) if np.isfinite(rhat).any() else None,
             "flagged": flagged,
+            "unmeasured": unmeasured,
             "stopped": stopped["why"],
             "burn": int(gen[keep][0]) - 1 if keep.any() else 0,
             "burn_requested": burn,

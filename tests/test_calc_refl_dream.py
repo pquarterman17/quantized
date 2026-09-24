@@ -199,6 +199,10 @@ def test_the_deadline_returns_a_flagged_partial_posterior() -> None:
     assert c["n_generations"] < c["n_generations_requested"]
     assert any("time limit" in w for w in out["warnings"])
     assert any("burn-in" in w for w in out["warnings"])
+    # too few generations for R-hat: said as such, not as "above 1.2"
+    assert c["flagged"] == [] and c["unmeasured"] == ["L1.thickness", "L2.thickness"]
+    assert any("could not be computed" in w for w in out["warnings"])
+    assert all(p["rhat"] is None and p["rhat_flag"] for p in out["parameters"])
     assert len(out["parameters"]) == 2 and out["r_bands"]
 
 
@@ -241,6 +245,47 @@ def test_plan_sizes_the_run_it_validates() -> None:
                     "n_evaluations": 3 + (50 + 60 + 10) * 10 + 100}
     out = sample_reflectivity(params, chans, samples=600, burn=50, pop=5, seed=1, band_draws=100)
     assert out["convergence"]["n_evaluations"] <= plan["n_evaluations"]
+
+
+def test_a_run_queued_behind_another_waits_cancellably_and_its_budget_starts_late() -> None:
+    import threading
+
+    params, chans = degenerate()
+    held, release = threading.Event(), threading.Event()
+
+    def other_run() -> None:
+        with dream_seed.seeded_dream(None):
+            held.set()
+            release.wait(5)
+
+    t = threading.Thread(target=other_run)
+    t.start()
+    held.wait(5)
+    waits = {"n": 0}
+
+    def progress(_f: float) -> None:
+        waits["n"] += 1
+        if waits["n"] == 4:  # ~1 s queued: longer than this run's whole budget
+            release.set()
+
+    out = sample_reflectivity(params, chans, samples=200, burn=10, pop=5, seed=1,
+                              deadline_s=0.5, band_draws=10, progress_callback=progress)
+    t.join()
+    assert out["convergence"]["stopped"] == "completed"  # the wait did not spend the budget
+
+    held.clear()
+    release.clear()
+    t = threading.Thread(target=other_run)
+    t.start()
+    held.wait(5)
+    try:
+        with pytest.raises(dream_seed.DreamCancelled):
+            sample_reflectivity(params, chans, samples=200, seed=1, abort_check=lambda: True)
+    finally:
+        release.set()
+        t.join()
+    with dream_seed.seeded_dream(2):  # and nothing was left holding the sampler
+        pass
 
 
 # ── the model and the request ────────────────────────────────────────────────

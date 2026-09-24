@@ -28,7 +28,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from .dream_seed import seeded_dream
+from .dream_seed import DreamCancelled, seeded_dream
 from .fit_models import FIT_MODELS, evaluate
 
 __all__ = ["BUMPS_ENGINES", "bumps_available", "fit_bumps"]
@@ -227,7 +227,13 @@ def fit_bumps(
     if engine == "dream":
         # Unseeded, but exclusive: a seeded reflectivity DREAM run in another
         # job must not draw from, or be drawn from by, this one (calc.dream_seed).
-        with seeded_dream(None):
+        def waiting() -> None:  # queued behind another DREAM run: still cancellable
+            if progress_callback is not None:
+                progress_callback(0.0)
+            if abort_check is not None and abort_check():
+                raise DreamCancelled("cancelled while waiting for another DREAM run")
+
+        with seeded_dream(None, while_waiting=waiting):
             x_best, _fx = driver.fit()
     else:
         x_best, _fx = driver.fit()

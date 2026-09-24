@@ -39,7 +39,9 @@ export interface ReflDreamState {
   /** Job fraction (0..1) and message while polling; null otherwise. */
   progress: number | null;
   message: string;
+  /** The last failure, for the record it is OF (`errorFor`). */
   error: string | null;
+  errorFor: string | null;
   /** Why this record cannot be sampled, or null. */
   blocked: (record: ReflFitRecord) => string | null;
   /** The live run's bands are available for this record's stored posterior. */
@@ -85,23 +87,24 @@ async function rebuildChannels(record: ReflFitRecord, resolve: (id: string) => P
   return out;
 }
 
-export function useReflDream(): ReflDreamState {
+export function useReflDream(datasets: Dataset[]): ReflDreamState {
   const resolveDataset = useApp((s) => s.resolveDataset);
   const recordHistory = useApp((s) => s.recordHistory);
   const addDataset = useApp((s) => s.addDataset);
   const createWindow = useApp((s) => s.createWindow);
   const setStatus = useApp((s) => s.setStatus);
-  const datasets = useApp((s) => s.datasets);
   const [settings, setSettingsState] = useState<DreamSettings>(DREAM_DEFAULTS);
   const [busy, setBusy] = useState(false);
   const [runningFor, setRunningFor] = useState<string | null>(null);
   const [progress, setProgress] = useState<number | null>(null);
   const [message, setMessage] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  const [failure, setFailure] = useState<{ recordId: string; message: string } | null>(null);
   // The last run's full result (with its bands), for the record it is OF.
   const [live, setLive] = useState<{ recordId: string; ranAt: string; result: ReflPosteriorResult } | null>(null);
   const [addedFor, setAddedFor] = useState<Record<string, string[]>>({});
   const jobRef = useRef<string | null>(null);
+  // Cancel pressed before the job id came back: honoured when it does.
+  const cancelEarly = useRef(false);
   const mounted = useRef(true);
   // The library as it is NOW, for the write after the job's round trip (the
   // same subscription useReflFitHistory's `publish` uses).
@@ -132,13 +135,14 @@ export function useReflDream(): ReflDreamState {
     if (busy) return;
     const why = dreamBlocked(record);
     if (why) {
-      setError(why);
+      setFailure({ recordId: record.id, message: why });
       return;
     }
     const chosen = { ...settings };
+    cancelEarly.current = false;
     setBusy(true);
     setRunningFor(record.id);
-    setError(null);
+    setFailure(null);
     setProgress(0);
     setMessage("submitting");
     try {
@@ -154,9 +158,11 @@ export function useReflDream(): ReflDreamState {
         pop: chosen.pop,
         seed: chosen.seed,
       });
-      if (!mounted.current) {
-        // Closed while the request was in flight: the cleanup had no id to cancel.
+      if (!mounted.current || cancelEarly.current) {
+        // Closed, or cancelled, while the request was in flight: there was no
+        // id to cancel then.
         void cancelReflJob(job_id).catch(() => undefined);
+        if (mounted.current) setStatus("reflectivity uncertainty estimate cancelled");
         return;
       }
       jobRef.current = job_id;
@@ -169,7 +175,7 @@ export function useReflDream(): ReflDreamState {
       const ranAt = new Date().toISOString();
       const now = liveDatasets.current ?? datasets;
       if (!now.some((d) => recordsFor(d).some((r) => r.id === record.id))) {
-        setError("the fit this estimate belongs to is no longer stored (deleted or undone) — nothing was saved");
+        setFailure({ recordId: record.id, message: "the fit this estimate belongs to is no longer stored (deleted or undone) — nothing was saved" });
         return;
       }
       recordHistory("reflectivity uncertainty");
@@ -182,7 +188,7 @@ export function useReflDream(): ReflDreamState {
     } catch (e) {
       if (!mounted.current) return;
       if (e instanceof ReflJobCancelled) setStatus("reflectivity uncertainty estimate cancelled");
-      else setError(e instanceof Error ? e.message : "the uncertainty estimate failed");
+      else setFailure({ recordId: record.id, message: e instanceof Error ? e.message : "the uncertainty estimate failed" });
     } finally {
       jobRef.current = null;
       if (mounted.current) {
@@ -196,7 +202,10 @@ export function useReflDream(): ReflDreamState {
 
   async function cancel(): Promise<void> {
     const id = jobRef.current;
-    if (!id) return;
+    if (!id) {
+      if (busy) cancelEarly.current = true;
+      return;
+    }
     try {
       await cancelReflJob(id);
     } catch {
@@ -206,7 +215,7 @@ export function useReflDream(): ReflDreamState {
 
   function addBands(record: ReflFitRecord): string[] {
     if (!live || !hasBands(record)) return [];
-    const done = addedFor[live.ranAt];
+    const done = bandIds(live.ranAt);
     if (done) return done;
     const ids = bandDatasets(live.result, record, datasets, live.ranAt).map((c) => {
       const id = nextDatasetId();
@@ -216,6 +225,13 @@ export function useReflDream(): ReflDreamState {
     setAddedFor((m) => ({ ...m, [live.ranAt]: ids }));
     setStatus(`added ${ids.length} uncertainty-band datasets for reflectivity fit #${record.seq}`);
     return ids;
+  }
+
+  /** The band datasets already added for a run, while ALL of them are still
+   *  in the library (deleting one lets "Add uncertainty bands" add them anew). */
+  function bandIds(ranAt: string): string[] | null {
+    const ids = addedFor[ranAt];
+    return ids && ids.every((id) => datasets.some((d) => d.id === id)) ? ids : null;
   }
 
   function openBandPlot(record: ReflFitRecord): void {
@@ -231,10 +247,11 @@ export function useReflDream(): ReflDreamState {
     runningFor,
     progress,
     message,
-    error,
+    error: failure?.message ?? null,
+    errorFor: failure?.recordId ?? null,
     blocked: dreamBlocked,
     hasBands,
-    bandsAdded: (record) => live != null && hasBands(record) && live.ranAt in addedFor,
+    bandsAdded: (record) => live != null && hasBands(record) && bandIds(live.ranAt) != null,
     run,
     cancel,
     addBands,

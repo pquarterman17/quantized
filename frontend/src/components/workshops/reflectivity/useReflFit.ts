@@ -354,7 +354,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     setSettingsState(setup.settings);
   }
 
-  const dream = useReflDream();
+  const dream = useReflDream(datasets);
   const history = useReflFitHistory({
     hostId: channels[0]?.datasetId ?? null,
     datasets,

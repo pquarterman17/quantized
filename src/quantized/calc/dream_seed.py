@@ -13,7 +13,10 @@ lock while it does: two DREAM runs in one process (the job pool runs two at
 once) would otherwise draw from each other's stream, and a seed would no
 longer reproduce a result. The lock serialises DREAM runs; it is not a worker
 thread and holds no state beyond the swap. An unseeded run takes the lock
-too, so it cannot draw from a seeded run's stream.
+too, so it cannot draw from a seeded run's stream. The cost is
+throughput: a curve-fit DREAM and a reflectivity DREAM no longer run side by
+side. A run queued behind another stays cancellable (``while_waiting``), and
+a reflectivity run's time budget starts only once it holds the sampler.
 
 Two installs a seed cannot fully control, reported by :func:`seed_reproducible`
 so a caller can say so: with numba installed bumps JIT-compiles its DE step,
@@ -28,13 +31,13 @@ from __future__ import annotations
 
 import importlib
 import threading
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
 
 import numpy as np
 
-__all__ = ["DREAM_RNG_MODULES", "seed_reproducible", "seeded_dream"]
+__all__ = ["DREAM_RNG_MODULES", "DreamCancelled", "seed_reproducible", "seeded_dream"]
 
 #: Every bumps.dream module that holds the sampler's ``rng`` as an attribute
 #: (measured against bumps 1.0.5: ``rg -n "rng" bumps/dream``; the others
@@ -44,6 +47,11 @@ DREAM_RNG_MODULES = (
 )
 
 _LOCK = threading.Lock()
+_WAIT_POLL_S = 0.25
+
+
+class DreamCancelled(Exception):
+    """Raised by a ``while_waiting`` hook to give up waiting for the sampler."""
 
 
 def seed_reproducible() -> bool:
@@ -54,7 +62,9 @@ def seed_reproducible() -> bool:
 
 
 @contextmanager
-def seeded_dream(seed: int | None) -> Iterator[np.random.RandomState]:
+def seeded_dream(
+    seed: int | None, *, while_waiting: Callable[[], None] | None = None,
+) -> Iterator[np.random.RandomState]:
     """Run the body exclusively, with every DREAM module drawing from
     ``RandomState(seed)``; yields that stream (for the caller's own draws).
 
@@ -63,10 +73,17 @@ def seeded_dream(seed: int | None) -> Iterator[np.random.RandomState]:
     own tests do, keeps its seed) — and yields a fresh unseeded stream; the run
     is still exclusive. The previous bindings are restored on exit, whether
     the body returns or raises.
+
+    While another DREAM run holds the sampler, ``while_waiting`` is called
+    every quarter second; it may raise (``DreamCancelled``, or the job
+    runner's cancellation) to give up, so a queued run stays cancellable.
     """
     mods: list[Any] = [importlib.import_module(name) for name in DREAM_RNG_MODULES]
     diffev = mods[DREAM_RNG_MODULES.index("bumps.dream.diffev")]
-    with _LOCK:
+    while not _LOCK.acquire(timeout=_WAIT_POLL_S):
+        if while_waiting is not None:
+            while_waiting()
+    try:
         stream = np.random.RandomState(seed)
         if seed is None:
             yield stream
@@ -82,3 +99,5 @@ def seeded_dream(seed: int | None) -> Iterator[np.random.RandomState]:
         finally:
             for m, attr, old in saved:
                 setattr(m, attr, old)
+    finally:
+        _LOCK.release()

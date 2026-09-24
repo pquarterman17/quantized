@@ -131,6 +131,8 @@ export interface ReflPosteriorResult {
     rhat_threshold: number;
     rhat_max: number | null;
     flagged: string[];
+    /** Parameters whose R-hat could not be computed (too few generations). */
+    unmeasured: string[];
     stopped: "completed" | "deadline" | "cancelled";
     burn: number;
     burn_requested: number;

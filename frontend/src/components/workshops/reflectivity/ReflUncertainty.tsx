@@ -91,7 +91,7 @@ export default function ReflUncertainty({ dream, record }: { dream: ReflDreamSta
         </div>
       )}
 
-      {dream.error && !dream.busy && (
+      {dream.error && dream.errorFor === record.id && !dream.busy && (
         <div className="qzk-ds-meta qzk-msg" role="alert" style={{ marginTop: 8, color: "var(--danger)" }}>
           {dream.error}
         </div>

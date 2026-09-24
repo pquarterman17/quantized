@@ -222,6 +222,10 @@ def test_an_r_hat_flag_and_an_early_stop_are_said_plainly() -> None:
     assert "Sampling stopped early (deadline)" in note
     texts = _texts(from_refl_fit(_result(posterior=_posterior(rhat_max=None))).to_dict())
     assert any(t.startswith("R-hat: not available") for t in texts)
+    post = _posterior(unmeasured=["scale"], rhat_max=1.01, converged=False)
+    note = next(t for t in _texts(from_refl_fit(_result(posterior=post)).to_dict())
+                if t.startswith("R-hat"))
+    assert note.startswith("R-hat could not be computed for scale")
 
 
 def test_a_result_without_a_posterior_keeps_the_slice_3_table() -> None:

@@ -76,7 +76,14 @@ describe("the posterior summary", () => {
     const s = posteriorSummary(dreamResult(), DREAM_DEFAULTS, RAN);
     expect(posteriorCaveat(s)).toMatch(/R-hat above 1.2 for background/);
     expect(posteriorCaveat({ convergence: { ...s.convergence, stopped: "deadline" } })).toMatch(/time limit/);
-    expect(posteriorCaveat({ convergence: { ...s.convergence, flagged: [], rhat_max: 1.05 } })).toBeNull();
+    expect(posteriorCaveat({ convergence: { ...s.convergence, flagged: [], unmeasured: ["scale"] } })).toMatch(
+      /R-hat could not be computed for scale/,
+    );
+    expect(posteriorCaveat({ convergence: { ...s.convergence, flagged: [], rhat_max: 1.05, converged: true } })).toBeNull();
+    // a record stored before `unmeasured` existed reads as "none unmeasured"
+    const { unmeasured: _u, ...older } = s.convergence;
+    const back = decodePosterior({ ...s, convergence: older });
+    expect(back?.convergence.unmeasured).toEqual([]);
   });
 });
 

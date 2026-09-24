@@ -19,13 +19,14 @@ import numpy as np
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from quantized.calc.dream_seed import DreamCancelled
 from quantized.calc.fit_bumps import bumps_available
 from quantized.calc.refl_dream import plan_sampling, sample_reflectivity
 from quantized.calc.refl_fit import fit_reflectivity
 from quantized.calc.refl_model import layer_field
 from quantized.calc.reflectivity import parratt_refl
 from quantized.calc.sld import refl_sld_presets, sld_profile
-from quantized.jobs import AbortFn, JobQueueFullError, ProgressFn, jobs
+from quantized.jobs import AbortFn, JobCancelled, JobQueueFullError, ProgressFn, jobs
 from quantized.routes._errors import call_calc
 from quantized.routes._payload import to_jsonable
 
@@ -260,10 +261,13 @@ def dream_route(req: ReflDreamRequest) -> dict[str, Any]:
         def on_fraction(fraction: float) -> None:
             progress(fraction, "sampling posterior" if fraction < 0.95 else "computing bands")
 
-        out = sample_reflectivity(
-            params, chans, seed=req.seed, deadline_s=DREAM_DEADLINE_S,
-            progress_callback=on_fraction, abort_check=abort_check, **kwargs,
-        )
+        try:
+            out = sample_reflectivity(
+                params, chans, seed=req.seed, deadline_s=DREAM_DEADLINE_S,
+                progress_callback=on_fraction, abort_check=abort_check, **kwargs,
+            )
+        except DreamCancelled as exc:  # gave up waiting for another DREAM run
+            raise JobCancelled(str(exc)) from exc
         return to_jsonable(out)
 
     try:

@@ -157,6 +157,7 @@ describe("estimating a live fit's uncertainty", () => {
       await result.current.fit.dream.run(stored()[0]);
     });
     expect(result.current.fit.dream.error).toMatch(/channel 1: the data of "film.refl" changed since this fit/);
+    expect(result.current.fit.dream.errorFor).toBe(stored()[0].id); // shown under THIS record only
     expect(reflDream).not.toHaveBeenCalled();
   });
 
@@ -169,6 +170,29 @@ describe("estimating a live fit's uncertainty", () => {
     await waitFor(() => expect(view.result.current.fit.dream.progress).toBe(0.42));
     view.unmount();
     expect(cancelReflJob).toHaveBeenCalledWith("j1");
+  });
+
+  it("Cancel pressed before the job id comes back still cancels the job", async () => {
+    const { result } = await fittedHook();
+    let accept: (v: { job_id: string; plan: never }) => void = () => undefined;
+    vi.mocked(reflDream).mockReturnValue(new Promise((resolve) => (accept = resolve)));
+    let running: Promise<void> = Promise.resolve();
+    act(() => {
+      running = result.current.fit.dream.run(stored()[0]);
+    });
+    await waitFor(() => expect(result.current.fit.dream.busy).toBe(true));
+    await act(async () => {
+      await result.current.fit.dream.cancel();
+    });
+    await act(async () => {
+      accept({ job_id: "j3", plan: undefined as never });
+      await running;
+    });
+    expect(cancelReflJob).toHaveBeenCalledWith("j3");
+    expect(pollReflJob).not.toHaveBeenCalled();
+    expect(result.current.fit.dream.busy).toBe(false);
+    expect(stored()[0].posterior).toBeUndefined();
+    expect(useApp.getState().status).toBe("reflectivity uncertainty estimate cancelled");
   });
 
   it("closing the workshop while the job is being submitted still cancels it", async () => {
@@ -217,6 +241,11 @@ describe("the uncertainty section", () => {
     const band = useApp.getState().datasets.find((d) => d.name.endsWith("R band"));
     expect(band?.data.labels).toEqual(R_BAND_LABELS);
     expect(screen.getByRole("button", { name: "Uncertainty bands added" })).toBeTruthy();
+
+    // Deleting them lets the bands be added again (not a stale id list).
+    act(() => useApp.setState((s) => ({ datasets: s.datasets.filter((d) => !d.name.includes(" band")) })));
+    fireEvent.click(await screen.findByRole("button", { name: "Add uncertainty bands" }));
+    await waitFor(() => expect(useApp.getState().datasets.length).toBe(before + 2));
   });
 
   it("a saved fit shows its stored posterior without a run; a legacy record offers the run only", async () => {

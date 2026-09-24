@@ -160,7 +160,7 @@ export function dreamResult(over: Partial<ReflPosteriorResult> = {}): ReflPoster
     map_chi2: 12.1,
     n_points: 60,
     convergence: {
-      converged: false, rhat_threshold: 1.2, rhat_max: 1.4, flagged: ["background"], stopped: "completed",
+      converged: false, rhat_threshold: 1.2, rhat_max: 1.4, flagged: ["background"], unmeasured: [], stopped: "completed",
       burn: 200, burn_requested: 200, thin: 1, n_chains: 10, n_generations: 1200, n_generations_requested: 1200,
       n_draws: 10000, n_band_draws: 200, n_evaluations: 12050, seed: 1, reproducible: true,
     },
