@@ -2686,20 +2686,38 @@ physics, which already existed and was already golden. The map:
   (asserts the API call carries only the included peaks), "adopts the
   wavelength the pattern was measured at", "names the provenance of the loaded
   rows", "drops the provenance line the moment a row is edited by hand".
-- [x] Expose the Pawley engine. **Implemented 2026-09-23 in PR #403.**
-  `calc/pawley.py::pawley_refine` is now reachable through
-  `POST /api/reductions/pawley`, a typed frontend wrapper, and the existing
-  Reductions workshop under Analyze → XRD & reflectivity. The UI accepts the
-  active powder-XRD intensity channel, starting cell, Bravais centering,
-  wavelength, fixed profile FWHM, and a refine-cell toggle; it reports the
-  refined a/b/c, Rwp, and reflection count. The derived Library output keeps
-  the exact full-resolution finite rows used in the refinement and adds
-  observed/model/residual columns without modifying the raw dataset. API,
-  hook, panel/command, OpenAPI, and generated-type coverage ship with the PR.
-  The initial UI also exposes α/β/γ so non-orthogonal cells are not silently
-  forced to 90°. Deliberate first-slice limits: hklMax and max iterations
-  remain at backend defaults; richer Pawley reports/figure objects should be
-  driven by real use rather than added pre-emptively.
+- [x] Expose the Pawley engine. **Implemented 2026-09-23 in PR #403;
+  hardened 2026-09-24 after review.**
+  `calc/pawley.py::pawley_refine` is reachable through
+  `POST /api/reductions/pawley`, a typed frontend wrapper, and the Reductions
+  workshop under Analyze → XRD & reflectivity.
+  - **Input:** the active dataset's x axis must be 2θ in degrees, by the same
+    rule as the fitted-peak table (`xAxisIsTwoThetaDegrees`); q, time and
+    temperature axes are refused. The user picks the intensity channel, the
+    starting cell, an explicit axis tie (cubic / a = b / independent), the
+    centering (R is the hexagonal-axes rule), the wavelength (read from the
+    file when it records one), the fixed profile FWHM, and whether to refine.
+    Empty or non-physical fields disable Refine with the reason shown; the
+    route enforces the same domain (422).
+  - **Scope:** only reflections inside the measured 2θ window are fit and
+    counted. `hkl_max` is derived from the cell and window, capped at 20
+    (larger cells are refused with advice to narrow the range). No
+    reflections in range, or fewer points than parameters, is a 422 rather
+    than a fake-perfect R_wp.
+  - **Output:** refined a/b/c to 4 decimals, α/β/γ shown as fixed (the
+    engine never refines angles; they are inputs only), R_wp and the starting
+    cell's R_wp as percentages, and the in-range reflection count. The fit is
+    flagged, not presented as a result, when R_wp ≥ 100 %, when it ended worse
+    than its start, or when the search ran out of iterations. The derived
+    Library dataset keeps the exact fitted rows (observed, model, background,
+    residual), is stamped as a 2θ/deg XRD powder pattern, and records the full
+    request and per-reflection table under `metadata.pawley`.
+  - **Known limits:** the engine is a local grid search with a small capture
+    radius that depends on peak width (measured: well under 1 % in some
+    cases), and from further out it can settle on a wrong minimum; no
+    uncertainties are reported; glide and
+    screw absences are not applied; the fit runs synchronously on the request
+    thread rather than through the job queue.
 - [x] Durable peak identity, uncertainty, exclusion, model, and provenance —
   **the columns; the uncertainty NUMBERS are the next box.** **(2026-09-14)**
   `lib/peakTable.ts` defines `PeakTable`: per-peak durable `id`,

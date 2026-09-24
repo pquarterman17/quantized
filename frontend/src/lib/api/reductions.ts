@@ -55,12 +55,14 @@ export function pawleyRefine(body: {
   a: number;
   b: number;
   c: number;
-  symmetry?: string;
+  symmetry?: "P" | "F" | "I" | "A" | "B" | "C" | "R";
   alpha?: number;
   beta?: number;
   gamma?: number;
+  tie?: "abc" | "ab" | "none";
   hkl_max?: number;
   wavelength?: number;
+  min_two_theta?: number;
   max_two_theta?: number;
   profile_fwhm?: number;
   refine_cell?: boolean;
