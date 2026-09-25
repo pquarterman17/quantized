@@ -274,8 +274,6 @@ export default function AppOverlays() {
 
   return (
     <>
-      <ParamDialog />
-      <ConfirmDialog />
       {annotationTextOpen && <AnnotationTextDialog />}
       {splitDialogMounted && <SplitDatasetDialog />}
       {combineDialogMounted && <CombineWorkbooksDialog />}
@@ -331,6 +329,15 @@ export default function AppOverlays() {
       {recodeOpen && <RecodePanel />}
       {levelOrderOpen && <LevelOrderPanel />}
       {workbookPropertiesOpen && <WorkbookPropertiesDialog />}
+      {/* LAST among the dialogs (R12): every dialog backdrop has the same
+          z-index, so tree order is paint order, and the active modal is the
+          one last in the document (lib/modalInert.ts). A confirmation or a
+          parameter prompt is always asked OVER whatever is open — the Delete
+          key with Preferences open asks one — so it must paint, and be, on
+          top; mounted first, it rendered underneath the dialog it was
+          asked over. */}
+      <ParamDialog />
+      <ConfirmDialog />
       <Toaster />
     </>
   );

@@ -489,11 +489,13 @@ describe("round-2 focus details, now pinned (P3.3 round 3)", () => {
     expect(screen.getByRole("button", { name: "First" })).toHaveFocus();
   });
 
-  it("orders traps by OPEN order, so reopening an outer one does not steal Tab (NIT 6)", async () => {
+  it("orders traps by PAINT order, so reopening an outer one does not steal Tab (NIT 6)", async () => {
     // Measured on the round-2 tree: toggling the OUTER trap closed→open while
     // an inner one stayed open pushed the outer on top, and Tab then cycled
     // the dialog BEHIND the topmost one ("Outer A", "Outer B", "Outer A", …).
-    // `seq` is per component instance now, so close/reopen keeps its place.
+    // Round 3 fixed it with per-instance MOUNT order; R12 replaced that with
+    // document (= paint) order, which gives this case the same answer and
+    // also the kept-mounted case mount order got wrong (modalInertOrder.test).
     const user = userEvent.setup();
     function Stacked() {
       const [outerOpen, setOuterOpen] = useState(true);

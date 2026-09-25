@@ -15,7 +15,7 @@ import { useEffect, useId, useRef } from "react";
 import { Button } from "../primitives";
 import { useEscapeSurface } from "../../lib/escapeStack";
 import { useConfirm } from "../../store/confirmDialog";
-import { useFocusTrap } from "./useDialogFocus";
+import { useFocusTrap, useOpenerCapture } from "./useDialogFocus";
 
 export default function ConfirmDialog() {
   const title = useConfirm((s) => s.title);
@@ -34,6 +34,14 @@ export default function ConfirmDialog() {
   // tests). Tab from the confirm button used to walk out of an `aria-modal`
   // dialog into the page behind the backdrop; now it wraps to Cancel.
   useFocusTrap(dialogRef, title !== null);
+
+  // The opener, captured during the render that OPENS the dialog. This dialog
+  // keeps its own restore RULES (argued out below) but not its own capture:
+  // R12's background `inert` lands in `useFocusTrap`'s layout effect, before
+  // the focus effect below runs, and HTML's focus-fixup rule lets a browser
+  // blur the opener then — so the effect-time read this used to do could
+  // remember <body>.
+  const openerRef = useOpenerCapture(title !== null);
 
   // Enter confirms, Escape cancels — captured before app-level shortcuts so the
   // dialog owns those keys while open (capture phase + stopPropagation).
@@ -98,11 +106,10 @@ export default function ConfirmDialog() {
   // reader is never taken to the question at all.
   useEffect(() => {
     if (title === null) return;
-    // Remember where focus came from BEFORE taking it, so closing can give it
-    // back. Moving focus in without ever restoring it (as this did when the
-    // move was added) leaves every caller dropping focus to <body> on close --
-    // cancel a delete and you are dumped out of the list you were working in.
-    const cameFrom = document.activeElement as HTMLElement | null;
+    // Remember where focus came from so closing can give it back -- cancel a
+    // delete and without it you are dumped out of the list you were working
+    // in. Read at RENDER time (`openerRef` above), not here: see there.
+    const cameFrom = openerRef.current;
     // Cancel is the FIRST button in the row, so this is the safe default: a
     // stray Space/Enter on it dismisses rather than destroys. Queried through
     // the container because the shared `Button` primitive does not forward a
@@ -118,7 +125,9 @@ export default function ConfirmDialog() {
       // makes the guard testable rather than a matter of trust.)
       if (cameFrom?.isConnected) cameFrom.focus();
     };
-  }, [title]);
+    // `openerRef` is a ref with a stable identity; it is listed only because
+    // the exhaustive-deps rule cannot see that through `useOpenerCapture`.
+  }, [title, openerRef]);
 
   if (title === null) return null;
 
@@ -129,13 +138,15 @@ export default function ConfirmDialog() {
 
   return (
     <div className="qz-overlay-backdrop" onMouseDown={() => finish(false)}>
-      {/* role/aria-modal/labelledby so assistive tech announces this as a
-          dialog and reads the question. Without them the backdrop is just a
-          div, and the only gate on an irreversible delete is invisible. */}
+      {/* role/labelledby so assistive tech announces this as a dialog and
+          reads the question. Without them the backdrop is just a div, and the
+          only gate on an irreversible delete is invisible. NO `aria-modal`
+          (R12): it hid the app's live regions for as long as the dialog was
+          open. Modality is `lib/modalInert.ts`'s background `inert`, and
+          `architecture.test.ts` keeps the attribute out. */}
       <div
         className="qzk-glass qz-dialog"
         role="dialog"
-        aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={message ? messageId : undefined}
         ref={dialogRef}

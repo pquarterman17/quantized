@@ -46,7 +46,6 @@ export default function WorkbookPropertiesDialog() {
       <div
         className="qzk-glass qz-dialog qzk-workbook-properties"
         role="dialog"
-        aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={descriptionId}
         ref={dialogRef}

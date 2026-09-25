@@ -153,7 +153,6 @@ export default function PreferencesDialog() {
       <div
         className="qzk-prefs"
         role="dialog"
-        aria-modal="true"
         aria-labelledby={titleId}
         ref={dialogRef}
         tabIndex={-1}

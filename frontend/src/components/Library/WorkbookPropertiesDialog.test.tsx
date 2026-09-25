@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import WorkbookPropertiesDialog from "./WorkbookPropertiesDialog";
 import { useWorkbookPropertiesDialog } from "../../store/workbookPropertiesDialog";
@@ -19,7 +19,9 @@ describe("WorkbookPropertiesDialog", () => {
     render(<WorkbookPropertiesDialog />);
     open();
     const dialog = screen.getByRole("dialog", { name: "Properties — Book 1" });
-    expect(dialog).toHaveAttribute("aria-modal", "true");
+    // R12: no `aria-modal` (it hid the app's live regions); the background
+    // `inert` of lib/modalInert.ts carries the modality instead.
+    expect(dialog).not.toHaveAttribute("aria-modal");
     expect(dialog).toHaveTextContent("Project / Runs");
     expect(dialog).toHaveTextContent("2 worksheets");
     expect(dialog).toHaveTextContent("1 artifact");
@@ -37,6 +39,34 @@ describe("WorkbookPropertiesDialog", () => {
     open();
     fireEvent.click(screen.getByRole("button", { name: "Close" }));
     expect(container.querySelector('[role="dialog"]')).toBeNull();
+    expect(document.activeElement).toBe(opener);
+  });
+
+  // R12: this dialog restores focus EAGERLY, inside its close handler, while
+  // it is still mounted — i.e. while the background (the opener included) is
+  // still `inert`, where a browser refuses `focus()`. jsdom does not refuse,
+  // so what is pinned is the precondition: at the moment the opener is
+  // focused, nothing above it is inert any more.
+  it("lifts the background inert before its eager focus restore", () => {
+    render(<><div><button type="button">Workbook row</button></div><WorkbookPropertiesDialog /></>);
+    const opener = screen.getByRole("button", { name: "Workbook row" });
+    opener.focus();
+    open();
+    expect(opener.closest("[inert]")).not.toBeNull();
+    const inertAtFocus: boolean[] = [];
+    const realFocus = HTMLElement.prototype.focus;
+    const spy = vi.spyOn(HTMLElement.prototype, "focus").mockImplementation(function (
+      this: HTMLElement,
+      ...args: Parameters<HTMLElement["focus"]>
+    ) {
+      if (this === opener) inertAtFocus.push(opener.closest("[inert]") !== null);
+      return realFocus.apply(this, args);
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    spy.mockRestore();
+    // The FIRST focus of the opener is the eager one, from the close handler.
+    expect(inertAtFocus[0]).toBe(false);
+    expect(document.querySelectorAll("[inert]")).toHaveLength(0);
     expect(document.activeElement).toBe(opener);
   });
 

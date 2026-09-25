@@ -42,6 +42,37 @@ describe("browser-storage test reliability", () => {
   });
 });
 
+// R12 ratchet (PRIMARY_SOFTWARE_AUDIT_PLAN P3.3). `aria-modal="true"` tells
+// assistive tech to ignore EVERYTHING outside the dialog, including the two
+// `aria-live` regions this app announces through (Toaster, the status bar's
+// "Background operations" region) — so a toast raised while a dialog was open
+// was silently never announced. Every backdrop dialog dropped it (sixteen
+// `role="dialog"` elements in fifteen components, 2026-09-25, the two lazy
+// promise-dialog bodies included); modality is the browser-enforced background
+// `inert` in lib/modalInert.ts instead.
+// Nothing in jsdom can notice the attribute coming back (it is a pure AT
+// contract), which is why it is pinned here as raw source.
+describe("modal dialogs do not hide the app's live regions (R12)", () => {
+  it("no source module sets aria-modal", () => {
+    const offending = sources()
+      // Comments stripped first (line and block, which also covers the JSX
+      // `{/* … */}` form) so the prose explaining WHY the attribute is gone
+      // does not read as the attribute coming back.
+      // Both spellings: the JSX attribute, and the string key a
+      // `setAttribute("aria-modal", …)` or a spread props object would use.
+      .filter(([, src]) =>
+        /aria-modal\s*=\s*[{"']|["']aria-modal["']\s*[,:]/.test(
+          src.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, ""),
+        ),
+      )
+      .map(([p]) => p);
+    expect(
+      offending,
+      "aria-modal hides Toaster/StatusBar announcements from assistive tech; use lib/modalInert.ts's background inert instead",
+    ).toEqual([]);
+  });
+});
+
 /** Modules that reference `re`, minus those whose path ends with an allowlisted
  *  suffix (the sanctioned model layers). */
 function offenders(re: RegExp, allow: string[]): string[] {

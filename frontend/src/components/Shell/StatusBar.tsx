@@ -77,6 +77,11 @@ export default function StatusBar() {
           announcement with no idea which region produced it — and it is why a
           bare `getByRole("status")` is no longer a safe locator, which is how
           this landed CI-red once (see region-tool-escape.spec.ts). */}
+      {/* R12: `data-live-region` exempts THIS span — not the whole status bar —
+          from the `inert` an open dialog puts on the background
+          (lib/modalInert.ts descends into the footer, so the rest of it still
+          goes inert). The per-op Cancel controls inside it stay reachable with
+          it, deliberately: they cancel the background work it reports. */}
       <span
         className={visibleOps.length > 0 ? "qzk-pending" : undefined}
         title={visibleOps.length > 0 ? visibleOps.map((o) => o.label).join(", ") : undefined}
@@ -84,6 +89,7 @@ export default function StatusBar() {
         aria-live="polite"
         aria-atomic="true"
         aria-label="Background operations"
+        data-live-region=""
       >
         {visibleOps.length > 0 && (
           <>
@@ -135,8 +141,11 @@ export default function StatusBar() {
           unaffected by the pending-ops indicator above — it renders
           unconditionally and never displaces this block. */}
       {health.error ? (
+        // R12: an autosave failure raised while a dialog is open must still
+        // be announced, so this alert is exempt from the background `inert`.
         <span
           role="alert"
+          data-live-region=""
           style={{ color: "var(--danger, #d33)" }}
           title={`Autosave is failing: ${health.error}. Use File ▸ Save workspace to save manually.`}
         >

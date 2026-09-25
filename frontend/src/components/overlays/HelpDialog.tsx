@@ -164,7 +164,6 @@ export default function HelpDialog() {
         className="qzk-glass qz-dialog qzk-help"
         onMouseDown={(e) => e.stopPropagation()}
         role="dialog"
-        aria-modal="true"
         aria-labelledby={titleId}
         ref={dialogRef}
         tabIndex={-1}

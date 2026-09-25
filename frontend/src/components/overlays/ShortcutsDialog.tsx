@@ -54,7 +54,6 @@ export default function ShortcutsDialog() {
       <div
         className="qzk-glass qz-dialog qzk-shortcuts"
         role="dialog"
-        aria-modal="true"
         aria-labelledby={titleId}
         ref={dialogRef}
         tabIndex={-1}

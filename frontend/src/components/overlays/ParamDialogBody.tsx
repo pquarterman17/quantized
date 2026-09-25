@@ -83,7 +83,6 @@ export default function ParamDialog() {
       <div
         className="qzk-glass qz-dialog"
         role="dialog"
-        aria-modal="true"
         aria-labelledby={titleId}
         ref={dialogRef}
         tabIndex={-1}
