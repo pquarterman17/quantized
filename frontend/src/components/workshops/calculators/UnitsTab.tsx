@@ -119,7 +119,11 @@ export default function UnitsTab({ c }: { c: CalculatorsState }) {
         {QUICK_PAIRS.map((p) => (
           <Pill
             key={p.label}
-            active={c.from === p.from && c.to === p.to && c.category === p.category}
+            active={
+              c.category === p.category &&
+              c.to === p.to &&
+              (p.category === "photon_energy" ? c.peFrom === p.from : c.from === p.from)
+            }
             onClick={() => c.setPair(p.from, p.to, p.category)}
           >
             {p.label}

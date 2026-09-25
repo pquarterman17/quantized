@@ -118,6 +118,32 @@ describe("UnitsTab", () => {
     expect(screen.getByLabelText("to unit")).toHaveValue("eV");
   });
 
+  it("a photon quick-pick updates the visible source quantity and pressed state", async () => {
+    await renderUnits();
+    fireEvent.change(screen.getByLabelText("unit category"), {
+      target: { value: "photon_energy" },
+    });
+    fireEvent.change(screen.getByLabelText("photon-energy quantity"), {
+      target: { value: "K" },
+    });
+
+    expect(screen.getByRole("button", { name: "eV → nm" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "eV → nm" }));
+
+    expect(screen.getByLabelText("photon-energy quantity")).toHaveValue("eV");
+    expect(screen.getByRole("button", { name: "eV → nm" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "eV → THz" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+  });
+
   it("switching to Photon / Thermal Energy shows the 5-quantity panel instead of from/to", async () => {
     await renderUnits();
     fireEvent.change(screen.getByLabelText("unit category"), {

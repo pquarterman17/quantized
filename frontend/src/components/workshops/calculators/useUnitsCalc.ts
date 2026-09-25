@@ -124,7 +124,13 @@ export function useUnitsCalc(): UnitsCalcState {
   const setPair = (f: string, t: string, cat?: string): void => {
     setFromRaw(f);
     setToRaw(t);
-    if (cat) setCategoryState(cat);
+    if (cat) {
+      setCategoryState(cat);
+      if (cat === "photon_energy") {
+        setPeFromRaw(f);
+        invalidatePe();
+      }
+    }
     invalidateConvert();
   };
 

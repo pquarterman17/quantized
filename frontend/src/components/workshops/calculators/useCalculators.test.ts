@@ -411,6 +411,24 @@ describe("useCalculators", () => {
     expect(result.current.peResults?.nm).toBe(500);
   });
 
+  it("a photon quick-pick updates peFrom and invalidates the prior readout", async () => {
+    vi.mocked(convertUnits).mockResolvedValue({ result: 42, info: {} });
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setPeFrom("K"));
+    await act(async () => {
+      await result.current.peCompute();
+    });
+    expect(result.current.peResults).not.toBeNull();
+
+    act(() => result.current.setPair("eV", "nm", "photon_energy"));
+
+    expect(result.current.category).toBe("photon_energy");
+    expect(result.current.peFrom).toBe("eV");
+    expect(result.current.from).toBe("eV");
+    expect(result.current.to).toBe("nm");
+    expect(result.current.peResults).toBeNull();
+  });
+
   it("peCompute rejects a non-numeric value without calling the API", async () => {
     const { result } = renderHook(() => useCalculators());
     act(() => result.current.setPeValue("abc"));
