@@ -8,6 +8,7 @@ on-disk transfer directory.
 from __future__ import annotations
 
 import json
+import re
 import time
 from collections.abc import Iterator
 from pathlib import Path
@@ -18,9 +19,11 @@ from fastapi.testclient import TestClient
 
 import quantized.app as app_module
 from quantized.app import create_app
+from quantized.io import workbook_transfer_store as store_mod
 from quantized.io.workbook_transfer_store import (
     DEFAULT_TTL_SECONDS,
     MAX_PACKAGE_BYTES,
+    MIN_PACKAGE_BYTES,
     PACKAGE_SUFFIX,
     TransferStore,
 )
@@ -34,6 +37,10 @@ PKG = json.dumps({"format": "quantized-workbook-transfer", "version": 1, "x": "Â
 def transfer_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     root = tmp_path / "xfer"
     monkeypatch.setenv("QZ_TRANSFER_DIR", str(root))
+    # Small test payloads: lift the 1 MB minimum (tested on its own below).
+    monkeypatch.setattr(
+        workbook_transfer, "_store", lambda: TransferStore(root, min_package_bytes=1)
+    )
     return root
 
 
@@ -115,7 +122,9 @@ def test_expired_package_is_410_then_404(
 ) -> None:
     now = {"t": time.time()}
     monkeypatch.setattr(
-        workbook_transfer, "_store", lambda: TransferStore(transfer_root, clock=lambda: now["t"])
+        workbook_transfer,
+        "_store",
+        lambda: TransferStore(transfer_root, clock=lambda: now["t"], min_package_bytes=1),
     )
     stored = _post(client)
     now["t"] += DEFAULT_TTL_SECONDS + 1
@@ -127,7 +136,9 @@ def _small_cap(monkeypatch: pytest.MonkeyPatch, root: Path) -> None:
     monkeypatch.setattr(
         workbook_transfer,
         "_store",
-        lambda: TransferStore(root, max_package_bytes=10, max_total_bytes=10_000),
+        lambda: TransferStore(
+            root, max_package_bytes=10, max_total_bytes=10_000, min_package_bytes=1
+        ),
     )
 
 
@@ -174,6 +185,41 @@ def test_empty_body_is_422(client: TestClient, transfer_root: Path) -> None:
     assert client.post(BASE, content=b"").status_code == 422
 
 
+def test_security_probe_tiny_posts_cannot_wipe_a_real_copy(
+    client: TestClient, transfer_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The review's probe, with the REAL default store: one real package,
+    then 32 one-byte POSTs. They are refused (422) and the copy survives."""
+    monkeypatch.setattr(workbook_transfer, "_store", lambda: TransferStore(transfer_root))
+    real_body = b"r" * MIN_PACKAGE_BYTES
+    real = _post(client, real_body)
+    for _ in range(32):
+        res = client.post(BASE, content=b"x")
+        assert res.status_code == 422
+        assert res.json()["detail"] == (
+            f"transfer package too small (minimum {MIN_PACKAGE_BYTES} bytes)"
+        )
+    assert _get(client, real["id"], real["token"]).content == real_body
+
+
+def test_full_store_is_507_and_keeps_every_live_copy(
+    client: TestClient, transfer_root: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        workbook_transfer,
+        "_store",
+        lambda: TransferStore(transfer_root, max_entries=2, min_package_bytes=1),
+    )
+    first, second = _post(client), _post(client)
+    res = client.post(BASE, content=PKG)
+    assert res.status_code == 507
+    assert res.json()["detail"].isascii()
+    assert "transfer store is full" in res.json()["detail"]
+    for stored in (first, second):
+        assert _get(client, stored["id"], stored["token"]).content == PKG
+    assert len(list(transfer_root.iterdir())) == 2  # no temp left behind
+
+
 def test_unwritable_store_is_503(
     client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -205,8 +251,8 @@ def test_startup_sweeps_expired_packages(
     monkeypatch.setattr(app_module.jobs._pool, "shutdown", lambda **_kw: None)
     monkeypatch.setattr(app_module._datasetcache, "clear_cache", lambda: None)
     past = time.time() - DEFAULT_TTL_SECONDS - 10
-    stale = TransferStore(transfer_root, clock=lambda: past).put(PKG)
-    live = TransferStore(transfer_root).put(PKG)
+    stale = TransferStore(transfer_root, clock=lambda: past, min_package_bytes=1).put(PKG)
+    live = TransferStore(transfer_root, min_package_bytes=1).put(PKG)
     with TestClient(create_app()):
         pass
     names = {p.name for p in transfer_root.iterdir()}
@@ -223,3 +269,7 @@ def test_frontend_client_mirrors_the_backend_contract() -> None:
     assert '"X-Transfer-Token"' in src
     cap = f"{MAX_PACKAGE_BYTES:_}"
     assert f"export const MAX_STORED_TRANSFER_BYTES = {cap};" in src
+    # the client's strict token shape must accept exactly what the server mints
+    assert "const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;" in src
+    for _ in range(50):
+        assert re.fullmatch(r"[A-Za-z0-9_-]{43}", store_mod._new_token())

@@ -20257,8 +20257,14 @@
           "413": {
             "description": "Too large"
           },
+          "422": {
+            "description": "Empty or too small"
+          },
           "503": {
             "description": "Store unavailable"
+          },
+          "507": {
+            "description": "Store full"
           }
         },
         "summary": "Store Package",

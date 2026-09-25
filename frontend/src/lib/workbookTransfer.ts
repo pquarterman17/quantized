@@ -120,7 +120,9 @@ export const WORKBOOK_TRANSFER_VERSION = 1;
  *  documented hard cap, but a very large string risks browser-specific
  *  slowdown or failure with no good error surface to report through, so above
  *  it no multi-MB clipboard write is attempted: Copy stores the package and
- *  copies a small descriptor instead (Group F, `buildCopyText` below).
+ *  copies a small descriptor instead (Group F, `buildCopyText` below). The
+ *  clipboard paths pass it explicitly; build/parse DEFAULT to the stored-
+ *  package bound, so Duplicate (no clipboard) handles what Copy/Paste do.
  *
  *  DOCUMENTED TRADEOFF (booked, not built — adversarial review, 2026-08-19):
  *  `buildTransferPackage`/`parseTransferPackage` below materialize the FULL
@@ -179,7 +181,7 @@ function mb(chars: number): string {
 export function buildTransferPackage(
   workbookId: string,
   state: TransferSourceState,
-  limit = MAX_TRANSFER_PACKAGE_CHARS,
+  limit = MAX_STORED_TRANSFER_BYTES,
 ): BuildTransferResult {
   const workbook = state.workbooks.find((w) => w.id === workbookId);
   if (!workbook) return { ok: false, reason: "workbook not found" };
@@ -254,7 +256,7 @@ export async function buildCopyText(workbookId: string, state: TransferSourceSta
 /** Paste's parse for either clipboard form — see `buildCopyText`. */
 export async function resolvePasteText(text: string): Promise<ParseTransferResult> {
   const ref = readTransferRef(text);
-  if (!ref) return parseTransferPackage(text);
+  if (!ref) return parseTransferPackage(text, MAX_TRANSFER_PACKAGE_CHARS);
   if (!ref.ok) return ref;
   return fetchReferencedPackage(ref.ref, (t) => parseTransferPackage(t, MAX_STORED_TRANSFER_BYTES));
 }
@@ -263,7 +265,7 @@ export async function resolvePasteText(text: string): Promise<ParseTransferResul
  *  descriptor (checked locally — the probe never fetches). */
 export function canPasteText(text: string, now = Date.now()): boolean {
   const ref = readTransferRef(text);
-  return ref ? ref.ok && Date.parse(ref.ref.expiresAt) > now : parseTransferPackage(text).ok;
+  return ref ? ref.ok && Date.parse(ref.ref.expiresAt) > now : parseTransferPackage(text, MAX_TRANSFER_PACKAGE_CHARS).ok;
 }
 
 export type ParseTransferResult =
@@ -288,7 +290,7 @@ export type ParseTransferResult =
  *  caller can leave the destination untouched and say why (frozen-scope item
  *  5's "leave the destination byte-identical" starts here: nothing this
  *  function returns is ever partially applied). */
-export function parseTransferPackage(text: string, limit = MAX_TRANSFER_PACKAGE_CHARS): ParseTransferResult {
+export function parseTransferPackage(text: string, limit = MAX_STORED_TRANSFER_BYTES): ParseTransferResult {
   if (text.length > limit) {
     return { ok: false, reason: `transfer package too large (${mb(text.length)}, limit ${mb(limit)})` };
   }

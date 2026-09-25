@@ -44,6 +44,10 @@ export const MAX_STORED_TRANSFER_BYTES = 128_000_000;
 const MAX_REF_CHARS = 4096;
 const PACKAGES = "/api/workbook-transfer/packages";
 const ID_RE = /^[0-9a-f]{32}$/;
+/** Exactly what the server mints (`secrets.token_urlsafe(32)`). Anything
+ *  else never reaches `fetch`: a `\n` or non-Latin-1 header value makes
+ *  it throw, which would surface as a false "store unavailable". */
+const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 const AGAIN = "copy the workbook again in the source window";
 /** Keeps the descriptor far under `MAX_REF_CHARS` whatever the name. */
 const MAX_SUMMARY_NAME = 80;
@@ -86,14 +90,14 @@ export function readTransferRef(text: string): ReadRefResult | null {
     typeof id !== "string" ||
     !ID_RE.test(id) ||
     typeof token !== "string" ||
-    !token ||
+    !TOKEN_RE.test(token) ||
     typeof size !== "number" ||
     !Number.isInteger(size) ||
     size <= 0 ||
     typeof expiresAt !== "string" ||
     Number.isNaN(Date.parse(expiresAt))
   ) {
-    return { ok: false, reason: "workbook transfer reference is malformed" };
+    return { ok: false, reason: "clipboard text is not a valid Quantized transfer descriptor" };
   }
   return {
     ok: true,
@@ -134,7 +138,7 @@ export async function storeAsReference(
         `and the temporary transfer store is unavailable (${why(e)})`,
     };
   }
-  if (!ID_RE.test(stored.id) || !stored.token || stored.size !== body.size) {
+  if (!ID_RE.test(stored.id) || !TOKEN_RE.test(stored.token) || stored.size !== body.size) {
     return { ok: false, reason: "the temporary transfer store returned an unexpected response" };
   }
   const n = built.pkg.datasets.length;

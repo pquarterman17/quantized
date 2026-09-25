@@ -17256,8 +17256,22 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Empty or too small */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Store unavailable */
             503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Store full */
+            507: {
                 headers: {
                     [name: string]: unknown;
                 };

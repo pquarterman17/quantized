@@ -29,7 +29,9 @@ from quantized.io.workbook_transfer_store import (
     PackageExpired,
     PackageNotFound,
     PackageTooLarge,
+    PackageTooSmall,
     PendingPackage,
+    StoreFull,
     TransferStore,
     TransferStoreError,
     transfer_dir,
@@ -89,16 +91,27 @@ def _raise_for(exc: Exception) -> NoReturn:
 
 
 async def _receive(request: Request, pending: PendingPackage) -> None:
-    """Stream the body into ``pending``; the store checks the cap per chunk."""
+    """Stream the body into ``pending`` in ~1 MiB writes, each OFF the event
+    loop (blocking file I/O); the store checks the cap on every write."""
+    buf = bytearray()
     async for chunk in request.stream():
-        if chunk:
-            pending.write(chunk)
+        buf.extend(chunk)
+        if len(buf) >= _CHUNK:
+            await run_in_threadpool(pending.write, bytes(buf))
+            buf.clear()
+    if buf:
+        await run_in_threadpool(pending.write, bytes(buf))
 
 
 @router.post(
     "/packages",
     openapi_extra=_BODY_DOC,
-    responses={413: {"description": "Too large"}, 503: {"description": "Store unavailable"}},
+    responses={
+        413: {"description": "Too large"},
+        422: {"description": "Empty or too small"},
+        503: {"description": "Store unavailable"},
+        507: {"description": "Store full"},
+    },
 )
 async def store_package(request: Request) -> StoredPackageResponse:
     """Store a transfer package too large for the clipboard."""
@@ -118,10 +131,20 @@ async def store_package(request: Request) -> StoredPackageResponse:
         raise _too_large(limit) from exc
     except EmptyPackage as exc:
         raise HTTPException(status_code=422, detail="transfer package is empty") from exc
+    except PackageTooSmall as exc:
+        detail = f"transfer package too small (minimum {store.min_package_bytes} bytes)"
+        raise HTTPException(status_code=422, detail=detail) from exc
+    except StoreFull as exc:
+        detail = (
+            "transfer store is full -- paste or let earlier large copies expire "
+            "(24 h), then copy again"
+        )
+        raise HTTPException(status_code=507, detail=detail) from exc
     except (TransferStoreError, OSError) as exc:
         raise HTTPException(status_code=503, detail=_UNAVAILABLE) from exc
     finally:
-        pending.abort()  # no-op after a successful commit; client disconnects too
+        # no-op after a successful commit; also covers client disconnects
+        await run_in_threadpool(pending.abort)
     expires = datetime.fromtimestamp(stored.expires_at, tz=UTC)
     return StoredPackageResponse(
         id=stored.package_id,

@@ -17,6 +17,7 @@ import {
 } from "./workbookTransferRef";
 
 const ID = "0123456789abcdef0123456789abcdef";
+const TOK = "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTtok"; // the server's shape: 43 url-safe characters
 const FUTURE = "2999-01-01T00:00:00Z";
 const PAST = "2000-01-01T00:00:00Z";
 
@@ -25,7 +26,7 @@ const ref = (extra: Partial<WorkbookTransferRef> = {}): WorkbookTransferRef => (
   version: 1,
   summary: "s",
   id: ID,
-  token: "tok",
+  token: TOK,
   size: 3,
   expiresAt: FUTURE,
   ...extra,
@@ -61,12 +62,17 @@ describe("readTransferRef", () => {
     ["path-shaped id", { id: `../${"0".repeat(29)}` }],
     ["upper-case id", { id: ID.toUpperCase() }],
     ["empty token", { token: "" }],
+    ["short token", { token: "a".repeat(42) }],
+    ["long token", { token: "a".repeat(44) }],
+    ["newline in token (fetch would throw)", { token: `${"a".repeat(21)}\n${"a".repeat(21)}` }],
+    ["non-Latin-1 token (fetch would throw)", { token: `${"a".repeat(42)}\u4e2d` }],
+    ["padding char in token", { token: `${"a".repeat(42)}=` }],
     ["fractional size", { size: 1.5 }],
     ["zero size", { size: 0 }],
     ["bad expiry", { expiresAt: "soon" }],
   ])("refuses a malformed descriptor (%s)", (_label, extra) => {
     const r = readTransferRef(JSON.stringify(ref(extra as Partial<WorkbookTransferRef>)));
-    expect(r).toEqual({ ok: false, reason: "workbook transfer reference is malformed" });
+    expect(r).toEqual({ ok: false, reason: "clipboard text is not a valid Quantized transfer descriptor" });
   });
 });
 
@@ -78,7 +84,7 @@ describe("storeAsReference", () => {
       expect(init?.method).toBe("POST");
       const body = init?.body as Blob;
       expect(await body.text()).toBe(text);
-      return new Response(JSON.stringify({ id: ID, token: "tok", size: bytes, expires_at: FUTURE, ttl_seconds: 86400 }), {
+      return new Response(JSON.stringify({ id: ID, token: TOK, size: bytes, expires_at: FUTURE, ttl_seconds: 86400 }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
@@ -90,7 +96,7 @@ describe("storeAsReference", () => {
     if (!out.ok) return;
     expect(out.text.length).toBeLessThan(600);
     const parsed = readTransferRef(out.text);
-    expect(parsed?.ok && parsed.ref).toMatchObject({ id: ID, token: "tok", size: bytes, expiresAt: FUTURE });
+    expect(parsed?.ok && parsed.ref).toMatchObject({ id: ID, token: TOK, size: bytes, expiresAt: FUTURE });
     expect(parsed?.ok && parsed.ref.summary).toMatch(/^Quantized workbook "Big run" \(2 worksheets, 0\.0 MB\)/);
     expect(out.note).toMatch(/temporary transfer package/);
   });
@@ -98,7 +104,7 @@ describe("storeAsReference", () => {
   it("caps the workbook name in the summary so the descriptor stays small", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ id: ID, token: "t", size: 3, expires_at: FUTURE, ttl_seconds: 1 }))),
+      vi.fn(async () => new Response(JSON.stringify({ id: ID, token: TOK, size: 3, expires_at: FUTURE, ttl_seconds: 1 }))),
     );
     const longName = { ...pkg, workbook: { id: "w1", name: "\u0001".repeat(5000) } } as WorkbookTransferPackage;
     const out = await storeAsReference({ pkg: longName, text: "abc" }, 8_000_000);
@@ -110,7 +116,7 @@ describe("storeAsReference", () => {
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
       init?.method === "DELETE"
         ? Promise.reject(new TypeError("Failed to fetch"))
-        : new Response(JSON.stringify({ id: ID, token: "tok", size: 3, expires_at: FUTURE, ttl_seconds: 1 })),
+        : new Response(JSON.stringify({ id: ID, token: TOK, size: 3, expires_at: FUTURE, ttl_seconds: 1 })),
     );
     vi.stubGlobal("fetch", fetchMock);
     const out = await storeAsReference({ pkg, text: "abc" }, 8_000_000);
@@ -118,7 +124,7 @@ describe("storeAsReference", () => {
     const [url, init] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(url).toBe(`/api/workbook-transfer/packages/${ID}`);
     expect(init.method).toBe("DELETE");
-    expect((init.headers as Record<string, string>)["X-Transfer-Token"]).toBe("tok");
+    expect((init.headers as Record<string, string>)["X-Transfer-Token"]).toBe(TOK);
   });
 
   it("refuses with the store named when the backend is unreachable (offline)", async () => {
@@ -145,7 +151,7 @@ describe("storeAsReference", () => {
   it("refuses a store response whose size disagrees with what was sent", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => new Response(JSON.stringify({ id: ID, token: "t", size: 1, expires_at: FUTURE, ttl_seconds: 1 }))),
+      vi.fn(async () => new Response(JSON.stringify({ id: ID, token: TOK, size: 1, expires_at: FUTURE, ttl_seconds: 1 }))),
     );
     const out = await storeAsReference({ pkg, text: "abc" }, 8_000_000);
     expect(out).toEqual({ ok: false, reason: "the temporary transfer store returned an unexpected response" });
@@ -179,8 +185,8 @@ describe("fetchReferencedPackage", () => {
     expect(out.ok).toBe(true);
     const [url, init] = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
     expect(url).toBe(`/api/workbook-transfer/packages/${ID}`);
-    expect(url).not.toContain("tok");
-    expect((init.headers as Record<string, string>)["X-Transfer-Token"]).toBe("tok");
+    expect(url).not.toContain(TOK);
+    expect((init.headers as Record<string, string>)["X-Transfer-Token"]).toBe(TOK);
   });
 
   it("names an expired package (410)", async () => {

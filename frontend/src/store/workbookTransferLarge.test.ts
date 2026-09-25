@@ -79,8 +79,9 @@ function fakeBackend(): { entries: Map<string, Entry>; fetchMock: FetchMock; off
     if (url === PACKAGES && init?.method === "POST") {
       const bytes = new Uint8Array(await (init.body as Blob).arrayBuffer());
       const id = (++n).toString(16).padStart(32, "0");
-      entries.set(id, { token: `tok-${n}`, bytes });
-      const body = { id, token: `tok-${n}`, size: bytes.byteLength, expires_at: new Date(Date.now() + 864e5).toISOString(), ttl_seconds: 86400 };
+      const token = `${"t".repeat(40)}${String(n).padStart(3, "0")}`; // server shape: 43 chars
+      entries.set(id, { token, bytes });
+      const body = { id, token, size: bytes.byteLength, expires_at: new Date(Date.now() + 864e5).toISOString(), ttl_seconds: 86400 };
       return new Response(JSON.stringify(body), { status: 200 });
     }
     const id = url.slice(PACKAGES.length + 1);
@@ -153,7 +154,7 @@ describe("Group F — large workbooks travel as a descriptor + temporary package
     const text = contents.text ?? "";
     expect(text.length).toBeLessThan(1000);
     const ref = JSON.parse(text);
-    expect(ref).toMatchObject({ format: "quantized-workbook-transfer-ref", version: 1, token: "tok-1" });
+    expect(ref).toMatchObject({ format: "quantized-workbook-transfer-ref", version: 1, token: `${"t".repeat(40)}001` });
     expect(ref.summary).toMatch(/^Quantized workbook "run1" \(1 worksheet, 8\.0 MB\)/);
     expect(entries.get(ref.id)?.bytes.byteLength).toBe(ref.size);
     expect(useApp.getState().status).toMatch(/^copied "run1" \(1 worksheet\) via a temporary transfer package/);
@@ -243,6 +244,45 @@ describe("Group F — large workbooks travel as a descriptor + temporary package
     expectUnchanged(before);
     expect(useApp.getState().status).toBe(
       "paste workbook: temporary transfer package: unsupported workbook transfer version: 99",
+    );
+  });
+
+  it("Duplicate handles a workbook above the inline bound (it never touches the clipboard)", async () => {
+    const { fetchMock } = fakeBackend();
+    const id = await useApp.getState().duplicateWorkbook("w1");
+    expect(id).not.toBeNull();
+    const after = useApp.getState();
+    expect(after.workbooks.find((w) => w.id === id)?.name).toBe("run1 copy");
+    expect(after.datasets.find((d) => d.workbookId === id)?.data.metadata.note).toBe(BIG_NOTE);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("still refuses an INLINE clipboard package above the inline bound", async () => {
+    fakeBackend();
+    const { contents } = mockClipboard();
+    const built = buildTransferPackage("w1", useApp.getState());
+    contents.text = built.ok ? built.text : "";
+    becomeDestination();
+    const before = snapshot();
+    await useApp.getState().pasteWorkbookFromClipboard();
+    expectUnchanged(before);
+    expect(useApp.getState().status).toMatch(/^paste workbook: transfer package too large \(8\.0 MB, limit 8\.0 MB\)$/);
+  });
+
+  it("a crafted descriptor token is refused as not-a-descriptor, never fetched", async () => {
+    const { fetchMock } = fakeBackend();
+    const { contents } = mockClipboard();
+    await useApp.getState().copyWorkbookToClipboard("w1");
+    const ref = JSON.parse(contents.text ?? "");
+    contents.text = JSON.stringify({ ...ref, token: `${"a".repeat(21)}\n${"a".repeat(21)}` });
+    becomeDestination();
+    fetchMock.mockClear();
+    const before = snapshot();
+    await useApp.getState().pasteWorkbookFromClipboard();
+    expectUnchanged(before);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toBe(
+      "paste workbook: clipboard text is not a valid Quantized transfer descriptor",
     );
   });
 

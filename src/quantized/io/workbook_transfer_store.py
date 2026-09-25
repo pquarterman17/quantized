@@ -36,9 +36,13 @@ never trusted from the caller:
   consider names matching this module's own two patterns (``<id>.qzxfer`` and
   ``.qzxfer-tmp-*.part``) inside that one directory; nothing is recursed into
   and nothing else is deleted. It cannot be pointed at a user file.
-* **Bounded.** One package <= ``MAX_PACKAGE_BYTES``; the directory <=
-  ``MAX_TOTAL_BYTES`` and ``MAX_ENTRIES`` (oldest evicted first); every
-  package expires ``DEFAULT_TTL_SECONDS`` after it was stored.
+* **Bounded.** ``MIN_PACKAGE_BYTES`` <= one package <= ``MAX_PACKAGE_BYTES``;
+  the directory <= ``MAX_TOTAL_BYTES`` (oldest evicted first, by BYTES only)
+  and ``MAX_ENTRIES`` unexpired packages -- a store past the entry cap is
+  REFUSED (``StoreFull``), never made room for by evicting a live copy, so a
+  burst of small junk stores cannot wipe a user's real one; the minimum size
+  keeps junk from taking slots cheaply. Every package expires
+  ``DEFAULT_TTL_SECONDS`` after it was stored.
 * **Read needs the token.** A package is released only to a caller holding
   its 256-bit token, compared in constant time against a SHA-256 of it (the
   token itself is never written to disk). The route takes the token in a
@@ -70,8 +74,17 @@ served and is swept once older than ``TEMP_GRACE_SECONDS`` (never sooner, so
 another process's in-progress write is not deleted under it). Every removal
 tolerates the file already being gone (another process cleaned it first) or
 being in use (Windows): cleanup is idempotent and retried on the next store.
-The size bound is per-process best effort: two processes storing at the same
-instant can each see room and together overshoot by at most one package.
+Admission (bound check, eviction, publish, and a post-publish trim) runs
+under one process-wide lock and counts this process's other IN-FLIGHT
+writes as spoken for (it evicts for them; it never refuses over them), so
+within one process the published total never exceeds ``MAX_TOTAL_BYTES``
+and the unexpired count never exceeds
+``MAX_ENTRIES``. Across processes there is no shared lock: P processes
+admitting at the same instant can each see room, so the directory can
+transiently exceed ``MAX_TOTAL_BYTES`` by at most (P - 1) x
+(``MAX_PACKAGE_BYTES`` + ``HEADER_BYTES``) and ``MAX_ENTRIES`` by P - 1. The
+byte overshoot lasts only until the last of them finishes: each trims the
+oldest OTHER packages back under the byte cap after publishing.
 
 A package-named file whose header this build does not recognise (a newer
 build's format sharing the directory, say) is left alone until its mtime is
@@ -94,19 +107,35 @@ from __future__ import annotations
 import contextlib
 import hmac
 import os
-import re
 import secrets
 import tempfile
+import threading
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
 import platformdirs
 
-from quantized.io.workbook_transfer_header import HEADER_BYTES, encode_header, token_digest
+from quantized.io.workbook_transfer_header import (
+    HEADER_BYTES,
+    PACKAGE_SUFFIX,
+    CleanupReport,
+    EmptyPackage,
+    InvalidPackageId,
+    PackageExpired,
+    PackageNotFound,
+    PackageTooLarge,
+    PackageTooSmall,
+    StoredPackage,
+    StoreFull,
+    TransferStoreError,
+    encode_header,
+    is_valid_package_id,
+    token_digest,
+)
 from quantized.io.workbook_transfer_header import Entry as _Entry
+from quantized.io.workbook_transfer_header import is_package_name as _is_package_name
 from quantized.io.workbook_transfer_header import read_entry as _read_entry
 from quantized.portable.atomic_rename import NoReplaceUnsupported, rename_noreplace
 
@@ -114,13 +143,16 @@ __all__ = [
     "DEFAULT_TTL_SECONDS",
     "MAX_PACKAGE_BYTES",
     "MAX_TOTAL_BYTES",
+    "MIN_PACKAGE_BYTES",
     "CleanupReport",
     "EmptyPackage",
     "InvalidPackageId",
     "PackageExpired",
     "PackageNotFound",
     "PackageTooLarge",
+    "PackageTooSmall",
     "PendingPackage",
+    "StoreFull",
     "StoredPackage",
     "TransferStore",
     "TransferStoreError",
@@ -133,7 +165,6 @@ ENV_OVERRIDE = "QZ_TRANSFER_DIR"
 _APP_NAME = "quantized"
 _SUBDIR = "workbook-transfer"
 
-PACKAGE_SUFFIX = ".qzxfer"
 TEMP_PREFIX = ".qzxfer-tmp-"
 TEMP_SUFFIX = ".part"
 
@@ -144,50 +175,16 @@ DEFAULT_TTL_SECONDS = 24 * 3600
 MAX_PACKAGE_BYTES = 128_000_000
 MAX_TOTAL_BYTES = 512_000_000  # four max-size packages
 MAX_ENTRIES = 32
+# The client stores only packages over 8 M characters (smaller ones travel
+# inline on the clipboard), so 1 MB is an eighth of the smallest real one.
+MIN_PACKAGE_BYTES = 1_000_000
 TEMP_GRACE_SECONDS = 3600
 _ID_ATTEMPTS = 4
-_ID_RE = re.compile(r"[0-9a-f]{32}")
 
-
-class TransferStoreError(Exception):
-    """Base class: the store could not do what was asked."""
-
-
-class InvalidPackageId(TransferStoreError):
-    """The id is not a well-formed package id (never forms a path)."""
-
-
-class PackageTooLarge(TransferStoreError):
-    """The package exceeds the per-package byte cap."""
-
-
-class EmptyPackage(TransferStoreError):
-    """A zero-byte package was offered."""
-
-
-class PackageNotFound(TransferStoreError):
-    """No such package, or the token does not match (deliberately the same
-    answer, so a wrong token is not an existence oracle)."""
-
-
-class PackageExpired(TransferStoreError):
-    """The package existed, the token matched, but its lifetime is over."""
-
-
-@dataclass(frozen=True)
-class StoredPackage:
-    package_id: str
-    token: str
-    size: int
-    created_at: float
-    expires_at: float
-
-
-@dataclass(frozen=True)
-class CleanupReport:
-    expired: int = 0
-    stale: int = 0
-    corrupt: int = 0
+# One admission at a time per process, and the byte count of every write
+# still streaming in this process (temp path -> header + payload so far).
+_ADMIT_LOCK = threading.Lock()
+_IN_FLIGHT: dict[str, int] = {}
 
 
 def transfer_dir() -> Path:
@@ -198,10 +195,6 @@ def transfer_dir() -> Path:
     if override:
         return Path(override)
     return Path(platformdirs.user_cache_dir(_APP_NAME, appauthor=False)) / _SUBDIR
-
-
-def is_valid_package_id(package_id: object) -> bool:
-    return isinstance(package_id, str) and _ID_RE.fullmatch(package_id) is not None
 
 
 def _new_id() -> str:
@@ -242,12 +235,18 @@ class PendingPackage:
                 f"transfer package is over the {self._store.max_package_bytes}-byte limit"
             )
         self._fh.write(chunk)
+        with _ADMIT_LOCK:
+            _IN_FLIGHT[self._tmp] = HEADER_BYTES + self.size
 
     def commit(self) -> StoredPackage:
         store = self._store
         try:
             if self.size == 0:
                 raise EmptyPackage("transfer package is empty")
+            if self.size < store.min_package_bytes:
+                raise PackageTooSmall(
+                    f"transfer package is under the {store.min_package_bytes}-byte minimum"
+                )
             now = store.clock()
             token = store.new_token()
             expires = now + store.ttl_seconds
@@ -257,12 +256,11 @@ class PendingPackage:
             self._fh.flush()
             os.fsync(self._fh.fileno())
             self._fh.close()
-            store.make_room(HEADER_BYTES + self.size)
-            package_id = store.publish(self._tmp)
+            package_id = store.admit(self._tmp, HEADER_BYTES + self.size)
         except BaseException:
             self.abort()
             raise
-        self._done = True
+        self._done = True  # admit() already released the in-flight entry
         return StoredPackage(package_id, token, self.size, now, expires)
 
     def abort(self) -> None:
@@ -270,6 +268,8 @@ class PendingPackage:
         if self._done:
             return
         self._done = True
+        with _ADMIT_LOCK:
+            _IN_FLIGHT.pop(self._tmp, None)
         with contextlib.suppress(OSError):
             self._fh.close()
         with contextlib.suppress(OSError):
@@ -290,6 +290,7 @@ class TransferStore:
         max_package_bytes: int = MAX_PACKAGE_BYTES,
         max_total_bytes: int = MAX_TOTAL_BYTES,
         max_entries: int = MAX_ENTRIES,
+        min_package_bytes: int = MIN_PACKAGE_BYTES,
         new_id: Callable[[], str] = _new_id,
         new_token: Callable[[], str] = _new_token,
     ) -> None:
@@ -301,6 +302,7 @@ class TransferStore:
         self.max_package_bytes = max_package_bytes
         self.max_total_bytes = max_total_bytes
         self.max_entries = max_entries
+        self.min_package_bytes = min_package_bytes
         self.new_id = new_id
         self.new_token = new_token
 
@@ -328,6 +330,10 @@ class TransferStore:
             )
         if not data:
             raise EmptyPackage("transfer package is empty")
+        if len(data) < self.min_package_bytes:
+            raise PackageTooSmall(
+                f"transfer package is under the {self.min_package_bytes}-byte minimum"
+            )
         pending = self.begin()
         pending.write(data)
         return pending.commit()
@@ -386,18 +392,45 @@ class TransferStore:
                     expired += _remove(path)
         return CleanupReport(expired, stale, corrupt)
 
-    def make_room(self, incoming: int) -> None:
-        """Evict the oldest packages until one more file of ``incoming``
-        bytes fits both the byte and the entry-count bound."""
+    def admit(self, tmp: str, incoming: int) -> str:
+        """Publish a finished temp file of ``incoming`` bytes within bounds:
+        refuse past the entry cap, evict oldest by bytes, publish, then trim
+        any cross-process overshoot. Serialized per process (module doc)."""
+        with _ADMIT_LOCK:
+            _IN_FLIGHT.pop(tmp, None)
+            reserved = sum(_IN_FLIGHT.values())
+            self._make_room(incoming, reserved)
+            package_id = self.publish(tmp)
+            self._trim(keep=package_id)
+        return package_id
+
+    def _live(self) -> list[_Entry]:
+        """Unexpired packages, oldest first."""
+        now = self.clock()
         found = [_read_entry(p) for p in self._listing() if _is_package_name(p.name)]
-        entries = sorted(
-            (e for e in found if isinstance(e, _Entry)), key=lambda e: (e.created_at, e.package_id)
-        )
+        live = [e for e in found if isinstance(e, _Entry) and now < e.expires_at]
+        return sorted(live, key=lambda e: (e.created_at, e.package_id))
+
+    def _make_room(self, incoming: int, reserved: int) -> None:
+        """Refuse past the entry cap; else evict oldest by bytes so this file
+        AND this process's other in-flight writes (``reserved``) fit. The
+        reservation only ever evicts -- it never refuses: first to commit
+        wins, and ``incoming`` alone always fits an empty store."""
+        entries = self._live()
+        if len(entries) >= self.max_entries:
+            raise StoreFull(f"transfer store is full ({len(entries)} unexpired packages)")
         total = sum(HEADER_BYTES + e.size for e in entries)
-        while entries and (
-            total + incoming > self.max_total_bytes or len(entries) + 1 > self.max_entries
-        ):
+        while entries and total + incoming + reserved > self.max_total_bytes:
             oldest = entries.pop(0)
+            _remove(oldest.path)
+            total -= HEADER_BYTES + oldest.size
+
+    def _trim(self, keep: str) -> None:
+        entries = self._live()
+        total = sum(HEADER_BYTES + e.size for e in entries)
+        for oldest in [e for e in entries if e.package_id != keep]:
+            if total <= self.max_total_bytes:
+                break
             _remove(oldest.path)
             total -= HEADER_BYTES + oldest.size
 
@@ -445,10 +478,6 @@ class TransferStore:
             _remove(entry.path)
             raise PackageExpired("transfer package expired")
         return entry
-
-
-def _is_package_name(name: str) -> bool:
-    return name.endswith(PACKAGE_SUFFIX) and is_valid_package_id(name[: -len(PACKAGE_SUFFIX)])
 
 
 def _older_than(path: Path, now: float, seconds: float) -> bool:

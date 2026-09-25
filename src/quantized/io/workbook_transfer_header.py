@@ -1,9 +1,9 @@
 """On-disk header of one large-workbook transfer package (Group F).
 
 Split out of :mod:`quantized.io.workbook_transfer_store` (500-line module
-ceiling): this is the read-only half -- encode a header, and classify a
-package file by reading one back. It never writes or removes anything; the
-store owns every filesystem write.
+ceiling): the read-only half -- encode a header, classify a package file
+by reading one back -- plus the store's value types and errors. It never
+writes or removes anything; the store owns every filesystem write.
 
 A package file is a FIXED ``HEADER_BYTES`` block -- ASCII JSON padded with
 spaces and terminated by ``\\n`` -- followed by the payload bytes verbatim.
@@ -26,8 +26,21 @@ __all__ = [
     "HEADER_BYTES",
     "HEADER_FORMAT",
     "HEADER_VERSION",
+    "PACKAGE_SUFFIX",
+    "CleanupReport",
+    "EmptyPackage",
     "Entry",
+    "InvalidPackageId",
+    "PackageExpired",
+    "PackageNotFound",
+    "PackageTooLarge",
+    "PackageTooSmall",
+    "StoreFull",
+    "StoredPackage",
+    "TransferStoreError",
     "encode_header",
+    "is_package_name",
+    "is_valid_package_id",
     "read_entry",
     "token_digest",
 ]
@@ -36,6 +49,59 @@ HEADER_FORMAT = "quantized-transfer-store"
 HEADER_VERSION = 1
 HEADER_BYTES = 1024
 _DIGEST_RE = re.compile(r"[0-9a-f]{64}")
+PACKAGE_SUFFIX = ".qzxfer"
+_ID_RE = re.compile(r"[0-9a-f]{32}")
+
+
+class TransferStoreError(Exception):
+    """Base class: the store could not do what was asked."""
+
+
+class InvalidPackageId(TransferStoreError):
+    """The id is not a well-formed package id (never forms a path)."""
+
+
+class PackageTooLarge(TransferStoreError):
+    """The package exceeds the per-package byte cap."""
+
+
+class EmptyPackage(TransferStoreError):
+    """A zero-byte package was offered."""
+
+
+class PackageTooSmall(TransferStoreError):
+    """Smaller than any package the client ever stores (it copies inline
+    below 8 M characters) -- refused so junk cannot occupy entry slots."""
+
+
+class StoreFull(TransferStoreError):
+    """The entry cap is reached with unexpired packages, or in-flight writes
+    leave no room. Refused rather than evicting someone's live copy."""
+
+
+class PackageNotFound(TransferStoreError):
+    """No such package, or the token does not match (deliberately the same
+    answer, so a wrong token is not an existence oracle)."""
+
+
+class PackageExpired(TransferStoreError):
+    """The package existed, the token matched, but its lifetime is over."""
+
+
+@dataclass(frozen=True)
+class StoredPackage:
+    package_id: str
+    token: str
+    size: int
+    created_at: float
+    expires_at: float
+
+
+@dataclass(frozen=True)
+class CleanupReport:
+    expired: int = 0
+    stale: int = 0
+    corrupt: int = 0
 
 
 @dataclass(frozen=True)
@@ -48,6 +114,15 @@ class Entry:
     expires_at: float
     size: int
     token_sha256: str
+
+
+def is_valid_package_id(package_id: object) -> bool:
+    return isinstance(package_id, str) and _ID_RE.fullmatch(package_id) is not None
+
+
+def is_package_name(name: str) -> bool:
+    """``<32 hex>.qzxfer`` -- the only package names the store touches."""
+    return name.endswith(PACKAGE_SUFFIX) and is_valid_package_id(name[: -len(PACKAGE_SUFFIX)])
 
 
 def token_digest(token: str) -> str:

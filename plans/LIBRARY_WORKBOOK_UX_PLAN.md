@@ -3284,10 +3284,17 @@ back to the owner. No Library implementation is authorized by this pause.
   refusal (missing, expired, truncated, incompatible version, offline store)
   returns before `recordHistory`/`set`, pinned by reference-equality
   assertions. Eager bundle: 881,391 -> 881,369 B (-22 B, both measured
-  after `npm ci`). Left open, deliberately: Duplicate still builds with the
-  8 M-char inline bound, so a workbook between 8 M and 128 MB can be
-  copied/pasted across windows but not duplicated in place (unchanged PR I
-  behaviour; lifting it costs eager bytes in `store/workbookTransfer.ts`).
+  after `npm ci`). **Security-review round (same day):** the entry cap now
+  REFUSES (507) instead of evicting, so a burst of tiny stores can no longer
+  wipe a live copy; eviction is by bytes/age only, and packages under 1 MB
+  are refused (422). Admission (cap check, byte eviction, publish,
+  post-publish trim) runs under a process-wide lock that also counts this
+  process's in-flight writes. Across processes the documented bound is
+  transient: (P-1) packages over the byte cap until the last trim. Descriptor
+  tokens must match the server's exact shape (`[A-Za-z0-9_-]{43}`) before
+  any fetch; route body writes run off the event loop. Duplicate now
+  defaults to the stored-package bound (the clipboard paths pass the 8 M
+  inline bound explicitly), so it handles what Copy/Paste handle.
 - **2026-09-12 — Group X, Details rename / move / drag-drop parity (worktree
   agent):** L1.4's Details half. Verified first, and the plan's own
   description was understated: `LibraryDetails.tsx` lacked not just a rename

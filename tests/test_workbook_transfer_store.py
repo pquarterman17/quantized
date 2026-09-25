@@ -9,6 +9,7 @@ directory -- including a FORCED cleanup race rather than a hoped-for one
 
 from __future__ import annotations
 
+import contextlib
 import itertools
 import os
 import threading
@@ -29,6 +30,8 @@ from quantized.io.workbook_transfer_store import (
     PackageExpired,
     PackageNotFound,
     PackageTooLarge,
+    PackageTooSmall,
+    StoreFull,
     TransferStore,
     TransferStoreError,
     cleanup_transfer_dir,
@@ -51,6 +54,8 @@ class Clock:
 
 
 def _store(root: Path, clock: Clock | None = None, **kw: object) -> TransferStore:
+    # Tiny payloads keep these tests fast; the real minimum has its own tests.
+    kw.setdefault("min_package_bytes", 1)
     return TransferStore(root, clock=clock or Clock(), **kw)  # type: ignore[arg-type]
 
 
@@ -346,14 +351,134 @@ def test_total_byte_bound_evicts_oldest_first(tmp_path: Path) -> None:
     assert total <= store.max_total_bytes
 
 
-def test_entry_count_bound_evicts_oldest_first(tmp_path: Path) -> None:
+def test_entry_cap_refuses_instead_of_evicting_a_live_copy(tmp_path: Path) -> None:
+    """Security review, finding 1: 32 one-byte stores used to evict the
+    user's real package through the COUNT bound. Now the count bound
+    refuses; only bytes (and age) ever evict."""
     clock = Clock()
-    store = _store(tmp_path, clock, max_entries=2)
-    ids = []
-    for _ in range(4):
-        ids.append(store.put(PKG).package_id)
+    store = _store(tmp_path, clock)
+    real = store.put(b"r" * 5000)
+    for _ in range(mod.MAX_ENTRIES - 1):
         clock.now += 1
-    assert _files(tmp_path) == sorted(f"{i}{PACKAGE_SUFFIX}" for i in ids[-2:])
+        store.put(b"x")
+    with pytest.raises(StoreFull):
+        store.put(b"x")
+    assert store.get(real.package_id, real.token) == b"r" * 5000
+    assert len(_files(tmp_path)) == mod.MAX_ENTRIES  # no temp left behind
+    clock.now += DEFAULT_TTL_SECONDS  # the real one expires first ...
+    store.put(b"x")  # ... and expired entries never count against the cap
+
+
+def test_packages_under_the_minimum_are_refused_before_counting(tmp_path: Path) -> None:
+    store = TransferStore(tmp_path)  # the real default minimum
+    assert mod.MIN_PACKAGE_BYTES == 1_000_000
+    with pytest.raises(PackageTooSmall):
+        store.put(b"x")
+    pending = store.begin()
+    pending.write(b"x" * 10)
+    with pytest.raises(PackageTooSmall):
+        pending.commit()
+    assert _files(tmp_path) == []
+    ok = store.put(b"x" * mod.MIN_PACKAGE_BYTES)
+    assert ok.size == mod.MIN_PACKAGE_BYTES
+
+
+def test_forces_concurrent_commits_in_one_process_to_respect_the_byte_cap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Security review, finding 2: three commits racing in the threadpool
+    reached 10,120 B against a 6,072 B cap. Forced, not hoped for: every
+    thread parks INSIDE publish until all three are there -- which, with the
+    admission lock, can never happen, so the barrier times out and they run
+    one at a time. The directory total is measured right after EACH publish
+    (before any trim), so an unlocked admission is caught even if a later
+    trim would have repaired it."""
+    clock = Clock()
+    # 2024 B per file (1024 header + 1000): the cap holds two, never three
+    store = _store(tmp_path, clock, max_package_bytes=1000, max_total_bytes=5000)
+    pendings = []
+    for _ in range(3):
+        pending = store.begin()
+        pending.write(b"p" * 1000)
+        pendings.append(pending)
+    inside = threading.Barrier(3, timeout=0.5)
+    real_publish = store.publish
+    seen: list[int] = []
+
+    def publish_when_all_inside(tmp: str) -> str:
+        with contextlib.suppress(threading.BrokenBarrierError):
+            inside.wait()
+        package_id = real_publish(tmp)
+        seen.append(sum(p.stat().st_size for p in tmp_path.glob(f"*{PACKAGE_SUFFIX}")))
+        return package_id
+
+    monkeypatch.setattr(store, "publish", publish_when_all_inside)
+    errors: list[BaseException] = []
+
+    def run(pending: mod.PendingPackage) -> None:
+        try:
+            pending.commit()
+        except BaseException as exc:  # pragma: no cover - reported below
+            errors.append(exc)
+
+    threads = [threading.Thread(target=run, args=(p,)) for p in pendings]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert errors == []
+    assert len(seen) == 3
+    assert max(seen) <= store.max_total_bytes
+    assert len(_files(tmp_path)) == 2  # the oldest was evicted by bytes
+
+
+def test_in_flight_writes_count_against_the_byte_cap(tmp_path: Path) -> None:
+    clock = Clock()
+    store = _store(tmp_path, clock, max_package_bytes=1000, max_total_bytes=5000)
+    old = store.put(b"o" * 1000)
+    clock.now += 1
+    streaming = store.begin()
+    streaming.write(b"s" * 1000)  # still in flight: 2024 B spoken for
+    clock.now += 1
+    new = store.put(b"n" * 1000)
+    names = _files(tmp_path)
+    assert f"{old.package_id}{PACKAGE_SUFFIX}" not in names  # made room for both
+    assert f"{new.package_id}{PACKAGE_SUFFIX}" in names
+    done = streaming.commit()
+    total = sum(p.stat().st_size for p in tmp_path.glob(f"*{PACKAGE_SUFFIX}"))
+    assert total <= store.max_total_bytes
+    assert store.get(done.package_id, done.token) == b"s" * 1000
+
+
+def test_forces_a_cross_process_publish_inside_the_admission_window(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No lock spans processes. Forced: after this process's room check and
+    before its publish, ANOTHER process lands two packages (planted as raw
+    files -- the other process's own lock is not ours). The post-publish
+    trim brings the directory back under the byte cap, evicting the oldest
+    OTHER packages and never the one just published."""
+    clock = Clock()
+    store = _store(tmp_path, clock, max_package_bytes=1000, max_total_bytes=5000)
+    real_publish = store.publish
+
+    def other_process_lands_first(tmp: str) -> str:
+        for n in range(2):
+            header = mod.encode_header(
+                created_at=clock.now - 10 + n,
+                expires_at=clock.now + DEFAULT_TTL_SECONDS,
+                size=1000,
+                token="t",
+            )
+            (tmp_path / f"{n:032x}{PACKAGE_SUFFIX}").write_bytes(header + b"o" * 1000)
+        return real_publish(tmp)
+
+    monkeypatch.setattr(store, "publish", other_process_lands_first)
+    mine = store.put(b"m" * 1000)
+    total = sum(p.stat().st_size for p in tmp_path.glob(f"*{PACKAGE_SUFFIX}"))
+    assert total <= store.max_total_bytes
+    assert f"{0:032x}{PACKAGE_SUFFIX}" not in _files(tmp_path)  # the oldest other
+    assert store.get(mine.package_id, mine.token) == b"m" * 1000
 
 
 def test_bounds_that_cannot_hold_one_package_are_rejected(tmp_path: Path) -> None:
@@ -484,8 +609,9 @@ def test_two_stores_evicting_concurrently_tolerate_each_other(
 ) -> None:
     """Forced: B picks its eviction victim, then A removes it first."""
     clock = Clock()
-    a = _store(tmp_path, clock, max_entries=2)
-    b = _store(tmp_path, clock, max_entries=2)
+    # PKG files are 1076 B: this byte cap holds two, never three
+    a = _store(tmp_path, clock, max_package_bytes=100, max_total_bytes=3000)
+    b = _store(tmp_path, clock, max_package_bytes=100, max_total_bytes=3000)
     ids = itertools.count()
     oldest = a.put(PKG)
     clock.now += 1
