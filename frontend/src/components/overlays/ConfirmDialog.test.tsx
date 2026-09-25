@@ -121,7 +121,10 @@ describe("safety for irreversible confirms (P3.5 review)", () => {
     render(<ConfirmDialog />);
 
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveAttribute("aria-modal", "true");
+    // NOT `aria-modal` — it hid the app's live regions from assistive tech for
+    // as long as this dialog was open (R12). Modality is the background
+    // `inert` in lib/modalInert.ts now; modalInert.test.tsx pins that.
+    expect(dialog).not.toHaveAttribute("aria-modal");
     expect(dialog).toHaveAccessibleName("Delete it?");
     expect(dialog).toHaveAccessibleDescription("This cannot be undone.");
     // Cancel, not the destructive button: a stray Space/Enter must dismiss.

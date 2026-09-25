@@ -117,7 +117,11 @@ class Catch extends Component<CatchProps, CatchState> {
     if (this.state.failed) {
       return (
         <div className="qzk-lazy-fail" role="alert">
-          <span>⚠ {this.props.label} failed to load.</span>
+          {/* `data-live-region` (R12, lib/modalInert.ts): a load failure
+              raised while a dialog is open — the dialog it would have opened
+              over another one, say — is still announced; the Retry beside it
+              stays inert with the rest of the background until that closes. */}
+          <span data-live-region="">⚠ {this.props.label} failed to load.</span>
           <button type="button" onClick={this.props.onRetry}>
             ↻ Retry
           </button>
