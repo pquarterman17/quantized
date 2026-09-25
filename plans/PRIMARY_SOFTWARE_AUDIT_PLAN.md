@@ -4360,6 +4360,30 @@ covers a much smaller subset and guards focus on Analyze.
     container has Chromium only, so those rest on published support
     versions.
 
+    *Cross-browser coverage now runs in CI (2026-09-25, branch
+    `e2e-browsers`). Status: PENDING the first CI run, so not ticked.* The
+    new `e2e-xbrowser` job in `.github/workflows/e2e.yml` runs Firefox and
+    WebKit, one matrix leg each, over the engine-sensitive specs:
+    `modal-inert` (all 7 R12/R16 cases), `workshop-escape-ladder`,
+    `region-tool-escape`, `quick-figure-builder`, `library-tiles`,
+    `details-keyboard` and `keyboard-only`. That is 16 tests per engine; the
+    same 16 take 57 s in local Chromium under CI settings. What it will and
+    will not settle:
+    - Firefox and WebKit: focus refusal, the Tab trap, pointer blocking,
+      inert placement, paint order and the Escape ladder, all measured by
+      the real engine.
+    - The accessibility-tree assertions stay Chromium-only. They read the
+      tree over CDP, which the other engines lack, so they are skipped
+      there with an `ax-tree-unmeasured` annotation, not approximated.
+    - The WebKit leg is Playwright's Linux WebKit build, not macOS
+      WKWebView. It is the closest engine CI can run, not the shipped
+      embed. WebView2 is Chromium, so the existing `e2e` job covers its
+      engine but not the embed itself.
+    - The `aria-hidden` fallback is still exercised only by the unit test,
+      because every engine in CI has `inert`.
+    - Tick this item only once the job has gone green on a PR run, and
+      record that run here.
+
     *(b) The DOM-mutation gap, closed.* `7f0d0a25` walked only when the
     modal stack changed, so a node that mounted while a dialog was open
     stayed live. A MutationObserver (childList, subtree) is now attached
@@ -4515,7 +4539,9 @@ covers a much smaller subset and guards focus on Analyze.
 
     **Left open:**
     - Residual R15 below.
-    - The engines not measured, listed under (a).
+    - The engines not measured, listed under (a). Firefox and (Linux)
+      WebKit now run in CI through `e2e-xbrowser`; this stays open until
+      that job's first green run is recorded under (a).
     - Live regions INSIDE background panels, such as a workshop's
       `role="alert"`, are not exempt. They sit in an inert window beside
       interactive controls, so an alert raised there while a dialog is open

@@ -94,6 +94,37 @@ triple an already browser-heavy suite for marginal extra coverage, so:
 
 Run one project directly: `npx playwright test --project=chromium-125`.
 
+## Cross-browser projects (Firefox + WebKit)
+
+The desktop app is a pywebview window: WebView2 (Chromium) on Windows, but
+WKWebView (WebKit) on macOS. So the engine-sensitive journeys also run on
+Firefox and WebKit, as two opt-in projects, `firefox` and `webkit`, both at
+100% scale. They exist only when `QZ_E2E_XBROWSER=1` is set. Without it the
+project list is the three Chromium projects and nothing else, so a plain
+`npm run e2e` never asks for an engine that is not installed.
+
+By default they run `XBROWSER_SPECS` in `playwright.config.ts`, the
+dialog / modality / Escape / focus / keyboard journeys: `modal-inert`,
+`workshop-escape-ladder`, `region-tool-escape`, `quick-figure-builder`,
+`library-tiles`, `details-keyboard` and `keyboard-only`. Setting
+`QZ_E2E_XBROWSER_FULL=1` as well runs every spec on both engines.
+
+```bash
+npx playwright install firefox webkit          # once
+QZ_E2E_XBROWSER=1 npx playwright test --config=e2e/playwright.config.ts --project=firefox --project=webkit
+```
+
+`modal-inert.spec.ts` reads the accessibility tree over CDP, which only
+Chromium has. On the other engines those assertions are skipped and the test
+gets an `ax-tree-unmeasured` annotation. Every other assertion in the spec
+runs on all three engines.
+
+In CI this is the `e2e-xbrowser` job in `.github/workflows/e2e.yml`, one
+matrix leg per engine. A manual run (`workflow_dispatch`) with
+`xbrowser_full` ticked runs the full suite there. Linux WebKit is not the
+macOS WKWebView the desktop app ships, so a green `webkit` leg is strong
+evidence for WKWebView, not proof.
+
 ## Journeys shipped
 
 | # | Spec | Tag |
