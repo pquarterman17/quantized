@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { copyText } from "../../../lib/clipboard";
 import { useCalcHistory } from "../../../store/calcHistory";
-import { type CardSuccess, resultLine, useCard } from "./shared";
+import { parseXYPairs, type CardSuccess, resultLine, useCard } from "./shared";
 
 vi.mock("../../../lib/clipboard", () => ({ copyText: vi.fn() }));
 
@@ -30,6 +30,22 @@ beforeEach(() => {
   localStorage.clear();
   vi.mocked(copyText).mockReset();
   vi.mocked(copyText).mockResolvedValue(true);
+});
+
+describe("parseXYPairs", () => {
+  it("accepts comma-, space-, and tab-separated two-column rows", () => {
+    expect(parseXYPairs("1, 2\n3 4\n5\t6")).toEqual({
+      x: [1, 3, 5],
+      y: [2, 4, 6],
+    });
+  });
+
+  it("drops rows unless they contain exactly two finite numeric tokens", () => {
+    expect(parseXYPairs("1 2 999\n3\n4 nope\n5 6\n7 Infinity\n8 9 extra")).toEqual({
+      x: [5],
+      y: [6],
+    });
+  });
 });
 
 describe("useCard — request provenance", () => {

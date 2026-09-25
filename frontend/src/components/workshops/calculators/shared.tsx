@@ -116,7 +116,7 @@ export function parseXYPairs(text: string): { x: number[]; y: number[] } {
       .trim()
       .split(/[\s,]+/)
       .filter((p) => p.length > 0);
-    if (parts.length < 2) continue;
+    if (parts.length !== 2) continue;
     const a = Number(parts[0]);
     const b = Number(parts[1]);
     if (Number.isFinite(a) && Number.isFinite(b)) {
