@@ -68,6 +68,10 @@ export interface EquationValidateResult {
   functions?: string[];
   constants?: string[];
   error?: string;
+  /** Syntax-error span in CODE POINTS of the submitted text, end exclusive
+   *  (P2.7) — convert with lib/equationSpan before indexing a JS string. */
+  errorStart?: number;
+  errorEnd?: number;
 }
 
 /** Validate a custom fit equation. Always 200 with ok/params/error — the

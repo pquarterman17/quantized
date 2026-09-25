@@ -23,7 +23,7 @@ import re
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from .fit_equation import parse_equation
+from .fit_equation import EquationSyntaxError, parse_equation
 
 __all__ = ["apply_constraints"]
 
@@ -106,8 +106,10 @@ def apply_constraints(
             fcn, _ = parse_equation(rewritten)
             val = fcn(0.0, pf)
         except Exception as exc:
+            # A syntax error's column refers to the REWRITTEN text, not `expr`.
+            why = exc.detail if isinstance(exc, EquationSyntaxError) else exc
             raise ValueError(
-                f'failed to evaluate constraint for "{all_param_names[kk]}" ("{expr}"): {exc}'
+                f'failed to evaluate constraint for "{all_param_names[kk]}" ("{expr}"): {why}'
             ) from exc
         p_full[kk] = float(np.asarray(val, dtype=float).ravel()[0])
 

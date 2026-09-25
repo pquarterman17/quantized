@@ -98,6 +98,38 @@ def test_validate_unexpected_character() -> None:
     assert "Unexpected character" in out["error"]
 
 
+def test_validate_syntax_error_carries_its_span() -> None:
+    # P2.7: the editor underlines [errorStart, errorEnd) of the text it sent.
+    eqn = "y = a*foo(x) + b"
+    out = client.post(VALIDATE, json={"equation": eqn}).json()
+    assert out["ok"] is False
+    assert eqn[out["errorStart"]:out["errorEnd"]] == "foo"
+    assert "(column 7)" in out["error"]
+
+
+def test_validate_error_text_is_ascii() -> None:
+    out = client.post(VALIDATE, json={"equation": "a*x\u00b2"}).json()
+    assert out["ok"] is False
+    assert out["error"].isascii()
+    assert (out["errorStart"], out["errorEnd"]) == (3, 4)
+
+
+def test_validate_accepts_python_power_operator() -> None:
+    out = client.post(VALIDATE, json={"equation": "a*x**2 + b*x**-1"}).json()
+    assert out["ok"] is True
+    assert out["params"] == ["a", "b"]
+
+
+def test_fit_python_power_matches_caret() -> None:
+    x = list(np.linspace(0.5, 3.0, 40))
+    y = [1.5 * v**2 + 0.25 for v in x]
+    body = {"x": x, "y": y, "guesses": [1.0, 1.0]}
+    caret = client.post(FIT, json={"equation": "a*x^2 + c", **body}).json()
+    star = client.post(FIT, json={"equation": "a*x**2 + c", **body}).json()
+    assert caret["params"] == star["params"]
+    assert abs(star["params"][0] - 1.5) < 1e-5
+
+
 # ── fit ─────────────────────────────────────────────────────────────────────
 
 

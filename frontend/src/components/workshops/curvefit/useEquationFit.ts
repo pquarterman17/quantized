@@ -23,6 +23,7 @@ import {
   saveCustomModel,
   type CustomFitModel,
 } from "../../../lib/fitmodels";
+import { codePointSpanToUtf16, type TextSpan } from "../../../lib/equationSpan";
 import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -47,6 +48,9 @@ export interface EquationFitState {
   setEquation: (text: string) => void;
   status: ValidationStatus;
   validationError: string | null;
+  /** Where the syntax error is in `equation` (UTF-16 span), when the
+   *  validate route located it (P2.7); null for any other text. */
+  errorSpan: TextSpan | null;
   rows: EquationParamRow[];
   setRow: (index: number, field: "guess" | "min" | "max", value: string) => void;
   /** Hold (or release) one parameter at its guess (P2.7). */
@@ -120,6 +124,9 @@ export function useEquationFit(
   const [equation, setEquation] = useState(initial?.equation ?? "");
   const [status, setStatus] = useState<ValidationStatus>(initial ? "ok" : "idle");
   const [validationError, setValidationError] = useState<string | null>(null);
+  // The span is tied to the exact text it was reported for, so a keystroke
+  // (which re-validates after a debounce) can never mark the wrong characters.
+  const [errorAt, setErrorAt] = useState<{ text: string; span: TextSpan } | null>(null);
   const [rows, setRows] = useState<EquationParamRow[]>(initial ? rowsFromModel(initial) : []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -168,12 +175,15 @@ export function useEquationFit(
             setStatus("error");
             setSummary(null);
             setValidationError(v.error ?? "invalid equation");
+            const span = codePointSpanToUtf16(equation, v.errorStart, v.errorEnd);
+            setErrorAt(span ? { text: equation, span } : null);
           }
         })
         .catch((e: unknown) => {
           if (cancelled) return;
           setStatus("error");
           setSummary(null);
+          setErrorAt(null);
           setValidationError(e instanceof Error ? e.message : "validation unavailable");
         });
     }, debounceMs);
@@ -290,6 +300,7 @@ export function useEquationFit(
     setEquation,
     status,
     validationError,
+    errorSpan: errorAt && errorAt.text === equation ? errorAt.span : null,
     rows,
     setRow,
     setHeld,

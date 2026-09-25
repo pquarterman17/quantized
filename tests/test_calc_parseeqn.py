@@ -85,7 +85,7 @@ def test_parse_equation_rejects_dangling_operator() -> None:
 
 def test_parse_equation_rejects_adjacent_values() -> None:
     # "a b" would previously eval to just "a" (leftover stack) — now an error.
-    with pytest.raises(ValueError, match="malformed expression"):
+    with pytest.raises(ValueError, match='Missing operator before "b"'):
         parse_equation("a b")
 
 

@@ -11,6 +11,7 @@ import { DataTable } from "../../primitives/DataTable";
 import { Button } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
 import type { CustomFitModel } from "../../../lib/fitmodels";
+import EquationEditor from "./EquationEditor";
 import EquationParamTable from "./EquationParamTable";
 import EquationSummary from "./EquationSummary";
 import FindXYSection from "./FindXYSection";
@@ -60,27 +61,14 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
       <label className="qzk-field-lbl" style={{ marginTop: 10 }}>
         Equation
       </label>
-      <input
-        className="qz-input"
-        style={{ width: "100%", fontFamily: "var(--font-mono)" }}
-        placeholder="y = a*exp(-x/t) + c"
+      <EquationEditor
         value={eq.equation}
-        onChange={(e) => eq.setEquation(e.target.value)}
-        spellCheck={false}
+        onChange={eq.setEquation}
+        status={eq.status}
+        validationError={eq.validationError}
+        errorSpan={eq.errorSpan}
+        noParams={eq.rows.length === 0}
       />
-      <div className="qzk-ds-meta" style={{ marginTop: 6, minHeight: 16 }}>
-        {eq.status === "checking" && (
-          <span style={{ color: "var(--text-faint)" }}>checking…</span>
-        )}
-        {eq.status === "ok" && eq.rows.length === 0 && (
-          <span style={{ color: "var(--text-faint)" }}>
-            no free parameters — add at least one to fit
-          </span>
-        )}
-        {eq.status === "error" && (
-          <span style={{ color: "var(--danger)" }}>{eq.validationError}</span>
-        )}
-      </div>
 
       {eq.status === "ok" && eq.summary && eq.rows.length > 0 && (
         <EquationSummary summary={eq.summary} rows={eq.rows} runProblem={eq.runProblem} />

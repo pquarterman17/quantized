@@ -3361,7 +3361,25 @@ violin, bar, strip, or summary plots.
   when x is unused. Every-parameter-held, min > max and a held value outside
   its bounds are refused before the request (`lib/equationRows`) AND by the
   route (`check_param_vectors`), since `curve_fit` clips starts into the box.
-- [ ] Precise inline syntax feedback.
+- [x] Precise inline syntax feedback. (slice 2, 2026-09-25) Tokenizer,
+  grammar check and shunting-yard moved to `calc/fit_equation_syntax.py`.
+  Python `**` is a synonym of `^` (right-associative; `-x**2` is
+  `-(x**2)`, `2**-1` is 0.5). Every syntax error is an
+  `EquationSyntaxError` (a ValueError) with a code-point span into the
+  ORIGINAL text and an ASCII-only message ending "(column N)": unclosed /
+  unmatched parentheses, a function without `(`, a missing argument, a
+  second argument, a missing operand, a missing operator (`2x`, `a b`),
+  unknown function / called `x` or constant, a malformed number, an
+  unexpected character. `/equation/validate` returns `errorStart`/`errorEnd`;
+  `EquationEditor` underlines the span in the field (an aria-hidden overlay
+  tied to the exact text it was reported for) with the message under it,
+  converting code points to UTF-16 (`lib/equationSpan`). **Numeric change,
+  deliberate:** a unary minus AFTER an operator used to be encoded as
+  `0 - operand` and was silently wrong (`3*-2` gave -2, `2^-3` gave -2,
+  `3--2` gave 1, `2/-4*2` raised); it is now a prefix negation. A minus at
+  the start or after `(` keeps the historical encoding bit for bit, so every
+  previously-correct equation (and the golden set) is unchanged. Also: `x²`
+  is now an "unexpected character" error instead of a parameter named `x²`.
 - [ ] Save model with units/description.
 - [ ] Stretch: pretty LaTeX rendering while Python remains editable source.
 

@@ -77,3 +77,12 @@ def test_all_constrained_requires_empty_free() -> None:
 def test_size_mismatch_raises() -> None:
     with pytest.raises(ValueError, match="same length"):
         apply_constraints([1.0], [""], ["a", "b"])
+
+
+def test_constraint_syntax_error_omits_rewritten_text_column() -> None:
+    # P2.7: parser errors carry "(column N)", but a constraint is parsed
+    # AFTER name rewriting, so that column would point into text the user
+    # never wrote -- the message keeps the reason and drops the column.
+    with pytest.raises(ValueError, match=r'"\(" is never closed') as info:
+        apply_constraints([1.0], ["", "2*(p1"], ["a", "b"])
+    assert "column" not in str(info.value)

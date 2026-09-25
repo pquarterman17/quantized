@@ -3111,7 +3111,7 @@
         "type": "object"
       },
       "EquationValidateResponse": {
-        "description": "Live-validation shape (always HTTP 200). On success: the fit\nparameters plus the before-run summary (independent variable, whether it\nis used, the recognised functions/constants). On failure: ``error``.",
+        "description": "Live-validation shape (always HTTP 200). On success: the fit\nparameters plus the before-run summary (independent variable, whether it\nis used, the recognised functions/constants). On failure: ``error``, plus\nfor a syntax error the ``[errorStart, errorEnd)`` span it is about (code\npoints of the submitted text) so the editor can mark it inline.",
         "properties": {
           "constants": {
             "anyOf": [
@@ -3137,6 +3137,28 @@
               }
             ],
             "title": "Error"
+          },
+          "errorEnd": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorend"
+          },
+          "errorStart": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorstart"
           },
           "functions": {
             "anyOf": [

@@ -6264,13 +6264,19 @@ export interface components {
          * EquationValidateResponse
          * @description Live-validation shape (always HTTP 200). On success: the fit
          *     parameters plus the before-run summary (independent variable, whether it
-         *     is used, the recognised functions/constants). On failure: ``error``.
+         *     is used, the recognised functions/constants). On failure: ``error``, plus
+         *     for a syntax error the ``[errorStart, errorEnd)`` span it is about (code
+         *     points of the submitted text) so the editor can mark it inline.
          */
         EquationValidateResponse: {
             /** Constants */
             constants?: string[] | null;
             /** Error */
             error?: string | null;
+            /** Errorend */
+            errorEnd?: number | null;
+            /** Errorstart */
+            errorStart?: number | null;
             /** Functions */
             functions?: string[] | null;
             /** Ok */

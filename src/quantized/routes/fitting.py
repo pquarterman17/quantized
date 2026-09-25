@@ -19,6 +19,7 @@ from pydantic import BaseModel
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_bootstrap import bootstrap_fit, fit_posterior
 from quantized.calc.fit_equation import (
+    EquationSyntaxError,
     check_param_vectors,
     default_guesses,
     describe_equation,
@@ -203,7 +204,9 @@ class EquationFitRequest(BaseModel):
 class EquationValidateResponse(BaseModel):
     """Live-validation shape (always HTTP 200). On success: the fit
     parameters plus the before-run summary (independent variable, whether it
-    is used, the recognised functions/constants). On failure: ``error``."""
+    is used, the recognised functions/constants). On failure: ``error``, plus
+    for a syntax error the ``[errorStart, errorEnd)`` span it is about (code
+    points of the submitted text) so the editor can mark it inline."""
 
     ok: bool
     params: list[str]
@@ -212,6 +215,8 @@ class EquationValidateResponse(BaseModel):
     functions: list[str] | None = None
     constants: list[str] | None = None
     error: str | None = None
+    errorStart: int | None = None
+    errorEnd: int | None = None
 
 
 @router.post(
@@ -223,6 +228,12 @@ def equation_validate(req: EquationValidateRequest) -> EquationValidateResponse:
     """Validate a custom fit equation; 200 with ok/params[]/error (live UI)."""
     try:
         info = describe_equation(req.equation)
+    except EquationSyntaxError as exc:
+        # Same curated, ASCII-only parser text as below, plus its span.
+        # NOTE(codeql py/stack-trace-exposure) -- see the note below.
+        return EquationValidateResponse(
+            ok=False, params=[], error=str(exc), errorStart=exc.start, errorEnd=exc.end
+        )
     except (ValueError, ArithmeticError, IndexError) as exc:
         # Telling the user WHY their equation is rejected ("unknown function
         # 'expp'", "unbalanced parenthesis") is the whole point of a validate
