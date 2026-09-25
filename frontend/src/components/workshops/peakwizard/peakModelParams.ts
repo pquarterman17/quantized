@@ -13,9 +13,17 @@
 // a Voigt splits the detected FWHM into fwhm_g = fwhm_l = 0.61 x FWHM (the
 // Olivero-Longbothum total of that pair is ~1.0 x FWHM); the background
 // polynomial goes through the mean of the first and last 5 % of points.
+//
+// EDITS (slice 3): the table a user sees is `applyEdits(seedSetup(...),
+// fit)` — the seed for the current data, overlaid field by field with the
+// user's edits from the recipe's fit section (lib/peakRecipeFit.ts, keyed by
+// these same parameter names). `recordEdits` turns a table change back into
+// those field edits. So a stored edit survives any re-seed, and every field
+// the user never touched follows the data.
 
-export type ModelShape = "gaussian" | "lorentzian" | "pseudo_voigt" | "voigt";
-export type ModelBackground = "none" | "constant" | "linear" | "quadratic";
+import { paramKind, type ModelBackground, type ModelShape, type ParamEdit, type PeakRecipeFit } from "../../../lib/peakRecipeFit";
+
+export { paramKind, type ModelBackground, type ModelShape };
 
 export const MODEL_SHAPES: { value: ModelShape; label: string }[] = [
   { value: "gaussian", label: "Gaussian" },
@@ -37,7 +45,6 @@ const SHAPE_FIELDS: Record<ModelShape, readonly string[]> = {
   voigt: ["center", "height", "fwhm_g", "fwhm_l"],
 };
 const BG_TERMS: Record<ModelBackground, number> = { none: 0, constant: 1, linear: 2, quadratic: 3 };
-const WIDTHS = new Set(["fwhm", "fwhm_g", "fwhm_l"]);
 /** fwhm_g = fwhm_l = VOIGT_SPLIT x FWHM gives a Voigt of ~that FWHM. */
 const VOIGT_SPLIT = 0.61;
 
@@ -89,13 +96,6 @@ export function backgroundNote(degree: number): string | null {
   return degree > 2
     ? `background degree ${degree} has no equivalent here: quadratic is the highest this engine fits`
     : null;
-}
-
-/** Tie compatibility class: the backend joins only parameters of one kind. */
-export function paramKind(name: string): string {
-  const field = name.slice(name.indexOf(".") + 1);
-  if (name.startsWith("bg.")) return `bg${field.slice(1)}`;
-  return WIDTHS.has(field) ? "width" : field;
 }
 
 export function paramNames(shapes: readonly ModelShape[], background: ModelBackground): string[] {
@@ -182,37 +182,51 @@ export function seedSetup(
   return out;
 }
 
-const sameParam = (a: ModelParam, b: ModelParam) =>
-  a.value === b.value && a.vary === b.vary && a.min === b.min && a.max === b.max && a.tie === b.tie;
-
-/** Re-seed for new shapes/background. A parameter the user EDITED (it no
- *  longer equals what `prev`'s own seed gave it) keeps the edit; every other
- *  one takes the fresh seed — so switching the background re-seeds its
- *  coefficients AND the heights measured above it together, and the start
- *  stays consistent. A kept tie whose target vanished (or changed kind) is
- *  dropped. `peaks`, `x`, `y`, `linkMode` must be what `prev` was seeded from. */
-export function reshape(
-  prev: ModelSetup,
-  peaks: readonly SeedPeak[],
-  shapes: readonly ModelShape[],
-  background: ModelBackground,
-  x: readonly number[],
-  y: readonly number[],
-  linkMode = "None",
-): ModelSetup {
-  const fresh = seedSetup(peaks, shapes, background, x, y, linkMode);
-  const before = new Map(seedSetup(peaks, prev.shapes, prev.background, x, y, linkMode).params.map((p) => [p.name, p]));
-  const old = new Map(prev.params.map((p) => [p.name, p]));
-  const names = new Set(fresh.params.map((p) => p.name));
-  const params = fresh.params.map((p) => {
-    const kept = old.get(p.name);
-    const seeded = before.get(p.name);
-    if (!kept || (seeded && sameParam(kept, seeded))) return p;
-    const tieOk = kept.tie !== null && names.has(kept.tie) && paramKind(kept.tie) === paramKind(p.name);
-    return { ...kept, tie: tieOk ? kept.tie : null };
+/** The table the user sees: the fresh seed, overlaid field by field with the
+ *  user's edits. Because the seed is recomputed for the current shapes /
+ *  background / data, switching the background re-seeds its coefficients AND
+ *  the heights measured above it together, while an edited height or
+ *  coefficient keeps its edit. An edit whose parameter does not exist here
+ *  (a shape without eta, a peak this dataset lacks) waits unused; an edited
+ *  tie whose target is missing or of another kind is ignored (the seed's tie
+ *  stands) rather than sent to the backend to fail. */
+export function applyEdits(seeded: ModelSetup, fit: Pick<PeakRecipeFit, "params" | "shareVary">): ModelSetup {
+  const names = new Set(seeded.params.map((p) => p.name));
+  const params = seeded.params.map((p) => {
+    const e = Object.hasOwn(fit.params, p.name) ? fit.params[p.name] : undefined;
+    if (!e) return p;
+    const next: ModelParam = { ...p, ...e };
+    if (typeof e.tie === "string" && !(names.has(e.tie) && paramKind(e.tie) === paramKind(p.name) && e.tie !== p.name)) {
+      next.tie = p.tie;
+    }
+    return next;
   });
-  const shareVary = Object.fromEntries(Object.entries(prev.shareVary).filter(([n]) => names.has(n)));
-  return { ...fresh, params, shareVary };
+  const kept = Object.entries(fit.shareVary).filter(([n]) => names.has(n));
+  return { ...seeded, params, shareVary: { ...seeded.shareVary, ...Object.fromEntries(kept) } };
+}
+
+/** Fold a table change (`before` -> `after`, same names) into `edits`: every
+ *  field that changed becomes (or updates) that parameter's edit. Fields that
+ *  did not change are left as they were — never written as `undefined`. */
+export function recordEdits(
+  edits: Readonly<Record<string, ParamEdit>>,
+  before: readonly ModelParam[],
+  after: readonly ModelParam[],
+): Record<string, ParamEdit> {
+  const out: Record<string, ParamEdit> = { ...edits };
+  const prev = new Map(before.map((p) => [p.name, p]));
+  for (const p of after) {
+    const b = prev.get(p.name);
+    if (!b) continue;
+    const d: ParamEdit = {};
+    if (p.value !== b.value) d.value = p.value;
+    if (p.vary !== b.vary) d.vary = p.vary;
+    if (p.min !== b.min) d.min = p.min;
+    if (p.max !== b.max) d.max = p.max;
+    if (p.tie !== b.tie) d.tie = p.tie;
+    if (Object.keys(d).length > 0) out[p.name] = { ...out[p.name], ...d };
+  }
+  return out;
 }
 
 export function patchParam(setup: ModelSetup, name: string, patch: Partial<Omit<ModelParam, "name">>): ModelSetup {
@@ -278,6 +292,51 @@ function tieToFirst(setup: ModelSetup, fields: readonly string[], on: boolean): 
  *  exactly which ties it adds and removes. */
 export function setFwhmShared(setup: ModelSetup, on: boolean): ModelSetup {
   return tieToFirst(setup, WIDTH_FIELDS, on);
+}
+
+/** The table for these peaks and this recipe fit section: the seed (the
+ *  recipe's width link included), then the Share-FWHM flag when the user set
+ *  one, then the user's edits. Pure; what useModelFit shows and sends. */
+export function buildSetup(
+  peaks: readonly SeedPeak[],
+  fit: PeakRecipeFit,
+  model: { shape: string; bgDegree: number; linkMode: string },
+  x: readonly number[],
+  y: readonly number[],
+): ModelSetup {
+  const shapes = peaks.map((_, i) => fit.shapes[i] ?? shapeFromGlobal(model.shape));
+  const bg = fit.background ?? backgroundFromDegree(model.bgDegree);
+  let seeded = seedSetup(peaks, shapes, bg, x, y, model.linkMode);
+  if (fit.shareFwhm !== null) seeded = setFwhmShared(seeded, fit.shareFwhm);
+  return applyEdits(seeded, fit);
+}
+
+/** The Share-FWHM toggle as a recipe change. It sets the FLAG — the ties
+ *  themselves are never recorded as edits (a later width-link change would
+ *  otherwise be overridden by them), and any tie edit on a width the toggle
+ *  governs steps aside so the toggle does what it says. A root the user had
+ *  fixed is made to vary while shared and its fixed state restored on
+ *  unshare (`shareVary`), as before. `setup` is the table shown now. */
+export function withShareFwhm(fit: PeakRecipeFit, setup: ModelSetup, on: boolean): PeakRecipeFit {
+  const params: Record<string, ParamEdit> = { ...fit.params };
+  const shareVary = { ...fit.shareVary };
+  for (const [root, ...rest] of groups(setup.params, WIDTH_FIELDS)) {
+    for (const p of rest) {
+      const e = params[p.name];
+      if (!e || !("tie" in e)) continue;
+      const { tie: _dropped, ...kept } = e;
+      if (Object.keys(kept).length > 0) params[p.name] = kept;
+      else delete params[p.name];
+    }
+    if (on && !root.vary && root.tie === null && !(root.name in shareVary)) {
+      shareVary[root.name] = false;
+      params[root.name] = { ...params[root.name], vary: true };
+    } else if (!on && root.name in shareVary) {
+      params[root.name] = { ...params[root.name], vary: shareVary[root.name] };
+      delete shareVary[root.name];
+    }
+  }
+  return { ...fit, shareFwhm: on, params, shareVary };
 }
 
 /** True when every peak's width is tied to its field's first-peak root. */

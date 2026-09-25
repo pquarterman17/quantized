@@ -47,7 +47,11 @@ export function sniffRecipeKind(parsed: unknown): RecipeKind | null {
   if (parsed.version === 1 && Array.isArray(parsed.steps)) {
     return "analysis";
   }
-  if (parsed.version === 1 && isObj(parsed.baseline) && isObj(parsed.model) && isObj(parsed.find)) {
+  // Peak recipes are versioned (v2 added the model-fit section, audit P2.4
+  // slice 3): ANY numeric version routes here, so the peak parser — not this
+  // sniffer — decides, and a newer app's file is refused by its version
+  // number ("unsupported version 3") instead of "not a recognised recipe".
+  if (typeof parsed.version === "number" && isObj(parsed.baseline) && isObj(parsed.model) && isObj(parsed.find)) {
     return "peak";
   }
   if (parsed.version === 1 && typeof parsed.equation === "string" && Array.isArray(parsed.params)) {

@@ -44,10 +44,13 @@ import {
   isPeakRecipe,
   loadRecipes as loadPeakRecipes,
   PEAK_LINK_MODES,
+  PEAK_RECIPE_VERSION,
   PEAK_SHAPES,
   type PeakRecipe,
   saveRecipe as savePeakRecipe,
+  unreadablePeakRecipeNames,
 } from "./peakwizard";
+import { DEFAULT_FIT, parseRecipeFit } from "./peakRecipeFit";
 import { dropEntry, moveEntry } from "./recipeIndex";
 import type { RecipeKind, RecipeRef } from "./recipeLibrary";
 import { uniqueTemplateName } from "./uniqueName";
@@ -86,7 +89,14 @@ interface Adapter {
    *  see RECIPE_CAPABILITIES for the resulting `canImportExport` matrix. */
   serialize?: (record: NamedRecord) => string;
   parse?: (text: string) => NamedRecord;
+  /** Names held by stored records `load` cannot return (peak recipes a newer
+   *  app wrote, P2.4 slice 3). They count as TAKEN when deduping a name, so
+   *  a rename / duplicate / import never lands on — and replaces — one. */
+  hidden?: () => readonly string[];
 }
+
+/** Every name a new record must not take: the readable ones and the hidden. */
+const takenNames = (a: Adapter): string[] => [...a.load().map((r) => r.name), ...(a.hidden?.() ?? [])];
 
 // ── P3.5 import/export for the three that had none ─────────────────────────
 //
@@ -164,14 +174,29 @@ const PEAK_REPORT_MODES = ["fit", "integrate"] as const;
  *                   max_peaks integer >= 1
  *    model          shape in PEAK_SHAPES; linkMode in PEAK_LINK_MODES;
  *                   bgDegree integer >= 0
- *    report         integrate: regionWidth > 0 (a width in x FWHM) */
+ *    report         integrate: regionWidth > 0 (a width in x FWHM)
+ *    fit (v2)       lib/peakRecipeFit's `parseRecipeFit`; a v1 file gets
+ *                   DEFAULT_FIT; a version above PEAK_RECIPE_VERSION is
+ *                   refused by number */
 function parsePeakRecipeFile(text: string): NamedRecord {
   const o = parseJsonRecord(text, "peak recipe");
-  if (!isPeakRecipe(o)) throw new Error("not a valid peak recipe file");
-  requireName(o, "peak recipe");
   const bad = (field: string): never => {
     throw new Error(`not a valid peak recipe file (${field})`);
   };
+  if (typeof o.version === "number" && o.version > PEAK_RECIPE_VERSION) bad(`unsupported version ${o.version}`);
+  if (!isPeakRecipe(o)) throw new Error("not a valid peak recipe file");
+  requireName(o, "peak recipe");
+  // v2's model-fit section (P2.4 slice 3): one validator for storage and file
+  // (lib/peakRecipeFit), rebuilt from known fields; a v1 file migrates to the
+  // default, which is exactly how the wizard ran every v1 recipe.
+  let fit = DEFAULT_FIT;
+  if (o.version === 2) {
+    try {
+      fit = parseRecipeFit(o.fit);
+    } catch (e) {
+      bad(e instanceof Error ? e.message : "fit");
+    }
+  }
   const range = o.range as Record<string, unknown>;
   if (!finiteOrNull(range.lo) || !finiteOrNull(range.hi)) bad("range");
   if (range.lo !== null && range.hi !== null && (range.lo as number) > (range.hi as number)) bad("range: lo > hi");
@@ -198,7 +223,7 @@ function parsePeakRecipeFile(text: string): NamedRecord {
   if (!finite(report.regionWidth)) bad("report.regionWidth");
   if (report.mode === "integrate" && !positive(report.regionWidth)) bad("report.regionWidth");
   const record: PeakRecipe = {
-    version: 1,
+    version: 2,
     name: o.name as string,
     range: { lo: range.lo as number | null, hi: range.hi as number | null },
     baseline: {
@@ -220,6 +245,7 @@ function parsePeakRecipeFile(text: string): NamedRecord {
       constrain: model.constrain as boolean,
     },
     report: { mode: report.mode as PeakRecipe["report"]["mode"], regionWidth: report.regionWidth as number },
+    fit,
   };
   return record;
 }
@@ -320,6 +346,7 @@ const ADAPTERS: Record<NameKeyedKind, Adapter> = {
     remove: (name) => void deletePeakRecipe(name),
     serialize: serializeRecord,
     parse: parsePeakRecipeFile,
+    hidden: unreadablePeakRecipeNames,
   },
   graph: {
     load: loadGraphTemplates,
@@ -363,7 +390,7 @@ export function renameNameKeyed(kind: NameKeyedKind, from: string, to: string): 
   const record = all.find((r) => r.name === from);
   if (!record) return { ok: false, reason: `"${from}" no longer exists` };
 
-  const taken = new Set(all.map((r) => r.name).filter((n) => n !== from));
+  const taken = new Set(takenNames(adapter).filter((n) => n !== from));
   const final = uniqueTemplateName(wanted, taken);
   adapter.save({ ...record, name: final }); // guard 2: save first…
   adapter.remove(from); // …then drop the old key
@@ -380,7 +407,7 @@ export function duplicateNameKeyed(kind: NameKeyedKind, name: string): RecipeOpR
   const all = adapter.load();
   const record = all.find((r) => r.name === name);
   if (!record) return { ok: false, reason: `"${name}" no longer exists` };
-  const final = uniqueTemplateName(`${name} copy`, new Set(all.map((r) => r.name)));
+  const final = uniqueTemplateName(`${name} copy`, new Set(takenNames(adapter)));
   adapter.save({ ...record, name: final });
   return { ok: true, name: final };
 }
@@ -419,7 +446,7 @@ export function importNameKeyed(kind: NameKeyedKind, text: string): RecipeOpResu
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "not a valid recipe file" };
   }
-  const final = uniqueTemplateName(parsed.name, new Set(adapter.load().map((r) => r.name)));
+  const final = uniqueTemplateName(parsed.name, new Set(takenNames(adapter)));
   adapter.save({ ...parsed, name: final });
   // Every `save*` swallows a `localStorage.setItem` failure (quota, private
   // mode) and keeps the record session-local at best -- so a bare "saved"

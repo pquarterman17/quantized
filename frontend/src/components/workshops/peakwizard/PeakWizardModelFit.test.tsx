@@ -161,6 +161,18 @@ describe("Peak Analyzer — model engine setup (step 3)", () => {
     const options = within(tie).getAllByRole("option").map((o) => o.getAttribute("value"));
     expect(options).toEqual(["", "p1.fwhm"]);
   });
+
+  it("a peak's × in the model table deletes it; the other peak keeps its edit under its new number (slice 3)", async () => {
+    await findTwoPeaks();
+    step("Model");
+    fireEvent.change(screen.getByRole("textbox", { name: "#2 center min" }), { target: { value: "3.9" } });
+    fireEvent.click(screen.getByRole("button", { name: "remove peak 1" }));
+    expect(screen.queryByRole("combobox", { name: "peak 2 shape" })).not.toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "#1 center start" })).toHaveValue("4");
+    expect(screen.getByRole("textbox", { name: "#1 center min" })).toHaveValue("3.9");
+    step("Find peaks");
+    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+  });
 });
 
 describe("Peak Analyzer — model fit results (step 4)", () => {

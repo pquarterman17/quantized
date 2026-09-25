@@ -9,10 +9,13 @@
 import { type RefObject, useMemo } from "react";
 import type uPlot from "uplot";
 
+import { fullPlottedX } from "../../lib/fitselectionActions";
 import type { PlotPayload } from "../../lib/plotdata";
 import { axisZoneAt, type AxisZone, nearestIndex, pickNearestSeries } from "../../lib/plotHitTest";
 import { buildPlotMenu, type LegendCorner, type MenuSeries } from "../../lib/plotMenu";
+import { plotRangeSelection } from "../../lib/plotRangeSelection";
 import type { MarkerShape } from "../../lib/types";
+import { requestPeakFitRange } from "../../store/peakFitRange";
 import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
 import { askParams } from "../overlays/ParamDialog";
@@ -175,6 +178,26 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       void createAnnotationFromDialog({ x: dataX, y: dataY, title: "Add text", flipToPointer: true });
     };
 
+    // Audit P2.4 "Peak Fitting ▸ Fit this range": the selected x-range (Gadget
+    // band / ∫ region / selected rows — lib/plotRangeSelection) handed to the
+    // Peak Analyzer through store/peakFitRange, which applies it and finds
+    // the peaks. Same open-time snapshot as everything else in this menu.
+    const activeDs = st.datasets.find((d) => d.id === st.activeId) ?? null;
+    const peakRange = plotRangeSelection({
+      qfitRoi: st.qfitRoi,
+      qfitRoiFor: st.qfitRoiFor,
+      integral: st.integral,
+      selection: st.selection,
+      activeId: st.activeId,
+      xKey: st.xKey,
+      plottedX: () => (activeDs ? fullPlottedX(activeDs.data, st.xKey) : null),
+    });
+    const fitPeakRange = () => {
+      if (!peakRange || !activeDs) return;
+      requestPeakFitRange(activeDs.id, peakRange.lo, peakRange.hi);
+      st.setPeakWizardOpen(true);
+    };
+
     return buildPlotMenu({
       series,
       zone,
@@ -219,6 +242,8 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       copyData: actions.copyData,
       setTool: st.setPlotTool,
       addTextHere,
+      peakRange,
+      fitPeakRange,
     });
     // Single-shot menu (every action calls onClose): rebuild only if the anchor
     // moves. The store snapshot is captured at open time — correct because a

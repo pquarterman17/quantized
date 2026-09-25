@@ -33,6 +33,7 @@ import { fitStepParams } from "../lib/fitselection";
 import { computeCursorReadout } from "../lib/gadgetCursors";
 import { lit } from "../lib/macro";
 import type { Measurement } from "../lib/measure";
+import type { RegionContext } from "../lib/plotRangeSelection";
 import { effectiveChannels } from "../lib/plotdata";
 import {
   firstVisiblePlottedChannel,
@@ -56,6 +57,8 @@ export interface GadgetSlice {
   // live drag preview never does (auto-committing every move would spam the
   // recalc graph). Cleared on tool switch, Escape, dataset change, or ✕.
   qfitRoi: [number, number] | null;
+  /** The dataset + X column `qfitRoi` was drawn on (lib/plotRangeSelection). */
+  qfitRoiFor: RegionContext | null;
   qfitModel: string;
   qfitBusy: boolean;
   qfitResult: CalcResult | null;
@@ -108,6 +111,7 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
 
   return {
     qfitRoi: null,
+    qfitRoiFor: null,
     qfitModel: "Linear",
     qfitBusy: false,
     qfitResult: null,
@@ -125,7 +129,13 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
 
     // ── Quick-fit gadget (#33) ────────────────────────────────────────────────
     setQfitRoi: (roi) => {
-      set({ qfitRoi: roi });
+      // Stamp WHICH dataset + X column the band was drawn on (a re-set of the
+      // same band keeps its stamp), so "Fit this range" can refuse a stale one.
+      set((s) => ({
+        qfitRoi: roi,
+        qfitRoiFor: roi === null ? null
+          : roi === s.qfitRoi && s.qfitRoiFor ? s.qfitRoiFor : { datasetId: s.activeId, xKey: s.xKey },
+      }));
       if (qfitTimer) {
         clearTimeout(qfitTimer);
         qfitTimer = null;

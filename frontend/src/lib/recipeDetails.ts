@@ -175,6 +175,19 @@ function analysisDetails(row: RecipeDescriptor, t: AnalysisTemplate): RecipeDeta
   return { fields, sections: [{ title: "Steps", items: steps }, { title: "Outputs", items: [...t.outputs] }] };
 }
 
+/** "mixed-shape model, 2 parameter edits" — what the v2 fit section adds. */
+function fitEngineText(fit: PeakRecipe["fit"]): string {
+  if (fit.engine === "classic") return "classic multi-peak";
+  const edits = Object.keys(fit.params).length;
+  const shapes = fit.shapes.filter((s) => s !== null).length;
+  const extras = [
+    edits ? `${edits} parameter edit${edits === 1 ? "" : "s"}` : null,
+    shapes ? `${shapes} per-peak shape${shapes === 1 ? "" : "s"}` : null,
+    fit.background ? `${fit.background} background` : null,
+  ].filter(Boolean);
+  return ["mixed-shape model", ...extras].join(", ");
+}
+
 function peakDetails(row: RecipeDescriptor, r: PeakRecipe): RecipeDetails {
   const fields = commonFields(row, null, undefined);
   fields.push(
@@ -186,6 +199,7 @@ function peakDetails(row: RecipeDescriptor, r: PeakRecipe): RecipeDetails {
       mono: true,
     },
     { label: "Model", value: `${r.model.shape}, bg degree ${r.model.bgDegree}, link ${r.model.linkMode}`, mono: true },
+    { label: "Fit engine", value: fitEngineText(r.fit) },
     { label: "Report mode", value: r.report.mode },
   );
   fields.push(actionsField(row.kind));

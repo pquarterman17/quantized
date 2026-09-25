@@ -8,8 +8,10 @@
 
 import type { ContextMenuItem, Swatch } from "../components/overlays/ContextMenu";
 import { buildMenuItems, curveActions } from "./contextActions";
+import { fmtNum } from "./format";
 import { MARKER_SHAPES } from "./markers";
 import type { AxisZone } from "./plotHitTest";
+import { NO_RANGE_REASON, type PlotRange } from "./plotRangeSelection";
 import type { AxisScale, LineStyle, MarkerShape, SeriesStyle } from "./types";
 
 export type LegendCorner = "ne" | "nw" | "se" | "sw";
@@ -90,6 +92,13 @@ export interface PlotMenuContext {
 
   // ── tools (preserve the pre-existing axes-menu tool activations) ──
   setTool: (tool: "integ" | "fwhm" | "qfit" | "measure") => void;
+
+  /** Audit P2.4: the selected x-range "Peak Fitting ▸ Fit this range" fits
+   *  (lib/plotRangeSelection), or null — the entry is then disabled with
+   *  `NO_RANGE_REASON` as its tooltip. */
+  peakRange: PlotRange | null;
+  /** Open the Peak Analyzer on `peakRange` with its peaks found. */
+  fitPeakRange: () => void;
 
   /** UX-R6 manual annotation entry point: place a new text annotation at the
    *  DATA coordinates under the cursor (the caller has already converted the
@@ -270,6 +279,18 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
       { label: "Peak / FWHM", run: () => ctx.setTool("fwhm") },
       { label: "Gadget (fit/stats/FFT/cursors)", run: () => ctx.setTool("qfit") },
       { label: "Measure (Δx, Δy)", run: () => ctx.setTool("measure") },
+    ],
+  });
+  const r = ctx.peakRange;
+  items.push({
+    label: "Peak Fitting",
+    submenu: [
+      {
+        label: "Fit this range",
+        run: ctx.fitPeakRange,
+        disabled: !r,
+        title: r ? `Peak Analyzer on ${fmtNum(r.lo)} – ${fmtNum(r.hi)} (the ${r.source})` : NO_RANGE_REASON,
+      },
     ],
   });
   items.push({ separator: true });

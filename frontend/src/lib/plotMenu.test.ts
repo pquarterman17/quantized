@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { ContextMenuItem } from "../components/overlays/ContextMenu";
 import { buildPlotMenu, type MenuSeries, type PlotMenuContext } from "./plotMenu";
+import { NO_RANGE_REASON } from "./plotRangeSelection";
 
 /** A plain action/submenu label, or a symbolic marker for structural entries. */
 function label(it: ContextMenuItem): string {
@@ -68,6 +69,8 @@ function makeCtx(over: Partial<PlotMenuContext> = {}): PlotMenuContext {
     copyData: vi.fn(),
     setTool: vi.fn(),
     addTextHere: vi.fn(),
+    peakRange: null,
+    fitPeakRange: vi.fn(),
     ...over,
   };
 }
@@ -267,5 +270,28 @@ describe("buildPlotMenu — Copy figure (vector) follows ctx.copyFigureSvg", () 
     expect(item).toBeTruthy();
     if (item && "run" in item) item.run();
     expect(copyFigureSvg).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("buildPlotMenu — Peak Fitting ▸ Fit this range (audit P2.4)", () => {
+  const fitItem = (items: ContextMenuItem[]) => {
+    const it = submenuOf(items, "Peak Fitting").find((i) => label(i) === "Fit this range");
+    if (!it || !("run" in it)) throw new Error("no Fit this range entry");
+    return it;
+  };
+
+  it("is disabled with the reason when no x-range is selected", () => {
+    const it = fitItem(buildPlotMenu(makeCtx()));
+    expect(it.disabled).toBe(true);
+    expect(it.title).toBe(NO_RANGE_REASON);
+  });
+
+  it("is enabled for a selected range, names it, and dispatches ctx.fitPeakRange", () => {
+    const fitPeakRange = vi.fn();
+    const it = fitItem(buildPlotMenu(makeCtx({ fitPeakRange, peakRange: { lo: 35, hi: 45, source: "gadget region" } })));
+    expect(it.disabled).toBe(false);
+    expect(it.title).toMatch(/35.*45.*gadget region/);
+    it.run();
+    expect(fitPeakRange).toHaveBeenCalledTimes(1);
   });
 });

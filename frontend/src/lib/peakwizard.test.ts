@@ -9,11 +9,15 @@ import {
   deleteRecipe,
   expandToFullRows,
   loadRecipes,
+  loadRecipesChecked,
   regionsFromPeaks,
   saveRecipe,
   subtractBaseline,
+  unreadablePeakRecipeNames,
+  upgradePeakRecipe,
   type PeakRecipe,
 } from "./peakwizard";
+import { DEFAULT_FIT } from "./peakRecipeFit";
 
 describe("cutRange", () => {
   const x = [1, 2, 3, 4, 5];
@@ -108,5 +112,92 @@ describe("recipe persistence", () => {
     expect(loadRecipes()).toEqual([]);
     localStorage.setItem("qz.peakRecipes", JSON.stringify([recipe("ok"), { version: 2 }, null]));
     expect(loadRecipes().map((r) => r.name)).toEqual(["ok"]);
+  });
+});
+
+// Audit P2.4 slice 3: v2 adds the model-fit section.
+describe("recipe v2 — migration, round trip, fail closed", () => {
+  beforeEach(() => localStorage.clear());
+
+  const v1 = (name: string): Record<string, unknown> => {
+    const r: Record<string, unknown> = { ...DEFAULT_RECIPE, version: 1, name };
+    delete r.fit;
+    return r;
+  };
+  const edited: PeakRecipe = {
+    ...DEFAULT_RECIPE,
+    name: "edited",
+    fit: {
+      engine: "classic",
+      shapes: ["voigt", null],
+      background: "none",
+      params: { "p0.center": { min: 35.5, max: 36.5 }, "p1.fwhm": { tie: "p0.fwhm_g" } },
+      shareFwhm: null,
+      shareVary: { "p0.fwhm_g": false },
+    },
+  };
+
+  it("a stored v1 recipe loads as v2 with the default fit (the engine as before), silently", () => {
+    localStorage.setItem("qz.peakRecipes", JSON.stringify([v1("old")]));
+    const { recipes, warnings } = loadRecipesChecked();
+    expect(warnings).toEqual([]);
+    expect(recipes).toEqual([{ ...DEFAULT_RECIPE, name: "old" }]);
+    expect(recipes[0].fit).toEqual(DEFAULT_FIT);
+  });
+
+  it("a v2 recipe round-trips exactly through storage", () => {
+    saveRecipe(edited);
+    expect(loadRecipes()).toEqual([edited]);
+  });
+
+  it("skips a structurally bad fit section or a newer version with a named warning — never deleting either", () => {
+    const badFit = { ...edited, name: "bad", fit: { ...edited.fit, engine: "turbo" } };
+    const future = { ...edited, name: "future", version: 3 };
+    localStorage.setItem("qz.peakRecipes", JSON.stringify([badFit, future, v1("ok")]));
+    const { recipes, warnings } = loadRecipesChecked();
+    expect(recipes.map((r) => r.name)).toEqual(["ok"]);
+    expect(warnings.map((w) => w.message)).toEqual([
+      'skipped saved peak recipe "bad": fit.engine: not one of model / classic',
+      'skipped saved peak recipe "future": unsupported version 3 (this app reads up to 2)',
+    ]);
+    expect(new Set(warnings.map((w) => w.key)).size).toBe(2);
+    saveRecipe({ ...DEFAULT_RECIPE, name: "new" });
+    deleteRecipe("ok");
+    deleteRecipe("future"); // not a readable record: kept
+    const raw = JSON.parse(localStorage.getItem("qz.peakRecipes")!) as { name: string }[];
+    expect(raw.map((r) => r.name)).toEqual(["bad", "future", "new"]); // carried through untouched
+    expect(unreadablePeakRecipeNames()).toEqual(["bad", "future"]);
+  });
+
+  // Review #7: an unreadable record's name is TAKEN.
+  it("refuses to save over an unreadable record, writing nothing", () => {
+    localStorage.setItem("qz.peakRecipes", JSON.stringify([{ ...edited, name: "future", version: 3 }]));
+    const before = localStorage.getItem("qz.peakRecipes");
+    expect(() => saveRecipe({ ...DEFAULT_RECIPE, name: "future" })).toThrow(/"future" could not be read/);
+    expect(localStorage.getItem("qz.peakRecipes")).toBe(before);
+  });
+
+  // Review #2: what the table lets a user type must not make a recipe vanish.
+  it("loads a stored edit with min > max by dropping just those bounds, with a warning", () => {
+    const stored = { ...edited, name: "loose", fit: { ...edited.fit, params: { "p0.center": { value: 36, min: 2, max: 1 }, "p1.fwhm": { tie: "p0.fwhm_g" } } } };
+    localStorage.setItem("qz.peakRecipes", JSON.stringify([stored]));
+    const { recipes, warnings } = loadRecipesChecked();
+    expect(recipes.map((r) => r.name)).toEqual(["loose"]);
+    expect(recipes[0].fit.params).toEqual({ "p0.center": { value: 36 }, "p1.fwhm": { tie: "p0.fwhm_g" } });
+    expect(warnings.map((w) => w.message)).toEqual(['saved peak recipe "loose": fit.params["p0.center"]: min > max (bounds dropped)']);
+  });
+
+  // Review #5: a remap can never write a name the loader refuses.
+  it("loads a stored edit past the peak cap by dropping that edit, with a warning", () => {
+    const stored = { ...edited, name: "big", fit: { ...edited.fit, params: { "p500.center": { value: 1 }, "p1.center": { tie: "p600.center" }, "p0.eta": { value: 0.3 } } } };
+    localStorage.setItem("qz.peakRecipes", JSON.stringify([stored]));
+    const { recipes, warnings } = loadRecipesChecked();
+    expect(recipes[0].fit.params).toEqual({ "p1.center": {}, "p0.eta": { value: 0.3 } });
+    expect(warnings).toHaveLength(2);
+  });
+
+  it("upgradePeakRecipe explains a non-recipe", () => {
+    expect(() => upgradePeakRecipe({ version: 2 })).toThrow("not a peak recipe");
+    expect(() => upgradePeakRecipe({ ...edited, fit: undefined })).toThrow(/^fit: missing/);
   });
 });

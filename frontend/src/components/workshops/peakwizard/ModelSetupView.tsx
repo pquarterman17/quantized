@@ -67,6 +67,7 @@ export default function ModelSetupView({ w }: { w: PeakWizardState }) {
                   <th>#</th>
                   <th>center</th>
                   <th>shape</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -81,6 +82,16 @@ export default function ModelSetupView({ w }: { w: PeakWizardState }) {
                         value={m.setup.shapes[i] ?? "gaussian"}
                         onChange={(e) => m.setShape(i, e.target.value as ModelShape)}
                       />
+                    </td>
+                    <td>
+                      <button
+                        className="qz-btn qz-ghost qz-sm"
+                        aria-label={`remove peak ${i + 1}`}
+                        title="remove this peak from the model (its parameter rows go; later peaks keep their edits)"
+                        onClick={() => w.removeModelPeak(i)}
+                      >
+                        ×
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -117,7 +128,8 @@ export default function ModelSetupView({ w }: { w: PeakWizardState }) {
           <ModelParamTable model={m} />
           <SetupProblems problems={m.problems} />
           <div className="qzk-ds-meta" style={{ ...faint, marginTop: 6 }}>
-            Seeded from the detected peaks; blank min/max = open (widths stay positive, η in [0, 1]).
+            Seeded from the detected peaks; your edits save with the recipe. Blank min/max = open
+            (widths stay positive, η in [0, 1]).
           </div>
         </>
       )}

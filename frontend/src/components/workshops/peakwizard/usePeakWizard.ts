@@ -3,36 +3,56 @@
 // /api/peaks/model-fit, audit P2.4 — see useModelFit.ts): ① range & baseline (live
 // subtract preview via the baseline overlay) → ② find peaks (auto-find params,
 // include/exclude, manual add, OR click-on-plot add/remove — interaction plan
-// item 5) → ③ model & constraints → ④ fit & review → ⑤ report (fit report, or
-// the #32 integrate-only path). All state lives here so Back/Next never loses
-// edits; the whole configuration round-trips as a PeakRecipe (lib/peakwizard)
-// that re-runs on another dataset. Reads the ANALYSIS view
-// (rowstate.analysisData) so exclusions/filters are honored.
+// item 5; usePeakCandidates.ts) → ③ model & constraints → ④ fit & review →
+// ⑤ report (fit report, or the #32 integrate-only path). All state lives here
+// (or in the hooks it composes) so Back/Next never loses edits; the whole
+// configuration — since recipe v2 including the model engine, per-peak
+// shapes, background and parameter-table edits (lib/peakRecipeFit.ts) —
+// round-trips as a PeakRecipe (lib/peakwizard) that re-runs on another
+// dataset. Reads the ANALYSIS view (rowstate.analysisData) so
+// exclusions/filters are honored.
+//
+// "Fit this range" (the plot context menu's Peak Fitting submenu, slice 3)
+// arrives as a request in store/peakFitRange.ts: the range is applied, the
+// wizard goes to step ②, and peaks are found as soon as the step-① baseline
+// for THAT range is in (usePeakBaseline's result is tied to its segment).
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePeakBaseline } from "./usePeakBaseline";
+import { usePeakCandidates, type CandidatePeak } from "./usePeakCandidates";
 import { useModelFit, type ModelFitState } from "./useModelFit";
 import { modelPeaksForIntegrate, usePeakWizardOutput, type IntegrateResult } from "./usePeakWizardOutput";
 
-import { findPeaks, fitMultiPeak } from "../../../lib/api/peaks";
+import { fitMultiPeak } from "../../../lib/api/peaks";
 import { dropGapRows } from "../../../lib/api/finitePairs";
-import { visiblePeakMarkers } from "../../../lib/peakMarkerHit";
 import {
   cutRange,
   DEFAULT_RECIPE,
-  loadRecipes,
+  loadRecipesChecked,
   saveRecipe as persistRecipe,
   subtractBaseline,
   type PeakRecipe,
 } from "../../../lib/peakwizard";
+import {
+  extractPeak,
+  insertedAt,
+  insertPeak,
+  remapFitPeaks,
+  removedAt,
+  type PeakRecipeFit,
+  type PeakSlice,
+} from "../../../lib/peakRecipeFit";
 import { selectedFitData } from "../../../lib/fitselection";
-import { fullPlottedX } from "../../../lib/fitselectionActions";
-import { baselineValueAt, plotApexY } from "../../../lib/peakWizardApex";
-import { peakOverlayArray } from "../../../lib/plotdata";
-import type { Dataset, MultiFitResult, Peak } from "../../../lib/types";
+import type { Dataset, MultiFitResult } from "../../../lib/types";
 import { recordUse } from "../../../lib/recipeIndex";
-import { toast } from "../../../store/toasts";
+import { consumePeakFitRange, usePeakFitRange } from "../../../store/peakFitRange";
+import { notifyMigrationWarnings, toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+
+export type { CandidatePeak };
+
+/** Recipe-load warnings already shown this session (see the effect below). */
+const warnedRecipes = new Set<string>();
 
 export const WIZARD_STEPS = [
   "Range & baseline",
@@ -41,22 +61,6 @@ export const WIZARD_STEPS = [
   "Fit & review",
   "Report",
 ] as const;
-
-/** A peak candidate on step ②: detected or manually added, toggleable.
- *  `height`/`bg` match `Peak`/`FittedPeak` (lib/types.ts) — apex =
- *  `height + bg` — but relative to `workingY` (the baseline-subtracted
- *  trace `findPeaks` runs on), not the plot's raw coordinates; see
- *  `plotApexY`'s doc for the term that maps back onto the plot. A manually
- *  added peak (`addPeakAt`) gets `bg: 0` — no detector background to
- *  separate out for it. */
-export interface CandidatePeak {
-  center: number;
-  height: number;
-  bg: number;
-  fwhm: number;
-  included: boolean;
-  manual: boolean;
-}
 
 export interface PeakWizardState {
   active: Dataset | null;
@@ -76,12 +80,14 @@ export interface PeakWizardState {
   runFind: () => Promise<void>;
   togglePeak: (i: number) => void;
   removePeak: (i: number) => void;
+  /** Delete the model's peak `k` (the k-th INCLUDED candidate). */
+  removeModelPeak: (k: number) => void;
   addPeakAt: (center: number) => void;
   /** True iff click-on-plot marker editing (interaction item 5) is live: step
-   *  ② is showing, a dataset is active, and Escape hasn't paused it (see the
-   *  suppression effect below). Drives the plot's crosshair cursor + the
-   *  step's status hint; PlotStage reads the actual bridge via the store's
-   *  `peakWizardEdit` (null exactly when this is false). */
+   *  ② is showing, a dataset is active, and Escape hasn't paused it. Drives the
+   *  plot's crosshair cursor + the step's status hint; PlotStage reads the
+   *  actual bridge via the store's `peakWizardEdit` (null exactly when this is
+   *  false). */
   markerEditActive: boolean;
   // ④ fit
   fitBusy: boolean;
@@ -109,7 +115,7 @@ export interface PeakWizardState {
 }
 
 type DeepPartialRecipe = {
-  [K in keyof PeakRecipe]?: PeakRecipe[K] extends object
+  [K in Exclude<keyof PeakRecipe, "fit">]?: PeakRecipe[K] extends object
     ? Partial<PeakRecipe[K]>
     : PeakRecipe[K];
 };
@@ -117,27 +123,28 @@ type DeepPartialRecipe = {
 export function usePeakWizard(): PeakWizardState {
   const active = useActiveDataset();
   const setBaselineOverlay = useApp((s) => s.setBaselineOverlay);
-  const setPeakOverlay = useApp((s) => s.setPeakOverlay);
-  const setPeakWizardEdit = useApp((s) => s.setPeakWizardEdit);
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
 
   const [step, setStep] = useState(0);
   const [recipe, setRecipe] = useState<PeakRecipe>(DEFAULT_RECIPE);
-  const [candidates, setCandidates] = useState<CandidatePeak[]>([]);
-  const [findBusy, setFindBusy] = useState(false);
-  const [findError, setFindError] = useState<string | null>(null);
   const [fitBusy, setFitBusy] = useState(false);
   const [fitError, setFitError] = useState<string | null>(null);
   const [fitResult, setFitResult] = useState<MultiFitResult | null>(null);
   const [integrateResult, setIntegrateResult] = useState<PeakWizardState["integrateResult"]>(null);
-  const [recipes, setRecipes] = useState<PeakRecipe[]>(() => loadRecipes());
+  // Saved recipes, read once; a record that cannot be read (an unknown
+  // version, a malformed fit section) is skipped and said so, never guessed.
+  // Each warning is shown once per session (keyed by recipe name + version +
+  // what), not on every mount — StrictMode's double effect included.
+  const [stored] = useState(loadRecipesChecked);
+  const [recipes, setRecipes] = useState<PeakRecipe[]>(stored.recipes);
+  useEffect(() => {
+    const fresh = stored.warnings.filter((w) => !warnedRecipes.has(w.key));
+    for (const w of fresh) warnedRecipes.add(w.key);
+    notifyMigrationWarnings(fresh.map((w) => w.message));
+  }, [stored]);
   const [recipeRev, setRecipeRev] = useState(0);
-  // Click-on-plot marker editing (item 5): Escape pauses the mode without
-  // leaving step ②; re-entering the step (or any step change and back) resets
-  // it, so the pause never outlives the step it was raised on.
-  const [editSuppressed, setEditSuppressed] = useState(false);
 
   const patchRecipe = useCallback((p: DeepPartialRecipe) => {
     setRecipe((r) => ({
@@ -147,8 +154,39 @@ export function usePeakWizard(): PeakWizardState {
       ...(p.find ? { find: { ...r.find, ...p.find } } : {}),
       ...(p.model ? { model: { ...r.model, ...p.model } } : {}),
       ...(p.report ? { report: { ...r.report, ...p.report } } : {}),
+      // A new width link decides width sharing afresh: the Share-FWHM
+      // toggle's choice (a flag, never tie edits) steps aside.
+      ...(p.model?.linkMode !== undefined && p.model.linkMode !== r.model.linkMode
+        ? { fit: { ...r.fit, shareFwhm: null } }
+        : {}),
     }));
     // Downstream results are stale the moment the configuration changes.
+    setFitResult(null);
+    setIntegrateResult(null);
+  }, []);
+  // The model fit's edits (engine, shapes, background, parameter table) —
+  // stable setters, so the candidate ops that renumber them stay stable (R9).
+  const setFit = useCallback((update: (f: PeakRecipeFit) => PeakRecipeFit) =>
+    setRecipe((r) => ({ ...r, fit: update(r.fit) })), []);
+  // A peak leaving the model takes its edits with it; an EXCLUDED one's are
+  // set aside by candidate id (session only) and come back when it is
+  // re-included. The map write inside the updater is idempotent (the same
+  // slice from the same `f`), so a StrictMode double call is harmless.
+  const setAside = useRef(new Map<number, PeakSlice>());
+  const peakLeft = useCallback((k: number, id: number, ids: readonly number[], keep: boolean) =>
+    setFit((f) => {
+      if (keep) setAside.current.set(id, extractPeak(f, k, ids));
+      else setAside.current.delete(id);
+      return remapFitPeaks(f, removedAt(k));
+    }), [setFit]);
+  const peakJoined = useCallback((k: number, id: number, ids: readonly number[]) =>
+    setFit((f) => {
+      const shifted = remapFitPeaks(f, insertedAt(k));
+      const slice = setAside.current.get(id);
+      return slice ? insertPeak(shifted, k, slice, ids) : shifted;
+    }), [setFit]);
+  const dropResults = useCallback(() => {
+    setAside.current.clear(); // a new candidate list: nothing to come back
     setFitResult(null);
     setIntegrateResult(null);
   }, []);
@@ -185,166 +223,45 @@ export function usePeakWizard(): PeakWizardState {
       : segment.y;
   }, [segment, baseline, recipe.baseline.method]);
 
-  // ② Find peaks on the corrected segment; markers overlay on the full x.
-  const runFind = useCallback(async () => {
-    if (!active || !segment || !workingY) return;
-    setFindBusy(true);
-    setFindError(null);
-    try {
-      if (segment.x.length === 0) throw new Error("no finite X/Y pairs are available to analyze");
-      if (segment.gapCount > 0) {
-        toast(`${segment.gapCount} of ${segment.sourceCount} rows are gaps; they were excluded from peak analysis.`);
-      }
-      const res = await findPeaks({
-        x: segment.x,
-        y: workingY,
-        snr_threshold: recipe.find.snr_threshold,
-        ...(recipe.find.min_prominence > 0
-          ? { min_prominence: recipe.find.min_prominence }
-          : {}),
-        max_peaks: recipe.find.max_peaks,
-      });
-      const found: CandidatePeak[] = res.peaks.map((p: Peak) => ({
-        center: p.center,
-        height: p.height,
-        bg: p.bg,
-        fwhm: p.fwhm,
-        included: true,
-        manual: false,
-      }));
-      setCandidates(found);
-      setFitResult(null);
-      setIntegrateResult(null);
-    } catch (e) {
-      setFindError(e instanceof Error ? e.message : "peak find failed");
-    } finally {
-      setFindBusy(false);
+  const cands = usePeakCandidates({
+    active, step, segment, workingY, baseline, find: recipe.find, xKey, onReplaced: dropResults, peakLeft, peakJoined,
+  });
+  const { candidates, runFind } = cands;
+
+  // "Fit this range" from the plot's context menu: apply the range, go to ②,
+  // then find peaks once the working trace for THAT range is ready. The armed
+  // find remembers exactly what was asked (dataset + range); it fires or is
+  // dropped on the first TERMINAL outcome for that range — no data (runFind
+  // then says so), no baseline wanted, the baseline in, the baseline failed
+  // or the dataset unavailable (usePeakBaseline reports both as an error) —
+  // and is dropped the moment the dataset or range stops being the one asked
+  // for, so it can never fire later on some unrelated change.
+  const rangeRequest = usePeakFitRange((s) => s.request);
+  const [pendingFind, setPendingFind] = useState<{ datasetId: string; lo: number; hi: number } | null>(null);
+  useEffect(() => {
+    if (!rangeRequest || !active) return;
+    consumePeakFitRange(rangeRequest.seq);
+    if (rangeRequest.datasetId !== active.id) {
+      toast("that range was selected on another dataset — select it on this one to fit it", "danger");
+      return;
     }
-  }, [active, segment, workingY, recipe.find]);
-
-  // Keep the marker overlay in sync with the included candidates. M3
-  // review finding (same latent bug as usePeaks.ts's L1/L2, third call
-  // site): a raw `p.height` is NOT the plot apex — see
-  // lib/peakWizardApex.ts's doc; `plotApexY`/`baselineValueAt` map it back.
+    patchRecipe({ range: { lo: rangeRequest.lo, hi: rangeRequest.hi } });
+    setStep(1);
+    setPendingFind({ datasetId: active.id, lo: rangeRequest.lo, hi: rangeRequest.hi });
+  }, [rangeRequest, active, patchRecipe]);
   useEffect(() => {
-    if (!active || candidates.length === 0) return;
-    const included = candidates.filter((c) => c.included);
-    setPeakOverlay({
-      datasetId: active.id,
-      y: peakOverlayArray(
-        fullPlottedX(active.data, xKey),
-        included.map((p) => ({
-          center: p.center,
-          height: plotApexY(p.height, p.bg, baselineValueAt(p.center, segment?.x ?? [], baseline)),
-        })),
-      ),
-    });
-  }, [active, candidates, setPeakOverlay, xKey, segment, baseline]);
-
-  const togglePeak = (i: number) =>
-    setCandidates((cs) => cs.map((c, j) => (j === i ? { ...c, included: !c.included } : c)));
-  // R9: memoized (not plain closures) so their identity — and therefore the
-  // `peakWizardEdit` bridge effect below that lists them as deps — stays
-  // STABLE across a re-render that changes neither `segment`/`workingY` nor
-  // `candidates`. PlotViewport.tsx's create effect keys off `peakWizardEdit`
-  // and rebuilds the WHOLE uPlot instance on any identity change, so an
-  // unrelated re-render (e.g. patching an unrelated recipe field) must never
-  // manufacture a new bridge object — see usePeakWizard.test.ts's "does not
-  // push a new peakWizardEdit bridge on an unrelated re-render" regression.
-  const removePeak = useCallback((i: number) => setCandidates((cs) => cs.filter((_, j) => j !== i)), []);
-  const addPeakAt = useCallback(
-    (center: number) => {
-      if (!segment || !workingY || segment.x.length === 0) return;
-      // Seed height from the nearest working point; FWHM from 2% of the range.
-      let nearest = 0;
-      for (let i = 1; i < segment.x.length; i++) {
-        if (Math.abs(segment.x[i] - center) < Math.abs(segment.x[nearest] - center)) nearest = i;
-      }
-      const span = segment.x[segment.x.length - 1] - segment.x[0];
-      setCandidates((cs) => [
-        ...cs,
-        {
-          center,
-          height: workingY[nearest],
-          bg: 0, // no detector background to separate out for a manual point
-          fwhm: span / 50 || 1,
-          included: true,
-          manual: true,
-        },
-      ]);
-    },
-    [segment, workingY],
-  );
-
-  // Click-on-plot marker editing (interaction item 5, deferred from closed
-  // gap #31): live only while step ② is showing, a dataset is active, and
-  // Escape hasn't paused it. `addPeakAt`/`removePeak` above are the SAME
-  // functions the manual "+ Add" field and the candidate table's "×" button
-  // use — no parallel state model. This hook stays the sole owner of
-  // `candidates`; the store only carries a thin, disposable projection
-  // (visible marker positions + these two callbacks) so PlotStage's plugin
-  // can hit-test a click without needing its own copy of the wizard state.
-  const markerEditActive = step === 1 && !!active && !editSuppressed;
-
-  // Escape pauses the mode (mirrors useGadgetChip's Escape-to-dismiss) without
-  // navigating away from step ②; re-entering the step below un-pauses it.
-  //
-  // `preventDefault()` is the repo's "this keystroke was mine" convention
-  // (useGlobalShortcuts' header documents it), and here it is load-bearing:
-  // this panel is hosted by `ToolWindow`, whose Escape-to-close reads
-  // `defaultPrevented` once the dispatch is over. Without the claim, one
-  // Escape would pause the marker-edit mode AND close the whole Peak Analyzer.
-  // The listener is mounted only while there is something to pause, so a
-  // SECOND Escape (mode already paused) claims nothing and closes the panel as
-  // usual.
-  useEffect(() => {
-    if (step !== 1 || !active || editSuppressed) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
-      e.preventDefault();
-      setEditSuppressed(true);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [step, active, editSuppressed]);
-
-  // Any step change resets the pause — so it never outlives the visit to ②
-  // that raised it, and returning to ② always starts un-paused.
-  useEffect(() => {
-    setEditSuppressed(false);
-  }, [step]);
-
-  // Push the current bridge into the store whenever markerEditActive,
-  // candidates, or addPeakAt/removePeak's own identity change (R9:
-  // `useCallback`-memoized on [segment, workingY]/[], not plain closures)
-  // — so a stale segment/workingY closure can never desync `addPeakAt`
-  // from the manual "+ Add" field, WITHOUT re-pushing (forcing a full
-  // PlotViewport/uPlot rebuild) on every unrelated re-render; unmount
-  // always clears it. M3: hit-test markers use the SAME `plotApexY`
-  // mapping the overlay draw above uses (also gaining segment/baseline as
-  // triggers) — a click must land on what's actually drawn.
-  useEffect(() => {
-    setPeakWizardEdit(
-      markerEditActive
-        ? {
-            // N4: only INCLUDED candidates pay for the linear-scan
-            // baseline lookup below (excluded ones' `height` is never
-            // read); the array itself stays full-length since
-            // `removePeak(index)` depends on ORIGINAL indices.
-            markers: visiblePeakMarkers(
-              candidates.map((c) =>
-                c.included
-                  ? { ...c, height: plotApexY(c.height, c.bg, baselineValueAt(c.center, segment?.x ?? [], baseline)) }
-                  : c,
-              ),
-            ),
-            addPeakAt,
-            removePeak,
-          }
-        : null,
-    );
-  }, [markerEditActive, candidates, addPeakAt, removePeak, setPeakWizardEdit, segment, baseline]);
-  useEffect(() => () => setPeakWizardEdit(null), [setPeakWizardEdit]);
+    if (!pendingFind) return;
+    const asked = active?.id === pendingFind.datasetId
+      && recipe.range.lo === pendingFind.lo && recipe.range.hi === pendingFind.hi;
+    if (!asked || !segment) {
+      setPendingFind(null);
+    } else if (segment.x.length === 0 || recipe.baseline.method === "none" || baseline !== null) {
+      setPendingFind(null);
+      void runFind();
+    } else if (baselineError) {
+      setPendingFind(null);
+    }
+  }, [pendingFind, active, recipe.range.lo, recipe.range.hi, recipe.baseline.method, segment, baseline, baselineError, runFind]);
 
   // ④ Simultaneous fit of the included candidates.
   const runFit = useCallback(async () => {
@@ -384,10 +301,10 @@ export function usePeakWizard(): PeakWizardState {
     [candidates],
   );
   // useModelFit invalidates its own result from a content key of these inputs
-  // (dataset, included peaks, recipe model, working x/y) — see its header.
+  // (dataset, included peaks, recipe model, engine, working x/y) — see its header.
   const model = useModelFit({
     active, segment, workingY, baseline, baselineOn: recipe.baseline.method !== "none",
-    peaks: included, model: recipe.model,
+    peaks: included, model: recipe.model, fit: recipe.fit, setFit,
   });
   // Step ⑤ reads the ACTIVE engine's CURRENT fit only: a stale model result
   // (table edited since) is blocked, with the reason shown there.
@@ -409,10 +326,24 @@ export function usePeakWizard(): PeakWizardState {
     blocked: reportBlock,
   });
 
+  // `recipe.fit` IS the live model configuration (useModelFit edits it in
+  // place), so a saved recipe carries the engine, shapes and table as shown.
+  // A table the loader would have to repair (or the backend would refuse) is
+  // not saved: the reason is the first parameter problem. Nor is a save onto
+  // the name of a stored record this app cannot read (lib/peakwizard).
   const saveRecipe = (name: string) => {
+    if (model.problems.length > 0) {
+      toast(`recipe not saved — fix the parameter table first: ${model.problems[0]}`, "danger");
+      return;
+    }
     const named = { ...recipe, name };
+    try {
+      setRecipes(persistRecipe(named));
+    } catch (e) {
+      toast(`recipe not saved — ${e instanceof Error ? e.message : "storage refused it"}`, "danger");
+      return;
+    }
     setRecipe(named);
-    setRecipes(persistRecipe(named));
     toast(`recipe "${name}" saved`);
   };
 
@@ -423,7 +354,8 @@ export function usePeakWizard(): PeakWizardState {
     // that is already gone records nothing.
     recordUse({ kind: "peak", scope: "global", id: r.name });
     setRecipe(r);
-    setCandidates([]);
+    cands.clearCandidates();
+    setAside.current.clear();
     setFitResult(null);
     setIntegrateResult(null);
     setStep(0);
@@ -441,13 +373,14 @@ export function usePeakWizard(): PeakWizardState {
     baselineBusy,
     baselineError,
     candidates,
-    findBusy,
-    findError,
+    findBusy: cands.findBusy,
+    findError: cands.findError,
     runFind,
-    togglePeak,
-    removePeak,
-    addPeakAt,
-    markerEditActive,
+    togglePeak: cands.togglePeak,
+    removePeak: cands.removePeak,
+    removeModelPeak: cands.removeModelPeak,
+    addPeakAt: cands.addPeakAt,
+    markerEditActive: cands.markerEditActive,
     fitBusy,
     fitError,
     fitResult,

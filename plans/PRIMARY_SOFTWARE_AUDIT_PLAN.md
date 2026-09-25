@@ -3112,12 +3112,13 @@ summary without leaving Quantized.
 
 **Models:** Sol high/Opus 4.8 for fit semantics; Sonnet 5 for UI.
 
-- [~] Add/edit/delete peaks directly in selection. Edit + delete of fitted
-  durable rows shipped in the 2026-09-23 durability slice; direct add remains
-  open.
+- [x] Add/edit/delete peaks directly in selection. Edit + delete of fitted
+  durable rows shipped in the 2026-09-23 durability slice; direct add (plot
+  click / "add peak at x", data-seeded) and delete from the model table in
+  slice 3, 2026-09-25.
 - [x] Mixed functions and shared/fixed/start/bound parameters. (slice 2,
-  2026-09-25 — Peak Analyzer UI; recipe persistence of the table is slice 3)
-- [ ] Context submenu: Peak Fitting > Fit this range.
+  2026-09-25 — Peak Analyzer UI; saved in PeakRecipe v2 since slice 3)
+- [x] Context submenu: Peak Fitting > Fit this range. (slice 3, 2026-09-25)
 - [x] Explicit model metrics/warnings. (slice 2, 2026-09-25)
 
 **Progress 2026-09-25 (slice 1, engine + route, no UI; Opus 5.5):** new
@@ -3182,6 +3183,67 @@ the backend's parameter rules blocks Fit with the reason; no x_min/x_max sent.
 Remaining: slice 3 — PeakRecipe v2 carrying engine/shapes/table (and the
 recipe-file importer), durable peak-table publishing with stderr + shape, a
 correlation view; slice 4 — "Fit this range" context submenu and batch recipe.
+
+**Progress 2026-09-25 (slice 3, recipe v2 + direct add + Fit this range;
+Opus 5.5):** PeakRecipe v2 (`lib/peakRecipeFit.ts`) stores the model fit's
+engine, per-peak shapes (null = the global shape), background (null = from
+the degree) and FIELD-LEVEL parameter edits keyed by the backend's stable
+names, plus the share-FWHM memory. The table is `applyEdits(seedSetup(...),
+fit)` — re-seeded from the data it runs on, every stored edit re-applied —
+so a recipe carries "fix p0.eta at 0.3" or "tie p1.fwhm to p0.fwhm" to a new
+dataset while unedited centres/heights follow the new peaks. The edits live
+IN the wizard's recipe state (so save/apply is exact) and follow their peak:
+remove / exclude / re-include renumber them (`remapFitPeaks`) — this replaces
+slice 2's "any peak change re-seeds everything"; Find keeps them by index (the
+recipe semantic). v1 migrates losslessly (DEFAULT_FIT = the old behaviour, no
+warning); a malformed fit section or a newer version FAILS CLOSED — skipped
+with a named warning (`loadRecipesChecked` -> `notifyMigrationWarnings`),
+never half-loaded, and carried through untouched by later saves (only a
+same-name save replaces it). One validator serves storage and the file
+importer (`nameKeyedRecipes` refuses "fit.params["p0.center"]: min > max" /
+"unsupported version 3" by name); the library sniffer routes any numeric
+peak-recipe version to the peak parser; library details show the engine.
+Direct add: `addPeakAt` seeds from the data around the click
+(`lib/peakSeed.ts`: snap to an apex within ~1.5 % of the points unless on a
+slope, half-maximum FWHM) and the peak joins the table as the next `p{i}`
+without renumbering anything; each model-table peak has a delete (x).
+"Peak Fitting > Fit this range" on the plot context menu takes the Gadget
+band, else the integration region, else the selected rows' x extent
+(`lib/plotRangeSelection.ts`; the Background Region pick is not a source —
+nothing stays drawn) and hands it to the analyzer through a standalone store
+(`store/peakFitRange.ts`, zero useApp lines): range applied, step 2, peaks
+found once THAT range's baseline is in; disabled with the reason when nothing
+is selected; a range from another dataset is refused with a toast. Bug fix
+(slice-2 review): the step-1 baseline preview (and useModelFit's restore of
+it) expanded analysis-view indices as full rows and drifted past excluded
+rows — now mapped by `modelFitOverlay.segmentRows`, shared with the model
+overlay; the baseline estimate and its error are tied to the segment they
+were computed for; a cancelled estimate no longer leaves "estimating" up.
+`usePeakCandidates.ts` split out of usePeakWizard.ts (ceiling). Verified:
+vitest (`peakRecipeFit`, `peakSeed`, `plotRangeSelection`, `peakwizard`,
+`nameKeyedRecipes`, `recipeFile`, `recipeDetails`, `plotMenu`,
+`PlotContextMenu`, `PeakWizardSlice3`, `PeakWizardModelFit`, `useModelFit`),
+Chromium e2e `peak-fit-range-and-add.spec.ts` (real backend); sabotages went
+red: segment mapping of the preview, baseline-to-segment tie, peak-delete
+remap, min > max validation, v1 migration, shoulder detection, the busy
+reset, and (e2e) the menu's hand-off. Eager bundle unchanged (844.7 kB; all new code lazy).
+Review round (same day, 9 findings fixed): an armed "Fit this range" find
+remembers the dataset + range it was asked for and fires or disarms on the
+first terminal outcome (no data -> the reason; baseline in / failed / dataset
+unavailable), never later; save refuses a table with problems (with the
+reason) and the STORAGE loader drops an unusable edit field (min > max, a
+name past the 500-peak cap) with a warning instead of losing the recipe
+(files stay strict); remaps never write a name past the cap; unticking a
+peak sets its edits aside by candidate id and reticking restores them (x
+deletes); Share FWHM is a flag (`shareFwhm`), never tie edits, reset by a
+width-link change; the Gadget band / integration region are stamped with the
+dataset + X column they were drawn on and ignored when stale; an unreadable
+record's name is taken (save refuses, rename / duplicate / import dedupe
+around it); the plotted-X copy is built only when the row selection decides;
+each load warning shows once per session.
+Remaining for slice 4: batch recipe (run a saved v2 recipe over many
+datasets) and the uncertainty/diagnostic result table; durable peak-table
+publishing with stderr + shape and a correlation view are still open.
 - [ ] Batch recipe and uncertainty/diagnostic result table.
 
 ### P2.5 — Transform/combine/clean wizard

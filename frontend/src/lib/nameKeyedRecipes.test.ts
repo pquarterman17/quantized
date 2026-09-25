@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { loadGraphTemplates, saveGraphTemplate } from "./figuredoc";
 import { loadCustomModels, saveCustomModel } from "./fitmodels";
-import { loadRecipes as loadPeakRecipes, saveRecipe as savePeakRecipe, DEFAULT_RECIPE } from "./peakwizard";
+import { loadRecipes as loadPeakRecipes, saveRecipe as savePeakRecipe, DEFAULT_RECIPE, type PeakRecipe } from "./peakwizard";
 import {
   deleteNameKeyed,
   duplicateNameKeyed,
@@ -261,6 +261,58 @@ describe("import / export", () => {
     localStorage.clear();
     expect(importNameKeyed("peak", exported.text)).toEqual({ ok: true, name: original.name });
     expect(loadPeakRecipes()[0]).toEqual(original);
+  });
+
+  // Audit P2.4 slice 3: recipe v2 carries the model fit's engine, shapes,
+  // background and parameter-table edits — they must survive the FILE too.
+  it("round-trips a v2 recipe's fit section exactly through export/import", () => {
+    const original: PeakRecipe = {
+      ...DEFAULT_RECIPE,
+      name: "Fit section",
+      fit: {
+        engine: "model",
+        shapes: [null, "lorentzian"],
+        background: "constant",
+        params: { "p1.center": { value: 44, vary: false }, "p1.fwhm": { tie: "p0.fwhm", min: null } },
+        shareFwhm: false,
+        shareVary: {},
+      },
+    };
+    savePeakRecipe(original);
+    const exported = exportNameKeyed("peak", original.name);
+    if (!exported.ok) throw new Error("export failed");
+    localStorage.clear();
+    expect(importNameKeyed("peak", exported.text)).toEqual({ ok: true, name: original.name });
+    expect(loadPeakRecipes()[0]).toEqual(original);
+  });
+
+  // Review #7: a stored record this app cannot read keeps its name.
+  it("rename, duplicate and import treat an unreadable peak recipe's name as taken", () => {
+    const future = { ...DEFAULT_RECIPE, name: "Later", version: 3 };
+    localStorage.setItem("qz.peakRecipes", JSON.stringify([future]));
+    savePeakRecipe({ ...DEFAULT_RECIPE, name: "Mine" });
+    expect(renameNameKeyed("peak", "Mine", "Later")).toEqual({ ok: true, name: "Later (2)" });
+    expect(duplicateNameKeyed("peak", "Later (2)")).toMatchObject({ ok: true });
+    expect(importNameKeyed("peak", JSON.stringify({ ...DEFAULT_RECIPE, name: "Later" }))).toEqual({ ok: true, name: "Later (3)" });
+    const raw = JSON.parse(localStorage.getItem("qz.peakRecipes")!) as { name: string; version: number }[];
+    expect(raw.find((r) => r.name === "Later")).toMatchObject({ version: 3 }); // untouched
+  });
+
+  it("imports a v1 file as v2 with the default fit, and refuses a bad fit or a newer version by name", () => {
+    const v1: Record<string, unknown> = { ...DEFAULT_RECIPE, version: 1, name: "Old file" };
+    delete v1.fit;
+    expect(importNameKeyed("peak", JSON.stringify(v1))).toEqual({ ok: true, name: "Old file" });
+    expect(loadPeakRecipes()[0]).toEqual({ ...DEFAULT_RECIPE, name: "Old file" });
+    const badFit = { ...DEFAULT_RECIPE, name: "Bad", fit: { ...DEFAULT_RECIPE.fit, engine: "turbo" } };
+    expect(importNameKeyed("peak", JSON.stringify(badFit))).toEqual({
+      ok: false,
+      reason: "not a valid peak recipe file (fit.engine: not one of model / classic)",
+    });
+    expect(importNameKeyed("peak", JSON.stringify({ ...DEFAULT_RECIPE, name: "Future", version: 3 }))).toEqual({
+      ok: false,
+      reason: "not a valid peak recipe file (unsupported version 3)",
+    });
+    expect(loadPeakRecipes().map((r) => r.name)).toEqual(["Old file"]);
   });
 
   it("round-trips a fit model with null bounds losslessly", () => {
