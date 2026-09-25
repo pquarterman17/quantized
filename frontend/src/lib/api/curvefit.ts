@@ -60,6 +60,13 @@ export function bootstrapFit(req: BootstrapRequest): Promise<BootstrapResult> {
 export interface EquationValidateResult {
   ok: boolean;
   params: string[];
+  /** P2.7 before-run summary (present when ok): the independent variable
+   *  (always "x"), whether the equation uses it, and the recognised
+   *  functions / constants it uses, each in order of first appearance. */
+  variable?: string;
+  usesX?: boolean;
+  functions?: string[];
+  constants?: string[];
   error?: string;
 }
 
@@ -77,6 +84,9 @@ export interface EquationFitRequest {
   /** Per-parameter bounds; null entries = unbounded on that side. */
   lower?: (number | null)[];
   upper?: (number | null)[];
+  /** Per-parameter hold flags (P2.7): a held parameter keeps its guess and
+   *  reports no standard error. Omitted when nothing is held. */
+  fixed?: boolean[];
   weights?: number[];
   calc_errors?: boolean;
 }

@@ -18,7 +18,12 @@ from pydantic import BaseModel
 
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_bootstrap import bootstrap_fit, fit_posterior
-from quantized.calc.fit_equation import default_guesses, equation_model
+from quantized.calc.fit_equation import (
+    check_param_vectors,
+    default_guesses,
+    describe_equation,
+    equation_model,
+)
 from quantized.calc.fit_findxy import find_x, find_y
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fit_scan import scan_models
@@ -195,11 +200,29 @@ class EquationFitRequest(BaseModel):
     calc_errors: bool = True
 
 
-@router.post("/equation/validate")
-def equation_validate(req: EquationValidateRequest) -> dict[str, Any]:
+class EquationValidateResponse(BaseModel):
+    """Live-validation shape (always HTTP 200). On success: the fit
+    parameters plus the before-run summary (independent variable, whether it
+    is used, the recognised functions/constants). On failure: ``error``."""
+
+    ok: bool
+    params: list[str]
+    variable: str | None = None
+    usesX: bool | None = None  # camelCase wire names, like paramNames
+    functions: list[str] | None = None
+    constants: list[str] | None = None
+    error: str | None = None
+
+
+@router.post(
+    "/equation/validate",
+    response_model=EquationValidateResponse,
+    response_model_exclude_none=True,
+)
+def equation_validate(req: EquationValidateRequest) -> EquationValidateResponse:
     """Validate a custom fit equation; 200 with ok/params[]/error (live UI)."""
     try:
-        _, names = equation_model(req.equation)
+        info = describe_equation(req.equation)
     except (ValueError, ArithmeticError, IndexError) as exc:
         # Telling the user WHY their equation is rejected ("unknown function
         # 'expp'", "unbalanced parenthesis") is the whole point of a validate
@@ -208,8 +231,15 @@ def equation_validate(req: EquationValidateRequest) -> dict[str, Any]:
         # traceback: no frames, no file paths, no interpreter state. See the
         # note on stack-trace exposure in SECURITY.md.
         # NOTE(codeql py/stack-trace-exposure)
-        return {"ok": False, "params": [], "error": str(exc)}
-    return {"ok": True, "params": names}
+        return EquationValidateResponse(ok=False, params=[], error=str(exc))
+    return EquationValidateResponse(
+        ok=True,
+        params=info.params,
+        variable="x",
+        usesX=info.uses_x,
+        functions=info.functions,
+        constants=info.constants,
+    )
 
 
 @router.post("/equation/fit")
@@ -220,8 +250,6 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
         if not names:
             raise ValueError("equation has no free parameters to fit")
         p0 = req.guesses if req.guesses is not None else default_guesses(names)
-        if len(p0) != len(names):
-            raise ValueError(f"expected {len(names)} guesses, got {len(p0)}")
         lower = (
             [-math.inf if v is None else v for v in req.lower]
             if req.lower is not None
@@ -232,6 +260,7 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
             if req.upper is not None
             else None
         )
+        check_param_vectors(names, p0, req.fixed, lower, upper)
         result = curve_fit(
             req.x,
             req.y,

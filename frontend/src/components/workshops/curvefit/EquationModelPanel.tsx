@@ -8,10 +8,11 @@
 // edits to the shared workshop files stay minimal.
 
 import { DataTable } from "../../primitives/DataTable";
-import { NumberField } from "../../primitives/NumberField";
 import { Button } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
 import type { CustomFitModel } from "../../../lib/fitmodels";
+import EquationParamTable from "./EquationParamTable";
+import EquationSummary from "./EquationSummary";
 import FindXYSection from "./FindXYSection";
 import FitConvergenceWarning from "./FitConvergenceWarning";
 import { useEquationFit } from "./useEquationFit";
@@ -39,7 +40,13 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
   const params = (eq.result?.params as number[] | undefined) ?? [];
   const errors = (eq.result?.errors as (number | null)[] | undefined) ?? [];
   const resultNames = (eq.result?.paramNames as string[] | undefined) ?? eq.paramNames;
-  const paramRows = params.map((p, i) => [resultNames[i] ?? `p${i}`, fmt(p), fmt(errors[i])]);
+  // A held parameter kept its guess and has no standard error (P2.7) — say
+  // "held" rather than the blank a failed error estimate would show.
+  const paramRows = params.map((p, i) => [
+    resultNames[i] ?? `p${i}`,
+    fmt(p),
+    eq.fitHeld[i] ? "held" : fmt(errors[i]),
+  ]);
   const statRows: (string | number)[][] = eq.result
     ? [
         ["R²", fmt(eq.result.R2)],
@@ -65,11 +72,9 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
         {eq.status === "checking" && (
           <span style={{ color: "var(--text-faint)" }}>checking…</span>
         )}
-        {eq.status === "ok" && (
+        {eq.status === "ok" && eq.rows.length === 0 && (
           <span style={{ color: "var(--text-faint)" }}>
-            {eq.rows.length > 0
-              ? `parameters: ${eq.rows.map((r) => r.name).join(", ")}`
-              : "no free parameters — add at least one to fit"}
+            no free parameters — add at least one to fit
           </span>
         )}
         {eq.status === "error" && (
@@ -77,39 +82,13 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
         )}
       </div>
 
+      {eq.status === "ok" && eq.summary && eq.rows.length > 0 && (
+        <EquationSummary summary={eq.summary} rows={eq.rows} runProblem={eq.runProblem} />
+      )}
+
       {eq.rows.length > 0 && (
         <div style={{ marginTop: 8 }}>
-          <DataTable
-            columns={["param", "guess", "min", "max"]}
-            rows={eq.rows.map((r, i) => [
-              <span key="n" style={{ fontFamily: "var(--font-mono)" }}>
-                {r.name}
-              </span>,
-              <NumberField
-                key="g"
-                width={60}
-                value={r.guess}
-                onChange={(v) => eq.setRow(i, "guess", v)}
-                aria-label={`guess ${r.name}`}
-              />,
-              <NumberField
-                key="lo"
-                width={60}
-                value={r.min}
-                placeholder="−∞"
-                onChange={(v) => eq.setRow(i, "min", v)}
-                aria-label={`min ${r.name}`}
-              />,
-              <NumberField
-                key="hi"
-                width={60}
-                value={r.max}
-                placeholder="+∞"
-                onChange={(v) => eq.setRow(i, "max", v)}
-                aria-label={`max ${r.name}`}
-              />,
-            ])}
-          />
+          <EquationParamTable rows={eq.rows} setRow={eq.setRow} setHeld={eq.setHeld} />
         </div>
       )}
 
@@ -117,7 +96,10 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
         <Button
           variant="primary"
           size="sm"
-          disabled={!eq.active || eq.busy || eq.status !== "ok" || eq.rows.length === 0}
+          disabled={
+            !eq.active || eq.busy || eq.status !== "ok" || eq.rows.length === 0 || eq.runProblem !== null
+          }
+          title={eq.runProblem ?? undefined}
           onClick={() => void eq.fit()}
         >
           {eq.busy ? "Fitting…" : "Fit"}

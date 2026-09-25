@@ -14,13 +14,21 @@ fit-model builder (GOTO #1).
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.special import erf, erfc
 
-__all__ = ["default_guesses", "equation_model", "parse_equation"]
+__all__ = [
+    "EquationInfo",
+    "check_param_vectors",
+    "default_guesses",
+    "describe_equation",
+    "equation_model",
+    "parse_equation",
+]
 
 
 def _coth(a: NDArray[np.float64]) -> NDArray[np.float64]:
@@ -89,7 +97,7 @@ def _tokenize(s: str) -> tuple[list[dict[str, Any]], list[str]]:
                     + ", ".join(sorted(_FUNCS))
                 )
             if name in _CONSTS:
-                tokens.append({"type": "number", "value": _CONSTS[name]})
+                tokens.append({"type": "number", "value": _CONSTS[name], "const": name})
                 prev = "value"
             elif name == "x":
                 tokens.append({"type": "x", "value": "x"})
@@ -212,14 +220,8 @@ def _eval_rpn(rpn: list[dict[str, Any]], x: NDArray[np.float64], p: NDArray[np.f
     return stack[0]
 
 
-def parse_equation(
-    eqn_str: str,
-) -> tuple[Callable[[ArrayLike, ArrayLike], NDArray[np.float64]], list[str]]:
-    """Parse ``eqn_str`` into ``(fcn, param_names)``. Port of fitting.parseEquation.
-
-    ``fcn(x, p)`` evaluates the expression (``p`` indexed in ``param_names`` order).
-    Strips a leading ``y =`` / ``f(x) =``. Safe: RPN is interpreted, never eval'd.
-    """
+def _parse(eqn_str: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[str]]:
+    """``(tokens, rpn, param_names)`` for ``eqn_str``; raises ValueError."""
     import re
 
     expr = re.sub(r"^\s*(y|f\(x\))\s*=\s*", "", eqn_str.strip())
@@ -228,6 +230,18 @@ def parse_equation(
     tokens, param_names = _tokenize(expr)
     rpn = _to_rpn(tokens)
     _check_arity(rpn)
+    return tokens, rpn, param_names
+
+
+def parse_equation(
+    eqn_str: str,
+) -> tuple[Callable[[ArrayLike, ArrayLike], NDArray[np.float64]], list[str]]:
+    """Parse ``eqn_str`` into ``(fcn, param_names)``. Port of fitting.parseEquation.
+
+    ``fcn(x, p)`` evaluates the expression (``p`` indexed in ``param_names`` order).
+    Strips a leading ``y =`` / ``f(x) =``. Safe: RPN is interpreted, never eval'd.
+    """
+    _, rpn, param_names = _parse(eqn_str)
 
     def fcn(x: ArrayLike, p: ArrayLike) -> NDArray[np.float64]:
         xv = np.asarray(x, dtype=float).ravel()
@@ -237,6 +251,14 @@ def parse_equation(
         return np.asarray(out, dtype=float).copy()
 
     return fcn, param_names
+
+
+def _check_param_names(param_names: Sequence[str]) -> None:
+    for name in param_names:
+        if name.startswith("_"):
+            raise ValueError(
+                f'invalid parameter name "{name}": parameters must start with a letter'
+            )
 
 
 def equation_model(
@@ -250,12 +272,71 @@ def equation_model(
     plugs straight into ``calc.fitting.curve_fit`` as ``model_fcn``.
     """
     fcn, param_names = parse_equation(eqn_str)
-    for name in param_names:
-        if name.startswith("_"):
-            raise ValueError(
-                f'invalid parameter name "{name}": parameters must start with a letter'
-            )
+    _check_param_names(param_names)
     return fcn, param_names
+
+
+@dataclass(frozen=True)
+class EquationInfo:
+    """What a fit equation is made of, for the before-run summary (P2.7).
+
+    ``params`` are the free identifiers in order of first appearance (the fit
+    parameters); ``uses_x`` says whether the independent variable ``x``
+    appears at all; ``functions`` / ``constants`` are the recognised built-in
+    names the equation uses, each in order of first appearance.
+    """
+
+    params: list[str]
+    uses_x: bool
+    functions: list[str]
+    constants: list[str]
+
+
+def describe_equation(eqn_str: str) -> EquationInfo:
+    """Validate ``eqn_str`` exactly as ``equation_model`` does and report its
+    parts. Raises the same ValueError on a bad equation."""
+    tokens, _, param_names = _parse(eqn_str)
+    _check_param_names(param_names)
+    functions: list[str] = []
+    constants: list[str] = []
+    for tok in tokens:
+        if tok["type"] == "function" and tok["value"] not in functions:
+            functions.append(tok["value"])
+        const = tok.get("const")
+        if const is not None and const not in constants:
+            constants.append(const)
+    uses_x = any(tok["type"] == "x" for tok in tokens)
+    return EquationInfo(list(param_names), uses_x, functions, constants)
+
+
+def check_param_vectors(
+    names: Sequence[str],
+    p0: Sequence[float],
+    fixed: Sequence[bool] | None,
+    lower: Sequence[float] | None,
+    upper: Sequence[float] | None,
+) -> None:
+    """Vet the per-parameter vectors of an equation fit (P2.7): each must line
+    up with ``names``, something must be left to fit, no bound pair may be
+    inverted (the bounded solver cannot satisfy lower > upper at all), and a
+    HELD parameter's value must sit inside its own bounds -- ``curve_fit``
+    clips starts into the box, so a held value outside it would silently
+    change instead of being kept. Raises ValueError naming the problem."""
+    n = len(names)
+    vectors = (("guesses", p0), ("fixed", fixed), ("lower", lower), ("upper", upper))
+    for label, vec in vectors:
+        if vec is not None and len(vec) != n:
+            raise ValueError(f"expected {n} {label}, got {len(vec)}")
+    held = list(fixed) if fixed is not None else [False] * n
+    if n > 0 and all(held):
+        raise ValueError("every parameter is held; nothing left to fit")
+    lo = list(lower) if lower is not None else [-np.inf] * n
+    hi = list(upper) if upper is not None else [np.inf] * n
+    for k, name in enumerate(names):
+        if lo[k] > hi[k]:
+            raise ValueError(f'parameter "{name}": min is above max')
+        if held[k] and not lo[k] <= p0[k] <= hi[k]:
+            raise ValueError(f'parameter "{name}" is held at {p0[k]:g}, outside its bounds')
 
 
 def default_guesses(param_names: Sequence[str]) -> list[float]:

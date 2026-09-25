@@ -6260,6 +6260,28 @@ export interface components {
             /** Equation */
             equation: string;
         };
+        /**
+         * EquationValidateResponse
+         * @description Live-validation shape (always HTTP 200). On success: the fit
+         *     parameters plus the before-run summary (independent variable, whether it
+         *     is used, the recognised functions/constants). On failure: ``error``.
+         */
+        EquationValidateResponse: {
+            /** Constants */
+            constants?: string[] | null;
+            /** Error */
+            error?: string | null;
+            /** Functions */
+            functions?: string[] | null;
+            /** Ok */
+            ok: boolean;
+            /** Params */
+            params: string[];
+            /** Usesx */
+            usesX?: boolean | null;
+            /** Variable */
+            variable?: string | null;
+        };
         /** EstimateRequest */
         EstimateRequest: {
             /**
@@ -11542,9 +11564,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": {
-                        [key: string]: unknown;
-                    };
+                    "application/json": components["schemas"]["EquationValidateResponse"];
                 };
             };
             /** @description Validation Error */

@@ -32,10 +32,37 @@ def test_validate_happy_path_params_in_appearance_order() -> None:
     assert "error" not in out
 
 
+def test_validate_reports_the_before_run_summary() -> None:
+    # P2.7: the editor shows x / parameters / constants / functions before a
+    # run, straight from the parser that will evaluate the equation.
+    out = client.post(VALIDATE, json={"equation": "A*sin(2*pi*x/w) + exp(-x/t) + e"}).json()
+    assert out == {
+        "ok": True,
+        "params": ["A", "w", "t"],
+        "variable": "x",
+        "usesX": True,
+        "functions": ["sin", "exp"],
+        "constants": ["pi", "e"],
+    }
+
+
 def test_validate_no_parameter_equation_is_ok_with_empty_params() -> None:
     resp = client.post(VALIDATE, json={"equation": "2*x + 1"})
     assert resp.status_code == 200
-    assert resp.json() == {"ok": True, "params": []}
+    assert resp.json() == {
+        "ok": True,
+        "params": [],
+        "variable": "x",
+        "usesX": True,
+        "functions": [],
+        "constants": [],
+    }
+
+
+def test_validate_flags_an_equation_that_never_uses_x() -> None:
+    out = client.post(VALIDATE, json={"equation": "a + b"}).json()
+    assert out["ok"] is True
+    assert out["usesX"] is False
 
 
 def test_validate_syntax_error_mismatched_paren() -> None:
@@ -173,6 +200,76 @@ def test_fit_guess_count_mismatch_is_422() -> None:
     )
     assert resp.status_code == 422
     assert "expected 3 guesses" in resp.json()["detail"]
+
+
+# ── held (fixed) parameters (P2.7) ─────────────────────────────────────────
+
+
+def test_fit_held_parameter_keeps_its_value_and_reports_no_error() -> None:
+    x, y = _decay_data()
+    resp = client.post(
+        FIT,
+        json={
+            "equation": "a*exp(-x/t) + c",
+            "x": x,
+            "y": y,
+            "guesses": [1.0, 1.0, 0.6],
+            "fixed": [False, False, True],
+        },
+    )
+    assert resp.status_code == 200
+    out = resp.json()
+    a, t, c = out["params"]
+    assert c == 0.6  # exactly the held value, not a refit
+    assert abs(a - 2.5) < 1e-4 and abs(t - 1.7) < 1e-4
+    assert out["errors"][2] is None  # no stderr for a held parameter
+    assert out["errors"][0] is not None and out["errors"][1] is not None
+    assert out["nFree"] == 2
+
+
+def test_fit_every_parameter_held_is_422() -> None:
+    x, y = _decay_data()
+    resp = client.post(
+        FIT,
+        json={"equation": "a*x + b", "x": x, "y": y, "fixed": [True, True]},
+    )
+    assert resp.status_code == 422
+    assert "every parameter is held" in resp.json()["detail"]
+
+
+def test_fit_min_above_max_is_422() -> None:
+    x, y = _decay_data()
+    resp = client.post(
+        FIT,
+        json={"equation": "a*x + b", "x": x, "y": y, "lower": [2.0, None], "upper": [1.0, None]},
+    )
+    assert resp.status_code == 422
+    assert '"a": min is above max' in resp.json()["detail"]
+
+
+def test_fit_held_value_outside_its_bounds_is_422() -> None:
+    # curve_fit clips starts into the box; a held value must never move.
+    x, y = _decay_data()
+    resp = client.post(
+        FIT,
+        json={
+            "equation": "a*x + b",
+            "x": x,
+            "y": y,
+            "guesses": [5.0, 1.0],
+            "upper": [1.0, None],
+            "fixed": [True, False],
+        },
+    )
+    assert resp.status_code == 422
+    assert "outside its bounds" in resp.json()["detail"]
+
+
+def test_fit_fixed_length_mismatch_is_422() -> None:
+    x, y = _decay_data()
+    resp = client.post(FIT, json={"equation": "a*x + b", "x": x, "y": y, "fixed": [True]})
+    assert resp.status_code == 422
+    assert "expected 2 fixed" in resp.json()["detail"]
 
 
 # ── injection attempts: rejected by the parser, never executed ──────────────

@@ -3351,7 +3351,16 @@ violin, bar, strip, or summary plots.
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
-- [ ] Identify variables/parameters/fitted/fixed/start/bounds before run.
+- [x] Identify variables/parameters/fitted/fixed/start/bounds before run.
+  (slice 1, 2026-09-25) The equation table gained a hold column (mirrors
+  `FitParamsSection`); `fixed` reaches `/equation/fit`, where a held
+  parameter keeps its guess and reports no stderr (results say "held").
+  `/equation/validate` now returns the before-run summary (`variable`,
+  `usesX`, `functions`, `constants` from `calc.fit_equation.describe_equation`)
+  and `EquationSummary` shows x / free / held / constants / functions, warning
+  when x is unused. Every-parameter-held, min > max and a held value outside
+  its bounds are refused before the request (`lib/equationRows`) AND by the
+  route (`check_param_vectors`), since `curve_fit` clips starts into the box.
 - [ ] Precise inline syntax feedback.
 - [ ] Save model with units/description.
 - [ ] Stretch: pretty LaTeX rendering while Python remains editable source.
