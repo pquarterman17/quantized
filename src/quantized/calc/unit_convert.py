@@ -325,10 +325,19 @@ def unit_convert(
                 )
     assert result is not None
     desc = f"{from_str} -> {to_str}" if np.isnan(factor) else f"1 {from_str} = {factor:g} {to_str}"
+    latex = ""
+    if val.size == 1 and result.size == 1:
+        from_tex = from_str.replace("*", r"\cdot ").replace("Ang", r"\text{\AA}")
+        to_tex = to_str.replace("*", r"\cdot ").replace("Ang", r"\text{\AA}")
+        latex = (
+            f"${float(val.reshape(-1)[0]):g}\\,\\text{{{from_tex}}} = "
+            f"{float(result.reshape(-1)[0]):g}\\,\\text{{{to_tex}}}$"
+        )
     info = {
         "factor": factor,
         "fromParsed": {"dims": from_p["dims"], "scale": from_p["scale"], "display": from_str},
         "toParsed": {"dims": to_p["dims"], "scale": to_p["scale"], "display": to_str},
         "description": desc,
+        "latex": latex,
     }
     return result, info

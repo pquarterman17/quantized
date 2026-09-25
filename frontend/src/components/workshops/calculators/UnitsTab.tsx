@@ -25,7 +25,10 @@ export default function UnitsTab({ c }: { c: CalculatorsState }) {
     <div style={{ marginTop: 12 }}>
       {cats.length > 0 && (
         <Select
-          options={cats.map((x) => ({ value: x.id, label: x.label }))}
+          options={[
+            ...cats.map((x) => ({ value: x.id, label: x.label })),
+            { value: "custom", label: "Custom expression" },
+          ]}
           value={c.category}
           onChange={(e) => c.setCategory(e.target.value)}
           aria-label="unit category"
@@ -99,6 +102,7 @@ export default function UnitsTab({ c }: { c: CalculatorsState }) {
               <div style={{ fontFamily: "var(--font-mono)", fontSize: "var(--font-size-lg)" }}>
                 {fmtNum(c.result)} <span style={{ color: "var(--text-dim)" }}>{c.to}</span>
                 <CopyButton value={String(c.result)} label="converted value" />
+                {c.latex && <CopyButton value={c.latex} label="LaTeX" />}
               </div>
               {c.description && (
                 <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>

@@ -23,13 +23,13 @@ const PHOTON_ENERGY_FALLBACK = ["eV", "nm", "cm^-1", "THz", "K"];
  *  units that are actually offered together. */
 export const QUICK_PAIRS: { label: string; from: string; to: string; category: string }[] = [
   { label: "Oe → T", from: "Oe", to: "T", category: "magnetic_field" },
-  { label: "T → G", from: "T", to: "G", category: "magnetic_field" },
+  { label: "emu → A·m²", from: "emu", to: "A*m^2", category: "magnetization" },
   { label: "eV → nm", from: "eV", to: "nm", category: "photon_energy" },
-  { label: "eV → THz", from: "eV", to: "THz", category: "photon_energy" },
-  { label: "K → C", from: "K", to: "C", category: "temperature" },
-  { label: "J → eV", from: "J", to: "eV", category: "energy" },
-  { label: "GPa → bar", from: "GPa", to: "bar", category: "pressure" },
   { label: "Ang → nm", from: "Ang", to: "nm", category: "length" },
+  { label: "Pa → Torr", from: "Pa", to: "Torr", category: "pressure" },
+  { label: "K → C", from: "K", to: "C", category: "temperature" },
+  { label: "GPa → Pa", from: "GPa", to: "Pa", category: "pressure" },
+  { label: "deg → rad", from: "deg", to: "rad", category: "angle" },
 ];
 
 export interface UnitsCalcState {
@@ -38,6 +38,7 @@ export interface UnitsCalcState {
   to: string;
   result: number | null;
   description: string | null;
+  latex: string | null;
   error: string | null;
   busy: boolean;
   setValue: (v: string) => void;
@@ -65,6 +66,7 @@ export function useUnitsCalc(): UnitsCalcState {
   const [to, setToRaw] = useState("T");
   const [result, setResult] = useState<number | null>(null);
   const [description, setDescription] = useState<string | null>(null);
+  const [latex, setLatex] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [unitCategories, setUnitCategories] = useState<UnitCategoryDef[] | null>(null);
@@ -84,6 +86,7 @@ export function useUnitsCalc(): UnitsCalcState {
     convSeq.current++;
     setResult(null);
     setDescription(null);
+    setLatex(null);
     setError(null);
     setBusy(false);
   };
@@ -128,10 +131,15 @@ export function useUnitsCalc(): UnitsCalcState {
       setCategoryState(cat);
       if (cat === "photon_energy") {
         setPeFromRaw(f);
+        invalidateConvert();
         invalidatePe();
+        void peComputeSnapshot(peValue, f);
+      } else {
+        void convertSnapshot(value, f, t);
       }
+    } else {
+      void convertSnapshot(value, f, t);
     }
-    invalidateConvert();
   };
 
   const setCategory = (id: string): void => {
@@ -147,7 +155,7 @@ export function useUnitsCalc(): UnitsCalcState {
   const swapUnits = (): void => {
     setFromRaw(to);
     setToRaw(from);
-    invalidateConvert();
+    void convertSnapshot(value, to, from);
   };
 
   const setPeValue = (v: string): void => {
@@ -159,24 +167,28 @@ export function useUnitsCalc(): UnitsCalcState {
     invalidatePe();
   };
 
-  async function convert(): Promise<void> {
+  async function convertSnapshot(rawValue: string, fromUnit: string, toUnit: string): Promise<void> {
     const id = ++convSeq.current;
+    setResult(null);
+    setDescription(null);
+    setLatex(null);
     setBusy(true);
     setError(null);
     try {
-      const v = Number(value);
+      const v = Number(rawValue);
       if (!Number.isFinite(v)) throw new Error("enter a numeric value");
-      const res = await convertUnits(v, from, to);
+      const res = await convertUnits(v, fromUnit, toUnit);
       if (convSeq.current !== id) return; // superseded — a newer run/edit owns this panel
       const out = typeof res.result === "number" ? res.result : null;
       setResult(out);
       setDescription(typeof res.info?.description === "string" ? res.info.description : null);
+      setLatex(typeof res.info?.latex === "string" && res.info.latex ? res.info.latex : null);
       if (out != null) {
         useCalcHistory.getState().record({
           domain: "Units",
           label: "Unit conversion",
-          summary: `${value} ${from} = ${fmtNum(out)} ${to}`,
-          inputs: `value=${value}, from=${from}, to=${to}`,
+          summary: `${rawValue} ${fromUnit} = ${fmtNum(out)} ${toUnit}`,
+          inputs: `value=${rawValue}, from=${fromUnit}, to=${toUnit}`,
         });
       }
     } catch (e) {
@@ -188,25 +200,30 @@ export function useUnitsCalc(): UnitsCalcState {
     }
   }
 
+  async function convert(): Promise<void> {
+    await convertSnapshot(value, from, to);
+  }
+
   // Photon/thermal energy: show all 5 interchangeable quantities (eV, nm,
   // cm^-1, THz, K) for one entered value at once, rather than one from/to
   // pair at a time — every non-`peFrom` unit is converted independently
   // (the backend routes each through a common energy hub, so this works
   // regardless of which quantity was entered).
-  async function peCompute(): Promise<void> {
+  async function peComputeSnapshot(rawValue: string, sourceUnit: string): Promise<void> {
     const id = ++peSeq.current;
+    setPeResults(null);
     setPeBusy(true);
     setPeError(null);
     try {
-      const v = Number(peValue);
+      const v = Number(rawValue);
       if (!Number.isFinite(v)) throw new Error("enter a numeric value");
       const photonUnits =
         unitCategories?.find((c) => c.id === "photon_energy")?.units.map((u) => u.value) ??
         PHOTON_ENERGY_FALLBACK;
-      const targets = photonUnits.filter((u) => u !== peFrom);
-      const responses = await Promise.all(targets.map((u) => convertUnits(v, peFrom, u)));
+      const targets = photonUnits.filter((u) => u !== sourceUnit);
+      const responses = await Promise.all(targets.map((u) => convertUnits(v, sourceUnit, u)));
       if (peSeq.current !== id) return;
-      const out: Record<string, number> = { [peFrom]: v };
+      const out: Record<string, number> = { [sourceUnit]: v };
       targets.forEach((u, i) => {
         const r = responses[i].result;
         if (typeof r === "number") out[u] = r;
@@ -218,7 +235,7 @@ export function useUnitsCalc(): UnitsCalcState {
         summary: Object.entries(out)
           .map(([u, val]) => `${u}=${fmtNum(val)}`)
           .join(" · "),
-        inputs: `value=${peValue}, from=${peFrom}`,
+        inputs: `value=${rawValue}, from=${sourceUnit}`,
       });
     } catch (e) {
       if (peSeq.current !== id) return;
@@ -229,12 +246,17 @@ export function useUnitsCalc(): UnitsCalcState {
     }
   }
 
+  async function peCompute(): Promise<void> {
+    await peComputeSnapshot(peValue, peFrom);
+  }
+
   return {
     value,
     from,
     to,
     result,
     description,
+    latex,
     error,
     busy,
     setValue,

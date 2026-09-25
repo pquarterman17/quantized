@@ -7,8 +7,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { copyText } from "../../../lib/clipboard";
 import { convertUnits, getConstants, getUnitCategories } from "../../../lib/api/reference";
 import CalculatorsContent from "./CalculatorsContent";
+
+vi.mock("../../../lib/clipboard", () => ({ copyText: vi.fn() }));
 
 vi.mock("../../../lib/api", () => ({
   xrayCalc: vi.fn(),
@@ -39,6 +42,16 @@ const CATEGORIES = [
     ],
   },
   {
+    id: "length",
+    label: "Length",
+    hint: null,
+    units: [
+      { value: "m", label: "m" },
+      { value: "Ang", label: "Ang" },
+      { value: "nm", label: "nm" },
+    ],
+  },
+  {
     id: "energy",
     label: "Energy",
     hint: null,
@@ -63,6 +76,8 @@ const CATEGORIES = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(copyText).mockResolvedValue(true);
+  vi.mocked(convertUnits).mockResolvedValue({ result: 1, info: {} });
   vi.mocked(getConstants).mockResolvedValue({ constants: {}, systems: { SI: [], CGS: [], eV: [] } });
   vi.mocked(getUnitCategories).mockResolvedValue({ categories: CATEGORIES });
 });
@@ -92,11 +107,14 @@ describe("UnitsTab", () => {
     expect(screen.getByText(/1 T = 1e4 G/)).toBeInTheDocument();
   });
 
-  it("swap button exchanges from and to", async () => {
+  it("swap button exchanges from and to and immediately converts", async () => {
+    vi.mocked(convertUnits).mockResolvedValue({ result: 10_000, info: {} });
     await renderUnits();
     fireEvent.click(screen.getByLabelText("swap units"));
     expect(screen.getByLabelText("from unit")).toHaveValue("T");
     expect(screen.getByLabelText("to unit")).toHaveValue("Oe");
+    await screen.findByRole("button", { name: "copy converted value" });
+    expect(convertUnits).toHaveBeenCalledWith(1, "T", "Oe");
   });
 
   it("converts and displays the result with the target unit", async () => {
@@ -110,12 +128,39 @@ describe("UnitsTab", () => {
     expect(convertUnits).toHaveBeenCalledWith(1, "Oe", "T");
   });
 
-  it("a quick-pick pill sets both the category and the from/to pair", async () => {
+  it("a quick-pick pill sets the pair and immediately converts", async () => {
+    vi.mocked(convertUnits).mockResolvedValue({ result: 0.1, info: {} });
     await renderUnits();
-    fireEvent.click(screen.getByText("J → eV"));
-    expect(screen.getByLabelText("unit category")).toHaveValue("energy");
-    expect(screen.getByLabelText("from unit")).toHaveValue("J");
-    expect(screen.getByLabelText("to unit")).toHaveValue("eV");
+    fireEvent.click(screen.getByText("Ang → nm"));
+    expect(screen.getByLabelText("unit category")).toHaveValue("length");
+    expect(screen.getByLabelText("from unit")).toHaveValue("Ang");
+    expect(screen.getByLabelText("to unit")).toHaveValue("nm");
+    await screen.findByRole("button", { name: "copy converted value" });
+    expect(convertUnits).toHaveBeenCalledWith(1, "Ang", "nm");
+  });
+
+  it("custom mode accepts arbitrary unit expressions", async () => {
+    vi.mocked(convertUnits).mockResolvedValue({ result: 10, info: {} });
+    await renderUnits();
+    fireEvent.change(screen.getByLabelText("unit category"), { target: { value: "custom" } });
+    fireEvent.change(screen.getByLabelText("from unit"), { target: { value: "mA/cm^2" } });
+    fireEvent.change(screen.getByLabelText("to unit"), { target: { value: "A/m^2" } });
+    fireEvent.click(screen.getByText("="));
+
+    await screen.findByRole("button", { name: "copy converted value" });
+    expect(convertUnits).toHaveBeenCalledWith(1, "mA/cm^2", "A/m^2");
+  });
+
+  it("copies the backend's LaTeX form", async () => {
+    vi.mocked(convertUnits).mockResolvedValue({
+      result: 0.0001,
+      info: { latex: "$1\\,\\text{Oe} = 0.0001\\,\\text{T}$" },
+    });
+    await renderUnits();
+    fireEvent.click(screen.getByText("="));
+    fireEvent.click(await screen.findByRole("button", { name: "copy LaTeX" }));
+
+    expect(copyText).toHaveBeenCalledWith("$1\\,\\text{Oe} = 0.0001\\,\\text{T}$");
   });
 
   it("a photon quick-pick updates the visible source quantity and pressed state", async () => {
@@ -138,10 +183,7 @@ describe("UnitsTab", () => {
       "aria-pressed",
       "true",
     );
-    expect(screen.getByRole("button", { name: "eV → THz" })).toHaveAttribute(
-      "aria-pressed",
-      "false",
-    );
+    expect(screen.getByRole("button", { name: "Oe → T" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("switching to Photon / Thermal Energy shows the 5-quantity panel instead of from/to", async () => {
