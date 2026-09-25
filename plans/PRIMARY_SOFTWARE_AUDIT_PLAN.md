@@ -4360,8 +4360,9 @@ covers a much smaller subset and guards focus on Analyze.
     container has Chromium only, so those rest on published support
     versions.
 
-    *Cross-browser coverage now runs in CI (2026-09-25, branch
-    `e2e-browsers`). Status: PENDING the first CI run, so not ticked.* The
+    *Cross-browser coverage runs in CI (2026-09-25). Status: MEASURED --
+    first run on PR #414 (head 1fa096df) went 16/16 green on both Firefox
+    and WebKit, merged in 22dfcd57.* The
     new `e2e-xbrowser` job in `.github/workflows/e2e.yml` runs Firefox and
     WebKit, one matrix leg each, over the engine-sensitive specs:
     `modal-inert` (all 7 R12/R16 cases), `workshop-escape-ladder`,
@@ -4381,8 +4382,8 @@ covers a much smaller subset and guards focus on Analyze.
       engine but not the embed itself.
     - The `aria-hidden` fallback is still exercised only by the unit test,
       because every engine in CI has `inert`.
-    - Tick this item only once the job has gone green on a PR run, and
-      record that run here.
+    - Recorded run: PR #414, `e2e cross-browser (firefox)` and
+      `(webkit)`, 16 passed each.
 
     *(b) The DOM-mutation gap, closed.* `7f0d0a25` walked only when the
     modal stack changed, so a node that mounted while a dialog was open
