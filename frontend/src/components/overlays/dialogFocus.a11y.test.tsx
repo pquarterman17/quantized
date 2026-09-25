@@ -152,6 +152,8 @@ describe("ParamDialog keyboard cancel (P3.3)", () => {
     act(() => {
       result = askParams("Proceed?", []);
     });
+    // The body is a lazy chunk (bundle diet slice 8): wait for it to mount.
+    await screen.findByRole("dialog");
 
     await user.keyboard("{Escape}");
     await expect(result).resolves.toBeNull();
@@ -172,6 +174,7 @@ describe("ParamDialog keyboard cancel (P3.3)", () => {
     act(() => {
       result = askParams("Smooth", [{ key: "n", label: "Window", type: "number", default: 5 }]);
     });
+    await screen.findByRole("dialog"); // lazy body (bundle diet slice 8)
 
     // The field's own autoFocus wins — the hook does not override it.
     // ParamFields renders a bare <input> (no type="number" — it coerces on
@@ -205,6 +208,7 @@ describe("ConfirmDialog focus trap (P3.3)", () => {
     act(() => {
       result = askConfirm("Remove everything?", "gone forever", "Remove all", true);
     });
+    await screen.findByRole("dialog"); // lazy body (bundle diet slice 8)
 
     const cancel = screen.getByRole("button", { name: "Cancel" });
     const remove = screen.getByRole("button", { name: "Remove all" });
@@ -383,6 +387,7 @@ describe("stacked focus traps take turns (P3.3 round 2)", () => {
     act(() => {
       confirmed = askConfirm("Remove everything?", "gone forever", "Remove all", true);
     });
+    await screen.findByRole("button", { name: "Remove all" }); // lazy body (bundle diet slice 8)
     const inner = within(screen.getAllByRole("dialog")[1]);
     const innerCancel = inner.getByRole("button", { name: "Cancel" });
     const removeAll = inner.getByRole("button", { name: "Remove all" });

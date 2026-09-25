@@ -1,7 +1,15 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import ConfirmDialog, { askConfirm } from "./ConfirmDialog";
+// The dialog BODY, rendered directly: since bundle diet slice 8 it is a lazy
+// chunk behind the thin `ConfirmDialog.tsx` gate, and these are unit tests of
+// what the dialog DOES once open (focus, Enter/Escape, repeat guard), which
+// the body owns outright. The gate itself -- that nothing loads until an ask,
+// that an ask mounts this body, and what a failed load does -- is pinned in
+// `lazyDialogSeams.test.tsx`; the integration files (dialogFocus.a11y,
+// stackedDialogEscape, ToolWindow, CalcOnlyApp) still mount the real gate.
+import ConfirmDialog from "./ConfirmDialogBody";
+import { askConfirm } from "./ConfirmDialog";
 
 /** Open the dialog inside act() so its state update + effect (key listener) flush. */
 function open(...args: Parameters<typeof askConfirm>): Promise<boolean> {
