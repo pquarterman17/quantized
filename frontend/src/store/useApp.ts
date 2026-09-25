@@ -32,9 +32,9 @@ import { rebindFocusedPlotWindow } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistoryBatchToken, type HistorySlice } from "./history";
 import { createWorksheetSelectionSlice, type WorksheetSelectionSlice } from "./worksheetSelection";
-import { runSaveWorkspace, runSaveWorkspaceToFile } from "./workspaceIO";
+import { runSaveWorkspace, runSaveWorkspaceToFile } from "./workspaceIOLazy";
 import { createReductionsSlice, type ReductionsSlice } from "./reductions";
-import { createReimportSlice, type ReimportSlice } from "./reimport";
+import { createReimportSlice, type ReimportSlice } from "./reimportLazy";
 import { createReimportAllSlice, type ReimportAllSlice } from "./reimportAll";
 import { createPanelsSlice, type PanelsSlice } from "./panels";
 import { createPointerToolSlice, type PointerToolSlice } from "./pointerTool";
@@ -94,7 +94,7 @@ import { toast } from "./toasts";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
 import { createOriginImportSlice, type OriginImportSlice } from "./originImport";
 import { createRecipeFidelitySlice, type RecipeFidelitySlice } from "./recipeFidelity";
-import { createOriginFallbackSlice, type OriginFallbackSlice } from "./originFallback";
+import { createOriginFallbackSlice, type OriginFallbackSlice } from "./originFallbackLazy";
 import { createPlotViewSettingsSlice, type PlotViewSettingsSlice } from "./plotViewSettings";
 import type {
   Annotation,
@@ -901,8 +901,8 @@ export const useApp = create<AppState>((set, get) => ({
     await get().importFiles(files);
   },
 
-  // Body lives in ./workspaceIO (store-size ratchet offset for MAIN_PLAN
-  // #16's appendWorkspace — see that file's doc).
+  // Body lives in ./workspaceIO, fetched on the first save by
+  // ./workspaceIOLazy (bundle headroom slice 9 — see that file's doc).
   saveWorkspaceToFile: () => runSaveWorkspaceToFile(get),
   saveWorkspace: () => runSaveWorkspace(get),
   setActive: (id) => {

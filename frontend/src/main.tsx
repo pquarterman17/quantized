@@ -11,6 +11,7 @@ import type { PlotView, PlotWindow, WindowGeometry, WinState } from "./lib/plotv
 import type { Dataset } from "./lib/types";
 import { isCalcOnlyView } from "./lib/viewMode";
 import { useApp } from "./store/useApp";
+import { warmSaveModules } from "./store/workspaceIOLazy";
 import "./styles/index.css";
 
 connectLifecycle();
@@ -137,3 +138,7 @@ createRoot(document.getElementById("root")!).render(
     <Root />
   </StrictMode>,
 );
+
+// Bundle slice 9 deferred Save and the `.dwk` codec; warm both once startup
+// has settled so they are in hand before the first Save (workspaceIOLazy.ts).
+setTimeout(() => void warmSaveModules(), 2_000);

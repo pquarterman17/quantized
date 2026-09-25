@@ -17,8 +17,8 @@
   "dependencies": {
     "clsx": "^2.1.1",
     "d3-contour": "^4.0.2",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "uplot": "^1.6.31",
     "zustand": "^5.0.15"
   },

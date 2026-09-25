@@ -45,6 +45,23 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-09-25 (bundle diet slice 9, `plans/BUNDLE_HEADROOM.md`) - react and
+ *  react-dom 19.2.8 -> 19.3.0 taken, FUNDED rather than raised; pin then
+ *  LOWERED 868,308 -> 866,358 (`measured + 1,024`, rule 3's diet-pass path).
+ *  Exact bytes, `npm ci`-fresh, `.vite` wiped, each reproduced twice:
+ *    main `69e0741a` (react 19.2.8)                      867,524
+ *    + react/react-dom 19.3.0 alone                      896,801  (+29,277)
+ *    + five lazy seams (the .dwk codec, Save/Save As,
+ *      re-import, Origin fallbacks, parse fallback)      865,334  (-31,467)
+ *  Net against main: -2,190 B. WHY 19.3 costs 29 kB: its one production
+ *  client build (`cjs/react-dom-client.production.js`, 536,016 -> 625,168 B
+ *  unminified) now compiles in the features 19.3 made stable -
+ *  <ViewTransition> (~35 kB of new top-level functions), Fragment refs
+ *  (~29 kB), Suspense-y images (~5 kB) - behind build-time flags. There is
+ *  no alternate entry, export condition or `define` that drops them (the
+ *  exports map differs from 19.2.8 only in its `deno` server condition), so
+ *  no supported config recovers it; see the slice's section for the diff.
+ *
  *  2026-09-25, slice 8 rebased onto Group F (`55f0cac9`, PR #409) - pin
  *  868,330 -> 868,308 (`measured + 1,024`). Group F's own tree measures
  *  881,369 B (22 B under 3ccf4972's 881,391); slice 8 on top of it measures
@@ -1720,7 +1737,7 @@ import { fileURLToPath } from "node:url";
  * modulepreloads. A clipboard-import split was also measured at 858.5 kB and
  * rejected. All three changes were reverted.
  */
-const EAGER_JS_BUDGET = 868_308;
+const EAGER_JS_BUDGET = 866_358;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

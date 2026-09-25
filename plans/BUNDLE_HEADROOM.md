@@ -1,6 +1,13 @@
 # Bundle headroom campaign
 
-**Current state (2026-09-25, after slice 8 and its review round, rebased onto
+**Current state (2026-09-25, after slice 9):** react/react-dom **19.3.0**
+taken (Dependabot #412), funded by five lazy seams rather than a raise.
+Measured **865,334 B** eager against main `69e0741a`'s **867,524 B**
+(**−2,190 B** net; React alone was **+29,277 B**, the seams **−31,467 B**),
+pin LOWERED **868,308 → 866,358 B** (`measured + 1,024`). See "Slice 9",
+which also records WHY a React minor cost 29 kB.
+
+**Previous state (2026-09-25, after slice 8 and its review round, rebased onto
 Group F `55f0cac9`):** measured **867,284 B** eager against that parent's
 **881,369 B** (**−14,085 B**), pin LOWERED **881,442 → 868,308 B**
 (`measured + 1,024`), leaving **1,024 B of headroom** by design. Group F (the
@@ -12,7 +19,7 @@ finding is not a seam: most of the "chunk-boundary tax" slices 3–5 kept
 measuring was Vite's preload lists naming already-loaded chunks, and removing
 them (build-time, runtime-neutral) recovered 10.7 kB by itself. See "Slice 8".
 
-**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4, 5, 6 and 8
+**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4, 5, 6, 8 and 9
 executed; slice 7 built and reverted, never on main** (slice 5 deliberately small — see its ruling on `PlotLegend`; slice
 6 ratchets the pin DOWN, the first slice authorized to) (see their sections
 below); slice 2 is partially done. Slice 5 is no longer the
@@ -1453,6 +1460,147 @@ browser; the mechanism itself is pinned in `lazyRegion.test.tsx`.
 - **`TooltipLayer` / `InteractionHints`** — `InteractionHints` must stay
   mounted for its reopen listener (`AppOverlays.tsx` header);
   `TooltipLayer` owns global hover listeners. Not built.
+
+### Slice 9 — fund React 19.3: five async-only seams, pin ratcheted DOWN — **DONE (2026-09-25)**
+
+**Measured net eager delta −2,190 B against main, with react/react-dom
+19.2.8 → 19.3.0 taken — pin LOWERED 868,308 → 866,358 B** (`measured + 1,024`)
+
+Dependabot #412 (react + react-dom 19.3.0) failed the gate at 875.6 kB over
+848.0 kB, and `c9027ecd` held it back with "why a React minor grew that much
+has not been established". Exact bytes out of `dist/index.html`, `npm ci`,
+`node_modules/.vite` wiped before EVERY build, every figure reproduced by a
+second identical build:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| main `69e0741a` (react 19.2.8) | 867,524 | — |
+| + react/react-dom 19.3.0, nothing else | 896,801 | **+29,277** |
+| + `.dwk` codec seam (+ parse-core fallback) | 875,379 | −21,422 |
+| + re-import seam | 871,406 | −3,973 |
+| + Origin fallback seam | 868,763 | −2,643 |
+| + Save / Save As seam | 865,334 | −3,429 |
+
+The per-seam rows are MARGINAL (each on top of the rows above it), not
+standalone values — the slice-5 distinction.
+
+#### 1. Why React 19.3 costs 29 kB — and why no config recovers it
+
+All of it is the `index` chunk's `react-dom-client` (react/react-dom
+wrappers +661 B). `react-dom/client` resolves, in production, to ONE file,
+`cjs/react-dom-client.production.js`: **536,016 → 625,168 B** unminified
+(+89,152 B, +17%). It is not a dev or profiling path leaking in (those are
+separate files: `react-dom-client.development.js`,
+`react-dom-profiling.profiling.js`), and not a changed export condition — the
+`exports` maps of 19.2.8 and 19.3.0 differ in exactly one entry, the `deno`
+condition of `./server`. The file itself grew because 19.3 compiles in the
+features it made stable. Top-level functions new in 19.3, grouped by name
+and summed as unminified source (scratch script, regenerable by diffing
+`^function` spans of the two files):
+
+| feature | new source bytes | examples |
+|---|---:|---|
+| `<ViewTransition>` | ~35,400 | `startViewTransition`, `commitEnterViewTransitions`, `measureNestedViewTransitions` |
+| Fragment refs (`FragmentInstance`) | ~29,200 | `FragmentInstance`, `commitNewChildToFragmentInstances`, `observeChild` |
+| Suspense-y images | ~5,400 | `suspendInstance`, `waitForImageToLoad`, `estimateImageBytes` |
+| other (SuspenseList context, portal hide/unhide, dehydrated Suspense, ...) | ~11,600 | |
+| growth of pre-existing functions | ~10,000 | |
+
+Those are React's own build-time feature flags, constant-folded into the
+published file; nothing reachable by `resolve.conditions`, a `define`, or a
+different documented entry removes them, and the reconciler reaches all of
+them through its fiber-tag switches, so no bundler can tree-shake them.
+Patching or vendoring React was out of scope by rule. So the bytes had to be
+funded.
+
+#### 2. The five seams
+
+Ranked with a dominator analysis over the build's own module graph (a
+scratch Vite config dumping `getModuleInfo` + the committed attribution
+core): for every eager module, the bytes it alone keeps eager. The
+`.dwk` subsystem was the largest subtree on the tree that no first paint
+touches — and every one of its entry points was ALREADY async:
+
+- **`.dwk` codec** — `lib/workspace.ts` + 15 modules only it reached
+  (`workspaceDatasetParse`, `workspaceSerialize`, `plotRecipeIO`,
+  `pageDocument`, `workspaceOrigin`, `peakTable`, ...). Loader
+  `lib/workspaceCodecLazy.ts`; callers: autosave (IndexedDB is async),
+  Save/Save As, native Open, Open Recent. `lib/parseWorkspaceFile.ts`'s
+  no-Worker fallback reaches `workspaceParseCore` dynamically too (the worker
+  bundles its own copy). `workspaceIO` now imports `mergeWorkspace` from
+  `lib/workspaceMerge.ts` directly, so the synchronous append path stays eager.
+- **Save / Save As** — `store/workspaceIO.ts`, via `store/workspaceIOLazy.ts`
+  (same two `Promise<void>` functions; `useApp.ts` changed one import path).
+  The synchronous `appendWorkspace` body moved to
+  `store/workspaceHydration.ts`, next to `loadWorkspace`.
+- **Re-import** — `store/reimport.ts` + `lib/reimport.ts` +
+  `lib/dependencyImpact.ts`, via `store/reimportLazy.ts`. Slice 3 measured
+  this seam at **+1,451 B** with the preload tax in place; after slice 8's
+  pruning it measures **−3,973 B** — the re-measure slice 8 asked for.
+- **Origin graph-recovery fallbacks** — `store/originFallback.ts` +
+  `lib/originSources.ts`, via `store/originFallbackLazy.ts`. The seed field
+  and its synchronous clearer stay eager; the recovery logic is untouched.
+
+`store/toolwindows.ts`'s `import { type ToolWindowLayout }` became
+`import type` so the architecture guard's scanner (which does not erase
+inline-`type` imports) agrees with the bundler that `lib/toolwindow.ts` left.
+
+#### 3. Why they qualify under the `PlotLegend` ruling, and what they cost
+
+Nothing on first paint parses or writes a workspace, re-imports, or recovers
+an Origin source. The one startup caller is the autosave restore, and it
+starts the codec fetch alongside its IndexedDB read. **Measured in Chromium**
+against a local `qz`, 5 runs each, restore of an autosaved demo dataset
+(navigation → "restored 1 dataset from autosave" on screen): branch
+**178–239 ms**, main **192–347 ms** — no regression within noise (the codec
+chunk, 12.8 kB, loads in parallel and finishes around first contentful
+paint). First Ctrl+S of a session: the save chunk (4.9 kB) arrives 9–13 ms
+after the keypress. Re-import and Origin recovery pay one localhost fetch on
+their first use.
+
+**Failure contracts** (each loader drops a rejected promise, so the next
+gesture refetches):
+
+| gesture | chunk will not load |
+|---|---|
+| Save / Save As | status + danger toast "save failed — couldn't load ...", nothing picked or written |
+| autosave write | reported through autosave health (the persistent StatusBar alert), next save retries |
+| **startup restore** | `loadAutosaveGeneration` REJECTS (never "nothing to restore", which would show an empty library over a good autosave); the hook toasts "Couldn't restore the autosaved library ... reload to try again" |
+| Open (native) / Open Recent | the existing "open failed" status / danger toast a parse failure gets |
+| re-import | "re-import failed" status + toast ending "— the dataset is unchanged" |
+| Origin source / remake | danger toast, same phrasing the real actions use for a failed book fetch |
+
+#### Guards and sabotage
+
+`architecture.test.ts`: `store/workspaceIO.ts` and `store/originFallback.ts`
+are `SEAMS` entries; `lib/workspace.ts`, `lib/workspaceParseCore.ts` and
+`store/reimport.ts` cannot be (other LAZY modules import them statically:
+`lib/workbookTransfer.ts`, the parse worker, `store/reimportAllRun.ts`), so
+they and the 16 modules only the seams reached are `DRAGGED_OUT`. Build
+graph: 407 → 390 eager modules. Behaviour: `store/slice9LazySeams.test.ts`
+(13 cases: delegation with arguments, each failure contract, retry).
+
+| sabotage | result |
+|---|---|
+| restore swallows a codec failure (`return null`) | RED — 2 cases (restore rejects; hook toasts) |
+| loaders cache a rejected load | RED — 5 cases |
+| `useApp.ts` imports `./originFallback` statically | RED — both `SEAMS` arms |
+| eager `openWorkspaceCommand.ts` value-imports `./workspace` | RED — `DRAGGED_OUT` arm (14 modules) |
+
+**Tick-counting blast radius** (slice 3's lesson): `openWorkspaceConfirm` and
+`openWorkspaceSafe` counted 6 microtasks after a pick, which the fallback's
+dynamic import outlasts (14 cases red). Their helpers, and the
+`openWorkspaceNative` / `useWorkspaceAutosave` ones that stayed green by
+luck, now `await vi.dynamicImportSettled()` (one macrotask, then every
+pending import) before counting. Every other spec calling a seamed action
+already awaits the action itself.
+
+#### Candidates considered and not taken
+
+`store/importDatasets.ts` (7.1 kB subtree; its guard store and error-role
+edits are synchronous and would need a split), `store/recode.ts` (needs the
+store split slice 8 noted), and moving `lib/autosave.ts` itself (its
+`autosaveHealth()` is read synchronously). Not needed for the target.
 
 ## What this does NOT change
 

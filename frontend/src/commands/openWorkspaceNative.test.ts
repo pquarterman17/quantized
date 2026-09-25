@@ -74,6 +74,9 @@ function run(id: string) {
 }
 
 async function settle() {
+  // The native branch loads the `.dwk` codec with a dynamic import (bundle
+  // headroom slice 9, lib/workspaceCodecLazy.ts) — settle it before counting ticks.
+  await vi.dynamicImportSettled();
   for (let i = 0; i < 8; i++) await Promise.resolve();
 }
 

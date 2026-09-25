@@ -33,6 +33,9 @@ const ds = {
 
 async function flush() {
   await act(async () => {
+    // The restore loads the `.dwk` codec with a dynamic import (bundle
+    // headroom slice 9, lib/workspaceCodecLazy.ts) — settle it, then the ticks.
+    await vi.dynamicImportSettled();
     for (let i = 0; i < 10; i++) await Promise.resolve();
   });
 }

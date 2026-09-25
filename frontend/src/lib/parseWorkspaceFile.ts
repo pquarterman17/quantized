@@ -28,7 +28,7 @@
 // grid) should see a cleaner win, since clone cost scales with payload size
 // while the render-mount cost does not.
 
-import { parseWorkspaceBlob, type ViewportSize, type WorkspaceParseResult } from "./workspaceParseCore";
+import type { ViewportSize, WorkspaceParseResult } from "./workspaceParseCore";
 import type { LoadedWorkspace } from "./workspace";
 
 export type { ViewportSize } from "./workspaceParseCore";
@@ -55,7 +55,9 @@ function unwrap(result: WorkspaceParseResult): LoadedWorkspace {
  *  not a Worker was available. */
 export function parseWorkspaceFile(file: File, viewport: ViewportSize): Promise<LoadedWorkspace> {
   if (typeof Worker === "undefined") {
-    return parseWorkspaceBlob(file, viewport).then(unwrap);
+    // Dynamic: the parse core is the `.dwk` codec, a lazy chunk (bundle
+    // headroom slice 9, lib/workspaceCodecLazy.ts); the worker bundles its own.
+    return import("./workspaceParseCore").then(({ parseWorkspaceBlob }) => parseWorkspaceBlob(file, viewport)).then(unwrap);
   }
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL("./workspaceParse.worker.ts", import.meta.url), {
