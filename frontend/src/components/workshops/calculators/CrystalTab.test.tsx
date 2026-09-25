@@ -3,7 +3,7 @@
 // h/k live, and a both-notations echo in the result. Non-hexagonal systems
 // are unaffected (calc.crystallography.hkl_to_hkil / hkil_to_hkl).
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getConstants } from "../../../lib/api/reference";
@@ -151,6 +151,53 @@ describe("CrystalTab — interplanar angle", () => {
 
     // Edit the card's own "h1" field — the result no longer matches the inputs.
     fireEvent.change(screen.getByLabelText("h1"), { target: { value: "2" } });
+    expect(screen.queryByText(/φ = 45.*°/)).not.toBeInTheDocument();
+  });
+
+  it("changing the shared lattice invalidates the displayed angle", async () => {
+    vi.mocked(crystalInterplanarAngle).mockResolvedValue({
+      angle_deg: 45.0,
+      d1: 3.8387,
+      d2: 2.7154,
+      system: "cubic",
+    });
+    openCrystalTab();
+    fireEvent.click(screen.getAllByText("=")[2]);
+    expect(await screen.findByText(/φ = 45.*°/)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("crystal system"), {
+      target: { value: "tetragonal" },
+    });
+    expect(screen.queryByText(/φ = 45.*°/)).not.toBeInTheDocument();
+  });
+
+  it("changing the shared lattice disowns an in-flight angle request", async () => {
+    let resolve!: (value: {
+      angle_deg: number;
+      d1: number;
+      d2: number;
+      system: string;
+    }) => void;
+    const pending = new Promise<{
+      angle_deg: number;
+      d1: number;
+      d2: number;
+      system: string;
+    }>((res) => {
+      resolve = res;
+    });
+    vi.mocked(crystalInterplanarAngle).mockReturnValue(pending);
+    openCrystalTab();
+    fireEvent.click(screen.getAllByText("=")[2]);
+
+    fireEvent.change(screen.getByLabelText("crystal system"), {
+      target: { value: "tetragonal" },
+    });
+    await act(async () => {
+      resolve({ angle_deg: 45.0, d1: 3.8387, d2: 2.7154, system: "cubic" });
+      await pending;
+    });
+
     expect(screen.queryByText(/φ = 45.*°/)).not.toBeInTheDocument();
   });
 
