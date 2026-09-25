@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 
 import App from "./App";
 import { spatialPanelsOf } from "./lib/composition";
+import { requestDatasetRemoval } from "./lib/datasetRemoval";
 import { connectLifecycle } from "./lib/lifecycle";
 import { lazyRegion } from "./lib/lazyRegion";
 import { defaultPlotView } from "./lib/plotview";
@@ -105,9 +106,13 @@ if (new URLSearchParams(window.location.search).has("harness")) {
         // collapsed it into `composition`, silently misclassifying every
         // spatial-multi-panel apply as "single" in the structural report).
         spatialPanelsOf: typeof spatialPanelsOf;
+        // The app's one dataset-removal request path (confirm, remove, toast),
+        // so `modal-inert.spec` can raise a toast or a confirm WHILE a dialog
+        // is open: since R15 the Delete key no longer reaches it from there.
+        requestDatasetRemoval: typeof requestDatasetRemoval;
       };
     }
-  ).__qz = { useApp, harnessResetWindows, harnessApplyWindows, spatialPanelsOf };
+  ).__qz = { useApp, harnessResetWindows, harnessApplyWindows, spatialPanelsOf, requestDatasetRemoval };
 }
 
 // ── ?view=calc — standalone DiraCulator launcher (MAIN_PLAN #22) ───────────

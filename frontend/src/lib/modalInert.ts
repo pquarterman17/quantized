@@ -67,6 +67,8 @@
 
 import type { RefObject } from "react";
 
+import { holdModal } from "./appShortcuts";
+
 /** Marks an app-level live region: never inert while a modal is open. The
  *  eager components spell it as a literal (importing this module would pull
  *  it into the entry chunk); `modalInert.test.tsx` pins the spelling. */
@@ -188,6 +190,8 @@ function guardFocus(e: FocusEvent): void {
 /** Register an open modal root (read live from `ref`) and recompute. */
 export function registerModal(ref: RefObject<HTMLElement | null>): void {
   openModals.push({ ref, layers: new Set() });
+  // R15: an open modal also gates the app's window-level shortcuts.
+  holdModal(ref, true);
   sync();
 }
 
@@ -201,6 +205,7 @@ export function isTopModal(ref: RefObject<HTMLElement | null>): boolean {
  *  call it. */
 export function releaseModal(ref: RefObject<HTMLElement | null>): void {
   for (let i = openModals.length - 1; i >= 0; i--) if (openModals[i].ref === ref) openModals.splice(i, 1);
+  holdModal(ref, false);
   sync();
 }
 

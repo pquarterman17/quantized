@@ -17,6 +17,7 @@
 
 import { useEffect } from "react";
 
+import { listenForAppShortcuts } from "../../lib/appShortcuts";
 import { isEditingTarget } from "../../lib/editingTarget";
 import { freezePlotSnapshot, readLivePlotSnapshot } from "../../lib/plotsnapshot";
 import { cycleWindow, nextPlotBg, snapshotView, zOrderIds } from "../../lib/plotview";
@@ -274,7 +275,7 @@ export function useWindowCommands(): void {
           break;
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // R15: never while a modal dialog is open (lib/appShortcuts.ts).
+    return listenForAppShortcuts(onKey);
   }, []);
 }

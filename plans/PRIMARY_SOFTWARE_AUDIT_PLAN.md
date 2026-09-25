@@ -3892,10 +3892,12 @@ covers a much smaller subset and guards focus on Analyze.
   BUG-018 and CLOSED R1 and R13**; **round 10 (2026-09-25) CLOSED R12**:
   modality is now a browser-enforced `inert` background instead of
   `aria-modal`, with the live regions exempt (`frontend/src/lib/modalInert.ts`).
-  Round 10's review follow-up also CLOSED R16, the residual that round opened.
-  Stays `[~]` rather than `[x]`: twelve residuals remain (R2–R11, R14 and R15
-  below — R1, R12, R13 and R16 are closed, R14 was opened by the round-9
-  re-review, R15 by round 10), each a distinct, smaller gap — none of them a
+  Round 10's review follow-up also CLOSED R16, the residual that round opened,
+  and **round 11 (2026-09-25) CLOSED R15**: a modal now gates the app's
+  window-level shortcuts (`frontend/src/lib/appShortcuts.ts`).
+  Stays `[~]` rather than `[x]`: eleven residuals remain (R2–R11 and R14
+  below — R1, R12, R13, R15 and R16 are closed, R14 was opened by the round-9
+  re-review), each a distinct, smaller gap — none of them a
   dialog with no keyboard dismissal at all, which is what the audit originally
   found.
 
@@ -4539,10 +4541,11 @@ covers a much smaller subset and guards focus on Analyze.
       chunk.
 
     **Left open:**
-    - Residual R15 below.
+    - Residual R15 below (closed in round 11).
     - The engines not measured, listed under (a). Firefox and (Linux)
-      WebKit now run in CI through `e2e-xbrowser`; this stays open until
-      that job's first green run is recorded under (a).
+      WebKit now run in CI through `e2e-xbrowser`, first green on #414
+      (recorded under (a)); the shipped WKWebView and WebView2 embeds
+      themselves are still unmeasured.
     - Live regions INSIDE background panels, such as a workshop's
       `role="alert"`, are not exempt. They sit in an inert window beside
       interactive controls, so an alert raised there while a dialog is open
@@ -4627,6 +4630,98 @@ covers a much smaller subset and guards focus on Analyze.
     and with "confirm before removing" on it asks OVER the dialog, which is
     now correct. Whether a modal should suppress global shortcuts outright
     is a product decision. It is recorded here rather than taken silently.
+
+    **CLOSED (round 11, 2026-09-25).** The decision taken: a modal suppresses
+    every shortcut that acts on the app BEHIND it, and keeps only the two
+    that open another dialog ON TOP of it, which R16 made correct.
+
+    *Inventory.* Every `keydown` listener on `window`/`document`:
+    - App shortcuts. `useGlobalShortcuts` handles Delete/Backspace
+      (remove), `?` (Shortcuts), Alt+←/→ (view history), `a` (autoscale),
+      `f`/`y`/`p` (workshops), ↑/↓ (step dataset), H/Z/D/M/I/W (plot
+      tools) and Ctrl/Cmd + K (palette), O (open), V (paste a dataset),
+      `[`/`]` (panels), Shift+L (theme), `,` (Preferences) and S (save).
+      `useHistoryCommands` handles Ctrl/Cmd+Z and Shift+Z (undo/redo).
+      `useWindowCommands` handles Ctrl+Tab/Shift+Tab (window focus) and
+      Ctrl/Cmd+Shift+N/D/W (new, duplicate, close window).
+      `CalcOnlyApp` handles Ctrl/Cmd+Shift+L (theme).
+    - Not app shortcuts, and unchanged. `escapeStack` (Escape, already
+      modal-aware), `useDialogFocus` (the Tab trap), `ConfirmDialogBody`
+      (its own Enter/Escape), `usePendingDialogGuard` (Enter/Space during
+      a lazy load), `WhatIsThis`, `ContextMenu`, `TooltipLayer`,
+      `SymbolPalette` and `usePeakWizard` (each owns Escape for its own
+      surface).
+
+    *The rule.* It lives in one place, `lib/appShortcuts.ts`. All four app
+    handlers now register through `listenForAppShortcuts` instead of
+    `window.addEventListener`. While any modal hold exists, the gate
+    passes only `?` and Ctrl/Cmd+, to them. It never calls
+    `preventDefault()` or stops propagation, so a dialog's own fields and
+    handlers are untouched. Typing, Backspace and a text field's native
+    Ctrl+Z all keep working. `lib/modalInert.ts` takes a hold for every
+    registered dialog, the same set the background `inert` is walked for.
+    `usePendingDialogGuard` takes one while a lazy body is still loading
+    (slice 8). The module is eager and tiny. `modalInert.ts` stays in its
+    lazy chunk.
+
+    *A pre-existing hole closed on the way.* `useHistoryCommands` hands
+    Ctrl+Z to the app on a range, checkbox or radio input (Group S finding
+    5). So Ctrl+Z on Preferences ▸ Plot's line-width slider undid the last
+    edit behind the dialog. It no longer does, and a test pins it.
+
+    *Evidence.* Unit: `overlays/modalShortcuts.test.tsx` (34), which runs
+    the three real hooks. Each of 14 background shortcut classes acts with
+    no dialog, and does nothing from a Preferences button. It also covers
+    the slider's Ctrl+Z, the pending guard, reopening the keys on close,
+    `?` over Preferences, Ctrl+, over Help, and editing keys in Help's
+    search box, including an unclaimed Ctrl+Z. Four sabotages:
+    - gate removed: exactly the 17 cases that expect a blocked key go red;
+    - layering allowance removed: the 2 layering cases and both R16
+      `modalInertOrder` cases go red;
+    - no pending hold: only the pending-guard case goes red;
+    - gate claims a blocked key with `preventDefault()` instead of
+      skipping it: the text-field case goes red, and so do the three R16
+      `modalInertOrder` cases, whose Escape it swallows.
+
+    Browser: `e2e/specs/modal-inert.spec.ts` gained "R15: background
+    shortcuts pressed inside Preferences leave the app untouched". It
+    presses 18 keys, then runs a positive control with the dialog closed.
+    Three cases used a shortcut as their path INTO a dialog. They now
+    raise the toast, the confirm and the window from outside a key event:
+    `__qz` exposes `requestDatasetRemoval` under `?harness`, and the window
+    opens through `setCurveFitOpen`. What they prove about `inert` is
+    unchanged. The toast case and the window case also assert, from the
+    STORE, that their old key (Delete, `f`) now does nothing. A DOM read
+    cannot tell: the first cut checked `.qzk-win` count 0 right after `f`,
+    and it stayed green with the gate removed, because the window's body is
+    lazy. Browser sabotage (gate removed, SPA rebuilt): exactly those two
+    cases and the R15 case go red, on both attempts.
+
+    Manual check against `uv run qz --no-browser` in Chromium: with a
+    dataset imported and Preferences opened by Ctrl+,, each of 15 keys
+    left the store snapshot unchanged. The keys were Ctrl+Z, Ctrl+Shift+Z,
+    Delete, Backspace, z, h, f, p, y, ↓, Ctrl+K, Ctrl+[, Ctrl+Shift+L,
+    Ctrl+Shift+N and Ctrl+Tab. The snapshot covered datasets, history,
+    tool, workshops, palette, panels, theme, windows and toasts. `?` then
+    opened Shortcuts painted on top, with Preferences inert. Escape, then
+    Escape again, closed both and left 0 `[inert]`. With no dialog open,
+    `z` and Delete acted.
+
+    **Bundle:** eager bytes went from 867,372 B to **867,524 B (+152 B)**
+    against the unmoved 868,308 pin. Measured twice after `npm ci` with
+    `node_modules/.vite` removed.
+
+    **Gates**, after `npm ci`: `tsc -b --force` 0 and lint 0. vitest ran
+    727 files, 12,193 passed and 2 expected-fail. The build passed. e2e (CI
+    settings) had 70 passed, 1 skipped (already skipped before), 0
+    retries; `modal-inert.spec.ts` now has 8 cases. `test_repo_integrity`
+    had 13 passed.
+
+    **Left open.** The command palette is a backdrop surface but not a
+    modal dialog. It registers no hold, and it keeps its own
+    editing-target guard. Preferences' tabs are `<div>`s with click
+    handlers only, so they are not keyboard-reachable. That was found
+    while writing the slider test and is not part of R15.
 
   - **R16** (round 10, R12 closure) — **Escape was ranked by OPEN order;
     Tab and `inert` by PAINT order; paint by TREE order.**

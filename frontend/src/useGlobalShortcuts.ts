@@ -6,6 +6,7 @@
 
 import { useEffect } from "react";
 
+import { listenForAppShortcuts } from "./lib/appShortcuts";
 import { cancelActiveGesture } from "./lib/gestureCancel";
 import { useEscapeSurface } from "./lib/escapeStack";
 import { isEditingTarget } from "./lib/editingTarget";
@@ -181,8 +182,9 @@ export function useGlobalShortcuts(): void {
           break;
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // R15: through the modal gate. While a dialog is open only `?` and
+    // Ctrl/Cmd+, (which open a dialog ON TOP) reach `onKey` at all.
+    return listenForAppShortcuts(onKey);
   }, []);
 
   // ── The three plot-tool tiers of the Escape ladder (GUI_INTERACTION #9) ──
