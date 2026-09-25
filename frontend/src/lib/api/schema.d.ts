@@ -2420,6 +2420,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reductions/pawley": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Pawley Route
+         * @description Whole-pattern Pawley unit-cell refinement for powder XRD.
+         */
+        post: operations["pawley_route_api_reductions_pawley_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/reductions/reflectivity-fft": {
         parameters: {
             query?: never;
@@ -2584,6 +2604,52 @@ export interface paths {
         get: operations["get_unit_categories_api_reference_unit_categories_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reflectivity/dream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Dream Route
+         * @description Queue a DREAM posterior for a fit; returns ``{job_id, plan}``.
+         *
+         *     Poll ``GET /api/jobs/{id}``; ``GET /api/jobs/{id}/result`` is
+         *     ``calc.refl_dream.sample_reflectivity``'s dict. A request the sampler would
+         *     refuse, or one over the limits above, is a 422 here, before anything is
+         *     queued. ``plan`` carries the sizes, including the band draws after the
+         *     clamp.
+         */
+        post: operations["dream_route_api_reflectivity_dream_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reflectivity/fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Fit Route
+         * @description Fit the layer model to one or more measured reflectivity curves.
+         */
+        post: operations["fit_route_api_reflectivity_fit_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4837,6 +4903,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/workbook-transfer/packages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Store Package
+         * @description Store a transfer package too large for the clipboard.
+         */
+        post: operations["store_package_api_workbook_transfer_packages_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/workbook-transfer/packages/{package_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fetch Package
+         * @description Fetch a stored package by id; the token must match.
+         */
+        get: operations["fetch_package_api_workbook_transfer_packages__package_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Package
+         * @description Remove a stored package before it expires; the token must match.
+         */
+        delete: operations["delete_package_api_workbook_transfer_packages__package_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/xray/calc": {
         parameters: {
             query?: never;
@@ -5950,6 +6060,11 @@ export interface components {
             n: number;
             /** V S */
             v_s: number;
+        };
+        /** DeletedResponse */
+        DeletedResponse: {
+            /** Deleted */
+            deleted: boolean;
         };
         /** DemagRequest */
         DemagRequest: {
@@ -7579,6 +7694,74 @@ export interface components {
             /** Columns */
             columns: number[][];
         };
+        /** PawleyRequest */
+        PawleyRequest: {
+            /** A */
+            a: number;
+            /**
+             * Alpha
+             * @default 90
+             */
+            alpha?: number;
+            /** B */
+            b: number;
+            /**
+             * Beta
+             * @default 90
+             */
+            beta?: number;
+            /** C */
+            c: number;
+            /**
+             * Gamma
+             * @default 90
+             */
+            gamma?: number;
+            /** Hkl Max */
+            hkl_max?: number | null;
+            /** Intensity */
+            intensity: number[];
+            /**
+             * Max Iter
+             * @default 20
+             */
+            max_iter?: number;
+            /**
+             * Max Two Theta
+             * @default 120
+             */
+            max_two_theta?: number;
+            /**
+             * Min Two Theta
+             * @default 0
+             */
+            min_two_theta?: number;
+            /**
+             * Profile Fwhm
+             * @default 0.05
+             */
+            profile_fwhm?: number;
+            /**
+             * Refine Cell
+             * @default true
+             */
+            refine_cell?: boolean;
+            /**
+             * Symmetry
+             * @default P
+             * @enum {string}
+             */
+            symmetry?: "P" | "F" | "I" | "A" | "B" | "C" | "R";
+            /** Tie */
+            tie?: ("abc" | "ab" | "none") | null;
+            /** Two Theta */
+            two_theta: number[];
+            /**
+             * Wavelength
+             * @default 1.5406
+             */
+            wavelength?: number;
+        };
         /** PcaFigureRequest */
         PcaFigureRequest: {
             /** Dpi */
@@ -7897,6 +8080,137 @@ export interface components {
              * @default false
              */
             paired?: boolean;
+        };
+        /**
+         * ReflDreamRequest
+         * @description A completed fit's parameters and channels (as sent to /fit), the fitted
+         *     values to start the population about, and the sampling budget. ``pop`` is
+         *     chains per free parameter; ``burn`` and the kept length are generations;
+         *     ``seed`` makes the run reproducible.
+         */
+        ReflDreamRequest: {
+            /**
+             * Band Draws
+             * @default 200
+             */
+            band_draws?: number;
+            /**
+             * Burn
+             * @default 100
+             */
+            burn?: number;
+            /** Centre */
+            centre?: {
+                [key: string]: number;
+            } | null;
+            /** Channels */
+            channels: components["schemas"]["ReflFitChannel"][];
+            /** Parameters */
+            parameters: components["schemas"]["ReflFitParameter"][];
+            /**
+             * Pop
+             * @default 10
+             */
+            pop?: number;
+            /**
+             * Samples
+             * @default 10000
+             */
+            samples?: number;
+            /** Seed */
+            seed?: number | null;
+            /**
+             * Thin
+             * @default 1
+             */
+            thin?: number;
+            /**
+             * Weighting
+             * @default dr
+             * @enum {string}
+             */
+            weighting?: "dr" | "log";
+        };
+        /**
+         * ReflFitChannel
+         * @description One measured curve. ``dq`` is a per-point 1-sigma resolution unless
+         *     ``dq_is_fwhm``; ``resolution`` is a constant 1-sigma dQ/Q, used instead of
+         *     ``dq`` (never together).
+         */
+        ReflFitChannel: {
+            /**
+             * Background
+             * @default background
+             */
+            background?: string;
+            /** Dq */
+            dq?: number[] | null;
+            /**
+             * Dq Is Fwhm
+             * @default false
+             */
+            dq_is_fwhm?: boolean;
+            /** Dr */
+            dr?: number[] | null;
+            /** Label */
+            label?: string | null;
+            /** Q */
+            q: number[];
+            /** Q Max */
+            q_max?: number | null;
+            /** Q Min */
+            q_min?: number | null;
+            /** R */
+            r: number[];
+            /** Resolution */
+            resolution?: number | null;
+            /**
+             * Scale
+             * @default scale
+             */
+            scale?: string;
+            /** Spin */
+            spin?: ("+" | "-") | null;
+        };
+        /**
+         * ReflFitParameter
+         * @description One model parameter: ``L{i}.{thickness|sld|isld|roughness|msld}``,
+         *     ``scale``, ``background`` or a per-channel scale/background name.
+         */
+        ReflFitParameter: {
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Name */
+            name: string;
+            /** Tie */
+            tie?: string | null;
+            /** Value */
+            value: number;
+            /**
+             * Vary
+             * @default false
+             */
+            vary?: boolean;
+        };
+        /** ReflFitRequest */
+        ReflFitRequest: {
+            /** Channels */
+            channels: components["schemas"]["ReflFitChannel"][];
+            /**
+             * Max Nfev
+             * @default 200
+             */
+            max_nfev?: number;
+            /** Parameters */
+            parameters: components["schemas"]["ReflFitParameter"][];
+            /**
+             * Weighting
+             * @default dr
+             * @enum {string}
+             */
+            weighting?: "dr" | "log";
         };
         /** ReflectivityFFTRequest */
         ReflectivityFFTRequest: {
@@ -8508,6 +8822,19 @@ export interface components {
             tf: number;
             /** Ts */
             ts: number;
+        };
+        /** StoredPackageResponse */
+        StoredPackageResponse: {
+            /** Expires At */
+            expires_at: string;
+            /** Id */
+            id: string;
+            /** Size */
+            size: number;
+            /** Token */
+            token: string;
+            /** Ttl Seconds */
+            ttl_seconds: number;
         };
         /**
          * StrainRequest
@@ -12690,6 +13017,41 @@ export interface operations {
             };
         };
     };
+    pawley_route_api_reductions_pawley_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PawleyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     reflectivity_fft_route_api_reductions_reflectivity_fft_post: {
         parameters: {
             query?: never;
@@ -12925,6 +13287,76 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    dream_route_api_reflectivity_dream_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReflDreamRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    fit_route_api_reflectivity_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReflFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -16783,6 +17215,159 @@ export interface operations {
                         [key: string]: unknown;
                     };
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    store_package_api_workbook_transfer_packages_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": Record<string, never>;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoredPackageResponse"];
+                };
+            };
+            /** @description Too large */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Empty or too small */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Store unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Store full */
+            507: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    fetch_package_api_workbook_transfer_packages__package_id__get: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-transfer-token": string;
+            };
+            path: {
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The stored package */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Invalid id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found (or wrong token) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Expired */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_package_api_workbook_transfer_packages__package_id__delete: {
+        parameters: {
+            query?: never;
+            header: {
+                "x-transfer-token": string;
+            };
+            path: {
+                package_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeletedResponse"];
+                };
+            };
+            /** @description Invalid id */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Not found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

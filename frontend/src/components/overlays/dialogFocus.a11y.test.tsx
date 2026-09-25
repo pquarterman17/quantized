@@ -152,6 +152,8 @@ describe("ParamDialog keyboard cancel (P3.3)", () => {
     act(() => {
       result = askParams("Proceed?", []);
     });
+    // The body is a lazy chunk (bundle diet slice 8): wait for it to mount.
+    await screen.findByRole("dialog");
 
     await user.keyboard("{Escape}");
     await expect(result).resolves.toBeNull();
@@ -172,6 +174,7 @@ describe("ParamDialog keyboard cancel (P3.3)", () => {
     act(() => {
       result = askParams("Smooth", [{ key: "n", label: "Window", type: "number", default: 5 }]);
     });
+    await screen.findByRole("dialog"); // lazy body (bundle diet slice 8)
 
     // The field's own autoFocus wins — the hook does not override it.
     // ParamFields renders a bare <input> (no type="number" — it coerces on
@@ -205,6 +208,7 @@ describe("ConfirmDialog focus trap (P3.3)", () => {
     act(() => {
       result = askConfirm("Remove everything?", "gone forever", "Remove all", true);
     });
+    await screen.findByRole("dialog"); // lazy body (bundle diet slice 8)
 
     const cancel = screen.getByRole("button", { name: "Cancel" });
     const remove = screen.getByRole("button", { name: "Remove all" });
@@ -383,6 +387,7 @@ describe("stacked focus traps take turns (P3.3 round 2)", () => {
     act(() => {
       confirmed = askConfirm("Remove everything?", "gone forever", "Remove all", true);
     });
+    await screen.findByRole("button", { name: "Remove all" }); // lazy body (bundle diet slice 8)
     const inner = within(screen.getAllByRole("dialog")[1]);
     const innerCancel = inner.getByRole("button", { name: "Cancel" });
     const removeAll = inner.getByRole("button", { name: "Remove all" });
@@ -484,11 +489,15 @@ describe("round-2 focus details, now pinned (P3.3 round 3)", () => {
     expect(screen.getByRole("button", { name: "First" })).toHaveFocus();
   });
 
-  it("orders traps by OPEN order, so reopening an outer one does not steal Tab (NIT 6)", async () => {
+  it("a reopened trap is the ONE active trap, the same one Escape and inert pick (NIT 6, R16)", async () => {
     // Measured on the round-2 tree: toggling the OUTER trap closed→open while
-    // an inner one stayed open pushed the outer on top, and Tab then cycled
-    // the dialog BEHIND the topmost one ("Outer A", "Outer B", "Outer A", …).
-    // `seq` is per component instance now, so close/reopen keeps its place.
+    // an inner one stayed open left Tab cycling a dialog that was not the one
+    // in charge. Round 3 answered with per-instance MOUNT order ("Inner"
+    // stays active); R16 measured mount order disagreeing with Escape (open
+    // order) and with paint (tree order) in the real app, and unified all of
+    // them on OPEN order, with modalInert painting the newest-opened on top.
+    // So the reopened Outer is now the active trap, and exactly one trap acts:
+    // Tab wraps inside Outer, and Inner has gone inert beneath it.
     const user = userEvent.setup();
     function Stacked() {
       const [outerOpen, setOuterOpen] = useState(true);
@@ -521,10 +530,11 @@ describe("round-2 focus details, now pinned (P3.3 round 3)", () => {
     await user.click(screen.getByRole("button", { name: "Toggle outer" })); // close…
     await user.click(screen.getByRole("button", { name: "Toggle outer" })); // …and reopen
 
-    screen.getByRole("button", { name: "Inner B" }).focus();
+    screen.getByRole("button", { name: "Outer B" }).focus();
     await user.tab();
 
-    expect(screen.getByRole("button", { name: "Inner A" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Outer A" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Inner A" }).closest("[inert]")).not.toBeNull();
   });
 
   it("skips a focusable inside an aria-hidden wrapper, not only a hidden element (S20)", async () => {

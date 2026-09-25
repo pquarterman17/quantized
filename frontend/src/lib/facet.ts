@@ -217,9 +217,17 @@ export function breakPayloads(
   // own `xlo`/`xhi` (the finite min/max of the WHOLE x column, not of any one
   // segment). Unused when no row has a finite x: every segment is then empty
   // and drops out below.
-  const finiteAll = xs.filter((v) => Number.isFinite(v));
-  const dataLo = finiteAll.length ? Math.min(...finiteAll) : -Infinity;
-  const dataHi = finiteAll.length ? Math.max(...finiteAll) : Infinity;
+  // Do not spread the full column into Math.min/max: a large imported scan
+  // exceeds the JS argument limit and makes an otherwise valid figure crash.
+  let dataLo = Infinity;
+  let dataHi = -Infinity;
+  for (const value of xs) {
+    if (!Number.isFinite(value)) continue;
+    if (value < dataLo) dataLo = value;
+    if (value > dataHi) dataHi = value;
+  }
+  if (dataLo === Infinity) dataLo = -Infinity;
+  if (dataHi === -Infinity) dataHi = Infinity;
   const segments: [number, number][] = [];
   let prevHi = -Infinity;
   for (const [lo, hi] of sorted) {

@@ -7,6 +7,7 @@ import { IconButton } from "../../primitives/IconButton";
 import { NumberField } from "../../primitives/NumberField";
 import { Select } from "../../primitives";
 import type { SldPreset } from "../../../lib/types";
+import { resolveLayer } from "./reflFitModel";
 import type { ModelLayer, Radiation } from "./useReflectivity";
 
 function roleLabel(index: number, count: number): string {
@@ -28,7 +29,9 @@ export default function LayerTable({
   onUpdate: (index: number, patch: Partial<ModelLayer>) => void;
   onRemove: (index: number) => void;
 }) {
-  const options = presets.map((p) => ({ value: p.name, label: p.name }));
+  // "" = a manual SLD row (seeded from the SLD calculator, or written by the
+  // fit's "Apply to model" when a fitted SLD left its preset's value).
+  const options = [{ value: "", label: "Manual SLD" }, ...presets.map((p) => ({ value: p.name, label: p.name }))];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
@@ -44,8 +47,7 @@ export default function LayerTable({
       </div>
       {layers.map((row, i) => {
         const isEnd = i === 0 || i === layers.length - 1;
-        const p = presets.find((x) => x.name === row.preset);
-        const sld = p ? (radiation === "xray" ? p.sldX : p.sldN) : row.sld;
+        const { sld, isld } = resolveLayer(row, presets, radiation);
         return (
           <div
             key={i}
@@ -66,7 +68,10 @@ export default function LayerTable({
             <Select
               options={options}
               value={row.preset}
-              onChange={(e) => onUpdate(i, { preset: e.target.value })}
+              // Switching to Manual keeps the row's current SLD instead of zeroing it.
+              onChange={(e) =>
+                onUpdate(i, e.target.value === "" ? { preset: "", sld, isld } : { preset: e.target.value })
+              }
             />
             <NumberField
               value={isEnd ? "—" : row.thickness}

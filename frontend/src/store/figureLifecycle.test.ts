@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { createFigureDocument, type FigureDocument } from "../lib/figureDocument";
+import { facetComposition } from "../lib/composition";
+import { facetPayloads } from "../lib/facet";
 import type { FigureDoc } from "../lib/figuredoc";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import { editableFigureDirty, figurePublicationDirty, liveWindowDocument } from "./figureLifecycle";
@@ -360,6 +362,48 @@ describe("canonical Publication Preview session", () => {
     expect(state.plotTitle).toBe("Published title");
   });
 
+  it("removing a facet in Publication Preview clears the focused facet render cache on Apply", () => {
+    useApp.setState({ datasets: [{
+      id: "d1", name: "Data",
+      data: { time: [0, 1, 2], values: [[2, 0], [3, 1], [4, 0]], labels: ["Y", "Group"], units: ["", ""], metadata: {} },
+    }] });
+    useApp.getState().facetByColumn("d1", 1);
+    expect(useApp.getState().composition?.kind).toBe("facet");
+    expect(useApp.getState().beginFigurePublicationEdit()).toBe(true);
+    expect(useApp.getState().figurePublicationSession?.draft.bindings.facetKey).toBe(1);
+
+    useApp.getState().patchFigurePublicationDraft((draft) => ({
+      ...draft,
+      bindings: { ...draft.bindings, facetKey: null },
+      plot: {
+        ...draft.plot,
+        view: { ...draft.plot.view, stackMode: false },
+        axisBreaks: { ...draft.plot.axisBreaks, x: [[0.25, 0.75]] },
+      },
+    }));
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(true);
+    const state = useApp.getState();
+    expect(state.composition).toBeNull();
+    expect(state.facetKey).toBeNull();
+    expect(state.stackMode).toBe(false);
+    expect(state.plotWindows[0].document?.plot.axisBreaks.x).toEqual([[0.25, 0.75]]);
+  });
+
+  it("assigning a facet clears a stale break composition so the new facet grid can render", () => {
+    useApp.setState({ composition: { kind: "break", panels: [] } });
+    expect(useApp.getState().beginFigurePublicationEdit()).toBe(true);
+    useApp.getState().patchFigurePublicationDraft((draft) => ({
+      ...draft,
+      bindings: { ...draft.bindings, facetKey: 1 },
+      plot: { ...draft.plot, view: { ...draft.plot.view, stackMode: true } },
+    }));
+
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(true);
+    expect(useApp.getState().composition).toBeNull();
+    expect(useApp.getState().facetKey).toBe(1);
+    expect(useApp.getState().stackMode).toBe(true);
+  });
+
   it("rejects same-id concurrent focused-facade drift without recording history, and flags the session staleBaseline", () => {
     useApp.getState().beginFigurePublicationEdit();
     useApp.setState({ plotTitle: "Changed on Stage" });
@@ -606,6 +650,31 @@ describe("canonical Publication Preview session — library target", () => {
     // instead of silently reverting it back to the pre-Apply Stage state.
     expect(state.plotTitle).toBe("New title");
     expect(liveWindowDocument(state, state.plotWindows[0])?.plot.view.plotTitle).toBe("New title");
+  });
+
+  it("clears a focused facet render cache when a Library-target preview removes faceting", () => {
+    const data = {
+      time: [0, 1, 2], values: [[2, 0], [3, 1], [4, 0]],
+      labels: ["Y", "Group"], units: ["", ""], metadata: {},
+    };
+    const view = { ...defaultPlotView(), facetKey: 1, stackMode: true };
+    const saved = createFigureDocument({ id: "figure-lib-1", name: "Saved figure", datasetId: "d1", view, facetKey: 1 });
+    const w1: PlotWindow = { ...window(), title: saved.name, view, document: saved };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "Data", data }],
+      editableFigures: [saved], plotWindows: [w1], focusedWindowId: "w1",
+      ...view,
+      composition: facetComposition(facetPayloads(data, 1, null, [0])),
+    });
+    expect(useApp.getState().beginFigurePublicationEditForFigure(saved.id)).toBe(true);
+    useApp.getState().patchFigurePublicationDraft((draft) => ({
+      ...draft,
+      bindings: { ...draft.bindings, facetKey: null },
+      plot: { ...draft.plot, view: { ...draft.plot.view, stackMode: false } },
+    }));
+    expect(useApp.getState().applyFigurePublicationEdit()).toBe(true);
+    expect(useApp.getState().composition).toBeNull();
+    expect(useApp.getState().facetKey).toBeNull();
   });
 
   // Item 1 (data loss): the finder's exact repro at full-store level -- a

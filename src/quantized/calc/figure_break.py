@@ -46,6 +46,30 @@ from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps  # 
 __all__ = ["render_breaks_impl"]
 
 
+def _visible_bounds(
+    x: NDArray[np.float64], breaks: Sequence[tuple[float, float]]
+) -> list[tuple[float, float]]:
+    """Use the same non-empty, data-clamped panels as the interactive plot."""
+    finite = x[np.isfinite(x)]
+    if not finite.size:
+        return [(0.0, 1.0)]
+    xlo, xhi = float(finite.min()), float(finite.max())
+    segments: list[tuple[float, float]] = []
+    lo = float("-inf")
+    for b0, b1 in breaks:
+        segments.append((lo, b0))
+        lo = b1
+    segments.append((lo, float("inf")))
+    bounds = [
+        (max(lo, xlo), min(hi, xhi))
+        for lo, hi in segments
+        if np.any((finite >= lo) & (finite <= hi))
+    ]
+    # The interactive view declines a break if fewer than two panels survive.
+    # A fully covered dataset must still export as an ordinary single panel.
+    return bounds or [(xlo, xhi)]
+
+
 def render_breaks_impl(
     x: NDArray[np.float64],
     series: Sequence[tuple[str, ArrayLike]],
@@ -78,15 +102,7 @@ def render_breaks_impl(
     (matplotlib's own ``sharey`` + this module's ``tick_params(left=False)``
     on the rest), so ``y_fmt`` only visibly affects that panel, but is
     applied uniformly for simplicity/consistency."""
-    finite = x[np.isfinite(x)]
-    xlo = float(finite.min()) if finite.size else 0.0
-    xhi = float(finite.max()) if finite.size else 1.0
-    bounds: list[tuple[float, float]] = []
-    lo = xlo
-    for b0, b1 in breaks:
-        bounds.append((lo, b0))
-        lo = b1
-    bounds.append((lo, xhi))
+    bounds = _visible_bounds(x, breaks)
     n = len(bounds)
     widths = [max(hi - lo, 1e-9) for lo, hi in bounds]
 

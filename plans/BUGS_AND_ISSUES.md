@@ -2,7 +2,8 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-20 (BUG-024 through BUG-028 merged in PR #385;
+**Updated:** 2026-09-25 (BUG-030 filed and fixed: the local API Origin guard now admits only its own origin, plus the Vite origin in `qz --dev`; earlier that day P3.3 residual R12 closed: `aria-modal` replaced by a per-element `inert` background with the live regions exempt, see the change log; earlier 2026-09-21: BUG-012 facet-plus-break no-op now surfaced and removable in Publication Preview; screen/export break-panel residual and large-column crash fixed; BUG-009 final queued-analysis race fixes merged in PR #398;
+earlier: BUG-024 through BUG-028 merged in PR #385;
 BUG-002 FIXED — declared-source write protection now
 compares filesystem identity as well as canonical path, so hard-link and
 normalization-insensitive aliases are refused without adding source I/O to the
@@ -76,6 +77,7 @@ This is a working document, not a claim that every observation is already reprod
 
 | ID | Priority | Area | Issue | Owner | Status/evidence |
 |---|---:|---|---|---|---|
+| 2026-09-24 | Claude | Added and fixed BUG-029 (Parratt engine +isld = gain) at the simulate/fit boundary | Regression tests in `test_api_reflectivity.py` and `test_calc_refl_fit.py`; MATLAB untouched |
 | BUG-001 | P0 | NCNR `.refl` import/plot | Uncertainty and resolution are plotted as ordinary Y curves | Claude | Every code-verifiable box closed 2026-09-12; owner Windows visual check + a Reductus variant check remain |
 | UX-001 | P1 | Origin project Library | Large worksheet cards are difficult to interpret and consume too much space | Claude | Compact Tree row + both residuals (icon audit, selected-vs-open) test-verified 2026-09-12; owner visual verification of the reported project remains. **Its icon-audit residual proved to be only half an audit — see UX-004**, which finishes it without reverting anything here |
 | BUG-002 | P2 | Desktop bridge write consent | A hard-linked alias of a declared raw source defeats the never-overwrite-your-own-source check | Codex | **FIXED 2026-09-20** — filesystem-identity guard shared by cached and payload checks; strict `xfail` converted to passing cross-platform coverage; PR #382 |
@@ -87,7 +89,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **10 of 10 code sites fixed, re-verified 2026-09-14 by grepping every call site rather than trusting the count** (see the entry's "Every caller covered" box); `lib/barlayout.ts`'s label path was the last one, shipped 2026-09-12. The deferred end-to-end reproduction test (filter + Extract, at the `planExtract` layer) was added 2026-09-14 — see the entry's Reproduction checklist. Declared closed three times before it actually was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite had caught essentially none of it; adversarial review, per-branch sabotage and measuring claims caught all of it. Owner's real-data visual confirmation remains open |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | BUG-008 | P2 | Split Dataset | An explicit `cat_levels` level table was invisible to Split, so a few-row categorical column MERGED all its samples into one child dataset (and, at row counts where the shape heuristic agreed, named the children after raw float codes) | Claude | **FIXED** 2026-09-10 after ONE review round that found 2 HIGH — the first cut fixed only the `cat_levels` shape and its chokepoint ratchet was evadable by an aliased import. 22 behaviour tests + a 2-test ratchet, every fix sabotage-verified |
-| BUG-009 | P2 | Pending-dataset contract | Mutating and outward analysis actions now resolve the complete Origin book and resume automatically; stale queued intent is cancelled rather than applied | ChatGPT-Sol | **FIXED 2026-09-20** — PRs #389–393 shipped; final analysis actions are PR #394 (CI pending) |
+| BUG-009 | P2 | Pending-dataset contract | Mutating and outward analysis actions now resolve the complete Origin book and resume automatically; stale queued intent is cancelled rather than applied | ChatGPT-Sol | **FIXED 2026-09-21** — PRs #389–394 shipped; PR #398 closed the post-merge queued-replay race and failure-state gaps. CI green on #398; owner real-file acceptance remains open. |
 | BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal. Adversarial review round (2026-09-13) closed the one real gap the fix missed — File ▸ Open itself never joined the toast channel — plus doc/citation cleanup; see the entry |
 | BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review rounds 2/3 (2026-09-13) closed further regressions, finished the finding #5 fix, and widened the terminal-status fix to every `failed`/`cancelled` transition. Residual closed 2026-09-13: `store/workspaceIO.ts`'s Save/Save As now shares the identical post-await `pending` re-check (see the entry) — every explicit export path (Save, Save As, workbook transfer, Pack Project) now closes finding #2's window. Owner call on abort-vs-partial-pack still open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
@@ -109,9 +111,11 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-026 | P2 | Floating plot windows | A rapid drag/resize drops its final pointer position; a cancelled touch/pen gesture can remain armed and move the window later without a pressed button | Codex | **FIXED 2026-09-20** — PR #385; one finish path flushes move/resize, cancels rAF and handles pointer cancel/blur; owner feel-check remains |
 | BUG-027 | P2 | Recent data files | Desktop recent imports deduplicate by bare filename, so importing the same filename from another folder silently removes the first experiment from quick reopen | Codex | **FIXED 2026-09-20** — PR #385; native paths identify rows, same-named files coexist, and parent-folder context disambiguates them |
 | BUG-028 | P3 | Windows test reliability | Long-path bridge tests can fail in fixture setup under normal Windows MAX_PATH policy before Quantized code runs | Codex | **FIXED 2026-09-20** — PR #385; Windows capability failures skip precisely while POSIX and capable hosts retain bridge coverage |
+| BUG-029 | P1 | Reflectivity simulate/fit — imaginary SLD sign | The golden Parratt engine (`calc/reflectivity.py`, port of MATLAB `parrattRefl`) treats a POSITIVE imaginary SLD as gain: a 2000 Å film with isld +0.5e-6 raised R from 0.071 to 0.50, while presets, `sld_formula` and refl1d all use positive = absorption | Claude | **FIXED 2026-09-24** (P2.2 slice 1) at the boundary: `/api/reflectivity/simulate` and `calc/refl_model.layer_stack` negate isld before calling the engine; the golden engine and MATLAB are untouched |
 | UX-005 | P1 | Quick Plot refusal guidance | Quick Plot refusal text exposed obsolete roadmap wording instead of directing users to the shipped configuration workflow | ChatGPT-Sol | **FIXED 2026-09-20** — commit `4997396a`; both refusal paths name **Configure Quick Plot…**, map data retains Map-specific guidance, and focused/full gates passed |
 | UX-006 | P3 | Installed-version diagnostics | The installed CLI previously rejected `qz --version`, obscuring the package version during release support | ChatGPT-Sol | **FIXED 2026-09-20** — `qz` and `quantized` now use argparse's version action backed by canonical `quantized.__version__`, exiting before server/browser startup; focused CLI tests and both-alias wheel smoke coverage added. Commit/PR recorded in the audit completion entry. |
 | UX-007 | P2 | Workbook Properties command | The workbook right-click menu showed **Properties…** permanently disabled and explained it with the internal roadmap text “arrives with Details/Properties (PR D)”, even though PR D shipped; the result was a prominent dead end in the new Origin-like Library | ChatGPT-Sol | **FIXED 2026-09-20** — Properties now opens a bounded read-only inspector from the shared workbook action registry in Tree, Details, and Tiles. It projects canonical workbook children, location, recorded source/Origin provenance, availability, member/artifact counts, member tags, and import time only when present; Close/Escape restores its invoking row/tile focus. Editing remains in existing commands. Focused 42 tests, full frontend suite, forced typecheck, lint, build/bundle, and integrity gates run; full pickup brief retained in `POST_RELEASE_PROBLEM_AUDIT.md` |
+| BUG-030 | P1 | Local API Origin guard (security) | `origin_allowed` accepted any `localhost`/`127.0.0.1` origin on any port, so another local dev server or app page could trigger write routes (file writes, job submission) with a simple text/plain POST | Claude (agent) | **FIXED 2026-09-25** on branch `origin-guard` — Origin must match the request's own scheme + Host port (both loopback aliases); the Vite origin is admitted in `qz --dev` only. Tauri-origin residual recorded in the entry |
 
 ---
 
@@ -2140,8 +2144,8 @@ lose an edit:
   once, only after the resumed edit succeeds. Remaining refusal family: local
   analysis guards.
 
-  **Sixth and final implementation slice complete 2026-09-20 — PR #394,
-  CI pending:** Stats Chooser recommendations, Fit Y by X reports, and
+  **Sixth implementation slice shipped 2026-09-20 — PR #394:**
+  Stats Chooser recommendations, Fit Y by X reports, and
   Tabulate dataset/report exports now resume automatically against the full
   Origin book. The adversarial pass found a fourth outward path omitted from
   the plan: Copy TSV; it now resolves first as well. Every queued action
@@ -2151,6 +2155,20 @@ lose an edit:
   calculated from the preview can never leak into the report. No production
   caller of `refusePendingEdit` or `pendingStatusMessage` remains; the legacy
   helper stays only as tested fallback infrastructure.
+
+  **Post-merge critical-review fix shipped 2026-09-21 — PR #398:** the three
+  queued replay effects had treated any cleared `pending` flag as their own
+  successful resolution. A same-ID replacement/reimport could therefore run
+  a queued action on different data before the original fetch reported that
+  its install was rejected. Replay now requires that request's successful
+  `resolveDataset` result and the same active dataset object; switching to a
+  different active dataset cancels a stalled request immediately. Stats Chooser
+  clears busy and stale results when the full analysis view has no groups.
+  Fit Y by X omits only typed local insufficient-data levels; a service failure
+  aborts a per-level report instead of silently emitting a partial one.
+  Regression tests cover same-ID replacement, stalled active-dataset switch,
+  empty groups, and a one-level service failure. Forced TypeScript, lint,
+  697 frontend test files locally, and every GitHub CI check passed.
 ### CLOSED (2026-09-10) — "in flight" vs "failed, will never arrive"
 
 - [x] `lib/bookData.ts` records why the last fetch for a `pending` book failed
@@ -3556,7 +3574,7 @@ F5 DOM test asserts TWO uPlot instances INSIDE EACH window frame instead of a
 total of four (a regression moving a panel between the windows would have
 passed).
 
-**Residuals added (measured, deliberately not fixed here):**
+**Residuals added in round 3 (historical; first item closed 2026-09-21):**
 
 - **Three wire-valid break shapes draw differently on screen and on export.**
   `lib/facet.breakPayloads` drops a segment with no rows (`rows.length === 0`)
@@ -3591,6 +3609,31 @@ passed).
   path, so an `x_breaks` pair that would 400 the flat export is accepted in
   silence. Precedence itself is correct and tested; this is the missing
   authoring feedback beside it.
+
+**2026-09-21 follow-up (ChatGPT-Sol):** The first residual above is fixed:
+`calc.figure_break._visible_bounds` now drops data-empty segments and clamps
+surviving bounds to the finite x extent, matching `lib/facet.breakPayloads`.
+When fewer than two panels survive, the production export dispatch uses its
+ordinary plot path, so single-axis properties such as `x_lim` remain active.
+The export test checks both the computed ranges and actual SVG panel count for
+out-of-range, empty-middle, and partially out-of-range cases. Independently,
+`breakPayloads` no longer spreads a potentially huge x column into
+`Math.min`/`Math.max`, which crashed on large imported scans; a 200,000-row
+regression test pins that path. The facet-plus-break feedback residual above
+remained open at this point; the screen/export parity fix did not change that
+precedence.
+
+**2026-09-21 follow-up (ChatGPT-Sol):** The second residual is addressed in
+Publication Preview without adding the still-deferred full facet editor. When
+the draft carries `facetKey`, the x-break panel explicitly says the ranges are
+inactive and disables Add. An explicit **Remove faceting and use breaks**
+action clears that binding and `stackMode` in the draft, preserving saved
+breaks; removing a previously saved break remains available. Applying the
+draft clears a focused facet render cache, so Stage derives the break
+arrangement instead of continuing to draw the old facet grid. The existing
+facet-over-break precedence is unchanged. Focused panel, draft, and Apply
+regressions pin the transition; full facet editing remains a separate owner-
+gated feature.
 
 **Round-3 verification:** `tsc -b --force`, `eslint src --max-warnings=0`,
 `vitest run src/lib src/store src/components/Stage src/components/windows
@@ -7421,6 +7464,17 @@ gets the KEY, not the ARIA surface — and `aria-modal` still hides the toaster
 and status-bar live regions. Closing it needs the `inert`-plus-live-region-
 hoisting design decision R12 records.
 
+**R12 was closed separately on 2026-09-25** (`46ed0750`, P3.3 round 10). This
+paragraph stands as the record of what the BUG-018 fix did and did not do.
+The decision R12 took: `aria-modal` is gone from all 16 dialog elements, and a
+browser-enforced `inert` background, computed per element, carries modality
+(`frontend/src/lib/modalInert.ts`), with the live regions exempt. One
+ordering note touches this entry. This fix's `modal` layer ranks Escape by
+OPEN order, while equal-z dialogs painted in tree order, so `?` pressed in
+Help or Preferences opened Shortcuts underneath, invisible, and the first
+Escape closed it unseen (measured on `main`). R16 closed that by painting
+dialogs in open order, too. See R16 in `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`.
+
 #### Implementation
 
 - [x] Minimal safe behavior defined — one Escape closes the innermost open
@@ -8703,6 +8757,75 @@ behavior, while GitHub runners may pass under a different policy.
 
 ---
 
+## BUG-029 — the Parratt engine treats positive imaginary SLD as gain
+
+**Priority:** P1 — absorbing films simulated as amplifying
+**Reported:** 2026-09-24 by Claude during the P2.2 reflectivity-fit review
+**Status:** Fixed 2026-09-24 at the API/model boundary (P2.2 slice 1)
+
+### Problem and impact
+
+`calc.reflectivity.parratt_refl` (golden vs MATLAB `parrattRefl`) forms
+k_z with the sign convention under which `+sld_imag` amplifies the beam.
+Measured: a 2000 Å film on Si with isld +0.5e-6 gives R = 0.50 at a Q where
+the non-absorbing film gives 0.071. Every other place in the app (layer
+presets, `sld_formula`, periodictable, refl1d) means positive = absorption,
+so `/simulate` silently showed absorbing layers as gain media.
+
+### Resolution checklist
+
+- [x] Negate isld at the boundary: `routes/reflectivity._engine_layers` (simulate) and `calc/refl_model.layer_stack` (fit).
+- [x] Regression tests: `test_simulate_treats_positive_sld_imag_as_absorption`, and the positive-isld absorption case in `tests/test_calc_refl_fit.py`.
+- [x] Leave the golden engine and its MATLAB freeze untouched (parity holds for MATLAB's own convention).
+- [ ] Decide deliberately whether MATLAB `parrattRefl` should change sign (sibling repo; not touched here).
+
+---
+
+## BUG-030 — the local API's Origin guard accepted every localhost port
+
+**Priority:** P1 — security: another local web page could drive the write routes
+**Reported:** 2026-09-25 by a security review (Claude)
+**Status:** Fixed 2026-09-25 on branch `origin-guard` (not yet merged)
+
+### Problem and impact
+
+`security.origin_allowed` (the CSRF half of `app.py`'s `_security_guard`,
+covering `/api/*` and the `/api/ws` upgrade) accepted ANY origin whose
+hostname was `localhost`, `127.0.0.1` or `::1`, on ANY port. Measured with
+TestClient: `Origin: http://localhost:8888` on a text/plain POST passed with
+a 200. The page cannot read the response (CORS), but a text/plain POST is a
+"simple" request with no preflight, so any other local dev server or local
+app page open in the same browser could trigger file writes (e.g.
+`/api/workbook-transfer/packages`) and job submission. Separately, CORS
+granted read access to `localhost:5173` in every run mode, not just `--dev`.
+
+### Fix
+
+- [x] An Origin now passes only when its scheme and port equal the request's
+  own scheme and `Host` port (`localhost` and `127.0.0.1` interchangeable for
+  that same port; `[::1]` only on an `[::1]` Host). The port comes from the
+  live `Host` header, which `host_allowed` has already vetted and a page
+  cannot set, so it is right for `--port`, the busy-8000 ephemeral fallback,
+  the Tauri ephemeral sidecar and uvicorn `--reload` with no port plumbing.
+- [x] The Vite dev origin (both aliases) is admitted — for the guard and for
+  CORS — only when `qz --dev` exports `QZ_DEV_VITE_PORT`; `_run_dev` now runs
+  Vite with `--port 5173 --strictPort` from one `_VITE_PORT` constant, so the
+  admitted port is the port Vite really binds. CORS is empty in every other
+  mode.
+- [x] Unchanged: missing Origin passes; `Origin: null` is refused; exact Tauri
+  origins pass; the 403 detail stays the ASCII `cross-origin API request blocked`.
+- [x] Tests: `tests/test_origin_guard.py` (both aliases, other port, other
+  scheme, dev-only origin, read + text/plain file-write + job routes, WS, and
+  a real uvicorn on an OS-picked port the way `--desktop` runs it);
+  `test_csrf_guard.py` cases now name the Host they are same-origin with;
+  `test_server_launch.py` pins the Vite args and the pre-uvicorn env export.
+- [ ] Residual: `tauri://localhost` is the origin of EVERY Tauri app on the
+  machine, not just ours. The packaged shell navigates to the served
+  `http://127.0.0.1:<port>` (same-origin), so the allowance may be removable;
+  not changed here without a packaged-app check.
+
+---
+
 ## Change log
 
 | Date | Author | Change | Evidence/status |
@@ -8732,3 +8855,6 @@ behavior, while GitHub runners may pass under a different policy.
 | 2026-09-19 | Claude (agent) | Filed BUG-018 (P2): all ten backdrop dialogs in `components/overlays/` claim Escape with `window.addEventListener("keydown", …, true)` + `stopPropagation()`, which does not stop a same-node same-phase sibling, so two stacked dialogs both act on ONE keystroke — measured 2 → 0 open `[role="dialog"]` for Preferences+Shortcuts, Preferences+Help and Preferences over a pending `ConfirmDialog`, the last also resolving the confirmation `false` on the keystroke that dismissed Preferences. Pre-existing (the Escape effects are byte-identical to before `cee0494f`); what was new was R1 being CLOSED and the audit row flipped to "window capture, kept" on the claim that a backdrop dialog can never be out-ranked — true over a non-dialog surface, false dialog-over-dialog. The preferred fix was BUILT and MEASURED (all ten onto `useEscapeSurface("window", …)`; it does fix the ladder, confirm stays pending on the first Escape) and then REVERTED: `escapeStack`'s `isEditingTarget` early return made Help, Separate, Combine and Split Escape-DEAD from their own documented landing spots (an `<input>`/`<select>` each), 9 failed / 264 passed. Narrowed R1 instead, corrected the audit row, recorded NITs 4 and 5 as residuals R12/R13, and fixed review NIT 3 (Preferences landed on the first Theme segment, which under `theme: "light"` is an `aria-selected="false"` "Dark" button; it now lands on the SELECTED one, pinned in both themes) | 3 new specs (`components/overlays/stackedDialogEscape.test.tsx`) + 1 new 2-case `it.each` (`PreferencesDialog.test.tsx`), all sabotage-verified across 5 sabotages, source restored byte-identical; round 7's per-dialog focus-hook sabotage property re-verified after the landing-spot change (Preferences alone → RED 2/10). Also corrected the FIFTH-recurrence wrong-parent bundle record on `cee0494f`: its parent is `4179b166`, not `b10bcad3` (three commits back, with two P4.1 commits that moved 218 eager lines between them) — re-measured in a throwaway worktree, `4179b166` **889,496 B** → `cee0494f` **889,498 B**, +2 B; the delta was right, both absolute numbers were wrong by 21 B |
 | 2026-09-19 | Claude (agent) | **BUG-019 fixed** (P1, silent state corruption) and **BUG-020 filed + fixed** (P2, silent data loss). BUG-019: `lib/techniqueViewMemory.ts`'s `captureTechniqueView` spread its capture source whole (`{ ...liveView, labels }`), and `LiveViewSource` is satisfied STRUCTURALLY — so the three callers that hand it the entire `AppState` (`store/windows.ts:151`'s `focusedRebindPatch`, `useWorkspaceAutosave.ts:283`'s debounced autosave, `store/workspaceIO.ts:102`'s Save/Save As) stored `datasets`, `plotWindows` AND the PREVIOUS `techniqueViewMemory` in every entry. Only the slot being written is replaced, so a single technique recurses linearly but ALTERNATING two — switch to the map, switch back — makes each slot absorb the other one generation late: `size(k) ~ size(k-1) + size(k-2) + C`, Fibonacci-like, ratio -> phi ~ 1.62 (an earlier revision of this row said `2 x size(k-1) + C`; measured on `281ee552`: 80,340 -> 241,003 -> 482,002 -> 883,664 -> 1,526,325 -> 2,570,648 -> 4,257,632 -> 6,988,939, ratios 3.0, 2.0, 1.83, 1.73, 1.68, 1.66, 1.64). Autosave `JSON.stringify`s that map on the thread that draws, 800 ms after every dataset switch and every dataset add, which is why the owner's ROI box integration produced an empty new plot AND blanked previously plotted datasets — the data was never wrong, the main thread simply stopped. Fixed by projecting the capture source down to its nine declared fields inside `captureTechniqueView`, so it holds for all four callers and any future one; no schema change and no behaviour change to the memory itself. Two review corrections carried in the same commit: the earlier claim that "nothing is reported" was FALSE — `lib/autosave.ts:88` + `StatusBar.tsx:139-145` do render a persistent `role="alert"` autosave-failing indicator — so the claim is narrowed to the stall itself, and the one genuinely wrong surface (a status line hardcoded to "storage full or unavailable" for what was a `serializeWorkspace` failure) now names the real reason. BUG-020: `Stage/useCutLanding.ts` minted `cut-N` ids from a private page-lifetime counter instead of `store/idSeq.ts`'s collision-free sequence — filed with its own reproduction rather than left as a footnote, since it reproduces the owner's "Apply made a new plot that was empty/wrong" symptom class independently of the stall | Measured before/after against the RUNNING app (Playwright + real backend) on the owner's exact sequence: `JSON.stringify(techniqueViewMemory).length` 5,440,727 -> 16,322,222 -> 32,387,084 -> 69,957,577 -> 123,592,932 -> 214,798,775 -> 359,639,968 -> `RangeError: Invalid string length` -> page unresponsive >45 s; after the fix a flat 344 B across all 26 switches with identical canvas ink (537,953 / 51,795) every time. A second run on two ordinary imported XRDML files hit 73.9 MB in ten switches and stopped answering any page evaluation from switch nine for the remaining 600 s. BUG-020 probed on both trees: `['cut-1','cut-1']`, `activeId` resolving to the OLD rows, and `removeDatasets` emptying the library, versus unique ids and an independent delete after. 10 new tests across four files, all sabotage-verified — the whole-object spread and the recursion-only variant each redden 4 (2 in `lib/techniqueViewMemory.test.ts`, 2 in `store/techniqueMemoryGrowth.test.ts`); restoring the private cut counter reddens all 3 in `Stage/useCutLanding.test.ts`; hardcoding the autosave wording reddens both new `useWorkspaceAutosave.test.ts` cases; and a per-field sweep of `projectLiveView` (scope: the two memory files + `store/windows.test.ts`) now reddens on EVERY one of the nine — xKey 4, yKeys 8, yScale 5, xScale 2, seriesStyles 9, seriesLabels 8, seriesOrder 2, errKeys 8, hiddenChannels 8 (the previous row claimed 1 for a dropped field, which was the weaker `hiddenChannels: []` variant, and `xScale` had NO coverage at all before this round). `npx tsc -b --force` 0; `npx eslint src --max-warnings=0` 0; SCOPED `npx vitest run` over the six affected/adjacent files (`lib/techniqueViewMemory.test.ts`, `store/techniqueMemoryGrowth.test.ts`, `Stage/useCutLanding.test.ts`, `useWorkspaceAutosave.test.ts`, `store/windows.test.ts`, `architecture.test.ts`) 6 files / 138 passed, 0 `FAIL` — the FULL suite is NOT verified on this tree: two attempts were killed by host contention (a second agent's gate running concurrently), not by a test failure, so CI is the remaining gate; `uv run ruff check src tests tools` 0; `uv run mypy src` 0 (297 files); `uv run pytest -q tests/test_repo_integrity.py` 13 passed (12 + the new heading guard). Eager bundle 875,755 B at the parent `281ee552` -> 876,018 B here, +263 B, 451 B under the unmoved 876,469 B budget |
 | 2026-09-20 | Claude (agent) | **BUG-021 fixed** (P0, owner-reported from a real VSM hysteresis loop; filed as BUG-019 on the branch and renumbered on rebase, `main` having taken that number). Four reported defects, each reproduced by measurement first: (1) `lib/api/http.ts`'s `ensureOk` — the app's SINGLE error-extraction path — cast the error body to `{ detail?: string }`, so FastAPI's array-shaped 422 `detail` rendered as `[object Object],[object Object],[object Object],[object Object]`; new `lib/api/errorDetail.ts` formats any shape, `await import()`ed only on the non-string path so its bytes stay out of the eager bundle. (2) The 422 itself: `JSON.stringify(NaN)` is `null` and every series field is pydantic `list[float]`, one error per gap — new `lib/api/finitePairs.ts` DROPS gap rows before a fit and scatters the result back to their original indices, throwing rather than returning a shifted column. (3) The scientific bug: the Background tab always called the M(T) one-sided high-T fit, which `subtract_mag_background`'s own docstring forbids on a loop — new `lib/magDataKind.ts` decides from the DECLARED x label/unit and `useMagTools.ts` dispatches, failing closed to a user choice when unknown. (4) The labelling: description, control label, per-path default (0.1 vs 0.7, separate state) and reported quantity (offset, NOT intercept) follow the path actually selected. Adversarial review then found six more, all closed here: the first cut read `x_column_name` ALONE while six other resolvers read `x_column_long || x_column_name`, so an Origin short column name ("B", "H", "T") reintroduced the silent misdispatch mirror-imaged; the NaN filter covered 1 of 5 call sites, leaving the Hysteresis workshop's AUTOMATIC analysis still 422ing on the owner's same loop; a documented no-op (`slope=offset=0`) was reported as a successful subtraction; the readout survived a dataset change and sat under the other path's label; the Units tab paired the coordinates and so destroyed a good field value over a moment gap (fixed with a substitute-not-drop pair for elementwise transforms, plus the minimum-data guard it lacked); and a line count and a missing bundle number were corrected. The readout's ownership is DERIVED, not cleared by an effect — an effect keyed on the active id fires on the app's own `addDataset` and wiped the readout in the same turn that produced it (measured: 8 tests red). The co-occurring "autosave failing" banner was investigated and NOT filed separately: it is BUG-019's `JSON.stringify` failure, not a NaN failure. A THIRD round then closed five more: `_label_for` falls back to the bare Origin SHORT designation when there is no Long Name, so `x_column_long` can ITSELF be "B"/"H"/"T" and the bare letter still reached the detector (closed at the root — a LONE symbol no longer classifies on its own and fails closed, while a recognisable unit still decides alone); a derived dataset recorded no x identity, so the panel could flip to "Cannot tell M(T) from M(H)" the instant its own output became active; a minor loop was claimed to be "re-centred" when that branch deliberately does not centre; the Hysteresis workshop dropped gap rows with no user notice; and `convert()`'s guard refused only when BOTH axes were all-gap. Two pre-existing defects were FILED, not fixed: **BUG-022** (`selectedFitData` does not filter, and all six consumers post to `list[float]` routes — the owner's same loop still 422s in Curve Fit) and a note on **BUG-020** that four more call sites mint ids from a page-lifetime counter, which this fix's readout ownership now keys on | Measured before the fix: a node-`JSON.stringify` body → 4 `null`s → HTTP 422 with a 4-entry `detail` list (`loc` `["body","moment",7/8/22/31]`); and on a synthetic saturated loop the M(T) tool removed intercept 1.0500e-03 (true offset 5.0000e-05), leaving plateaus at 0 / −2.000e-03 and squareness 1.0000 against the M(H) tool's ±1.000e-03. Autosave ruled out by `lib/nonFiniteCells.test.ts`'s two autosave cases passing on this tree. Re-gated on the CURRENT base `2e9ed223` (vite 8.3.0 + vitest 5.0.1) after `npm ci`, not carried over from the earlier base: `npx tsc -b --force` exit 0; `npx eslint src --max-warnings=0` exit 0; full `npx vitest run` 693 files / 11,740 passed + 2 expected fail, 0 `FAIL`; `npm run build` clean, eager bundle 877,081 B at the parent -> 877,336 B here, **+255 B**, 846 B under the unmoved 878,182 B budget, with `errorDetail` still emitted as its own chunk and zero `modulepreload` references to it in `index.html` (main's own bytes re-measured on this base in a throwaway worktree, removed after); `uv run ruff check src tests tools` 0; `uv run mypy src` 0 (297 files); `uv run pytest -q -n auto tests -k magnetometry` 22 passed / 2 skipped; `uv run pytest -q tests/test_repo_integrity.py tests/test_openapi_snapshot.py` 14 passed (no schema drift). 19 sabotages over three rounds, every source file restored byte-identical. |
+| 2026-09-25 | Claude (agent) | **P3.3 residual R12 closed** (`46ed0750`, re-applied from the unmerged `7f0d0a25` onto `c1d92758`, then hardened). `aria-modal` is dropped from all 16 `role="dialog"` elements in 15 components, the slice-8 lazy Confirm/Param bodies included, and `architecture.test.ts` ratchets it out. `lib/modalInert.ts` makes the background `inert` per element; the Toaster, the status-bar operations region and the autosave alert are exempt. Four changes from `7f0d0a25`. (b) A MutationObserver, attached only while a dialog is open, covers nodes that mount after the walk, and registration is a layout effect, so a lazy body resolving over Preferences is never marked (zero `inert` writes recorded). (a) Every engine in the build target has `inert`. The PyQt5 pywebview backend (Chromium 87) does not, and gets a per-element `aria-hidden` fallback. (c) Boundary, uncaught and StrictMode unmounts and the UX-003 load failure all leave nothing inert. The active modal is now the dialog painted on top (document order), because mount order left a reopened Preferences inert on top of Help. ParamDialog/ConfirmDialog now render last, because a confirm asked over Preferences rendered UNDER it. New residuals: R15 (global shortcuts fire under a modal) and R16 (Escape ranks by open order) | Unit: 31 new cases in 4 files, plus 1 in WorkbookPropertiesDialog. e2e: `modal-inert.spec.ts`, 5 cases in Chromium, including the CDP accessibility tree. 9 unit and 2 browser sabotages. Gates: vitest 726 files / 12157 passed; e2e 67 passed, 1 skipped (pre-existing); tsc -b --force, lint, build and test_repo_integrity all green. Eager bytes 867,284 -> 867,350 B (+66) against the unmoved 868,308 pin. Not measured: Firefox, Safari, WebView2, WKWebView |
+| 2026-09-25 | Claude (agent) | **R12 review follow-up; P3.3 R16 closed.** The review measured R16 in Chromium on this branch and on `main`: `?` pressed in Help or Preferences opened Shortcuts UNDERNEATH (equal z-index paints in tree order), invisible, and the first Escape closed it unseen. Open order now drives everything. `lib/modalInert.ts` treats the newest-opened dialog as active, which Escape already used, and stamps each open backdrop's z-index in open order, so the newest dialog also paints on top. Also fixed: the `aria-hidden` fallback gains a focusin guard that sends script-driven focus back into the dialog, and `lazyRegion`'s load-failure message is a live region, so it is announced under an open dialog while its Retry stays inert. The WhatIsThis badge is deliberately not exempt (reasons in the plan). The optional diff-based `sync()` was not done | `modalInertOrder.test.tsx` now presses Escape and covers Help→`?` and Preferences→`?` (first open and reopen); e2e adds 2 Chromium cases whose paint check lifts `inert` for one hit test. Sabotages: no stamp, oldest-first, no guard, no marker, each red on its intended tests. vitest 726 files / 12159 passed; e2e 69 passed, 1 skipped; tsc, lint, build and test_repo_integrity green. Eager bytes 867,372 B (+22) against the unmoved 868,308 pin |
+| 2026-09-25 | Claude (agent) | **BUG-030 filed and fixed** (P1, security review): `security.origin_allowed` accepted any `localhost`/`127.0.0.1` origin on any port, so another local page could drive write routes with a simple text/plain POST. The Origin must now match the request's own scheme + `Host` port (both loopback aliases); the Vite origin (guard + CORS) is admitted only when `qz --dev` exports `QZ_DEV_VITE_PORT`, and Vite runs with `--strictPort` on the one `_VITE_PORT` | Branch `origin-guard`; new `tests/test_origin_guard.py` (16 tests, 38 cases); 4 sabotage rounds each reddened the expected tests; ruff/mypy clean; pytest 5174 passed / 184 skipped / 18 xfailed; e2e 69 passed / 1 fixme-skipped; `qz --dev` smoke via Vite (proxied GET 200, POST reaches route, WS accepted, foreign origin 403) |

@@ -17,20 +17,18 @@
 // `JSON.parse` (so pasting arbitrary non-Quantized clipboard text, however
 // large, is cheap to reject) and its `format` field check IS the "compatible
 // payload present" test a Paste command gates on (`canPasteWorkbook` below).
-// A file-based fallback (a guarded, expiring temp package under the desktop
-// bridge's write-consent discipline — the same shape `desktop_bridge.py`'s
-// `save_file_dialog`/`write_project_file` pair already established) is
-// EXPLICITLY DEFERRED, not built here: it is new filesystem-write authority,
-// and CLAUDE.md's read-first section is unambiguous that any new authority
-// like that must be backend-verifiable rather than caller-asserted — that
-// needs its own careful, adversarially-reviewed contract PR (the same
-// weight P1.7's `grant_source_paths` ruling got), which this slice's budget
-// does not allow to do responsibly. Booked home: "PR I file-based transport
-// fallback" as `desktop_bridge.py`'s next slice, triggered when a workbook
-// is bounded-refused for size (`MAX_TRANSFER_PACKAGE_CHARS`) or when
-// `copyText`/`readText` report unavailable — both cases already degrade
-// HONESTLY today (a named refusal reason, never a silent truncation or a
-// guessed success).
+// LARGE WORKBOOKS (Group F, which supersedes PR I's booked defer of a
+// file-based fallback): above `MAX_TRANSFER_PACKAGE_CHARS` Copy no longer
+// refuses — `buildCopyText` stores the package in the backend's guarded,
+// expiring temporary store and the clipboard gets a small versioned
+// descriptor instead; Paste's `resolvePasteText` fetches and validates it
+// through the SAME `parseTransferPackage`. Below the bound the clipboard text
+// is byte-identical to PR I's. The write-authority answer PR I asked for
+// (caller sends bytes, never a path; server-owned cache dir, server-minted
+// id, bounded size/count/lifetime) lives in lib/workbookTransferRef.ts and
+// src/quantized/io/workbook_transfer_store.py. Every failure there — store
+// offline on Copy; missing/expired/incomplete/incompatible on Paste — is a
+// named refusal reported below like any other, never a partial paste.
 //
 // FAILURE-SAFE CLEANUP (frozen-scope item 5): every failure path below
 // (empty/oversize workbook, unparseable clipboard text, wrong format/
@@ -44,7 +42,7 @@
 
 import { copyTextAsync } from "../lib/clipboard";
 import { plural } from "../lib/plural";
-import type { TransferExistingIds, TransferIdGenerators } from "../lib/workbookTransfer";
+import type { BuildTransferResult, TransferExistingIds, TransferIdGenerators } from "../lib/workbookTransfer";
 import type { AppState } from "./useApp";
 import { nextDatasetId } from "./idSeq";
 import { nextWorkbookId } from "./workbookIds";
@@ -77,6 +75,7 @@ type SliceGet = () => AppState;
  *  `buildForCopy` below for why the clipboard write has to start before it. */
 type TransferCore = typeof import("../lib/workbookTransfer");
 type PasteResult = ReturnType<TransferCore["pasteTransferPackage"]>;
+type CopyBuilt = Extract<BuildTransferResult, { ok: true }>;
 
 /** The transfer core, or null after reporting that `what` could not run. */
 async function transferCore(get: SliceGet, what: string): Promise<TransferCore | null> {
@@ -107,16 +106,16 @@ async function buildForCopy(
   workbookId: string,
   name: string,
   get: SliceGet,
-): Promise<{ text: string; count: number }> {
+): Promise<CopyBuilt> {
   let core: TransferCore;
   try {
     core = await import("../lib/workbookTransfer");
   } catch (e) {
     throw new Error(`copy "${name}" failed: ${e instanceof Error ? e.message : "error"}`);
   }
-  const built = core.buildTransferPackage(workbookId, get());
+  const built = await core.buildCopyText(workbookId, get());
   if (!built.ok) throw new Error(`copy "${name}" unavailable: ${built.reason}`);
-  return { text: built.text, count: built.pkg.datasets.length };
+  return built;
 }
 
 let _reportSeq = 0;
@@ -221,6 +220,9 @@ export interface WorkbookTransferSlice {
   /** Is there a compatible workbook package on the clipboard right now?
    *  `false` covers "no bridge", "not our format", and "clipboard read
    *  denied" alike — a UI Paste command gates on this rather than guessing.
+   *  Group F: a large-workbook DESCRIPTOR counts only while it is unexpired
+   *  and of a supported version (checked locally, never fetched) — an
+   *  expired one could only be refused, like an incompatible inline package.
    *  NOTE (2026-09-15): no production caller reads it yet. The shipped Paste
    *  command (`commands/workbookTransferCommands.ts`) is unconditionally
    *  enabled and there is no paste shortcut, so the "must not toast / must
@@ -262,7 +264,7 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
       // reason; "clipboard unavailable" is only ever the fallback wording.
       const build = buildForCopy(workbookId, name, get);
       const wrote = await copyTextAsync(build.then((b) => b.text));
-      let built: { text: string; count: number };
+      let built: CopyBuilt;
       try {
         built = await build;
       } catch (e) {
@@ -270,10 +272,15 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
         return;
       }
       if (!wrote) {
+        // A package already stored for a descriptor that never reached the
+        // clipboard is unreachable: drop it now rather than let it hold
+        // transfer-store room until it expires (Group F).
+        void built.discard?.();
         fail(get, `copy "${name}" failed: clipboard unavailable`);
         return;
       }
-      get().setStatus(`copied "${name}" (${built.count} worksheet${plural(built.count)})`);
+      const n = built.pkg.datasets.length;
+      get().setStatus(`copied "${name}" (${n} worksheet${plural(n)})${built.note ?? ""}`);
       toast(`copied "${name}"`, "ok");
     },
 
@@ -284,7 +291,7 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
         // Not `transferCore()`: this probe answers a plain boolean and must
         // never toast — a Paste command merely asking "is anything pastable?"
         // has not failed at anything the user did.
-        return (await import("../lib/workbookTransfer")).parseTransferPackage(text).ok;
+        return (await import("../lib/workbookTransfer")).canPasteText(text);
       } catch {
         return false;
       }
@@ -305,7 +312,7 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
       }
       const core = await transferCore(get, "paste workbook");
       if (!core) return;
-      const parsed = core.parseTransferPackage(text);
+      const parsed = await core.resolvePasteText(text);
       if (!parsed.ok) {
         fail(get, `paste workbook: ${parsed.reason}`);
         return;

@@ -9,15 +9,19 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from collections.abc import Collection
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.requests import HTTPConnection
 
 from quantized import __version__
+from quantized.io.workbook_transfer_store import cleanup_transfer_dir
 from quantized.jobs import jobs
 from quantized.plugins import load_plugins
 from quantized.routes import (
@@ -68,9 +72,11 @@ from quantized.routes import (
     thermal,
     thin_film,
     vacuum,
+    workbook_transfer,
     xray,
 )
-from quantized.security import host_allowed, origin_allowed
+from quantized.routes._errors import validation_error_handler
+from quantized.security import dev_origins_from_env, host_allowed, origin_allowed
 
 __all__ = ["create_app", "app"]
 
@@ -105,8 +111,7 @@ async def _lifecycle_ws(ws: WebSocket) -> None:
     if not host_allowed(ws.headers.get("host")):
         await ws.close(code=1008)  # policy violation
         return
-    origin = ws.headers.get("origin")
-    if origin and not origin_allowed(origin):
+    if not _origin_ok(ws):
         await ws.close(code=1008)  # policy violation
         return
     await ws.accept()
@@ -129,14 +134,33 @@ async def _grace_check() -> None:
     if _AUTO_SHUTDOWN and _ever_connected and _clients == 0:
         os._exit(0)
 
-# Vite dev server origins (the SPA in --dev mode). Same-origin in production.
-_DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
+def _origin_ok(conn: HTTPConnection) -> bool:
+    """The CSRF check shared by the HTTP guard and the WS upgrade.
+
+    No Origin header passes (same-origin navigations, curl, the desktop
+    shells -- ``host_allowed`` covers those). A present Origin must be this
+    server's own origin for the request's scheme + Host port (BUG-030), the
+    Tauri shell, or -- under ``qz --dev`` only -- the Vite dev origin."""
+    origin = conn.headers.get("origin")
+    if not origin:
+        return True
+    return origin_allowed(
+        origin,
+        host_header=conn.headers.get("host"),
+        scheme=conn.url.scheme,
+        extra_origins=getattr(conn.app.state, "dev_origins", frozenset()),
+    )
 
 
 @asynccontextmanager
 async def _app_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     """App lifespan: clean up the executor pool + dataset cache on shutdown."""
-    # Startup: no-op
+    # Startup: sweep expired large-workbook transfer packages (Group F) from
+    # an EXISTING transfer dir -- never creates it, never fails startup.
+    try:
+        cleanup_transfer_dir()
+    except OSError:
+        logging.getLogger(__name__).warning("transfer-package cleanup failed", exc_info=True)
     yield
     # Shutdown: terminate the job executor with pending cancellation
     jobs._pool.shutdown(wait=False, cancel_futures=True)
@@ -145,12 +169,22 @@ async def _app_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     _datasetcache.clear_cache()
 
 
-def create_app() -> FastAPI:
-    """Build the FastAPI app and wire the domain routers."""
+def create_app(*, dev_origins: Collection[str] | None = None) -> FastAPI:
+    """Build the FastAPI app and wire the domain routers.
+
+    ``dev_origins`` are the only cross-origin pages (besides the Tauri shell)
+    allowed to call /api. None reads them from the environment, where
+    ``qz --dev`` exports the Vite port (``security.dev_origins_from_env``);
+    every other run mode leaves it unset, so the set is empty there."""
+    allowed_dev = frozenset(dev_origins_from_env() if dev_origins is None else dev_origins)
     application = FastAPI(title="quantized", version=__version__, lifespan=_app_lifespan)
+    application.state.dev_origins = allowed_dev
+    application.add_exception_handler(RequestValidationError, validation_error_handler)
+    # CORS read access for the Vite dev origin in --dev only (empty otherwise:
+    # the served SPA and the desktop shells are same-origin and need none).
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=_DEV_ORIGINS,
+        allow_origins=sorted(allowed_dev),
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -163,12 +197,8 @@ def create_app() -> FastAPI:
         it never inspects Host and doesn't block simple cross-site POSTs."""
         if not host_allowed(request.headers.get("host")):
             return JSONResponse({"detail": "unrecognized Host header"}, status_code=403)
-        if request.url.path.startswith("/api"):
-            origin = request.headers.get("origin")
-            if origin and not origin_allowed(origin):
-                return JSONResponse(
-                    {"detail": "cross-origin API request blocked"}, status_code=403
-                )
+        if request.url.path.startswith("/api") and not _origin_ok(request):
+            return JSONResponse({"detail": "cross-origin API request blocked"}, status_code=403)
         return await call_next(request)
 
     @application.get("/api/health")
@@ -226,6 +256,7 @@ def create_app() -> FastAPI:
     application.include_router(magnetic.router)
     application.include_router(aggregate.router)
     application.include_router(calc.router)
+    application.include_router(workbook_transfer.router)
 
     # Client-presence WebSocket (registered before the SPA mount so the
     # catch-all StaticFiles route never shadows it).

@@ -375,6 +375,7 @@ describe("useFigureBuilder", () => {
     expect(draft.bindings.y2Keys).toEqual([0]);
     expect(draft.bindings.errors).toEqual(document.bindings.errors);
     expect(draft.bindings.facetKey).toBe(1);
+    expect(result.current.facetActive).toBe(true);
     expect(draft.plot.mark).toBe("scatter");
     expect(draft.plot.axisBreaks).toEqual(document.plot.axisBreaks);
 
@@ -405,6 +406,51 @@ describe("useFigureBuilder", () => {
       }],
       x_breaks: [[0.25, 0.5]],
     });
+  });
+
+  it("clears faceting explicitly while preserving authored x-axis breaks", () => {
+    const document = createFigureDocument({
+      id: "faceted-break", name: "Faceted break", datasetId: "d1",
+      view: { ...defaultPlotView(), yKeys: [0] },
+      facetKey: 1,
+      axisBreaks: { x: [[0.2, 0.5]], y: [], y2: [] },
+    });
+    useApp.setState({ figurePublicationSession: {
+      target: "window", windowId: "w1",
+      baseline: structuredClone(document), draft: structuredClone(document),
+    } });
+    const { result } = renderHook(() => useFigureBuilder());
+    expect(result.current.facetActive).toBe(true);
+
+    act(() => result.current.clearFacet());
+    const draft = useApp.getState().figurePublicationSession!.draft;
+    expect(draft.bindings.facetKey).toBeNull();
+    expect(draft.plot.axisBreaks.x).toEqual([[0.2, 0.5]]);
+    expect(draft.plot.view.stackMode).toBe(false);
+    expect(result.current.facetActive).toBe(false);
+  });
+
+  it("assigns and changes a facet binding on the canonical draft", () => {
+    const document = createFigureDocument({
+      id: "facet-editor", name: "Facet editor", datasetId: "d1",
+      view: { ...defaultPlotView(), yKeys: [0], stackMode: false },
+    });
+    useApp.setState({ figurePublicationSession: {
+      target: "window", windowId: "w1",
+      baseline: structuredClone(document), draft: structuredClone(document),
+    } });
+    const { result } = renderHook(() => useFigureBuilder());
+
+    act(() => result.current.setFacetKey(1));
+    let draft = useApp.getState().figurePublicationSession!.draft;
+    expect(draft.bindings.facetKey).toBe(1);
+    expect(draft.plot.view.stackMode).toBe(true);
+    expect(result.current.facetActive).toBe(true);
+
+    act(() => result.current.setFacetKey(null));
+    draft = useApp.getState().figurePublicationSession!.draft;
+    expect(draft.bindings.facetKey).toBeNull();
+    expect(draft.plot.view.stackMode).toBe(false);
   });
 
   // Regression: canonical mode read/wrote ONLY `publication.overrides` (the

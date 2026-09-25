@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from "react";
 import { reflPresets, reflSimulate, reflSldProfile, type ReflLayer } from "../../../lib/api/reflectivity";
 import type { DataStruct, SldPreset } from "../../../lib/types";
 import { nextDatasetId, useApp } from "../../../store/useApp";
+import { resolveLayer } from "./reflFitModel";
 
 export type Radiation = "xray" | "neutron";
 
@@ -18,6 +19,8 @@ export interface ModelLayer {
   thickness: number; // Å (ignored for incident medium + substrate)
   roughness: number; // Å
   sld: number; // manual SLD (Å⁻²), used only when preset === ""
+  isld?: number; // manual absorption (Å⁻², POSITIVE = absorption), preset === "" only; default 0
+  msld?: number; // magnetic SLD (Å⁻²), read only by polarised-neutron fits; default 0
 }
 
 export interface QGrid {
@@ -50,16 +53,10 @@ export interface ReflectivityState {
   updateLayer: (index: number, patch: Partial<ModelLayer>) => void;
   addLayer: () => void;
   removeLayer: (index: number) => void;
+  /** Replace the whole stack (the fit's parameter edits and "apply to model"). */
+  replaceLayers: (layers: ModelLayer[]) => void;
   simulate: () => Promise<void>;
   sldProfile: () => Promise<void>;
-}
-
-/** Resolve a row's real SLD from its preset + the radiation type. */
-function layerSld(row: ModelLayer, presets: SldPreset[], radiation: Radiation): number {
-  if (row.preset === "") return row.sld;
-  const p = presets.find((x) => x.name === row.preset);
-  if (!p) return row.sld;
-  return radiation === "xray" ? p.sldX : p.sldN;
 }
 
 export function useReflectivity(): ReflectivityState {
@@ -102,14 +99,13 @@ export function useReflectivity(): ReflectivityState {
   }, [reflectivitySeed, clearReflectivitySeed, setStatus]);
 
   // [thickness, sld_real, sld_imag, roughness] rows for the API. X-ray carries
-  // the preset's imaginary SLD (absorption); neutron treats it as ~0.
+  // the preset's imaginary SLD (absorption); neutron treats it as ~0; a manual
+  // row carries its own (reflFitModel.resolveLayer, shared with the fit).
   const toApiLayers = useMemo(
     () => (): ReflLayer[] =>
       layers.map((row) => {
-        const sldR = layerSld(row, presets, radiation);
-        const p = presets.find((x) => x.name === row.preset);
-        const sldI = radiation === "xray" && p ? p.sldImag : 0;
-        return [row.thickness, sldR, sldI, row.roughness];
+        const r = resolveLayer(row, presets, radiation);
+        return [r.thickness, r.sld, r.isld, r.roughness];
       }),
     [layers, presets, radiation],
   );
@@ -194,6 +190,7 @@ export function useReflectivity(): ReflectivityState {
     updateLayer,
     addLayer,
     removeLayer,
+    replaceLayers: setLayers,
     simulate,
     sldProfile,
   };

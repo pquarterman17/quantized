@@ -74,7 +74,13 @@ agent can implement a fix without repeating the investigation.
   against the packaged build: errors, y2, hidden/reordered series, grouping,
   facets, 2x2 pages, PNG clipboard, SVG, and PDF.
 - [ ] Compare at least one saved/reopened frozen figure containing gaps with
-  its live source and export.
+  its live source and export. **Automated structural half added 2026-09-21:**
+  `regressionMatrixFrozen.test.ts` compares the frozen figure's screen/export/
+  reopened projections, proves its snapshot keeps NaN and signed zero while
+  the live source differs, and checks the export wire before and after reopen.
+  `test_export_vector_structure.py` independently proves a JSON-null gap
+  becomes two disconnected SVG segments through the real export route. The
+  rendered desktop/Office visual comparison still needs the owner.
 
 ## Confirmed problems to solve
 
@@ -283,23 +289,25 @@ inexpensive model.
   remain required before uncertainty-role handling can honestly close.
 - [ ] **UX-001 + UX-004 / P1:** compact rows and unique marks landed, but the
   dense reported Origin project still needs a real readability verdict.
-- [ ] **BUG-002 / P2:** hard-linked source aliases can bypass raw-source write
-  protection; strict expected-failure test remains open.
-- [ ] **BUG-003 / P2:** a hidden stale Data Filter predicate remains a contract
-  problem pending the product decision recorded in the living tracker.
+- [x] **BUG-002 / P2:** hard-linked source aliases are blocked by filesystem
+  identity checks (PR #382).
+- [x] **BUG-003 / P2:** incompatible Data Filter rules are paused consistently
+  across the panel and its consumers (PR #387).
 - [x] **BUG-005 / P2 (fixed 2026-09-20, `df06a518`):** Corrections passes
   categorical codes through all y transforms; Resample preserves a coincident
   grid and refuses a new one; reimport/workspace round trips preserve levels and
   order.
-- [ ] **BUG-009 / P2:** pending-dataset handling remains several guards rather
-  than a resolve-then-apply contract.
+- [x] **BUG-009 / P2 (fixed in #389–394, hardened in #398):** mutating and
+  outward analysis actions resolve the full Origin book before applying;
+  queued actions require their own successful resolution and cancel stale
+  intent. Owner real-file acceptance remains open in `BUGS_AND_ISSUES.md`.
 - [ ] **FEATURE-001 / P3:** faceted per-series styling remains deliberately
   unresolved; do not reapply the reverted one-style-list patch without first
   deciding whether styles are grid-wide or panel-specific.
 
 ## Recommended execution order
 
-1. [ ] Fix UX-005 first: tiny, immediately visible, and removes misleading
+1. [x] Fix UX-005 first: tiny, immediately visible, and removes misleading
    guidance from a primary workflow.
 2. [x] Resolve UX-007 next: remove the dead-end wording immediately, then use a
    small read-only inspector if it fits the current Library projection cleanly.
@@ -315,6 +323,7 @@ inexpensive model.
 
 | Date | Author | Change | Evidence |
 |---|---|---|---|
+| 2026-09-21 | ChatGPT-Sol | Reconciled the stale BUG-002/003 entries; aligned x-break export panels with the screen for empty/out-of-range segments and removed the large-column argument-limit crash in the screen builder | Focused Python/TypeScript regression tests; PR #400 |
 | 2026-09-20 | Codex | Fixed BUG-005 across Corrections, Resample, browser reimport, raw/corrected workspace persistence and client/API boundaries | `df06a518`; focused backend 175/1 skip; frontend architecture/affected 311; full frontend 11,758/2 expected failures; full backend 5,417/87 skip/9 xfail excluding three host MAX_PATH setup cases; forced typecheck/lint/Ruff/mypy/build/integrity green |
 | 2026-09-20 | Codex | Fixed BUG-023 with the shared BUG-017 sentinel codec across frozen FigureDocuments, snapshot-window numeric arrays, workspace saves, and workbook transfer | Direct/full round trips; focused 271; full frontend 11,755; typecheck/lint/build/bundle; integrity 13 |
 | 2026-09-20 | ChatGPT-Sol | Extended BUG-023 to the independent static snapshot-window payload; filed UX-007 for the dead workbook Properties placeholder; completed the saved numeric-payload boundary pass | Serializer/sanitizer tracing, persistence tests, action-registry and plan reconciliation |

@@ -123,6 +123,9 @@ describe("BUG-018 — one Escape closes the INNERMOST backdrop dialog only", () 
     void asked.then((v) => {
       settled = v;
     });
+    // The confirm body is a lazy chunk (bundle diet slice 8): let it mount --
+    // and register its Escape surface -- before anything stacks on it.
+    await screen.findByText("Delete everything?");
     // Preferences opens ON TOP of the pending confirm, so Preferences is the
     // innermost surface and the only one this keystroke should reach.
     act(() => useApp.getState().setPrefsOpen(true));

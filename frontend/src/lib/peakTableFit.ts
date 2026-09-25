@@ -180,12 +180,23 @@ export function peakTableMatchesData(table: PeakTable, ds: Dataset): boolean {
 const DEGREE_UNITS = new Set(["deg", "°", "degree", "degrees"]);
 const TWO_THETA_LABEL = /2\s*-?\s*(theta|θ)|two[_ -]?theta/i;
 
+/** The rule itself, factored out so every consumer that needs to know "is
+ *  THIS axis 2-theta in degrees" shares one predicate instead of re-deriving
+ *  it — `peakTableXIsDegrees` below delegates to it (no behaviour change),
+ *  and `usePawley` (the Reductions workshop) calls it directly over
+ *  `xChannelIdentity(ds.data, null)` rather than a `PeakTable`'s recorded
+ *  provenance, since Pawley refines straight off the dataset's own x axis
+ *  with no fitted-peak table involved. */
+export function xAxisIsTwoThetaDegrees(x: { xLabel: string; xUnit: string }): boolean {
+  const u = x.xUnit.trim().toLowerCase();
+  return u === "" ? TWO_THETA_LABEL.test(x.xLabel) : DEGREE_UNITS.has(u);
+}
+
 /** Is the axis this table was fit on 2-theta in DEGREES — i.e. may a consumer
  *  that reads `center` as 2-theta (Williamson-Hall) use it? The exact rule is
  *  in the block comment above. */
 export function peakTableXIsDegrees(table: PeakTable): boolean {
-  const u = table.provenance.xUnit.trim().toLowerCase();
-  return u === "" ? TWO_THETA_LABEL.test(table.provenance.xLabel) : DEGREE_UNITS.has(u);
+  return xAxisIsTwoThetaDegrees({ xLabel: table.provenance.xLabel, xUnit: table.provenance.xUnit });
 }
 
 /** The x channel's label/unit as the user sees it, for
@@ -368,3 +379,84 @@ export function withPeakExcluded(table: PeakTable, id: string, excluded: boolean
   };
 }
 
+
+
+export type PeakManualPatch = Partial<Pick<PeakTableEntry, "center" | "fwhm" | "height" | "area">>;
+
+/** Why a manual edit of `current` is not physical, or null. Shared by the
+ *  edit dialog and the store writer. Only fields the edit actually CHANGES
+ *  are judged — the dialog always sends all four, and a row the fit produced
+ *  must stay editable whatever it holds. FWHM must stay positive. Height and
+ *  area may not become zero or flip sign: the fitter leaves height
+ *  unconstrained, so a dip is a legitimate negative peak, but zeroing a peak
+ *  is what Remove is for. */
+export function peakManualEditProblem(
+  patch: PeakManualPatch,
+  current: Pick<PeakTableEntry, "center" | "fwhm" | "height" | "area">,
+): string | null {
+  const changed = (k: keyof PeakManualPatch): number | undefined =>
+    patch[k] !== undefined && patch[k] !== current[k] ? patch[k] : undefined;
+  const c = { center: changed("center"), fwhm: changed("fwhm"), height: changed("height"), area: changed("area") };
+  if (!Object.values(c).every((v) => v === undefined || Number.isFinite(v))) {
+    return "Peak values must be finite numbers.";
+  }
+  if (c.fwhm !== undefined && !(c.fwhm > 0)) return "FWHM must be greater than zero.";
+  const keepsSign = (v: number | undefined, was: number): boolean =>
+    v === undefined || (v !== 0 && (was === 0 || Math.sign(v) === Math.sign(was)));
+  if (!keepsSign(c.height, current.height)) return "Height cannot be zero or change sign; remove the peak instead.";
+  if (!keepsSign(c.area, current.area)) return "Area cannot be zero or change sign; remove the peak instead.";
+  return null;
+}
+
+/** Manually revise one durable fitted-peak row. Manual numbers supersede the
+ * fit-derived value, so the uncertainty of each field that actually CHANGED is
+ * cleared and global fit metrics are invalidated. Raw data and the data
+ * fingerprint are unchanged.
+ *
+ * Area is not independent of height and FWHM: for a fixed profile shape it is
+ * height × FWHM × a shape constant (exact for Gaussian, Lorentzian and
+ * pseudo-Voigt at fixed η; approximate for an independently fitted Split
+ * Pearson VII, whose area is a windowed integral). When height or FWHM changes
+ * and the area field is unchanged, the area is rescaled by the same ratio so
+ * the row stays self-consistent; a changed area is kept as given. A row with a
+ * zero height or FWHM cannot be rescaled and keeps its area. */
+export function withPeakManualEdit(table: PeakTable, id: string, patch: PeakManualPatch): PeakTable {
+  const index = table.peaks.findIndex((p) => p.id === id);
+  if (index < 0) return table;
+  const current = table.peaks[index];
+  const differs = (key: keyof PeakManualPatch): boolean =>
+    patch[key] !== undefined && patch[key] !== current[key];
+  if (!(["center", "fwhm", "height", "area"] as const).some(differs)) return table;
+  const next = { ...current, ...patch, status: "manual-edit" };
+  if (!differs("area") && (differs("height") || differs("fwhm")) && current.height !== 0 && current.fwhm !== 0) {
+    next.area = current.area * (next.height / current.height) * (next.fwhm / current.fwhm);
+  }
+  if (differs("center")) next.centerErr = null;
+  if (differs("fwhm")) next.fwhmErr = null;
+  if (differs("height")) next.heightErr = null;
+  const peaks = [...table.peaks];
+  peaks[index] = next;
+  return {
+    ...table,
+    peaks,
+    provenance: { ...table.provenance, R2: null, rmse: null },
+  };
+}
+
+/** How many rows of a table carry hand-edited values. */
+export function manualEditCount(peaks: readonly { status?: string }[]): number {
+  return peaks.filter((p) => p.status === "manual-edit").length;
+}
+
+/** Remove fitted peaks by durable id. Refuses to create an empty PeakTable:
+ * zero fitted rows means the dataset has no peak-analysis artifact at all. */
+export function withoutPeaks(table: PeakTable, ids: ReadonlySet<string>): PeakTable | null {
+  const peaks = table.peaks.filter((p) => !ids.has(p.id));
+  if (peaks.length === table.peaks.length) return table;
+  if (peaks.length === 0) return null;
+  return {
+    ...table,
+    peaks,
+    provenance: { ...table.provenance, R2: null, rmse: null },
+  };
+}

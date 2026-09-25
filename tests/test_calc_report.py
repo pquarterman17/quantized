@@ -167,6 +167,31 @@ def test_from_multipeak_fit_builds_table() -> None:
     assert table["rows"][0][0] == 1 and table["rows"][1][2] == 20.0
 
 
+
+def test_from_multipeak_fit_marks_hand_edited_rows() -> None:
+    result = {
+        "peaks": [
+            {"model": "Gaussian", "center": 10.0, "fwhm": 1.2, "height": 100.0,
+             "area": 150.0, "eta": None, "status": "ok"},
+            {"model": "Gaussian", "center": 20.0, "fwhm": 1.5, "height": 80.0,
+             "area": 120.0, "eta": None, "status": "manual-edit"},
+        ],
+        "rmse": None, "nPeaks": 2, "model": "Gaussian",
+    }
+    rep = from_multipeak_fit(result)
+    validate_report(rep.to_dict())
+    table = next(b for b in rep.iter_blocks() if b["type"] == "table")
+    assert table["columns"][-1] == "Source"
+    assert [row[-1] for row in table["rows"]] == ["fit", "edited by hand"]
+    assert "1 edited by hand" in table["caption"]
+
+
+def test_from_multipeak_fit_has_no_source_column_for_pure_fits() -> None:
+    result = {"peaks": [{"model": "Gaussian", "center": 10.0, "fwhm": 1.2,
+                         "height": 100.0, "area": 150.0, "eta": None, "status": "ok"}]}
+    table = next(b for b in from_multipeak_fit(result).iter_blocks() if b["type"] == "table")
+    assert "Source" not in table["columns"]
+
 def test_from_anova_uses_real_result() -> None:
     battery = [
         [[130, 155, 74, 180], [34, 40, 80, 75]],

@@ -1,7 +1,15 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import ConfirmDialog, { askConfirm } from "./ConfirmDialog";
+// The dialog BODY, rendered directly: since bundle diet slice 8 it is a lazy
+// chunk behind the thin `ConfirmDialog.tsx` gate, and these are unit tests of
+// what the dialog DOES once open (focus, Enter/Escape, repeat guard), which
+// the body owns outright. The gate itself -- that nothing loads until an ask,
+// that an ask mounts this body, and what a failed load does -- is pinned in
+// `lazyDialogSeams.test.tsx`; the integration files (dialogFocus.a11y,
+// stackedDialogEscape, ToolWindow, CalcOnlyApp) still mount the real gate.
+import ConfirmDialog from "./ConfirmDialogBody";
+import { askConfirm } from "./ConfirmDialog";
 
 /** Open the dialog inside act() so its state update + effect (key listener) flush. */
 function open(...args: Parameters<typeof askConfirm>): Promise<boolean> {
@@ -113,7 +121,10 @@ describe("safety for irreversible confirms (P3.5 review)", () => {
     render(<ConfirmDialog />);
 
     const dialog = await screen.findByRole("dialog");
-    expect(dialog).toHaveAttribute("aria-modal", "true");
+    // NOT `aria-modal` — it hid the app's live regions from assistive tech for
+    // as long as this dialog was open (R12). Modality is the background
+    // `inert` in lib/modalInert.ts now; modalInert.test.tsx pins that.
+    expect(dialog).not.toHaveAttribute("aria-modal");
     expect(dialog).toHaveAccessibleName("Delete it?");
     expect(dialog).toHaveAccessibleDescription("This cannot be undone.");
     // Cancel, not the destructive button: a stray Space/Enter must dismiss.

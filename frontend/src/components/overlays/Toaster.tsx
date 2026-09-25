@@ -13,7 +13,13 @@ export default function Toaster() {
   const dismiss = useToasts((s) => s.dismiss);
   if (toasts.length === 0) return null;
   return (
-    <div className="qzk-toaster" aria-live="polite">
+    // `data-live-region` (R12) exempts this element from the `inert` a modal
+    // dialog puts on everything around it (lib/modalInert.ts, which also
+    // catches this node appearing WHILE a dialog is open). Without it a toast
+    // raised meanwhile reached the screen but not the accessibility tree.
+    // Spelled as a literal: importing the constant would pull modalInert into
+    // the entry chunk; modalInert.test.tsx pins the spelling.
+    <div className="qzk-toaster" aria-live="polite" data-live-region="">
       {toasts.map((t) => (
         <div
           key={t.id}

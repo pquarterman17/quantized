@@ -31,6 +31,26 @@ if (globalThis.localStorage === undefined) {
   });
 }
 
+// jsdom (30) implements no `inert` at all — measured 2026-09-25: the
+// property is absent from HTMLElement.prototype and `focus()` still lands
+// inside an inert subtree. Every engine the SPA ships to has it (R12, see
+// lib/modalInert.ts), and modalInert picks its `aria-hidden` fallback by
+// feature-detecting the PROPERTY. Reflect it here so the unit suite takes the
+// path real users take; this adds the reflection only, none of the behaviour,
+// which e2e/specs/modal-inert.spec.ts pins in real Chromium instead. The one
+// test of the fallback deletes this for its own duration.
+if (!("inert" in HTMLElement.prototype)) {
+  Object.defineProperty(HTMLElement.prototype, "inert", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return this.hasAttribute("inert");
+    },
+    set(this: HTMLElement, v: boolean) {
+      this.toggleAttribute("inert", Boolean(v));
+    },
+  });
+}
+
 // `globals` is off in the vitest config, so RTL's automatic afterEach cleanup
 // doesn't register itself. Unmount rendered components/hooks between tests so a
 // prior test's lingering store subscriptions can't intercept a later test's

@@ -2686,16 +2686,43 @@ physics, which already existed and was already golden. The map:
   (asserts the API call carries only the included peaks), "adopts the
   wavelength the pattern was measured at", "names the provenance of the loaded
   rows", "drops the provenance line the moment a row is edited by hand".
-- [ ] Expose the Pawley engine. `calc/pawley.py::pawley_refine` exists and is
-  tested (`tests/test_calc_pawley.py`) but is reachable from NOWHERE: no route
-  in `routes/`, no `lib/api` wrapper, no UI (measured 2026-09-14: a case-
-  insensitive grep for "pawley" over `src/quantized/routes/` returns nothing,
-  and over `frontend/src` returns exactly one hit — a doc comment in
-  `lib/peakTableFit.ts` naming a future entry point, added by this item).
-  It is also NOT a peak-table consumer — it refines a unit cell
-  against the WHOLE pattern (`two_theta`, `intensity`) plus a `phase_info`
-  cell, so the missing piece is a route + phase-cell entry point, not the
-  wiring this item shipped.
+- [x] Expose the Pawley engine. **Implemented 2026-09-23 in PR #403;
+  hardened 2026-09-24 after review.**
+  `calc/pawley.py::pawley_refine` is reachable through
+  `POST /api/reductions/pawley`, a typed frontend wrapper, and the Reductions
+  workshop under Analyze → XRD & reflectivity.
+  - **Input:** the active dataset's x axis must be a 2θ scan in degrees:
+    the fitted-peak table's rule (`xAxisIsTwoThetaDegrees`), tightened to
+    refuse labels naming another angle (phi, omega, chi, psi), 2-D datasets,
+    and x outside 0–180°. The user picks the intensity channel, the starting
+    cell, an explicit axis tie (cubic / a = b / independent), the centering
+    (R is the hexagonal-axes rule), the wavelength (read from the file when it
+    records one), the fixed profile FWHM, and whether to refine. Empty or
+    out-of-range fields disable Refine with the reason shown, using the
+    route's own bounds; the route re-checks every field (422).
+  - **Scope and cost:** only reflections inside the measured 2θ window are
+    fit and counted. `hkl_max` is derived from the cell and window, capped at
+    20; more than 500 reflections in range, or more than 2M points ×
+    reflections, is refused with advice to narrow the range (each of the ~100
+    grid-search trials solves that least-squares problem). No reflections in
+    range, or no more points than parameters, is a 422 rather than a
+    fake-perfect R_wp.
+  - **Output:** refined a/b/c to 4 decimals, α/β/γ shown as fixed (the
+    engine never refines angles; they are inputs only), and R_wp for the fit,
+    the starting cell and the linear background alone, as percentages, with
+    the in-range reflection count. A warning is shown beside the result (not
+    in place of it) and saved with it when R_wp exceeds 0.6 × the
+    background-only R_wp, when the fit ended worse than its start, or when
+    the search ran out of iterations. The derived Library dataset keeps the
+    exact fitted rows (observed, model, background, residual), is stamped as
+    a 2θ/deg XRD powder pattern, and records the full request, the warning
+    and the per-reflection table under `metadata.pawley`.
+  - **Known limits:** the engine is a local grid search with a small capture
+    radius that depends on peak width (measured: well under 1 % in some
+    cases), and from further out it can settle on a wrong minimum; the 0.6
+    warning ratio is a heuristic measured on synthetic Si; no uncertainties
+    are reported; glide and screw absences are not applied; the fit runs
+    synchronously on the request thread rather than through the job queue.
 - [x] Durable peak identity, uncertainty, exclusion, model, and provenance —
   **the columns; the uncertainty NUMBERS are the next box.** **(2026-09-14)**
   `lib/peakTable.ts` defines `PeakTable`: per-peak durable `id`,
@@ -2988,7 +3015,33 @@ a plan edit.
   williamson_hall` likewise takes no weights. Filling either in is new
   numerics and needs a MATLAB golden first (CLAUDE.md's golden-parity rule) —
   deliberately not invented here.
-- [ ] Manual peak edits and reviewed batch recipe.
+- [~] Manual peak edits and reviewed batch recipe. **2026-09-23 slice:** fitted
+  peak rows can now be selected, edited (center/FWHM/height/area), or removed
+  directly in the Peaks workshop. The durable `PeakTable` is the source of
+  truth, so edits survive save/reopen and feed downstream consumers such as
+  Williamson-Hall. An edit invalidates global R²/RMSE and clears the
+  uncertainty slot of each field it actually changed (every current producer
+  writes null uncertainties, so today this is a contract, not a visible
+  change). Only the fields an edit changes are validated: FWHM must stay
+  positive, and height/area may not become zero or change sign (a fitted dip
+  is a legitimate negative peak and stays editable). When height or FWHM
+  changes and area is left as it was, area is rescaled by the same ratio
+  (exact for Gaussian/Lorentzian/pseudo-Voigt at fixed η, approximate for an
+  independently fitted Split Pearson VII).
+  **Review hardening, 2026-09-23/24:** publishing a fit, and each effective
+  manual edit, removal and include/exclude toggle, creates one undo step
+  (no-op submissions create none); undo/redo rehydrates both the visible fitted table and its overlay
+  from the durable artifact. Async hydration is generation-guarded (a store
+  subscription bumps the generation on any active-dataset switch), so a
+  delayed resolve cannot restore an old dataset's fit after navigation. An
+  exclusion toggle no longer replaces the fit result, so the fitted-row
+  selection survives it. Hand-edited rows are declared as such: the Peaks
+  header ("N edited by hand"; "fit metrics cleared by manual changes" instead
+  of "independent fits"), the Williamson-Hall source caption, and a Source
+  column in the peak-fit report. Recording every writer matters because undo
+  snapshots the whole dataset list: an unrecorded write made after a recorded
+  one is rolled back by undoing it (an unrecorded re-fit was lost this way).
+  Batch recipe remains open, as does direct manual peak creation.
 - [ ] Technique-specific plot recipe is manually chosen, never auto-overwrites.
 - [ ] Validate on representative owner instruments/phases.
 
@@ -2999,11 +3052,46 @@ fit, uncertainty, SLD, residuals, results, and publication output.
 
 **Models:** GPT-5.6 Sol high / Claude Opus 4.8.
 
-- [ ] Bind measured X/Y/errors and fit ranges to layer stack.
-- [ ] Starts, bounds, fixed/shared parameters, resolution/background.
-- [ ] Linked data/model/residual/SLD views.
-- [ ] Durable results table and FigureDoc.
-- [ ] Validate representative XRR and PNR fits against trusted results.
+- [x] Bind measured X/Y/errors and fit ranges to layer stack. Slice 1 (PR
+  #405): `calc/refl_fit.py` + `POST /api/reflectivity/fit` fit named layer
+  parameters to one or more measured channels (R, dR, per-point dQ or dQ/Q,
+  Q window, spin +/- for a joint PNR pair), dR or log weighting, bounded and
+  time-limited; truth recovered on the committed XRR and PNR fixtures. Slice
+  2 (PR #406): the Fit mode binds library datasets/columns (Q or 2-theta with
+  lambda) in the Reflectivity workshop.
+- [x] Starts, bounds, fixed/shared parameters, resolution/background. Slices
+  1-2 (PRs #405, #406): value/vary/min/max/tie per parameter, scale and
+  background (per-channel names allowed), resolution from a dQ column or
+  dQ/Q; a model that cannot mean what it says is refused.
+- [~] Linked data/model/residual/SLD views. Slices 2-3 (PRs #406, #407): the
+  fitted curve overlays its data, and "Add fit curves" adds each channel's R
+  and model and each SLD profile (log-Y plot one click away). Open: no linked
+  multi-panel view, and residuals are returned but not yet plotted.
+- [x] Posterior uncertainty. Slice 4 (PR TBD, 2026-09-24): "Estimate
+  uncertainty (DREAM)" on a live or saved dR-weighted fit samples the
+  posterior through the job queue (`calc/refl_dream.py`,
+  `POST /api/reflectivity/dream`; progress, cancel, seed, time limit) and
+  shows 68%/95% intervals beside the least-squares values, R-hat (flagged
+  above 1.2), a bound-limited flag, and R(Q)/SLD(z) credible bands as
+  library datasets; a compact summary (never the chains) is stored on the
+  fit record and reaches the report. Validation (synthetic): converged 95%
+  widths 0.93-1.04x least squares on the XRR fixture; 77/80 thickness/SLD
+  truths inside the 95% interval over 20 fresh noise realisations; a
+  degenerate same-material pair gets bound-wide intervals and correlation
+  -1. User doc: `docs/tutorials/reflectivity-fit-workbench.md`.
+- [~] Durable results table and FigureDoc. Slice 3 (2026-09-24): every
+  finished fit is a durable record on its channel datasets (`Dataset.reflFits`,
+  last 10, `.dwk` round-trip with the BUG-017 sentinels), shown again with a
+  history picker, Apply-to-model guard, Restore fit setup and Add to report
+  (`calc/report_emit.from_refl_fit`); fit curves carry `metadata.reflFit`
+  provenance and export through the existing vector path (tested). Follow-up:
+  records also store the fitted curves (≤ 2,000 points each, thinned and
+  labelled past that), so a saved fit overlays and adds its curves without a
+  re-run; fit curves carry the Library's derived mark. Open: no dedicated
+  FigureDoc template for data/model/residual/SLD panels.
+- [ ] Validate representative XRR and PNR fits against trusted results. Open:
+  needs the owner's real instrument data and a trusted reference fit (e.g.
+  refl1d/GenX) — the synthetic-fixture checks above do not close it.
 
 ### P2.3 — SIMS depth profiles
 
@@ -3024,7 +3112,9 @@ summary without leaving Quantized.
 
 **Models:** Sol high/Opus 4.8 for fit semantics; Sonnet 5 for UI.
 
-- [ ] Add/edit/delete peaks directly in selection.
+- [~] Add/edit/delete peaks directly in selection. Edit + delete of fitted
+  durable rows shipped in the 2026-09-23 durability slice; direct add remains
+  open.
 - [ ] Mixed functions and shared/fixed/start/bound parameters.
 - [ ] Context submenu: Peak Fitting > Fit this range.
 - [ ] Explicit model metrics/warnings.
@@ -3799,10 +3889,14 @@ covers a much smaller subset and guards focus on Analyze.
   fixed across nine rounds, 2026-09-18–19.** Round 7 closed R1's focus half;
   **round 8 NARROWED R1** after measuring that its Escape half was closed on
   a false claim, and filed the measured defect as **BUG-018**; **round 9 fixed
-  BUG-018 and CLOSED R1 and R13**. Stays `[~]` rather than `[x]`: twelve
-  residuals remain (R2–R12 and R14 below — R13 is closed, and R14 was opened by
-  the round-9 re-review), each a distinct, smaller gap — none of them a dialog
-  with no keyboard dismissal at all, which is what the audit originally
+  BUG-018 and CLOSED R1 and R13**; **round 10 (2026-09-25) CLOSED R12**:
+  modality is now a browser-enforced `inert` background instead of
+  `aria-modal`, with the live regions exempt (`frontend/src/lib/modalInert.ts`).
+  Round 10's review follow-up also CLOSED R16, the residual that round opened.
+  Stays `[~]` rather than `[x]`: twelve residuals remain (R2–R11, R14 and R15
+  below — R1, R12, R13 and R16 are closed, R14 was opened by the round-9
+  re-review, R15 by round 10), each a distinct, smaller gap — none of them a
+  dialog with no keyboard dismissal at all, which is what the audit originally
   found.
 
   **The audit** — every `.tsx` under `components/overlays`, the `ToolWindow`
@@ -4221,6 +4315,246 @@ covers a much smaller subset and guards focus on Analyze.
     hoisting the live regions out of the inert subtree, which is a design
     decision of its own, not a markup tweak. Not fixed here; recorded.
 
+    **CLOSED (round 10, 2026-09-25, `46ed0750` on `c1d92758`).** This is a
+    re-application of the unmerged `7f0d0a25` (written 2026-09-19 on
+    `281ee552`). The tree had moved since then: slice 8 made the
+    Confirm/Param bodies lazy, BUG-018 added the `modal` Escape tier, and
+    UX-003 added the seam boundaries. The re-application also resolves the
+    three hypotheses that commit's review never checked.
+
+    *The decision.* `aria-modal` is dropped from **every dialog: 16
+    `role="dialog"` elements in 15 components.** These are
+    AnnotationText, CombineWorkbooks, ConfirmDialogBody, Help,
+    ParamDialogBody, PlotRecipeApply, Preferences, QuickPlotWith (two
+    branches), RecoveryChoice, ReimportAll, SeparateWorksheets, Shortcuts,
+    SplitDataset, TextFormatHelp and `Library/WorkbookPropertiesDialog`. No
+    placement of `aria-modal` can leave a live region announceable, because
+    it tells AT to ignore everything outside the dialog. Modality now
+    comes from `lib/modalInert.ts`: the background is made `inert` PER
+    ELEMENT, walking from the active dialog's root up to `<body>` and
+    marking every sibling off that path. Elements marked `data-live-region`
+    are exempt, and so is anything that contains one, which is descended
+    into instead. Three elements carry the marker: the Toaster, the status
+    bar's "Background operations" region, and the status bar's
+    autosave-failure `role="alert"`, which is new since `7f0d0a25`.
+    `architecture.test.ts` fails the build if `aria-modal` returns, in
+    either the JSX spelling or the `"aria-modal"` string-key spelling.
+
+    *(a) Engine support.* Measured: the SPA's build target is Vite 8's
+    default, Chrome/Edge 111, Firefox 114 and Safari 16.4. Every one of
+    those is at or past the version that shipped `inert` (102, 112 and 15.5
+    respectively). The pywebview desktop embeds meet the same bar: WebView2
+    is evergreen Chromium on Windows, and WKWebView uses the system WebKit
+    (Safari 15.5+). Headless Chromium 141 here reports
+    `"inert" in HTMLElement.prototype` as true. One documented target falls
+    short: the PyQt5/PySide2 backend that `server_launch.py`'s
+    `_WEBVIEW_HINT` suggests on Linux is QtWebEngine 5.15, i.e. Chromium 87,
+    which has no `inert`. It also lacks `structuredClone`, which store code
+    already calls, so that backend was already broken in practice. The
+    fallback is therefore cheap and honest: when the property is missing,
+    the same elements get `aria-hidden="true"`. That is still per element,
+    so the live regions stay exposed; Tab stays trapped and the backdrop
+    still blocks the pointer. A test covers it, and there jsdom CAN see the
+    effect, because its role queries honour `aria-hidden`. **Not measured
+    here: Firefox, Safari, WebView2, WKWebView and WebKitGTK.** This
+    container has Chromium only, so those rest on published support
+    versions.
+
+    *Cross-browser coverage runs in CI (2026-09-25). Status: MEASURED --
+    first run on PR #414 (head 1fa096df) went 16/16 green on both Firefox
+    and WebKit, merged in 22dfcd57.* The
+    new `e2e-xbrowser` job in `.github/workflows/e2e.yml` runs Firefox and
+    WebKit, one matrix leg each, over the engine-sensitive specs:
+    `modal-inert` (all 7 R12/R16 cases), `workshop-escape-ladder`,
+    `region-tool-escape`, `quick-figure-builder`, `library-tiles`,
+    `details-keyboard` and `keyboard-only`. That is 16 tests per engine; the
+    same 16 take 57 s in local Chromium under CI settings. What it will and
+    will not settle:
+    - Firefox and WebKit: focus refusal, the Tab trap, pointer blocking,
+      inert placement, paint order and the Escape ladder, all measured by
+      the real engine.
+    - The accessibility-tree assertions stay Chromium-only. They read the
+      tree over CDP, which the other engines lack, so they are skipped
+      there with an `ax-tree-unmeasured` annotation, not approximated.
+    - The WebKit leg is Playwright's Linux WebKit build, not macOS
+      WKWebView. It is the closest engine CI can run, not the shipped
+      embed. WebView2 is Chromium, so the existing `e2e` job covers its
+      engine but not the embed itself.
+    - The `aria-hidden` fallback is still exercised only by the unit test,
+      because every engine in CI has `inert`.
+    - Recorded run: PR #414, `e2e cross-browser (firefox)` and
+      `(webkit)`, 16 passed each.
+
+    *(b) The DOM-mutation gap, closed.* `7f0d0a25` walked only when the
+    modal stack changed, so a node that mounted while a dialog was open
+    stayed live. A MutationObserver (childList, subtree) is now attached
+    only while a dialog is open. It re-walks for a node added outside every
+    marked subtree (a child of a path node, or of a descended container),
+    and for a live region added under a marked ancestor, which needs the
+    descent. A node inside a marked subtree is covered by inheritance: a
+    test adding 50 such nodes records zero `inert` writes. The costs were
+    measured in Chromium as the median of 15 runs, each appending 2,000
+    nodes in one task:
+    - with no dialog open: 1.0 ms;
+    - under an inert ancestor: 3.1 ms, about 1 µs per added node;
+    - inside the dialog: 2.0 ms;
+    - one full re-walk with 7 marked elements: ~0.1 ms, which is the timer
+      resolution.
+
+    Registration moved into a LAYOUT effect, so a dialog mounting over
+    another registers before the observer sees its insertion. The slice-8
+    case is pinned directly. A lazy confirm body resolves over Preferences
+    after the ask; a test records every `inert` write during that and finds
+    none on the body's subtree. Moving the registration back to a passive
+    effect reddens that test. Four more cases are pinned:
+    - A dialog that re-renders into a different root element
+      (QuickPlotWith's "source removed" branch) stays modal, because the
+      registry reads the ref live.
+    - A background window or `<body>` portal that mounts while a dialog is
+      open goes inert. In the browser, pressing `f` in Preferences mounts
+      the curve-fit window inert, and its focus-on-mount is refused.
+    - The autosave alert and a toast raised meanwhile stay live.
+    - A symbol palette that the dialog itself opens is portaled to
+      `<body>`. It is marked `data-modal-layer` and belongs to that dialog,
+      even when it arrives in the same mutation batch as a background node.
+
+    *(c) Release on abnormal unmount.* Each of the following ends with no
+    `[inert]` in the document and an empty registry:
+    - an error boundary catching a render throw inside the open dialog;
+    - an error boundary catching an effect throw after registration;
+    - an uncaught throw that unmounts the whole React root;
+    - StrictMode's double mount, which also registers exactly once;
+    - UX-003's lazy-confirm load failure, stacked over Preferences.
+      Preferences stays the one active modal, the failure toast is exempt,
+      and focus is untouched.
+
+    *Ordering, found and fixed on the way.* `7f0d0a25` ordered dialogs by
+    the trap's per-instance MOUNT `seq`, and that rule proved wrong once
+    losing meant going inert. Measured in Chromium: Preferences stays
+    mounted after its first close. Ctrl+, then reopened it over Help, and
+    it was painted on top but ranked below, so the dialog the user saw was
+    inert and dead to the pointer. `46ed0750` answered with document
+    order; the review follow-up replaced that with **open order for
+    everything**: see R16 below, which records why and what was measured.
+    The Tab trap asks `isTopModal` for the same answer as the inert walk,
+    so `trapStack` and `seq` are gone. A second case was measured the same
+    way. With
+    Preferences ▸ "Confirm before removing" on, Delete inside Preferences
+    asked "Remove 1 dataset?" UNDERNEATH Preferences, completely covered.
+    That was already so on `main`, because ParamDialog and ConfirmDialog
+    mounted first in `AppOverlays`, and it becomes fatal once the covering
+    dialog is inert. Both now render last among the dialogs.
+
+    *Focus.* The eager restore of `WorkbookPropertiesDialog` runs inside
+    its close handler, while the background is still inert, and `focus()`
+    is refused there. It now releases the modal first; a test checks that
+    the opener has no inert ancestor at the moment it is focused.
+    `ConfirmDialogBody` captures its opener at render time
+    (`useOpenerCapture`). Measured: Chromium 141 does NOT blur a focused
+    element whose ancestor becomes inert. The render-time capture still
+    holds regardless, because HTML's focus-fixup rule permits the blur.
+
+    *Stacked and lazy.* While the confirm chunk is still in flight over
+    Preferences, the pending guard is active and nothing new is modal:
+    Preferences keeps the walk and the focus, and Escape cancels the ask.
+    Once the body mounts it is the one active modal and Preferences is
+    inert. Cancel then gives Preferences back its interactivity and its
+    focus, landing on the control inside it that opened the ask.
+
+    *Measured.* Unit tests: `overlays/modalInert.test.tsx` (13),
+    `modalInertMutations.test.tsx` (10), `modalInertOrder.test.tsx` (2),
+    `modalInertRelease.test.tsx` (6), plus one case in
+    `WorkbookPropertiesDialog.test.tsx`. `src/test/setup.ts` reflects the
+    `inert` property jsdom lacks, and adds nothing else. Browser:
+    `e2e/specs/modal-inert.spec.ts` (5), which reads Chromium's own AX tree
+    over CDP, because Playwright's ARIA snapshot is inert-blind. It checks
+    the following:
+    - focus to the Library is refused;
+    - 40 Tabs stay inside the dialog;
+    - a real click that lands on the Library's "Tiles" button does nothing;
+    - the button is absent from the AX tree;
+    - a toast raised by Delete inside Preferences is visible, not inert,
+      and present in the AX tree;
+    - Preferences over Help and the confirm over Preferences behave as
+      described above;
+    - nothing is `[inert]` after everything closes.
+
+    A manual check against `uv run qz --no-browser` repeated all of this
+    and found every result as expected. Sabotage: nine unit sabotages and
+    two browser sabotages each reddened only their intended cases:
+    - passive-effect registration;
+    - no observer;
+    - no release before the eager restore;
+    - no cleanup release;
+    - no Toaster marker;
+    - no layer claim;
+    - no fallback;
+    - open-order ranking;
+    - skipping the rest of a batch;
+    - no `inert` at all (browser);
+    - the old promise-dialog mount order (browser).
+
+    **Bundle:** eager bytes went from 867,284 B to **867,350 B (+66 B)**
+    against the unmoved 868,308 B pin. The measurement ran after `npm ci`
+    with `node_modules/.vite` removed, and was reproduced. The eager cost
+    is the literal markers only: `modalInert.ts` ships in
+    `useDialogFocus`'s lazy chunk, and the eager components spell
+    `data-live-region` as a literal so that they never import it (a test
+    pins the spelling).
+
+    *Review follow-up (the second commit on this branch).* Three nits were
+    fixed as well as R16.
+    - The `aria-hidden` fallback hid the background from AT only. A
+      window's focus-on-mount or any `.focus()` could still land there. A
+      `focusin` guard, active in fallback mode only, now sends focus back
+      into the active dialog. It is tested with `inert` removed from the
+      prototype, and removing the guard reddens exactly that test.
+    - `lazyRegion`'s load-failure alert is not inside any dialog, so it
+      could not become the active one. When a dialog fails to load while
+      another is open, the failed dialog never mounts and never registers;
+      its boundary's alert lands in the background and was going inert
+      whole. Its message `<span>` now carries `data-live-region`, so the
+      message is announced while the Retry beside it stays inert until the
+      open dialog closes. A test pins both halves, and removing the marker
+      reddens it.
+    - The `WhatIsThis` badge (`role="status"`, portaled to `<body>`) is
+      deliberately NOT exempt. It can only appear by toggling the mode from
+      a command, which is unreachable while a dialog makes the background
+      inert. Its text is fixed, and was announced when the mode began, so
+      a dialog opened during the mode costs no announcement. Exempting it
+      would only leave its Done button live over the modal, and Escape still
+      ends the mode through its own window listener.
+    - The optional diff-based `sync()` was NOT done. A full re-walk costs
+      ~0.1 ms, and the zero-`inert`-writes proof that covered additions
+      skip the re-walk depends on a re-walk rewriting every mark.
+    - Follow-up gates, after `npm ci`: `tsc -b --force` 0 and lint 0.
+      vitest ran 726 files, 12,159 passed. The build passed. e2e (CI
+      settings) had 69 passed, 1 skipped (already skipped before), 0
+      retries; `modal-inert.spec.ts` now has 7 cases.
+      `test_repo_integrity` had 13 passed. The manual checks against
+      `uv run qz` were repeated, including both `?` pairs and a
+      forced-fallback page. Eager bytes are **867,372 B** against the
+      unmoved 868,308 pin, measured twice with `.vite` removed: +22 B for
+      the `lazyRegion` marker. The stamp and the guard ship in the lazy
+      chunk.
+
+    **Left open:**
+    - Residual R15 below.
+    - The engines not measured, listed under (a). Firefox and (Linux)
+      WebKit now run in CI through `e2e-xbrowser`; this stays open until
+      that job's first green run is recorded under (a).
+    - Live regions INSIDE background panels, such as a workshop's
+      `role="alert"`, are not exempt. They sit in an inert window beside
+      interactive controls, so an alert raised there while a dialog is open
+      is not announced until the dialog closes.
+    - Tooltips (`TooltipLayer`, portaled to `<body>`) for a dialog's own
+      controls mount inert. Nothing is lost today, because they are visual
+      only and not `aria-describedby`-linked. Linking them would need
+      `data-modal-layer`.
+    - During a lazy body's chunk fetch, nothing new is inert. The pending
+      guard owns the keys, and pointer behaviour for that window, one
+      localhost fetch, is unchanged from before.
+
   - **R13** (round 8, review NIT 5) — **three of round 7's eight new Escape
     cases discriminate only on focus-in/restore, not on Escape
     reachability.** Each "Escape … gives focus back to the opener" case
@@ -4278,6 +4612,79 @@ covers a much smaller subset and guards focus on Analyze.
     input on Windows or macOS) rather than guessed at. Scope: any Escape
     pressed mid-composition anywhere in the app; the ten backdrop dialogs are
     where the new `preventDefault()` makes it visible.
+
+  - **R15** (round 10, R12 closure) — **global shortcuts still fire while a
+    modal dialog is open.** `useGlobalShortcuts` does not check for an open
+    modal, so a key pressed on a focused dialog button still reaches the
+    surface behind the dialog. `f`/`y`/`p` open workshop windows, Ctrl+K
+    opens the palette, `?` opens Shortcuts and Delete removes the active
+    dataset. R12 changed the effect of this, not the cause. A surface opened
+    this way now mounts INERT behind the dialog: measured in Chromium, `f`
+    mounts the curve-fit window inert, its focus-on-mount is refused, and
+    focus stays in the dialog. Before R12 that window took focus from
+    behind the backdrop. Delete still acts, because it changes data, not
+    DOM. It is the e2e spec's own path to a toast raised during a dialog,
+    and with "confirm before removing" on it asks OVER the dialog, which is
+    now correct. Whether a modal should suppress global shortcuts outright
+    is a product decision. It is recorded here rather than taken silently.
+
+  - **R16** (round 10, R12 closure) — **Escape was ranked by OPEN order;
+    Tab and `inert` by PAINT order; paint by TREE order.**
+    `lib/escapeStack.ts` allocates `seq` on every enable, so the most
+    recently OPENED `modal` surface takes Escape. Equal-z backdrops paint in
+    tree order. `46ed0750`'s Tab trap and inert walk followed paint.
+
+    The first write-up called this "reopen only, unmeasured". The
+    branch's independent review MEASURED it in real Chromium, on this
+    branch and on `main`, and it is worse than that. Pressing `?` in Help
+    (focus on a Help tab), or in Preferences, opened Shortcuts. Shortcuts
+    sits EARLIER in `AppOverlays`, so it painted UNDERNEATH the dialog it
+    was opened from, invisible. Focus and Tab stayed in that dialog, and
+    the first Escape closed the hidden Shortcuts, so nothing visible
+    changed. This happened on first open as well as on reopen. On `main`,
+    first open moved focus into the hidden dialog, and reopen was already
+    split. In short: `?` in Help opened nothing the user could see.
+
+    **CLOSED (round 10 follow-up, 2026-09-25).** Open order now equals
+    draw order. The active modal is the dialog OPENED LAST (`topmost()`
+    walks the registry newest-first), which is what Escape already used.
+    Every walk also stamps each open dialog's `.qz-overlay-backdrop` with
+    an inline z-index in open order (101, 102, …), so the stylesheet's 100
+    is only a floor, the toast stack at 200 stays above, and the newest
+    dialog PAINTS on top wherever it sits in the tree. The stamps are
+    lifted with the walk. Escape (`escapeStack`), the Tab trap
+    (`isTopModal`), the inert walk and the paint now all name one dialog.
+
+    This was preferred over portaling each dialog to the end of `<body>`,
+    or remounting it on reopen: it touches no dialog component, React tree
+    or event path, and costs nothing eager. A confirm or a parameter prompt
+    asked from a dialog is opened last, so it stays on top as before
+    (ParamDialog and ConfirmDialog also still render last in the tree). NIT
+    6's case changes answer, deliberately. Its reopened outer trap was
+    opened last, is now painted on top, and is what Escape closes, so it is
+    also the active trap. `dialogFocus.a11y.test.tsx` now pins that
+    exactly one trap acts and that it is the one Escape closes.
+
+    Evidence:
+    - `modalInertOrder.test.tsx`, which now presses Escape. It covers
+      Help → `?` and Preferences → `?` on first open and on reopen through
+      the real `useGlobalShortcuts`. In each case Shortcuts is live and
+      stamped above the dialog under it although it sits earlier in the
+      tree. Focus and Tab are Shortcuts'. The first Escape closes
+      Shortcuts and returns focus to the opener in the dialog beneath; the
+      second closes that dialog; nothing is left inert and every stamp is
+      lifted. A third case covers a Preferences mounted first but opened
+      last, with Escape.
+    - `modal-inert.spec.ts`, which has two new Chromium cases for the same
+      pairs. "Painted on top" is checked by a hit test with every `inert`
+      lifted for one synchronous `elementFromPoint`: `inert` removes
+      elements from hit testing, so a plain hit test looks straight
+      through an inert dialog painted on top. The first cut of this check
+      had that flaw and stayed green with the stamp removed. The fixed
+      check goes red on exactly the two R16 cases.
+    - Sabotages: removing the stamp reddens the three order tests and both
+      browser R16 cases. Ranking by OLDEST open reddens those three and
+      three `modalInertMutations` cases.
 
   - **Round 5 2026-09-18 — the ladder is resolved at KEYDOWN, not one
     macrotask later.** Round 4 landed locally and was NOT pushed, because

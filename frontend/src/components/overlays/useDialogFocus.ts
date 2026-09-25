@@ -23,9 +23,10 @@
 //
 // No new dependency: this is ~100 lines of DOM, not a focus-trap package.
 
-import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 
 import { APP_ROOT_FOCUS_SELECTOR } from "../../lib/appRoot";
+import { isTopModal, registerModal, releaseModal } from "../../lib/modalInert";
 import { SCROLL_OUT_FOCUS_SELECTOR } from "../../lib/scrollOutFocus";
 
 // Deliberately NOT filtered by visibility/offsetParent. jsdom performs no
@@ -110,26 +111,22 @@ function focusSafeLanding(): void {
   landing?.focus();
 }
 
-/** Open trap roots, innermost LAST. Round 2 (review finding 3): both traps
- *  listen on `document` in capture and each pulls focus back whenever
- *  `document.activeElement` is outside ITS OWN root, so with two open they
- *  fought over every Tab and the measured sequence never advanced past the
- *  first control of either dialog — Tab was dead for the keyboard user. Only
- *  the top of this stack acts; the traps below stay mounted, keep their
- *  listeners, and resume the moment the one above pops. Module-level on
- *  purpose: the dialogs are independent components with no common ancestor to
- *  hang a context off, and there is exactly one document.
+/* WHICH TRAP ACTS. Round 2 (review finding 3): every open trap listens on
+ * `document` in capture and pulls focus back whenever it is outside ITS OWN
+ * root, so with two open they fought over every Tab and Tab was dead. Only
+ * ONE trap may act: the active modal, which `lib/modalInert.ts` also keeps
+ * live while it makes everything else `inert` — one answer for both, asked of
+ * `isTopModal`, so the Tab trap and the inert background cannot disagree.
  *
- *  Round 3 (review NIT 6): "innermost" is decided by MOUNT order, not push
- *  order. The first cut pushed on every `open` transition, so toggling an
- *  OUTER dialog closed→open while an inner one stayed open put the outer on
- *  top and trapped Tab in the dialog behind the topmost one (measured: the
- *  sequence cycled Outer A → Outer B with Inner still mounted). `seq` is
- *  allocated once per component instance and survives close/reopen, which is
- *  the same rule `lib/escapeStack.ts` uses for its own ordering. */
-type TrapEntry = { ref: RefObject<HTMLElement | null>; seq: number };
-const trapStack: TrapEntry[] = [];
-let nextTrapSeq = 0;
+ * "Active" is the dialog OPENED LAST, which `lib/escapeStack.ts` already
+ * ranks Escape by and which modalInert also PAINTS on top (it stamps each open
+ * backdrop's z-index in open order). Round 3 (NIT 6) had ordered by component
+ * MOUNT order, and equal-z backdrops painted in TREE order; R12/R16 measured
+ * both disagreeing with each other and with Escape in Chromium (2026-09-25):
+ * Preferences, kept mounted after its first close, reopened over Help painted
+ * on top but ranked below — inert and dead to the pointer — and `?` in Help
+ * opened Shortcuts UNDERNEATH Help, where the first Escape closed it unseen.
+ * One order — open order — now drives Escape, Tab, `inert` and paint. */
 
 /** Keep Tab / Shift+Tab inside `ref` while `open`. Moves focus only when it
  *  would otherwise leave; an ordinary Tab between two controls is untouched.
@@ -141,23 +138,33 @@ let nextTrapSeq = 0;
  *  because a plain `Tab` check excludes it. A `defaultPrevented` Tab is left
  *  alone regardless, so a future owner of the key still wins. */
 export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean): void {
-  // Lazy per-instance id. `useState`'s initializer, not `if (ref.current ===
-  // null) ref.current = next++` during render (review NIT 11): the latter
-  // mutates module state in the render phase, which StrictMode's double render
-  // and any future concurrent re-render are both allowed to run more than
-  // once. The null-guard made it idempotent, but the initializer is the idiom
-  // that is correct by construction. `escapeStack` never had the problem — its
-  // seq is allocated inside the effect.
-  const [seq] = useState(() => nextTrapSeq++);
+  // R12: while the trap is live the background is `inert`, walked from the
+  // active (newest-opened, painted on top) open dialog.
+  //
+  // A LAYOUT effect, deliberately, for three orderings it buys:
+  //  * It registers in the same commit that inserts the dialog, before
+  //    `lib/modalInert.ts`'s MutationObserver can see that insertion — so a
+  //    dialog mounting over another (a lazy body resolving over Preferences)
+  //    is never judged as background by the previous dialog's walk, not
+  //    even for a microtask (pinned by modalInertMutations.test.tsx).
+  //  * On OPEN it runs before every passive effect, including the ones that
+  //    move focus in. HTML's focus-fixup rule lets an engine blur a focused
+  //    element once an ancestor is `inert` (Chromium 141 measured not to,
+  //    yet), so every dialog remembers its opener during RENDER
+  //    (`useOpenerCapture`), never in an effect.
+  //  * On CLOSE it lifts `inert` before any passive cleanup restores focus;
+  //    focusing into a still-inert background would silently do nothing.
+  useLayoutEffect(() => {
+    if (!open) return;
+    registerModal(ref);
+    return () => releaseModal(ref);
+  }, [ref, open]);
 
   useEffect(() => {
     if (!open) return;
-    const entry: TrapEntry = { ref, seq };
-    trapStack.push(entry);
     const onKey = (e: KeyboardEvent) => {
-      // A dialog stacked on top owns Tab: the innermost open trap is the one
-      // whose component mounted last, whatever order the `open` flags flipped.
-      if (trapStack.some((other) => other.seq > seq)) return;
+      // A dialog stacked on top owns Tab (see WHICH TRAP ACTS above).
+      if (!isTopModal(ref)) return;
       if (e.key !== "Tab" || e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
       const root = ref.current;
       if (!root) return;
@@ -184,12 +191,8 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean):
       }
     };
     document.addEventListener("keydown", onKey, true);
-    return () => {
-      const at = trapStack.indexOf(entry);
-      if (at !== -1) trapStack.splice(at, 1);
-      document.removeEventListener("keydown", onKey, true);
-    };
-  }, [ref, open, seq]);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [ref, open]);
 }
 
 /** Hand focus back from a closing surface. Exported through the hook below
@@ -215,6 +218,31 @@ function restoreFocusTo(cameFrom: HTMLElement | null, root: HTMLElement | null):
   else focusSafeLanding();
 }
 
+/** Remember, during the RENDER that opens a surface, where focus came from.
+ *
+ *  Render time, not effect time, and R12 turned that from a subtlety into a
+ *  requirement: `useFocusTrap`'s layout effect makes the background `inert`
+ *  before any passive effect runs, and HTML's focus-fixup rule lets an engine
+ *  blur a focused element under a newly inert ancestor (Chromium 141 measured
+ *  not to), so an effect-time read could remember <body>. It was already
+ *  necessary before that, because by effect time an `autoFocus` field
+ *  (ParamDialog's first row) or a surface's own focus-on-mount has run and the
+ *  read would name a node INSIDE the surface — i.e. no restore at all.
+ *
+ *  The read is idempotent (nothing has moved focus yet), so a StrictMode
+ *  double render sees the same answer, and the `wasOpen` latch makes it
+ *  once-per-open either way. Shared with ConfirmDialog, which keeps its own
+ *  restore rules but must capture the opener by exactly this rule. */
+export function useOpenerCapture(open: boolean): RefObject<HTMLElement | null> {
+  const opener = useRef<HTMLElement | null>(null);
+  const wasOpen = useRef(false);
+  if (open !== wasOpen.current) {
+    wasOpen.current = open;
+    if (open) opener.current = document.activeElement as HTMLElement | null;
+  }
+  return opener;
+}
+
 /** Remember where focus came FROM when `open` goes true, and give it back
  *  when the surface closes or unmounts. Shared by `useDialogFocus` and by
  *  `ToolWindow` (round 2, review finding 1: the workshop host started taking
@@ -234,21 +262,9 @@ function restoreFocusTo(cameFrom: HTMLElement | null, root: HTMLElement | null):
  *  the backstop for every other way a surface can close.
  *
  *  The opener is read during the RENDER that opens the surface, not in the
- *  effect. By effect time the surface is mounted and an `autoFocus` field
- *  (ParamDialog's first row) — or ToolWindow's own focus-on-mount — has
- *  already taken focus, so an effect-time read would remember a node INSIDE
- *  the surface and "restore" to something that is about to be unmounted, i.e.
- *  no restore at all. At render time the DOM still shows where the user
- *  actually was. The read is idempotent (nothing has moved focus yet), so a
- *  StrictMode double-render sees the same answer, and the `wasOpen` latch
- *  makes it once-per-open either way. */
+ *  effect — `useOpenerCapture` above owns that rule and argues it out. */
 export function useOpenerRestore(ref: RefObject<HTMLElement | null>, open: boolean): () => void {
-  const opener = useRef<HTMLElement | null>(null);
-  const wasOpen = useRef(false);
-  if (open !== wasOpen.current) {
-    wasOpen.current = open;
-    if (open) opener.current = document.activeElement as HTMLElement | null;
-  }
+  const opener = useOpenerCapture(open);
 
   useEffect(() => {
     if (!open) return;
@@ -257,9 +273,20 @@ export function useOpenerRestore(ref: RefObject<HTMLElement | null>, open: boole
     // already detached the ref.
     const root = ref.current;
     return () => restoreFocusTo(cameFrom, root);
-  }, [ref, open]);
+    // `opener` is a ref, so its identity never changes; it is listed only
+    // because the hook comes from `useOpenerCapture` and the exhaustive-deps
+    // rule cannot see that.
+  }, [ref, open, opener]);
 
-  return useCallback(() => restoreFocusTo(opener.current, ref.current), [ref]);
+  // R12: the eager call runs while the surface is still open, i.e. while the
+  // background — the opener included — is still `inert`, where `focus()` is
+  // refused. Releasing this surface's modal first is what lets the restore
+  // land; the unmount cleanup's own release is then an idempotent resync.
+  // For a non-modal surface (ToolWindow) it is a no-op resync.
+  return useCallback(() => {
+    releaseModal(ref);
+    restoreFocusTo(opener.current, ref.current);
+  }, [ref, opener]);
 }
 
 /** The whole modal-dialog contract: trap Tab, move focus in on open, and give

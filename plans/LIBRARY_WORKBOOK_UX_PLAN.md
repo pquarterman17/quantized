@@ -673,13 +673,24 @@ as a CSS-only tree redesign.
   (PR I — plain `format`/`version`-stamped JSON text; the transport is the
   browser Clipboard API pywebview embeds identically on both platforms, no
   OS-specific code path.)
-- [~] Avoid placing an unbounded scientific payload directly on the system
+- [x] Avoid placing an unbounded scientific payload directly on the system
   clipboard. A robust implementation may use a small clipboard descriptor plus
   a guarded temporary transfer package for large workbooks, with expiry and
-  cleanup safeguards. (PR I ships the BOUND — refuse above
-  `MAX_TRANSFER_PACKAGE_CHARS` with the size named — not the small-descriptor/
-  temp-package scheme; that file-based fallback is an explicit, booked defer,
-  see PR I's plan-doc entry for the write-consent reasoning.)
+  cleanup safeguards. (PR I shipped the BOUND; **Group F, 2026-09-25**, ships
+  the descriptor/temp-package scheme above it. Up to
+  `MAX_TRANSFER_PACKAGE_CHARS` the clipboard text is byte-identical to PR I's
+  (pinned: `store/workbookTransferLarge.test.ts` "copies the inline package
+  itself"); above it Copy `POST`s the package to
+  `/api/workbook-transfer/packages` and the clipboard gets a < 1 kB versioned
+  descriptor (format/version, id, token, size, expiry, summary line) —
+  `lib/workbookTransferRef.ts`. Store: `io/workbook_transfer_store.py` —
+  Quantized's own per-user cache dir, atomic temp+no-replace-rename publish,
+  128 MB/package, 512 MB + 32 entries total (oldest evicted first), 24 h
+  expiry, cleanup on startup and on every store, 256-bit token compared in
+  constant time against a stored SHA-256. PR I's write-consent concern is
+  answered in that module's "Write authority" section: the caller sends
+  bytes, never a path. Evidence: `tests/test_workbook_transfer_store.py`,
+  `tests/test_api_workbook_transfer.py`, `lib/workbookTransferRef.test.ts`.)
 - [x] If the transfer package is unavailable or incompatible, explain the
   failure and leave the destination unchanged. (PR I — every refusal path
   returns before `recordHistory`/`set`, tested.)
@@ -689,8 +700,13 @@ as a CSS-only tree redesign.
   `writeText`/`readText` calls every other clipboard feature already uses.)
 - [x] Add cross-process contract tests for ID remapping, internal links,
   version compatibility, missing transfer packages, and cleanup. (PR I —
-  `lib/workbookTransfer.test.ts`/`store/workbookTransfer.test.ts`; "cleanup"
-  is N/A for the shipped clipboard-only transport, no temp files are created.)
+  `lib/workbookTransfer.test.ts`/`store/workbookTransfer.test.ts`. "Cleanup"
+  was N/A for PR I's clipboard-only transport; since Group F (2026-09-25) it
+  is real and tested — expired/corrupt package sweep, stale-temp sweep that
+  spares another process's in-progress write, eviction, and a FORCED
+  two-process cleanup race — in `tests/test_workbook_transfer_store.py`, plus
+  two independent backends sharing one store in
+  `tests/test_api_workbook_transfer.py`.)
 
 ## Template-matching contract (CONFIRMED 2026-08-13 — see L0.14)
 
@@ -2239,7 +2255,8 @@ build, and focused interaction coverage where appropriate.
    oversize/unavailable-clipboard cases is EXPLICITLY DEFERRED (new
    filesystem-write authority needs its own adversarially-reviewed contract
    PR, the `grant_source_paths` precedent) and booked as `desktop_bridge.py`'s
-   next slice. **Provenance (requirement 4):** `Dataset.source` rides
+   next slice (delivered 2026-09-25 as Group F instead — a server-owned,
+   bytes-only route store rather than a bridge slice; see `## Completed`). **Provenance (requirement 4):** `Dataset.source` rides
    untouched through the id rewrite; `reimportDataset` (`store/reimport.ts`)
    now probes an unreachable source (`hasDesktopShell()` + `pathState`) and
    reports "source unavailable" + opens the LANDED P1.7 `useRelink` panel
@@ -2959,6 +2976,7 @@ tokens on rework.
   destination IDs.
 - **Scale:** small clipboard descriptor plus guarded temporary package for large
   content; bounded lifetime and cleanup; no unbounded raw clipboard payload.
+  (Shipped 2026-09-25, Group F — see the transfer-requirements box above.)
 - **Tests:** two-process round-trip, ID collisions, missing/expired package,
   incompatible version, partial write, cleanup, offline source, and destination
   atomicity.
@@ -3240,6 +3258,43 @@ back to the owner. No Library implementation is authorized by this pause.
 
 ## Completed
 
+- **2026-09-25 — Group F, bounded clipboard transfer for large workbooks
+  (worktree agent):** the transfer-requirements box 5 `[~]` -> `[x]`, and
+  PR I's booked "file-based transport fallback". Backend: pure
+  `io/workbook_transfer_store.py` (+ its read-only header codec
+  `io/workbook_transfer_header.py`, split for the 500-line ceiling) + thin
+  `routes/workbook_transfer.py` (`POST /api/workbook-transfer/packages`;
+  `GET`/`DELETE .../{id}` with the token in an `X-Transfer-Token` header,
+  never the URL). Both directions STREAM in 1 MiB chunks, never buffering a
+  package (ROBUSTNESS_PLAN #3); the cap is enforced mid-stream. Startup sweep
+  in `app.py`'s lifespan; `tests/test_write_sites.py` allowlists the writer.
+  A header this build does not know (a newer build sharing the directory) is
+  aged out by mtime, never deleted on sight. A Copy whose clipboard write
+  fails DELETEs the package it just stored.
+  Frontend: `lib/workbookTransferRef.ts` (descriptor + store client, reached
+  only through the lazy `lib/workbookTransfer.ts` seam — pinned in
+  `architecture.test.ts`'s DRAGGED_OUT) and three call-site swaps in
+  `store/workbookTransfer.ts` (`buildCopyText`/`resolvePasteText`/
+  `canPasteText`). Write-consent answer: PR I deferred "new filesystem-write
+  authority" because caller-ASSERTED paths are the hazard (`grant_source_paths`
+  precedent); this store takes bytes only, picks its own directory, mints its
+  own ids, validates fetch ids by `fullmatch` before forming any path, and
+  never touches a name it did not create — the class of write
+  `routes/_uploadcache.py` and `io/import_filters.py` already do. Every paste
+  refusal (missing, expired, truncated, incompatible version, offline store)
+  returns before `recordHistory`/`set`, pinned by reference-equality
+  assertions. Eager bundle: 881,391 -> 881,369 B (-22 B, both measured
+  after `npm ci`). **Security-review round (same day):** the entry cap now
+  REFUSES (507) instead of evicting, so a burst of tiny stores can no longer
+  wipe a live copy; eviction is by bytes/age only, and packages under 1 MB
+  are refused (422). Admission (cap check, byte eviction, publish,
+  post-publish trim) runs under a process-wide lock that also counts this
+  process's in-flight writes. Across processes the documented bound is
+  transient: (P-1) packages over the byte cap until the last trim. Descriptor
+  tokens must match the server's exact shape (`[A-Za-z0-9_-]{43}`) before
+  any fetch; route body writes run off the event loop. Duplicate now
+  defaults to the stored-package bound (the clipboard paths pass the 8 M
+  inline bound explicitly), so it handles what Copy/Paste handle.
 - **2026-09-12 — Group X, Details rename / move / drag-drop parity (worktree
   agent):** L1.4's Details half. Verified first, and the plan's own
   description was understated: `LibraryDetails.tsx` lacked not just a rename

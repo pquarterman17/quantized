@@ -26,6 +26,7 @@ import { peakOverlayArray } from "../../../lib/plotdata";
 import { rowStateIdentity } from "../../../lib/rowstate";
 import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/types";
 import { peakInputs } from "./peakInputs";
+import { usePeakManualEdits } from "./usePeakManualEdits";
 import { finiteRange } from "./peakRanges";
 import { askParams } from "../../overlays/ParamDialog";
 import { publishFitResult, setPeakExcluded } from "../../../store/peakTables";
@@ -84,6 +85,8 @@ export interface PeaksState {
    *  the table (reviewable) but are dropped by every consumer — see
    *  lib/peakTable's `includedPeaks`. */
   toggleExcluded: (peakId: string, excluded: boolean) => void;
+  editFittedPeak: (peakId: string, patch: { center: number; fwhm: number; height: number; area: number }) => Promise<void>;
+  removeFittedPeaks: (peakIds: ReadonlySet<string>) => Promise<void>;
   fitting: boolean;
   fitError: string | null;
   fitTogether: (opts: PeakFitOptions) => Promise<void>;
@@ -474,8 +477,15 @@ export function usePeaks(): PeaksState {
     [activeId],
   );
 
+  const { editFittedPeak, removeFittedPeaks } = usePeakManualEdits({
+    activeId,
+    setFitResult,
+    setPeakOverlay,
+    overlayFitted,
+  });
+
   return {
     active, peaks, busy, error, fitResult, peakTable: activeTable, toggleExcluded,
-    fitting, fitError, fitTogether, fitEach, labelPeaks,
+    editFittedPeak, removeFittedPeaks, fitting, fitError, fitTogether, fitEach, labelPeaks,
   };
 }

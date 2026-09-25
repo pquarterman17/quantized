@@ -10,7 +10,7 @@
 
 import type { AppState } from "./useApp";
 
-export type ReductionsMethod = "williamson-hall" | "fft-thickness" | "reflectivity-fft";
+export type ReductionsMethod = "williamson-hall" | "pawley" | "fft-thickness" | "reflectivity-fft";
 
 export interface ReductionsSlice {
   reductionsOpen: boolean;

@@ -282,7 +282,7 @@ decisions are merged.
         figure was deleted or edited elsewhere; syncs any open window
         sharing the document id and hydrates the live view singletons only
         when that window is focused. Cancel mutation-free.
-- [ ] **F2.3 Reach full property parity.** Expose or link to plot type,
+- [x] **F2.3 Reach full property parity.** Expose or link to plot type,
       channels, series, errors, y2, grouping/faceting, ordering/visibility,
       tick formats, breaks, shapes, and reference objects.
   - [x] **F2.3a Publication-property parity slice (planned PR #112).**
@@ -344,12 +344,26 @@ decisions are merged.
         (`facetByColumn`/`MultiPanelStage`) is an unrelated store singleton
         sharing only the name. Editing it here would write dead state.
         Remains open below. See the 2026-08-12 F2.3h log entry.
-  - [ ] **F2.3i Facet editing (BLOCKED — needs a multi-panel Publication
-        Preview contract first).** Booked by F2.3h's scoping:
+  - [x] **F2.3i Facet editing.** Originally booked by F2.3h's scoping:
         `figureCompatibility.ts` already blocks faceted Graph Builder specs
         from opening Publication Preview for exactly this reason. Unblocks
         if/when the preview grows a multi-panel contract (relates to F3's
         PageDocument, but per-figure faceting is a different mechanism).
+        **2026-09-21 narrow follow-up:** A faceted FigureDocument can now
+        reach the canonical preview through later Stage work. Its x-break
+        control explains that facet takes precedence and offers an explicit
+        clear-facet action before adding a break. This is removal of a binding,
+        not a facet layout editor.
+        **Completed 2026-09-23 (ChatGPT-Sol):** the canonical Grouping panel
+        now exposes independent **Group by** and **Facet by** selectors. Facet
+        edits write the durable `bindings.facetKey`, synchronize `stackMode`,
+        preview through the existing resolved-panel wire, and survive Apply/
+        reopen. Changing the facet binding clears any transient facet/break
+        composition so an older layout cannot hide the new selection. Axis
+        breaks remain authored but visibly inactive while a facet is selected.
+        This closes binding/property parity; freeform facet-grid layout belongs
+        to the separate multi-panel page builder rather than this per-figure
+        binding control.
   - [x] **F2.3j Region-shade editing (owner DECIDED editable, 2026-08-13;
         shipped same day, Claude Sonnet 5).** Resolves the question F2.3d
         deliberately left open: decoded film-stack shades are NOT immutable

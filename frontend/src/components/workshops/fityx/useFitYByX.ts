@@ -26,10 +26,10 @@ import { reportEmit } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { analysisData } from "../../../lib/rowstate";
-import type { ModelingType } from "../../../lib/types";
+import type { Dataset, ModelingType } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-import { colValues, groupsForOneway, runLeg } from "./runLeg";
+import { colValues, groupsForOneway, InsufficientDataError, runLeg } from "./runLeg";
 import type { BivariateResult, ContingencyResult, FitYByXKind, OnewayResult } from "./runLeg";
 import { type ByColumnOption, type ByLevel, useByPartition } from "../useByPartition";
 
@@ -132,7 +132,7 @@ export function useFitYByX(): FitYByXState {
   const addReport = useApp((s) => s.addReport);
   const setStatus = useApp((s) => s.setStatus);
   const [reportBusy, setReportBusy] = useState(false);
-  const [queuedReport, setQueuedReport] = useState<string | null>(null);
+  const [queuedReport, setQueuedReport] = useState<{ key: string; id: string; resolved: Dataset | null } | null>(null);
   const pendingSeq = useRef(0);
   const [order, setOrder] = useState(1);
   const [bandInterval, setBandInterval] = useState<"confidence" | "prediction">("confidence");
@@ -238,7 +238,8 @@ export function useFitYByX(): FitYByXState {
         try {
           const leg = await runLeg(lvl.data, kind, xCol, yCol, order, bandInterval);
           return { label: lvl.label, n: lvl.data.time.length, ...leg, error: null };
-        } catch (_e) {
+        } catch (e) {
+          if (!(e instanceof InsufficientDataError)) throw e;
           return {
             label: lvl.label,
             n: lvl.data.time.length,
@@ -249,6 +250,12 @@ export function useFitYByX(): FitYByXState {
     )
       .then((results) => {
         if (!cancelled) setByResults(results);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) {
+          setByResults([]);
+          setError(e instanceof Error ? e.message : "analysis failed");
+        }
       })
       .finally(() => {
         if (!cancelled) setByBusy(false);
@@ -271,14 +278,18 @@ export function useFitYByX(): FitYByXState {
     if (!active?.pending) return false;
     const id = active.id;
     const request = ++pendingSeq.current;
-    setQueuedReport(reportKey);
+    setQueuedReport({ key: reportKey, id, resolved: null });
     setReportBusy(true);
     setStatus(`Loading full data for "${active.name}" — report will continue automatically`);
     void useApp.getState().resolveDataset(id).then((resolved) => {
-      if (request !== pendingSeq.current || resolved) return;
-      setQueuedReport(null);
-      setReportBusy(false);
-      setStatus("Could not create the report because the full dataset is unavailable; re-import the source to continue");
+      if (request !== pendingSeq.current) return;
+      if (resolved) {
+        setQueuedReport({ key: reportKey, id, resolved });
+      } else {
+        setQueuedReport(null);
+        setReportBusy(false);
+        setStatus("Could not create the report because the full dataset is unavailable; re-import the source to continue");
+      }
     }).catch((e: unknown) => {
       if (request !== pendingSeq.current) return;
       setQueuedReport(null);
@@ -353,7 +364,8 @@ export function useFitYByX(): FitYByXState {
             try {
               const leg = await runLeg(lvl.data, kind, xCol, yCol, order, bandInterval);
               return { label: lvl.label, n: lvl.data.time.length, ...leg, error: null };
-            } catch (_e) {
+            } catch (e) {
+              if (!(e instanceof InsufficientDataError)) throw e;
               return { label: lvl.label, n: lvl.data.time.length, error: `not enough data (n=${lvl.data.time.length})` };
             }
           }));
@@ -402,18 +414,25 @@ export function useFitYByX(): FitYByXState {
   }
 
   useEffect(() => {
-    if (queuedReport == null || active?.pending) return;
+    if (queuedReport && !queuedReport.resolved && active?.id !== queuedReport.id) {
+      pendingSeq.current++;
+      setQueuedReport(null);
+      setReportBusy(false);
+      setStatus("The report was skipped because the active dataset changed while loading");
+      return;
+    }
+    if (!queuedReport?.resolved) return;
     setQueuedReport(null);
-    if (!active || queuedReport !== reportKey) {
+    if (active !== queuedReport.resolved || queuedReport.key !== reportKey) {
       pendingSeq.current++;
       setReportBusy(false);
-      setStatus("Full data loaded, but the report was skipped because the Fit Y by X setup changed");
+      setStatus("The report was skipped because the Fit Y by X setup changed or the dataset was replaced while loading");
       return;
     }
     void toReport(true);
     // `reportKey` captures every control that changes the emitted analysis.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.pending, queuedReport, reportKey]);
+  }, [active, queuedReport, reportKey]);
 
   return {
     hasData: !!active,

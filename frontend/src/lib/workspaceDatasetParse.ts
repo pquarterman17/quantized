@@ -277,6 +277,10 @@ export function parseWorkspaceDataset(d: unknown, i: number, projectDir?: string
   // rather than throwing — `sanitizePeakTable` owns every rule.
   const peakTable = sanitizePeakTable(dd.peakTable);
   if (peakTable) ds.peakTable = peakTable;
+  // P2.2 slice 3: reflectivity fit history, kept verbatim; each record is
+  // validated when the workshop reads it (reflFitRecord.ts's `decodeRecord`),
+  // where a malformed one is skipped rather than failing the whole load.
+  if (dd.reflFits) ds.reflFits = dd.reflFits as unknown[];
   // Lazy per-book reference (#38) — only ever present in an autosave
   // snapshot (a real "Save workspace" export always resolves it first);
   // validated the same defensive way as every other optional field here.

@@ -12,6 +12,7 @@ import { Select } from "../../primitives";
 import AnnotationEditor from "./AnnotationEditor";
 import ChannelsPanel from "./ChannelsPanel";
 import ErrorColumnsPanel from "./ErrorColumnsPanel";
+import FacetBreakNotice from "./FacetBreakNotice";
 import GroupingPanel from "./GroupingPanel";
 import Num from "./PropertyNumberField";
 import SeriesPropertiesPanel from "./SeriesPropertiesPanel";
@@ -74,6 +75,8 @@ export default function PropertyPanels({
   overrides,
   setOverrides,
   hasY2,
+  facetActive = false,
+  clearFacet,
   xBreaks,
   setXBreaks,
   channels,
@@ -93,6 +96,8 @@ export default function PropertyPanels({
    *  it -- without one the y2 min/max fields are placebo (the backend gate
    *  drops y2_lim), so they render only when this is true. */
   hasY2: boolean;
+  facetActive?: boolean;
+  clearFacet?: () => void;
   /** Item 3: the canonical home for x-axis breaks (document.plot.axisBreaks.x,
    *  merged with a legacy-imported document's publication delta -- see
    *  canonicalOverrides.ts's effectiveXBreaks). When supplied, the breaks UI
@@ -125,7 +130,7 @@ export default function PropertyPanels({
    *  group; present-but-empty still renders it -- see ErrorColumnsPanelProps'
    *  doc. */
   errorColumns?: ErrorColumnsPanelProps;
-  /** F2.3h: canonical group-by binding -- rendered even unset ("None"), like F2.3d/f. */
+  /** Canonical group/facet bindings -- rendered even unset ("None"), like F2.3d/f. */
   grouping?: GroupingPanelProps;
   /** Preview click-to-select can force its matching panel open. */
   openGroup?: string | null;
@@ -158,7 +163,7 @@ export default function PropertyPanels({
           : overlapsBreak
             ? "overlaps an existing break"
             : null;
-  const canAddBreak = breakReason === null;
+  const canAddBreak = !facetActive && breakReason === null;
 
   return (
     <div>
@@ -210,6 +215,7 @@ export default function PropertyPanels({
           style={{ display: "flex", flexWrap: "wrap", gap: 6, width: "100%", alignItems: "end" }}
         >
           <span className="qzk-field-lbl" style={{ width: "100%" }}>x-axis breaks</span>
+          {facetActive && <FacetBreakNotice onClear={clearFacet ? () => removeRowSafely(breaksRef.current, clearFacet) : undefined} />}
           {currentBreaks.map(([lo, hi], index) => (
             <div key={`${lo}:${hi}:${index}`} style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
               <span className="qzk-ds-meta">{lo} to {hi}</span>
@@ -238,7 +244,7 @@ export default function PropertyPanels({
           {breakFrom.trim() !== "" && breakTo.trim() !== "" && breakReason && (
             <div className="qzk-ds-meta" style={{ color: "var(--text-dim)", width: "100%" }}>{breakReason}</div>
           )}
-          <span title={breakReason ?? "Omit a finite, non-overlapping x-range in the export"}>
+          <span title={facetActive ? "Remove faceting to use x-axis breaks" : breakReason ?? "Omit a finite, non-overlapping x-range in the export"}>
             <button
               className="qz-btn qz-sm"
               disabled={!canAddBreak}
@@ -330,7 +336,7 @@ export default function PropertyPanels({
 
       {grouping && (
         <Group title="Grouping" forceOpen={openGroup === "Grouping"} openNonce={openNonce}>
-          <GroupingPanel groupKey={grouping.groupKey} labels={grouping.labels} onGroupKey={grouping.onGroupKey} />
+          <GroupingPanel {...grouping} />
         </Group>
       )}
 

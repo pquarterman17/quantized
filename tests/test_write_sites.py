@@ -128,6 +128,15 @@ WRITE_SITE_ALLOWLIST: dict[str, str] = {
         "_write_filters: persists the saved import-filter list to this "
         "app's own config-dir JSON file (`_filters_path()`), not a dataset."
     ),
+    "io/workbook_transfer_store.py": (
+        "TransferStore/PendingPackage (Group F large-workbook transfer): "
+        "mkstemp/fdopen/os.replace write, and unlink removes, only "
+        "`<32-hex id>.qzxfer` packages and `.qzxfer-tmp-*.part` temps inside "
+        "Quantized's own per-user CACHE dir (`transfer_dir()`). The id is "
+        "minted server-side (fetch/delete ids are fullmatch-validated before "
+        "any path is formed); the HTTP body is bytes only, never a path -- "
+        "so no caller can name, reach, or overwrite a user file."
+    ),
     "io/origin_project/writer.py": (
         "write_opj: a pure library function taking an explicit `path` "
         "argument, exported for the headless `api.py`/CLI surface -- no "
