@@ -9,10 +9,9 @@ import { electrochemButlerVolmer, electrochemDoubleLayer, electrochemNernst, ele
 import {
   Button,
   Card,
-  cardResult,
+  dual,
   Field,
   ROW,
-  fmtNum,
   resultLine,
   useCard,
   withTouch,
@@ -60,7 +59,7 @@ export default function ElectrochemistryTab() {
             onClick={() =>
               void c1.run("Nernst potential", `E⁰=${e0} V, n=${nerN}, Q=${nerQ}`, async () => {
                 const r = await electrochemNernst(Number(e0), Number(nerN), Number(nerQ));
-                return cardResult(`E = ${fmtNum(r.E)} V`, `E = ${r.E} V`);
+                return dual`E = ${r.E} V`;
               })
             }
           >
@@ -85,7 +84,7 @@ export default function ElectrochemistryTab() {
                   Number(eta),
                   Number(bvAlpha),
                 );
-                return cardResult(`j = ${fmtNum(r.j)} A/cm²`, `j = ${r.j} A/cm²`);
+                return dual`j = ${r.j} A/cm²`;
               })
             }
           >
@@ -105,7 +104,7 @@ export default function ElectrochemistryTab() {
             onClick={() =>
               void c3.run("Tafel slope", `α=${tafAlpha}, T=${tafT} K`, async () => {
                 const r = await electrochemTafel(Number(tafAlpha), Number(tafT));
-                return cardResult(`b = ${fmtNum(r.bMv)} mV/decade`, `b = ${r.bMv} mV/decade`);
+                return dual`b = ${r.bMv} mV/decade`;
               })
             }
           >
@@ -126,10 +125,7 @@ export default function ElectrochemistryTab() {
             onClick={() =>
               void c4.run("Double-layer capacitance", `εr=${eps}, d=${dlcD} nm, A=${dlcA} cm²`, async () => {
                 const r = await electrochemDoubleLayer(Number(eps), Number(dlcD), Number(dlcA));
-                return cardResult(
-                  `C = ${fmtNum(r.CuF)} µF · ${fmtNum(r.Cspec * 1e6)} µF/cm²`,
-                  `C = ${r.CuF} µF · ${r.Cspec * 1e6} µF/cm²`,
-                );
+                return dual`C = ${r.CuF} µF · ${r.Cspec * 1e6} µF/cm²`;
               })
             }
           >
@@ -149,10 +145,7 @@ export default function ElectrochemistryTab() {
             onClick={() =>
               void c5.run("Ohmic drop (iR)", `I=${irI} A, R=${irR} Ω`, async () => {
                 const r = await electrochemOhmicDrop(Number(irI), Number(irR));
-                return cardResult(
-                  `V_IR = ${fmtNum(r.VmV)} mV (${fmtNum(r.V)} V)`,
-                  `V_IR = ${r.VmV} mV (${r.V} V)`,
-                );
+                return dual`V_IR = ${r.VmV} mV (${r.V} V)`;
               })
             }
           >

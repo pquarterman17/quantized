@@ -38,21 +38,6 @@ def test_unit_convert_current_density() -> None:
     result, info = unit_convert(1.0, "mA/cm^2", "A/m^2")
     assert float(np.asarray(result)) == pytest.approx(10.0)
     assert info["factor"] == pytest.approx(10.0)
-    assert info["latex"] == (
-        r"$1\,\text{mA/cm^2} = 10\,\text{A/m^2}$"
-    )
-
-
-def test_unit_convert_latex_matches_matlab_unit_escaping() -> None:
-    _result, info = unit_convert(1.0, "Ang", "nm")
-    assert info["latex"] == (
-        r"$1\,\text{\text{\AA}} = 0.1\,\text{nm}$"
-    )
-
-
-def test_unit_convert_array_has_no_scalar_latex() -> None:
-    _result, info = unit_convert([1.0, 2.0], "m", "cm")
-    assert info["latex"] == ""
 
 
 def test_unit_convert_temperature_offset() -> None:

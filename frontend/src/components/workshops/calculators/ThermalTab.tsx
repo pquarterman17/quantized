@@ -9,10 +9,9 @@ import { thermalDebye, thermalDiffusivity, thermalWiedemannFranz } from "../../.
 import {
   Button,
   Card,
-  cardResult,
+  dual,
   Field,
   ROW,
-  fmtNum,
   resultLine,
   useCard,
   withTouch,
@@ -47,7 +46,7 @@ export default function ThermalTab() {
             onClick={() =>
               void c1.run("Wiedemann-Franz law", `σ=${sigma} S/cm, T=${wfT} K`, async () => {
                 const r = await thermalWiedemannFranz(Number(sigma), Number(wfT));
-                return cardResult(`κ = ${fmtNum(r.kappa)} W/(m·K)`, `κ = ${r.kappa} W/(m·K)`);
+                return dual`κ = ${r.kappa} W/(m·K)`;
               })
             }
           >
@@ -67,7 +66,7 @@ export default function ThermalTab() {
             onClick={() =>
               void c2.run("Debye temperature", `v_s=${vs} m/s, n=${nDens} m⁻³`, async () => {
                 const r = await thermalDebye(Number(vs), Number(nDens));
-                return cardResult(`Θ_D = ${fmtNum(r.theta_D)} K`, `Θ_D = ${r.theta_D} K`);
+                return dual`Θ_D = ${r.theta_D} K`;
               })
             }
           >
@@ -90,10 +89,7 @@ export default function ThermalTab() {
             onClick={() =>
               void c3.run("Thermal diffusivity", `κ=${kappa} W/m·K, ρ=${rho} kg/m³, c_p=${cp} J/kg·K`, async () => {
                 const r = await thermalDiffusivity(Number(kappa), Number(rho), Number(cp));
-                return cardResult(
-                  `α = ${fmtNum(r.alpha)} m²/s = ${fmtNum(r.alpha_mm2)} mm²/s`,
-                  `α = ${r.alpha} m²/s = ${r.alpha_mm2} mm²/s`,
-                );
+                return dual`α = ${r.alpha} m²/s = ${r.alpha_mm2} mm²/s`;
               })
             }
           >

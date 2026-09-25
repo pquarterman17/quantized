@@ -32,6 +32,9 @@ export const QUICK_PAIRS: { label: string; from: string; to: string; category: s
   { label: "deg → rad", from: "deg", to: "rad", category: "angle" },
 ];
 
+/** A live (chip / Swap) run needs a real number — "" would coerce to 0. */
+const isNumeric = (s: string): boolean => s.trim() !== "" && Number.isFinite(Number(s));
+
 export interface UnitsCalcState {
   value: string;
   from: string;
@@ -124,21 +127,19 @@ export function useUnitsCalc(): UnitsCalcState {
     invalidateConvert();
   };
 
+  // Quick-pick chips and Swap convert LIVE (readout only): a live run records
+  // no Calc History entry — only an explicit "=" does — and a live failure
+  // (e.g. an empty / half-typed custom expression) just clears the readout.
   const setPair = (f: string, t: string, cat?: string): void => {
     setFromRaw(f);
     setToRaw(t);
-    if (cat) {
-      setCategoryState(cat);
-      if (cat === "photon_energy") {
-        setPeFromRaw(f);
-        invalidateConvert();
-        invalidatePe();
-        void peComputeSnapshot(peValue, f);
-      } else {
-        void convertSnapshot(value, f, t);
-      }
+    if (cat) setCategoryState(cat);
+    if (cat === "photon_energy") {
+      setPeFromRaw(f);
+      invalidateConvert();
+      void peComputeSnapshot(peValue, f, true);
     } else {
-      void convertSnapshot(value, f, t);
+      void convertSnapshot(value, f, t, true);
     }
   };
 
@@ -155,7 +156,7 @@ export function useUnitsCalc(): UnitsCalcState {
   const swapUnits = (): void => {
     setFromRaw(to);
     setToRaw(from);
-    void convertSnapshot(value, to, from);
+    void convertSnapshot(value, to, from, true);
   };
 
   const setPeValue = (v: string): void => {
@@ -167,7 +168,16 @@ export function useUnitsCalc(): UnitsCalcState {
     invalidatePe();
   };
 
-  async function convertSnapshot(rawValue: string, fromUnit: string, toUnit: string): Promise<void> {
+  async function convertSnapshot(
+    rawValue: string,
+    fromUnit: string,
+    toUnit: string,
+    live = false,
+  ): Promise<void> {
+    if (live && (!isNumeric(rawValue) || !fromUnit.trim() || !toUnit.trim())) {
+      invalidateConvert(); // nothing convertible yet — clear the readout, no error
+      return;
+    }
     const id = ++convSeq.current;
     setResult(null);
     setDescription(null);
@@ -183,7 +193,7 @@ export function useUnitsCalc(): UnitsCalcState {
       setResult(out);
       setDescription(typeof res.info?.description === "string" ? res.info.description : null);
       setLatex(typeof res.info?.latex === "string" && res.info.latex ? res.info.latex : null);
-      if (out != null) {
+      if (out != null && !live) {
         useCalcHistory.getState().record({
           domain: "Units",
           label: "Unit conversion",
@@ -194,7 +204,7 @@ export function useUnitsCalc(): UnitsCalcState {
     } catch (e) {
       if (convSeq.current !== id) return;
       setResult(null);
-      setError(e instanceof Error ? e.message : "conversion failed");
+      if (!live) setError(e instanceof Error ? e.message : "conversion failed");
     } finally {
       if (convSeq.current === id) setBusy(false);
     }
@@ -209,7 +219,11 @@ export function useUnitsCalc(): UnitsCalcState {
   // pair at a time — every non-`peFrom` unit is converted independently
   // (the backend routes each through a common energy hub, so this works
   // regardless of which quantity was entered).
-  async function peComputeSnapshot(rawValue: string, sourceUnit: string): Promise<void> {
+  async function peComputeSnapshot(rawValue: string, sourceUnit: string, live = false): Promise<void> {
+    if (live && !isNumeric(rawValue)) {
+      invalidatePe();
+      return;
+    }
     const id = ++peSeq.current;
     setPeResults(null);
     setPeBusy(true);
@@ -229,18 +243,20 @@ export function useUnitsCalc(): UnitsCalcState {
         if (typeof r === "number") out[u] = r;
       });
       setPeResults(out);
-      useCalcHistory.getState().record({
-        domain: "Units",
-        label: "Photon/thermal energy",
-        summary: Object.entries(out)
-          .map(([u, val]) => `${u}=${fmtNum(val)}`)
-          .join(" · "),
-        inputs: `value=${rawValue}, from=${sourceUnit}`,
-      });
+      if (!live) {
+        useCalcHistory.getState().record({
+          domain: "Units",
+          label: "Photon/thermal energy",
+          summary: Object.entries(out)
+            .map(([u, val]) => `${u}=${fmtNum(val)}`)
+            .join(" · "),
+          inputs: `value=${rawValue}, from=${sourceUnit}`,
+        });
+      }
     } catch (e) {
       if (peSeq.current !== id) return;
       setPeResults(null);
-      setPeError(e instanceof Error ? e.message : "conversion failed");
+      if (!live) setPeError(e instanceof Error ? e.message : "conversion failed");
     } finally {
       if (peSeq.current === id) setPeBusy(false);
     }

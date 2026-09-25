@@ -119,6 +119,18 @@ describe("MagneticTab", () => {
     expect(magneticCurieWeissFit).not.toHaveBeenCalled();
   });
 
+  it("names extra-column paste rows instead of fitting a 2-column subset", async () => {
+    render(<MagneticTab />);
+    fireEvent.change(screen.getByLabelText("Curie-Weiss T, chi data"), {
+      target: { value: "100, 0.03\n150, 0.02, 0.001\n200, 0.015\n250, 0.012\n300, 0.01" },
+    });
+    fireEvent.click(screen.getByText("Fit"));
+    expect(
+      await screen.findByText("line 2: expected exactly 2 columns (x, y); found 3"),
+    ).toBeInTheDocument();
+    expect(magneticCurieWeissFit).not.toHaveBeenCalled();
+  });
+
   it("editing an input invalidates the displayed result (provenance contract)", async () => {
     vi.mocked(magneticMomentConvert).mockResolvedValue({
       emu: 1e-3,

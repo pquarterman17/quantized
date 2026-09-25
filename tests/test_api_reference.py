@@ -66,7 +66,7 @@ def test_convert_oe_to_tesla() -> None:
     assert resp.status_code == 200
     out = resp.json()
     assert abs(out["result"] - 1e-4) < 1e-12
-    assert out["info"]["latex"] == r"$1\,\text{Oe} = 0.0001\,\text{T}$"
+    assert out["info"]["latex"] == r"$1\,\mathrm{Oe} = 0.0001\,\mathrm{T}$"
 
 
 def test_convert_incompatible_dims_is_422() -> None:

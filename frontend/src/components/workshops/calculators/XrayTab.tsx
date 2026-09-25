@@ -18,7 +18,7 @@ import {
   XRAY_MODES,
   type CalculatorsState,
 } from "./useCalculators";
-import { Card, CopyButton, ROW, cardResult, resultLine, useCard, withTouch } from "./shared";
+import { Card, CopyButton, ROW, dual, resultLine, useCard, withTouch } from "./shared";
 
 const NEUTRON_QUANTITIES: { value: string; label: string; unit: string }[] = [
   { value: "wavelength", label: "λ — wavelength", unit: "Å" },
@@ -174,14 +174,7 @@ export default function XrayTab({ c }: { c: CalculatorsState }) {
                 const v = Number(nValue);
                 if (!Number.isFinite(v)) throw new Error("enter a numeric value");
                 const r = await neutronCalc(nQuantity, v);
-                const text =
-                  `λ = ${fmtNum(r.wavelength_a)} Å · E = ${fmtNum(r.energy_mev)} meV · ` +
-                  `v = ${fmtNum(r.velocity_m_s)} m/s · T = ${fmtNum(r.temperature_k)} K`;
-                return cardResult(
-                  text,
-                  `λ = ${r.wavelength_a} Å · E = ${r.energy_mev} meV · ` +
-                    `v = ${r.velocity_m_s} m/s · T = ${r.temperature_k} K`,
-                );
+                return dual`λ = ${r.wavelength_a} Å · E = ${r.energy_mev} meV · v = ${r.velocity_m_s} m/s · T = ${r.temperature_k} K`;
                 },
               )
             }

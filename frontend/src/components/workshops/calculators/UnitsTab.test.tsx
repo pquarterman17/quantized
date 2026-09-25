@@ -154,13 +154,13 @@ describe("UnitsTab", () => {
   it("copies the backend's LaTeX form", async () => {
     vi.mocked(convertUnits).mockResolvedValue({
       result: 0.0001,
-      info: { latex: "$1\\,\\text{Oe} = 0.0001\\,\\text{T}$" },
+      info: { latex: "$1\\,\\mathrm{Oe} = 0.0001\\,\\mathrm{T}$" },
     });
     await renderUnits();
     fireEvent.click(screen.getByText("="));
     fireEvent.click(await screen.findByRole("button", { name: "copy LaTeX" }));
 
-    expect(copyText).toHaveBeenCalledWith("$1\\,\\text{Oe} = 0.0001\\,\\text{T}$");
+    expect(copyText).toHaveBeenCalledWith("$1\\,\\mathrm{Oe} = 0.0001\\,\\mathrm{T}$");
   });
 
   it("a photon quick-pick updates the visible source quantity and pressed state", async () => {
@@ -184,6 +184,28 @@ describe("UnitsTab", () => {
       "true",
     );
     expect(screen.getByRole("button", { name: "Oe → T" })).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("the photon chip's pressed state ignores the hidden main-converter from/to", async () => {
+    // A reversed photon unit order leaves the hidden converter at from=K /
+    // to=THz — the chip must key on the panel's source unit (peFrom) only.
+    const reordered = CATEGORIES.map((cat) =>
+      cat.id === "photon_energy" ? { ...cat, units: [...cat.units].reverse() } : cat,
+    );
+    vi.mocked(getUnitCategories).mockResolvedValue({ categories: reordered });
+    await renderUnits();
+    fireEvent.change(screen.getByLabelText("unit category"), {
+      target: { value: "photon_energy" },
+    });
+    const chip = screen.getByRole("button", { name: "eV → nm" });
+    fireEvent.change(screen.getByLabelText("photon-energy quantity"), {
+      target: { value: "THz" },
+    });
+    expect(chip).toHaveAttribute("aria-pressed", "false");
+    fireEvent.change(screen.getByLabelText("photon-energy quantity"), {
+      target: { value: "eV" },
+    });
+    expect(chip).toHaveAttribute("aria-pressed", "true");
   });
 
   it("switching to Photon / Thermal Energy shows the 5-quantity panel instead of from/to", async () => {

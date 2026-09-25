@@ -10,10 +10,9 @@ import { magneticCurieWeiss, magneticDemag, magneticDomainWall, magneticLangevin
 import {
   Button,
   Card,
-  cardResult,
+  dual,
   Field,
   ROW,
-  fmtNum,
   parseXYPairs,
   resultLine,
   useCard,
@@ -101,17 +100,9 @@ export default function MagneticTab() {
                   vol > 0 ? vol : undefined,
                   atoms > 0 ? atoms : undefined,
                 );
-                let text = `${fmtNum(r.emu)} emu = ${fmtNum(r.am2)} A·m² = ${fmtNum(r.mu_b)} µ_B`;
-                let copyValue = `${r.emu} emu = ${r.am2} A·m² = ${r.mu_b} µ_B`;
-                if (r.m_si != null) {
-                  text += ` · M = ${fmtNum(r.m_si)} A/m`;
-                  copyValue += ` · M = ${r.m_si} A/m`;
-                }
-                if (r.mu_b_per_atom != null) {
-                  text += ` · ${fmtNum(r.mu_b_per_atom)} µ_B/atom`;
-                  copyValue += ` · ${r.mu_b_per_atom} µ_B/atom`;
-                }
-                return cardResult(text, copyValue);
+                const m = r.m_si != null ? dual` · M = ${r.m_si} A/m` : "";
+                const perAtom = r.mu_b_per_atom != null ? dual` · ${r.mu_b_per_atom} µ_B/atom` : "";
+                return dual`${r.emu} emu = ${r.am2} A·m² = ${r.mu_b} µ_B${m}${perAtom}`;
                 },
               )
             }
@@ -145,10 +136,7 @@ export default function MagneticTab() {
             onClick={() =>
               void c2.run("Demagnetization factors", `shape=${shape}`, async () => {
                 const r = await magneticDemag(shape);
-                return cardResult(
-                  `Nz = ${fmtNum(r.Nz)} · Nxy = ${fmtNum(r.Nxy)} · 4πNz = ${fmtNum(r.n_cgs)}`,
-                  `Nz = ${r.Nz} · Nxy = ${r.Nxy} · 4πNz = ${r.n_cgs}`,
-                );
+                return dual`Nz = ${r.Nz} · Nxy = ${r.Nxy} · 4πNz = ${r.n_cgs}`;
               })
             }
           >
@@ -168,10 +156,7 @@ export default function MagneticTab() {
             onClick={() =>
               void c3.run("Curie-Weiss law", `C=${cwC}, θ=${cwTheta} K`, async () => {
                 const r = await magneticCurieWeiss(Number(cwC), Number(cwTheta));
-                return cardResult(
-                  `µ_eff = ${fmtNum(r.mu_eff)} µ_B · ${r.mag_type}`,
-                  `µ_eff = ${r.mu_eff} µ_B · ${r.mag_type}`,
-                );
+                return dual`µ_eff = ${r.mu_eff} µ_B · ${r.mag_type}`;
               })
             }
           >
@@ -195,10 +180,7 @@ export default function MagneticTab() {
                 `μ=${langMu} μ_B, H=${langH} T, T=${langT} K`,
                 async () => {
                 const r = await magneticLangevin(Number(langMu), Number(langH), Number(langT));
-                return cardResult(
-                  `L(x) = ${fmtNum(r.L)} at x = ${fmtNum(r.x)}`,
-                  `L(x) = ${r.L} at x = ${r.x}`,
-                );
+                return dual`L(x) = ${r.L} at x = ${r.x}`;
                 },
               )
             }
@@ -219,10 +201,7 @@ export default function MagneticTab() {
             onClick={() =>
               void c5.run("Domain wall & anisotropy", `A=${dwA} J/m, K=${dwK} J/m³`, async () => {
                 const r = await magneticDomainWall(Number(dwA), Number(dwK));
-                return cardResult(
-                  `δ = ${fmtNum(r.delta_nm)} nm · E_wall = ${fmtNum(r.e_wall_mj_m2)} mJ/m²`,
-                  `δ = ${r.delta_nm} nm · E_wall = ${r.e_wall_mj_m2} mJ/m²`,
-                );
+                return dual`δ = ${r.delta_nm} nm · E_wall = ${r.e_wall_mj_m2} mJ/m²`;
               })
             }
           >
@@ -259,12 +238,7 @@ export default function MagneticTab() {
                   throw new Error("paste at least 3 valid T, χ rows");
                 }
                 const r = await magneticCurieWeissFit({ temperature, susceptibility });
-                return cardResult(
-                  `θ_CW = ${fmtNum(r.theta_cw)} K · C = ${fmtNum(r.C)} emu·K/mol · ` +
-                    `µ_eff = ${fmtNum(r.mu_eff)} µ_B · R² = ${fmtNum(r.r2)}`,
-                  `θ_CW = ${r.theta_cw} K · C = ${r.C} emu·K/mol · ` +
-                    `µ_eff = ${r.mu_eff} µ_B · R² = ${r.r2}`,
-                );
+                return dual`θ_CW = ${r.theta_cw} K · C = ${r.C} emu·K/mol · µ_eff = ${r.mu_eff} µ_B · R² = ${r.r2}`;
               })
             }
           >

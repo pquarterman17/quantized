@@ -15,8 +15,7 @@ import {
   type CardSuccess,
   Field,
   ROW,
-  cardResult,
-  fmtNum,
+  dual,
   resultLine,
   useCard,
   withTouch,
@@ -69,10 +68,7 @@ const CARDS: CardSpec[] = [
     ],
     compute: async (n) => {
       const r = await semiconductorIntrinsic(n("ni_eg"), n("ni_me"), n("ni_mh"), n("ni_t"));
-      return cardResult(
-        `nᵢ = ${fmtNum(r.ni)} cm⁻³ · Nc = ${fmtNum(r.Nc)} · Nv = ${fmtNum(r.Nv)}`,
-        `nᵢ = ${r.ni} cm⁻³ · Nc = ${r.Nc} · Nv = ${r.Nv}`,
-      );
+      return dual`nᵢ = ${r.ni} cm⁻³ · Nc = ${r.Nc} · Nv = ${r.Nv}`;
     },
   },
   {
@@ -84,10 +80,7 @@ const CARDS: CardSpec[] = [
     ],
     compute: async (n) => {
       const r = await semiconductorCarrierConc(n("cc_nd"), n("cc_na"), n("cc_ni"));
-      return cardResult(
-        `n = ${fmtNum(r.n)} · p = ${fmtNum(r.p)} cm⁻³ · ${r.type}-type`,
-        `n = ${r.n} · p = ${r.p} cm⁻³ · ${r.type}-type`,
-      );
+      return dual`n = ${r.n} · p = ${r.p} cm⁻³ · ${r.type}-type`;
     },
   },
   {
@@ -101,10 +94,7 @@ const CARDS: CardSpec[] = [
     ],
     compute: async (n) => {
       const r = await semiconductorDepletionWidth(n("dw_vbi"), n("dw_na"), n("dw_nd"), n("dw_eps"), 300);
-      return cardResult(
-        `W = ${fmtNum(r.W)} nm · xₙ = ${fmtNum(r.xn)} · xₚ = ${fmtNum(r.xp)} nm`,
-        `W = ${r.W} nm · xₙ = ${r.xn} · xₚ = ${r.xp} nm`,
-      );
+      return dual`W = ${r.W} nm · xₙ = ${r.xn} · xₚ = ${r.xp} nm`;
     },
   },
   {
@@ -116,10 +106,7 @@ const CARDS: CardSpec[] = [
     compute: async (n) => {
       const d = await semiconductorDiffusionCoeff(n("tr_mu"), 300);
       const l = await semiconductorDiffusionLength(d.D, n("tr_tau"));
-      return cardResult(
-        `D = ${fmtNum(d.D)} cm²/s · L = ${fmtNum(l.Lum)} µm`,
-        `D = ${d.D} cm²/s · L = ${l.Lum} µm`,
-      );
+      return dual`D = ${d.D} cm²/s · L = ${l.Lum} µm`;
     },
   },
   {
@@ -141,10 +128,7 @@ const CARDS: CardSpec[] = [
         n("fl_na"),
         n("fl_t"),
       );
-      return cardResult(
-        `E_F − Eᵢ = ${fmtNum(r.EF)} eV · ${r.type}-type`,
-        `E_F − Eᵢ = ${r.EF} eV · ${r.type}-type`,
-      );
+      return dual`E_F − Eᵢ = ${r.EF} eV · ${r.type}-type`;
     },
   },
   {
@@ -156,7 +140,7 @@ const CARDS: CardSpec[] = [
     ],
     compute: async (n) => {
       const r = await semiconductorDebyeLength(n("dl_n"), n("dl_eps"), n("dl_t"));
-      return cardResult(`L_D = ${fmtNum(r.LD)} nm`, `L_D = ${r.LD} nm`);
+      return dual`L_D = ${r.LD} nm`;
     },
   },
   {
@@ -169,7 +153,7 @@ const CARDS: CardSpec[] = [
     ],
     compute: async (n) => {
       const r = await semiconductorBuiltInPotential(n("bv_na"), n("bv_nd"), n("bv_ni"), n("bv_t"));
-      return cardResult(`V_bi = ${fmtNum(r.Vbi)} V`, `V_bi = ${r.Vbi} V`);
+      return dual`V_bi = ${r.Vbi} V`;
     },
   },
   {
@@ -180,7 +164,7 @@ const CARDS: CardSpec[] = [
     ],
     compute: async (n) => {
       const r = await semiconductorSheetCarrierDensity(n("sc_n"), n("sc_t") * NM_TO_CM);
-      return cardResult(`n_s = ${fmtNum(r.ns)} cm⁻²`, `n_s = ${r.ns} cm⁻²`);
+      return dual`n_s = ${r.ns} cm⁻²`;
     },
   },
   {
@@ -191,7 +175,7 @@ const CARDS: CardSpec[] = [
     ],
     compute: async (n) => {
       const r = await semiconductorThermalVelocity(n("tv_m"), n("tv_t"));
-      return cardResult(`v_th = ${fmtNum(r.vth)} cm/s`, `v_th = ${r.vth} cm/s`);
+      return dual`v_th = ${r.vth} cm/s`;
     },
   },
   {
@@ -204,10 +188,7 @@ const CARDS: CardSpec[] = [
     ],
     compute: async (n) => {
       const r = await semiconductorHallCoefficient(n("hc_n"), n("hc_p"), n("hc_me"), n("hc_mh"));
-      return cardResult(
-        `R_H = ${fmtNum(r.RH)} cm³/C · ${r.apparent_type}-type`,
-        `R_H = ${r.RH} cm³/C · ${r.apparent_type}-type`,
-      );
+      return dual`R_H = ${r.RH} cm³/C · ${r.apparent_type}-type`;
     },
   },
   {
@@ -218,10 +199,7 @@ const CARDS: CardSpec[] = [
     ],
     compute: async (n) => {
       const r = await semiconductorMobilityModel("Si", n("mm_t"), n("mm_n"));
-      return cardResult(
-        `μₑ = ${fmtNum(r.muE)} · μ_h = ${fmtNum(r.muH)} cm²/V·s`,
-        `μₑ = ${r.muE} · μ_h = ${r.muH} cm²/V·s`,
-      );
+      return dual`μₑ = ${r.muE} · μ_h = ${r.muH} cm²/V·s`;
     },
   },
 ];

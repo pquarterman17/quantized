@@ -125,8 +125,11 @@ export default function UnitsTab({ c }: { c: CalculatorsState }) {
             key={p.label}
             active={
               c.category === p.category &&
-              c.to === p.to &&
-              (p.category === "photon_energy" ? c.peFrom === p.from : c.from === p.from)
+              // The photon panel shows every quantity at once: its only state
+              // is the source unit, never the hidden main converter's from/to.
+              (p.category === "photon_energy"
+                ? c.peFrom === p.from
+                : c.from === p.from && c.to === p.to)
             }
             onClick={() => c.setPair(p.from, p.to, p.category)}
           >

@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { copyText } from "../../../lib/clipboard";
 import { useCalcHistory } from "../../../store/calcHistory";
-import { parseXYPairs, type CardSuccess, resultLine, useCard } from "./shared";
+import { dual, parseXYPairs, type CardSuccess, resultLine, useCard } from "./shared";
 
 vi.mock("../../../lib/clipboard", () => ({ copyText: vi.fn() }));
 
@@ -40,10 +40,62 @@ describe("parseXYPairs", () => {
     });
   });
 
-  it("drops rows unless they contain exactly two finite numeric tokens", () => {
-    expect(parseXYPairs("1 2 999\n3\n4 nope\n5 6\n7 Infinity\n8 9 extra")).toEqual({
+  it("skips blank, single-token, and non-finite rows", () => {
+    expect(parseXYPairs("T chi\n\n3\n4 nope\n5 6\n7 Infinity")).toEqual({
       x: [5],
       y: [6],
+    });
+  });
+
+  it("rejects an all-3-column paste, naming every offending line", () => {
+    expect(() => parseXYPairs("1 2 0.1\n3 4 0.1\n5 6 0.1")).toThrow(
+      "lines 1, 2, 3: expected exactly 2 columns (x, y); found 3",
+    );
+  });
+
+  it("rejects a partial 3-column paste instead of fitting the 2-column subset", () => {
+    expect(() => parseXYPairs("1 2\n3 4 999\n5 6\n\n8 9 extra")).toThrow(
+      "lines 2, 5: expected exactly 2 columns (x, y); found 3",
+    );
+    expect(() => parseXYPairs("1 2\n3,4,5,6")).toThrow(
+      "line 2: expected exactly 2 columns (x, y); found 4",
+    );
+  });
+});
+
+describe("dual — one template for display text and clipboard copy", () => {
+  it("fmtNum's numbers for text and keeps String() precision for copy", () => {
+    expect(dual`ρ = ${1.2345678901234} Ω·cm`).toEqual({
+      text: "ρ = 1.23457 Ω·cm",
+      copyValue: "ρ = 1.2345678901234 Ω·cm",
+    });
+    expect(dual`${1e-7} A`).toEqual({ text: "1.00000e-7 A", copyValue: "1e-7 A" });
+  });
+
+  it("passes strings through verbatim in both and handles no interpolations", () => {
+    expect(dual`${"n"}-type · ${"1.23456789"}`).toEqual({
+      text: "n-type · 1.23456789",
+      copyValue: "n-type · 1.23456789",
+    });
+    expect(dual`h_c = ∞`).toEqual({ text: "h_c = ∞", copyValue: "h_c = ∞" });
+  });
+
+  it("splices a nested dual (conditional suffix) into each side, or nothing", () => {
+    const suffix = (rho: number | null) => (rho != null ? dual` · ρ = ${rho} Ω·cm` : "");
+    expect(dual`Rs = ${10.123456789} Ω/sq${suffix(2.000000001)}`).toEqual({
+      text: "Rs = 10.1235 Ω/sq · ρ = 2 Ω·cm",
+      copyValue: "Rs = 10.123456789 Ω/sq · ρ = 2.000000001 Ω·cm",
+    });
+    expect(dual`Rs = ${10} Ω/sq${suffix(null)}`).toEqual({
+      text: "Rs = 10 Ω/sq",
+      copyValue: "Rs = 10 Ω/sq",
+    });
+  });
+
+  it("renders a runtime null/NaN the way fmtNum did (em-dash text, raw copy)", () => {
+    expect(dual`x = ${NaN}; y = ${null as unknown as number}`).toEqual({
+      text: "x = —; y = —",
+      copyValue: "x = NaN; y = null",
     });
   });
 });

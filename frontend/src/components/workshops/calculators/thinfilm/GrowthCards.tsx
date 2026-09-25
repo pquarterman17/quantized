@@ -10,10 +10,9 @@ import { thinFilmDepositionRate, thinFilmDiffusionLength, thinFilmDoseFromCurren
 import {
   Button,
   Card,
-  cardResult,
+  dual,
   Field,
   ROW,
-  fmtNum,
   resultLine,
   useCard,
   withTouch,
@@ -36,10 +35,7 @@ export function DepositionRateCard() {
           onClick={() =>
             void c1.run("Deposition rate", `thickness=${drThick} Å, time=${drTime} s`, async () => {
               const r = await thinFilmDepositionRate(Number(drThick), Number(drTime));
-              return cardResult(
-                `rate = ${fmtNum(r.rate)} Å/s · ${fmtNum(r.rate_nm_per_min)} nm/min`,
-                `rate = ${r.rate} Å/s · ${r.rate_nm_per_min} nm/min`,
-              );
+              return dual`rate = ${r.rate} Å/s · ${r.rate_nm_per_min} nm/min`;
             })
           }
         >
@@ -80,10 +76,7 @@ export function SputterRateCard() {
                 Number(spRho),
                 Number(spM),
               );
-              return cardResult(
-                `rate = ${fmtNum(r.rate)} nm/s · ${fmtNum(r.rate_nm_per_min)} nm/min`,
-                `rate = ${r.rate} nm/s · ${r.rate_nm_per_min} nm/min`,
-              );
+              return dual`rate = ${r.rate} nm/s · ${r.rate_nm_per_min} nm/min`;
               },
             )
           }
@@ -113,10 +106,7 @@ export function DiffusionLengthCard() {
           onClick={() =>
             void c3.run("Thermal diffusion length", `D=${dlD} cm²/s, t=${dlT} s`, async () => {
               const r = await thinFilmDiffusionLength(Number(dlD), Number(dlT));
-              return cardResult(
-                `L = ${fmtNum(r.L)} cm · ${fmtNum(r.L_nm)} nm`,
-                `L = ${r.L} cm · ${r.L_nm} nm`,
-              );
+              return dual`L = ${r.L} cm · ${r.L_nm} nm`;
             })
           }
         >
@@ -154,10 +144,7 @@ export function ImplantDoseCard() {
                 Number(doseT),
                 Number(doseA),
               );
-              return cardResult(
-                `dose = ${fmtNum(r.dose)} ions/cm²`,
-                `dose = ${r.dose} ions/cm²`,
-              );
+              return dual`dose = ${r.dose} ions/cm²`;
               },
             )
           }
@@ -196,10 +183,7 @@ export function PeakConcentrationCard() {
                 Number(dcRp),
                 Number(dcDRp),
               );
-              return cardResult(
-                `C_peak = ${fmtNum(r.Cpeak)} atoms/cm³`,
-                `C_peak = ${r.Cpeak} atoms/cm³`,
-              );
+              return dual`C_peak = ${r.Cpeak} atoms/cm³`;
               },
             )
           }

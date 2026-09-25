@@ -9,10 +9,9 @@ import { electricalConductivity, electricalCurrentDensity, electricalHall, elect
 import {
   Button,
   Card,
-  cardResult,
+  dual,
   Field,
   ROW,
-  fmtNum,
   parseXYPairs,
   resultLine,
   useCard,
@@ -78,7 +77,7 @@ export default function ElectricalTab() {
             onClick={() =>
               void c1.run("Resistivity / Sheet resistance", `Rs=${rs} Ω/sq, thickness=${thick} nm`, async () => {
                 const r = await electricalResistivity(Number(rs), Number(thick) * NM_TO_CM);
-                return cardResult(`ρ = ${fmtNum(r.rho)} Ω·cm`, `ρ = ${r.rho} Ω·cm`);
+                return dual`ρ = ${r.rho} Ω·cm`;
               })
             }
           >
@@ -92,7 +91,7 @@ export default function ElectricalTab() {
             onClick={() =>
               void c1.run("Resistivity / Sheet resistance", `ρ=${rho1} Ω·cm, thickness=${thick} nm`, async () => {
                 const r = await electricalSheetResistance(Number(rho1), Number(thick) * NM_TO_CM);
-                return cardResult(`Rs = ${fmtNum(r.Rs)} Ω/sq`, `Rs = ${r.Rs} Ω/sq`);
+                return dual`Rs = ${r.Rs} Ω/sq`;
               })
             }
           >
@@ -111,7 +110,7 @@ export default function ElectricalTab() {
             onClick={() =>
               void c2.run("Conductivity", `ρ=${rho2} Ω·cm`, async () => {
                 const r = await electricalConductivity(Number(rho2));
-                return cardResult(`σ = ${fmtNum(r.sigma)} S/cm`, `σ = ${r.sigma} S/cm`);
+                return dual`σ = ${r.sigma} S/cm`;
               })
             }
           >
@@ -131,7 +130,7 @@ export default function ElectricalTab() {
             onClick={() =>
               void c3.run("Mobility", `ρ=${rho3} Ω·cm, n=${n3} cm⁻³`, async () => {
                 const r = await electricalMobility(Number(rho3), Number(n3));
-                return cardResult(`μ = ${fmtNum(r.mu)} cm²/(V·s)`, `μ = ${r.mu} cm²/(V·s)`);
+                return dual`μ = ${r.mu} cm²/(V·s)`;
               })
             }
           >
@@ -151,7 +150,7 @@ export default function ElectricalTab() {
             onClick={() =>
               void c4.run("Current density", `I=${cur} A, area=${area} cm²`, async () => {
                 const r = await electricalCurrentDensity(Number(cur), Number(area));
-                return cardResult(`J = ${fmtNum(r.J)} A/cm²`, `J = ${r.J} A/cm²`);
+                return dual`J = ${r.J} A/cm²`;
               })
             }
           >
@@ -190,10 +189,7 @@ export default function ElectricalTab() {
                   Number(hallB),
                   Number(hallT) * NM_TO_CM,
                 );
-                return cardResult(
-                  `R_H = ${fmtNum(r.r_h)} cm³/C · n = ${fmtNum(r.carrier_density)} cm⁻³ · ${r.carrier_type}-type`,
-                  `R_H = ${r.r_h} cm³/C · n = ${r.carrier_density} cm⁻³ · ${r.carrier_type}-type`,
-                );
+                return dual`R_H = ${r.r_h} cm³/C · n = ${r.carrier_density} cm⁻³ · ${r.carrier_type}-type`;
                 },
               )
             }
@@ -255,17 +251,8 @@ export default function ElectricalTab() {
                   thickness: t,
                   sigma,
                 });
-                let text =
-                  `R_H = ${fmtNum(r.r_h)} cm³/C · n = ${fmtNum(r.carrier_density)} cm⁻³ · ` +
-                  `${r.carrier_type}-type · R² = ${fmtNum(r.fit_r2)}`;
-                let copyValue =
-                  `R_H = ${r.r_h} cm³/C · n = ${r.carrier_density} cm⁻³ · ` +
-                  `${r.carrier_type}-type · R² = ${r.fit_r2}`;
-                if (Number.isFinite(r.mobility)) {
-                  text += ` · µ = ${fmtNum(r.mobility)} cm²/(V·s)`;
-                  copyValue += ` · µ = ${r.mobility} cm²/(V·s)`;
-                }
-                return cardResult(text, copyValue);
+                const mu = Number.isFinite(r.mobility) ? dual` · µ = ${r.mobility} cm²/(V·s)` : "";
+                return dual`R_H = ${r.r_h} cm³/C · n = ${r.carrier_density} cm⁻³ · ${r.carrier_type}-type · R² = ${r.fit_r2}${mu}`;
                 },
               )
             }
@@ -298,13 +285,7 @@ export default function ElectricalTab() {
                 async () => {
                 const t = vdpT.trim() === "" ? undefined : Number(vdpT) * NM_TO_CM;
                 const r = await electricalVanDerPauw(Number(vdpRa), Number(vdpRb), t);
-                let text = `Rs = ${fmtNum(r.Rs)} Ω/sq`;
-                let copyValue = `Rs = ${r.Rs} Ω/sq`;
-                if (r.rho != null) {
-                  text += ` · ρ = ${fmtNum(r.rho)} Ω·cm`;
-                  copyValue += ` · ρ = ${r.rho} Ω·cm`;
-                }
-                return cardResult(text, copyValue);
+                return dual`Rs = ${r.Rs} Ω/sq${r.rho != null ? dual` · ρ = ${r.rho} Ω·cm` : ""}`;
                 },
               )
             }

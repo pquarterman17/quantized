@@ -18,10 +18,9 @@ import {
 import {
   Button,
   Card,
-  cardResult,
+  dual,
   Field,
   ROW,
-  fmtNum,
   parseList,
   resultLine,
   useCard,
@@ -46,12 +45,8 @@ export function KiessigCard() {
             void c6.run("Kiessig thickness", `ΔQ=${kDq} Å⁻¹, SLD=${kSld} Å⁻²`, async () => {
               const sld = kSld.trim() === "" ? undefined : Number(kSld);
               const r = await thinFilmKiessig(Number(kDq), sld);
-              const corr = Number.isNaN(r.Qc) ? "" : ` (Qc = ${fmtNum(r.Qc)} Å⁻¹)`;
-              const copyCorr = Number.isNaN(r.Qc) ? "" : ` (Qc = ${r.Qc} Å⁻¹)`;
-              return cardResult(
-                `t = ${fmtNum(r.thickness)} Å · ${fmtNum(r.thickness_nm)} nm${corr}`,
-                `t = ${r.thickness} Å · ${r.thickness_nm} nm${copyCorr}`,
-              );
+              const corr = Number.isNaN(r.Qc) ? "" : dual` (Qc = ${r.Qc} Å⁻¹)`;
+              return dual`t = ${r.thickness} Å · ${r.thickness_nm} nm${corr}`;
             })
           }
         >
@@ -95,10 +90,7 @@ export function MultilayerThermalCard() {
               `d=${JSON.stringify(mlD)} nm, k=${JSON.stringify(mlK)} W/m/K`,
               async () => {
               const r = await thinFilmMultilayerThermal(parseList(mlD), parseList(mlK));
-              return cardResult(
-                `k⊥ = ${fmtNum(r.k_series)} · k∥ = ${fmtNum(r.k_parallel)} W/m/K`,
-                `k⊥ = ${r.k_series} · k∥ = ${r.k_parallel} W/m/K`,
-              );
+              return dual`k⊥ = ${r.k_series} · k∥ = ${r.k_parallel} W/m/K`;
               },
             )
           }
@@ -139,10 +131,7 @@ export function ProjectedRangeCard() {
               `ion=${prIon}, target=${prTarget}, E=${prE} keV`,
               async () => {
               const r = await thinFilmProjectedRange(prIon, prTarget, Number(prE));
-              return cardResult(
-                `Rp = ${fmtNum(r.Rp)} nm · ΔRp = ${fmtNum(r.deltaRp)} nm`,
-                `Rp = ${r.Rp} nm · ΔRp = ${r.deltaRp} nm`,
-              );
+              return dual`Rp = ${r.Rp} nm · ΔRp = ${r.deltaRp} nm`;
               },
             )
           }
@@ -187,10 +176,7 @@ export function StoneyStressCard() {
                 Number(stTf),
                 Number(stR),
               );
-              return cardResult(
-                `σ = ${fmtNum(r.stress_MPa)} MPa · ${fmtNum(r.stress_GPa)} GPa`,
-                `σ = ${r.stress_MPa} MPa · ${r.stress_GPa} GPa`,
-              );
+              return dual`σ = ${r.stress_MPa} MPa · ${r.stress_GPa} GPa`;
               },
             )
           }
@@ -236,16 +222,8 @@ export function ThermalMismatchCard() {
                 e,
                 Number(tmNu),
               );
-              const stress = Number.isNaN(r.stress_MPa)
-                ? ""
-                : ` · σ = ${fmtNum(r.stress_MPa)} MPa`;
-              const copyStress = Number.isNaN(r.stress_MPa)
-                ? ""
-                : ` · σ = ${r.stress_MPa} MPa`;
-              return cardResult(
-                `ε = ${fmtNum(r.strain)} (${r.description})${stress}`,
-                `ε = ${r.strain} (${r.description})${copyStress}`,
-              );
+              const stress = Number.isNaN(r.stress_MPa) ? "" : dual` · σ = ${r.stress_MPa} MPa`;
+              return dual`ε = ${r.strain} (${r.description})${stress}`;
               },
             )
           }
@@ -284,17 +262,8 @@ export function SauerbreyCard() {
               const area = sfArea.trim() === "" ? undefined : Number(sfArea);
               const density = sfRho.trim() === "" ? undefined : Number(sfRho);
               const r = await thinFilmSauerbrey(Number(sfDf), Number(sfF0), area, density);
-              let text = `Δm/A = ${fmtNum(r.areal_mass_ng_cm2)} ng/cm² · Cf = ${fmtNum(
-                r.Cf_hz_cm2_ug,
-              )} Hz·cm²/µg`;
-              let copyValue =
-                `Δm/A = ${r.areal_mass_ng_cm2} ng/cm² · Cf = ` +
-                `${r.Cf_hz_cm2_ug} Hz·cm²/µg`;
-              if (r.thickness_nm != null) {
-                text += ` · t = ${fmtNum(r.thickness_nm)} nm`;
-                copyValue += ` · t = ${r.thickness_nm} nm`;
-              }
-              return cardResult(text, copyValue);
+              const t = r.thickness_nm != null ? dual` · t = ${r.thickness_nm} nm` : "";
+              return dual`Δm/A = ${r.areal_mass_ng_cm2} ng/cm² · Cf = ${r.Cf_hz_cm2_ug} Hz·cm²/µg${t}`;
               },
             )
           }
@@ -329,10 +298,7 @@ export function ScherrerCard() {
               `FWHM=${fwhm} ° 2θ, λ=${wavelength} Å, 2θ=${twoTheta} °`,
               async () => {
               const r = await thinFilmScherrer(Number(fwhm), Number(wavelength), Number(twoTheta));
-              return cardResult(
-                `D = ${fmtNum(r.D)} Å · ${fmtNum(r.D_nm)} nm`,
-                `D = ${r.D} Å · ${r.D_nm} nm`,
-              );
+              return dual`D = ${r.D} Å · ${r.D_nm} nm`;
               },
             )
           }
