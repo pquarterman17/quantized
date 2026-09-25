@@ -33,7 +33,7 @@ import { resetOriginFallbackCoreForTests } from "./originFallbackLazy";
 import { resetReimportCoreForTests } from "./reimportLazy";
 import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
-import { resetWorkspaceIOCoreForTests } from "./workspaceIOLazy";
+import { resetWorkspaceIOCoreForTests, warmSaveModules } from "./workspaceIOLazy";
 
 const ds: Dataset = {
   id: "a",
@@ -165,6 +165,31 @@ describe("the Save / Save As seam (store/workspaceIOLazy.ts)", () => {
     vi.resetModules();
     useApp.setState({ datasets: [] });
     await useApp.getState().saveWorkspace();
+    expect(useApp.getState().status).toBe("no datasets to save");
+  });
+
+  it("warmSaveModules fetches ahead, so a later Save no longer needs the chunk to load", async () => {
+    await warmSaveModules();
+    // From here a fetch would fail (the local server has gone away) —
+    // the warmed module is already in hand, so Save still runs.
+    vi.doMock("./workspaceIO", failLoad);
+    vi.doMock("../lib/workspace", failLoad);
+    useApp.setState({ datasets: [] });
+    await useApp.getState().saveWorkspaceToFile();
+    expect(useApp.getState().status).toBe("no datasets to save");
+    expect(dangerToasts()).toEqual([]);
+  });
+
+  it("a failed warm-up is silent and not cached", async () => {
+    vi.doMock("./workspaceIO", failLoad);
+    await expect(warmSaveModules()).resolves.toBeUndefined();
+    expect(dangerToasts()).toEqual([]);
+    expect(useApp.getState().status).toBe("");
+
+    vi.doUnmock("./workspaceIO");
+    vi.resetModules();
+    useApp.setState({ datasets: [] });
+    await useApp.getState().saveWorkspaceToFile();
     expect(useApp.getState().status).toBe("no datasets to save");
   });
 });

@@ -19,6 +19,7 @@
 // reachable from the entry chunk; `src/architecture.test.ts`'s SEAMS list is
 // the guard.
 
+import { workspaceCodec } from "../lib/workspaceCodecLazy";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 
@@ -50,6 +51,16 @@ export function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
 
 export function runSaveWorkspace(get: SliceGet): Promise<void> {
   return workspaceIOCore().then((io) => io.runSaveWorkspace(get), saveLoadFailed(get));
+}
+
+/** Fetch the save module and the `.dwk` codec ahead of the first Save, once
+ *  startup has settled (`main.tsx`). They are deferred only for the eager
+ *  budget, and Save's browser-download fallback needs no server: a chunk that
+ *  was simply never fetched must not be what fails the first Save after the
+ *  local server has gone away. Failures are ignored here; the loaders do not
+ *  cache them, and a real Save reports its own. */
+export function warmSaveModules(): Promise<void> {
+  return Promise.allSettled([workspaceIOCore(), workspaceCodec()]).then(() => undefined);
 }
 
 /** Test-only: forget the cached promise (cold path / `vi.doMock`). */
