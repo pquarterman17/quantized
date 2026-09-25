@@ -20,12 +20,12 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import minimize
 
+from quantized.calc.peakshapes import pseudo_voigt_area
+
 __all__ = ["build_linked_packer", "compute_peak_area", "fit_multi_peak"]
 
 _LN2 = math.log(2.0)
 _EPS = float(np.finfo(float).eps)
-_A_L = math.pi / 2.0
-_A_G = math.sqrt(math.pi) / (2.0 * math.sqrt(_LN2))
 
 ExpandFn = Callable[[NDArray[np.float64]], NDArray[np.float64]]
 
@@ -65,11 +65,10 @@ def compute_peak_area(model: str, height: float, fwhm: float, eta: float) -> flo
     """Integrated peak area from fitted params. Port of computeArea (SPVII/TCH use
     the Lorentzian form, matching MATLAB's ``otherwise`` branch)."""
     if model == "Gaussian":
-        return height * fwhm * math.sqrt(math.pi / _LN2) / 2.0
+        return pseudo_voigt_area(height, fwhm, 0.0)
     if model == "Pseudo-Voigt":
-        e = 0.5 if math.isnan(eta) else eta
-        return height * fwhm * (e * _A_L + (1.0 - e) * _A_G)
-    return height * fwhm * math.pi / 2.0
+        return pseudo_voigt_area(height, fwhm, 0.5 if math.isnan(eta) else eta)
+    return pseudo_voigt_area(height, fwhm, 1.0)
 
 
 def _build_composite_model(

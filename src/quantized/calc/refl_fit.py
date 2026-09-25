@@ -41,13 +41,12 @@ warning. A tied parameter reports its target's error.
 from __future__ import annotations
 
 import math
-import time
 from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.optimize import least_squares
 
+from quantized.calc._bounded_lsq import pinv_covariance, solve_bounded
 from quantized.calc.refl_model import (
     ReflChannel,
     ReflParams,
@@ -66,10 +65,6 @@ _TINY = 1e-300
 # 3.6e-9 (finite-difference noise), the weakest direction of a healthy 9-param
 # bilayer fit at 8.8e-3; 1e-6 leaves ~3 decades of margin on both sides.
 _DEGENERATE = 1e-6
-
-
-class _Deadline(Exception):
-    pass
 
 
 def channel_model(ch: ReflChannel, params: ReflParams, v: NDArray[np.float64], n_layers: int,
@@ -123,43 +118,22 @@ def fit_reflectivity(
     if n_points <= n_free:
         raise ValueError(f"{n_points} usable points cannot constrain {n_free} free parameters")
 
-    t_end = None if deadline_s is None else time.monotonic() + deadline_s
-    count = {"n": 0}
-    best: dict[str, Any] = {"cost": math.inf, "x": params.x0()}
-
     def residuals(x: NDArray[np.float64]) -> NDArray[np.float64]:
-        if t_end is not None and time.monotonic() > t_end:
-            raise _Deadline
-        count["n"] += 1
         v = params.full(x)
-        r = np.concatenate([
+        return np.concatenate([
             channel_residuals(c, channel_model(c, params, v, n_layers, m), m, weighting)
             for c, m in zip(chans, masks, strict=True)
         ])
-        cost = float(np.sum(r**2))
-        if cost < best["cost"]:
-            best["cost"], best["x"] = cost, np.array(x, dtype=float)
-        return r
 
     warnings: list[str] = []
-    x0 = params.x0()
-    jac: NDArray[np.float64] | None = None
-    if n_free:
-        try:
-            sol = least_squares(residuals, x0, bounds=(0.0, 1.0), method="trf",
-                                x_scale="jac", max_nfev=max_nfev)
-            x, success, message, jac = sol.x, bool(sol.success), str(sol.message), sol.jac
-            if not success or sol.status == 0:
-                success = False
-                warnings.append(f"the optimiser stopped without converging: {message}")
-        except _Deadline:
-            x, success = best["x"], False
-            message = f"stopped at the {deadline_s:g} s time limit"
-            warnings.append(f"the fit {message}; the best point found is reported")
-    else:
-        x, success, message = x0, True, "no free parameters"
-    t_end = None
-    resid = residuals(x)
+    fit = solve_bounded(residuals, params.x0(), (0.0, 1.0), max_nfev=max_nfev,
+                        deadline_s=deadline_s)
+    x, success, message, jac = fit.x, fit.success, fit.message, fit.jac
+    if fit.status == "not_converged":
+        warnings.append(f"the optimiser stopped without converging: {message}")
+    elif fit.status == "deadline":
+        warnings.append(f"the fit {message}; the best point found is reported")
+    resid = fit.residuals(x)
     obj = float(np.sum(resid**2))
     red = obj / (n_points - n_free)
 
@@ -172,15 +146,11 @@ def fit_reflectivity(
     if n_free and jac is not None:
         for k, i in enumerate(params.free):
             at_bound[i] = x[k] < 1e-6 or x[k] > 1 - 1e-6
-        _, s, vt = np.linalg.svd(jac, full_matrices=False)
-        smax = float(s[0]) if s.size else 0.0
-        weak = s <= _DEGENERATE * smax if smax > 0 else np.ones_like(s, dtype=bool)
-        for row in vt[weak]:
-            for kk in np.nonzero(np.abs(row) > 1e-3)[0]:
-                undetermined[params.free[int(kk)]] = True
-        inv_s2 = np.zeros_like(s)
-        inv_s2[~weak] = 1.0 / s[~weak] ** 2
-        cov = (vt.T * inv_s2) @ vt * red * np.outer(params.span, params.span)
+        cov_x, weak_params = pinv_covariance(jac, degenerate_ratio=_DEGENERATE,
+                                             equilibrate=False)
+        for kk in np.nonzero(weak_params)[0]:
+            undetermined[params.free[int(kk)]] = True
+        cov = cov_x * red * np.outer(params.span, params.span)
         sd = np.sqrt(np.clip(np.diag(cov), 0.0, None))
         for k, i in enumerate(params.free):
             errs[i] = sd[k]
@@ -246,7 +216,7 @@ def fit_reflectivity(
         "n_free": n_free,
         "success": success,
         "message": message,
-        "n_evaluations": count["n"],
+        "n_evaluations": fit.n_evaluations,
         "weighting": weighting,
         "curves": curves,
         "sld_profiles": profiles,

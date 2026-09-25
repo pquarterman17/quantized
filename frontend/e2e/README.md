@@ -140,6 +140,7 @@ evidence for WKWebView, not proof.
 | i | `channel-axis-drag.spec.ts` — drag a channel chip from the Channels card onto the plot's X/Y/Y2 axis bands, re-plotting it through the same store actions the card's own checkboxes use | `@core` |
 | j | `annotation-shape-lifecycle.spec.ts` — annotation create/edit-text/move/delete (right-click menu AND the selection mini-toolbar); shape draw/Dashed-toggle/delete — no undo coverage (gated on #1) | `@core` |
 | k | `window-arrange.spec.ts` — New Graph Window ×2, Tile Windows (non-overlapping grid), Cascade Windows (staggered offsets), maximize/restore via title-bar double-click, close via the title bar's own right-click menu | 100% only |
+| l | `peak-model-fit.spec.ts` — Peak Analyzer on `two-peaks.csv`: find peaks, per-peak shapes (Gaussian + Lorentzian), a real `/api/peaks/model-fit` fit (centres, ± errors, SSR label, model curve on the plot), report via the `peak_model_fit` emitter (audit P2.4) | 100% only |
 
 ## Residuals (booked, not shipped here)
 

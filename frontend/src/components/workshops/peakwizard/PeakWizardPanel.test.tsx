@@ -86,6 +86,12 @@ describe("PeakWizardPanel", () => {
     // markers land on the plot once the candidates effect settles
     await waitFor(() => expect(useApp.getState().peakOverlay?.datasetId).toBe("d1"));
 
+    // ③ The mixed-shape model became the default engine in audit P2.4 slice 2
+    // (its own walk is PeakWizardModelFit.test.tsx); this walk pins the
+    // CLASSIC multifit path, which stays one select away.
+    fireEvent.click(screen.getByText("Model", { selector: ".qzk-wizard-step" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "fit engine" }), { target: { value: "classic" } });
+
     // ④ fit
     fireEvent.click(screen.getByText("Fit & review"));
     fireEvent.click(screen.getByRole("button", { name: "Fit" }));

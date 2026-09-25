@@ -2360,6 +2360,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/peaks/model-fit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Model Fit
+         * @description Fit mixed-shape peaks + a polynomial background with per-parameter
+         *     start/vary/bounds/ties; returns parameters, derived peaks, metrics,
+         *     curves and warnings.
+         */
+        post: operations["model_fit_api_peaks_model_fit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plot/map": {
         parameters: {
             query?: never;
@@ -7852,6 +7874,196 @@ export interface components {
             /** Y */
             y: number;
         };
+        /** PeakModelBackgroundOut */
+        PeakModelBackgroundOut: {
+            /** Kind */
+            kind: string;
+            /** X Ref */
+            x_ref: number;
+        };
+        /**
+         * PeakModelCurves
+         * @description On the fitted points; ``components`` are the peaks without background.
+         */
+        PeakModelCurves: {
+            /** Background */
+            background: (number | null)[];
+            /** Components */
+            components: (number | null)[][];
+            /** Model */
+            model: (number | null)[];
+            /** Normalized Residual */
+            normalized_residual: (number | null)[] | null;
+            /** Residual */
+            residual: (number | null)[];
+            /** X */
+            x: (number | null)[];
+            /** Y */
+            y: (number | null)[];
+            /** Y Err */
+            y_err: (number | null)[] | null;
+        };
+        /** PeakModelFitRequest */
+        PeakModelFitRequest: {
+            /**
+             * Background
+             * @default linear
+             * @enum {string}
+             */
+            background?: "none" | "constant" | "linear" | "quadratic";
+            /** Bg X Ref */
+            bg_x_ref?: number | null;
+            /**
+             * Deadline S
+             * @default 10
+             */
+            deadline_s?: number;
+            /**
+             * Max Nfev
+             * @default 1000
+             */
+            max_nfev?: number;
+            /** Parameters */
+            parameters: components["schemas"]["PeakModelParameter"][];
+            /** Shapes */
+            shapes: ("gaussian" | "lorentzian" | "pseudo_voigt" | "voigt")[];
+            /** X */
+            x: (number | null)[];
+            /** X Max */
+            x_max?: number | null;
+            /** X Min */
+            x_min?: number | null;
+            /** Y */
+            y: (number | null)[];
+            /** Y Err */
+            y_err?: (number | null)[] | null;
+        };
+        /** PeakModelFitResponse */
+        PeakModelFitResponse: {
+            background: components["schemas"]["PeakModelBackgroundOut"];
+            /** Correlation */
+            correlation: (number | null)[][];
+            curves: components["schemas"]["PeakModelCurves"];
+            /** Free */
+            free: string[];
+            /** Message */
+            message: string;
+            metrics: components["schemas"]["PeakModelMetrics"];
+            /** N Dropped */
+            n_dropped: number;
+            /** N Evaluations */
+            n_evaluations: number;
+            /** N Excluded */
+            n_excluded: number;
+            /** Parameters */
+            parameters: components["schemas"]["PeakModelParameterOut"][];
+            /** Peaks */
+            peaks: components["schemas"]["PeakModelPeakOut"][];
+            /** Success */
+            success: boolean;
+            /** Warnings */
+            warnings: string[];
+            /** Weighted */
+            weighted: boolean;
+            /** X Range */
+            x_range: number[];
+        };
+        /**
+         * PeakModelMetrics
+         * @description ``chi2``/``reduced_chi2`` only for a weighted fit; ``ssr`` always.
+         */
+        PeakModelMetrics: {
+            /** Adj R Squared */
+            adj_r_squared: number | null;
+            /** Aic */
+            aic: number | null;
+            /** Bic */
+            bic: number | null;
+            /** Chi2 */
+            chi2: number | null;
+            /** Dof */
+            dof: number;
+            /** N Free */
+            n_free: number;
+            /** N Points */
+            n_points: number;
+            /**
+             * Objective
+             * @enum {string}
+             */
+            objective: "ssr" | "chi2";
+            /** R Squared */
+            r_squared: number | null;
+            /** Reduced Chi2 */
+            reduced_chi2: number | null;
+            /** Reduced Ssr */
+            reduced_ssr: number | null;
+            /** Ssr */
+            ssr: number | null;
+        };
+        /**
+         * PeakModelParameter
+         * @description ``p{i}.{center|height|fwhm|eta|fwhm_g|fwhm_l}`` or ``bg.c{k}``: start
+         *     ``value``, ``vary``, optional bounds and an identity ``tie``.
+         */
+        PeakModelParameter: {
+            /** Max */
+            max?: number | null;
+            /** Min */
+            min?: number | null;
+            /** Name */
+            name: string;
+            /** Tie */
+            tie?: string | null;
+            /** Value */
+            value: number;
+            /**
+             * Vary
+             * @default false
+             */
+            vary?: boolean;
+        };
+        /** PeakModelParameterOut */
+        PeakModelParameterOut: {
+            /** At Bound */
+            at_bound: boolean;
+            /** Name */
+            name: string;
+            /** Stderr */
+            stderr: number | null;
+            /** Tie */
+            tie: string | null;
+            /** Value */
+            value: number | null;
+            /** Vary */
+            vary: boolean;
+        };
+        /**
+         * PeakModelPeakOut
+         * @description Derived per-peak quantities with delta-method standard errors.
+         */
+        PeakModelPeakOut: {
+            /** Area */
+            area: number | null;
+            /** Area Stderr */
+            area_stderr: number | null;
+            /** Center */
+            center: number | null;
+            /** Center Stderr */
+            center_stderr: number | null;
+            /** Fwhm */
+            fwhm: number | null;
+            /** Fwhm Stderr */
+            fwhm_stderr: number | null;
+            /** Height */
+            height: number | null;
+            /** Height Stderr */
+            height_stderr: number | null;
+            /** Id */
+            id: string;
+            /** Shape */
+            shape: string;
+        };
         /** PeakSeed */
         PeakSeed: {
             /** Center */
@@ -12899,6 +13111,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    model_fit_api_peaks_model_fit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PeakModelFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeakModelFitResponse"];
                 };
             };
             /** @description Validation Error */

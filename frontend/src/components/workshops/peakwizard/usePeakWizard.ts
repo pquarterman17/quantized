@@ -1,5 +1,6 @@
 // Peak Analyzer wizard (#31 + #32) — state hook. Orchestrates the 5-step flow
-// over the EXISTING calc endpoints (zero new math): ① range & baseline (live
+// over the calc endpoints (the fit step's default engine is the mixed-shape
+// /api/peaks/model-fit, audit P2.4 — see useModelFit.ts): ① range & baseline (live
 // subtract preview via the baseline overlay) → ② find peaks (auto-find params,
 // include/exclude, manual add, OR click-on-plot add/remove — interaction plan
 // item 5) → ③ model & constraints → ④ fit & review → ⑤ report (fit report, or
@@ -10,16 +11,16 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePeakBaseline } from "./usePeakBaseline";
+import { useModelFit, type ModelFitState } from "./useModelFit";
+import { modelPeaksForIntegrate, usePeakWizardOutput, type IntegrateResult } from "./usePeakWizardOutput";
 
 import { findPeaks, fitMultiPeak } from "../../../lib/api/peaks";
 import { dropGapRows } from "../../../lib/api/finitePairs";
-import { peaksIntegrate, reportEmit, type IntegratedPeak } from "../../../lib/api";
 import { visiblePeakMarkers } from "../../../lib/peakMarkerHit";
 import {
   cutRange,
   DEFAULT_RECIPE,
   loadRecipes,
-  regionsFromPeaks,
   saveRecipe as persistRecipe,
   subtractBaseline,
   type PeakRecipe,
@@ -87,8 +88,14 @@ export interface PeakWizardState {
   fitError: string | null;
   fitResult: MultiFitResult | null;
   runFit: () => Promise<void>;
+  /** The mixed-shape model engine (audit P2.4) — the default fit engine. */
+  model: ModelFitState;
+  /** Step ⑤ has a CURRENT fit to report from the ACTIVE engine. */
+  canReportFit: boolean;
+  /** Why step ⑤ refuses to integrate/report right now (a stale model fit). */
+  reportBlock: string | null;
   // ⑤ report / integrate (#32)
-  integrateResult: { peaks: IntegratedPeak[]; total_area: number } | null;
+  integrateResult: IntegrateResult;
   runIntegrate: () => Promise<void>;
   reportBusy: boolean;
   toReport: () => Promise<void>;
@@ -109,7 +116,6 @@ type DeepPartialRecipe = {
 
 export function usePeakWizard(): PeakWizardState {
   const active = useActiveDataset();
-  const addReport = useApp((s) => s.addReport);
   const setBaselineOverlay = useApp((s) => s.setBaselineOverlay);
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
   const setPeakWizardEdit = useApp((s) => s.setPeakWizardEdit);
@@ -126,7 +132,6 @@ export function usePeakWizard(): PeakWizardState {
   const [fitError, setFitError] = useState<string | null>(null);
   const [fitResult, setFitResult] = useState<MultiFitResult | null>(null);
   const [integrateResult, setIntegrateResult] = useState<PeakWizardState["integrateResult"]>(null);
-  const [reportBusy, setReportBusy] = useState(false);
   const [recipes, setRecipes] = useState<PeakRecipe[]>(() => loadRecipes());
   const [recipeRev, setRecipeRev] = useState(0);
   // Click-on-plot marker editing (item 5): Escape pauses the mode without
@@ -373,67 +378,36 @@ export function usePeakWizard(): PeakWizardState {
     }
   }, [segment, workingY, candidates, recipe.model]);
 
-  // ⑤ Integrate-only path (#32): regions from the best peak positions we have.
-  const runIntegrate = useCallback(async () => {
-    if (!segment || !workingY) return;
-    const source = fitResult?.peaks?.length
-      ? fitResult.peaks
-      : candidates.filter((c) => c.included);
-    if (source.length === 0) {
-      setFitError("no peaks to integrate — find or fit peaks first");
-      return;
-    }
-    setFitBusy(true);
-    setFitError(null);
-    try {
-      if (segment.x.length === 0) throw new Error("no finite X/Y pairs are available to integrate");
-      if (segment.gapCount > 0) {
-        toast(`${segment.gapCount} of ${segment.sourceCount} rows are gaps; they were excluded from integration.`);
-      }
-      const regions = regionsFromPeaks(
-        source.map((p) => ({ center: p.center, fwhm: p.fwhm })),
-        recipe.report.regionWidth,
-        segment.x[0],
-        segment.x[segment.x.length - 1],
-      );
-      const res = await peaksIntegrate({ x: segment.x, y: workingY, regions });
-      setIntegrateResult({ peaks: res.peaks, total_area: res.total_area });
-    } catch (e) {
-      setFitError(e instanceof Error ? e.message : "integration failed");
-    } finally {
-      setFitBusy(false);
-    }
-  }, [segment, workingY, fitResult, candidates, recipe.report.regionWidth]);
-
-  // ⑤ Land the result as a #36 report (fit table or integration table).
-  const toReport = useCallback(async () => {
-    if (!active) return;
-    setReportBusy(true);
-    try {
-      const refs = [{ kind: "dataset", id: active.id, name: active.name }];
-      if (recipe.report.mode === "integrate" && integrateResult) {
-        const { report } = await reportEmit({
-          kind: "integrate",
-          result: integrateResult as unknown as Record<string, unknown>,
-          title: `Peak integration — ${active.name}`,
-          source_refs: refs,
-        });
-        addReport(`Peak integration — ${active.name}`, report, active.id);
-      } else if (fitResult) {
-        const { report } = await reportEmit({
-          kind: "multipeak_fit",
-          result: fitResult as unknown as Record<string, unknown>,
-          title: `Peak analysis — ${active.name}`,
-          source_refs: refs,
-        });
-        addReport(`Peak analysis — ${active.name}`, report, active.id);
-      }
-    } catch (e) {
-      toast(`could not add to report — ${e instanceof Error ? e.message : "unknown error"}`, "danger");
-    } finally {
-      setReportBusy(false);
-    }
-  }, [active, recipe.report.mode, integrateResult, fitResult, addReport]);
+  // The mixed-shape model engine (audit P2.4) and step ⑤ (integrate / report).
+  const included = useMemo(
+    () => candidates.filter((c) => c.included).map(({ center, height, bg, fwhm }) => ({ center, height, bg, fwhm })),
+    [candidates],
+  );
+  // useModelFit invalidates its own result from a content key of these inputs
+  // (dataset, included peaks, recipe model, working x/y) — see its header.
+  const model = useModelFit({
+    active, segment, workingY, baseline, baselineOn: recipe.baseline.method !== "none",
+    peaks: included, model: recipe.model,
+  });
+  // Step ⑤ reads the ACTIVE engine's CURRENT fit only: a stale model result
+  // (table edited since) is blocked, with the reason shown there.
+  const modelResult = model.engine === "model" && !model.stale ? model.result : null;
+  const reportBlock = model.engine === "model" && model.stale
+    ? "the model table changed since the last fit — re-fit in step 4 before integrating or reporting"
+    : null;
+  // An integration seeded from a fit that is gone, replaced or stale — or
+  // from the other engine — describes nothing current.
+  useEffect(() => setIntegrateResult(null), [modelResult, model.engine]);
+  const classicResult = model.engine === "classic" ? fitResult : null;
+  const fitted = useMemo(
+    () => (modelResult ? modelPeaksForIntegrate(modelResult) : classicResult?.peaks.length ? classicResult.peaks : null),
+    [modelResult, classicResult],
+  );
+  const { runIntegrate, reportBusy, toReport } = usePeakWizardOutput({
+    active, segment, workingY, fitted, candidates, classicResult, modelResult,
+    report: recipe.report, integrateResult, setIntegrateResult, setBusy: setFitBusy, setError: setFitError,
+    blocked: reportBlock,
+  });
 
   const saveRecipe = (name: string) => {
     const named = { ...recipe, name };
@@ -478,6 +452,9 @@ export function usePeakWizard(): PeakWizardState {
     fitError,
     fitResult,
     runFit,
+    model,
+    canReportFit: modelResult !== null || classicResult !== null,
+    reportBlock,
     integrateResult,
     runIntegrate,
     reportBusy,

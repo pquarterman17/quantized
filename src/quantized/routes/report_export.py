@@ -35,7 +35,8 @@ def _safe_name(name: str, ext: str) -> str:
 class ReportEmitRequest(BaseModel):
     """An analysis result + which emitter should shape it into a report."""
 
-    # curve_fit | multipeak_fit | refl_fit | integrate | batch_integrate | anova | stats_table
+    # curve_fit | multipeak_fit | peak_model_fit | refl_fit | integrate |
+    # batch_integrate | anova | stats_table
     kind: str
     result: dict[str, Any] | None = None
     records: list[dict[str, Any]] | None = None  # stats_table input
@@ -69,6 +70,7 @@ def _emit_sheet(req: ReportEmitRequest) -> ReportSheet:
         )
     simple = {
         "multipeak_fit": report_emit.from_multipeak_fit,
+        "peak_model_fit": report_emit.from_peak_model_fit,
         "refl_fit": report_emit.from_refl_fit,
         "integrate": report_emit.from_integrate,
         "batch_integrate": report_emit.from_batch_integrate,
