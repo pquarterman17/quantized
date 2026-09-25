@@ -36,14 +36,17 @@ export interface BatchDatasetResult {
 /** A dataset's preparation outcome, in the order the user picked them. */
 export type PrepOutcome =
   | { datasetId: string; name: string; ok: true; itemId: string; notes: string[] }
-  | { datasetId: string; name: string; ok: false; error: string };
+  | { datasetId: string; name: string; ok: false; error: string; notRun?: true };
 
 /** Join the preparations with the job's rows (matched by item id). */
 export function mergeBatch(preps: readonly PrepOutcome[], job: PeakBatchResult | null): BatchDatasetResult[] {
   const byId = new Map((job?.rows ?? []).map((r) => [r.id, r]));
   return preps.map((p): BatchDatasetResult => {
     if (!p.ok) {
-      return { datasetId: p.datasetId, name: p.name, status: "error", stage: "prepare", error: p.error, fit: null, notes: [] };
+      return {
+        datasetId: p.datasetId, name: p.name, status: p.notRun ? "not_run" : "error",
+        stage: "prepare", error: p.error, fit: null, notes: [],
+      };
     }
     const row = byId.get(p.itemId);
     if (!row) {
@@ -173,6 +176,16 @@ function sortValue(r: BatchTableRow, key: SortKey): number | string | null {
     default:
       return r[key];
   }
+}
+
+export interface BatchSort {
+  key: SortKey;
+  dir: "asc" | "desc";
+}
+
+/** The next sort after a header click: a new column ascends, the same one flips. */
+export function nextSort(s: BatchSort | null, key: SortKey): BatchSort {
+  return s?.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" };
 }
 
 /** Stable sort; missing values (null / non-finite) always last. */

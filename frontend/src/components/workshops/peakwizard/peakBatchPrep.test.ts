@@ -9,11 +9,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_RECIPE, subtractBaseline, type PeakRecipe } from "../../../lib/peakwizard";
 import type { Dataset } from "../../../lib/types";
 import {
+  applyPointBudget,
   batchChannels,
   batchSegment,
+  batchTotalDeadline,
+  mapPool,
   prepareBatchItem,
   recipeBatchBlock,
   type BatchChannels,
+  type PreparedItem,
 } from "./peakBatchPrep";
 import { buildSetup, modelFitBody } from "./peakModelParams";
 
@@ -136,5 +140,56 @@ describe("recipeBatchBlock", () => {
   it("refuses a Classic-engine recipe with the way out", () => {
     expect(recipeBatchBlock(recipe({ fit: { ...DEFAULT_RECIPE.fit, engine: "classic" } }))).toMatch(/Classic engine.*switch the recipe to the model engine/);
     expect(recipeBatchBlock(recipe())).toBeNull();
+  });
+});
+
+describe("mapPool (bounded, order-stable preparation)", () => {
+  it("never runs more than `limit` at once and keeps the input order", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const delays = [30, 5, 20, 1, 10, 2, 15];
+    const out = await mapPool(delays, 3, async (ms, i) => {
+      inFlight += 1;
+      peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, ms));
+      inFlight -= 1;
+      return i;
+    });
+    expect(out).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(peak).toBe(3);
+  });
+  it("starts nothing new once stopped", async () => {
+    const started: number[] = [];
+    let stop = false;
+    await mapPool([1, 2, 3, 4], 1, async (v) => {
+      started.push(v);
+      if (v === 2) stop = true;
+      return v;
+    }, () => stop);
+    expect(started).toEqual([1, 2]);
+  });
+});
+
+describe("applyPointBudget (the route's total-points cap, client side)", () => {
+  const ok = (n: number): PreparedItem => ({
+    ok: true, nPeaks: 1, notes: [],
+    item: { x: Array.from({ length: n }, (_, i) => i), y: [], shapes: ["gaussian"], parameters: [] },
+  });
+  it("keeps items while they fit; one that would overflow is a named 'not run'", () => {
+    const out = applyPointBudget([ok(30), { ok: false, error: "no peaks found" }, ok(30), ok(20)], 50);
+    expect(out.map((p) => p.ok)).toEqual([true, false, false, true]);
+    expect(out[1]).toEqual({ ok: false, error: "no peaks found" });
+    expect(out[2]).toEqual({
+      ok: false, notRun: true,
+      error: "not fitted: the batch's 50-point limit was reached — pick fewer datasets, or run the rest as another batch",
+    });
+  });
+});
+
+describe("batchTotalDeadline", () => {
+  it("scales with the item count, capped at the route's 30 min", () => {
+    expect(batchTotalDeadline(1)).toBe(40);
+    expect(batchTotalDeadline(2)).toBe(50);
+    expect(batchTotalDeadline(200)).toBe(1800);
   });
 });

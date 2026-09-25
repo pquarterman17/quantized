@@ -222,7 +222,11 @@ class PeakModelParameter(BaseModel):
     tie: str | None = Field(default=None, max_length=32, pattern=r"^[a-z0-9_.]*$")
 
 
-class PeakModelFitRequest(BaseModel):
+class PeakModelProblem(BaseModel):
+    """The fit problem itself - data, shapes, background, parameter table.
+    Shared by ``/model-fit`` and each ``/model-fit-batch`` item
+    (routes/peaks_batch.py), so the two can never drift apart."""
+
     x: Column = Field(min_length=2, max_length=MODEL_FIT_MAX_POINTS)
     y: Column = Field(min_length=2, max_length=MODEL_FIT_MAX_POINTS)
     y_err: Column | None = Field(default=None, max_length=MODEL_FIT_MAX_POINTS)
@@ -230,9 +234,20 @@ class PeakModelFitRequest(BaseModel):
     background: Literal["none", "constant", "linear", "quadratic"] = "linear"
     parameters: list[PeakModelParameter] = Field(
         min_length=1, max_length=MODEL_FIT_MAX_PARAMETERS)
+    bg_x_ref: FiniteFloat | None = None
+
+    def calc_kwargs(self) -> dict[str, Any]:
+        """The problem as ``fit_peak_model``'s inputs (null rows -> NaN)."""
+        return {
+            "x": _column(self.x), "y": _column(self.y), "y_err": _column(self.y_err),
+            "shapes": list(self.shapes), "background": self.background,
+            "parameters": [p.model_dump() for p in self.parameters], "bg_x_ref": self.bg_x_ref,
+        }
+
+
+class PeakModelFitRequest(PeakModelProblem):
     x_min: FiniteFloat | None = None
     x_max: FiniteFloat | None = None
-    bg_x_ref: FiniteFloat | None = None
     max_nfev: int = Field(default=1000, ge=1, le=10_000)
     deadline_s: float = Field(default=10.0, gt=0.0, le=MODEL_FIT_MAX_DEADLINE_S)
 
@@ -325,11 +340,11 @@ def model_fit(req: PeakModelFitRequest) -> dict[str, Any]:
     """Fit mixed-shape peaks + a polynomial background with per-parameter
     start/vary/bounds/ties; returns parameters, derived peaks, metrics,
     curves and warnings."""
+    k = req.calc_kwargs()
     out = call_calc(fit_peak_model,
-        _column(req.x), _column(req.y), list(req.shapes),
-        [p.model_dump() for p in req.parameters],
-        background=req.background, y_err=_column(req.y_err),
-        x_min=req.x_min, x_max=req.x_max, bg_x_ref=req.bg_x_ref,
+        k["x"], k["y"], k["shapes"], k["parameters"],
+        background=k["background"], y_err=k["y_err"],
+        x_min=req.x_min, x_max=req.x_max, bg_x_ref=k["bg_x_ref"],
         max_nfev=req.max_nfev, deadline_s=req.deadline_s,
     )
     result: dict[str, Any] = to_jsonable(out)

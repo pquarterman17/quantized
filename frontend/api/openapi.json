@@ -6943,128 +6943,8 @@
         "title": "PeakModelBackgroundOut",
         "type": "object"
       },
-      "PeakModelBatchItem": {
-        "description": "One dataset's prepared fit: the ``/model-fit`` body plus its ``id``.",
-        "properties": {
-          "background": {
-            "default": "linear",
-            "enum": [
-              "none",
-              "constant",
-              "linear",
-              "quadratic"
-            ],
-            "title": "Background",
-            "type": "string"
-          },
-          "bg_x_ref": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Bg X Ref"
-          },
-          "id": {
-            "maxLength": 128,
-            "minLength": 1,
-            "pattern": "^[A-Za-z0-9_.:-]+$",
-            "title": "Id",
-            "type": "string"
-          },
-          "parameters": {
-            "items": {
-              "$ref": "#/components/schemas/PeakModelParameter"
-            },
-            "maxItems": 203,
-            "minItems": 1,
-            "title": "Parameters",
-            "type": "array"
-          },
-          "shapes": {
-            "items": {
-              "enum": [
-                "gaussian",
-                "lorentzian",
-                "pseudo_voigt",
-                "voigt"
-              ],
-              "type": "string"
-            },
-            "maxItems": 50,
-            "minItems": 1,
-            "title": "Shapes",
-            "type": "array"
-          },
-          "x": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "maxItems": 100000,
-            "minItems": 2,
-            "title": "X",
-            "type": "array"
-          },
-          "y": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "maxItems": 100000,
-            "minItems": 2,
-            "title": "Y",
-            "type": "array"
-          },
-          "y_err": {
-            "anyOf": [
-              {
-                "items": {
-                  "anyOf": [
-                    {
-                      "type": "number"
-                    },
-                    {
-                      "type": "null"
-                    }
-                  ]
-                },
-                "maxItems": 100000,
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Y Err"
-          }
-        },
-        "required": [
-          "id",
-          "x",
-          "y",
-          "shapes",
-          "parameters"
-        ],
-        "title": "PeakModelBatchItem",
-        "type": "object"
-      },
       "PeakModelBatchRequest": {
+        "description": "``items``: each a ``PeakModelFitRequest``-shaped problem (without the\nrange / budget fields) plus ``id``; bodies are validated per item in the\njob, so the schema here only types the envelope.",
         "properties": {
           "item_deadline_s": {
             "default": 10.0,
@@ -7075,7 +6955,8 @@
           },
           "items": {
             "items": {
-              "$ref": "#/components/schemas/PeakModelBatchItem"
+              "additionalProperties": true,
+              "type": "object"
             },
             "maxItems": 200,
             "minItems": 1,

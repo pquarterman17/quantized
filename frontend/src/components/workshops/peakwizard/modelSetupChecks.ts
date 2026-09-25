@@ -6,6 +6,11 @@
 // self, same kind, no cycle, ending on a varying parameter), min <= max, a
 // free parameter's start inside its bounds (widths > 0 by default, eta in
 // [0, 1]), positive widths, eta in [0, 1], and a Voigt with a nonzero width.
+// Non-finite numbers first: every comparison with NaN is false, so without
+// that check a NaN start or bound slipped past all of the rules below — and
+// JSON sends NaN as null, which the backend refuses (a 422 for the fit, an
+// error row in a batch). Checked for tied parameters too: the backend
+// validates every value, even one a tie then ignores.
 
 import { paramKind, paramLabel, type ModelSetup } from "./peakModelParams";
 
@@ -26,6 +31,14 @@ export function setupProblems(setup: ModelSetup): string[] {
   };
   for (const p of setup.params) {
     const n = label(p.name);
+    if (!Number.isFinite(p.value)) {
+      out.push(`${n}: the start value is not a finite number`);
+      continue;
+    }
+    if ([p.min, p.max].some((b) => b !== null && !Number.isFinite(b))) {
+      out.push(`${n}: a bound is not a finite number`);
+      continue;
+    }
     if (p.tie !== null) {
       const t = by.get(p.tie);
       if (!t) out.push(`${n} is tied to an unknown parameter (${p.tie})`);

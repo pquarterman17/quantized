@@ -14,7 +14,14 @@ import { getJSON, postJSON } from "./http";
 import type { components } from "./schema";
 
 export type PeakBatchRequest = components["schemas"]["PeakModelBatchRequest"];
-export type PeakBatchItem = components["schemas"]["PeakModelBatchItem"];
+/** One item: a `/model-fit` problem (the backend's shared `PeakModelProblem`
+ *  — the fit request minus its range / budget fields) plus its `id`. The
+ *  route types only the envelope and validates each item inside the job, so
+ *  the item type is derived from the single-fit request here. */
+export type PeakBatchItem = Omit<
+  components["schemas"]["PeakModelFitRequest"],
+  "x_min" | "x_max" | "max_nfev" | "deadline_s"
+> & { id: string };
 type Submitted = components["schemas"]["PeakModelBatchSubmitted"];
 type FitResponse = components["schemas"]["PeakModelFitResponse"];
 

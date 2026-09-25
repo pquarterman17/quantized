@@ -181,3 +181,53 @@ def test_progress_exceptions_propagate() -> None:
 def test_bad_budgets_are_rejected(kw: dict[str, float]) -> None:
     with pytest.raises(ValueError, match="must be positive"):
         fit_peak_model_batch([_item("a", 23.0, 100.0, 0.8)], **kw)
+
+
+def test_uncurated_exception_text_never_reaches_a_row() -> None:
+    # A KeyError's text is Python's repr of the key, not a curated message.
+    no_shapes = _item("no-shapes", 25.0, 50.0, 1.0)
+    del no_shapes["shapes"]
+    out = fit_peak_model_batch([no_shapes, _item("a", 23.0, 100.0, 0.8)])
+    assert [r["status"] for r in out["rows"]] == ["error", "ok"]
+    assert out["rows"][0]["error"] == "unexpected KeyError while fitting"
+
+
+def test_validate_hook_errors_are_isolated_rows() -> None:
+    def validate(item: Any) -> Any:
+        if item["id"] == "bad":
+            raise ValueError("invalid item: parameters.0.value: Input should be a finite number")
+        return item
+
+    items = [_item("a", 23.0, 100.0, 0.8), _item("bad", 25.0, 50.0, 1.0),
+             _item("c", 27.2, 150.0, 0.5)]
+    out = fit_peak_model_batch(items, validate=validate)
+    assert [r["status"] for r in out["rows"]] == ["ok", "error", "ok"]
+    assert out["rows"][1]["error"].startswith("invalid item: parameters.0.value")
+
+
+def test_a_fit_cut_short_by_the_total_budget_marks_the_batch_stopped(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    import quantized.calc.peak_model_batch as mod
+
+    real = mod.fit_peak_model
+    now = {"t": 0.0}
+
+    def slow(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        out = real(*args, **kwargs)
+        now["t"] += kwargs["deadline_s"]  # it used its whole budget ...
+        return {**out, "success": False}  # ... and stopped there, unconverged
+
+    monkeypatch.setattr(mod, "fit_peak_model", slow)
+    out = fit_peak_model_batch([_item("a", 23.0, 100.0, 0.8), _item("b", 25.5, 60.0, 1.2)],
+                               item_deadline_s=10.0, total_deadline_s=15.0,
+                               clock=lambda: now["t"])
+    # Item b got 5 s (not 10) and ran out: every item has a row, none is
+    # "not_run", yet the batch budget DID cut work short.
+    assert [r["status"] for r in out["rows"]] == ["ok", "ok"]
+    assert out["n_not_run"] == 0 and out["stopped"] == "deadline"
+
+
+def test_a_fit_converging_inside_a_shortened_budget_is_not_flagged() -> None:
+    out = fit_peak_model_batch([_item("a", 23.0, 100.0, 0.8)], item_deadline_s=10.0,
+                               total_deadline_s=5.0, clock=lambda: 0.0)
+    assert out["rows"][0]["fit"]["success"] and out["stopped"] is None

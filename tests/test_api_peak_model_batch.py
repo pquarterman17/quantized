@@ -114,8 +114,9 @@ def _detail(resp: Any) -> str:
     [
         (lambda b: b.update(items=[]), "at least 1"),
         (lambda b: b["items"].append(dict(b["items"][0])), "item ids must be unique"),
-        (lambda b: b["items"][0].update(id="bad id!"), "pattern"),
-        (lambda b: b["items"][0].update(shapes=["sinc"]), "gaussian"),
+        (lambda b: b["items"][0].update(id="bad id!"), "items[0].id must be"),
+        (lambda b: b["items"][0].pop("id"), "items[0].id must be"),
+        (lambda b: b.update(items=[1]), "valid dictionary"),
         (lambda b: b.update(item_deadline_s=31.0), "less than or equal"),
         (lambda b: b.update(total_deadline_s=0.0), "greater than 0"),
     ],
@@ -143,3 +144,41 @@ def test_caps_are_enforced(monkeypatch: pytest.MonkeyPatch) -> None:
     resp = client.post("/api/peaks/model-fit-batch", json={"items": items})
     assert resp.status_code == 422
     assert "1005 points; the limit is 1000" in _detail(resp)
+
+
+def test_one_invalid_item_is_an_error_row_not_a_422() -> None:
+    """A NaN start value serializes to null (JSON has no NaN) and an unknown
+    shape fails the item schema: each is ITS dataset's error row."""
+    nan_seed = _item("ds-nan", 0.0, 10.0)
+    nan_seed["parameters"][0]["value"] = None
+    sinc = _item("ds-sinc", 0.0, 10.0)
+    sinc["shapes"] = ["sinc"]
+    items = [_item("ds-1", -1.0, 30.0), nan_seed, sinc, _item("ds-4", 1.0, 20.0)]
+    resp = client.post("/api/peaks/model-fit-batch", json={"items": items})
+    assert resp.status_code == 200
+    job_id = resp.json()["job_id"]
+    assert _wait(job_id)["status"] == "done"
+    rows = client.get(f"/api/jobs/{job_id}/result").json()["result"]["rows"]
+    assert [r["status"] for r in rows] == ["ok", "error", "error", "ok"]
+    assert rows[1]["error"] == "invalid item: parameters.0.value: Input should be a valid number"
+    assert rows[2]["error"].startswith("invalid item: shapes.0: Input should be 'gaussian'")
+    assert all(r["error"].isascii() for r in rows[1:3])
+
+
+def test_the_job_does_not_hold_the_parsed_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    import quantized.routes.peaks_batch as mod
+
+    captured: list[Any] = []
+    monkeypatch.setattr(mod.jobs, "submit", lambda fn: captured.append(fn) or "j")
+    client.post("/api/peaks/model-fit-batch", json={"items": [_item("ds-1", 0.0, 10.0)]})
+    cells = [c.cell_contents for c in captured[0].__closure__ or ()]
+    assert not any(isinstance(c, mod.PeakModelBatchRequest) for c in cells)
+
+
+def test_batch_items_and_single_fits_share_one_problem_model() -> None:
+    from quantized.routes.peaks import PeakModelFitRequest, PeakModelProblem
+    from quantized.routes.peaks_batch import PeakModelBatchItem
+
+    assert issubclass(PeakModelBatchItem, PeakModelProblem)
+    assert issubclass(PeakModelFitRequest, PeakModelProblem)
+    assert set(PeakModelBatchItem.model_fields) == set(PeakModelProblem.model_fields) | {"id"}

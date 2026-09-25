@@ -3295,6 +3295,23 @@ dataset is the durable result; it does not reopen as the interactive
 table); the wizard sends no y errors, so a χ²-labelled batch is reachable
 only through the API today; durable peak-table publishing with stderr +
 shape and a correlation view remain open (below the boxes, not new boxes).
+Review round (same day, 10 findings fixed, each with a test that went red
+when the fix was reverted): a dataset whose LOADING throws is an error row
+and preparation always ends; preparation runs 4 at a time (`mapPool`, rows
+in picked order); the route's 2M-point total is enforced client-side
+before submit (`applyPointBudget`: overflow datasets are "not run" rows
+saying to pick fewer); the route validates each item INSIDE the job
+(`TypeAdapter`), so one bad item (a NaN start sent as null, an unknown
+shape) is its error row, never a 422 for the batch — the envelope (count,
+unique ids, total points) still 422s — and `setupProblems` now rejects
+non-finite starts/bounds; the job closure no longer holds the parsed
+request; the total deadline is `min(1800, n x 10 s + 30 s)`, not a flat 30
+min; `stopped = "deadline"` also when the budget cut the LAST fit short,
+and the status says so; Export CSV follows the on-screen sort (sort state
+lifted to the view); batch items and `/model-fit` share one
+`PeakModelProblem` model; only ValueError / ArithmeticError / LinAlgError
+text reaches a row (KeyError / IndexError / TypeError get the generic
+type-only message).
 - [x] Batch recipe and uncertainty/diagnostic result table. (slice 4,
   2026-09-25)
 

@@ -5,7 +5,7 @@
 // library as a dataset — the standard derived-data path, so it saves with the
 // workspace and names the recipe and every source in its metadata.
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 
 import { saveBlob } from "../../../lib/download";
 import type { PeakRecipe } from "../../../lib/peakwizard";
@@ -14,7 +14,7 @@ import { useApp } from "../../../store/useApp";
 import { Button, Select, StatusDot } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import PeakBatchTable from "./PeakBatchTable";
-import { batchCsv, batchTableRows } from "./peakBatchTable";
+import { batchCsv, batchTableRows, nextSort, sortRows, type BatchSort } from "./peakBatchTable";
 import { usePeakBatch } from "./usePeakBatch";
 
 const faint = { color: "var(--text-faint)" } as const;
@@ -30,13 +30,16 @@ export default function PeakBatchView({ recipes, current, pollMs }: {
   const datasets = useApp((s) => s.datasets);
   const selectedIds = useApp((s) => s.selectedIds);
   const rows = useMemo(() => (b.results ? batchTableRows(b.results) : []), [b.results]);
+  // The sort lives here so the table and the CSV share one order.
+  const [sort, setSort] = useState<BatchSort | null>(null);
+  const shown = useMemo(() => (sort ? sortRows(rows, sort.key, sort.dir) : rows), [rows, sort]);
   const busy = b.phase === "preparing" || b.phase === "fitting" || b.phase === "cancelling";
   const ch = b.channels;
 
   const exportCsv = () => {
     if (!b.ran) return;
     const safe = b.ran.recipe.name.replace(/[^\w.-]+/g, "_") || "recipe";
-    saveBlob(new Blob([batchCsv(rows)], { type: "text/csv" }), `peak-batch-${safe}.csv`);
+    saveBlob(new Blob([batchCsv(shown)], { type: "text/csv" }), `peak-batch-${safe}.csv`);
   };
   const addTable = () => {
     const id = b.addAsTable();
@@ -105,7 +108,7 @@ export default function PeakBatchView({ recipes, current, pollMs }: {
 
       {b.results && (
         <>
-          <PeakBatchTable rows={rows} />
+          <PeakBatchTable rows={shown} sort={sort} onSort={(key) => setSort((s) => nextSort(s, key))} />
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <Button size="sm" onClick={exportCsv}>Export CSV</Button>
             <Button size="sm" onClick={addTable}>Add as table</Button>

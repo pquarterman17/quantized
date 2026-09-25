@@ -32,8 +32,66 @@ import { recipeBaseline, recipeFind } from "./recipeSteps";
 /** The backend's per-fit caps (src/quantized/routes/peaks.py). */
 export const BATCH_MAX_PEAKS = 50;
 export const BATCH_MAX_POINTS = 100_000;
-/** The batch route's cap on items (src/quantized/routes/peaks_batch.py). */
+/** The batch route's caps (src/quantized/routes/peaks_batch.py): items, and
+ *  points summed over every item — enforced HERE before submit, so a large
+ *  pick is never an all-or-nothing 422 (`applyPointBudget`). */
 export const BATCH_MAX_DATASETS = 200;
+export const BATCH_MAX_TOTAL_POINTS = 2_000_000;
+/** Each fit's budget (the route's default, sent explicitly). */
+export const BATCH_ITEM_DEADLINE_S = 10;
+/** Datasets prepared at once: enough to hide request latency, few enough not
+ *  to flood the server (each is a baseline + find request). */
+export const BATCH_PREP_CONCURRENCY = 4;
+
+/** The batch's total budget: every fit may use its whole per-fit budget, plus
+ *  30 s of slack, capped at the route's 30 min. Scaling with the item count
+ *  keeps a small batch from holding one of the job queue's two workers for
+ *  half an hour; a fit that hits its own 10 s budget stops unconverged (a
+ *  row saying so), so n x 10 s bounds the honest work. */
+export function batchTotalDeadline(nItems: number): number {
+  return Math.min(1800, nItems * BATCH_ITEM_DEADLINE_S + 30);
+}
+
+/** Run `fn` over `inputs` with at most `limit` in flight; results keep the
+ *  INPUT order whatever order they finish in. Once `stop()` is true no new
+ *  input starts (those slots stay undefined). `fn` must not reject. */
+export async function mapPool<T, R>(
+  inputs: readonly T[],
+  limit: number,
+  fn: (v: T, i: number) => Promise<R>,
+  stop: () => boolean = () => false,
+): Promise<(R | undefined)[]> {
+  const out: (R | undefined)[] = new Array<R | undefined>(inputs.length).fill(undefined);
+  let next = 0;
+  const worker = async () => {
+    while (next < inputs.length && !stop()) {
+      const i = next++;
+      out[i] = await fn(inputs[i], i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.max(1, Math.min(limit, inputs.length)) }, worker));
+  return out;
+}
+
+/** Walk the prepared items in order, keeping each while the running total
+ *  of points stays within `cap`; an item that would push it past becomes a
+ *  "not run" outcome saying why and what to do (a smaller later one may
+ *  still fit). The route would otherwise 422 the whole batch. */
+export function applyPointBudget(prepared: readonly PreparedItem[], cap: number): PreparedItem[] {
+  let total = 0;
+  return prepared.map((p): PreparedItem => {
+    if (!p.ok) return p;
+    const n = p.item.x.length;
+    if (total + n > cap) {
+      return {
+        ok: false, notRun: true,
+        error: `not fitted: the batch's ${cap}-point limit was reached — pick fewer datasets, or run the rest as another batch`,
+      };
+    }
+    total += n;
+    return p;
+  });
+}
 
 /** Which columns the batch fits: names (null x = the row index/time axis)
  *  plus the active dataset's indices, preferred when the name still matches. */
@@ -103,7 +161,7 @@ export function recipeBatchBlock(recipe: PeakRecipe): string | null {
 
 export type PreparedItem =
   | { ok: true; item: Omit<PeakBatchItem, "id">; nPeaks: number; notes: string[] }
-  | { ok: false; error: string };
+  | { ok: false; error: string; notRun?: true };
 
 /** One dataset's fit problem, prepared exactly as the wizard would on it:
  *  segment -> baseline -> find -> table (seed + the recipe's edits) -> body.

@@ -7902,32 +7902,11 @@ export interface components {
             x_ref: number;
         };
         /**
-         * PeakModelBatchItem
-         * @description One dataset's prepared fit: the ``/model-fit`` body plus its ``id``.
+         * PeakModelBatchRequest
+         * @description ``items``: each a ``PeakModelFitRequest``-shaped problem (without the
+         *     range / budget fields) plus ``id``; bodies are validated per item in the
+         *     job, so the schema here only types the envelope.
          */
-        PeakModelBatchItem: {
-            /**
-             * Background
-             * @default linear
-             * @enum {string}
-             */
-            background?: "none" | "constant" | "linear" | "quadratic";
-            /** Bg X Ref */
-            bg_x_ref?: number | null;
-            /** Id */
-            id: string;
-            /** Parameters */
-            parameters: components["schemas"]["PeakModelParameter"][];
-            /** Shapes */
-            shapes: ("gaussian" | "lorentzian" | "pseudo_voigt" | "voigt")[];
-            /** X */
-            x: (number | null)[];
-            /** Y */
-            y: (number | null)[];
-            /** Y Err */
-            y_err?: (number | null)[] | null;
-        };
-        /** PeakModelBatchRequest */
         PeakModelBatchRequest: {
             /**
              * Item Deadline S
@@ -7935,7 +7914,9 @@ export interface components {
              */
             item_deadline_s?: number;
             /** Items */
-            items: components["schemas"]["PeakModelBatchItem"][];
+            items: {
+                [key: string]: unknown;
+            }[];
             /**
              * Max Nfev
              * @default 1000

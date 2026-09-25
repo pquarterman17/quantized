@@ -44,7 +44,7 @@ function fitRow(id: string) {
 
 // A tiny fake of the job API: snapshots are served from `script`, the last
 // one repeating; a cancel flips the job to "cancelled" on the next poll.
-let posted: { items: { id: string }[] }[] = [];
+let posted: { items: { id: string }[]; item_deadline_s?: number; total_deadline_s?: number }[] = [];
 let script: { status: string; progress: number; message: string; error?: string }[] = [];
 let cancelled = false;
 let result: PeakBatchResult;
@@ -53,8 +53,11 @@ function json(v: unknown, status = 200) {
   return Promise.resolve(new Response(JSON.stringify(v), { status, headers: { "Content-Type": "application/json" } }));
 }
 
+const realResolve = useApp.getState().resolveDataset;
+
 beforeEach(() => {
   vi.clearAllMocks();
+  useApp.setState({ resolveDataset: realResolve });
   posted = [];
   cancelled = false;
   script = [{ status: "running", progress: 0.5, message: "fitting 1/2" }, { status: "done", progress: 1, message: "fitted 2/2" }];
@@ -207,6 +210,60 @@ describe("PeakBatchView", () => {
     const rows = within(screen.getByRole("table", { name: "batch results" })).getAllByRole("row").slice(1);
     expect(rows).toHaveLength(3);
     expect(rows[0]).toHaveTextContent("no peaks found");
+  });
+
+  it("a dataset that fails to LOAD is an error row, and the batch still finishes", async () => {
+    useApp.setState({
+      resolveDataset: (id: string) => (id === "c" ? Promise.reject(new Error("disk gone")) : realResolve(id)),
+    });
+    result = { ...result, rows: [fitRow("i0")] };
+    await runAll();
+    await waitFor(() => expect(status()).toHaveTextContent("done"));
+    const rows = within(screen.getByRole("table", { name: "batch results" })).getAllByRole("row").slice(1);
+    expect(rows.map((r) => r.getAttribute("data-status"))).toEqual(["converged", "converged", "error", "error"]);
+    expect(rows[3]).toHaveTextContent("could not load the dataset: disk gone");
+    expect(posted[0].items.map((i) => i.id)).toEqual(["i0"]);
+  });
+
+  it("prepares datasets concurrently but keeps the rows in the picked order", async () => {
+    let release: (v: unknown) => void = () => undefined;
+    const found = await findMock.getMockImplementation()?.({});
+    findMock.mockReturnValueOnce(new Promise((r) => { release = r; })); // A: slow
+    await runAll();
+    // B fails fast and C finishes while A is still out: that is 2/3 — a
+    // sequential run would sit at 0/3 behind A.
+    await waitFor(() => expect(status()).toHaveTextContent("preparing · preparing 2/3"));
+    release(found ?? { peaks: [], background: [] });
+    await waitFor(() => expect(status()).toHaveTextContent("done"));
+    const names = within(screen.getByRole("table", { name: "batch results" })).getAllByRole("row").slice(1)
+      .map((r) => r.querySelector("td")?.textContent);
+    expect(names).toEqual(["scan a", "scan a", "scan b", "scan c", "scan c"]);
+  });
+
+  it("sends a per-fit budget and a total deadline scaled to the item count", async () => {
+    await runAll();
+    await waitFor(() => expect(status()).toHaveTextContent("done"));
+    expect(posted[0].item_deadline_s).toBe(10);
+    expect(posted[0].total_deadline_s).toBe(50);
+  });
+
+  it("says when the batch time limit cut the last fit short", async () => {
+    result = { ...result, stopped: "deadline" };
+    await runAll();
+    await waitFor(() => expect(status()).toHaveTextContent("the batch reached its time limit — the last fit was cut short"));
+  });
+
+  it("exports the CSV in the order the table is sorted", async () => {
+    await runAll();
+    const table = await screen.findByRole("table", { name: "batch results" });
+    fireEvent.click(within(table).getByRole("button", { name: "Center" }));
+    fireEvent.click(within(table).getByRole("button", { name: /Center/ })); // descending
+    fireEvent.click(screen.getByRole("button", { name: "Export CSV" }));
+    const [blob] = saveMock.mock.calls[0] as [Blob, string];
+    const lines = (await blob.text()).split("\n").slice(1);
+    const header = (await blob.text()).split("\n")[0].split(",");
+    const centres = lines.map((l) => l.split(",")[header.indexOf("center")]);
+    expect(centres).toEqual(["4", "4", "2.01", "2.01", ""]);
   });
 
   it("cancel while preparing stops at once and queues nothing, even when the pending request lands", async () => {

@@ -3,12 +3,14 @@
 // peak), a failed dataset as one row with its reason. Every missing error is
 // "± —" whose tooltip says WHY (./modelFitReasons); the objective column
 // names what each fit minimised (SSR, or χ² only for a weighted fit); the
-// warnings cell shows the count, the texts on hover and on expand.
+// warnings cell shows the count, the texts on hover and on expand. The sort
+// is the VIEW's state (PeakBatchView), so the CSV it exports is in exactly
+// the order shown here.
 
-import { useMemo, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 
 import { fmtNum } from "../../../lib/format";
-import { DERIVED, sortRows, type BatchTableRow, type SortKey, type ValueErr } from "./peakBatchTable";
+import { DERIVED, type BatchSort, type BatchTableRow, type SortKey, type ValueErr } from "./peakBatchTable";
 
 const faint = { color: "var(--text-faint)" } as const;
 const mono = { fontFamily: "var(--font-mono)", whiteSpace: "nowrap" } as const;
@@ -91,11 +93,13 @@ function Status({ r }: { r: BatchTableRow }): ReactNode {
   );
 }
 
-export default function PeakBatchTable({ rows }: { rows: BatchTableRow[] }) {
-  const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" } | null>(null);
-  const shown = useMemo(() => (sort ? sortRows(rows, sort.key, sort.dir) : rows), [rows, sort]);
-  const onSort = (key: SortKey) =>
-    setSort((s) => (s?.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+/** `rows` are shown as given (already sorted by `sort`); a header click asks
+ *  the owner to sort by that column (again: the other direction). */
+export default function PeakBatchTable({ rows, sort, onSort }: {
+  rows: BatchTableRow[];
+  sort: BatchSort | null;
+  onSort: (key: SortKey) => void;
+}) {
 
   return (
     <div style={{ overflow: "auto", maxHeight: 320, marginTop: 6 }}>
@@ -120,7 +124,7 @@ export default function PeakBatchTable({ rows }: { rows: BatchTableRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {shown.map((r) => (
+          {rows.map((r) => (
             <tr key={`${r.datasetId}:${r.peak ?? "x"}`} data-status={r.status}>
               <td>{r.dataset}</td>
               <td style={mono}>{r.peak ?? "—"}</td>

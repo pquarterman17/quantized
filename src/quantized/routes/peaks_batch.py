@@ -5,32 +5,31 @@
 :data:`BATCH_MAX_ITEMS` prepared fit problems and returns ``{job_id,
 n_items}`` at once; the SPA GET-polls ``/api/jobs/{id}`` (progress "fitting
 k/N"), cancels through ``/api/jobs/{id}/cancel`` and reads the rows from
-``/api/jobs/{id}/result``. Each item is exactly one ``/api/peaks/model-fit``
-body (same field models, same caps) plus a client ``id``; a bad item is an
-error ROW, never a failed batch. Validate -> submit -> serialize.
+``/api/jobs/{id}/result``.
+
+VALIDATION IS PER ITEM. Each item is one ``/api/peaks/model-fit`` problem
+(:class:`quantized.routes.peaks.PeakModelProblem`, the SAME model, so the
+two cannot drift) plus a client ``id``. The request itself only checks the
+ENVELOPE - item count, a unique well-formed ``id`` on every item, the total
+point count; each item's body is validated inside the job, one at a time,
+and an item that fails (a non-finite start value sent as ``null``, an unknown
+shape) becomes an ERROR ROW - one bad dataset never 422s the batch.
+Validate -> submit -> serialize.
 """
 
 from __future__ import annotations
 
-from typing import Any, Literal
+import re
+from collections.abc import Mapping
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, TypeAdapter, ValidationError, model_validator
 
 from quantized.calc.peak_model_batch import BatchCancelled, fit_peak_model_batch
 from quantized.jobs import AbortFn, JobCancelled, JobQueueFullError, ProgressFn, jobs
 from quantized.routes._payload import to_jsonable
-from quantized.routes.peaks import (
-    MODEL_FIT_MAX_DEADLINE_S,
-    MODEL_FIT_MAX_PARAMETERS,
-    MODEL_FIT_MAX_PEAKS,
-    MODEL_FIT_MAX_POINTS,
-    Column,
-    FiniteFloat,
-    PeakModelParameter,
-    PeakShape,
-    _column,
-)
+from quantized.routes.peaks import MODEL_FIT_MAX_DEADLINE_S, PeakModelProblem
 
 router = APIRouter(prefix="/api/peaks", tags=["peaks"])
 
@@ -40,34 +39,44 @@ router = APIRouter(prefix="/api/peaks", tags=["peaks"])
 BATCH_MAX_ITEMS = 200
 BATCH_MAX_POINTS = 2_000_000
 BATCH_MAX_TOTAL_S = 1800.0
+_ID = re.compile(r"^[A-Za-z0-9_.:-]{1,128}$")
 
 
-class PeakModelBatchItem(BaseModel):
-    """One dataset's prepared fit: the ``/model-fit`` body plus its ``id``."""
+class PeakModelBatchItem(PeakModelProblem):
+    """One dataset's prepared fit: a ``/model-fit`` problem plus its ``id``."""
 
-    id: str = Field(min_length=1, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
-    x: Column = Field(min_length=2, max_length=MODEL_FIT_MAX_POINTS)
-    y: Column = Field(min_length=2, max_length=MODEL_FIT_MAX_POINTS)
-    y_err: Column | None = Field(default=None, max_length=MODEL_FIT_MAX_POINTS)
-    shapes: list[PeakShape] = Field(min_length=1, max_length=MODEL_FIT_MAX_PEAKS)
-    background: Literal["none", "constant", "linear", "quadratic"] = "linear"
-    parameters: list[PeakModelParameter] = Field(
-        min_length=1, max_length=MODEL_FIT_MAX_PARAMETERS)
-    bg_x_ref: FiniteFloat | None = None
+    id: str = Field(min_length=1, max_length=128, pattern=_ID.pattern)
+
+
+_ITEM = TypeAdapter(PeakModelBatchItem)
+
+
+def _points(item: Mapping[str, Any]) -> int:
+    sizes = [len(v) for k in ("x", "y", "y_err") if isinstance(v := item.get(k), list)]
+    return max(sizes, default=0)
 
 
 class PeakModelBatchRequest(BaseModel):
-    items: list[PeakModelBatchItem] = Field(min_length=1, max_length=BATCH_MAX_ITEMS)
+    """``items``: each a ``PeakModelFitRequest``-shaped problem (without the
+    range / budget fields) plus ``id``; bodies are validated per item in the
+    job, so the schema here only types the envelope."""
+
+    items: list[dict[str, Any]] = Field(min_length=1, max_length=BATCH_MAX_ITEMS)
     max_nfev: int = Field(default=1000, ge=1, le=10_000)
     item_deadline_s: float = Field(default=10.0, gt=0.0, le=MODEL_FIT_MAX_DEADLINE_S)
     total_deadline_s: float = Field(default=600.0, gt=0.0, le=BATCH_MAX_TOTAL_S)
 
     @model_validator(mode="after")
-    def _bounded(self) -> PeakModelBatchRequest:
-        ids = [it.id for it in self.items]
+    def _envelope(self) -> PeakModelBatchRequest:
+        ids: list[str] = []
+        for k, it in enumerate(self.items):
+            item_id = it.get("id")
+            if not isinstance(item_id, str) or not _ID.match(item_id):
+                raise ValueError(f"items[{k}].id must be 1-128 characters of A-Z a-z 0-9 _ . : -")
+            ids.append(item_id)
         if len(set(ids)) != len(ids):
             raise ValueError("item ids must be unique")
-        total = sum(len(it.x) for it in self.items)
+        total = sum(_points(it) for it in self.items)
         if total > BATCH_MAX_POINTS:
             raise ValueError(f"the batch holds {total} points; the limit is {BATCH_MAX_POINTS}")
         return self
@@ -78,21 +87,38 @@ class PeakModelBatchSubmitted(BaseModel):
     n_items: int
 
 
+def _ascii(text: str) -> str:
+    return text.encode("ascii", "replace").decode("ascii")
+
+
+def validate_item(raw: Mapping[str, Any]) -> dict[str, Any]:
+    """One item -> ``fit_peak_model_batch``'s item, or ValueError naming the
+    first few bad fields (locations + pydantic's messages; never the input)."""
+    try:
+        item = _ITEM.validate_python(raw)
+    except ValidationError as exc:
+        errs = exc.errors(include_url=False, include_input=False)
+        where = "; ".join(
+            f"{'.'.join(str(p) for p in e['loc'])}: {e['msg']}" for e in errs[:3])
+        more = f" (+{len(errs) - 3} more)" if len(errs) > 3 else ""
+        raise ValueError(_ascii(f"invalid item: {where}{more}")) from None
+    return {"id": item.id, **item.calc_kwargs()}
+
+
 @router.post("/model-fit-batch", response_model=PeakModelBatchSubmitted)
 def model_fit_batch(req: PeakModelBatchRequest) -> dict[str, Any]:
     """Queue the batch; poll ``/api/jobs/{job_id}`` for progress and rows."""
-    items = [{
-        "id": it.id, "x": _column(it.x), "y": _column(it.y), "y_err": _column(it.y_err),
-        "shapes": list(it.shapes), "background": it.background,
-        "parameters": [p.model_dump() for p in it.parameters], "bg_x_ref": it.bg_x_ref,
-    } for it in req.items]
+    # Bind what the job needs, not `req`: the closure lives as long as the
+    # job, and the raw items are the only large thing it must keep.
+    items = req.items
+    max_nfev, item_s, total_s = req.max_nfev, req.item_deadline_s, req.total_deadline_s
 
     def run_job(progress: ProgressFn, abort_check: AbortFn) -> Any:
         try:
             out = fit_peak_model_batch(
-                items, max_nfev=req.max_nfev, item_deadline_s=req.item_deadline_s,
-                total_deadline_s=req.total_deadline_s, progress=progress,
-                abort_check=abort_check,
+                items, max_nfev=max_nfev, item_deadline_s=item_s,
+                total_deadline_s=total_s, progress=progress,
+                abort_check=abort_check, validate=validate_item,
             )
         except BatchCancelled as exc:
             raise JobCancelled(str(exc)) from exc
