@@ -2988,6 +2988,9 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/derivedWorksheetActions.ts",
     "/lib/downsample.ts",
     "/lib/libraryPreviewPrefs.ts",
+    // Group F (2026-09-25): the large-workbook descriptor/transfer-store
+    // client. Only `lib/workbookTransfer.ts` (itself a seam) imports it.
+    "/lib/workbookTransferRef.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

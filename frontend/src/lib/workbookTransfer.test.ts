@@ -194,7 +194,7 @@ describe("buildTransferPackage", () => {
     const state = makeState({
       datasets: [ds("ds-1", bigLabel, { workbookId: "wb-1" })],
     });
-    const result = buildTransferPackage("wb-1", state);
+    const result = buildTransferPackage("wb-1", state, MAX_TRANSFER_PACKAGE_CHARS);
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.reason).toMatch(/too large/);
@@ -238,7 +238,7 @@ describe("parseTransferPackage", () => {
   });
 
   it("rejects an oversize payload before even parsing JSON", () => {
-    const result = parseTransferPackage("x".repeat(MAX_TRANSFER_PACKAGE_CHARS + 1));
+    const result = parseTransferPackage("x".repeat(MAX_TRANSFER_PACKAGE_CHARS + 1), MAX_TRANSFER_PACKAGE_CHARS);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.reason).toMatch(/too large/);
   });
