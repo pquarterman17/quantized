@@ -11,10 +11,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import create_app
+from quantized.security import DEV_VITE_PORT_ENV
 
 
 @pytest.fixture
-def client() -> TestClient:
+def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
+    # a non-dev app: no Vite origin, whatever the ambient environment holds
+    monkeypatch.delenv(DEV_VITE_PORT_ENV, raising=False)
     return TestClient(create_app())
 
 
@@ -24,17 +27,22 @@ def test_no_origin_allowed(client: TestClient) -> None:
 
 
 @pytest.mark.parametrize(
-    "origin",
+    ("host", "origin"),
     [
-        "http://127.0.0.1:8000",  # served SPA
-        "http://localhost:8000",
-        "http://localhost:5173",  # Vite dev server
-        "tauri://localhost",  # Tauri (macOS/Linux)
-        "http://tauri.localhost",  # Tauri (Windows)
+        # BUG-030: "our origin" is the request's own Host port, so each case
+        # names the Host the browser connected to (TestClient defaults to
+        # "testserver"). The Vite dev origin moved to test_origin_guard.py:
+        # it is allowed under qz --dev only.
+        ("127.0.0.1:8000", "http://127.0.0.1:8000"),  # served SPA
+        ("localhost:8000", "http://localhost:8000"),
+        ("testserver", "http://testserver"),
+        ("127.0.0.1:8000", "tauri://localhost"),  # Tauri (macOS/Linux)
+        ("127.0.0.1:8000", "http://tauri.localhost"),  # Tauri (Windows)
     ],
 )
-def test_app_origins_allowed(client: TestClient, origin: str) -> None:
-    assert client.get("/api/health", headers={"Origin": origin}).status_code == 200
+def test_app_origins_allowed(client: TestClient, host: str, origin: str) -> None:
+    r = client.get("/api/health", headers={"Host": host, "Origin": origin})
+    assert r.status_code == 200
 
 
 @pytest.mark.parametrize("origin", ["https://evil.example", "http://attacker.test:8000", "null"])

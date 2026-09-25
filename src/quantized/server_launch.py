@@ -26,6 +26,12 @@ __all__ = ["_open_when_healthy", "_resolve_port", "_run_desktop", "_run_dev"]
 # Built SPA — same resolution as quantized.app._WEB_DIR / cli._WEB_DIR.
 _WEB_DIR = Path(__file__).parent / "web"
 
+# The Vite dev server's port under ``qz --dev``. The ONE source for the port
+# Vite is told to bind (``--strictPort``: fail loudly rather than drift to
+# 5174), the URL the browser opens, and the dev origin the API's Origin guard
+# admits (exported as ``security.DEV_VITE_PORT_ENV``; BUG-030).
+_VITE_PORT = 5173
+
 
 def _frontend_dir() -> Path:
     """The repo-checkout ``frontend/`` (``--dev`` needs sources, not a build)."""
@@ -266,9 +272,19 @@ def _run_dev(host: str, port: int, *, calc: bool = False) -> None:
     # QZ_BACKEND_PORT; review 2026-07-11: it was hardcoded to 8000, so
     # `qz --dev --port 9000` silently proxied /api to the WRONG server).
     env = dict(os.environ, QZ_BACKEND_PORT=str(port))
-    vite = subprocess.Popen([npm, "run", "dev"], cwd=frontend, env=env)
+    vite = subprocess.Popen(
+        [npm, "run", "dev", "--", "--port", str(_VITE_PORT), "--strictPort"],
+        cwd=frontend,
+        env=env,
+    )
     calc_path = "/?view=calc" if calc else ""
-    _open_browser_later(f"http://localhost:5173{calc_path}")
+    _open_browser_later(f"http://localhost:{_VITE_PORT}{calc_path}")
+    # BUG-030: admit the Vite origin in the API's Origin guard -- dev mode
+    # only. Via os.environ because reload=True builds the app in a reloader
+    # subprocess that inherits the environment, not our arguments.
+    from quantized.security import DEV_VITE_PORT_ENV
+
+    os.environ[DEV_VITE_PORT_ENV] = str(_VITE_PORT)
     try:
         uvicorn.run("quantized.app:app", host=host, port=port, reload=True)
     finally:
