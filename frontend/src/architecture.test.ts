@@ -42,6 +42,37 @@ describe("browser-storage test reliability", () => {
   });
 });
 
+// R12 ratchet (PRIMARY_SOFTWARE_AUDIT_PLAN P3.3). `aria-modal="true"` tells
+// assistive tech to ignore EVERYTHING outside the dialog, including the two
+// `aria-live` regions this app announces through (Toaster, the status bar's
+// "Background operations" region) — so a toast raised while a dialog was open
+// was silently never announced. Every backdrop dialog dropped it (sixteen
+// `role="dialog"` elements in fifteen components, 2026-09-25, the two lazy
+// promise-dialog bodies included); modality is the browser-enforced background
+// `inert` in lib/modalInert.ts instead.
+// Nothing in jsdom can notice the attribute coming back (it is a pure AT
+// contract), which is why it is pinned here as raw source.
+describe("modal dialogs do not hide the app's live regions (R12)", () => {
+  it("no source module sets aria-modal", () => {
+    const offending = sources()
+      // Comments stripped first (line and block, which also covers the JSX
+      // `{/* … */}` form) so the prose explaining WHY the attribute is gone
+      // does not read as the attribute coming back.
+      // Both spellings: the JSX attribute, and the string key a
+      // `setAttribute("aria-modal", …)` or a spread props object would use.
+      .filter(([, src]) =>
+        /aria-modal\s*=\s*[{"']|["']aria-modal["']\s*[,:]/.test(
+          src.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, ""),
+        ),
+      )
+      .map(([p]) => p);
+    expect(
+      offending,
+      "aria-modal hides Toaster/StatusBar announcements from assistive tech; use lib/modalInert.ts's background inert instead",
+    ).toEqual([]);
+  });
+});
+
 /** Modules that reference `re`, minus those whose path ends with an allowlisted
  *  suffix (the sanctioned model layers). */
 function offenders(re: RegExp, allow: string[]): string[] {
@@ -61,6 +92,7 @@ describe("workshop dataset identity", () => {
     "/components/workshops/hysteresis/useHysteresis.ts",
     "/components/workshops/magtools/useMagTools.ts",
     "/components/workshops/reflectivity/useReflectivity.ts",
+    "/components/workshops/reflectivity/useReflFit.ts",
     "/commands/fileCommands.ts",
     "/components/Library/Library.tsx",
     "/components/Library/folderOps.ts",
@@ -1796,6 +1828,8 @@ const DATASET_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   workbookId: "Library organization only, not channel-indexed",
   peakTable:
     "fitted-peak records in the dataset's own x/y UNITS (2-theta, FWHM, intensity) plus a provenance record -- it stores no channel index at all, so a column removal cannot leave it pointing at the wrong one",
+  reflFits:
+    "a HISTORY of reflectivity fits (P2.2 slice 3): its column indices are hints recorded beside each column's LABEL, and every reader re-resolves them by label and fails closed on a mismatch (workshops/reflectivity/reflFitRestore.ts's resolveBinding) -- remapping would rewrite what a past fit ran on, and nothing reads an index without that check",
 };
 
 const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
@@ -2739,6 +2773,28 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/components/Library/Library.tsx",
       call: 'import("./LibraryFlatRows")',
     },
+    // ── SLICE 8 (2026-09-25, plans/BUNDLE_HEADROOM.md) ────────────────────
+    // The two promise dialogs. `ConfirmDialog.tsx` / `ParamDialog.tsx` stay
+    // EAGER as thin gates -- they keep `askConfirm` / `askParams` (which ~40
+    // eager call sites and ~67 test mocks import from them, untouched) over
+    // the tiny stores in `store/confirmDialog.ts` / `store/paramDialog.ts` --
+    // and mount the BODY (a `lazyRegion`) only while a request is pending
+    // and only once its chunk has loaded (`useRegionLoaded`, so it never
+    // suspends into React's retry throttle). A dialog appears strictly in response to something that asked
+    // a question, so the body never paints on first paint; the cost is one
+    // localhost chunk fetch on the FIRST ask of a session. Load failure
+    // settles the pending ask with its cancel value (`false` / `null`) and
+    // toasts; see `lazyDialogSeamFailure.test.tsx`.
+    {
+      module: "/components/overlays/ConfirmDialogBody.tsx",
+      loader: "/components/overlays/ConfirmDialog.tsx",
+      call: 'import("./ConfirmDialogBody")',
+    },
+    {
+      module: "/components/overlays/ParamDialogBody.tsx",
+      loader: "/components/overlays/ParamDialog.tsx",
+      call: 'import("./ParamDialogBody")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -2961,6 +3017,14 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  The one corpus module ADDED is `LibraryFlatRows.tsx`, the loader — which
    *  itself stays lazy, so it does not appear in either eager count. None of
    *  the eleven is a seam itself, so only reachability can hold this line. */
+  /** SLICE 8 (2026-09-25) adds the four modules only the two dialog bodies
+   *  reached: `useDialogFocus.ts` (every OTHER importer is an already-lazy
+   *  dialog), `ParamFields.tsx`, `lib/params.ts` (the gates and stores import
+   *  its TYPES only, which erase) and `lib/scrollOutFocus.ts`. Replayed
+   *  `eagerlyReachable()` against `3ccf4972`: 387 -> 385 eager modules
+   *  (the four dropped, the two new stores `store/confirmDialog.ts` /
+   *  `store/paramDialog.ts` added; the bodies were the old eager dialog
+   *  files, so they are not new eager modules). */
   const DRAGGED_OUT = [
     "/components/overlays/ToolWindow.tsx",
     "/lib/workshopHelp.ts",
@@ -2985,6 +3049,13 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/derivedWorksheetActions.ts",
     "/lib/downsample.ts",
     "/lib/libraryPreviewPrefs.ts",
+    // Group F (2026-09-25): the large-workbook descriptor/transfer-store
+    // client. Only `lib/workbookTransfer.ts` (itself a seam) imports it.
+    "/lib/workbookTransferRef.ts",
+    "/components/overlays/useDialogFocus.ts",
+    "/components/overlays/ParamFields.tsx",
+    "/lib/params.ts",
+    "/lib/scrollOutFocus.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

@@ -488,6 +488,8 @@ export interface Dataset {
    *  peak table", so a pre-P2.1 `.dwk` loads unchanged and no version bump was
    *  needed. See lib/peakTable.ts for the contract and its sanitizer. */
   peakTable?: PeakTable;
+  /** Durable reflectivity fits (P2.2 slice 3), newest first, in their JSON-safe stored form; decoded lazily by workshops/reflectivity/reflFitRecord.ts. */
+  reflFits?: readonly unknown[];
   /** Free-text user notes (sample, conditions, caveats); shown in the Inspector Notes card. */
   notes?: string;
   /** User tags for organizing + filtering the Library. */
@@ -648,11 +650,8 @@ export interface BaselineOverlay {
   y: (number | null)[];
 }
 
-// The /api/peaks wire types (Peak / FittedPeak / MultiFitResult /
-// SinglePeakFit) MOVED to ./peakTable 2026-09-14 (audit P2.1) and are
-// re-exported here so every existing importer is untouched: that file is now
-// the single home for the peak contract, since P2.1's durable `PeakTable`
-// (below, on Dataset) is built from and rehydrated into exactly these shapes.
+// The /api/peaks wire types MOVED to ./peakTable 2026-09-14 (audit P2.1), the
+// single home of the peak contract; re-exported so no importer changed.
 export type { FittedPeak, MultiFitResult, Peak, SinglePeakFit } from "./peakTable";
 
 /** One material SLD preset (from GET /api/reflectivity/presets). `sldX` is the

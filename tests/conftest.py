@@ -7,8 +7,12 @@ tests/fixtures/ so the parity tests run in CI without MATLAB.
 
 from __future__ import annotations
 
+import atexit
 import json
 import math
+import os
+import shutil
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
@@ -28,6 +32,16 @@ from quantized.security import ALLOWED_HOSTS
 # the ONE place all call sites share, instead of per-file fixtures.
 # Production's default set (127.0.0.1/localhost/::1) never includes it.
 ALLOWED_HOSTS.add("testserver")
+
+# Group F: the large-workbook transfer store lives in the user CACHE dir. The
+# suite must never read or write the real one (a `with TestClient(...)` runs
+# the startup sweep), so point it at a throwaway dir for this process (each
+# xdist worker imports this file, so each gets its own) -- unconditionally,
+# so a developer's own exported QZ_TRANSFER_DIR is never swept by the suite
+# -- and remove it when the process exits.
+_TRANSFER_TEST_DIR = tempfile.mkdtemp(prefix="qz-transfer-test-")
+os.environ["QZ_TRANSFER_DIR"] = _TRANSFER_TEST_DIR
+atexit.register(shutil.rmtree, _TRANSFER_TEST_DIR, ignore_errors=True)
 
 TESTS_DIR = Path(__file__).parent
 FIXTURES = TESTS_DIR / "fixtures"

@@ -1,7 +1,19 @@
 # Bundle headroom campaign
 
-**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4, 5 and 6
-executed** (slice 5 deliberately small — see its ruling on `PlotLegend`; slice
+**Current state (2026-09-25, after slice 8 and its review round, rebased onto
+Group F `55f0cac9`):** measured **867,284 B** eager against that parent's
+**881,369 B** (**−14,085 B**), pin LOWERED **881,442 → 868,308 B**
+(`measured + 1,024`), leaving **1,024 B of headroom** by design. Group F (the
+bounded clipboard transfer this margin was reserved for) landed first and was
+itself 22 B lighter than `3ccf4972`, so it spent none of it. Slice 7 was built and never landed, and the pin was RAISED
+three times on 2026-09-20 between slices 6 and 8 (876,469 → 878,182 →
+879,420 → 881,442); both are recorded in "Slice 7" below. Slice 8's lasting
+finding is not a seam: most of the "chunk-boundary tax" slices 3–5 kept
+measuring was Vite's preload lists naming already-loaded chunks, and removing
+them (build-time, runtime-neutral) recovered 10.7 kB by itself. See "Slice 8".
+
+**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4, 5, 6 and 8
+executed; slice 7 built and reverted, never on main** (slice 5 deliberately small — see its ruling on `PlotLegend`; slice
 6 ratchets the pin DOWN, the first slice authorized to) (see their sections
 below); slice 2 is partially done. Slice 5 is no longer the
 `lib/plotRecipeIO.ts` proposal it was reserved for — that candidate was
@@ -18,7 +30,7 @@ instead; that conclusion was drawn from a **chunk-level** profile, and this
 document records a **per-module** one, which changed the picture enough to
 be worth acting on.
 
-**Current state (2026-09-19, after slice 6, round 2 following adversarial
+**Earlier state (2026-09-19, after slice 6, round 2 following adversarial
 review):** landed tip **875,445 B** eager against parent `8f79207d`'s
 **888,562 B** measured bytes (**−13,117 B**, the largest single-seam win of
 the campaign), pin LOWERED from the PRIOR PIN of **920,400 B** to
@@ -1236,6 +1248,212 @@ back it.
 | widen `inHierarchy` to always `false` | `libraryFlatRowsSeam.test.tsx`'s "never fetches the chunk on any REAL state" | **RED** — `expected [ 'LibraryFlatRows' ] to not include 'LibraryFlatRows'` |
 | remove the `shown.length > 0` gate (round 2 fix reverted) | `libraryFlatRowsSeam.test.tsx`'s "never fetches the chunk on any REAL state" | **RED** — same assertion, at the true-empty (cold-start) state specifically |
 
+### Slice 7 — window chrome, built and REVERTED; the three pin raises after it — **record added 2026-09-25**
+
+Recorded by slice 8 because `check-bundle-size.mjs`'s 2026-09-20 entry said
+"plans/BUNDLE_HEADROOM.md records what slice 7 established" and, on `main`,
+it did not: slice 7's own section lived only on its unmerged branch. Sources,
+all verifiable with `git show`: `8abdbd78` and `b51f0c53` (slice 7 rounds 1
+and 2, **not ancestors of `main`** — `git merge-base --is-ancestor` says so)
+and `7dd58552` (the first raise, on `main`).
+
+- **Round 1** (`8abdbd78`) deferred `components/windows/PlotWindowFrame.tsx`
+  behind `WindowCanvas.tsx`'s single-maximized fast path: −9,007 B, rejected
+  on adversarial review because its `Suspense` wrapped the frame's
+  `children`, i.e. the live `<PlotStage/>` — it blanked the plot on every
+  multi-window path.
+- **Round 2** (`b51f0c53`) deferred only `WindowTitleButtons.tsx`: −3,603 B
+  (875,755 → 872,152). CI then failed e2e `group-facet-journey`, which
+  right-clicks a window titlebar and waits for "Close Window":
+  `windowMenu.ts` had gone lazy with the buttons, so the titlebar menu was not
+  there when the user reached for it. Reverted (`7dd58552`'s message).
+- **Standing rulings from slice 7:** the window-frame family (frame, titlebar
+  buttons, titlebar menu) is disqualified — a titlebar is immediately
+  interactive, not furniture; and `lib/plotRecipeIO.ts`'s `parseRecipe`
+  split is measured-rejected at a **474 B** ceiling (deleting it outright
+  saved only that, before any chunk-boundary cost).
+- **The raises that followed** (each in `check-bundle-size.mjs` with its
+  justification, all "measured + 1,024" under rule 2): 876,469 → 878,182
+  (batch 9: UX-003 boundaries, BUG-019 projection, UX-004 node icons),
+  → 879,420 (BUG-009 preview row-state migration), → 881,442 (BUG-009
+  resolve-then-apply). That is how `main` reached 51 B of headroom.
+- **No ratchet suspension is on record.** A brief for slice 8 mentioned a
+  "round 11 batch" suspension of the ratchet; nothing in `plans/`, `docs/` or
+  `check-bundle-size.mjs` at `3ccf4972` says so. The ratchet was never
+  suspended — it was raised three times, each under the file's own rule 2.
+
+### Slice 8 — preload-list pruning + the two promise dialogs, pin ratcheted DOWN — **DONE (2026-09-25)**
+
+**Measured net eager delta −14,085 B — pin LOWERED 881,442 → 868,308 B** (868,037 at
+landing; 868,330 after the review round's +293 B fix; 868,308 after rebasing
+onto Group F `55f0cac9` — always `measured + 1,024`)
+
+Exact bytes out of `dist/index.html` (the eager `<script type=module>` +
+`modulepreload` set), `npm ci`, `node_modules/.vite` wiped before EVERY build,
+every number reproduced by a second identical build:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `3ccf4972` (parent) | 881,391 | — |
+| + preload-list pruning | 870,673 | **−10,718** |
+| + lazy `ConfirmDialog`/`ParamDialog` bodies | 867,013 | **−3,660** |
+| + review round: first-ask key guard, replaced asks settle | 867,306 | **+293** |
+| dialog bodies ALONE on the parent (no pruning) | 881,021 | −370 |
+| rebased: Group F `55f0cac9` (new parent) | 881,369 | — |
+| rebased: slice 8 on top of it | 867,284 | **−14,085** |
+
+#### 1. Preload-list pruning — the chunk-boundary tax, found
+
+Every dynamic `import()` Vite emits carries a preload list
+(`__vite__mapDeps([...])` plus a per-chunk table of file names) naming the
+target's **whole static-import closure**. For a seam reached from the entry,
+most of that closure is the eager graph itself — `useApp`, `react`, `index`
+— so each seam paid ~50 file names for chunks already fetched and evaluated
+before its `import()` could run. On the parent, **18,363 B of the entry
+chunk and 20,680 B across eager chunks** were these lists. That is the
+mechanism behind slice 3's "+1,451 B for a 1,830 B bound" and slice 5's
+marginal-vs-alone confusion: a new seam's list, not "glue".
+
+`frontend/scripts/preloadPrune.mjs` (wired in `vite.config.ts` through
+`build.modulePreload.resolveDependencies`, bundle captured by a
+`generateBundle` hook ordered `pre`) drops, for JS hosts only, every chunk
+certainly loaded before the host's code runs: the host chunk's own static
+closure, and the HTML entry's (intersected across entries; this app has
+one). ES modules link the whole static graph before evaluating any of it, so
+those hints were already no-ops — Vite's preload helper found the existing
+`<link rel="modulepreload">` and returned. Kept: the seam's own lazy chunk,
+lazy chunks it shares with other seams (so they still preload in parallel —
+observed in the browser: `ConfirmDialogBody` and `useDialogFocus` fetched
+together), all CSS, and the HTML entry's own modulepreload tags. What is left
+(10,747 B on the landed tree) is the per-chunk table naming each LAZY chunk
+once, which is irreducible without changing chunking. Tests:
+`src/lib/preloadPrune.test.ts`.
+
+**The real output is gated, not just the pure functions (review round).**
+An independent review re-checked every removal with its own
+es-module-lexer probe (3,554 removals across 135 sites: 0 unsafe, 0 CSS
+dropped) and asked for that probe in the build. It is now
+`scripts/preloadVerify.mjs`, run from the prune plugin's `writeBundle`, so
+every `vite build` (and so `npm run build` and CI) re-derives the static graph
+from the EMITTED code — not from Rolldown's `imports`, which the prune itself
+trusts — and fails on any list missing a chunk its target needs (target +
+closure, minus host closure, minus entry closure) or any CSS Vite's own walk
+would have listed. On the landed tree: 137 lists checked (137 wrapped
+import() sites), 0 violations. *Review round 2:* the first version found only
+130 -- it recognised an emptied list solely in the `import("./X"),[])` shape,
+so the 7 async-destructure sites (`h(async()=>{let{x:e}=await import(..)},[])`)
+were skipped, and emptying one of those passed the build (129 checked). Every
+dynamic import must now be matched to a list or it is itself a violation; the
+same sabotage (relinkPreview's list emptied) now fails the build.
+Sabotage: a prune that drops one extra entry fails `npm run build` with 96
+violations. `es-module-lexer` 2.3.2 became an exact devDependency (it was
+already in the lock via vitest). Pruned lists put their CSS last because Vite
+appends CSS after `resolveDependencies`; the CSS entries keep their relative
+order and a JS modulepreload never takes part in the cascade, so this is
+harmless (commented in `preloadPrune.mjs`).
+
+**Consequence for future slices:** re-measure the "rejected on measurement"
+seams (slice 3's `store/reimport.ts` and `fileCommands → originTemplate`,
+slice 5's `DocumentWindow`); their losses were measured with the tax in
+place. A seam alone on the parent is no longer the right comparison either —
+measure on top of the pruning.
+
+#### 2. `ConfirmDialog` / `ParamDialog` bodies
+
+Both rendered nothing until something asked (`askConfirm`/`askParams`), yet
+sat in the entry chunk with their focus machinery. Now:
+
+- `store/confirmDialog.ts` / `store/paramDialog.ts` hold the stores and the
+  ask functions (the `store/annotationTextDialog.ts` shape).
+- `ConfirmDialog.tsx` / `ParamDialog.tsx` stay eager as thin gates that
+  RE-EXPORT the ask functions, so ~40 call sites and ~67 test mocks of those
+  module paths are untouched.
+- The bodies (`ConfirmDialogBody.tsx`, `ParamDialogBody.tsx`, moved verbatim)
+  are lazy. Dragged out with them: `useDialogFocus.ts`, `ParamFields.tsx`,
+  `lib/params.ts`, `lib/scrollOutFocus.ts`. Replayed `eagerlyReachable()`:
+  387 → 385 eager modules (four dropped, two stores added).
+
+**Why they qualify under the `PlotLegend` ruling:** a dialog exists only
+after something asked a question, so nothing on first paint, hydration or a
+restore moves. **Cost, measured in a real browser** (Chromium, built SPA,
+local `qz`, three runs each against the parent): the chunk fetch is
+**8–12 ms** for the confirm body (+ `useDialogFocus`, in parallel) and
+**4–5 ms** for the parameter body, on the FIRST open of a session only;
+end-to-end open times were within run-to-run noise of the parent's (Export
+figure first open 108–186 ms vs 114–137 ms; the first "Remove all" confirm is
+~1.2–1.7 s on BOTH trees, a palette-first-run cost unrelated to this seam).
+Later opens mount from `lazyRegion`'s resolved cache on the same flush.
+
+**The first cut was rejected on the same ruling.** Mounting the body straight
+into a suspending `lazyRegion` measured 300 B smaller but opened
+**250–280 ms late** on the first Export figure: React holds a retry's reveal
+until ~300 ms after the last committed Suspense fallback. So `lazyRegion`
+gained `preload()`/`loaded()` and a `useRegionLoaded(region, wanted, onFail)`
+hook: the gate starts the load when a request arrives and mounts the body
+only once its chunk is in, so it never suspends. That is the +300 B in the
+table above. The same hook is available to any `lazyPanel` that wants its
+first open off the throttle — not applied to the existing ones here.
+
+**Load failure (UX-003):** the load runs through `lazyRegion`'s tagged
+loader and nothing throws during render, so the root is never at risk. The
+pending ask settles with its cancel value (`false` — nothing destructive runs
+behind a dialog nobody saw — or `null`, which every `askParams` caller
+already handles), a danger toast says why, and the next ask retries the
+fetch.
+
+**First-ask key window — CLOSED in the review round.** As first landed,
+nothing was modal while the first ask's chunk was in flight, so keys reached
+the page behind. The reviewer's repro showed it was worse than a timing
+nit: a second Enter on the focused trigger asked AGAIN and replaced the first
+ask's `resolve`, so the first promise NEVER settled (`["ask2:false"]` where
+the parent gave `["ask1:false"]`), and an Escape closed the `window`-layer
+surface behind while the dialog then opened anyway. Fixed two ways:
+`components/overlays/usePendingDialogGuard.ts` stands in for the dialog
+while `open && !ready` (a `modal` escape surface that cancels the ask, and a
+capture-phase swallow of Enter/Space on keydown and keyup), and both stores'
+`open()` now settle a replaced ask with its cancel value (`false` / `null`)
+instead of dropping it — which also closes the same loss for two asks
+arriving back-to-back with the dialog already loaded.
+`lazyDialogPendingKeys.test.tsx` holds the body chunk back and replays the
+repro; disabling the guard, only the Enter swallow, or the stores' settle
+each reddens it.
+
+**Guards and sabotage** (each verified red, then reverted):
+
+| sabotage | test | result |
+|---|---|---|
+| static import of a body in its gate | the three `SEAMS` arms in `architecture.test.ts` | **RED** (all three) |
+| gate loads regardless of a pending ask | `lazyDialogSeams.test.tsx` import recorder | **RED** — `expected [ 'ConfirmDialogBody' ] to deeply equal []` |
+| `useRegionLoaded` ignores a failed load | `lazyDialogSeamFailure.test.tsx` | **RED** — the ask never settles (timeout) |
+| `preload()` does not fill the resolved cache | `lazyRegion.test.tsx` preload tests | **RED** (two tests) |
+
+`lazyDialogSeamFailure.test.tsx` also asserts no `console.error` at all: the
+failure stays a handled rejection. Not pinned by a test: that the gate waits
+for `useRegionLoaded` rather than mounting into a suspending region (the
+throttle regression) — that is only observable as wall-clock in a real
+browser; the mechanism itself is pinned in `lazyRegion.test.tsx`.
+
+#### Candidates considered and not landed
+
+- **`CommandPalette`, `PlotToolbar`, `PlotLegend`** — still disqualified by
+  the `PlotLegend` ruling (slices 5–6); not rebuilt.
+- **`components/overlays/ContextMenu.tsx`** (5,293 B exclusive) — the
+  right-click class slice 4 flagged, and the titlebar menu is exactly what
+  broke slice 7 in e2e. Not built.
+- **Window chrome** — slice 7's disqualification stands.
+- **`store/recode.ts`** (3,935 B exclusive; only eager importer
+  `AppOverlays.tsx`, which reads its `open` flag) — needs the store split so
+  the flag survives without the actions; a `store`-level seam, not built.
+- **`lib/template.ts`** (1,930 B) — its only eager use is a synchronous
+  `hidden` predicate on the folder context menu; deferring it changes that
+  menu's behaviour, not just its timing. Not built.
+- **`components/Shell/AppearanceMenu.tsx`'s dropdown** (≤ 2,092 B bound,
+  `lib/shortcuts.ts` stays eager via `MenuBar`) — plausible now that the tax
+  is gone; not needed for this slice's target, left for the next.
+- **`TooltipLayer` / `InteractionHints`** — `InteractionHints` must stay
+  mounted for its reopen listener (`AppOverlays.tsx` header);
+  `TooltipLayer` owns global hover listeners. Not built.
+
 ## What this does NOT change
 
 Vendor is 26% and fixed. `useApp.ts` at 36.5 kB is the largest app module and
@@ -1257,7 +1475,9 @@ against the unmoved pin, not a purely discretionary diet-pass choice (see
 slice 6's round-2 correction), so that gain is locked in rather than left
 as spendable slack.
 
-**Current headroom is 1,024 B against the 876,469 B pin** — by design, not
+**As of slice 6, headroom was 1,024 B against the 876,469 B pin** (stale:
+three raises followed, then slice 8 lowered the pin to 868,308 B with
+1,024 B of headroom — see the top of this file) — by design, not
 by exhaustion. The two banked seams (`PlotToolbar` −3,644 B,
 `CommandPalette` −2,935 B) remain on the table, unlanded, under the
 `PlotLegend` ruling; landing either needs that ruling to be re-argued, not

@@ -251,8 +251,12 @@ export default function SymbolPalette({ x, y, onInsert, onClose }: SymbolPalette
   }, [onClose]);
 
   return createPortal(
+    // `data-modal-layer` (R12, lib/modalInert.ts): opened from a dialog's
+    // label field (AnnotationTextDialog), this <body> portal appears while the
+    // background is inert and must belong to that dialog, not the background.
     <div
       ref={rootRef}
+      data-modal-layer=""
       className="qzk-menu-pop qzk-ctx"
       // ContextMenu sits above this at zIndex 2100 (see its module header),
       // but the two never coexist: both close on any outside mousedown.

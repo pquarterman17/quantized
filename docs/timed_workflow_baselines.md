@@ -113,7 +113,10 @@ on a decaying background, Poisson counting noise).
 **Fixtures:** `tests/fixtures/baselines/xrr_bilayer_kiessig.refl` (NCNR
 `.refl`-style bilayer reflectivity, Kiessig fringes, ~7 decades dynamic
 range), `tests/fixtures/baselines/pnr_bilayer_spin_pair.pnr` (spin-up/down
-R++/R-- pair with a magnetic splitting).
+R++/R-- pair with a magnetic splitting). Both are computed with absorbing
+layers (positive isld) and smeared by the 1-sigma dQ column they carry
+(regenerated 2026-09-24 for BUG-029), so a fit that uses that column recovers
+the generator's truth at reduced chi2 ~ 1.
 
 **Preconditions:** fresh session.
 

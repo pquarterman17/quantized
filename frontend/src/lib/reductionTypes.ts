@@ -105,3 +105,37 @@ export interface RsmStrainResponse {
   relaxation: number | null;
   warnings: string[];
 }
+
+
+export interface PawleyPeak {
+  hkl: number[];
+  two_theta: number;
+  d: number;
+  multiplicity: number;
+  intensity: number;
+}
+
+/** Response of POST /api/reductions/pawley. */
+export interface PawleyResult {
+  cell: [number, number, number, number, number, number];
+  cell_initial: [number, number, number, number, number, number];
+  scale: number | null;
+  peaks: PawleyPeak[];
+  background: number[];
+  model: number[];
+  residual: number[];
+  /** Weighted-profile R-factor; null when undefined (no positive intensity). */
+  rwp: number | null;
+  /** R_wp of the starting cell, for judging whether the refinement helped. */
+  rwp_initial: number | null;
+  /** R_wp of the linear background alone: the yardstick for a weak fit. */
+  rwp_background: number | null;
+  /** The grid step shrank to tolerance (always true when the cell was fixed). */
+  converged: boolean;
+  /** Which axes moved together. */
+  tie: "abc" | "ab" | "none";
+  /** Miller-index bound the backend enumerated to (derived from the cell). */
+  hkl_max: number;
+  /** Reflections inside the fitted 2θ window. */
+  n_peaks: number;
+}

@@ -127,6 +127,25 @@ def test_dream_cancel_via_jobs_api() -> None:
     assert client.get(f"/api/jobs/{job_id}/result").status_code == 409
 
 
+def test_dream_cancelled_while_queued_ends_cancelled_not_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A cancel landing between the lock wait's progress report and its
+    # abort check raises DreamCancelled (calc.dream_seed); the job must end
+    # as cancelled, not as an error.
+    import quantized.routes.fitting_bumps as route
+    from quantized.calc.dream_seed import DreamCancelled
+
+    def queued_then_cancelled(*_a: Any, **_k: Any) -> Any:
+        raise DreamCancelled("cancelled while waiting for another DREAM run")
+
+    monkeypatch.setattr(route, "fit_bumps", queued_then_cancelled)
+    body = _payload(engine="dream", samples=240, burn=10, pop=4)
+    r = client.post("/api/fitting/bumps", json=body)
+    assert r.status_code == 200
+    assert _poll_terminal(r.json()["job_id"])[-1]["status"] == "cancelled"
+
+
 def test_missing_bumps_is_422_with_install_hint(monkeypatch: pytest.MonkeyPatch) -> None:
     for mod in ("bumps", "bumps.curve", "bumps.fitproblem", "bumps.fitters"):
         monkeypatch.setitem(sys.modules, mod, None)  # forces ImportError on import

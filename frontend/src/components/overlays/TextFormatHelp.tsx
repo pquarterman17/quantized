@@ -102,7 +102,6 @@ export default function TextFormatHelp() {
         className="qzk-glass qz-dialog"
         style={{ maxWidth: 620, maxHeight: "80vh", overflowY: "auto" }}
         role="dialog"
-        aria-modal="true"
         aria-labelledby={titleId}
         ref={dialogRef}
         tabIndex={-1}

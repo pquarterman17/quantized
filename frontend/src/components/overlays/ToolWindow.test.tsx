@@ -478,6 +478,9 @@ describe("ToolWindow Escape precedence (P3.3 round 2)", () => {
     act(() => {
       result = askConfirm("Remove everything?", "gone forever", "Remove all", true);
     });
+    // The confirm body is a lazy chunk (bundle diet slice 8); until it mounts
+    // there is no modal surface to own Escape, so wait for it first.
+    await screen.findByRole("dialog");
 
     await user.keyboard("{Escape}");
 

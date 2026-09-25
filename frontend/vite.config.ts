@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
 
+import { preloadPrune } from "./scripts/preloadPrune.mjs";
+
 // Build identity for the diagnostics bundle (see src/lib/buildInfo.ts). Read
 // here rather than imported from package.json so the bundle never depends on
 // `resolveJsonModule`, and so a tree with no `.git` (an sdist, a vendored
@@ -45,10 +47,15 @@ const gitSha = (): string => {
   }
 };
 
+// Bundle diet slice 8: drop already-loaded chunks from every dynamic import's
+// preload list (see scripts/preloadPrune.mjs for why that is a pure no-op at
+// runtime and what it saves in eager bytes).
+const prune = preloadPrune();
+
 // Dev: proxy /api to the FastAPI backend (`qz` / uvicorn on :8000).
 // Build: emit into the backend package so `qz` can serve the SPA statically.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), prune.plugin],
   define: {
     __APP_VERSION__: JSON.stringify(pkgVersion()),
     __BUILD_SHA__: JSON.stringify(gitSha()),
@@ -56,6 +63,7 @@ export default defineConfig({
   build: {
     outDir: "../src/quantized/web",
     emptyOutDir: true,
+    modulePreload: { resolveDependencies: prune.resolveDependencies },
   },
   server: {
     proxy: {

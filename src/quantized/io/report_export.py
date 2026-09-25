@@ -121,6 +121,9 @@ _LATEX_REPL = {
     "ω": r"$\omega$", "μ": r"$\mu$", "π": r"$\pi$", "τ": r"$\tau$",
     "Δ": r"$\Delta$", "Ω": r"$\Omega$", "Å": r"\AA{}", "°": r"$^\circ$",
     "√": r"$\surd$", "∞": r"$\infty$",
+    # The reflectivity-fit report (calc.report_emit.from_refl_fit): its log
+    # objective "Σ(Δlog₁₀R)²" and the "—" of an unreported error.
+    "Σ": r"$\Sigma$", "₀": r"$_0$", "₁": r"$_1$", "—": "---", "–": "--",
 }
 
 

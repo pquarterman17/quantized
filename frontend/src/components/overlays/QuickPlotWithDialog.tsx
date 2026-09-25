@@ -73,7 +73,6 @@ export default function QuickPlotWithDialog() {
         <div
           className="qzk-glass qz-dialog"
           role="dialog"
-          aria-modal="true"
           aria-labelledby={titleId}
           ref={dialogRef}
           tabIndex={-1}
@@ -107,7 +106,6 @@ export default function QuickPlotWithDialog() {
       <div
         className="qzk-glass qz-dialog"
         role="dialog"
-        aria-modal="true"
         aria-labelledby={titleId}
         ref={dialogRef}
         tabIndex={-1}

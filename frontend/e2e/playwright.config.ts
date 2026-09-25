@@ -24,6 +24,18 @@
 // canvas hit-testing / pointer capture / native drag-and-drop, the exact
 // gaps jsdom can't cover — run in the 125%/200% projects; every spec (core
 // and non-core) runs at the 100% baseline.
+//
+// Cross-browser projects (`firefox`, `webkit`) are OPT-IN, added only when
+// QZ_E2E_XBROWSER=1. Without it the project list is exactly the three
+// Chromium projects above, so `npm run e2e` locally and the `e2e` CI job run
+// what they always did (and a machine with only Chromium installed — this
+// repo's remote containers — is never asked for an engine it lacks). The
+// `e2e-xbrowser` job in .github/workflows/e2e.yml sets the flag. Why these
+// engines: the desktop app is a pywebview window, which is WKWebView (WebKit)
+// on macOS, and R12's background `inert` (src/lib/modalInert.ts) had been
+// measured in Chromium only. By default the two projects run XBROWSER_SPECS,
+// the dialog / modality / Escape / focus / keyboard journeys; set
+// QZ_E2E_XBROWSER_FULL=1 as well to run every spec on both engines.
 
 import { defineConfig, devices } from "@playwright/test";
 import path from "node:path";
@@ -38,6 +50,26 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 // frontend/e2e -> frontend -> repo root (where pyproject.toml + `uv run qz`
 // resolve from).
 const REPO_ROOT = path.resolve(here, "../..");
+
+const XBROWSER = process.env.QZ_E2E_XBROWSER === "1";
+const XBROWSER_FULL = process.env.QZ_E2E_XBROWSER_FULL === "1";
+// Dialog / modality / Escape / focus / keyboard journeys: the behaviour that
+// depends on the ENGINE (inert, focus, Tab order, native key dispatch) rather
+// than on the app's own canvas maths. Keep in step with README.md.
+const XBROWSER_SPECS = [
+  "modal-inert",
+  "workshop-escape-ladder",
+  "region-tool-escape",
+  "quick-figure-builder",
+  "library-tiles",
+  "details-keyboard",
+  "keyboard-only",
+].map((name) => `**/${name}.spec.ts`);
+const xbrowserProject = (name: string, device: string) => ({
+  name,
+  ...(XBROWSER_FULL ? {} : { testMatch: XBROWSER_SPECS }),
+  use: { ...devices[device], viewport: { width: 1360, height: 900 }, deviceScaleFactor: 1 },
+});
 
 export default defineConfig({
   testDir: "./specs",
@@ -82,5 +114,6 @@ export default defineConfig({
       grep: /@core/,
       use: { ...devices["Desktop Chrome"], viewport: { width: 1360, height: 900 }, deviceScaleFactor: 2 },
     },
+    ...(XBROWSER ? [xbrowserProject("firefox", "Desktop Firefox"), xbrowserProject("webkit", "Desktop Safari")] : []),
   ],
 });

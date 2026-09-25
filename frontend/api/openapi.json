@@ -2631,6 +2631,19 @@
         "title": "DebyeRequest",
         "type": "object"
       },
+      "DeletedResponse": {
+        "properties": {
+          "deleted": {
+            "title": "Deleted",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "deleted"
+        ],
+        "title": "DeletedResponse",
+        "type": "object"
+      },
       "DemagRequest": {
         "properties": {
           "shape": {
@@ -6549,6 +6562,157 @@
         "title": "PartialCorrelationRequest",
         "type": "object"
       },
+      "PawleyRequest": {
+        "properties": {
+          "a": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000.0,
+            "title": "A",
+            "type": "number"
+          },
+          "alpha": {
+            "default": 90.0,
+            "exclusiveMaximum": 180.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "b": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000.0,
+            "title": "B",
+            "type": "number"
+          },
+          "beta": {
+            "default": 90.0,
+            "exclusiveMaximum": 180.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Beta",
+            "type": "number"
+          },
+          "c": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 1000.0,
+            "title": "C",
+            "type": "number"
+          },
+          "gamma": {
+            "default": 90.0,
+            "exclusiveMaximum": 180.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Gamma",
+            "type": "number"
+          },
+          "hkl_max": {
+            "anyOf": [
+              {
+                "maximum": 20.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hkl Max"
+          },
+          "intensity": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 50000,
+            "title": "Intensity",
+            "type": "array"
+          },
+          "max_iter": {
+            "default": 20,
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Max Iter",
+            "type": "integer"
+          },
+          "max_two_theta": {
+            "default": 120.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 180.0,
+            "title": "Max Two Theta",
+            "type": "number"
+          },
+          "min_two_theta": {
+            "default": 0.0,
+            "exclusiveMaximum": 180.0,
+            "minimum": 0.0,
+            "title": "Min Two Theta",
+            "type": "number"
+          },
+          "profile_fwhm": {
+            "default": 0.05,
+            "exclusiveMinimum": 0.0,
+            "maximum": 20.0,
+            "title": "Profile Fwhm",
+            "type": "number"
+          },
+          "refine_cell": {
+            "default": true,
+            "title": "Refine Cell",
+            "type": "boolean"
+          },
+          "symmetry": {
+            "default": "P",
+            "enum": [
+              "P",
+              "F",
+              "I",
+              "A",
+              "B",
+              "C",
+              "R"
+            ],
+            "title": "Symmetry",
+            "type": "string"
+          },
+          "tie": {
+            "anyOf": [
+              {
+                "enum": [
+                  "abc",
+                  "ab",
+                  "none"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tie"
+          },
+          "two_theta": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 50000,
+            "title": "Two Theta",
+            "type": "array"
+          },
+          "wavelength": {
+            "default": 1.5406,
+            "exclusiveMinimum": 0.0,
+            "maximum": 10.0,
+            "title": "Wavelength",
+            "type": "number"
+          }
+        },
+        "required": [
+          "two_theta",
+          "intensity",
+          "a",
+          "b",
+          "c"
+        ],
+        "title": "PawleyRequest",
+        "type": "object"
+      },
       "PcaFigureRequest": {
         "properties": {
           "dpi": {
@@ -7298,6 +7462,349 @@
           "groups"
         ],
         "title": "RecommendRequest",
+        "type": "object"
+      },
+      "ReflDreamRequest": {
+        "description": "A completed fit's parameters and channels (as sent to /fit), the fitted\nvalues to start the population about, and the sampling budget. ``pop`` is\nchains per free parameter; ``burn`` and the kept length are generations;\n``seed`` makes the run reproducible.",
+        "properties": {
+          "band_draws": {
+            "default": 200,
+            "maximum": 1000.0,
+            "minimum": 10.0,
+            "title": "Band Draws",
+            "type": "integer"
+          },
+          "burn": {
+            "default": 100,
+            "maximum": 5000.0,
+            "minimum": 0.0,
+            "title": "Burn",
+            "type": "integer"
+          },
+          "centre": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "number"
+                },
+                "maxProperties": 200,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Centre"
+          },
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/ReflFitChannel"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Channels",
+            "type": "array"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/ReflFitParameter"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Parameters",
+            "type": "array"
+          },
+          "pop": {
+            "default": 10,
+            "maximum": 20.0,
+            "minimum": 1.0,
+            "title": "Pop",
+            "type": "integer"
+          },
+          "samples": {
+            "default": 10000,
+            "maximum": 200000.0,
+            "minimum": 100.0,
+            "title": "Samples",
+            "type": "integer"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "maximum": 4294967295.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "thin": {
+            "default": 1,
+            "maximum": 100.0,
+            "minimum": 1.0,
+            "title": "Thin",
+            "type": "integer"
+          },
+          "weighting": {
+            "default": "dr",
+            "enum": [
+              "dr",
+              "log"
+            ],
+            "title": "Weighting",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parameters",
+          "channels"
+        ],
+        "title": "ReflDreamRequest",
+        "type": "object"
+      },
+      "ReflFitChannel": {
+        "description": "One measured curve. ``dq`` is a per-point 1-sigma resolution unless\n``dq_is_fwhm``; ``resolution`` is a constant 1-sigma dQ/Q, used instead of\n``dq`` (never together).",
+        "properties": {
+          "background": {
+            "default": "background",
+            "maxLength": 64,
+            "title": "Background",
+            "type": "string"
+          },
+          "dq": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 20000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dq"
+          },
+          "dq_is_fwhm": {
+            "default": false,
+            "title": "Dq Is Fwhm",
+            "type": "boolean"
+          },
+          "dr": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 20000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dr"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "q": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 20000,
+            "minItems": 2,
+            "title": "Q",
+            "type": "array"
+          },
+          "q_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q Max"
+          },
+          "q_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Q Min"
+          },
+          "r": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 20000,
+            "minItems": 2,
+            "title": "R",
+            "type": "array"
+          },
+          "resolution": {
+            "anyOf": [
+              {
+                "maximum": 0.5,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resolution"
+          },
+          "scale": {
+            "default": "scale",
+            "maxLength": 64,
+            "title": "Scale",
+            "type": "string"
+          },
+          "spin": {
+            "anyOf": [
+              {
+                "enum": [
+                  "+",
+                  "-"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spin"
+          }
+        },
+        "required": [
+          "q",
+          "r"
+        ],
+        "title": "ReflFitChannel",
+        "type": "object"
+      },
+      "ReflFitParameter": {
+        "description": "One model parameter: ``L{i}.{thickness|sld|isld|roughness|msld}``,\n``scale``, ``background`` or a per-channel scale/background name.",
+        "properties": {
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "name": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "tie": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tie"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "vary": {
+            "default": false,
+            "title": "Vary",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "ReflFitParameter",
+        "type": "object"
+      },
+      "ReflFitRequest": {
+        "properties": {
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/ReflFitChannel"
+            },
+            "maxItems": 4,
+            "minItems": 1,
+            "title": "Channels",
+            "type": "array"
+          },
+          "max_nfev": {
+            "default": 200,
+            "maximum": 2000.0,
+            "minimum": 1.0,
+            "title": "Max Nfev",
+            "type": "integer"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/ReflFitParameter"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Parameters",
+            "type": "array"
+          },
+          "weighting": {
+            "default": "dr",
+            "enum": [
+              "dr",
+              "log"
+            ],
+            "title": "Weighting",
+            "type": "string"
+          }
+        },
+        "required": [
+          "parameters",
+          "channels"
+        ],
+        "title": "ReflFitRequest",
         "type": "object"
       },
       "ReflectivityFFTRequest": {
@@ -8797,6 +9304,39 @@
           "r"
         ],
         "title": "StoneyStressRequest",
+        "type": "object"
+      },
+      "StoredPackageResponse": {
+        "properties": {
+          "expires_at": {
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "size": {
+            "title": "Size",
+            "type": "integer"
+          },
+          "token": {
+            "title": "Token",
+            "type": "string"
+          },
+          "ttl_seconds": {
+            "title": "Ttl Seconds",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "token",
+          "size",
+          "expires_at",
+          "ttl_seconds"
+        ],
+        "title": "StoredPackageResponse",
         "type": "object"
       },
       "StrainRequest": {
@@ -14412,6 +14952,50 @@
         ]
       }
     },
+    "/api/reductions/pawley": {
+      "post": {
+        "description": "Whole-pattern Pawley unit-cell refinement for powder XRD.",
+        "operationId": "pawley_route_api_reductions_pawley_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PawleyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Pawley Route Api Reductions Pawley Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Pawley Route",
+        "tags": [
+          "reductions"
+        ]
+      }
+    },
     "/api/reductions/reflectivity-fft": {
       "post": {
         "description": "Kiessig-fringe FFT thickness(es) + superlattice analysis.",
@@ -14702,6 +15286,94 @@
         "summary": "Get Unit Categories",
         "tags": [
           "reference"
+        ]
+      }
+    },
+    "/api/reflectivity/dream": {
+      "post": {
+        "description": "Queue a DREAM posterior for a fit; returns ``{job_id, plan}``.\n\nPoll ``GET /api/jobs/{id}``; ``GET /api/jobs/{id}/result`` is\n``calc.refl_dream.sample_reflectivity``'s dict. A request the sampler would\nrefuse, or one over the limits above, is a 422 here, before anything is\nqueued. ``plan`` carries the sizes, including the band draws after the\nclamp.",
+        "operationId": "dream_route_api_reflectivity_dream_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReflDreamRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Dream Route Api Reflectivity Dream Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Dream Route",
+        "tags": [
+          "reflectivity"
+        ]
+      }
+    },
+    "/api/reflectivity/fit": {
+      "post": {
+        "description": "Fit the layer model to one or more measured reflectivity curves.",
+        "operationId": "fit_route_api_reflectivity_fit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReflFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Fit Route Api Reflectivity Fit Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fit Route",
+        "tags": [
+          "reflectivity"
         ]
       }
     },
@@ -19553,6 +20225,164 @@
         "summary": "Sputter Yield",
         "tags": [
           "vacuum"
+        ]
+      }
+    },
+    "/api/workbook-transfer/packages": {
+      "post": {
+        "description": "Store a transfer package too large for the clipboard.",
+        "operationId": "store_package_api_workbook_transfer_packages_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "A workbook transfer package, stored verbatim.",
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoredPackageResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "413": {
+            "description": "Too large"
+          },
+          "422": {
+            "description": "Empty or too small"
+          },
+          "503": {
+            "description": "Store unavailable"
+          },
+          "507": {
+            "description": "Store full"
+          }
+        },
+        "summary": "Store Package",
+        "tags": [
+          "workbook-transfer"
+        ]
+      }
+    },
+    "/api/workbook-transfer/packages/{package_id}": {
+      "delete": {
+        "description": "Remove a stored package before it expires; the token must match.",
+        "operationId": "delete_package_api_workbook_transfer_packages__package_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "title": "Package Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-transfer-token",
+            "required": true,
+            "schema": {
+              "title": "X-Transfer-Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeletedResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "description": "Invalid id"
+          },
+          "404": {
+            "description": "Not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Package",
+        "tags": [
+          "workbook-transfer"
+        ]
+      },
+      "get": {
+        "description": "Fetch a stored package by id; the token must match.",
+        "operationId": "fetch_package_api_workbook_transfer_packages__package_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "package_id",
+            "required": true,
+            "schema": {
+              "title": "Package Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "x-transfer-token",
+            "required": true,
+            "schema": {
+              "title": "X-Transfer-Token",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {}
+            },
+            "description": "The stored package"
+          },
+          "400": {
+            "description": "Invalid id"
+          },
+          "404": {
+            "description": "Not found (or wrong token)"
+          },
+          "410": {
+            "description": "Expired"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Fetch Package",
+        "tags": [
+          "workbook-transfer"
         ]
       }
     },

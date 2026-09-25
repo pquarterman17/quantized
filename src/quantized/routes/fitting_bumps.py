@@ -16,10 +16,11 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
+from quantized.calc.dream_seed import DreamCancelled
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_bumps import BUMPS_ENGINES, bumps_available, fit_bumps
 from quantized.calc.fit_models import FIT_MODELS
-from quantized.jobs import AbortFn, JobQueueFullError, ProgressFn, jobs
+from quantized.jobs import AbortFn, JobCancelled, JobQueueFullError, ProgressFn, jobs
 from quantized.routes._errors import CALC_ERRORS, call_calc
 from quantized.routes._payload import to_jsonable
 
@@ -83,10 +84,13 @@ def bumps_fit(req: BumpsFitRequest) -> dict[str, Any]:
             def on_fraction(fraction: float) -> None:
                 progress(fraction, "sampling posterior")
 
-            result = fit_bumps(
-                req.x, req.y, req.dy,
-                progress_callback=on_fraction, abort_check=abort_check, **kwargs,
-            )
+            try:
+                result = fit_bumps(
+                    req.x, req.y, req.dy,
+                    progress_callback=on_fraction, abort_check=abort_check, **kwargs,
+                )
+            except DreamCancelled as exc:  # cancelled while queued behind another DREAM run
+                raise JobCancelled(str(exc)) from exc
             return to_jsonable(result)
 
         try:

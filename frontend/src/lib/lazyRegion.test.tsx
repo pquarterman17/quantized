@@ -11,7 +11,7 @@ import type { MockInstance } from "vitest";
 import { useState, useEffect, Component } from "react";
 import type { ComponentType, ReactElement, ReactNode } from "react";
 
-import { lazyRegion } from "./lazyRegion";
+import { lazyRegion, useRegionLoaded, type PreloadableRegion } from "./lazyRegion";
 
 /** A minimal real error boundary, standing in for whatever boundary sits
  *  ABOVE a lazyRegion seam in the real app (or the crash-to-console default
@@ -312,5 +312,64 @@ describe("lazyRegion", () => {
 
     render(<Region />);
     expect(await screen.findByText("⚠ Widget failed to load.")).toBeInTheDocument();
+  });
+});
+
+// Bundle diet slice 8: `preload()` + `useRegionLoaded` let a gate mount a
+// region only once its chunk is in, so the region never suspends -- which is
+// what keeps React's ~300 ms retry throttle off a lazily-mounted dialog's
+// first open (measured in a real browser; see plans/BUNDLE_HEADROOM.md).
+describe("lazyRegion preload (bundle diet slice 8)", () => {
+  it("a region mounted after preload() renders on the first flush -- no fallback, no suspension", async () => {
+    const { load, calls } = flakyLoader(0);
+    const Region = lazyRegion(load, "Widget", <span>loading fallback</span>);
+    expect(Region.loaded()).toBe(false);
+    await Region.preload();
+    expect(Region.loaded()).toBe(true);
+
+    render(<Region />);
+    // Synchronous query: a suspending region would show the fallback here.
+    expect(screen.getByText("Loaded content")).toBeInTheDocument();
+    expect(screen.queryByText("loading fallback")).toBeNull();
+    expect(calls()).toBe(1);
+  });
+
+  it("a failed preload rejects, caches nothing, and the next preload is a real new attempt", async () => {
+    const { load, calls } = flakyLoader(1);
+    const Region = lazyRegion(load, "Widget");
+    await expect(Region.preload()).rejects.toThrow("chunk failed to load");
+    expect(Region.loaded()).toBe(false);
+    await Region.preload();
+    expect(Region.loaded()).toBe(true);
+    expect(calls()).toBe(2);
+  });
+
+  /** Reports failures as DOM state, so the test waits on what a user would
+   *  see rather than on a mock having been called. */
+  function Gate({ region, wanted }: { region: PreloadableRegion<object>; wanted: boolean }): ReactElement {
+    const [failures, setFailures] = useState(0);
+    const ready = useRegionLoaded(region, wanted, () => setFailures((n) => n + 1));
+    return <div>{wanted && ready ? "gate open" : `closed, failures: ${failures}`}</div>;
+  }
+
+  it("useRegionLoaded loads only once wanted, reports a failure, and retries on the next want", async () => {
+    const { load, calls } = flakyLoader(1);
+    const Region = lazyRegion(load, "Widget");
+
+    const { rerender } = render(<Gate region={Region} wanted={false} />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(calls()).toBe(0); // not wanted: nothing fetched
+
+    rerender(<Gate region={Region} wanted />);
+    expect(await screen.findByText("closed, failures: 1")).toBeInTheDocument();
+
+    // The caller answers the failure by dropping the want (the dialogs cancel
+    // their ask); wanting again is a fresh attempt, which now succeeds.
+    rerender(<Gate region={Region} wanted={false} />);
+    rerender(<Gate region={Region} wanted />);
+    expect(await screen.findByText("gate open")).toBeInTheDocument();
+    expect(calls()).toBe(2);
   });
 });
