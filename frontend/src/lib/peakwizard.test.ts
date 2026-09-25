@@ -9,11 +9,14 @@ import {
   deleteRecipe,
   expandToFullRows,
   loadRecipes,
+  loadRecipesChecked,
   regionsFromPeaks,
   saveRecipe,
   subtractBaseline,
+  upgradePeakRecipe,
   type PeakRecipe,
 } from "./peakwizard";
+import { DEFAULT_FIT } from "./peakRecipeFit";
 
 describe("cutRange", () => {
   const x = [1, 2, 3, 4, 5];
@@ -108,5 +111,64 @@ describe("recipe persistence", () => {
     expect(loadRecipes()).toEqual([]);
     localStorage.setItem("qz.peakRecipes", JSON.stringify([recipe("ok"), { version: 2 }, null]));
     expect(loadRecipes().map((r) => r.name)).toEqual(["ok"]);
+  });
+});
+
+// Audit P2.4 slice 3: v2 adds the model-fit section.
+describe("recipe v2 — migration, round trip, fail closed", () => {
+  beforeEach(() => localStorage.clear());
+
+  const v1 = (name: string): Record<string, unknown> => {
+    const r: Record<string, unknown> = { ...DEFAULT_RECIPE, version: 1, name };
+    delete r.fit;
+    return r;
+  };
+  const edited: PeakRecipe = {
+    ...DEFAULT_RECIPE,
+    name: "edited",
+    fit: {
+      engine: "classic",
+      shapes: ["voigt", null],
+      background: "none",
+      params: { "p0.center": { min: 35.5, max: 36.5 }, "p1.fwhm": { tie: "p0.fwhm_g" } },
+      shareVary: { "p0.fwhm_g": false },
+    },
+  };
+
+  it("a stored v1 recipe loads as v2 with the default fit (the engine as before), silently", () => {
+    localStorage.setItem("qz.peakRecipes", JSON.stringify([v1("old")]));
+    const { recipes, warnings } = loadRecipesChecked();
+    expect(warnings).toEqual([]);
+    expect(recipes).toEqual([{ ...DEFAULT_RECIPE, name: "old" }]);
+    expect(recipes[0].fit).toEqual(DEFAULT_FIT);
+  });
+
+  it("a v2 recipe round-trips exactly through storage", () => {
+    saveRecipe(edited);
+    expect(loadRecipes()).toEqual([edited]);
+  });
+
+  it("skips a malformed fit section or a newer version with a named warning — and never deletes it on save", () => {
+    const badFit = { ...edited, name: "bad", fit: { ...edited.fit, params: { "p0.center": { min: 2, max: 1 } } } };
+    const future = { ...edited, name: "future", version: 3 };
+    localStorage.setItem("qz.peakRecipes", JSON.stringify([badFit, future, v1("ok")]));
+    const { recipes, warnings } = loadRecipesChecked();
+    expect(recipes.map((r) => r.name)).toEqual(["ok"]);
+    expect(warnings).toEqual([
+      'skipped saved peak recipe "bad": fit.params["p0.center"]: min > max',
+      'skipped saved peak recipe "future": unsupported version 3 (this app reads up to 2)',
+    ]);
+    saveRecipe({ ...DEFAULT_RECIPE, name: "new" });
+    deleteRecipe("ok");
+    const raw = JSON.parse(localStorage.getItem("qz.peakRecipes")!) as { name: string }[];
+    expect(raw.map((r) => r.name)).toEqual(["bad", "future", "new"]); // carried through untouched
+    // ...and a same-name save is the one thing that replaces an unreadable record
+    saveRecipe({ ...DEFAULT_RECIPE, name: "future" });
+    expect(loadRecipes().map((r) => r.name)).toEqual(["new", "future"]);
+  });
+
+  it("upgradePeakRecipe explains a non-recipe", () => {
+    expect(() => upgradePeakRecipe({ version: 2 })).toThrow("not a peak recipe");
+    expect(() => upgradePeakRecipe({ ...edited, fit: undefined })).toThrow(/^fit: missing/);
   });
 });

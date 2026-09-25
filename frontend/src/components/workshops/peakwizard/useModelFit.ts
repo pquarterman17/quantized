@@ -6,11 +6,15 @@
 //
 // ONE CONTENT KEY drives everything that depends on the inputs: the active
 // dataset id, the included candidates, the recipe's shape / background degree
-// / width link, and a digest of the working x and y (so a range, baseline,
-// toggle/add/remove-peak or same-id data change all move it).
-//   * Parameters: `seedSetup` (./peakModelParams) derives the defaults; user
-//     edits are kept against the key, so an equal re-render keeps them and a
-//     real change re-seeds.
+// / width link, the engine, and a digest of the working x and y (so a range,
+// baseline, toggle/add/remove-peak or same-id data change all move it).
+//   * Parameters (slice 3): the USER'S EDITS live in the recipe's fit section
+//     (`fit`, lib/peakRecipeFit.ts — engine, per-peak shapes, background, and
+//     field-level parameter edits by stable name), so they save and load with
+//     the recipe. The table is `applyEdits(seedSetup(...), fit)`: re-seeded
+//     from the current data on every input change, with every stored edit
+//     re-applied on top. The wizard renumbers the edits when a peak leaves
+//     or re-joins the model (`remapFitPeaks`), so an edit stays with its peak.
 //   * Results: any key change DROPS the result, the in-flight request and our
 //     overlays — no hand-placed invalidation calls. A table edit after a fit
 //     leaves the result visible but STALE: its overlays come off, and the
@@ -36,19 +40,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fitPeakModel, type PeakModelFitResponse } from "../../../lib/api/peaks";
-import { expandToFullRows, type PeakRecipe } from "../../../lib/peakwizard";
-import { activeRowIndices, droppedRows } from "../../../lib/rowstate";
+import type { PeakRecipe } from "../../../lib/peakwizard";
+import { DEFAULT_FIT, type FitEngine, type PeakRecipeFit } from "../../../lib/peakRecipeFit";
 import type { BaselineOverlay, Dataset, FitOverlay } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
-import { curveToRows } from "./modelFitOverlay";
+import { curveToRows, segmentRows, segmentToFullRows } from "./modelFitOverlay";
 import { setupProblems } from "./modelSetupChecks";
 import {
+  applyEdits,
   backgroundFromDegree,
   backgroundNote,
   fwhmShared,
   modelFitBody,
   patchParam,
-  reshape,
+  recordEdits,
   seedSetup,
   setFwhmShared,
   shapeFromGlobal,
@@ -60,7 +65,7 @@ import {
   type SeedPeak,
 } from "./peakModelParams";
 
-export type FitEngine = "model" | "classic";
+export type { FitEngine };
 
 export interface ModelFitState {
   engine: FitEngine;
@@ -99,6 +104,9 @@ export interface ModelFitInputs {
   baselineOn: boolean;
   peaks: SeedPeak[];
   model: PeakRecipe["model"];
+  /** The recipe's fit section — the single store of the user's edits. */
+  fit: PeakRecipeFit;
+  setFit: (update: (fit: PeakRecipeFit) => PeakRecipeFit) => void;
 }
 
 function digest(v: readonly number[] | null | undefined): [number, number, number] {
@@ -115,11 +123,10 @@ function digest(v: readonly number[] | null | undefined): [number, number, numbe
 type Owned = { fit: FitOverlay | null; bg: BaselineOverlay | null };
 
 export function useModelFit(inp: ModelFitInputs): ModelFitState {
-  const { active, segment, workingY, baseline, baselineOn, peaks, model } = inp;
+  const { active, segment, workingY, baseline, baselineOn, peaks, model, fit, setFit } = inp;
+  const engine = fit.engine;
   const setFitOverlay = useApp((s) => s.setFitOverlay);
   const setBaselineOverlay = useApp((s) => s.setBaselineOverlay);
-  const [engine, setEngineState] = useState<FitEngine>("model");
-  const [edited, setEdited] = useState<{ key: string; setup: ModelSetup } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -130,27 +137,38 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
 
   const activeId = active?.id ?? null;
   const key = useMemo(
-    () => JSON.stringify([activeId, peaks, model.shape, model.bgDegree, model.linkMode,
+    () => JSON.stringify([activeId, peaks, model.shape, model.bgDegree, model.linkMode, engine,
       digest(segment?.x), digest(workingY)]),
-    [activeId, peaks, model.shape, model.bgDegree, model.linkMode, segment, workingY],
+    [activeId, peaks, model.shape, model.bgDegree, model.linkMode, engine, segment, workingY],
   );
-  const seeded = useMemo(
-    () => seedSetup(peaks, peaks.map(() => shapeFromGlobal(model.shape)),
-      backgroundFromDegree(model.bgDegree), segment?.x ?? [], workingY ?? [], model.linkMode),
-    [peaks, model.shape, model.bgDegree, model.linkMode, segment, workingY],
-  );
-  const setup = edited && edited.key === key ? edited.setup : seeded;
+  const setup = useMemo(() => {
+    const shapes = peaks.map((_, i) => fit.shapes[i] ?? shapeFromGlobal(model.shape));
+    const bg = fit.background ?? backgroundFromDegree(model.bgDegree);
+    const seeded = seedSetup(peaks, shapes, bg, segment?.x ?? [], workingY ?? [], model.linkMode);
+    return applyEdits(seeded, fit);
+  }, [peaks, fit, model.shape, model.bgDegree, model.linkMode, segment, workingY]);
   const setupJson = useMemo(() => JSON.stringify(setup), [setup]);
   const problems = useMemo(() => setupProblems(setup), [setup]);
-  const edit = (next: ModelSetup) => setEdited({ key, setup: next });
-  const reshapeTo = (shapes: ModelShape[], bg: ModelBackground) =>
-    edit(reshape(setup, peaks, shapes, bg, segment?.x ?? [], workingY ?? [], model.linkMode));
+  /** Record a table change (`next` derived from the CURRENT `setup`) as edits. */
+  const edit = (next: ModelSetup) =>
+    setFit((f) => {
+      const shareVary = { ...f.shareVary };
+      for (const k of Object.keys(setup.shareVary)) if (!(k in next.shareVary)) delete shareVary[k];
+      return { ...f, params: recordEdits(f.params, setup.params, next.params), shareVary: { ...shareVary, ...next.shareVary } };
+    });
+  const setShape = (i: number, s: ModelShape) =>
+    setFit((f) => {
+      const shapes = [...f.shapes];
+      for (let j = shapes.length; j < i; j++) shapes[j] = null;
+      shapes[i] = s;
+      return { ...f, shapes };
+    });
 
   // The step-① preview as usePeakBaseline draws it, for restoring.
   const previewRef = useRef<() => BaselineOverlay | null>(() => null);
   previewRef.current = () =>
     active && segment && baseline && baselineOn
-      ? { datasetId: active.id, y: expandToFullRows(baseline, segment.kept, active.data.time.length) }
+      ? { datasetId: active.id, y: segmentToFullRows(baseline, active, segment.kept) }
       : null;
 
   const dropOverlays = useCallback((restore: boolean) => {
@@ -195,8 +213,7 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
 
   const publish = (res: PeakModelFitResponse, ds: Dataset, seg: { x: number[]; kept: number[] }) => {
     const n = ds.data.time.length;
-    const rows = activeRowIndices(n, droppedRows(ds));
-    const segToRow = seg.kept.map((k) => rows[k]);
+    const segToRow = segmentRows(ds, seg.kept);
     const offsets = baselineOn && baseline ? baseline : null;
     const c = res.curves;
     const fit = { datasetId: ds.id, y: curveToRows(c.x, c.model, seg.x, segToRow, n, offsets) };
@@ -253,24 +270,25 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
   const shared = fwhmShared(setup.params);
   return {
     engine,
-    // Switching engine is a configuration change: the model's result and its
-    // plot curves go (the classic engine draws none).
+    // Switching engine is a configuration change: `engine` is in the content
+    // key, so the model's result and its plot curves go (the classic engine
+    // draws none).
     setEngine: (e) => {
-      if (e === engine) return;
-      reset(true);
-      setEngineState(e);
+      if (e !== engine) setFit((f) => ({ ...f, engine: e }));
     },
     setup,
     shapeNote: shapeFromGlobal(model.shape) === "pseudo_voigt" && model.shape !== "Pseudo-Voigt"
       ? `${model.shape} has no mixed-model equivalent: peaks start as pseudo-Voigt (use the Classic engine for ${model.shape})`
       : null,
     bgNote: backgroundNote(model.bgDegree),
-    setShape: (i, s) => reshapeTo(setup.shapes.map((old, j) => (j === i ? s : old)), setup.background),
-    setBackground: (bg) => reshapeTo(setup.shapes, bg),
+    setShape,
+    setBackground: (bg: ModelBackground) => setFit((f) => ({ ...f, background: bg })),
     patch: (name, p) => edit(patchParam(setup, name, p)),
     fwhmShared: shared,
     toggleShareFwhm: () => edit(setFwhmShared(setup, !shared)),
-    resetSetup: () => setEdited(null),
+    // Back to the seeded defaults: every shape, background and table edit
+    // goes; the engine choice is not a table edit and stays.
+    resetSetup: () => setFit((f) => ({ ...DEFAULT_FIT, engine: f.engine })),
     problems,
     busy,
     error,

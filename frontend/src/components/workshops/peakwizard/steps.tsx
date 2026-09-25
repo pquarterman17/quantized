@@ -148,7 +148,7 @@ export function StepFindPeaks({ w }: { w: PeakWizardState }) {
     <>
       {w.markerEditActive && (
         <div className="qzk-ds-meta" style={{ ...faint, marginBottom: 6 }}>
-          Click the plot to add a peak · click a marker to remove it (Esc to pause)
+          Click the plot to add a peak (it snaps to a nearby apex) · click a marker to remove it (Esc to pause)
         </div>
       )}
       <div style={{ display: "flex", gap: 6, alignItems: "flex-end" }}>

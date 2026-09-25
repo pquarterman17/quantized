@@ -155,13 +155,20 @@ describe("recipeDetails — schema version is always visible", () => {
     expect(channels).toEqual(["2theta (deg)", "Intensity (cps)", " (cps) · error-y", "temp (K) · not used"]);
   });
 
-  it("analysis/peak/fitModel: versioned, show v1", () => {
+  it("analysis/peak/fitModel: versioned, show their version (peak recipes are v2 since P2.4 slice 3)", () => {
     seedNameKeyed();
     const sources = buildSources();
-    for (const kind of ["analysis", "peak", "fitModel"] as const) {
+    for (const [kind, v] of [["analysis", "v1"], ["peak", "v2"], ["fitModel", "v1"]] as const) {
       const details = recipeDetails(rowFor(kind, sources), sources);
-      expect(details && fieldValue(details, "Schema version"), kind).toBe("v1");
+      expect(details && fieldValue(details, "Schema version"), kind).toBe(v);
     }
+  });
+
+  it("a peak recipe names its fit engine and how much of the model it pins", () => {
+    seedNameKeyed();
+    const sources = buildSources();
+    const details = recipeDetails(rowFor("peak", sources), sources);
+    expect(details && fieldValue(details, "Fit engine")).toBe("mixed-shape model");
   });
 
   it("graph: unversioned by construction", () => {

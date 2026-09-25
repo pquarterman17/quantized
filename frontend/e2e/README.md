@@ -141,6 +141,7 @@ evidence for WKWebView, not proof.
 | j | `annotation-shape-lifecycle.spec.ts` — annotation create/edit-text/move/delete (right-click menu AND the selection mini-toolbar); shape draw/Dashed-toggle/delete — no undo coverage (gated on #1) | `@core` |
 | k | `window-arrange.spec.ts` — New Graph Window ×2, Tile Windows (non-overlapping grid), Cascade Windows (staggered offsets), maximize/restore via title-bar double-click, close via the title bar's own right-click menu | 100% only |
 | l | `peak-model-fit.spec.ts` — Peak Analyzer on `two-peaks.csv`: find peaks, per-peak shapes (Gaussian + Lorentzian), a real `/api/peaks/model-fit` fit (centres, ± errors, SSR label, model curve on the plot), report via the `peak_model_fit` emitter (audit P2.4) | 100% only |
+| m | `peak-fit-range-and-add.spec.ts` — plot right-click "Peak Fitting ▸ Fit this range" (disabled with a reason, then on a Select Rows brush: the analyzer opens on step 2 with the range applied and its peak found); delete a peak from the model table, click the plot to add it back (data-seeded centre/FWHM), and fit both (audit P2.4 slice 3) | 100% only |
 
 ## Residuals (booked, not shipped here)
 

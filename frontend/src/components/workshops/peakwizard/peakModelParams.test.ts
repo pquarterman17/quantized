@@ -3,7 +3,9 @@
 
 import { describe, expect, it } from "vitest";
 
+import type { ParamEdit } from "../../../lib/peakRecipeFit";
 import {
+  applyEdits,
   backgroundFromDegree,
   backgroundNote,
   fwhmShared,
@@ -11,12 +13,14 @@ import {
   paramKind,
   paramLabel,
   patchParam,
-  reshape,
+  recordEdits,
   seedSetup,
   setFwhmShared,
   shapeFromGlobal,
   startFromFit,
   tieTargets,
+  type ModelBackground,
+  type ModelSetup,
   type SeedPeak,
 } from "./peakModelParams";
 
@@ -108,15 +112,29 @@ describe("editing", () => {
     expect(paramLabel("p0.fwhm_g")).toBe("#1 FWHM g");
   });
 
-  it("reshape keeps edits that still exist and drops ties to vanished parameters", () => {
-    let s = seedSetup(PEAKS, ["gaussian", "gaussian"], "linear", X, Y);
-    s = patchParam(s, "p1.fwhm", { tie: "p0.fwhm" });
-    s = patchParam(s, "p0.center", { min: 2.5, max: 3.5 });
-    const r = reshape(s, PEAKS, ["voigt", "gaussian"], "quadratic", X, Y);
+  it("recordEdits keeps only the fields that changed, field by field", () => {
+    const s = seedSetup(PEAKS, ["gaussian", "gaussian"], "linear", X, Y);
+    let edits = recordEdits({}, s.params, patchParam(s, "p0.center", { min: 2.5 }).params);
+    expect(edits).toEqual({ "p0.center": { min: 2.5 } });
+    const s1 = applyEdits(s, { params: edits, shareVary: {} });
+    edits = recordEdits(edits, s1.params, patchParam(s1, "p0.center", { max: 3.5 }).params);
+    expect(edits).toEqual({ "p0.center": { min: 2.5, max: 3.5 } }); // no value, vary or tie written
+    expect(recordEdits(edits, s1.params, s1.params)).toEqual(edits); // a no-op change records nothing
+  });
+
+  it("applyEdits re-applies edits over a NEW seed and ignores a tie whose target is gone", () => {
+    const edits = { "p0.center": { min: 2.5, max: 3.5 }, "p1.fwhm": { tie: "p0.fwhm" }, "p0.eta": { value: 0.3, vary: false } };
+    // the same edits over a different shape / background seed
+    const r = applyEdits(seedSetup(PEAKS, ["voigt", "gaussian"], "quadratic", X, Y), { params: edits, shareVary: {} });
     expect(r.shapes).toEqual(["voigt", "gaussian"]);
-    expect(byName(r.params, "p0.center")).toMatchObject({ min: 2.5, max: 3.5 });
-    expect(byName(r.params, "p1.fwhm").tie).toBeNull(); // p0.fwhm is gone
+    expect(byName(r.params, "p0.center")).toMatchObject({ value: 3, min: 2.5, max: 3.5 }); // value still seeded
+    expect(byName(r.params, "p1.fwhm").tie).toBeNull(); // p0.fwhm does not exist for a Voigt
     expect(r.params.map((p) => p.name)).toContain("bg.c2");
+    expect(r.params.some((p) => p.name === "p0.eta")).toBe(false); // waits unused
+    // ...and back to a pseudo-Voigt, the eta edit applies again
+    const pv = applyEdits(seedSetup(PEAKS, ["pseudo_voigt", "gaussian"], "linear", X, Y), { params: edits, shareVary: {} });
+    expect(byName(pv.params, "p0.eta")).toMatchObject({ value: 0.3, vary: false });
+    expect(byName(pv.params, "p1.fwhm").tie).toBe("p0.fwhm");
   });
 });
 
@@ -164,17 +182,21 @@ describe("share FWHM across peaks — adds and removes only the ties it owns", (
 
 describe("background change re-seeds background AND heights consistently", () => {
   const apex0 = PEAKS[0].height + PEAKS[0].bg; // 5.6 at x = 3
+  // What useModelFit does on a background switch: a fresh seed for the new
+  // background, the user's edits applied on top.
+  const reshape = (s: ModelSetup, bg: ModelBackground, edits: Record<string, ParamEdit> = {}) =>
+    applyEdits(seedSetup(PEAKS, s.shapes, bg, X, Y), { params: edits, shareVary: {} });
   it("none -> constant: c0 at the lower data end, height = apex - c0", () => {
     const none = seedSetup(PEAKS, ["gaussian", "gaussian"], "none", X, Y);
     expect(byName(none.params, "p0.height").value).toBeCloseTo(apex0);
-    const c = reshape(none, PEAKS, none.shapes, "constant", X, Y);
+    const c = reshape(none, "constant");
     const c0 = byName(c.params, "bg.c0").value;
     expect(c0).toBeCloseTo(1.04); // mean of the first 5 points
     expect(byName(c.params, "p0.height").value).toBeCloseTo(apex0 - c0);
   });
   it("constant -> linear: the line passes through both data ends and the apex stays put", () => {
     const con = seedSetup(PEAKS, ["gaussian", "gaussian"], "constant", X, Y);
-    const lin = reshape(con, PEAKS, con.shapes, "linear", X, Y);
+    const lin = reshape(con, "linear");
     const c0 = byName(lin.params, "bg.c0").value;
     const c1 = byName(lin.params, "bg.c1").value;
     const line = (x: number) => c0 + c1 * (x - lin.xRef);
@@ -183,9 +205,12 @@ describe("background change re-seeds background AND heights consistently", () =>
     expect(byName(lin.params, "p0.height").value + line(3)).toBeCloseTo(apex0);
   });
   it("an edited height or coefficient survives the switch", () => {
-    const con = patchParam(seedSetup(PEAKS, ["gaussian", "gaussian"], "constant", X, Y), "p1.height", { value: 7 });
-    const lin = reshape(con, PEAKS, con.shapes, "linear", X, Y);
+    const seed = seedSetup(PEAKS, ["gaussian", "gaussian"], "constant", X, Y);
+    const edits = recordEdits({}, seed.params, patchParam(patchParam(seed, "p1.height", { value: 7 }), "bg.c0", { vary: false }).params);
+    const lin = reshape(seed, "linear", edits);
     expect(byName(lin.params, "p1.height").value).toBe(7);
+    expect(byName(lin.params, "bg.c0").vary).toBe(false);
+    expect(byName(lin.params, "p0.height").value).not.toBe(byName(seed.params, "p0.height").value); // unedited: re-seeded
   });
   it("notes a recipe degree above quadratic", () => {
     expect(backgroundNote(2)).toBeNull();

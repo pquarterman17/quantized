@@ -74,6 +74,14 @@ describe("sniffRecipeKind", () => {
     expect(sniffRecipeKind(JSON.parse(exportOrThrow("peak", "Peaks")))).toBe("peak");
   });
 
+  it("routes a v1 peak recipe AND a newer app's version to the peak parser (P2.4 slice 3)", () => {
+    const v1: Record<string, unknown> = { ...DEFAULT_RECIPE, version: 1, name: "old" };
+    delete v1.fit;
+    expect(sniffRecipeKind(v1)).toBe("peak");
+    // a v3 file is still a peak recipe — the peak parser refuses it BY VERSION
+    expect(sniffRecipeKind({ ...DEFAULT_RECIPE, version: 3 })).toBe("peak");
+  });
+
   it("identifies a fit model from its own exporter", () => {
     saveCustomModel({ version: 1, name: "M", equation: "y=a*x", params: ["a"], guesses: [1], lower: [null], upper: [null] });
     expect(sniffRecipeKind(JSON.parse(exportOrThrow("fitModel", "M")))).toBe("fitModel");

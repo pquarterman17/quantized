@@ -44,10 +44,12 @@ import {
   isPeakRecipe,
   loadRecipes as loadPeakRecipes,
   PEAK_LINK_MODES,
+  PEAK_RECIPE_VERSION,
   PEAK_SHAPES,
   type PeakRecipe,
   saveRecipe as savePeakRecipe,
 } from "./peakwizard";
+import { DEFAULT_FIT, parseRecipeFit } from "./peakRecipeFit";
 import { dropEntry, moveEntry } from "./recipeIndex";
 import type { RecipeKind, RecipeRef } from "./recipeLibrary";
 import { uniqueTemplateName } from "./uniqueName";
@@ -164,14 +166,29 @@ const PEAK_REPORT_MODES = ["fit", "integrate"] as const;
  *                   max_peaks integer >= 1
  *    model          shape in PEAK_SHAPES; linkMode in PEAK_LINK_MODES;
  *                   bgDegree integer >= 0
- *    report         integrate: regionWidth > 0 (a width in x FWHM) */
+ *    report         integrate: regionWidth > 0 (a width in x FWHM)
+ *    fit (v2)       lib/peakRecipeFit's `parseRecipeFit`; a v1 file gets
+ *                   DEFAULT_FIT; a version above PEAK_RECIPE_VERSION is
+ *                   refused by number */
 function parsePeakRecipeFile(text: string): NamedRecord {
   const o = parseJsonRecord(text, "peak recipe");
-  if (!isPeakRecipe(o)) throw new Error("not a valid peak recipe file");
-  requireName(o, "peak recipe");
   const bad = (field: string): never => {
     throw new Error(`not a valid peak recipe file (${field})`);
   };
+  if (typeof o.version === "number" && o.version > PEAK_RECIPE_VERSION) bad(`unsupported version ${o.version}`);
+  if (!isPeakRecipe(o)) throw new Error("not a valid peak recipe file");
+  requireName(o, "peak recipe");
+  // v2's model-fit section (P2.4 slice 3): one validator for storage and file
+  // (lib/peakRecipeFit), rebuilt from known fields; a v1 file migrates to the
+  // default, which is exactly how the wizard ran every v1 recipe.
+  let fit = DEFAULT_FIT;
+  if (o.version === 2) {
+    try {
+      fit = parseRecipeFit(o.fit);
+    } catch (e) {
+      bad(e instanceof Error ? e.message : "fit");
+    }
+  }
   const range = o.range as Record<string, unknown>;
   if (!finiteOrNull(range.lo) || !finiteOrNull(range.hi)) bad("range");
   if (range.lo !== null && range.hi !== null && (range.lo as number) > (range.hi as number)) bad("range: lo > hi");
@@ -198,7 +215,7 @@ function parsePeakRecipeFile(text: string): NamedRecord {
   if (!finite(report.regionWidth)) bad("report.regionWidth");
   if (report.mode === "integrate" && !positive(report.regionWidth)) bad("report.regionWidth");
   const record: PeakRecipe = {
-    version: 1,
+    version: 2,
     name: o.name as string,
     range: { lo: range.lo as number | null, hi: range.hi as number | null },
     baseline: {
@@ -220,6 +237,7 @@ function parsePeakRecipeFile(text: string): NamedRecord {
       constrain: model.constrain as boolean,
     },
     report: { mode: report.mode as PeakRecipe["report"]["mode"], regionWidth: report.regionWidth as number },
+    fit,
   };
   return record;
 }

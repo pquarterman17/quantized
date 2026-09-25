@@ -96,14 +96,25 @@ describe("useModelFit — request", () => {
     expect(params.find((p) => p.name === "p0.height")).toMatchObject({ vary: false, min: 0, max: null, tie: null });
   });
 
-  it("table edits survive re-renders; a real change (a peak excluded) re-seeds", () => {
+  // Slice 3 changed this on purpose: edits live in the recipe and FOLLOW
+  // THEIR PEAK (slice 2 dropped every edit on any peak-list change).
+  it("table edits survive re-renders and follow their peak when another is excluded; Defaults clears them", () => {
     const { result } = wizardWithTwoPeaks();
+    const param = (n: string) => result.current.model.setup.params.find((p) => p.name === n);
     act(() => result.current.model.patch("p0.fwhm", { max: 3 }));
+    act(() => result.current.model.patch("p1.height", { vary: false }));
     act(() => result.current.patchRecipe({ report: { regionWidth: 4 } })); // unrelated re-render
-    expect(result.current.model.setup.params.find((p) => p.name === "p0.fwhm")?.max).toBe(3);
-    act(() => result.current.togglePeak(1));
+    expect(param("p0.fwhm")?.max).toBe(3);
+    act(() => result.current.togglePeak(0)); // peak #2 becomes p0 and takes its edit along
     expect(result.current.model.setup.shapes).toHaveLength(1);
-    expect(result.current.model.setup.params.find((p) => p.name === "p0.fwhm")?.max).not.toBe(3);
+    expect(param("p0.height")?.vary).toBe(false);
+    expect(param("p0.fwhm")?.max).not.toBe(3); // peak #1's edit left with peak #1
+    act(() => result.current.togglePeak(0)); // back in, at index 0: a fresh seed there
+    expect(param("p0.height")?.vary).toBe(true);
+    expect(param("p1.height")?.vary).toBe(false);
+    act(() => result.current.model.resetSetup());
+    expect(param("p1.height")?.vary).toBe(true);
+    expect(result.current.recipe.fit.params).toEqual({});
   });
 });
 

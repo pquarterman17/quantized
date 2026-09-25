@@ -6,6 +6,7 @@ import type uPlot from "uplot";
 import PlotContextMenu from "./PlotContextMenu";
 import type { PlotPayload } from "../../lib/plotdata";
 import { askAnnotationText } from "../../store/annotationTextDialog";
+import { usePeakFitRange } from "../../store/peakFitRange";
 import { useApp } from "../../store/useApp";
 import type { PlotStageActions } from "./usePlotStageActions";
 
@@ -156,6 +157,33 @@ describe("PlotContextMenu", () => {
   it("'Move earlier (draw under)' is disabled for the first channel in draw order", () => {
     open();
     expect(screen.getByRole("menuitem", { name: "Move earlier (draw under)" })).toBeDisabled();
+  });
+});
+
+describe("PlotContextMenu — Peak Fitting ▸ Fit this range (audit P2.4)", () => {
+  const scan = { id: "d1", name: "scan", data: { time: [30, 35, 40, 45, 50], values: [[1], [2], [3], [2], [1]], labels: ["I"], units: [""], metadata: {} } };
+  beforeEach(() => {
+    usePeakFitRange.setState({ request: null });
+    useApp.setState({ datasets: [scan], activeId: "d1", xKey: null, qfitRoi: null, integral: null, selection: null, peakWizardOpen: false });
+  });
+  const fitEntry = () => {
+    fireEvent.mouseEnter(screen.getByText("Peak Fitting").closest(".qzk-ctx-subwrap")!);
+    return screen.getByRole("menuitem", { name: "Fit this range" });
+  };
+
+  it("with no selected range the entry is disabled and says how to make one", () => {
+    open();
+    expect(fitEntry()).toBeDisabled();
+    expect(fitEntry()).toHaveAttribute("title", expect.stringMatching(/select an x-range first/));
+  });
+
+  it("hands the selected rows' x-range to the Peak Analyzer and opens it", () => {
+    useApp.setState({ selection: { datasetId: "d1", rows: [1, 2, 3] } });
+    const onClose = open();
+    fireEvent.click(fitEntry());
+    expect(usePeakFitRange.getState().request).toMatchObject({ datasetId: "d1", lo: 35, hi: 45 });
+    expect(useApp.getState().peakWizardOpen).toBe(true);
+    expect(onClose).toHaveBeenCalledOnce();
   });
 });
 
