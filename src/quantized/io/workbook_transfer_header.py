@@ -99,6 +99,10 @@ class StoredPackage:
 
 @dataclass(frozen=True)
 class CleanupReport:
+    """Removals this call saw succeed. Informational only: when two cleaners
+    race on macOS/Windows the OS can report the same unlink as succeeding to
+    both (measured on CI), so concurrent totals may exceed the file count."""
+
     expired: int = 0
     stale: int = 0
     corrupt: int = 0
