@@ -12,7 +12,13 @@ import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { crystalInterplanarAngle } from "../../../lib/api/crystallography";
 import { Card, CopyButton, ROW, resultLine, useCard, withTouch } from "./shared";
-import { assembleCell, CRYSTAL_SYSTEMS, type CalculatorsState, type CellAngle } from "./useCalculators";
+import {
+  assembleCell,
+  CRYSTAL_SYSTEMS,
+  type CalculatorsState,
+  type CellAngle,
+  type CrystalForm,
+} from "./useCalculators";
 
 const ANGLE_GLYPH: Record<CellAngle, string> = { alpha: "α", beta: "β", gamma: "γ" };
 
@@ -37,6 +43,13 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
   const [ak2, setAk2] = useState("1");
   const [al2, setAl2] = useState("0");
   const angleCard = useCard("Crystal");
+  // The angle card consumes the shared lattice as well as its local hkl pairs.
+  // Keep that dependency explicit so a lattice edit clears a completed result
+  // and disowns an in-flight request for the previous cell.
+  const updateLattice = (patch: Partial<CrystalForm>): void => {
+    c.updCrystal(patch);
+    angleCard.touch();
+  };
   const show4Index = isHex && millerMode === "4";
   const hNum = Number(c.crystal.h);
   const kNum = Number(c.crystal.k);
@@ -49,7 +62,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
       <Select
         options={CRYSTAL_SYSTEMS.map((s) => ({ value: s.value, label: s.label }))}
         value={c.crystal.system}
-        onChange={(e) => c.updCrystal({ system: e.target.value })}
+        onChange={(e) => updateLattice({ system: e.target.value })}
         aria-label="crystal system"
       />
 
@@ -58,13 +71,13 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
         <span className="qzk-field-lbl" style={{ margin: 0 }}>
           a
         </span>
-        <NumberField value={c.crystal.a} width={64} onChange={(v) => c.updCrystal({ a: v })} />
+        <NumberField value={c.crystal.a} width={64} onChange={(v) => updateLattice({ a: v })} />
         {lengths.includes("b") && (
           <>
             <span className="qzk-field-lbl" style={{ margin: 0 }}>
               b
             </span>
-            <NumberField value={c.crystal.b} width={64} onChange={(v) => c.updCrystal({ b: v })} />
+            <NumberField value={c.crystal.b} width={64} onChange={(v) => updateLattice({ b: v })} />
           </>
         )}
         {lengths.includes("c") && (
@@ -72,7 +85,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
             <span className="qzk-field-lbl" style={{ margin: 0 }}>
               c
             </span>
-            <NumberField value={c.crystal.c} width={64} onChange={(v) => c.updCrystal({ c: v })} />
+            <NumberField value={c.crystal.c} width={64} onChange={(v) => updateLattice({ c: v })} />
           </>
         )}
         <span style={{ color: "var(--text-faint)" }}>Å</span>
@@ -89,7 +102,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
               <NumberField
                 value={c.crystal[ang]}
                 width={64}
-                onChange={(v) => c.updCrystal({ [ang]: v })}
+                onChange={(v) => updateLattice({ [ang]: v })}
               />
             </span>
           ))}

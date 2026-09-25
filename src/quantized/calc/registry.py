@@ -93,12 +93,25 @@ _OPS: list[CalcOp] = [
     *_ops(
         "xray",
         xray,
-        ["bragg_d_spacing", "bragg_two_theta", "q_from_two_theta", "two_theta_from_q", "xray_calc"],
+        [
+            "bragg_d_spacing",
+            "bragg_two_theta",
+            "q_from_two_theta",
+            "two_theta_from_q",
+            "xray_calc",
+            "neutron_calc",
+        ],
     ),
     *_ops(
         "crystal",
         crystallography,
-        ["d_spacing", "cell_volume", "theoretical_density", "plane_spacings"],
+        [
+            "d_spacing",
+            "cell_volume",
+            "theoretical_density",
+            "plane_spacings",
+            "interplanar_angle",
+        ],
     ),
     *_ops("sld", sld_formula, ["sld_from_formula"]),
     *_ops(
@@ -112,11 +125,12 @@ _OPS: list[CalcOp] = [
             "current_density",
             "hall_single_point",
             "hall_analysis",
+            "van_der_pauw",
             "wiedemann_franz",
         ],
     ),
     *_ops("thermal", thermal, ["wiedemann_franz", "debye_temperature", "thermal_diffusivity"]),
-    *_ops("diffusion", diffusion, ["arrhenius", "diffusion_length", "fick_flux"]),
+    *_ops("diffusion", diffusion, ["arrhenius", "diffusion_length", "fick_flux", "c_profile"]),
     *_ops(
         "optics",
         optics,
@@ -156,7 +170,13 @@ _OPS: list[CalcOp] = [
     *_ops(
         "substrates",
         substrates,
-        ["get_substrate", "list_substrates", "lattice_mismatch", "substrate_table"],
+        [
+            "get_substrate",
+            "list_substrates",
+            "lattice_mismatch",
+            "critical_thickness",
+            "substrate_table",
+        ],
     ),
     *_ops(
         "semiconductor",
@@ -205,6 +225,8 @@ _OPS: list[CalcOp] = [
             "diffusion_length_thermal",
             "dose_from_current",
             "dose_to_concentration",
+            "sauerbrey",
+            "scherrer_grain_size",
         ],
     ),
     *_ops(

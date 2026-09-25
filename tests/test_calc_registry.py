@@ -20,29 +20,132 @@ from quantized.calc.registry import (
     list_calculators,
 )
 
-_EXPECTED_DOMAINS = {
-    "units",
-    "constants",
-    "xray",
-    "crystal",
-    "sld",
-    "electrical",
-    "thermal",
-    "diffusion",
-    "optics",
-    "vacuum",
-    "electrochemistry",
-    "substrates",
-    "semiconductor",
-    "superconductor",
-    "thinfilm",
-    "magnetic",
+_EXPECTED_OPERATIONS_BY_DOMAIN = {
+    "units": {"convert"},
+    "constants": {"list"},
+    "xray": {
+        "bragg_d_spacing",
+        "bragg_two_theta",
+        "q_from_two_theta",
+        "two_theta_from_q",
+        "xray_calc",
+        "neutron_calc",
+    },
+    "crystal": {
+        "d_spacing",
+        "cell_volume",
+        "theoretical_density",
+        "plane_spacings",
+        "interplanar_angle",
+    },
+    "sld": {"sld_from_formula"},
+    "electrical": {
+        "resistivity",
+        "sheet_resistance",
+        "conductivity",
+        "mobility",
+        "current_density",
+        "hall_single_point",
+        "hall_analysis",
+        "van_der_pauw",
+        "wiedemann_franz",
+    },
+    "thermal": {"wiedemann_franz", "debye_temperature", "thermal_diffusivity"},
+    "diffusion": {"arrhenius", "diffusion_length", "fick_flux", "c_profile"},
+    "optics": {
+        "fresnel_coefficients",
+        "critical_angle",
+        "brewster_angle",
+        "penetration_depth",
+        "skin_depth",
+        "dielectric_to_refractive",
+        "refractive_to_dielectric",
+    },
+    "vacuum": {
+        "mean_free_path",
+        "monolayer_time",
+        "knudsen_number",
+        "pump_down_time",
+        "sputter_yield",
+        "gas_flow",
+    },
+    "electrochemistry": {
+        "nernst_potential",
+        "butler_volmer",
+        "tafel_slope",
+        "ohmic_drop",
+        "double_layer_capacitance",
+    },
+    "substrates": {
+        "get_substrate",
+        "list_substrates",
+        "lattice_mismatch",
+        "critical_thickness",
+        "substrate_table",
+    },
+    "semiconductor": {
+        "intrinsic_carrier_conc",
+        "carrier_concentration",
+        "fermi_level",
+        "built_in_potential",
+        "depletion_width",
+        "debye_length",
+        "hall_coefficient",
+        "mobility_model",
+        "thermal_velocity",
+        "sheet_carrier_density",
+        "diffusion_coeff",
+        "diffusion_length",
+        "dos_effective_mass",
+        "material_presets",
+    },
+    "superconductor": {
+        "london_depth",
+        "coherence_length",
+        "gl_parameter",
+        "critical_fields",
+        "depairing_current",
+        "bcs_gap",
+        "material_presets",
+    },
+    "thinfilm": {
+        "deposition_rate",
+        "sputter_rate",
+        "kiessig_thickness",
+        "stoney_stress",
+        "projected_range",
+        "multilayer_thermal_conductivity",
+        "thermal_mismatch_strain",
+        "diffusion_length_thermal",
+        "dose_from_current",
+        "dose_to_concentration",
+        "sauerbrey",
+        "scherrer_grain_size",
+    },
+    "magnetic": {
+        "moment_convert",
+        "bohr_magneton_convert",
+        "demag_factor",
+        "demag_named",
+        "curie_weiss_moment",
+        "curie_weiss_fit",
+        "langevin",
+        "magnetization",
+        "domain_wall",
+        "moment_per_atom",
+    },
+}
+
+_EXPECTED_OPERATION_NAMES = {
+    f"{domain}.{operation}"
+    for domain, operations in _EXPECTED_OPERATIONS_BY_DOMAIN.items()
+    for operation in operations
 }
 
 
 def test_catalog_integrity() -> None:
     ops = list_calculators()
-    assert len(ops) == len(CALCULATORS) >= 80
+    assert len(ops) == len(CALCULATORS)
     # names unique + <domain>.<op> shaped; every op resolves + summarizes
     names = [o["name"] for o in ops]
     assert len(names) == len(set(names))
@@ -50,7 +153,8 @@ def test_catalog_integrity() -> None:
         assert "." in name and name.split(".", 1)[0] == op.domain
         assert callable(op.fn)
         assert op.summary, f"{name} has no docstring summary"
-    assert set(DOMAINS) == _EXPECTED_DOMAINS
+    assert set(names) == _EXPECTED_OPERATION_NAMES
+    assert set(DOMAINS) == set(_EXPECTED_OPERATIONS_BY_DOMAIN)
 
 
 def test_list_calculators_filters_by_domain() -> None:
@@ -61,6 +165,7 @@ def test_list_calculators_filters_by_domain() -> None:
         "xray.q_from_two_theta",
         "xray.two_theta_from_q",
         "xray.xray_calc",
+        "xray.neutron_calc",
     }
     assert all(o["domain"] == "xray" for o in xr)
     assert list_calculators(domain="nope") == []

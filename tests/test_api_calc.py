@@ -17,6 +17,8 @@ def test_catalog_lists_operations() -> None:
     names = {o["name"] for o in ops}
     assert "crystal.d_spacing" in names
     assert "superconductor.london_depth" in names
+    assert "thinfilm.scherrer_grain_size" in names
+    assert "substrates.critical_thickness" in names
     assert all({"name", "domain", "summary"} <= set(o) for o in ops)
 
 
@@ -61,6 +63,19 @@ def test_call_returns_result() -> None:
     body = resp.json()
     assert body["name"] == "crystal.d_spacing"
     assert body["result"]["d"] == pytest.approx(3.1355, abs=1e-3)
+
+
+def test_call_reaches_a_late_added_calculator() -> None:
+    """The generic surface stays in sync when a domain gains an operation."""
+    resp = client.post(
+        "/api/calc/call",
+        json={
+            "name": "thinfilm.scherrer_grain_size",
+            "params": {"fwhm_deg": 0.5, "wavelength": 1.5406, "two_theta_deg": 33.0},
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["result"]["D"] == pytest.approx(165.7, abs=0.1)
 
 
 def test_call_serializes_numpy_result() -> None:
