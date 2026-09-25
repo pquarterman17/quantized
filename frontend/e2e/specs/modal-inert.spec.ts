@@ -12,6 +12,12 @@
 // (`Accessibility.getFullAXTree`): Playwright's own ARIA snapshot is computed
 // from the DOM and is inert-BLIND (measured 2026-09-19: it still listed the
 // background "Tiles" button with Preferences open).
+//
+// ENGINES. Written against Chromium; also runs in Firefox and WebKit through
+// the opt-in cross-browser projects (playwright.config.ts, the
+// `e2e-xbrowser` CI job). Every assertion runs on all three engines EXCEPT
+// the accessibility-tree ones, which need CDP: `expectInAxTree` skips them
+// outside Chromium and says so in a `ax-tree-unmeasured` test annotation.
 
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
@@ -49,6 +55,25 @@ async function inAxTree(page: Page, name: RegExp, role?: string): Promise<boolea
   return nodes.some(
     (n) => !n.ignored && name.test(String(n.name?.value ?? "")) && (role === undefined || n.role?.value === role),
   );
+}
+
+/** Assert the accessibility-tree half, where it can be measured. CDP exists
+ *  only in Chromium; Firefox and WebKit expose no engine AX tree to
+ *  Playwright, and its DOM-computed ARIA snapshot is inert-blind (above). So
+ *  on those engines this assertion is NOT faked or approximated: it is
+ *  skipped, and the skip is recorded as a test annotation so the report says
+ *  so. The focus, Tab, pointer and inert-placement assertions around each
+ *  call run on every engine. */
+async function expectInAxTree(page: Page, name: RegExp, role: string | undefined, present: boolean): Promise<void> {
+  const engine = page.context().browser()?.browserType().name();
+  if (engine !== "chromium") {
+    const annotations = test.info().annotations;
+    if (!annotations.some((a) => a.type === "ax-tree-unmeasured")) {
+      annotations.push({ type: "ax-tree-unmeasured", description: `no CDP accessibility tree in ${engine}` });
+    }
+    return;
+  }
+  expect(await inAxTree(page, name, role)).toBe(present);
 }
 
 /** The accessible name of the dialog holding focus ("" when none does). */
@@ -94,7 +119,7 @@ test("an open dialog takes the background out of focus, Tab, pointer and the acc
   const tiles = page.getByRole("button", { name: "Tiles" });
   await expect(tiles).toBeVisible();
   expect(await canFocus(tiles)).toBe(true);
-  expect(await inAxTree(page, /^Tiles$/, "button")).toBe(true);
+  await expectInAxTree(page, /^Tiles$/, "button", true);
 
   await setPrefs(page, true);
   const prefs = page.getByRole("dialog", { name: "Preferences" });
@@ -117,14 +142,14 @@ test("an open dialog takes the background out of focus, Tab, pointer and the acc
   await expect(page.getByLabel("Library workspace")).toHaveCount(0);
   // Accessibility tree: the background control is gone, the status bar's
   // live region is not.
-  expect(await inAxTree(page, /^Tiles$/, "button")).toBe(false);
-  expect(await inAxTree(page, /^Background operations$/)).toBe(true);
+  await expectInAxTree(page, /^Tiles$/, "button", false);
+  await expectInAxTree(page, /^Background operations$/, undefined, true);
 
   await setPrefs(page, false);
   await expect(page.getByRole("dialog")).toHaveCount(0);
   expect(await page.locator("[inert]").count()).toBe(0);
   expect(await canFocus(tiles)).toBe(true);
-  expect(await inAxTree(page, /^Tiles$/, "button")).toBe(true);
+  await expectInAxTree(page, /^Tiles$/, "button", true);
 });
 
 test("a toast raised while a dialog is open is announced: not inert, and in the accessibility tree", async ({ page }) => {
@@ -145,10 +170,10 @@ test("a toast raised while a dialog is open is announced: not inert, and in the 
   const toastMsg = page.locator(".qzk-toast", { hasText: "removed 1 dataset" });
   await expect(toastMsg).toBeVisible();
   expect(await inertAncestor(toastMsg)).toBe(false);
-  expect(await inAxTree(page, /removed 1 dataset/)).toBe(true);
+  await expectInAxTree(page, /removed 1 dataset/, undefined, true);
   // ...while the background around it really is inert.
   expect(await inertAncestor(page.locator(".qzk-library"))).toBe(true);
-  expect(await inAxTree(page, /^Tiles$/, "button")).toBe(false);
+  await expectInAxTree(page, /^Tiles$/, "button", false);
 
   await setPrefs(page, false);
   expect(await page.locator("[inert]").count()).toBe(0);

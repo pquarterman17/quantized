@@ -9,6 +9,15 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Manual runs exist for the cross-browser job's full-suite probe (below).
+  # On push/pull_request `inputs.xbrowser_full` is empty, so both jobs behave
+  # exactly as on any other run.
+  workflow_dispatch:
+    inputs:
+      xbrowser_full:
+        description: "Cross-browser job: run EVERY spec on Firefox + WebKit, not just the dialog/modality/keyboard set"
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -48,5 +57,79 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
+          path: frontend/test-results
+          retention-days: 7
+
+  # Cross-browser coverage (PRIMARY_SOFTWARE_AUDIT_PLAN R12 / R16): the
+  # background `inert` modality in src/lib/modalInert.ts, and the Escape /
+  # focus / Tab behaviour around it, had been measured in Chromium only. The
+  # desktop app runs in pywebview, which is WKWebView (WebKit) on macOS, and
+  # the SPA is also opened in any browser. This job runs the engine-sensitive
+  # journeys on Firefox and WebKit: e2e/playwright.config.ts's XBROWSER_SPECS
+  # (modal-inert, workshop-escape-ladder, region-tool-escape,
+  # quick-figure-builder, library-tiles, details-keyboard, keyboard-only; 16
+  # tests per engine). A manual run with `xbrowser_full` runs every spec.
+  #
+  # A SEPARATE job from `e2e` above, which is left byte-for-byte as it was
+  # (Chromium only, no QZ_E2E_XBROWSER, so its project list is unchanged).
+  # Like the rest of this workflow it is NOT a required check. Before adding
+  # its two contexts to branch protection, give it a run history: Linux
+  # WebKit is WebKitGTK-family, not the macOS WKWebView the desktop ships, so
+  # a red leg here needs reading, not an automatic merge block.
+  e2e-xbrowser:
+    name: e2e cross-browser (${{ matrix.engine }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        engine: [firefox, webkit]
+    defaults:
+      run:
+        working-directory: frontend
+    env:
+      QZ_E2E_XBROWSER: "1"
+      QZ_E2E_XBROWSER_FULL: ${{ inputs.xbrowser_full && '1' || '' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.13"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+      - name: Sync backend deps (webServer runs `uv run qz`)
+        working-directory: .
+        run: uv sync --group dev
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend deps
+        run: npm ci
+      # Browser binaries are cached per engine AND per Playwright version
+      # (read from the lockfile, so a Playwright bump is a new key and never
+      # reuses a mismatched revision). OS libraries cannot be cached, so the
+      # install step always runs: on a hit it finds the binary present and
+      # only installs the system dependencies.
+      - name: Resolve Playwright version
+        id: pw
+        run: echo "version=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ matrix.engine }}-${{ steps.pw.outputs.version }}
+      - name: Install Playwright (${{ matrix.engine }})
+        run: npx playwright install --with-deps ${{ matrix.engine }}
+      - name: Build the SPA (what the backend serves)
+        run: npm run build
+      - name: Run the cross-browser journeys (${{ matrix.engine }})
+        run: npx playwright test --config=e2e/playwright.config.ts --project=${{ matrix.engine }}
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report-${{ matrix.engine }}
           path: frontend/test-results
           retention-days: 7
