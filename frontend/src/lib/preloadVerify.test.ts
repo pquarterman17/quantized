@@ -61,4 +61,24 @@ describe("preloadVerify (bundle diet slice 8 build gate)", () => {
       "assets/Panel.js -> assets/Deep.js: needs assets/Deep.js, not in its preload list",
     ]);
   });
+
+  it("checks an emptied list in the async-destructure shape (review round 2: it used to be skipped)", async () => {
+    // Vite's `h(async()=>{let{x:e}=await import("./X");...},[])` shape.
+    const chunks = build(["assets/Dialog.js", "assets/shared.js", "assets/dialog.css"]);
+    chunks["assets/Panel.js"] = {
+      code: 'import"./shared.js";const b=h(async()=>{let{x:e}=await import("./Deep.js");return{default:e}},[]);',
+      css: [],
+      isEntry: false,
+    };
+    const r = await verifyPreloadLists(chunks);
+    expect(r.sites).toBe(2);
+    expect(r.violations).toEqual(["assets/Panel.js -> assets/Deep.js: needs assets/Deep.js, not in its preload list"]);
+  });
+
+  it("fails an import() whose preload list it cannot find, rather than skipping it", async () => {
+    const chunks = build(["assets/Dialog.js", "assets/shared.js", "assets/dialog.css"]);
+    chunks["assets/Panel.js"] = { code: 'import"./shared.js";const b=import("./Deep.js");', css: [], isEntry: false };
+    const r = await verifyPreloadLists(chunks);
+    expect(r.violations).toEqual(["assets/Panel.js -> assets/Deep.js: import() with no recognisable preload list"]);
+  });
 });

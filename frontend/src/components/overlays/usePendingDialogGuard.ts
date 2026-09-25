@@ -14,12 +14,6 @@ import { useLayoutEffect } from "react";
 
 import { useEscapeSurface } from "../../lib/escapeStack";
 
-function swallowActivation(e: KeyboardEvent): void {
-  if (e.key !== "Enter" && e.key !== " ") return;
-  e.preventDefault();
-  e.stopPropagation();
-}
-
 export function usePendingDialogGuard(active: boolean, cancel: () => void): void {
   useEscapeSurface(
     "modal",
@@ -33,6 +27,14 @@ export function usePendingDialogGuard(active: boolean, cancel: () => void): void
   // the browser can deliver the next key.
   useLayoutEffect(() => {
     if (!active) return;
+    // One handler per guard: a shared module-level function would be deduped
+    // by addEventListener, so the first guard to unmount would strip the
+    // other's protection (review round 2: params + confirm pending at once).
+    const swallowActivation = (e: KeyboardEvent): void => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      e.stopPropagation();
+    };
     window.addEventListener("keydown", swallowActivation, true);
     window.addEventListener("keyup", swallowActivation, true);
     return () => {

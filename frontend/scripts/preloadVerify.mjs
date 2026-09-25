@@ -22,8 +22,11 @@ import { init, parse } from "es-module-lexer";
 
 const HEADER = /^const __vite__mapDeps=\(i,m=__vite__mapDeps,d=\(m\.f\|\|\(m\.f=(\[[^\]]*\])\)\)\)=>i\.map\(i=>d\[i\]\);\n/;
 const MARKER = /__vite__mapDeps\(\[([\d,]*)\]\)/g;
-// An emptied list right after the specifier: `import("./X.js"),[])`.
-const AFTER = /^[`'"]?\s*\)\s*,\s*(\[\])\s*\)/;
+// An emptied list: the preload helper's `,[])`. Vite wraps EVERY dynamic
+// import, in several shapes -- `h(()=>import("./X"),[])`, `.then(...)` chains
+// and `h(async()=>{let{x:e}=await import("./X");...},[])` -- so an import
+// with no marker takes the first `,[])` before the next import as its list.
+const EMPTY = /,\s*\[\]\s*\)/g;
 
 /**
  * @param {Record<string, { code: string; css: readonly string[]; isEntry: boolean }>} chunks
@@ -77,8 +80,8 @@ export async function verifyPreloadLists(chunks) {
     // Every list site: each `__vite__mapDeps([...])` marker belongs to the
     // last import() before it (the wrapper may be `.then(...)` or an async
     // arrow that destructures the import, so the marker is not always right
-    // after the specifier); plus the `import("./X"),[])` shape, which is how
-    // Vite writes a list that ended up empty.
+    // after the specifier); plus EMPTY, how Vite writes a list that ended up
+    // empty, in any wrapper shape.
     const lists = [];
     const claimed = new Set();
     for (const mk of code.matchAll(MARKER)) {
@@ -90,11 +93,19 @@ export async function verifyPreloadLists(chunks) {
       claimed.add(owner);
       lists.push({ target: owner.target, keys: mk[1] });
     }
-    for (const d of dyn) {
-      if (claimed.has(d)) continue;
-      const m = code.slice(d.end).match(AFTER);
-      if (m?.[1] !== undefined) lists.push({ target: d.target, keys: "" });
-    }
+    dyn.forEach((d, i) => {
+      if (claimed.has(d)) return;
+      EMPTY.lastIndex = d.end;
+      const m = EMPTY.exec(code);
+      if (m && m.index < (dyn[i + 1]?.start ?? code.length)) {
+        lists.push({ target: d.target, keys: "" });
+      } else {
+        // Never skip silently: an import() whose list this gate cannot find is
+        // an import() it is not checking (review round 2 -- 7 async-destructure
+        // sites used to be skipped, so an emptied list there passed).
+        violations.push(`${host} -> ${d.target}: import() with no recognisable preload list`);
+      }
+    });
     for (const { target, keys } of lists) {
       sites += 1;
       const listed = new Set(keys.split(",").filter(Boolean).map((k) => table[Number(k)]));

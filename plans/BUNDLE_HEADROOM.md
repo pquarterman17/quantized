@@ -1338,7 +1338,13 @@ every `vite build` (and so `npm run build` and CI) re-derives the static graph
 from the EMITTED code — not from Rolldown's `imports`, which the prune itself
 trusts — and fails on any list missing a chunk its target needs (target +
 closure, minus host closure, minus entry closure) or any CSS Vite's own walk
-would have listed. On the landed tree: 130 lists checked, 0 violations.
+would have listed. On the landed tree: 137 lists checked (137 wrapped
+import() sites), 0 violations. *Review round 2:* the first version found only
+130 -- it recognised an emptied list solely in the `import("./X"),[])` shape,
+so the 7 async-destructure sites (`h(async()=>{let{x:e}=await import(..)},[])`)
+were skipped, and emptying one of those passed the build (129 checked). Every
+dynamic import must now be matched to a list or it is itself a violation; the
+same sabotage (relinkPreview's list emptied) now fails the build.
 Sabotage: a prune that drops one extra entry fails `npm run build` with 96
 violations. `es-module-lexer` 2.3.2 became an exact devDependency (it was
 already in the lock via vitest). Pruned lists put their CSS last because Vite
