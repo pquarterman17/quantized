@@ -33,7 +33,7 @@ import { CANCELLED, openProject, pathState, readProject, type OpenProjectResult 
 import { baseName, parentDirectory } from "../lib/importEntry";
 import { hasWorkspaceContent, replaceConfirmMessage, replaceWorkspace } from "../lib/openWorkspaceReplace";
 import { currentViewport } from "../lib/parseWorkspaceFile";
-import { parseWorkspace } from "../lib/workspace";
+import { workspaceCodec } from "../lib/workspaceCodecLazy";
 import { useCommands, type Action } from "../store/commands";
 import { useRecentProjects } from "../store/recentProjects";
 import { toast } from "../store/toasts";
@@ -127,6 +127,8 @@ export async function openRecentProject(name: string, path: string): Promise<Reo
     // a real path, same as `lib/openWorkspaceCommand.ts`'s native branch —
     // `opened.path` (NOT the stale `path` argument, which a relocated/
     // renamed reopen may have superseded) is this workspace's own directory.
+    // Lazy codec chunk (lib/workspaceCodecLazy.ts): a load failure is toasted like a parse failure.
+    const { parseWorkspace } = await workspaceCodec();
     ws = parseWorkspace(opened.content, currentViewport(), {
       projectDir: parentDirectory(opened.path) || undefined,
     });

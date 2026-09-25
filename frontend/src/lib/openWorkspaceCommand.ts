@@ -10,7 +10,8 @@ import { baseName, parentDirectory } from "./importEntry";
 import { useWorkingPaths } from "../store/workingPaths";
 import type { StoreGet } from "./exportActive";
 import { currentViewport, parseWorkspaceFile } from "./parseWorkspaceFile";
-import { parseWorkspace, type LoadedWorkspace } from "./workspace";
+import type { LoadedWorkspace } from "./workspace";
+import { workspaceCodec } from "./workspaceCodecLazy";
 import { withOp } from "../store/pendingOps";
 import type { ProjectIdentity } from "../store/project";
 
@@ -99,8 +100,10 @@ export function openWorkspaceCommand(
         viaPicker();
         return;
       }
+      // The codec is a lazy chunk (lib/workspaceCodecLazy.ts); a load failure
+      // lands in the same "open failed" status as a parse failure.
       void withOp(label, () =>
-        Promise.resolve(
+        workspaceCodec().then(({ parseWorkspace }) =>
           parseWorkspace(native.content, currentViewport(), {
             projectDir: parentDirectory(native.path) || undefined,
           }),

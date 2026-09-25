@@ -23,12 +23,12 @@ import {
   type Generation,
 } from "./autosaveGenerations";
 import { defaultBackend, LEGACY_KEY, type AutosaveBackend } from "./autosaveBackend";
-import {
-  parseWorkspace,
-  serializeWorkspace,
-  type LoadedWorkspace,
-  type WorkspaceState,
-} from "./workspace";
+import type { LoadedWorkspace, WorkspaceState } from "./workspace";
+import { workspaceCodec } from "./workspaceCodecLazy";
+
+/** The lazily loaded `.dwk` codec (bundle headroom slice 9): only its parser
+ *  is needed here, and only once there is something to validate. */
+type ParseWorkspace = Awaited<ReturnType<typeof workspaceCodec>>["parseWorkspace"];
 
 /** Total retained bytes across all generations. Generous next to localStorage's
  *  ~5 MB because IndexedDB can take it, but still bounded — #32 wants recovery
@@ -53,7 +53,7 @@ export function autosaveBackendKind(): AutosaveBackend["kind"] {
   return backend.kind;
 }
 
-function isRestorable(text: string): boolean {
+function isRestorable(parseWorkspace: ParseWorkspace, text: string): boolean {
   try {
     return parseWorkspace(text).datasets.length > 0;
   } catch {
@@ -73,6 +73,9 @@ export async function saveAutosave(ws: WorkspaceState, now = Date.now()): Promis
       health = { savedAt: health.savedAt, error: null, count: 0 };
       return true;
     }
+    // Inside the try: a codec chunk that will not load is reported like any
+    // other failed save (persistent health warning), and the next save retries.
+    const { serializeWorkspace } = await workspaceCodec();
     const existing = await backend.read();
     // Three bounds, applied in sequence, each preserving the newest
     // generation on its own axis (count / age / size) — see
@@ -106,9 +109,17 @@ export async function loadAutosave(): Promise<LoadedWorkspace | null> {
 export async function loadAutosaveGeneration(): Promise<
   { workspace: LoadedWorkspace; at: number } | null
 > {
+  // The codec chunk is fetched alongside the storage read, and awaited OUTSIDE
+  // the try below: a chunk that will not load must REJECT, never read as
+  // "nothing to restore" — that would show an empty library over a perfectly
+  // good autosave. The caller (useWorkspaceAutosave) reports the rejection.
+  const [codec, read] = await Promise.allSettled([workspaceCodec(), (async () => backend.read())()]);
+  if (codec.status === "rejected") throw codec.reason;
+  const { parseWorkspace } = codec.value;
   try {
-    const generations = await readAllWithMigration();
-    const pick = pickRestorable(generations, isRestorable);
+    if (read.status === "rejected") return null;
+    const generations = await withLegacyGeneration(read.value, parseWorkspace);
+    const pick = pickRestorable(generations, (text) => isRestorable(parseWorkspace, text));
     health = { ...health, count: generations.length };
     return pick ? { workspace: parseWorkspace(pick.text), at: pick.at } : null;
   } catch {
@@ -120,7 +131,8 @@ export async function loadAutosaveGeneration(): Promise<
  *  recovery picker, so the UI can show which recovery points exist. */
 export async function listAutosaveGenerations(): Promise<Generation[]> {
   try {
-    return (await readAllWithMigration()).sort((a, b) => b.at - a.at);
+    const { parseWorkspace } = await workspaceCodec();
+    return (await withLegacyGeneration(await backend.read(), parseWorkspace)).sort((a, b) => b.at - a.at);
   } catch {
     return [];
   }
@@ -130,14 +142,15 @@ export async function autosaveBytes(): Promise<number> {
   return totalSize(await listAutosaveGenerations());
 }
 
-/** Read generations, importing the pre-#32 localStorage slot the first time.
+/** Import the pre-#32 localStorage slot the first time, given the generations
+ *  just read (split from the read itself so that read can overlap the codec
+ *  fetch — the legacy slot is validated with the lazily loaded parser).
  *
  *  Without this, upgrading would strand whatever was autosaved before the
  *  switch — a data-loss bug introduced BY the data-loss fix. Migration only
  *  READS the legacy key: it is copied, never deleted, so a downgrade still
  *  finds it. */
-async function readAllWithMigration(): Promise<Generation[]> {
-  const generations = await backend.read();
+async function withLegacyGeneration(generations: Generation[], parseWorkspace: ParseWorkspace): Promise<Generation[]> {
   if (generations.length > 0 || backend.kind === "localstorage") return generations;
   let legacy: string | null = null;
   try {
@@ -145,7 +158,7 @@ async function readAllWithMigration(): Promise<Generation[]> {
   } catch {
     return generations; // storage unavailable — nothing to migrate
   }
-  if (!legacy || !isRestorable(legacy)) return generations;
+  if (!legacy || !isRestorable(parseWorkspace, legacy)) return generations;
   // `at: 0` marks it the oldest possible snapshot; any real save outranks it.
   return [{ at: 0, text: legacy }];
 }

@@ -1,44 +1,40 @@
-// Save-workspace-to-file (.dwk export) — extracted from store/useApp.ts
-// (MAIN_PLAN #16, Append workspace) under the store-size ratchet
-// (architecture.test.ts's STORE_PINS): a few lines were needed for the new
-// `appendWorkspace` action, and this already-cohesive #38 "save" chunk was
-// the smallest self-contained piece available to offset them. Same get-only
-// DI as windows.ts/history.ts's `SliceSet`/`SliceGet` — only a TYPE import
-// crosses back into useApp.ts, so there's no runtime import cycle.
+// Save-workspace-to-file (.dwk export) — extracted from store/useApp.ts (MAIN_PLAN #16, Append
+// workspace) under the store-size ratchet (architecture.test.ts's STORE_PINS): a few lines were
+// needed for the new `appendWorkspace` action, and this already-cohesive #38 "save" chunk was the
+// smallest self-contained piece available to offset them. Same get-only DI as windows.ts/history.ts's
+// `SliceGet` — only a TYPE import crosses back into useApp.ts, so no runtime import cycle.
 //
-// A .dwk must be self-contained (#38): resolve every pending lazy book
-// FIRST — an exported file never references a book by a path/token that may
-// not exist on another machine or after a server restart.
+// A .dwk must be self-contained (#38): resolve every pending lazy book FIRST — an exported file
+// never references a book by a path/token that may not exist on another machine or after a server
+// restart.
 //
-// P1.1 C3: "Save workspace" now tries a NATIVE Save As first — a real dialog,
-// a real path, a direct in-process write (desktopBridge.ts's
-// `pickSaveDestination` + `saveProjectTo` — split from the original combined
-// `saveProjectAs` under P2's adversarial-review fix, below, so a lock check
-// can sit between the dialog and the write) — and falls back to the
-// pre-existing `saveBlob` download exactly when there is no usable bridge OR
-// the write itself failed after a real pick ("no usable bridge" is EVERY
-// jsdom test environment and every browser tab). A `CANCELLED` result is a
-// deliberate no-op: the user backed out of the native dialog, and falling
-// back to a browser download they never asked for would be worse than doing
-// nothing. Only a genuine native save (a real returned path) records a
-// Recent Projects entry — see lib/recentProjects.ts's module doc for why a
-// browser download, which has no path, never does.
+// Bundle headroom slice 9: this module is fetched on the first Save (store/workspaceIOLazy.ts), the
+// serializer on top of it (lib/workspaceCodecLazy.ts), and `appendWorkspace`'s synchronous body
+// (`runAppendWorkspace`) moved to store/workspaceHydration.ts so it stays eager.
+//
+// P1.1 C3: "Save workspace" now tries a NATIVE Save As first — a real dialog, a real path, a direct
+// in-process write (desktopBridge.ts's `pickSaveDestination` + `saveProjectTo` — split from the
+// original combined `saveProjectAs` under P2's adversarial-review fix, below, so a lock check can sit
+// between the dialog and the write) — and falls back to the pre-existing `saveBlob` download exactly
+// when there is no usable bridge OR the write itself failed after a real pick ("no usable bridge" is
+// EVERY jsdom test environment and every browser tab). A `CANCELLED` result is a deliberate no-op:
+// the user backed out of the native dialog, and falling back to a browser download they never asked
+// for would be worse than doing nothing. Only a genuine native save (a real returned path) records a
+// Recent Projects entry — see lib/recentProjects.ts's module doc for why a browser download, which
+// has no path, never does.
 
 import { CANCELLED, hasDesktopShell, isSaveRefused, LOCK_LOST, pathState, pickSaveDestination, saveErrorStatus, saveProjectTo, type SaveProjectResult } from "../lib/desktopBridge";
 import { saveBlob } from "../lib/download";
 import { baseName, parentDirectory } from "../lib/importEntry";
 import { canRelease, classifyLock, type LockRecord, type LockStatus } from "../lib/lockState";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
-import { mergeWorkspace, serializeWorkspace, type LoadedWorkspace } from "../lib/workspace";
+import { workspaceCodecOrReport } from "../lib/workspaceCodecLazy";
 import { statusFromRefusal, useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
-import { notifyMigrationWarnings, toast } from "./toasts";
+import { toast } from "./toasts";
 import { useWorkingPaths } from "./workingPaths";
-import { nextDatasetId } from "./idSeq";
 import type { AppState } from "./useApp";
-import { nextWorkbookId } from "./workbookIds";
 
-type SliceSet = (partial: Partial<AppState> | ((state: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
 /** Shared "saved workspace [to PATH] — N dataset(s)" status/toast text —
@@ -115,8 +111,8 @@ async function prepareWorkspaceState(get: SliceGet): Promise<AppState | null> {
  *  comment for why. */
 async function serializeCurrentWorkspace(get: SliceGet, projectDir?: string): Promise<string | null> {
   const state = await prepareWorkspaceState(get);
-  if (state === null) return null;
-  return serializeWorkspace(state, projectDir !== undefined ? { projectDir } : undefined);
+  const codec = state && (await workspaceCodecOrReport("save", get().setStatus));
+  return state && codec ? codec.serializeWorkspace(state, projectDir !== undefined ? { projectDir } : undefined) : null;
 }
 
 /** I2 (P0-3/P1-1): acquire the lock for a Save-As DESTINATION before ever
@@ -180,7 +176,10 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   // is only writable as `kind: "bundle"` relative to WHERE this save is
   // actually landing, which isn't known yet at this line).
   const state = await prepareWorkspaceState(get);
-  if (state === null) return;
+  // The `.dwk` writer is a lazy chunk (lib/workspaceCodecLazy.ts): loaded before the dialog, so a
+  // load failure is reported (status + toast) before the user picks anything.
+  const codec = state && (await workspaceCodecOrReport("save", get().setStatus));
+  if (state === null || codec === null) return;
   const all = get().datasets; // unaffected by serializing — safe to re-read for the count
 
   // P1.1 C3 + P2 (adversarial review, 2026-08-19): the dialog pick and the
@@ -219,7 +218,7 @@ export async function runSaveWorkspaceToFile(get: SliceGet): Promise<void> {
   // check decides per-dataset, not this call); no destination (no usable
   // bridge — every browser tab) means the browser-download fallback below,
   // unchanged, always absolute.
-  const content = serializeWorkspace(
+  const content = codec.serializeWorkspace(
     state,
     destination !== null ? { projectDir: parentDirectory(destination) || undefined } : undefined,
   );
@@ -459,40 +458,4 @@ export async function runSaveWorkspace(get: SliceGet): Promise<void> {
   const msg = savedMsg(get().datasets.length, result.path);
   get().setStatus(msg);
   toast(msg, "ok");
-}
-
-/** Append Project (MAIN_PLAN #16, workbook transfer LIBRARY_WORKBOOK_UX_PLAN
- *  PR A4): join a freshly-parsed .dwk's flat dataset list AND its referenced
- *  workbooks into the currently loaded library. See
- *  lib/workspaceMerge.mergeWorkspace for the full reference-field matrix of
- *  what is (and deliberately isn't) merged in. `recordHistory` runs BEFORE
- *  the mutation, and `workbooks` is already part of `HistorySnapshot`
- *  (history.ts), so undo restores the pre-append workbook list for free —
- *  same as it already does for `datasets`. */
-export function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorkspace): void {
-  const n = ws.datasets.length;
-  if (n === 0) {
-    toast("workspace has no datasets to append", "danger");
-    return;
-  }
-  get().recordHistory("append workspace");
-  const currentWorkbookIds = new Set(get().workbooks.map((w) => w.id));
-  const { datasets, renamed, workbooks } = mergeWorkspace(
-    get().datasets,
-    ws,
-    nextDatasetId,
-    currentWorkbookIds,
-    nextWorkbookId,
-  );
-  const wbNote =
-    workbooks.length > 0
-      ? ` — ${workbooks.length} workbook${workbooks.length === 1 ? "" : "s"} landed at Library root`
-      : "";
-  const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)${wbNote}`;
-  set({ datasets, workbooks: [...get().workbooks, ...workbooks], status: msg });
-  toast(msg, "ok");
-  // BUG-010: `ws.migrationWarnings` (produced when the appended .dwk was
-  // parsed) has no status-line fold here at all — this never routes through
-  // loadWorkspace — so the toast is its only surface.
-  notifyMigrationWarnings(ws.migrationWarnings);
 }

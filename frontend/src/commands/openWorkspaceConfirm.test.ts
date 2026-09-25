@@ -43,6 +43,9 @@ async function pickWorkspaceFile(json: string) {
   const cb = vi.mocked(openFilePicker).mock.calls.at(-1)?.[0];
   if (!cb) throw new Error("openFilePicker was never called");
   cb([{ text: () => Promise.resolve(json) } as unknown as File]);
+  // The no-Worker parse fallback loads the `.dwk` parse core with a dynamic
+  // import (bundle headroom slice 9) — settle it before counting ticks.
+  await vi.dynamicImportSettled();
   for (let i = 0; i < 6; i++) await Promise.resolve();
 }
 

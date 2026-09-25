@@ -14,7 +14,7 @@
 // Composed into the ONE useApp store instance exactly like store/panels.ts
 // (read store/windows.ts's header first for the general slice pattern).
 
-import { type ToolWindowLayout } from "../lib/toolwindow";
+import type { ToolWindowLayout } from "../lib/toolwindow";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;

@@ -16,13 +16,12 @@
 // CURRENT library; `activeId`, `plotWindows`, every view-state field, and
 // the existing datasets are left completely alone).
 //
-// `appendWorkspace` itself is a ONE-LINE delegate to `runAppendWorkspace`
-// (store/workspaceIO.ts) — that function is NOT moving here. workspaceIO.ts
-// is already its own module, below the store-size pin, and owns the
-// save-workspace half of the same MAIN_PLAN #16 work; splitting its
-// `runAppendWorkspace` out again into a THIRD file would cost an import for
-// no cohesion gain. This module just carries the action's declaration and
-// its one-line body, same as useApp.ts did before.
+// `appendWorkspace` itself is a ONE-LINE delegate to `runAppendWorkspace`,
+// at the bottom of this module. It lived in store/workspaceIO.ts until bundle
+// headroom slice 9 made that module (the save half of the same MAIN_PLAN #16
+// work) a lazy chunk: `appendWorkspace` is synchronous and keeps its
+// synchronous contract, so its body moved here, next to `loadWorkspace` —
+// its additive opposite — rather than behind the save chunk's fetch.
 //
 // WHAT IT DOES NOT OWN, deliberately:
 //   - the FIELDS themselves. They stay declared (and initialized) on
@@ -31,7 +30,7 @@
 //     replace has to), but plenty of OTHER actions read and write them too.
 //   - `saveWorkspaceToFile`/`saveWorkspace` (the write half of MAIN_PLAN
 //     #16/#38) — those stay in useApp.ts, thin delegates to
-//     store/workspaceIO.ts exactly like `appendWorkspace`'s delegate here.
+//     store/workspaceIO.ts (lazily, via store/workspaceIOLazy.ts).
 //   - the actual `.dwk` (de)serialize logic (`lib/workspace.ts` and its
 //     `workspaceDatasetParse.ts`/`workspaceSerialize.ts`/`workspaceMerge.ts`
 //     siblings) and the folder-migration primitive (`lib/foldertree.ts`).
@@ -61,11 +60,13 @@ import { sanitizeTechniqueViewMemory } from "../lib/techniqueViewMemory";
 import { nextStageTab } from "../lib/stagetab";
 import type { LoadedWorkspace, WorkspaceState } from "../lib/workspace";
 import { sanitizeDocumentBackedPlotWindows } from "../lib/windowDocumentPersistence";
-import { nextFolderId } from "./idSeq";
+import { mergeWorkspace } from "../lib/workspaceMerge";
+import { nextDatasetId, nextFolderId } from "./idSeq";
 import { loadedMapViews } from "./rois"; // loadedMapViews: P2.8, see store/mapView.ts
+import { notifyMigrationWarnings, toast } from "./toasts";
 import type { AppState } from "./useApp";
 import { focusTransientReset, mainWindow } from "./windows";
-import { runAppendWorkspace } from "./workspaceIO";
+import { nextWorkbookId } from "./workbookIds";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -262,4 +263,40 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
       }),
     appendWorkspace: (ws) => runAppendWorkspace(set, get, ws),
   };
+}
+
+/** Append Project (MAIN_PLAN #16, workbook transfer LIBRARY_WORKBOOK_UX_PLAN
+ *  PR A4): join a freshly-parsed .dwk's flat dataset list AND its referenced
+ *  workbooks into the currently loaded library. See
+ *  lib/workspaceMerge.mergeWorkspace for the full reference-field matrix of
+ *  what is (and deliberately isn't) merged in. `recordHistory` runs BEFORE
+ *  the mutation, and `workbooks` is already part of `HistorySnapshot`
+ *  (history.ts), so undo restores the pre-append workbook list for free —
+ *  same as it already does for `datasets`. */
+function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorkspace): void {
+  const n = ws.datasets.length;
+  if (n === 0) {
+    toast("workspace has no datasets to append", "danger");
+    return;
+  }
+  get().recordHistory("append workspace");
+  const currentWorkbookIds = new Set(get().workbooks.map((w) => w.id));
+  const { datasets, renamed, workbooks } = mergeWorkspace(
+    get().datasets,
+    ws,
+    nextDatasetId,
+    currentWorkbookIds,
+    nextWorkbookId,
+  );
+  const wbNote =
+    workbooks.length > 0
+      ? ` — ${workbooks.length} workbook${workbooks.length === 1 ? "" : "s"} landed at Library root`
+      : "";
+  const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)${wbNote}`;
+  set({ datasets, workbooks: [...get().workbooks, ...workbooks], status: msg });
+  toast(msg, "ok");
+  // BUG-010: `ws.migrationWarnings` (produced when the appended .dwk was
+  // parsed) has no status-line fold here at all — this never routes through
+  // loadWorkspace — so the toast is its only surface.
+  notifyMigrationWarnings(ws.migrationWarnings);
 }

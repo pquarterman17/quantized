@@ -2795,6 +2795,27 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/components/overlays/ParamDialog.tsx",
       call: 'import("./ParamDialogBody")',
     },
+    // ── SLICE 9 (2026-09-25, plans/BUNDLE_HEADROOM.md) ────────────────────
+    // Funds the React 19.3 bump. Two store slices whose every action was
+    // ALREADY async, composed into `useApp.ts` through thin eager loaders
+    // that keep the slice types identical: Save / Save As
+    // (`store/workspaceIO.ts`, via `store/workspaceIOLazy.ts`; the
+    // synchronous `appendWorkspace` body moved to workspaceHydration.ts) and
+    // the Origin graph-recovery fallbacks (`store/originFallback.ts`, via
+    // `store/originFallbackLazy.ts`). The slice's other three seams —
+    // the `.dwk` codec, its parse core, and single-dataset re-import — have
+    // legitimate static importers inside other lazy chunks, so they are held
+    // by DRAGGED_OUT's reachability arm below instead of this corpus-wide one.
+    {
+      module: "/store/workspaceIO.ts",
+      loader: "/store/workspaceIOLazy.ts",
+      call: 'import("./workspaceIO")',
+    },
+    {
+      module: "/store/originFallback.ts",
+      loader: "/store/originFallbackLazy.ts",
+      call: 'import("./originFallback")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -3056,6 +3077,33 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/components/overlays/ParamFields.tsx",
     "/lib/params.ts",
     "/lib/scrollOutFocus.ts",
+    // SLICE 9 (2026-09-25): three seams that cannot be SEAMS entries because
+    // other LAZY modules import them statically (`lib/workbookTransfer.ts`
+    // and the parse worker import the codec / parse core;
+    // `store/reimportAllRun.ts` imports `store/reimport.ts`), plus every
+    // module only they reached. Loaders: `lib/workspaceCodecLazy.ts`,
+    // `lib/parseWorkspaceFile.ts`'s no-Worker fallback, `store/reimportLazy.ts`.
+    // Replayed over the build's own module graph: 407 -> 390 eager modules
+    // (these 19 plus the two SEAMS modules above out, the four loaders in).
+    "/lib/workspace.ts",
+    "/lib/workspaceParseCore.ts",
+    "/lib/workspaceDatasetParse.ts",
+    "/lib/workspaceSerialize.ts",
+    "/lib/workspaceOrigin.ts",
+    "/lib/workspaceLibraryPanel.ts",
+    "/lib/workspaceComputedColumns.ts",
+    "/lib/plotRecipeIO.ts",
+    "/lib/plotRecipeSchema.ts",
+    "/lib/pageDocument.ts",
+    "/lib/figurepage.ts",
+    "/lib/peakTable.ts",
+    "/lib/toolwindow.ts",
+    "/lib/collections.ts",
+    "/lib/librarySearch.ts",
+    "/store/reimport.ts",
+    "/lib/reimport.ts",
+    "/lib/dependencyImpact.ts",
+    "/lib/originSources.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
