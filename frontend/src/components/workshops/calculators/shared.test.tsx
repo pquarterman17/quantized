@@ -3,11 +3,16 @@
 // the races with hand-resolved deferred promises — completion order is under
 // test control, never timing luck (docs/testing.md evidence standard).
 
-import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { act, fireEvent, render, renderHook, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { copyText } from "../../../lib/clipboard";
 import { useCalcHistory } from "../../../store/calcHistory";
-import { useCard } from "./shared";
+import { type CardSuccess, resultLine, useCard } from "./shared";
+
+vi.mock("../../../lib/clipboard", () => ({ copyText: vi.fn() }));
+
+const success = (text: string, copyValue = text): CardSuccess => ({ text, copyValue });
 
 /** A promise whose resolve/reject the test holds. */
 function deferred<T>() {
@@ -23,13 +28,38 @@ function deferred<T>() {
 beforeEach(() => {
   useCalcHistory.setState({ history: [], favorites: [], seq: 0 });
   localStorage.clear();
+  vi.mocked(copyText).mockReset();
+  vi.mocked(copyText).mockResolvedValue(true);
 });
 
 describe("useCard — request provenance", () => {
+  it("keeps the full-precision clipboard value separate from rounded display text", async () => {
+    const { result } = renderHook(() => useCard("Test"));
+    await act(async () => {
+      await result.current.run("calc", "x=1", () =>
+        Promise.resolve(success("D = 1.235 nm", "D = 1.23456789012345 nm")),
+      );
+    });
+
+    expect(result.current.result).toEqual({
+      text: "D = 1.235 nm",
+      copyValue: "D = 1.23456789012345 nm",
+    });
+    expect(useCalcHistory.getState().history[0].summary).toBe("D = 1.235 nm");
+  });
+
+  it("copies the exact value rather than the rounded display text", () => {
+    render(resultLine(success("D = 1.235 nm", "D = 1.23456789012345 nm")));
+
+    fireEvent.click(screen.getByRole("button", { name: "copy result" }));
+
+    expect(copyText).toHaveBeenCalledWith("D = 1.23456789012345 nm");
+  });
+
   it("an older in-flight request never overwrites a newer result (out-of-order completion)", async () => {
     const { result } = renderHook(() => useCard("Test"));
-    const slow = deferred<string>();
-    const fast = deferred<string>();
+    const slow = deferred<CardSuccess>();
+    const fast = deferred<CardSuccess>();
 
     let p1: Promise<void>, p2: Promise<void>;
     act(() => {
@@ -37,25 +67,25 @@ describe("useCard — request provenance", () => {
       p2 = result.current.run("fast", "x=2", () => fast.promise);
     });
     await act(async () => {
-      fast.resolve("NEW");
+      fast.resolve(success("NEW"));
       await p2;
     });
-    expect(result.current.result).toEqual({ text: "NEW" });
+    expect(result.current.result).toEqual(success("NEW"));
 
     await act(async () => {
-      slow.resolve("STALE"); // ...completes last
+      slow.resolve(success("STALE")); // ...completes last
       await p1;
     });
     // The stale completion is dropped outright — display AND history.
-    expect(result.current.result).toEqual({ text: "NEW" });
+    expect(result.current.result).toEqual(success("NEW"));
     const summaries = useCalcHistory.getState().history.map((e) => e.summary);
     expect(summaries).toEqual(["NEW"]);
   });
 
   it("a stale ERROR cannot clobber a newer result either", async () => {
     const { result } = renderHook(() => useCard("Test"));
-    const failing = deferred<string>();
-    const ok = deferred<string>();
+    const failing = deferred<CardSuccess>();
+    const ok = deferred<CardSuccess>();
 
     let p1: Promise<void>, p2: Promise<void>;
     act(() => {
@@ -63,20 +93,20 @@ describe("useCard — request provenance", () => {
       p2 = result.current.run("ok", "x=2", () => ok.promise);
     });
     await act(async () => {
-      ok.resolve("GOOD");
+      ok.resolve(success("GOOD"));
       await p2;
       failing.reject(new Error("boom"));
       await p1;
     });
-    expect(result.current.result).toEqual({ text: "GOOD" });
+    expect(result.current.result).toEqual(success("GOOD"));
   });
 
   it("touch() clears the displayed result immediately", async () => {
     const { result } = renderHook(() => useCard("Test"));
     await act(async () => {
-      await result.current.run("calc", "x=1", () => Promise.resolve("R"));
+      await result.current.run("calc", "x=1", () => Promise.resolve(success("R")));
     });
-    expect(result.current.result).toEqual({ text: "R" });
+    expect(result.current.result).toEqual(success("R"));
 
     act(() => result.current.touch());
     expect(result.current.result).toBeNull();
@@ -84,7 +114,7 @@ describe("useCard — request provenance", () => {
 
   it("touch() disowns a pending request issued for the old inputs", async () => {
     const { result } = renderHook(() => useCard("Test"));
-    const d = deferred<string>();
+    const d = deferred<CardSuccess>();
 
     let p: Promise<void>;
     act(() => {
@@ -92,7 +122,7 @@ describe("useCard — request provenance", () => {
       result.current.touch(); // the user edited an input while pending
     });
     await act(async () => {
-      d.resolve("STALE");
+      d.resolve(success("STALE"));
       await p;
     });
     // Neither displayed nor recorded — it answered a question no longer asked.
@@ -102,7 +132,7 @@ describe("useCard — request provenance", () => {
 
   it("touch() disowns a pending request's ERROR too", async () => {
     const { result } = renderHook(() => useCard("Test"));
-    const d = deferred<string>();
+    const d = deferred<CardSuccess>();
 
     let p: Promise<void>;
     act(() => {
@@ -119,8 +149,8 @@ describe("useCard — request provenance", () => {
   it("history is written only by the completion that owns the display", async () => {
     const { result } = renderHook(() => useCard("Dom"));
     await act(async () => {
-      await result.current.run("first", "x=1", () => Promise.resolve("A"));
-      await result.current.run("second", "x=2", () => Promise.resolve("B"));
+      await result.current.run("first", "x=1", () => Promise.resolve(success("A")));
+      await result.current.run("second", "x=2", () => Promise.resolve(success("B")));
     });
     const h = useCalcHistory.getState().history;
     expect(h.map((e) => e.summary)).toEqual(["B", "A"]); // newest-first, both owned

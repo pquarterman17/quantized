@@ -15,12 +15,12 @@ import { IconButton } from "../../primitives/IconButton";
 import { NumberField } from "../../primitives/NumberField";
 import { Button } from "../../primitives";
 
-/** A result string plus the exact value copy-to-clipboard should write —
- *  usually the raw JS number's full-precision `String(...)`, not the
- *  rounded `fmtNum` display text (item 5, calculator audit). Falls back to
- *  `text` when omitted (most existing `makeCardRunner` cards, whose result
- *  is only ever built as an already-formatted string). */
-export type CardResult = { text: string; err?: boolean; copyValue?: string } | null;
+/** A successful result carries separate display and clipboard strings so
+ *  presentation rounding can never silently discard numeric precision. */
+export type CardSuccess = { text: string; copyValue: string };
+export type CardResult = CardSuccess | { text: string; err: true } | null;
+
+export const cardResult = (text: string, copyValue: string): CardSuccess => ({ text, copyValue });
 
 /** A titled group of inputs + a result line, mirroring the MATLAB cards. */
 export function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -154,7 +154,7 @@ export function useCard(domain: string) {
     async (
       label: string,
       inputs: string,
-      fn: (isCurrent: () => boolean) => Promise<string>,
+      fn: (isCurrent: () => boolean) => Promise<CardSuccess>,
     ): Promise<void> => {
       const id = ++seq.current;
       // For fns with side-effects beyond the returned text (e.g. chaining a
@@ -162,10 +162,10 @@ export function useCard(domain: string) {
       // disowned completion can't overwrite state the user has since edited.
       const isCurrent = (): boolean => seq.current === id;
       try {
-        const text = await fn(isCurrent);
+        const success = await fn(isCurrent);
         if (seq.current !== id) return; // superseded — a newer run/touch owns this card
-        setResult({ text });
-        useCalcHistory.getState().record({ domain, label, summary: text, inputs });
+        setResult(success);
+        useCalcHistory.getState().record({ domain, label, summary: success.text, inputs });
       } catch (e) {
         if (seq.current !== id) return;
         setResult({ text: e instanceof Error ? e.message : "calculation failed", err: true });
@@ -212,12 +212,15 @@ export function CopyButton({ value, label = "result" }: { value: string; label?:
   );
 }
 
-export const resultLine = (r: CardResult) =>
-  r && (
-    <div style={r.err ? ERR : RESULT}>
+export const resultLine = (r: CardResult) => {
+  if (!r) return null;
+  const isError = "err" in r;
+  return (
+    <div style={isError ? ERR : RESULT}>
       <span>{r.text}</span>
-      {!r.err && <CopyButton value={r.copyValue ?? r.text} />}
+      {!isError && <CopyButton value={r.copyValue} />}
     </div>
   );
+};
 
 export { Button, fmtNum };

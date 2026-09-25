@@ -11,6 +11,7 @@ import { scBcsGap, scCoherenceLength, scCriticalFields, scDepairingCurrent, scGl
 import {
   Button,
   Card,
+  cardResult,
   Field,
   ROW,
   fmtNum,
@@ -36,6 +37,7 @@ const PRESETS: Record<
 const MATERIALS = Object.keys(PRESETS);
 
 const fmtOe = (v: number) => (Number.isNaN(v) ? "—" : `${fmtNum(v)} Oe`);
+const copyOe = (v: number) => (Number.isNaN(v) ? "—" : `${v} Oe`);
 
 export default function SuperconductorTab() {
   // Card 1 — BCS gap.
@@ -121,9 +123,10 @@ export default function SuperconductorTab() {
             onClick={() =>
               void c1.run("BCS gap", `T_c=${gTc} K, T=${gT} K`, async () => {
                 const r = await scBcsGap(Number(gTc), Number(gT));
-                return `Δ₀ = ${fmtNum(r.delta0)} meV · Δ(T) = ${fmtNum(
-                  r.deltaT,
-                )} meV · 2Δ₀/k_BT_c = ${fmtNum(r.ratio)}`;
+                return cardResult(
+                  `Δ₀ = ${fmtNum(r.delta0)} meV · Δ(T) = ${fmtNum(r.deltaT)} meV · 2Δ₀/k_BT_c = ${fmtNum(r.ratio)}`,
+                  `Δ₀ = ${r.delta0} meV · Δ(T) = ${r.deltaT} meV · 2Δ₀/k_BT_c = ${r.ratio}`,
+                );
               })
             }
           >
@@ -156,7 +159,10 @@ export default function SuperconductorTab() {
                 `material=${lMat}, λ₀=${lLam0} nm, T_c=${lTc} K, T=${lT} K`,
                 async () => {
                 const r = await scLondonDepth(Number(lLam0), Number(lT), Number(lTc));
-                return `λ(${fmtNum(r.T)} K) = ${fmtNum(r.lambda)} nm`;
+                return cardResult(
+                  `λ(${fmtNum(r.T)} K) = ${fmtNum(r.lambda)} nm`,
+                  `λ(${r.T} K) = ${r.lambda} nm`,
+                );
                 },
               )
             }
@@ -190,7 +196,10 @@ export default function SuperconductorTab() {
                 `material=${xMat}, ξ₀=${xXi0} nm, T_c=${xTc} K, T=${xT} K`,
                 async () => {
                 const r = await scCoherenceLength(Number(xXi0), Number(xT), Number(xTc));
-                return `ξ(${fmtNum(r.T)} K) = ${fmtNum(r.xi)} nm`;
+                return cardResult(
+                  `ξ(${fmtNum(r.T)} K) = ${fmtNum(r.xi)} nm`,
+                  `ξ(${r.T} K) = ${r.xi} nm`,
+                );
                 },
               )
             }
@@ -211,7 +220,10 @@ export default function SuperconductorTab() {
             onClick={() =>
               void c4.run("Ginzburg-Landau parameter", `λ=${kLam} nm, ξ=${kXi} nm`, async () => {
                 const r = await scGlParameter(Number(kLam), Number(kXi));
-                return `κ = ${fmtNum(r.kappa)} (Type ${r.type})`;
+                return cardResult(
+                  `κ = ${fmtNum(r.kappa)} (Type ${r.type})`,
+                  `κ = ${r.kappa} (Type ${r.type})`,
+                );
               })
             }
           >
@@ -249,9 +261,10 @@ export default function SuperconductorTab() {
                   Number(hT),
                   hMat,
                 );
-                return `Type ${r.type} · H_c = ${fmtOe(r.Hc)} · H_c1 = ${fmtOe(
-                  r.Hc1,
-                )} · H_c2 = ${fmtOe(r.Hc2)}`;
+                return cardResult(
+                  `Type ${r.type} · H_c = ${fmtOe(r.Hc)} · H_c1 = ${fmtOe(r.Hc1)} · H_c2 = ${fmtOe(r.Hc2)}`,
+                  `Type ${r.type} · H_c = ${copyOe(r.Hc)} · H_c1 = ${copyOe(r.Hc1)} · H_c2 = ${copyOe(r.Hc2)}`,
+                );
                 },
               )
             }
@@ -292,7 +305,7 @@ export default function SuperconductorTab() {
                   Number(dTc),
                   Number(dT),
                 );
-                return `J_d = ${fmtNum(r.JdMA)} MA/cm²`;
+                return cardResult(`J_d = ${fmtNum(r.JdMA)} MA/cm²`, `J_d = ${r.JdMA} MA/cm²`);
                 },
               )
             }

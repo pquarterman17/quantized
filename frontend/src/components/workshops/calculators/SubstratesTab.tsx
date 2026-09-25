@@ -14,7 +14,7 @@ import {
   type SubstrateInfo,
 } from "../../../lib/api/substrates";
 import { fmtNum } from "../../../lib/format";
-import { Card, resultLine, useCard } from "./shared";
+import { Card, cardResult, resultLine, useCard } from "./shared";
 
 // Detail rows: [label, key, unit]. Lattice rows are skipped for amorphous.
 const LATTICE_FIELDS: [string, keyof SubstrateInfo, string][] = [
@@ -99,7 +99,10 @@ export default function SubstratesTab() {
       `a_film=${aFilm} Å, substrate=${selected.name}, a_sub=${selected.a} Å`,
       async () => {
         const r = await substrateMismatch(af, selected.a as number);
-        return `f = ${fmtNum(r.mismatchPct)} %  (${r.description})`;
+        return cardResult(
+          `f = ${fmtNum(r.mismatchPct)} %  (${r.description})`,
+          `f = ${r.mismatchPct} %  (${r.description})`,
+        );
       },
     );
   }
@@ -117,8 +120,11 @@ export default function SubstratesTab() {
       `a_film=${aFilm} Å, a_sub=${selected.a} Å, ν=${mbNu}`,
       async () => {
         const r = await substratesCriticalThickness(af, selected.a as number, nu);
-        if (r.matched) return "h_c = ∞ (lattice matched)";
-        return `h_c = ${fmtNum(r.h_c as number)} Å = ${fmtNum(r.h_c_nm as number)} nm`;
+        if (r.matched) return cardResult("h_c = ∞ (lattice matched)", "h_c = ∞ (lattice matched)");
+        return cardResult(
+          `h_c = ${fmtNum(r.h_c as number)} Å = ${fmtNum(r.h_c_nm as number)} nm`,
+          `h_c = ${r.h_c as number} Å = ${r.h_c_nm as number} nm`,
+        );
       },
     );
   }
