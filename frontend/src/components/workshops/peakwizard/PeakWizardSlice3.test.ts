@@ -24,13 +24,13 @@ let calls: Call[] = [];
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "Content-Type": "application/json" } });
 const detected = (center: number, height: number) => ({ center, height, bg: 0, fwhm: 0.47, prominence: height, localSNR: 20, area: null });
 
-/** /api/peaks/find answers the two Gaussians; ALS answers `als(n)`. */
-function stubFetch(als: (n: number) => number[] = (n) => Array.from({ length: n }, () => 0.25)) {
+/** /api/peaks/find answers the two Gaussians; ALS answers `als(y)` for the y it was sent. */
+function stubFetch(als: (y: number[]) => number[] = (y) => y.map(() => 0.25)) {
   vi.stubGlobal("fetch", (url: string, init: RequestInit) => {
     const body = JSON.parse(init.body as string) as Record<string, unknown>;
     calls.push({ url, body });
     if (url === "/api/peaks/find") return Promise.resolve(json({ peaks: [detected(2, 2), detected(4, 1.5)], background: [] }));
-    if (url === "/api/baseline/als") return Promise.resolve(json({ baseline: als((body.y as number[]).length) }));
+    if (url === "/api/baseline/als") return Promise.resolve(json({ baseline: als(body.y as number[]) }));
     return Promise.reject(new Error(`unexpected ${url}`));
   });
 }
@@ -153,17 +153,20 @@ describe("Peak Fitting ▸ Fit this range", () => {
   });
 
   it("with a baseline, waits for THAT range's estimate and finds peaks on the corrected trace", async () => {
-    stubFetch((n) => Array.from({ length: n }, () => 0.75));
+    // baseline = half the y it was estimated on, point for point — so an
+    // estimate for the OLD (full) range, index-shifted onto the new one,
+    // would subtract the wrong values
+    stubFetch((y) => y.map((v) => v / 2));
     const { result } = renderHook(() => usePeakWizard());
     act(() => result.current.patchRecipe({ baseline: { method: "als" } }));
-    await waitFor(() => expect(result.current.baselineBusy).toBe(false));
+    await waitFor(() => expect(useApp.getState().baselineOverlay).not.toBeNull());
     act(() => requestPeakFitRange("d1", 1, 3));
     await waitFor(() => expect(calls.filter((c) => c.url === "/api/peaks/find")).toHaveLength(1));
     const find = calls.find((c) => c.url === "/api/peaks/find")!;
     const sentX = find.body.x as number[];
     const sentY = find.body.y as number[];
     expect(sentX[0]).toBeCloseTo(1);
-    sentX.forEach((x, i) => expect(sentY[i]).toBeCloseTo(Y[Math.round(x * 10)] - 0.75));
+    sentX.forEach((x, i) => expect(sentY[i]).toBeCloseTo(Y[Math.round(x * 10)] / 2));
   });
 
   it("refuses a range selected on another dataset, and says so", async () => {
@@ -177,10 +180,21 @@ describe("Peak Fitting ▸ Fit this range", () => {
   });
 });
 
+describe("step-1 baseline busy state", () => {
+  it("switching to no baseline mid-estimate clears 'estimating'", async () => {
+    vi.stubGlobal("fetch", () => new Promise<Response>(() => {})); // the estimate never answers
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.patchRecipe({ baseline: { method: "als" } }));
+    await waitFor(() => expect(result.current.baselineBusy).toBe(true));
+    act(() => result.current.patchRecipe({ baseline: { method: "none" } }));
+    expect(result.current.baselineBusy).toBe(false);
+  });
+});
+
 describe("step-1 baseline preview with excluded rows (slice-2 review bug)", () => {
   it("lands each baseline value on the row it was computed for", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "scan", data: DATA, excludedRows: [1] }] });
-    stubFetch((n) => Array.from({ length: n }, (_, i) => 100 + i)); // value = 100 + segment index
+    stubFetch((ys) => ys.map((_, i) => 100 + i)); // value = 100 + segment index
     const { result } = renderHook(() => usePeakWizard());
     act(() => result.current.patchRecipe({ baseline: { method: "als" } }));
     await waitFor(() => expect(useApp.getState().baselineOverlay).not.toBeNull());

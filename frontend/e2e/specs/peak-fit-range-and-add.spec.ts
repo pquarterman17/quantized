@@ -43,10 +43,15 @@ async function loadPinned(page: Page, lim: [number, number]) {
   }, lim);
 }
 
-/** Client pixel of data x on the stage plot, for a pinned [lo, hi] x range. */
+/** Client pixel of data x on the stage plot, for a pinned [lo, hi] x range.
+ *  Polls for the box: a new row selection adds a plotted series, and the plot
+ *  is rebuilt — `.u-over` is briefly detached (measured: a null box). */
 async function pixelAt(page: Page, lim: [number, number], x: number): Promise<{ x: number; y: number }> {
-  const box = (await page.locator(".qzk-stage .u-over").boundingBox())!;
-  return { x: box.x + ((x - lim[0]) / (lim[1] - lim[0])) * box.width, y: box.y + box.height * 0.5 };
+  const over = page.locator(".qzk-stage .u-over");
+  let box: { x: number; y: number; width: number; height: number } | null = null;
+  await expect.poll(async () => (box = await over.boundingBox()) !== null).toBe(true);
+  const b = box!;
+  return { x: b.x + ((x - lim[0]) / (lim[1] - lim[0])) * b.width, y: b.y + b.height * 0.5 };
 }
 
 const wizard = (page: Page) => page.locator(".qzk-win").filter({ has: page.getByText("Peak Analyzer", { exact: true }) });

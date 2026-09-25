@@ -216,12 +216,12 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     const segToRow = segmentRows(ds, seg.kept);
     const offsets = baselineOn && baseline ? baseline : null;
     const c = res.curves;
-    const fit = { datasetId: ds.id, y: curveToRows(c.x, c.model, seg.x, segToRow, n, offsets) };
+    const curve = { datasetId: ds.id, y: curveToRows(c.x, c.model, seg.x, segToRow, n, offsets) };
     const bg = res.background.kind === "none" && !offsets
       ? null
       : { datasetId: ds.id, y: curveToRows(c.x, c.background, seg.x, segToRow, n, offsets) };
-    own.current = { fit, bg };
-    setFitOverlay(fit);
+    own.current = { fit: curve, bg };
+    setFitOverlay(curve);
     if (bg) setBaselineOverlay(bg);
   };
 
