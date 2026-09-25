@@ -463,7 +463,12 @@ class TransferStore:
     def _path_for(self, package_id: str) -> Path:
         if not is_valid_package_id(package_id):
             raise InvalidPackageId("invalid transfer package id")
-        return self.root / f"{package_id}{PACKAGE_SUFFIX}"
+        # Defence in depth, in the containment form CodeQL recognises.
+        root = os.path.normpath(str(self.root))
+        full = os.path.normpath(os.path.join(root, package_id + PACKAGE_SUFFIX))
+        if not full.startswith(root + os.sep) or os.path.dirname(full) != root:
+            raise InvalidPackageId("invalid transfer package id")
+        return Path(full)
 
     def _lookup(self, package_id: str, token: str) -> _Entry:
         path = self._path_for(package_id)
