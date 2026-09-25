@@ -23,6 +23,7 @@ export default function PeakWizardPanel() {
   const w = usePeakWizard();
 
   const close = () => {
+    w.model.clear(); // the model engine's curve + in-flight request
     setBaselineOverlay(null);
     setPeakOverlay(null);
     setOpen(false);

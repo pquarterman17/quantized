@@ -11,6 +11,8 @@ import { Checkbox } from "../../primitives/Checkbox";
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
 import { Button, Select, StatusDot } from "../../primitives";
+import ModelFitStep from "./ModelFitStep";
+import ModelSetupView, { EngineSelect } from "./ModelSetupView";
 import type { PeakWizardState } from "./usePeakWizard";
 
 const faint = { color: "var(--text-faint)" } as const;
@@ -225,9 +227,11 @@ export function StepFindPeaks({ w }: { w: PeakWizardState }) {
 /** ③ Model & constraints. */
 export function StepModel({ w }: { w: PeakWizardState }) {
   const m = w.recipe.model;
+  if (w.model.engine === "model") return <ModelSetupView w={w} />;
   return (
     <>
-      <label className="qzk-field-lbl">Peak shape</label>
+      <EngineSelect w={w} />
+      <label className="qzk-field-lbl" style={{ marginTop: 6 }}>Peak shape</label>
       <Select
         options={PEAK_SHAPES.map((s) => ({ value: s, label: s }))}
         value={m.shape}
@@ -262,6 +266,7 @@ export function StepModel({ w }: { w: PeakWizardState }) {
 /** ④ Fit & review: run the simultaneous fit, per-peak table + GOF. */
 export function StepFitReview({ w }: { w: PeakWizardState }) {
   const r = w.fitResult;
+  if (w.model.engine === "model") return <ModelFitStep w={w} />;
   return (
     <>
       <Button size="sm" variant="primary" disabled={w.fitBusy} onClick={() => void w.runFit()}>
@@ -350,7 +355,7 @@ export function StepReport({ w }: { w: PeakWizardState }) {
         <Button
           size="sm"
           variant="primary"
-          disabled={w.reportBusy || (mode === "fit" ? !w.fitResult : !w.integrateResult)}
+          disabled={w.reportBusy || (mode === "fit" ? !w.canReportFit : !w.integrateResult)}
           onClick={() => void w.toReport()}
         >
           {w.reportBusy ? "Reporting…" : "→ Report"}

@@ -6,6 +6,7 @@
 
 import { postJSON } from "./http";
 import type { MultiFitResult, Peak, SinglePeakFit } from "../types";
+import type { components } from "./schema";
 
 /** Robust peak detection -> peak list + estimated background. */
 export function findPeaks(body: {
@@ -51,4 +52,19 @@ export function fitMultiPeak(body: {
   link_mode?: string;
 }): Promise<MultiFitResult> {
   return postJSON("/api/peaks/fit-multi", body);
+}
+
+// ── mixed-shape peak model fit (audit P2.4) ──────────────────────────────────
+export type PeakModelFitRequest = components["schemas"]["PeakModelFitRequest"];
+export type PeakModelFitResponse = components["schemas"]["PeakModelFitResponse"];
+
+/** Per-peak shapes + polynomial background with per-parameter start/vary/
+ *  bounds/ties (/api/peaks/model-fit). Synchronous on the server (30 s cap):
+ *  `signal` only stops the CLIENT waiting — a cancelled fit still finishes
+ *  server-side and its response is dropped. */
+export function fitPeakModel(
+  body: PeakModelFitRequest,
+  signal?: AbortSignal,
+): Promise<PeakModelFitResponse> {
+  return postJSON("/api/peaks/model-fit", body, signal);
 }
