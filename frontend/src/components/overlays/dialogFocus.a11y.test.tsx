@@ -23,6 +23,8 @@ import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
 import { parseWorkspace, WORKSPACE_FORMAT } from "../../lib/workspace";
 import { askAnnotationText, useAnnotationTextDialog } from "../../store/annotationTextDialog";
+import { cancelPendingConfirm } from "../../store/confirmDialog";
+import { cancelPendingParams } from "../../store/paramDialog";
 import { openQuickPlotWith, useQuickPlotWithDialog } from "../../store/quickPlotWithDialog";
 import { useRecoveryChoice, type RecoveryPrompt } from "../../store/recoveryChoice";
 import { useApp } from "../../store/useApp";
@@ -70,6 +72,13 @@ beforeEach(() => {
   useRecoveryChoice.setState({ pending: null });
   useQuickPlotWithDialog.setState({ datasetId: null, workbookId: null });
   useAnnotationTextDialog.setState({ title: null, initial: "", resolve: null });
+  // The promise dialogs' asks live in module-level stores that outlive RTL's
+  // cleanup. A case that fails before answering its ask used to leave the
+  // question pending, so the NEXT case's <ConfirmDialog/> mounted showing it
+  // -- one real failure reported as two ("Found multiple elements with the
+  // role "button" and name "Cancel"" in the stacked-traps case).
+  cancelPendingConfirm();
+  cancelPendingParams();
 });
 
 // ── RecoveryChoiceDialog: had NO keyboard cancel at all ──────────────────

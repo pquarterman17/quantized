@@ -48,6 +48,7 @@
 //    it to the next boundary up (or lets it crash), exactly as if this
 //    boundary were not here.
 import { Component, lazy, Suspense, useEffect, useState } from "react";
+import { flushSync } from "react-dom";
 import type { ComponentType, LazyExoticComponent, ReactNode } from "react";
 
 /** Marks "the loader's own promise rejected" without touching the rejected
@@ -202,7 +203,20 @@ export function lazyRegion<P extends object>(
  *  suspends, so its first appearance costs the chunk fetch and not React's
  *  retry throttle. `onFail` runs when a load attempt fails (the tagged
  *  `LoadFailure`) -- nothing throws during render, so the React root is
- *  never at risk -- and the next time `wanted` turns true it tries again. */
+ *  never at risk -- and the next time `wanted` turns true it tries again.
+ *
+ *  The flip to ready is committed with `flushSync` (BUG-031). A plain
+ *  setState from the chunk's promise is a default-lane update: React commits
+ *  it in a Scheduler task, then ALWAYS yields to the host before the passive
+ *  effects of that commit (`requestPaint`), so the region's DOM and layout
+ *  effects landed one macrotask before its passive ones. For the promise
+ *  dialogs that meant a painted dialog, an `inert` background and a torn-down
+ *  pending guard (`usePendingDialogGuard`, layout cleanup), while focus-in,
+ *  the Enter handler and the Tab trap had not run yet -- focus still on the
+ *  control behind the backdrop and nothing trapping Tab. A sync-lane
+ *  commit flushes its passive effects before it returns, so the region
+ *  arrives whole, in the task that paints it. Pinned by
+ *  `components/overlays/lazyDialogPaintFocus.test.tsx`. */
 export function useRegionLoaded<P>(region: PreloadableRegion<P>, wanted: boolean, onFail: () => void): boolean {
   const [ready, setReady] = useState(region.loaded);
   useEffect(() => {
@@ -210,7 +224,9 @@ export function useRegionLoaded<P>(region: PreloadableRegion<P>, wanted: boolean
     let live = true;
     region.preload().then(
       () => {
-        if (live) setReady(true);
+        // A promise callback, never a render or effect body, so flushSync is
+        // legal here; see the doc comment for why it is required.
+        if (live) flushSync(() => setReady(true));
       },
       () => {
         if (live) onFail();
