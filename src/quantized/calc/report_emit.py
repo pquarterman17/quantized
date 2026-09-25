@@ -27,6 +27,7 @@ __all__ = [
     "from_curve_fit",
     "from_integrate",
     "from_multipeak_fit",
+    "from_peak_model_fit",
     "from_refl_fit",
     "from_stats_table",
 ]
@@ -206,6 +207,84 @@ def from_refl_fit(
     return ReportSheet(
         title=title,
         sections=(section("Fit results", blocks),),
+        source_refs=tuple(dict(r) for r in (source_refs or ())),
+    )
+
+
+# The mixed-shape peak model's objective under its honest label: chi-square only
+# for a weighted fit (calc/peak_model_fit.py reports which in ``objective``).
+_PEAK_OBJECTIVE: dict[str, tuple[tuple[str, str], ...]] = {
+    "ssr": (("SSR", "ssr"), ("Reduced SSR", "reduced_ssr")),
+    "chi2": (("χ²", "chi2"), ("Reduced χ²", "reduced_chi2")),
+}
+
+
+def _pm(value: Any, err: Any) -> list[Any]:
+    """A value and its standard error as two cells, the dash where absent."""
+    e = _finite(err)
+    return [_finite(value), _NONE if e is None else e]
+
+
+def _fmt6(v: Any) -> str:
+    f = _finite(v)
+    return _NONE if f is None else format(f, ".6g")
+
+
+def from_peak_model_fit(
+    result: Mapping[str, Any],
+    *,
+    title: str = "Peak model fit",
+    source_refs: Sequence[Mapping[str, Any]] | None = None,
+) -> ReportSheet:
+    """Build a report from a ``calc.peak_model_fit.fit_peak_model`` result
+    (audit P2.4; the Peak Analyzer sends it without its curves).
+
+    A per-peak table (shape, then centre / FWHM / height / area, each with its
+    standard error), the parameter table (value, standard error, status: free,
+    fixed, tied, at bound), the metrics under the objective's honest label
+    (SSR for an unweighted fit, chi-square only for a weighted one) and one
+    line per warning. "—" marks every error the fit does not report.
+    """
+    metrics = result.get("metrics")
+    m: Mapping[str, Any] = metrics if isinstance(metrics, Mapping) else {}
+    objective = m.get("objective")
+    if objective not in _PEAK_OBJECTIVE:
+        raise ValueError("from_peak_model_fit needs metrics.objective 'ssr' or 'chi2'")
+    params = list(result.get("parameters") or [])
+    peaks = list(result.get("peaks") or [])
+    if not params or not peaks:
+        raise ValueError("from_peak_model_fit needs a result with parameters and peaks")
+    peak_rows = [
+        [i, pk.get("shape", ""),
+         *_pm(pk.get("center"), pk.get("center_stderr")),
+         *_pm(pk.get("fwhm"), pk.get("fwhm_stderr")),
+         *_pm(pk.get("height"), pk.get("height_stderr")),
+         *_pm(pk.get("area"), pk.get("area_stderr"))]
+        for i, pk in enumerate(peaks, start=1)
+    ]
+    param_rows = [[p.get("name", ""), *_pm(p.get("value"), p.get("stderr")), _refl_status(p)]
+                  for p in params]
+    bg = result.get("background")
+    bg_kind = bg.get("kind") if isinstance(bg, Mapping) else None
+    stats = [f"{label} = {_fmt6(m.get(key))}" for label, key in _PEAK_OBJECTIVE[objective]]
+    stats += [f"R² = {_fmt6(m.get('r_squared'))}", f"adj. R² = {_fmt6(m.get('adj_r_squared'))}",
+              f"AIC = {_fmt6(m.get('aic'))}", f"BIC = {_fmt6(m.get('bic'))}",
+              f"points = {m.get('n_points')}", f"free parameters = {m.get('n_free')}",
+              f"converged: {'yes' if result.get('success') else 'no'}"]
+    blocks: list[dict[str, Any]] = [
+        text_block(f"Background: {bg_kind or _NONE}"),
+        table_block(["Peak", "Shape", "Center", "± center", "FWHM", "± FWHM", "Height",
+                     "± height", "Area", "± area"], peak_rows, caption=f"{len(peaks)} peak(s)"),
+        table_block(["Parameter", "Value", "± stderr", "Status"], param_rows,
+                    caption="Fitted parameters"),
+        text_block(" · ".join(stats)),
+    ]
+    if result.get("message"):
+        blocks.append(text_block(f"Optimizer: {result['message']}"))
+    blocks.extend(text_block(f"Warning: {w}") for w in result.get("warnings") or [])
+    return ReportSheet(
+        title=title,
+        sections=(section("Peak fit", blocks),),
         source_refs=tuple(dict(r) for r in (source_refs or ())),
     )
 

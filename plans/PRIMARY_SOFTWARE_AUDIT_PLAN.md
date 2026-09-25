@@ -3115,9 +3115,10 @@ summary without leaving Quantized.
 - [~] Add/edit/delete peaks directly in selection. Edit + delete of fitted
   durable rows shipped in the 2026-09-23 durability slice; direct add remains
   open.
-- [ ] Mixed functions and shared/fixed/start/bound parameters.
+- [x] Mixed functions and shared/fixed/start/bound parameters. (slice 2,
+  2026-09-25 — Peak Analyzer UI; recipe persistence of the table is slice 3)
 - [ ] Context submenu: Peak Fitting > Fit this range.
-- [ ] Explicit model metrics/warnings.
+- [x] Explicit model metrics/warnings. (slice 2, 2026-09-25)
 
 **Progress 2026-09-25 (slice 1, engine + route, no UI; Opus 5.5):** new
 `calc/peak_model.py` + `calc/peak_model_fit.py` and `POST
@@ -3135,6 +3136,52 @@ parity) untouched. Verified by truth recovery + invariants
 (`tests/test_calc_peak_model_fit.py`, `tests/test_api_peak_model_fit.py`); six
 sabotages went red. The three boxes above stay open until the Peak Analyzer UI
 drives this engine (slice 2).
+
+**Progress 2026-09-25 (slice 2, Peak Analyzer UI on the model engine; Opus
+5.5):** the wizard's fit step now defaults to the mixed-shape engine
+(`peakwizard/useModelFit.ts`); "Classic multi-peak (MATLAB parity)" stays one
+select away on step 3 and its path is unchanged. Step 3: a shape per included
+peak (default = the recipe's global shape; SPVII/TCH-pV -> pseudo-Voigt with a
+note), background none/constant/linear/quadratic (default from the recipe's
+degree), "Share FWHM across peaks" (ties only; the recipe's Shared-FWHM link
+pre-applies it), and an editable table (start / vary / min / max / tie to a
+same-kind varying untied parameter) seeded from the detected peaks
+(`peakModelParams.ts`: centres bounded to the window, heights above a seeded
+end-to-end background with min 0, FWHM max = window, Voigt split 0.61/0.61,
+eta 0.5). Step 4: run / cancel over the wizard's range-cut, baseline-corrected
+trace; `seq` + AbortController so a cancelled, superseded or config-cleared
+response writes nothing; the backend's ASCII detail shown verbatim; results
+with values +- stderr, a tooltip reason on every "—" (not converged / on a
+bound / fixed / tied / undetermined), derived centre/FWHM/height/area,
+metrics labelled SSR unless `metrics.objective` is chi2, warnings listed
+first; the model and fitted background go to the plot's `fitOverlay` /
+`baselineOverlay` (baseline added back, rows matched by x, taken back only
+while still ours), components + residuals in an in-panel SVG preview; "Start
+from fit". Step 5 reports it through a new `peak_model_fit` emitter
+(`calc/report_emit.from_peak_model_fit`: per-peak shape and every stderr incl.
+area, parameter status, honest objective label, warnings). PERSISTENCE: the
+report is the wizard's durable output and carries all of it; the wizard never
+wrote the Peaks workshop's durable peak table and still does not, and the
+engine choice / shapes / parameter table are NOT in the saved PeakRecipe
+(in-memory for this slice). Verified: vitest (`peakModelParams`,
+`modelFitReasons`, `useModelFit`, `PeakWizardModelFit` tests),
+`tests/test_report_peak_model_fit.py`, Chromium e2e
+`peak-model-fit.spec.ts` (real backend, two-peak synthetic fixture); sabotages
+of the stale guard, the chi2 label and the null-stderr reason went red.
+Review round (same day, 10 findings fixed): one content key (dataset id,
+included peaks, recipe model, working x/y digest) now invalidates the result,
+in-flight request and overlays — toggle/add/remove peak and same-id data
+edits included; a table edit leaves the fit STALE (curves off the plot,
+integrate/report blocked with the reason); a new fit or engine switch clears
+the integration; a dataset switch never restores the old baseline; curves map
+to plot rows 1:1 by position (repeated-x sweeps, excluded rows); a background
+change re-seeds unedited coefficients AND heights together; a degree > 2 note;
+Share FWHM adds/removes only ties to the first peak and restores the root's
+vary; a parameter others are tied to cannot be fixed, and a client mirror of
+the backend's parameter rules blocks Fit with the reason; no x_min/x_max sent.
+Remaining: slice 3 — PeakRecipe v2 carrying engine/shapes/table (and the
+recipe-file importer), durable peak-table publishing with stderr + shape, a
+correlation view; slice 4 — "Fit this range" context submenu and batch recipe.
 - [ ] Batch recipe and uncertainty/diagnostic result table.
 
 ### P2.5 — Transform/combine/clean wizard
