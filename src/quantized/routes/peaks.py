@@ -3,7 +3,9 @@ MATLAB findPeaksRobust); ``/fit`` wraps ``calc.peak_fit.fit_single_peak`` (golde
 vs fitSinglePeak); ``/fit-multi`` wraps ``calc.peak_multifit.fit_multi_peak``
 (golden vs peakAnalysis.onFitSimultaneous); ``/model-fit`` wraps
 ``calc.peak_model_fit.fit_peak_model`` (audit P2.4: mixed shapes, per-parameter
-start/vary/bounds/ties, metrics and warnings; new capability, not golden).
+start/vary/bounds/ties, metrics and warnings; new capability, not golden). It
+runs SYNCHRONOUSLY under a deadline capped at 30 s, the same budget as
+``/api/reflectivity/fit``; the slice-2 UI may move long fits onto the job queue.
 Validate -> call -> serialize; no business logic here.
 """
 
@@ -192,7 +194,9 @@ def integrate_batch(req: BatchIntegrateRequest) -> dict[str, Any]:
 
 # Cost caps: one evaluation costs ~points x peaks exp() calls and a TRF step
 # ~(n_free + 1) evaluations, so a large fit is bounded by the deadline, which
-# returns the best point seen (flagged) rather than running on.
+# returns the best point seen (flagged) rather than running on. The 30 s cap
+# matches /api/reflectivity/fit (FIT_DEADLINE_S): synchronous fits share one
+# worst-case request time until long fits move onto the job queue.
 MODEL_FIT_MAX_POINTS = 100_000
 MODEL_FIT_MAX_PEAKS = 50
 MODEL_FIT_MAX_PARAMETERS = 4 * MODEL_FIT_MAX_PEAKS + 3

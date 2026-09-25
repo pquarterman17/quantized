@@ -30,9 +30,11 @@ Conventions (stated once, relied on everywhere):
   value it copies (identity tie: shared FWHM is ``p1.fwhm`` tied to
   ``p0.fwhm``). A tie must resolve to a VARYING parameter (tying to a fixed
   one is just a fixed value - say so with ``vary=false``); a tied parameter's
-  own bounds are ignored.
+  own value and bounds are ignored (and not validated).
 * Physical bounds are always applied: widths are > 0 (default ``min`` is
-  ``min(1e-6 * x-span, value/2)``), ``eta`` lies in [0, 1]. Nothing else has a
+  ``min(1e-6 * x-span, value/2)``), ``eta`` lies in [0, 1]. The one exception:
+  a FIXED Voigt ``fwhm_g`` or ``fwhm_l`` may be exactly 0 (the pure
+  Lorentzian / Gaussian limit), never both. Nothing else has a
   default bound, so an unconstrained height may go negative (the fitter warns).
 """
 
@@ -44,9 +46,15 @@ from typing import Any
 
 import numpy as np
 from numpy.typing import NDArray
-from scipy.special import voigt_profile
 
-from quantized.calc.peakshapes import pseudo_voigt, voigt
+from quantized.calc.peakshapes import (
+    gaussian,
+    lorentzian,
+    pseudo_voigt,
+    pseudo_voigt_area,
+    voigt,
+    voigt_area,
+)
 
 __all__ = [
     "BACKGROUNDS",
@@ -64,10 +72,6 @@ SHAPES: dict[str, tuple[str, ...]] = {
 }
 BACKGROUNDS: dict[str, int] = {"none": 0, "constant": 1, "linear": 2, "quadratic": 3}
 
-_LN2 = math.log(2.0)
-_SIGMA_PER_FWHM = 1.0 / (2.0 * math.sqrt(2.0 * _LN2))
-_AREA_G = math.sqrt(math.pi / _LN2) / 2.0  # Gaussian area / (height * fwhm)
-_AREA_L = math.pi / 2.0  # Lorentzian area / (height * fwhm)
 _WIDTHS = ("fwhm", "fwhm_g", "fwhm_l")
 _PEAK_NAME = re.compile(r"^p(0|[1-9][0-9]*)\.([a-z_]+)$", re.ASCII)
 _BG_NAME = re.compile(r"^bg\.c([0-9])$", re.ASCII)
@@ -145,8 +149,11 @@ class PeakParams:
         ]
         self.vary = [bool(s.get("vary", False)) and t is None
                      for s, t in zip(specs, self.tie, strict=True)]
-        user_lo = [_bound(s, "min", n) for s, n in zip(specs, self.names, strict=True)]
-        user_hi = [_bound(s, "max", n) for s, n in zip(specs, self.names, strict=True)]
+        # A tied parameter's own bounds (and value) are ignored, so not validated.
+        user_lo = [None if t else _bound(s, "min", n)
+                   for s, n, t in zip(specs, self.names, self.tie, strict=True)]
+        user_hi = [None if t else _bound(s, "max", n)
+                   for s, n, t in zip(specs, self.names, self.tie, strict=True)]
         for n, lo, hi in zip(self.names, user_lo, user_hi, strict=True):
             if lo is not None and hi is not None and lo > hi:
                 raise ValueError(f"{n}: min ({lo:g}) is greater than max ({hi:g})")
@@ -203,8 +210,13 @@ class PeakParams:
     def _check_physical(self, user_lo: list[float | None], user_hi: list[float | None]) -> None:
         for i, n in enumerate(self.names):
             v, kind, lo = float(self.values[i]), self.kinds[i], user_lo[i]
+            if self.tie[i] is not None:
+                continue  # its value is the target's, checked there
             if kind == "width":
-                if v <= 0:
+                # A FIXED Voigt component width may be exactly 0 (the pure
+                # Lorentzian / Gaussian limit); a varying width must stay > 0.
+                zero_ok = n.endswith((".fwhm_g", ".fwhm_l")) and not self.vary[i]
+                if v < 0 or (v == 0 and not zero_ok):
                     raise ValueError(f"{n}: a width must be positive (got {v:g})")
                 if self.vary[i] and lo is not None and lo <= 0:
                     raise ValueError(f"{n}: min must be positive for a width")
@@ -214,6 +226,12 @@ class PeakParams:
                 for b in (user_lo[i], user_hi[i]):
                     if self.vary[i] and b is not None and not 0.0 <= b <= 1.0:
                         raise ValueError(f"{n}: eta bounds must lie in [0, 1]")
+        for n in self.names:
+            if n.endswith(".fwhm_g"):
+                g, lw = self.index[n], self.index[n[:-1] + "l"]
+                if self.values[self.root[g]] == 0 and self.values[self.root[lw]] == 0:
+                    raise ValueError(f"{n[:-7]}: a Voigt needs fwhm_g or fwhm_l above 0, "
+                                     "not both 0")
 
     def _effective_bounds(self, i: int, lo: float | None, hi: float | None,
                           xspan: float) -> tuple[float, float]:
@@ -292,18 +310,19 @@ class PeakModel:
 
 def shape_curve(shape: str, x: NDArray[np.float64], p: list[float]) -> NDArray[np.float64]:
     """One peak from its field values in :data:`SHAPES` order."""
+    if shape == "gaussian":
+        return gaussian(x, p[0], p[2], p[1])
+    if shape == "lorentzian":
+        return lorentzian(x, p[0], p[2], p[1])
     if shape == "voigt":
-        c, h, fg, fl = p
-        return voigt(x, c, fg, fl, h)
-    c, h, w = p[:3]
-    eta = {"gaussian": 0.0, "lorentzian": 1.0}.get(shape, p[3] if len(p) > 3 else 0.0)
-    return pseudo_voigt(x, c, w, h, eta)
+        return voigt(x, p[0], p[2], p[3], p[1])
+    return pseudo_voigt(x, p[0], p[2], p[1], p[3])
 
 
 def peak_fwhm(shape: str, p: list[float]) -> float:
     """Full width at half maximum. Exact for G/L/pV (both pV parts share ``fwhm``);
     for Voigt, Olivero & Longbothum (1977): 0.5346 fL + sqrt(0.2166 fL^2 + fG^2),
-    accurate to ~0.02 %."""
+    accurate to ~0.02 % (exact in the fL = 0 limit)."""
     if shape == "voigt":
         fg, fl = p[2], p[3]
         return 0.5346 * fl + math.sqrt(0.2166 * fl**2 + fg**2)
@@ -311,17 +330,15 @@ def peak_fwhm(shape: str, p: list[float]) -> float:
 
 
 def peak_area(shape: str, p: list[float]) -> float:
-    """Integrated area (closed forms, H = height, w = fwhm):
+    """Integrated area; the closed forms live in :mod:`quantized.calc.peakshapes`
+    (H = height, w = fwhm, AREA_G = sqrt(pi/ln 2)/2, AREA_L = pi/2):
 
-    * gaussian      H*w*sqrt(pi/ln 2)/2
-    * lorentzian    H*w*pi/2
-    * pseudo_voigt  H*w*(eta*pi/2 + (1-eta)*sqrt(pi/ln 2)/2)
+    * gaussian      H*w*AREA_G
+    * lorentzian    H*w*AREA_L
+    * pseudo_voigt  H*w*(eta*AREA_L + (1-eta)*AREA_G)
     * voigt         H / V(0; sigma, gamma)  (V area-normalised, peak scaled to H)
     """
-    h = p[1]
     if shape == "voigt":
-        sigma, gamma = p[2] * _SIGMA_PER_FWHM, p[3] / 2.0
-        return h / float(voigt_profile(0.0, sigma, gamma))
-    w = p[2]
+        return voigt_area(p[1], p[2], p[3])
     eta = {"gaussian": 0.0, "lorentzian": 1.0}.get(shape, p[3] if len(p) > 3 else 0.0)
-    return h * w * (eta * _AREA_L + (1.0 - eta) * _AREA_G)
+    return pseudo_voigt_area(p[1], p[2], eta)

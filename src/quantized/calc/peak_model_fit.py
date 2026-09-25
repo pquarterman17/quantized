@@ -16,8 +16,12 @@ plain unweighted sum) is reported for both, so neither is ever mislabelled.
 Optimiser and uncertainty
 -------------------------
 scipy's bounded trust-region-reflective ``least_squares`` - a LOCAL method, so
-starting values matter. ``deadline_s`` stops the fit at a wall-clock budget
-and returns the best point seen (``success`` False, a warning, no errors).
+starting values matter - via the scaffold shared with refl_fit
+(:mod:`quantized.calc._bounded_lsq`). ``deadline_s`` stops the fit at a
+wall-clock budget and returns the best point seen; running out of
+``max_nfev`` returns the last point. Either way ``success`` is False, a
+warning says so, and NO uncertainties are reported (all ``stderr`` None,
+``correlation`` empty): a Jacobian away from a minimum describes nothing.
 
 Covariance: ``C = (J^T J)^+ * s^2`` with ``s^2`` the reduced objective
 (lmfit's ``scale_covar`` convention, as in refl_fit). The pseudo-inverse is
@@ -25,8 +29,9 @@ taken on the COLUMN-EQUILIBRATED Jacobian's SVD, so the degenerate-direction
 test does not depend on parameter units: a singular value below
 :data:`DEGENERATE_RATIO` times the largest marks every parameter with a
 material share of that direction as undetermined (``stderr`` None + warning),
-where a plain inverse would report a meaningless number. A parameter on a
-bound also gets ``stderr`` None; a tied parameter reports its target's error.
+where a plain inverse would report a meaningless number. Such a parameter,
+and one on a bound, gets ``stderr`` None and None throughout its
+``correlation`` row and column; a tied parameter reports its target's error.
 
 Derived peak quantities (centre, FWHM, height, area; closed forms in
 :func:`quantized.calc.peak_model.peak_area` / ``peak_fwhm``) carry delta-
@@ -46,14 +51,13 @@ the same points and weights mean anything).
 from __future__ import annotations
 
 import math
-import time
 from collections.abc import Sequence
 from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
-from scipy.optimize import least_squares
 
+from quantized.calc._bounded_lsq import pinv_covariance, solve_bounded
 from quantized.calc.peak_model import PeakModel, PeakParams, peak_area, peak_fwhm
 
 __all__ = ["DEGENERATE_RATIO", "OVERLAP_FWHM_FRACTION", "fit_peak_model"]
@@ -68,10 +72,6 @@ DEGENERATE_RATIO = 1e-6
 # overlapping: their heights/widths trade off and the split is weakly defined.
 OVERLAP_FWHM_FRACTION = 0.5
 _REL_STEP = 1e-6
-
-
-class _Deadline(Exception):
-    pass
 
 
 def _prepare(
@@ -147,49 +147,31 @@ def fit_peak_model(
         raise ValueError(f"{n_points} usable points cannot constrain {n_free} free parameters")
     weighted = ef is not None
 
-    t_end = None if deadline_s is None else time.monotonic() + deadline_s
-    count = {"n": 0}
-    best: dict[str, Any] = {"cost": math.inf, "x": params.x0()}
-
     def residuals(xs: NDArray[np.float64]) -> NDArray[np.float64]:
-        if t_end is not None and time.monotonic() > t_end:
-            raise _Deadline
-        count["n"] += 1
         r = model.evaluate(xf, params.full(xs)) - yf
-        if ef is not None:
-            r = r / ef
-        r = np.asarray(r, dtype=float)
-        cost = float(np.sum(r**2))
-        if cost < best["cost"]:
-            best["cost"], best["x"] = cost, np.array(xs, dtype=float)
-        return r
+        return np.asarray(r if ef is None else r / ef, dtype=float)
 
     warnings: list[str] = []
-    jac: NDArray[np.float64] | None = None
-    if n_free:
-        try:
-            sol = least_squares(residuals, params.x0(), bounds=params.x_bounds(), method="trf",
-                                x_scale="jac", max_nfev=max_nfev)
-            xs, success, message, jac = sol.x, bool(sol.success), str(sol.message), sol.jac
-            if not success or sol.status == 0:
-                success = False
-                warnings.append(f"the optimiser stopped without converging: {message}")
-        except _Deadline:
-            xs, success = best["x"], False
-            message = f"stopped at the {deadline_s:g} s time limit"
-            warnings.append(f"the fit {message}; the best point found is reported "
-                            "without uncertainties")
-    else:
-        xs, success, message = params.x0(), True, "no free parameters"
-    t_end = None
-    obj = float(np.sum(residuals(xs) ** 2))
+    fit = solve_bounded(residuals, params.x0(), params.x_bounds(), max_nfev=max_nfev,
+                        deadline_s=deadline_s)
+    xs, success, message = fit.x, fit.success, fit.message
+    if fit.status == "not_converged":
+        warnings.append(f"the optimiser stopped without converging: {message}; the last "
+                        "point is reported without uncertainties")
+    elif fit.status == "deadline":
+        warnings.append(f"the fit {message}; the best point found is reported "
+                        "without uncertainties")
+    obj = float(np.sum(fit.residuals(xs) ** 2))
     dof = n_points - n_free
     v = params.full(xs)
     if n_dropped:
         warnings.append(f"{n_dropped} rows with a non-finite value were dropped")
 
+    # Uncertainties only at a converged minimum: a Jacobian taken anywhere else
+    # (budget or deadline stop) describes no minimum, so it would mislead.
+    jac = fit.jac if fit.status == "converged" else None
     cov, undetermined = _covariance(jac, params, obj / dof)
-    at_bound = params.at_bound(v) if jac is not None else [False] * n_free
+    at_bound = params.at_bound(v) if fit.jac is not None else [False] * n_free
     no_err = [at_bound[k] or undetermined[k] or cov is None for k in range(n_free)]
     free_pos = {i: k for k, i in enumerate(params.free)}
     _flag(warnings, params, at_bound, "parameters ended on a bound (errors not reported): ")
@@ -217,14 +199,14 @@ def fit_peak_model(
     return {
         "parameters": out_params,
         "free": [params.names[i] for i in params.free],
-        "correlation": _correlation(cov),
+        "correlation": _correlation(cov, no_err),
         "peaks": peaks,
         "background": {"kind": background, "x_ref": x_ref},
         "weighted": weighted,
         "metrics": _metrics(yf, ef, resid, n_points, n_free),
         "success": success,
         "message": message,
-        "n_evaluations": count["n"],
+        "n_evaluations": fit.n_evaluations,
         "x_range": [xlo, xhi],
         "n_dropped": n_dropped,
         "n_excluded": n_excluded,
@@ -247,21 +229,9 @@ def _covariance(jac: NDArray[np.float64] | None, params: PeakParams,
     n_free = len(params.free)
     if jac is None or not n_free:
         return None, [False] * n_free
-    d = np.linalg.norm(jac, axis=0)
-    d = np.where(d > 0, d, 1.0)
-    _, s, vt = np.linalg.svd(jac / d, full_matrices=False)
-    smax = float(s[0]) if s.size else 0.0
-    weak = s <= DEGENERATE_RATIO * smax if smax > 0 else np.ones_like(s, dtype=bool)
-    undetermined = [False] * n_free
-    for row in vt[weak]:
-        for kk in np.nonzero(np.abs(row) > 1e-3)[0]:
-            undetermined[int(kk)] = True
-    inv_s2 = np.zeros_like(s)
-    inv_s2[~weak] = 1.0 / s[~weak] ** 2
-    cov_n = (vt.T * inv_s2) @ vt
-    sc = params.scale / d
-    cov = np.asarray(cov_n * np.outer(sc, sc) * red, dtype=float)
-    return cov, undetermined
+    cov_x, weak = pinv_covariance(jac, degenerate_ratio=DEGENERATE_RATIO, equilibrate=True)
+    cov = np.asarray(cov_x * red * np.outer(params.scale, params.scale), dtype=float)
+    return cov, [bool(w) for w in weak]
 
 
 _DERIVED = ("center", "height", "fwhm", "area")
@@ -358,13 +328,16 @@ def _flag(warnings: list[str], params: PeakParams, flags: list[bool], head: str)
         warnings.append(head + ", ".join(names))
 
 
-def _correlation(cov: NDArray[np.float64] | None) -> list[list[float | None]]:
+def _correlation(cov: NDArray[np.float64] | None,
+                 no_err: list[bool]) -> list[list[float | None]]:
+    """Correlation of the free parameters; None wherever either one has no error."""
     if cov is None:
         return []
     sd = np.sqrt(np.clip(np.diag(cov), 0.0, None))
     with np.errstate(invalid="ignore", divide="ignore"):
         c = cov / np.outer(sd, sd)
-    return [[_finite(val) for val in r] for r in c]
+    return [[None if no_err[i] or no_err[j] else _finite(float(c[i, j]))
+             for j in range(len(no_err))] for i in range(len(no_err))]
 
 
 def _finite(x: float) -> float | None:

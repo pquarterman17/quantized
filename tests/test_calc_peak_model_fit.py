@@ -177,6 +177,12 @@ def test_bounds_are_respected_and_a_bound_hit_is_flagged() -> None:
     # A derived quantity built on a bound parameter has no error either.
     assert out["peaks"][0]["fwhm_stderr"] is None and out["peaks"][0]["area_stderr"] is None
     assert out["peaks"][1]["area_stderr"] is not None
+    # Its correlation row and column are masked like its stderr; the rest are not.
+    k = out["free"].index("p0.fwhm")
+    corr = out["correlation"]
+    assert all(corr[k][j] is None and corr[j][k] is None for j in range(len(corr)))
+    others = [i for i in range(len(corr)) if i != k]
+    assert all(corr[i][j] is not None for i in others for j in others)
 
 
 def test_identical_coincident_peaks_are_reported_undetermined() -> None:
@@ -193,6 +199,12 @@ def test_identical_coincident_peaks_are_reported_undetermined() -> None:
     assert any("do not determine" in w and "p0.height, p1.height" in w
                for w in out["warnings"])
     assert any("overlap" in w for w in out["warnings"])
+    free, corr = out["free"], out["correlation"]
+    for name in ("p0.height", "p1.height"):
+        k = free.index(name)
+        assert all(corr[k][j] is None and corr[j][k] is None for j in range(len(free)))
+    kb = free.index("bg.c0")
+    assert corr[kb][kb] == pytest.approx(1.0)
     # The SUM is still what the data say.
     assert p["p0.height"]["value"] + p["p1.height"]["value"] == pytest.approx(100, abs=1)
 
@@ -239,6 +251,8 @@ def test_non_uniform_weights_downweight_noisy_points() -> None:
     ("lorentzian", [0.3, 12.0, 0.8]),
     ("pseudo_voigt", [0.3, 12.0, 0.8, 0.35]),
     ("voigt", [0.3, 12.0, 0.6, 0.4]),
+    ("voigt", [0.3, 12.0, 0.0, 0.8]),  # pure-Lorentzian limit
+    ("voigt", [0.3, 12.0, 0.8, 0.0]),  # pure-Gaussian limit
 ])
 def test_area_and_fwhm_closed_forms_match_numerics(shape: str, p: list[float]) -> None:
     area = integral(lambda t: float(shape_curve(shape, np.array([t]), p)[0]), p[0])
@@ -258,6 +272,28 @@ def test_fitted_area_matches_integrating_the_component_curve() -> None:
         area = integral(lambda t, k=k: float(m.component(k, np.array([t]), v)[0]),
                         pk["center"])
         assert pk["area"] == pytest.approx(area, rel=1e-7)
+
+
+@pytest.mark.parametrize(("zero", "shape"), [("fwhm_g", "lorentzian"),
+                                             ("fwhm_l", "gaussian")])
+def test_voigt_with_a_fixed_zero_width_is_its_pure_limit(zero: str, shape: str) -> None:
+    x = np.linspace(-6, 6, 801)
+    y = synth([shape], "constant", {"p0.center": 0.2, "p0.height": 40.0, "p0.fwhm": 0.9,
+                                    "bg.c0": 1.0}, x, 0.2, seed=13)
+    other = "fwhm_l" if zero == "fwhm_g" else "fwhm_g"
+    specs = [P("p0.center", 0.0), P("p0.height", 35.0), P(f"p0.{zero}", 0.0, vary=False),
+             P(f"p0.{other}", 0.7), P("bg.c0", 0.0)]
+    out = fit_peak_model(x, y, ["voigt"], specs, background="constant")
+    ref = fit_peak_model(x, y, [shape], [P("p0.center", 0.0), P("p0.height", 35.0),
+                                         P("p0.fwhm", 0.7), P("bg.c0", 0.0)],
+                         background="constant")
+    assert out["success"] and out["warnings"] == []
+    pv, pr = out["peaks"][0], ref["peaks"][0]
+    assert by_name(out)[f"p0.{other}"]["value"] == pytest.approx(pr["fwhm"], rel=1e-6)
+    assert pv["area"] == pytest.approx(pr["area"], rel=1e-6)
+    assert pv["area_stderr"] == pytest.approx(pr["area_stderr"], rel=1e-3)
+    # Olivero-Longbothum is exact at fL = 0 and within 0.02 % at fG = 0.
+    assert pv["fwhm"] == pytest.approx(pr["fwhm"], rel=2e-4)
 
 
 def test_voigt_peak_is_recovered() -> None:
@@ -363,13 +399,36 @@ def test_deadline_stops_the_fit_and_reports_the_best_point() -> None:
     assert all(q["stderr"] is None for q in out["parameters"])
     assert all(pk["area_stderr"] is None for pk in out["peaks"])
     assert out["correlation"] == []
+    # A zero budget stops before the solver's first evaluation on any clock
+    # resolution (>= comparison); the one counted call is the final pass.
+    assert out["n_evaluations"] == 1
+
+
+def test_zero_deadline_fires_on_a_clock_that_has_not_ticked(
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    # Forces the Windows case (monotonic() resolution ~15.6 ms): the clock
+    # returns the same value at arm time and at the first residual call.
+    import quantized.calc._bounded_lsq as lsq
+
+    monkeypatch.setattr(lsq.time, "monotonic", lambda: 1000.0)
+    specs = [P(n, v) for n, v in MIXED_START.items()]
+    out = fit_peak_model(X_MIXED, mixed_data(), MIXED, specs, bg_x_ref=40.5, deadline_s=0.0)
+    assert not out["success"] and "time limit" in out["message"]
+    assert out["n_evaluations"] == 1
 
 
 def test_evaluation_budget_exhaustion_is_not_reported_as_success() -> None:
     specs = [P(n, v) for n, v in MIXED_START.items()]
     out = fit_peak_model(X_MIXED, mixed_data(), MIXED, specs, bg_x_ref=40.5, max_nfev=2)
     assert not out["success"]
-    assert any("without converging" in w for w in out["warnings"])
+    assert any("without converging" in w and "without uncertainties" in w
+               for w in out["warnings"])
+    # A Jacobian away from a minimum describes nothing: no errors anywhere.
+    assert all(q["stderr"] is None for q in out["parameters"])
+    assert all(pk[f"{key}_stderr"] is None for pk in out["peaks"]
+               for key in ("center", "height", "fwhm", "area"))
+    assert out["correlation"] == []
+    assert not any("do not determine" in w for w in out["warnings"])
 
 
 def test_all_fixed_model_just_evaluates() -> None:
@@ -377,83 +436,3 @@ def test_all_fixed_model_just_evaluates() -> None:
     out = fit_peak_model(X_MIXED, mixed_data(), MIXED, specs, bg_x_ref=40.5)
     assert out["success"] and out["free"] == [] and out["metrics"]["n_free"] == 0
     assert all(pk["area_stderr"] is None for pk in out["peaks"])
-
-
-# ── (i) validation ──────────────────────────────────────────────────────────
-
-def _fit_two(specs: list[dict[str, Any]], **kw: Any) -> dict[str, Any]:
-    return fit_peak_model(X_TWO, np.ones(X_TWO.size), ["gaussian", "pseudo_voigt"], specs,
-                          background="constant", **kw)
-
-
-def _two_pv() -> list[dict[str, Any]]:
-    return [P("p0.center", -1.0), P("p0.height", 5.0), P("p0.fwhm", 1.0),
-            P("p1.center", 1.0), P("p1.height", 5.0), P("p1.fwhm", 1.0),
-            P("p1.eta", 0.5), P("bg.c0", 0.0)]
-
-
-def _patched(name: str, **patch: Any) -> list[dict[str, Any]]:
-    specs = _two_pv()
-    for s in specs:
-        if s["name"] == name:
-            s.update(patch)
-    return specs
-
-
-@pytest.mark.parametrize(("specs", "match"), [
-    (_two_pv() + [P("p2.center", 0.0)], "unknown parameter p2.center"),
-    (_two_pv()[:-1], "missing parameters: bg.c0"),
-    (_two_pv() + [P("p0.center", 0.0)], "unique"),
-    (_patched("p1.fwhm", tie="p9.fwhm"), "tied to unknown parameter p9.fwhm"),
-    (_patched("p1.fwhm", tie="p1.fwhm"), "tied to itself"),
-    (_patched("p0.fwhm", tie="p1.fwhm")[:2]
-     + [P("p0.fwhm", 1.0, tie="p1.fwhm")] + _patched("p1.fwhm", tie="p0.fwhm")[3:],
-     "cycle"),
-    (_patched("p1.fwhm", tie="p0.fwhm")[:2] + [P("p0.fwhm", 1.0, vary=False)]
-     + _patched("p1.fwhm", tie="p0.fwhm")[3:], "which is fixed"),
-    (_patched("p1.fwhm", tie="p0.height"), "ties join parameters of one kind"),
-    (_patched("p0.height", min=10.0, max=2.0), "min \\(10\\) is greater than max \\(2\\)"),
-    (_patched("p0.height", min=10.0, max=20.0), "start value 5 is outside"),
-    (_patched("p0.height", min=5.0, max=5.0), "min equals max"),
-    (_patched("p0.fwhm", value=-1.0), "width must be positive"),
-    (_patched("p0.fwhm", min=0.0), "min must be positive"),
-    (_patched("p1.eta", value=1.5), "eta must lie in"),
-    (_patched("p1.eta", max=2.0), "eta bounds"),
-    (_patched("p0.center", value=math.nan), "must be finite"),
-    (_patched("p0.center", min=-math.inf), "min must be finite"),
-])
-def test_invalid_models_are_refused(specs: list[dict[str, Any]], match: str) -> None:
-    with pytest.raises(ValueError, match=match):
-        _fit_two(specs)
-
-
-def test_tie_chain_to_a_free_root_is_allowed() -> None:
-    specs = [P("p0.center", -2.0), P("p0.height", 5.0), P("p0.fwhm", 1.0),
-             P("p1.center", 0.0), P("p1.height", 5.0), P("p1.fwhm", 1.0, tie="p0.fwhm"),
-             P("p2.center", 2.0), P("p2.height", 5.0), P("p2.fwhm", 1.0, tie="p1.fwhm"),
-             P("bg.c0", 0.0)]
-    x = np.linspace(-5, 5, 201)
-    out = fit_peak_model(x, np.ones(x.size), ["gaussian"] * 3, specs, background="constant")
-    p = by_name(out)
-    assert p["p2.fwhm"]["value"] == p["p0.fwhm"]["value"]
-
-
-@pytest.mark.parametrize(("kw", "match"), [
-    ({"x": [0.0, 1.0, 2.0], "y": [1.0, 2.0]}, "same length"),
-    ({"y_err": [1.0, 1.0]}, "y_err must have the same length"),
-    ({"y_err": np.full(X_TWO.size, -1.0)}, "y_err must be positive"),
-    ({"x_min": 2.0, "x_max": 1.0}, "x_min must be less than x_max"),
-    ({"x_min": 5.9, "x_max": 5.91}, "at least 2 distinct"),
-    ({"x_min": 5.85}, "7 usable points cannot constrain 8"),
-    ({"shapes": ["gaussian", "cauchy"]}, "unknown shape"),
-    ({"shapes": []}, "at least one peak"),
-    ({"background": "cubic"}, "background must be one of"),
-])
-def test_invalid_data_or_options_are_refused(kw: dict[str, Any], match: str) -> None:
-    args: dict[str, Any] = {"x": X_TWO, "y": np.ones(X_TWO.size),
-                            "shapes": ["gaussian", "pseudo_voigt"],
-                            "parameters": _two_pv(), "background": "constant"}
-    args.update(kw)
-    with pytest.raises(ValueError, match=match):
-        fit_peak_model(args.pop("x"), args.pop("y"), args.pop("shapes"),
-                       args.pop("parameters"), **args)

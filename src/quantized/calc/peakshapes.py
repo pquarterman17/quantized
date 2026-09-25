@@ -14,7 +14,19 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.special import voigt_profile
 
-__all__ = ["pseudo_voigt", "split_pearson_vii", "tch_pseudo_voigt", "voigt"]
+__all__ = [
+    "AREA_G",
+    "AREA_L",
+    "gaussian",
+    "lorentzian",
+    "pseudo_voigt",
+    "pseudo_voigt_area",
+    "split_pearson_vii",
+    "tch_pseudo_voigt",
+    "voigt",
+    "voigt_area",
+    "voigt_sigma_gamma",
+]
 
 # Parameter vector: a plain sequence or a float ndarray (e.g. straight from an
 # optimizer) — both are unpacked via float(...) so either works at runtime.
@@ -22,6 +34,41 @@ Params = Sequence[float] | NDArray[np.float64]
 
 _LN2 = math.log(2)
 _EPS = float(np.finfo(float).eps)
+
+# Integrated area / (height * fwhm) of the unit-height profiles. The single
+# home of these constants (peak_fit, peak_multifit and peak_model import them).
+AREA_L = math.pi / 2.0  # Lorentzian
+AREA_G = math.sqrt(math.pi) / (2.0 * math.sqrt(_LN2))  # Gaussian = sqrt(pi/ln 2)/2
+
+
+def gaussian(x: NDArray[np.float64], x0: float, fwhm: float, height: float) -> NDArray[np.float64]:
+    """H*exp(-4 ln2 ((x-x0)/fwhm)^2): pseudo_voigt's eta=0 branch, bit for bit."""
+    u = (np.asarray(x, dtype=float) - x0) / fwhm
+    return np.asarray(height * np.exp(-4.0 * _LN2 * u**2), dtype=float)
+
+
+def lorentzian(x: NDArray[np.float64], x0: float, fwhm: float,
+               height: float) -> NDArray[np.float64]:
+    """H/(1 + 4((x-x0)/fwhm)^2): pseudo_voigt's eta=1 branch, bit for bit."""
+    u = (np.asarray(x, dtype=float) - x0) / fwhm
+    return np.asarray(height * (1.0 / (1.0 + 4.0 * u**2)), dtype=float)
+
+
+def pseudo_voigt_area(height: float, fwhm: float, eta: float) -> float:
+    """Area of H*(eta*L + (1-eta)*G): H*fwhm*(eta*AREA_L + (1-eta)*AREA_G).
+    eta = 0 / 1 give the Gaussian / Lorentzian areas."""
+    return height * fwhm * (eta * AREA_L + (1.0 - eta) * AREA_G)
+
+
+def voigt_sigma_gamma(fwhm_g: float, fwhm_l: float) -> tuple[float, float]:
+    """``scipy.special.voigt_profile``'s (sigma, gamma) from the component FWHMs."""
+    return fwhm_g / (2.0 * math.sqrt(2.0 * _LN2)), fwhm_l / 2.0
+
+
+def voigt_area(height: float, fwhm_g: float, fwhm_l: float) -> float:
+    """Area of :func:`voigt` (height-scaled): H / V(0; sigma, gamma)."""
+    sigma, gamma = voigt_sigma_gamma(fwhm_g, fwhm_l)
+    return height / float(voigt_profile(0.0, sigma, gamma))
 
 
 def pseudo_voigt(
@@ -61,8 +108,7 @@ def voigt(
     """
     if fwhm_g < 0 or fwhm_l < 0 or (fwhm_g == 0 and fwhm_l == 0):
         raise ValueError("Voigt widths must be non-negative and not both zero")
-    sigma = fwhm_g / (2.0 * math.sqrt(2.0 * _LN2))
-    gamma = fwhm_l / 2.0
+    sigma, gamma = voigt_sigma_gamma(fwhm_g, fwhm_l)
     xv = np.asarray(x, dtype=float)
     peak0 = float(voigt_profile(0.0, sigma, gamma))
     return np.asarray(height * voigt_profile(xv - x0, sigma, gamma) / peak0 + bg, dtype=float)
