@@ -17,7 +17,7 @@
 // wizard goes to step ②, and peaks are found as soon as the step-① baseline
 // for THAT range is in (usePeakBaseline's result is tied to its segment).
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePeakBaseline } from "./usePeakBaseline";
 import { usePeakCandidates, type CandidatePeak } from "./usePeakCandidates";
 import { useModelFit, type ModelFitState } from "./useModelFit";
@@ -33,7 +33,15 @@ import {
   subtractBaseline,
   type PeakRecipe,
 } from "../../../lib/peakwizard";
-import { remapFitPeaks, type PeakRecipeFit } from "../../../lib/peakRecipeFit";
+import {
+  extractPeak,
+  insertedAt,
+  insertPeak,
+  remapFitPeaks,
+  removedAt,
+  type PeakRecipeFit,
+  type PeakSlice,
+} from "../../../lib/peakRecipeFit";
 import { selectedFitData } from "../../../lib/fitselection";
 import type { Dataset, MultiFitResult } from "../../../lib/types";
 import { recordUse } from "../../../lib/recipeIndex";
@@ -42,6 +50,9 @@ import { notifyMigrationWarnings, toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 
 export type { CandidatePeak };
+
+/** Recipe-load warnings already shown this session (see the effect below). */
+const warnedRecipes = new Set<string>();
 
 export const WIZARD_STEPS = [
   "Range & baseline",
@@ -124,9 +135,15 @@ export function usePeakWizard(): PeakWizardState {
   const [integrateResult, setIntegrateResult] = useState<PeakWizardState["integrateResult"]>(null);
   // Saved recipes, read once; a record that cannot be read (an unknown
   // version, a malformed fit section) is skipped and said so, never guessed.
+  // Each warning is shown once per session (keyed by recipe name + version +
+  // what), not on every mount — StrictMode's double effect included.
   const [stored] = useState(loadRecipesChecked);
   const [recipes, setRecipes] = useState<PeakRecipe[]>(stored.recipes);
-  useEffect(() => notifyMigrationWarnings(stored.warnings), [stored]);
+  useEffect(() => {
+    const fresh = stored.warnings.filter((w) => !warnedRecipes.has(w.key));
+    for (const w of fresh) warnedRecipes.add(w.key);
+    notifyMigrationWarnings(fresh.map((w) => w.message));
+  }, [stored]);
   const [recipeRev, setRecipeRev] = useState(0);
 
   const patchRecipe = useCallback((p: DeepPartialRecipe) => {
@@ -137,6 +154,11 @@ export function usePeakWizard(): PeakWizardState {
       ...(p.find ? { find: { ...r.find, ...p.find } } : {}),
       ...(p.model ? { model: { ...r.model, ...p.model } } : {}),
       ...(p.report ? { report: { ...r.report, ...p.report } } : {}),
+      // A new width link decides width sharing afresh: the Share-FWHM
+      // toggle's choice (a flag, never tie edits) steps aside.
+      ...(p.model?.linkMode !== undefined && p.model.linkMode !== r.model.linkMode
+        ? { fit: { ...r.fit, shareFwhm: null } }
+        : {}),
     }));
     // Downstream results are stale the moment the configuration changes.
     setFitResult(null);
@@ -146,9 +168,25 @@ export function usePeakWizard(): PeakWizardState {
   // stable setters, so the candidate ops that renumber them stay stable (R9).
   const setFit = useCallback((update: (f: PeakRecipeFit) => PeakRecipeFit) =>
     setRecipe((r) => ({ ...r, fit: update(r.fit) })), []);
-  const remapFit = useCallback((map: (i: number) => number | null) =>
-    setFit((f) => remapFitPeaks(f, map)), [setFit]);
+  // A peak leaving the model takes its edits with it; an EXCLUDED one's are
+  // set aside by candidate id (session only) and come back when it is
+  // re-included. The map write inside the updater is idempotent (the same
+  // slice from the same `f`), so a StrictMode double call is harmless.
+  const setAside = useRef(new Map<number, PeakSlice>());
+  const peakLeft = useCallback((k: number, id: number, ids: readonly number[], keep: boolean) =>
+    setFit((f) => {
+      if (keep) setAside.current.set(id, extractPeak(f, k, ids));
+      else setAside.current.delete(id);
+      return remapFitPeaks(f, removedAt(k));
+    }), [setFit]);
+  const peakJoined = useCallback((k: number, id: number, ids: readonly number[]) =>
+    setFit((f) => {
+      const shifted = remapFitPeaks(f, insertedAt(k));
+      const slice = setAside.current.get(id);
+      return slice ? insertPeak(shifted, k, slice, ids) : shifted;
+    }), [setFit]);
   const dropResults = useCallback(() => {
+    setAside.current.clear(); // a new candidate list: nothing to come back
     setFitResult(null);
     setIntegrateResult(null);
   }, []);
@@ -186,14 +224,20 @@ export function usePeakWizard(): PeakWizardState {
   }, [segment, baseline, recipe.baseline.method]);
 
   const cands = usePeakCandidates({
-    active, step, segment, workingY, baseline, find: recipe.find, xKey, onReplaced: dropResults, remapFit,
+    active, step, segment, workingY, baseline, find: recipe.find, xKey, onReplaced: dropResults, peakLeft, peakJoined,
   });
   const { candidates, runFind } = cands;
 
   // "Fit this range" from the plot's context menu: apply the range, go to ②,
-  // then find peaks once the working trace for THAT range is ready.
+  // then find peaks once the working trace for THAT range is ready. The armed
+  // find remembers exactly what was asked (dataset + range); it fires or is
+  // dropped on the first TERMINAL outcome for that range — no data (runFind
+  // then says so), no baseline wanted, the baseline in, the baseline failed
+  // or the dataset unavailable (usePeakBaseline reports both as an error) —
+  // and is dropped the moment the dataset or range stops being the one asked
+  // for, so it can never fire later on some unrelated change.
   const rangeRequest = usePeakFitRange((s) => s.request);
-  const [pendingFind, setPendingFind] = useState(false);
+  const [pendingFind, setPendingFind] = useState<{ datasetId: string; lo: number; hi: number } | null>(null);
   useEffect(() => {
     if (!rangeRequest || !active) return;
     consumePeakFitRange(rangeRequest.seq);
@@ -203,19 +247,21 @@ export function usePeakWizard(): PeakWizardState {
     }
     patchRecipe({ range: { lo: rangeRequest.lo, hi: rangeRequest.hi } });
     setStep(1);
-    setPendingFind(true);
+    setPendingFind({ datasetId: active.id, lo: rangeRequest.lo, hi: rangeRequest.hi });
   }, [rangeRequest, active, patchRecipe]);
-  const traceReady = recipe.baseline.method === "none" || (baseline !== null && !baselineBusy);
   useEffect(() => {
     if (!pendingFind) return;
-    // No data in the range, or no baseline for it: nothing to find on (step ②
-    // / ① say why); never leave a find armed to fire on some later change.
-    if (baselineError || !segment) setPendingFind(false);
-    else if (traceReady) {
-      setPendingFind(false);
+    const asked = active?.id === pendingFind.datasetId
+      && recipe.range.lo === pendingFind.lo && recipe.range.hi === pendingFind.hi;
+    if (!asked || !segment) {
+      setPendingFind(null);
+    } else if (segment.x.length === 0 || recipe.baseline.method === "none" || baseline !== null) {
+      setPendingFind(null);
       void runFind();
+    } else if (baselineError) {
+      setPendingFind(null);
     }
-  }, [pendingFind, traceReady, baselineError, segment, runFind]);
+  }, [pendingFind, active, recipe.range.lo, recipe.range.hi, recipe.baseline.method, segment, baseline, baselineError, runFind]);
 
   // ④ Simultaneous fit of the included candidates.
   const runFit = useCallback(async () => {
@@ -282,10 +328,22 @@ export function usePeakWizard(): PeakWizardState {
 
   // `recipe.fit` IS the live model configuration (useModelFit edits it in
   // place), so a saved recipe carries the engine, shapes and table as shown.
+  // A table the loader would have to repair (or the backend would refuse) is
+  // not saved: the reason is the first parameter problem. Nor is a save onto
+  // the name of a stored record this app cannot read (lib/peakwizard).
   const saveRecipe = (name: string) => {
+    if (model.problems.length > 0) {
+      toast(`recipe not saved — fix the parameter table first: ${model.problems[0]}`, "danger");
+      return;
+    }
     const named = { ...recipe, name };
+    try {
+      setRecipes(persistRecipe(named));
+    } catch (e) {
+      toast(`recipe not saved — ${e instanceof Error ? e.message : "storage refused it"}`, "danger");
+      return;
+    }
     setRecipe(named);
-    setRecipes(persistRecipe(named));
     toast(`recipe "${name}" saved`);
   };
 
@@ -297,6 +355,7 @@ export function usePeakWizard(): PeakWizardState {
     recordUse({ kind: "peak", scope: "global", id: r.name });
     setRecipe(r);
     cands.clearCandidates();
+    setAside.current.clear();
     setFitResult(null);
     setIntegrateResult(null);
     setStep(0);

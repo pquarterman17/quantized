@@ -185,10 +185,12 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
     const activeDs = st.datasets.find((d) => d.id === st.activeId) ?? null;
     const peakRange = plotRangeSelection({
       qfitRoi: st.qfitRoi,
+      qfitRoiFor: st.qfitRoiFor,
       integral: st.integral,
       selection: st.selection,
       activeId: st.activeId,
-      plottedX: activeDs ? fullPlottedX(activeDs.data, st.xKey) : null,
+      xKey: st.xKey,
+      plottedX: () => (activeDs ? fullPlottedX(activeDs.data, st.xKey) : null),
     });
     const fitPeakRange = () => {
       if (!peakRange || !activeDs) return;

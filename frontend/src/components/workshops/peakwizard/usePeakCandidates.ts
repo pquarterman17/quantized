@@ -15,15 +15,16 @@
 //
 // EDITS FOLLOW THEIR PEAK. The model table's user edits are keyed `p{i}` by
 // INCLUDED-peak index (lib/peakRecipeFit.ts). Every operation that moves an
-// included peak's index tells the wizard (`remapFit`): remove / exclude
-// shifts later peaks down, re-include shifts them up. A wholesale new list
-// (Find peaks) keeps the edits by index — the recipe semantic.
+// included peak's index tells the wizard: removing (x) or excluding a peak
+// shifts later peaks down (`peakLeft`; an EXCLUDED peak's own edits are set
+// aside by its stable candidate `id`), re-including shifts them up and puts
+// its edits back (`peakJoined`). A wholesale new list (Find peaks) keeps the
+// edits by index — the recipe semantic.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { findPeaks } from "../../../lib/api/peaks";
 import { visiblePeakMarkers } from "../../../lib/peakMarkerHit";
-import { insertedAt, removedAt } from "../../../lib/peakRecipeFit";
 import { seedPeakNear } from "../../../lib/peakSeed";
 import { baselineValueAt, plotApexY } from "../../../lib/peakWizardApex";
 import type { PeakRecipe } from "../../../lib/peakwizard";
@@ -41,6 +42,9 @@ import { useApp } from "../../../store/useApp";
  *  added peak (`addPeakAt`) gets `bg: 0` — no detector background to
  *  separate out for it. */
 export interface CandidatePeak {
+  /** Stable for the session (never reused): what an excluded peak's
+   *  set-aside model edits are keyed by. */
+  id: number;
   center: number;
   height: number;
   bg: number;
@@ -66,16 +70,23 @@ interface Inputs {
   xKey: number | null;
   /** A Find replaced the candidate set: downstream results are stale. */
   onReplaced: () => void;
-  /** Renumber the model's per-peak edits; must be a stable function. */
-  remapFit: (map: (i: number) => number | null) => void;
+  /** Included peak `k` (candidate `id`) left the model; `ids` are the included
+   *  candidate ids BEFORE. `keep`: set its edits aside (an exclusion). Stable. */
+  peakLeft: (k: number, id: number, ids: readonly number[], keep: boolean) => void;
+  /** Candidate `id` joined the model as peak `k`; `ids` are the included ids
+   *  AFTER. Stable. */
+  peakJoined: (k: number, id: number, ids: readonly number[]) => void;
 }
+
+let nextCandidateId = 1;
+const includedIds = (cs: readonly CandidatePeak[]): number[] => cs.filter((c) => c.included).map((c) => c.id);
 
 /** How many INCLUDED candidates precede candidate `i` (its model index). */
 const includedIndex = (cs: readonly CandidatePeak[], i: number): number =>
   cs.slice(0, i).filter((c) => c.included).length;
 
 export function usePeakCandidates(inp: Inputs) {
-  const { active, step, segment, workingY, baseline, find, xKey, onReplaced, remapFit } = inp;
+  const { active, step, segment, workingY, baseline, find, xKey, onReplaced, peakLeft, peakJoined } = inp;
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
   const setPeakWizardEdit = useApp((s) => s.setPeakWizardEdit);
   const [candidates, setCandidates] = useState<CandidatePeak[]>([]);
@@ -87,7 +98,7 @@ export function usePeakCandidates(inp: Inputs) {
   const [editSuppressed, setEditSuppressed] = useState(false);
 
   // The ops below read and write the list through this ref so each one can
-  // tell `remapFit` which INCLUDED index moved (a functional setState updater
+  // tell the wizard which INCLUDED index moved (a functional setState updater
   // must stay pure, so the remap cannot live inside one), and so two ops in
   // one tick still see each other's result.
   const listRef = useRef(candidates);
@@ -115,6 +126,7 @@ export function usePeakCandidates(inp: Inputs) {
         max_peaks: find.max_peaks,
       });
       commit(res.peaks.map((p: Peak) => ({
+        id: nextCandidateId++,
         center: p.center, height: p.height, bg: p.bg, fwhm: p.fwhm, included: true, manual: false,
       })));
       onReplaced();
@@ -149,8 +161,10 @@ export function usePeakCandidates(inp: Inputs) {
     const c = cs[i];
     if (!c) return;
     const k = includedIndex(cs, i);
-    remapFit(c.included ? removedAt(k) : insertedAt(k));
-    commit(cs.map((x, j) => (j === i ? { ...x, included: !x.included } : x)));
+    const next = cs.map((x, j) => (j === i ? { ...x, included: !x.included } : x));
+    if (c.included) peakLeft(k, c.id, includedIds(cs), true);
+    else peakJoined(k, c.id, includedIds(next));
+    commit(next);
   };
   // R9: memoized (not plain closures) so their identity — and therefore the
   // `peakWizardEdit` bridge effect below that lists them as deps — stays
@@ -163,16 +177,16 @@ export function usePeakCandidates(inp: Inputs) {
   const removePeak = useCallback((i: number) => {
     const cs = listRef.current;
     if (!cs[i]) return;
-    if (cs[i].included) remapFit(removedAt(includedIndex(cs, i)));
+    if (cs[i].included) peakLeft(includedIndex(cs, i), cs[i].id, includedIds(cs), false);
     commit(cs.filter((_, j) => j !== i));
-  }, [remapFit, commit]);
+  }, [peakLeft, commit]);
   const addPeakAt = useCallback(
     (at: number) => {
       if (!segment || !workingY || segment.x.length === 0) return;
       const seed = seedPeakNear(segment.x, workingY, at);
       if (!seed) return;
       // Appended: it becomes the LAST included peak, so no index moves.
-      commit([...listRef.current, { ...seed, bg: 0, included: true, manual: true }]);
+      commit([...listRef.current, { id: nextCandidateId++, ...seed, bg: 0, included: true, manual: true }]);
     },
     [segment, workingY, commit],
   );

@@ -83,6 +83,7 @@ import type { ReportEntry } from "../lib/report";
 import type { PanelFit } from "../lib/panelLayout";
 import type { PageSetup } from "../lib/pagesetup";
 import type { FwhmResult } from "../lib/peakwidth";
+import type { IntegralResult } from "../lib/plotRangeSelection";
 import type { FigureDoc } from "../lib/figuredoc";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import { nextDatasetId, nextFolderId, nextSmartFolderId } from "./idSeq";
@@ -184,12 +185,8 @@ export type PlotTool =
   | "integ"
   | "fwhm"
   | "qfit";
-/** Committed integral region from the ∫ tool (area under the curve). */
-export interface IntegralResult {
-  xlo: number;
-  xhi: number;
-  area: number;
-}
+/** Committed integral region from the ∫ tool (lib/plotRangeSelection). */
+export type { IntegralResult };
 
 /** A layer SLD handed from the calculators SLD tab to the reflectivity workshop
  *  (cross-panel hook). `sld` is in Å⁻² (the reflectivity layer unit — the SLD tab
@@ -1272,7 +1269,9 @@ export const useApp = create<AppState>((set, get) => ({
   // (the window-management action implementations moved to store/windows.ts —
   // composed via createWindowsSlice at the top of this literal.)
   setPlotTool: (plotTool) => set({ plotTool }),
-  setIntegral: (integral) => set({ integral }),
+  // Stamped with the dataset + X column it was drawn on (plotRangeSelection).
+  setIntegral: (integral) =>
+    set((s) => ({ integral: integral && { ...integral, context: { datasetId: s.activeId, xKey: s.xKey } } })),
   setFwhmResult: (fwhmResult) => set({ fwhmResult }),
   setCmdk: (cmdkOpen) => set({ cmdkOpen }),
   setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),

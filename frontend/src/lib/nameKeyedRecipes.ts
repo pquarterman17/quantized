@@ -48,6 +48,7 @@ import {
   PEAK_SHAPES,
   type PeakRecipe,
   saveRecipe as savePeakRecipe,
+  unreadablePeakRecipeNames,
 } from "./peakwizard";
 import { DEFAULT_FIT, parseRecipeFit } from "./peakRecipeFit";
 import { dropEntry, moveEntry } from "./recipeIndex";
@@ -88,7 +89,14 @@ interface Adapter {
    *  see RECIPE_CAPABILITIES for the resulting `canImportExport` matrix. */
   serialize?: (record: NamedRecord) => string;
   parse?: (text: string) => NamedRecord;
+  /** Names held by stored records `load` cannot return (peak recipes a newer
+   *  app wrote, P2.4 slice 3). They count as TAKEN when deduping a name, so
+   *  a rename / duplicate / import never lands on — and replaces — one. */
+  hidden?: () => readonly string[];
 }
+
+/** Every name a new record must not take: the readable ones and the hidden. */
+const takenNames = (a: Adapter): string[] => [...a.load().map((r) => r.name), ...(a.hidden?.() ?? [])];
 
 // ── P3.5 import/export for the three that had none ─────────────────────────
 //
@@ -338,6 +346,7 @@ const ADAPTERS: Record<NameKeyedKind, Adapter> = {
     remove: (name) => void deletePeakRecipe(name),
     serialize: serializeRecord,
     parse: parsePeakRecipeFile,
+    hidden: unreadablePeakRecipeNames,
   },
   graph: {
     load: loadGraphTemplates,
@@ -381,7 +390,7 @@ export function renameNameKeyed(kind: NameKeyedKind, from: string, to: string): 
   const record = all.find((r) => r.name === from);
   if (!record) return { ok: false, reason: `"${from}" no longer exists` };
 
-  const taken = new Set(all.map((r) => r.name).filter((n) => n !== from));
+  const taken = new Set(takenNames(adapter).filter((n) => n !== from));
   const final = uniqueTemplateName(wanted, taken);
   adapter.save({ ...record, name: final }); // guard 2: save first…
   adapter.remove(from); // …then drop the old key
@@ -398,7 +407,7 @@ export function duplicateNameKeyed(kind: NameKeyedKind, name: string): RecipeOpR
   const all = adapter.load();
   const record = all.find((r) => r.name === name);
   if (!record) return { ok: false, reason: `"${name}" no longer exists` };
-  const final = uniqueTemplateName(`${name} copy`, new Set(all.map((r) => r.name)));
+  const final = uniqueTemplateName(`${name} copy`, new Set(takenNames(adapter)));
   adapter.save({ ...record, name: final });
   return { ok: true, name: final };
 }
@@ -437,7 +446,7 @@ export function importNameKeyed(kind: NameKeyedKind, text: string): RecipeOpResu
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : "not a valid recipe file" };
   }
-  const final = uniqueTemplateName(parsed.name, new Set(adapter.load().map((r) => r.name)));
+  const final = uniqueTemplateName(parsed.name, new Set(takenNames(adapter)));
   adapter.save({ ...parsed, name: final });
   // Every `save*` swallows a `localStorage.setItem` failure (quota, private
   // mode) and keeps the record session-local at best -- so a bare "saved"

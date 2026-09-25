@@ -79,7 +79,13 @@ export function usePeakBaseline(
         // (recomputed reactively once `active` swaps), so this only guards
         // the eagerly-fired first step.
         const ds = await useApp.getState().resolveDataset(activeId);
-        if (cancelled || !ds) return;
+        if (cancelled) return;
+        if (!ds) {
+          // A terminal outcome like any failure (an armed "Fit this range"
+          // find waits on exactly these), never a silent stop.
+          setFailure({ segment, message: "the dataset is no longer available" });
+          return;
+        }
         const res = await (b.method === "als"
           ? baselineALS({ y: segment.y, lam: b.lam, p: b.p })
           : b.method === "rollingball"

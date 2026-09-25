@@ -294,6 +294,51 @@ export function setFwhmShared(setup: ModelSetup, on: boolean): ModelSetup {
   return tieToFirst(setup, WIDTH_FIELDS, on);
 }
 
+/** The table for these peaks and this recipe fit section: the seed (the
+ *  recipe's width link included), then the Share-FWHM flag when the user set
+ *  one, then the user's edits. Pure; what useModelFit shows and sends. */
+export function buildSetup(
+  peaks: readonly SeedPeak[],
+  fit: PeakRecipeFit,
+  model: { shape: string; bgDegree: number; linkMode: string },
+  x: readonly number[],
+  y: readonly number[],
+): ModelSetup {
+  const shapes = peaks.map((_, i) => fit.shapes[i] ?? shapeFromGlobal(model.shape));
+  const bg = fit.background ?? backgroundFromDegree(model.bgDegree);
+  let seeded = seedSetup(peaks, shapes, bg, x, y, model.linkMode);
+  if (fit.shareFwhm !== null) seeded = setFwhmShared(seeded, fit.shareFwhm);
+  return applyEdits(seeded, fit);
+}
+
+/** The Share-FWHM toggle as a recipe change. It sets the FLAG — the ties
+ *  themselves are never recorded as edits (a later width-link change would
+ *  otherwise be overridden by them), and any tie edit on a width the toggle
+ *  governs steps aside so the toggle does what it says. A root the user had
+ *  fixed is made to vary while shared and its fixed state restored on
+ *  unshare (`shareVary`), as before. `setup` is the table shown now. */
+export function withShareFwhm(fit: PeakRecipeFit, setup: ModelSetup, on: boolean): PeakRecipeFit {
+  const params: Record<string, ParamEdit> = { ...fit.params };
+  const shareVary = { ...fit.shareVary };
+  for (const [root, ...rest] of groups(setup.params, WIDTH_FIELDS)) {
+    for (const p of rest) {
+      const e = params[p.name];
+      if (!e || !("tie" in e)) continue;
+      const { tie: _dropped, ...kept } = e;
+      if (Object.keys(kept).length > 0) params[p.name] = kept;
+      else delete params[p.name];
+    }
+    if (on && !root.vary && root.tie === null && !(root.name in shareVary)) {
+      shareVary[root.name] = false;
+      params[root.name] = { ...params[root.name], vary: true };
+    } else if (!on && root.name in shareVary) {
+      params[root.name] = { ...params[root.name], vary: shareVary[root.name] };
+      delete shareVary[root.name];
+    }
+  }
+  return { ...fit, shareFwhm: on, params, shareVary };
+}
+
 /** True when every peak's width is tied to its field's first-peak root. */
 export function fwhmShared(params: readonly ModelParam[]): boolean {
   const g = groups(params, WIDTH_FIELDS);

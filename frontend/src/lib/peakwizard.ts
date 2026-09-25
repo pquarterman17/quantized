@@ -9,10 +9,13 @@
 // VERSIONS. v1 had no `fit`; it migrates to v2 with `DEFAULT_FIT`, which is
 // exactly how the wizard treated every v1 recipe (model engine, shapes from
 // the global shape, background from the degree, no table edits) — lossless,
-// so no warning. Anything else that cannot be read (an unknown version, a
-// malformed fit section) FAILS CLOSED: it is skipped with a named warning
-// (`loadRecipesChecked`), never half-loaded, and a later save never deletes
-// it from storage — only a save under the same name replaces it.
+// so no warning. A stored v2 edit FIELD that cannot be honoured (bounds with
+// min > max, a name past the peak cap) is dropped with a warning and the rest
+// of the recipe loads. Anything else that cannot be read (an unknown version,
+// a structurally malformed fit section) FAILS CLOSED: it is skipped with a
+// named warning (`loadRecipesChecked`), never half-loaded, never deleted by a
+// later save or delete, and its name stays TAKEN — a save onto it is refused
+// (`saveRecipe` throws) and rename / duplicate / import dedupe around it.
 
 import { DEFAULT_FIT, parseRecipeFit, type PeakRecipeFit } from "./peakRecipeFit";
 
@@ -159,14 +162,15 @@ const fieldOf = (v: unknown, k: string): unknown =>
 
 /** Any stored value -> a current (v2) PeakRecipe, or an Error saying why not:
  *  v1 gains `DEFAULT_FIT`; v2's fit section is validated and rebuilt
- *  (lib/peakRecipeFit's `parseRecipeFit`). */
-export function upgradePeakRecipe(v: unknown): PeakRecipe {
+ *  (lib/peakRecipeFit's `parseRecipeFit` — TOLERANTLY when `warnings` is
+ *  given: an unusable edit field is dropped and described there). */
+export function upgradePeakRecipe(v: unknown, warnings?: string[]): PeakRecipe {
   const version = fieldOf(v, "version");
   if (typeof version === "number" && version > PEAK_RECIPE_VERSION) {
     throw new Error(`unsupported version ${version} (this app reads up to ${PEAK_RECIPE_VERSION})`);
   }
   if (!isPeakRecipe(v)) throw new Error("not a peak recipe");
-  const fit = v.version === 1 ? DEFAULT_FIT : parseRecipeFit(v.fit);
+  const fit = v.version === 1 ? DEFAULT_FIT : parseRecipeFit(v.fit, warnings);
   return { ...v, version: 2, fit };
 }
 
@@ -180,30 +184,60 @@ function readRaw(): unknown[] {
   }
 }
 
-function upgradeAll(raw: readonly unknown[], warnings: string[] | null): PeakRecipe[] {
+/** A load warning. `key` (name + version + what) lets a caller say it once
+ *  per session however often the list is read. */
+export interface RecipeWarning {
+  key: string;
+  message: string;
+}
+
+function upgradeAll(raw: readonly unknown[], warnings: RecipeWarning[] | null): PeakRecipe[] {
   const out: PeakRecipe[] = [];
   for (const entry of raw) {
+    const name = fieldOf(entry, "name");
+    const label = typeof name === "string" && name ? ` "${name}"` : "";
+    const id = `${typeof name === "string" ? name : "?"}@v${String(fieldOf(entry, "version"))}`;
+    const dropped: string[] = [];
     try {
-      out.push(upgradePeakRecipe(entry));
+      out.push(upgradePeakRecipe(entry, dropped));
+      for (const d of dropped) warnings?.push({ key: `${id}:${d}`, message: `saved peak recipe${label}: ${d}` });
     } catch (e) {
-      const name = fieldOf(entry, "name");
-      const label = typeof name === "string" && name ? ` "${name}"` : "";
-      warnings?.push(`skipped saved peak recipe${label}: ${e instanceof Error ? e.message : "unreadable"}`);
+      const why = e instanceof Error ? e.message : "unreadable";
+      warnings?.push({ key: `${id}:${why}`, message: `skipped saved peak recipe${label}: ${why}` });
     }
   }
   return out;
 }
 
 /** Every readable saved recipe (upgraded to v2), plus one warning per record
- *  skipped — the wizard shows them the way a workspace load shows its
- *  `migrationWarnings` (store/toasts' `notifyMigrationWarnings`). */
-export function loadRecipesChecked(): { recipes: PeakRecipe[]; warnings: string[] } {
-  const warnings: string[] = [];
+ *  skipped or field dropped — the wizard shows them the way a workspace load
+ *  shows its `migrationWarnings` (store/toasts' `notifyMigrationWarnings`). */
+export function loadRecipesChecked(): { recipes: PeakRecipe[]; warnings: RecipeWarning[] } {
+  const warnings: RecipeWarning[] = [];
   return { recipes: upgradeAll(readRaw(), warnings), warnings };
 }
 
 export function loadRecipes(): PeakRecipe[] {
   return upgradeAll(readRaw(), null);
+}
+
+const readable = (v: unknown): boolean => {
+  try {
+    upgradePeakRecipe(v, []);
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+/** Names held by stored records this app cannot read (a newer version, a
+ *  malformed fit). They are TAKEN: a save, rename, duplicate or import must
+ *  never land on one (lib/nameKeyedRecipes counts them when deduping). */
+export function unreadablePeakRecipeNames(): string[] {
+  return readRaw().flatMap((r) => {
+    const name = fieldOf(r, "name");
+    return typeof name === "string" && !readable(r) ? [name] : [];
+  });
 }
 
 /** Rewrite the slot as `raw` — records this app cannot read ride through
@@ -218,11 +252,17 @@ function writeRaw(raw: unknown[]): PeakRecipe[] {
   return upgradeAll(raw, null);
 }
 
-/** Save (upsert by name) and return the new list. */
+/** Save (upsert by name) and return the new list. Throws — writing nothing —
+ *  when the name belongs to a stored record this app cannot read: replacing
+ *  it would silently destroy it. */
 export function saveRecipe(recipe: PeakRecipe): PeakRecipe[] {
+  if (unreadablePeakRecipeNames().includes(recipe.name)) {
+    throw new Error(`a saved peak recipe named "${recipe.name}" could not be read (a newer or damaged record) — save under another name`);
+  }
   return writeRaw([...readRaw().filter((r) => fieldOf(r, "name") !== recipe.name), recipe]);
 }
 
+/** Delete the READABLE record(s) of that name; an unreadable one is kept. */
 export function deleteRecipe(name: string): PeakRecipe[] {
-  return writeRaw(readRaw().filter((r) => fieldOf(r, "name") !== name));
+  return writeRaw(readRaw().filter((r) => fieldOf(r, "name") !== name || !readable(r)));
 }

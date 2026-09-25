@@ -177,6 +177,30 @@ describe("PlotContextMenu — Peak Fitting ▸ Fit this range (audit P2.4)", () 
     expect(fitEntry()).toHaveAttribute("title", expect.stringMatching(/select an x-range first/));
   });
 
+  it("uses an ∫ region only while its dataset and X column are the plotted ones (review #6)", () => {
+    useApp.getState().setIntegral({ xlo: 36, xhi: 44, area: 1 });
+    expect(useApp.getState().integral?.context).toEqual({ datasetId: "d1", xKey: null });
+    const { unmount } = render(
+      <PlotContextMenu x={300} y={250} plotRef={{ current: fakePlot() }} payload={payload} plotted={[0, 1]}
+        hidden={[false, false]} actions={actions} onClose={vi.fn()} />,
+    );
+    expect(fitEntry()).toBeEnabled();
+    unmount();
+    useApp.setState({ xKey: 0 }); // another X column: the band no longer means this range
+    open();
+    expect(fitEntry()).toBeDisabled();
+  });
+
+  it("the Gadget band is stamped with the dataset + X column it was drawn on", () => {
+    useApp.getState().setQfitRoi([36, 44]);
+    expect(useApp.getState().qfitRoiFor).toEqual({ datasetId: "d1", xKey: null });
+    useApp.setState({ xKey: 0 });
+    useApp.getState().setQfitRoi(useApp.getState().qfitRoi); // a re-run keeps the original stamp
+    expect(useApp.getState().qfitRoiFor).toEqual({ datasetId: "d1", xKey: null });
+    useApp.getState().setQfitRoi(null);
+    expect(useApp.getState().qfitRoiFor).toBeNull();
+  });
+
   it("hands the selected rows' x-range to the Peak Analyzer and opens it", () => {
     useApp.setState({ selection: { datasetId: "d1", rows: [1, 2, 3] } });
     const onClose = open();

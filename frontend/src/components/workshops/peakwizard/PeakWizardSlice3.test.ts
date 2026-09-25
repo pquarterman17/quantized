@@ -73,7 +73,8 @@ describe("recipe v2 through the wizard", () => {
       engine: "model",
       shapes: [null, "lorentzian"],
       background: "constant",
-      params: { "p0.center": { min: 1.8, max: 2.2 }, "p1.height": { vary: false, value: 0.4 }, "p1.fwhm": { tie: "p0.fwhm" } },
+      params: { "p0.center": { min: 1.8, max: 2.2 }, "p1.height": { vary: false, value: 0.4 } },
+      shareFwhm: true, // the toggle is a flag — no tie edits recorded (review #4)
       shareVary: {},
     });
     first.unmount();
@@ -93,6 +94,47 @@ describe("recipe v2 through the wizard", () => {
     expect(second.result.current.model.fwhmShared).toBe(true);
   });
 
+  it("refuses to save a table with problems, with the reason, so save and load agree (review #2)", async () => {
+    stubFetch();
+    const { result } = renderHook(() => usePeakWizard());
+    await act(() => result.current.runFind());
+    act(() => result.current.model.patch("p0.center", { min: 3, max: 1 }));
+    act(() => result.current.saveRecipe("inverted"));
+    expect(result.current.recipes).toEqual([]);
+    expect(localStorage.getItem("qz.peakRecipes")).toBeNull();
+    expect(useToasts.getState().toasts.at(-1)?.msg).toMatch(/recipe not saved — fix the parameter table first: #1 center: min is greater than max/);
+  });
+
+  it("refuses to save over a stored recipe it cannot read (review #7)", () => {
+    stubFetch();
+    const future = { name: "later", version: 3 };
+    localStorage.setItem("qz.peakRecipes", JSON.stringify([future]));
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.saveRecipe("later"));
+    expect(JSON.parse(localStorage.getItem("qz.peakRecipes")!)).toEqual([future]);
+    expect(useToasts.getState().toasts.at(-1)?.msg).toMatch(/recipe not saved — a saved peak recipe named "later" could not be read/);
+  });
+
+  it("says a skipped recipe once per session, not on every mount (review #9)", () => {
+    localStorage.setItem("qz.peakRecipes", JSON.stringify([{ name: "once-only", version: 9 }]));
+    const skippedToasts = () => useToasts.getState().toasts.filter((t) => t.msg.includes('"once-only"')).length;
+    renderHook(() => usePeakWizard()).unmount();
+    renderHook(() => usePeakWizard()).unmount();
+    expect(skippedToasts()).toBe(1);
+  });
+
+  it("Share FWHM on then off, then a new width link: the link's ties apply (review #4)", async () => {
+    stubFetch();
+    const { result } = renderHook(() => usePeakWizard());
+    await act(() => result.current.runFind());
+    act(() => result.current.model.toggleShareFwhm());
+    act(() => result.current.model.toggleShareFwhm());
+    expect(param(result, "p1.fwhm")?.tie).toBeNull();
+    act(() => result.current.patchRecipe({ model: { linkMode: "Shared FWHM" } }));
+    expect(param(result, "p1.fwhm")?.tie).toBe("p0.fwhm");
+    expect(result.current.recipe.fit.params).toEqual({}); // nothing recorded as an edit
+  });
+
   it("an engine choice travels with the recipe", () => {
     stubFetch();
     const { result } = renderHook(() => usePeakWizard());
@@ -105,6 +147,30 @@ describe("recipe v2 through the wizard", () => {
 });
 
 describe("direct add and delete in the model", () => {
+  it("unticking then reticking a peak brings its edits and shape back; x deletes them for good (review #3)", async () => {
+    stubFetch();
+    const { result } = renderHook(() => usePeakWizard());
+    await act(() => result.current.runFind());
+    act(() => result.current.model.setShape(1, "pseudo_voigt"));
+    act(() => result.current.model.patch("p1.eta", { value: 0.3, vary: false }));
+    act(() => result.current.model.patch("p0.center", { min: 1.9 }));
+    act(() => result.current.togglePeak(1));
+    expect(param(result, "p1.eta")).toBeUndefined();
+    act(() => result.current.togglePeak(0)); // both out: nothing in the model
+    act(() => result.current.togglePeak(1)); // peak 2 back first -> it is p0 now
+    expect(result.current.model.setup.shapes).toEqual(["pseudo_voigt"]);
+    expect(param(result, "p0.eta")).toMatchObject({ value: 0.3, vary: false });
+    act(() => result.current.togglePeak(0)); // peak 1 back, before it: p0 again
+    expect(result.current.model.setup.shapes).toEqual(["gaussian", "pseudo_voigt"]);
+    expect(param(result, "p0.center")?.min).toBe(1.9);
+    expect(param(result, "p1.eta")).toMatchObject({ value: 0.3, vary: false });
+    act(() => result.current.togglePeak(1));
+    act(() => result.current.removePeak(1)); // x on the excluded peak
+    act(() => result.current.addPeakAt(4));
+    expect(result.current.model.setup.shapes).toEqual(["gaussian", "gaussian"]);
+    expect(Object.keys(result.current.recipe.fit.params).filter((n) => n.startsWith("p1."))).toEqual([]);
+  });
+
   it("a click near a peak adds a data-seeded candidate that becomes the next model peak, keeping the other edits", async () => {
     stubFetch();
     const { result } = renderHook(() => usePeakWizard());
@@ -167,6 +233,39 @@ describe("Peak Fitting ▸ Fit this range", () => {
     const sentY = find.body.y as number[];
     expect(sentX[0]).toBeCloseTo(1);
     sentX.forEach((x, i) => expect(sentY[i]).toBeCloseTo(Y[Math.round(x * 10)] / 2));
+  });
+
+  // Review #1: a range with no data must not leave a find armed to fire on
+  // some later, unrelated change (and clobber curated candidates).
+  it("a range with no data disarms at once (saying why) and never fires later", async () => {
+    stubFetch();
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.patchRecipe({ baseline: { method: "als" } }));
+    await waitFor(() => expect(result.current.baselineBusy).toBe(false));
+    act(() => requestPeakFitRange("d1", 100, 200));
+    await waitFor(() => expect(result.current.findError).toMatch(/no finite X\/Y pairs/));
+    act(() => result.current.patchRecipe({ range: { lo: null, hi: null } })); // unrelated later changes
+    act(() => result.current.patchRecipe({ baseline: { method: "none" } }));
+    act(() => result.current.addPeakAt(2));
+    await waitFor(() => expect(useApp.getState().peakOverlay).not.toBeNull());
+    expect(calls.filter((c) => c.url === "/api/peaks/find")).toHaveLength(0);
+    expect(result.current.candidates).toHaveLength(1);
+  });
+
+  it("an unavailable dataset disarms too (the baseline reports it)", async () => {
+    stubFetch();
+    const original = useApp.getState().resolveDataset;
+    useApp.setState({ resolveDataset: () => Promise.resolve(undefined) });
+    try {
+      const { result } = renderHook(() => usePeakWizard());
+      act(() => result.current.patchRecipe({ baseline: { method: "als" } }));
+      act(() => requestPeakFitRange("d1", 1, 3));
+      await waitFor(() => expect(result.current.baselineError).toMatch(/no longer available/));
+      act(() => result.current.patchRecipe({ baseline: { method: "none" } }));
+      expect(calls.filter((c) => c.url === "/api/peaks/find")).toHaveLength(0);
+    } finally {
+      useApp.setState({ resolveDataset: original });
+    }
   });
 
   it("refuses a range selected on another dataset, and says so", async () => {

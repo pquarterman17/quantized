@@ -11,10 +11,11 @@
 //   * Parameters (slice 3): the USER'S EDITS live in the recipe's fit section
 //     (`fit`, lib/peakRecipeFit.ts — engine, per-peak shapes, background, and
 //     field-level parameter edits by stable name), so they save and load with
-//     the recipe. The table is `applyEdits(seedSetup(...), fit)`: re-seeded
-//     from the current data on every input change, with every stored edit
-//     re-applied on top. The wizard renumbers the edits when a peak leaves
-//     or re-joins the model (`remapFitPeaks`), so an edit stays with its peak.
+//     the recipe. The table is `buildSetup` (./peakModelParams): re-seeded
+//     from the current data on every input change, the Share-FWHM flag
+//     applied, then every stored edit re-applied on top. The wizard renumbers
+//     the edits when a peak leaves or re-joins the model, so an edit stays
+//     with its peak (an excluded peak's come back on re-include).
 //   * Results: any key change DROPS the result, the in-flight request and our
 //     overlays — no hand-placed invalidation calls. A table edit after a fit
 //     leaves the result visible but STALE: its overlays come off, and the
@@ -47,17 +48,15 @@ import { useApp } from "../../../store/useApp";
 import { curveToRows, segmentRows, segmentToFullRows } from "./modelFitOverlay";
 import { setupProblems } from "./modelSetupChecks";
 import {
-  applyEdits,
-  backgroundFromDegree,
   backgroundNote,
+  buildSetup,
   fwhmShared,
   modelFitBody,
   patchParam,
   recordEdits,
-  seedSetup,
-  setFwhmShared,
   shapeFromGlobal,
   startFromFit,
+  withShareFwhm,
   type ModelBackground,
   type ModelParam,
   type ModelSetup,
@@ -141,21 +140,15 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
       digest(segment?.x), digest(workingY)]),
     [activeId, peaks, model.shape, model.bgDegree, model.linkMode, engine, segment, workingY],
   );
-  const setup = useMemo(() => {
-    const shapes = peaks.map((_, i) => fit.shapes[i] ?? shapeFromGlobal(model.shape));
-    const bg = fit.background ?? backgroundFromDegree(model.bgDegree);
-    const seeded = seedSetup(peaks, shapes, bg, segment?.x ?? [], workingY ?? [], model.linkMode);
-    return applyEdits(seeded, fit);
-  }, [peaks, fit, model.shape, model.bgDegree, model.linkMode, segment, workingY]);
+  const setup = useMemo(
+    () => buildSetup(peaks, fit, model, segment?.x ?? [], workingY ?? []),
+    [peaks, fit, model, segment, workingY],
+  );
   const setupJson = useMemo(() => JSON.stringify(setup), [setup]);
   const problems = useMemo(() => setupProblems(setup), [setup]);
   /** Record a table change (`next` derived from the CURRENT `setup`) as edits. */
   const edit = (next: ModelSetup) =>
-    setFit((f) => {
-      const shareVary = { ...f.shareVary };
-      for (const k of Object.keys(setup.shareVary)) if (!(k in next.shareVary)) delete shareVary[k];
-      return { ...f, params: recordEdits(f.params, setup.params, next.params), shareVary: { ...shareVary, ...next.shareVary } };
-    });
+    setFit((f) => ({ ...f, params: recordEdits(f.params, setup.params, next.params) }));
   const setShape = (i: number, s: ModelShape) =>
     setFit((f) => {
       const shapes = [...f.shapes];
@@ -285,7 +278,8 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     setBackground: (bg: ModelBackground) => setFit((f) => ({ ...f, background: bg })),
     patch: (name, p) => edit(patchParam(setup, name, p)),
     fwhmShared: shared,
-    toggleShareFwhm: () => edit(setFwhmShared(setup, !shared)),
+    // A flag, not tie edits (./peakModelParams `withShareFwhm`).
+    toggleShareFwhm: () => setFit((f) => withShareFwhm(f, setup, !shared)),
     // Back to the seeded defaults: every shape, background and table edit
     // goes; the engine choice is not a table edit and stays.
     resetSetup: () => setFit((f) => ({ ...DEFAULT_FIT, engine: f.engine })),

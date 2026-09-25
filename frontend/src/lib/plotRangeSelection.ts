@@ -8,19 +8,42 @@
 //   2. the Integrate tool's committed region (`integral`, the ∫ chip);
 //   3. rows picked with Select Rows (or in the worksheet) — their x extent on
 //      the plotted X column.
-// The Background Region tool is NOT a source: it hands its pick straight to
-// the Baseline workshop and leaves nothing drawn, so "this range" would be a
-// range the user cannot see. A degenerate range (lo === hi, or no finite x)
-// is no range.
+// Each counts only while it belongs to what is plotted NOW: the band and the
+// ∫ region are stamped with the dataset + X column they were drawn on
+// (`RegionContext`, written by the store's setters) and ignored when either
+// differs — or when there is no stamp at all; the row selection carries its
+// dataset id and is read through the CURRENT X column. The Background Region
+// tool is NOT a source: it hands its pick straight to the Baseline workshop
+// and leaves nothing drawn, so "this range" would be a range the user cannot
+// see. A degenerate range (lo === hi, or no finite x) is no range.
+
+/** Which dataset and X column (`xKey`, null = the time column) a region was
+ *  drawn against. */
+export interface RegionContext {
+  datasetId: string | null;
+  xKey: number | null;
+}
+
+/** Committed integral region from the ∫ tool (area under the curve). The
+ *  store stamps `context` when it is set. */
+export interface IntegralResult {
+  xlo: number;
+  xhi: number;
+  area: number;
+  context?: RegionContext;
+}
 
 export interface PlotRangeInputs {
   qfitRoi: readonly [number, number] | null;
-  integral: { xlo: number; xhi: number } | null;
+  qfitRoiFor: RegionContext | null;
+  integral: IntegralResult | null;
   /** The row selection, live only when it belongs to `activeId`. */
   selection: { datasetId: string; rows: readonly number[] } | null;
   activeId: string | null;
-  /** The active dataset's plotted X, full rows (fitselectionActions' `fullPlottedX`). */
-  plottedX: readonly (number | null)[] | null;
+  xKey: number | null;
+  /** The active dataset's plotted X, full rows — a getter, only called when
+   *  the row selection is what decides (it is a whole-column copy). */
+  plottedX: () => readonly (number | null)[] | null;
 }
 
 export interface PlotRange {
@@ -38,20 +61,25 @@ function ordered(a: number, b: number, source: PlotRange["source"]): PlotRange |
   return { lo: Math.min(a, b), hi: Math.max(a, b), source };
 }
 
+const current = (c: RegionContext | null | undefined, s: PlotRangeInputs): boolean =>
+  !!c && c.datasetId !== null && c.datasetId === s.activeId && c.xKey === s.xKey;
+
 export function plotRangeSelection(s: PlotRangeInputs): PlotRange | null {
-  if (s.qfitRoi) {
+  if (s.qfitRoi && current(s.qfitRoiFor, s)) {
     const r = ordered(s.qfitRoi[0], s.qfitRoi[1], "gadget region");
     if (r) return r;
   }
-  if (s.integral) {
+  if (s.integral && current(s.integral.context, s)) {
     const r = ordered(s.integral.xlo, s.integral.xhi, "integration region");
     if (r) return r;
   }
-  if (s.selection && s.selection.datasetId === s.activeId && s.plottedX) {
+  if (s.selection && s.selection.datasetId === s.activeId) {
+    const plottedX = s.plottedX();
+    if (!plottedX) return null;
     let lo = Infinity;
     let hi = -Infinity;
     for (const row of s.selection.rows) {
-      const x = s.plottedX[row];
+      const x = plottedX[row];
       if (typeof x === "number" && Number.isFinite(x)) {
         lo = Math.min(lo, x);
         hi = Math.max(hi, x);

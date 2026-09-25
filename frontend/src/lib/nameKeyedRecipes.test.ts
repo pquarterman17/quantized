@@ -274,6 +274,7 @@ describe("import / export", () => {
         shapes: [null, "lorentzian"],
         background: "constant",
         params: { "p1.center": { value: 44, vary: false }, "p1.fwhm": { tie: "p0.fwhm", min: null } },
+        shareFwhm: false,
         shareVary: {},
       },
     };
@@ -283,6 +284,18 @@ describe("import / export", () => {
     localStorage.clear();
     expect(importNameKeyed("peak", exported.text)).toEqual({ ok: true, name: original.name });
     expect(loadPeakRecipes()[0]).toEqual(original);
+  });
+
+  // Review #7: a stored record this app cannot read keeps its name.
+  it("rename, duplicate and import treat an unreadable peak recipe's name as taken", () => {
+    const future = { ...DEFAULT_RECIPE, name: "Later", version: 3 };
+    localStorage.setItem("qz.peakRecipes", JSON.stringify([future]));
+    savePeakRecipe({ ...DEFAULT_RECIPE, name: "Mine" });
+    expect(renameNameKeyed("peak", "Mine", "Later")).toEqual({ ok: true, name: "Later (2)" });
+    expect(duplicateNameKeyed("peak", "Later (2)")).toMatchObject({ ok: true });
+    expect(importNameKeyed("peak", JSON.stringify({ ...DEFAULT_RECIPE, name: "Later" }))).toEqual({ ok: true, name: "Later (3)" });
+    const raw = JSON.parse(localStorage.getItem("qz.peakRecipes")!) as { name: string; version: number }[];
+    expect(raw.find((r) => r.name === "Later")).toMatchObject({ version: 3 }); // untouched
   });
 
   it("imports a v1 file as v2 with the default fit, and refuses a bad fit or a newer version by name", () => {

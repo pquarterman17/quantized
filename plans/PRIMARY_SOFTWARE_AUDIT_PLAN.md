@@ -3227,6 +3227,20 @@ Chromium e2e `peak-fit-range-and-add.spec.ts` (real backend); sabotages went
 red: segment mapping of the preview, baseline-to-segment tie, peak-delete
 remap, min > max validation, v1 migration, shoulder detection, the busy
 reset, and (e2e) the menu's hand-off. Eager bundle unchanged (844.7 kB; all new code lazy).
+Review round (same day, 9 findings fixed): an armed "Fit this range" find
+remembers the dataset + range it was asked for and fires or disarms on the
+first terminal outcome (no data -> the reason; baseline in / failed / dataset
+unavailable), never later; save refuses a table with problems (with the
+reason) and the STORAGE loader drops an unusable edit field (min > max, a
+name past the 500-peak cap) with a warning instead of losing the recipe
+(files stay strict); remaps never write a name past the cap; unticking a
+peak sets its edits aside by candidate id and reticking restores them (x
+deletes); Share FWHM is a flag (`shareFwhm`), never tie edits, reset by a
+width-link change; the Gadget band / integration region are stamped with the
+dataset + X column they were drawn on and ignored when stale; an unreadable
+record's name is taken (save refuses, rename / duplicate / import dedupe
+around it); the plotted-X copy is built only when the row selection decides;
+each load warning shows once per session.
 Remaining for slice 4: batch recipe (run a saved v2 recipe over many
 datasets) and the uncertainty/diagnostic result table; durable peak-table
 publishing with stderr + shape and a correlation view are still open.

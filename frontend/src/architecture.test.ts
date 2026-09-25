@@ -2169,6 +2169,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   integral: "analysis tool/gadget working scratch",
   fwhmResult: "analysis tool/gadget working scratch",
   qfitRoi: "analysis tool/gadget working scratch",
+  qfitRoiFor: "analysis tool/gadget working scratch",
   qfitModel: "analysis tool/gadget working scratch",
   qfitBusy: "analysis tool/gadget working scratch",
   qfitResult: "analysis tool/gadget working scratch",
