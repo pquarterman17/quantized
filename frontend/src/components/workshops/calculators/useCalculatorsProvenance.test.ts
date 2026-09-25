@@ -254,3 +254,88 @@ describe("SLD provenance", () => {
     expect(result.current.sld.formula).toBe("D2O");
   });
 });
+
+type Converted = Awaited<ReturnType<typeof convertUnits>>;
+
+describe("units converter — live (chip / Swap) runs vs explicit '='", () => {
+  it("quick-pick chips and Swap update the readout but record no history; '=' does", async () => {
+    const chip = deferred<Converted>();
+    vi.mocked(convertUnits).mockReturnValueOnce(chip.promise);
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setPair("Pa", "Torr", "pressure"));
+    await act(async () => {
+      chip.resolve({ result: 0.0075, info: {} });
+      await chip.promise;
+    });
+    expect(result.current.result).toBe(0.0075);
+
+    const swap = deferred<Converted>();
+    vi.mocked(convertUnits).mockReturnValueOnce(swap.promise);
+    act(() => result.current.swapUnits());
+    await act(async () => {
+      swap.resolve({ result: 133.322, info: {} });
+      await swap.promise;
+    });
+    expect(result.current.result).toBe(133.322);
+    expect(useCalcHistory.getState().history).toHaveLength(0);
+
+    vi.mocked(convertUnits).mockResolvedValueOnce({ result: 133.322, info: {} });
+    await act(async () => {
+      await result.current.convert();
+    });
+    expect(useCalcHistory.getState().history).toHaveLength(1);
+  });
+
+  it("a photon quick-pick recomputes the panel without a history entry", async () => {
+    const pick = deferred<Converted>();
+    vi.mocked(convertUnits).mockReturnValue(pick.promise);
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setPair("eV", "nm", "photon_energy"));
+    await act(async () => {
+      pick.resolve({ result: 2, info: {} });
+      await pick.promise;
+    });
+    expect(result.current.peResults?.nm).toBe(2);
+    expect(useCalcHistory.getState().history).toHaveLength(0);
+
+    await act(async () => {
+      await result.current.peCompute(); // the explicit "=" DOES record
+    });
+    expect(useCalcHistory.getState().history.map((h) => h.label)).toEqual([
+      "Photon/thermal energy",
+    ]);
+  });
+
+  it("Swap on an empty custom expression clears the readout without an error", async () => {
+    vi.mocked(convertUnits).mockResolvedValue({ result: 10, info: {} });
+    const { result } = renderHook(() => useCalculators());
+    await act(async () => {
+      await result.current.convert();
+    });
+    expect(result.current.result).toBe(10);
+    act(() => result.current.setTo(""));
+    act(() => result.current.swapUnits());
+    expect(result.current.from).toBe("");
+    expect(result.current.result).toBeNull();
+    expect(result.current.error).toBeNull();
+    expect(result.current.busy).toBe(false);
+    expect(convertUnits).toHaveBeenCalledTimes(1); // the swap never reached the API
+  });
+
+  it("Swap on a half-typed expression the backend rejects clears, never errors", async () => {
+    const bad = deferred<Converted>();
+    vi.mocked(convertUnits).mockReturnValueOnce(bad.promise);
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setTo("mA/cm^"));
+    act(() => result.current.swapUnits());
+    expect(result.current.busy).toBe(true);
+    await act(async () => {
+      bad.reject(new Error("unknown unit 'cm^'"));
+      await bad.promise.catch(() => undefined);
+    });
+    expect(result.current.busy).toBe(false);
+    expect(result.current.result).toBeNull();
+    expect(result.current.error).toBeNull();
+    expect(useCalcHistory.getState().history).toHaveLength(0);
+  });
+});

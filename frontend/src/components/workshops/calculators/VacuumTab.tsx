@@ -10,9 +10,9 @@ import { vacuumGasFlow, vacuumKnudsen, vacuumMeanFreePath, vacuumMonolayerTime, 
 import {
   Button,
   Card,
+  dual,
   Field,
   ROW,
-  fmtNum,
   resultLine,
   useCard,
   withTouch,
@@ -90,7 +90,7 @@ export default function VacuumTab() {
             onClick={() =>
               void c1.run("Mean free path", `P=${mfpP} Pa, T=${mfpT} K, molecular diameter=${mfpGas} m`, async () => {
                 const r = await vacuumMeanFreePath(Number(mfpP), Number(mfpT), Number(mfpGas));
-                return `λ = ${fmtNum(r.mfp)} m (${fmtNum(r.mfpMm)} mm)`;
+                return dual`λ = ${r.mfp} m (${r.mfpMm} mm)`;
               })
             }
           >
@@ -109,7 +109,7 @@ export default function VacuumTab() {
             onClick={() =>
               void c2.run("Monolayer formation time", `P=${monoP} Pa`, async () => {
                 const r = await vacuumMonolayerTime(Number(monoP));
-                return `t_mono = ${fmtNum(r.tMono)} s`;
+                return dual`t_mono = ${r.tMono} s`;
               })
             }
           >
@@ -130,9 +130,10 @@ export default function VacuumTab() {
             onClick={() =>
               void c3.run("Sputter yield", `target=${syMat}, ion=${syIon}, E=${syE} eV`, async () => {
                 const r = await vacuumSputterYield(syMat, Number(syE), syIon);
-                return Number.isNaN(r.Y)
-                  ? `Y(${syMat}/${syIon}) = N/A (out of table)`
-                  : `Y(${syMat}/${syIon}, ${fmtNum(Number(syE))} eV) = ${fmtNum(r.Y)} atoms/ion`;
+                if (Number.isNaN(r.Y)) {
+                  return dual`Y(${syMat}/${syIon}) = N/A (out of table)`;
+                }
+                return dual`Y(${syMat}/${syIon}, ${Number(syE)} eV) = ${r.Y} atoms/ion`;
               })
             }
           >
@@ -161,7 +162,7 @@ export default function VacuumTab() {
                   Number(pP0),
                   Number(pPf),
                 );
-                return `t = ${fmtNum(r.time)} s (${fmtNum(r.timeMin)} min) · τ = ${fmtNum(r.tau)} s`;
+                return dual`t = ${r.time} s (${r.timeMin} min) · τ = ${r.tau} s`;
               })
             }
           >
@@ -181,7 +182,7 @@ export default function VacuumTab() {
             onClick={() =>
               void c5.run("Knudsen number", `MFP=${knMfp} m, L=${knL} m`, async () => {
                 const r = await vacuumKnudsen(Number(knMfp), Number(knL));
-                return `Kn = ${fmtNum(r.Kn)} [${r.regime} flow]`;
+                return dual`Kn = ${r.Kn} [${r.regime} flow]`;
               })
             }
           >
@@ -210,9 +211,7 @@ export default function VacuumTab() {
                   Number(gfD),
                   Number(gfL),
                 );
-                return `C_mol = ${fmtNum(r.Cmol)} L/s · C_visc = ${fmtNum(
-                  r.Cvisc,
-                )} L/s [${r.regime}]`;
+                return dual`C_mol = ${r.Cmol} L/s · C_visc = ${r.Cvisc} L/s [${r.regime}]`;
               })
             }
           >

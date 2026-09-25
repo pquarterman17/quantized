@@ -10,6 +10,7 @@ field (via vacuum permeability).
 
 from __future__ import annotations
 
+import math
 import re
 from typing import Any
 
@@ -299,6 +300,83 @@ def _try_bridge(
     return False, None, nan
 
 
+# --- LaTeX rendering (the scalar result's "copy LaTeX" form) -----------------
+# Everything is emitted in MATH mode -- upright unit names via \mathrm, braced
+# exponents, \cdot products -- because `^` and `\cdot` are math-only and fail
+# to compile inside \text{} (pdflatex "Missing $", KaTeX parse error). The
+# output is pure ASCII, so it also compiles without inputenc. This is a
+# Python-side presentation helper, not a golden-verified MATLAB parity output.
+_LATEX_BASE: dict[str, str] = {
+    "Ang": r"\mathring{A}",
+    "angstrom": r"\mathring{A}",
+    "Ohm": r"\Omega",
+    "ohm": r"\Omega",
+    "deg": r"{}^{\circ}",
+    "C": r"{}^{\circ}\mathrm{C}",  # the registry's "C" is degrees Celsius
+    "F": r"{}^{\circ}\mathrm{F}",  # ... and "F" Fahrenheit (farad is "F_cap")
+    "F_cap": r"\mathrm{F}",
+    "Coul": r"\mathrm{C}",
+}
+_LATEX_PREFIX: dict[str, str] = {"u": r"\mu", "mu": r"\mu", "micro": r"\mu"}
+
+
+def _latex_base(name: str) -> str:
+    return _LATEX_BASE.get(name, rf"\mathrm{{{name}}}")
+
+
+def _latex_token(name: str) -> str:
+    """One unit token (no exponent) as math-mode LaTeX, splitting an SI prefix
+    exactly the way ``_decompose_token`` resolves it."""
+    if name in _BASE_UNITS:
+        return _latex_base(name)
+    for pfx in _PREFIX_KEYS:
+        base = name[len(pfx) :]
+        if len(name) > len(pfx) and name.startswith(pfx) and base in _BASE_UNITS:
+            if pfx not in _LATEX_PREFIX and base not in _LATEX_BASE:
+                return rf"\mathrm{{{name}}}"  # e.g. mA, cm, kOe: one upright group
+            return _LATEX_PREFIX.get(pfx, rf"\mathrm{{{pfx}}}") + _latex_base(base)
+    return name  # a bare numeric literal (the "1" in "1/cm")
+
+
+def _latex_units(unit_str: str) -> str:
+    """Render a unit expression as ``num/den`` in math mode with the parser's
+    semantics: everything after the first ``/`` is denominator, so ``J/mol*K``
+    renders as ``J/(mol.K)``. A bare reciprocal (``1/cm``) becomes ``cm^{-1}``."""
+
+    def power(tex: str, exp: float) -> str:
+        return tex if exp == 1.0 else f"{tex}^{{{exp:g}}}"
+
+    toks = _tokenize(unit_str)
+    num = [power(_latex_token(t["str"]), float(t["exp"])) for t in toks if not t["in_denom"]]
+    den = [(_latex_token(t["str"]), float(t["exp"])) for t in toks if t["in_denom"]]
+    if den and num in ([], ["1"]):
+        return r"\cdot ".join(power(tex, -exp) for tex, exp in den)
+    out = r"\cdot ".join(num) or "1"
+    if den:
+        joined = r"\cdot ".join(power(tex, exp) for tex, exp in den)
+        out += "/" + (f"({joined})" if len(den) > 1 else joined)
+    return out
+
+
+def _latex_number(x: float) -> str:
+    r"""Full precision -- the shortest round-trip repr, the same digits as the
+    frontend copy-value path's ``String(x)`` -- with ``e±NN`` written as
+    ``\times 10^{NN}`` and a trailing ``.0`` trimmed."""
+    if math.isnan(x):
+        return r"\mathrm{NaN}"
+    if math.isinf(x):
+        return r"-\infty" if x < 0 else r"\infty"
+    mant, _, exp = repr(x).partition("e")
+    if mant.endswith(".0"):
+        mant = mant[:-2]
+    if not exp:
+        return mant
+    power = str(int(exp))
+    if mant in ("1", "-1"):
+        return f"{mant[:-1]}10^{{{power}}}"
+    return rf"{mant}\times 10^{{{power}}}"
+
+
 def unit_convert(
     value: ArrayLike, from_str: str, to_str: str
 ) -> tuple[NDArray[np.float64], dict[str, Any]]:
@@ -325,10 +403,17 @@ def unit_convert(
                 )
     assert result is not None
     desc = f"{from_str} -> {to_str}" if np.isnan(factor) else f"1 {from_str} = {factor:g} {to_str}"
+    latex = ""
+    if val.size == 1 and result.size == 1:
+        latex = (
+            f"${_latex_number(float(val.reshape(-1)[0]))}\\,{_latex_units(from_str)} = "
+            f"{_latex_number(float(result.reshape(-1)[0]))}\\,{_latex_units(to_str)}$"
+        )
     info = {
         "factor": factor,
         "fromParsed": {"dims": from_p["dims"], "scale": from_p["scale"], "display": from_str},
         "toParsed": {"dims": to_p["dims"], "scale": to_p["scale"], "display": to_str},
         "description": desc,
+        "latex": latex,
     }
     return result, info

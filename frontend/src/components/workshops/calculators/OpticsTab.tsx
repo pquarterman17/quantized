@@ -9,9 +9,9 @@ import { opticsBrewsterAngle, opticsCriticalAngle, opticsDielectricToRefractive,
 import {
   Button,
   Card,
+  dual,
   Field,
   ROW,
-  fmtNum,
   resultLine,
   useCard,
   withTouch,
@@ -60,9 +60,7 @@ export default function OpticsTab() {
             onClick={() =>
               void c1.run("Fresnel coefficients", `n₁=${fN1}, n₂=${fN2}, θ=${fTh}°`, async () => {
                 const r = await opticsFresnel(Number(fN1), Number(fN2), Number(fTh));
-                return `Rs = ${fmtNum(r.Rs)} · Rp = ${fmtNum(r.Rp)} · Ts = ${fmtNum(
-                  r.Ts,
-                )} · Tp = ${fmtNum(r.Tp)}`;
+                return dual`Rs = ${r.Rs} · Rp = ${r.Rp} · Ts = ${r.Ts} · Tp = ${r.Tp}`;
               })
             }
           >
@@ -85,8 +83,8 @@ export default function OpticsTab() {
                   opticsCriticalAngle(Number(aN1), Number(aN2)),
                   opticsBrewsterAngle(Number(aN1), Number(aN2)),
                 ]);
-                const tc = Number.isNaN(rc.theta_c) ? "— (no TIR)" : `${fmtNum(rc.theta_c)}°`;
-                return `θc = ${tc} · θB = ${fmtNum(rb.theta_b)}°`;
+                const tc = Number.isNaN(rc.theta_c) ? "— (no TIR)" : dual`${rc.theta_c}°`;
+                return dual`θc = ${tc} · θB = ${rb.theta_b}°`;
               })
             }
           >
@@ -107,7 +105,7 @@ export default function OpticsTab() {
             onClick={() =>
               void c3.run("Penetration depth", `n=${pN}, k=${pK}, λ=${pLam}`, async () => {
                 const r = await opticsPenetrationDepth(Number(pN), Number(pK), Number(pLam));
-                return `depth = ${fmtNum(r.depth)} (same unit as λ)`;
+                return dual`depth = ${r.depth} (same unit as λ)`;
               })
             }
           >
@@ -127,7 +125,7 @@ export default function OpticsTab() {
             onClick={() =>
               void c4.run("Skin depth", `ρ=${sRho} Ω·m, f=${sFreq} Hz`, async () => {
                 const r = await opticsSkinDepth(Number(sRho), Number(sFreq));
-                return `δ = ${fmtNum(r.delta_um)} µm`;
+                return dual`δ = ${r.delta_um} µm`;
               })
             }
           >
@@ -153,7 +151,7 @@ export default function OpticsTab() {
                   setRdE1(String(r.eps1));
                   setRdE2(String(r.eps2));
                 }
-                return `ε₁ = ${fmtNum(r.eps1)} · ε₂ = ${fmtNum(r.eps2)}`;
+                return dual`ε₁ = ${r.eps1} · ε₂ = ${r.eps2}`;
               })
             }
           >
@@ -172,7 +170,7 @@ export default function OpticsTab() {
                   setRdN(String(r.n));
                   setRdK(String(r.k));
                 }
-                return `n = ${fmtNum(r.n)} · k = ${fmtNum(r.k)}`;
+                return dual`n = ${r.n} · k = ${r.k}`;
               })
             }
           >

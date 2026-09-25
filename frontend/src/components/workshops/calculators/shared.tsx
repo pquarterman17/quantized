@@ -15,12 +15,43 @@ import { IconButton } from "../../primitives/IconButton";
 import { NumberField } from "../../primitives/NumberField";
 import { Button } from "../../primitives";
 
-/** A result string plus the exact value copy-to-clipboard should write —
- *  usually the raw JS number's full-precision `String(...)`, not the
- *  rounded `fmtNum` display text (item 5, calculator audit). Falls back to
- *  `text` when omitted (most existing `makeCardRunner` cards, whose result
- *  is only ever built as an already-formatted string). */
-export type CardResult = { text: string; err?: boolean; copyValue?: string } | null;
+/** A successful result carries separate display and clipboard strings so
+ *  presentation rounding can never silently discard numeric precision.
+ *  Build one with the `dual` tag below, never by hand. */
+export type CardSuccess = { text: string; copyValue: string };
+export type CardResult = CardSuccess | { text: string; err: true } | null;
+
+/** A `dual` interpolation: a number (fmtNum'd for display, `String()` for
+ *  copy), a string (verbatim in both), or a nested `dual` result (its text
+ *  into the text, its copyValue into the copy — for conditional suffixes). */
+export type DualPart = number | string | CardSuccess;
+
+/** Build a result's display and clipboard strings from ONE template so they
+ *  cannot drift: `dual\`ρ = ${r.rho} Ω·cm\`` gives
+ *  `{ text: "ρ = 1.23457 Ω·cm", copyValue: "ρ = 1.2345678 Ω·cm" }`.
+ *  A number that must NOT be rounded for display is passed as `String(n)`. */
+export function dual(strings: TemplateStringsArray, ...parts: DualPart[]): CardSuccess {
+  let text = strings[0];
+  let copyValue = strings[0];
+  parts.forEach((p: unknown, i) => {
+    if (typeof p === "string") {
+      text += p;
+      copyValue += p;
+    } else if (p != null && typeof p === "object") {
+      const d = p as CardSuccess;
+      text += d.text;
+      copyValue += d.copyValue;
+    } else {
+      // A number — or a null/undefined a `number`-typed API field carried at
+      // runtime, which fmtNum renders "—" exactly as the hand-written sites did.
+      text += fmtNum(p);
+      copyValue += String(p);
+    }
+    text += strings[i + 1];
+    copyValue += strings[i + 1];
+  });
+  return { text, copyValue };
+}
 
 /** A titled group of inputs + a result line, mirroring the MATLAB cards. */
 export function Card({ title, children }: { title: string; children: React.ReactNode }) {
@@ -103,26 +134,38 @@ export function parseList(s: string): number[] {
 
 /** Parse pasted two-column data (one "x y" / "x, y" / "x\ty" pair per line —
  *  whitespace/comma tolerant, like `parseList` but per row) into parallel x/y
- *  arrays. Blank lines are skipped; a malformed row (not exactly 2 numeric
- *  tokens) is silently dropped rather than throwing, so one bad paste row
- *  doesn't block the whole card. Shared by every card that fits a pasted
- *  (x, y) sweep — e.g. Curie-Weiss (T, χ) and the Hall-effect field sweep
- *  (H, R_xy) — rather than each hand-rolling its own paste parser. */
+ *  arrays. Blank lines are skipped, as is a row with fewer than 2 tokens or a
+ *  non-finite token (a header or stray note). A row with MORE than 2 columns
+ *  throws, naming the offending line(s), so the calling card runs nothing:
+ *  silently fitting only the 2-column subset of a 3-column paste (or reporting
+ *  "paste at least N rows" for an all-3-column one) would be misleading.
+ *  Shared by every card that fits a pasted (x, y) sweep — e.g. Curie-Weiss
+ *  (T, χ) and the Hall-effect field sweep (H, R_xy). */
 export function parseXYPairs(text: string): { x: number[]; y: number[] } {
   const x: number[] = [];
   const y: number[] = [];
-  for (const line of text.split(/\r?\n/)) {
+  const wide: { line: number; cols: number }[] = [];
+  text.split(/\r?\n/).forEach((line, i) => {
     const parts = line
       .trim()
       .split(/[\s,]+/)
       .filter((p) => p.length > 0);
-    if (parts.length < 2) continue;
+    if (parts.length > 2) wide.push({ line: i + 1, cols: parts.length });
+    if (parts.length !== 2) return;
     const a = Number(parts[0]);
     const b = Number(parts[1]);
     if (Number.isFinite(a) && Number.isFinite(b)) {
       x.push(a);
       y.push(b);
     }
+  });
+  if (wide.length > 0) {
+    const shown = wide.slice(0, 5);
+    const lines = shown.map((w) => w.line).join(", ") + (wide.length > shown.length ? ", …" : "");
+    const found = [...new Set(shown.map((w) => w.cols))].join(", ");
+    throw new Error(
+      `${wide.length === 1 ? "line" : "lines"} ${lines}: expected exactly 2 columns (x, y); found ${found}`,
+    );
   }
   return { x, y };
 }
@@ -154,7 +197,7 @@ export function useCard(domain: string) {
     async (
       label: string,
       inputs: string,
-      fn: (isCurrent: () => boolean) => Promise<string>,
+      fn: (isCurrent: () => boolean) => Promise<CardSuccess>,
     ): Promise<void> => {
       const id = ++seq.current;
       // For fns with side-effects beyond the returned text (e.g. chaining a
@@ -162,10 +205,10 @@ export function useCard(domain: string) {
       // disowned completion can't overwrite state the user has since edited.
       const isCurrent = (): boolean => seq.current === id;
       try {
-        const text = await fn(isCurrent);
+        const success = await fn(isCurrent);
         if (seq.current !== id) return; // superseded — a newer run/touch owns this card
-        setResult({ text });
-        useCalcHistory.getState().record({ domain, label, summary: text, inputs });
+        setResult(success);
+        useCalcHistory.getState().record({ domain, label, summary: success.text, inputs });
       } catch (e) {
         if (seq.current !== id) return;
         setResult({ text: e instanceof Error ? e.message : "calculation failed", err: true });
@@ -212,12 +255,15 @@ export function CopyButton({ value, label = "result" }: { value: string; label?:
   );
 }
 
-export const resultLine = (r: CardResult) =>
-  r && (
-    <div style={r.err ? ERR : RESULT}>
+export const resultLine = (r: CardResult) => {
+  if (!r) return null;
+  const isError = "err" in r;
+  return (
+    <div style={isError ? ERR : RESULT}>
       <span>{r.text}</span>
-      {!r.err && <CopyButton value={r.copyValue ?? r.text} />}
+      {!isError && <CopyButton value={r.copyValue} />}
     </div>
   );
+};
 
 export { Button, fmtNum };

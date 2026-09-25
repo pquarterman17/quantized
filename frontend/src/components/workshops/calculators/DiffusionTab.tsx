@@ -9,9 +9,9 @@ import { diffusionArrhenius, diffusionFickFlux, diffusionLength, diffusionCProfi
 import {
   Button,
   Card,
+  dual,
   Field,
   ROW,
-  fmtNum,
   resultLine,
   useCard,
   withTouch,
@@ -55,7 +55,7 @@ export default function DiffusionTab() {
             onClick={() =>
               void c1.run("Arrhenius diffusion coefficient", `D₀=${d0} cm²/s, Eₐ=${ea} eV, T=${arrT} K`, async () => {
                 const r = await diffusionArrhenius(Number(d0), Number(ea), Number(arrT));
-                return `D = ${fmtNum(r.D)} cm²/s`;
+                return dual`D = ${r.D} cm²/s`;
               })
             }
           >
@@ -75,7 +75,7 @@ export default function DiffusionTab() {
             onClick={() =>
               void c2.run("Diffusion length", `D=${dlD} cm²/s, t=${dlT} s`, async () => {
                 const r = await diffusionLength(Number(dlD), Number(dlT));
-                return `L = √(Dt) = ${fmtNum(r.L)} cm = ${fmtNum(r.L_um)} µm`;
+                return dual`L = √(Dt) = ${r.L} cm = ${r.L_um} µm`;
               })
             }
           >
@@ -96,7 +96,7 @@ export default function DiffusionTab() {
             onClick={() =>
               void c3.run("Fick's first law (flux)", `D=${fickD} cm²/s, ΔC=${fickDC} cm⁻³, Δx=${fickDx} cm`, async () => {
                 const r = await diffusionFickFlux(Number(fickD), Number(fickDC), Number(fickDx));
-                return `J = -D ∂C/∂x = ${fmtNum(r.J)} atoms/(cm²·s)`;
+                return dual`J = -D ∂C/∂x = ${r.J} atoms/(cm²·s)`;
               })
             }
           >
@@ -124,7 +124,7 @@ export default function DiffusionTab() {
                   Number(cpC0),
                 );
                 const c = typeof r.c === "number" ? r.c : r.c[0];
-                return `c(x,t) = ${fmtNum(c)} · L = √(Dt) = ${fmtNum(r.L)} cm`;
+                return dual`c(x,t) = ${c} · L = √(Dt) = ${r.L} cm`;
               })
             }
           >

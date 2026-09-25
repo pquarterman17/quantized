@@ -38,6 +38,7 @@ const PHOTON_ENERGY_UNITS = [
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(convertUnits).mockResolvedValue({ result: 1, info: {} });
   useCalcHistory.setState({ history: [], favorites: [], seq: 0 });
   vi.mocked(getConstants).mockResolvedValue({
     constants: { h: 6.626e-34, c: 2.998e8 },
@@ -84,7 +85,7 @@ describe("useCalculators", () => {
     expect(result.current.error).toBeNull();
   });
 
-  it("setPair swaps from/to and clears the stale result", async () => {
+  it("setPair swaps from/to and immediately computes the new result", async () => {
     vi.mocked(convertUnits).mockResolvedValue({ result: 0.0001, info: {} });
     const { result } = renderHook(() => useCalculators());
     await act(async () => {
@@ -92,10 +93,11 @@ describe("useCalculators", () => {
     });
     expect(result.current.result).not.toBeNull();
 
+    vi.mocked(convertUnits).mockResolvedValue({ result: 1239.842, info: {} });
     act(() => result.current.setPair("eV", "nm"));
     expect(result.current.from).toBe("eV");
     expect(result.current.to).toBe("nm");
-    expect(result.current.result).toBeNull();
+    await waitFor(() => expect(result.current.result).toBeCloseTo(1239.842, 3));
   });
 
   it("loads unit categories on mount", async () => {
@@ -115,7 +117,7 @@ describe("useCalculators", () => {
     expect(result.current.result).toBeNull();
   });
 
-  it("swapUnits exchanges from/to and clears the stale result", async () => {
+  it("swapUnits exchanges from/to and immediately computes", async () => {
     vi.mocked(convertUnits).mockResolvedValue({ result: 0.0001, info: {} });
     const { result } = renderHook(() => useCalculators());
     await act(async () => {
@@ -123,10 +125,11 @@ describe("useCalculators", () => {
     });
     expect(result.current.result).not.toBeNull();
 
+    vi.mocked(convertUnits).mockResolvedValue({ result: 10_000, info: {} });
     act(() => result.current.swapUnits());
     expect(result.current.from).toBe("T");
     expect(result.current.to).toBe("Oe");
-    expect(result.current.result).toBeNull();
+    await waitFor(() => expect(result.current.result).toBe(10_000));
   });
 
   it("setPair with a category argument switches the category too", () => {
@@ -150,7 +153,7 @@ describe("useCalculators", () => {
   it("surfaces an incompatible-dimension error from the backend", async () => {
     vi.mocked(convertUnits).mockRejectedValue(new Error("incompatible dimensions"));
     const { result } = renderHook(() => useCalculators());
-    act(() => result.current.setPair("Oe", "J"));
+    act(() => result.current.setTo("J"));
     await act(async () => {
       await result.current.convert();
     });
@@ -409,6 +412,25 @@ describe("useCalculators", () => {
     expect(convertUnits).toHaveBeenCalledWith(500, "nm", "THz");
     expect(convertUnits).toHaveBeenCalledWith(500, "nm", "K");
     expect(result.current.peResults?.nm).toBe(500);
+  });
+
+  it("a photon quick-pick updates peFrom, clears the prior readout, and recomputes", async () => {
+    vi.mocked(convertUnits).mockResolvedValue({ result: 42, info: {} });
+    const { result } = renderHook(() => useCalculators());
+    act(() => result.current.setPeFrom("K"));
+    await act(async () => {
+      await result.current.peCompute();
+    });
+    expect(result.current.peResults).not.toBeNull();
+
+    act(() => result.current.setPair("eV", "nm", "photon_energy"));
+
+    expect(result.current.category).toBe("photon_energy");
+    expect(result.current.peFrom).toBe("eV");
+    expect(result.current.from).toBe("eV");
+    expect(result.current.to).toBe("nm");
+    expect(result.current.peResults).toBeNull();
+    await waitFor(() => expect(result.current.peResults?.eV).toBe(1));
   });
 
   it("peCompute rejects a non-numeric value without calling the API", async () => {

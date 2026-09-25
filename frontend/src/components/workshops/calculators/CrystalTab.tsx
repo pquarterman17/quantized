@@ -11,7 +11,7 @@ import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { crystalInterplanarAngle } from "../../../lib/api/crystallography";
-import { Card, CopyButton, ROW, resultLine, useCard, withTouch } from "./shared";
+import { Card, CopyButton, ROW, dual, resultLine, useCard, withTouch } from "./shared";
 import {
   assembleCell,
   CRYSTAL_SYSTEMS,
@@ -281,7 +281,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
                   k2: k2v,
                   l2: l2v,
                 });
-                return `φ = ${fmtNum(r.angle_deg)}°  (d₁ = ${fmtNum(r.d1)} Å, d₂ = ${fmtNum(r.d2)} Å)`;
+                return dual`φ = ${r.angle_deg}°  (d₁ = ${r.d1} Å, d₂ = ${r.d2} Å)`;
                 },
               )
             }
