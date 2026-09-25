@@ -17,6 +17,16 @@ import pytest
 
 from quantized import server_launch
 from quantized.desktop_bridge import DesktopApi
+from quantized.security import DEV_VITE_PORT_ENV
+
+
+@pytest.fixture(autouse=True)
+def _isolate_dev_origin_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``_run_dev`` exports the Vite port into os.environ (BUG-030); record the
+    variable so monkeypatch removes it afterwards and no later test in this
+    worker builds an app that admits the dev origin."""
+    monkeypatch.setenv(DEV_VITE_PORT_ENV, "")
+
 
 # ── probe helpers ────────────────────────────────────────────────────────────
 
@@ -176,7 +186,16 @@ def test_run_dev_spawns_vite_and_reloading_uvicorn(
     ):
         server_launch._run_dev("127.0.0.1", 9001)
     argv = popen.call_args.args[0]
-    assert argv[0].startswith("npm") and argv[1:] == ["run", "dev"]
+    # BUG-030: Vite binds exactly the port the Origin guard admits, and fails
+    # loudly instead of drifting to another one when it is busy.
+    assert argv[0].startswith("npm") and argv[1:] == [
+        "run",
+        "dev",
+        "--",
+        "--port",
+        str(server_launch._VITE_PORT),
+        "--strictPort",
+    ]
     assert popen.call_args.kwargs["cwd"] == tmp_path
     # The Vite proxy must learn the backend port (review 2026-07-11).
     assert popen.call_args.kwargs["env"]["QZ_BACKEND_PORT"] == "9001"
@@ -192,6 +211,29 @@ def test_run_dev_spawns_vite_and_reloading_uvicorn(
     else:
         vite.terminate.assert_called_once()
     vite.wait.assert_called_once()
+
+
+def test_run_dev_exports_vite_origin_before_uvicorn_starts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """BUG-030: ``reload=True`` builds the app in a reloader subprocess that
+    inherits only the environment, so the Vite port must already be exported
+    when uvicorn.run is entered -- that is what makes the Origin guard admit
+    the dev origin in --dev and nowhere else."""
+    import os
+
+    monkeypatch.setattr(server_launch, "_frontend_dir", lambda: tmp_path)
+    seen: list[str | None] = []
+    with (
+        patch("subprocess.Popen", return_value=MagicMock(pid=4242)),
+        patch("subprocess.run"),
+        patch("uvicorn.run", side_effect=lambda *a, **k: seen.append(
+            os.environ.get(DEV_VITE_PORT_ENV)
+        )),
+        patch.object(server_launch, "_open_browser_later"),
+    ):
+        server_launch._run_dev("127.0.0.1", 9001)
+    assert seen == [str(server_launch._VITE_PORT)]
 
 
 def test_run_dev_default_opens_plain_dev_url(
