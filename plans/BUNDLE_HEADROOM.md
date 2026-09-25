@@ -1,8 +1,8 @@
 # Bundle headroom campaign
 
-**Current state (2026-09-25, after slice 8):** measured **867,013 B** eager
-against parent `3ccf4972`'s **881,391 B** (**−14,378 B**), pin LOWERED
-**881,442 → 868,037 B** (`measured + 1,024`), leaving **1,024 B of headroom**
+**Current state (2026-09-25, after slice 8 and its review round):** measured
+**867,306 B** eager against parent `3ccf4972`'s **881,391 B** (**−14,085 B**),
+pin LOWERED **881,442 → 868,330 B** (`measured + 1,024`), leaving **1,024 B of headroom**
 by design — that margin is what the queued bounded-clipboard-transfer work is
 expected to spend. Slice 7 was built and never landed, and the pin was RAISED
 three times on 2026-09-20 between slices 6 and 8 (876,469 → 878,182 →
@@ -1283,7 +1283,8 @@ and `7dd58552` (the first raise, on `main`).
 
 ### Slice 8 — preload-list pruning + the two promise dialogs, pin ratcheted DOWN — **DONE (2026-09-25)**
 
-**Measured net eager delta −14,378 B — pin LOWERED 881,442 → 868,037 B**
+**Measured net eager delta −14,085 B — pin LOWERED 881,442 → 868,330 B** (868,037 at
+landing, re-set to `measured + 1,024` after the review round's +293 B fix)
 
 Exact bytes out of `dist/index.html` (the eager `<script type=module>` +
 `modulepreload` set), `npm ci`, `node_modules/.vite` wiped before EVERY build,
@@ -1294,6 +1295,7 @@ every number reproduced by a second identical build:
 | `3ccf4972` (parent) | 881,391 | — |
 | + preload-list pruning | 870,673 | **−10,718** |
 | + lazy `ConfirmDialog`/`ParamDialog` bodies | 867,013 | **−3,660** |
+| + review round: first-ask key guard, replaced asks settle | 867,306 | **+293** |
 | dialog bodies ALONE on the parent (no pruning) | 881,021 | −370 |
 
 #### 1. Preload-list pruning — the chunk-boundary tax, found
@@ -1322,6 +1324,23 @@ together), all CSS, and the HTML entry's own modulepreload tags. What is left
 (10,747 B on the landed tree) is the per-chunk table naming each LAZY chunk
 once, which is irreducible without changing chunking. Tests:
 `src/lib/preloadPrune.test.ts`.
+
+**The real output is gated, not just the pure functions (review round).**
+An independent review re-checked every removal with its own
+es-module-lexer probe (3,554 removals across 135 sites: 0 unsafe, 0 CSS
+dropped) and asked for that probe in the build. It is now
+`scripts/preloadVerify.mjs`, run from the prune plugin's `writeBundle`, so
+every `vite build` (and so `npm run build` and CI) re-derives the static graph
+from the EMITTED code — not from Rolldown's `imports`, which the prune itself
+trusts — and fails on any list missing a chunk its target needs (target +
+closure, minus host closure, minus entry closure) or any CSS Vite's own walk
+would have listed. On the landed tree: 130 lists checked, 0 violations.
+Sabotage: a prune that drops one extra entry fails `npm run build` with 96
+violations. `es-module-lexer` 2.3.2 became an exact devDependency (it was
+already in the lock via vitest). Pruned lists put their CSS last because Vite
+appends CSS after `resolveDependencies`; the CSS entries keep their relative
+order and a JS modulepreload never takes part in the cascade, so this is
+harmless (commented in `preloadPrune.mjs`).
 
 **Consequence for future slices:** re-measure the "rejected on measurement"
 seams (slice 3's `store/reimport.ts` and `fileCommands → originTemplate`,
@@ -1372,12 +1391,22 @@ behind a dialog nobody saw — or `null`, which every `askParams` caller
 already handles), a danger toast says why, and the next ask retries the
 fetch.
 
-**Residual (named, not fixed):** during the one-chunk window of the FIRST ask
-there is no modal surface yet, so an Escape or Enter pressed in those
-~5–12 ms reaches whatever is behind (the test suite had to wait for the
-dialog before pressing keys: `ToolWindow.test.tsx`,
-`stackedDialogEscape.test.tsx`, `dialogFocus.a11y.test.tsx`). Same class as
-slice 4's right-click residual.
+**First-ask key window — CLOSED in the review round.** As first landed,
+nothing was modal while the first ask's chunk was in flight, so keys reached
+the page behind. The reviewer's repro showed it was worse than a timing
+nit: a second Enter on the focused trigger asked AGAIN and replaced the first
+ask's `resolve`, so the first promise NEVER settled (`["ask2:false"]` where
+the parent gave `["ask1:false"]`), and an Escape closed the `window`-layer
+surface behind while the dialog then opened anyway. Fixed two ways:
+`components/overlays/usePendingDialogGuard.ts` stands in for the dialog
+while `open && !ready` (a `modal` escape surface that cancels the ask, and a
+capture-phase swallow of Enter/Space on keydown and keyup), and both stores'
+`open()` now settle a replaced ask with its cancel value (`false` / `null`)
+instead of dropping it — which also closes the same loss for two asks
+arriving back-to-back with the dialog already loaded.
+`lazyDialogPendingKeys.test.tsx` holds the body chunk back and replays the
+repro; disabling the guard, only the Enter swallow, or the stores' settle
+each reddens it.
 
 **Guards and sabotage** (each verified red, then reverted):
 
@@ -1437,7 +1466,7 @@ slice 6's round-2 correction), so that gain is locked in rather than left
 as spendable slack.
 
 **As of slice 6, headroom was 1,024 B against the 876,469 B pin** (stale:
-three raises followed, then slice 8 lowered the pin to 868,037 B with
+three raises followed, then slice 8 lowered the pin to 868,330 B with
 1,024 B of headroom — see the top of this file) — by design, not
 by exhaustion. The two banked seams (`PlotToolbar` −3,644 B,
 `CommandPalette` −2,935 B) remain on the table, unlanded, under the

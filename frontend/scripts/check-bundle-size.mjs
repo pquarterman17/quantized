@@ -45,6 +45,13 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-09-25, slice 8 review round - pin 868,037 -> 868,330, i.e. still
+ *  `measured + 1,024` on the fixed tree (867,306 B, reproduced; +293 B over
+ *  867,013). The +293 B is the review's should-fix, not new scope: the
+ *  first-ask key guard (`usePendingDialogGuard`) and the stores settling a
+ *  replaced ask instead of dropping its promise. Net for the slice against
+ *  `3ccf4972`'s 881,391 B: -14,085 B.
+ *
  *  2026-09-25 (bundle diet slice 8, `plans/BUNDLE_HEADROOM.md`) - pin LOWERED
  *  881,442 -> 868,037 (`measured + 1,024`, rule 3's diet-pass path; the
  *  forced `SLACK` floor did not fire). Parent `3ccf4972` measured 881,391 B,
@@ -1707,7 +1714,7 @@ import { fileURLToPath } from "node:url";
  * modulepreloads. A clipboard-import split was also measured at 858.5 kB and
  * rejected. All three changes were reverted.
  */
-const EAGER_JS_BUDGET = 868_037;
+const EAGER_JS_BUDGET = 868_330;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

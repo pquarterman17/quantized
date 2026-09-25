@@ -10,7 +10,9 @@
 // nothing until somebody asks. Cost: the FIRST confirm of a session waits one
 // localhost chunk fetch before it paints. The body is mounted only after its
 // chunk has LOADED (`useRegionLoaded`), never into a suspending boundary, so
-// that first open does not also pay React's ~300 ms retry throttle.
+// that first open does not also pay React's ~300 ms retry throttle. While
+// that fetch is in flight `usePendingDialogGuard` owns Escape (it cancels the
+// ask) and swallows Enter/Space, so nothing behind the dialog reacts.
 //
 // Load failure (UX-003): `lazyRegion`'s tagged loader reports it without
 // anything throwing during render, so the React root is never at risk. The
@@ -21,6 +23,7 @@
 import { lazyRegion, useRegionLoaded } from "../../lib/lazyRegion";
 import { cancelPendingConfirm, useConfirm } from "../../store/confirmDialog";
 import { toast } from "../../store/toasts";
+import { usePendingDialogGuard } from "./usePendingDialogGuard";
 
 export { askConfirm } from "../../store/confirmDialog";
 
@@ -34,5 +37,7 @@ function loadFailed(): void {
 export default function ConfirmDialog() {
   const open = useConfirm((s) => s.title !== null);
   const ready = useRegionLoaded(Body, open, loadFailed);
+  // Asked, chunk still in flight: own Escape/Enter/Space until the body does.
+  usePendingDialogGuard(open && !ready, cancelPendingConfirm);
   return open && ready ? <Body /> : null;
 }

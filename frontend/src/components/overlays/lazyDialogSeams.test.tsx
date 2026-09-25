@@ -12,7 +12,7 @@
 // The load-failure contract lives in `lazyDialogSeamFailure.test.tsx`, a
 // separate file because its module mock makes the chunk unloadable.
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
 import ConfirmDialog, { askConfirm } from "./ConfirmDialog";
@@ -66,7 +66,11 @@ describe("lazy promise dialogs (bundle diet slice 8)", () => {
     });
     expect(await screen.findByRole("dialog")).toHaveAccessibleName("Remove everything?");
     expect(loaded).toEqual(["ConfirmDialogBody"]);
-    expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus();
+    // Focus moves in the body's effect, which can trail the DOM commit when
+    // the load resolves outside act (lost that race once under a loaded
+    // full-suite run) -- wait on the focus STATE. (No `import()` of a body
+    // path in this file: vitest then loads it early and defeats the recorder.)
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus());
     fireEvent.click(screen.getByRole("button", { name: "Remove all" }));
     await expect(confirmed).resolves.toBe(true);
     expect(screen.queryByRole("dialog")).toBeNull();

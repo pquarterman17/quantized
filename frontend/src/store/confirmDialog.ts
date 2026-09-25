@@ -26,14 +26,18 @@ export interface ConfirmState {
   close: () => void;
 }
 
-export const useConfirm = create<ConfirmState>((set) => ({
+export const useConfirm = create<ConfirmState>((set, get) => ({
   title: null,
   message: "",
   confirmLabel: "OK",
   danger: false,
   resolve: null,
-  open: (title, message, confirmLabel, danger, resolve) =>
-    set({ title, message, confirmLabel, danger, resolve }),
+  open: (title, message, confirmLabel, danger, resolve) => {
+    // A new question REPLACES a pending one; answer the old one "no" first
+    // so its caller settles instead of awaiting forever (slice 8 review).
+    get().resolve?.(false);
+    set({ title, message, confirmLabel, danger, resolve });
+  },
   close: () => set({ title: null, message: "", confirmLabel: "OK", danger: false, resolve: null }),
 }));
 

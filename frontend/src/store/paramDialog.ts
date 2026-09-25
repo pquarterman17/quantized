@@ -21,11 +21,16 @@ export interface ParamDialogState {
   close: () => void;
 }
 
-export const useParamDialog = create<ParamDialogState>((set) => ({
+export const useParamDialog = create<ParamDialogState>((set, get) => ({
   title: null,
   fields: [],
   resolve: null,
-  open: (title, fields, resolve) => set({ title, fields, resolve }),
+  open: (title, fields, resolve) => {
+    // A new request REPLACES a pending one; settle the old one as a cancel
+    // (`null`) first so its caller never awaits forever (slice 8 review).
+    get().resolve?.(null);
+    set({ title, fields, resolve });
+  },
   close: () => set({ title: null, fields: [], resolve: null }),
 }));
 

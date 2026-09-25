@@ -20,6 +20,11 @@
 // preloading the lists exist for is untouched. CSS never reaches this filter
 // (Vite appends a seam's CSS after `resolveDependencies`), and the HTML
 // entry's own modulepreload tags are passed through unchanged.
+//
+// The build FAILS if that promise is ever broken on the real output: see the
+// plugin's `writeBundle` below and scripts/preloadVerify.mjs.
+
+import { verifyPreloadLists } from "./preloadVerify.mjs";
 
 /** Every chunk file name `host` statically imports, transitively (not `host`
  *  itself). `bundle` is Rollup/Rolldown's output bundle object. */
@@ -93,7 +98,28 @@ export function preloadPrune() {
           cache.clear();
         },
       },
+      // The gate: re-derive every list's requirements from the EMITTED code
+      // (scripts/preloadVerify.mjs) and fail the build on any lost chunk.
+      async writeBundle(_opts, output) {
+        const chunks = {};
+        for (const [name, c] of Object.entries(output)) {
+          if (c.type !== "chunk") continue;
+          chunks[name] = { code: c.code, css: [...(c.viteMetadata?.importedCss ?? [])], isEntry: c.isEntry };
+        }
+        const { sites, checked, violations } = await verifyPreloadLists(chunks);
+        if (checked === 0) this.error("preload-verify: found no preload list to check -- has Vite's output format changed?");
+        if (violations.length > 0) {
+          this.error(
+            `preload-verify: ${violations.length} preload list(s) lost a needed chunk:\n  ${violations.slice(0, 20).join("\n  ")}`,
+          );
+        }
+        console.log(`preload-verify: OK -- ${checked} preload lists checked (${sites} wrapped import() sites), 0 violations`);
+      },
     },
+    // Vite passes only the JS deps here and appends the CSS deps after the
+    // result, so a pruned list lists its CSS last. Harmless: the preload
+    // helper inserts the CSS links in their own original relative order, and
+    // a JS modulepreload never takes part in the cascade.
     resolveDependencies(_filename, deps, { hostId, hostType }) {
       // `html`: the entry's own <link rel="modulepreload"> tags -- the eager
       // set itself. Never touch those.

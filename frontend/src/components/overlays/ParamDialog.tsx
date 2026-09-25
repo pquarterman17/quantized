@@ -8,6 +8,8 @@
 // dialog body, `ParamDialogBody.tsx`, from a lazy chunk once a request is
 // pending -- only after that chunk has LOADED (`useRegionLoaded`), so the
 // first open costs one localhost fetch and never React's retry throttle.
+// During that fetch `usePendingDialogGuard` owns Escape (cancel) and swallows
+// Enter/Space, so nothing behind the dialog reacts.
 //
 // Load failure (UX-003): nothing throws during render, so the React root is
 // never at risk; the pending request resolves `null` (cancel -- the contract
@@ -17,6 +19,7 @@
 import { lazyRegion, useRegionLoaded } from "../../lib/lazyRegion";
 import { cancelPendingParams, useParamDialog } from "../../store/paramDialog";
 import { toast } from "../../store/toasts";
+import { usePendingDialogGuard } from "./usePendingDialogGuard";
 
 export { askParams } from "../../store/paramDialog";
 export type { ParamField, ParamValues } from "../../lib/params";
@@ -31,5 +34,7 @@ function loadFailed(): void {
 export default function ParamDialog() {
   const open = useParamDialog((s) => s.title !== null);
   const ready = useRegionLoaded(Body, open, loadFailed);
+  // Asked, chunk still in flight: own Escape/Enter/Space until the body does.
+  usePendingDialogGuard(open && !ready, cancelPendingParams);
   return open && ready ? <Body /> : null;
 }
