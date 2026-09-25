@@ -21,6 +21,7 @@ import CalcTitleBar from "./components/Shell/CalcTitleBar";
 import ConfirmDialog from "./components/overlays/ConfirmDialog";
 import Toaster from "./components/overlays/Toaster";
 import CalculatorsContent from "./components/workshops/calculators/CalculatorsContent";
+import { listenForAppShortcuts } from "./lib/appShortcuts";
 import { useApp } from "./store/useApp";
 
 export default function CalcOnlyApp() {
@@ -43,8 +44,8 @@ export default function CalcOnlyApp() {
         s.setTheme(s.theme === "dark" ? "light" : "dark");
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Through the same modal gate as the full app's shortcuts (R15).
+    return listenForAppShortcuts(onKey);
   }, []);
 
   // ── trap browser back/forward (mouse back button, ⌫ in old browsers) ──

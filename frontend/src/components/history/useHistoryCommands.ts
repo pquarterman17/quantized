@@ -25,6 +25,7 @@
 
 import { useEffect } from "react";
 
+import { listenForAppShortcuts } from "../../lib/appShortcuts";
 import { useCommands, type Action } from "../../store/commands";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
@@ -111,7 +112,7 @@ export function useHistoryCommands(): void {
       if (e.shiftKey) runRedo();
       else runUndo();
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // R15: never while a modal dialog is open (lib/appShortcuts.ts).
+    return listenForAppShortcuts(onKey);
   }, []);
 }

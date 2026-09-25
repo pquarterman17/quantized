@@ -26,12 +26,31 @@ import { fixturePath } from "../utils/fixtures";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
 
+type HarnessState = {
+  setPrefsOpen: (v: boolean) => void;
+  setCurveFitOpen: (v: boolean) => void;
+  activeId: string | null;
+};
 type HarnessWindow = Window & {
-  __qz: { useApp: { getState: () => { setPrefsOpen: (v: boolean) => void }; setState: (p: object) => void } };
+  __qz: {
+    useApp: { getState: () => HarnessState; setState: (p: object) => void };
+    requestDatasetRemoval: (ids: readonly string[]) => void;
+  };
 };
 
 const setPrefs = (page: Page, open: boolean) =>
   page.evaluate((v) => (window as unknown as HarnessWindow).__qz.useApp.getState().setPrefsOpen(v), open);
+
+/** Ask to remove the active dataset through the app's one removal path (the
+ *  one Delete uses), from outside any key event. Since R15 a key pressed
+ *  inside a dialog no longer reaches that path, so this is how a toast or a
+ *  confirm is raised WHILE a dialog is open. */
+const requestRemoveActive = (page: Page) =>
+  page.evaluate(() => {
+    const qz = (window as unknown as HarnessWindow).__qz;
+    const id = qz.useApp.getState().activeId;
+    if (id) qz.requestDatasetRemoval([id]);
+  });
 
 /** Can this element actually take focus? `inert` is enforced by the browser,
  *  so a refused `focus()` is the real, unfakeable signal. */
@@ -160,11 +179,15 @@ test("a toast raised while a dialog is open is announced: not inert, and in the 
   await setPrefs(page, true);
   const prefs = page.getByRole("dialog", { name: "Preferences" });
   await expect(prefs).toBeVisible();
-  // A real user path to a toast from INSIDE a dialog: the global Delete key
-  // removes the active dataset (Preferences ▸ Interaction's confirm is off by
-  // default) and says so in a toast.
+  // R15: the global Delete key no longer reaches the app from inside a
+  // dialog, so the removal (confirm is off by default) is requested the way
+  // any background operation would, and it says so in a toast.
   await prefs.getByRole("button").first().focus();
   await page.keyboard.press("Delete");
+  // The store, read synchronously after the key: a DOM row count could still
+  // show the row before a removal re-rendered.
+  expect((await appSnapshot(page)).datasets).toBe(1);
+  await requestRemoveActive(page);
   await waitForDatasetCount(page, 0);
 
   const toastMsg = page.locator(".qzk-toast", { hasText: "removed 1 dataset" });
@@ -234,7 +257,11 @@ test("a confirmation asked over Preferences paints on top and is the active moda
   const prefs = page.getByRole("dialog", { name: "Preferences" });
   const opener = prefs.getByRole("button").first();
   await opener.focus();
-  await page.keyboard.press("Delete");
+  // R15: Delete inside Preferences no longer asks (pinned by the R15 case
+  // below: the confirm's body is lazy, so a dialog count read here right
+  // after the key could not tell). The same removal request, raised from
+  // outside a key event, still asks OVER Preferences.
+  await requestRemoveActive(page);
 
   const ask = page.getByRole("dialog", { name: "Remove 1 dataset?" });
   await expect(ask).toBeVisible();
@@ -257,15 +284,23 @@ test("a confirmation asked over Preferences paints on top and is the active moda
   expect(await page.locator("[inert]").count()).toBe(0);
 });
 
-test("a window opened by a shortcut while a dialog is open mounts inert and cannot take focus", async ({ page }) => {
+test("a window opened while a dialog is open mounts inert and cannot take focus; `f` from the dialog opens none", async ({ page }) => {
   await gotoApp(page);
   await setPrefs(page, true);
   const prefs = page.getByRole("dialog", { name: "Preferences" });
   await prefs.getByRole("button").first().focus();
-  // `f` is the curve-fit workshop's global shortcut; it still fires from a
-  // focused dialog button. The window mounts AFTER the dialog's walk — the
-  // DOM-mutation gap — and must still be background.
+  // R15: `f`, the curve-fit workshop's global shortcut, no longer fires from
+  // a focused dialog button.
   await page.keyboard.press("f");
+  await expect(prefs).toBeVisible();
+  // The store, not the DOM: the window's body is lazy, so a DOM count read
+  // right after the key would be 0 either way (measured with the gate
+  // removed: that check stayed green).
+  expect((await appSnapshot(page)).curveFitOpen).toBe(false);
+  // A window that opens anyway (from the store, as a background operation
+  // would) mounts AFTER the dialog's walk — the DOM-mutation gap — and must
+  // still be background.
+  await page.evaluate(() => (window as unknown as HarnessWindow).__qz.useApp.getState().setCurveFitOpen(true));
   const win = page.locator(".qzk-win").first();
   await expect(win).toBeAttached();
   expect(await inertAncestor(win)).toBe(true);
@@ -274,6 +309,46 @@ test("a window opened by a shortcut while a dialog is open mounts inert and cann
 
   await setPrefs(page, false);
   expect(await page.locator("[inert]").count()).toBe(0);
+});
+
+/** The app state every background shortcut would change (R15). */
+const appSnapshot = (page: Page): Promise<Record<string, unknown>> =>
+  page.evaluate(() => {
+    const s = (window as unknown as HarnessWindow).__qz.useApp.getState() as unknown as Record<string, unknown>;
+    const pick = ["activeId", "plotTool", "cmdkOpen", "curveFitOpen", "hysteresisOpen", "peaksOpen", "leftCollapsed", "rightCollapsed", "theme", "focusedWindowId"];
+    return {
+      ...Object.fromEntries(pick.map((k) => [k, s[k]])),
+      datasets: (s.datasets as unknown[]).length,
+      history: (s.history as unknown[]).length,
+      windows: (s.plotWindows as unknown[]).length,
+    };
+  });
+
+test("R15: background shortcuts pressed inside Preferences leave the app untouched", async ({ page }) => {
+  await gotoApp(page);
+  await dropFileOnto(page, page.locator(".qzk-library"), fixturePath("linear-ramp.csv"));
+  await waitForDatasetCount(page, 1);
+  await setPrefs(page, true);
+  const prefs = page.getByRole("dialog", { name: "Preferences" });
+  await prefs.getByRole("button").first().focus();
+  const before = await appSnapshot(page);
+
+  const keys = ["Control+z", "Control+Shift+z", "Delete", "Backspace", "z", "h", "d", "f", "y", "p", "a", "ArrowDown",
+    "Control+k", "Control+[", "Control+]", "Control+Shift+l", "Control+Shift+n", "Control+Tab"];
+  for (const key of keys) {
+    await page.keyboard.press(key);
+    expect(await appSnapshot(page), key).toEqual(before);
+    await expect(prefs, key).toBeVisible();
+  }
+  await expect(page.locator(".qzk-toast")).toHaveCount(0);
+  expect(await page.locator(".qzk-win").count()).toBe(0);
+
+  // Positive control: with the dialog closed the same keys reach the app.
+  await setPrefs(page, false);
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.keyboard.press("z");
+  expect((await appSnapshot(page)).plotTool).toBe("zoom");
 });
 
 /** R16: `?` pressed from `opener` inside the open dialog `under`. Shortcuts

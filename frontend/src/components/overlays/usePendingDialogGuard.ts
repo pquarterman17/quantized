@@ -7,11 +7,14 @@
 //   - Escape: a `modal` surface on the ordered registry that cancels the
 //     pending ask, exactly as the dialog's own Escape would;
 //   - Enter / Space: swallowed in the capture phase (keydown AND keyup --
-//     a button activates on Space's keyup), so nothing behind activates.
+//     a button activates on Space's keyup), so nothing behind activates;
+//   - every other app shortcut: gated by a modal hold (R15,
+//     lib/appShortcuts.ts), exactly as the mounted dialog will gate it.
 // The body mounts with its own handlers the moment `active` turns false.
 
 import { useLayoutEffect } from "react";
 
+import { holdModal } from "../../lib/appShortcuts";
 import { useEscapeSurface } from "../../lib/escapeStack";
 
 export function usePendingDialogGuard(active: boolean, cancel: () => void): void {
@@ -37,7 +40,11 @@ export function usePendingDialogGuard(active: boolean, cancel: () => void): void
     };
     window.addEventListener("keydown", swallowActivation, true);
     window.addEventListener("keyup", swallowActivation, true);
+    // R15: the pending ask counts as an open modal, so the app's shortcuts
+    // stand down too (lib/appShortcuts.ts). The handler is this guard's key.
+    holdModal(swallowActivation, true);
     return () => {
+      holdModal(swallowActivation, false);
       window.removeEventListener("keydown", swallowActivation, true);
       window.removeEventListener("keyup", swallowActivation, true);
     };
