@@ -45,6 +45,43 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-09-25, slice 8 rebased onto Group F (`55f0cac9`, PR #409) - pin
+ *  868,330 -> 868,308 (`measured + 1,024`). Group F's own tree measures
+ *  881,369 B (22 B under 3ccf4972's 881,391); slice 8 on top of it measures
+ *  867,284 B, both reproduced after `npm ci` with `.vite` wiped. Slice 8's
+ *  net is unchanged by the rebase: -14,085 B.
+ *
+ *  2026-09-25, slice 8 review round - pin 868,037 -> 868,330, i.e. still
+ *  `measured + 1,024` on the fixed tree (867,306 B, reproduced; +293 B over
+ *  867,013). The +293 B is the review's should-fix, not new scope: the
+ *  first-ask key guard (`usePendingDialogGuard`) and the stores settling a
+ *  replaced ask instead of dropping its promise. Net for the slice against
+ *  `3ccf4972`'s 881,391 B: -14,085 B.
+ *
+ *  2026-09-25 (bundle diet slice 8, `plans/BUNDLE_HEADROOM.md`) - pin LOWERED
+ *  881,442 -> 868,037 (`measured + 1,024`, rule 3's diet-pass path; the
+ *  forced `SLACK` floor did not fire). Parent `3ccf4972` measured 881,391 B,
+ *  51 B under its pin. Exact bytes out of `dist/index.html`, `npm ci`-fresh
+ *  node_modules, `node_modules/.vite` wiped before EVERY build, every figure
+ *  reproduced by a second identical build:
+ *    3ccf4972 (parent)                                   881,391
+ *    + preload-list pruning (scripts/preloadPrune.mjs)   870,673  (-10,718)
+ *    + lazy ConfirmDialog/ParamDialog bodies             867,013  ( -3,660)
+ *  Measured alone against the parent the dialog seam is only -370 B (881,021):
+ *  without the pruning, each new `import()` carried a ~50-entry preload list
+ *  naming chunks that were already loaded -- the "chunk-boundary tax" this
+ *  file's history and slices 3-5 kept paying (18.4 kB of the entry chunk on
+ *  the parent was such lists). The pruning is not a seam: it removes, at
+ *  build time, preload hints for chunks certainly loaded before the
+ *  importing code can run (the host chunk's own static closure and the HTML
+ *  entry's), which the preload helper already skipped at runtime, so no
+ *  fetch, order or error path changes. The dialog seam includes +300 B for
+ *  mounting each body only once its chunk has loaded (`useRegionLoaded`):
+ *  mounted straight into a suspending boundary it measured 300 B smaller but
+ *  opened 250-280 ms late the first time (React's retry throttle). The
+ *  1,024 B margin is the headroom the queued bounded-clipboard-transfer work
+ *  is expected to spend.
+ *
  *  2026-09-20 - pin RAISED 876,469 -> 878,182 for batch 9. This is rule 2's
  *  last resort and the try-a-lazy-split-first requirement was met the hard
  *  way: bundle diet slice 7 was built to fund this batch, recovered 3,603 B
@@ -77,6 +114,9 @@ import { fileURLToPath } from "node:url";
  *  plans/BUNDLE_HEADROOM.md records what slice 7 established about which
  *  seams are NOT available (the window-frame family is disqualified; and
  *  lib/plotRecipeIO.ts is measured-rejected at a 474 B ceiling).
+ *  [Corrected 2026-09-25, slice 8: when this was written that record existed
+ *  only on slice 7's unmerged branch (`b51f0c53`), not on main; slice 8
+ *  added a "Slice 7" section to the plan so the pointer above now resolves.]
  *
  *   *  2026-09-19 (bundle diet slice 6, `plans/BUNDLE_HEADROOM.md`) — pin LOWERED
  *  920,400 -> 876,469. The PRIOR PIN was 920,400; 888,562 below is the
@@ -1680,7 +1720,7 @@ import { fileURLToPath } from "node:url";
  * modulepreloads. A clipboard-import split was also measured at 858.5 kB and
  * rejected. All three changes were reverted.
  */
-const EAGER_JS_BUDGET = 881_442;
+const EAGER_JS_BUDGET = 868_308;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

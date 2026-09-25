@@ -2742,6 +2742,28 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/components/Library/Library.tsx",
       call: 'import("./LibraryFlatRows")',
     },
+    // ── SLICE 8 (2026-09-25, plans/BUNDLE_HEADROOM.md) ────────────────────
+    // The two promise dialogs. `ConfirmDialog.tsx` / `ParamDialog.tsx` stay
+    // EAGER as thin gates -- they keep `askConfirm` / `askParams` (which ~40
+    // eager call sites and ~67 test mocks import from them, untouched) over
+    // the tiny stores in `store/confirmDialog.ts` / `store/paramDialog.ts` --
+    // and mount the BODY (a `lazyRegion`) only while a request is pending
+    // and only once its chunk has loaded (`useRegionLoaded`, so it never
+    // suspends into React's retry throttle). A dialog appears strictly in response to something that asked
+    // a question, so the body never paints on first paint; the cost is one
+    // localhost chunk fetch on the FIRST ask of a session. Load failure
+    // settles the pending ask with its cancel value (`false` / `null`) and
+    // toasts; see `lazyDialogSeamFailure.test.tsx`.
+    {
+      module: "/components/overlays/ConfirmDialogBody.tsx",
+      loader: "/components/overlays/ConfirmDialog.tsx",
+      call: 'import("./ConfirmDialogBody")',
+    },
+    {
+      module: "/components/overlays/ParamDialogBody.tsx",
+      loader: "/components/overlays/ParamDialog.tsx",
+      call: 'import("./ParamDialogBody")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -2964,6 +2986,14 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
    *  The one corpus module ADDED is `LibraryFlatRows.tsx`, the loader — which
    *  itself stays lazy, so it does not appear in either eager count. None of
    *  the eleven is a seam itself, so only reachability can hold this line. */
+  /** SLICE 8 (2026-09-25) adds the four modules only the two dialog bodies
+   *  reached: `useDialogFocus.ts` (every OTHER importer is an already-lazy
+   *  dialog), `ParamFields.tsx`, `lib/params.ts` (the gates and stores import
+   *  its TYPES only, which erase) and `lib/scrollOutFocus.ts`. Replayed
+   *  `eagerlyReachable()` against `3ccf4972`: 387 -> 385 eager modules
+   *  (the four dropped, the two new stores `store/confirmDialog.ts` /
+   *  `store/paramDialog.ts` added; the bodies were the old eager dialog
+   *  files, so they are not new eager modules). */
   const DRAGGED_OUT = [
     "/components/overlays/ToolWindow.tsx",
     "/lib/workshopHelp.ts",
@@ -2991,6 +3021,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // Group F (2026-09-25): the large-workbook descriptor/transfer-store
     // client. Only `lib/workbookTransfer.ts` (itself a seam) imports it.
     "/lib/workbookTransferRef.ts",
+    "/components/overlays/useDialogFocus.ts",
+    "/components/overlays/ParamFields.tsx",
+    "/lib/params.ts",
+    "/lib/scrollOutFocus.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

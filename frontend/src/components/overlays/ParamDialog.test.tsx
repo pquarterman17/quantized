@@ -18,7 +18,13 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
 
-import ParamDialog, { askParams, type ParamField } from "./ParamDialog";
+// The dialog BODY, rendered directly: since bundle diet slice 8 it is a lazy
+// chunk behind the thin `ParamDialog.tsx` gate, and this file pins the body's
+// own value-reset contract. The gate (nothing loads until an ask; an ask
+// mounts this body; a failed load resolves the ask `null`) is pinned in
+// `lazyDialogSeams.test.tsx`.
+import ParamDialog from "./ParamDialogBody";
+import { askParams, type ParamField } from "./ParamDialog";
 import { GREYSCALE_FIELD } from "../../lib/exportFigureCommand";
 import type { ParamValues } from "../../lib/params";
 

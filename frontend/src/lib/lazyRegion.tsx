@@ -47,7 +47,7 @@
 //    re-throws anything else from `getDerivedStateFromError`, which hands
 //    it to the next boundary up (or lets it crash), exactly as if this
 //    boundary were not here.
-import { Component, lazy, Suspense, useState } from "react";
+import { Component, lazy, Suspense, useEffect, useState } from "react";
 import type { ComponentType, LazyExoticComponent, ReactNode } from "react";
 
 /** Marks "the loader's own promise rejected" without touching the rejected
@@ -128,6 +128,20 @@ class Catch extends Component<CatchProps, CatchState> {
   }
 }
 
+/** A region that can also be LOADED before it is mounted (bundle diet slice
+ *  8). `preload()` runs the same tagged loader and, on success, fills the
+ *  resolved cache, so a Region mounted afterwards renders synchronously: no
+ *  Suspense fallback is ever committed, hence no React retry throttle (React
+ *  holds a retry's reveal until ~300 ms after the last committed fallback --
+ *  measured as +250-280 ms on the first open of a dialog mounted straight
+ *  into a suspending region, against ~5-10 ms for its chunk fetch). Rejects
+ *  with the tagged `LoadFailure`; nothing is cached on failure, so the next
+ *  `preload()` is a real new attempt. `loaded()` says whether it succeeded. */
+export type PreloadableRegion<P> = ComponentType<P> & {
+  preload: () => Promise<void>;
+  loaded: () => boolean;
+};
+
 /** `lazy(load)` plus a boundary: `label` names the region in the fallback
  *  ("Library failed to load."), `fallback` is the Suspense placeholder
  *  while the chunk is in flight (default none — these seams resolve in a
@@ -136,7 +150,7 @@ export function lazyRegion<P extends object>(
   load: () => Promise<{ default: ComponentType<P> }>,
   label: string,
   fallback: ReactNode = null,
-): ComponentType<P> {
+): PreloadableRegion<P> {
   const taggedLoad = taggedLoader(load);
   // Written only by a SUCCESSFUL resolution, read only by a fresh mount's
   // own initializer (see point 1 above) — never by an already-mounted
@@ -151,7 +165,13 @@ export function lazyRegion<P extends object>(
       }),
     );
 
-  return function Region(props: P) {
+  const preload = (): Promise<void> =>
+    taggedLoad().then((mod) => {
+      resolved = mod.default;
+    });
+  return Object.assign(Region, { preload, loaded: () => resolved !== null });
+
+  function Region(props: P) {
     // Lazy-initializer form: runs ONCE for this mounted instance, not on
     // every render and not shared with any other instance of this seam.
     const [Comp, setComp] = useState<ComponentType<P> | LazyExoticComponent<ComponentType<P>>>(
@@ -169,5 +189,35 @@ export function lazyRegion<P extends object>(
         </Suspense>
       </Catch>
     );
-  };
+  }
+}
+
+/** Mount-when-loaded gate for a `PreloadableRegion` (bundle diet slice 8):
+ *  true once the region's chunk is loaded, starting the load the first time
+ *  `wanted` is true. Render the region only when this is true and it never
+ *  suspends, so its first appearance costs the chunk fetch and not React's
+ *  retry throttle. `onFail` runs when a load attempt fails (the tagged
+ *  `LoadFailure`) -- nothing throws during render, so the React root is
+ *  never at risk -- and the next time `wanted` turns true it tries again. */
+export function useRegionLoaded<P>(region: PreloadableRegion<P>, wanted: boolean, onFail: () => void): boolean {
+  const [ready, setReady] = useState(region.loaded);
+  useEffect(() => {
+    if (!wanted || ready) return;
+    let live = true;
+    region.preload().then(
+      () => {
+        if (live) setReady(true);
+      },
+      () => {
+        if (live) onFail();
+      },
+    );
+    return () => {
+      live = false;
+    };
+    // `onFail` is deliberately not a dependency: a fresh closure per render
+    // must not restart an in-flight load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region, wanted, ready]);
+  return ready;
 }

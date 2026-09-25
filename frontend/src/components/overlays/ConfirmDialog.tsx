@@ -1,193 +1,43 @@
 // Promise-based confirm dialog: askConfirm(title, message?, confirmLabel?, danger?)
-// resolves true on confirm, false on cancel / backdrop / Escape. A styled,
-// on-brand alternative to window.confirm for destructive actions (Remove all,
-// …). Mount one <ConfirmDialog/> at the app root (next to <ParamDialog/>).
-// Modeled on ParamDialog's promise+zustand pattern.
+// resolves true on confirm, false on cancel / backdrop / Escape. Mount one
+// <ConfirmDialog/> at the app root (next to <ParamDialog/>).
+//
+// Bundle diet slice 8 (plans/BUNDLE_HEADROOM.md): this file is now the thin,
+// EAGER half -- it re-exports `askConfirm` (so the ~20 call sites and every
+// test that mocks this module are untouched) and mounts the dialog body,
+// `ConfirmDialogBody.tsx`, from a lazy chunk once a question is pending. The
+// body used to sit in the entry chunk on every launch although it renders
+// nothing until somebody asks. Cost: the FIRST confirm of a session waits one
+// localhost chunk fetch before it paints. The body is mounted only after its
+// chunk has LOADED (`useRegionLoaded`), never into a suspending boundary, so
+// that first open does not also pay React's ~300 ms retry throttle. While
+// that fetch is in flight `usePendingDialogGuard` owns Escape (it cancels the
+// ask) and swallows Enter/Space, so nothing behind the dialog reacts.
+//
+// Load failure (UX-003): `lazyRegion`'s tagged loader reports it without
+// anything throwing during render, so the React root is never at risk. The
+// pending ask is answered `false` -- the safe answer, nothing destructive runs
+// behind a dialog nobody saw -- so its caller does not hang, and a toast says
+// why. The next ask tries the fetch again.
 
-import { useEffect, useId, useRef } from "react";
-import { create } from "zustand";
+import { lazyRegion, useRegionLoaded } from "../../lib/lazyRegion";
+import { cancelPendingConfirm, useConfirm } from "../../store/confirmDialog";
+import { toast } from "../../store/toasts";
+import { usePendingDialogGuard } from "./usePendingDialogGuard";
 
-import { Button } from "../primitives";
-import { useEscapeSurface } from "../../lib/escapeStack";
-import { useFocusTrap } from "./useDialogFocus";
+export { askConfirm } from "../../store/confirmDialog";
 
-interface ConfirmState {
-  title: string | null;
-  message: string;
-  confirmLabel: string;
-  danger: boolean;
-  resolve: ((ok: boolean) => void) | null;
-  open: (
-    title: string,
-    message: string,
-    confirmLabel: string,
-    danger: boolean,
-    resolve: (ok: boolean) => void,
-  ) => void;
-  close: () => void;
-}
+const Body = lazyRegion(() => import("./ConfirmDialogBody"), "Confirm dialog");
 
-const useConfirm = create<ConfirmState>((set) => ({
-  title: null,
-  message: "",
-  confirmLabel: "OK",
-  danger: false,
-  resolve: null,
-  open: (title, message, confirmLabel, danger, resolve) =>
-    set({ title, message, confirmLabel, danger, resolve }),
-  close: () => set({ title: null, message: "", confirmLabel: "OK", danger: false, resolve: null }),
-}));
-
-/** Open a confirm dialog; resolves true on confirm, false on cancel/backdrop/Esc. */
-export function askConfirm(
-  title: string,
-  message = "",
-  confirmLabel = "OK",
-  danger = false,
-): Promise<boolean> {
-  return new Promise((resolve) => {
-    useConfirm.getState().open(title, message, confirmLabel, danger, resolve);
-  });
+function loadFailed(): void {
+  cancelPendingConfirm();
+  toast("The confirmation dialog failed to load, so nothing was changed. Try again.", "danger");
 }
 
 export default function ConfirmDialog() {
-  const title = useConfirm((s) => s.title);
-  const message = useConfirm((s) => s.message);
-  const confirmLabel = useConfirm((s) => s.confirmLabel);
-  const danger = useConfirm((s) => s.danger);
-  const resolve = useConfirm((s) => s.resolve);
-  const close = useConfirm((s) => s.close);
-  const dialogRef = useRef<HTMLDivElement | null>(null);
-  const titleId = useId();
-  const messageId = useId();
-
-  // P3.3: the ONE gap this dialog had. Focus-in and restore below were already
-  // built and are deliberately left alone (their choices — Cancel first, the
-  // `isConnected` guard — are argued out in the comments there and pinned by
-  // tests). Tab from the confirm button used to walk out of an `aria-modal`
-  // dialog into the page behind the backdrop; now it wraps to Cancel.
-  useFocusTrap(dialogRef, title !== null);
-
-  // Enter confirms, Escape cancels — captured before app-level shortcuts so the
-  // dialog owns those keys while open (capture phase + stopPropagation).
-  //
-  // `e.repeat` is ignored, and that is a safety guard rather than a nicety.
-  // This listener mounts in an effect AFTER the dialog renders, so a user who
-  // opened the dialog by holding Enter on the triggering button — or who
-  // leans on Enter because nothing appeared to happen — has the very next
-  // auto-repeat land here as a CONFIRM, before they have read the question.
-  // On a delete that cannot be undone, that is the whole safeguard bypassed.
-  // NARROWED 2026-09-19 (BUG-018, P3.3 round 9). The paragraph above is true
-  // only over a NON-dialog surface, and it now describes ENTER alone.
-  // `stopPropagation()` does not stop a same-node, same-phase sibling, so
-  // while a second backdrop dialog was open above this one, ONE Escape both
-  // dismissed that dialog AND silently resolved this confirmation `false`.
-  // ESCAPE therefore moved to the ordered registry's `modal` layer below;
-  // ENTER stays here, because the `e.repeat` safeguard and the
-  // "a focused button activates itself" rule are about this dialog's own
-  // destructive-action gate and have nothing to do with the Escape ladder.
-  useEffect(() => {
-    if (title === null) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Enter") return;
-      e.stopPropagation(); // this dialog owns Enter while it is open
-      if (e.repeat) {
-        e.preventDefault();
-        return;
-      }
-      // Enter must NOT mean "confirm" while a button has focus, or it
-      // overrides the button the user is actually on. Focus now lands on
-      // Cancel, so treating Enter as confirm here would turn the safest
-      // keyboard gesture in the dialog into the destructive one — the exact
-      // opposite of what moving focus there was for. Let the browser activate
-      // whatever is focused instead.
-      if ((e.target as HTMLElement | null)?.closest?.("button")) return;
-      e.preventDefault();
-      resolve?.(true);
-      close();
-    };
-    window.addEventListener("keydown", onKey, true);
-    return () => window.removeEventListener("keydown", onKey, true);
-  }, [title, resolve, close]);
-
-  // Escape always cancels — now as a `modal` surface in `lib/escapeStack.ts`,
-  // so a dialog opened ON TOP of a pending confirmation takes the first
-  // Escape and this one stays pending for the second (BUG-018). The
-  // registry's own `event.repeat` guard replaces the one removed above for
-  // this key.
-  useEscapeSurface(
-    "modal",
-    () => {
-      resolve?.(false);
-      close();
-      return true;
-    },
-    title !== null,
-  );
-
-  // Move focus INTO the dialog, onto Cancel — the safe choice, so a stray
-  // Space/Enter on the newly focused control dismisses rather than destroys.
-  // Without this, focus stays on the button behind the backdrop and a screen
-  // reader is never taken to the question at all.
-  useEffect(() => {
-    if (title === null) return;
-    // Remember where focus came from BEFORE taking it, so closing can give it
-    // back. Moving focus in without ever restoring it (as this did when the
-    // move was added) leaves every caller dropping focus to <body> on close --
-    // cancel a delete and you are dumped out of the list you were working in.
-    const cameFrom = document.activeElement as HTMLElement | null;
-    // Cancel is the FIRST button in the row, so this is the safe default: a
-    // stray Space/Enter on it dismisses rather than destroys. Queried through
-    // the container because the shared `Button` primitive does not forward a
-    // ref, and widening that primitive for one caller is not worth it.
-    dialogRef.current?.querySelector("button")?.focus();
-    return () => {
-      // The case worth rescuing is a CANCEL, where the trigger is still on
-      // screen. A confirmed destructive action usually removes its own
-      // trigger, and `isConnected` keeps the restore from reaching for it --
-      // pinned by "does not reach for a trigger the confirmed action removed",
-      // which spies on the detached node. (Focusing it would be a silent
-      // no-op, so the EFFECT is unobservable; the CALL is not, which is what
-      // makes the guard testable rather than a matter of trust.)
-      if (cameFrom?.isConnected) cameFrom.focus();
-    };
-  }, [title]);
-
-  if (title === null) return null;
-
-  const finish = (ok: boolean) => {
-    resolve?.(ok);
-    close();
-  };
-
-  return (
-    <div className="qz-overlay-backdrop" onMouseDown={() => finish(false)}>
-      {/* role/aria-modal/labelledby so assistive tech announces this as a
-          dialog and reads the question. Without them the backdrop is just a
-          div, and the only gate on an irreversible delete is invisible. */}
-      <div
-        className="qzk-glass qz-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={message ? messageId : undefined}
-        ref={dialogRef}
-        onMouseDown={(e) => e.stopPropagation()}
-      >
-        <h2 id={titleId}>{title}</h2>
-        {message && <p id={messageId}>{message}</p>}
-        {/* #17: a destructive confirm is SEPARATED from Cancel rather than
-            sitting flush against it as an equal-width twin -- order stays
-            secondary-first/primary-last, but the irreversible button is no
-            longer one stray pixel away from the safe one. */}
-        <div className={danger ? "qz-btn-row qz-btn-row--danger" : "qz-btn-row"}>
-          <Button onClick={() => finish(false)}>Cancel</Button>
-          {danger && <span className="qz-btn-row-gap" data-testid="destructive-gap" aria-hidden="true" />}
-          <Button variant={danger ? "danger" : "primary"} onClick={() => finish(true)}>
-            {confirmLabel}
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
+  const open = useConfirm((s) => s.title !== null);
+  const ready = useRegionLoaded(Body, open, loadFailed);
+  // Asked, chunk still in flight: own Escape/Enter/Space until the body does.
+  usePendingDialogGuard(open && !ready, cancelPendingConfirm);
+  return open && ready ? <Body /> : null;
 }
