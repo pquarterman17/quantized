@@ -6925,6 +6925,791 @@
         "title": "PcaVectorWire",
         "type": "object"
       },
+      "PeakModelBackgroundOut": {
+        "properties": {
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "x_ref": {
+            "title": "X Ref",
+            "type": "number"
+          }
+        },
+        "required": [
+          "kind",
+          "x_ref"
+        ],
+        "title": "PeakModelBackgroundOut",
+        "type": "object"
+      },
+      "PeakModelCurves": {
+        "description": "On the fitted points; ``components`` are the peaks without background.",
+        "properties": {
+          "background": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Background",
+            "type": "array"
+          },
+          "components": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Components",
+            "type": "array"
+          },
+          "model": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Model",
+            "type": "array"
+          },
+          "normalized_residual": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Normalized Residual"
+          },
+          "residual": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Residual",
+            "type": "array"
+          },
+          "x": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Y",
+            "type": "array"
+          },
+          "y_err": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Err"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "y_err",
+          "model",
+          "background",
+          "components",
+          "residual",
+          "normalized_residual"
+        ],
+        "title": "PeakModelCurves",
+        "type": "object"
+      },
+      "PeakModelFitRequest": {
+        "properties": {
+          "background": {
+            "default": "linear",
+            "enum": [
+              "none",
+              "constant",
+              "linear",
+              "quadratic"
+            ],
+            "title": "Background",
+            "type": "string"
+          },
+          "bg_x_ref": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bg X Ref"
+          },
+          "deadline_s": {
+            "default": 10.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 30.0,
+            "title": "Deadline S",
+            "type": "number"
+          },
+          "max_nfev": {
+            "default": 1000,
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Max Nfev",
+            "type": "integer"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/PeakModelParameter"
+            },
+            "maxItems": 203,
+            "minItems": 1,
+            "title": "Parameters",
+            "type": "array"
+          },
+          "shapes": {
+            "items": {
+              "enum": [
+                "gaussian",
+                "lorentzian",
+                "pseudo_voigt",
+                "voigt"
+              ],
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Shapes",
+            "type": "array"
+          },
+          "x": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxItems": 100000,
+            "minItems": 2,
+            "title": "X",
+            "type": "array"
+          },
+          "x_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Max"
+          },
+          "x_min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Min"
+          },
+          "y": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxItems": 100000,
+            "minItems": 2,
+            "title": "Y",
+            "type": "array"
+          },
+          "y_err": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 100000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Err"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "shapes",
+          "parameters"
+        ],
+        "title": "PeakModelFitRequest",
+        "type": "object"
+      },
+      "PeakModelFitResponse": {
+        "properties": {
+          "background": {
+            "$ref": "#/components/schemas/PeakModelBackgroundOut"
+          },
+          "correlation": {
+            "items": {
+              "items": {
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            "title": "Correlation",
+            "type": "array"
+          },
+          "curves": {
+            "$ref": "#/components/schemas/PeakModelCurves"
+          },
+          "free": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Free",
+            "type": "array"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "metrics": {
+            "$ref": "#/components/schemas/PeakModelMetrics"
+          },
+          "n_dropped": {
+            "title": "N Dropped",
+            "type": "integer"
+          },
+          "n_evaluations": {
+            "title": "N Evaluations",
+            "type": "integer"
+          },
+          "n_excluded": {
+            "title": "N Excluded",
+            "type": "integer"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/PeakModelParameterOut"
+            },
+            "title": "Parameters",
+            "type": "array"
+          },
+          "peaks": {
+            "items": {
+              "$ref": "#/components/schemas/PeakModelPeakOut"
+            },
+            "title": "Peaks",
+            "type": "array"
+          },
+          "success": {
+            "title": "Success",
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "weighted": {
+            "title": "Weighted",
+            "type": "boolean"
+          },
+          "x_range": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X Range",
+            "type": "array"
+          }
+        },
+        "required": [
+          "parameters",
+          "free",
+          "correlation",
+          "peaks",
+          "background",
+          "weighted",
+          "metrics",
+          "success",
+          "message",
+          "n_evaluations",
+          "x_range",
+          "n_dropped",
+          "n_excluded",
+          "curves",
+          "warnings"
+        ],
+        "title": "PeakModelFitResponse",
+        "type": "object"
+      },
+      "PeakModelMetrics": {
+        "description": "``chi2``/``reduced_chi2`` only for a weighted fit; ``ssr`` always.",
+        "properties": {
+          "adj_r_squared": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Adj R Squared"
+          },
+          "aic": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aic"
+          },
+          "bic": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bic"
+          },
+          "chi2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Chi2"
+          },
+          "dof": {
+            "title": "Dof",
+            "type": "integer"
+          },
+          "n_free": {
+            "title": "N Free",
+            "type": "integer"
+          },
+          "n_points": {
+            "title": "N Points",
+            "type": "integer"
+          },
+          "objective": {
+            "enum": [
+              "ssr",
+              "chi2"
+            ],
+            "title": "Objective",
+            "type": "string"
+          },
+          "r_squared": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "R Squared"
+          },
+          "reduced_chi2": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reduced Chi2"
+          },
+          "reduced_ssr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reduced Ssr"
+          },
+          "ssr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ssr"
+          }
+        },
+        "required": [
+          "objective",
+          "n_points",
+          "n_free",
+          "dof",
+          "ssr",
+          "reduced_ssr",
+          "chi2",
+          "reduced_chi2",
+          "r_squared",
+          "adj_r_squared",
+          "aic",
+          "bic"
+        ],
+        "title": "PeakModelMetrics",
+        "type": "object"
+      },
+      "PeakModelParameter": {
+        "description": "``p{i}.{center|height|fwhm|eta|fwhm_g|fwhm_l}`` or ``bg.c{k}``: start\n``value``, ``vary``, optional bounds and an identity ``tie``.",
+        "properties": {
+          "max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "min": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Min"
+          },
+          "name": {
+            "maxLength": 32,
+            "minLength": 1,
+            "pattern": "^[a-z0-9_.]+$",
+            "title": "Name",
+            "type": "string"
+          },
+          "tie": {
+            "anyOf": [
+              {
+                "maxLength": 32,
+                "pattern": "^[a-z0-9_.]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tie"
+          },
+          "value": {
+            "title": "Value",
+            "type": "number"
+          },
+          "vary": {
+            "default": false,
+            "title": "Vary",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "value"
+        ],
+        "title": "PeakModelParameter",
+        "type": "object"
+      },
+      "PeakModelParameterOut": {
+        "properties": {
+          "at_bound": {
+            "title": "At Bound",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "stderr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stderr"
+          },
+          "tie": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tie"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          },
+          "vary": {
+            "title": "Vary",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name",
+          "value",
+          "stderr",
+          "vary",
+          "tie",
+          "at_bound"
+        ],
+        "title": "PeakModelParameterOut",
+        "type": "object"
+      },
+      "PeakModelPeakOut": {
+        "description": "Derived per-peak quantities with delta-method standard errors.",
+        "properties": {
+          "area": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area"
+          },
+          "area_stderr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Area Stderr"
+          },
+          "center": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Center"
+          },
+          "center_stderr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Center Stderr"
+          },
+          "fwhm": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fwhm"
+          },
+          "fwhm_stderr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fwhm Stderr"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "height_stderr": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height Stderr"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "shape": {
+            "title": "Shape",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "shape",
+          "center",
+          "center_stderr",
+          "height",
+          "height_stderr",
+          "fwhm",
+          "fwhm_stderr",
+          "area",
+          "area_stderr"
+        ],
+        "title": "PeakModelPeakOut",
+        "type": "object"
+      },
       "PeakSeed": {
         "properties": {
           "center": {
@@ -14815,6 +15600,48 @@
           }
         },
         "summary": "Integrate Batch",
+        "tags": [
+          "peaks"
+        ]
+      }
+    },
+    "/api/peaks/model-fit": {
+      "post": {
+        "description": "Fit mixed-shape peaks + a polynomial background with per-parameter\nstart/vary/bounds/ties; returns parameters, derived peaks, metrics,\ncurves and warnings.",
+        "operationId": "model_fit_api_peaks_model_fit_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeakModelFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeakModelFitResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Model Fit",
         "tags": [
           "peaks"
         ]

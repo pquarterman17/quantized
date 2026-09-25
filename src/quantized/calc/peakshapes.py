@@ -1,6 +1,8 @@
 """Peak-shape profiles for XRD/spectroscopy fitting. Ports of MATLAB +utilities.
 
 Pure functions: positions in, profile out. Used by the fitting model library.
+:func:`voigt` is new capability (MATLAB has none); it follows the same
+peak-height convention (``height`` is the value at ``x0`` above ``bg``).
 """
 
 from __future__ import annotations
@@ -10,8 +12,9 @@ from collections.abc import Sequence
 
 import numpy as np
 from numpy.typing import NDArray
+from scipy.special import voigt_profile
 
-__all__ = ["pseudo_voigt", "split_pearson_vii", "tch_pseudo_voigt"]
+__all__ = ["pseudo_voigt", "split_pearson_vii", "tch_pseudo_voigt", "voigt"]
 
 # Parameter vector: a plain sequence or a float ndarray (e.g. straight from an
 # optimizer) — both are unpacked via float(...) so either works at runtime.
@@ -39,6 +42,30 @@ def pseudo_voigt(
     lorentz = 1.0 / (1.0 + 4.0 * u**2)
     gauss = np.exp(-4.0 * _LN2 * u**2)
     return height * (eta * lorentz + (1.0 - eta) * gauss) + bg
+
+
+def voigt(
+    x: NDArray[np.float64],
+    x0: float,
+    fwhm_g: float,
+    fwhm_l: float,
+    height: float,
+    bg: float = 0.0,
+) -> NDArray[np.float64]:
+    """Voigt profile scaled to its peak height: H*V(x-x0)/V(0) + bg.
+
+    ``V`` is the area-normalised convolution of a Gaussian of FWHM ``fwhm_g``
+    (sigma = fwhm_g / (2*sqrt(2 ln 2))) with a Lorentzian of FWHM ``fwhm_l``
+    (half-width gamma = fwhm_l / 2), via ``scipy.special.voigt_profile``. Either
+    width may be 0 (pure Lorentzian / pure Gaussian), not both.
+    """
+    if fwhm_g < 0 or fwhm_l < 0 or (fwhm_g == 0 and fwhm_l == 0):
+        raise ValueError("Voigt widths must be non-negative and not both zero")
+    sigma = fwhm_g / (2.0 * math.sqrt(2.0 * _LN2))
+    gamma = fwhm_l / 2.0
+    xv = np.asarray(x, dtype=float)
+    peak0 = float(voigt_profile(0.0, sigma, gamma))
+    return np.asarray(height * voigt_profile(xv - x0, sigma, gamma) / peak0 + bg, dtype=float)
 
 
 def split_pearson_vii(x: NDArray[np.float64], params: Params) -> NDArray[np.float64]:

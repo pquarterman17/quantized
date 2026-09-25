@@ -1,21 +1,24 @@
 """Thin peak routes. ``/find`` wraps ``calc.peaks.find_peaks_robust`` (golden vs
 MATLAB findPeaksRobust); ``/fit`` wraps ``calc.peak_fit.fit_single_peak`` (golden
 vs fitSinglePeak); ``/fit-multi`` wraps ``calc.peak_multifit.fit_multi_peak``
-(golden vs peakAnalysis.onFitSimultaneous). Validate -> call -> serialize; no
-business logic here.
+(golden vs peakAnalysis.onFitSimultaneous); ``/model-fit`` wraps
+``calc.peak_model_fit.fit_peak_model`` (audit P2.4: mixed shapes, per-parameter
+start/vary/bounds/ties, metrics and warnings; new capability, not golden).
+Validate -> call -> serialize; no business logic here.
 """
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Annotated, Any, Literal
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quantized.calc.peak_batch import batch_integrate_peaks
 from quantized.calc.peak_fit import MODELS, fit_single_peak
 from quantized.calc.peak_integrate import integrate_peaks
+from quantized.calc.peak_model_fit import fit_peak_model
 from quantized.calc.peak_multifit import fit_multi_peak
 from quantized.calc.peaks import find_peaks_robust
 from quantized.routes._errors import CALC_ERRORS, call_calc
@@ -183,3 +186,147 @@ def integrate_batch(req: BatchIntegrateRequest) -> dict[str, Any]:
         )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+# ── mixed-shape peak model fit (audit P2.4) ──────────────────────────────────
+
+# Cost caps: one evaluation costs ~points x peaks exp() calls and a TRF step
+# ~(n_free + 1) evaluations, so a large fit is bounded by the deadline, which
+# returns the best point seen (flagged) rather than running on.
+MODEL_FIT_MAX_POINTS = 100_000
+MODEL_FIT_MAX_PEAKS = 50
+MODEL_FIT_MAX_PARAMETERS = 4 * MODEL_FIT_MAX_PEAKS + 3
+MODEL_FIT_MAX_DEADLINE_S = 30.0
+
+FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
+PeakShape = Literal["gaussian", "lorentzian", "pseudo_voigt", "voigt"]
+# A null (or non-finite) x / y / y_err entry marks a row the fit drops.
+Column = list[float | None]
+# Parameter names are ASCII (p0.center, bg.c1), so error text echoing one is too.
+_PARAM_NAME = r"^[a-z0-9_.]+$"
+
+
+class PeakModelParameter(BaseModel):
+    """``p{i}.{center|height|fwhm|eta|fwhm_g|fwhm_l}`` or ``bg.c{k}``: start
+    ``value``, ``vary``, optional bounds and an identity ``tie``."""
+
+    name: str = Field(min_length=1, max_length=32, pattern=_PARAM_NAME)
+    value: FiniteFloat
+    vary: bool = False
+    min: FiniteFloat | None = None
+    max: FiniteFloat | None = None
+    tie: str | None = Field(default=None, max_length=32, pattern=r"^[a-z0-9_.]*$")
+
+
+class PeakModelFitRequest(BaseModel):
+    x: Column = Field(min_length=2, max_length=MODEL_FIT_MAX_POINTS)
+    y: Column = Field(min_length=2, max_length=MODEL_FIT_MAX_POINTS)
+    y_err: Column | None = Field(default=None, max_length=MODEL_FIT_MAX_POINTS)
+    shapes: list[PeakShape] = Field(min_length=1, max_length=MODEL_FIT_MAX_PEAKS)
+    background: Literal["none", "constant", "linear", "quadratic"] = "linear"
+    parameters: list[PeakModelParameter] = Field(
+        min_length=1, max_length=MODEL_FIT_MAX_PARAMETERS)
+    x_min: FiniteFloat | None = None
+    x_max: FiniteFloat | None = None
+    bg_x_ref: FiniteFloat | None = None
+    max_nfev: int = Field(default=1000, ge=1, le=10_000)
+    deadline_s: float = Field(default=10.0, gt=0.0, le=MODEL_FIT_MAX_DEADLINE_S)
+
+
+class PeakModelParameterOut(BaseModel):
+    name: str
+    value: float | None
+    stderr: float | None
+    vary: bool
+    tie: str | None
+    at_bound: bool
+
+
+class PeakModelPeakOut(BaseModel):
+    """Derived per-peak quantities with delta-method standard errors."""
+
+    id: str
+    shape: str
+    center: float | None
+    center_stderr: float | None
+    height: float | None
+    height_stderr: float | None
+    fwhm: float | None
+    fwhm_stderr: float | None
+    area: float | None
+    area_stderr: float | None
+
+
+class PeakModelBackgroundOut(BaseModel):
+    kind: str
+    x_ref: float
+
+
+class PeakModelMetrics(BaseModel):
+    """``chi2``/``reduced_chi2`` only for a weighted fit; ``ssr`` always."""
+
+    objective: Literal["ssr", "chi2"]
+    n_points: int
+    n_free: int
+    dof: int
+    ssr: float | None
+    reduced_ssr: float | None
+    chi2: float | None
+    reduced_chi2: float | None
+    r_squared: float | None
+    adj_r_squared: float | None
+    aic: float | None
+    bic: float | None
+
+
+class PeakModelCurves(BaseModel):
+    """On the fitted points; ``components`` are the peaks without background."""
+
+    x: Column
+    y: Column
+    y_err: Column | None
+    model: Column
+    background: Column
+    components: list[Column]
+    residual: Column
+    normalized_residual: Column | None
+
+
+class PeakModelFitResponse(BaseModel):
+    parameters: list[PeakModelParameterOut]
+    free: list[str]
+    correlation: list[list[float | None]]
+    peaks: list[PeakModelPeakOut]
+    background: PeakModelBackgroundOut
+    weighted: bool
+    metrics: PeakModelMetrics
+    success: bool
+    message: str
+    n_evaluations: int
+    x_range: list[float]
+    n_dropped: int
+    n_excluded: int
+    curves: PeakModelCurves
+    warnings: list[str]
+
+
+def _column(values: Column | None) -> list[float] | None:
+    if values is None:
+        return None
+    return [float("nan") if v is None else v for v in values]
+
+
+@router.post("/model-fit", response_model=PeakModelFitResponse)
+def model_fit(req: PeakModelFitRequest) -> dict[str, Any]:
+    """Fit mixed-shape peaks + a polynomial background with per-parameter
+    start/vary/bounds/ties; returns parameters, derived peaks, metrics,
+    curves and warnings."""
+    out = call_calc(fit_peak_model,
+        _column(req.x), _column(req.y), list(req.shapes),
+        [p.model_dump() for p in req.parameters],
+        background=req.background, y_err=_column(req.y_err),
+        x_min=req.x_min, x_max=req.x_max, bg_x_ref=req.bg_x_ref,
+        max_nfev=req.max_nfev, deadline_s=req.deadline_s,
+    )
+    result: dict[str, Any] = to_jsonable(out)
+    return result
