@@ -107,6 +107,7 @@ import type { Dataset } from "./types";
 import { parseWorkspace, WORKSPACE_FORMAT, WORKSPACE_VERSION } from "./workspace";
 import type { WorkbookNode } from "./workbooks";
 import { lastBookError, truncateReason } from "./bookData";
+import { fetchReferencedPackage, MAX_STORED_TRANSFER_BYTES, readTransferRef, storeAsReference } from "./workbookTransferRef";
 
 export const WORKBOOK_TRANSFER_FORMAT = "quantized-workbook-transfer";
 export const WORKBOOK_TRANSFER_VERSION = 1;
@@ -117,9 +118,9 @@ export const WORKBOOK_TRANSFER_VERSION = 1;
  *  store/workbookTransfer.ts's module doc for the full transport ruling) is
  *  the binding constraint, not disk. `navigator.clipboard.writeText` has no
  *  documented hard cap, but a very large string risks browser-specific
- *  slowdown or failure with no good error surface to report through, so this
- *  refuses cleanly, in advance, with the actual size named — rather than
- *  attempting a multi-MB clipboard write and finding out.
+ *  slowdown or failure with no good error surface to report through, so above
+ *  it no multi-MB clipboard write is attempted: Copy stores the package and
+ *  copies a small descriptor instead (Group F, `buildCopyText` below).
  *
  *  DOCUMENTED TRADEOFF (booked, not built — adversarial review, 2026-08-19):
  *  `buildTransferPackage`/`parseTransferPackage` below materialize the FULL
@@ -160,7 +161,7 @@ export interface TransferSourceState {
 }
 
 export type BuildTransferResult =
-  | { ok: true; pkg: WorkbookTransferPackage; text: string }
+  | { ok: true; pkg: WorkbookTransferPackage; text: string; note?: string; discard?: () => Promise<void> }
   | { ok: false; reason: string };
 
 function mb(chars: number): string {
@@ -175,7 +176,11 @@ function mb(chars: number): string {
  *  `serializeCurrentWorkspace` enforces before a `.dwk` save; the caller
  *  (store/workbookTransfer.ts) resolves pending datasets before calling this
  *  so the ordinary path never hits this refusal. */
-export function buildTransferPackage(workbookId: string, state: TransferSourceState): BuildTransferResult {
+export function buildTransferPackage(
+  workbookId: string,
+  state: TransferSourceState,
+  limit = MAX_TRANSFER_PACKAGE_CHARS,
+): BuildTransferResult {
   const workbook = state.workbooks.find((w) => w.id === workbookId);
   if (!workbook) return { ok: false, reason: "workbook not found" };
   const datasets = state.datasets.filter((d) => d.workbookId === workbookId);
@@ -229,13 +234,36 @@ export function buildTransferPackage(workbookId: string, state: TransferSourceSt
   // full workspace to both dataset cells and frozen FigureDocument snapshots.
   // `pkg` itself stays live/in-memory, and ordinary finite JSON is unchanged.
   const text = JSON.stringify(pkg, encodePersistedCells);
-  if (text.length > MAX_TRANSFER_PACKAGE_CHARS) {
-    return {
-      ok: false,
-      reason: `workbook is too large to transfer (${mb(text.length)}, limit ${mb(MAX_TRANSFER_PACKAGE_CHARS)})`,
-    };
+  if (text.length > limit) {
+    return { ok: false, reason: `workbook is too large to transfer (${mb(text.length)}, limit ${mb(limit)})` };
   }
   return { ok: true, pkg, text };
+}
+
+/** Copy's text (Group F, lib/workbookTransferRef.ts): the inline package,
+ *  unchanged, up to `MAX_TRANSFER_PACKAGE_CHARS`; above it a small descriptor
+ *  of a package stored in the backend's guarded temporary store (a UTF-16
+ *  length never exceeds the UTF-8 byte count, so the char bound is safe). */
+export async function buildCopyText(workbookId: string, state: TransferSourceState): Promise<BuildTransferResult> {
+  const built = buildTransferPackage(workbookId, state, MAX_STORED_TRANSFER_BYTES);
+  return built.ok && built.text.length > MAX_TRANSFER_PACKAGE_CHARS
+    ? storeAsReference(built, MAX_TRANSFER_PACKAGE_CHARS)
+    : built;
+}
+
+/** Paste's parse for either clipboard form — see `buildCopyText`. */
+export async function resolvePasteText(text: string): Promise<ParseTransferResult> {
+  const ref = readTransferRef(text);
+  if (!ref) return parseTransferPackage(text);
+  if (!ref.ok) return ref;
+  return fetchReferencedPackage(ref.ref, (t) => parseTransferPackage(t, MAX_STORED_TRANSFER_BYTES));
+}
+
+/** `canPasteWorkbook`'s probe: a valid inline package, or a usable, unexpired
+ *  descriptor (checked locally — the probe never fetches). */
+export function canPasteText(text: string, now = Date.now()): boolean {
+  const ref = readTransferRef(text);
+  return ref ? ref.ok && Date.parse(ref.ref.expiresAt) > now : parseTransferPackage(text).ok;
 }
 
 export type ParseTransferResult =
@@ -260,9 +288,9 @@ export type ParseTransferResult =
  *  caller can leave the destination untouched and say why (frozen-scope item
  *  5's "leave the destination byte-identical" starts here: nothing this
  *  function returns is ever partially applied). */
-export function parseTransferPackage(text: string): ParseTransferResult {
-  if (text.length > MAX_TRANSFER_PACKAGE_CHARS) {
-    return { ok: false, reason: `transfer package too large (${mb(text.length)}, limit ${mb(MAX_TRANSFER_PACKAGE_CHARS)})` };
+export function parseTransferPackage(text: string, limit = MAX_TRANSFER_PACKAGE_CHARS): ParseTransferResult {
+  if (text.length > limit) {
+    return { ok: false, reason: `transfer package too large (${mb(text.length)}, limit ${mb(limit)})` };
   }
   let parsed: unknown;
   try {

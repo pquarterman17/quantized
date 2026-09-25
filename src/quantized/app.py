@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from quantized import __version__
+from quantized.io.workbook_transfer_store import cleanup_transfer_dir
 from quantized.jobs import jobs
 from quantized.plugins import load_plugins
 from quantized.routes import (
@@ -69,6 +70,7 @@ from quantized.routes import (
     thermal,
     thin_film,
     vacuum,
+    workbook_transfer,
     xray,
 )
 from quantized.routes._errors import validation_error_handler
@@ -138,7 +140,12 @@ _DEV_ORIGINS = ["http://localhost:5173", "http://127.0.0.1:5173"]
 @asynccontextmanager
 async def _app_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     """App lifespan: clean up the executor pool + dataset cache on shutdown."""
-    # Startup: no-op
+    # Startup: sweep expired large-workbook transfer packages (Group F) from
+    # an EXISTING transfer dir -- never creates it, never fails startup.
+    try:
+        cleanup_transfer_dir()
+    except OSError:
+        logging.getLogger(__name__).warning("transfer-package cleanup failed", exc_info=True)
     yield
     # Shutdown: terminate the job executor with pending cancellation
     jobs._pool.shutdown(wait=False, cancel_futures=True)
@@ -229,6 +236,7 @@ def create_app() -> FastAPI:
     application.include_router(magnetic.router)
     application.include_router(aggregate.router)
     application.include_router(calc.router)
+    application.include_router(workbook_transfer.router)
 
     # Client-presence WebSocket (registered before the SPA mount so the
     # catch-all StaticFiles route never shadows it).
