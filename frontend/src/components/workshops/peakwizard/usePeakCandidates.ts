@@ -23,7 +23,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { findPeaks } from "../../../lib/api/peaks";
 import { visiblePeakMarkers } from "../../../lib/peakMarkerHit";
 import { seedPeakNear } from "../../../lib/peakSeed";
 import { baselineValueAt, plotApexY } from "../../../lib/peakWizardApex";
@@ -33,6 +32,7 @@ import { peakOverlayArray } from "../../../lib/plotdata";
 import type { Dataset, Peak } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
+import { recipeFind } from "./recipeSteps";
 
 /** A peak candidate on step ②: detected or manually added, toggleable.
  *  `height`/`bg` match `Peak`/`FittedPeak` (lib/types.ts) — apex =
@@ -118,14 +118,9 @@ export function usePeakCandidates(inp: Inputs) {
       if (segment.gapCount > 0) {
         toast(`${segment.gapCount} of ${segment.sourceCount} rows are gaps; they were excluded from peak analysis.`);
       }
-      const res = await findPeaks({
-        x: segment.x,
-        y: workingY,
-        snr_threshold: find.snr_threshold,
-        ...(find.min_prominence > 0 ? { min_prominence: find.min_prominence } : {}),
-        max_peaks: find.max_peaks,
-      });
-      commit(res.peaks.map((p: Peak) => ({
+      // Shared with the batch runner (./recipeSteps).
+      const found = await recipeFind(segment.x, workingY, find);
+      commit(found.map((p: Peak) => ({
         id: nextCandidateId++,
         center: p.center, height: p.height, bg: p.bg, fwhm: p.fwhm, included: true, manual: false,
       })));

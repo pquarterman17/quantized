@@ -7,7 +7,10 @@ Pure calc layer. Two pieces both fitters need, owned once:
   EVERY residual evaluation (``>=``, so a zero budget stops on the first call
   even where the monotonic clock ticks coarsely, ~15.6 ms on Windows), the
   best point seen kept for a deadline stop, and an evaluation count that
-  includes the Jacobian's finite-difference calls.
+  includes the Jacobian's finite-difference calls. An optional
+  ``abort_check`` is polled at the same place; when it returns True the
+  fit raises :class:`FitAborted` (a cancelled batch job must not wait out a
+  whole fit - P2.4 slice 4).
 * :func:`pinv_covariance` - ``(J^T J)^+`` from the Jacobian's SVD, dropping
   directions whose singular value is below ``degenerate_ratio`` times the
   largest and flagging every parameter with a material share (>1e-3) of such
@@ -30,7 +33,7 @@ import numpy as np
 from numpy.typing import NDArray
 from scipy.optimize import least_squares
 
-__all__ = ["BoundedFit", "pinv_covariance", "solve_bounded"]
+__all__ = ["BoundedFit", "FitAborted", "pinv_covariance", "solve_bounded"]
 
 Residuals = Callable[[NDArray[np.float64]], NDArray[np.float64]]
 Status = Literal["converged", "not_converged", "deadline", "no_free"]
@@ -38,6 +41,10 @@ Status = Literal["converged", "not_converged", "deadline", "no_free"]
 
 class _Deadline(Exception):
     pass
+
+
+class FitAborted(Exception):
+    """Raised out of :func:`solve_bounded` when its ``abort_check`` fires."""
 
 
 @dataclass
@@ -56,8 +63,11 @@ class BoundedFit:
     n_evaluations: int = 0
     best_cost: float = math.inf
     best_x: NDArray[np.float64] = field(default_factory=lambda: np.zeros(0))
+    abort: Callable[[], bool] | None = None
 
     def tracked(self, x: NDArray[np.float64]) -> NDArray[np.float64]:
+        if self.abort is not None and self.abort():
+            raise FitAborted("the fit was cancelled")
         if self.t_end is not None and time.monotonic() >= self.t_end:
             raise _Deadline
         self.n_evaluations += 1
@@ -79,10 +89,11 @@ def solve_bounded(
     *,
     max_nfev: int,
     deadline_s: float | None,
+    abort_check: Callable[[], bool] | None = None,
 ) -> BoundedFit:
     """Minimise ``sum(fun(x)**2)`` within ``bounds`` (TRF, ``x_scale="jac"``)."""
     fit = BoundedFit(fun=fun, x=x0, success=True, message="no free parameters",
-                     status="no_free", best_x=np.array(x0, dtype=float))
+                     status="no_free", best_x=np.array(x0, dtype=float), abort=abort_check)
     if not x0.size:
         return fit
     fit.t_end = None if deadline_s is None else time.monotonic() + deadline_s
@@ -97,7 +108,10 @@ def solve_bounded(
         fit.x, fit.success, fit.message = sol.x, bool(sol.success), str(sol.message)
         fit.jac = sol.jac
         fit.status = "converged" if fit.success else "not_converged"
+    # The caller's final pass (``residuals``) runs unbudgeted and unabortable:
+    # the solve is over, and a finished fit is reported, never discarded.
     fit.t_end = None
+    fit.abort = None
     return fit
 
 

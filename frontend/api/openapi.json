@@ -6943,6 +6943,184 @@
         "title": "PeakModelBackgroundOut",
         "type": "object"
       },
+      "PeakModelBatchItem": {
+        "description": "One dataset's prepared fit: the ``/model-fit`` body plus its ``id``.",
+        "properties": {
+          "background": {
+            "default": "linear",
+            "enum": [
+              "none",
+              "constant",
+              "linear",
+              "quadratic"
+            ],
+            "title": "Background",
+            "type": "string"
+          },
+          "bg_x_ref": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bg X Ref"
+          },
+          "id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_.:-]+$",
+            "title": "Id",
+            "type": "string"
+          },
+          "parameters": {
+            "items": {
+              "$ref": "#/components/schemas/PeakModelParameter"
+            },
+            "maxItems": 203,
+            "minItems": 1,
+            "title": "Parameters",
+            "type": "array"
+          },
+          "shapes": {
+            "items": {
+              "enum": [
+                "gaussian",
+                "lorentzian",
+                "pseudo_voigt",
+                "voigt"
+              ],
+              "type": "string"
+            },
+            "maxItems": 50,
+            "minItems": 1,
+            "title": "Shapes",
+            "type": "array"
+          },
+          "x": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxItems": 100000,
+            "minItems": 2,
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxItems": 100000,
+            "minItems": 2,
+            "title": "Y",
+            "type": "array"
+          },
+          "y_err": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "maxItems": 100000,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Err"
+          }
+        },
+        "required": [
+          "id",
+          "x",
+          "y",
+          "shapes",
+          "parameters"
+        ],
+        "title": "PeakModelBatchItem",
+        "type": "object"
+      },
+      "PeakModelBatchRequest": {
+        "properties": {
+          "item_deadline_s": {
+            "default": 10.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 30.0,
+            "title": "Item Deadline S",
+            "type": "number"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PeakModelBatchItem"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          },
+          "max_nfev": {
+            "default": 1000,
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Max Nfev",
+            "type": "integer"
+          },
+          "total_deadline_s": {
+            "default": 600.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1800.0,
+            "title": "Total Deadline S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PeakModelBatchRequest",
+        "type": "object"
+      },
+      "PeakModelBatchSubmitted": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "n_items": {
+            "title": "N Items",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "n_items"
+        ],
+        "title": "PeakModelBatchSubmitted",
+        "type": "object"
+      },
       "PeakModelCurves": {
         "description": "On the fitted points; ``components`` are the peaks without background.",
         "properties": {
@@ -15642,6 +15820,48 @@
           }
         },
         "summary": "Model Fit",
+        "tags": [
+          "peaks"
+        ]
+      }
+    },
+    "/api/peaks/model-fit-batch": {
+      "post": {
+        "description": "Queue the batch; poll ``/api/jobs/{job_id}`` for progress and rows.",
+        "operationId": "model_fit_batch_api_peaks_model_fit_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeakModelBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeakModelBatchSubmitted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Model Fit Batch",
         "tags": [
           "peaks"
         ]

@@ -2382,6 +2382,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/peaks/model-fit-batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Model Fit Batch
+         * @description Queue the batch; poll ``/api/jobs/{job_id}`` for progress and rows.
+         */
+        post: operations["model_fit_batch_api_peaks_model_fit_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/plot/map": {
         parameters: {
             query?: never;
@@ -7882,6 +7902,59 @@ export interface components {
             x_ref: number;
         };
         /**
+         * PeakModelBatchItem
+         * @description One dataset's prepared fit: the ``/model-fit`` body plus its ``id``.
+         */
+        PeakModelBatchItem: {
+            /**
+             * Background
+             * @default linear
+             * @enum {string}
+             */
+            background?: "none" | "constant" | "linear" | "quadratic";
+            /** Bg X Ref */
+            bg_x_ref?: number | null;
+            /** Id */
+            id: string;
+            /** Parameters */
+            parameters: components["schemas"]["PeakModelParameter"][];
+            /** Shapes */
+            shapes: ("gaussian" | "lorentzian" | "pseudo_voigt" | "voigt")[];
+            /** X */
+            x: (number | null)[];
+            /** Y */
+            y: (number | null)[];
+            /** Y Err */
+            y_err?: (number | null)[] | null;
+        };
+        /** PeakModelBatchRequest */
+        PeakModelBatchRequest: {
+            /**
+             * Item Deadline S
+             * @default 10
+             */
+            item_deadline_s?: number;
+            /** Items */
+            items: components["schemas"]["PeakModelBatchItem"][];
+            /**
+             * Max Nfev
+             * @default 1000
+             */
+            max_nfev?: number;
+            /**
+             * Total Deadline S
+             * @default 600
+             */
+            total_deadline_s?: number;
+        };
+        /** PeakModelBatchSubmitted */
+        PeakModelBatchSubmitted: {
+            /** Job Id */
+            job_id: string;
+            /** N Items */
+            n_items: number;
+        };
+        /**
          * PeakModelCurves
          * @description On the fitted points; ``components`` are the peaks without background.
          */
@@ -13144,6 +13217,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PeakModelFitResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    model_fit_batch_api_peaks_model_fit_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PeakModelBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeakModelBatchSubmitted"];
                 };
             };
             /** @description Validation Error */

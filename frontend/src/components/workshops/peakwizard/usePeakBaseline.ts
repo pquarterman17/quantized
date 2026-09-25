@@ -12,11 +12,11 @@
 
 import { useEffect, useState } from "react";
 
-import { baselineALS, baselineModPoly, baselineRollingBall } from "../../../lib/api/baseline";
 import type { PeakRecipe } from "../../../lib/peakwizard";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { segmentToFullRows } from "./modelFitOverlay";
+import { recipeBaseline as runRecipeBaseline } from "./recipeSteps";
 
 /** The `cutRange` result the wizard works on: the in-range x/y plus the
  *  ANALYSIS-view row indices they came from (modelFitOverlay's `segmentRows`
@@ -86,17 +86,15 @@ export function usePeakBaseline(
           setFailure({ segment, message: "the dataset is no longer available" });
           return;
         }
-        const res = await (b.method === "als"
-          ? baselineALS({ y: segment.y, lam: b.lam, p: b.p })
-          : b.method === "rollingball"
-            ? baselineRollingBall({ y: segment.y, radius: b.radius })
-            : baselineModPoly({ y: segment.y, order: b.order }));
+        // Shared with the batch runner (./recipeSteps): one meaning of the
+        // recipe's baseline. Never null here — "none" returned above.
+        const est = (await runRecipeBaseline(segment.y, b)) ?? [];
         if (cancelled) return;
-        setResult({ segment, baseline: res.baseline });
+        setResult({ segment, baseline: est });
         // Segment point i is ANALYSIS row kept[i]; with excluded or
         // filtered-out rows that is not full row kept[i] (slice-3 fix: the
         // preview used to drift one row per dropped row ahead of it).
-        setBaselineOverlay({ datasetId: ds.id, y: segmentToFullRows(res.baseline, ds, segment.kept) });
+        setBaselineOverlay({ datasetId: ds.id, y: segmentToFullRows(est, ds, segment.kept) });
       } catch (e: unknown) {
         if (!cancelled) setFailure({ segment, message: e instanceof Error ? e.message : "baseline failed" });
       } finally {
