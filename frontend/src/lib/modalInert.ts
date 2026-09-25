@@ -15,15 +15,22 @@
 // and refuses it focus and pointer events — and it does so PER ELEMENT, so an
 // element left unmarked keeps working. That per-element property is the fix.
 //
-// THE WALK. From the TOPMOST open dialog's root up to `document.body`, every
-// sibling off that path is marked. "Topmost" is the open dialog last in
-// DOCUMENT order, i.e. the one PAINTED on top (every dialog sits in a
-// `.qz-overlay-backdrop` of equal z-index in one stacking context), and
-// `useDialogFocus`'s Tab trap asks `isTopModal` for the same answer, so the
-// two can never disagree. A dialog stacked underneath is a sibling off the
-// path, so it goes inert with the rest of the background (exactly one active
-// modal); the dialog's own backdrop is ON the path, so click-to-dismiss is
-// untouched.
+// THE WALK. From the ACTIVE dialog's root up to `document.body`, every
+// sibling off that path is marked. A dialog stacked underneath is a sibling
+// off the path, so it goes inert with the rest of the background (exactly one
+// active modal); the dialog's own backdrop is ON the path, so click-to-dismiss
+// is untouched.
+//
+// ONE ORDER FOR EVERYTHING (R16). "Active" is the dialog OPENED LAST — the
+// order `lib/escapeStack.ts` already ranks Escape by — and this module makes
+// it the dialog PAINTED on top, too: every walk stamps each open dialog's
+// `.qz-overlay-backdrop` with a z-index in open order (101, 102, …; the
+// stylesheet's 100 is the floor, the toast stack at 200 stays above). Before
+// that, equal z-index painted in TREE order, so `?` pressed in Help opened
+// Shortcuts (earlier in `AppOverlays`) underneath Help: invisible, yet the
+// first Escape closed it (measured in Chromium, main and this branch). Now
+// Escape, the Tab trap (`isTopModal`), the inert walk and the paint all name
+// the same dialog.
 //
 // THE EXEMPTIONS.
 //  * `data-live-region`: never marked. An element that CONTAINS one is
@@ -50,7 +57,8 @@
 // 16.4; `inert` shipped in 102 / 112 / 15.5). An engine without it gets the
 // classic per-element `aria-hidden="true"` on the same elements instead —
 // still per element, so the live regions stay exposed; Tab stays trapped by
-// `useFocusTrap` and the pointer by the backdrop.
+// `useFocusTrap`, the pointer by the backdrop, and script-driven focus by a
+// focusin guard (fallback mode only) that sends it back into the dialog.
 //
 // jsdom implements neither the property nor its effects (measured: no
 // `inert` in HTMLElement.prototype, `focus()` lands inside an inert subtree),
@@ -77,22 +85,20 @@ const openModals: ModalEntry[] = [];
 const marked = new Set<Element>();
 let attr: "inert" | "aria-hidden" = "inert";
 let observer: MutationObserver | null = null;
+/** The backdrops this module gave an open-order z-index. */
+const stamped = new Set<HTMLElement>();
 /** The root the current marks were walked from. */
 let walkedFrom: HTMLElement | null = null;
 
 function topmost(): { entry: ModalEntry; el: HTMLElement } | null {
-  let best: { entry: ModalEntry; el: HTMLElement } | null = null;
-  for (const entry of openModals) {
-    const el = entry.ref.current;
-    // A root React already detached (or swapped for another element) is not
-    // a modal any more; reading `ref.current` live is what lets a dialog that
-    // re-renders into a different root element stay the modal.
-    if (!el?.isConnected) continue;
-    // Later in the document (a nested dialog's root counts as later than its
-    // host's: FOLLOWING is set for descendants too) = painted above.
-    if (best === null || best.el.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) best = { entry, el };
+  // Newest-opened first. A root React already detached (or swapped for
+  // another element) is skipped; reading `ref.current` live is what lets a
+  // dialog that re-renders into a different root element stay the modal.
+  for (let i = openModals.length - 1; i >= 0; i--) {
+    const el = openModals[i].ref.current;
+    if (el?.isConnected) return { entry: openModals[i], el };
   }
-  return best;
+  return null;
 }
 
 function mark(el: Element, keep: Set<Element>): void {
@@ -113,12 +119,27 @@ function sync(): void {
   // about to account for — so a dialog mounted in this same commit is never
   // judged by the walk it replaces.
   observer?.disconnect();
+  document.removeEventListener("focusin", guardFocus, true);
   for (const el of marked) el.removeAttribute(attr);
   marked.clear();
+  for (const b of stamped) b.style.zIndex = "";
+  stamped.clear();
+  let z = 101;
+  for (const entry of openModals) {
+    const b = entry.ref.current?.closest<HTMLElement>(".qz-overlay-backdrop");
+    if (b) {
+      b.style.zIndex = String(z++);
+      stamped.add(b);
+    }
+  }
   const top = topmost();
   walkedFrom = top?.el ?? null;
   if (top === null) return;
   attr = "inert" in HTMLElement.prototype ? "inert" : "aria-hidden";
+  // `aria-hidden` hides the background from AT only; script-driven focus
+  // (a window's focus-on-mount, a programmatic `.focus()`) could still land
+  // there, which real `inert` refuses. The fallback refuses it here instead.
+  if (attr !== "inert") document.addEventListener("focusin", guardFocus, true);
   let node: Element = top.el;
   while (node !== document.body && node.parentElement) {
     const parent: Element = node.parentElement;
@@ -153,6 +174,15 @@ function onAdded(records: MutationRecord[]): void {
     }
   }
   if (dirty) sync();
+}
+
+/** Fallback mode only: focus that lands in a marked subtree goes back into
+ *  the active dialog. */
+function guardFocus(e: FocusEvent): void {
+  const top = topmost();
+  let a = e.target instanceof Element ? e.target : null;
+  while (a && !marked.has(a)) a = a.parentElement;
+  if (top && a) (top.el.matches("[tabindex]") ? top.el : top.el.querySelector<HTMLElement>("button,input,select,textarea,[href],[tabindex]"))?.focus();
 }
 
 /** Register an open modal root (read live from `ref`) and recompute. */

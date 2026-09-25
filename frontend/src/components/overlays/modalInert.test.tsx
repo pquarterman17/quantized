@@ -292,6 +292,16 @@ describe("R12 — the markers, and an engine without `inert`", () => {
       expect(screen.getByRole("dialog")).toBeInTheDocument();
       expect(liveRegion()).toBeInTheDocument();
       expect(document.querySelector(".qzk-toaster")!.closest('[aria-hidden="true"]')).toBeNull();
+      // aria-hidden refuses nothing to SCRIPT, which real `inert` does: a
+      // window's focus-on-mount or any `.focus()` into the background would
+      // land. The fallback's focusin guard sends it back into the dialog.
+      const dialog = screen.getByRole("dialog");
+      act(() => document.querySelector<HTMLElement>(".qzk-main button")!.focus());
+      expect(dialog.contains(document.activeElement)).toBe(true);
+      // ...and leaves focus that is not in the background alone.
+      const inside = dialog.querySelectorAll<HTMLElement>("button")[1];
+      act(() => inside.focus());
+      expect(inside).toHaveFocus();
 
       await act(async () => useApp.getState().setPrefsOpen(false));
       expect(document.querySelectorAll('[aria-hidden="true"]')).toHaveLength(hiddenBefore);

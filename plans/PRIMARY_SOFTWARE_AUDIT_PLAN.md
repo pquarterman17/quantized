@@ -3892,9 +3892,10 @@ covers a much smaller subset and guards focus on Analyze.
   BUG-018 and CLOSED R1 and R13**; **round 10 (2026-09-25) CLOSED R12**:
   modality is now a browser-enforced `inert` background instead of
   `aria-modal`, with the live regions exempt (`frontend/src/lib/modalInert.ts`).
-  Stays `[~]` rather than `[x]`: thirteen residuals remain (R2–R11 and R14–R16
-  below — R1, R12 and R13 are closed, R14 was opened by the round-9 re-review,
-  R15 and R16 by round 10), each a distinct, smaller gap — none of them a
+  Round 10's review follow-up also CLOSED R16, the residual that round opened.
+  Stays `[~]` rather than `[x]`: twelve residuals remain (R2–R11, R14 and R15
+  below — R1, R12, R13 and R16 are closed, R14 was opened by the round-9
+  re-review, R15 by round 10), each a distinct, smaller gap — none of them a
   dialog with no keyboard dismissal at all, which is what the audit originally
   found.
 
@@ -4407,12 +4408,12 @@ covers a much smaller subset and guards focus on Analyze.
     losing meant going inert. Measured in Chromium: Preferences stays
     mounted after its first close. Ctrl+, then reopened it over Help, and
     it was painted on top but ranked below, so the dialog the user saw was
-    inert and dead to the pointer. The active modal is now the open dialog
-    **last in document order**. Every backdrop has the same z-index in one
-    stacking context, so that is the dialog painted on top. The Tab trap
-    asks `isTopModal` for the same answer, so `trapStack` and `seq` are
-    gone. NIT 6's case (the outer dialog reopened while an inner one stays
-    open) keeps its answer. A second case was measured the same way. With
+    inert and dead to the pointer. `46ed0750` answered with document
+    order; the review follow-up replaced that with **open order for
+    everything**: see R16 below, which records why and what was measured.
+    The Tab trap asks `isTopModal` for the same answer as the inert walk,
+    so `trapStack` and `seq` are gone. A second case was measured the same
+    way. With
     Preferences ▸ "Confirm before removing" on, Delete inside Preferences
     asked "Remove 1 dataset?" UNDERNEATH Preferences, completely covered.
     That was already so on `main`, because ParamDialog and ConfirmDialog
@@ -4476,8 +4477,44 @@ covers a much smaller subset and guards focus on Analyze.
     `data-live-region` as a literal so that they never import it (a test
     pins the spelling).
 
+    *Review follow-up (the second commit on this branch).* Three nits were
+    fixed as well as R16.
+    - The `aria-hidden` fallback hid the background from AT only. A
+      window's focus-on-mount or any `.focus()` could still land there. A
+      `focusin` guard, active in fallback mode only, now sends focus back
+      into the active dialog. It is tested with `inert` removed from the
+      prototype, and removing the guard reddens exactly that test.
+    - `lazyRegion`'s load-failure alert is not inside any dialog, so it
+      could not become the active one. When a dialog fails to load while
+      another is open, the failed dialog never mounts and never registers;
+      its boundary's alert lands in the background and was going inert
+      whole. Its message `<span>` now carries `data-live-region`, so the
+      message is announced while the Retry beside it stays inert until the
+      open dialog closes. A test pins both halves, and removing the marker
+      reddens it.
+    - The `WhatIsThis` badge (`role="status"`, portaled to `<body>`) is
+      deliberately NOT exempt. It can only appear by toggling the mode from
+      a command, which is unreachable while a dialog makes the background
+      inert. Its text is fixed, and was announced when the mode began, so
+      a dialog opened during the mode costs no announcement. Exempting it
+      would only leave its Done button live over the modal, and Escape still
+      ends the mode through its own window listener.
+    - The optional diff-based `sync()` was NOT done. A full re-walk costs
+      ~0.1 ms, and the zero-`inert`-writes proof that covered additions
+      skip the re-walk depends on a re-walk rewriting every mark.
+    - Follow-up gates, after `npm ci`: `tsc -b --force` 0 and lint 0.
+      vitest ran 726 files, 12,159 passed. The build passed. e2e (CI
+      settings) had 69 passed, 1 skipped (already skipped before), 0
+      retries; `modal-inert.spec.ts` now has 7 cases.
+      `test_repo_integrity` had 13 passed. The manual checks against
+      `uv run qz` were repeated, including both `?` pairs and a
+      forced-fallback page. Eager bytes are **867,372 B** against the
+      unmoved 868,308 pin, measured twice with `.vite` removed: +22 B for
+      the `lazyRegion` marker. The stamp and the guard ship in the lazy
+      chunk.
+
     **Left open:**
-    - Residuals R15 and R16 below.
+    - Residual R15 below.
     - The engines not measured, listed under (a).
     - Live regions INSIDE background panels, such as a workshop's
       `role="alert"`, are not exempt. They sit in an inert window beside
@@ -4564,22 +4601,63 @@ covers a much smaller subset and guards focus on Analyze.
     now correct. Whether a modal should suppress global shortcuts outright
     is a product decision. It is recorded here rather than taken silently.
 
-  - **R16** (round 10, R12 closure) — **Escape is ordered by OPEN order;
-    Tab and `inert` by PAINT order.** `lib/escapeStack.ts` allocates `seq`
-    on every enable, so the most recently OPENED `modal` surface takes
-    Escape. The Tab trap and the inert walk now follow the dialog painted on
-    top, which is last in document order. The two orders agree in every
-    stacking this round measured (Preferences over Help, a confirm over
-    Preferences, a lazy body over Preferences). They disagree when a
-    kept-mounted dialog that sits EARLIER in `AppOverlays` is reopened over
-    a later one. This case is derived from the two rules and was NOT
-    measured in a browser. Example: with Help open, `?` reopens Shortcuts. Shortcuts
-    paints beneath Help and is inert, yet the first Escape closes it,
-    unseen, rather than Help. This does not come from R12: before it, the
-    same Escape went to the same hidden Shortcuts while Tab ran in mount
-    order. The fix is to rank Escape's `modal` layer by `isTopModal`, or to
-    raise a reopened dialog in the tree. Either one touches the BUG-018
-    dispatcher, so it was left to be measured separately.
+  - **R16** (round 10, R12 closure) — **Escape was ranked by OPEN order;
+    Tab and `inert` by PAINT order; paint by TREE order.**
+    `lib/escapeStack.ts` allocates `seq` on every enable, so the most
+    recently OPENED `modal` surface takes Escape. Equal-z backdrops paint in
+    tree order. `46ed0750`'s Tab trap and inert walk followed paint.
+
+    The first write-up called this "reopen only, unmeasured". The
+    branch's independent review MEASURED it in real Chromium, on this
+    branch and on `main`, and it is worse than that. Pressing `?` in Help
+    (focus on a Help tab), or in Preferences, opened Shortcuts. Shortcuts
+    sits EARLIER in `AppOverlays`, so it painted UNDERNEATH the dialog it
+    was opened from, invisible. Focus and Tab stayed in that dialog, and
+    the first Escape closed the hidden Shortcuts, so nothing visible
+    changed. This happened on first open as well as on reopen. On `main`,
+    first open moved focus into the hidden dialog, and reopen was already
+    split. In short: `?` in Help opened nothing the user could see.
+
+    **CLOSED (round 10 follow-up, 2026-09-25).** Open order now equals
+    draw order. The active modal is the dialog OPENED LAST (`topmost()`
+    walks the registry newest-first), which is what Escape already used.
+    Every walk also stamps each open dialog's `.qz-overlay-backdrop` with
+    an inline z-index in open order (101, 102, …), so the stylesheet's 100
+    is only a floor, the toast stack at 200 stays above, and the newest
+    dialog PAINTS on top wherever it sits in the tree. The stamps are
+    lifted with the walk. Escape (`escapeStack`), the Tab trap
+    (`isTopModal`), the inert walk and the paint now all name one dialog.
+
+    This was preferred over portaling each dialog to the end of `<body>`,
+    or remounting it on reopen: it touches no dialog component, React tree
+    or event path, and costs nothing eager. A confirm or a parameter prompt
+    asked from a dialog is opened last, so it stays on top as before
+    (ParamDialog and ConfirmDialog also still render last in the tree). NIT
+    6's case changes answer, deliberately. Its reopened outer trap was
+    opened last, is now painted on top, and is what Escape closes, so it is
+    also the active trap. `dialogFocus.a11y.test.tsx` now pins that
+    exactly one trap acts and that it is the one Escape closes.
+
+    Evidence:
+    - `modalInertOrder.test.tsx`, which now presses Escape. It covers
+      Help → `?` and Preferences → `?` on first open and on reopen through
+      the real `useGlobalShortcuts`. In each case Shortcuts is live and
+      stamped above the dialog under it although it sits earlier in the
+      tree. Focus and Tab are Shortcuts'. The first Escape closes
+      Shortcuts and returns focus to the opener in the dialog beneath; the
+      second closes that dialog; nothing is left inert and every stamp is
+      lifted. A third case covers a Preferences mounted first but opened
+      last, with Escape.
+    - `modal-inert.spec.ts`, which has two new Chromium cases for the same
+      pairs. "Painted on top" is checked by a hit test with every `inert`
+      lifted for one synchronous `elementFromPoint`: `inert` removes
+      elements from hit testing, so a plain hit test looks straight
+      through an inert dialog painted on top. The first cut of this check
+      had that flaw and stayed green with the stamp removed. The fixed
+      check goes red on exactly the two R16 cases.
+    - Sabotages: removing the stamp reddens the three order tests and both
+      browser R16 cases. Ranking by OLDEST open reddens those three and
+      three `modalInertMutations` cases.
 
   - **Round 5 2026-09-18 — the ladder is resolved at KEYDOWN, not one
     macrotask later.** Round 4 landed locally and was NOT pushed, because

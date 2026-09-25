@@ -58,6 +58,23 @@ const focusedDialog = (page: Page) =>
     return d ? (document.getElementById(d.getAttribute("aria-labelledby") ?? "")?.textContent ?? "") : "";
   });
 
+/** The dialog PAINTED topmost at (x, y). `inert` removes elements from hit
+ *  testing, so a plain `elementFromPoint` would look straight through an
+ *  inert dialog painted on top and report the live one beneath it — it
+ *  cannot tell what the user SEES. So every `inert` is lifted for the one
+ *  synchronous hit test (no frame renders in between) and put back. */
+const paintedOnTopAt = (page: Page, x: number, y: number) =>
+  page.evaluate(
+    ([px, py]) => {
+      const inert = Array.from(document.querySelectorAll("[inert]"));
+      for (const el of inert) el.removeAttribute("inert");
+      const d = document.elementFromPoint(px, py)?.closest("[role='dialog']");
+      for (const el of inert) el.setAttribute("inert", "");
+      return d ? (document.getElementById(d.getAttribute("aria-labelledby") ?? "")?.textContent ?? "") : "";
+    },
+    [x, y],
+  );
+
 /** Stacked dialogs by accessible name, each with whether it is inert. */
 const dialogStates = (page: Page) =>
   page.evaluate(() =>
@@ -162,13 +179,7 @@ test("Preferences reopened over Help: the one painted on top is the one active m
   // Preferences is the dialog painted on top, and it is the live one: the
   // pointer reaches it and Tab stays inside it.
   const pbox = (await prefs.boundingBox())!;
-  const hit = await page.evaluate(
-    ([x, y]) => {
-      const d = document.elementFromPoint(x, y)?.closest("[role='dialog']");
-      return d ? document.getElementById(d.getAttribute("aria-labelledby") ?? "")?.textContent : null;
-    },
-    [pbox.x + pbox.width / 2, pbox.y + 30],
-  );
+  const hit = await paintedOnTopAt(page, pbox.x + pbox.width / 2, pbox.y + 30);
   expect(hit).toBe("Preferences");
   expect(await canFocus(helpTab)).toBe(false);
   for (let i = 0; i < 12; i++) {
@@ -209,13 +220,7 @@ test("a confirmation asked over Preferences paints on top and is the active moda
   // Painted on top: its own centre hits it (it used to render UNDER
   // Preferences, which covered it completely).
   const abox = (await ask.boundingBox())!;
-  const onTop = await page.evaluate(
-    ([x, y]) => {
-      const d = document.elementFromPoint(x, y)?.closest("[role='dialog']");
-      return d ? document.getElementById(d.getAttribute("aria-labelledby") ?? "")?.textContent : null;
-    },
-    [abox.x + abox.width / 2, abox.y + 20],
-  );
+  const onTop = await paintedOnTopAt(page, abox.x + abox.width / 2, abox.y + 20);
   expect(onTop).toBe("Remove 1 dataset?");
 
   await ask.getByRole("button", { name: "Cancel" }).click();
@@ -244,4 +249,54 @@ test("a window opened by a shortcut while a dialog is open mounts inert and cann
 
   await setPrefs(page, false);
   expect(await page.locator("[inert]").count()).toBe(0);
+});
+
+/** R16: `?` pressed from `opener` inside the open dialog `under`. Shortcuts
+ *  sits EARLIER in AppOverlays, so before open order drove the paint it
+ *  opened UNDERNEATH `under` — invisible — and the first Escape closed it
+ *  unseen (measured on main and on the first R12 cut). */
+async function questionMarkOver(page: Page, under: string, opener: Locator): Promise<void> {
+  await opener.focus();
+  await page.keyboard.press("?");
+  const shortcuts = page.getByRole("dialog", { name: /shortcuts/i });
+  await expect(shortcuts).toBeVisible();
+  // Visible ON TOP: its own centre hits it, not the dialog beneath.
+  const box = (await shortcuts.boundingBox())!;
+  const hit = await paintedOnTopAt(page, box.x + box.width / 2, box.y + box.height / 2);
+  expect(hit).toMatch(/shortcuts/i);
+  const live = (await dialogStates(page)).filter((d) => !d.inert).map((d) => d.name);
+  expect(live).toHaveLength(1);
+  expect(live[0]).toMatch(/shortcuts/i);
+  // Focus and Tab are Shortcuts'.
+  expect(await focusedDialog(page)).toMatch(/shortcuts/i);
+  for (let i = 0; i < 8; i++) {
+    await page.keyboard.press("Tab");
+    expect(await focusedDialog(page)).toMatch(/shortcuts/i);
+  }
+  // First Escape closes what is visible on top; the dialog beneath is live
+  // again with its focus back where it was.
+  await page.keyboard.press("Escape");
+  await expect(shortcuts).toHaveCount(0);
+  expect(await dialogStates(page)).toEqual([{ name: under, inert: false }]);
+  await expect(opener).toBeFocused();
+  // Second Escape closes the one beneath; nothing is left inert.
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(await page.locator("[inert]").count()).toBe(0);
+}
+
+test("R16: `?` in Help opens Shortcuts visibly on top, and Escape closes it first", async ({ page }) => {
+  await gotoApp(page);
+  await openHelpFromPalette(page);
+  await questionMarkOver(page, "Help", page.getByRole("dialog", { name: "Help" }).getByRole("tab").first());
+});
+
+test("R16: `?` in Preferences opens Shortcuts on top, on first open and on reopen", async ({ page }) => {
+  await gotoApp(page);
+  for (let round = 0; round < 2; round++) {
+    await setPrefs(page, true);
+    const prefs = page.getByRole("dialog", { name: "Preferences" });
+    await expect(prefs).toBeVisible();
+    await questionMarkOver(page, "Preferences", prefs.getByRole("button").first());
+  }
 });

@@ -489,13 +489,15 @@ describe("round-2 focus details, now pinned (P3.3 round 3)", () => {
     expect(screen.getByRole("button", { name: "First" })).toHaveFocus();
   });
 
-  it("orders traps by PAINT order, so reopening an outer one does not steal Tab (NIT 6)", async () => {
+  it("a reopened trap is the ONE active trap, the same one Escape and inert pick (NIT 6, R16)", async () => {
     // Measured on the round-2 tree: toggling the OUTER trap closed→open while
-    // an inner one stayed open pushed the outer on top, and Tab then cycled
-    // the dialog BEHIND the topmost one ("Outer A", "Outer B", "Outer A", …).
-    // Round 3 fixed it with per-instance MOUNT order; R12 replaced that with
-    // document (= paint) order, which gives this case the same answer and
-    // also the kept-mounted case mount order got wrong (modalInertOrder.test).
+    // an inner one stayed open left Tab cycling a dialog that was not the one
+    // in charge. Round 3 answered with per-instance MOUNT order ("Inner"
+    // stays active); R16 measured mount order disagreeing with Escape (open
+    // order) and with paint (tree order) in the real app, and unified all of
+    // them on OPEN order, with modalInert painting the newest-opened on top.
+    // So the reopened Outer is now the active trap, and exactly one trap acts:
+    // Tab wraps inside Outer, and Inner has gone inert beneath it.
     const user = userEvent.setup();
     function Stacked() {
       const [outerOpen, setOuterOpen] = useState(true);
@@ -528,10 +530,11 @@ describe("round-2 focus details, now pinned (P3.3 round 3)", () => {
     await user.click(screen.getByRole("button", { name: "Toggle outer" })); // close…
     await user.click(screen.getByRole("button", { name: "Toggle outer" })); // …and reopen
 
-    screen.getByRole("button", { name: "Inner B" }).focus();
+    screen.getByRole("button", { name: "Outer B" }).focus();
     await user.tab();
 
-    expect(screen.getByRole("button", { name: "Inner A" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Outer A" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Inner A" }).closest("[inert]")).not.toBeNull();
   });
 
   it("skips a focusable inside an aria-hidden wrapper, not only a hidden element (S20)", async () => {

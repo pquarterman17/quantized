@@ -17,7 +17,7 @@
 import { act, render, screen } from "@testing-library/react";
 import { useRef } from "react";
 import { createPortal } from "react-dom";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { create } from "zustand";
 
 import ConfirmDialog, { askConfirm } from "./ConfirmDialog";
@@ -28,6 +28,7 @@ import StatusBar from "../Shell/StatusBar";
 import SymbolPalette from "../primitives/SymbolPalette";
 import { MODAL_LAYER_ATTR, openModalCount } from "../../lib/modalInert";
 import { HEALTHY } from "../../lib/autosaveGenerations";
+import { lazyRegion } from "../../lib/lazyRegion";
 import { reportAutosaveHealth } from "../../store/autosaveStatus";
 import { useApp } from "../../store/useApp";
 import { useToasts } from "../../store/toasts";
@@ -36,7 +37,20 @@ import { useToasts } from "../../store/toasts";
 import "./ConfirmDialogBody";
 
 /** Test-only switches for things that mount while a dialog is open. */
-const useLate = create(() => ({ sibling: false, portal: false, palette: false, swap: false, probe: false }));
+const useLate = create(() => ({ sibling: false, portal: false, palette: false, swap: false, probe: false, failed: false }));
+
+/** A lazily-loaded dialog whose chunk fails (UX-003): what AppOverlays shows
+ *  when e.g. Help is opened over Preferences and its chunk cannot load. The
+ *  dialog never mounts, so it never becomes the active modal — its boundary's
+ *  alert lands in the background instead. */
+const FailingDialog = lazyRegion<object>(
+  () => Promise.reject<{ default: () => null }>(new Error("chunk fetch failed")),
+  "Help dialog",
+);
+function LateFail() {
+  const on = useLate((s) => s.failed);
+  return on ? <FailingDialog /> : null;
+}
 
 function LateSibling() {
   const on = useLate((s) => s.sibling);
@@ -77,6 +91,7 @@ function Shell() {
       <StatusBar />
       <LateSibling />
       <LatePortal />
+      <LateFail />
       <PreferencesDialog />
       <SwappingDialog />
       <ConfirmDialog />
@@ -88,7 +103,7 @@ function Shell() {
 const inertAncestor = (el: Element | null): Element | null => el?.closest("[inert]") ?? null;
 const reset = () => {
   useApp.getState().setPrefsOpen(false);
-  useLate.setState({ sibling: false, portal: false, palette: false, swap: false, probe: false });
+  useLate.setState({ sibling: false, portal: false, palette: false, swap: false, probe: false, failed: false });
   useToasts.setState({ toasts: [] });
   reportAutosaveHealth(HEALTHY);
 };
@@ -165,6 +180,29 @@ describe("R12 (b) — live regions that mount while a dialog is open", () => {
     });
     expect(inertAncestor(region)).toBeNull();
     expect(screen.getByText("background control")).toHaveAttribute("inert");
+  });
+});
+
+describe("R12 (b) — a lazy dialog that fails to load under an open dialog", () => {
+  it("its load-failure alert is announced; its Retry stays inert with the background", async () => {
+    const quiet = vi.spyOn(console, "error").mockImplementation(() => {});
+    render(<Shell />);
+    await act(async () => useApp.getState().setPrefsOpen(true));
+    await act(async () => useLate.setState({ failed: true }));
+    const alert = await screen.findByRole("alert");
+    quiet.mockRestore();
+    expect(alert).toHaveTextContent("Help dialog failed to load.");
+    // Not inside any dialog (the failed one never mounted), so it is
+    // background: the text is exempt and stays in the accessibility tree...
+    expect(alert.closest("[role='dialog']")).toBeNull();
+    const message = screen.getByText(/Help dialog failed to load/);
+    expect(message.tagName).toBe("SPAN");
+    expect(inertAncestor(message)).toBeNull();
+    // ...while the Retry is inert until Preferences closes, like any other
+    // background control.
+    expect(inertAncestor(screen.getByText("↻ Retry"))).not.toBeNull();
+    await act(async () => useApp.getState().setPrefsOpen(false));
+    expect(document.querySelectorAll("[inert]")).toHaveLength(0);
   });
 });
 

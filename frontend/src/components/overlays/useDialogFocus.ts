@@ -118,17 +118,15 @@ function focusSafeLanding(): void {
  * live while it makes everything else `inert` — one answer for both, asked of
  * `isTopModal`, so the Tab trap and the inert background cannot disagree.
  *
- * "Active" is the open dialog LAST IN DOCUMENT ORDER, because that is the one
- * painted on top: every modal renders inside a `.qz-overlay-backdrop`
- * (`position: fixed; z-index: 100`) in the same stacking context, where equal
- * z-index paints in tree order. Round 3 (NIT 6) had ordered by component
- * MOUNT order instead, which agrees with paint order only while dialogs mount
- * in DOM order. R12 measured where it does not (Chromium, 2026-09-25):
- * Preferences stays mounted after its first close, so reopened with Ctrl+,
- * over Help it was PAINTED on top yet ordered below — Tab went to the Help
- * behind it and, with the background `inert`, Preferences took no pointer or
- * focus at all. NIT 6's own case (an outer dialog reopened while an inner one,
- * later in the DOM, stays open) keeps its answer under document order. */
+ * "Active" is the dialog OPENED LAST, which `lib/escapeStack.ts` already
+ * ranks Escape by and which modalInert also PAINTS on top (it stamps each open
+ * backdrop's z-index in open order). Round 3 (NIT 6) had ordered by component
+ * MOUNT order, and equal-z backdrops painted in TREE order; R12/R16 measured
+ * both disagreeing with each other and with Escape in Chromium (2026-09-25):
+ * Preferences, kept mounted after its first close, reopened over Help painted
+ * on top but ranked below — inert and dead to the pointer — and `?` in Help
+ * opened Shortcuts UNDERNEATH Help, where the first Escape closed it unseen.
+ * One order — open order — now drives Escape, Tab, `inert` and paint. */
 
 /** Keep Tab / Shift+Tab inside `ref` while `open`. Moves focus only when it
  *  would otherwise leave; an ordinary Tab between two controls is untouched.
@@ -141,7 +139,7 @@ function focusSafeLanding(): void {
  *  alone regardless, so a future owner of the key still wins. */
 export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean): void {
   // R12: while the trap is live the background is `inert`, walked from the
-  // active (topmost-painted) open dialog.
+  // active (newest-opened, painted on top) open dialog.
   //
   // A LAYOUT effect, deliberately, for three orderings it buys:
   //  * It registers in the same commit that inserts the dialog, before
