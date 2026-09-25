@@ -22,6 +22,8 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 from scipy.optimize import minimize
 
+from .peakshapes import AREA_G as _A_G
+from .peakshapes import AREA_L as _A_L
 from .peakshapes import split_pearson_vii, tch_pseudo_voigt
 
 __all__ = [
@@ -33,8 +35,6 @@ __all__ = [
 ]
 
 _LN2 = math.log(2.0)
-_A_L = math.pi / 2.0  # integrated-area constant, Lorentzian
-_A_G = math.sqrt(math.pi) / (2.0 * math.sqrt(_LN2))  # ... Gaussian
 
 MODELS = ("Lorentzian", "Gaussian", "Pseudo-Voigt", "Split Pearson VII", "TCH-pV")
 

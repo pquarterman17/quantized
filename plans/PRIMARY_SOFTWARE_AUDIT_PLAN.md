@@ -3118,6 +3118,23 @@ summary without leaving Quantized.
 - [ ] Mixed functions and shared/fixed/start/bound parameters.
 - [ ] Context submenu: Peak Fitting > Fit this range.
 - [ ] Explicit model metrics/warnings.
+
+**Progress 2026-09-25 (slice 1, engine + route, no UI; Opus 5.5):** new
+`calc/peak_model.py` + `calc/peak_model_fit.py` and `POST
+/api/peaks/model-fit`. Each peak picks gaussian / lorentzian / pseudo_voigt /
+voigt (`peakshapes.voigt` added); background none/constant/linear/quadratic in
+`(x - x_ref)`. Parameters `p{i}.{center,height,fwhm,eta,fwhm_g,fwhm_l}` and
+`bg.c{k}` (height convention, area derived) each take value/vary/min/max and
+an identity tie of the same kind to a varying root. Scale-normalised TRF with
+deadline, equilibrated-SVD covariance, at-bound/undetermined -> stderr None,
+chi2 only when weighted (SSR always), R2/adj-R2/AIC/BIC, per-peak
+centre/FWHM/height/area with delta-method errors, x-range + non-finite drop
+counts, warnings (convergence, deadline, bounds, degeneracy, centre outside
+range, overlap < 0.5 mean FWHM, negative peaks). `peak_multifit` (golden
+parity) untouched. Verified by truth recovery + invariants
+(`tests/test_calc_peak_model_fit.py`, `tests/test_api_peak_model_fit.py`); six
+sabotages went red. The three boxes above stay open until the Peak Analyzer UI
+drives this engine (slice 2).
 - [ ] Batch recipe and uncertainty/diagnostic result table.
 
 ### P2.5 — Transform/combine/clean wizard
