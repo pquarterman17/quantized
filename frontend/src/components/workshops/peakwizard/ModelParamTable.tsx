@@ -3,12 +3,14 @@
 // fixed at the start value), optional min / max (blank = the backend's
 // default: open, except widths > 0 and eta in [0, 1]), and a tie to another
 // parameter of the same kind (a tied row copies its target, so its own
-// fields are disabled). Presentational: every edit goes through
+// fields are disabled). A parameter others are tied to cannot be fixed (the
+// backend refuses a tie to a fixed parameter): its vary box is disabled and
+// says which ties to undo first. Presentational: every edit goes through
 // `useModelFit`'s `patch`.
 
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import { Select } from "../../primitives";
-import { paramLabel, tieTargets, type ModelParam } from "./peakModelParams";
+import { dependents, paramLabel, tieTargets, type ModelParam } from "./peakModelParams";
 import type { ModelFitState } from "./useModelFit";
 
 const cell = { padding: "2px 3px" } as const;
@@ -17,6 +19,8 @@ function Row({ p, all, model }: { p: ModelParam; all: ModelParam[]; model: Model
   const label = paramLabel(p.name);
   const tied = p.tie !== null;
   const targets = tieTargets(all, p.name);
+  const deps = dependents(all, p.name);
+  const lockedVary = !tied && p.vary && deps.length > 0;
   // A tie to a target that is no longer eligible still shows (the backend
   // explains the conflict on Fit) rather than silently vanishing.
   const tieOptions = [
@@ -45,9 +49,13 @@ function Row({ p, all, model }: { p: ModelParam; all: ModelParam[]; model: Model
         <input
           type="checkbox"
           aria-label={`${label} vary`}
-          title={p.vary ? "fitted (uncheck to fix at the start value)" : "fixed at the start value"}
+          title={
+            lockedVary
+              ? `${deps.map(paramLabel).join(", ")} ${deps.length === 1 ? "is" : "are"} tied to this — untie first to fix it`
+              : p.vary ? "fitted (uncheck to fix at the start value)" : "fixed at the start value"
+          }
           checked={tied || p.vary}
-          disabled={tied}
+          disabled={tied || lockedVary}
           onChange={(e) => model.patch(p.name, { vary: e.target.checked })}
         />
       </td>

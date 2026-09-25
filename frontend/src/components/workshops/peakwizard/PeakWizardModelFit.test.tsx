@@ -125,6 +125,35 @@ describe("Peak Analyzer — model engine setup (step 3)", () => {
     expect(get("p1.height").tie).toBeNull();
   });
 
+  it("cannot fix a parameter others are tied to, and blocks Fit on a table the backend would reject", async () => {
+    await findTwoPeaks();
+    step("Model");
+    fireEvent.click(screen.getByRole("button", { name: "Share FWHM across peaks" }));
+    const rootVary = screen.getByRole("checkbox", { name: "#1 FWHM vary" });
+    expect(rootVary).toBeDisabled();
+    expect(rootVary).toHaveAttribute("title", "#2 FWHM is tied to this — untie first to fix it");
+    // a bad bound is caught before any request is made
+    fireEvent.change(screen.getByRole("textbox", { name: "#1 center min" }), { target: { value: "5" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "#1 center max" }), { target: { value: "4" } });
+    expect(screen.getByRole("list", { name: "parameter problems" })).toHaveTextContent("#1 center: min is greater than max");
+    stubModelFit(200, modelFitResponse());
+    step("Fit & review");
+    expect(screen.getByRole("button", { name: "Fit" })).toBeDisabled();
+    expect(bodies).toHaveLength(0);
+  });
+
+  it("a table edit after a fit blocks the report until a re-fit, with the reason", async () => {
+    await findTwoPeaks();
+    await fitWith(modelFitResponse());
+    await waitFor(() => expect(screen.getByLabelText("fit metrics")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Start from fit" }));
+    expect(screen.getByText(/cannot be\s+integrated or reported until you Re-fit/)).toBeInTheDocument();
+    expect(useApp.getState().fitOverlay).toBeNull();
+    step("Report");
+    expect(screen.getByText(/re-fit in step 4 before integrating or reporting/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "→ Report" })).toBeDisabled();
+  });
+
   it("the tie dropdown lists only same-kind parameters", async () => {
     await findTwoPeaks();
     step("Model");

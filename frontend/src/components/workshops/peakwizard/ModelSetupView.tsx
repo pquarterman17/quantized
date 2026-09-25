@@ -31,6 +31,23 @@ export function EngineSelect({ w }: { w: PeakWizardState }) {
   );
 }
 
+/** The table's rule breaks (./modelSetupChecks) — Fit is blocked on them. */
+export function SetupProblems({ problems }: { problems: string[] }) {
+  if (problems.length === 0) return null;
+  return (
+    <ul
+      role="list"
+      aria-label="parameter problems"
+      className="qzk-ds-meta qzk-msg"
+      style={{ margin: "6px 0 0", paddingLeft: 16, color: "var(--danger)" }}
+    >
+      {problems.map((p) => (
+        <li key={p}>{p}</li>
+      ))}
+    </ul>
+  );
+}
+
 export default function ModelSetupView({ w }: { w: PeakWizardState }) {
   const m = w.model;
   const peaks = w.candidates.filter((c) => c.included);
@@ -70,11 +87,11 @@ export default function ModelSetupView({ w }: { w: PeakWizardState }) {
               </tbody>
             </table>
           </div>
-          {m.shapeNote && (
-            <div className="qzk-ds-meta" style={{ ...faint, marginTop: 4 }}>
-              {m.shapeNote}
+          {[m.shapeNote, m.bgNote].filter(Boolean).map((note) => (
+            <div key={note} className="qzk-ds-meta qzk-msg" style={{ ...faint, marginTop: 4 }}>
+              {note}
             </div>
-          )}
+          ))}
           <div style={{ display: "flex", gap: 6, alignItems: "flex-end", marginTop: 8, flexWrap: "wrap" }}>
             <span style={{ display: "inline-flex", flexDirection: "column", gap: 2 }}>
               <label className="qzk-field-lbl">Background</label>
@@ -98,6 +115,7 @@ export default function ModelSetupView({ w }: { w: PeakWizardState }) {
             </Button>
           </div>
           <ModelParamTable model={m} />
+          <SetupProblems problems={m.problems} />
           <div className="qzk-ds-meta" style={{ ...faint, marginTop: 6 }}>
             Seeded from the detected peaks; blank min/max = open (widths stay positive, η in [0, 1]).
           </div>

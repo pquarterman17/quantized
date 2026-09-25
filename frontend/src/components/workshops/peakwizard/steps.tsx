@@ -351,6 +351,11 @@ export function StepReport({ w }: { w: PeakWizardState }) {
           />
         </div>
       )}
+      {w.reportBlock && (
+        <div className="qzk-ds-meta qzk-msg" style={{ color: "var(--warn)", marginTop: 6 }}>
+          {w.reportBlock}
+        </div>
+      )}
       <div style={{ marginTop: 10 }}>
         <Button
           size="sm"

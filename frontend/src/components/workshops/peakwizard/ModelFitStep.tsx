@@ -6,6 +6,7 @@
 import { Button } from "../../primitives";
 import ModelFitPreview from "./ModelFitPreview";
 import ModelFitResults from "./ModelFitResults";
+import { SetupProblems } from "./ModelSetupView";
 import type { PeakWizardState } from "./usePeakWizard";
 
 const faint = { color: "var(--text-faint)" } as const;
@@ -21,7 +22,13 @@ export default function ModelFitStep({ w }: { w: PeakWizardState }) {
         parameters (edit them in step 3)
       </div>
       <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-        <Button size="sm" variant="primary" disabled={m.busy || n === 0} onClick={() => void m.run()}>
+        <Button
+          size="sm"
+          variant="primary"
+          disabled={m.busy || n === 0 || m.problems.length > 0}
+          title={m.problems.length > 0 ? "fix the parameter table (step 3) first" : undefined}
+          onClick={() => void m.run()}
+        >
           {m.busy ? "Fitting…" : r ? "Re-fit" : "Fit"}
         </Button>
         {m.busy && (
@@ -35,6 +42,7 @@ export default function ModelFitStep({ w }: { w: PeakWizardState }) {
           </Button>
         )}
       </div>
+      <SetupProblems problems={m.problems} />
       {m.error && (
         <div role="alert" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)", marginTop: 6 }}>
           {m.error}
@@ -47,7 +55,8 @@ export default function ModelFitStep({ w }: { w: PeakWizardState }) {
       )}
       {r && m.stale && (
         <div className="qzk-ds-meta" style={{ color: "var(--warn)", marginTop: 6 }}>
-          The parameters changed since this fit — Re-fit to update it.
+          The parameters changed since this fit — its curves are off the plot and it cannot be
+          integrated or reported until you Re-fit.
         </div>
       )}
       {r && (

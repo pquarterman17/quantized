@@ -3168,6 +3168,17 @@ engine choice / shapes / parameter table are NOT in the saved PeakRecipe
 `tests/test_report_peak_model_fit.py`, Chromium e2e
 `peak-model-fit.spec.ts` (real backend, two-peak synthetic fixture); sabotages
 of the stale guard, the chi2 label and the null-stderr reason went red.
+Review round (same day, 10 findings fixed): one content key (dataset id,
+included peaks, recipe model, working x/y digest) now invalidates the result,
+in-flight request and overlays — toggle/add/remove peak and same-id data
+edits included; a table edit leaves the fit STALE (curves off the plot,
+integrate/report blocked with the reason); a new fit or engine switch clears
+the integration; a dataset switch never restores the old baseline; curves map
+to plot rows 1:1 by position (repeated-x sweeps, excluded rows); a background
+change re-seeds unedited coefficients AND heights together; a degree > 2 note;
+Share FWHM adds/removes only ties to the first peak and restores the root's
+vary; a parameter others are tied to cannot be fixed, and a client mirror of
+the backend's parameter rules blocks Fit with the reason; no x_min/x_max sent.
 Remaining: slice 3 — PeakRecipe v2 carrying engine/shapes/table (and the
 recipe-file importer), durable peak-table publishing with stderr + shape, a
 correlation view; slice 4 — "Fit this range" context submenu and batch recipe.

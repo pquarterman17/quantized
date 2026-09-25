@@ -33,6 +33,8 @@ interface Inputs {
   report: PeakRecipe["report"];
   integrateResult: IntegrateResult;
   setIntegrateResult: (r: IntegrateResult) => void;
+  /** Non-null: integrate and report refuse, showing this reason. */
+  blocked: string | null;
   setBusy: (b: boolean) => void;
   setError: (e: string | null) => void;
 }
@@ -45,13 +47,17 @@ export function modelPeaksForIntegrate(res: PeakModelFitResponse): { center: num
 
 export function usePeakWizardOutput(inp: Inputs) {
   const { active, segment, workingY, fitted, candidates, classicResult, modelResult, report } = inp;
-  const { integrateResult, setIntegrateResult, setBusy, setError } = inp;
+  const { integrateResult, setIntegrateResult, blocked, setBusy, setError } = inp;
   const addReport = useApp((s) => s.addReport);
   const [reportBusy, setReportBusy] = useState(false);
 
   // ⑤ Integrate-only path (#32): regions from the best peak positions we have.
   const runIntegrate = useCallback(async () => {
     if (!segment || !workingY) return;
+    if (blocked) {
+      setError(blocked);
+      return;
+    }
     const source = fitted?.length ? fitted : candidates.filter((c) => c.included);
     if (source.length === 0) {
       setError("no peaks to integrate — find or fit peaks first");
@@ -77,11 +83,15 @@ export function usePeakWizardOutput(inp: Inputs) {
     } finally {
       setBusy(false);
     }
-  }, [segment, workingY, fitted, candidates, report.regionWidth, setIntegrateResult, setBusy, setError]);
+  }, [segment, workingY, fitted, candidates, report.regionWidth, blocked, setIntegrateResult, setBusy, setError]);
 
   // ⑤ Land the result as a #36 report (fit table or integration table).
   const toReport = useCallback(async () => {
     if (!active) return;
+    if (blocked && report.mode === "fit") {
+      setError(blocked);
+      return;
+    }
     setReportBusy(true);
     try {
       const refs = [{ kind: "dataset", id: active.id, name: active.name }];
@@ -117,7 +127,7 @@ export function usePeakWizardOutput(inp: Inputs) {
     } finally {
       setReportBusy(false);
     }
-  }, [active, report.mode, integrateResult, modelResult, classicResult, addReport]);
+  }, [active, blocked, report.mode, integrateResult, modelResult, classicResult, addReport, setError]);
 
   return { runIntegrate, reportBusy, toReport };
 }

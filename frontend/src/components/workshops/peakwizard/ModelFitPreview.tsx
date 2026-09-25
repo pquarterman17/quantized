@@ -6,6 +6,8 @@
 // are the fit's own (the baseline-corrected working trace). Inline SVG,
 // colours from the design tokens only.
 
+import { useMemo } from "react";
+
 import type { PeakModelFitResponse } from "../../../lib/api/peaks";
 
 const W = 388;
@@ -39,12 +41,19 @@ function path(order: number[], x: Col, y: Col, sx: (v: number) => number, sy: (v
 
 export default function ModelFitPreview({ r }: { r: PeakModelFitResponse }) {
   const c = r.curves;
-  const n = c.x.length;
-  const stride = Math.max(1, Math.ceil(n / MAX_POINTS));
-  const order = [...Array(n).keys()]
-    .filter((i) => i % stride === 0 || i === n - 1)
-    .sort((a, b) => (c.x[a] ?? 0) - (c.x[b] ?? 0));
-  const stacked = c.components.map((comp) => comp.map((v, i) => (v === null || c.background[i] === null ? null : v + c.background[i]!)));
+  // Derived arrays depend on the result only: rebuild them per fit, not per
+  // render of the step.
+  const { order, stacked } = useMemo(() => {
+    const n = c.x.length;
+    const stride = Math.max(1, Math.ceil(n / MAX_POINTS));
+    return {
+      order: [...Array(n).keys()]
+        .filter((i) => i % stride === 0 || i === n - 1)
+        .sort((a, b) => (c.x[a] ?? 0) - (c.x[b] ?? 0)),
+      stacked: c.components.map((comp) =>
+        comp.map((v, i) => (v === null || c.background[i] === null ? null : v + c.background[i]!))),
+    };
+  }, [c]);
   const [x0, x1] = extent([c.x]);
   const [y0, y1] = extent([c.y, c.model, c.background, ...stacked]);
   const [r0, r1] = extent([c.residual]);

@@ -1,41 +1,40 @@
-// Peak Analyzer — map a model-fit curve back onto the plot (audit P2.4
-// slice 2). Pure. The fit runs on the wizard's WORKING trace (range-cut,
-// gap-dropped, baseline-subtracted), so a curve drawn on the raw plot must
-// add the step-① baseline back — the same correction `plotApexY` applies to
-// the peak markers (lib/peakWizardApex.ts).
+// Peak Analyzer — place a model-fit curve on the plot (audit P2.4 slice 2).
+// Pure. The fit runs on the wizard's WORKING trace (analysis rows, range-cut,
+// gap-dropped, baseline-subtracted), so a curve drawn on the raw plot must add
+// the step-① baseline back — the same correction `plotApexY` applies to the
+// peak markers (lib/peakWizardApex.ts).
 //
-// Rows are matched by X VALUE, not by index: the fit's points are a subset of
-// the plotted rows (range cut, gap rows, and `analysisData`'s excluded rows
-// all drop out), and every model curve is a function of x, so the exact x
-// the backend echoes back (JSON round-trips a double exactly) is the only
-// key that cannot misalign. A plotted row the fit never saw draws nothing.
+// Rows are mapped 1:1 BY POSITION, never by x value (repeated x — an up/down
+// sweep, or an excluded row sharing its x — would make an x lookup
+// ambiguous): segment point i is analysis row `segment.kept[i]`, which is full
+// row `activeRows[kept[i]]` (lib/rowstate's `activeRowIndices`, the rows
+// `analysisData` keeps). The backend returns the fitted points in the order it
+// was sent them, dropping only non-finite rows, so curve point j is matched to
+// the NEXT segment point with the same x — exact when nothing was dropped
+// (the wizard sends only finite pairs), and order-preserving otherwise.
 
-export function fullRowOverlay(
-  fullX: readonly number[],
+export function curveToRows(
   curveX: readonly (number | null)[],
   values: readonly (number | null)[],
-  offsetByX: ReadonlyMap<number, number> | null,
+  segX: readonly number[],
+  segToRow: readonly number[],
+  nRows: number,
+  offsets: readonly (number | null)[] | null,
 ): (number | null)[] {
-  const byX = new Map<number, number>();
-  curveX.forEach((x, i) => {
-    const v = values[i];
-    if (x === null || v === null || v === undefined || byX.has(x)) return;
-    byX.set(x, v + (offsetByX?.get(x) ?? 0));
-  });
-  return fullX.map((x) => byX.get(x) ?? null);
-}
-
-/** x -> the step-① baseline value there, for `fullRowOverlay`'s offset. A
- *  null baseline point was passed through uncorrected (subtractBaseline), so
- *  it maps to no offset. */
-export function baselineOffsets(
-  x: readonly number[],
-  baseline: readonly (number | null)[],
-): Map<number, number> {
-  const m = new Map<number, number>();
-  x.forEach((xi, i) => {
-    const b = baseline[i];
-    if (typeof b === "number" && Number.isFinite(b) && !m.has(xi)) m.set(xi, b);
-  });
-  return m;
+  const out: (number | null)[] = new Array<number | null>(nRows).fill(null);
+  let i = 0;
+  for (let j = 0; j < curveX.length; j++) {
+    const x = curveX[j];
+    if (x === null) continue;
+    while (i < segX.length && segX[i] !== x) i++;
+    if (i >= segX.length) break;
+    const v = values[j];
+    const row = segToRow[i];
+    if (v !== null && v !== undefined && row !== undefined && row < nRows) {
+      const b = offsets?.[i];
+      out[row] = v + (typeof b === "number" && Number.isFinite(b) ? b : 0);
+    }
+    i++;
+  }
+  return out;
 }

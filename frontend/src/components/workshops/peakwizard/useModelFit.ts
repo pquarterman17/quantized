@@ -4,37 +4,47 @@
 // the working data and the candidates; this hook owns everything about the
 // model, so the wizard hook stays a thin orchestrator.
 //
-// PARAMETERS. `seedSetup` (./peakModelParams) derives the defaults from the
-// included candidates + the recipe's global shape / background degree / width
-// link, so touching nothing reproduces the recipe's intent. User edits are
-// kept against a CONTENT key of those inputs: a re-render that rebuilds equal
-// arrays keeps the edits; a real change (re-find, include/exclude, a new
-// global shape, different data) re-seeds.
+// ONE CONTENT KEY drives everything that depends on the inputs: the active
+// dataset id, the included candidates, the recipe's shape / background degree
+// / width link, and a digest of the working x and y (so a range, baseline,
+// toggle/add/remove-peak or same-id data change all move it).
+//   * Parameters: `seedSetup` (./peakModelParams) derives the defaults; user
+//     edits are kept against the key, so an equal re-render keeps them and a
+//     real change re-seeds.
+//   * Results: any key change DROPS the result, the in-flight request and our
+//     overlays — no hand-placed invalidation calls. A table edit after a fit
+//     leaves the result visible but STALE: its overlays come off, and the
+//     wizard blocks integrate/report on it until a re-fit.
 //
 // REQUESTS. The repo's sequencing pattern (useCrystalCalc's `crSeq`, the
 // calculators' `seq.current !== id`) plus useReflFit's AbortController: every
-// run, cancel and clear bumps `seq`, and a response whose id is no longer
+// run, cancel and reset bumps `seq`, and a response whose id is no longer
 // current writes nothing — so a slow, superseded or cancelled fit can never
 // overwrite a newer one. Aborting only stops the CLIENT waiting; the
 // synchronous backend fit still finishes (its 30 s cap bounds it).
 //
 // OVERLAYS. The model (+ the step-① baseline, since the fit ran on the
 // subtracted trace) goes to the store's `fitOverlay`; the fitted background
-// (+ that baseline) replaces the baseline preview in `baselineOverlay`. Both
-// are remembered as OURS and cleared/restored only while still ours, the
-// useReflFit ownership pattern. Components and residuals have no plot slot;
-// the step's own preview (ModelFitPreview) draws them.
+// (+ that baseline) replaces the baseline preview in `baselineOverlay`, rows
+// mapped 1:1 by position (./modelFitOverlay). Both are taken back only while
+// still ours — a compare-and-set inside `useApp.setState`'s updater, so this
+// hook never subscribes to those slices. Taking them back within one dataset
+// restores the step-① preview; across a dataset switch it only clears (the
+// baseline in hand belongs to the OLD dataset). Components and residuals have
+// no plot slot; the step's own preview (ModelFitPreview) draws them.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fitPeakModel, type PeakModelFitResponse } from "../../../lib/api/peaks";
-import { fullPlottedX } from "../../../lib/fitselectionActions";
 import { expandToFullRows, type PeakRecipe } from "../../../lib/peakwizard";
+import { activeRowIndices, droppedRows } from "../../../lib/rowstate";
 import type { BaselineOverlay, Dataset, FitOverlay } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
-import { baselineOffsets, fullRowOverlay } from "./modelFitOverlay";
+import { curveToRows } from "./modelFitOverlay";
+import { setupProblems } from "./modelSetupChecks";
 import {
   backgroundFromDegree,
+  backgroundNote,
   fwhmShared,
   modelFitBody,
   patchParam,
@@ -56,19 +66,23 @@ export interface ModelFitState {
   engine: FitEngine;
   setEngine: (e: FitEngine) => void;
   setup: ModelSetup;
-  /** Why the default shape differs from the recipe's (no equivalent here). */
+  /** Why the defaults differ from the recipe (no equivalent here). */
   shapeNote: string | null;
+  bgNote: string | null;
   setShape: (peak: number, shape: ModelShape) => void;
   setBackground: (bg: ModelBackground) => void;
   patch: (name: string, patch: Partial<Omit<ModelParam, "name">>) => void;
   fwhmShared: boolean;
   toggleShareFwhm: () => void;
   resetSetup: () => void;
+  /** Client-side mirror of the backend's parameter rules; Fit is blocked
+   *  while non-empty. */
+  problems: string[];
   busy: boolean;
   error: string | null;
   notice: string | null;
   result: PeakModelFitResponse | null;
-  /** The table changed since `result` was fitted. */
+  /** The table changed since `result` was fitted: not reportable. */
   stale: boolean;
   run: () => Promise<void>;
   cancel: () => void;
@@ -85,23 +99,26 @@ export interface ModelFitInputs {
   baselineOn: boolean;
   peaks: SeedPeak[];
   model: PeakRecipe["model"];
-  range: PeakRecipe["range"];
-  xKey: number | null;
 }
 
-function contentKey(i: ModelFitInputs): string {
-  const x = i.segment?.x ?? [];
-  let ySum = 0;
-  for (const v of i.workingY ?? []) ySum += v;
-  return JSON.stringify([i.peaks, i.model.shape, i.model.bgDegree, i.model.linkMode,
-    x.length, x[0], x[x.length - 1], ySum]);
+function digest(v: readonly number[] | null | undefined): [number, number, number] {
+  let s = 0;
+  let w = 0;
+  const a = v ?? [];
+  for (let i = 0; i < a.length; i++) {
+    s += a[i];
+    w += a[i] * (i + 1);
+  }
+  return [a.length, s, w];
 }
+
+type Owned = { fit: FitOverlay | null; bg: BaselineOverlay | null };
 
 export function useModelFit(inp: ModelFitInputs): ModelFitState {
-  const { active, segment, workingY, baseline, baselineOn, peaks, model, range, xKey } = inp;
+  const { active, segment, workingY, baseline, baselineOn, peaks, model } = inp;
   const setFitOverlay = useApp((s) => s.setFitOverlay);
   const setBaselineOverlay = useApp((s) => s.setBaselineOverlay);
-  const [engine, setEngine] = useState<FitEngine>("model");
+  const [engine, setEngineState] = useState<FitEngine>("model");
   const [edited, setEdited] = useState<{ key: string; setup: ModelSetup } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,9 +126,14 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
   const [ran, setRan] = useState<{ result: PeakModelFitResponse; setup: string } | null>(null);
   const seq = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
-  const own = useRef<{ fit: FitOverlay | null; bg: BaselineOverlay | null }>({ fit: null, bg: null });
+  const own = useRef<Owned>({ fit: null, bg: null });
 
-  const key = contentKey(inp);
+  const activeId = active?.id ?? null;
+  const key = useMemo(
+    () => JSON.stringify([activeId, peaks, model.shape, model.bgDegree, model.linkMode,
+      digest(segment?.x), digest(workingY)]),
+    [activeId, peaks, model.shape, model.bgDegree, model.linkMode, segment, workingY],
+  );
   const seeded = useMemo(
     () => seedSetup(peaks, peaks.map(() => shapeFromGlobal(model.shape)),
       backgroundFromDegree(model.bgDegree), segment?.x ?? [], workingY ?? [], model.linkMode),
@@ -119,33 +141,32 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
   );
   const setup = edited && edited.key === key ? edited.setup : seeded;
   const setupJson = useMemo(() => JSON.stringify(setup), [setup]);
+  const problems = useMemo(() => setupProblems(setup), [setup]);
   const edit = (next: ModelSetup) => setEdited({ key, setup: next });
   const reshapeTo = (shapes: ModelShape[], bg: ModelBackground) =>
-    edit(reshape(setup, peaks, shapes, bg, segment?.x ?? [], workingY ?? []));
+    edit(reshape(setup, peaks, shapes, bg, segment?.x ?? [], workingY ?? [], model.linkMode));
 
-  // Latest values for the stable `clear` (called from usePeakWizard's
-  // `patchRecipe`, a []-deps callback) without re-creating it every render.
-  const restoreRef = useRef<() => BaselineOverlay | null>(() => null);
-  restoreRef.current = () =>
+  // The step-① preview as usePeakBaseline draws it, for restoring.
+  const previewRef = useRef<() => BaselineOverlay | null>(() => null);
+  previewRef.current = () =>
     active && segment && baseline && baselineOn
       ? { datasetId: active.id, y: expandToFullRows(baseline, segment.kept, active.data.time.length) }
       : null;
 
-  // What the plot shows now, via selectors (not an imperative getState, per
-  // architecture.test.ts's getState ratchet): our curves are taken back only
-  // while they are still the ones showing — another tool may have replaced them.
-  const liveFit = useApp((s) => s.fitOverlay);
-  const liveBg = useApp((s) => s.baselineOverlay);
-  const live = useRef({ fit: liveFit, bg: liveBg });
-  live.current = { fit: liveFit, bg: liveBg };
-
-  const dropOverlays = useCallback(() => {
-    if (own.current.fit && live.current.fit === own.current.fit) setFitOverlay(null);
-    if (own.current.bg && live.current.bg === own.current.bg) setBaselineOverlay(restoreRef.current());
+  const dropOverlays = useCallback((restore: boolean) => {
+    const { fit, bg } = own.current;
     own.current = { fit: null, bg: null };
-  }, [setFitOverlay, setBaselineOverlay]);
+    if (!fit && !bg) return;
+    const preview = restore ? previewRef.current() : null;
+    useApp.setState((s) => {
+      const next: { fitOverlay?: null; baselineOverlay?: BaselineOverlay | null } = {};
+      if (fit && s.fitOverlay === fit) next.fitOverlay = null;
+      if (bg && s.baselineOverlay === bg) next.baselineOverlay = preview;
+      return Object.keys(next).length ? next : s;
+    });
+  }, []);
 
-  const clear = useCallback(() => {
+  const reset = useCallback((restore: boolean) => {
     seq.current++;
     abortRef.current?.abort();
     abortRef.current = null;
@@ -153,21 +174,35 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     setRan(null);
     setError(null);
     setNotice(null);
-    dropOverlays();
+    dropOverlays(restore);
   }, [dropOverlays]);
+  const clear = useCallback(() => reset(false), [reset]);
 
-  // A result describes ONE dataset: switching the active one drops it, and
-  // unmounting (the panel closing) stops the wait and takes our curve off.
-  const activeId = active?.id ?? null;
-  useEffect(() => clear, [activeId, clear]);
+  // Any input change invalidates: within one dataset the preview comes back;
+  // across a switch (or on unmount) we only clear.
+  const lastActive = useRef(activeId);
+  useEffect(() => {
+    const same = lastActive.current === activeId;
+    lastActive.current = activeId;
+    reset(same);
+  }, [key, activeId, reset]);
+  useEffect(() => () => reset(false), [reset]);
 
-  const publish = (res: PeakModelFitResponse, ds: Dataset, x: number[]) => {
-    const fullX = fullPlottedX(ds.data, xKey);
-    const offset = baselineOn && baseline ? baselineOffsets(x, baseline) : null;
-    const fit = { datasetId: ds.id, y: fullRowOverlay(fullX, res.curves.x, res.curves.model, offset) };
-    const bg = res.background.kind === "none" && !offset
+  const stale = ran !== null && ran.setup !== setupJson;
+  useEffect(() => {
+    if (stale) dropOverlays(true);
+  }, [stale, dropOverlays]);
+
+  const publish = (res: PeakModelFitResponse, ds: Dataset, seg: { x: number[]; kept: number[] }) => {
+    const n = ds.data.time.length;
+    const rows = activeRowIndices(n, droppedRows(ds));
+    const segToRow = seg.kept.map((k) => rows[k]);
+    const offsets = baselineOn && baseline ? baseline : null;
+    const c = res.curves;
+    const fit = { datasetId: ds.id, y: curveToRows(c.x, c.model, seg.x, segToRow, n, offsets) };
+    const bg = res.background.kind === "none" && !offsets
       ? null
-      : { datasetId: ds.id, y: fullRowOverlay(fullX, res.curves.x, res.curves.background, offset) };
+      : { datasetId: ds.id, y: curveToRows(c.x, c.background, seg.x, segToRow, n, offsets) };
     own.current = { fit, bg };
     setFitOverlay(fit);
     if (bg) setBaselineOverlay(bg);
@@ -176,6 +211,10 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
   const run = async () => {
     if (!active || !segment || !workingY || peaks.length === 0) {
       setError("include at least one peak first");
+      return;
+    }
+    if (problems.length > 0) {
+      setError(`fix the parameter table first: ${problems[0]}`);
       return;
     }
     abortRef.current?.abort();
@@ -187,11 +226,11 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     setError(null);
     setNotice(null);
     try {
-      const res = await fitPeakModel(modelFitBody(setup, segment.x, workingY, range), controller.signal);
-      if (seq.current !== id) return; // superseded — a newer run/cancel/clear owns this panel
-      dropOverlays();
+      const res = await fitPeakModel(modelFitBody(setup, segment.x, workingY), controller.signal);
+      if (seq.current !== id) return; // superseded — a newer run/cancel/reset owns this panel
+      dropOverlays(false);
       setRan({ result: res, setup: sent });
-      publish(res, active, segment.x);
+      publish(res, active, segment);
     } catch (e) {
       if (seq.current !== id) return;
       setError(e instanceof Error ? e.message : "model fit failed");
@@ -214,28 +253,30 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
   const shared = fwhmShared(setup.params);
   return {
     engine,
-    // Switching engine is a configuration change like any recipe patch: the
-    // model's result and its plot curves go (the classic engine draws none).
+    // Switching engine is a configuration change: the model's result and its
+    // plot curves go (the classic engine draws none).
     setEngine: (e) => {
       if (e === engine) return;
-      clear();
-      setEngine(e);
+      reset(true);
+      setEngineState(e);
     },
     setup,
     shapeNote: shapeFromGlobal(model.shape) === "pseudo_voigt" && model.shape !== "Pseudo-Voigt"
       ? `${model.shape} has no mixed-model equivalent: peaks start as pseudo-Voigt (use the Classic engine for ${model.shape})`
       : null,
+    bgNote: backgroundNote(model.bgDegree),
     setShape: (i, s) => reshapeTo(setup.shapes.map((old, j) => (j === i ? s : old)), setup.background),
     setBackground: (bg) => reshapeTo(setup.shapes, bg),
     patch: (name, p) => edit(patchParam(setup, name, p)),
     fwhmShared: shared,
-    toggleShareFwhm: () => edit({ ...setup, params: setFwhmShared(setup.params, !shared) }),
+    toggleShareFwhm: () => edit(setFwhmShared(setup, !shared)),
     resetSetup: () => setEdited(null),
+    problems,
     busy,
     error,
     notice,
     result: ran?.result ?? null,
-    stale: ran !== null && ran.setup !== setupJson,
+    stale,
     run,
     cancel,
     startFromResult: () => {

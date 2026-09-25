@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   backgroundFromDegree,
+  backgroundNote,
   fwhmShared,
   modelFitBody,
   paramKind,
@@ -38,6 +39,7 @@ describe("seedSetup — defaults a user who touches nothing fits with", () => {
     ]);
     expect(s.params.every((p) => p.vary && p.tie === null)).toBe(true);
     expect(s.xRef).toBe(5);
+    expect(s.shareVary).toEqual({});
   });
 
   it("bounds centres to the window, heights at 0, widths at the window span", () => {
@@ -118,21 +120,76 @@ describe("editing", () => {
   });
 });
 
-describe("share FWHM across peaks", () => {
-  it("ties every width to the first peak's of the same field and toggles back", () => {
-    const s = seedSetup([...PEAKS, PEAKS[0]], ["gaussian", "gaussian", "voigt"], "none", X, Y);
-    const withFixedRoot = patchParam(s, "p0.fwhm", { vary: false }).params;
-    expect(fwhmShared(withFixedRoot)).toBe(false);
-    const on = setFwhmShared(withFixedRoot, true);
-    expect(byName(on, "p0.fwhm")).toMatchObject({ tie: null, vary: true }); // root made to vary
-    expect(byName(on, "p1.fwhm").tie).toBe("p0.fwhm");
-    expect(byName(on, "p2.fwhm_g").tie).toBeNull(); // first fwhm_g is its own root
-    expect(fwhmShared(on)).toBe(true);
-    // only ties change: values and bounds are untouched
-    expect(on.map((p) => [p.value, p.min, p.max])).toEqual(withFixedRoot.map((p) => [p.value, p.min, p.max]));
+describe("share FWHM across peaks — adds and removes only the ties it owns", () => {
+  const three = () => seedSetup([...PEAKS, PEAKS[0]], ["gaussian", "gaussian", "voigt"], "none", X, Y);
+
+  it("ties every width to the first peak's of its field, remembering a fixed root's vary", () => {
+    const s0 = patchParam(three(), "p0.fwhm", { vary: false });
+    expect(fwhmShared(s0.params)).toBe(false);
+    const on = setFwhmShared(s0, true);
+    expect(byName(on.params, "p0.fwhm")).toMatchObject({ tie: null, vary: true }); // root made to vary
+    expect(byName(on.params, "p1.fwhm").tie).toBe("p0.fwhm");
+    expect(byName(on.params, "p2.fwhm_g").tie).toBeNull(); // first fwhm_g: its own root
+    expect(fwhmShared(on.params)).toBe(true);
+    // only ties (and the root's vary) change: values and bounds untouched
+    expect(on.params.map((p) => [p.value, p.min, p.max])).toEqual(s0.params.map((p) => [p.value, p.min, p.max]));
     const off = setFwhmShared(on, false);
-    expect(off.every((p) => p.tie === null)).toBe(true);
-    expect(fwhmShared(off)).toBe(false);
+    expect(off.params.every((p) => p.tie === null)).toBe(true);
+    expect(byName(off.params, "p0.fwhm").vary).toBe(false); // restored
+    expect(fwhmShared(off.params)).toBe(false);
+    expect(off.shareVary).toEqual({});
+  });
+
+  it("leaves a manual tie elsewhere alone, both ways, and does not count it as shared", () => {
+    const four = seedSetup([...PEAKS, ...PEAKS], ["gaussian", "gaussian", "gaussian", "gaussian"], "none", X, Y);
+    const manual = patchParam(four, "p3.fwhm", { tie: "p2.fwhm" });
+    expect(fwhmShared(manual.params)).toBe(false); // p3 is tied, but not to p0
+    const on = setFwhmShared(manual, true);
+    expect(byName(on.params, "p3.fwhm").tie).toBe("p2.fwhm"); // untouched
+    expect(byName(on.params, "p2.fwhm").tie).toBe("p0.fwhm");
+    expect(fwhmShared(on.params)).toBe(false); // not ALL tied to p0
+    const off = setFwhmShared(on, false);
+    expect(byName(off.params, "p3.fwhm").tie).toBe("p2.fwhm"); // still there
+    expect(byName(off.params, "p1.fwhm").tie).toBeNull();
+    // unsharing keeps each untied parameter's own vary
+    const fixedP1 = setFwhmShared(patchParam(on, "p1.fwhm", { vary: false }), false);
+    expect(byName(fixedP1.params, "p1.fwhm")).toMatchObject({ tie: null, vary: false });
+  });
+
+  it("the toggle reflects 'all widths tied to their first peak', however they got tied", () => {
+    const s0 = seedSetup(PEAKS, ["gaussian", "gaussian"], "none", X, Y);
+    expect(fwhmShared(patchParam(s0, "p1.fwhm", { tie: "p0.fwhm" }).params)).toBe(true);
+  });
+});
+
+describe("background change re-seeds background AND heights consistently", () => {
+  const apex0 = PEAKS[0].height + PEAKS[0].bg; // 5.6 at x = 3
+  it("none -> constant: c0 at the lower data end, height = apex - c0", () => {
+    const none = seedSetup(PEAKS, ["gaussian", "gaussian"], "none", X, Y);
+    expect(byName(none.params, "p0.height").value).toBeCloseTo(apex0);
+    const c = reshape(none, PEAKS, none.shapes, "constant", X, Y);
+    const c0 = byName(c.params, "bg.c0").value;
+    expect(c0).toBeCloseTo(1.04); // mean of the first 5 points
+    expect(byName(c.params, "p0.height").value).toBeCloseTo(apex0 - c0);
+  });
+  it("constant -> linear: the line passes through both data ends and the apex stays put", () => {
+    const con = seedSetup(PEAKS, ["gaussian", "gaussian"], "constant", X, Y);
+    const lin = reshape(con, PEAKS, con.shapes, "linear", X, Y);
+    const c0 = byName(lin.params, "bg.c0").value;
+    const c1 = byName(lin.params, "bg.c1").value;
+    const line = (x: number) => c0 + c1 * (x - lin.xRef);
+    expect(line(0.2)).toBeCloseTo(1.04); // left-end mean at its mean x
+    expect(line(9.8)).toBeCloseTo(2.96);
+    expect(byName(lin.params, "p0.height").value + line(3)).toBeCloseTo(apex0);
+  });
+  it("an edited height or coefficient survives the switch", () => {
+    const con = patchParam(seedSetup(PEAKS, ["gaussian", "gaussian"], "constant", X, Y), "p1.height", { value: 7 });
+    const lin = reshape(con, PEAKS, con.shapes, "linear", X, Y);
+    expect(byName(lin.params, "p1.height").value).toBe(7);
+  });
+  it("notes a recipe degree above quadratic", () => {
+    expect(backgroundNote(2)).toBeNull();
+    expect(backgroundNote(4)).toMatch(/degree 4 has no equivalent/);
   });
 });
 
@@ -152,9 +209,9 @@ describe("startFromFit / modelFitBody", () => {
     expect(byName(out, "p1.height").value).toBe(byName(s.params, "p1.height").value);
   });
 
-  it("builds the /api/peaks/model-fit body with explicit vary and the fitted range", () => {
+  it("builds the /api/peaks/model-fit body with explicit vary and no x_min/x_max", () => {
     const s = patchParam(seedSetup(PEAKS.slice(0, 1), ["lorentzian"], "constant", X, Y), "bg.c0", { vary: false });
-    const body = modelFitBody(s, [1, 2], [3, 4], { lo: 0.5, hi: null });
+    const body = modelFitBody(s, [1, 2], [3, 4]);
     expect(body).toEqual({
       x: [1, 2],
       y: [3, 4],
@@ -162,7 +219,6 @@ describe("startFromFit / modelFitBody", () => {
       background: "constant",
       parameters: s.params.map(({ name, value, vary, min, max, tie }) => ({ name, value, vary, min, max, tie })),
       bg_x_ref: 5,
-      x_min: 0.5,
     });
     expect(body.parameters.find((p) => p.name === "bg.c0")?.vary).toBe(false);
   });

@@ -56,6 +56,9 @@ export interface ModelSetup {
   params: ModelParam[];
   /** The background's reference x (sent as `bg_x_ref`): the window's middle. */
   xRef: number;
+  /** Share-FWHM memory: each root width the toggle forced to vary -> the
+   *  `vary` it had before, restored when sharing is turned off. */
+  shareVary: Record<string, boolean>;
 }
 
 /** A detected/added candidate, in the wizard's working (baseline-corrected)
@@ -79,6 +82,13 @@ export function shapeFromGlobal(global: string): ModelShape {
 export function backgroundFromDegree(degree: number): ModelBackground {
   if (degree <= 0) return "constant";
   return degree === 1 ? "linear" : "quadratic";
+}
+
+/** Why the default background differs from the recipe's degree, or null. */
+export function backgroundNote(degree: number): string | null {
+  return degree > 2
+    ? `background degree ${degree} has no equivalent here: quadratic is the highest this engine fits`
+    : null;
 }
 
 /** Tie compatibility class: the backend joins only parameters of one kind. */
@@ -166,14 +176,21 @@ export function seedSetup(
     }
   });
   bg.forEach((c, k) => params.push(free(`bg.c${k}`, c, null, null)));
-  let out = params;
+  let out: ModelSetup = { shapes: [...shapes], background, params, xRef, shareVary: {} };
   if (linkMode.startsWith("Shared FWHM")) out = setFwhmShared(out, true);
-  if (linkMode === "Shared FWHM + eta") out = shareField(out, ["eta"], true);
-  return { shapes: [...shapes], background, params: out, xRef };
+  if (linkMode === "Shared FWHM + eta") out = tieToFirst(out, ["eta"], true);
+  return out;
 }
 
-/** Re-seed for new shapes/background, keeping every edit whose parameter
- *  still exists; a tie whose target vanished (or changed kind) is dropped. */
+const sameParam = (a: ModelParam, b: ModelParam) =>
+  a.value === b.value && a.vary === b.vary && a.min === b.min && a.max === b.max && a.tie === b.tie;
+
+/** Re-seed for new shapes/background. A parameter the user EDITED (it no
+ *  longer equals what `prev`'s own seed gave it) keeps the edit; every other
+ *  one takes the fresh seed — so switching the background re-seeds its
+ *  coefficients AND the heights measured above it together, and the start
+ *  stays consistent. A kept tie whose target vanished (or changed kind) is
+ *  dropped. `peaks`, `x`, `y`, `linkMode` must be what `prev` was seeded from. */
 export function reshape(
   prev: ModelSetup,
   peaks: readonly SeedPeak[],
@@ -181,17 +198,21 @@ export function reshape(
   background: ModelBackground,
   x: readonly number[],
   y: readonly number[],
+  linkMode = "None",
 ): ModelSetup {
-  const fresh = seedSetup(peaks, shapes, background, x, y);
+  const fresh = seedSetup(peaks, shapes, background, x, y, linkMode);
+  const before = new Map(seedSetup(peaks, prev.shapes, prev.background, x, y, linkMode).params.map((p) => [p.name, p]));
   const old = new Map(prev.params.map((p) => [p.name, p]));
   const names = new Set(fresh.params.map((p) => p.name));
   const params = fresh.params.map((p) => {
     const kept = old.get(p.name);
-    if (!kept) return p;
+    const seeded = before.get(p.name);
+    if (!kept || (seeded && sameParam(kept, seeded))) return p;
     const tieOk = kept.tie !== null && names.has(kept.tie) && paramKind(kept.tie) === paramKind(p.name);
     return { ...kept, tie: tieOk ? kept.tie : null };
   });
-  return { ...fresh, params };
+  const shareVary = Object.fromEntries(Object.entries(prev.shareVary).filter(([n]) => names.has(n)));
+  return { ...fresh, params, shareVary };
 }
 
 export function patchParam(setup: ModelSetup, name: string, patch: Partial<Omit<ModelParam, "name">>): ModelSetup {
@@ -207,36 +228,62 @@ export function tieTargets(params: readonly ModelParam[], name: string): string[
     .map((p) => p.name);
 }
 
-function shareField(params: ModelParam[], fields: readonly string[], on: boolean): ModelParam[] {
-  const root = new Map<string, string>();
-  return params.map((p) => {
-    const field = p.name.slice(p.name.indexOf(".") + 1);
-    if (!p.name.startsWith("p") || !fields.includes(field)) return p;
-    if (!on) return p.tie ? { ...p, tie: null, vary: true } : p;
-    const first = root.get(field);
-    if (first === undefined) {
-      root.set(field, p.name);
-      return { ...p, tie: null, vary: true };
-    }
-    return { ...p, tie: first };
-  });
+/** Names of the parameters tied to `name` (they would break if it were fixed). */
+export function dependents(params: readonly ModelParam[], name: string): string[] {
+  return params.filter((p) => p.tie === name).map((p) => p.name);
 }
 
 const WIDTH_FIELDS = ["fwhm", "fwhm_g", "fwhm_l"];
+const fieldOf = (name: string) => name.slice(name.indexOf(".") + 1);
 
-/** The "share FWHM across peaks" convenience: ties every peak's width to
- *  the FIRST peak's width of the same field (fwhm, or a Voigt's fwhm_g /
- *  fwhm_l), making that root vary; off clears those ties. Only ties change. */
-export function setFwhmShared(params: ModelParam[], on: boolean): ModelParam[] {
-  return shareField(params, WIDTH_FIELDS, on);
+/** Peak parameters of each field in `fields`, grouped; the first is the root. */
+function groups(params: readonly ModelParam[], fields: readonly string[]): ModelParam[][] {
+  return fields
+    .map((f) => params.filter((p) => p.name.startsWith("p") && fieldOf(p.name) === f))
+    .filter((g) => g.length >= 2);
 }
 
-/** True when sharing is in force: some width is tied, and applying the
- *  convenience again would change no tie. */
+/** Tie every peak's `fields` parameter to the FIRST peak's of the same field.
+ *  The ties this ADDS are exactly "to that root", and only untied
+ *  parameters get one (a manual tie elsewhere is left alone); a fixed root
+ *  is made to vary and its previous `vary` remembered. Off removes exactly
+ *  the ties to a root and restores the remembered `vary`. */
+function tieToFirst(setup: ModelSetup, fields: readonly string[], on: boolean): ModelSetup {
+  const shareVary = { ...setup.shareVary };
+  const patch = new Map<string, Partial<ModelParam>>();
+  for (const [root, ...rest] of groups(setup.params, fields)) {
+    if (on) {
+      if (!root.vary && root.tie === null && !(root.name in shareVary)) {
+        shareVary[root.name] = false;
+        patch.set(root.name, { vary: true });
+      }
+      for (const p of rest) if (p.tie === null) patch.set(p.name, { tie: root.name });
+    } else {
+      for (const p of rest) if (p.tie === root.name) patch.set(p.name, { tie: null });
+      if (root.name in shareVary) {
+        patch.set(root.name, { vary: shareVary[root.name] });
+        delete shareVary[root.name];
+      }
+    }
+  }
+  return {
+    ...setup,
+    shareVary,
+    params: setup.params.map((p) => (patch.has(p.name) ? { ...p, ...patch.get(p.name) } : p)),
+  };
+}
+
+/** The "share FWHM across peaks" convenience (fwhm, or a Voigt's fwhm_g /
+ *  fwhm_l, each to the first peak's of that field); see `tieToFirst` for
+ *  exactly which ties it adds and removes. */
+export function setFwhmShared(setup: ModelSetup, on: boolean): ModelSetup {
+  return tieToFirst(setup, WIDTH_FIELDS, on);
+}
+
+/** True when every peak's width is tied to its field's first-peak root. */
 export function fwhmShared(params: readonly ModelParam[]): boolean {
-  const shared = setFwhmShared([...params], true);
-  return shared.some((p) => p.tie !== null && paramKind(p.name) === "width")
-    && shared.every((p, i) => p.tie === params[i].tie);
+  const g = groups(params, WIDTH_FIELDS);
+  return g.length > 0 && g.every(([root, ...rest]) => rest.every((p) => p.tie === root.name));
 }
 
 /** Copy fitted values into the start values (untied parameters, clamped
@@ -256,13 +303,9 @@ export function startFromFit(
 
 /** The `/api/peaks/model-fit` body. `vary` is always explicit (the backend
  *  defaults it to false); a tied parameter's own value/bounds are ignored
- *  there. `range` is the wizard's fitted x-range (null bound = open). */
-export function modelFitBody(
-  setup: ModelSetup,
-  x: number[],
-  y: number[],
-  range: { lo: number | null; hi: number | null },
-) {
+ *  there. No x_min/x_max: `x` is the wizard's already range-cut segment, and
+ *  re-sending the range only adds a way to fail (lo === hi is a 422). */
+export function modelFitBody(setup: ModelSetup, x: number[], y: number[]) {
   return {
     x,
     y,
@@ -272,7 +315,5 @@ export function modelFitBody(
       name: p.name, value: p.value, vary: p.vary, min: p.min, max: p.max, tie: p.tie,
     })),
     bg_x_ref: setup.xRef,
-    ...(range.lo !== null ? { x_min: range.lo } : {}),
-    ...(range.hi !== null ? { x_max: range.hi } : {}),
   };
 }
