@@ -82,7 +82,7 @@ test.describe("Peak Analyzer batch", () => {
     await expect(rows).toHaveCount(5);
     const statuses = await rows.evaluateAll((trs) => trs.map((tr) => tr.getAttribute("data-status")));
     expect(statuses.filter((s) => s === "converged")).toHaveLength(4);
-    const rowsOf = (name: string) => rows.filter({ has: page.locator("td:first-child", { hasText: new RegExp(`^${name.replace(/[.]/g, "\\.")}$`) }) });
+    const rowsOf = (name: string) => rows.filter({ has: page.locator("td:first-child", { hasText: new RegExp(`^${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) }) });
     const bad = rowsOf(nameOf("two-peaks-counts"));
     await expect(bad).toHaveAttribute("data-status", "error");
     await expect(bad).toContainText('no column named "Intensity"');

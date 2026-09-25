@@ -158,8 +158,22 @@ def test_total_deadline_leaves_named_not_run_rows() -> None:
     assert out["rows"][2]["fit"] is None
 
 
-def test_item_deadline_is_passed_to_each_fit() -> None:
-    out = fit_peak_model_batch([_item("a", 23.0, 100.0, 0.8)], item_deadline_s=1e-9)
+def test_item_deadline_is_passed_to_each_fit(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A fake clock that advances 1 s per read: the solver's deadline trips on
+    # its first evaluation. A real 1e-9 s budget is NOT deterministic - on
+    # Windows the monotonic clock ticks ~15.6 ms, so t_end can equal "now".
+    import types
+
+    import quantized.calc._bounded_lsq as lsq
+
+    ticks = {"t": 0.0}
+
+    def fake_monotonic() -> float:
+        ticks["t"] += 1.0
+        return ticks["t"]
+
+    monkeypatch.setattr(lsq, "time", types.SimpleNamespace(monotonic=fake_monotonic))
+    out = fit_peak_model_batch([_item("a", 23.0, 100.0, 0.8)], item_deadline_s=0.5)
     fit = out["rows"][0]["fit"]
     assert out["rows"][0]["status"] == "ok"  # it RAN; it just did not converge
     assert fit["success"] is False
