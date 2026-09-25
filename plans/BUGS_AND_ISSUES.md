@@ -116,6 +116,7 @@ This is a working document, not a claim that every observation is already reprod
 | UX-006 | P3 | Installed-version diagnostics | The installed CLI previously rejected `qz --version`, obscuring the package version during release support | ChatGPT-Sol | **FIXED 2026-09-20** — `qz` and `quantized` now use argparse's version action backed by canonical `quantized.__version__`, exiting before server/browser startup; focused CLI tests and both-alias wheel smoke coverage added. Commit/PR recorded in the audit completion entry. |
 | UX-007 | P2 | Workbook Properties command | The workbook right-click menu showed **Properties…** permanently disabled and explained it with the internal roadmap text “arrives with Details/Properties (PR D)”, even though PR D shipped; the result was a prominent dead end in the new Origin-like Library | ChatGPT-Sol | **FIXED 2026-09-20** — Properties now opens a bounded read-only inspector from the shared workbook action registry in Tree, Details, and Tiles. It projects canonical workbook children, location, recorded source/Origin provenance, availability, member/artifact counts, member tags, and import time only when present; Close/Escape restores its invoking row/tile focus. Editing remains in existing commands. Focused 42 tests, full frontend suite, forced typecheck, lint, build/bundle, and integrity gates run; full pickup brief retained in `POST_RELEASE_PROBLEM_AUDIT.md` |
 | BUG-030 | P1 | Local API Origin guard (security) | `origin_allowed` accepted any `localhost`/`127.0.0.1` origin on any port, so another local dev server or app page could trigger write routes (file writes, job submission) with a simple text/plain POST | Claude (agent) | **FIXED 2026-09-25** on branch `origin-guard` — Origin must match the request's own scheme + Host port (both loopback aliases); the Vite origin is admitted in `qz --dev` only. Tauri-origin residual recorded in the entry |
+| BUG-031 | P2 | Lazy promise dialogs (Confirm/Param) — keyboard hand-off | On the first ask of a session the lazy dialog body painted one macrotask BEFORE it took focus: the background was already `inert` and the pending-ask guard had dropped its Enter/Space swallow, but focus was still on the control behind the backdrop and the body's own Enter handler and Tab trap were not installed yet | Claude (agent) | **FIXED 2026-09-25** — `useRegionLoaded` commits the load flip with `flushSync`, so the body's passive effects run in the task that paints it; forced by `lazyDialogPaintFocus.test.tsx` (fails 2/2 with the fix reverted). Found as a one-off full-suite failure of `dialogFocus.a11y.test.tsx`, whose second reported failure was a cascade (fixed in its `beforeEach`) |
 
 ---
 
@@ -8826,6 +8827,68 @@ granted read access to `localhost:5173` in every run mode, not just `--dev`.
 
 ---
 
+## BUG-031 — a lazy dialog body painted one macrotask before it took the keyboard
+
+**Priority:** P2 — a keyboard/focus hand-off gap on the first confirm or parameter prompt of a session; no data path, but it sits in front of destructive confirmations
+**State:** Verified complete (agent); no owner check required
+**Reported:** 2026-09-25 by Claude (agent), from a one-off full-suite failure
+**Investigated:** 2026-09-25, Claude (agent)
+**Suggested implementation owner/model:** —
+**Related plan:** `plans/BUNDLE_HEADROOM.md` slice 8 (lazy dialog bodies); PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 (R12 `inert`, R15 modal holds)
+
+#### User-visible problem
+
+The first `askConfirm` / `askParams` of a session mounts its body from a lazy
+chunk (slice 8). When the chunk arrived, the dialog appeared with the
+background already `inert`, but focus stayed on the control behind the
+backdrop for one more macrotask. During that task the pending-ask guard
+(`usePendingDialogGuard`) was already gone -- its Enter/Space swallow is a
+layout effect and was torn down in the commit that painted the body -- while
+the body's own focus-in, Enter handler and Tab trap (passive effects) had not
+run yet: a Tab in that window was trapped by nothing (pinned). Seen in CI-like
+conditions as a one-off failure of `dialogFocus.a11y.test.tsx`:
+"Tab wraps between Cancel and the confirm button" got `<body>` instead of
+Cancel right after `findByRole("dialog")`.
+
+#### Reproduction
+
+- [x] Starting state: a fresh module instance (first ask of the session), a focused opener
+- [x] Actions: ask, let the body chunk arrive through the Scheduler (not inside `act`)
+- [x] Actual: at the first microtask after the dialog is inserted, `document.activeElement` is the now-`inert` opener
+- [x] Expected: focus is already on Cancel (the dialog's safe first control)
+- [x] Reproduced by an agent: deterministically, see Tests
+
+#### Investigation
+
+- [x] Owner: `lib/lazyRegion.tsx` `useRegionLoaded` (shared by `ConfirmDialog.tsx` and `ParamDialog.tsx`)
+- [x] Root cause confirmed: `setReady(true)` from the chunk's promise is a DEFAULT-lane update. React renders and commits it in a Scheduler task and schedules the commit's passive effects as a SEPARATE Scheduler task; scheduler 0.28's `shouldYieldToHost()` returns true after every commit (`requestPaint` sets `needsPaint`), so those passive effects ALWAYS run in a later macrotask. React flushes passive effects synchronously only for a sync-lane commit (`react-dom-client` `0 !== (pendingEffectsLanes & 3) && flushPendingEffects()`).
+- [x] Why the test flaked rather than failed: RTL's `asyncWrapper` resumes the test from a `setTimeout(0)` after `findByRole` resolves; the passive flush is a `setImmediate`. Which one Node runs first depends on whether >= 1 ms passed in the loop iteration -- i.e. on load. Measured with the original assertion in a one-test file on the unfixed code: 3/20 failures standalone; 0/20 with the fix (supporting only -- the forcing test below is the evidence).
+- [x] The second failure in the same log ("Found multiple elements with the role "button" and name "Cancel"", stacked-traps case) is a CASCADE, not a second race: the failed confirm case never answered its ask, `useConfirm` is a module-level store RTL's cleanup does not reset, and the next case's `<ConfirmDialog/>` mounted showing the leftover question. Reproduced by throwing right after the confirm case's `findByRole`: both cases fail with exactly the logged messages; with the reset, only the thrown case fails.
+
+#### Implementation
+
+- [x] `useRegionLoaded` commits the flip with `flushSync(() => setReady(true))` -- a promise callback, never a render/effect body, so it is legal there. The region now arrives whole (DOM, layout AND passive effects) in the task that paints it; the guard hand-off has no gap.
+- [x] `dialogFocus.a11y.test.tsx`'s `beforeEach` answers any leftover confirm/params ask (`cancelPendingConfirm`, `cancelPendingParams`), so one failure reports as one.
+- [x] Failure behaviour unchanged: the load-failure path (`onFail`) is untouched.
+
+#### Tests and acceptance
+
+- [x] `components/overlays/lazyDialogPaintFocus.test.tsx` ("forces the hand-off race: confirm" / "...: a zero-field params dialog"): holds the body chunk in its mock, releases it outside `act`, and from a MutationObserver at the first microtask after insertion reads `document.activeElement` and presses Shift+Tab -- before any later macrotask, so no timer race is involved. Fails 2/2 on every run with the `flushSync` reverted (received `{ focus: <the inert opener>, tabTrapped: false }`; 3/3 sabotage runs), passes with it.
+- [x] Relevant focused suites pass (dialogFocus.a11y, lazyRegion, lazyDialog*, usePendingDialogGuard, ConfirmDialog, ParamDialog).
+- [x] Type-check/build/repository gates pass (see Completion record).
+- [x] Agent verifies acceptance criteria.
+- [ ] Owner verifies when required -- not required.
+
+#### Completion record
+
+- PR/commit: see the change log row (branch commit, not pushed)
+- Automated tests: after `npm ci`: `tsc -b --force` 0, `npm run lint` 0 (weak-wait ratchet unchanged), full `npx vitest run` 729 files / 12,212 passed + 2 expected-fail / 0 failed, `npm run build` bundle gate 844.8 kB eager vs the unmoved 846.1 kB budget (+~0.1 kB for the `flushSync` import; 844.7 kB without it)
+- Agent verification: sabotage (revert the `flushSync`) reddens both forcing cases; cascade demonstrated and contained as above
+- Owner verification: not required
+- Notes: jsdom does not blur a focused element when an ancestor goes `inert` (Chromium 141 measured not to either), so the stranded focus is the opener, not `<body>`, in the forcing test.
+
+---
+
 ## Change log
 
 | Date | Author | Change | Evidence/status |
@@ -8859,3 +8922,4 @@ granted read access to `localhost:5173` in every run mode, not just `--dev`.
 | 2026-09-25 | Claude (agent) | **R12 review follow-up; P3.3 R16 closed.** The review measured R16 in Chromium on this branch and on `main`: `?` pressed in Help or Preferences opened Shortcuts UNDERNEATH (equal z-index paints in tree order), invisible, and the first Escape closed it unseen. Open order now drives everything. `lib/modalInert.ts` treats the newest-opened dialog as active, which Escape already used, and stamps each open backdrop's z-index in open order, so the newest dialog also paints on top. Also fixed: the `aria-hidden` fallback gains a focusin guard that sends script-driven focus back into the dialog, and `lazyRegion`'s load-failure message is a live region, so it is announced under an open dialog while its Retry stays inert. The WhatIsThis badge is deliberately not exempt (reasons in the plan). The optional diff-based `sync()` was not done | `modalInertOrder.test.tsx` now presses Escape and covers Help→`?` and Preferences→`?` (first open and reopen); e2e adds 2 Chromium cases whose paint check lifts `inert` for one hit test. Sabotages: no stamp, oldest-first, no guard, no marker, each red on its intended tests. vitest 726 files / 12159 passed; e2e 69 passed, 1 skipped; tsc, lint, build and test_repo_integrity green. Eager bytes 867,372 B (+22) against the unmoved 868,308 pin |
 | 2026-09-25 | Claude (agent) | **P3.3 residual R15 closed.** Global shortcuts no longer act on the app behind an open modal. `lib/appShortcuts.ts` is the one gate: the four app shortcut handlers (`useGlobalShortcuts`, `useHistoryCommands`, `useWindowCommands`, `CalcOnlyApp`) register through it, and while `modalInert` holds a dialog, or `usePendingDialogGuard` holds a lazy one still loading, only `?` and Ctrl/Cmd+, (which open a dialog on top, per R16) reach them. The gate never claims the key, so typing, Backspace and a field's native Ctrl+Z inside a dialog are unchanged. It also closes Ctrl+Z on a Preferences slider undoing the app behind it | `overlays/modalShortcuts.test.tsx` (34; 14 shortcut classes each act without a dialog and do nothing inside one); four sabotages each redden only their cases; `modal-inert.spec.ts` gains an R15 case and three cases re-routed off the now-blocked keys (removing the gate reddens exactly the three that assert R15); manual Chromium check against `uv run qz`; eager 867,372 -> 867,524 B, pin 868,308 unmoved |
 | 2026-09-25 | Claude (agent) | **BUG-030 filed and fixed** (P1, security review): `security.origin_allowed` accepted any `localhost`/`127.0.0.1` origin on any port, so another local page could drive write routes with a simple text/plain POST. The Origin must now match the request's own scheme + `Host` port (both loopback aliases); the Vite origin (guard + CORS) is admitted only when `qz --dev` exports `QZ_DEV_VITE_PORT`, and Vite runs with `--strictPort` on the one `_VITE_PORT` | Branch `origin-guard`; new `tests/test_origin_guard.py` (16 tests, 38 cases); 4 sabotage rounds each reddened the expected tests; ruff/mypy clean; pytest 5174 passed / 184 skipped / 18 xfailed; e2e 69 passed / 1 fixme-skipped; `qz --dev` smoke via Vite (proxied GET 200, POST reaches route, WS accepted, foreign origin 403) |
+| 2026-09-25 | Claude (agent) | **BUG-031 filed and fixed** (P2): the lazy Confirm/Param dialog body painted one macrotask before its passive effects took focus and the keyboard, with the pending guard already torn down. `useRegionLoaded` now commits the load flip with `flushSync`. Root-caused from a one-off full-suite failure of `dialogFocus.a11y.test.tsx`; its second logged failure was a cascade of the first through the un-reset `useConfirm` store, now reset in that file's `beforeEach` | New `lazyDialogPaintFocus.test.tsx` (2 forcing cases, red 2/2 with the fix reverted); after `npm ci`: `tsc -b --force` 0, `npm run lint` 0 (weak-wait ratchet unchanged), full `npx vitest run` 729 files / 12,212 passed + 2 expected-fail / 0 failed, `npm run build` bundle gate 844.8 kB eager vs the unmoved 846.1 kB budget (+~0.1 kB for the `flushSync` import; 844.7 kB without it) |
