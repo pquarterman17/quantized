@@ -45,6 +45,12 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-09-25, slice 8 rebased onto Group F (`55f0cac9`, PR #409) - pin
+ *  868,330 -> 868,308 (`measured + 1,024`). Group F's own tree measures
+ *  881,369 B (22 B under 3ccf4972's 881,391); slice 8 on top of it measures
+ *  867,284 B, both reproduced after `npm ci` with `.vite` wiped. Slice 8's
+ *  net is unchanged by the rebase: -14,085 B.
+ *
  *  2026-09-25, slice 8 review round - pin 868,037 -> 868,330, i.e. still
  *  `measured + 1,024` on the fixed tree (867,306 B, reproduced; +293 B over
  *  867,013). The +293 B is the review's should-fix, not new scope: the
@@ -1714,7 +1720,7 @@ import { fileURLToPath } from "node:url";
  * modulepreloads. A clipboard-import split was also measured at 858.5 kB and
  * rejected. All three changes were reverted.
  */
-const EAGER_JS_BUDGET = 868_330;
+const EAGER_JS_BUDGET = 868_308;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

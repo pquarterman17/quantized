@@ -1,10 +1,11 @@
 # Bundle headroom campaign
 
-**Current state (2026-09-25, after slice 8 and its review round):** measured
-**867,306 B** eager against parent `3ccf4972`'s **881,391 B** (**−14,085 B**),
-pin LOWERED **881,442 → 868,330 B** (`measured + 1,024`), leaving **1,024 B of headroom**
-by design — that margin is what the queued bounded-clipboard-transfer work is
-expected to spend. Slice 7 was built and never landed, and the pin was RAISED
+**Current state (2026-09-25, after slice 8 and its review round, rebased onto
+Group F `55f0cac9`):** measured **867,284 B** eager against that parent's
+**881,369 B** (**−14,085 B**), pin LOWERED **881,442 → 868,308 B**
+(`measured + 1,024`), leaving **1,024 B of headroom** by design. Group F (the
+bounded clipboard transfer this margin was reserved for) landed first and was
+itself 22 B lighter than `3ccf4972`, so it spent none of it. Slice 7 was built and never landed, and the pin was RAISED
 three times on 2026-09-20 between slices 6 and 8 (876,469 → 878,182 →
 879,420 → 881,442); both are recorded in "Slice 7" below. Slice 8's lasting
 finding is not a seam: most of the "chunk-boundary tax" slices 3–5 kept
@@ -1283,8 +1284,9 @@ and `7dd58552` (the first raise, on `main`).
 
 ### Slice 8 — preload-list pruning + the two promise dialogs, pin ratcheted DOWN — **DONE (2026-09-25)**
 
-**Measured net eager delta −14,085 B — pin LOWERED 881,442 → 868,330 B** (868,037 at
-landing, re-set to `measured + 1,024` after the review round's +293 B fix)
+**Measured net eager delta −14,085 B — pin LOWERED 881,442 → 868,308 B** (868,037 at
+landing; 868,330 after the review round's +293 B fix; 868,308 after rebasing
+onto Group F `55f0cac9` — always `measured + 1,024`)
 
 Exact bytes out of `dist/index.html` (the eager `<script type=module>` +
 `modulepreload` set), `npm ci`, `node_modules/.vite` wiped before EVERY build,
@@ -1297,6 +1299,8 @@ every number reproduced by a second identical build:
 | + lazy `ConfirmDialog`/`ParamDialog` bodies | 867,013 | **−3,660** |
 | + review round: first-ask key guard, replaced asks settle | 867,306 | **+293** |
 | dialog bodies ALONE on the parent (no pruning) | 881,021 | −370 |
+| rebased: Group F `55f0cac9` (new parent) | 881,369 | — |
+| rebased: slice 8 on top of it | 867,284 | **−14,085** |
 
 #### 1. Preload-list pruning — the chunk-boundary tax, found
 
@@ -1466,7 +1470,7 @@ slice 6's round-2 correction), so that gain is locked in rather than left
 as spendable slack.
 
 **As of slice 6, headroom was 1,024 B against the 876,469 B pin** (stale:
-three raises followed, then slice 8 lowered the pin to 868,330 B with
+three raises followed, then slice 8 lowered the pin to 868,308 B with
 1,024 B of headroom — see the top of this file) — by design, not
 by exhaustion. The two banked seams (`PlotToolbar` −3,644 B,
 `CommandPalette` −2,935 B) remain on the table, unlanded, under the
