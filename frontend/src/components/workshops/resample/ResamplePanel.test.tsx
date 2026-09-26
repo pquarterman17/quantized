@@ -6,6 +6,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { buildDataCommands } from "../../../commands/dataCommands";
 import type { ResampleRequest, ResampleResult } from "../../../lib/api/resample";
 import type { DataStruct } from "../../../lib/types";
 import { useResampleDialog } from "../../../store/resampleDialog";
@@ -116,11 +117,11 @@ describe("ResamplePanel — previewed align/interpolate", () => {
       method: "linear",
       outOfRange: "nan",
       sortUnsorted: false,
-      allowUnitMismatch: false,
       input: { id: "d1", name: "a.dat" },
       inputIsTarget: true,
       outputs: [{ id: out.id, key: "" }],
     });
+    expect(step.params).not.toHaveProperty("acceptedXUnits");
     // The workshop closes once everything was created; undo removes it.
     expect(useResampleDialog.getState().seed).toBeNull();
     act(() => useApp.getState().undo());
@@ -137,6 +138,21 @@ describe("ResamplePanel — previewed align/interpolate", () => {
     expect(createButton()).toBeDisabled();
     await waitFor(() => expect(results().textContent).toContain("4 rows → 9 rows"));
     expect(createButton()).not.toBeDisabled();
+  });
+
+  it("re-previews when a picked dataset changes, and never for an unrelated store change", async () => {
+    render(<ResamplePanel />);
+    await waitFor(() => expect(results().textContent).toContain("a.dat: 4 rows → 500 rows"));
+    vi.mocked(resampleDataset).mockClear();
+    // Unrelated: a new dataset (every picked object unchanged).
+    act(() => useApp.setState((s) => ({ datasets: [...s.datasets, { id: "z", name: "z.dat", data: b }] })));
+    await new Promise((r) => setTimeout(r, 400));
+    expect(resampleDataset).not.toHaveBeenCalled();
+    // Related: the picked dataset's rows change -> stale, then re-previewed.
+    const longer = { ...a, time: [...a.time, 4], values: [...a.values, [40]] };
+    act(() => useApp.setState((s) => ({ datasets: s.datasets.map((d) => (d.id === "d1" ? { ...d, data: longer } : d)) })));
+    expect(createButton()).toBeDisabled();
+    await waitFor(() => expect(results().textContent).toContain("a.dat: 5 rows → 500 rows"));
   });
 
   it("an invalid grid says what to fix and asks the backend nothing", async () => {
@@ -159,6 +175,9 @@ describe("ResamplePanel — previewed align/interpolate", () => {
 
   it("aligns several datasets onto another dataset's x; the unit mismatch needs the explicit acknowledgment", async () => {
     extraWarnings = [{ code: "unit-mismatch", text: "X units differ: the source is in K but the grid is in Oe", confirm: true }];
+    useApp.setState((s) => ({
+      datasets: s.datasets.map((d) => (d.id === "g" ? { ...d, data: { ...grid, metadata: { x_column_unit: "Oe" } } } : d)),
+    }));
     useResampleDialog.setState({ seed: ["d1", "d2"] });
     render(<ResamplePanel />);
     fireEvent.change(screen.getByRole("combobox", { name: "Target grid" }), { target: { value: "match" } });
@@ -168,8 +187,9 @@ describe("ResamplePanel — previewed align/interpolate", () => {
     expect(within(results()).getAllByRole("listitem")).toHaveLength(2);
     // The preview asks with the mismatch allowed, so the warning can be shown.
     expect(vi.mocked(resampleDataset).mock.calls.at(-1)?.[0]).toMatchObject({
-      mode: "match", match_x: [0.5, 1.5, 3.5], match_x_unit: "K", allow_unit_mismatch: true,
+      mode: "match", match_x: [0.5, 1.5, 3.5], match_x_unit: "Oe", allow_unit_mismatch: true,
     });
+    vi.mocked(resampleDataset).mockClear();
     const create = screen.getByRole("button", { name: "Create 2 resampled datasets" });
     expect(create).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox", { name: "Resample despite the x unit mismatch" }));
@@ -182,7 +202,10 @@ describe("ResamplePanel — previewed align/interpolate", () => {
     expect(made[0].data.metadata).toMatchObject({ aligned_to: "grid.dat", resample_of: "a.dat" });
     expect(made[1].data.time).toEqual([0.5, 1.5, 3.5]);
     const steps = useApp.getState().macroSteps;
-    expect(steps.map((s) => s.params.allowUnitMismatch)).toEqual([true, true]);
+    // The acknowledgment is recorded as the exact accepted unit pair, and the
+    // commit itself asked with it (the backend refuses a mismatch otherwise).
+    expect(steps.map((s) => s.params.acceptedXUnits)).toEqual([["K", "Oe"], ["K", "Oe"]]);
+    expect(vi.mocked(resampleDataset).mock.calls.map((c) => c[0].allow_unit_mismatch)).toEqual([true, true]);
     expect(steps.map((s) => s.params.with)).toEqual([{ id: "g", name: "grid.dat" }, { id: "g", name: "grid.dat" }]);
     // The active dataset's step applies to a template's target; b.dat is an
     // explicit reference.
@@ -198,5 +221,36 @@ describe("ResamplePanel — previewed align/interpolate", () => {
     await waitFor(() => expect(results().textContent).toContain("a.dat: 4 rows → 3 rows"));
     expect(within(results()).getAllByRole("listitem")).toHaveLength(1);
     expect(screen.getByRole("button", { name: "Create resampled dataset" })).toBeTruthy();
+  });
+
+  it("a partial failure unticks what WAS created, so pressing Create again cannot duplicate it", async () => {
+    // b.dat previews fine but is refused at commit (preview asks with allow=true).
+    vi.mocked(resampleDataset).mockImplementation((body) =>
+      body.dataset.time.length === 3 && !body.allow_unit_mismatch
+        ? Promise.reject(new Error("refused at commit"))
+        : fakeBackend(body),
+    );
+    useResampleDialog.setState({ seed: ["d1", "d2"] });
+    render(<ResamplePanel />);
+    await waitFor(() => expect(within(results()).getAllByRole("listitem")).toHaveLength(2));
+    await act(async () => fireEvent.click(createButton()));
+    await waitFor(() => expect(screen.getByRole("alert").textContent).toContain("b.dat: refused at commit"));
+    expect(screen.getByRole("alert").textContent).toContain("resampled a.dat (now unticked)");
+    expect(useApp.getState().datasets).toHaveLength(4);
+    expect(useResampleDialog.getState().seed).not.toBeNull();
+    const picks = screen.getByRole("group", { name: "Datasets to resample" });
+    expect(within(picks).getByRole("checkbox", { name: "a.dat" })).not.toBeChecked();
+    expect(within(picks).getByRole("checkbox", { name: "b.dat" })).toBeChecked();
+  });
+
+  it("running the command again while open re-seeds the pick from the new selection (a single one included)", async () => {
+    render(<ResamplePanel />);
+    const picks = () => screen.getByRole("group", { name: "Datasets to resample" });
+    expect(within(picks()).getByRole("checkbox", { name: "a.dat" })).toBeChecked();
+    useApp.setState({ selectedIds: ["d2"] });
+    act(() => buildDataCommands(useApp.getState).find((c) => c.id === "resample")!.run());
+    expect(useResampleDialog.getState().seed).toEqual(["d2"]);
+    expect(within(picks()).getByRole("checkbox", { name: "a.dat" })).not.toBeChecked();
+    expect(within(picks()).getByRole("checkbox", { name: "b.dat" })).toBeChecked();
   });
 });

@@ -3,6 +3,7 @@
 // mark). A dependency-free SVG, so the lazy workshop chunk stays small; the
 // point is to SEE where the new grid lands, blanks and all, before creating.
 
+import { xExtent } from "../../../lib/plotDecimate";
 import type { DataStruct } from "../../../lib/types";
 
 const W = 300;
@@ -22,20 +23,10 @@ function pairs(d: DataStruct, channel: number): Pt[] {
   return out;
 }
 
-/** [min, max] by loop (a spread would overflow the stack on a long column). */
-function extent(values: Iterable<number>): [number, number] {
-  let lo = Number.POSITIVE_INFINITY;
-  let hi = Number.NEGATIVE_INFINITY;
-  for (const v of values) {
-    if (!Number.isFinite(v)) continue;
-    if (v < lo) lo = v;
-    if (v > hi) hi = v;
-  }
-  if (lo === hi) {
-    lo -= 1;
-    hi += 1;
-  }
-  return [lo, hi];
+/** The finite [min, max], widened when it is a single value. */
+function extent(values: ArrayLike<number | null>): [number, number] {
+  const [lo, hi] = xExtent(values) ?? [0, 1];
+  return lo === hi ? [lo - 1, hi + 1] : [lo, hi];
 }
 
 export default function ResamplePreviewPlot({

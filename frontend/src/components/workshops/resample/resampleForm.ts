@@ -3,6 +3,7 @@
 // (lib/transformResample.ts) or a plain message saying what is missing.
 
 import type { OutOfRange, ResampleMethod, ResampleMode, ResampleParams } from "../../../lib/transformResample";
+import { xExtent } from "../../../lib/plotDecimate";
 import type { DataStruct } from "../../../lib/types";
 
 export interface ResampleForm {
@@ -47,25 +48,13 @@ export function defaultForm(matchId: string): ResampleForm {
   };
 }
 
-/** Finite x-range of a dataset, or null when it has fewer than two finite x. */
-export function xRange(data: DataStruct): [number, number] | null {
-  let lo = Number.POSITIVE_INFINITY;
-  let hi = Number.NEGATIVE_INFINITY;
-  for (const x of data.time) {
-    if (!Number.isFinite(x)) continue;
-    if (x < lo) lo = x;
-    if (x > hi) hi = x;
-  }
-  return hi > lo ? [lo, hi] : null;
-}
-
 const tidy = (v: number): string => String(Number(v.toPrecision(6)));
 
 /** Seed the empty step/range fields from a dataset's x-range (100 intervals),
  *  leaving anything the user already typed alone. */
 export function withRangeDefaults(f: ResampleForm, data: DataStruct | undefined): ResampleForm {
-  const r = data ? xRange(data) : null;
-  if (!r) return f;
+  const r = data ? xExtent(data.time) : null;
+  if (!r || r[1] <= r[0]) return f;
   const step = tidy((r[1] - r[0]) / 100);
   return {
     ...f,
@@ -83,12 +72,11 @@ function num(text: string, what: string): number | string {
   return Number.isFinite(v) ? v : `${what} must be a number`;
 }
 
-/** The recorded params for this form, or a message saying what to fix.
- *  `allowUnitMismatch` is decided at commit (the explicit acknowledgment). */
+/** The recorded params for this form, or a message saying what to fix. An
+ *  accepted x-unit pair is added per dataset at commit (the acknowledgment). */
 export function formToParams(
   f: ResampleForm,
   datasets: readonly { id: string; name: string }[],
-  allowUnitMismatch = false,
 ): ResampleParams | string {
   const base = {
     op: "resample" as const,
@@ -96,7 +84,6 @@ export function formToParams(
     method: f.method,
     outOfRange: f.outOfRange,
     sortUnsorted: f.sortUnsorted,
-    allowUnitMismatch,
   };
   switch (f.mode) {
     case "n_points": {

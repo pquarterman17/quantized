@@ -85,8 +85,8 @@ export function buildDataCommands(s: StoreGet): Action[] {
       run: () => s().setDatasetMathOpen(true),
     },
     {
-      // P2.5 align/interpolate: the Library selection (≥ 2) or the active
-      // dataset seeds the pick; the workshop previews before creating.
+      // P2.5 align/interpolate: the Library selection, else the active
+      // dataset, seeds the pick; the workshop previews before creating.
       id: "resample",
       group: "Data",
       section: "Combine & split",
@@ -96,7 +96,7 @@ export function buildDataCommands(s: StoreGet): Action[] {
       run: () => {
         const st = s();
         const picked = st.selectedIds.filter((id) => st.datasets.some((d) => d.id === id));
-        openResampleDialog(picked.length >= 2 ? picked : st.activeId ? [st.activeId] : []);
+        openResampleDialog(picked.length ? picked : st.activeId ? [st.activeId] : []);
       },
     },
     { id: "transpose", group: "Data", section: "Combine & split", label: "Transpose worksheet…", description: "Swap worksheet rows and columns in a new derived dataset.", run: () => runWorksheetTransform(s, (m) => m.runTransposeWorksheet) },

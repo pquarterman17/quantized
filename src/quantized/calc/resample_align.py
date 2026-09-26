@@ -5,8 +5,11 @@ Pure calc layer. A guard-and-report wrapper around the golden
 it builds the target grid, refuses the inputs that would silently produce a
 wrong answer, and reports -- as plain sentences -- everything the user should
 know BEFORE the derived dataset is created. The interpolation numerics are
-``resample_data``'s own, untouched: every grid built here goes through its
-``n_points`` / ``step`` / ``grid`` modes, so the golden parity still holds.
+``resample_data``'s own, untouched (its ``n_points`` and ``grid`` modes). The
+one grid difference is deliberate: a ``step`` / ``range`` endpoint that lands
+on the stop value is exactly that value, as in MATLAB's colon, where
+``resample_data``'s ``step`` mode can overshoot it by an ulp
+(``_colon_snapped``).
 
 The rules, each a deliberate product decision:
 
@@ -100,6 +103,20 @@ def _positive(name: str, v: float | None) -> float:
     return float(v)
 
 
+def _colon_snapped(a: float, d: float, b: float) -> NDArray[np.float64]:
+    """``_colon`` (MATLAB ``a:d:b``) with an endpoint that LANDS on ``b`` set to
+    exactly ``b``. ``_colon`` counts a point as landing when ``(b-a)/d`` is an
+    integer to within 1e-10, but builds it as ``a + n*d``, which can overshoot
+    by an ulp (``0:0.1:0.3`` ends at 0.30000000000000004). Past the source's
+    last x that point would come out blank or be clipped, and a grid equal to
+    the source x would stop being an identity. MATLAB's colon returns ``b``
+    itself there; so does this."""
+    g = _colon(a, d, b)
+    if g.size and abs(g[-1] - b) <= 1e-10 * abs(d):
+        g[-1] = b
+    return g
+
+
 def _target_grid(
     mode: str,
     lo: float,
@@ -112,9 +129,10 @@ def _target_grid(
     match_x: NDArray[np.float64] | None,
     warnings: list[dict[str, Any]],
 ) -> NDArray[np.float64]:
-    """The grid ``resample_data`` would build for this mode (n_points/step are
-    rebuilt with its own ``linspace`` / MATLAB-colon rule so the counts and
-    out-of-range checks here see exactly the points it interpolates onto)."""
+    """The target grid for this mode: ``resample_data``'s own ``linspace`` for
+    ``n_points``, and its MATLAB-colon rule (endpoint snapped, see
+    ``_colon_snapped``) for ``step`` / ``range``. The counts and out-of-range
+    checks run on exactly the points that are then interpolated onto."""
     if mode == "n_points":
         if n_points is None or n_points < 2:
             raise ValueError("the number of points must be at least 2")
@@ -122,7 +140,7 @@ def _target_grid(
     if mode == "step":
         d = _positive("step", step)
         _check_count((hi - lo) / d + 1)
-        return _colon(lo, d, hi)
+        return _colon_snapped(lo, d, hi)
     if mode == "range":
         if start is None or stop is None or not (math.isfinite(start) and math.isfinite(stop)):
             raise ValueError("start and stop must be finite numbers")
@@ -133,7 +151,7 @@ def _target_grid(
                 f"a step of {_fmt(step)} never reaches {_fmt(stop)} from {_fmt(start)}"
             )
         _check_count((stop - start) / step + 1)
-        return _colon(float(start), float(step), float(stop))
+        return _colon_snapped(float(start), float(step), float(stop))
     # match
     if match_x is None or match_x.size == 0:
         raise ValueError("the dataset to match has no x values")
@@ -322,16 +340,18 @@ def align_resample(
         warnings.append(
             _warn(
                 "out-of-range",
-                f"{n_out} of {outside.size} target points lie outside the source x-range "
+                f"{n_out} of {outside.size} target points "
+                f"{'lies' if n_out == 1 else 'lie'} outside the source x-range "
                 f"{span} and {'is' if n_out == 1 else 'are'} {fate}.",
                 count=n_out,
             )
         )
 
+    # n_points: resample_data's own linspace (never outside [lo, hi], so never
+    # clipped). Every other mode passes the grid built above -- the snapped,
+    # possibly clipped one -- so the output has exactly the reported points.
     if mode == "n_points":
         out = resample_data(data, n_points=grid.size, method=method)
-    elif mode == "step":
-        out = resample_data(data, step=_positive("step", step), method=method)
     else:
         out = resample_data(data, grid=grid, method=method)
 

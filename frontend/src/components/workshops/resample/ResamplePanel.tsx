@@ -9,6 +9,7 @@ import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { RESAMPLE_METHODS, resampleSource, type OutOfRange, type ResampleMethod, type ResampleMode } from "../../../lib/transformResample";
+import { useResampleDialog } from "../../../store/resampleDialog";
 import ResamplePreviewPlot from "./ResamplePreviewPlot";
 import { MODE_OPTIONS, OUT_OF_RANGE_OPTIONS } from "./resampleForm";
 import { useResample, type ResampleState } from "./useResample";
@@ -89,7 +90,14 @@ function Preview({ r }: { r: ResampleState }) {
   );
 }
 
+/** Remounted on every opening, so running the command again while the
+ *  workshop is open re-seeds the pick from the new selection. */
 export default function ResamplePanel() {
+  const opened = useResampleDialog((s) => s.opened);
+  return <ResampleWorkshop key={opened} />;
+}
+
+function ResampleWorkshop() {
   const r = useResample();
   const matchName = r.form.mode === "match" ? r.datasets.find((d) => d.id === r.form.matchId)?.name : undefined;
   const n = r.targets.length;

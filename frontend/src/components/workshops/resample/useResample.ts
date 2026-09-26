@@ -13,9 +13,15 @@
 // grid and is not itself resampled). An x unit mismatch keeps Create disabled
 // until the explicit acknowledgment for THIS pick and grid is ticked.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
-import { computeResample, resampleSource, type ResampleComputed } from "../../../lib/transformResample";
+import {
+  computeResample,
+  resampleSource,
+  xUnitConflict,
+  type ResampleComputed,
+  type ResampleParams,
+} from "../../../lib/transformResample";
 import { runTransform } from "../../../lib/transformRun";
 import { needsConfirm, type TransformWarning } from "../../../lib/transformWarnings";
 import type { Dataset } from "../../../lib/types";
@@ -114,7 +120,16 @@ export function useResample(): ResampleState {
     [parsed, targets, matchDs],
   );
 
+  // The preview re-runs when the KEY changes, not whenever an unrelated store
+  // change hands `targets` / `matchDs` a new identity (adding or renaming
+  // another dataset, or each addDataset during create()). The inputs are read
+  // from a ref the effect above keeps current (effects run in order).
+  const inputs = useRef({ parsed, targets, matchDs });
   useEffect(() => {
+    inputs.current = { parsed, targets, matchDs };
+  });
+  useEffect(() => {
+    const { parsed, targets, matchDs } = inputs.current;
     if (typeof parsed === "string" || !targets.length) return;
     const ctrl = new AbortController();
     const timer = setTimeout(() => {
@@ -139,7 +154,7 @@ export function useResample(): ResampleState {
       clearTimeout(timer);
       ctrl.abort();
     };
-  }, [key, parsed, targets, matchDs]);
+  }, [key]);
 
   const fresh = previews.key === key && key !== "";
   const entries = fresh ? previews.entries : [];
@@ -162,7 +177,12 @@ export function useResample(): ResampleState {
 
   async function create(): Promise<void> {
     if (typeof parsed === "string" || !allOk) return;
-    const params = { ...parsed, allowUnitMismatch: unitsAcknowledged };
+    // The acknowledgment is recorded per dataset as the exact unit pair it
+    // accepted, so a replay onto differently-mismatched units is refused.
+    const paramsFor = (ds: Dataset): ResampleParams => {
+      const pair = unitsAcknowledged && matchDs ? xUnitConflict(resampleSource(ds), matchDs.data) : undefined;
+      return pair ? { ...parsed, acceptedXUnits: pair } : parsed;
+    };
     const s = useApp.getState;
     // The active dataset first, so its step is the one a template batch
     // applies to each file (inputIsTarget); the rest are explicit references.
@@ -170,20 +190,26 @@ export function useResample(): ResampleState {
     const order = [...targets].sort((a, b) => Number(b.id === active) - Number(a.id === active));
     setBusy(true);
     setError(null);
-    const made: string[] = [];
+    const made: Dataset[] = [];
     const failed: string[] = [];
     for (const ds of order) {
       try {
-        const out = await runTransform(s, params, ds.id);
-        if (out) made.push(out.name);
+        if (await runTransform(s, paramsFor(ds), ds.id)) made.push(ds);
       } catch (e) {
         failed.push(`${ds.name}: ${message(e, "resample failed")}`);
       }
     }
     setBusy(false);
     if (made.length) toast(`created ${made.length} resampled dataset${made.length === 1 ? "" : "s"}`, "ok");
-    if (failed.length) setError(`not created — ${failed.join("; ")}`);
-    else close();
+    if (!failed.length) {
+      close();
+      return;
+    }
+    // Untick what WAS created, so fixing the rest and pressing Create again
+    // does not create those a second time.
+    setPicks((p) => p.filter((id) => !made.some((d) => d.id === id)));
+    const done = made.length ? `resampled ${made.map((d) => d.name).join(", ")} (now unticked); ` : "";
+    setError(`${done}not created — ${failed.join("; ")}`);
   }
 
   return {

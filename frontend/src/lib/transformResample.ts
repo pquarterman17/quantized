@@ -13,11 +13,14 @@
 // the source is its analysis rows (exclusions/filters pruned), as for the
 // reshape transforms.
 //
-// Out-of-range target points are left blank or dropped, never extrapolated;
-// an x unit mismatch is refused by the backend unless `allowUnitMismatch` was
-// explicitly acknowledged (the preview always asks with it, so the warning
-// can be SHOWN before the user decides). Lazy: only the workshop and the
-// transform runner import this.
+// Out-of-range target points are left blank or dropped, never extrapolated.
+// An x unit mismatch is refused by the backend unless it was explicitly
+// acknowledged. The acknowledgment is recorded as the exact unit PAIR the
+// user accepted (`acceptedXUnits`, e.g. ["K", "Oe"]), never a blanket flag:
+// a replay or template run whose units differ in any OTHER way is refused
+// again, by name. The preview always asks with the mismatch allowed, so the
+// warning can be SHOWN before the user decides. Lazy: only the workshop and
+// the transform runner import this.
 
 import { resampleDataset, type ResampleRequest, type ResampleWarningWire } from "./api/resample";
 import { analysisData } from "./rowstate";
@@ -49,8 +52,9 @@ export interface ResampleParams {
   /** Sort an x that changes direction (merging loop branches) instead of
    *  refusing it. */
   sortUnsorted: boolean;
-  /** A different x unit on the matched dataset was explicitly accepted. */
-  allowUnitMismatch: boolean;
+  /** `match`: the [source, matched] x-unit pair the user explicitly accepted
+   *  as different. Only that exact pair is let through on replay. */
+  acceptedXUnits?: [string, string];
 }
 
 /** What one resample produces, before anything is committed. */
@@ -67,6 +71,26 @@ const stem = (name: string): string => name.replace(/\.[^.]+$/, "");
 
 /** The rows a resample reads from a dataset: its ANALYSIS rows. */
 export const resampleSource = (ds: Dataset): DataStruct => analysisData(ds) ?? ds.data;
+
+/** A dataset's recorded x unit ("" when unknown) — the same keys, in the same
+ *  order, as the backend's `calc.resample_align.x_unit_of`, so both sides
+ *  agree on what the unit IS. */
+export function xUnitOf(data: DataStruct): string {
+  for (const key of ["x_column_unit", "xUnit", "xColumnUnit"]) {
+    const raw = data.metadata?.[key];
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+  }
+  return "";
+}
+
+/** The x-unit pair a `match` resample of `source` onto `match` would have to
+ *  accept, or undefined when the units do not conflict (either unknown, or
+ *  equal) — the backend's rule. */
+export function xUnitConflict(source: DataStruct, match: DataStruct): [string, string] | undefined {
+  const a = xUnitOf(source);
+  const b = xUnitOf(match);
+  return a && b && a !== b ? [a, b] : undefined;
+}
 
 /** "200 points", "step 0.5", "0:0.5:10", "b.dat's x". */
 export function gridText(p: ResampleParams): string {
@@ -89,7 +113,8 @@ export function resampleOutputName(p: ResampleParams, primaryName: string): stri
 }
 
 /** The request body. `preview` asks with the unit mismatch allowed, so the
- *  warning can be shown; the commit asks with the recorded acknowledgment. */
+ *  warning can be shown; the commit (and a replay) allows it only when THIS
+ *  source/match unit pair is the one recorded as accepted. */
 export function resampleRequest(
   p: ResampleParams,
   source: DataStruct,
@@ -110,7 +135,7 @@ export function resampleRequest(
     method: p.method,
     out_of_range: p.outOfRange,
     unsorted: p.sortUnsorted ? "sort" : "refuse",
-    allow_unit_mismatch: preview || p.allowUnitMismatch,
+    allow_unit_mismatch: preview,
   };
   if (p.mode === "n_points") body.n_points = p.nPoints;
   if (p.mode === "step" || p.mode === "range") body.step = p.step;
@@ -121,8 +146,10 @@ export function resampleRequest(
   if (p.mode === "match") {
     if (!match) throw new Error("pick the dataset whose x to match");
     body.match_x = match.time.map((v) => (Number.isFinite(v) ? v : null));
-    const unit = match.metadata?.x_column_unit;
-    body.match_x_unit = typeof unit === "string" ? unit : "";
+    body.match_x_unit = xUnitOf(match);
+    const conflict = xUnitConflict(source, match);
+    const ok = p.acceptedXUnits;
+    if (conflict && ok && conflict[0] === ok[0] && conflict[1] === ok[1]) body.allow_unit_mismatch = true;
   }
   return body;
 }
@@ -174,8 +201,14 @@ export function resampleParamsOf(raw: Record<string, unknown>): ResampleParams {
     method,
     outOfRange,
     sortUnsorted: raw.sortUnsorted === true,
-    allowUnitMismatch: raw.allowUnitMismatch === true,
   };
+  const acc = raw.acceptedXUnits;
+  if (acc !== undefined) {
+    if (!Array.isArray(acc) || acc.length !== 2 || !acc.every((u) => typeof u === "string" && u)) {
+      throw new Error('resample "acceptedXUnits" must be two unit names');
+    }
+    p.acceptedXUnits = [acc[0] as string, acc[1] as string];
+  }
   const need = (k: "nPoints" | "step" | "start" | "stop"): number => {
     const v = raw[k];
     if (!finite(v)) throw new Error(`resample "${mode}" needs a number "${k}"`);

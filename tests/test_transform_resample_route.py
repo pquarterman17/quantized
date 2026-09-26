@@ -140,6 +140,36 @@ def test_clip_drops_the_out_of_range_points() -> None:
     assert w["count"] == 2 and "dropped" in w["text"]
 
 
+TENTHS = _ds([0.0, 0.1, 0.2, 0.3], [0.0, 1.0, 2.0, 3.0])
+
+
+@pytest.mark.parametrize(
+    "grid",
+    [{"mode": "step", "step": 0.1}, {"mode": "range", "start": 0, "stop": 0.3, "step": 0.1}],
+)
+@pytest.mark.parametrize("out_of_range", ["nan", "clip"])
+def test_a_step_that_lands_on_the_last_x_keeps_it(grid: dict[str, Any], out_of_range: str) -> None:
+    """0:0.1:0.3 built as 3*0.1 overshoots 0.3 by an ulp; the endpoint is 0.3
+    itself (MATLAB colon), so it is neither blanked nor clipped, and a grid
+    equal to the source x stays the identity."""
+    r = client.post(URL, json={"dataset": TENTHS, **grid, "out_of_range": out_of_range})
+    body = r.json()
+    assert body["dataset"]["time"] == [0.0, 0.1, 0.2, 0.3]
+    assert _col(body) == [0.0, 1.0, 2.0, 3.0]
+    assert body["warnings"] == []
+
+
+def test_clip_really_drops_the_points_it_reports() -> None:
+    body = _post(mode="range", start=1, stop=7, step=2, out_of_range="clip").json()
+    w = next(w for w in body["warnings"] if w["code"] == "out-of-range")
+    assert w["text"].startswith("2 of 4 target points lie outside")
+    assert body["rows_out"] == 2 and body["dataset"]["time"] == [1.0, 3.0]
+    one = _post(mode="range", start=2, stop=5, step=1, out_of_range="clip").json()
+    assert one["dataset"]["time"] == [2.0, 3.0, 4.0]
+    assert "1 of 4 target points lies outside" in one["warnings"][0]["text"]
+    assert "and is dropped" in one["warnings"][0]["text"]
+
+
 def test_clip_with_nothing_inside_is_refused() -> None:
     r = _post(mode="range", start=10, stop=20, step=1, out_of_range="clip")
     assert r.status_code == 422 and "no target point" in r.json()["detail"]

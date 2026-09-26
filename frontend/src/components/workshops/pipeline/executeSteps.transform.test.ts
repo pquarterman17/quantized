@@ -134,9 +134,9 @@ const cases: [string, TransformParams][] = [
   ["join", { op: "join", leftKey: 0, rightKey: 0, mode: "full", with: { id: "oth", name: "oth.dat" } }],
   ["merge", { op: "merge", with: [{ id: "oth", name: "oth.dat" }] }],
   ["algebra", { op: "algebra", operation: "A-B", interp: "linear", with: { id: "oth", name: "oth.dat" } }],
-  ["resample (points)", { op: "resample", mode: "n_points", nPoints: 5, method: "linear", outOfRange: "nan", sortUnsorted: false, allowUnitMismatch: false }],
-  ["resample (range)", { op: "resample", mode: "range", start: 0, stop: 6, step: 0.5, method: "makima", outOfRange: "clip", sortUnsorted: false, allowUnitMismatch: false }],
-  ["resample (match)", { op: "resample", mode: "match", with: { id: "oth", name: "oth.dat" }, method: "pchip", outOfRange: "clip", sortUnsorted: true, allowUnitMismatch: true }],
+  ["resample (points)", { op: "resample", mode: "n_points", nPoints: 5, method: "linear", outOfRange: "nan", sortUnsorted: false }],
+  ["resample (range)", { op: "resample", mode: "range", start: 0, stop: 6, step: 0.5, method: "makima", outOfRange: "clip", sortUnsorted: false }],
+  ["resample (match)", { op: "resample", mode: "match", with: { id: "oth", name: "oth.dat" }, method: "pchip", outOfRange: "clip", sortUnsorted: true, acceptedXUnits: ["s", "Oe"] }],
 ];
 
 describe("transform steps replay to the same output", () => {
@@ -190,7 +190,7 @@ describe("executeSteps with transform steps", () => {
   it("a resample onto a dataset's x that is no longer in the workspace fails by name, never guesses a grid", async () => {
     const step = makeStep("transform", "Resample src onto gone.dat's x", "qz.transform()", {
       op: "resample", mode: "match", with: { id: "gone", name: "gone.dat" }, method: "linear",
-      outOfRange: "nan", sortUnsorted: false, allowUnitMismatch: false,
+      outOfRange: "nan", sortUnsorted: false,
     });
     const { log } = await executeSteps(saved([step]), "src");
     expect(Object.values(log)[0]).toEqual({ status: "failed", note: 'the recorded input "gone.dat" is not in this workspace' });
