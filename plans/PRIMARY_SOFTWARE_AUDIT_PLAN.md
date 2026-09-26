@@ -3413,24 +3413,37 @@ violin, bar, strip, or summary plots.
     version. OPEN and APPEND merge in file order, by BASE name (trailing
     "(from project[ N])" stripped, so a model that went A -> B -> A comes
     home): the same model already held under that base = no-op (the local
-    starts win); free name = added; same name holding a different model,
+    starts win -- so re-saving the project writes THIS machine's last-used
+    starts/bounds for a model both hold, replacing the project's own;
+    deliberate, they are last-used convenience and fit results are
+    untouched); free name = added; same name holding a different model,
     or a name held by an unreadable local record = the local one is never
     touched and the project's is added as "<base> (from project)" /
     "(from project 2)" ...; one storage write, RE-READ, so a write the
-    browser refuses is reported and carried instead of claimed; one toast.
-    Embedded records pass the same file-boundary checks as a model-file
-    import (`checkFitModelRecord`, now shared with `parseFitModelFile`:
-    lower > upper, guess outside bounds, blank/duplicate params, unknown
-    keys stripped). Records this build cannot accept (newer version,
-    damaged, failing those checks, a non-array field) are skipped with one
+    browser refuses is reported and carried instead of claimed; one toast,
+    which says so honestly when another load or an undo replaced the
+    project before a refused record could be carried. The project boundary
+    accepts exactly what the local slot accepts (`rebuildCustomFitModel`:
+    shape check, unknown keys stripped), so a model the library holds never
+    comes back from its own project as "could not be read" (PR #432
+    review); the stricter `checkFitModelRecord` (lower > upper, guess
+    outside bounds, blank/duplicate params -- now shared with
+    `parseFitModelFile`) gates where models are MADE: the fit workshop's
+    Save, which previously skipped it, and a model-file import. Records
+    this build cannot read (newer version, damaged, a non-array field) are
+    skipped with one
     migration warning and carried in the store (`fitModelCarry`: replaced
     by a load, grown by an append in the same set() as its datasets,
     UNDOABLE with the project) and written back on the next save, never
-    destroyed; they also make `recipeSourcesComplete` false. An open Recipe
+    destroyed (a save drops a readable carried record the library already
+    holds, so a file never holds a model twice); they also make
+    `recipeSourcesComplete` false. An open Recipe
     Library re-renders on the merge. Autosave embeds the library at every
     write, but a crash-recovery RESTORE merges no models (lib/autosave.ts):
     the autosave came from this very library, which is newer, so merging
-    would only resurrect deletions. Saving a model does NOT schedule an
+    would only resurrect deletions -- the ones the library does NOT hold
+    (deleted since, or refused by the browser) move to the carry, so the
+    project keeps them. Saving a model does NOT schedule an
     autosave (it is already durable in localStorage). Known and intended:
     opening a project that holds a model the user deleted locally brings it
     back -- the project needs it. Compatibility: no version bump --

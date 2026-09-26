@@ -445,4 +445,4 @@ export * from "./workspaceSerialize";
 
 // The store's load/append reach the fit-model merge through this (already
 // loaded) codec rather than a chunk of their own — lib/fitModelsProject.ts.
-export { adoptProjectFitModels } from "./fitModelsProject";
+export { adoptProjectFitModels, autosaveRestoreFitModels } from "./fitModelsProject";

@@ -110,6 +110,10 @@ describe("store load/append merge the project's fit models", () => {
         expect(useToasts.getState().toasts.some((t) => t.msg.includes("could not be saved"))).toBe(true),
       );
       expect(useApp.getState().fitModelCarry).toEqual([]);
+      // ...and the toast does not claim it was kept (PR #432 review).
+      const msg = useToasts.getState().toasts.find((t) => t.msg.includes("could not be saved"))!.msg;
+      expect(msg).not.toContain("kept in the project");
+      expect(msg).toContain("replaced before it could be kept");
     } finally {
       spy.mockRestore();
     }
@@ -123,6 +127,7 @@ describe("store load/append merge the project's fit models", () => {
       const m = model("Kept", "y = a");
       useApp.getState().loadWorkspace(parseWorkspace(projectText([m])));
       await vi.waitFor(() => expect(useApp.getState().fitModelCarry).toEqual([m]));
+      expect(useToasts.getState().toasts.some((t) => t.msg.includes("kept in the project"))).toBe(true);
       const saved = JSON.parse(serializeWorkspace(useApp.getState())) as { customFitModels: unknown[] };
       expect(saved.customFitModels).toEqual([m]);
     } finally {

@@ -288,6 +288,28 @@ describe("useEquationFit saved models", () => {
     ]);
   });
 
+  it("save refuses what a project/import would refuse — min > max, or a (blank=1) start outside its bounds", async () => {
+    // PR #432 review: the workshop used to save these, and the model then came
+    // back from its own project as "could not be read".
+    vi.mocked(validateEquation).mockResolvedValue({ ok: true, params: ["a", "t"] });
+    const { result } = renderHook(() => useEquationFit(null, NO_DEBOUNCE));
+    act(() => {
+      result.current.setEquation("a*exp(-x/t)");
+    });
+    await waitFor(() => expect(result.current.status).toBe("ok"));
+    act(() => {
+      result.current.setRow(1, "min", "5"); // t's start is blank -> 1, below its min
+      result.current.setModelName("Decay");
+    });
+    let saved: CustomFitModel[] | null = [];
+    act(() => {
+      saved = result.current.save();
+    });
+    expect(saved).toBeNull();
+    expect(result.current.error).toContain("guess[t]: outside its bounds");
+    expect(loadCustomModels()).toEqual([]);
+  });
+
   it("save is a no-op without a name or a valid equation", () => {
     const { result } = renderHook(() => useEquationFit(null, NO_DEBOUNCE));
     expect(result.current.save()).toBeNull();

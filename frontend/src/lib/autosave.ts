@@ -115,17 +115,20 @@ export async function loadAutosaveGeneration(): Promise<
   // good autosave. The caller (useWorkspaceAutosave) reports the rejection.
   const [codec, read] = await Promise.allSettled([workspaceCodec(), (async () => backend.read())()]);
   if (codec.status === "rejected") throw codec.reason;
-  const { parseWorkspace } = codec.value;
+  const { parseWorkspace, autosaveRestoreFitModels } = codec.value;
   try {
     if (read.status === "rejected") return null;
     const generations = await withLegacyGeneration(read.value, parseWorkspace);
     const pick = pickRestorable(generations, (text) => isRestorable(parseWorkspace, text));
     health = { ...health, count: generations.length };
     // P2.7: an autosave was written from THIS browser's fit-model library,
-    // which is newer than the copy it embeds — so its readable models are
-    // not merged back on restore (that would only resurrect deletions and
-    // renames made since). Its carry (project content) restores as usual.
-    return pick ? { workspace: { ...parseWorkspace(pick.text), customFitModels: [] }, at: pick.at } : null;
+    // which is newer than the copy it embeds — so its models are not merged
+    // back on restore (that would only resurrect deletions and renames made
+    // since); the ones the library does not hold move to the carry, so the
+    // project keeps them (lib/fitModelsProject.ts).
+    if (!pick) return null;
+    const ws = parseWorkspace(pick.text);
+    return { workspace: { ...ws, ...autosaveRestoreFitModels(ws) }, at: pick.at };
   } catch {
     return null; // never block startup on a bad autosave
   }

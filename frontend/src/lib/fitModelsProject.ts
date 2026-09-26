@@ -32,7 +32,12 @@
 // " (from project N)", so a model that went A -> B -> A comes home instead of
 // growing a second suffix.
 //   1. Some local model whose base is the same holds the same model: nothing.
-//      (Reopening the same project, or any older one, adds nothing.)
+//      (Reopening the same project, or any older one, adds nothing.) The
+//      LOCAL copy's last-used starts/bounds win: re-saving the project then
+//      writes the local ones, so a project's own starting values are replaced
+//      by this machine's for a model both hold. Deliberate — the start values
+//      are last-used convenience, not part of the model — and the project's
+//      fit results are untouched.
 //   2. The name is free locally (no readable or unreadable record holds it):
 //      the model is added under its own name.
 //   3. Otherwise (the name holds a DIFFERENT model, or belongs to a local
@@ -47,14 +52,23 @@
 // fit workshop: the library is not project state. It also means a model the
 // user deleted locally comes back when they open a project that holds it —
 // the project needs it, and that is the point of carrying it. A crash-
-// recovery AUTOSAVE is the exception (lib/autosave.ts drops its readable
-// models before restore): it was written from this very library, which is
-// newer, so merging it back would only resurrect deletions.
+// recovery AUTOSAVE is the exception (`autosaveRestoreFitModels`): it was
+// written from this very library, which is newer, so its models are NOT
+// merged back (that would resurrect deletions); the ones this library does not
+// hold are moved to the carry instead, so the project still keeps them — a
+// model the browser refused to store must survive a crash too.
 //
-// RECORDS THE FILE HOLDS BUT THIS BUILD CANNOT ACCEPT — a newer build's
-// version, a damaged entry, a record that fails the file-boundary checks
-// (`checkFitModelRecord`: lower > upper, a guess outside its bounds, blank or
-// duplicate parameter names), or a field that is not an array at all — are
+// THE PROJECT BOUNDARY ACCEPTS WHAT THE LOCAL SLOT ACCEPTS: any record
+// `isCustomFitModel` reads, rebuilt from its known fields
+// (`rebuildCustomFitModel`, unknown keys dropped). The stricter creation
+// checks (`checkFitModelRecord`: lower > upper, a guess outside its bounds,
+// blank or duplicate parameter names) gate where a model is MADE — the fit
+// workshop's Save and a model-file import — not where an existing library
+// travels: a record this library holds must never come back from its own
+// project as "could not be read".
+//
+// RECORDS THIS BUILD CANNOT READ — a newer build's version, a damaged entry,
+// or a field that is not an array at all — are
 // skipped with a migration warning and NEVER destroyed: they ride in the store
 // (`fitModelCarry`, undoable with the rest of the project) and are written
 // back into the file on the next save, the same "rewrite around it" rule
@@ -63,8 +77,9 @@
 
 import {
   appendCustomModels,
-  checkFitModelRecord,
+  isCustomFitModel,
   loadCustomModels,
+  rebuildCustomFitModel,
   unreadableCustomModelNames,
   type CustomFitModel,
 } from "./fitmodels";
@@ -89,11 +104,8 @@ export function splitProjectFitModels(
   const models: CustomFitModel[] = [];
   const carry: unknown[] = [];
   for (const r of list) {
-    try {
-      models.push(checkFitModelRecord(r));
-    } catch {
-      carry.push(r);
-    }
+    if (isCustomFitModel(r)) models.push(rebuildCustomFitModel(r));
+    else carry.push(r);
   }
   if (carry.length > 0) {
     const names = carry.map(nameOf).filter((n): n is string => !!n);
@@ -107,23 +119,46 @@ export function splitProjectFitModels(
 }
 
 /** The records a save writes: the given models (a parsed project re-saved) or
- *  else the local library's readable models, then the carried records (exact
- *  duplicates once — appending the same project twice must not double them).
- *  Reads localStorage; a storage failure reads as an empty library, exactly
- *  as `loadCustomModels` does. */
+ *  else the local library's readable models, then the carried records — each
+ *  once (appending the same project twice must not double them), and a
+ *  READABLE carried record not at all when the library already holds that
+ *  model under its base name (one the browser refused earlier and has since
+ *  stored, say), so a file never holds a model twice. Reads localStorage; a
+ *  storage failure reads as an empty library, exactly as `loadCustomModels`
+ *  does. */
 export function projectFitModelsForSave(
   models: readonly CustomFitModel[] | undefined,
   carry: readonly unknown[] | undefined,
 ): unknown[] {
-  const out: unknown[] = [...(models ?? loadCustomModels())];
+  const lib = models ?? loadCustomModels();
+  const out: unknown[] = [...lib];
+  const held = new Set(lib.map(heldKey));
   const seen = new Set<string>();
   for (const r of carry ?? []) {
     const key = JSON.stringify(r) ?? "undefined";
-    if (seen.has(key)) continue;
+    if (seen.has(key) || (isCustomFitModel(r) && held.has(heldKey(r)))) continue;
     seen.add(key);
     out.push(r);
   }
   return out;
+}
+
+/** A crash-recovery restore (lib/autosave.ts): the autosave's models that
+ *  this library already holds (same base name, same definition) are dropped —
+ *  the library is newer — and the REST move to the carry, so they are kept
+ *  in the project without being merged back into the library. */
+export function autosaveRestoreFitModels(ws: {
+  customFitModels?: CustomFitModel[];
+  fitModelCarry?: unknown[];
+}): { customFitModels: CustomFitModel[]; fitModelCarry: unknown[] } {
+  const held = new Set(loadCustomModels().map(heldKey));
+  const keep = (ws.customFitModels ?? []).filter((m) => !held.has(heldKey(m)));
+  return { customFitModels: [], fitModelCarry: [...(ws.fitModelCarry ?? []), ...keep] };
+}
+
+/** "This library holds that model" — base name + definition. */
+function heldKey(m: CustomFitModel): string {
+  return `${baseName(m.name)}\u0000${definitionKey(m)}`;
 }
 
 /** The model's DEFINITION (see THE SAME MODEL above). */
@@ -200,8 +235,10 @@ export function mergeProjectFitModels(incoming: readonly CustomFitModel[]): Adop
 const quoted = (names: readonly string[]): string => names.map((n) => `"${n}"`).join(", ");
 
 /** The ONE message an open shows for a merge, or null when the project brought
- *  nothing new (the common reopen). */
-export function adoptionMessage({ added, renamed, unstored }: AdoptResult): string | null {
+ *  nothing new (the common reopen). `kept` says whether the refused records
+ *  actually reached the carry — false when another load or an undo replaced
+ *  the project before the merge landed, and the message must not claim it. */
+export function adoptionMessage({ added, renamed, unstored }: AdoptResult, kept = true): string | null {
   const parts: string[] = [];
   if (added.length) {
     parts.push(
@@ -216,7 +253,10 @@ export function adoptionMessage({ added, renamed, unstored }: AdoptResult): stri
   }
   if (unstored.length) {
     parts.push(
-      `${quoted(unstored.map((m) => m.name))} could not be saved to your library (browser storage refused it); kept in the project`,
+      `${quoted(unstored.map((m) => m.name))} could not be saved to your library (browser storage refused it); ` +
+        (kept
+          ? "kept in the project"
+          : "the project was replaced before it could be kept — it is still in the project file; reopen that file to try again"),
     );
   }
   return parts.length ? parts.join(". ") : null;
@@ -242,9 +282,15 @@ export function adoptProjectFitModels(
   expected: unknown[],
 ): void {
   const result = mergeProjectFitModels(ws.customFitModels ?? []);
+  let kept = false;
   if (result.added.length || result.renamed.length || result.unstored.length) {
-    set((s) => (s.fitModelCarry === expected ? { fitModelCarry: [...expected, ...result.unstored] } : {}));
+    // Zustand runs the updater synchronously, so `kept` is settled below.
+    set((s) => {
+      if (s.fitModelCarry !== expected) return {};
+      kept = true;
+      return { fitModelCarry: [...expected, ...result.unstored] };
+    });
   }
-  const msg = adoptionMessage(result);
+  const msg = adoptionMessage(result, kept);
   if (msg) toast(msg, result.unstored.length ? "danger" : "info");
 }

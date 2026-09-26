@@ -66,9 +66,11 @@ export function isCustomFitModel(v: unknown): v is CustomFitModel {
   return true;
 }
 
-/** The FILE-BOUNDARY check (a record arriving from outside this browser: an
- *  imported model file, lib/nameKeyedRecipes' `parseFitModelFile`, or a
- *  project's embedded models, lib/fitModelsProject.ts). `isCustomFitModel`
+/** The CREATION check: every model this app makes or takes in as a new record
+ *  — the fit workshop's Save (components/workshops/curvefit/useEquationFit)
+ *  and an imported model file (lib/nameKeyedRecipes' `parseFitModelFile`).
+ *  NOT a project's embedded models, which are an existing library travelling
+ *  and cross `rebuildCustomFitModel` instead (below). `isCustomFitModel`
  *  proves the SHAPE (aligned arrays, finite guesses), but a record can still
  *  be well-typed and unusable — a bound pair with lower > upper, a starting
  *  guess outside its own bounds (scipy refuses an infeasible x0 at fit
@@ -81,6 +83,12 @@ export function checkFitModelRecord(o: unknown): CustomFitModel {
   };
   if (!isCustomFitModel(o)) bad("not a valid fit model");
   const m = o as CustomFitModel;
+  checkFitModelFields(m, bad);
+  return rebuildCustomFitModel(m);
+}
+
+/** The field checks of `checkFitModelRecord`, on an already-typed record. */
+function checkFitModelFields(m: CustomFitModel, bad: (field: string) => never): void {
   const seen = new Set<string>();
   m.params.forEach((name, i) => {
     if (!name.trim()) bad(`params[${i}]: empty name`);
@@ -93,6 +101,15 @@ export function checkFitModelRecord(o: unknown): CustomFitModel {
     const g = m.guesses[i];
     if ((lo !== null && g < lo) || (hi !== null && g > hi)) bad(`guess[${name}]: outside its bounds`);
   });
+}
+
+/** A readable record rebuilt from its KNOWN fields only (unknown extra keys
+ *  dropped), with no semantic checks — exactly what this library's own slot
+ *  accepts. A project's embedded models cross this, not
+ *  `checkFitModelRecord`: they are this same library on another machine, so
+ *  a record the slot holds must never read as "unreadable" in a project
+ *  (lib/fitModelsProject.ts). */
+export function rebuildCustomFitModel(m: CustomFitModel): CustomFitModel {
   return buildCustomFitModel({
     name: m.name,
     equation: m.equation,

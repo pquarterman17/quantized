@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { buildCustomFitModel, loadCustomModels, type CustomFitModel } from "./fitmodels";
 import {
   adoptionMessage,
+  autosaveRestoreFitModels,
   mergeProjectFitModels,
   projectFitModelsForSave,
   splitProjectFitModels,
@@ -165,15 +166,49 @@ describe("unreadable records in the file", () => {
     expect(warnings[0]).toContain("kept in the project file");
   });
 
-  it("the file-boundary checks apply: an unusable record is carried, never stored; extra keys are stripped", () => {
+  it("the project boundary accepts what the local slot accepts — extra keys stripped", () => {
+    // PR #432 review: a record the local library holds (an older workshop
+    // saved min > max, or a blank start outside its bounds) must not come back
+    // from its own project as "could not be read".
     const infeasible = { version: 1, name: "X", equation: "y = a", params: ["a"], guesses: [5], lower: [10], upper: [0] };
-    const dupParams = { version: 1, name: "D", equation: "y = a", params: ["a", "a"], guesses: [1, 1], lower: [null, null], upper: [null, null] };
     const extra = { ...model("Ok"), evil: { payload: 1 } };
     const warnings: string[] = [];
-    const { models, carry } = splitProjectFitModels([infeasible, dupParams, extra], warnings);
-    expect(carry).toEqual([infeasible, dupParams]);
-    expect(models).toEqual([model("Ok")]);
-    expect("evil" in models[0]).toBe(false);
+    const { models, carry } = splitProjectFitModels([infeasible, extra], warnings);
+    expect(carry).toEqual([]);
+    expect(warnings).toEqual([]);
+    expect(models).toEqual([infeasible, model("Ok")]);
+    expect("evil" in models[1]).toBe(false);
+  });
+
+  it("an own model the library holds round-trips through its project as a model: no warning, no duplicate", () => {
+    // The #432 probe, P1: blank start -> 1 with min 5, saved to the library.
+    const m = buildCustomFitModel({ name: "Decay", equation: "y = a*exp(-x/t)", params: ["a", "t"], guesses: [1, 1], lower: [null, 5], upper: [null, null] });
+    localStorage.setItem(KEY, JSON.stringify([m]));
+    const warnings: string[] = [];
+    const split = splitProjectFitModels(JSON.parse(JSON.stringify(projectFitModelsForSave(undefined, []))), warnings);
+    expect(split).toEqual({ models: [m], carry: [] });
+    expect(warnings).toEqual([]);
+    expect(projectFitModelsForSave(undefined, split.carry)).toEqual([m]);
+  });
+
+  it("a save drops a READABLE carried record the library already holds (base name + definition)", () => {
+    const lib = model("A", "y = a");
+    localStorage.setItem(KEY, JSON.stringify([lib]));
+    const refusedEarlier = { ...model("A", "y = a"), guesses: [9, 9] }; // since stored; starts differ
+    const differentModel = model("A", "y = b");
+    const future = { version: 9, name: "A" };
+    expect(projectFitModelsForSave(undefined, [refusedEarlier, differentModel, future])).toEqual([lib, differentModel, future]);
+  });
+
+  it("a crash restore drops the models the library holds and CARRIES the rest (a refused one survives)", () => {
+    localStorage.setItem(KEY, JSON.stringify([model("Held", "y = a")]));
+    const refused = model("Refused", "y = r");
+    const future = { version: 9, name: "F" };
+    // The #432 probe, P2: autosave writes library + carry; restore splits them.
+    const text = serializeWorkspace({ datasets: [ds], fitModelCarry: [refused, future] });
+    const restored = autosaveRestoreFitModels(parseWorkspace(text));
+    expect(restored.customFitModels).toEqual([]);
+    expect(restored.fitModelCarry).toEqual([future, refused]);
   });
 
   it("a field that is not an array is carried as one record, not dropped", () => {

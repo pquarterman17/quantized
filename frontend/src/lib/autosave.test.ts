@@ -131,12 +131,22 @@ describe("autosave carries the saved fit models (P2.7 follow-up)", () => {
     const [gen] = await listAutosaveGenerations();
     expect(JSON.parse(gen.text).customFitModels).toEqual([model, future]);
     // The autosave came from THIS library, which is newer: the user deletes
-    // the model after the autosave was written, and a restore must not bring
-    // it back.
+    // the model after the autosave was written, and a restore must not merge
+    // it back into the library — but the PROJECT still keeps it (carried),
+    // which is also what saves a model the browser had refused to store.
     localStorage.removeItem("qz.customFitModels");
     const restored = await loadAutosave();
     expect(restored?.customFitModels).toEqual([]);
-    expect(restored?.fitModelCarry).toEqual([future]);
+    expect(restored?.fitModelCarry).toEqual([future, model]);
+  });
+
+  it("a restore drops a model the library still holds (no duplicate carry)", async () => {
+    const model = { version: 1, name: "Held", equation: "y = a", params: ["a"], guesses: [1], lower: [null], upper: [null] };
+    localStorage.setItem("qz.customFitModels", JSON.stringify([model]));
+    expect(await saveAutosave({ datasets: [ds("a", "first")] })).toBe(true);
+    const restored = await loadAutosave();
+    expect(restored?.customFitModels).toEqual([]);
+    expect(restored?.fitModelCarry).toEqual([]);
   });
 
   it("writes no customFitModels key when there are none (an ordinary project is unchanged)", async () => {

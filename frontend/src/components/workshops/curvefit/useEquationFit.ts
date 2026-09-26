@@ -20,6 +20,7 @@ import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { recordUse } from "../../../lib/recipeIndex";
 import {
   buildCustomFitModel,
+  checkFitModelRecord,
   deleteCustomModel,
   loadCustomModels,
   saveCustomModel,
@@ -305,6 +306,16 @@ export function useEquationFit(
       description,
       units: rows.map((r) => r.unit),
     });
+    // The same creation check an imported model file gets (lib/fitmodels'
+    // `checkFitModelRecord`): a model saved here with min > max, or a start
+    // outside its bounds (a blank start is 1), would be refused on every
+    // other way in — so it is refused here, naming the parameter.
+    try {
+      checkFitModelRecord(model);
+    } catch (e) {
+      setError(`can't save the model: ${e instanceof Error ? e.message : "invalid"}`);
+      return null;
+    }
     try {
       return saveCustomModel(model);
     } catch (e) {
