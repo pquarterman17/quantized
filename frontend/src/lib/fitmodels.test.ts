@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import {
   buildCustomFitModel,
+  DAMAGED_BACKUP_KEY,
   deleteCustomModel,
   isCustomFitModel,
   loadCustomModels,
@@ -160,5 +161,24 @@ describe("fitmodels tolerant load (audit P2.7 slice 3)", () => {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? "[]") as unknown[];
     expect(raw).toContainEqual(future);
     expect(loadCustomModels().map((m) => m.name)).toEqual(["Other", "Future"]);
+  });
+});
+
+describe("fitmodels damaged slot (review: never destroy on write)", () => {
+  it("warns once and moves the damaged text aside before the first save", () => {
+    localStorage.setItem(KEY, '[{"version":1,"name":"Lost"'); // truncated JSON
+    expect(loadCustomModelsChecked()).toMatchObject({ models: [], warning: expect.stringMatching(/could not be read/) });
+    saveCustomModel(model());
+    expect(localStorage.getItem(DAMAGED_BACKUP_KEY)).toBe('[{"version":1,"name":"Lost"');
+    expect(loadCustomModels()).toEqual([model()]);
+  });
+
+  it("never replaces an earlier backup; a second one gets a numbered key", () => {
+    localStorage.setItem(DAMAGED_BACKUP_KEY, "first");
+    localStorage.setItem(KEY, '{"not":"an array"}');
+    deleteCustomModel("x");
+    expect(localStorage.getItem(DAMAGED_BACKUP_KEY)).toBe("first");
+    expect(localStorage.getItem(`${DAMAGED_BACKUP_KEY}.2`)).toBe('{"not":"an array"}');
+    expect(localStorage.getItem(KEY)).toBe("[]");
   });
 });

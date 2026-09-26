@@ -63,11 +63,17 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
 
   return (
     <div>
-      {initial?.description && (
-        <div className="qzk-ds-meta qzk-msg" style={{ marginTop: 6 }} aria-label="model description">
-          {initial.description}
-        </div>
-      )}
+      {/* ONE description field, at the top so a chosen saved model's text is
+          the first thing shown (P2.7); it is what Save writes. */}
+      <input
+        className="qz-input"
+        style={{ display: "block", width: "100%", marginTop: 8 }}
+        placeholder="description (optional)"
+        aria-label="model description"
+        title="What this model is for — saved with it and shown in the model picker"
+        value={eq.description}
+        onChange={(e) => eq.setDescription(e.target.value)}
+      />
       <label className="qzk-field-lbl" style={{ marginTop: 10 }}>
         Equation
       </label>
@@ -164,14 +170,6 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
           </Button>
         )}
       </div>
-      <input
-        className="qz-input"
-        style={{ display: "block", width: "100%", marginTop: 6 }}
-        placeholder="description (optional)"
-        aria-label="model description text"
-        value={eq.description}
-        onChange={(e) => eq.setDescription(e.target.value)}
-      />
     </div>
   );
 }

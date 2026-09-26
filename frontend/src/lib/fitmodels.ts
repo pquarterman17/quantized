@@ -88,15 +88,33 @@ export function buildCustomFitModel(
 // ── Persistence (localStorage, like analysis templates) ─────────────────────
 const KEY = "qz.customFitModels";
 
-function readRaw(): unknown[] {
+/** Where a damaged slot's text is moved before the first write replaces it. */
+export const DAMAGED_BACKUP_KEY = `${KEY}.damaged`;
+
+interface Slot {
+  list: unknown[];
+  /** The slot's text when it is present but not a JSON array, else null. */
+  damaged: string | null;
+}
+
+function readSlot(): Slot {
+  let raw: string | null;
   try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return [];
-    const parsed: unknown = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    raw = localStorage.getItem(KEY);
   } catch {
-    return [];
+    return { list: [], damaged: null };
   }
+  if (!raw) return { list: [], damaged: null };
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? { list: parsed, damaged: null } : { list: [], damaged: raw };
+  } catch {
+    return { list: [], damaged: raw };
+  }
+}
+
+function readRaw(): unknown[] {
+  return readSlot().list;
 }
 
 function nameOf(v: unknown): string | null {
@@ -114,7 +132,15 @@ export interface CheckedCustomModels {
 /** Every readable saved model plus ONE warning naming the records skipped
  *  (a damaged entry, or one a newer build wrote). */
 export function loadCustomModelsChecked(): CheckedCustomModels {
-  const raw = readRaw();
+  const { list: raw, damaged } = readSlot();
+  if (damaged !== null) {
+    return {
+      models: [],
+      warning:
+        "the saved fit model list could not be read; it will be kept aside " +
+        `(${DAMAGED_BACKUP_KEY}) when a model is next saved`,
+    };
+  }
   const models = raw.filter(isCustomFitModel);
   const skipped = raw.filter((r) => !isCustomFitModel(r));
   if (skipped.length === 0) return { models, warning: null };
@@ -135,6 +161,17 @@ export function loadCustomModels(): CustomFitModel[] {
  *  and return the readable list (session-local if storage refuses). */
 function writeRaw(raw: unknown[]): CustomFitModel[] {
   try {
+    // A damaged slot (not a JSON array at all) is moved aside, never simply
+    // overwritten: it may hold every model the user had. An earlier backup
+    // is never replaced either; a second one gets a numbered key.
+    const { damaged } = readSlot();
+    if (damaged !== null) {
+      let key = DAMAGED_BACKUP_KEY;
+      for (let n = 2; localStorage.getItem(key) !== null && localStorage.getItem(key) !== damaged; n++) {
+        key = `${DAMAGED_BACKUP_KEY}.${n}`;
+      }
+      localStorage.setItem(key, damaged);
+    }
     localStorage.setItem(KEY, JSON.stringify(raw));
   } catch {
     /* storage unavailable — the change stays session-local */

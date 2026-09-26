@@ -103,6 +103,11 @@ export function parseFitParams(
     if (Number.isNaN(lo)) return { ...empty, error: `${row.name}: min is not a number` };
     if (Number.isNaN(hi)) return { ...empty, error: `${row.name}: max is not a number` };
     if (lo > hi) return { ...empty, error: `${row.name}: min is above max` };
+    // The engine clips every start into its bounds, so a held value outside
+    // them would silently move (the equation table refuses this too, P2.7).
+    if (row.fixed && (start < lo || start > hi)) {
+      return { ...empty, error: `${row.name}: held at ${start}, outside its bounds` };
+    }
     p0.push(start);
     lower.push(lo);
     upper.push(hi);

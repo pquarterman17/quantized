@@ -80,7 +80,10 @@ describe("EquationEditor inline error marking (P2.7)", () => {
     expect(screen.queryByTestId("equation-error-mark")).toBeNull();
   });
 
-  it("never marks newer text with an older span", async () => {
+  // DOM-level: the mark is gone once the keystroke has settled. The stricter
+  // per-render guarantee (no render pairs the old span with new text) is
+  // pinned in useEquationFit.hold.test.ts, where each render is observable.
+  it("clears the mark as soon as the text changes", async () => {
     vi.mocked(validateEquation).mockResolvedValue({
       ok: false,
       params: [],

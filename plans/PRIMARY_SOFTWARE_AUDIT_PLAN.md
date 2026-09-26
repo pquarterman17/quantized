@@ -3378,8 +3378,11 @@ violin, bar, strip, or summary plots.
   `0 - operand` and was silently wrong (`3*-2` gave -2, `2^-3` gave -2,
   `3--2` gave 1, `2/-4*2` raised); it is now a prefix negation. A minus at
   the start or after `(` keeps the historical encoding bit for bit, so every
-  previously-correct equation (and the golden set) is unchanged. Also: `x²`
-  is now an "unexpected character" error instead of a parameter named `x²`.
+  previously-correct equation (and the golden set) is unchanged. The
+  identifier rule is deliberately the historical one (letters/digits/`_`,
+  so saved names like `A₀`, `τ` keep working): a mistyped `x²` is still a
+  parameter named `x²`, which the before-run summary exposes ("x is not
+  used"); a middle dot `a·x` is an error, not a name.
 - [x] Save model with units/description. (slice 3, 2026-09-25) Saved
   custom models (`lib/fitmodels`) are versioned: v2 adds an optional
   `description` and per-parameter `units`; a record is written as v2 only
@@ -3407,6 +3410,14 @@ violin, bar, strip, or summary plots.
     than half-done; until then a model travels between machines via the
     Recipe Library's export/import.
 - [ ] Stretch: pretty LaTeX rendering while Python remains editable source.
+- **Progress 2026-09-25:** slices 1-3 plus a self-review round (identifier
+  rule restored to the historical one; a damaged storage slot is moved aside
+  rather than overwritten; one description field; the validate response
+  type comes from the generated schema; the registry table also refuses a
+  held start outside its bounds). Gates green, golden unchanged, eager
+  bundle 845.0 -> 845.1 kB (budget 846.1). Open: the stretch box, saved
+  models in the .dwk (above), and one shared row parser for
+  `lib/fitParams` + `lib/equationRows`.
 
 ### P2.8 — 2-D map polish
 

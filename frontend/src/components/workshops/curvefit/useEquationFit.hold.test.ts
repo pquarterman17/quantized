@@ -7,6 +7,7 @@ import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { fitEquation, validateEquation } from "../../../lib/api/curvefit";
+import type { TextSpan } from "../../../lib/equationSpan";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useEquationFit } from "./useEquationFit";
@@ -128,5 +129,29 @@ describe("useEquationFit hold column + summary (P2.7)", () => {
     });
     await waitFor(() => expect(result.current.status).toBe("error"));
     expect(result.current.summary).toBeNull();
+  });
+
+  it("never pairs an error span with text it was not reported for, even for one render", async () => {
+    // The render right after a keystroke still has status "error" (the
+    // re-validate effect has not run yet); the span must already be gone.
+    const seen: { eq: string; span: TextSpan | null; status: string }[] = [];
+    vi.mocked(validateEquation).mockResolvedValue({ ok: false, params: [], error: "bad", errorStart: 2, errorEnd: 3 });
+    const { result } = renderHook(() => {
+      const s = useEquationFit(null, { debounceMs: 0 });
+      seen.push({ eq: s.equation, span: s.errorSpan, status: s.status });
+      return s;
+    });
+    act(() => {
+      result.current.setEquation("a+;");
+    });
+    await waitFor(() => expect(result.current.errorSpan).toEqual({ start: 2, end: 3 }));
+    vi.mocked(validateEquation).mockReturnValue(new Promise(() => {}));
+    act(() => {
+      result.current.setEquation("a+;b");
+    });
+    // The intermediate render this guards really happens ...
+    expect(seen.some((r) => r.eq === "a+;b" && r.status === "error")).toBe(true);
+    // ... and never carries the old span.
+    expect(seen.filter((r) => r.span !== null && r.eq !== "a+;")).toEqual([]);
   });
 });

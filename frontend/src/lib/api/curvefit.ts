@@ -8,6 +8,7 @@
 
 import { getJSON, postJSON } from "./http";
 import type { CalcResult, FitModel } from "../types";
+import type { components } from "./schema";
 
 /** Registry of fit models with parameter names and defaults. */
 export function listFitModels(): Promise<{ models: FitModel[] }> {
@@ -57,22 +58,14 @@ export function bootstrapFit(req: BootstrapRequest): Promise<BootstrapResult> {
 }
 
 // ── Custom equation models (GOTO #1) ────────────────────────────────────────
-export interface EquationValidateResult {
-  ok: boolean;
-  params: string[];
-  /** P2.7 before-run summary (present when ok): the independent variable
-   *  (always "x"), whether the equation uses it, and the recognised
-   *  functions / constants it uses, each in order of first appearance. */
-  variable?: string;
-  usesX?: boolean;
-  functions?: string[];
-  constants?: string[];
-  error?: string;
-  /** Syntax-error span in CODE POINTS of the submitted text, end exclusive
-   *  (P2.7) — convert with lib/equationSpan before indexing a JS string. */
-  errorStart?: number;
-  errorEnd?: number;
-}
+/** The validate route's typed response (`EquationValidateResponse`), taken
+ *  from the generated OpenAPI schema so a renamed field fails to compile
+ *  here instead of at runtime. On success: `params` plus the P2.7 before-run
+ *  summary (`variable` — always "x" —, `usesX`, `functions`, `constants`, in
+ *  order of first appearance). On failure: `error`, and for a syntax error
+ *  `[errorStart, errorEnd)` in CODE POINTS of the submitted text (convert with
+ *  lib/equationSpan before indexing a JS string). */
+export type EquationValidateResult = components["schemas"]["EquationValidateResponse"];
 
 /** Validate a custom fit equation. Always 200 with ok/params/error — the
  *  live-validation shape (the fit endpoint is the one that 422s). */

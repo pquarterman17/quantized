@@ -81,7 +81,7 @@ describe("saved model description + units (P2.7 slice 3)", () => {
       paramNames: ["a", "t"],
     });
     render(<EquationModelPanel initial={DECAY} onSavedChange={() => {}} />);
-    expect(screen.getByLabelText("model description")).toHaveTextContent("single exponential decay");
+    expect(screen.getByLabelText("model description")).toHaveValue("single exponential decay");
     expect(screen.getByLabelText("unit a")).toHaveValue("V");
     expect(screen.getByLabelText("unit t")).toHaveValue("s");
     // The mount re-validate must settle before Fit is enabled.
@@ -101,7 +101,7 @@ describe("saved model description + units (P2.7 slice 3)", () => {
     fireEvent.change(screen.getByLabelText("Equation"), { target: { value: "a*exp(-x/t)" } });
     fireEvent.change(await screen.findByLabelText("unit t"), { target: { value: "s" } });
     fireEvent.change(screen.getByPlaceholderText("model name"), { target: { value: "Mine" } });
-    fireEvent.change(screen.getByLabelText("model description text"), { target: { value: "my decay" } });
+    fireEvent.change(screen.getByLabelText("model description"), { target: { value: "my decay" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(loadCustomModels()).toEqual([
       {

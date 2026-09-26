@@ -48,6 +48,16 @@ test.describe("Curve Fit custom equation authoring (P2.7)", () => {
     const glyph = m.width / 3; // "foo" is three monospace glyphs
     expect(Math.abs(m.x - (f.x + 8 + 1 + 6 * glyph))).toBeLessThan(glyph); // 8 px padding + 1 px border
 
+    // A long equation scrolls the field; the overlay scrolls with it, so the
+    // mark on an error at the END is still inside the field's box.
+    await field.fill(`${"m*x + ".repeat(12)}foo(b)`);
+    await expect(panel.getByRole("alert")).toContainText("(column 73)", { timeout: 10_000 });
+    await expect(mark).toHaveText("foo");
+    const lf = await box(field);
+    const lm = await box(mark);
+    expect(lm.x).toBeGreaterThan(lf.x);
+    expect(lm.x + lm.width).toBeLessThanOrEqual(lf.x + lf.width);
+
     // ── Python ** validates; summary; hold ─────────────────────────────────
     await field.fill("m*x**1 + b");
     await expect(mark).toHaveCount(0);
@@ -58,10 +68,12 @@ test.describe("Curve Fit custom equation authoring (P2.7)", () => {
     await panel.getByRole("checkbox", { name: "Hold b fixed" }).check();
     await expect(summary).toContainText("held");
     await panel.getByRole("textbox", { name: "unit m" }).fill("V/s");
-    // Six columns must fit the 340 px window (the first cut overflowed it and
-    // clipped the hold column).
+    // Six columns must fit the 340 px window. The first cut overflowed it:
+    // the window body scrolled sideways (so BOTH edges must be checked — the
+    // right one alone passed) and the hold column was clipped.
     const table = await box(panel.locator(".qzk-dense-table table"));
     const win = await box(panel);
+    expect(table.x).toBeGreaterThanOrEqual(win.x);
     expect(table.x + table.width).toBeLessThanOrEqual(win.x + win.width);
     await expect(panel.getByRole("checkbox", { name: "Hold b fixed" })).toBeInViewport({ ratio: 1 });
 
@@ -83,7 +95,7 @@ test.describe("Curve Fit custom equation authoring (P2.7)", () => {
 
     // ── save with a description; the picker names it ────────────────────────
     await panel.getByPlaceholder("model name").fill("Ramp");
-    await panel.getByRole("textbox", { name: "model description text" }).fill("straight line through zero");
+    await panel.getByRole("textbox", { name: "model description" }).fill("straight line through zero");
     await panel.getByRole("button", { name: "Save", exact: true }).click();
     await expect(panel.locator("select").first().locator("option", { hasText: "ƒ Ramp — straight line" })).toHaveCount(1);
   });

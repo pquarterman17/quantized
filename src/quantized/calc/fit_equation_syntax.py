@@ -89,7 +89,13 @@ def _identifier(s: str, pos: int, base: int, params: list[str], spans: dict[str,
                 ) -> tuple[Token, int]:
     start, n = pos, len(s)
     pos += 1
-    while pos < n and s[start:pos + 1].isidentifier():
+    # The historical rule, kept exactly: a letter or "_" starts a name and
+    # letters / digits / "_" continue it (str.isalnum, so saved models with
+    # names like "A\u2080" or "\u03c4" keep parsing). str.isidentifier() would
+    # break those AND swallow "\u00b7" (a middle dot typed as "times") into
+    # a parameter name. A mistyped "x\u00b2" stays a parameter, but the
+    # before-run summary then says x is unused.
+    while pos < n and (s[pos].isalnum() or s[pos] == "_"):
         pos += 1
     name = s[start:pos]
     a, b = base + start, base + pos
@@ -135,7 +141,7 @@ def _tokenize(s: str, base: int) -> tuple[list[Token], list[str], dict[str, tupl
             tokens.append(tok)
             prev = "value"
             continue
-        if ch.isidentifier():
+        if ch.isalpha() or ch == "_":
             tok, pos = _identifier(s, pos, base, params, spans)
             tokens.append(tok)
             prev = "function" if tok["type"] == "function" else "value"

@@ -108,7 +108,7 @@ def test_validate_syntax_error_carries_its_span() -> None:
 
 
 def test_validate_error_text_is_ascii() -> None:
-    out = client.post(VALIDATE, json={"equation": "a*x\u00b2"}).json()
+    out = client.post(VALIDATE, json={"equation": "a*x\u00b7b"}).json()
     assert out["ok"] is False
     assert out["error"].isascii()
     assert (out["errorStart"], out["errorEnd"]) == (3, 4)

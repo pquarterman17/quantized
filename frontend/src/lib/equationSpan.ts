@@ -18,10 +18,10 @@ export interface TextSpan {
  *  to mark (empty text, non-finite or inverted input). */
 export function codePointSpanToUtf16(
   text: string,
-  start: number | undefined,
-  end: number | undefined,
+  start: number | null | undefined,
+  end: number | null | undefined,
 ): TextSpan | null {
-  if (start === undefined || end === undefined) return null;
+  if (start == null || end == null) return null;
   if (!Number.isInteger(start) || !Number.isInteger(end) || start < 0 || end < start) return null;
   const points = Array.from(text);
   if (points.length === 0) return null;

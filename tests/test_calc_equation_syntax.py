@@ -170,16 +170,28 @@ def test_underscore_parameter_error_spans_its_first_occurrence() -> None:
 
 
 def test_error_text_is_ascii_even_for_non_ascii_input() -> None:
-    # "x²" used to become a parameter named "x²"; it is now a clear error.
+    # A middle dot typed as "times" is an error, not part of a name.
     with pytest.raises(EquationSyntaxError) as info:
-        parse_equation("a*x²")
+        parse_equation("a\u00b7x + b")
     msg = str(info.value)
     assert msg.isascii()
-    assert "\\xb2" in msg
-    assert (info.value.start, info.value.end) == (3, 4)
+    assert "\\xb7" in msg
+    assert (info.value.start, info.value.end) == (1, 2)
     with pytest.raises(EquationSyntaxError) as info2:
-        equation_model("_α*x")
+        equation_model("_\u03b1*x")
     assert str(info2.value).isascii()
+
+
+def test_historical_identifier_rule_is_kept() -> None:
+    # Names with sub/superscript digits parsed before P2.7 and still do, so
+    # saved models keep working ...
+    fcn, names = parse_equation("A\u2080*exp(-x/\u03c4)")
+    assert names == ["A\u2080", "\u03c4"]
+    # ... and a mistyped "x\u00b2" is still a parameter -- which the
+    # before-run summary exposes: x is then unused.
+    info = describe_equation("a*x\u00b2")
+    assert info.params == ["a", "x\u00b2"]
+    assert info.uses_x is False
 
 
 def test_positions_count_code_points() -> None:

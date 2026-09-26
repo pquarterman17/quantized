@@ -99,6 +99,15 @@ describe("parseFitParams", () => {
     expect(parseFitParams(rows, gauss).error).toContain("min is above max");
   });
 
+  it("refuses a HELD start outside its own bounds (the engine would clip it)", () => {
+    const rows = rowsFromModel(gauss).map((r) =>
+      r.name === "amp" ? { ...r, start: "5", max: "2", fixed: true } : r,
+    );
+    expect(parseFitParams(rows, gauss).error).toBe("amp: held at 5, outside its bounds");
+    const free = rows.map((r) => ({ ...r, fixed: false }));
+    expect(parseFitParams(free, gauss).error).toBeUndefined();
+  });
+
   it("refuses unparseable numbers, naming the parameter", () => {
     const rows = rowsFromModel(gauss).map((r) =>
       r.name === "center" ? { ...r, start: "abc" } : r,
