@@ -56,7 +56,7 @@ import {
   mergeBatch,
   type BatchDatasetResult,
   type PrepOutcome,
-} from "./peakBatchTable";
+} from "./peakBatchRows";
 
 export type BatchPhase = "idle" | "preparing" | "fitting" | "cancelling" | "done" | "cancelled" | "failed";
 
