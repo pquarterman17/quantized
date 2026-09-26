@@ -57,7 +57,7 @@ describe("save → open round trip", () => {
     await vi.waitFor(() => expect(loadTemplates().map((t) => t.name)).toEqual(["Stack M"]));
     // Again, plus one new recipe: its arrival proves this merge RAN, and
     // "Stack M" (the same definition) is still there once.
-    const again = JSON.parse(text);
+    const again = JSON.parse(text) as { analysisTemplates: unknown[] };
     again.analysisTemplates.push(JSON.parse(JSON.stringify(recipe("Other"))));
     useApp.getState().appendWorkspace(parseWorkspace(JSON.stringify(again)));
     await vi.waitFor(() => expect(loadTemplates().map((t) => t.name)).toEqual(["Stack M", "Other"]));

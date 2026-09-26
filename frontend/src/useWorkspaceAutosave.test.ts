@@ -446,6 +446,14 @@ const AUTOSAVE_EXCLUDED: Record<string, string> = {
     "the model is already durable on this machine, which is the only place " +
     "an autosave can be restored, and an autosave does not embed the library " +
     "at all (lib/autosave.test.ts). The carry half is tracked as fitModelCarry.",
+  // P2.5 box 4: the saved analysis templates / transformation recipes
+  // (lib/templatesProject.ts) — the GLOBAL localStorage template library read
+  // by serializeWorkspace at write time; there is no store half at all.
+  analysisTemplates:
+    "not project state: saving a template in the Pipeline workshop writes " +
+    "localStorage only — durable on this machine, the only place an autosave " +
+    "is restored — and an autosave never embeds the library " +
+    "(lib/templatesProject.test.ts).",
 };
 
 describe("AutosaveState completeness sweep (P2-1)", () => {

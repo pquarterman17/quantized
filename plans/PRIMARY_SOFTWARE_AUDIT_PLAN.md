@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-26 (latest): **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-26 (latest): **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -3678,7 +3678,95 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
     reusable form); unit parsing does not convert between units (it refuses
     instead); `updateFormula` editing a factor's EXPRESSION turns it into an
     ordinary formula (by design — it is no longer the metadata value).
-- [ ] Saved transformation recipe, undo, provenance, derived output.
+- [x] Saved transformation recipe, undo, provenance, derived output.
+  (2026-09-26: saved, previewed/preflighted, applied, rebindable, in the .dwk.)
+  - **Survey — what already existed.** Recording and replay of every
+    transform (#431/#438/#440/#442: `lib/transformRun`, `executeSteps`), the
+    analysis template (`lib/template.ts`: a named step list, localStorage,
+    export/import, load into the Pipeline, batch over FILES and a folder run),
+    and the Recipe Library listing it (P3.5, kind "analysis": rename,
+    duplicate, import/export). **Missing:** a recipe that declares what input
+    it expects, applying one to LOADED datasets with a preflight, rebinding
+    columns whose names differ, provenance naming the recipe and its version,
+    one undo step per apply, and saved templates in the `.dwk`.
+  - **A recipe is an analysis template** (no second format) with three
+    additive-optional fields (`version` stays 1; old templates load
+    unchanged): `description`, `revision` (1, then +1 per re-save under the
+    name; a blank description or no example on a re-save keeps the saved
+    value, only an explicit "no example" drops the expected input) and
+    `expects` (`lib/recipeExpect.ts`): the recording input's column layout
+    (name, unit, required) up to the last column a step reads, plus the
+    metadata fields a promote step reads. Required = what the steps that read
+    the INPUT reference (up to the first step that derives a dataset):
+    expression letters, fit y/x/σ columns, stack/unstack/join/split columns;
+    a whole-table op (transpose, append by position, dataset math) requires
+    all. Columns the recipe itself added to the example are left out. Save is
+    the Pipeline workshop's Templates section, with a description, an example
+    dataset (the recording's input by default) and a live "Expects:" line.
+  - **Apply** (Templates ▸ Apply…, `ApplyRecipeSection.tsx`): pick any loaded
+    datasets; each shows its PREFLIGHT before anything runs
+    (`lib/recipePreflight.ts`): the column bindings (by name, trimmed and
+    case-insensitive; any can be rebound to another column or to a blank one
+    for a column no step reads) and every issue. REFUSED: a missing/blank
+    required column, a missing metadata field, a recorded second input or
+    correction background not in this workspace, a unit mismatch until
+    "Apply despite the unit mismatch" is ticked, a recipe that derives no
+    dataset (fit-only), a recipe that corrects an already-corrected dataset.
+    NOTED: a step on a recorded dataset rather than this one, blank fillers,
+    applied corrections, fit steps (run, result not kept).
+  - **Derived output** (`runTemplate.ts`'s `applyRecipe`): the steps run
+    through the same `executeSteps` on a WORKING COPY laid out like the
+    recording input when the columns were rebound or a step would edit in
+    place (bound columns at the recorded positions, the target's other
+    columns after; categorical tables, row exclusions, the row filter and
+    error roles follow their columns), else on the dataset itself. The source
+    is never edited. The output carries `metadata.transform_recipe` {recipe,
+    revision, input, column bindings, steps, appliedAt}. A failed run is
+    rolled back (everything it created removed, the view handed back).
+  - **One undo step per apply**, however many datasets: `asOneUndoStep`
+    collapses the entries the apply pushed. Known limitation (documented in
+    `runTemplate.ts`, the class `withHistoryBatch` also has across awaits):
+    an unrelated edit made DURING an apply folds into its entry.
+  - **`.dwk`** (`lib/templatesProject.ts`, the #432 fit-model bridge): a save
+    embeds the saved templates as top-level `analysisTemplates` (written only
+    when there are any; the autosave embeds none); an open or append merges
+    them into the local library by the fit-model rule (same definition:
+    nothing; free name: added; else "(from project)"), reads the write back
+    and toasts once. **Export/import as a file** was already the template's
+    `.qzt.json` (Templates ▸ Export / Import…, and the Recipe Library); it
+    now carries the new fields. The Recipe Library's details show the
+    description, revision and expected input.
+  - **Bundle:** `lib/template.ts` left the eager chunk (the folder menu's
+    visibility check reads the storage slot instead), funding the rest: eager
+    866,135 → 864,322 B after the seam, 864,710 B with the feature (budget
+    866,358 B, pin unchanged). Recipe modules are in the lazy-only list.
+  - **Tests:** `recipeExpect.test.ts`, `recipePreflight.test.ts` (binding,
+    every refusal and note, the working copy), `applyRecipe.test.ts` (record
+    two transforms → save → apply to a reordered dataset: output equals the
+    recipe on the recorded layout; provenance; rebinding; refusal creates
+    nothing; unit acknowledgment; rollback; fit-only refused; ONE undo entry
+    and undo/redo), `ApplyRecipeSection.test.tsx` (save with description,
+    revisions, "no example"; preflight before apply, rebind, apply),
+    `templatesProject.test.ts` (`.dwk` save → open on a clean library keeps
+    description/revision/expects; append; merge rule; storage refusal),
+    `template.test.ts`, `recipeDetails.test.ts`. e2e
+    `transform-recipe.spec.ts`: record stack + transpose through the Reshape
+    workshop, save as a recipe, apply to a file with the same numbers in
+    another column order → the output equals the recorded one; provenance;
+    one Undo removes the apply.
+  - **Self-review:** code-review high, 10 findings, 9 fixed (fit-only
+    recipes, the σ column, stacked corrections, background references, the
+    "no example" pick, re-save retention, stale bindings across revisions,
+    unreported storage refusal, the view after a rollback); the history-
+    squash altitude finding answered in `runTemplate.ts`. Sabotage-verified:
+    conforming, the undo squash, the missing-column refusal, the provenance
+    stamp, the rollback, the `.dwk` embed.
+  - **Not done:** no data-level dry run in the preview (the preflight and
+    bindings are the preview; the output is created on Apply); editing a
+    transform step's params in the Pipeline panel; recording the import-time
+    append; a carry for `.dwk` template records this build cannot read (they
+    are reported and skipped — the local slot keeps none either); fit results
+    of a recipe apply are not kept (Batch / the folder run are the fit paths).
   **Progress (opener slice, 2026-09-25) — recording part only:** join, stack,
   unstack, transpose, merge/append ("Merge selected"), split and dataset
   math record a `transform` pipeline step with their full parameters
