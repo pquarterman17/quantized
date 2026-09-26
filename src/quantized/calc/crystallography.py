@@ -52,6 +52,7 @@ import math
 from collections.abc import Callable
 from typing import Any
 
+from quantized.calc.bond_geometry import bond_angle
 from quantized.calc.constants import constants
 from quantized.calc.miller_bravais import (
     direction_uvtw_to_uvw,
@@ -66,6 +67,7 @@ from quantized.calc.plane_spacings import plane_spacings
 # calc.plane_spacings modules — see each module's docstring for why).
 __all__ = [
     "CRYSTAL_SYSTEMS",
+    "bond_angle",
     "cell_volume",
     "d_spacing",
     "direction_uvtw_to_uvw",
@@ -93,6 +95,26 @@ def _from_inv_d2(inv_d2: float) -> float:
     return 1.0 / math.sqrt(inv_d2)
 
 
+def _cell_volume_radicand(
+    alpha: float, beta: float, gamma: float
+) -> tuple[float, float, float, float]:
+    """Cosines of the three cell angles, plus the triclinic volume radicand
+    ``1 - cos²α - cos²β - cos²γ + 2·cosα·cosβ·cosγ`` for a UNIT-length cell
+    (``V = a·b·c·sqrt(radicand)`` for actual lengths ``a, b, c``).
+
+    Shared by :func:`cell_volume` and
+    :func:`quantized.calc.bond_geometry._direct_basis`, which builds the same
+    triclinic direct-space basis and used to duplicate this radicand with its
+    own threshold and error message (a 2026-09 PR review finding). Imported
+    from there via a function-body import to avoid a module-level import
+    cycle -- this module imports :func:`quantized.calc.bond_geometry.bond_angle`
+    as a backward-compatible re-export (see ``__all__`` above).
+    """
+    ca, cb, cg = _cos(alpha), _cos(beta), _cos(gamma)
+    radicand = 1.0 - ca * ca - cb * cb - cg * cg + 2.0 * ca * cb * cg
+    return ca, cb, cg, radicand
+
+
 def cell_volume(
     a: float, b: float, c: float, alpha: float = 90.0, beta: float = 90.0, gamma: float = 90.0
 ) -> float:
@@ -108,8 +130,7 @@ def cell_volume(
     for name, val in (("a", a), ("b", b), ("c", c)):
         if not (math.isfinite(val) and val > 0):
             raise ValueError(f"lattice length {name} must be positive and finite")
-    ca, cb, cg = _cos(alpha), _cos(beta), _cos(gamma)
-    radicand = 1.0 - ca * ca - cb * cb - cg * cg + 2.0 * ca * cb * cg
+    _, _, _, radicand = _cell_volume_radicand(alpha, beta, gamma)
     if radicand <= 0:
         raise ValueError("non-physical cell angles (cell volume would be <= 0)")
     return a * b * c * math.sqrt(radicand)

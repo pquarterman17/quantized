@@ -1,8 +1,9 @@
 """Thin crystallography route. Wraps ``calc.crystallography`` (pure formulas).
 
-Computes interplanar d-spacing from lattice parameters + Miller indices, and the
-unit-cell volume + theoretical density (from a chemical formula + Z); the math
-lives in calc, this only validates + serializes.
+Computes interplanar d-spacing from lattice parameters + Miller indices, atomic
+bond angles from fractional coordinates, and unit-cell volume + theoretical
+density (from a chemical formula + Z); the math lives in calc, this only
+validates + serializes.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from quantized.calc.crystallography import (
+    bond_angle,
     cell_volume,
     d_spacing,
     interplanar_angle,
@@ -91,6 +93,37 @@ def angle(req: InterplanarAngleRequest) -> dict[str, Any]:
         alpha=req.alpha,
         beta=req.beta,
         gamma=req.gamma,
+    )
+
+
+class BondAngleRequest(BaseModel):
+    a: float
+    b: float
+    c: float
+    alpha: float = 90.0
+    beta: float = 90.0
+    gamma: float = 90.0
+    atom1: tuple[float, float, float]
+    vertex: tuple[float, float, float]
+    atom3: tuple[float, float, float]
+    minimum_image: bool = True
+
+
+@router.post("/bond-angle")
+def atomic_bond_angle(req: BondAngleRequest) -> dict[str, Any]:
+    """Angle atom1-vertex-atom3 from fractional unit-cell coordinates."""
+    return call_calc(
+        bond_angle,
+        req.a,
+        req.b,
+        req.c,
+        req.alpha,
+        req.beta,
+        req.gamma,
+        req.atom1,
+        req.vertex,
+        req.atom3,
+        minimum_image=req.minimum_image,
     )
 
 

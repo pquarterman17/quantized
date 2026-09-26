@@ -111,6 +111,7 @@ _OPS: list[CalcOp] = [
             "theoretical_density",
             "plane_spacings",
             "interplanar_angle",
+            "bond_angle",
         ],
     ),
     *_ops("sld", sld_formula, ["sld_from_formula"]),

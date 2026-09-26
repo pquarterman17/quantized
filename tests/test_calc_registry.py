@@ -37,6 +37,7 @@ _EXPECTED_OPERATIONS_BY_DOMAIN = {
         "theoretical_density",
         "plane_spacings",
         "interplanar_angle",
+        "bond_angle",
     },
     "sld": {"sld_from_formula"},
     "electrical": {
