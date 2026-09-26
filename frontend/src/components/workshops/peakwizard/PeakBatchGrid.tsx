@@ -95,7 +95,7 @@ function Status({ r }: { r: BatchTableRow }): ReactNode {
 
 /** `rows` are shown as given (already sorted by `sort`); a header click asks
  *  the owner to sort by that column (again: the other direction). */
-export default function PeakBatchTable({ rows, sort, onSort }: {
+export default function PeakBatchGrid({ rows, sort, onSort }: {
   rows: BatchTableRow[];
   sort: BatchSort | null;
   onSort: (key: SortKey) => void;
