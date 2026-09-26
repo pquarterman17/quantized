@@ -6,21 +6,28 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import HomeScreen, { stateBadge } from "./HomeScreen";
+import { openRecentProject } from "../../commands/recentProjectsCommands";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
 import { useApp } from "../../store/useApp";
+import { useRecentProjects } from "../../store/recentProjects";
 import { useWorkingPaths } from "../../store/workingPaths";
 
 // Typed with the param it actually receives — `vi.fn(async () => …)` infers a
 // zero-arg signature, which type-checks in the test run but fails the build.
 const pathState = vi.fn(async (_path: string): Promise<string> => "ok");
 vi.mock("../../lib/desktopBridge", () => ({ pathState: (p: string) => pathState(p) }));
+vi.mock("../../commands/recentProjectsCommands", () => ({ openRecentProject: vi.fn() }));
 
 const noop = () => {};
 
 beforeEach(() => {
   vi.clearAllMocks();
   pathState.mockResolvedValue("ok");
-  useApp.setState({ recent: [], datasets: [] });
+  useApp.setState({
+    recent: [], datasets: [], activeId: null, importWizardOpen: false,
+    stageTab: "plot", groupKey: null,
+  });
+  useRecentProjects.setState({ recentProjects: [] });
   useWorkingPaths.setState({ paths: [], current: "" });
   useAutosaveStatus.setState({ health: { savedAt: null, error: null, count: 0 } });
 });
@@ -51,6 +58,44 @@ describe("HomeScreen", () => {
   it("always offers import", () => {
     render(<HomeScreen onImport={noop} />);
     expect(screen.getByRole("button", { name: /Import data/ })).toBeInTheDocument();
+  });
+
+  it("offers the guided import path without mutating the library", () => {
+    render(<HomeScreen onImport={noop} />);
+    screen.getByRole("button", { name: /Guided import/ }).click();
+    expect(useApp.getState().importWizardOpen).toBe(true);
+    expect(useApp.getState().datasets).toEqual([]);
+  });
+
+  it("reopens recent projects through the established safe reopen path", () => {
+    useRecentProjects.setState({
+      recentProjects: [{ name: "analysis.dwk", path: "/work/analysis.dwk", at: new Date().toISOString() }],
+    });
+    render(<HomeScreen onImport={noop} />);
+    screen.getByRole("button", { name: /analysis\.dwk/ }).click();
+    expect(openRecentProject).toHaveBeenCalledWith("analysis.dwk", "/work/analysis.dwk");
+  });
+
+  it.each([
+    ["1-D", "example-1d-signal.csv", "plot", null],
+    ["Grouped", "example-grouped-lots.csv", "plot", 1],
+    ["2-D", "example-2d-map.csv", "map", null],
+  ] as const)("loads the %s example into its useful first view", async (button, name, stageTab, groupKey) => {
+    render(<HomeScreen onImport={noop} />);
+    screen.getByRole("button", { name: button }).click();
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(1));
+    const state = useApp.getState();
+    expect(state.datasets[0].name).toBe(name);
+    expect(state.stageTab).toBe(stageTab);
+    expect(state.groupKey).toBe(groupKey);
+  });
+
+  it("coalesces repeated example clicks while the lazy example is loading", async () => {
+    render(<HomeScreen onImport={noop} />);
+    const button = screen.getByRole("button", { name: "1-D" });
+    button.click();
+    button.click();
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(1));
   });
 
   it("lists recent files", () => {

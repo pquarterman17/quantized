@@ -18,11 +18,14 @@ import { useEffect, useState, useRef } from "react";
 import { plural } from "../../lib/plural";
 
 import { pathState, type PathState } from "../../lib/desktopBridge";
+import type { FirstRunExampleKind } from "../../lib/firstRunExamples";
 import { recentKey, recentParentLabel, relativeTime, type RecentFile } from "../../lib/recentFiles";
 import { reopenRecent } from "../../lib/reopenRecent";
+import { openRecentProject } from "../../commands/recentProjectsCommands";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
-import { useApp } from "../../store/useApp";
+import { nextDatasetId, useApp } from "../../store/useApp";
+import { useRecentProjects } from "../../store/recentProjects";
 import { useWorkingPaths } from "../../store/workingPaths";
 
 /** Short badge for a source's reachability. `ok`/`unknown` render nothing —
@@ -60,7 +63,10 @@ function useRecentStates(recent: RecentFile[]): Record<string, PathState> {
 export default function HomeScreen({ onImport }: { onImport: () => void }) {
   const recent = useApp((s) => s.recent);
   const removeRecent = useApp((s) => s.removeRecent);
+  const recentProjects = useRecentProjects((s) => s.recentProjects);
   const homeRef = useRef<HTMLDivElement>(null);
+  const exampleInFlight = useRef(false);
+  const [loadingExample, setLoadingExample] = useState<FirstRunExampleKind | null>(null);
   const paths = useWorkingPaths((s) => s.paths);
   const setPinned = useWorkingPaths((s) => s.setPinned);
   // Not `usePath`: a `use`-prefixed local reads as a React hook (and trips
@@ -68,6 +74,29 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
   const recordPathUse = useWorkingPaths((s) => s.use);
   const health = useAutosaveStatus((s) => s.health);
   const states = useRecentStates(recent);
+  const addExample = async (kind: FirstRunExampleKind): Promise<void> => {
+    if (exampleInFlight.current) return;
+    exampleInFlight.current = true;
+    setLoadingExample(kind);
+    // Examples are an optional first-run path. Keep their generators out of
+    // the already-tight eager bundle and load them only after an explicit
+    // click, just like the larger Library surfaces around this component.
+    try {
+      const { makeFirstRunExample } = await import("../../lib/firstRunExamples");
+      const example = makeFirstRunExample(kind);
+      const state = useApp.getState();
+      state.addDataset({ id: nextDatasetId(), name: example.name, data: example.data });
+      if (example.groupKey != null) useApp.getState().setGroupKey(example.groupKey);
+      useApp.getState().setStageTab(example.stageTab);
+      useApp.getState().setStatus(`loaded ${example.description.toLowerCase()}`);
+      // Success unmounts Home because the Library is no longer empty. Do not
+      // enqueue a redundant state reset on that disappearing component.
+    } catch {
+      exampleInFlight.current = false;
+      setLoadingExample(null);
+      useApp.getState().setStatus("example could not be loaded — try again");
+    }
+  };
 
   return (
     // tabIndex/keydown: hardening review fix — the recents ✕ removal needs a
@@ -76,13 +105,40 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
     // active dataset (lib/focusGuard.ts's incident class).
     <div ref={homeRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer} style={{ padding: 10, display: "flex", flexDirection: "column", gap: 12 }}>
       <div>
+        <div className="qzk-menu-label">Start here</div>
         <button className="qz-btn" onClick={onImport} style={{ width: "100%" }}>
           ⊞ Import data…
         </button>
+        <button
+          className="qzk-menu-item"
+          onClick={() => useApp.getState().setImportWizardOpen(true)}
+          style={{ width: "100%", marginTop: 4, textAlign: "center" }}
+        >
+          Guided import for unfamiliar files…
+        </button>
         <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
-          or drop files anywhere in this panel
+          Drop files anywhere here. Quantized plots the first usable columns;
+          then drag columns onto X, Y, or Y2 to change them.
         </div>
       </div>
+
+      {recentProjects.length > 0 && (
+        <div>
+          <div className="qzk-menu-label">Recent projects</div>
+          {recentProjects.slice(0, 4).map((project) => (
+            <button
+              key={project.path}
+              className="qzk-menu-item"
+              style={{ width: "100%", textAlign: "left" }}
+              title={project.path}
+              onClick={() => void openRecentProject(project.name, project.path)}
+            >
+              <span className="qzk-menu-trunc">{project.name}</span>
+              <span className="qz-shortcut">{relativeTime(project.at, Date.now())}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {recent.length > 0 && (
         <div>
@@ -167,6 +223,24 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
           ))}
         </div>
       )}
+
+      <div>
+        <div className="qzk-menu-label">Try an example</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 4 }}>
+          <button className="qzk-menu-item" disabled={loadingExample != null} title="Load a simple 1-D line example" onClick={() => void addExample("line")}>
+            {loadingExample === "line" ? "Loading…" : "1-D"}
+          </button>
+          <button className="qzk-menu-item" disabled={loadingExample != null} title="Load data grouped by lot" onClick={() => void addExample("grouped")}>
+            {loadingExample === "grouped" ? "Loading…" : "Grouped"}
+          </button>
+          <button className="qzk-menu-item" disabled={loadingExample != null} title="Load a small 2-D intensity map" onClick={() => void addExample("map")}>
+            {loadingExample === "map" ? "Loading…" : "2-D"}
+          </button>
+        </div>
+        <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
+          Examples are generated locally and never replace your files.
+        </div>
+      </div>
 
       <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
         {health.error ? (

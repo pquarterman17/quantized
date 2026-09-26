@@ -4614,10 +4614,27 @@ covers a much smaller subset and guards focus on Analyze.
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
-- [ ] Home foregrounds projects, drop/import, working path, first-plot path.
-- [ ] Familiar Origin gesture tips without copying Origin's architecture.
-- [ ] Optional 1-D, grouped, and 2-D examples.
-- [ ] Hints stop once learned.
+- [x] Home foregrounds projects, drop/import, working path, first-plot path.
+- [x] Familiar Origin gesture tips without copying Origin's architecture.
+- [x] Optional 1-D, grouped, and 2-D examples.
+- [x] Hints stop once learned.
+
+**Completed 2026-09-26 (ChatGPT-Sol, Home/onboarding lane).** The true-empty
+Library now presents one ordered start surface: ordinary import/drop, guided
+import for unfamiliar files, recent projects through the existing safe-reopen
+contract, recent files, and working paths. Concise copy names the next
+mouse-first gesture (drag channels to X/Y/Y2), complementing the existing
+dismiss-once interaction-hints card and its explicit Help-menu reopen command.
+Three client-only examples exercise distinct real application paths: a 1-D
+line, categorical grouped series with human-readable lot labels, and a 2-D
+map that opens directly in Map. Example generation is lazy, guarded against
+repeat clicks, visibly identified as synthetic, and never reads or rewrites a
+source file. Home itself is also a lazy Library region, so this first-run work
+reduced rather than consumed the eager-bundle margin. Unit coverage pins the
+data contracts, safe project-reopen delegation, guided-import action, and
+view selection; a real-browser journey pins grouped labels and the map path,
+including the latter at 100/125/200% scaling. The five-minute goal remains a
+timed owner-acceptance measurement under P0.1 rather than an automated claim.
 
 ### P3.3 — Accessibility/input-quality pass
 
