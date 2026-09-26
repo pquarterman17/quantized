@@ -78,12 +78,18 @@ export default function ConfirmDialog() {
       // whatever is focused instead.
       if ((e.target as HTMLElement | null)?.closest?.("button")) return;
       e.preventDefault();
+      // A DANGER confirm (an irreversible action, or the P2.5 "Create despite
+      // unit mismatch" override) is never confirmed by a bare Enter from
+      // outside the button row: the user must press the danger button itself
+      // (focus it and Enter/Space, or click). Focus lands on Cancel, so the
+      // ordinary keyboard path still works — Tab to the button, then Enter.
+      if (danger) return;
       resolve?.(true);
       close();
     };
     window.addEventListener("keydown", onKey, true);
     return () => window.removeEventListener("keydown", onKey, true);
-  }, [title, resolve, close]);
+  }, [title, resolve, close, danger]);
 
   // Escape always cancels — now as a `modal` surface in `lib/escapeStack.ts`,
   // so a dialog opened ON TOP of a pending confirmation takes the first
@@ -153,7 +159,9 @@ export default function ConfirmDialog() {
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2 id={titleId}>{title}</h2>
-        {message && <p id={messageId}>{message}</p>}
+        {/* pre-line: a multi-line message (the P2.5 transform review lists
+            one warning per line) keeps its line breaks. */}
+        {message && <p id={messageId} style={{ whiteSpace: "pre-line" }}>{message}</p>}
         {/* #17: a destructive confirm is SEPARATED from Cancel rather than
             sitting flush against it as an equal-width twin -- order stays
             secondary-first/primary-last, but the irreversible button is no

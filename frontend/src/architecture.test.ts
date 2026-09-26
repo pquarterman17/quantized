@@ -86,6 +86,9 @@ function offenders(re: RegExp, allow: string[]): string[] {
 // durable dataset ids.  A restored project can already contain any id minted
 // during an earlier page lifetime, so every dataset producer must draw from
 // the workspace-wide sequence instead of restarting at 1 after reload.
+const PRIVATE_ID_SEQUENCE =
+  /(?:const\s+id\s*=|id:)\s*`(?:bgsub|hystbg|magbg|magunit|refl-model|refl-sld|demo|sample|tplf|subset|sqlite|math|digi|impwiz|tplb|tplsum|fftthk|reflfft|tab|transform)-/;
+
 describe("workshop dataset identity", () => {
   const migrated = [
     "/components/workshops/baseline/useBaseline.ts",
@@ -98,24 +101,40 @@ describe("workshop dataset identity", () => {
     "/components/Library/folderOps.ts",
     "/components/Stage/worksheet/useWorksheetView.ts",
     "/components/workshops/database/SqliteQueryDialog.tsx",
-    "/components/workshops/datasetmath/useDatasetMath.ts",
+    // P2.5: dataset math + the worksheet reshapes now commit through
+    // lib/transformRun.ts (shared with pipeline replay), which mints the id.
+    "/lib/transformRun.ts",
     "/components/workshops/digitizer/useDigitizer.ts",
     "/components/workshops/importwizard/useImportWizard.ts",
     "/components/workshops/pipeline/useTemplates.ts",
     "/components/workshops/reductions/useFftThickness.ts",
     "/components/workshops/reductions/useReflectivityFft.ts",
     "/components/workshops/tabulate/useTabulate.ts",
+  ];
+
+  // P2.5 moved these two producers' id minting into lib/transformRun.ts, so
+  // they no longer call nextDatasetId() themselves — but they must still never
+  // grow a PRIVATE sequence back (PR #431 review: that half of the check had
+  // been lost with them).
+  const delegating = [
+    "/components/workshops/datasetmath/useDatasetMath.ts",
     "/lib/worksheetTransformCommands.ts",
   ];
+
+  it("keeps delegating producers free of a private dataset-id sequence", () => {
+    const found = sources().filter(([path]) => delegating.some((suffix) => path.endsWith(suffix)));
+    expect(found.map(([path]) => path)).toHaveLength(delegating.length);
+    for (const [path, src] of found) {
+      expect(src, `${path} must not restore a private durable dataset-id sequence`).not.toMatch(PRIVATE_ID_SEQUENCE);
+    }
+  });
 
   it("keeps the BUG-020 workshop producers on the shared dataset-id sequence", () => {
     const workshopSources = sources().filter(([path]) => migrated.some((suffix) => path.endsWith(suffix)));
     expect(workshopSources.map(([path]) => path)).toHaveLength(migrated.length);
     for (const [path, src] of workshopSources) {
       expect(src, `${path} must mint durable ids through store/idSeq.ts`).toContain("nextDatasetId()");
-      expect(src, `${path} must not restore a private durable dataset-id sequence`).not.toMatch(
-        /(?:const\s+id\s*=|id:)\s*`(?:bgsub|hystbg|magbg|magunit|refl-model|refl-sld|demo|sample|tplf|subset|sqlite|math|digi|impwiz|tplb|tplsum|fftthk|reflfft|tab|transform)-/,
-      );
+      expect(src, `${path} must not restore a private durable dataset-id sequence`).not.toMatch(PRIVATE_ID_SEQUENCE);
     }
   });
 });
@@ -487,9 +506,14 @@ const STORE_PINS: Record<string, number> = {
   // `.map`/`.filter` even though its content is unchanged) was written and
   // run green against the PRE-extraction code and passes byte-unchanged
   // after the move.
-  // 1386 -> 1383 (2026-09-25, P2.6): one multi-line import folded, funding
-  //   the `statLevels` PlotView field.
-  "/store/useApp.ts": 1383,
+  // 1386 -> 1340 (2026-09-25, P2.5 opener): `mergeSelected`'s body moved to
+  // lib/transformRun.ts (lazy) so the merge could gain its unit/label review
+  // and a recorded pipeline step, and `clearAll` (literally loadWorkspace
+  // with an empty workspace) moved beside loadWorkspace in
+  // store/workspaceHydration.ts; ratcheted down with the extraction.
+  // 1340 -> 1338 (2026-09-26, P2.6 merge): one multi-line import folded,
+  // funding the `statLevels` PlotView field (net -2 lines).
+  "/store/useApp.ts": 1338,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

@@ -1,24 +1,22 @@
 import { askParams, type ParamField, type ParamValues } from "../components/overlays/ParamDialog";
 import type { StoreGet } from "./exportActive";
-import { analysisData } from "./rowstate";
-import type { DataStruct, Dataset } from "./types";
+import type { DataStruct } from "./types";
 import type { AggregateMode, JoinMode } from "./worksheetTransforms";
-import { nextDatasetId } from "../store/useApp";
 
-/** `lib/worksheetTransforms.ts` holds ~200 lines of reshape math (transpose,
- *  stack, unstack, join, with their own cell-count guards) that nothing needs
- *  before first paint — every entry point below is a Data-menu command — so it
- *  is deferred behind a dynamic import, which takes it out of the eager `index`
- *  chunk with no API change (the commands were already async inside).
+/** The Data-menu reshape dialogs (transpose / stack / unstack / join). Each
+ *  collects its parameters, then hands them to `lib/transformRun.ts`, which
+ *  computes the result, shows the P2.5 warning review (duplicate keys, rows
+ *  lost, unit mismatch — the last needs an explicit confirm) BEFORE anything is
+ *  created, stamps the warnings into the derived dataset's metadata, and
+ *  records a replayable pipeline step. The same function replays that step.
  *
- *  Each command STARTS the fetch before it opens its `ParamDialog` and awaits it
- *  only after the dialog resolves, so the download overlaps the user's
- *  think-time instead of landing between OK and the result. A review round
- *  caught the first version awaiting it after the dialog while its comment
- *  claimed the dialog covered the fetch — it didn't; this shape makes the claim
- *  true. A chunk-load failure (offline, evicted asset) is a new possibility and
- *  surfaces through `withErrors` below as Vite's own message. */
-const transforms = () => import("./worksheetTransforms");
+ *  `lib/worksheetTransforms.ts` (the reshape math) and `transformRun.ts` load
+ *  behind ONE dynamic import. Each command STARTS the fetch before it opens its
+ *  `ParamDialog` and awaits it only after the dialog resolves, so the download
+ *  overlaps the user's think-time instead of landing between OK and the result.
+ *  A chunk-load failure (offline, evicted asset) surfaces through `withErrors`
+ *  below as Vite's own message. */
+const runner = () => import("./transformRun");
 
 function columnOptions(data: DataStruct): string[] {
   return ["-1: X / time", ...data.labels.map((label, index) => `${index}: ${label}`)];
@@ -28,26 +26,10 @@ function optionIndex(value: unknown): number {
   return Number.parseInt(String(value).split(":", 1)[0], 10);
 }
 
-function addDerived(s: StoreGet, sourceName: string, suffix: string, data: DataStruct): void {
-  const id = nextDatasetId();
-  s().addDataset({ id, name: `${sourceName} (${suffix})`, data });
-  s().setStatus(`created ${sourceName} (${suffix})`);
-}
-
 async function activeData(s: StoreGet): Promise<ReturnType<StoreGet>["datasets"][number] | null> {
   const id = s().activeId;
   if (!id) { s().setStatus("select a dataset first"); return null; }
   return (await s().resolveDataset(id)) ?? null;
-}
-
-/** The dataset's ANALYSIS view: rows the user excluded (#50) or filtered out
- *  (#53) are pruned. A reshape DERIVES a new dataset from the source's data, so
- *  it reads rows through the row-state chokepoint like every other consumer
- *  (architecture-guards #11) — `Dataset.data` deliberately stays full so the
- *  worksheet can grey excluded rows, which means reading it directly silently
- *  resurrects the rows the user just told us to drop. */
-function rowsOf(ds: Dataset): DataStruct {
-  return analysisData(ds) ?? ds.data;
 }
 
 async function withErrors(s: StoreGet, fn: () => Promise<void>): Promise<void> {
@@ -55,19 +37,26 @@ async function withErrors(s: StoreGet, fn: () => Promise<void>): Promise<void> {
   catch (error) { s().setStatus(error instanceof Error ? error.message : "worksheet transform failed"); }
 }
 
+/** Start the chunk fetch while a dialog is open; the dialog may be cancelled
+ *  and never await it, so its rejection is pre-handled. */
+function prefetch(): ReturnType<typeof runner> {
+  const pending = runner();
+  pending.catch(() => {});
+  return pending;
+}
+
 export function runTransposeWorksheet(s: StoreGet): void {
   void withErrors(s, async () => {
     const source = await activeData(s);
     if (!source) return;
-    const pending = transforms(); // starts downloading while the dialog is open
-    pending.catch(() => {}); // the dialog may be cancelled below and never await it
+    const pending = prefetch();
     const params = await askParams("Transpose worksheet", [{
       key: "confirm", label: "Create one output column per input row", type: "boolean", default: true,
       hint: "The source remains unchanged; original labels and units are kept in provenance.",
     }]);
     if (!params || !params.confirm) return;
-    const { transposeWorksheet } = await pending;
-    addDerived(s, source.name, "transposed", transposeWorksheet(rowsOf(source)));
+    const { runTransform, reviewTransform } = await pending;
+    await runTransform(s, { op: "transpose" }, source.id, reviewTransform);
   });
 }
 
@@ -75,17 +64,20 @@ export function runStackWorksheet(s: StoreGet): void {
   void withErrors(s, async () => {
     const source = await activeData(s);
     if (!source) return;
-    const pending = transforms(); // starts downloading while the dialog is open
-    pending.catch(() => {}); // the dialog may be cancelled below and never await it
+    const pending = prefetch();
     const params = await askParams("Stack columns to long form", [{
       key: "channels", label: "Channels (1-based, comma-separated)", type: "text",
       default: source.data.labels.map((_, index) => index + 1).join(","),
-      hint: "Produces X/time, Source channel, and Value columns; the source remains unchanged.",
+      hint: "Produces X/time, Source channel, and Value columns; channels with different units are flagged before anything is created.",
     }]);
     if (!params) return;
-    const channels = String(params.channels).split(",").map((token) => Number.parseInt(token.trim(), 10) - 1);
-    const { stackWorksheet } = await pending;
-    addDerived(s, source.name, "stacked", stackWorksheet(rowsOf(source), channels));
+    // Clean BEFORE recording: a stray token ("1,2,") would otherwise record
+    // NaN, which JSON saves as null and the replay then rejects.
+    const channels = [...new Set(
+      String(params.channels).split(",").map((token) => Number.parseInt(token.trim(), 10) - 1),
+    )].filter((c) => Number.isInteger(c) && c >= 0 && c < source.data.labels.length);
+    const { runTransform, reviewTransform } = await pending;
+    await runTransform(s, { op: "stack", channels }, source.id, reviewTransform);
   });
 }
 
@@ -100,19 +92,17 @@ export function runUnstackWorksheet(s: StoreGet): void {
       { key: "value", label: "Value column", type: "select", default: options[2] ?? options[1] ?? options[0], options },
       { key: "aggregate", label: "Duplicate key/category cells", type: "select", default: "mean", options: ["mean", "first", "last"] },
     ];
-    const pending = transforms(); // starts downloading while the dialog is open
-    pending.catch(() => {}); // the dialog may be cancelled below and never await it
+    const pending = prefetch();
     const params = await askParams("Unstack / pivot to wide form", fields);
     if (!params) return;
-    const { unstackWorksheet } = await pending;
-    const data = unstackWorksheet(
-      rowsOf(source),
-      optionIndex(params.key),
-      optionIndex(params.category),
-      optionIndex(params.value),
-      String(params.aggregate) as AggregateMode,
-    );
-    addDerived(s, source.name, "unstacked", data);
+    const { runTransform, reviewTransform } = await pending;
+    await runTransform(s, {
+      op: "unstack",
+      key: optionIndex(params.key),
+      category: optionIndex(params.category),
+      value: optionIndex(params.value),
+      aggregate: String(params.aggregate) as AggregateMode,
+    }, source.id, reviewTransform);
   });
 }
 
@@ -129,8 +119,7 @@ export function runJoinWorksheets(s: StoreGet): void {
       { key: "leftKey", label: "Active dataset key", type: "select", default: leftOptions[0], options: leftOptions },
       { key: "mode", label: "Rows to retain", type: "select", default: "inner", options: ["inner", "left", "right", "full"] },
     ];
-    const pending = transforms(); // starts downloading while the dialog is open
-    pending.catch(() => {}); // the dialog may be cancelled below and never await it
+    const pending = prefetch();
     const first = await askParams("Join datasets by numeric key — step 1 of 2", initial);
     if (!first) return;
     const rightId = candidates[datasetOptions.indexOf(String(first.right))]?.id;
@@ -139,17 +128,16 @@ export function runJoinWorksheets(s: StoreGet): void {
     const rightOptions = columnOptions(right.data);
     const second: ParamValues | null = await askParams("Join datasets by numeric key — step 2 of 2", [{
       key: "rightKey", label: `${right.name} key`, type: "select", default: rightOptions[0], options: rightOptions,
-      hint: "Duplicate keys use their first row to avoid an accidental many-to-many expansion.",
+      hint: "Duplicate keys use their first row. Duplicate, blank and unmatched keys and differing key units are counted for review before anything is created.",
     }]);
     if (!second) return;
-    const { joinWorksheets } = await pending;
-    const data = joinWorksheets(
-      rowsOf(left),
-      rowsOf(right),
-      optionIndex(first.leftKey),
-      optionIndex(second.rightKey),
-      String(first.mode) as JoinMode,
-    );
-    addDerived(s, `${left.name} + ${right.name}`, "joined", data);
+    const { runTransform, reviewTransform } = await pending;
+    await runTransform(s, {
+      op: "join",
+      leftKey: optionIndex(first.leftKey),
+      rightKey: optionIndex(second.rightKey),
+      mode: String(first.mode) as JoinMode,
+      with: { id: right.id, name: right.name },
+    }, left.id, reviewTransform);
   });
 }
