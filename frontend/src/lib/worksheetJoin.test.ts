@@ -95,6 +95,14 @@ describe("join by a text key", () => {
     expect(out).not.toHaveProperty("cat_levels");
   });
 
+  it("a numeric join keeps a categorical channel's level table (it used to drop it)", () => {
+    const l: DataStruct = { time: [1, 2], values: [[0], [1]], labels: ["grade"], units: [""], metadata: {}, cat_levels: { 0: ["lo", "hi"] }, level_order: { 0: [1, 0] } };
+    const r: DataStruct = { time: [1, 2], values: [[5], [6]], labels: ["b"], units: [""], metadata: {} };
+    const out = joinWorksheets(l, r, -1, -1, "inner");
+    expect(out.cat_levels).toEqual({ 0: ["lo", "hi"] });
+    expect(out.level_order).toEqual({ 0: [1, 0] });
+  });
+
   it("a recorded join step may name a text column as its key", () => {
     const p = transformParamsOf({ op: "join", leftKey: "ID", rightKey: 0, mode: "left", with: { id: "R", name: "r" } });
     expect(p).toEqual({ op: "join", leftKey: "ID", rightKey: 0, mode: "left", with: { id: "R", name: "r" } });
