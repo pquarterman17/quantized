@@ -17,7 +17,7 @@ import {
   mergeBatch,
   sortRows,
   type PrepOutcome,
-} from "./peakBatchTable";
+} from "./peakBatchRows";
 
 function fit(over: Parameters<typeof modelFitResponse>[0] = {}): PeakBatchFit {
   const { curves: _c, correlation: _r, ...rest } = modelFitResponse(over);

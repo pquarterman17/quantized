@@ -3316,7 +3316,7 @@ or crashing item is an error row — uncurated exception text never reaches
 it), cancel polled before every item AND before every model evaluation (new
 optional `abort_check` in `_bounded_lsq.solve_bounded` /
 `fit_peak_model`), total deadline -> named "not_run" rows. A Classic-engine
-recipe is refused with the way out. TABLE (`peakBatchTable.ts` +
+recipe is refused with the way out. TABLE (`peakBatchRows.ts` +
 `PeakBatchTable.tsx`): one row per (dataset, peak) — shape, centre / FWHM /
 height / area +- stderr ("—" with `modelFitReasons`' reason on hover),
 status, R², the objective under its honest label (SSR, or χ² only when
@@ -3333,7 +3333,7 @@ recovery on 3 synthetic datasets, isolation incl. an unexpected exception,
 cancel between items and mid-fit, total + per-item deadline, progress
 propagation), `tests/test_api_peak_model_batch.py` (real job queue, rows ==
 calc, error row, cancel via `/api/jobs` mid-fit, ASCII 422s, caps); vitest
-`peakBatchTable` (incl. `.dwk` save/reopen of the table), `peakBatchPrep`
+`peakBatchRows` (incl. `.dwk` save/reopen of the table), `peakBatchPrep`
 (item == the wizard's body with stored edits; by-name columns; reasons),
 `PeakBatchView` (run, isolation, SSR/χ², reasons, sort, cancel while
 preparing / fitting / on close, failed job, CSV, add-as-table provenance,

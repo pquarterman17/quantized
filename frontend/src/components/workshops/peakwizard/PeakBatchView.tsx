@@ -1,7 +1,7 @@
 // Peak Analyzer — "Batch" mode (audit P2.4 slice 4): pick a saved recipe and
 // datasets, run the recipe over each (./usePeakBatch: client prepares, one
 // job on the queue fits), watch n/N progress, cancel, then read / sort /
-// export the uncertainty-diagnostic table (./PeakBatchGrid) or add it to the
+// export the uncertainty-diagnostic table (./PeakBatchTable) or add it to the
 // library as a dataset — the standard derived-data path, so it saves with the
 // workspace and names the recipe and every source in its metadata.
 
@@ -13,8 +13,8 @@ import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { Button, Select, StatusDot } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
-import PeakBatchGrid from "./PeakBatchGrid";
-import { batchCsv, batchTableRows, nextSort, sortRows, type BatchSort } from "./peakBatchTable";
+import PeakBatchTable from "./PeakBatchTable";
+import { batchCsv, batchTableRows, nextSort, sortRows, type BatchSort } from "./peakBatchRows";
 import { usePeakBatch } from "./usePeakBatch";
 
 const faint = { color: "var(--text-faint)" } as const;
@@ -108,7 +108,7 @@ export default function PeakBatchView({ recipes, current, pollMs }: {
 
       {b.results && (
         <>
-          <PeakBatchGrid rows={shown} sort={sort} onSort={(key) => setSort((s) => nextSort(s, key))} />
+          <PeakBatchTable rows={shown} sort={sort} onSort={(key) => setSort((s) => nextSort(s, key))} />
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <Button size="sm" onClick={exportCsv}>Export CSV</Button>
             <Button size="sm" onClick={addTable}>Add as table</Button>
