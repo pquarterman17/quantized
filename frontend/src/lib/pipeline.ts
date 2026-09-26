@@ -11,8 +11,11 @@ import { lit } from "./macro";
 /** Step kinds. Runnable kinds re-execute against the active dataset;
  *  "ui" steps (axis toggles, titles, figure applies…) replay as script lines
  *  only and are skipped by the runner. "import" marks the input slot (a
- *  future template binds a file to it, #2). */
-export type StepKind = "ui" | "import" | "expression" | "correction" | "reset" | "fit";
+ *  future template binds a file to it, #2). "transform" (P2.5) derives a NEW
+ *  dataset from the target (join/stack/unstack/transpose/merge/split/dataset
+ *  math — lib/transformRun.ts owns its params); the runner then continues on
+ *  that output, exactly as recording did (the output became active). */
+export type StepKind = "ui" | "import" | "expression" | "correction" | "reset" | "fit" | "transform";
 
 export interface PipelineStep {
   id: string;
@@ -113,11 +116,15 @@ export const STEP_FIELDS: Record<string, { key: string; label: string }[]> = {
   fit: [{ key: "model", label: "fit model" }],
 };
 
+/** Every step kind a persisted .dwk / template may carry ("transform", P2.5:
+ *  join/stack/unstack/transpose/merge/split/dataset math). An unknown kind is
+ *  dropped on load. */
+export const STEP_KINDS: readonly string[] = ["ui", "import", "expression", "correction", "reset", "fit", "transform"];
+
 /** Validate persisted steps from a .dwk (v3): drop malformed entries, mint
  *  fresh ids (persisted ids could collide with this session's counter). */
 export function sanitizeSteps(v: unknown): PipelineStep[] {
   if (!Array.isArray(v)) return [];
-  const kinds: readonly string[] = ["ui", "import", "expression", "correction", "reset", "fit"];
   const out: PipelineStep[] = [];
   for (const s of v) {
     if (typeof s !== "object" || s === null) continue;
@@ -125,7 +132,7 @@ export function sanitizeSteps(v: unknown): PipelineStep[] {
     if (
       typeof o.label !== "string" ||
       typeof o.code !== "string" ||
-      !kinds.includes(String(o.kind)) ||
+      !STEP_KINDS.includes(String(o.kind)) ||
       typeof o.params !== "object" ||
       o.params === null
     ) {

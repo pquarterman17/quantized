@@ -87,7 +87,9 @@ describe("safety for irreversible confirms (P3.5 review)", () => {
     // who opened this by holding Enter on the triggering button would have the
     // next auto-repeat land here as a confirm, before reading the question —
     // on a delete that cannot be undone, the whole safeguard bypassed.
-    const answer = askConfirm("Delete it?", "This cannot be undone.", "Delete", true);
+    // (Non-danger here: a DANGER confirm ignores off-button Enter entirely —
+    // see the P2.5 test below — so it could not show the repeat guard.)
+    const answer = askConfirm("Delete it?", "This cannot be undone.", "Delete", false);
     render(<ConfirmDialog />);
     await screen.findByText("Delete it?");
 
@@ -95,6 +97,20 @@ describe("safety for irreversible confirms (P3.5 review)", () => {
     expect(screen.getByText("Delete it?")).toBeInTheDocument(); // still open
 
     fireEvent.keyDown(window, { key: "Enter" }); // a deliberate press still works
+    expect(await answer).toBe(true);
+  });
+
+  it("P2.5: Enter off the buttons never confirms a DANGER dialog; the danger button itself still does", async () => {
+    const answer = askConfirm("Join: units differ", "Key units differ.", "Create despite unit mismatch", true);
+    render(<ConfirmDialog />);
+    await screen.findByText("Join: units differ");
+
+    // Focus moved off the buttons (onto the message / dialog body).
+    fireEvent.keyDown(screen.getByText("Key units differ."), { key: "Enter", bubbles: true });
+    fireEvent.keyDown(window, { key: "Enter" });
+    expect(screen.getByText("Join: units differ")).toBeInTheDocument(); // still open
+
+    fireEvent.click(screen.getByRole("button", { name: "Create despite unit mismatch" }));
     expect(await answer).toBe(true);
   });
 

@@ -39,7 +39,7 @@ import { deriveBundleRelativePath } from "./bundlePath";
 import { encodePersistedCells, type WireDataStruct } from "./nonFiniteCells";
 import type { DatasetSource } from "./datasetSource";
 import type { Dataset, FolderNode } from "./types";
-import { WORKSPACE_FORMAT, WORKSPACE_VERSION, type WorkspaceState } from "./workspace";
+import { WORKSPACE_FORMAT, WORKSPACE_VERSION, WORKSPACE_VERSION_TRANSFORM_STEPS, type WorkspaceState } from "./workspace";
 import type { PlotWindow } from "./plotview";
 
 /** A persisted dataset source entry — `kind: "path"` (today's shape,
@@ -159,7 +159,8 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
   const projectDir = opts?.projectDir;
   const doc: WorkspaceDoc = {
     format: WORKSPACE_FORMAT,
-    version: WORKSPACE_VERSION,
+    // v5 only when a `transform` step is present — see WORKSPACE_VERSION_TRANSFORM_STEPS.
+    version: (ws.macroSteps ?? []).some((st) => st.kind === "transform") ? WORKSPACE_VERSION_TRANSFORM_STEPS : WORKSPACE_VERSION,
     savedAt: new Date().toISOString(),
     folders: ws.folders ?? [],
     // PR 3 review finding #4: a workbook's `source` (import provenance) is

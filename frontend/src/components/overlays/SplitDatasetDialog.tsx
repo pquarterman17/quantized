@@ -20,6 +20,8 @@ import {
   SPLIT_GROUP_CAP,
 } from "../../lib/datasetsplit";
 import { pickDefaultSplitColumn } from "../../lib/datasetsplitDefault";
+import { analyzeSplit, columnName } from "../../lib/transformWarnings";
+import TransformWarningList from "./TransformWarningList";
 import { NumberField } from "../primitives/NumberField";
 import { Button, Select } from "../primitives";
 import { useApp } from "../../store/useApp";
@@ -237,6 +239,7 @@ export default function SplitDatasetDialog() {
             ))
           )}
         </div>
+        {canSplit && <TransformWarningList warnings={analyzeSplit(groups, columnName(dataset.data, col))} />}
         <div className="qz-btn-row">
           <Button onClick={close}>Cancel</Button>
           <Button variant="primary" disabled={!canSplit} onClick={runSplit}>

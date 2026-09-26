@@ -44,6 +44,12 @@ function StepEditor({
             Re-runs these corrections on the active dataset. Edit by re-recording.
           </div>
         )}
+        {step.kind === "transform" && (
+          <div className="qzk-ds-meta" style={{ color: "var(--text-faint)", marginTop: 4 }}>
+            Derives a new dataset from the current one; later steps continue on it. A second input is the
+            recorded dataset (matched by id — the step fails if it is no longer in this workspace).
+          </div>
+        )}
       </div>
     );
   }
