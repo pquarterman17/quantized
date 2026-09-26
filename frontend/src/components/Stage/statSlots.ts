@@ -36,6 +36,24 @@ export function spliceSlots<T>(
   return slots.map((s) => (s.values.length > 0 ? filled[k++] : make(s.label)));
 }
 
+/** Is `draw` the stats OF these filled slots — same count, and the same label
+ *  and n in the same order? Comparing counts alone (PR #433 review) let a
+ *  value/nesting/filter change that kept the filled COUNT splice the previous
+ *  pick's boxes one slot off until the refetch landed. Every box/violin entry
+ *  carries its group's label (backend echoes the request's `labels`; the
+ *  client fallback and violin builder copy `GroupSpec.label`) and its n. */
+function sameFilled(
+  draw: Extract<StatDrawData, { mode: "box" | "violin" | "strip" }>,
+  slots: readonly GroupSpec[],
+): boolean {
+  const filled = slots.filter((s) => s.values.length > 0);
+  const drawn: readonly { label: string; n: number }[] = draw.mode === "violin" ? draw.violins : draw.boxes;
+  return (
+    drawn.length === filled.length &&
+    drawn.every((d, i) => d.label === filled[i].label && d.n === filled[i].values.length)
+  );
+}
+
 /** `draw` with every empty slot of `slots` restored and `countLabels`
  *  attached (bar: attached only — its matrix already carries empty cells).
  *  Q-Q/histogram pass through untouched. A draw whose filled entries do not
@@ -49,9 +67,7 @@ export function withEmptySlots(
 ): StatDrawData | null {
   if (!draw || draw.mode === "qq" || draw.mode === "histogram") return draw;
   if (draw.mode === "bar") return { ...draw, countLabels };
-  const filled = slots.filter((s) => s.values.length > 0).length;
-  const drawn = draw.mode === "violin" ? draw.violins.length : draw.boxes.length;
-  if (drawn !== filled) return draw;
+  if (!sameFilled(draw, slots)) return draw;
   if (draw.mode === "box") {
     const points = draw.points ? spliceSlots(draw.points, slots, emptyPoints) : draw.points;
     return { ...draw, boxes: spliceSlots(draw.boxes, slots, emptyBox), points, countLabels };
