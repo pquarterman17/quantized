@@ -5,7 +5,9 @@
 // 0.6, height 400 on a 50 + (x - 30) background with a small deterministic
 // ripple), find the peaks, give each its own shape, fit via
 // /api/peaks/model-fit, and check the recovered peaks, the honest metrics
-// label, the plot overlay, and the report hand-off.
+// label, the plot overlay, publishing to the durable peak table (P2.1
+// uncertainties: the Peaks workshop then shows value ± error), and the report
+// hand-off.
 
 import { expect, test, type Page } from "@playwright/test";
 
@@ -28,6 +30,17 @@ function readStore(page: Page): Promise<{ fitPoints: number; fitMax: number; rep
       fitMax: y.length ? Math.max(...y) : 0,
       reports: s.reports.map((r) => JSON.stringify(r.report)),
     };
+  });
+}
+
+interface TableRow { center: number; centerErr: number | null; heightErr: number | null; model: string }
+
+function readPeakTable(page: Page): Promise<{ producer: string | undefined; rows: TableRow[] } | null> {
+  return page.evaluate(() => {
+    type S = { datasets: { peakTable?: { peaks: TableRow[]; provenance: { producer?: string } } }[] };
+    const s = (window as unknown as { __qz: { useApp: { getState: () => S } } }).__qz.useApp.getState();
+    const t = s.datasets[0]?.peakTable;
+    return t ? { producer: t.provenance.producer, rows: t.peaks } : null;
   });
 }
 
@@ -86,6 +99,20 @@ test.describe("Peak Analyzer mixed-shape model fit", () => {
     // components + residuals preview
     await expect(panel.getByRole("img", { name: /model fit preview/ })).toBeVisible();
 
+    // publish to the durable peak table (audit P2.1 uncertainties): one row
+    // per peak with its shape, value and standard error, producer model_fit
+    await panel.getByRole("button", { name: "Publish to peak table" }).click();
+    await expect(panel.getByRole("status").filter({ hasText: /published 2 peaks/ })).toBeVisible();
+    const table = await readPeakTable(page);
+    expect(table?.producer).toBe("model_fit");
+    expect(table?.rows.map((r) => r.model)).toEqual(["gaussian", "lorentzian"]);
+    for (const r of table?.rows ?? []) {
+      // every error the fit determined is a positive finite number, never 0 / NaN
+      expect(r.centerErr).toBeGreaterThan(0);
+      expect(r.heightErr).toBeGreaterThan(0);
+    }
+    expect(Math.abs((table?.rows[0].center ?? 0) - 36)).toBeLessThan(0.01);
+
     // ⑤ report through the peak_model_fit emitter
     await panel.locator(".qzk-wizard-step", { hasText: "Report" }).click();
     await panel.getByRole("button", { name: "→ Report" }).click();
@@ -94,5 +121,19 @@ test.describe("Peak Analyzer mixed-shape model fit", () => {
     expect(report).toContain("± area");
     expect(report).toContain("SSR = ");
     expect(report).not.toContain("χ²");
+
+    // the Peaks workshop shows the published table as value ± error
+    await runPaletteCommand(page, "Find peaks…");
+    const peaks = page.locator(".qzk-win").filter({ has: page.getByText("Peaks", { exact: true }) });
+    const fitted = peaks.getByRole("table", { name: "fitted peaks" });
+    await expect(fitted.locator("tbody tr")).toHaveCount(2, { timeout: 15_000 });
+    for (const [i, want] of [[0, 36], [1, 44]] as const) {
+      const cell = fitted.locator("tbody tr").nth(i).locator("td").nth(1);
+      await expect(cell).toHaveText(/^[\d.]+ ± [\d.e+-]+$/); // "value ± error", never "± —"
+      const [value, err] = ((await cell.textContent()) ?? "").split(" ± ").map(Number);
+      expect(Math.abs(value - want)).toBeLessThan(0.01);
+      expect(err).toBeGreaterThan(0);
+    }
+    await expect(peaks.getByText(/Peak Analyzer model fit/)).toBeVisible();
   });
 });

@@ -25,8 +25,10 @@ export default function ModelFitStep({ w }: { w: PeakWizardState }) {
         <Button
           size="sm"
           variant="primary"
-          disabled={m.busy || n === 0 || m.problems.length > 0}
-          title={m.problems.length > 0 ? "fix the parameter table (step 3) first" : undefined}
+          disabled={m.busy || m.publishing || n === 0 || m.problems.length > 0}
+          title={m.problems.length > 0
+            ? "fix the parameter table (step 3) first"
+            : m.publishing ? "publishing to the peak table — wait for it to finish" : undefined}
           onClick={() => void m.run()}
         >
           {m.busy ? "Fitting…" : r ? "Re-fit" : "Fit"}
@@ -41,7 +43,31 @@ export default function ModelFitStep({ w }: { w: PeakWizardState }) {
             Start from fit
           </Button>
         )}
+        {r && !m.busy && (
+          <Button
+            size="sm"
+            disabled={m.publishBlock !== null || m.publishing}
+            title={m.publishBlock ?? "save these peaks, with their errors and shapes, as this dataset's peak table"}
+            onClick={() => void m.publishToTable()}
+          >
+            Publish to peak table
+          </Button>
+        )}
       </div>
+      {r && !m.busy && m.publishBlock && !m.published && (
+        <div className="qzk-ds-meta" style={{ ...faint, marginTop: 6 }}>
+          Not publishable: {m.publishBlock}
+        </div>
+      )}
+      {m.publishNote && (
+        <div
+          role="status"
+          className="qzk-ds-meta"
+          style={{ color: m.publishNote.ok ? "var(--ok)" : "var(--danger)", marginTop: 6 }}
+        >
+          {m.publishNote.text}
+        </div>
+      )}
       <SetupProblems problems={m.problems} />
       {m.error && (
         <div role="alert" className="qzk-ds-meta qzk-msg" style={{ color: "var(--danger)", marginTop: 6 }}>

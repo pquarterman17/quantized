@@ -62,6 +62,7 @@ function makeState(overrides: Partial<StatStageState> = {}): StatStageState {
     busy: false,
     error: null,
     note: null,
+    groupNotice: null,
     draw: { mode: "box", boxes: [], valueLabel: "y", groupLabel: "grp" },
     drawFacets: null,
     exportFigure: vi.fn().mockResolvedValue(undefined),
@@ -377,5 +378,50 @@ describe("StatStage — connect-means line (JMP_GAP J5 residual)", () => {
     render(<StatStage />);
     screen.getByText("connect means").click();
     expect(setShowConnectMeans).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("StatStage — missing levels / unbalanced groups (P2.6 box 2)", () => {
+  beforeEach(() => {
+    useApp.setState({ statHideEmptyLevels: false, statShowGroupN: true });
+  });
+
+  it("the two options write the persisted PlotView fields", () => {
+    stateRef.current = makeState({ mode: "box" });
+    render(<StatStage />);
+    screen.getByText("empty levels").click();
+    expect(useApp.getState().statHideEmptyLevels).toBe(true);
+    screen.getByText("n").click();
+    expect(useApp.getState().statShowGroupN).toBe(false);
+  });
+
+  it("offers both options for every categorical mode, neither for Q-Q / histogram", () => {
+    for (const mode of ["box", "violin", "strip", "bar"] as const) {
+      stateRef.current = makeState({ mode, draw: null });
+      const { unmount } = render(<StatStage />);
+      expect(screen.getByText("empty levels")).toBeInTheDocument();
+      expect(screen.getByText("n")).toBeInTheDocument();
+      unmount();
+    }
+    for (const mode of ["qq", "histogram"] as const) {
+      stateRef.current = makeState({ mode, draw: null });
+      const { unmount } = render(<StatStage />);
+      expect(screen.queryByText("empty levels")).not.toBeInTheDocument();
+      unmount();
+    }
+  });
+
+  it("shows the one-line notice with the per-level breakdown as its tooltip", () => {
+    stateRef.current = makeState({
+      groupNotice: {
+        line: "1 empty level (n=0) · 2 rows dropped (2 non-finite, 0 excluded/filtered)",
+        detail: "grp = C: n=0, 2 non-finite",
+        caveat: null,
+      },
+    });
+    render(<StatStage />);
+    const notice = screen.getByTestId("stat-group-notice");
+    expect(notice).toHaveTextContent("1 empty level (n=0)");
+    expect(notice).toHaveAttribute("title", "grp = C: n=0, 2 non-finite");
   });
 });

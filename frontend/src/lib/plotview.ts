@@ -24,6 +24,7 @@ import {
   type PanelLayout,
 } from "./panelwindow";
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
+import { boolViewFields, sanitizeRegionShades } from "./plotviewSanitize";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
@@ -132,6 +133,12 @@ export interface PlotView {
   insetMode: boolean;
   polarMode: boolean;
   statMode: boolean;
+  /** P2.6 box 2 — Stat Stage display options that persist with the plot:
+   *  hide empty category levels (default false: an empty level keeps its slot
+   *  with an n=0 marker), and the per-group n annotation (default true, the
+   *  stage's long-standing `n=` captions). Screen and export both honour them. */
+  statHideEmptyLevels: boolean;
+  statShowGroupN: boolean;
   xLim: [number, number] | null;
   yLim: [number, number] | null;
   xStep: number | null;
@@ -202,6 +209,8 @@ export function defaultPlotView(): PlotView {
     insetMode: false,
     polarMode: false,
     statMode: false,
+    statHideEmptyLevels: false,
+    statShowGroupN: true,
     xLim: null,
     yLim: null,
     xStep: null,
@@ -456,10 +465,6 @@ function numOrNull(v: unknown): number | null {
   return typeof v === "number" && Number.isFinite(v) ? v : null;
 }
 
-function boolOrDefault(v: unknown, d: boolean): boolean {
-  return typeof v === "boolean" ? v : d;
-}
-
 function strOrDefault(v: unknown, d: string): string {
   return typeof v === "string" ? v : d;
 }
@@ -651,39 +656,6 @@ export function sanitizeShapes(v: unknown): Shape[] {
   return out;
 }
 
-/** Validate a persisted region-shade list (F2.3j — decoded film-stack shades
- *  became editable plot objects, not immutable provenance; previously this
- *  field was a bare `Array.isArray` cast). The `RegionShade` analogue of
- *  `sanitizeShapes` above: an entry missing its required `id`/finite
- *  `x1..y2`/string `fill` is dropped (nothing sane to fall back to for a
- *  single list entry); `axis` keeps only 0/1, same "drop the bad value, keep
- *  the entry" shape as an unrecognized annotation anchor. Region shades are
- *  always data-anchored (unlike `Shape`, there is no page-fraction variant),
- *  so coordinates are never clamped — same "never clamp DATA coords"
- *  convention `sanitizeShapes` already uses for a data-anchored shape. Never
- *  throws. */
-export function sanitizeRegionShades(v: unknown): RegionShade[] {
-  if (!Array.isArray(v)) return [];
-  const out: RegionShade[] = [];
-  for (const e of v) {
-    if (typeof e !== "object" || e === null) continue;
-    const o = e as Record<string, unknown>;
-    if (typeof o.id !== "string" || typeof o.fill !== "string") continue;
-    const coords = [o.x1, o.y1, o.x2, o.y2];
-    if (!coords.every((n): n is number => typeof n === "number" && Number.isFinite(n))) continue;
-    out.push({
-      id: o.id,
-      x1: o.x1 as number,
-      y1: o.y1 as number,
-      x2: o.x2 as number,
-      y2: o.y2 as number,
-      fill: o.fill,
-      ...(o.axis === 0 || o.axis === 1 ? { axis: o.axis } : {}),
-    });
-  }
-  return out;
-}
-
 /** Back-compat axis-scale resolver (MAIN #12): a NEW `scale` field (post-#12
  *  `.dwk`) wins when present and valid; else an OLD boolean `log` field
  *  (pre-#12 `.dwk`) maps `true` -> `"log"`, `false` -> `"linear"`; else `fb`. */
@@ -712,22 +684,15 @@ export function sanitizePlotView(v: unknown): PlotView {
   return {
     yScale: axisScaleOrDefault(o.yScale, o.yLog, fb.yScale),
     xScale: axisScaleOrDefault(o.xScale, o.xLog, fb.xScale),
-    showGrid: boolOrDefault(o.showGrid, fb.showGrid),
-    showLegend: boolOrDefault(o.showLegend, fb.showLegend),
+    ...boolViewFields(o, fb),
     legendPos: LEGEND_POS.includes(o.legendPos as LegendPos) ? (o.legendPos as LegendPos) : fb.legendPos,
     legendXY: legendXYOrNull(o.legendXY),
     // Same fraction shape + clamp-not-drop convention as `legendXY` (decode #52).
     legendFrameXY: legendXYOrNull(o.legendFrameXY),
-    legendStatic: boolOrDefault(o.legendStatic, fb.legendStatic),
     legendTitle: typeof o.legendTitle === "string" ? o.legendTitle : null,
     axisLabelOffsets: axisLabelOffsetsOrDefault(o.axisLabelOffsets),
     axisLabelStyles: axisLabelStylesOrDefault(o.axisLabelStyles),
     plotTemplate: strOrDefault(o.plotTemplate, fb.plotTemplate),
-    showAxisBox: boolOrDefault(o.showAxisBox, fb.showAxisBox),
-    stackMode: boolOrDefault(o.stackMode, fb.stackMode),
-    insetMode: boolOrDefault(o.insetMode, fb.insetMode),
-    polarMode: boolOrDefault(o.polarMode, fb.polarMode),
-    statMode: boolOrDefault(o.statMode, fb.statMode),
     xLim: isRange(o.xLim) ? o.xLim : null,
     yLim: isRange(o.yLim) ? o.yLim : null,
     xStep: numOrNull(o.xStep),
@@ -955,7 +920,7 @@ export function sanitizePlotWindows(
         o.linkGroup <= MAX_LINK_GROUP
           ? o.linkGroup
           : null,
-      pinned: boolOrDefault(o.pinned, false),
+      pinned: o.pinned === true, // a boolean, else false (the plain-boolean view fields: plotviewSanitize.boolViewFields)
       ...(snapshot ? { snapshot } : {}),
       ...(panel ? { panel } : {}),
     });

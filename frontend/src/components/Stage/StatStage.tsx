@@ -16,6 +16,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 
 import type { StatMode } from "../../lib/statstage";
+import { setStatHideEmptyLevels, setStatShowGroupN } from "../../store/statLevelOptions";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { Checkbox } from "../primitives/Checkbox";
 import { SegmentedControl } from "../primitives/SegmentedControl";
@@ -49,6 +50,9 @@ export default function StatStage() {
   const seriesOrder = useApp((s) => s.seriesOrder);
   const statStageSeed = useApp((s) => s.statStageSeed);
   const clearStatStageSeed = useApp((s) => s.clearStatStageSeed);
+  // P2.6 box 2: persisted with the plot (PlotView), so they ride the .dwk.
+  const hideEmptyLevels = useApp((s) => s.statHideEmptyLevels);
+  const showGroupN = useApp((s) => s.statShowGroupN);
   const st = useStatStage({
     active,
     yKeys,
@@ -56,7 +60,10 @@ export default function StatStage() {
     seriesOrder,
     seed: statStageSeed,
     onSeedConsumed: clearStatStageSeed,
+    hideEmptyLevels,
+    showGroupN,
   });
+  const categorical = st.mode === "box" || st.mode === "violin" || st.mode === "bar" || st.mode === "strip";
   const [exporting, setExporting] = useState(false);
 
   async function onExport() {
@@ -179,7 +186,7 @@ export default function StatStage() {
         <SegmentedControl options={MODE_OPTIONS} value={st.mode} onChange={st.setMode} />
         <span className="qzk-tool-sep" />
 
-        {(st.mode === "box" || st.mode === "violin" || st.mode === "bar" || st.mode === "strip") && (
+        {categorical && (
           <>
             <Picker label="group by">
               <Select
@@ -261,6 +268,19 @@ export default function StatStage() {
           </Checkbox>
         )}
 
+        {/* P2.6 box 2: an empty level keeps its slot (n=0) unless hidden;
+            the per-group n captions are optional. Both persist (PlotView). */}
+        {categorical && (
+          <Checkbox checked={!hideEmptyLevels} onChange={(v) => setStatHideEmptyLevels(!v)} title="Keep levels with no usable data on the axis, marked n=0">
+            empty levels
+          </Checkbox>
+        )}
+        {categorical && (
+          <Checkbox checked={showGroupN} onChange={setStatShowGroupN} title="Annotate each group's n above the plot">
+            n
+          </Checkbox>
+        )}
+
         {(st.mode === "qq" || st.mode === "histogram") && (
           <Picker label="column">
             <Select
@@ -331,7 +351,17 @@ export default function StatStage() {
           {st.error}
         </div>
       )}
-      {st.note && <div className="qzk-glass qzk-readout">{st.note}</div>}
+      {(st.note || st.groupNotice) && (
+        <div className="qzk-glass qzk-readout" style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", maxWidth: "70%" }}>
+          {st.note && <div>{st.note}</div>}
+          {/* One line; the per-level breakdown (dropped rows per level) is its tooltip. */}
+          {st.groupNotice && (
+            <div data-testid="stat-group-notice" title={st.groupNotice.detail}>
+              {st.groupNotice.line}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -78,6 +78,8 @@ function resetView(): void {
     insetMode: false,
     polarMode: false,
     statMode: false,
+    statHideEmptyLevels: false,
+    statShowGroupN: true,
     xLim: null,
     yLim: null,
     xStep: null,
