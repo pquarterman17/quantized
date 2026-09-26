@@ -37,12 +37,15 @@ from quantized.desktop_project_file import payload_declares_source
 from quantized.desktop_source_probe import probe_source_path, volume_present
 from unc_fakes import (
     ERROR_BAD_NETPATH,
+    ERROR_CANT_RESOLVE_FILENAME,
     ERROR_INVALID_NAME,
+    ERROR_INVALID_PARAMETER,
     ERROR_NETWORK_UNREACHABLE,
     NETWORK_EINVAL_WINERRORS,
     install_unc_fakes,
     unc_file,
     unc_share,
+    windows_oserror,
 )
 
 
@@ -450,30 +453,99 @@ def test_probe_source_offline_when_a_live_unc_share_answers_a_network_error(
 def test_probe_source_offline_for_an_unrecognised_oserror_on_a_unc_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A stat failure with no known code on a UNC path is still `offline`:
-    everything between this process and the file is network there."""
+    """A stat failure with no recognised code (a bare EINVAL, no winerror)
+    on a UNC path is still `offline`: everything between this process and
+    the file is network there. The same error on a local path is `invalid`
+    (`test_probe_generic_oserror_on_a_live_volume_is_invalid`)."""
     share = unc_share()
     install_unc_fakes(monkeypatch, share, mounted=True)
     real_stat = os.stat
     file_path = unc_file(share)
 
-    def eio_stat(p: Any, *a: Any, **kw: Any) -> os.stat_result:
+    def bare_einval_stat(p: Any, *a: Any, **kw: Any) -> os.stat_result:
         if p == file_path:
-            raise OSError(errno.EIO, "I/O error with no winerror", p)
+            raise OSError(errno.EINVAL, "EINVAL with no winerror", p)
         return real_stat(p, *a, **kw)
 
-    monkeypatch.setattr(os, "stat", eio_stat)
+    monkeypatch.setattr(os, "stat", bare_einval_stat)
     assert probe_source_path(file_path, compute_checksum=False)["state"] == "offline"
 
 
-def test_probe_source_invalid_for_a_malformed_name_on_a_live_unc_share(
+def test_probe_source_offline_for_invalid_parameter_on_a_unc_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The counterpart that keeps `invalid` meaningful: ERROR_INVALID_NAME
-    is also EINVAL, but it says the name is bad, not the link."""
+    """ERROR_INVALID_PARAMETER is generic: SMB redirectors and NAS firmware
+    return it for server-side faults, so on a share it is not taken as proof
+    of a malformed name."""
     share = unc_share()
-    install_unc_fakes(monkeypatch, share, mounted=True, stat_winerror=ERROR_INVALID_NAME)
-    assert probe_source_path(unc_file(share), compute_checksum=False)["state"] == "invalid"
+    install_unc_fakes(monkeypatch, share, mounted=True, stat_winerror=ERROR_INVALID_PARAMETER)
+    assert probe_source_path(unc_file(share), compute_checksum=False)["state"] == "offline"
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        pytest.param(ERROR_INVALID_NAME, id="ERROR_INVALID_NAME"),
+        pytest.param(ERROR_CANT_RESOLVE_FILENAME, id="ERROR_CANT_RESOLVE_FILENAME"),
+        pytest.param("ELOOP", id="ELOOP"),
+        pytest.param("ENOTDIR", id="ENOTDIR"),
+    ],
+)
+def test_probe_source_invalid_for_a_malformed_name_on_a_live_unc_share(
+    monkeypatch: pytest.MonkeyPatch, error: int | str
+) -> None:
+    """The counterpart that keeps `invalid` meaningful: these codes say the
+    name is bad, not the link, so the UNC rule must not turn them into an
+    `offline` that no reconnect would ever fix."""
+    share = unc_share()
+    file_path = unc_file(share)
+    if isinstance(error, int):
+        install_unc_fakes(monkeypatch, share, mounted=True, stat_winerror=error)
+    else:
+        install_unc_fakes(monkeypatch, share, mounted=True)
+        code = getattr(errno, error)
+        real_stat = os.stat
+
+        def errno_stat(p: Any, *a: Any, **kw: Any) -> os.stat_result:
+            if p == file_path:
+                raise OSError(code, error, p)
+            return real_stat(p, *a, **kw)
+
+        monkeypatch.setattr(os, "stat", errno_stat)
+    assert probe_source_path(file_path, compute_checksum=False)["state"] == "invalid"
+
+
+def test_unc_fakes_take_precedence_over_the_hosts_stat(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Models the windows-latest/3.11 host underneath the fakes: its real
+    stat for the share answers a network EINVAL. The fakes must answer for
+    every path under the share themselves, so a mounted share with an absent
+    file is still `missing`, whatever the host would have said."""
+    share = unc_share()
+    file_path = unc_file(share)
+    real_stat = os.stat
+
+    def host_stat(p: Any, *a: Any, **kw: Any) -> os.stat_result:
+        if isinstance(p, str) and p.startswith(share):
+            raise windows_oserror(ERROR_NETWORK_UNREACHABLE, p)
+        return real_stat(p, *a, **kw)
+
+    monkeypatch.setattr(os, "stat", host_stat)
+    install_unc_fakes(monkeypatch, share, mounted=True)
+    assert probe_source_path(file_path, compute_checksum=False)["state"] == "missing"
+
+
+def test_unc_fakes_match_case_insensitively(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Windows compares UNC paths case-insensitively and accepts either
+    slash, so a differently spelled path must not slip past the fakes."""
+    share = unc_share()
+    install_unc_fakes(monkeypatch, share, mounted=True, stat_winerror=ERROR_NETWORK_UNREACHABLE)
+    spelled = unc_file(share).upper().replace(chr(92), "/")
+    with pytest.raises(OSError) as info:
+        os.stat(spelled)
+    assert getattr(info.value, "winerror", None) == ERROR_NETWORK_UNREACHABLE
+    assert os.path.splitdrive(spelled)[0] == share.upper().replace(chr(92), "/")
 
 
 @pytest.mark.parametrize("as_type", ["pathlike", "bytes"])

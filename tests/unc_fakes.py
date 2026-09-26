@@ -33,8 +33,12 @@ ERROR_FILE_NOT_FOUND = 2
 ERROR_BAD_NETPATH = 53
 ERROR_UNEXP_NET_ERR = 59
 ERROR_SEM_TIMEOUT = 121
+ERROR_INVALID_PARAMETER = 87
 ERROR_INVALID_NAME = 123
 ERROR_NETWORK_UNREACHABLE = 1231
+ERROR_NOT_AUTHENTICATED = 1244
+ERROR_NO_LOGON_SERVERS = 1311
+ERROR_CANT_RESOLVE_FILENAME = 1921
 
 # The network codes seen on (or plausible for) a runner that cannot resolve
 # the fake server. CPython maps each of them to EINVAL.
@@ -84,10 +88,24 @@ def _as_text(p: object) -> str | None:
         return None
 
 
+def _unc_key(s: str) -> str:
+    """How Windows compares UNC paths: case-insensitive, either slash."""
+    return s.replace("/", BACKSLASH).casefold()
+
+
 def _under_share(p: object, share_root: str) -> bool:
     """Is ``p`` (str, bytes or PathLike) the share root or a path below it?"""
     s = _as_text(p)
-    return s is not None and (s == share_root or s.startswith(share_root + BACKSLASH))
+    if s is None:
+        return False
+    key, root = _unc_key(s), _unc_key(share_root)
+    return key == root or key.startswith(root + BACKSLASH)
+
+
+def _is_share_root(p: object, share_root: str) -> bool:
+    """The root itself, with or without one trailing separator."""
+    s = _as_text(p)
+    return s is not None and _unc_key(s).rstrip(BACKSLASH) == _unc_key(share_root)
 
 
 def install_unc_fakes(
@@ -119,7 +137,8 @@ def install_unc_fakes(
       its SMB lookup fails with a network error instead.
 
     Paths are matched after ``os.fsdecode``, so str, bytes and PathLike
-    arguments are all intercepted. File descriptors are not.
+    arguments are all intercepted, and the way Windows matches them: case-
+    insensitively, with either slash. File descriptors are not intercepted.
 
     Scope: every fake is installed on the shared ``os``/``os.path`` modules,
     so it is process-wide for the duration of the test, and monkeypatch
@@ -144,11 +163,11 @@ def install_unc_fakes(
         if not _under_share(p, share_root):
             return real_splitdrive(p)
         s = os.fspath(p)
-        root: Any = os.fsencode(share_root) if isinstance(s, bytes) else share_root
-        return (root, s[len(root) :])
+        n = len(os.fsencode(share_root)) if isinstance(s, bytes) else len(share_root)
+        return (s[:n], s[n:])  # ntpath keeps the caller's own spelling of the drive
 
     def fake_isdir(p: Any) -> bool:
-        if _as_text(p) in (share_root, share_root + BACKSLASH, share_root + os.sep):
+        if _is_share_root(p, share_root):
             return mounted
         if _under_share(p, share_root):
             return False
@@ -162,11 +181,9 @@ def install_unc_fakes(
     def fake_stat(p: Any, *a: Any, **kw: Any) -> os.stat_result:
         if not _under_share(p, share_root):
             return real_stat(p, *a, **kw)
-        text = _as_text(p)
-        assert text is not None
-        if mounted and text in (share_root, share_root + BACKSLASH):
+        if mounted and _is_share_root(p, share_root):
             return os.stat_result((stat.S_IFDIR | 0o755, 0, 0, 1, 0, 0, 0, 0, 0, 0))
-        raise windows_oserror(stat_winerror, text)
+        raise windows_oserror(stat_winerror, os.fsdecode(p))
 
     monkeypatch.setattr(os, "stat", fake_stat)
     monkeypatch.setattr(os.path, "splitdrive", fake_splitdrive)

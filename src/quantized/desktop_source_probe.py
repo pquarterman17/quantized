@@ -79,21 +79,23 @@ def volume_present(resolved: str) -> bool:
     return True  # not on a recognizable volume — cannot tell, so do not claim offline
 
 
-# Windows error codes a stat can return when the network, not the path, is
-# at fault. CPython maps every one of them to EINVAL (PC/errmap.h has no case
-# for them, so they fall through to its `default`), the same errno a genuinely
-# malformed name gets. Only `winerror` tells the two apart. ERROR_BAD_NETPATH
-# (53) and ERROR_BAD_NET_NAME (67) are listed for completeness even though
-# CPython maps them to ENOENT, which reaches the FileNotFoundError branch.
+# Windows error codes a stat can return when the network or the share
+# session, not the path, is at fault. CPython maps every one of them to EINVAL
+# (PC/errmap.h has no case for them, so they fall through to its `default`),
+# the same errno a genuinely malformed name gets, so only `winerror` tells the
+# two apart. ERROR_BAD_NETPATH (53) and ERROR_BAD_NET_NAME (67) are absent on
+# purpose: CPython maps them to ENOENT, so they reach the FileNotFoundError
+# branch and never this set.
 _WINDOWS_NETWORK_ERRORS = frozenset(
     {
         51,  # ERROR_REM_NOT_LIST
-        53,  # ERROR_BAD_NETPATH
         54,  # ERROR_NETWORK_BUSY
         55,  # ERROR_DEV_NOT_EXIST
         59,  # ERROR_UNEXP_NET_ERR
         64,  # ERROR_NETNAME_DELETED
-        67,  # ERROR_BAD_NET_NAME
+        66,  # ERROR_BAD_DEV_TYPE
+        70,  # ERROR_SHARING_PAUSED
+        71,  # ERROR_REQ_NOT_ACCEP
         121,  # ERROR_SEM_TIMEOUT
         1167,  # ERROR_DEVICE_NOT_CONNECTED
         1203,  # ERROR_NO_NET_OR_BAD_PATH
@@ -102,45 +104,56 @@ _WINDOWS_NETWORK_ERRORS = frozenset(
         1231,  # ERROR_NETWORK_UNREACHABLE
         1232,  # ERROR_HOST_UNREACHABLE
         1236,  # ERROR_CONNECTION_ABORTED
+        1244,  # ERROR_NOT_AUTHENTICATED (a lapsed share session)
+        1311,  # ERROR_NO_LOGON_SERVERS
+        1326,  # ERROR_LOGON_FAILURE (reconnecting with credentials fixes it)
         2250,  # ERROR_NOT_CONNECTED
     }
 )
 
-# Windows error codes that mean the NAME itself is bad. Both map to EINVAL, so
-# on a UNC path they are the one EINVAL that must stay `invalid`.
+# Windows error codes that say the NAME is bad, on any volume. Both map to
+# EINVAL, so they have to be singled out before the UNC rule below would call
+# them offline. ERROR_INVALID_PARAMETER (87) is deliberately NOT here: SMB
+# redirectors and NAS firmware return it for transient server-side faults too.
 _WINDOWS_MALFORMED_PATH_ERRORS = frozenset(
     {
-        87,  # ERROR_INVALID_PARAMETER
         123,  # ERROR_INVALID_NAME ("syntax is incorrect")
+        1921,  # ERROR_CANT_RESOLVE_FILENAME (a reparse-point loop)
     }
 )
 
-# The POSIX errnos a dead network or FUSE mount gives a stat. `getattr`
-# because not every platform's errno module defines all of them.
-_POSIX_NETWORK_ERRNOS = frozenset(
-    code
-    for code in (
-        getattr(errno, name, None)
-        for name in (
-            "ESTALE",
-            "ETIMEDOUT",
-            "EHOSTDOWN",
-            "EHOSTUNREACH",
-            "ENETDOWN",
-            "ENETUNREACH",
-            "ECONNREFUSED",
-            "ECONNRESET",
-            "ECONNABORTED",
-            "ENOTCONN",
-        )
+
+def _errnos(*names: str) -> frozenset[int]:
+    """The named errno values this platform defines. `getattr`, because not
+    every platform's errno module has all of them."""
+    return frozenset(
+        code for code in (getattr(errno, name, None) for name in names) if code is not None
     )
-    if code is not None
+
+
+# What a dead network or FUSE mount gives a stat on POSIX. EIO is included
+# because Linux CIFS and soft NFS mounts return it when the server goes away.
+_POSIX_NETWORK_ERRNOS = _errnos(
+    "ESTALE",
+    "EIO",
+    "ETIMEDOUT",
+    "EHOSTDOWN",
+    "EHOSTUNREACH",
+    "ENETDOWN",
+    "ENETUNREACH",
+    "ECONNREFUSED",
+    "ECONNRESET",
+    "ECONNABORTED",
+    "ENOTCONN",
 )
+
+# Errnos that describe the path's own shape, whatever volume it is on.
+_MALFORMED_PATH_ERRNOS = _errnos("ELOOP", "ENAMETOOLONG", "ENOTDIR")
 
 
 def _on_network_share(resolved: str) -> bool:
     """Is ``resolved`` a UNC path (``\\\\server\\share\\...``, or its
-    extended-length ``\\\\?\\UNC\\server\\share\\...`` spelling)?
+    ``\\\\?\\UNC\\...`` / ``\\\\.\\UNC\\...`` device spellings)?
 
     Decided from ``os.path.splitdrive`` alone, so it never touches the
     network. POSIX's splitdrive never returns a drive, so this is always
@@ -149,7 +162,10 @@ def _on_network_share(resolved: str) -> bool:
     this."""
     drive = os.path.splitdrive(resolved)[0].replace("/", "\\")
     if drive.startswith(("\\\\?\\", "\\\\.\\")):
-        return drive[4:].upper().startswith("UNC\\")
+        # ntpath returns `\\?\UNC\server\share` as the drive, but only
+        # `\\.\UNC` for the `\\.\` spelling.
+        prefix = drive[4:].upper()
+        return prefix == "UNC" or prefix.startswith("UNC\\")
     return drive.startswith("\\\\")
 
 
@@ -162,7 +178,9 @@ def _classify_stat_oserror(resolved: str, exc: OSError) -> str:
     second as `invalid` offers relink or cleanup for a file whose share is
     only flaky, so the order is:
 
-    1. A Windows malformed-name code: the path is bad wherever it points.
+    1. A malformed-name code (Windows ``winerror``, or an errno such as
+       ELOOP/ENOTDIR): the path is bad wherever it points, so the
+       pre-existing rule in step 4 applies even on a UNC path.
     2. A network error code (Windows ``winerror`` or POSIX errno): the file's
        volume is unreachable right now, so `offline`, even if the share root
        still answered ``isdir`` a moment ago.
@@ -175,12 +193,12 @@ def _classify_stat_oserror(resolved: str, exc: OSError) -> str:
     ``winerror`` is read with ``getattr`` because only Windows' OSError has
     the attribute."""
     winerror = getattr(exc, "winerror", None)
-    if winerror in _WINDOWS_MALFORMED_PATH_ERRORS:
-        return "invalid" if volume_present(resolved) else "offline"
-    if winerror in _WINDOWS_NETWORK_ERRORS or exc.errno in _POSIX_NETWORK_ERRNOS:
-        return "offline"
-    if _on_network_share(resolved):
-        return "offline"
+    malformed = winerror in _WINDOWS_MALFORMED_PATH_ERRORS or exc.errno in _MALFORMED_PATH_ERRNOS
+    if not malformed:
+        if winerror in _WINDOWS_NETWORK_ERRORS or exc.errno in _POSIX_NETWORK_ERRNOS:
+            return "offline"
+        if _on_network_share(resolved):
+            return "offline"
     return "invalid" if volume_present(resolved) else "offline"
 
 
@@ -229,7 +247,7 @@ def probe_source_path(resolved: str, *, compute_checksum: bool) -> dict[str, Any
     the stat and the read) degrades to a reported state, matching every other
     bridge method's "report, don't raise into JS" rule.
 
-    ``ValueError`` is caught right alongside ``OSError`` at both syscalls
+    ``ValueError`` is caught alongside ``OSError`` at both syscalls
     below (CI-found, Windows-only — this class is invisible on Linux/macOS,
     which degrade the same input through ``OSError`` instead): a malformed
     path (an embedded null byte, the concrete case; also a path over
@@ -243,6 +261,13 @@ def probe_source_path(resolved: str, *, compute_checksum: bool) -> dict[str, Any
     ``grant_source_paths``) — this docstring calls it out so the SAME
     malformed-path failure mode is provably degraded at every syscall a
     caller-supplied path reaches in this module, not just the first one.
+
+    The two are caught together but classified differently. A ``ValueError``
+    from ``os.stat`` is always a malformed path: ``invalid`` on a present
+    volume, ``offline`` on an absent one. An ``OSError`` other than ENOENT or
+    EACCES goes through :func:`_classify_stat_oserror`, which reads its error
+    code, because on Windows a network failure and a malformed name both
+    arrive as EINVAL.
     """
     try:
         st = os.stat(resolved)
@@ -256,8 +281,10 @@ def probe_source_path(resolved: str, *, compute_checksum: bool) -> dict[str, Any
     except OSError as exc:
         return {"state": _classify_stat_oserror(resolved, exc), "path": resolved}
     except ValueError:
-        # Always a malformed path (the embedded-null case above), so only an
-        # absent volume turns it into offline.
+        # A malformed path (see the docstring). It never reaches
+        # _classify_stat_oserror: there is no error code to read, and the
+        # network cannot raise ValueError, so only an absent volume makes it
+        # offline.
         return {
             "state": "invalid" if volume_present(resolved) else "offline",
             "path": resolved,

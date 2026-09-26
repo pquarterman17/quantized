@@ -15,6 +15,8 @@ import pytest
 from quantized.desktop_source_probe import _on_network_share, probe_source_path, volume_present
 from unc_fakes import (
     ERROR_INVALID_NAME,
+    ERROR_NO_LOGON_SERVERS,
+    ERROR_NOT_AUTHENTICATED,
     NETWORK_EINVAL_WINERRORS,
     unmounted_volume_path,
     windows_oserror,
@@ -140,14 +142,17 @@ def test_probe_generic_oserror_on_a_live_volume_is_invalid(
     assert probe_source_path(target, compute_checksum=False)["state"] == "invalid"
 
 
-@pytest.mark.parametrize("winerror", NETWORK_EINVAL_WINERRORS)
+@pytest.mark.parametrize(
+    "winerror", (*NETWORK_EINVAL_WINERRORS, ERROR_NOT_AUTHENTICATED, ERROR_NO_LOGON_SERVERS)
+)
 def test_probe_network_winerror_is_offline_on_a_live_non_unc_volume(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, winerror: int
 ) -> None:
     """A mapped network drive (``Z:``) is not recognisable as a share from
-    the path, and its root still answers ``isdir``. The winerror alone says
-    the link failed, so it is `offline`, not the `invalid` a plain EINVAL on
-    a live volume would get."""
+    the path, and its root still answers ``isdir`` (a lapsed SMB session
+    keeps the cached connection). The winerror alone says the link failed,
+    so it is `offline`, not the `invalid` a plain EINVAL on a live volume
+    would get."""
     target = str(tmp_path / "run.csv")
     real_stat = os.stat
 
@@ -175,13 +180,14 @@ def test_probe_malformed_winerror_on_a_live_volume_is_invalid(
     assert probe_source_path(target, compute_checksum=False)["state"] == "invalid"
 
 
-@pytest.mark.parametrize("name", ["ENOTCONN", "ETIMEDOUT", "EHOSTDOWN"])
+@pytest.mark.parametrize("name", ["ENOTCONN", "ETIMEDOUT", "EHOSTDOWN", "EIO"])
 def test_probe_posix_network_errno_is_offline_on_a_live_volume(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
 ) -> None:
     """The POSIX side of the same rule: a dead FUSE/sshfs mount answers
-    ENOTCONN, a hung NFS mount ETIMEDOUT, and neither is a malformed path
-    even when the path sits outside the known mount prefixes."""
+    ENOTCONN, a hung NFS mount ETIMEDOUT, a CIFS mount whose server went
+    away EIO, and none is a malformed path even when the path sits outside
+    the known mount prefixes."""
     code = getattr(errno, name, None)
     if code is None:
         pytest.skip(f"errno.{name} is not defined on this platform")
@@ -207,6 +213,7 @@ _B = chr(92)
         ("//server/share/f", True),
         (f"{_B}{_B}?{_B}UNC{_B}server{_B}share{_B}f", True),
         (f"{_B}{_B}?{_B}unc{_B}server{_B}share{_B}f", True),
+        (f"{_B}{_B}.{_B}UNC{_B}server{_B}share{_B}f", True),
         (f"{_B}{_B}?{_B}C:{_B}f", False),
         (f"{_B}{_B}.{_B}C:{_B}f", False),
         (f"C:{_B}f", False),
