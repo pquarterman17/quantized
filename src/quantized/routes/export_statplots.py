@@ -89,6 +89,13 @@ class StatplotFigureRequest(BaseModel):
     # (box/strip only) through each group's mean, in on-screen category
     # order. Default off -- today's behaviour, byte-identical.
     show_connect_means: bool = False
+    # P2.6 missing levels / unbalanced groups: per-slot count annotation text
+    # (parallel to `data`, authored by the frontend's lib/levelSlots so screen
+    # and export word it identically) and a one-line notice under the axes.
+    # Both absent = today's behaviour, except that an EMPTY group (now a legal
+    # empty level slot) is always annotated "n=0".
+    count_labels: list[str | None] | None = None
+    footnote: str | None = None
     # GUI_INTERACTION #12 slice 4b: one box/violin mini-panel per StatStage
     # "facet by" level instead of the flat single panel — the SAME
     # ceil(sqrt(n)) grid the interactive stage uses (calc.figure_facets).
@@ -131,6 +138,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 title=req.title, x_label=req.x_label, y_label=req.y_label, dpi=dpi,
                 show_points=req.show_points, point_row_indices=req.point_row_indices,
                 show_mean_ci=req.show_mean_ci, show_connect_means=req.show_connect_means,
+                count_labels=req.count_labels, footnote=req.footnote,
             )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -150,16 +158,21 @@ class CategoricalFacet(BaseModel):
     label: str
     groups: list[str]
     series: list[str]
-    values: list[list[float]]
+    values: list[list[float | None]]  # null = NaN (an all-NaN category)
     errors: list[list[float | None]] | None = None
 
 
 class CategoricalFigureRequest(BaseModel):
     groups: list[str]  # category tick labels, in axis order
     series: list[str]  # series (legend) labels, in stack/cluster order
-    values: list[list[float]]  # [group][series] bar height (mean)
+    # [group][series] bar height (mean); null = NaN, an empty category (P2.6)
+    values: list[list[float | None]]
     errors: list[list[float | None]] | None = None  # [group][series] SEM
     stacked: bool = False
+    # P2.6: per-bar count labels ([group][series] flattened; per group when
+    # stacked) and the unbalanced-groups footnote -- see StatplotFigureRequest.
+    count_labels: list[str | None] | None = None
+    footnote: str | None = None
     fmt: str = "pdf"
     style: str = "default"
     title: str = ""
@@ -207,7 +220,8 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
             img = render_categorical_figure(
                 req.groups, req.series, req.values, req.errors, stacked=req.stacked,
                 fmt=req.fmt, style=req.style, title=req.title, x_label=req.x_label,
-                y_label=req.y_label, dpi=dpi,
+                y_label=req.y_label, dpi=dpi, count_labels=req.count_labels,
+                footnote=req.footnote,
             )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

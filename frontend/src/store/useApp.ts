@@ -7,12 +7,7 @@ import type { Notation } from "../lib/format";
 import { recomputeWithErrors } from "../lib/formula";
 import { asAlreadyComputed } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
-import {
-  createFolder as treeCreateFolder,
-  moveDatasetToFolder as treeMoveDatasetToFolder,
-  moveFolder as treeMoveFolder,
-  renameFolder as treeRenameFolder,
-} from "../lib/foldertree";
+import { createFolder as treeCreateFolder, moveDatasetToFolder as treeMoveDatasetToFolder, moveFolder as treeMoveFolder, renameFolder as treeRenameFolder } from "../lib/foldertree";
 import { isOriginBookDataset } from "../lib/grouping";
 import type { SmartFolder } from "../lib/smartfolders";
 import type { WorkbookNode } from "../lib/workbooks";
@@ -82,6 +77,7 @@ import type { Composition } from "../lib/composition";
 import type { ReportEntry } from "../lib/report";
 import type { PanelFit } from "../lib/panelLayout";
 import type { PageSetup } from "../lib/pagesetup";
+import { defaultStatLevels, type StatLevelOptions } from "../lib/statLevelOptions";
 import type { FwhmResult } from "../lib/peakwidth";
 import type { IntegralResult } from "../lib/plotRangeSelection";
 import type { FigureDoc } from "../lib/figuredoc";
@@ -358,6 +354,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   insetMode: boolean; // show a magnifier inset over the plot
   polarMode: boolean; // render the active series in polar (angle vs radius)
   statMode: boolean; // render the Statistics stage (box/violin/qq/histogram, gap #16)
+  statLevels: StatLevelOptions; // P2.6: the stat stage's empty-level/n-annotation options (PlotView field)
   xLim: [number, number] | null; // explicit X range (null = autoscale)
   yLim: [number, number] | null; // explicit Y range (null = autoscale)
   // Origin's decoded major-tick increment for a FIXED log axis (plot-fidelity
@@ -723,6 +720,7 @@ export const useApp = create<AppState>((set, get) => ({
   insetMode: false,
   polarMode: false,
   statMode: false,
+  statLevels: defaultStatLevels(),
   xLim: null,
   yLim: null,
   xStep: null,

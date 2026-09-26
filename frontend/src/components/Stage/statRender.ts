@@ -20,7 +20,7 @@ import {
   type BarChartData,
 } from "../../lib/barlayout";
 import { niceTicks } from "../../lib/ticks";
-import { drawCategoryAxis } from "./statRenderAxes";
+import { drawCategoryAxis, drawCountLabel } from "./statRenderAxes";
 import {
   barValueDomain,
   categorySlots,
@@ -45,11 +45,13 @@ export interface ViolinGroup {
 }
 
 /** One group's raw finite points (rowIndex-tagged) for the "show points"
- *  jittered overlay (JMP_GAP J5 #1) — structurally the same shape
- *  `resolveGroupsIndexed` returns (`lib/statschooser.IndexedGroupSpec`). */
+ *  jittered overlay (JMP_GAP J5 #1) — structurally a `lib/levelSlots`
+ *  slot (`lib/statschooser.IndexedGroupSpec`). */
 export type BoxPointsGroup = IndexedGroupSpec;
 
-export type StatDrawData =
+/** `countLabels` (P2.6, box/violin/strip): per-slot count text authored by
+ *  `lib/levelSlots.countLabels`; absent = the legacy unconditional `n=K`. */
+export type StatDrawData = { countLabels?: (string | null)[] } & (
   | {
       mode: "box";
       boxes: BoxStat[];
@@ -108,7 +110,7 @@ export type StatDrawData =
       showMeanCI: boolean;
       /** See the `box` variant's `connectMeans` doc above. */
       connectMeans: boolean;
-    };
+    });
 
 export type Rect = { x: number; y: number; w: number; h: number };
 
@@ -123,21 +125,6 @@ export function fmt(v: number): string {
   const a = Math.abs(v);
   if (a !== 0 && (a < 1e-3 || a >= 1e5)) return v.toExponential(2);
   return Number(v.toPrecision(4)).toString();
-}
-
-/** "n=<count>" caption above a box/violin/strip (shared by all three). */
-export function drawCountLabel(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  top: number,
-  n: number,
-  muted: string,
-) {
-  ctx.fillStyle = muted;
-  ctx.font = "9px 'JetBrains Mono', monospace";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "bottom";
-  ctx.fillText(`n=${n}`, cx, top - 4);
 }
 
 function plotRect(w: number, h: number): Rect {
@@ -306,6 +293,7 @@ function drawBar(
       const hw = slot.halfWidth * 0.85 * rect.w;
       const segs = stackedSegments(g.series);
       segs.forEach((seg, si) => {
+        if (g.series[si].n === 0) return; // an empty cell (P2.6): no 1px sliver
         const color = seriesColor(si);
         const yTop = vy(seg.top);
         const yBot = vy(seg.base);
@@ -322,6 +310,9 @@ function drawBar(
         const top = stackedTotal(g.series);
         drawWhisker(ctx, cx, vy(top + last.sem), vy(top - last.sem), hw * 0.5, ink);
       }
+      // Stacked: one label per category (its top segment's n — the only SEM a
+      // stacked bar draws); none at all without authored labels, as before.
+      drawCountLabel(ctx, cx, vy(stackedTotal(g.series)), 0, muted, d.countLabels ? d.countLabels[gi] : null);
     } else {
       const subSlots = groupedBarSlots(nSeries);
       g.series.forEach((s, si) => {
@@ -332,6 +323,9 @@ function drawBar(
         const mean = Number.isFinite(s.mean) ? s.mean : 0;
         const yTop = vy(Math.max(mean, 0));
         const yBot = vy(Math.min(mean, 0));
+        const label = d.countLabels ? d.countLabels[gi * nSeries + si] : s.n > 0 ? undefined : null;
+        drawCountLabel(ctx, barCx, Math.min(yTop, zeroY), s.n, muted, label);
+        if (s.n === 0) return; // an empty cell (P2.6): its label is the mark
         ctx.globalAlpha = 0.75;
         ctx.fillStyle = color;
         ctx.fillRect(barCx - hw, yTop, hw * 2, Math.max(1, yBot - yTop));
@@ -342,7 +336,6 @@ function drawBar(
         if (Number.isFinite(s.sem)) {
           drawWhisker(ctx, barCx, vy(mean + s.sem), vy(mean - s.sem), hw * 0.6, ink);
         }
-        if (s.n > 0) drawCountLabel(ctx, barCx, Math.min(yTop, zeroY), s.n, muted);
       });
     }
   });
@@ -370,8 +363,9 @@ function drawViolins(
     const cx = rect.x + slot.cx * rect.w;
     const hw = slot.halfWidth * rect.w;
     const color = seriesColor(i);
+    drawCountLabel(ctx, cx, rect.y, v.n, muted, d.countLabels?.[i]);
     const outline = violinOutline(v.x, v.density);
-    if (outline.length < 2) return;
+    if (outline.length < 2) return; // an empty level slot (P2.6): label only
 
     ctx.beginPath();
     outline.forEach((p, k) => {
@@ -406,8 +400,6 @@ function drawViolins(
     ctx.beginPath();
     ctx.arc(cx, vy(med), 2, 0, 2 * Math.PI);
     ctx.fill();
-
-    drawCountLabel(ctx, cx, rect.y, v.n, muted);
   });
 }
 

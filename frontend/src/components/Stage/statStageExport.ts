@@ -38,8 +38,9 @@ import {
   type StatplotFacetSpec,
   type StatplotFigureSpec,
 } from "../../lib/api/figures";
+import type { BarChartData } from "../../lib/barlayout";
 import type { GroupSpec } from "../../lib/statschooser";
-import { finiteOf, type StatMode } from "../../lib/statstage";
+import { finiteOf, type IndexedGroupSpec, type StatMode } from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
 import type { FacetDraw } from "./useStatStageCompute";
 
@@ -58,10 +59,14 @@ export function buildExportSpec(
   pointRowIndices: number[][] | null = null,
   showMeanCI = false,
   showConnectMeans = false,
+  countLabels: (string | null)[] | null = null,
+  footnote: string | null = null,
 ): StatplotFigureSpec | null {
   if (mode === "box" || mode === "violin" || mode === "strip") {
-    const finiteGroups = groups.filter((g) => g.values.length > 0);
-    if (!finiteGroups.length) return null;
+    // P2.6: EVERY slot is sent, empty ones included (`data: []`) — the backend
+    // draws them as labelled `n=0` slots at the same axis positions the canvas
+    // uses. Only an all-empty plot has nothing to export.
+    if (!groups.some((g) => g.values.length > 0)) return null;
     // Violin has neither mark (JMP_GAP J5 is a box/strip feature) — omit
     // rather than send `false`/`null` no-ops on every violin export. Strip's
     // points overlay is always on (no toggle for it -- it's the whole plot),
@@ -78,8 +83,10 @@ export function buildExportSpec(
           };
     return {
       kind: mode,
-      data: finiteGroups.map((g) => g.values),
-      labels: finiteGroups.map((g) => g.label),
+      data: groups.map((g) => g.values),
+      labels: groups.map((g) => g.label),
+      ...(countLabels ? { count_labels: countLabels } : {}),
+      ...(footnote ? { footnote } : {}),
       fmt,
       title: `${valueLabel} by ${groupLabel}`,
       x_label: groupLabel,
@@ -114,6 +121,75 @@ export function buildExportSpec(
     y_label: fit ? "density" : "count",
     filename: `histogram_${valueLabel}`,
   };
+}
+
+/** Everything the Stat Stage's "Export figure" needs — the hook's render
+ *  inputs, passed explicitly (moved out of `useStatStage.ts` for P2.6, which
+ *  sits on a line pin). */
+export interface StatStageExportInputs extends FacetedExportInputs {
+  data: DataStruct | null;
+  barData: BarChartData | null;
+  /** The drawn SLOTS, empty ones included (P2.6). */
+  groups: GroupSpec[];
+  /** Slot-aligned points with their analysis-view row indices. */
+  indexedGroups: IndexedGroupSpec[];
+  valueCol: number;
+  dist: string;
+  bins: string;
+  fit: string | null;
+  showPoints: boolean;
+  showMeanCI: boolean;
+  showConnectMeans: boolean;
+  countLabels: (string | null)[];
+  footnote: string | null;
+}
+
+/** Render the Stat Stage's current plot server-side: the faceted grid when
+ *  one is drawn, else the flat bar / statplot figure. */
+export async function exportStatStageFigure(fmt: string, o: StatStageExportInputs): Promise<void> {
+  const { data, drawFacets, mode, barStack, groupLabel, barValueLabel, valueLabel, barData } = o;
+  if (!data) return;
+  // Faceted export (GUI_INTERACTION #12 slice 4b): drawFacets is set for
+  // exactly the modes that facet (box/violin/bar). Checked before the flat
+  // branches below.
+  if (drawFacets && drawFacets.length > 0) {
+    await exportFacetedFigure(fmt, o);
+    return;
+  }
+  if (mode === "bar") {
+    if (!barData || barData.groups.length === 0) return;
+    const spec: CategoricalFigureSpec = {
+      groups: barData.groups.map((g) => g.label),
+      series: barData.seriesLabels,
+      values: barData.groups.map((g) => g.series.map((s) => s.mean)),
+      errors: barData.groups.map((g) => g.series.map((s) => (Number.isFinite(s.sem) ? s.sem : null))),
+      stacked: barStack,
+      // P2.6: the canvas's per-bar (per-category when stacked) count labels.
+      count_labels: o.countLabels,
+      ...(o.footnote ? { footnote: o.footnote } : {}),
+      fmt,
+      title: `${barValueLabel} by ${groupLabel}`,
+      x_label: groupLabel,
+      y_label: barValueLabel,
+      filename: `bar_${barValueLabel}`,
+    };
+    await exportCategoricalFigure(spec);
+    return;
+  }
+  // Box's points overlay (JMP_GAP J5 #1) and Strip mode (#3, which always
+  // shows points) both need each group's ORIGINAL row indices --
+  // `point_row_indices` (parallel to the slots `buildExportSpec` sends, `[]`
+  // for an empty one) so the export scatters points in the SAME relative spot
+  // the screen does (identical deterministic-jitter hash, both sides).
+  const pointRowIndices =
+    mode === "strip" || (mode === "box" && o.showPoints)
+      ? o.indexedGroups.map((g) => g.points.map((p) => p.rowIndex))
+      : null;
+  const spec = buildExportSpec(
+    mode, data, o.groups, o.valueCol, valueLabel, groupLabel, o.dist, o.bins, o.fit, fmt,
+    o.showPoints, pointRowIndices, o.showMeanCI, o.showConnectMeans, o.countLabels, o.footnote,
+  );
+  if (spec) await exportStatplotFigure(spec);
 }
 
 /** Everything `exportFacetedFigure` used to close over as a method on the

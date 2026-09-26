@@ -49,6 +49,9 @@ export default function StatStage() {
   const seriesOrder = useApp((s) => s.seriesOrder);
   const statStageSeed = useApp((s) => s.statStageSeed);
   const clearStatStageSeed = useApp((s) => s.clearStatStageSeed);
+  // P2.6: the level-slot options are PlotView state (persisted per window).
+  const statLevels = useApp((s) => s.statLevels);
+  const setStatLevels = useApp((s) => s.setStatLevels);
   const st = useStatStage({
     active,
     yKeys,
@@ -56,7 +59,10 @@ export default function StatStage() {
     seriesOrder,
     seed: statStageSeed,
     onSeedConsumed: clearStatStageSeed,
+    hideEmptyLevels: statLevels.hideEmpty,
+    showGroupN: statLevels.showN,
   });
+  const slotted = st.mode === "box" || st.mode === "violin" || st.mode === "strip" || st.mode === "bar";
   const [exporting, setExporting] = useState(false);
 
   async function onExport() {
@@ -252,6 +258,20 @@ export default function StatStage() {
             mean ± CI
           </Checkbox>
         )}
+        {/* P2.6: empty level slots (declared levels / never-occurring nested
+            combinations, shown as labelled n=0 slots by default) and the
+            optional per-group n annotation. Faceted panels keep dropping
+            empty levels, so the toggles hide while a facet grid is drawn. */}
+        {slotted && !st.drawFacets && (
+          <>
+            <Checkbox checked={statLevels.hideEmpty} onChange={(v) => setStatLevels({ hideEmpty: v })}>
+              hide empty
+            </Checkbox>
+            <Checkbox checked={statLevels.showN} onChange={(v) => setStatLevels({ showN: v })}>
+              n
+            </Checkbox>
+          </>
+        )}
         {/* Connect-means "interaction plot" line (JMP_GAP J5 residual): only
             meaningful once a categorical "group by" column picks the
             categories -- hidden under the per-plotted-channel fallback. */}
@@ -331,7 +351,14 @@ export default function StatStage() {
           {st.error}
         </div>
       )}
-      {st.note && <div className="qzk-glass qzk-readout">{st.note}</div>}
+      {(st.note || st.levelNotice || st.dropped) && (
+        <div className="qzk-glass qzk-readout" data-testid="stat-diagnostics">
+          {[st.note, st.levelNotice].filter(Boolean).map((line) => (
+            <div key={line}>{line}</div>
+          ))}
+          {st.dropped && <div title={st.dropped.detail}>{st.dropped.text}</div>}
+        </div>
+      )}
     </div>
   );
 }

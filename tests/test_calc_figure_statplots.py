@@ -47,9 +47,25 @@ def test_grouped_requires_list_of_groups() -> None:
         render_statplot_figure("box", [])
 
 
-def test_group_with_no_finite_values_rejected() -> None:
+def test_all_groups_empty_is_rejected() -> None:
+    # P2.6 turned a single empty group into a legal empty level slot, but a
+    # request with NO finite value anywhere still has nothing to draw.
     with pytest.raises(ValueError, match="finite value"):
-        render_statplot_figure("violin", [[1.0, 2.0], [np.nan, np.inf]])
+        render_statplot_figure("violin", [[np.nan], [np.nan, np.inf]])
+
+
+@pytest.mark.parametrize("kind", ["box", "violin", "strip"])
+def test_an_empty_group_renders_as_a_labelled_n0_slot(kind: str) -> None:
+    # P2.6: this used to raise ("every group must have at least one finite
+    # value"); an empty group is now the export half of the stage's empty
+    # level slot -- its tick label survives and it is annotated n=0.
+    svg = render_statplot_figure(
+        kind, [[1.0, 2.0, 3.0], [np.nan, np.inf], [4.0, 5.0]],
+        labels=["lot = A", "lot = B", "lot = C"], fmt="svg",
+    ).decode("utf-8")
+    for label in ("lot = A", "lot = B", "lot = C"):
+        assert label in svg
+    assert svg.count("n=0") == 1
 
 
 # ── dpi preset resolution + mirrored box ticks (GAP_TIER3 item 2 follow-up) ─

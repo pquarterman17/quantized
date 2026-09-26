@@ -3,17 +3,22 @@
 import { describe, expect, it } from "vitest";
 
 import { resolveCategoryLabels } from "./barlayout";
+import { buildLevelSlots } from "./levelSlots";
 import {
   buildRunRequest,
   groupsByCategory,
-  groupsByCategoryIndexed,
   groupsByNestedCategory,
-  groupsByNestedCategoryIndexed,
   groupsFromColumns,
   reportRecord,
   resultRows,
 } from "./statschooser";
 import type { DataStruct } from "./types";
+
+/** The P2.6 slot builder's FILLED slots — the Stat Stage's points overlay
+ *  source since it replaced the `*Indexed` twins — for `byCol` (and a nested
+ *  `nestCol`) over `valueCol`. */
+const filledSlots = (data: DataStruct, valueCol: number, byCol: number, nestCol: number | null = null) =>
+  buildLevelSlots({ id: "t", name: "t", data }, valueCol, byCol, nestCol, [], true).slots;
 
 const DATA: DataStruct = {
   time: [1, 2, 3, 4, 5, 6],
@@ -56,7 +61,7 @@ describe("groupsByCategory", () => {
       "batch = Reference",
       "batch = Annealed",
     ]);
-    expect(groupsByCategoryIndexed(categorical, 0, 1).map((g) => g.label)).toEqual([
+    expect(filledSlots(categorical, 0, 1).map((g) => g.label)).toEqual([
       "batch = Reference",
       "batch = Annealed",
     ]);
@@ -116,11 +121,11 @@ describe("groupsByCategory honours the user's level ORDER (JMP_GAP J1)", () => {
     expect(gs[1].values).toEqual([10, 11]);
   });
 
-  it("reorders the INDEXED path identically — jitter points must not detach", () => {
-    // `groupsByCategoryIndexed` feeds the raw-point overlay, which hashes
+  it("reorders the SLOT path identically — jitter points must not detach", () => {
+    // The P2.6 slots feed the raw-point overlay, which hashes
     // (rowIndex, category). If the two paths ordered differently, a box would
     // sit over another category's points.
-    const gs = groupsByCategoryIndexed(ordered, 0, 1);
+    const gs = filledSlots(ordered, 0, 1);
     expect(gs.map((g) => g.label)).toEqual(["batch = Annealed", "batch = Reference"]);
     expect(gs[0].points.map((pt) => pt.rowIndex)).toEqual([3, 4, 5]);
     expect(gs[1].points.map((pt) => pt.rowIndex)).toEqual([0, 1]);
@@ -183,8 +188,9 @@ describe("membership stays the PARTITION's, not the level table's", () => {
     expect(gs).toHaveLength(1);
     expect(gs[0].label).toBe("batch = Kept");
     expect(gs[0].values).toEqual([10, 12]);
-    // And the indexed twin agrees, or a box would face an empty jitter bucket.
-    expect(groupsByCategoryIndexed(holey, 0, 1)).toHaveLength(1);
+    // And the (hide-empty) slot path agrees, or a box would face an empty
+    // jitter bucket. With hiding OFF that level is an explicit n=0 slot (P2.6).
+    expect(filledSlots(holey, 0, 1)).toHaveLength(1);
   });
 });
 
@@ -325,10 +331,10 @@ describe("groupsByNestedCategory — two-factor nesting (P2.6 / JMP lot-wafer)",
     expect(groupsByNestedCategory(named, 0, 1, 2)[0].label).toBe("lot = A / wafer = w1");
   });
 
-  it("the INDEXED twin matches label-for-label, and carries original row indices", () => {
+  it("the P2.6 slot path matches label-for-label, and carries original row indices", () => {
     // If these two ever diverge a box sits over another cell's jitter points.
     const flat = groupsByNestedCategory(LW, 0, 1, 2);
-    const idx = groupsByNestedCategoryIndexed(LW, 0, 1, 2);
+    const idx = filledSlots(LW, 0, 1, 2);
     expect(idx.map((g) => g.label)).toEqual(flat.map((g) => g.label));
     expect(idx.map((g) => g.points.map((p) => p.value))).toEqual(flat.map((g) => g.values));
     expect(idx[0].points.map((p) => p.rowIndex)).toEqual([0, 1]);

@@ -3,7 +3,7 @@
 // mocks the hook entirely and asserts on what the VIEW does with a given
 // StatStageState — the workshop-pattern split lets the two stay independent.
 
-import { render, screen } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -62,6 +62,8 @@ function makeState(overrides: Partial<StatStageState> = {}): StatStageState {
     busy: false,
     error: null,
     note: null,
+    levelNotice: null,
+    dropped: null,
     draw: { mode: "box", boxes: [], valueLabel: "y", groupLabel: "grp" },
     drawFacets: null,
     exportFigure: vi.fn().mockResolvedValue(undefined),
@@ -377,5 +379,37 @@ describe("StatStage — connect-means line (JMP_GAP J5 residual)", () => {
     render(<StatStage />);
     screen.getByText("connect means").click();
     expect(setShowConnectMeans).toHaveBeenCalledWith(true);
+  });
+});
+
+describe("StatStage — level slots (P2.6)", () => {
+  it("the hide-empty / n toggles write the PERSISTED plot-view option", () => {
+    useApp.setState({ statLevels: { hideEmpty: false, showN: true } });
+    stateRef.current = makeState({ mode: "box" });
+    render(<StatStage />);
+    act(() => screen.getByText("hide empty").click());
+    expect(useApp.getState().statLevels).toEqual({ hideEmpty: true, showN: true });
+    act(() => screen.getByText("n").click());
+    expect(useApp.getState().statLevels).toEqual({ hideEmpty: true, showN: false });
+  });
+
+  it("hides the toggles for modes without level slots, and while faceted", () => {
+    stateRef.current = makeState({ mode: "qq", draw: null });
+    const { unmount } = render(<StatStage />);
+    expect(screen.queryByText("hide empty")).not.toBeInTheDocument();
+    unmount();
+    stateRef.current = makeState({ mode: "box", drawFacets: [] });
+    render(<StatStage />);
+    expect(screen.queryByText("hide empty")).not.toBeInTheDocument();
+  });
+
+  it("shows the unbalanced notice and the dropped-row line with its per-level tooltip", () => {
+    stateRef.current = makeState({
+      levelNotice: "† Unbalanced groups (n = 2 to 12)",
+      dropped: { text: "Dropped 2 rows: 2 non-finite Y", detail: "lot = C: 2 non-finite Y" },
+    });
+    render(<StatStage />);
+    expect(screen.getByTestId("stat-diagnostics")).toHaveTextContent("† Unbalanced groups (n = 2 to 12)");
+    expect(screen.getByText("Dropped 2 rows: 2 non-finite Y")).toHaveAttribute("title", "lot = C: 2 non-finite Y");
   });
 });

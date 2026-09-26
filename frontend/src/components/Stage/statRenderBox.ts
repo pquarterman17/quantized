@@ -21,9 +21,9 @@ import {
   type CategorySlot,
 } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
+import { drawCountLabel } from "./statRenderAxes";
 import {
   drawCategoryAxis,
-  drawCountLabel,
   drawValueAxis,
   type BoxPointsGroup,
   type Rect,
@@ -179,6 +179,10 @@ export function drawBoxesWithMarks(
     const cx = rect.x + slot.cx * rect.w;
     const hw = slot.halfWidth * rect.w;
     const color = seriesColor(i);
+    drawCountLabel(ctx, cx, rect.y, b.n, muted, d.countLabels?.[i]);
+    // An empty level slot (P2.6, `n === 0`): its tick and count label ARE the
+    // mark — there is no box, whisker or mean to draw.
+    if (b.n === 0) return;
 
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.25;
@@ -221,8 +225,6 @@ export function drawBoxesWithMarks(
     const pointsGroup = d.points?.[i];
     if (pointsGroup) drawJitteredPoints(ctx, pointsGroup, cx, hw, vy, color);
     if (d.showMeanCI) drawMeanCIMarker(ctx, cx, b, vy, ink);
-
-    drawCountLabel(ctx, cx, rect.y, b.n, muted);
   });
 
   // Connect-means line last (JMP_GAP J5 residual) so it draws on top of
@@ -261,7 +263,7 @@ export function drawStrip(
     const b = d.boxes[i];
     if (d.showMeanCI && b) drawMeanCIMarker(ctx, cx, b, vy, ink);
 
-    drawCountLabel(ctx, cx, rect.y, g.points.length, muted);
+    drawCountLabel(ctx, cx, rect.y, g.points.length, muted, d.countLabels?.[i]);
   });
 
   // Connect-means line last (JMP_GAP J5 residual) so it draws on top of the

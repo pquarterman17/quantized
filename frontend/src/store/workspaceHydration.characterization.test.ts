@@ -592,6 +592,7 @@ describe("loadWorkspace — restored plot-window layout path (restoredHasPlot tr
       "stackMode",
       "staleDatasets",
       "staleFits",
+      "statLevels",
       "statMode",
       "status",
       "techniqueViewMemory",

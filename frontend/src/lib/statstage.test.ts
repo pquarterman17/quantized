@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 
+import { buildLevelSlots } from "./levelSlots";
 import type { DataStruct, Dataset } from "./types";
 import {
   barValueDomain,
@@ -14,7 +15,6 @@ import {
   groupBoxStatsClient,
   maskStaleCategoricalPicks,
   resolveGroups,
-  resolveGroupsIndexed,
   violinOutline,
   zeroBasedDomain,
 } from "./statstage";
@@ -230,12 +230,12 @@ describe("resolveGroups — NESTED second factor (Group R)", () => {
     );
   });
 
-  it("resolveGroupsIndexed nests IDENTICALLY — same cells, same order, same counts", () => {
+  it("the P2.6 slot builder nests IDENTICALLY — same cells, same order, same counts", () => {
     // The two must not diverge: the jittered points overlay is drawn into the
     // category slots the box stats produced, so a mismatch silently scatters
     // one cell's points over another cell's box.
     const plain = resolveGroups(ds.data, 0, 1, [1], 2);
-    const indexed = resolveGroupsIndexed(ds.data, 0, 1, [1], 2);
+    const indexed = buildLevelSlots(ds, 1, 0, 2, [1], true).slots;
     expect(indexed.map((g) => g.label)).toEqual(plain.map((g) => g.label));
     expect(indexed.map((g) => g.points.map((pt) => pt.value))).toEqual(
       plain.map((g) => g.values),
@@ -293,19 +293,23 @@ describe("maskStaleCategoricalPicks — the nested second factor (Group R)", () 
   });
 });
 
-describe("resolveGroupsIndexed (JMP_GAP J5 #1/#3 — points overlay / strip mode)", () => {
+// The points overlay / strip mode read their rows from the P2.6 slot builder
+// (lib/levelSlots), which replaced resolveGroupsIndexed: its FILLED slots must
+// partition exactly as resolveGroups does, or a box sits over another group's
+// jittered points.
+describe("buildLevelSlots filled slots (JMP_GAP J5 #1/#3 — points overlay / strip mode)", () => {
   const rows = Array.from({ length: 15 }, (_, i) => [i % 3, i * 1.1, i * 2.2]);
   const ds = makeDataset(["group", "valA", "valB"], rows);
 
   it("mirrors resolveGroups' partition (same labels, same order, same counts)", () => {
     const plain = resolveGroups(ds.data, 0, 1, [1, 2]);
-    const indexed = resolveGroupsIndexed(ds.data, 0, 1, [1, 2]);
+    const indexed = buildLevelSlots(ds, 1, 0, null, [1, 2], true).slots;
     expect(indexed.map((g) => g.label)).toEqual(plain.map((g) => g.label));
     expect(indexed.map((g) => g.points.length)).toEqual(plain.map((g) => g.values.length));
   });
 
   it("carries each point's ORIGINAL dataset row index alongside its value", () => {
-    const indexed = resolveGroupsIndexed(ds.data, 0, 1, [1, 2]);
+    const indexed = buildLevelSlots(ds, 1, 0, null, [1, 2], true).slots;
     // level 0 = rows 0,3,6,9,12 (i%3===0); values are i*1.1.
     expect(indexed[0].points.map((p) => p.rowIndex)).toEqual([0, 3, 6, 9, 12]);
     const values = indexed[0].points.map((p) => p.value);
@@ -313,7 +317,7 @@ describe("resolveGroupsIndexed (JMP_GAP J5 #1/#3 — points overlay / strip mode
   });
 
   it("falls back to one indexed group per plotted channel when groupCol is null", () => {
-    const indexed = resolveGroupsIndexed(ds.data, null, 1, [1, 2]);
+    const indexed = buildLevelSlots(ds, 1, null, null, [1, 2], true).slots;
     expect(indexed.map((g) => g.label)).toEqual(["valA", "valB"]);
     expect(indexed[0].points).toHaveLength(15);
     expect(indexed[0].points[0]).toEqual({ value: 0, rowIndex: 0 });

@@ -36,7 +36,7 @@ const finite = (xs: number[]): number[] => xs.filter((v) => Number.isFinite(v));
  *  `groupsFromColumns` honoured `metadata.x_column_name` for the x column while
  *  the two label builders hardcoded "x", so the same column was "Time (s)" in
  *  columns mode and "x" in a group label. */
-const columnDisplayName = (data: DataStruct, col: number): string =>
+export const columnDisplayName = (data: DataStruct, col: number): string =>
   col < 0
     ? String(data.metadata?.["x_column_name"] ?? "x")
     : (data.labels[col] ?? `col ${col}`);
@@ -177,12 +177,14 @@ function nestedLabel(
   return `${columnDisplayName(data, factorACol)} = ${aLabel}${NESTED_LABEL_SEP}${columnDisplayName(data, factorBCol)} = ${bLabel}`;
 }
 
-// ── Indexed groups (box/strip "show points" jitter, JMP_GAP J5 #1) ─────────
-// Same partitions as `groupsFromColumns`/`groupsByCategory` above, but each
-// value keeps its ORIGINAL dataset row index alongside it -- the jittered
-// point overlay hashes `(rowIndex, category)` (lib/jitter.ts), not a point's
-// position within the filtered group, so excluding a row (#50) never
-// reshuffles its still-visible neighbours.
+// ── Indexed points (box/strip "show points" jitter, JMP_GAP J5 #1) ─────────
+// A value kept with its row index -- the jittered point overlay hashes
+// `(rowIndex, category)` (lib/jitter.ts), not a point's position within the
+// filtered group, so excluding a row (#50) never reshuffles its still-visible
+// neighbours. The Stat Stage's indexed groups now come from the P2.6 slot
+// builder (`lib/levelSlots.buildLevelSlots`, which also keeps EMPTY levels);
+// the `*Indexed` twins of the builders above were retired with it, and
+// `statschooser.test.ts` pins that its filled slots partition identically.
 
 export interface IndexedPoint {
   value: number;
@@ -194,50 +196,12 @@ export interface IndexedGroupSpec {
   points: IndexedPoint[];
 }
 
-/** Columns mode, index-preserving counterpart to `groupsFromColumns`. */
-export function groupsFromColumnsIndexed(
-  data: DataStruct,
-  cols: readonly number[],
-): IndexedGroupSpec[] {
-  return cols.map((c) => {
-    const vs = colValues(data, c);
-    const points: IndexedPoint[] = [];
-    for (let i = 0; i < vs.length; i++) {
-      if (Number.isFinite(vs[i])) points.push({ value: vs[i], rowIndex: i });
-    }
-    return { label: columnDisplayName(data, c), points };
-  });
-}
-
-/** Index-preserving counterpart to `groupsByNestedCategory`. The two MUST stay
- *  in lockstep for the same reason the single-factor pair must: this one feeds
- *  the jittered raw-point overlay, so if they ordered or filtered differently a
- *  box would sit over another cell's points.
- *
- *  They cannot diverge, because there is only one walk — `nestedCells` below —
- *  and the plain variant is that walk with the row indices dropped. The two
- *  used to be copies kept honest by a comment and a test comparing their
- *  labels; the test still stands, but it is now pinning an identity rather than
- *  guarding a duplication. (A bundle-budget failure is what prompted looking at
- *  them again; the dedupe was worth ~0.1 kB of it — 895.2 kB -> 895.1 kB — not
- *  the 0.4 I first wrote down before measuring.) */
-export function groupsByNestedCategoryIndexed(
-  data: DataStruct,
-  valueCol: number,
-  factorACol: number,
-  factorBCol: number,
-): IndexedGroupSpec[] {
-  return nestedCells(data, valueCol, factorACol, factorBCol);
-}
-
 /** The ONE nested walk: one cell per (factor-A, factor-B) pair that has finite
  *  values, in nested display order, each carrying its points with their
  *  original row indices.
  *
- *  Always builds the indexed form even for the plain caller, which then drops
- *  the indices. The waste is one small object per finite value in a box plot's
- *  worth of data, and it buys the guarantee above — the two public builders
- *  partition, order and label identically because they are the same code. */
+ *  Builds the indexed form although its one caller (`groupsByNestedCategory`)
+ *  drops the indices — kept from when an indexed twin shared this walk. */
 function nestedCells(
   data: DataStruct,
   valueCol: number,
@@ -263,31 +227,6 @@ function nestedCells(
     }
   }
   return out;
-}
-
-/** Group-by mode, index-preserving counterpart to `groupsByCategory` — same
- *  display-order rule, and it MUST stay the same: this one feeds the raw-point
- *  overlay, so if the two ordered differently a box would sit over another
- *  category's jittered points. */
-export function groupsByCategoryIndexed(
-  data: DataStruct,
-  valueCol: number,
-  byCol: number,
-): IndexedGroupSpec[] {
-  const by = colValues(data, byCol);
-  const val = colValues(data, valueCol);
-  const parts = new Map<number, IndexedPoint[]>();
-  const n = Math.min(by.length, val.length);
-  for (let i = 0; i < n; i++) {
-    if (!Number.isFinite(by[i]) || !Number.isFinite(val[i])) continue;
-    const point: IndexedPoint = { value: val[i], rowIndex: i };
-    const bucket = parts.get(by[i]);
-    if (bucket) bucket.push(point);
-    else parts.set(by[i], [point]);
-  }
-  const levels = categoryLevels(data, byCol).filter((level) => parts.has(level));
-  const labels = categoryGroupLabels(data, byCol, levels);
-  return levels.map((level, i) => ({ label: labels[i], points: parts.get(level) ?? [] }));
 }
 
 /** Build the request for the RECOMMENDED endpoint from the same groups the

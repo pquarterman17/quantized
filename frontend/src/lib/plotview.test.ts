@@ -361,6 +361,25 @@ describe("sanitizeView — legendStatic / legendTitle (decode #52)", () => {
   });
 });
 
+describe("sanitizeView — statLevels (P2.6)", () => {
+  it("defaults to showing empty slots with the n annotation on", () => {
+    expect(defaultPlotView().statLevels).toEqual({ hideEmpty: false, showN: true });
+  });
+
+  it("round-trips the persisted options and coerces junk per key to the default", () => {
+    const keep = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), statLevels: { hideEmpty: true, showN: false } } })],
+      new Set(["d1"]),
+    );
+    expect(keep[0].view.statLevels).toEqual({ hideEmpty: true, showN: false });
+    const junk = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), statLevels: { hideEmpty: "yes", showN: 0 } } as unknown as PlotView })],
+      new Set(["d1"]),
+    );
+    expect(junk[0].view.statLevels).toEqual({ hideEmpty: false, showN: true });
+  });
+});
+
 describe("sanitizeView — annotations (MAIN #21 — page/data anchor)", () => {
   it("round-trips a data-anchored annotation (anchor absent) unchanged", () => {
     const out = sanitizePlotWindows(

@@ -11,13 +11,9 @@ import { channelModelingType, isCategorical } from "./modeling";
 import {
   NESTED_LABEL_SEP,
   groupsByCategory,
-  groupsByCategoryIndexed,
   groupsByNestedCategory,
-  groupsByNestedCategoryIndexed,
   groupsFromColumns,
-  groupsFromColumnsIndexed,
   type GroupSpec,
-  type IndexedGroupSpec,
 } from "./statschooser";
 import { tCritical95 } from "./tdist";
 import type { DataStruct, Dataset } from "./types";
@@ -193,28 +189,6 @@ export function resolveGroups(
   }
   const cols = plotted.length ? plotted : [valueCol];
   return groupsFromColumns(data, cols);
-}
-
-/** Index-preserving counterpart to `resolveGroups` -- Box's "show points"
- *  overlay and Strip mode (JMP_GAP J5 #1/#3) both need each point's
- *  ORIGINAL dataset row index (for the deterministic jitter hash), not just
- *  its value. Mirrors `resolveGroups`' own branch logic exactly (same
- *  partition, same fallback, same order), so a group's points line up 1:1
- *  with its `BoxStat` sibling from `resolveGroups`/`groupBoxStatsClient`. */
-export function resolveGroupsIndexed(
-  data: DataStruct,
-  groupCol: number | null,
-  valueCol: number,
-  plotted: readonly number[],
-  group2Col: number | null = null,
-): IndexedGroupSpec[] {
-  if (groupCol != null) {
-    return group2Col != null && group2Col !== groupCol
-      ? groupsByNestedCategoryIndexed(data, valueCol, groupCol, group2Col)
-      : groupsByCategoryIndexed(data, valueCol, groupCol);
-  }
-  const cols = plotted.length ? plotted : [valueCol];
-  return groupsFromColumnsIndexed(data, cols);
 }
 
 // ── Client-side box stats (offline fallback) ────────────────────────────────

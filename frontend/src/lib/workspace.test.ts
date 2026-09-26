@@ -1385,6 +1385,19 @@ describe("workspace plot windows (MULTI_PLOT_PLAN item 7 — additive-optional, 
     expect(loaded.focusedWindowId).toBe("w2");
   });
 
+  it("round-trips the stat stage's level-slot options (P2.6 statLevels)", () => {
+    const datasets = [makeDataset("a", "first")];
+    const view = { ...defaultPlotView(), statMode: true, statLevels: { hideEmpty: true, showN: false } };
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, plotWindows: [win({ view })], focusedWindowId: "w1" }));
+    expect(loaded.plotWindows[0].view.statLevels).toEqual({ hideEmpty: true, showN: false });
+    // A pre-P2.6 file (no statLevels) loads with today's behaviour.
+    const doc = JSON.parse(serializeWorkspace({ datasets, plotWindows: [win()] })) as {
+      plotWindows: { view: Record<string, unknown> }[];
+    };
+    delete doc.plotWindows[0].view.statLevels;
+    expect(parseWorkspace(JSON.stringify(doc)).plotWindows[0].view.statLevels).toEqual({ hideEmpty: false, showN: true });
+  });
+
   it("round-trips a canonical document and restores its projections", () => {
     const datasets = [makeDataset("a", "first")];
     const document = createFigureDocument({

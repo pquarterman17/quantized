@@ -22,6 +22,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from numpy.typing import ArrayLike  # noqa: E402
 
+from quantized.calc.figure_footnote import place_footnote  # noqa: E402
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_styles import figure_style  # noqa: E402
 from quantized.calc.statplots import box_stats as _box_stats  # noqa: E402
@@ -38,6 +39,7 @@ _FORMATS = ("pdf", "svg", "png", "tiff")
 STATPLOT_KINDS = ("box", "violin", "qq", "probability", "histogram", "strip")
 _GROUPED = ("box", "violin", "strip")
 _BOX_WIDTH = 0.5  # matplotlib boxplot's own default box width, data units
+_NESTED_SEP = " / "  # frontend statschooser.NESTED_LABEL_SEP
 
 
 def _clean_groups(groups: list[ArrayLike]) -> list[np.ndarray]:
@@ -71,6 +73,8 @@ def render_statplot_figure(
     point_row_indices: list[list[int]] | None = None,
     show_mean_ci: bool = False,
     show_connect_means: bool = False,
+    count_labels: list[str | None] | None = None,
+    footnote: str | None = None,
 ) -> bytes:
     """Render a statistical plot to image bytes.
 
@@ -99,6 +103,22 @@ def render_statplot_figure(
     on-screen category order — the "interaction plot" read for a grouped
     box/strip plot (reads the SAME ``box_stats`` mean as ``show_mean_ci``,
     never a second computation).
+
+    EMPTY SLOTS (P2.6 "missing levels are explicit"): a ``box``/``violin``/
+    ``strip`` group with no finite value is no longer rejected -- it is the
+    export half of the interactive stage's empty level slot (a declared level
+    with no rows, a level whose Y is all NaN/excluded, or a nested
+    combination that never occurs). It keeps its tick and label, draws no
+    glyph, and is annotated ``n=0``; the connect-means line breaks across it
+    exactly as the canvas polyline does. At least ONE group must still have a
+    finite value. ``count_labels`` (parallel to ``data``) overrides the
+    per-slot annotation text verbatim -- the frontend's
+    ``lib/levelSlots.countLabels`` is the single author of that text (the
+    optional ``n=K`` annotation and the low-n dagger caveat), so screen and
+    export cannot word it differently; ``None`` entries draw nothing, and an
+    absent/length-mismatched list falls back to annotating only the empty
+    slots. ``footnote`` renders one small line under the axes -- the
+    unbalanced-groups notice that explains the dagger.
 
     ``dpi`` defaults to the style preset's calibrated resolution when not
     given (``None``), same as ``calc.figure``'s ``resolved_dpi`` convention;
@@ -138,9 +158,12 @@ def render_statplot_figure(
                 ax, kind, data, labels, dist, bins, fit, st,
                 show_points=show_points, point_row_indices=point_row_indices,
                 show_mean_ci=show_mean_ci, show_connect_means=show_connect_means,
+                count_labels=count_labels,
             )
             if title:
-                ax.set_title(title)
+                # Count labels (P2.6) sit just above the axes, where the title
+                # would be -- lift the title clear of them.
+                ax.set_title(title, pad=14.0 if ax.texts else None)
             if x_label:
                 ax.set_xlabel(x_label)
             if y_label:
@@ -148,7 +171,11 @@ def render_statplot_figure(
             if not st.box_on:
                 ax.spines["top"].set_visible(False)
                 ax.spines["right"].set_visible(False)
-            fig.tight_layout()
+            rect = place_footnote(fig, footnote)
+            if rect is None:
+                fig.tight_layout()
+            else:
+                fig.tight_layout(rect=rect)
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=resolved_dpi)
             return buf.getvalue()
@@ -165,14 +192,14 @@ def _clean_groups_with_indices(
     dropping non-finite values. A missing/length-mismatched ``row_indices``
     entry degrades to a plain ``0..n-1`` sequence for that group (never
     raises -- jitter identity with the screen is best-effort, not load-
-    bearing for the plot to render)."""
+    bearing for the plot to render). A group with no finite value comes back
+    EMPTY (an explicit empty level slot, P2.6); only an all-empty request
+    raises."""
     groups: list[np.ndarray] = []
     idxs: list[list[int]] = []
     for i, g in enumerate(data):
         v = np.asarray(g, dtype=float).ravel()
         mask = np.isfinite(v)
-        if not mask.any():
-            raise ValueError("every group must have at least one finite value")
         groups.append(v[mask])
         raw_idx = row_indices[i] if row_indices is not None and i < len(row_indices) else None
         if raw_idx is not None and len(raw_idx) == v.size:
@@ -180,6 +207,8 @@ def _clean_groups_with_indices(
             idxs.append([int(x) for x in idx_arr])
         else:
             idxs.append(list(range(int(mask.sum()))))
+    if not any(g.size for g in groups):
+        raise ValueError("at least one group must have a finite value")
     return groups, idxs
 
 
@@ -208,6 +237,8 @@ def _overlay_mean_ci(ax: Any, groups: list[np.ndarray], ticks: list[int]) -> Non
     interactive stage's ``/api/statplots/box`` reads (its ``sem``/``ci_lo``/
     ``ci_hi`` fields) -- never a fresh/independent stats computation."""
     for g, tick in zip(groups, ticks, strict=True):
+        if g.size == 0:
+            continue  # an empty level slot has no mean to mark
         b = _box_stats(g)
         mean, lo, hi = b["mean"], b["ci_lo"], b["ci_hi"]
         yerr = [[mean - lo], [hi - mean]] if np.isfinite(lo) and np.isfinite(hi) else None
@@ -217,14 +248,68 @@ def _overlay_mean_ci(ax: Any, groups: list[np.ndarray], ticks: list[int]) -> Non
         )
 
 
-def _draw_connect_means_line(ax: Any, groups: list[np.ndarray], ticks: list[int]) -> None:
+def _nested_outer(label: str) -> str | None:
+    """The outer factor of a NESTED ``"lot = 1 / wafer = 3"`` label, else None
+    -- the export twin of the frontend's ``statstage.nestedOuterLabel``."""
+    return label.split(_NESTED_SEP, 1)[0] if _NESTED_SEP in label else None
+
+
+def _draw_connect_means_line(
+    ax: Any, groups: list[np.ndarray], ticks: list[int], labels: list[str],
+) -> None:
     """Connect-group-means line (JMP_GAP J5 residual): a dashed line through
     each group's mean, in on-screen category order -- the "interaction plot"
     read for a box/strip plot grouped by a categorical column. Reads the
     SAME ``box_stats`` mean ``_overlay_mean_ci`` uses, never a second/
     independent computation."""
-    means = [_box_stats(g)["mean"] for g in groups]
-    ax.plot(ticks, means, color="black", linewidth=1.25, linestyle="--", zorder=5)
+    # The line BREAKS exactly where the canvas polyline does
+    # (statRenderBox.drawConnectMeansLine): at an empty level slot (P2.6 -- a
+    # non-finite mean restarts the canvas path) and at each new OUTER factor of
+    # a nested plot (``statstage.connectMeansBreaks``) -- drawing through
+    # either would claim a trend across a level with no data, or across lots.
+    run_x: list[int] = []
+    run_y: list[float] = []
+
+    def flush() -> None:
+        if len(run_x) > 1:
+            ax.plot(run_x, run_y, color="black", linewidth=1.25, linestyle="--", zorder=5)
+        run_x.clear()
+        run_y.clear()
+
+    prev_outer: str | None = None
+    for g, tick, label in zip(groups, ticks, labels, strict=True):
+        outer = _nested_outer(label)
+        if outer is not None and prev_outer is not None and outer != prev_outer:
+            flush()
+        prev_outer = outer
+        if g.size == 0:
+            flush()
+            continue
+        run_x.append(tick)
+        run_y.append(float(_box_stats(g)["mean"]))
+    flush()
+
+
+def _draw_count_labels(
+    ax: Any, groups: list[np.ndarray], ticks: list[int], count_labels: list[str | None] | None,
+) -> None:
+    """Per-slot count annotation just ABOVE the axes (P2.6), where the canvas
+    draws it too -- inside the axes it would sit on the tallest whisker, flier
+    or CI bar. ``count_labels`` verbatim when it lines up with the slots, else
+    ``n=0`` on each EMPTY slot only -- the empty-slot marker is the one
+    annotation that is never optional, because an unlabelled gap reads as a
+    rendering fault."""
+    if count_labels is not None and len(count_labels) == len(groups):
+        texts = count_labels
+    else:
+        texts = ["n=0" if g.size == 0 else None for g in groups]
+    for tick, text in zip(ticks, texts, strict=True):
+        if text:
+            ax.annotate(
+                safe_mathtext_label(text), xy=(tick, 1.0), xycoords=("data", "axes fraction"),
+                xytext=(0, 2), textcoords="offset points", ha="center", va="bottom",
+                fontsize="x-small", color="0.35",
+            )
 
 
 def _draw_statplot(
@@ -241,6 +326,7 @@ def _draw_statplot(
     point_row_indices: list[list[int]] | None = None,
     show_mean_ci: bool = False,
     show_connect_means: bool = False,
+    count_labels: list[str | None] | None = None,
 ) -> None:
     if kind in _GROUPED:
         if not isinstance(data, list) or not data:
@@ -248,26 +334,34 @@ def _draw_statplot(
         groups, row_indices = _clean_groups_with_indices(data, point_row_indices)
         ticks = list(range(1, len(groups) + 1))
         cat_labels = labels or [f"group {i + 1}" for i in range(len(groups))]
+        # Empty level slots (P2.6) keep their tick but get no glyph: only the
+        # filled groups are handed to matplotlib, AT their slot positions. With
+        # no empty slot this is exactly the pre-P2.6 call (positions 1..n).
+        filled = [i for i, g in enumerate(groups) if g.size]
+        has_empty = len(filled) < len(groups)
+        f_groups = [groups[i] for i in filled]
+        f_ticks = [ticks[i] for i in filled]
         if kind == "box":
             # A caller-provided mean+-CI marker replaces boxplot's own tiny
             # mean-triangle (showmeans) -- one mean glyph on screen, not two.
-            ax.boxplot(groups, tick_labels=labels, showmeans=not show_mean_ci)
+            ax.boxplot(
+                f_groups, positions=f_ticks, showmeans=not show_mean_ci,
+                tick_labels=[labels[i] for i in filled] if labels else None,
+            )
         elif kind == "violin":
-            parts = ax.violinplot(groups, positions=ticks, showmeans=True, showextrema=True)
-            if labels:
-                ax.set_xticks(ticks)
-                ax.set_xticklabels(labels)
-            del parts
-        else:  # strip (JMP_GAP J5 #3): points-only, no box/violin glyph
+            ax.violinplot(f_groups, positions=f_ticks, showmeans=True, showextrema=True)
+        if kind == "strip" or labels or has_empty:
             ax.set_xticks(ticks)
-            ax.set_xticklabels(cat_labels)
+            ax.set_xticklabels(cat_labels if kind == "strip" or labels else [str(t) for t in ticks])
+        if kind == "strip" or has_empty:
             ax.set_xlim(0.5, len(groups) + 0.5)
         if kind in ("box", "strip") and show_points:
             _scatter_jittered_points(ax, groups, cat_labels, ticks, row_indices)
         if kind in ("box", "strip") and show_mean_ci:
             _overlay_mean_ci(ax, groups, ticks)
         if kind in ("box", "strip") and show_connect_means and len(groups) > 1:
-            _draw_connect_means_line(ax, groups, ticks)
+            _draw_connect_means_line(ax, groups, ticks, cat_labels)
+        _draw_count_labels(ax, groups, ticks, count_labels)
         return
 
     sample = np.asarray(data, dtype=float).ravel()

@@ -12,8 +12,8 @@
 // Row-state exclusion (#50) simply omits a row's point; it never renumbers
 // or reseeds its still-visible neighbours, because the hash depends only on
 // the ORIGINAL dataset row index, not a point's position within the
-// filtered group (lib/statschooser.ts's `groupsByCategoryIndexed` /
-// `groupsFromColumnsIndexed` carry that original index through).
+// filtered group (`lib/levelSlots.buildLevelSlots` carries that index through
+// on each slot's points).
 
 const FNV_OFFSET_BASIS = 0x811c9dc5;
 const FNV_PRIME = 0x01000193;

@@ -685,6 +685,9 @@ describe("figure documents — openFigureDocInWindow", () => {
         "axisLabelOffsets",
         "xFmt",
         "yFmt",
+        // P2.6: an object-valued PlotView field like xFmt/yFmt, hydrated from
+        // the new window's fresh default view (a new object identity).
+        "statLevels",
       ].sort(),
     );
   });

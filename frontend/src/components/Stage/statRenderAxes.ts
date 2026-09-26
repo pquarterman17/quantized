@@ -51,3 +51,24 @@ export function drawCategoryAxis(
   ctx.font = "11px 'JetBrains Mono', monospace";
   ctx.fillText(caption, rect.x + rect.w / 2, rect.y + rect.h + 30);
 }
+
+/** "n=<count>" caption above a box/violin/strip slot (and each bar). Moved
+ *  here from `statRender.ts` for P2.6: `text` is the slot's authored label
+ *  (`lib/levelSlots.countLabels` — the optional count, the `n=0` empty-slot
+ *  marker, the low-n caveat mark); `null` draws nothing and `undefined` keeps
+ *  the legacy unconditional `n=K`. */
+export function drawCountLabel(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  top: number,
+  n: number,
+  muted: string,
+  text?: string | null,
+) {
+  if (text === null) return;
+  ctx.fillStyle = muted;
+  ctx.font = "9px 'JetBrains Mono', monospace";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "bottom";
+  ctx.fillText(text ?? `n=${n}`, cx, top - 4);
+}

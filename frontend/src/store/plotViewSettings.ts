@@ -51,6 +51,7 @@ import { lit } from "../lib/macro";
 import type { PageSetup } from "../lib/pagesetup";
 import { nextPanelFit, type PanelFit } from "../lib/panelLayout";
 import { effectiveChannels } from "../lib/plotdata";
+import type { StatLevelOptions } from "../lib/statLevelOptions";
 import type { AxisFormat, AxisScale, SeriesStyle } from "../lib/types";
 import type { HistoryBatchToken } from "./history";
 import type { AppState, LegendPos } from "./useApp";
@@ -77,6 +78,7 @@ export interface PlotViewSettingsSlice {
   setInsetMode: (insetMode: boolean) => void;
   setPolarMode: (polarMode: boolean) => void;
   setStatMode: (statMode: boolean) => void;
+  setStatLevels: (patch: Partial<StatLevelOptions>) => void; // P2.6 (lib/statLevelOptions)
   setXLim: (xLim: [number, number] | null) => void;
   setYLim: (yLim: [number, number] | null) => void;
   // Secondary (right) Y axis: expose the already-rendered y2Scale/y2Lim fields
@@ -158,6 +160,7 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
     setInsetMode: (insetMode) => { get().recordHistory("toggle inset"); set({ insetMode }); },
     setPolarMode: (polarMode) => { get().recordHistory("toggle polar plot"); set({ polarMode }); },
     setStatMode: (statMode) => { get().recordHistory("toggle statistics plot"); set({ statMode }); },
+    setStatLevels: (patch) => { get().recordHistory("change level display"); set((s) => ({ statLevels: { ...s.statLevels, ...patch } })); },
     // Clears the paired decoded step too: a manual/Inspector range (or the
     // smart auto-scale reset to null) is no longer the Origin figure that
     // produced xStep/yStep, so a stale step must never leak onto it.

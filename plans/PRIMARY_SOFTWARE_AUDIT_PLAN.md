@@ -3337,7 +3337,44 @@ violin, bar, strip, or summary plots.
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5. **Dependencies:** P1.4-P1.5.
 
 - [ ] Nested grouping/order/labels/jitter/summary/errors/raw-point visibility.
-- [ ] Missing levels and unbalanced groups are explicit.
+- [x] Missing levels and unbalanced groups are explicit. (2026-09-25) Survey
+  first: the Stat Stage's slot list was the analysis-view PARTITION
+  (`statschooser.groupsByCategory` / nested cells), so (a) a declared
+  `cat_levels` level with no rows, (b) a level whose Y is all NaN or whose rows
+  are all excluded, and (c) a never-occurring nested combination all vanished
+  silently on screen AND in the export (which posts the same pre-aggregated
+  groups; `calc.figure_statplots` even 422'd an empty group). Bar dropped (a)
+  and excluded-only levels; (d) unequal n showed only an unconditional `n=K`
+  on the canvas, nothing in the export, no notice. Now `lib/levelSlots.ts` is
+  the one slot rule for box/violin/strip AND bar: declared + NaN/excluded-only
+  levels and the full nested cross product are EMPTY SLOTS (label kept, `n=0`),
+  unless the new per-plot `PlotView.statLevels.hideEmpty` option (persisted,
+  `.dwk` round-trip tested; `lib/statLevelOptions.ts`) hides them; past
+  `MAX_LEVEL_SLOTS` = 200 slots the empty ones are hidden and the notice says
+  how many. Values come from `rowstate.analysisData` (guard #11); raw rows are
+  read only to account for `droppedRows`. Count labels are authored once
+  (`countLabels`): optional `n=K` (`statLevels.showN`, default on), `n=0`
+  always, and a dagger caveat on groups with n < 3 or n/max < 0.2 — the same
+  strings reach the canvas and the export (`count_labels`), with the one-line
+  notice (`levelNotice`, min/max floored so it never prints a false `0.20 <
+  0.2`) in the stage diagnostics and as a wrapped export footnote
+  (`calc/figure_footnote.py`). Dropped rows are counted per level (excluded
+  once each, non-finite Y, rows with no level) in a diagnostics line whose
+  tooltip lists each level. Export: empty slots keep their tick and draw no
+  glyph; count labels sit above the axes (bars: over each bar); connect-means
+  breaks at empty slots and — newly matching the canvas — at nested
+  outer-factor boundaries; the categorical route accepts a null (empty) mean.
+  The display toggles never re-run the stats requests (hiding is a view step).
+  Parity: `tests/fixtures/wire/level_slots_statplot.json` is shared —
+  `levelSlotsParity.test.ts` proves the stage builds exactly its box and bar
+  requests and that the canvas draw has the same slots/labels/count labels;
+  `tests/test_export_level_slots.py` posts them to the real routes and checks
+  the SVG (ticks in slot order, each count label over its own tick, no glyph
+  on an empty slot, footnote text). The retired `*Indexed` statschooser twins'
+  tests now pin that the slot builder's FILLED slots partition exactly as
+  `resolveGroups`. **Residual (not this box):** faceted Stat Stage panels and
+  the Graph Builder mini-preview still group through `resolveGroups` and drop
+  empty levels; the stage hides the toggles and the notice while faceted.
 - [ ] Summary table links to selected groups.
 - [ ] ANOVA/post-hoc, PCA, regression/correlation, GLM, survival, and ROC stay
   lower priority until demand is shown. **Demand shown 2026-07-28**: the

@@ -18,13 +18,10 @@
 
 import { PANEL_FITS, type PanelFit } from "./panelLayout";
 import { sanitizePageSetup, type PageSetup } from "./pagesetup";
-import {
-  sanitizePanelDatasetIds,
-  sanitizePanelLayout,
-  type PanelLayout,
-} from "./panelwindow";
+import { sanitizePanelDatasetIds, sanitizePanelLayout, type PanelLayout } from "./panelwindow";
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
 import { isString, keyedRecord } from "./sanitizeRecord";
+import { defaultStatLevels, sanitizeStatLevels, type StatLevelOptions } from "./statLevelOptions";
 import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
 
@@ -132,6 +129,7 @@ export interface PlotView {
   insetMode: boolean;
   polarMode: boolean;
   statMode: boolean;
+  statLevels: StatLevelOptions; // P2.6: empty-level slots + n annotation (lib/statLevelOptions)
   xLim: [number, number] | null;
   yLim: [number, number] | null;
   xStep: number | null;
@@ -202,6 +200,7 @@ export function defaultPlotView(): PlotView {
     insetMode: false,
     polarMode: false,
     statMode: false,
+    statLevels: defaultStatLevels(),
     xLim: null,
     yLim: null,
     xStep: null,
@@ -465,14 +464,7 @@ function strOrDefault(v: unknown, d: string): string {
 }
 
 function isRange(v: unknown): v is [number, number] {
-  return (
-    Array.isArray(v) &&
-    v.length === 2 &&
-    typeof v[0] === "number" &&
-    typeof v[1] === "number" &&
-    Number.isFinite(v[0]) &&
-    Number.isFinite(v[1])
-  );
+  return Array.isArray(v) && v.length === 2 && Number.isFinite(v[0]) && Number.isFinite(v[1]);
 }
 
 function isAxisFormat(v: unknown): v is AxisFormat {
@@ -728,6 +720,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     insetMode: boolOrDefault(o.insetMode, fb.insetMode),
     polarMode: boolOrDefault(o.polarMode, fb.polarMode),
     statMode: boolOrDefault(o.statMode, fb.statMode),
+    statLevels: sanitizeStatLevels(o.statLevels),
     xLim: isRange(o.xLim) ? o.xLim : null,
     yLim: isRange(o.yLim) ? o.yLim : null,
     xStep: numOrNull(o.xStep),

@@ -5532,10 +5532,12 @@ export interface components {
             /** Series */
             series: string[];
             /** Values */
-            values: number[][];
+            values: (number | null)[][];
         };
         /** CategoricalFigureRequest */
         CategoricalFigureRequest: {
+            /** Count Labels */
+            count_labels?: (string | null)[] | null;
             /**
              * Dpi
              * @default 200
@@ -5555,6 +5557,8 @@ export interface components {
              * @default pdf
              */
             fmt?: string;
+            /** Footnote */
+            footnote?: string | null;
             /** Groups */
             groups: string[];
             /** Series */
@@ -5575,7 +5579,7 @@ export interface components {
              */
             title?: string;
             /** Values */
-            values: number[][];
+            values: (number | null)[][];
             /**
              * X Label
              * @default
@@ -9022,6 +9026,8 @@ export interface components {
              * @default fd
              */
             bins?: string | number;
+            /** Count Labels */
+            count_labels?: (string | null)[] | null;
             /** Data */
             data: number[][] | number[];
             /**
@@ -9045,6 +9051,8 @@ export interface components {
              * @default pdf
              */
             fmt?: string;
+            /** Footnote */
+            footnote?: string | null;
             /** Kind */
             kind: string;
             /** Labels */

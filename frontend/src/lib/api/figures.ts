@@ -287,6 +287,11 @@ export interface StatplotFigureSpec {
   // JMP_GAP J5 residual: connect-group-means "interaction plot" line
   // (box/strip only) through each group's mean, in on-screen category order.
   show_connect_means?: boolean;
+  // P2.6: per-slot count annotation text (parallel to `data`; an empty slot
+  // is `data: []`) authored by lib/levelSlots.countLabels, and the one-line
+  // unbalanced-groups notice drawn under the axes.
+  count_labels?: (string | null)[] | null;
+  footnote?: string | null;
 }
 
 /** Render a statistical plot (box/violin/Q-Q/histogram) server-side
@@ -331,6 +336,11 @@ export interface CategoricalFigureSpec {
   dpi?: number;
   filename?: string;
   facets?: CategoricalFacetSpec[] | null;
+  // P2.6: per-bar count labels ([group][series] flattened; per group when
+  // stacked) from lib/levelSlots.countLabels, and the unbalanced notice. An
+  // empty category is a row of NaN means (sent as null) with n=0 labels.
+  count_labels?: (string | null)[] | null;
+  footnote?: string | null;
 }
 
 /** Render a grouped/stacked bar chart server-side (matplotlib) and download

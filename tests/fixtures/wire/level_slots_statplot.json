@@ -1,0 +1,18 @@
+{
+  "_about": "P2.6 interactive-vs-export parity fixture. `dataset` (null = NaN) is what the Stat Stage plots; `request` / `bar_request` are the EXACT /api/export/statplot-figure (box) and /api/export/categorical-figure (bar) bodies the stage builds from it (frontend/src/components/Stage/levelSlotsParity.test.ts asserts that, and that the canvas draw has the same slots and count labels); tests/test_export_level_slots.py posts `request` to the real route and checks the SVG against the same slots.",
+  "dataset": {
+    "time": [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    "values": [
+      [0, 10], [0, 11], [0, 12], [0, 13], [0, 14], [0, 15],
+      [0, 16], [0, 17], [0, 18], [0, 19], [0, 20], [0, 21],
+      [1, 40], [1, 42],
+      [2, null], [2, null]
+    ],
+    "labels": ["lot", "y"],
+    "units": ["", ""],
+    "metadata": {},
+    "cat_levels": { "0": ["A", "B", "C", "D"] }
+  },
+  "bar_request": {"groups": ["A", "B", "C", "D"], "series": ["y"], "values": [[15.5], [41], [null], [null]], "errors": [[1.0408329997330663], [1], [null], [null]], "stacked": false, "count_labels": ["n=12", "n=2\u2020", "n=0", "n=0"], "footnote": "\u2020 Unbalanced groups (n = 2 to 12; min/max n = 0.16 < 0.2; 1 group with n < 3): summary stats and error bars on \u2020 groups are unreliable", "fmt": "svg", "title": "y by lot", "x_label": "lot", "y_label": "y", "filename": "bar_y"},
+  "request": {"kind": "box", "data": [[10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21], [40, 42], [], []], "labels": ["lot = A", "lot = B", "lot = C", "lot = D"], "count_labels": ["n=12", "n=2\u2020", "n=0", "n=0"], "footnote": "\u2020 Unbalanced groups (n = 2 to 12; min/max n = 0.16 < 0.2; 1 group with n < 3): summary stats and error bars on \u2020 groups are unreliable", "fmt": "svg", "title": "y by lot", "x_label": "lot", "y_label": "y", "filename": "box_y", "show_points": true, "point_row_indices": [[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11], [12, 13], [], []], "show_mean_ci": true, "show_connect_means": true}
+}

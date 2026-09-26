@@ -66,6 +66,8 @@ export function BackgroundStatWindow({ dataset, view }: BackgroundModeProps) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const st = useStatStage({
+    hideEmptyLevels: view.statLevels.hideEmpty,
+    showGroupN: view.statLevels.showN,
     active: dataset,
     yKeys: view.yKeys,
     xKey: view.xKey,
