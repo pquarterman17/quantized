@@ -98,14 +98,15 @@ describe("workshop dataset identity", () => {
     "/components/Library/folderOps.ts",
     "/components/Stage/worksheet/useWorksheetView.ts",
     "/components/workshops/database/SqliteQueryDialog.tsx",
-    "/components/workshops/datasetmath/useDatasetMath.ts",
+    // P2.5: dataset math + the worksheet reshapes now commit through
+    // lib/transformRun.ts (shared with pipeline replay), which mints the id.
+    "/lib/transformRun.ts",
     "/components/workshops/digitizer/useDigitizer.ts",
     "/components/workshops/importwizard/useImportWizard.ts",
     "/components/workshops/pipeline/useTemplates.ts",
     "/components/workshops/reductions/useFftThickness.ts",
     "/components/workshops/reductions/useReflectivityFft.ts",
     "/components/workshops/tabulate/useTabulate.ts",
-    "/lib/worksheetTransformCommands.ts",
   ];
 
   it("keeps the BUG-020 workshop producers on the shared dataset-id sequence", () => {
@@ -487,7 +488,10 @@ const STORE_PINS: Record<string, number> = {
   // `.map`/`.filter` even though its content is unchanged) was written and
   // run green against the PRE-extraction code and passes byte-unchanged
   // after the move.
-  "/store/useApp.ts": 1386,
+  // 1386 -> 1361 (2026-09-25, P2.5 opener): `mergeSelected`'s body moved to
+  // lib/transformRun.ts (lazy) so the merge could gain its unit/label review
+  // and a recorded pipeline step; ratcheted down with the extraction.
+  "/store/useApp.ts": 1361,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -1065,7 +1069,12 @@ describe("pending-edit guard ratchet (BUG-006 site 9)", () => {
       const updaters = [
         ...src.matchAll(/datasets:\s*\w+\.datasets\.map\(/g),
         ...src.matchAll(/\w+\s*=\s*\w+\.datasets\.map\(/g),
-        ...src.matchAll(/datasets:\s*\[/g),
+        // An EMPTY literal (`datasets: []`, e.g. `clearAll`'s loadWorkspace)
+        // writes no dataset at all, so it is not an updater. Before this
+        // exclusion it was flagged whenever the NEXT action's `data:` fell
+        // inside its 1,400-char window — 2026-09-25 (P2.5), once the
+        // `mergeSelected` body between them moved to a lazy module.
+        ...src.matchAll(/datasets:\s*\[(?!\s*\])/g),
       ];
       const touchesData = updaters.some((m) =>
         /\b(data|metadata|cat_levels|formulas|excludedRows|filter)\s*:/.test(src.slice(m.index ?? 0, (m.index ?? 0) + 1400)),

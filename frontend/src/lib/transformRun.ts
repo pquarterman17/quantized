@@ -1,0 +1,352 @@
+// Recordable combine/reshape operations (audit P2.5 — "saved transformation
+// recipe, undo, provenance, derived output" + "warnings for duplicate keys,
+// unit mismatch, or row loss"). ONE commit path for transpose / stack /
+// unstack / join / merge (append) / dataset algebra, shared by the
+// interactive commands AND the pipeline replay (`executeSteps`), so a
+// recorded step replays through exactly the code that produced it:
+//
+//   resolve inputs -> compute the derived data -> analyze (lib/transformWarnings)
+//   -> [interactive only] review the warnings -> addDataset (one undo entry,
+//   warnings stamped into metadata) -> record a `transform` pipeline step.
+//
+// Split lives in the store (`splitDatasetByColumn`, which folders its
+// children); its step shape is defined here and it records itself.
+//
+// DATASET REFERENCES (multi-input ops). The pipeline's one existing reference
+// model is a dataset id — a `correction` step's background is
+// `bg: {datasetId}` and replays by looking that id up. Join / merge / algebra
+// record their SECOND inputs the same way (`with: {id, name}`; the name is for
+// display only). The PRIMARY input is never an id: like every other step, a
+// transform applies to the pipeline's current target, so a template batch
+// joins/merges each file with the recorded second input. A reference whose
+// dataset is no longer in the workspace (another session's template) fails
+// that step with a message naming it — never a guess by name.
+//
+// Lazy on purpose: only reached from Data-menu commands, the dataset-math
+// workshop, the merge action and the pipeline runner — all post-click.
+
+import { datasetAlgebra } from "./api/datasetAlgebra";
+
+import { lit } from "./macro";
+import { mergeDatasets } from "./merge";
+import { analysisData } from "./rowstate";
+import {
+  actionable,
+  analyzeAlgebra,
+  analyzeJoin,
+  analyzeMerge,
+  analyzeStack,
+  analyzeTranspose,
+  analyzeUnstack,
+  needsConfirm,
+  stampWarnings,
+  warningsText,
+  type TransformWarning,
+} from "./transformWarnings";
+import type { DataStruct, Dataset } from "./types";
+import {
+  joinWorksheets,
+  stackWorksheet,
+  transposeWorksheet,
+  unstackWorksheet,
+  type AggregateMode,
+  type JoinMode,
+} from "./worksheetTransforms";
+import { askConfirm } from "../store/confirmDialog";
+import { toast } from "../store/toasts";
+import { nextDatasetId, type AppState } from "../store/useApp";
+
+/** The store accessor. Typed on the `AppState` interface, not
+ *  `typeof useApp.getState`: `useApp.ts` lazily imports this module, and the
+ *  latter would make the store's own type circular. */
+type StoreGet = () => AppState;
+
+export interface DatasetRef {
+  id: string;
+  name: string;
+}
+
+export type TransformParams =
+  | { op: "transpose" }
+  | { op: "stack"; channels: number[] }
+  | { op: "unstack"; key: number; category: number; value: number; aggregate: AggregateMode }
+  | { op: "join"; leftKey: number; rightKey: number; mode: JoinMode; with: DatasetRef }
+  | { op: "merge"; with: DatasetRef[] }
+  | { op: "algebra"; operation: string; interp: string; with: DatasetRef }
+  | { op: "split"; col: number; tolerance: number | null };
+
+/** What the review step sees before anything is committed. */
+export interface TransformPreview {
+  title: string;
+  /** "Result: 12 rows × 3 columns" and similar. */
+  summary: string;
+  warnings: TransformWarning[];
+}
+
+/** Returns true to commit. Interactive callers pass `reviewTransform`;
+ *  replay passes nothing (warnings are still stamped and logged). */
+export type ReviewFn = (preview: TransformPreview) => Promise<boolean>;
+
+export const ALGEBRA_SYMBOL: Record<string, string> = {
+  "A+B": "+", "A-B": "−", "A*B": "×", "A/B": "/", "(A-B)/(A+B)": "asym",
+};
+
+const stem = (name: string): string => name.replace(/\.[^.]+$/, "");
+
+/** The dataset's ANALYSIS rows (exclusion ∪ filter pruned) — the reshape
+ *  commands have always derived from these (architecture-guards #11). Merge
+ *  and algebra have always used `.data`; both are kept exactly as they were,
+ *  so recording changed no output. */
+const rowsOf = (ds: Dataset): DataStruct => analysisData(ds) ?? ds.data;
+
+function refsOf(p: TransformParams): DatasetRef[] {
+  if (p.op === "join" || p.op === "algebra") return [p.with];
+  if (p.op === "merge") return p.with;
+  return [];
+}
+
+/** Pipeline label + script line for a transform step. */
+export function transformStepText(p: TransformParams, primaryName: string): { label: string; code: string } {
+  const refs = refsOf(p).map((r) => r.name);
+  const { op, ...rest } = p;
+  const args: Record<string, unknown> = { ...rest };
+  if ("with" in args) args.with = Array.isArray(args.with) ? refs : refs[0];
+  let label: string;
+  switch (p.op) {
+    case "join": label = `Join ${primaryName} with ${refs[0]} (${p.mode})`; break;
+    case "merge": label = `Append ${refs.join(", ")} to ${primaryName}`; break;
+    case "algebra": label = `Dataset math ${primaryName} ${p.operation} ${refs[0]}`; break;
+    case "split": label = `Split ${primaryName} by column value`; break;
+    default: label = `${op[0].toUpperCase()}${op.slice(1)} ${primaryName}`;
+  }
+  return { label, code: `qz.transform(${lit(op)}, "<active>", ${lit(args)})` };
+}
+
+interface Computed {
+  data: DataStruct;
+  name: string;
+  preview: TransformPreview;
+}
+
+function preview(title: string, data: DataStruct, warnings: TransformWarning[]): TransformPreview {
+  const rows = data.time.length;
+  const cols = data.labels.length;
+  return { title, summary: `Result: ${rows} row${rows === 1 ? "" : "s"} × ${cols} column${cols === 1 ? "" : "s"} (plus X).`, warnings };
+}
+
+async function compute(p: TransformParams, primary: Dataset, others: Dataset[]): Promise<Computed> {
+  const src = rowsOf(primary);
+  switch (p.op) {
+    case "transpose": {
+      const data = transposeWorksheet(src);
+      return { data, name: `${primary.name} (transposed)`, preview: preview("Transpose", data, analyzeTranspose(src)) };
+    }
+    case "stack": {
+      const data = stackWorksheet(src, p.channels);
+      return { data, name: `${primary.name} (stacked)`, preview: preview("Stack columns", data, analyzeStack(src, p.channels)) };
+    }
+    case "unstack": {
+      const data = unstackWorksheet(src, p.key, p.category, p.value, p.aggregate);
+      const w = analyzeUnstack(src, p.key, p.category, p.value, p.aggregate);
+      return { data, name: `${primary.name} (unstacked)`, preview: preview("Unstack", data, w) };
+    }
+    case "join": {
+      const right = others[0];
+      const rsrc = rowsOf(right);
+      const data = joinWorksheets(src, rsrc, p.leftKey, p.rightKey, p.mode);
+      const w = analyzeJoin(src, rsrc, p.leftKey, p.rightKey, p.mode, primary.name, right.name);
+      return { data, name: `${primary.name} + ${right.name} (joined)`, preview: preview(`Join (${p.mode})`, data, w) };
+    }
+    case "merge": {
+      const all = [primary, ...others];
+      const names = all.map((d) => d.name);
+      const data = mergeDatasets(all.map((d) => d.data), names);
+      const w = analyzeMerge(all.map((d) => d.data), names);
+      return { data, name: `merged (${all.length})`, preview: preview(`Append ${all.length} datasets`, data, w) };
+    }
+    case "algebra": {
+      const b = others[0];
+      const data = await datasetAlgebra({
+        dataset_a: primary.data,
+        dataset_b: b.data,
+        operation: p.operation,
+        interp_method: p.interp,
+      });
+      const sym = ALGEBRA_SYMBOL[p.operation] ?? p.operation;
+      const w = analyzeAlgebra(primary.data, b.data, p.operation, primary.name, b.name);
+      const stamped = { ...data, metadata: { ...data.metadata, algebra_operands: [primary.name, b.name] } };
+      return { data: stamped, name: `${stem(primary.name)} ${sym} ${stem(b.name)}`, preview: preview("Dataset math", data, w) };
+    }
+    default:
+      throw new Error(`"${p.op}" is not a single-output transform`);
+  }
+}
+
+async function resolveRefs(s: StoreGet, refs: readonly DatasetRef[]): Promise<Dataset[]> {
+  const out: Dataset[] = [];
+  for (const ref of refs) {
+    const ds = await s().resolveDataset(ref.id);
+    if (!ds) throw new Error(`the recorded input "${ref.name}" is not in this workspace`);
+    out.push(ds);
+  }
+  return out;
+}
+
+/** Interactive review: silent when there is nothing to say; a unit mismatch
+ *  gets a danger-styled confirm whose button names what is being overridden. */
+export function reviewTransform(pv: TransformPreview): Promise<boolean> {
+  if (!actionable(pv.warnings).length) return Promise.resolve(true);
+  const units = needsConfirm(pv.warnings);
+  return askConfirm(
+    units ? `${pv.title}: units differ` : `${pv.title}: review before creating`,
+    warningsText(pv.summary, pv.warnings),
+    units ? "Create despite unit mismatch" : "Create",
+    units,
+  );
+}
+
+export interface TransformOutcome {
+  id: string;
+  name: string;
+  warnings: TransformWarning[];
+}
+
+/** Run one transform with `primaryId` as its primary input. Returns null when
+ *  the review declined; throws on bad input (callers surface the message). */
+export async function runTransform(
+  s: StoreGet,
+  p: TransformParams,
+  primaryId: string,
+  review?: ReviewFn,
+): Promise<TransformOutcome | null> {
+  if (p.op === "split") {
+    const ids = await s().splitDatasetByColumn(primaryId, p.col, p.tolerance ?? undefined);
+    if (!ids.length) throw new Error("the column did not split into two or more groups");
+    const first = s().datasets.find((d) => d.id === ids[0]);
+    const w = first?.data.metadata?.transform_warnings;
+    return {
+      id: ids[0],
+      name: first?.name ?? ids[0],
+      warnings: Array.isArray(w) ? w.map((text) => ({ code: "missing-split-key" as const, text: String(text) })) : [],
+    };
+  }
+  const primary = await s().resolveDataset(primaryId);
+  if (!primary) throw new Error("the input dataset is unavailable");
+  const others = await resolveRefs(s, refsOf(p));
+  const c = await compute(p, primary, others);
+  if (review && !(await review(c.preview))) {
+    s().setStatus(`${c.preview.title} cancelled — nothing was created`);
+    return null;
+  }
+  const id = nextDatasetId();
+  s().addDataset({ id, name: c.name, data: stampWarnings(c.data, p.op, c.preview.warnings) });
+  const { label, code } = transformStepText(p, primary.name);
+  s().recordMacro(label, code, {
+    kind: "transform",
+    params: { ...p, input: { id: primary.id, name: primary.name } },
+  });
+  const n = actionable(c.preview.warnings).length;
+  s().setStatus(`created ${c.name}${n ? ` — ${n} warning${n === 1 ? "" : "s"} recorded in its metadata` : ""}`);
+  return { id, name: c.name, warnings: c.preview.warnings };
+}
+
+const OPS = new Set(["transpose", "stack", "unstack", "join", "merge", "algebra", "split"]);
+
+/** Validate a recorded `transform` step's params (a .dwk / template is user-
+ *  editable JSON) into `TransformParams`, or throw naming what is wrong. */
+export function transformParamsOf(raw: Record<string, unknown>): TransformParams {
+  const op = String(raw.op ?? "");
+  if (!OPS.has(op)) throw new Error(`unknown transform "${op}"`);
+  const num = (k: string): number => {
+    const v = raw[k];
+    if (typeof v !== "number" || !Number.isInteger(v)) throw new Error(`transform "${op}" needs an integer "${k}"`);
+    return v;
+  };
+  const ref = (v: unknown): DatasetRef => {
+    const o = (v ?? {}) as Record<string, unknown>;
+    if (typeof o.id !== "string" || !o.id) throw new Error(`transform "${op}" has no recorded second input`);
+    return { id: o.id, name: typeof o.name === "string" ? o.name : o.id };
+  };
+  switch (op) {
+    case "transpose": return { op };
+    case "stack": {
+      const ch = raw.channels;
+      if (!Array.isArray(ch) || !ch.every((c) => typeof c === "number")) throw new Error('transform "stack" needs "channels"');
+      return { op, channels: ch as number[] };
+    }
+    case "unstack": {
+      const agg = String(raw.aggregate ?? "mean");
+      if (!["mean", "first", "last"].includes(agg)) throw new Error(`unknown aggregate "${agg}"`);
+      return { op, key: num("key"), category: num("category"), value: num("value"), aggregate: agg as AggregateMode };
+    }
+    case "join": {
+      const mode = String(raw.mode ?? "inner");
+      if (!["inner", "left", "right", "full"].includes(mode)) throw new Error(`unknown join mode "${mode}"`);
+      return { op, leftKey: num("leftKey"), rightKey: num("rightKey"), mode: mode as JoinMode, with: ref(raw.with) };
+    }
+    case "merge": {
+      if (!Array.isArray(raw.with) || !raw.with.length) throw new Error('transform "merge" has no recorded inputs');
+      return { op, with: raw.with.map(ref) };
+    }
+    case "algebra":
+      return { op, operation: String(raw.operation ?? ""), interp: String(raw.interp ?? "pchip"), with: ref(raw.with) };
+    default: {
+      const tol = raw.tolerance;
+      return { op: "split", col: num("col"), tolerance: typeof tol === "number" && Number.isFinite(tol) ? tol : null };
+    }
+  }
+}
+
+/** Pipeline replay of a recorded `transform` step against `targetId` (no
+ *  review — warnings are stamped and returned for the run log). */
+export async function replayTransform(
+  s: StoreGet,
+  params: Record<string, unknown>,
+  targetId: string,
+): Promise<TransformOutcome> {
+  const out = await runTransform(s, transformParamsOf(params), targetId);
+  if (!out) throw new Error("transform produced no output");
+  return out;
+}
+
+/** Import-time append (`importFilesAppended`): the same by-position merge and
+ *  review as "Merge selected", for files that are not datasets yet (so not
+ *  recordable by id — that path records its own `import` step). Null when the
+ *  review is declined. */
+export async function reviewedAppend(datas: DataStruct[], names: string[]): Promise<DataStruct | null> {
+  const data = mergeDatasets(datas, names);
+  const warnings = analyzeMerge(datas, names);
+  const pv = preview(`Append ${datas.length} files`, data, warnings);
+  pv.summary += " Cancel imports them as separate datasets instead.";
+  return (await reviewTransform(pv)) ? stampWarnings(data, "merge", warnings) : null;
+}
+
+/** "Merge selected" (Data menu / Library): append the selection in order,
+ *  reviewing unit/label mismatches first. The first pick is the primary. */
+export async function runMergeSelected(s: StoreGet): Promise<void> {
+  const st = s();
+  const pickIds = st.selectedIds.filter((id) => st.datasets.some((d) => d.id === id));
+  if (pickIds.length < 2) {
+    st.setStatus("select ≥2 datasets to merge");
+    return;
+  }
+  try {
+    // #38 deferred edge: resolve every still-pending pick first (bounded
+    // concurrency) rather than silently merging previews.
+    const picks = await s().resolveDatasets(pickIds);
+    if (picks.length < 2) {
+      s().setStatus("select ≥2 datasets to merge");
+      return;
+    }
+    const [first, ...rest] = picks;
+    const out = await runTransform(s, { op: "merge", with: rest.map((d) => ({ id: d.id, name: d.name })) }, first.id, reviewTransform);
+    if (!out) return;
+    const rows = s().datasets.find((d) => d.id === out.id)?.data.time.length ?? 0;
+    s().setStatus(`merged ${picks.length} datasets → ${rows} rows`);
+    toast(`merged ${picks.length} datasets`, "ok");
+  } catch (e) {
+    const msg = `could not merge the selected datasets: ${e instanceof Error ? e.message : "unknown error"} — nothing was added`;
+    s().setStatus(msg);
+    toast(msg, "danger");
+  }
+}

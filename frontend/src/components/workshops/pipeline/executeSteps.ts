@@ -54,6 +54,10 @@ export async function executeSteps(
     return { log, fits };
   }
 
+  // The dataset each step acts on. A `transform` step (P2.5) derives a new
+  // dataset and every later step continues on THAT output — the same thing
+  // recording did, since the output became the active dataset.
+  let target = targetId;
   for (const step of steps) {
     if (!step.enabled) {
       log[step.id] = { status: "skipped", note: "disabled" };
@@ -67,27 +71,27 @@ export async function executeSteps(
           const expr = String(step.params.expr ?? "");
           const err = validateExpression(
             expr,
-            store().datasets.find((d) => d.id === targetId)?.data.labels.length ?? 0,
+            store().datasets.find((d) => d.id === target)?.data.labels.length ?? 0,
           );
           if (err) throw new Error(err);
-          store().addFormula(targetId, name, expr);
+          store().addFormula(target, name, expr);
           log[step.id] = { status: "ok" };
           break;
         }
         case "correction": {
           const params = (step.params.params ?? {}) as CorrectionParams;
           const bg = step.params.bg as { datasetId: string; interp: string } | undefined;
-          await store().applyCorrections(targetId, params, bg);
+          await store().applyCorrections(target, params, bg);
           log[step.id] = { status: "ok" };
           break;
         }
         case "reset": {
-          store().resetCorrections(targetId);
+          store().resetCorrections(target);
           log[step.id] = { status: "ok" };
           break;
         }
         case "fit": {
-          const ds = store().datasets.find((d) => d.id === targetId);
+          const ds = store().datasets.find((d) => d.id === target);
           const d = analysisData(ds);
           if (!ds || !d || d.values.length === 0) throw new Error("no data to fit");
           const spec = fitSpecFromStepParams(step.params);
@@ -128,6 +132,18 @@ export async function executeSteps(
           fits.push(r);
           const r2 = typeof r.R2 === "number" ? ` R²=${r.R2.toFixed(4)}` : "";
           log[step.id] = { status: "ok", note: `fit${r2}${wnote}${gapNote}` };
+          break;
+        }
+        case "transform": {
+          // Lazy: only a pipeline that recorded a transform pays for it.
+          const { replayTransform } = await import("../../../lib/transformRun");
+          const out = await replayTransform(store, step.params, target);
+          target = out.id;
+          const n = out.warnings.length;
+          log[step.id] = {
+            status: "ok",
+            note: `created "${out.name}"${n ? ` (${n} warning${n === 1 ? "" : "s"}: ${out.warnings.map((w) => w.text).join(" ")})` : ""}`,
+          };
           break;
         }
         default:

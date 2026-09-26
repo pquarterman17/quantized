@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-25 (latest): **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-25 (latest): **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -3327,7 +3327,36 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
   propagation.
 - [ ] Metadata cleanup/promotion to factors.
 - [ ] Saved transformation recipe, undo, provenance, derived output.
-- [ ] Warnings for duplicate keys, unit mismatch, or row loss.
+  **Progress (opener slice, 2026-09-25) — recording part only:** join, stack,
+  unstack, transpose, merge/append ("Merge selected"), split and dataset
+  math record a `transform` pipeline step with their full parameters
+  (`lib/transformRun.ts`, one commit path shared by the commands and the
+  replay); steps save in `.dwk` and templates and `executeSteps` replays
+  them, continuing later steps on the output as recording did. Second
+  inputs reuse the pipeline's one reference model (a dataset id, like a
+  correction step's background) and fail by name when absent; the primary
+  input is the run's target. Tested: every op replays to an identical
+  output after a JSON save/load; old pipelines load unchanged; e2e join
+  replay. Undo is the existing one-entry `addDataset`. Still open: editing a
+  transform step's params in the Pipeline panel (it shows the script line
+  only), recording the import-time append (`importFilesAppended` records its
+  own `import` step — files are not datasets yet, so there is no id to
+  reference), and a recipe view beyond the pipeline list.
+- [x] Warnings for duplicate keys, unit mismatch, or row loss. (opener slice,
+  2026-09-25) Pure analyzers in `lib/transformWarnings.ts`: join (duplicate
+  keys and blank keys per side, unmatched keys dropped or left blank by
+  mode, key-unit mismatch), append by position (per-column unit and label
+  mismatch, X unit), dataset math (X/Y unit mismatch, rows of A outside B's
+  finite x-range that come out blank), split (rows with no split value ->
+  "(other)"), plus stack (mixed units), unstack (dropped rows, aggregated
+  cells) and transpose (units dropped, info only). The ParamDialog reshapes
+  and "Merge selected" show them in a review confirm BEFORE anything is
+  created; Split and Dataset Math show them inline; a unit mismatch needs an
+  explicit confirm (danger button "Create despite unit mismatch", or the
+  Dataset Math acknowledgment checkbox, keyed to the exact pick). The
+  append import offers "Cancel imports them as separate datasets". Derived
+  datasets carry `transform_warnings` (sentences) beside
+  `worksheet_transform`. Eager bundle -223 B (merge body moved lazy).
 
 ### P2.6 — Categorical/JMP-style plot workbench
 

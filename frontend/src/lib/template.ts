@@ -4,7 +4,7 @@
 // "analysis is code" differentiator); persists like peak recipes
 // (localStorage) and exports/imports as a standalone .json file. Pure.
 
-import { makeStep, type PipelineStep, type StepKind } from "./pipeline";
+import { makeStep, STEP_KINDS, type PipelineStep, type StepKind } from "./pipeline";
 import type { CalcResult, DataStruct } from "./types";
 
 export interface AnalysisTemplate {
@@ -38,15 +38,13 @@ export function serializeTemplate(t: AnalysisTemplate): string {
   return JSON.stringify(t, null, 2) + "\n";
 }
 
-const KINDS: readonly string[] = ["ui", "import", "expression", "correction", "reset", "fit"];
-
 function isStep(v: unknown): v is PipelineStep {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
   return (
     typeof o.label === "string" &&
     typeof o.code === "string" &&
-    KINDS.includes(String(o.kind)) &&
+    STEP_KINDS.includes(String(o.kind)) &&
     typeof o.params === "object" &&
     o.params !== null
   );

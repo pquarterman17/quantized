@@ -153,7 +153,9 @@ export default function ConfirmDialog() {
         onMouseDown={(e) => e.stopPropagation()}
       >
         <h2 id={titleId}>{title}</h2>
-        {message && <p id={messageId}>{message}</p>}
+        {/* pre-line: a multi-line message (the P2.5 transform review lists
+            one warning per line) keeps its line breaks. */}
+        {message && <p id={messageId} style={{ whiteSpace: "pre-line" }}>{message}</p>}
         {/* #17: a destructive confirm is SEPARATED from Cancel rather than
             sitting flush against it as an equal-width twin -- order stays
             secondary-first/primary-last, but the irreversible button is no

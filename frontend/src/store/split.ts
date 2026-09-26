@@ -66,6 +66,14 @@
 // it again) lands its children in the ORIGINAL folder instead of a second
 // identically-named one next to it.
 //
+// P2.5 (transform safety): rows with no split value land in the "(other)"
+// child — `lib/transformWarnings.analyzeSplit` names them in the dialog
+// before the split and in every child's `transform_warnings` metadata (beside
+// `worksheet_transform: "split"`). The action records a `transform` pipeline
+// step (`{op: "split", col, tolerance}`, text identical to
+// `lib/transformRun.transformStepText`) and returns the children's ids, which
+// is what lets the pipeline replay continue on the first child.
+//
 // Undo scope: the shared edit snapshot includes datasets and the folder tree.
 // Undoing this one transaction therefore restores the complete pre-split
 // organization without leaving an empty folder artifact.
@@ -80,6 +88,7 @@
 // and the await lands BEFORE any `recordHistory`/`set`, so the slice's
 // "build fully, swap once" contract is unchanged.
 import { childFolders, createFolder as treeCreateFolder } from "../lib/foldertree";
+import { lit } from "../lib/macro";
 import { nextStageTab } from "../lib/stagetab";
 import type { Dataset } from "../lib/types";
 import { toast } from "./toasts";
@@ -108,7 +117,7 @@ export interface SplitSlice {
    *  MORE than `SPLIT_GROUP_CAP` groups (almost certainly a mis-picked
    *  column — the dialog already warns before this is reachable, but the
    *  action re-checks so a direct/programmatic call can't bypass it). */
-  splitDatasetByColumn: (id: string, col: number, tolerance?: number) => Promise<void>;
+  splitDatasetByColumn: (id: string, col: number, tolerance?: number) => Promise<string[]>;
 }
 
 export function createSplitSlice(set: SliceSet, get: SliceGet): SplitSlice {
@@ -123,18 +132,24 @@ export function createSplitSlice(set: SliceSet, get: SliceGet): SplitSlice {
       // full data first so the split groups the REAL rows, not a preview's.
       await get().resolveDataset(id);
       const src = get().datasets.find((d) => d.id === id);
-      if (!src) return;
+      if (!src) return [];
 
-      const { splitColumn, sliceDataStruct, tooManyGroups } = await import("../lib/datasetsplit");
+      const [{ splitColumn, sliceDataStruct, tooManyGroups }, tw] = await Promise.all([
+        import("../lib/datasetsplit"),
+        import("../lib/transformWarnings"),
+      ]);
       const { groups } = splitColumn(src, col, tolerance);
       if (groups.length < 2) {
         toast(`"${src.name}" doesn't split into more than one group on that column`, "danger");
-        return;
+        return [];
       }
       if (tooManyGroups(groups)) {
         toast(`too many groups (${groups.length}) — pick a different column or a wider tolerance`, "danger");
-        return;
+        return [];
       }
+      // P2.5: rows with no split value land in "(other)" — say so on every
+      // child, beside the provenance, and record a replayable step.
+      const warnings = tw.analyzeSplit(groups, tw.columnName(src.data, col));
 
       get().recordHistory("split dataset");
       // Re-splitting the same source (e.g. after tweaking the tolerance)
@@ -151,7 +166,7 @@ export function createSplitSlice(set: SliceSet, get: SliceGet): SplitSlice {
         const child: Dataset = {
           id: nextDatasetId(),
           name: `${src.name} (${g.label})`,
-          data: sliceDataStruct(src.data, g.rowIndexes),
+          data: tw.stampWarnings(sliceDataStruct(src.data, g.rowIndexes), "split", warnings),
           folderId,
         };
         if (src.formulas?.length) child.formulas = src.formulas.map((f) => ({ ...f }));
@@ -181,8 +196,13 @@ export function createSplitSlice(set: SliceSet, get: SliceGet): SplitSlice {
         splitDialogTargetId: null,
       }));
 
+      get().recordMacro(`Split ${src.name} by column value`, `qz.transform("split", "<active>", ${lit({ col, tolerance: tolerance ?? null })})`, {
+        kind: "transform",
+        params: { op: "split", col, tolerance: tolerance ?? null, input: { id, name: src.name } },
+      });
       get().setStatus(`split "${src.name}" into ${children.length} datasets`);
       toast(`split into ${children.length} datasets`, "ok");
+      return children.map((c) => c.id);
     },
   };
 }

@@ -3,7 +3,9 @@
 // A's x-grid and the result is written to the library. Thin — logic in the hook.
 
 import ToolWindow from "../../overlays/ToolWindow";
+import TransformWarningList from "../../overlays/TransformWarningList";
 import { Button, Select } from "../../primitives";
+import { Checkbox } from "../../primitives/Checkbox";
 import { useApp } from "../../../store/useApp";
 import { OPERATIONS, useDatasetMath } from "./useDatasetMath";
 
@@ -49,10 +51,19 @@ export default function DatasetMathPanel() {
             onChange={(e) => m.setInterp(e.target.value)}
           />
 
+          <TransformWarningList warnings={m.warnings} />
+          {(m.blockedByUnits || m.unitsAcknowledged) && (
+            <div style={{ marginTop: 6 }}>
+              <Checkbox checked={m.unitsAcknowledged} onChange={m.setUnitsAcknowledged}>
+                Combine despite the unit mismatch
+              </Checkbox>
+            </div>
+          )}
+
           <Button
             variant="primary"
             size="sm"
-            disabled={m.busy || m.idA === m.idB}
+            disabled={m.busy || m.idA === m.idB || m.blockedByUnits}
             onClick={() => void m.compute()}
             style={{ marginTop: 12, width: "100%" }}
           >
