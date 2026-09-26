@@ -84,7 +84,12 @@ function planChannel(datasets: readonly DataStruct[], c: number): ChannelPlan | 
  *  codes losslessly when tables differ (`planChannel`); a channel missing
  *  its table on even one input still drops (can't invent a mapping for raw,
  *  never-coded values). */
-export function mergeDatasets(inputs: DataStruct[], names: string[], match: AppendMatch = "position"): DataStruct {
+export function mergeDatasets(
+  inputs: DataStruct[],
+  names: string[],
+  match: AppendMatch = "position",
+  sourceFactor?: string,
+): DataStruct {
   if (inputs.length < 2) {
     throw new Error("merge needs at least 2 datasets");
   }
@@ -175,11 +180,23 @@ export function mergeDatasets(inputs: DataStruct[], names: string[], match: Appe
     }
     if (codes.length) level_order[c] = codes;
   }
+  const labels = [...datasets[0].labels];
+  const units = [...datasets[0].units];
+  // P2.5 "Metadata → factors": the optional SOURCE factor — one categorical
+  // column naming the input each row came from, over the SAME per-part spans
+  // as the rows themselves (so it can never drift from them).
+  if (sourceFactor?.trim()) {
+    const src = sourceFactorColumn(sourceFactor.trim(), labels, names, spans);
+    values.forEach((row, r) => row.push(src.codes[r]));
+    cat_levels[labels.length] = src.levels;
+    labels.push(src.label);
+    units.push("");
+  }
   return {
     time,
     values,
-    labels: [...datasets[0].labels],
-    units: [...datasets[0].units],
+    labels,
+    units,
     metadata: {
       // BUG-006 site 8. Dataset 0's row-indexed sidecars are STRIPPED before the
       // rebuild rather than merely overwritten by it, so an omitted key means
@@ -203,7 +220,28 @@ export function mergeDatasets(inputs: DataStruct[], names: string[], match: Appe
       merged_count: datasets.length,
       ...(match === "name" ? { merged_by: "name" } : {}),
     },
-    ...(plans.size ? { cat_levels } : {}),
+    ...(Object.keys(cat_levels).length ? { cat_levels } : {}),
     ...(Object.keys(level_order).length ? { level_order } : {}),
   };
+}
+
+/** The source factor for a merge: level k is input k's name (made unique, so
+ *  two inputs with one name stay two levels), each part's rows coded k; the
+ *  column label is made unique against the merged labels. */
+export function sourceFactorColumn(
+  label: string,
+  labels: readonly string[],
+  names: readonly string[],
+  spans: readonly number[],
+): { label: string; levels: string[]; codes: number[] } {
+  const unique = (base: string, taken: Set<string>): string => {
+    let out = base;
+    for (let k = 2; taken.has(out.toLowerCase()); k++) out = `${base} (${k})`;
+    taken.add(out.toLowerCase());
+    return out;
+  };
+  const seen = new Set<string>();
+  const levels = names.map((n) => unique(n, seen));
+  const codes = spans.flatMap((span, k) => Array.from({ length: span }, () => k));
+  return { label: unique(label, new Set(labels.map((l) => l.toLowerCase()))), levels, codes };
 }

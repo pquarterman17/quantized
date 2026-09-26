@@ -58,6 +58,14 @@ function AppendFields({ r }: { r: ReshapeState }) {
         value={f.match}
         onChange={(e) => r.setForm({ match: e.target.value as AppendMatch })}
       />
+      <div style={{ ...gap, display: "flex", gap: 6, alignItems: "center" }}>
+        <Checkbox checked={f.sourceOn} onChange={(sourceOn) => r.setForm({ sourceOn })}>
+          Add a column naming each row&apos;s source dataset
+        </Checkbox>
+        {f.sourceOn && (
+          <input aria-label="Source column name" className="qz-input" value={f.sourceName} onChange={(e) => r.setForm({ sourceName: e.target.value })} style={{ width: 110 }} />
+        )}
+      </div>
     </>
   );
 }

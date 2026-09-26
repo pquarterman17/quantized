@@ -164,7 +164,7 @@ export async function executeSteps(
           const n = out.warnings.length;
           log[step.id] = {
             status: "ok",
-            note: `created "${out.name}"${n ? ` (${n} warning${n === 1 ? "" : "s"}: ${out.warnings.map((w) => w.text).join(" ")})` : ""}`,
+            note: out.note ?? `created "${out.name}"${n ? ` (${n} warning${n === 1 ? "" : "s"}: ${out.warnings.map((w) => w.text).join(" ")})` : ""}`,
           };
           break;
         }
