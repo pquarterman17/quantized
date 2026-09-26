@@ -3351,10 +3351,96 @@ violin, bar, strip, or summary plots.
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
-- [ ] Identify variables/parameters/fitted/fixed/start/bounds before run.
-- [ ] Precise inline syntax feedback.
-- [ ] Save model with units/description.
+- [x] Identify variables/parameters/fitted/fixed/start/bounds before run.
+  (slice 1, 2026-09-25) The equation table gained a hold column (mirrors
+  `FitParamsSection`); `fixed` reaches `/equation/fit`, where a held
+  parameter keeps its guess and reports no stderr (results say "held").
+  `/equation/validate` now returns the before-run summary (`variable`,
+  `usesX`, `functions`, `constants` from `calc.fit_equation.describe_equation`)
+  and `EquationSummary` shows x / free / held / constants / functions, warning
+  when x is unused. Every-parameter-held, min > max and a held value outside
+  its bounds are refused before the request (`lib/equationRows`) AND by the
+  route (`check_param_vectors`), since `curve_fit` clips starts into the box.
+- [x] Precise inline syntax feedback. (slice 2, 2026-09-25) Tokenizer,
+  grammar check and shunting-yard moved to `calc/fit_equation_syntax.py`.
+  Python `**` is a synonym of `^` (right-associative; `-x**2` is
+  `-(x**2)`, `2**-1` is 0.5). Every syntax error is an
+  `EquationSyntaxError` (a ValueError) with a code-point span into the
+  ORIGINAL text and an ASCII-only message ending "(column N)": unclosed /
+  unmatched parentheses, a function without `(`, a missing argument, a
+  second argument, a missing operand, a missing operator (`2x`, `a b`),
+  unknown function / called `x` or constant, a malformed number, an
+  unexpected character. `/equation/validate` returns `errorStart`/`errorEnd`;
+  `EquationEditor` underlines the span in the field (an aria-hidden overlay
+  tied to the exact text it was reported for) with the message under it,
+  converting code points to UTF-16 (`lib/equationSpan`). **Numeric change,
+  deliberate:** a unary minus AFTER an operator used to be encoded as
+  `0 - operand` and was silently wrong (`3*-2` gave -2, `2^-3` gave -2,
+  `3--2` gave 1, `2/-4*2` raised); it is now a prefix negation. A minus at
+  the start or after `(` keeps the historical encoding bit for bit, so every
+  previously-correct equation (and the golden set) is unchanged. The
+  identifier rule is deliberately the historical one (letters/digits/`_`,
+  so saved names like `A₀`, `τ` keep working): a mistyped `x²` is still a
+  parameter named `x²`, which the before-run summary exposes ("x is not
+  used"); a middle dot `a·x` is an error, not a name.
+- [x] Save model with units/description. (slice 3, 2026-09-25) Saved
+  custom models (`lib/fitmodels`) are versioned: v2 adds an optional
+  `description` and per-parameter `units`; a record is written as v2 only
+  when it carries one of them (otherwise still v1, readable by older
+  builds), and old v1 records load byte for byte unchanged. Load is
+  tolerant: an unreadable stored record is skipped and reported ONCE per
+  session (`loadCustomModelsChecked` -> a Curve Fit toast), and saves /
+  deletes rewrite the slot AROUND it instead of destroying it. File import
+  stays strict (`parseFitModelFile`: unsupported version, misaligned or
+  non-string units, a non-string description are refused; the sniffer routes
+  any numeric version to it). The equation table has a unit column; the
+  picker labels a model with the start of its description and the panel
+  shows the full text; fitted values and errors carry their unit; the Recipe
+  Library details list the description and units. E2E:
+  `e2e/specs/equation-fit.spec.ts` (inline error position, `**`, hold,
+  units, save + picker, six-column table fits the window).
+  - **Follow-up (not done): saved models in the workspace (.dwk).** Custom
+    fit models are a GLOBAL localStorage library, not store state, so there
+    is no existing seam: carrying them in a project would need a
+    serialize/parse slot, a merge policy on open (a same-named model with a
+    different equation in the file vs the browser), the Recipe Library's
+    `recipeSourcesComplete` fidelity flag, the merge-workspace path and
+    autosave triggers -- the project-scoped recipes that do ride the .dwk
+    (`quickPlotTemplates`, `plotRecipes`) touch ~34 files. Deferred rather
+    than half-done; until then a model travels between machines via the
+    Recipe Library's export/import.
 - [ ] Stretch: pretty LaTeX rendering while Python remains editable source.
+- **Progress 2026-09-25:** slices 1-3 plus a self-review round (identifier
+  rule restored to the historical one; a damaged storage slot is moved aside
+  rather than overwritten; one description field; the validate response
+  type comes from the generated schema; the registry table also refuses a
+  held start outside its bounds). Gates green, golden unchanged, eager
+  bundle 845.0 -> 845.1 kB (budget 846.1). Open: the stretch box, saved
+  models in the .dwk (above), and one shared row parser for
+  `lib/fitParams` + `lib/equationRows`.
+- **Review round 2 (2026-09-26, coordinator code review, nine findings):**
+  a held start outside its bounds is now refused at EVERY route that takes
+  `fixed` (`/fit` and `/equation/fit`, shared `calc/fit_holds.py`;
+  `curve_fit` itself is unchanged and golden-locked -- `calc.batch_fit` is
+  the one internal caller that relies on its clipping, for auto-guessed
+  starts it may hold, and has no route); `EquationSyntaxError` survives
+  pickle / deepcopy; a save onto a name held by an unreadable stored model
+  is refused and that name counts as taken for rename/duplicate/import; the
+  results table's units are snapshot at fit time; the recorded
+  `qz.fitEquation(equation, { guesses, lower, upper, fixed })` step carries
+  the whole setup (second argument optional, so old one-argument steps stay
+  valid); Unicode decimal digits start a number again, as before P2.7; one
+  shared row validator (`lib/paramRowCheck`) with one wording for both fit
+  tables (which closes the "shared row parser" follow-up above); fitmodels
+  reads its slot once per operation.
+  - **MATLAB-parity item, NEEDS VERIFICATION:** `^`/`**` are
+    right-associative and a sign after `^` binds the rest of the chain, so
+    `2^3^2` = 512 and `2^-3^2` = 2^-9. MATLAB evaluates `^` left to right
+    (`2^3^2` = 64 there). The right-associative `2^3^2` predates P2.7; it is
+    pinned by `test_exponent_chain_associativity_is_pinned` and documented
+    in `calc/fit_equation_syntax.py`, pending a check against
+    `quantized_matlab`'s parseEquation (not available in this environment).
+    Semantics deliberately NOT changed.
 
 ### P2.8 — 2-D map polish
 

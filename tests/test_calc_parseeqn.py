@@ -9,7 +9,13 @@ import numpy as np
 import pytest
 from numpy.testing import assert_allclose
 
-from quantized.calc.fit_equation import default_guesses, equation_model, parse_equation
+from quantized.calc.fit_equation import (
+    check_param_vectors,
+    default_guesses,
+    describe_equation,
+    equation_model,
+    parse_equation,
+)
 
 
 @pytest.mark.golden
@@ -79,7 +85,7 @@ def test_parse_equation_rejects_dangling_operator() -> None:
 
 def test_parse_equation_rejects_adjacent_values() -> None:
     # "a b" would previously eval to just "a" (leftover stack) — now an error.
-    with pytest.raises(ValueError, match="malformed expression"):
+    with pytest.raises(ValueError, match='Missing operator before "b"'):
         parse_equation("a b")
 
 
@@ -116,3 +122,52 @@ def test_equation_model_rejects_underscore_leading_param() -> None:
 def test_default_guesses_are_ones() -> None:
     assert default_guesses(["a", "t", "c"]) == [1.0, 1.0, 1.0]
     assert default_guesses([]) == []
+
+
+# ── describe_equation / check_param_vectors (P2.7 before-run summary) ───────
+
+
+def test_describe_equation_reports_parts_in_first_appearance_order() -> None:
+    info = describe_equation("y = A*exp(-x/t) + sin(pi*x) + exp(e) + pi")
+    assert info.params == ["A", "t"]
+    assert info.uses_x is True
+    assert info.functions == ["exp", "sin"]
+    assert info.constants == ["pi", "e"]
+
+
+def test_describe_equation_without_x() -> None:
+    info = describe_equation("a + b")
+    assert info.uses_x is False
+    assert info.functions == [] and info.constants == []
+
+
+def test_describe_equation_vets_like_equation_model() -> None:
+    with pytest.raises(ValueError, match="invalid parameter name"):
+        describe_equation("_a + x")
+
+
+@pytest.mark.parametrize(
+    ("p0", "fixed", "lower", "upper", "match"),
+    [
+        ([1.0, 1.0], [True, True], None, None, "every parameter is held"),
+        ([1.0, 1.0], None, [2.0, 0.0], [1.0, 3.0], '"a": min is above max'),
+        ([5.0, 1.0], [True, False], None, [1.0, 9.0], '"a" is held at 5, outside'),
+        ([1.0], None, None, None, "expected 2 guesses"),
+        ([1.0, 1.0], [True], None, None, "expected 2 fixed"),
+    ],
+)
+def test_check_param_vectors_refuses(
+    p0: list[float],
+    fixed: list[bool] | None,
+    lower: list[float] | None,
+    upper: list[float] | None,
+    match: str,
+) -> None:
+    with pytest.raises(ValueError, match=match):
+        check_param_vectors(["a", "b"], p0, fixed, lower, upper)
+
+
+def test_check_param_vectors_accepts_a_free_start_outside_bounds() -> None:
+    # A FREE start outside the box is curve_fit's to clip (long-standing
+    # behaviour); only a held value must already sit inside it.
+    check_param_vectors(["a", "b"], [5.0, 1.0], [False, True], None, [1.0, 9.0])

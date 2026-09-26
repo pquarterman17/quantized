@@ -196,6 +196,27 @@ describe("recipeDetails — kind-specific content a user deliberately opened may
     ]);
   });
 
+  it("shows a v2 fit model's description and each parameter's unit (audit P2.7)", () => {
+    saveCustomModel({
+      version: 2,
+      name: "Model",
+      equation: "y = a*exp(-x/t)",
+      params: ["a", "t"],
+      guesses: [1, 2],
+      lower: [null, 0],
+      upper: [null, null],
+      description: "decay",
+      units: ["V", ""],
+    });
+    const sources = buildSources();
+    const details = recipeDetails(rowFor("fitModel", sources), sources);
+    expect(details && fieldValue(details, "Description")).toBe("decay");
+    expect(details?.sections?.find((s) => s.title === "Parameters")?.items).toEqual([
+      "a = 1 [−∞, ∞] V",
+      "t = 2 [0, ∞]",
+    ]);
+  });
+
   it("shows an analysis template's step labels and outputs", () => {
     seedNameKeyed();
     const sources = buildSources();

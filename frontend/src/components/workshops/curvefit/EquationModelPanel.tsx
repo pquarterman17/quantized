@@ -8,10 +8,12 @@
 // edits to the shared workshop files stay minimal.
 
 import { DataTable } from "../../primitives/DataTable";
-import { NumberField } from "../../primitives/NumberField";
 import { Button } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
 import type { CustomFitModel } from "../../../lib/fitmodels";
+import EquationEditor from "./EquationEditor";
+import EquationParamTable from "./EquationParamTable";
+import EquationSummary from "./EquationSummary";
 import FindXYSection from "./FindXYSection";
 import FitConvergenceWarning from "./FitConvergenceWarning";
 import { useEquationFit } from "./useEquationFit";
@@ -39,7 +41,15 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
   const params = (eq.result?.params as number[] | undefined) ?? [];
   const errors = (eq.result?.errors as (number | null)[] | undefined) ?? [];
   const resultNames = (eq.result?.paramNames as string[] | undefined) ?? eq.paramNames;
-  const paramRows = params.map((p, i) => [resultNames[i] ?? `p${i}`, fmt(p), fmt(errors[i])]);
+  // A held parameter kept its guess and has no standard error (P2.7) — say
+  // "held" rather than the blank a failed error estimate would show.
+  // Units as they were when this result was fitted (snapshot, like held).
+  const unitOf = (i: number) => (eq.fitUnits[i] ? ` ${eq.fitUnits[i]}` : "");
+  const paramRows = params.map((p, i) => [
+    resultNames[i] ?? `p${i}`,
+    `${fmt(p)}${unitOf(i)}`,
+    eq.fitHeld[i] ? "held" : `${fmt(errors[i])}${Number.isFinite(errors[i]) ? unitOf(i) : ""}`,
+  ]);
   const statRows: (string | number)[][] = eq.result
     ? [
         ["R²", fmt(eq.result.R2)],
@@ -50,66 +60,36 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
 
   return (
     <div>
+      {/* ONE description field, at the top so a chosen saved model's text is
+          the first thing shown (P2.7); it is what Save writes. */}
+      <input
+        className="qz-input"
+        style={{ display: "block", width: "100%", marginTop: 8 }}
+        placeholder="description (optional)"
+        aria-label="model description"
+        title="What this model is for — saved with it and shown in the model picker"
+        value={eq.description}
+        onChange={(e) => eq.setDescription(e.target.value)}
+      />
       <label className="qzk-field-lbl" style={{ marginTop: 10 }}>
         Equation
       </label>
-      <input
-        className="qz-input"
-        style={{ width: "100%", fontFamily: "var(--font-mono)" }}
-        placeholder="y = a*exp(-x/t) + c"
+      <EquationEditor
         value={eq.equation}
-        onChange={(e) => eq.setEquation(e.target.value)}
-        spellCheck={false}
+        onChange={eq.setEquation}
+        status={eq.status}
+        validationError={eq.validationError}
+        errorSpan={eq.errorSpan}
+        noParams={eq.rows.length === 0}
       />
-      <div className="qzk-ds-meta" style={{ marginTop: 6, minHeight: 16 }}>
-        {eq.status === "checking" && (
-          <span style={{ color: "var(--text-faint)" }}>checking…</span>
-        )}
-        {eq.status === "ok" && (
-          <span style={{ color: "var(--text-faint)" }}>
-            {eq.rows.length > 0
-              ? `parameters: ${eq.rows.map((r) => r.name).join(", ")}`
-              : "no free parameters — add at least one to fit"}
-          </span>
-        )}
-        {eq.status === "error" && (
-          <span style={{ color: "var(--danger)" }}>{eq.validationError}</span>
-        )}
-      </div>
+
+      {eq.status === "ok" && eq.summary && eq.rows.length > 0 && (
+        <EquationSummary summary={eq.summary} rows={eq.rows} runProblem={eq.runProblem} />
+      )}
 
       {eq.rows.length > 0 && (
         <div style={{ marginTop: 8 }}>
-          <DataTable
-            columns={["param", "guess", "min", "max"]}
-            rows={eq.rows.map((r, i) => [
-              <span key="n" style={{ fontFamily: "var(--font-mono)" }}>
-                {r.name}
-              </span>,
-              <NumberField
-                key="g"
-                width={60}
-                value={r.guess}
-                onChange={(v) => eq.setRow(i, "guess", v)}
-                aria-label={`guess ${r.name}`}
-              />,
-              <NumberField
-                key="lo"
-                width={60}
-                value={r.min}
-                placeholder="−∞"
-                onChange={(v) => eq.setRow(i, "min", v)}
-                aria-label={`min ${r.name}`}
-              />,
-              <NumberField
-                key="hi"
-                width={60}
-                value={r.max}
-                placeholder="+∞"
-                onChange={(v) => eq.setRow(i, "max", v)}
-                aria-label={`max ${r.name}`}
-              />,
-            ])}
-          />
+          <EquationParamTable rows={eq.rows} setRow={eq.setRow} setHeld={eq.setHeld} />
         </div>
       )}
 
@@ -117,7 +97,10 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
         <Button
           variant="primary"
           size="sm"
-          disabled={!eq.active || eq.busy || eq.status !== "ok" || eq.rows.length === 0}
+          disabled={
+            !eq.active || eq.busy || eq.status !== "ok" || eq.rows.length === 0 || eq.runProblem !== null
+          }
+          title={eq.runProblem ?? undefined}
           onClick={() => void eq.fit()}
         >
           {eq.busy ? "Fitting…" : "Fit"}
@@ -174,7 +157,7 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
           size="sm"
           disabled={eq.status !== "ok" || eq.rows.length === 0 || !eq.modelName.trim()}
           onClick={doSave}
-          title="Save the equation + guesses/bounds as a reusable named model"
+          title="Save the equation + guesses/bounds/units + description as a reusable named model"
         >
           Save
         </Button>

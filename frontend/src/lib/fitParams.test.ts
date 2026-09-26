@@ -99,6 +99,15 @@ describe("parseFitParams", () => {
     expect(parseFitParams(rows, gauss).error).toContain("min is above max");
   });
 
+  it("refuses a HELD start outside its own bounds (the engine would clip it)", () => {
+    const rows = rowsFromModel(gauss).map((r) =>
+      r.name === "amp" ? { ...r, start: "5", max: "2", fixed: true } : r,
+    );
+    expect(parseFitParams(rows, gauss).error).toBe("amp: held at 5, outside its bounds");
+    const free = rows.map((r) => ({ ...r, fixed: false }));
+    expect(parseFitParams(free, gauss).error).toBeUndefined();
+  });
+
   it("refuses unparseable numbers, naming the parameter", () => {
     const rows = rowsFromModel(gauss).map((r) =>
       r.name === "center" ? { ...r, start: "abc" } : r,
@@ -108,7 +117,8 @@ describe("parseFitParams", () => {
 
   it("refuses an all-fixed table rather than sending a no-op fit", () => {
     const rows = rowsFromModel(gauss).map((r) => ({ ...r, fixed: true }));
-    expect(parseFitParams(rows, gauss).error).toContain("nothing left to fit");
+    // One wording with the equation table (lib/paramRowCheck, P2.7 review).
+    expect(parseFitParams(rows, gauss).error).toBe("every parameter is held — nothing left to fit");
   });
 
   it("allows SOME parameters fixed", () => {

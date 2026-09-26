@@ -38,7 +38,15 @@
 import { isGraphTemplate, loadGraphTemplates, saveGraphTemplate, deleteGraphTemplate, type GraphTemplate } from "./figuredoc";
 import { sanitizeFigureOverrides } from "./figureOverrides";
 import { sanitizeExportSeriesStyles } from "./publicationStyles";
-import { isCustomFitModel, loadCustomModels, saveCustomModel, deleteCustomModel, type CustomFitModel } from "./fitmodels";
+import {
+  buildCustomFitModel,
+  CUSTOM_FIT_MODEL_VERSION,
+  deleteCustomModel,
+  isCustomFitModel,
+  loadCustomModels,
+  saveCustomModel,
+  unreadableCustomModelNames,
+} from "./fitmodels";
 import {
   deleteRecipe as deletePeakRecipe,
   isPeakRecipe,
@@ -260,6 +268,11 @@ function parsePeakRecipeFile(text: string): NamedRecord {
  *  matching what the peak and graph parsers already guarantee. */
 function parseFitModelFile(text: string): NamedRecord {
   const o = parseJsonRecord(text, "fit model");
+  // A newer app's record is refused by its number, not as "not valid" (the
+  // peak parser's convention); v2 fields are checked by isCustomFitModel.
+  if (typeof o.version === "number" && (o.version < 1 || o.version > CUSTOM_FIT_MODEL_VERSION)) {
+    throw new Error(`not a valid fit model file (unsupported version ${o.version})`);
+  }
   if (!isCustomFitModel(o)) throw new Error("not a valid fit model file");
   requireName(o, "fit model");
   const bad = (field: string): never => {
@@ -277,16 +290,16 @@ function parseFitModelFile(text: string): NamedRecord {
     const g = o.guesses[i];
     if ((lo !== null && g < lo) || (hi !== null && g > hi)) bad(`guess[${name}]: outside its bounds`);
   });
-  const record: CustomFitModel = {
-    version: 1,
+  return buildCustomFitModel({
     name: o.name,
     equation: o.equation,
     params: [...o.params],
     guesses: [...o.guesses],
     lower: [...o.lower],
     upper: [...o.upper],
-  };
-  return record;
+    description: o.description,
+    units: o.units,
+  });
 }
 
 /** FIELD-LEVEL validation at the file boundary (review finding on #290).
@@ -361,6 +374,7 @@ const ADAPTERS: Record<NameKeyedKind, Adapter> = {
     remove: (name) => void deleteCustomModel(name),
     serialize: serializeRecord,
     parse: parseFitModelFile,
+    hidden: unreadableCustomModelNames,
   },
 };
 

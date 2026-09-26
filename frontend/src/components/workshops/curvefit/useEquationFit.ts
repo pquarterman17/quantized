@@ -1,32 +1,45 @@
 // Custom equation model (GOTO #1) — state hook for EquationModelPanel. Owns
 // the equation text + debounced validation, the parameter table (guess/min/
-// max), the fit call through /api/fitting/equation/fit (same engine + result
+// max/hold — the pure half is lib/equationRows), the before-run summary
+// from the validate response (P2.7), the fit call through /api/fitting/equation/fit (same engine + result
 // shape as registry fits), and save/load of named custom models
 // (lib/fitmodels). Mirrors useCurveFit's row-state discipline: fits the
 // analysis view (#50/#53) and expands the overlay back to full length.
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { fitEquation, validateEquation } from "../../../lib/api/curvefit";
+import { fitEquation, validateEquation, type EquationValidateResult } from "../../../lib/api/curvefit";
+import {
+  equationFitStep,
+  equationRunProblem,
+  newEquationRow,
+  parseEquationRows,
+  type EquationParamRow,
+} from "../../../lib/equationRows";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { recordUse } from "../../../lib/recipeIndex";
 import {
+  buildCustomFitModel,
   deleteCustomModel,
   loadCustomModels,
   saveCustomModel,
   type CustomFitModel,
 } from "../../../lib/fitmodels";
+import { codePointSpanToUtf16, type TextSpan } from "../../../lib/equationSpan";
 import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
 import { selectedFitData } from "../../../lib/fitselection";
 
-export interface EquationParamRow {
-  name: string;
-  guess: string; // kept as text while editing; parsed at fit time
-  min: string; // "" = unbounded
-  max: string; // "" = unbounded
+export type { EquationParamRow };
+
+/** What the last successful validate said the equation is made of (P2.7). */
+export interface EquationSummary {
+  variable: string;
+  usesX: boolean;
+  functions: string[];
+  constants: string[];
 }
 
 export type ValidationStatus = "idle" | "checking" | "ok" | "error";
@@ -37,17 +50,38 @@ export interface EquationFitState {
   setEquation: (text: string) => void;
   status: ValidationStatus;
   validationError: string | null;
+  /** Where the syntax error is in `equation` (UTF-16 span), when the
+   *  validate route located it (P2.7); null for any other text. */
+  errorSpan: TextSpan | null;
   rows: EquationParamRow[];
-  setRow: (index: number, field: "guess" | "min" | "max", value: string) => void;
+  setRow: (index: number, field: "guess" | "min" | "max" | "unit", value: string) => void;
+  /** Hold (or release) one parameter at its guess (P2.7). */
+  setHeld: (index: number, held: boolean) => void;
+  /** Before-run summary from the last successful validate; null otherwise. */
+  summary: EquationSummary | null;
+  /** Why the fit cannot run as the table stands (every parameter held, min
+   *  above max, ...), or null. The Fit button is disabled while set. */
+  runProblem: string | null;
   busy: boolean;
   error: string | null;
   result: CalcResult | null;
+  /** Hold flags the CURRENT result was fitted with (aligned with its
+   *  params), so the results table labels held values even after the table
+   *  is edited again. Empty when there is no result. */
+  fitHeld: boolean[];
+  /** Units the CURRENT result was fitted with (trimmed; "" = none), snapshot
+   *  at fit time like `fitHeld`, so editing a unit afterwards cannot relabel
+   *  a value that was already reported. */
+  fitUnits: string[];
   paramNames: string[];
   fit: () => Promise<void>;
   clear: () => void;
   /** Save-as-named-model controls. */
   modelName: string;
   setModelName: (name: string) => void;
+  /** Saved-model description (P2.7 slice 3); "" = none. */
+  description: string;
+  setDescription: (text: string) => void;
   save: () => CustomFitModel[] | null;
   remove: (name: string) => CustomFitModel[];
   /** [min, max] of the fitted x data — the domain Find X/Y (MAIN #15)
@@ -58,9 +92,16 @@ export interface EquationFitState {
 function freshRows(params: string[], prev: EquationParamRow[]): EquationParamRow[] {
   // Keep edited guesses/bounds for parameters that survive the re-validate
   // (matched by name); new parameters start at the neutral guess of 1.
-  return params.map(
-    (name) => prev.find((r) => r.name === name) ?? { name, guess: "1", min: "", max: "" },
-  );
+  return params.map((name) => prev.find((r) => r.name === name) ?? newEquationRow(name));
+}
+
+function summaryOf(v: EquationValidateResult): EquationSummary {
+  return {
+    variable: v.variable ?? "x",
+    usesX: v.usesX ?? true,
+    functions: v.functions ?? [],
+    constants: v.constants ?? [],
+  };
 }
 
 function rowsFromModel(m: CustomFitModel): EquationParamRow[] {
@@ -73,6 +114,8 @@ function rowsFromModel(m: CustomFitModel): EquationParamRow[] {
       guess: String(m.guesses[i] ?? 1),
       min: lo === null ? "" : String(lo),
       max: hi === null ? "" : String(hi),
+      fixed: false,
+      unit: m.units?.[i] ?? "",
     };
   });
 }
@@ -91,12 +134,20 @@ export function useEquationFit(
   const [equation, setEquation] = useState(initial?.equation ?? "");
   const [status, setStatus] = useState<ValidationStatus>(initial ? "ok" : "idle");
   const [validationError, setValidationError] = useState<string | null>(null);
+  // The span is tied to the exact text it was reported for, so a keystroke
+  // (which re-validates after a debounce) can never mark the wrong characters.
+  const [errorAt, setErrorAt] = useState<{ text: string; span: TextSpan } | null>(null);
   const [rows, setRows] = useState<EquationParamRow[]>(initial ? rowsFromModel(initial) : []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CalcResult | null>(null);
+  const [fitHeld, setFitHeld] = useState<boolean[]>([]);
+  const [fitUnits, setFitUnits] = useState<string[]>([]);
   const [paramNames, setParamNames] = useState<string[]>(initial ? [...initial.params] : []);
   const [modelName, setModelName] = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [summary, setSummary] = useState<EquationSummary | null>(null);
+  const runProblem = useMemo(() => equationRunProblem(rows), [rows]);
 
   // The rows the debounced validate reconciles against — a ref so the effect
   // doesn't re-fire (and re-validate) on every guess keystroke.
@@ -117,6 +168,7 @@ export function useEquationFit(
       setValidationError(null);
       setRows([]);
       setParamNames([]);
+      setSummary(null);
       return;
     }
     setStatus("checking");
@@ -130,14 +182,20 @@ export function useEquationFit(
             setValidationError(null);
             setParamNames(v.params);
             setRows(freshRows(v.params, rowsRef.current));
+            setSummary(summaryOf(v));
           } else {
             setStatus("error");
+            setSummary(null);
             setValidationError(v.error ?? "invalid equation");
+            const span = codePointSpanToUtf16(equation, v.errorStart, v.errorEnd);
+            setErrorAt(span ? { text: equation, span } : null);
           }
         })
         .catch((e: unknown) => {
           if (cancelled) return;
           setStatus("error");
+          setSummary(null);
+          setErrorAt(null);
           setValidationError(e instanceof Error ? e.message : "validation unavailable");
         });
     }, debounceMs);
@@ -147,15 +205,12 @@ export function useEquationFit(
     };
   }, [equation, debounceMs]);
 
-  function setRow(index: number, field: "guess" | "min" | "max", value: string): void {
+  function setRow(index: number, field: "guess" | "min" | "max" | "unit", value: string): void {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
   }
 
-  function parseBound(text: string, which: "min" | "max", name: string): number | null {
-    if (text.trim() === "") return null;
-    const v = Number(text);
-    if (!Number.isFinite(v)) throw new Error(`${which} for "${name}" is not a number`);
-    return v;
+  function setHeld(index: number, held: boolean): void {
+    setRows((prev) => prev.map((r, i) => (i === index ? { ...r, fixed: held } : r)));
   }
 
   async function fit(): Promise<void> {
@@ -163,15 +218,10 @@ export function useEquationFit(
     setBusy(true);
     setError(null);
     try {
-      const guesses = rows.map((r) => {
-        const v = Number(r.guess);
-        if (r.guess.trim() === "" || !Number.isFinite(v)) {
-          throw new Error(`guess for "${r.name}" is not a number`);
-        }
-        return v;
-      });
-      const lower = rows.map((r) => parseBound(r.min, "min", r.name));
-      const upper = rows.map((r) => parseBound(r.max, "max", r.name));
+      const parsed = parseEquationRows(rows);
+      if ("error" in parsed) throw new Error(parsed.error);
+      const { guesses, lower, upper, fixed } = parsed;
+      const units = rows.map((r) => r.unit.trim());
 
       // Resolve a still-pending dataset first (#38), then fit the plotted
       // X/primary-Y over the analysis view (#50/#53) — the same channels + rows
@@ -194,8 +244,11 @@ export function useEquationFit(
         guesses,
         ...(lower.some((v) => v !== null) ? { lower } : {}),
         ...(upper.some((v) => v !== null) ? { upper } : {}),
+        ...(fixed.some(Boolean) ? { fixed } : {}),
       });
       setResult(r);
+      setFitHeld(fixed);
+      setFitUnits(units);
       // P3.5 "recently used" — the one genuinely ambiguous kind, so it is
       // wired precisely. Selecting a saved model from the dropdown is a
       // BROWSE; the use is the fit actually running with it. And the name is
@@ -207,10 +260,12 @@ export function useEquationFit(
         recordUse({ kind: "fitModel", scope: "global", id: modelName });
       }
       // Script-only macro step ("ui" kind): the pipeline runner's "fit" step
-      // re-executes registry models by name, which a raw equation is not.
+      // re-executes registry models by name, which a raw equation is not. It
+      // carries the full setup that ran (lib/equationRows equationFitStep).
+      const step = equationFitStep(equation, parsed);
       useApp
         .getState()
-        .recordMacro(`Fit equation ${modelName || equation}`, `qz.fitEquation(${JSON.stringify(equation)})`);
+        .recordMacro(`Fit equation ${modelName || equation}`, step.code, { kind: "ui", params: step.params });
       const yFit = r.yFit as (number | null)[] | undefined;
       if (Array.isArray(yFit)) {
         const n = ds.data.time.length;
@@ -228,6 +283,8 @@ export function useEquationFit(
 
   function clear(): void {
     setResult(null);
+    setFitHeld([]);
+    setFitUnits([]);
     setError(null);
     setFitOverlay(null);
   }
@@ -235,8 +292,7 @@ export function useEquationFit(
   function save(): CustomFitModel[] | null {
     const name = modelName.trim();
     if (!name || status !== "ok" || rows.length === 0) return null;
-    const model: CustomFitModel = {
-      version: 1,
+    const model = buildCustomFitModel({
       name,
       equation,
       params: rows.map((r) => r.name),
@@ -246,8 +302,16 @@ export function useEquationFit(
       }),
       lower: rows.map((r) => (r.min.trim() === "" || !Number.isFinite(Number(r.min)) ? null : Number(r.min))),
       upper: rows.map((r) => (r.max.trim() === "" || !Number.isFinite(Number(r.max)) ? null : Number(r.max))),
-    };
-    return saveCustomModel(model);
+      description,
+      units: rows.map((r) => r.unit),
+    });
+    try {
+      return saveCustomModel(model);
+    } catch (e) {
+      // A stored record this build cannot read holds that name (lib/fitmodels).
+      setError(e instanceof Error ? e.message : "could not save the model");
+      return null;
+    }
   }
 
   function remove(name: string): CustomFitModel[] {
@@ -260,16 +324,24 @@ export function useEquationFit(
     setEquation,
     status,
     validationError,
+    errorSpan: errorAt && errorAt.text === equation ? errorAt.span : null,
     rows,
     setRow,
+    setHeld,
+    summary,
+    runProblem,
     busy,
     error,
     result,
+    fitHeld,
+    fitUnits,
     paramNames,
     fit,
     clear,
     modelName,
     setModelName,
+    description,
+    setDescription,
     save,
     remove,
     xRange,

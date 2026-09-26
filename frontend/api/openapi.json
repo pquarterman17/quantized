@@ -3110,6 +3110,111 @@
         "title": "EquationValidateRequest",
         "type": "object"
       },
+      "EquationValidateResponse": {
+        "description": "Live-validation shape (always HTTP 200). On success: the fit\nparameters plus the before-run summary (independent variable, whether it\nis used, the recognised functions/constants). On failure: ``error``, plus\nfor a syntax error the ``[errorStart, errorEnd)`` span it is about (code\npoints of the submitted text) so the editor can mark it inline.",
+        "properties": {
+          "constants": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Constants"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "errorEnd": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorend"
+          },
+          "errorStart": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Errorstart"
+          },
+          "functions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Functions"
+          },
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "params": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Params",
+            "type": "array"
+          },
+          "usesX": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usesx"
+          },
+          "variable": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Variable"
+          }
+        },
+        "required": [
+          "ok",
+          "params"
+        ],
+        "title": "EquationValidateResponse",
+        "type": "object"
+      },
       "EstimateRequest": {
         "properties": {
           "iter_max_passes": {
@@ -13589,9 +13694,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "additionalProperties": true,
-                  "title": "Response Equation Validate Api Fitting Equation Validate Post",
-                  "type": "object"
+                  "$ref": "#/components/schemas/EquationValidateResponse"
                 }
               }
             },

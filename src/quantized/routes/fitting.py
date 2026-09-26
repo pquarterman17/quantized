@@ -18,8 +18,15 @@ from pydantic import BaseModel
 
 from quantized.calc.fit_autoguess import auto_guess
 from quantized.calc.fit_bootstrap import bootstrap_fit, fit_posterior
-from quantized.calc.fit_equation import default_guesses, equation_model
+from quantized.calc.fit_equation import (
+    EquationSyntaxError,
+    check_param_vectors,
+    default_guesses,
+    describe_equation,
+    equation_model,
+)
 from quantized.calc.fit_findxy import find_x, find_y
+from quantized.calc.fit_holds import check_held_starts
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fit_scan import scan_models
 from quantized.calc.fitting import curve_fit, weights_from_dy
@@ -108,6 +115,9 @@ def fit(req: FitRequest) -> dict[str, Any]:
 
     try:
         p0 = req.p0 if req.p0 is not None else auto_guess(req.model, req.x, req.y)
+        # curve_fit would clip a held start into its bounds and still call it
+        # held; refuse instead (P2.7 review, shared with /equation/fit).
+        check_held_starts(FIT_MODELS[req.model]["paramNames"], p0, req.fixed, req.lower, req.upper)
         result = curve_fit(
             req.x,
             req.y,
@@ -195,11 +205,39 @@ class EquationFitRequest(BaseModel):
     calc_errors: bool = True
 
 
-@router.post("/equation/validate")
-def equation_validate(req: EquationValidateRequest) -> dict[str, Any]:
+class EquationValidateResponse(BaseModel):
+    """Live-validation shape (always HTTP 200). On success: the fit
+    parameters plus the before-run summary (independent variable, whether it
+    is used, the recognised functions/constants). On failure: ``error``, plus
+    for a syntax error the ``[errorStart, errorEnd)`` span it is about (code
+    points of the submitted text) so the editor can mark it inline."""
+
+    ok: bool
+    params: list[str]
+    variable: str | None = None
+    usesX: bool | None = None  # camelCase wire names, like paramNames
+    functions: list[str] | None = None
+    constants: list[str] | None = None
+    error: str | None = None
+    errorStart: int | None = None
+    errorEnd: int | None = None
+
+
+@router.post(
+    "/equation/validate",
+    response_model=EquationValidateResponse,
+    response_model_exclude_none=True,
+)
+def equation_validate(req: EquationValidateRequest) -> EquationValidateResponse:
     """Validate a custom fit equation; 200 with ok/params[]/error (live UI)."""
     try:
-        _, names = equation_model(req.equation)
+        info = describe_equation(req.equation)
+    except EquationSyntaxError as exc:
+        # Same curated, ASCII-only parser text as below, plus its span.
+        # NOTE(codeql py/stack-trace-exposure) -- see the note below.
+        return EquationValidateResponse(
+            ok=False, params=[], error=str(exc), errorStart=exc.start, errorEnd=exc.end
+        )
     except (ValueError, ArithmeticError, IndexError) as exc:
         # Telling the user WHY their equation is rejected ("unknown function
         # 'expp'", "unbalanced parenthesis") is the whole point of a validate
@@ -208,8 +246,15 @@ def equation_validate(req: EquationValidateRequest) -> dict[str, Any]:
         # traceback: no frames, no file paths, no interpreter state. See the
         # note on stack-trace exposure in SECURITY.md.
         # NOTE(codeql py/stack-trace-exposure)
-        return {"ok": False, "params": [], "error": str(exc)}
-    return {"ok": True, "params": names}
+        return EquationValidateResponse(ok=False, params=[], error=str(exc))
+    return EquationValidateResponse(
+        ok=True,
+        params=info.params,
+        variable="x",
+        usesX=info.uses_x,
+        functions=info.functions,
+        constants=info.constants,
+    )
 
 
 @router.post("/equation/fit")
@@ -220,8 +265,6 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
         if not names:
             raise ValueError("equation has no free parameters to fit")
         p0 = req.guesses if req.guesses is not None else default_guesses(names)
-        if len(p0) != len(names):
-            raise ValueError(f"expected {len(names)} guesses, got {len(p0)}")
         lower = (
             [-math.inf if v is None else v for v in req.lower]
             if req.lower is not None
@@ -232,6 +275,7 @@ def equation_fit(req: EquationFitRequest) -> dict[str, Any]:
             if req.upper is not None
             else None
         )
+        check_param_vectors(names, p0, req.fixed, lower, upper)
         result = curve_fit(
             req.x,
             req.y,

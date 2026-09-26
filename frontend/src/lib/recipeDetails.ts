@@ -216,9 +216,13 @@ function boundText(v: number | null, openGlyph: string): string {
 function fitModelDetails(row: RecipeDescriptor, m: CustomFitModel): RecipeDetails {
   const fields = commonFields(row, null, undefined);
   fields.push({ label: "Equation", value: m.equation, mono: true });
+  if (m.description) fields.push({ label: "Description", value: m.description });
   fields.push(actionsField(row.kind));
+  // v2 units (audit P2.7) trail the bounds: "t = 1.5 [0, ∞] s".
+  const unit = (i: number) => (m.units?.[i] ? ` ${m.units[i]}` : "");
   const params = m.params.map(
-    (name, i) => `${name} = ${m.guesses[i]} [${boundText(m.lower[i], "−∞")}, ${boundText(m.upper[i], "∞")}]`,
+    (name, i) =>
+      `${name} = ${m.guesses[i]} [${boundText(m.lower[i], "−∞")}, ${boundText(m.upper[i], "∞")}]${unit(i)}`,
   );
   return { fields, sections: [{ title: "Parameters", items: params, mono: true }] };
 }

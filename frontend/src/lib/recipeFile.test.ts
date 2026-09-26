@@ -85,6 +85,10 @@ describe("sniffRecipeKind", () => {
   it("identifies a fit model from its own exporter", () => {
     saveCustomModel({ version: 1, name: "M", equation: "y=a*x", params: ["a"], guesses: [1], lower: [null], upper: [null] });
     expect(sniffRecipeKind(JSON.parse(exportOrThrow("fitModel", "M")))).toBe("fitModel");
+    // v2 (description/units, audit P2.7) and a newer version still route to
+    // the fit-model parser, which then decides.
+    expect(sniffRecipeKind({ version: 2, equation: "a*x", params: ["a"] })).toBe("fitModel");
+    expect(sniffRecipeKind({ version: 3, equation: "a*x", params: ["a"] })).toBe("fitModel");
   });
 
   it("identifies a graph template from its own exporter", () => {
