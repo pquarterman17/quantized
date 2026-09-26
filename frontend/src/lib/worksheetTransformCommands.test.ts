@@ -62,7 +62,7 @@ describe("Join by key — review before commit", () => {
     await settle();
     const [title, message, label, danger] = vi.mocked(askConfirm).mock.calls[0];
     expect(title).toBe("Join (inner): review before creating");
-    expect(message.split("\n")).toEqual([
+    expect(String(message).split("\n")).toEqual([
       "Result: 2 rows × 2 columns (plus X).",
       '• left.dat: 1 row repeats an earlier key (1 duplicated key value in "T"); only the first row of each key is kept.',
       '• left.dat: 1 row with a blank or non-numeric "T" cannot match anything and is dropped.',
@@ -98,6 +98,14 @@ describe("Stack / transpose", () => {
     expect(vi.mocked(askConfirm).mock.calls[0][1]).toContain("T in K; a in emu");
     expect(vi.mocked(askConfirm).mock.calls[0][3]).toBe(true);
     expect(useApp.getState().datasets).toHaveLength(2);
+  });
+
+  it("stray channel tokens are cleaned before recording, so the step survives a save", async () => {
+    setup();
+    vi.mocked(askParams).mockReset().mockResolvedValueOnce({ channels: "1,1,,9,x" });
+    runStackWorksheet(useApp.getState);
+    await settle();
+    expect(useApp.getState().macroSteps[0].params).toMatchObject({ op: "stack", channels: [0] });
   });
 
   it("transpose only has an info note (units dropped), so no review is shown", async () => {

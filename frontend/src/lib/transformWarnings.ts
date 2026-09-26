@@ -331,16 +331,19 @@ export function analyzeAlgebra(
   const yb = columnUnitOf(b, channelB);
   if (unitsConflict(ya, yb)) {
     const cols = [columnName(a, channelA), columnName(b, channelB)];
+    // The unit label calc.aggregate.dataset_algebra writes for each op.
+    const label =
+      operation === "A*B" ? `${ya}²` : operation === "A/B" ? "ratio" : operation === "(A-B)/(A+B)" ? "asymmetry" : ya;
     out.push(SAME_UNIT_OPS.has(operation)
       ? {
           code: "unit-mismatch",
-          text: `Y units differ: "${cols[0]}" is ${ya} but "${cols[1]}" is ${yb}; ${operation} of different units is not meaningful and the result is labelled ${ya}.`,
+          text: `Y units differ: "${cols[0]}" is ${ya} but "${cols[1]}" is ${yb}; ${operation} of different units is not meaningful (the result is labelled "${label}").`,
           columns: cols,
           confirm: true,
         }
       : {
           code: "label-mismatch",
-          text: `Y units differ ("${cols[0]}" is ${ya}, "${cols[1]}" is ${yb}); check the result's unit label, which is derived from A's unit only.`,
+          text: `Y units differ ("${cols[0]}" is ${ya}, "${cols[1]}" is ${yb}); the result is labelled "${label}", which does not reflect ${yb}.`,
           columns: cols,
         });
   }

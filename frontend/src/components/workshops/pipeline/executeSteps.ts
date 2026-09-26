@@ -24,6 +24,11 @@ export interface ExecuteResult {
   /** Every fit-step result, in step order (the batch extracts outputs from
    *  the LAST one). */
   fits: CalcResult[];
+  /** The dataset each fit in `fits` ran on (index-aligned) — `targetId`, or
+   *  a transform step's output once one ran (P2.5). */
+  fitTargets: string[];
+  /** The dataset the run ended on (`targetId` unless a transform ran). */
+  target: string;
 }
 
 /** Run `steps` against dataset `targetId`. A failing step logs `failed` and
@@ -36,6 +41,7 @@ export async function executeSteps(
 ): Promise<ExecuteResult> {
   const log: Record<string, StepLogEntry> = {};
   const fits: CalcResult[] = [];
+  const fitTargets: string[] = [];
   const store = () => useApp.getState();
 
   // #38 deferred edge: a still-pending (preview-only) target must resolve to
@@ -51,16 +57,25 @@ export async function executeSteps(
     const note = `couldn't load full data — ${e instanceof Error ? e.message : "error"}`;
     for (const step of steps) log[step.id] = { status: "failed", note };
     onProgress?.({ ...log });
-    return { log, fits };
+    return { log, fits, fitTargets, target: targetId };
   }
 
   // The dataset each step acts on. A `transform` step (P2.5) derives a new
   // dataset and every later step continues on THAT output — the same thing
   // recording did, since the output became the active dataset.
   let target = targetId;
+  // Set when a transform FAILS: every later step was recorded against that
+  // transform's output, which does not exist — running them on the input
+  // instead would edit the user's source dataset in place. They are skipped.
+  let blockedBy: string | null = null;
   for (const step of steps) {
     if (!step.enabled) {
       log[step.id] = { status: "skipped", note: "disabled" };
+      onProgress?.({ ...log });
+      continue;
+    }
+    if (blockedBy) {
+      log[step.id] = { status: "skipped", note: `not run — an earlier transform failed (${blockedBy})` };
       onProgress?.({ ...log });
       continue;
     }
@@ -130,6 +145,7 @@ export async function executeSteps(
           const gapNote = pairs.complete ? "" : ` (${pairs.n - pairs.keep.length} gap rows excluded)`;
           const r = await fitModel({ model: spec.model, x: pairs.x, y: pairs.y, ...(finiteDy ? { dy: finiteDy } : {}) });
           fits.push(r);
+          fitTargets.push(target);
           const r2 = typeof r.R2 === "number" ? ` R²=${r.R2.toFixed(4)}` : "";
           log[step.id] = { status: "ok", note: `fit${r2}${wnote}${gapNote}` };
           break;
@@ -157,8 +173,9 @@ export async function executeSteps(
         status: "failed",
         note: e instanceof Error ? e.message : "error",
       };
+      if (step.kind === "transform") blockedBy = step.label;
     }
     onProgress?.({ ...log });
   }
-  return { log, fits };
+  return { log, fits, fitTargets, target };
 }

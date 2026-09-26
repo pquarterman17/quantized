@@ -36,6 +36,8 @@ export interface DatasetMathState {
   /** A unit mismatch is present and not yet acknowledged. */
   blockedByUnits: boolean;
   unitsAcknowledged: boolean;
+  /** A pick is a still-loading book: the counts above are from its preview. */
+  previewOnly: boolean;
   setUnitsAcknowledged: (ok: boolean) => void;
   setIdA: (id: string) => void;
   setIdB: (id: string) => void;
@@ -104,6 +106,7 @@ export function useDatasetMath(): DatasetMathState {
     warnings,
     blockedByUnits,
     unitsAcknowledged,
+    previewOnly: Boolean(pickA?.pending || pickB?.pending),
     setUnitsAcknowledged: (ok) => setAckFor(ok ? pickKey : null),
     setIdA,
     setIdB,

@@ -151,6 +151,15 @@ describe("analyzeAlgebra", () => {
     expect(codes(div)).toContain("label-mismatch");
   });
 
+  it("names the unit label the backend actually writes for each op", () => {
+    const b = ds([0, 5], [[1, 1]], ["B"], ["T"]);
+    const text = (op: string) => analyzeAlgebra(a, b, op, "a", "b")[0].text;
+    expect(text("A-B")).toContain('labelled "K"');
+    expect(text("(A-B)/(A+B)")).toContain('labelled "asymmetry"');
+    expect(text("A/B")).toContain('labelled "ratio"');
+    expect(text("A*B")).toContain('labelled "K²"');
+  });
+
   it("an X unit mismatch always needs confirm", () => {
     const ax = { ...a, metadata: { x_column_unit: "Oe" } };
     const bx = ds([0, 5], [[1, 1]], ["B"], ["K"], { x_column_unit: "T" });

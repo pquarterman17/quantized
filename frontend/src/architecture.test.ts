@@ -488,10 +488,12 @@ const STORE_PINS: Record<string, number> = {
   // `.map`/`.filter` even though its content is unchanged) was written and
   // run green against the PRE-extraction code and passes byte-unchanged
   // after the move.
-  // 1386 -> 1361 (2026-09-25, P2.5 opener): `mergeSelected`'s body moved to
+  // 1386 -> 1340 (2026-09-25, P2.5 opener): `mergeSelected`'s body moved to
   // lib/transformRun.ts (lazy) so the merge could gain its unit/label review
-  // and a recorded pipeline step; ratcheted down with the extraction.
-  "/store/useApp.ts": 1361,
+  // and a recorded pipeline step, and `clearAll` (literally loadWorkspace
+  // with an empty workspace) moved beside loadWorkspace in
+  // store/workspaceHydration.ts; ratcheted down with the extraction.
+  "/store/useApp.ts": 1340,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -1069,12 +1071,7 @@ describe("pending-edit guard ratchet (BUG-006 site 9)", () => {
       const updaters = [
         ...src.matchAll(/datasets:\s*\w+\.datasets\.map\(/g),
         ...src.matchAll(/\w+\s*=\s*\w+\.datasets\.map\(/g),
-        // An EMPTY literal (`datasets: []`, e.g. `clearAll`'s loadWorkspace)
-        // writes no dataset at all, so it is not an updater. Before this
-        // exclusion it was flagged whenever the NEXT action's `data:` fell
-        // inside its 1,400-char window — 2026-09-25 (P2.5), once the
-        // `mergeSelected` body between them moved to a lazy module.
-        ...src.matchAll(/datasets:\s*\[(?!\s*\])/g),
+        ...src.matchAll(/datasets:\s*\[/g),
       ];
       const touchesData = updaters.some((m) =>
         /\b(data|metadata|cat_levels|formulas|excludedRows|filter)\s*:/.test(src.slice(m.index ?? 0, (m.index ?? 0) + 1400)),

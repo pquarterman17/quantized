@@ -71,7 +71,11 @@ export function runStackWorksheet(s: StoreGet): void {
       hint: "Produces X/time, Source channel, and Value columns; channels with different units are flagged before anything is created.",
     }]);
     if (!params) return;
-    const channels = String(params.channels).split(",").map((token) => Number.parseInt(token.trim(), 10) - 1);
+    // Clean BEFORE recording: a stray token ("1,2,") would otherwise record
+    // NaN, which JSON saves as null and the replay then rejects.
+    const channels = [...new Set(
+      String(params.channels).split(",").map((token) => Number.parseInt(token.trim(), 10) - 1),
+    )].filter((c) => Number.isInteger(c) && c >= 0 && c < source.data.labels.length);
     const { runTransform, reviewTransform } = await pending;
     await runTransform(s, { op: "stack", channels }, source.id, reviewTransform);
   });

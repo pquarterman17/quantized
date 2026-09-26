@@ -15,6 +15,10 @@ import { useApp } from "../../../store/useApp";
 import { executeSteps } from "./executeSteps";
 
 vi.mock("../../../store/toasts", () => ({ toast: vi.fn() }));
+vi.mock("../../../lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api")>()),
+  fitModel: vi.fn(async () => ({ params: [1, 0], R2: 1 })),
+}));
 // Dataset math is a backend call; a deterministic stand-in (A - B on A's grid,
 // B looked up by x) keeps the replay comparison meaningful offline.
 vi.mock("../../../lib/api/datasetAlgebra", () => ({
@@ -157,6 +161,33 @@ describe("executeSteps with transform steps", () => {
     const { log } = await executeSteps(steps, "src");
     expect(log[steps[0].id]).toEqual({ status: "failed", note: 'the recorded input "oth.dat" is not in this workspace' });
     expect(useApp.getState().datasets).toHaveLength(1);
+  });
+
+  it("steps after a FAILED transform are skipped, never run on the input", async () => {
+    const join = makeStep("transform", "Join src with gone.dat (inner)", "qz.transform()", {
+      op: "join", leftKey: 0, rightKey: 0, mode: "inner", with: { id: "gone", name: "gone.dat" },
+    });
+    const addCol = makeStep("expression", "Add column dbl", "qz.addColumn()", { name: "dbl", expr: "B*2" });
+    const { log, target } = await executeSteps([join, addCol], "src");
+    expect(log[join.id].status).toBe("failed");
+    expect(log[addCol.id]).toEqual({
+      status: "skipped",
+      note: "not run — an earlier transform failed (Join src with gone.dat (inner))",
+    });
+    expect(byId("src").formulas).toBeUndefined();
+    expect(target).toBe("src");
+  });
+
+  it("reports which dataset each fit ran on (a fit after a transform ran on its output)", async () => {
+    const { fitModel } = await import("../../../lib/api");
+    const stack = makeStep("transform", "Stack", "qz.transform()", { op: "stack", channels: [1, 2] });
+    const fit = makeStep("fit", "Fit linear", "qz.fit()", { model: "linear" });
+    const before = ids();
+    const { fitTargets, target } = await executeSteps([stack, fit], "src");
+    const out = [...ids()].filter((id) => !before.has(id));
+    expect(fitTargets).toEqual(out);
+    expect(target).toBe(out[0]);
+    expect(fitModel).toHaveBeenCalledTimes(1);
   });
 
   it("logs the recorded warnings on replay", async () => {

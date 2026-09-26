@@ -52,6 +52,11 @@ export default function DatasetMathPanel() {
           />
 
           <TransformWarningList warnings={m.warnings} />
+          {m.previewOnly && m.warnings.length > 0 && (
+            <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
+              Counted on the loaded preview; the full data is checked again when you combine.
+            </div>
+          )}
           {(m.blockedByUnits || m.unitsAcknowledged) && (
             <div style={{ marginTop: 6 }}>
               <Checkbox checked={m.unitsAcknowledged} onChange={m.setUnitsAcknowledged}>

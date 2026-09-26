@@ -182,14 +182,17 @@ async function compute(p: TransformParams, primary: Dataset, others: Dataset[]):
   }
 }
 
+/** Resolve the recorded second inputs (bounded concurrency, like the old
+ *  merge path), in order, failing by NAME on the first one that is gone. */
 async function resolveRefs(s: StoreGet, refs: readonly DatasetRef[]): Promise<Dataset[]> {
-  const out: Dataset[] = [];
-  for (const ref of refs) {
-    const ds = await s().resolveDataset(ref.id);
-    if (!ds) throw new Error(`the recorded input "${ref.name}" is not in this workspace`);
-    out.push(ds);
-  }
-  return out;
+  const missing = refs.find((r) => !s().datasets.some((d) => d.id === r.id));
+  if (missing) throw new Error(`the recorded input "${missing.name}" is not in this workspace`);
+  const got = await s().resolveDatasets(refs.map((r) => r.id));
+  return refs.map((r) => {
+    const ds = got.find((d) => d.id === r.id);
+    if (!ds) throw new Error(`the recorded input "${r.name}" could not be loaded`);
+    return ds;
+  });
 }
 
 /** Interactive review: silent when there is nothing to say; a unit mismatch
@@ -220,8 +223,11 @@ export async function runTransform(
   review?: ReviewFn,
 ): Promise<TransformOutcome | null> {
   if (p.op === "split") {
+    if (!s().datasets.some((d) => d.id === primaryId)) throw new Error("the input dataset is unavailable");
     const ids = await s().splitDatasetByColumn(primaryId, p.col, p.tolerance ?? undefined);
-    if (!ids.length) throw new Error("the column did not split into two or more groups");
+    // The store action already said why (a notification): fewer than two
+    // groups, or more than the group cap. Point at it rather than guess.
+    if (!ids.length) throw new Error("the split was refused — see the notification for why");
     const first = s().datasets.find((d) => d.id === ids[0]);
     const w = first?.data.metadata?.transform_warnings;
     return {
@@ -245,9 +251,15 @@ export async function runTransform(
     kind: "transform",
     params: { ...p, input: { id: primary.id, name: primary.name } },
   });
-  const n = actionable(c.preview.warnings).length;
-  s().setStatus(`created ${c.name}${n ? ` — ${n} warning${n === 1 ? "" : "s"} recorded in its metadata` : ""}`);
+  s().setStatus(`created ${c.name}${recordedNote(c.preview.warnings)}`);
   return { id, name: c.name, warnings: c.preview.warnings };
+}
+
+/** " — N warnings recorded in its metadata" (every stamped warning, info
+ *  included — the metadata holds them all), or "" when there are none. */
+function recordedNote(warnings: readonly TransformWarning[]): string {
+  const n = warnings.length;
+  return n ? ` — ${n} warning${n === 1 ? "" : "s"} recorded in its metadata` : "";
 }
 
 const OPS = new Set(["transpose", "stack", "unstack", "join", "merge", "algebra", "split"]);
@@ -271,7 +283,9 @@ export function transformParamsOf(raw: Record<string, unknown>): TransformParams
     case "transpose": return { op };
     case "stack": {
       const ch = raw.channels;
-      if (!Array.isArray(ch) || !ch.every((c) => typeof c === "number")) throw new Error('transform "stack" needs "channels"');
+      if (!Array.isArray(ch) || !ch.length || !ch.every((c) => Number.isInteger(c))) {
+        throw new Error('transform "stack" needs integer "channels"');
+      }
       return { op, channels: ch as number[] };
     }
     case "unstack": {
@@ -342,7 +356,7 @@ export async function runMergeSelected(s: StoreGet): Promise<void> {
     const out = await runTransform(s, { op: "merge", with: rest.map((d) => ({ id: d.id, name: d.name })) }, first.id, reviewTransform);
     if (!out) return;
     const rows = s().datasets.find((d) => d.id === out.id)?.data.time.length ?? 0;
-    s().setStatus(`merged ${picks.length} datasets → ${rows} rows`);
+    s().setStatus(`merged ${picks.length} datasets → ${rows} rows${recordedNote(out.warnings)}`);
     toast(`merged ${picks.length} datasets`, "ok");
   } catch (e) {
     const msg = `could not merge the selected datasets: ${e instanceof Error ? e.message : "unknown error"} — nothing was added`;

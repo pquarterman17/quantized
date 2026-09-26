@@ -6,6 +6,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useApp } from "../store/useApp";
+import type { TransformPreview } from "./transformRun";
 import type { DataStruct, Dataset } from "./types";
 
 vi.mock("../store/confirmDialog", () => ({ askConfirm: vi.fn() }));
@@ -51,11 +52,11 @@ const joinParams = { op: "join" as const, leftKey: 0, rightKey: 0, mode: "inner"
 
 describe("runTransform", () => {
   it("shows the review BEFORE creating anything, with counts, and declining creates nothing", async () => {
-    const review = vi.fn(async () => false);
+    const review = vi.fn(async (_pv: TransformPreview) => false);
     const out = await runTransform(useApp.getState, joinParams, "L", review);
     expect(out).toBeNull();
     expect(review).toHaveBeenCalledTimes(1);
-    const pv = review.mock.calls[0][0] as { summary: string; warnings: { code: string; count?: number }[] };
+    const pv = review.mock.calls[0][0];
     expect(pv.summary).toBe("Result: 2 rows × 2 columns (plus X).");
     expect(pv.warnings.find((w) => w.code === "duplicate-keys")?.count).toBe(1);
     expect(created()).toEqual([]);
@@ -99,7 +100,19 @@ describe("runTransform", () => {
     await runTransform(useApp.getState, { op: "transpose" }, "C", reviewTransform);
     expect(askConfirm).not.toHaveBeenCalled();
     expect(useApp.getState().datasets).toHaveLength(2);
-    expect(useApp.getState().status).toBe("created c (transposed)");
+    expect(useApp.getState().status).toBe("created c (transposed) — 1 warning recorded in its metadata");
+  });
+
+  it("a refused split points at the store's own notification instead of guessing a cause", async () => {
+    // A single-valued column: the store refuses (fewer than 2 groups) and toasts why.
+    const flat: Dataset = { id: "F", name: "flat", data: struct([1, 1, 1], [1, 1, 1]) };
+    useApp.setState({ datasets: [flat] });
+    await expect(runTransform(useApp.getState, { op: "split", col: 0, tolerance: 0 }, "F")).rejects.toThrow(
+      "the split was refused — see the notification for why",
+    );
+    await expect(runTransform(useApp.getState, { op: "split", col: 0, tolerance: 0 }, "nope")).rejects.toThrow(
+      "the input dataset is unavailable",
+    );
   });
 
   it("a missing recorded second input fails naming it — never a guess by name", async () => {
@@ -137,6 +150,12 @@ describe("transformParamsOf (recorded params are user-editable JSON)", () => {
     for (const p of all) expect(transformParamsOf({ ...p, input: { id: "L", name: "l" } })).toEqual(p);
   });
 
+  it("rejects non-integer or empty stack channels (a NaN saved as null)", () => {
+    expect(() => transformParamsOf({ op: "stack", channels: [0, null] })).toThrow('integer "channels"');
+    expect(() => transformParamsOf({ op: "stack", channels: [1.5] })).toThrow('integer "channels"');
+    expect(() => transformParamsOf({ op: "stack", channels: [] })).toThrow('integer "channels"');
+  });
+
   it("rejects malformed params with a message naming the problem", () => {
     expect(() => transformParamsOf({ op: "explode" })).toThrow('unknown transform "explode"');
     expect(() => transformParamsOf({ op: "join", leftKey: 0, rightKey: 0, mode: "inner" })).toThrow("no recorded second input");
@@ -172,7 +191,7 @@ describe("Merge selected / append import (by column position)", () => {
     const merged = useApp.getState().datasets.find((d) => d.name === "merged (2)");
     expect(merged?.data.time).toEqual([2, 1]);
     expect(merged?.data.metadata.transform_warnings).toHaveLength(1);
-    expect(useApp.getState().status).toBe("merged 2 datasets → 2 rows");
+    expect(useApp.getState().status).toBe("merged 2 datasets → 2 rows — 1 warning recorded in its metadata");
     expect(useApp.getState().macroSteps[0].params).toMatchObject({ op: "merge", with: [{ id: "A", name: "a.dat" }], input: { id: "B" } });
   });
 
