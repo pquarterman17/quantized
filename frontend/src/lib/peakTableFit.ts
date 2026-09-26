@@ -17,7 +17,7 @@
 // path needs in ./peakTable instead. (The `.dwk` codec itself has since gone
 // lazy, lib/workspaceCodecLazy.ts; the split now keeps that chunk small.)
 
-import { PEAK_TABLE_VERSION, type MultiFitResult, type PeakTable, type PeakTableEntry } from "./peakTable";
+import { ERR_COLUMNS, PEAK_TABLE_VERSION, type MultiFitResult, type PeakTable, type PeakTableEntry } from "./peakTable";
 import { analysisData } from "./rowstate";
 import type { DataStruct, Dataset } from "./types";
 
@@ -436,19 +436,23 @@ export function withPeakManualEdit(table: PeakTable, id: string, patch: PeakManu
   if (!differs("area") && (differs("height") || differs("fwhm")) && current.height !== 0 && current.fwhm !== 0) {
     next.area = current.area * (next.height / current.height) * (next.fwhm / current.fwhm);
   }
-  if (differs("center")) next.centerErr = null;
-  if (differs("fwhm")) next.fwhmErr = null;
-  if (differs("height")) next.heightErr = null;
-  // Model-fit rows (the Peak Analyzer's publish): area has an error too, and
-  // it goes whenever the area VALUE moved — typed, or rescaled above. A new
-  // FWHM makes the Voigt G/L split unknown. Each cleared error says why.
-  if (table.provenance.producer === "model_fit") {
-    const changed = (["center", "fwhm", "height", "area"] as const).filter((k) => next[k] !== current[k]);
-    if (changed.includes("area")) next.areaErr = null;
-    if (changed.includes("fwhm")) Object.assign(next, { fwhmG: null, fwhmGErr: null, fwhmL: null, fwhmLErr: null });
-    next.errReasons = { ...current.errReasons };
-    for (const k of changed) next.errReasons[k] = k === "area" && !differs("area") ? RESCALED_ERR_REASON : MANUAL_ERR_REASON;
+  // ONE loop over every field whose VALUE moved (typed, or area rescaled
+  // above): its error column is cleared wherever the row has one (a legacy
+  // row has no `areaErr`, so none is materialised), and a model-fit row
+  // records why. A new FWHM also makes a Voigt row's G/L split unknown: the
+  // widths and their errors go (a null value carries no reason).
+  const modelFit = table.provenance.producer === "model_fit";
+  const reasons = { ...current.errReasons };
+  for (const k of (["center", "fwhm", "height", "area"] as const).filter((f) => next[f] !== current[f])) {
+    if (ERR_COLUMNS[k] in current) next[ERR_COLUMNS[k]] = null;
+    reasons[k] = k === "area" && !differs("area") ? RESCALED_ERR_REASON : MANUAL_ERR_REASON;
+    if (k === "fwhm" && "fwhmG" in current) {
+      Object.assign(next, { fwhmG: null, fwhmGErr: null, fwhmL: null, fwhmLErr: null });
+      delete reasons.fwhmG;
+      delete reasons.fwhmL;
+    }
   }
+  if (modelFit) next.errReasons = reasons;
   const peaks = [...table.peaks];
   peaks[index] = next;
   return { ...table, peaks, provenance: metricsCleared(table.provenance) };

@@ -25,8 +25,10 @@ export default function ModelFitStep({ w }: { w: PeakWizardState }) {
         <Button
           size="sm"
           variant="primary"
-          disabled={m.busy || n === 0 || m.problems.length > 0}
-          title={m.problems.length > 0 ? "fix the parameter table (step 3) first" : undefined}
+          disabled={m.busy || m.publishing || n === 0 || m.problems.length > 0}
+          title={m.problems.length > 0
+            ? "fix the parameter table (step 3) first"
+            : m.publishing ? "publishing to the peak table — wait for it to finish" : undefined}
           onClick={() => void m.run()}
         >
           {m.busy ? "Fitting…" : r ? "Re-fit" : "Fit"}

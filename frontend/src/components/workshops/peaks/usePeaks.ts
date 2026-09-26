@@ -29,7 +29,7 @@ import { peakInputs } from "./peakInputs";
 import { usePeakManualEdits } from "./usePeakManualEdits";
 import { finiteRange } from "./peakRanges";
 import { askParams } from "../../overlays/ParamDialog";
-import { publishFitResult, setPeakExcluded } from "../../../store/peakTables";
+import { confirmPeaksRefit, publishFitResult, setPeakExcluded } from "../../../store/peakTables";
 import { beginOp, endOp, updateOp } from "../../../store/pendingOps";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
@@ -219,6 +219,8 @@ export function usePeaks(): PeaksState {
         setFitError("Find peaks before fitting.");
         return;
       }
+      const go = confirmPeaksRefit(active.id, peaks.length); // a model fit's errors: ask first
+      if (go !== true && !(await go)) return;
       setFitting(true);
       setFitError(null);
       try {
@@ -252,6 +254,8 @@ export function usePeaks(): PeaksState {
         setFitError("Find peaks before fitting.");
         return;
       }
+      const go = confirmPeaksRefit(active.id, peaks.length); // a model fit's errors: ask first
+      if (go !== true && !(await go)) return;
       setFitting(true);
       setFitError(null);
       const total = peaks.length;

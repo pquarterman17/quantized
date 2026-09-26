@@ -23,6 +23,8 @@
 
 import type { PeakModelFitResponse } from "../../../lib/api/peaks";
 import {
+  ERR_COLUMNS,
+  ERR_FIELDS,
   PEAK_TABLE_VERSION,
   type PeakErrField,
   type PeakTable,
@@ -30,9 +32,8 @@ import {
 } from "../../../lib/peakTable";
 import { carriedExclusions, nextPeakId, xChannelIdentity } from "../../../lib/peakTableFit";
 import type { Dataset } from "../../../lib/types";
-import { baselineValueAt } from "../../../lib/peakWizardApex";
 import { wavelengthFromMetadata } from "../../../lib/xrdWavelength";
-import { derivedErrorReason } from "./modelFitReasons";
+import { derivedErrorReason, paramErrorReason, type DerivedKey } from "./modelFitReasons";
 
 /** What a publish reads: a live fit's result (its curves are not needed). */
 export type PublishableFit = Pick<
@@ -57,7 +58,10 @@ export interface ModelFitPublishContext {
   now?: Date;
 }
 
-const DERIVED: readonly PeakErrField[] = ["center", "fwhm", "height", "area"];
+/** The derived per-peak quantities (the first four `ERR_FIELDS`). */
+const DERIVED = ERR_FIELDS.slice(0, 4) as DerivedKey[];
+/** The shape parameters with an error column, and their backend names. */
+const SHAPE_PARAMS: Partial<Record<PeakErrField, string>> = { eta: "eta", fwhmG: "fwhm_g", fwhmL: "fwhm_l" };
 const BG_DEGREE: Record<string, number> = { none: -1, constant: 0, linear: 1, quadratic: 2 };
 
 /** The model's own background at `x`: `sum_k bg.c{k} * (x - x_ref)^k`, the
@@ -73,18 +77,36 @@ export function modelBackgroundAt(res: Pick<PeakModelFitResponse, "parameters" |
   }
 }
 
+/** `values` at the sample of `xs` nearest to `x` — a linear scan, so ANY x
+ *  order works (a down-sweep, a binding-energy axis, a non-monotonic
+ *  segment); `lib/peakWizardApex`'s binary search assumes ascending x. Ties
+ *  go to the first sample. 0 when nothing finite is there. */
+export function nearestSampleValue(
+  xs: readonly number[],
+  values: readonly (number | null)[] | null,
+  x: number,
+): number {
+  if (!values) return 0;
+  let best = -1;
+  for (let i = 0; i < xs.length; i++) {
+    if (Number.isFinite(xs[i]) && (best < 0 || Math.abs(xs[i] - x) < Math.abs(xs[best] - x))) best = i;
+  }
+  const v = best < 0 ? null : values[best];
+  return v != null && Number.isFinite(v) ? v : 0;
+}
+
 /** The background under each fitted centre, on the PLOTTED y: the model's
  *  background there plus the step-① baseline it was fitted over (`baseline`
- *  null = none subtracted), read at the nearest sample of `segmentX` exactly
- *  as the wizard's own markers read it (lib/peakWizardApex). A peak without a
- *  finite centre gets 0 (`modelFitPublishProblem` refuses such a fit). */
+ *  null = none subtracted), read at the nearest sample of `segmentX` (any x
+ *  order). A peak without a finite centre gets 0 (`modelFitPublishProblem`
+ *  refuses such a fit). */
 export function peakBackgrounds(
   res: Pick<PeakModelFitResponse, "peaks" | "parameters" | "background">,
   segmentX: readonly number[],
   baseline: readonly (number | null)[] | null,
 ): number[] {
   return res.peaks.map((p) =>
-    p.center === null ? 0 : modelBackgroundAt(res, p.center) + baselineValueAt(p.center, segmentX, baseline));
+    p.center === null ? 0 : modelBackgroundAt(res, p.center) + nearestSampleValue(segmentX, baseline, p.center));
 }
 
 /** Why this fit cannot become a durable table, or null when it can. */
@@ -119,13 +141,9 @@ export function peakTableFromModelFit(
   const value = (name: string) => param(name)?.value ?? null;
   const err = (name: string) => param(name)?.stderr ?? null;
   const rows = res.peaks.map((p, k): PeakTableEntry => {
-    const reasons: Partial<Record<PeakErrField, string>> = {};
-    for (const key of DERIVED) {
-      if (p[`${key}_stderr`] === null) reasons[key] = derivedErrorReason(res, k, key) ?? "no error reported";
-    }
     const voigt = p.shape === "voigt";
     const pv = p.shape === "pseudo_voigt";
-    return {
+    const row: PeakTableEntry = {
       id: nextPeakId(),
       center: p.center ?? 0,
       centerErr: p.center_stderr,
@@ -145,8 +163,21 @@ export function peakTableFromModelFit(
       model: p.shape,
       status: "fitted",
       excluded: false,
-      errReasons: reasons,
     };
+    // A reason for every field that HAS a value and no error: the derived four
+    // through modelFitReasons' derived rule, a shape parameter through its own.
+    const reasons: Partial<Record<PeakErrField, string>> = {};
+    for (const f of ERR_FIELDS) {
+      const shapeParam = SHAPE_PARAMS[f];
+      const has = shapeParam ? row[f as "eta" | "fwhmG" | "fwhmL"] != null : true;
+      if (!has || row[ERR_COLUMNS[f]] != null) continue;
+      const q = shapeParam ? param(`p${k}.${shapeParam}`) : undefined;
+      reasons[f] = (shapeParam
+        ? q && paramErrorReason(res, q)
+        : derivedErrorReason(res, k, f as DerivedKey)) ?? "no error reported";
+    }
+    row.errReasons = reasons;
+    return row;
   });
   const carried = carriedExclusions({ peaks: rows }, prior);
   rows.forEach((r, i) => (r.excluded = carried[i]));

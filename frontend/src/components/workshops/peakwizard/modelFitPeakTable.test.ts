@@ -13,6 +13,7 @@ import { parseWorkspace, serializeWorkspace } from "../../../lib/workspace";
 import { modelFitResponse } from "./modelFit.testkit";
 import {
   modelBackgroundAt,
+  nearestSampleValue,
   modelFitPublishProblem,
   peakBackgrounds,
   peakTableFromModelFit,
@@ -86,8 +87,11 @@ describe("peakTableFromModelFit — values and errors", () => {
     expect(t.peaks.map((p) => p.model)).toEqual(["pseudo_voigt", "gaussian"]);
     expect(t.peaks[0].eta).toBe(1);
     expect(t.peaks[0].etaErr).toBeNull(); // on a bound
+    expect(t.peaks[0].errReasons?.eta).toMatch(/on a bound/); // …and says so
     expect(t.peaks[1].eta).toBeNull();
+    expect(t.peaks[1].errReasons?.eta).toBeUndefined(); // no η on a Gaussian: nothing to explain
     expect(t.peaks[0].fwhmG).toBeNull();
+    expect(t.peaks[0].errReasons?.fwhmG).toBeUndefined();
   });
 
   it("records a Voigt row's Gaussian and Lorentzian widths with their errors", () => {
@@ -100,6 +104,12 @@ describe("peakTableFromModelFit — values and errors", () => {
     ];
     const p1 = build(res).peaks[1];
     expect(p1).toMatchObject({ model: "voigt", fwhmG: 0.5, fwhmGErr: 0.02, fwhmL: 0.4, fwhmLErr: null, eta: null });
+    expect(p1.errReasons?.fwhmL).toMatch(/^fixed/); // a fixed width's null error says why
+    expect(p1.errReasons?.fwhmG).toBeUndefined(); // it has an error
+    // …and all of it survives a .dwk save/reopen
+    const [back] = parseWorkspace(serializeWorkspace({ datasets: [{ ...DS, peakTable: build(res) }] })).datasets;
+    expect(back.peakTable?.peaks[1].errReasons?.fwhmL).toMatch(/^fixed/);
+    expect(back.peakTable?.peaks[1]).toMatchObject({ fwhmG: 0.5, fwhmGErr: 0.02, fwhmL: 0.4, fwhmLErr: null });
   });
 
   it("uses the background under each centre so height + bg is the plotted apex", () => {
@@ -174,6 +184,17 @@ describe("peakBackgrounds / modelBackgroundAt", () => {
     expect(peakBackgrounds(res, x, null)).toEqual([0.5, 0.5]);
     // 2.01 -> sample x=2 (baseline 2), 4 -> sample x=4 (baseline 4)
     expect(peakBackgrounds(res, x, [0, 1, 2, 3, 4, 5])).toEqual([2.5, 4.5]);
+  });
+
+  it("finds the nearest sample on a DESCENDING or non-monotonic x (down-sweep, binding energy)", () => {
+    const res = modelFitResponse(); // centres 2.01 and 4
+    const down = [5, 4, 3, 2, 1, 0];
+    const base = [50, 40, 30, 20, 10, 0]; // baseline = 10·x
+    expect(peakBackgrounds(res, down, base)).toEqual([20.5, 40.5]);
+    const zigzag = [0, 4, 1, 5, 2, 3];
+    expect(peakBackgrounds(res, zigzag, zigzag.map((v) => 10 * v))).toEqual([20.5, 40.5]);
+    expect(nearestSampleValue([], [], 1)).toBe(0);
+    expect(nearestSampleValue([0, 1], null, 1)).toBe(0);
   });
 });
 

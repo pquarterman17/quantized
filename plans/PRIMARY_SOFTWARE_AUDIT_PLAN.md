@@ -3085,6 +3085,29 @@ a plan edit.
   (a failed step-① baseline leaves the fit on the raw trace); the data
   fingerprint is taken at publish time from the fit-time record (records are
   immutable), so a fit that is never published never hashes the dataset.
+  **Review round 3 (independent review, same day, 8 findings fixed; 13
+  sabotages each went red, restored from file copies):** (1) a re-fit, reset
+  or dataset switch during an in-flight publish now CANCELS the write — the
+  store re-checks the hook's `seq` after its await, before building or
+  writing — and Fit is disabled while a publish runs; (2) a refusal is its own
+  dataset-keyed state that `reset` does not clear, so resolving a pending
+  preview (which swaps the record and resets the hook) can no longer hide why
+  nothing was published; (3) one shared replace guard
+  (`store/peakTables.confirmReplacingPeakTable`): the Peak Analyzer asks for
+  any existing table, the Peaks workshop's "Fit all together" / "Fit each"
+  ask BEFORE fitting when the table is a model fit (a Peaks re-fit of its own
+  table stays one click, and stays synchronous); (4) the background under a
+  centre uses an order-independent nearest-sample lookup (down-sweeps,
+  binding-energy axes, non-monotonic x); (5) once the durable table is paired
+  with the shown fit, the Peaks cells and header read the TABLE, never the
+  local `fitResult` copy, so a FWHM/height edit or a publish shows the new
+  value at once; (6) one full-dataset hash per publish (skipped for the live
+  record when it IS the fit-time record, counted in a test); (7) one
+  `ERR_COLUMNS`/`ERR_FIELDS` map in lib/peakTable.ts read by the builder, the
+  sanitizer, the manual-edit loop (now a single loop; a legacy row gains no
+  `areaErr`) and the Peaks cell; (8) `errReasons` covers η and the Voigt
+  widths too (a fixed/tied/at-bound shape parameter says why), round-trips
+  through `.dwk`, and a FWHM edit drops the width reasons with the widths.
   **Deferred:** (a) Williamson-Hall WEIGHTING by
   these errors — new numerics, needs a MATLAB golden of a weighted WH
   first; per-point error bars on the WH plot were not added either; (b)
@@ -3093,10 +3116,7 @@ a plan edit.
   prepare time); (c) the Peaks workshop's "→ Report" still emits a
   published model-fit table through the `multipeak_fit` emitter, which has
   no error columns (the Peak Analyzer's own report carries them) — needs an
-  emitter change; (d) a Peaks-workshop re-fit replaces a published model-fit
-  table without a prompt (the existing re-fit semantics, one undo step;
-  `usePeaks.ts` sits at 491/500 lines, so a confirm there wants a split
-  first).
+  emitter change.
 - [~] Manual peak edits and reviewed batch recipe. **2026-09-23 slice:** fitted
   peak rows can now be selected, edited (center/FWHM/height/area), or removed
   directly in the Peaks workshop. The durable `PeakTable` is the source of

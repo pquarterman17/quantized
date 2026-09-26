@@ -42,27 +42,31 @@
 // CURRENT, converged result as the dataset's durable `PeakTable`, standard
 // errors and shapes included (./modelFitPeakTable). What the table needs
 // beyond the response is captured WHEN THE FIT LANDS — the dataset record
-// the fit ran on (its data fingerprint is taken at publish time, so a fit that
-// is never published never pays for hashing the whole dataset; records are
-// immutable, so this is still the fit-time data), the x channel, the recipe
-// name and the baseline actually subtracted, the background under each
-// centre — never re-read from the live inputs, which may have moved on. Once
-// published, the button stays disabled while that table is still the
-// dataset's (an Undo or a later write re-enables it and drops the note). Replacing an existing table asks first (a narrow
-// range fit would otherwise silently shrink a full-pattern table), one
-// publish runs at a time, and a failure is reported, never swallowed.
+// the fit ran on (hashed once, at publish time, so a fit that is never
+// published never pays for it; records are immutable, so it is still the
+// fit-time data), the x channel, the recipe name and the baseline actually
+// subtracted, the background under each centre — never re-read from the live
+// inputs, which may have moved on. Once published, the button stays disabled
+// while that table is still the dataset's (an Undo or a later write
+// re-enables it and drops the note). Replacing an existing table asks first
+// (store/peakTables' shared `confirmReplacingPeakTable`). One publish runs at
+// a time and Fit is blocked meanwhile; a re-fit, reset or dataset switch that
+// still happens during it (the dataset resolving, say) CANCELS the write —
+// the store re-checks `seq` after its await, before writing. A refusal or
+// failure is ALWAYS shown: it lives in its own state (`refusal`, keyed by the
+// dataset) that `reset` does not clear, because resolving a pending preview
+// swaps the record and resets this hook AFTER the refusal was set (the store
+// update renders in a later task). The next Fit or Publish clears it.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fitPeakModel, type PeakModelFitResponse } from "../../../lib/api/peaks";
 import type { PeakTable } from "../../../lib/peakTable";
-import { peakDataFingerprint } from "../../../lib/peakTableFit";
 import { plural } from "../../../lib/plural";
 import type { PeakRecipe } from "../../../lib/peakwizard";
 import { DEFAULT_FIT, type FitEngine, type PeakRecipeFit } from "../../../lib/peakRecipeFit";
 import type { BaselineOverlay, Dataset, FitOverlay } from "../../../lib/types";
-import { askConfirm } from "../../../store/confirmDialog";
-import { publishBuiltPeakTable } from "../../../store/peakTables";
+import { confirmReplacingPeakTable, incomingPeaks, publishBuiltPeakTable } from "../../../store/peakTables";
 import { useApp } from "../../../store/useApp";
 import { curveToRows, segmentRows, segmentToFullRows } from "./modelFitOverlay";
 import { modelFitPublishProblem, peakBackgrounds, peakTableFromModelFit } from "./modelFitPeakTable";
@@ -178,6 +182,7 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
   const [notice, setNotice] = useState<string | null>(null);
   const [ran, setRan] = useState<Ran | null>(null);
   const [publishNote, setPublishNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [refusal, setRefusal] = useState<{ datasetId: string; text: string } | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [publishedTable, setPublishedTable] = useState<PeakTable | null>(null);
   const existingTable = useApp((s) => s.datasets.find((d) => d.id === active?.id)?.peakTable ?? null);
@@ -274,6 +279,7 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
   };
 
   const run = async () => {
+    if (publishing) return; // a publish in flight must finish (or be refused) first
     if (!active || !segment || !workingY || peaks.length === 0) {
       setError("include at least one peak first");
       return;
@@ -291,6 +297,7 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     setError(null);
     setNotice(null);
     setPublishNote(null);
+    setRefusal(null);
     setPublishedTable(null);
     try {
       const res = await fitPeakModel(modelFitBody(setup, segment.x, workingY), controller.signal);
@@ -334,32 +341,25 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     if (!ran || publishBlock || publishing) return;
     const id = seq.current;
     const n = ran.result.peaks.length;
-    const note = (v: { ok: boolean; text: string }) => {
-      if (seq.current === id) setPublishNote(v); // else a newer fit/reset owns the panel
-    };
+    // A refusal survives a reset (see the header); a success is `publishNote`.
+    const datasetId = ran.dataset.id;
+    const fail = (why: string) => setRefusal({ datasetId, text: `not published — ${why}` });
+    setRefusal(null);
     setPublishing(true);
     try {
-      if (existingTable && !(await askConfirm(
-        "Replace the peak table?",
-        `This dataset already has a ${existingTable.peaks.length}-peak table ` +
-          `(${existingTable.provenance.producer === "model_fit" ? "a Peak Analyzer model fit" : "from the Peaks workshop"}). ` +
-          `Publishing replaces it with these ${n} peak${plural(n)}; exclusions carry over to matching peaks, ` +
-          "and Undo restores the old table.",
-        "Replace",
-      ))) return;
-      const fingerprint = peakDataFingerprint(ran.dataset);
-      const out = await publishBuiltPeakTable(ran.dataset.id, fingerprint, (ds) =>
+      if (!(await confirmReplacingPeakTable(ran.dataset.id, incomingPeaks(n, "this model fit")))) return;
+      const out = await publishBuiltPeakTable(ran.dataset, (ds, fingerprint) =>
         peakTableFromModelFit(ran.result, ds, {
           xKey: ran.xKey, recipe: ran.recipe, baseline: ran.baseline, bgAtCenter: ran.bgAtCenter, fingerprint,
-        }, ds.peakTable));
+        }, ds.peakTable), () => seq.current === id);
       if ("reason" in out) {
-        note({ ok: false, text: `not published — ${out.reason}` });
-      } else if (seq.current === id) {
+        fail(out.reason);
+      } else {
         setPublishedTable(out.table);
         setPublishNote({ ok: true, text: `published ${n} peak${plural(n)} with their errors to the peak table` });
       }
     } catch (e) {
-      note({ ok: false, text: `not published — ${e instanceof Error ? e.message : "publishing failed"}` });
+      fail(e instanceof Error ? e.message : "publishing failed");
     } finally {
       setPublishing(false);
     }
@@ -398,7 +398,9 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     cancel,
     publishBlock,
     publishToTable,
-    publishNote: publishNote?.ok && !published ? null : publishNote,
+    publishNote: refusal && refusal.datasetId === activeId
+      ? { ok: false, text: refusal.text }
+      : publishNote?.ok && !published ? null : publishNote,
     published,
     publishing,
     startFromResult: () => {

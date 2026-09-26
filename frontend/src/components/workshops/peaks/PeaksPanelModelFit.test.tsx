@@ -3,13 +3,14 @@
 // reads "± —" with its saved reason on hover, the header names the producer,
 // and a legacy table (no errors measured) keeps rendering bare values.
 
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { findPeaks } from "../../../lib/api/peaks";
+import { findPeaks, fitMultiPeak } from "../../../lib/api/peaks";
 import { peakDataFingerprint, peakTableFromFit } from "../../../lib/peakTableFit";
 import type { Dataset } from "../../../lib/types";
-import { publishPeakTable } from "../../../store/peakTables";
+import { askConfirm } from "../../../store/confirmDialog";
+import { editPeak, publishPeakTable } from "../../../store/peakTables";
 import { useApp } from "../../../store/useApp";
 import { modelFitResponse } from "../peakwizard/modelFit.testkit";
 import { peakTableFromModelFit } from "../peakwizard/modelFitPeakTable";
@@ -18,6 +19,7 @@ import PeaksPanel from "./PeaksPanel";
 vi.mock("../../../lib/api", () => ({ fetchBookData: vi.fn(), reportEmit: vi.fn() }));
 vi.mock("../../../lib/api/peaks", () => ({ findPeaks: vi.fn(), fitMultiPeak: vi.fn(), fitPeak: vi.fn() }));
 vi.mock("../../overlays/ParamDialog", () => ({ askParams: vi.fn() }));
+vi.mock("../../../store/confirmDialog", () => ({ askConfirm: vi.fn() }));
 
 const DS: Dataset = {
   id: "d1",
@@ -84,7 +86,7 @@ describe("PeaksPanel — a published model-fit table", () => {
     expect(within(fresh).getAllByRole("row")[2]).toHaveTextContent("4");
   });
 
-  it("never pairs the OLD fit's values with a newly published table's errors while the refresh is pending", async () => {
+  it("shows a newly published table's OWN values with its errors at once, even while the refresh is pending", async () => {
     const legacy = peakTableFromFit(
       { peaks: [7, 9].map((c) => ({ center: c, fwhm: 0.8, height: 5, bg: 0.5, eta: null, area: 4, status: "fitted", model: "Gaussian" })),
         bgCoeffs: [0.5], R2: 0.9, rmse: 0.1, nPeaks: 2, model: "Gaussian" },
@@ -102,8 +104,76 @@ describe("PeaksPanel — a published model-fit table", () => {
     }, legacy);
     act(() => publishPeakTable("d1", published));
     const now = screen.getByRole("table", { name: "fitted peaks" });
-    expect(within(now).getAllByRole("cell")[1]).toHaveTextContent(/^7$/); // old value, no borrowed error
-    expect(now).not.toHaveTextContent("±");
+    // The cells read the durable table: the new value WITH its error, never
+    // the old fit's 7 beside the new row's error.
+    expect(within(now).getAllByRole("cell")[1]).toHaveTextContent("2.01 ± 0.004");
+    expect(now).not.toHaveTextContent(/\b7\b/);
+  });
+
+  it("a hand edit of FWHM shows the NEW width (error cleared) at once — no stale copy while the refresh is pending", async () => {
+    const table = peakTableFromModelFit(modelFitResponse(), DS, {
+      xKey: null, recipe: null, baseline: "none", bgAtCenter: [0.5, 0.5], fingerprint: peakDataFingerprint(DS),
+    }, null);
+    show({ ...DS, peakTable: table });
+    const grid = await screen.findByRole("table", { name: "fitted peaks" });
+    await waitFor(() => expect(within(grid).getAllByRole("cell")[3]).toHaveTextContent("0.81 ± 0.01"));
+    act(() => useApp.setState({ resolveDataset: () => new Promise<undefined>(() => {}) }));
+    act(() => void editPeak("d1", table.peaks[0].id, { fwhm: 0.9 }));
+    const fwhm = within(screen.getByRole("table", { name: "fitted peaks" })).getAllByRole("cell")[3];
+    expect(fwhm).toHaveTextContent("0.9 ± —");
+    expect(fwhm.querySelector("[data-no-error]")?.getAttribute("title")).toMatch(/edited by hand/);
+  });
+
+  it("asks BEFORE a Peaks-workshop re-fit would replace a model fit; 'no' fits nothing and keeps the table", async () => {
+    vi.mocked(findPeaks).mockResolvedValue({
+      peaks: [{ center: 2, height: 5, fwhm: 0.8, prominence: 1, localSNR: 10, area: null, bg: 0 }],
+      background: [],
+    });
+    vi.mocked(fitMultiPeak).mockResolvedValue({
+      peaks: [{ center: 2.02, fwhm: 0.8, height: 5, bg: 0, eta: null, area: 4, status: "fitted", model: "Gaussian" }],
+      bgCoeffs: [0], R2: 0.9, rmse: 0.1, nPeaks: 1, model: "Gaussian",
+    });
+    const table = peakTableFromModelFit(modelFitResponse(), DS, {
+      xKey: null, recipe: null, baseline: "none", bgAtCenter: [0.5, 0.5], fingerprint: peakDataFingerprint(DS),
+    }, null);
+    show({ ...DS, peakTable: table });
+    const fitAll = await screen.findByRole("button", { name: "Fit all together" });
+    await waitFor(() => expect(fitAll).toBeEnabled());
+
+    vi.mocked(askConfirm).mockResolvedValueOnce(false);
+    await act(async () => fireEvent.click(fitAll)); // flushes the declined confirm
+    expect(askConfirm).toHaveBeenCalledTimes(1);
+    expect(String(vi.mocked(askConfirm).mock.calls[0][1])).toMatch(/Peak Analyzer model fit, with per-peak errors/);
+    expect(fitMultiPeak).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets[0].peakTable).toBe(table);
+
+    vi.mocked(askConfirm).mockResolvedValueOnce(true);
+    fireEvent.click(fitAll);
+    await waitFor(() => expect(useApp.getState().datasets[0].peakTable?.provenance.producer).toBeUndefined());
+    expect(fitMultiPeak).toHaveBeenCalledTimes(1);
+  });
+
+  it("a Peaks re-fit of its OWN (legacy) table asks nothing — one click, as before", async () => {
+    vi.mocked(findPeaks).mockResolvedValue({
+      peaks: [{ center: 2, height: 5, fwhm: 0.8, prominence: 1, localSNR: 10, area: null, bg: 0 }],
+      background: [],
+    });
+    vi.mocked(fitMultiPeak).mockResolvedValue({
+      peaks: [{ center: 2.02, fwhm: 0.8, height: 5, bg: 0, eta: null, area: 4, status: "fitted", model: "Gaussian" }],
+      bgCoeffs: [0], R2: 0.9, rmse: 0.1, nPeaks: 1, model: "Gaussian",
+    });
+    const legacy = peakTableFromFit(
+      { peaks: [{ center: 2, fwhm: 0.8, height: 5, bg: 0.5, eta: null, area: 4, status: "fitted", model: "Gaussian" }],
+        bgCoeffs: [0.5], R2: 0.9, rmse: 0.1, nPeaks: 1, model: "Gaussian" },
+      { datasetId: "d1", datasetName: "x.dat", method: "simultaneous", bgDegree: 0, linkMode: "None",
+        constrain: false, wavelengthA: null, fingerprint: peakDataFingerprint(DS) },
+    );
+    show({ ...DS, peakTable: legacy });
+    const fitAll = await screen.findByRole("button", { name: "Fit all together" });
+    await waitFor(() => expect(fitAll).toBeEnabled());
+    fireEvent.click(fitAll);
+    await waitFor(() => expect(useApp.getState().datasets[0].peakTable).not.toBe(legacy));
+    expect(askConfirm).not.toHaveBeenCalled();
   });
 
   it("an unedited model fit with no R² says 'R² undefined', not 'cleared by manual changes'", async () => {

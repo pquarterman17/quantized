@@ -33,9 +33,50 @@ import {
   xChannelIdentity,
   type PeakManualPatch,
 } from "../lib/peakTableFit";
+import { plural } from "../lib/plural";
 import type { Dataset } from "../lib/types";
 import { wavelengthFromMetadata } from "../lib/xrdWavelength";
+import { askConfirm } from "./confirmDialog";
 import { useApp } from "./useApp";
+
+/** Ask before REPLACING a dataset's peak table; true when there is none to
+ *  replace, `when` says this one needs no question, or the user confirms.
+ *  The one replace guard both producers share: the Peak Analyzer asks for any
+ *  existing table (a narrow-range fit would otherwise silently shrink a
+ *  full-pattern one), and the Peaks workshop asks — before it fits — only
+ *  when the table is a model fit, whose errors, shapes and reasons a Peaks
+ *  re-fit would drop (a Peaks re-fit of its own table stays one click). */
+export async function confirmReplacingPeakTable(
+  datasetId: string,
+  incoming: string,
+  when: (existing: PeakTable) => boolean = () => true,
+): Promise<boolean> {
+  const t = useApp.getState().datasets.find((d) => d.id === datasetId)?.peakTable;
+  if (!t || !when(t)) return true;
+  return askConfirm(
+    "Replace the peak table?",
+    `This dataset already has a ${t.peaks.length}-peak table ` +
+      `(${t.provenance.producer === "model_fit" ? "a Peak Analyzer model fit, with per-peak errors" : "from the Peaks workshop"}). ` +
+      `Publishing replaces it with ${incoming}; exclusions carry over to matching peaks, and Undo restores the old table.`,
+    "Replace",
+  );
+}
+
+/** `confirmReplacingPeakTable`'s `incoming` text for `n` peaks. */
+export const incomingPeaks = (n: number, what: string): string => `${what} (${n} peak${plural(n)})`;
+
+/** The Peaks workshop's guard, asked BEFORE it fits (so a "no" costs nothing
+ *  and the panel never shows a fit that is not the table): only a model-fit
+ *  table triggers it. Plain `true` — no promise, so the caller need not yield
+ *  a microtask — when there is nothing to ask. */
+export function confirmPeaksRefit(datasetId: string, n: number): true | Promise<boolean> {
+  const t = useApp.getState().datasets.find((d) => d.id === datasetId)?.peakTable;
+  return t?.provenance.producer !== "model_fit" ||
+    confirmReplacingPeakTable(datasetId, incomingPeaks(n, "a Peaks-workshop fit, which has no per-peak errors"));
+}
+
+/** Why a superseded publish wrote nothing. */
+export const PUBLISH_SUPERSEDED = "a newer fit, reset or dataset change superseded it — publish again";
 
 /** Attach (or replace) a dataset's peak table. A no-op for an unknown id — the
  *  dataset can be removed while a fit is in flight. */
@@ -91,28 +132,39 @@ export function publishFitResult(
 }
 
 /** Publish a table another workshop BUILT — the Peak Analyzer's model fit
- *  (peakwizard/modelFitPeakTable.ts). Resolves the dataset first (never a
- *  still-pending preview), then refuses when its analysis view is no longer
- *  what the fit ran on (`fitFingerprint`, `peakDataFingerprint` of the dataset
- *  at fit time): publishing a table every reader would reject as stale helps
- *  nobody. `build` receives the LIVE record, so the exclusions the user has
- *  now carry over; it runs BEFORE the undo step is recorded, so a builder
- *  that throws leaves no empty history entry. One undo step. Returns the
- *  table written, or why nothing was. */
+ *  (peakwizard/modelFitPeakTable.ts). `fitDataset` is the record the fit RAN
+ *  on: records are immutable, so it IS the fit-time data, and its fingerprint
+ *  (the one hash every publish pays) is what the table is stamped with. The
+ *  record, not a fingerprint plus a few references, because the digest's
+ *  inputs include the row filter's validity, which reads channel modelling
+ *  types — the whole record is the one complete input (held by reference).
+ *
+ *  Resolves the dataset first (never a still-pending preview), then refuses
+ *  when its analysis view is no longer what the fit ran on — publishing a
+ *  table every reader would reject as stale helps nobody. When the live record
+ *  IS the fit-time record, nothing can have changed and the second hash is
+ *  skipped. `stillCurrent` is re-checked AFTER the await and BEFORE anything
+ *  is built or written, so a re-fit, reset or dataset switch during the
+ *  resolve cancels the write instead of publishing the old fit. `build` gets
+ *  the LIVE record (the user's current exclusions carry over) and runs before
+ *  the undo step is recorded, so a builder that throws leaves no history
+ *  entry. One undo step. Returns the table written, or why nothing was. */
 export async function publishBuiltPeakTable(
-  datasetId: string,
-  fitFingerprint: string,
-  build: (ds: Dataset) => PeakTable,
+  fitDataset: Dataset,
+  build: (ds: Dataset, fingerprint: string) => PeakTable,
+  stillCurrent: () => boolean = () => true,
 ): Promise<{ table: PeakTable } | { reason: string }> {
-  await useApp.getState().resolveDataset(datasetId);
-  const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
+  await useApp.getState().resolveDataset(fitDataset.id);
+  const ds = useApp.getState().datasets.find((d) => d.id === fitDataset.id);
   if (!ds) return { reason: "the dataset is no longer available" };
-  if (ds.pending || peakDataFingerprint(ds) !== fitFingerprint) {
+  const fingerprint = peakDataFingerprint(fitDataset);
+  if (ds.pending || fitDataset.pending || (ds !== fitDataset && peakDataFingerprint(ds) !== fingerprint)) {
     return { reason: "the dataset's data changed since this fit (or only a preview had loaded) — re-fit, then publish" };
   }
-  const table = build(ds);
+  if (!stillCurrent()) return { reason: PUBLISH_SUPERSEDED };
+  const table = build(ds, fingerprint);
   useApp.getState().recordHistory("publish model fit to peak table");
-  publishPeakTable(datasetId, table);
+  publishPeakTable(ds.id, table);
   return { table };
 }
 

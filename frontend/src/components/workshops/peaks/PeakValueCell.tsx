@@ -9,9 +9,8 @@
 // dash-with-a-reason the Peak Analyzer's results table shows.
 
 import { fmtNum } from "../../../lib/format";
-import type { PeakErrField, PeakTableEntry } from "../../../lib/peakTable";
+import { ERR_COLUMNS, type PeakErrField, type PeakTableEntry } from "../../../lib/peakTable";
 
-const ERR_KEY = { center: "centerErr", fwhm: "fwhmErr", height: "heightErr", area: "areaErr" } as const;
 const faint = { color: "var(--text-faint)" } as const;
 
 interface Props {
@@ -23,7 +22,7 @@ interface Props {
 
 export default function PeakValueCell({ value, field, entry }: Props) {
   if (!entry) return <>{fmtNum(value)}</>;
-  const err = entry[ERR_KEY[field]] ?? null;
+  const err = entry[ERR_COLUMNS[field]] ?? null;
   return (
     <span style={{ whiteSpace: "nowrap" }}>
       {fmtNum(value)}{" "}

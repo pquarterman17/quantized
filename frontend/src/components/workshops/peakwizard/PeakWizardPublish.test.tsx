@@ -46,8 +46,12 @@ function stubModelFit(payload: PeakModelFitResponse) {
     Promise.resolve(new Response(JSON.stringify(payload), { status: 200, headers: { "Content-Type": "application/json" } })));
 }
 
+// Some tests hold or replace `resolveDataset`; every test starts from the real one.
+const realResolve = useApp.getState().resolveDataset;
+
 beforeEach(() => {
   vi.clearAllMocks();
+  useApp.setState({ resolveDataset: realResolve });
   localStorage.clear();
   findMock.mockResolvedValue({
     peaks: [
@@ -127,7 +131,7 @@ describe("Peak Analyzer — Publish to peak table", () => {
     fireEvent.click(publishBtn());
     await waitFor(() => expect(publishBtn()).toBeEnabled());
     expect(confirmMock).toHaveBeenCalledTimes(1);
-    expect(String(confirmMock.mock.calls[0][1])).toMatch(/already has a 2-peak table \(a Peak Analyzer model fit\)/);
+    expect(String(confirmMock.mock.calls[0][1])).toMatch(/already has a 2-peak table \(a Peak Analyzer model fit/);
     expect(useApp.getState().datasets[0].peakTable).toBe(first);
 
     confirmMock.mockResolvedValueOnce(true);
@@ -169,5 +173,59 @@ describe("Peak Analyzer — Publish to peak table", () => {
     fireEvent.click(publishBtn());
     await screen.findByText(/not published — the dataset's data changed since this fit/);
     expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
+  });
+
+  it("a re-fit/reset during an in-flight publish CANCELS the write, and Fit is blocked meanwhile", async () => {
+    await fit(modelFitResponse());
+    let release!: () => void;
+    useApp.setState({
+      resolveDataset: (id: string) => new Promise((r) => {
+        release = () => r(useApp.getState().datasets.find((d) => d.id === id));
+      }),
+    });
+    fireEvent.click(publishBtn());
+    await waitFor(() => expect(publishBtn()).toBeDisabled()); // publishing
+    expect(screen.getByRole("button", { name: "Re-fit" })).toBeDisabled();
+    // A reset while the publish awaits: un-include a peak (the content key moves).
+    step("Find peaks");
+    fireEvent.click(screen.getAllByRole("checkbox")[1]);
+    await act(async () => release());
+    step("Fit & review");
+    await screen.findByText(/not published — a newer fit, reset or dataset change superseded it/);
+    expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
+  it("a refusal SURVIVES the reset that resolving a preview causes: the user always sees why", async () => {
+    await fit(modelFitResponse());
+    // Resolving swaps in the full record (one more row), which moves the
+    // content key and resets the hook — after the refusal has been decided.
+    const full = { ...ds, data: { ...ds.data, time: [...ds.data.time, 6], values: [...ds.data.values, [0.2, 60]] } };
+    useApp.setState({
+      resolveDataset: async () => {
+        useApp.setState({ datasets: [full] });
+        return full;
+      },
+    });
+    fireEvent.click(publishBtn());
+    await screen.findByText(/not published — the dataset's data changed since this fit/);
+    await waitFor(() => expect(screen.queryByLabelText("fit metrics")).not.toBeInTheDocument()); // the reset ran
+    expect(screen.getByText(/not published — the dataset's data changed since this fit/)).toBeInTheDocument();
+    expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
+  });
+
+  it("a refusal stays on screen through a LATER reset (it is not the reset-cleared note)", async () => {
+    await fit(modelFitResponse());
+    // Refused without moving the content key: only the unfitted T column changed.
+    const edited = { ...ds, data: { ...ds.data, values: ds.data.values.map((r, i) => (i === 0 ? [r[0], 99] : r)) } };
+    act(() => useApp.setState({ datasets: [edited] }));
+    fireEvent.click(publishBtn());
+    await screen.findByText(/not published — the dataset's data changed since this fit/);
+    // NOW a reset: un-include a peak (the key moves; the result goes).
+    step("Find peaks");
+    fireEvent.click(screen.getAllByRole("checkbox")[1]);
+    step("Fit & review");
+    await waitFor(() => expect(screen.queryByLabelText("fit metrics")).not.toBeInTheDocument());
+    expect(screen.getByText(/not published — the dataset's data changed since this fit/)).toBeInTheDocument();
   });
 });

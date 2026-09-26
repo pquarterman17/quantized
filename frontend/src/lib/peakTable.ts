@@ -172,15 +172,30 @@ export interface PeakTableEntry {
   fwhmGErr?: number | null;
   fwhmL?: number | null;
   fwhmLErr?: number | null;
-  /** Why each null `*Err` is null (not converged / fixed / tied / on a bound /
+  /** Why a field's 1σ is null (not converged / fixed / tied / on a bound /
    *  undetermined / edited by hand) — the text the Peak Analyzer shows on
-   *  hover. A key is present only for a field whose error IS null. */
+   *  hover. Keyed by every `ERR_FIELDS` field, the shape parameters (η, the
+   *  Voigt widths) included; a key is present only for a field that HAS a
+   *  value on this row and whose error is null. */
   errReasons?: Partial<Record<PeakErrField, string>>;
 }
 
-/** The derived fields whose error a model-fit row can carry. */
-export type PeakErrField = "center" | "fwhm" | "height" | "area";
-const ERR_FIELDS: readonly PeakErrField[] = ["center", "fwhm", "height", "area"];
+/** THE list of fields a row can carry a 1σ for, and the column holding it —
+ *  the one definition the builder, the `.dwk` sanitizer, the manual-edit
+ *  contract and the Peaks cell all read. The first four are the derived
+ *  per-peak quantities every producer writes; the last three are shape
+ *  parameters only a model fit has. */
+export const ERR_COLUMNS = {
+  center: "centerErr",
+  fwhm: "fwhmErr",
+  height: "heightErr",
+  area: "areaErr",
+  eta: "etaErr",
+  fwhmG: "fwhmGErr",
+  fwhmL: "fwhmLErr",
+} as const;
+export type PeakErrField = keyof typeof ERR_COLUMNS;
+export const ERR_FIELDS = Object.keys(ERR_COLUMNS) as PeakErrField[];
 /** The optional numeric model-fit columns, in the order `parseEntry` reads them. */
 const MODEL_FIT_NUMS = ["areaErr", "etaErr", "fwhmG", "fwhmGErr", "fwhmL", "fwhmLErr"] as const;
 
