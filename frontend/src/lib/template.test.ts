@@ -50,6 +50,25 @@ describe("toTemplate / serialize / parse round-trip", () => {
   });
 });
 
+describe("P2.5 box 4: transformation-recipe fields", () => {
+  const EXPECTS = { columns: [{ name: "M", unit: "emu", required: true }], metadata: [["sample"]], example: "a.dat" };
+
+  it("the export file (and a rename/duplicate through it) keeps description, revision and expected input", () => {
+    const t = toTemplate("r", STEPS, [], { description: " stack M ", revision: 4, expects: EXPECTS });
+    expect(t).toMatchObject({ description: "stack M", revision: 4, expects: EXPECTS });
+    expect(parseTemplate(serializeTemplate(t))).toMatchObject({ description: "stack M", revision: 4, expects: EXPECTS });
+  });
+
+  it("drops a malformed field instead of refusing the template; an old template has none", () => {
+    const text = JSON.stringify({ ...toTemplate("r", STEPS, []), description: 3, revision: 0, expects: { columns: "x" } });
+    const back = parseTemplate(text);
+    expect(back).not.toHaveProperty("description");
+    expect(back).not.toHaveProperty("revision");
+    expect(back).not.toHaveProperty("expects");
+    expect(back.steps).toHaveLength(3);
+  });
+});
+
 describe("template persistence", () => {
   beforeEach(() => localStorage.clear());
 
