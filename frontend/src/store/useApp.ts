@@ -518,9 +518,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // Bulk-remove by explicit id list (item 17's book-family filter dialog) —
   // distinct from removeSelected. `{permanent}` (P3.7) bypasses Trash.
   removeDatasets: (ids: string[], opts?: { permanent?: boolean }) => void;
-  // Wipe the whole library (datasets + folders + figures + selection + view
-  // state) — the File ▸ Remove all command; reuses loadWorkspace's reset.
-  clearAll: () => void;
+  // clearAll: see store/workspaceHydration.ts (WorkspaceHydrationSlice).
   // Concatenate the multi-selected datasets (≥2) row-wise into a new dataset.
   // Resolves any still-pending picks first (#38) — a batch of arbitrary
   // selected datasets is exactly the "never activated" risk case.
@@ -873,10 +871,13 @@ export const useApp = create<AppState>((set, get) => ({
     }
     if (!failReason && uploaded.length === files.length) {
       try {
-        const merged = (await import("../lib/merge")).mergeDatasets( // lazy: bundle ratchet
+        // lazy (bundle ratchet); reviews unit/label mismatches first (P2.5) —
+        // declining lands the files as separate datasets below.
+        const merged = await (await import("../lib/transformRun")).reviewedAppend(
           uploaded.map((u) => u.data),
           uploaded.map((u) => u.name),
         );
+        if (!merged) throw new Error("append cancelled at the unit/name review");
         const id = nextDatasetId();
         const name = `${uploaded[0].name} +${uploaded.length - 1} more (appended)`;
         get().addDataset({ id, name, data: merged });
@@ -895,7 +896,7 @@ export const useApp = create<AppState>((set, get) => ({
       }
     }
     // Degrade to N separate datasets rather than a dead import.
-    toast(`${failReason} — importing separately instead`, "danger");
+    toast(`${failReason} — importing separately instead`, failReason.startsWith("append cancelled") ? "info" : "danger");
     await get().importFiles(files);
   },
 
@@ -999,58 +1000,12 @@ export const useApp = create<AppState>((set, get) => ({
   // removeSelected, this doesn't touch/depend on the transient row selection.
   removeDatasets: (ids, opts) => removeDatasetsWithTrash(get, set, ids, opts),
 
-  // Wipe the entire library. Reuses loadWorkspace's "replace everything" reset
-  // (clears per-dataset view state, overlays, styles, folders, figures) with an
-  // empty workspace, so nothing stale survives; autosave self-clears on the
-  // resulting empty-datasets state.
-  clearAll: () => {
-    get().recordHistory("remove all");
-    get().loadWorkspace({
-      datasets: [],
-      folders: [],
-      activeId: null,
-      selectedIds: [],
-      expandedFolders: [],
-      originFigures: [],
-      originFidelity: [],
-      reports: [],
-      figureDocs: [],
-      editableFigures: [],
-    });
-    set({ status: "removed all datasets, folders, figures, and reports" });
-  },
+  // clearAll: see store/workspaceHydration.ts (it is loadWorkspace(empty)).
 
   // Concatenate the selected datasets (in selection order) row-wise into one new
-  // library dataset. Needs ≥2 with a matching column count (mergeDatasets guards).
-  mergeSelected: async () => {
-    const s = get();
-    const pickIds = s.selectedIds.filter((id) => s.datasets.some((d) => d.id === id));
-    if (pickIds.length < 2) {
-      get().setStatus("select ≥2 datasets to merge");
-      return;
-    }
-    try {
-      // #38 deferred edge: any of the selected datasets can be a never-
-      // activated, still-pending Origin book — resolve them all first
-      // (bounded concurrency) rather than silently merging previews.
-      const picks = await get().resolveDatasets(pickIds);
-      if (picks.length < 2) {
-        get().setStatus("select ≥2 datasets to merge");
-        return;
-      }
-      const data = (await import("../lib/merge")).mergeDatasets( // lazy: see importAppended
-        picks.map((d) => d.data),
-        picks.map((d) => d.name),
-      );
-      get().addDataset({ id: nextDatasetId(), name: `merged (${picks.length})`, data });
-      get().setStatus(`merged ${picks.length} datasets → ${data.time.length} rows`);
-      toast(`merged ${picks.length} datasets`, "ok");
-    } catch (e) {
-      const msg = `could not merge the selected datasets: ${e instanceof Error ? e.message : "unknown error"} — nothing was added`; // P3.4 error audit 2026-09-14: `addDataset` runs after the throwing call, so "nothing was added" holds
-      get().setStatus(msg);
-      toast(msg, "danger");
-    }
-  },
+  // library dataset — reviewed for unit/label mismatches and recorded as a
+  // replayable step (P2.5). Body: lib/transformRun.ts (lazy, post-click).
+  mergeSelected: async () => (await import("../lib/transformRun")).runMergeSelected(get),
 
   // Deep-copy a dataset (incl. raw/corrections/bgRef) as an independent "(copy)"
   // — for trying different corrections/formulas while keeping the original.

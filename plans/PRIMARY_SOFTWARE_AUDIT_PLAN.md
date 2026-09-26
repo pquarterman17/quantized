@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-26 (latest): **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-26 (latest): **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -3367,7 +3367,7 @@ or crashing item is an error row — uncurated exception text never reaches
 it), cancel polled before every item AND before every model evaluation (new
 optional `abort_check` in `_bounded_lsq.solve_bounded` /
 `fit_peak_model`), total deadline -> named "not_run" rows. A Classic-engine
-recipe is refused with the way out. TABLE (`peakBatchTable.ts` +
+recipe is refused with the way out. TABLE (`peakBatchRows.ts` +
 `PeakBatchTable.tsx`): one row per (dataset, peak) — shape, centre / FWHM /
 height / area +- stderr ("—" with `modelFitReasons`' reason on hover),
 status, R², the objective under its honest label (SSR, or χ² only when
@@ -3384,7 +3384,7 @@ recovery on 3 synthetic datasets, isolation incl. an unexpected exception,
 cancel between items and mid-fit, total + per-item deadline, progress
 propagation), `tests/test_api_peak_model_batch.py` (real job queue, rows ==
 calc, error row, cancel via `/api/jobs` mid-fit, ASCII 422s, caps); vitest
-`peakBatchTable` (incl. `.dwk` save/reopen of the table), `peakBatchPrep`
+`peakBatchRows` (incl. `.dwk` save/reopen of the table), `peakBatchPrep`
 (item == the wizard's body with stored edits; by-name columns; reasons),
 `PeakBatchView` (run, isolation, SSR/χ², reasons, sort, cancel while
 preparing / fitting / on close, failed job, CSV, add-as-table provenance,
@@ -3431,7 +3431,54 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
   propagation.
 - [ ] Metadata cleanup/promotion to factors.
 - [ ] Saved transformation recipe, undo, provenance, derived output.
-- [ ] Warnings for duplicate keys, unit mismatch, or row loss.
+  **Progress (opener slice, 2026-09-25) — recording part only:** join, stack,
+  unstack, transpose, merge/append ("Merge selected"), split and dataset
+  math record a `transform` pipeline step with their full parameters
+  (`lib/transformRun.ts`, one commit path shared by the commands and the
+  replay); steps save in `.dwk` and templates and `executeSteps` replays
+  them, continuing later steps on the output as recording did. Second
+  inputs reuse the pipeline's one reference model (a dataset id, like a
+  correction step's background) and fail by name when absent; the primary
+  input is the run's target. Tested: every op replays to an identical
+  output after a JSON save/load; old pipelines load unchanged; e2e join
+  replay. Undo is the existing one-entry `addDataset`. Still open: editing a
+  transform step's params in the Pipeline panel (it shows the script line
+  only), recording the import-time append (`importFilesAppended` records its
+  own `import` step — files are not datasets yet, so there is no id to
+  reference), and a recipe view beyond the pipeline list.
+- [x] Warnings for duplicate keys, unit mismatch, or row loss. (opener slice,
+  2026-09-25) Pure analyzers in `lib/transformWarnings.ts`: join (duplicate
+  keys and blank keys per side, unmatched keys dropped or left blank by
+  mode, key-unit mismatch), append by position (per-column unit and label
+  mismatch, X unit), dataset math (X/Y unit mismatch, rows of A outside B's
+  finite x-range that come out blank), split (rows with no split value ->
+  "(other)"), plus stack (mixed units), unstack (dropped rows, aggregated
+  cells) and transpose (units dropped, info only). The ParamDialog reshapes
+  and "Merge selected" show them in a review confirm BEFORE anything is
+  created; Split and Dataset Math show them inline; a unit mismatch needs an
+  explicit confirm (danger button "Create despite unit mismatch", or the
+  Dataset Math acknowledgment checkbox, keyed to the exact pick). The
+  append import offers "Cancel imports them as separate datasets". Derived
+  datasets carry `transform_warnings` (sentences) beside
+  `worksheet_transform`. Eager bundle -158 B (merge body moved lazy).
+  Self-review round (10 findings fixed, sabotage-verified): a failed
+  transform skips the steps recorded against its output rather than
+  running them on the source; fit reports cite the dataset the fit ran on;
+  stack channels are cleaned before recording; algebra warnings name the
+  backend's real unit label. Known residuals: declining the append-import
+  review re-uploads the files through `importFiles`; the pending-edit
+  ratchet cannot see a shorthand `data` write (`{ ...d, data }` in
+  `setCellValue`) — pre-existing, found while sabotage-testing, not fixed.
+  PR #431 review (7 findings fixed, each sabotage-verified): a recorded
+  primary input that was not the active dataset (Dataset Math, Merge
+  selected) is an explicit reference on replay, never the run's target;
+  references to an earlier step's output follow that step's replay output
+  (split children matched by group label) and fail when it was not
+  reproduced (`lib/transformReplay.ts`); a disabled transform blocks later
+  steps like a failed one; Enter off the buttons no longer confirms a danger
+  dialog; a `.dwk` whose pipeline holds a transform step is written as v5
+  so older builds refuse it instead of dropping the step (other saves stay
+  v4; backend accepts 5); algebra counts B's distinct x.
 
 ### P2.6 — Categorical/JMP-style plot workbench
 

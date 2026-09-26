@@ -48,7 +48,8 @@ __all__ = [
 # by keeping this to exactly the top-level fields `parseWorkspace` itself
 # checks before it will even start reading a document, no further.
 WORKSPACE_FORMAT = "quantized-workspace"
-WORKSPACE_VERSIONS = (1, 2, 3, 4)
+# 5 = a v4 doc whose pipeline holds a P2.5 `transform` step (see workspace.ts).
+WORKSPACE_VERSIONS = (1, 2, 3, 4, 5)
 
 
 def extract_declared_source_paths(content: str, base_dir: str | None = None) -> list[str]:

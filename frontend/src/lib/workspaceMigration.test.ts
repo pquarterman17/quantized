@@ -132,8 +132,8 @@ describe("workspace migration — frozen v1-v4 fixtures (P1.2 box 2)", () => {
     }
   }
 
-  it("a copy with version: 5 throws /unsupported workspace version/", () => {
-    const future = { ...(v4 as Record<string, unknown>), version: 5 };
+  it("a copy with version: 6 throws /unsupported workspace version/ (5 = P2.5 transform steps)", () => {
+    const future = { ...(v4 as Record<string, unknown>), version: 6 };
     expect(() => parseWorkspace(JSON.stringify(future))).toThrow(/unsupported workspace version/);
   });
 });
