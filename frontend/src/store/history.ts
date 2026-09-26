@@ -56,7 +56,7 @@ import { restorePatch, snapshotOf, type HistorySnapshot } from "./historySnapsho
 /** Bounded stack depth — oldest entries evicted first (both directions, for
  *  symmetry; redo can never exceed how many entries were ever undone from a
  *  present history, so this is a defensive cap, not a load-bearing one). */
-const HISTORY_DEPTH = 50;
+export const HISTORY_DEPTH = 50;
 
 export interface HistoryEntry {
   /** Shown by the Edit menu / ⌘K as "Undo <label>" / "Redo <label>". */

@@ -37,6 +37,7 @@ import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
 import { deriveBundleRelativePath } from "./bundlePath";
 import { projectFitModelsForSave } from "./fitModelsProject";
+import { projectTemplatesForSave } from "./templatesProject";
 import { encodePersistedCells, type WireDataStruct } from "./nonFiniteCells";
 import type { DatasetSource } from "./datasetSource";
 import type { Dataset, FolderNode } from "./types";
@@ -147,6 +148,8 @@ interface WorkspaceDoc {
   plotRecipes: PlotRecipe[];
   /** P2.7 follow-up — absent when there are none (lib/fitModelsProject.ts). */
   customFitModels?: unknown[];
+  /** P2.5 box 4 — absent when there are none (lib/templatesProject.ts). */
+  analysisTemplates?: unknown[];
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON
@@ -162,13 +165,16 @@ interface WorkspaceDoc {
  *  `opts.fitModelLibrary` (P2.7 follow-up): false ONLY for the crash-recovery
  *  autosave (lib/autosave.ts), which embeds the fit-model carry without the
  *  local library — lib/fitModelsProject.ts's header says why. Every other
- *  save embeds the library, read from localStorage now. */
+ *  save embeds the library, read from localStorage now. The same flag keeps
+ *  the saved analysis templates / transformation recipes (P2.5 box 4,
+ *  lib/templatesProject.ts) out of the autosave, for the same reason. */
 export function serializeWorkspace(
   ws: WorkspaceState,
   opts?: { projectDir?: string; fitModelLibrary?: boolean },
 ): string {
   const projectDir = opts?.projectDir;
   const fitModels = projectFitModelsForSave(ws.fitModelCarry, { fitModelLibrary: opts?.fitModelLibrary });
+  const templates = projectTemplatesForSave(opts?.fitModelLibrary !== false);
   const doc: WorkspaceDoc = {
     format: WORKSPACE_FORMAT,
     // v5 only when a `transform` step is present — see WORKSPACE_VERSION_TRANSFORM_STEPS.
@@ -233,6 +239,7 @@ export function serializeWorkspace(
     // store's carry, one record per name — lib/fitModelsProject.ts. Written
     // only when non-empty, the mapViews rule.
     ...(fitModels.length ? { customFitModels: fitModels } : {}),
+    ...(templates.length ? { analysisTemplates: templates } : {}), // P2.5 box 4, same rule
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,

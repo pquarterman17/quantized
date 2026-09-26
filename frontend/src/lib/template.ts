@@ -3,8 +3,17 @@
 // a batch run extracts into its summary sheet). Text/JSON and diffable (the
 // "analysis is code" differentiator); persists like peak recipes
 // (localStorage) and exports/imports as a standalone .json file. Pure.
+//
+// A SAVED TRANSFORMATION RECIPE (P2.5 box 4) is the same record with three
+// additive-optional fields: a `description`, a `revision` (1 on first save,
+// +1 on every re-save under the same name — what a derived output's
+// provenance cites beside the name), and `expects` (lib/recipeExpect.ts: the
+// input columns, units and metadata the steps read, checked before an apply).
+// Absent on every template saved before them, which load unchanged; `version`
+// stays 1 because no existing field changed meaning.
 
 import { makeStep, STEP_KINDS, type PipelineStep, type StepKind } from "./pipeline";
+import { sanitizeExpectations, type RecipeExpectations } from "./recipeExpect";
 import type { CalcResult, DataStruct } from "./types";
 
 export interface AnalysisTemplate {
@@ -16,13 +25,23 @@ export interface AnalysisTemplate {
   /** Declared outputs for the batch summary sheet (#3): typically the last
    *  fit step's parameter names + goodness-of-fit. */
   outputs: string[];
+  /** P2.5 recipe: what it does, in the author's words. */
+  description?: string;
+  /** P2.5 recipe: 1, 2, … — bumped on every save under the same name. */
+  revision?: number;
+  /** P2.5 recipe: the input the steps read (lib/recipeExpect.ts). */
+  expects?: RecipeExpectations;
 }
+
+/** The recipe fields `toTemplate` accepts (module doc). */
+export type RecipeFields = Pick<AnalysisTemplate, "description" | "revision" | "expects">;
 
 /** Freeze the current step list as a named template. */
 export function toTemplate(
   name: string,
   steps: readonly PipelineStep[],
   outputs: readonly string[],
+  recipe: RecipeFields = {},
 ): AnalysisTemplate {
   return {
     version: 1,
@@ -30,6 +49,18 @@ export function toTemplate(
     // Strip volatile ids — a template is content, not session state.
     steps: steps.map((s) => ({ ...s, id: "" })),
     outputs: [...outputs],
+    ...recipeFieldsOf(recipe as Record<string, unknown>),
+  };
+}
+
+/** The valid recipe fields of `o`; anything malformed is left out. */
+function recipeFieldsOf(o: Record<string, unknown>): RecipeFields {
+  const expects = sanitizeExpectations(o.expects);
+  const rev = o.revision;
+  return {
+    ...(typeof o.description === "string" && o.description.trim() ? { description: o.description.trim() } : {}),
+    ...(typeof rev === "number" && Number.isInteger(rev) && rev > 0 ? { revision: rev } : {}),
+    ...(expects ? { expects } : {}),
   };
 }
 
@@ -77,6 +108,7 @@ export function parseTemplate(text: string): AnalysisTemplate {
       enabled: s.enabled !== false,
     })),
     outputs,
+    ...recipeFieldsOf(o),
   };
 }
 
@@ -105,6 +137,12 @@ export function loadTemplates(): AnalysisTemplate[] {
 export function saveTemplate(t: AnalysisTemplate): AnalysisTemplate[] {
   const list = loadTemplates().filter((x) => x.name !== t.name);
   list.push(t);
+  return saveTemplates(list);
+}
+
+/** Write the whole list (one storage write — a `.dwk` open adds several,
+ *  lib/templatesProject.ts) and return it. */
+export function saveTemplates(list: AnalysisTemplate[]): AnalysisTemplate[] {
   try {
     localStorage.setItem(KEY, JSON.stringify(list));
   } catch {

@@ -77,7 +77,7 @@ type SliceGet = () => AppState;
  *  file — its fit models to merge into the library. That field is kept OUT of
  *  `WorkspaceState` so no save can ever serialize a parsed file's models
  *  (lib/fitModelsProject.ts). */
-export type WorkspaceToLoad = WorkspaceState & Pick<LoadedWorkspace, "projectFitModels">;
+export type WorkspaceToLoad = WorkspaceState & Pick<LoadedWorkspace, "projectFitModels" | "projectTemplates">;
 
 export interface WorkspaceHydrationSlice {
   // `skipLayout` (PR E2 "Open without layout…") ignores plotWindows/
@@ -310,6 +310,9 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
  *  loaded, except after the browser picker's Worker parse, when this is its
  *  first fetch (a failure is toasted by the loader). */
 function adoptFitModels(ws: WorkspaceToLoad, set: SliceSet, get: SliceGet): void {
+  // P2.5 box 4: the project's saved templates / transformation recipes join
+  // the local library by the same rule (lib/templatesProject.ts; no carry).
+  if (ws.projectTemplates?.length) void workspaceCodecOrReport("Adding the project's templates", noop).then((c) => c?.adoptProjectTemplates(ws));
   const models = ws.projectFitModels ?? [];
   if (!models.length) return;
   const expected = get().fitModelCarry;

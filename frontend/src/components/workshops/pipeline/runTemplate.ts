@@ -4,11 +4,45 @@
 // outputs into a BatchRow, and land a per-run #36 fit report when a fit ran.
 // Module-level (not a hook); callers own the pipelineRunning flag and the
 // summary worksheet.
+//
+// ── APPLY A SAVED TRANSFORMATION RECIPE (P2.5 box 4) ─────────────────────
+// `applyRecipe` runs a template (a transformation recipe) on one or many
+// loaded datasets, for the Pipeline workshop's ApplyRecipeSection.
+//
+// PER DATASET: preflight again at run time (lib/recipePreflight.ts — the
+// workspace may have changed since the preview), refuse on any blocking issue,
+// otherwise run the recipe's steps through the SAME `executeSteps` the
+// pipeline and the template batch use, starting on:
+//   - a WORKING COPY laid out like the recording input (`conformData`) when the
+//     columns were rebound, or when a step would edit the dataset in place —
+//     the source dataset is never edited;
+//   - the dataset itself otherwise (its first step derives a new dataset).
+// The dataset the run ends on is the OUTPUT. It gets `metadata.transform_recipe`:
+// the recipe's name and revision, the input, the column bindings, when. A run
+// with a failed step, or one that derived nothing, is ROLLED BACK — every
+// dataset it created is removed — and reported, never half-kept.
+//
+// ONE UNDO STEP PER APPLY, however many datasets and steps. The steps run
+// through store actions that each record their own history entry and do not
+// take a `withHistoryBatch` token (threading one through executeSteps' every
+// action is the alternative, and a much wider change), so `asOneUndoStep`
+// collapses the entries the apply pushed into one, holding the state from
+// before it. KNOWN LIMITATION, the same class `withHistoryBatch` documents: an
+// unrelated edit made WHILE an apply is running (its steps await the backend)
+// folds into the apply's entry, so undoing the apply also undoes that edit.
+// Recording is suppressed while it runs (`pipelineRunning`), exactly like a
+// folder batch.
 
 import { executeSteps } from "./executeSteps";
 import { reportEmit } from "../../../lib/api";
+import { conformData, conformFilter, needsWorkingCopy, preflightRecipe, runnableSteps, type Binding } from "../../../lib/recipePreflight";
+import { excludedSet } from "../../../lib/rowstate";
 import { extractOutputs, type AnalysisTemplate, type BatchRow } from "../../../lib/template";
-import { useApp } from "../../../store/useApp";
+import { HISTORY_DEPTH } from "../../../store/history";
+import { snapshotOf } from "../../../store/historySnapshot";
+import { removeDatasetsPatch } from "../../../store/removeDatasets";
+import { nextDatasetId, useApp } from "../../../store/useApp";
+
 
 /** Run template `t` against the loaded dataset `targetId`. Step failures are
  *  isolated (a flagged row, never a throw); the report emission is best-effort
@@ -53,4 +87,145 @@ export async function runTemplateOnDataset(
       ? { failed: failedSteps.map((l) => l.note ?? "step failed").join("; ") }
       : {}),
   };
+}
+
+export interface ApplyPlan {
+  datasetId: string;
+  bindings: Binding[];
+}
+
+export interface ApplyResult {
+  datasetId: string;
+  name: string;
+  status: "ok" | "refused" | "failed";
+  /** The derived output (status "ok"). */
+  outputId?: string;
+  outputName?: string;
+  note: string;
+}
+
+/** Provenance stamped on a recipe's output (`metadata.transform_recipe`). */
+export interface RecipeProvenance {
+  recipe: string;
+  revision: number;
+  input: { id: string; name: string };
+  /** Expected column → the input column bound to it, or null (blank). */
+  bindings: { column: string; from: string | null }[];
+  steps: number;
+  appliedAt: string;
+}
+
+/** Run `fn` as ONE undo entry labelled `label` (module doc). Entries `fn`
+ *  pushed are replaced by one holding the state from before it; nothing is
+ *  pushed when `fn` pushed nothing. */
+export async function asOneUndoStep<T>(label: string, fn: () => Promise<T>): Promise<T> {
+  const h0 = useApp.getState().history;
+  const last = h0[h0.length - 1];
+  const snapshot = snapshotOf(useApp.getState());
+  try {
+    return await fn();
+  } finally {
+    useApp.setState((s) => {
+      // Entries only append (oldest evicted at HISTORY_DEPTH), so everything
+      // after the entry that was on top is the apply's. That entry is gone
+      // only when evicted — then every entry is newer — or when something
+      // rewrote the stack (a permanent delete scrubs every snapshot); then
+      // the entries are left as they are: several undo steps, nothing lost.
+      let k = last ? s.history.lastIndexOf(last) : -1;
+      if (last && k < 0) {
+        if (s.history.length < HISTORY_DEPTH) return {};
+        k = -1;
+      }
+      if (k === s.history.length - 1) return {};
+      return { history: [...s.history.slice(0, k + 1), { label, snapshot }].slice(-HISTORY_DEPTH), future: [] };
+    });
+  }
+}
+
+/** Apply `recipe` to every plan's dataset, in order, as one undo step. */
+export async function applyRecipe(
+  recipe: AnalysisTemplate,
+  plans: readonly ApplyPlan[],
+  opts: { ackUnits: boolean },
+): Promise<ApplyResult[]> {
+  const s = useApp.getState;
+  s().setPipelineRunning(true);
+  try {
+    return await asOneUndoStep(`apply recipe “${recipe.name}”`, async () => {
+      const results: ApplyResult[] = [];
+      for (const plan of plans) results.push(await applyOne(recipe, plan, opts.ackUnits));
+      const ok = results.filter((r) => r.status === "ok").length;
+      s().setStatus(`applied “${recipe.name}” to ${ok}/${results.length} dataset${results.length === 1 ? "" : "s"}`);
+      return results;
+    });
+  } finally {
+    s().setPipelineRunning(false);
+  }
+}
+
+async function applyOne(recipe: AnalysisTemplate, plan: ApplyPlan, ackUnits: boolean): Promise<ApplyResult> {
+  const s = useApp.getState;
+  const listed = s().datasets.find((d) => d.id === plan.datasetId);
+  const base = { datasetId: plan.datasetId, name: listed?.name ?? plan.datasetId };
+  if (!listed) return { ...base, status: "refused", note: "no longer in the workspace" };
+  let ds;
+  try {
+    ds = await s().resolveDataset(plan.datasetId);
+  } catch (e) {
+    return { ...base, status: "refused", note: `couldn't load full data — ${e instanceof Error ? e.message : "error"}` };
+  }
+  if (!ds || ds.pending) return { ...base, status: "refused", note: "its full data could not be loaded" };
+  const pf = preflightRecipe(recipe, ds, plan.bindings, new Set(s().datasets.map((d) => d.id)), ackUnits);
+  if (pf.blocked) {
+    return { ...base, status: "refused", note: pf.issues.filter((i) => i.blocking).map((i) => i.text).join("; ") };
+  }
+  const columns = recipe.expects?.columns ?? [];
+  const existing = new Set(s().datasets.map((d) => d.id));
+  let start = ds.id;
+  if (needsWorkingCopy(recipe.steps, plan.bindings)) {
+    const c = conformData(ds.data, columns, plan.bindings);
+    const filter = conformFilter(ds.filter, c);
+    // Same rows, so the row exclusions carry over as they are.
+    const excluded = [...excludedSet(ds)].sort((a, b) => a - b);
+    start = nextDatasetId();
+    s().addDataset({
+      id: start,
+      name: `${ds.name} (${recipe.name} input)`,
+      data: { ...c.data, metadata: { ...c.data.metadata, recipe_working_copy: { recipe: recipe.name, of: { id: ds.id, name: ds.name } } } },
+      ...(excluded.length ? { excludedRows: excluded } : {}),
+      ...(filter ? { filter } : {}),
+    });
+  }
+  const run = await executeSteps(recipe.steps, start);
+  const failed = Object.values(run.log).filter((l) => l.status === "failed");
+  const output = run.target;
+  if (failed.length || output === ds.id) {
+    const created = s().datasets.filter((d) => !existing.has(d.id)).map((d) => d.id);
+    // The bare removal patch, not the `removeDatasets` action: its trash
+    // capture would keep the rollback's leftovers, and its permanent form
+    // rewrites every history entry, which `asOneUndoStep` tells apart by
+    // identity. The undo entry this apply makes predates them anyway.
+    if (created.length) useApp.setState((st) => removeDatasetsPatch(st, created));
+    const why = failed.length ? failed.map((l) => l.note ?? "a step failed").join("; ") : "no step derived a dataset";
+    return { ...base, status: "failed", note: `${why} — nothing kept` };
+  }
+  const prov: RecipeProvenance = {
+    recipe: recipe.name,
+    revision: recipe.revision ?? 1,
+    input: { id: ds.id, name: ds.name },
+    bindings: columns.map((c, i) => {
+      const b = plan.bindings[i];
+      return { column: c.name, from: typeof b === "number" ? (ds.data.labels[b] ?? null) : null };
+    }),
+    steps: runnableSteps(recipe.steps).length,
+    appliedAt: new Date().toISOString(),
+  };
+  useApp.setState((st) => ({
+    datasets: st.datasets.map((d) =>
+      d.id === output ? { ...d, data: { ...d.data, metadata: { ...d.data.metadata, transform_recipe: prov } } } : d,
+    ),
+  }));
+  const outName = s().datasets.find((d) => d.id === output)?.name ?? output;
+  const warned = Object.values(run.log).filter((l) => l.status === "warn").length;
+  return { ...base, status: "ok", outputId: output, outputName: outName, note: `created “${outName}”${warned ? ` (${warned} step warning${warned === 1 ? "" : "s"})` : ""}` };
 }

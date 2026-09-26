@@ -3165,6 +3165,14 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // `boundsFromWire`, now in lib/fitBoundsWire.ts.
     "/lib/fitParams.ts",
     "/lib/paramRowCheck.ts",
+    // P2.5 box 4 (saved transformation recipes): the template library left
+    // the entry chunk (lib/contextActions.ts reads the storage slot for its
+    // one visibility check), which funded the recipe modules below — reached
+    // only from the lazy Pipeline workshop, folder ops and the .dwk codec.
+    "/lib/template.ts",
+    "/lib/recipeExpect.ts",
+    "/lib/recipePreflight.ts",
+    "/lib/templatesProject.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
