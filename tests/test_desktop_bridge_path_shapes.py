@@ -555,9 +555,14 @@ def test_unc_fake_stat_intercepts_pathlike_and_bytes(
     """`os.stat` accepts str, bytes and PathLike. A fake that matched only
     `str` would let the other two reach the real SMB redirector."""
     share = unc_share()
-    install_unc_fakes(monkeypatch, share, mounted=True, stat_winerror=ERROR_NETWORK_UNREACHABLE)
     file_path = unc_file(share)
     arg: Any = Path(file_path) if as_type == "pathlike" else os.fsencode(file_path)
+    # Build (and stringify) the Path BEFORE the fakes go in: from Python 3.13
+    # pathlib formats a path through ``os.path.splitdrive``, which the fakes
+    # replace, so a Path first stringified afterwards comes out as
+    # "./\\server\share..." on POSIX and misses the share entirely.
+    os.fspath(arg)
+    install_unc_fakes(monkeypatch, share, mounted=True, stat_winerror=ERROR_NETWORK_UNREACHABLE)
     with pytest.raises(OSError) as info:
         os.stat(arg)
     assert getattr(info.value, "winerror", None) == ERROR_NETWORK_UNREACHABLE
