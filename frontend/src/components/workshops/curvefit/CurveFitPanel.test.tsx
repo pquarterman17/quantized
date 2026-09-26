@@ -3,11 +3,12 @@
 // useCurveFit.test.ts; this just proves the panel actually surfaces the
 // hook's new by* fields end-to-end.
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { listFitModels } from "../../../lib/api/curvefit";
 import { fitModel } from "../../../lib/api";
+import { appendCustomModels, deleteCustomModel, saveCustomModel } from "../../../lib/fitmodels";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import CurveFitPanel from "./CurveFitPanel";
@@ -79,5 +80,58 @@ describe("CurveFitPanel — By grouping (JMP_GAP_PLAN J7 residual)", () => {
     fireEvent.change(await screen.findByLabelText("Weighting"), { target: { value: "poisson" } });
     fireEvent.change(screen.getByLabelText("By (optional)"), { target: { value: "0" } });
     expect(await screen.findByText(/fit unweighted/)).toBeInTheDocument();
+  });
+});
+
+// PR #432 review: the picker read the library ONCE (`useState`) and stayed
+// stale while another surface — the Recipe Library, a project open merging
+// models in — wrote it.
+describe("CurveFitPanel — saved-model picker stays current", () => {
+  const model = (name: string) => ({ version: 1 as const, name, equation: "y = a", params: ["a"], guesses: [1], lower: [null], upper: [null] });
+  const option = (name: string) => screen.queryByRole("option", { name: `ƒ ${name}` });
+
+  beforeEach(() => localStorage.clear());
+
+  it("lists a model saved, appended (a project open) or deleted elsewhere while the panel is open", async () => {
+    render(<CurveFitPanel />);
+    await screen.findByLabelText("By (optional)");
+    expect(option("Elsewhere")).toBeNull();
+    act(() => {
+      saveCustomModel(model("Elsewhere"));
+    });
+    expect(option("Elsewhere")).toBeInTheDocument();
+    act(() => {
+      appendCustomModels([model("From project")]);
+    });
+    expect(option("From project")).toBeInTheDocument();
+    act(() => {
+      deleteCustomModel("Elsewhere");
+    });
+    expect(option("Elsewhere")).toBeNull();
+  });
+
+  it("lists a model another WINDOW saved (the storage event) — review", async () => {
+    render(<CurveFitPanel />);
+    await screen.findByLabelText("By (optional)");
+    // Another window's write: storage changes with no call into this module.
+    localStorage.setItem("qz.customFitModels", JSON.stringify([model("Other window")]));
+    expect(option("Other window")).toBeNull();
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: "qz.customFitModels" }));
+    });
+    expect(option("Other window")).toBeInTheDocument();
+  });
+
+  it("deleting the LOADED model elsewhere falls the picker back to a blank equation (review)", async () => {
+    saveCustomModel(model("Loaded"));
+    render(<CurveFitPanel />);
+    await screen.findByLabelText("By (optional)");
+    const picker = () => screen.getByRole("option", { name: "Custom equation…" }).closest("select")!;
+    fireEvent.change(picker(), { target: { value: "custom:Loaded" } });
+    expect(picker()).toHaveValue("custom:Loaded");
+    act(() => {
+      deleteCustomModel("Loaded"); // e.g. from the Recipe Library
+    });
+    expect(picker()).toHaveValue("custom:");
   });
 });

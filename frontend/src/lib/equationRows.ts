@@ -11,7 +11,7 @@
 // Pure: no React, no store.
 
 import { lit } from "./macro";
-import { ALL_HELD_ERROR, allHeld, checkParamRow } from "./paramRowCheck";
+import { ALL_HELD_ERROR, allHeld, checkParamRow, readParamNumber } from "./paramRowCheck";
 
 export interface EquationParamRow {
   name: string;
@@ -52,6 +52,37 @@ export function parseEquationRows(rows: readonly EquationParamRow[]): EquationRo
     out.fixed.push(r.fixed);
   }
   if (allHeld(out.fixed)) return { error: ALL_HELD_ERROR };
+  return out;
+}
+
+/** The numbers a SAVED model records for these rows, or why it cannot be
+ *  saved: the fit's own per-row checks (`checkParamRow` — a guess, min or max
+ *  that is not a number, min above max), with two differences. A BLANK guess
+ *  is 1 clamped into the row's bounds — the start the engine would use, since
+ *  it clips every start into its bounds (PR #432 review: unclamped, a blank
+ *  guess with min 5 was refused as a guess the user never typed). And the
+ *  hold flag plays no part: a saved model does not record it. A TYPED guess
+ *  outside its bounds is left for the creation check (lib/fitmodels'
+ *  `checkFitModelRecord`) to refuse, naming it. */
+export function savedModelRows(
+  rows: readonly EquationParamRow[],
+): { guesses: number[]; lower: (number | null)[]; upper: (number | null)[] } | { error: string } {
+  const out: { guesses: number[]; lower: (number | null)[]; upper: (number | null)[] } = { guesses: [], lower: [], upper: [] };
+  for (const r of rows) {
+    // An unreadable bound is refused by checkParamRow below; here it only
+    // must not move the blank start.
+    const lo = readParamNumber(r.min) ?? null;
+    const hi = readParamNumber(r.max) ?? null;
+    const blankStart = hi !== null && hi < 1 ? hi : lo !== null && lo > 1 ? lo : 1;
+    const c = checkParamRow(
+      { name: r.name, start: r.guess, min: r.min, max: r.max, held: false },
+      { startLabel: "guess", blankStart },
+    );
+    if ("error" in c) return { error: c.error };
+    out.guesses.push(c.start);
+    out.lower.push(c.lo);
+    out.upper.push(c.hi);
+  }
   return out;
 }
 

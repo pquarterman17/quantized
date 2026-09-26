@@ -50,7 +50,7 @@ beforeEach(() => {
 });
 
 function typeEquation(text: string) {
-  render(<EquationModelPanel initial={null} onSavedChange={() => {}} />);
+  render(<EquationModelPanel initial={null} />);
   fireEvent.change(screen.getByPlaceholderText("y = a*exp(-x/t) + c"), { target: { value: text } });
 }
 

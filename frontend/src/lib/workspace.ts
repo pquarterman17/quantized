@@ -39,6 +39,8 @@ import { sanitizeToolWindowLayout, type ToolWindowLayout } from "./toolwindow";
 import { applyWorkbookMigration, sanitizeWorkbooks, type WorkbookNode } from "./workbooks";
 import { parseOriginFidelity, parseOriginFigures, stringsIn } from "./workspaceOrigin";
 import { parseWorkspaceDataset } from "./workspaceDatasetParse";
+import { splitProjectFitModels } from "./fitModelsProject";
+import type { CustomFitModel } from "./fitmodels";
 import type { Dataset, FolderNode } from "./types";
 
 export const WORKSPACE_FORMAT = "quantized-workspace";
@@ -57,6 +59,9 @@ export const WORKSPACE_FORMAT = "quantized-workspace";
 // (audit P2.1; own schema `version` + sanitizer, lib/peakTable.ts) and `reflFits` (P2.2 slice 3;
 // passed through verbatim, each record carrying its own schema `version` and validated on read by
 // workshops/reflectivity/reflFitRecord.ts's `decodeRecord`, where an unknown version is skipped).
+// Additive-optional TOP-LEVEL `customFitModels` (P2.7 follow-up, lib/fitModelsProject.ts): the
+// saved fit models, written only when there are any; an older build never reads the key (this
+// parser picks its fields by name), so no bump.
 export const WORKSPACE_VERSION = 4;
 // v5 (P2.5, PR #431 review): written ONLY when the pipeline holds a `transform` step; every other
 // save stays v4, so ordinary files still open in older builds. The reason is an older reader's
@@ -136,6 +141,13 @@ export interface WorkspaceState {
    *  `WorkspaceDoc` has no such field, and `serializeWorkspace` picks its
    *  fields explicitly, so it cannot reach a saved project. */
   recipeSourcesComplete?: boolean;
+  /** P2.7 follow-up: the project's fit-model records the local library does
+   *  not hold (unreadable, or refused) — written back on save after the
+   *  library, which a save always reads itself (lib/fitModelsProject.ts).
+   *  There is deliberately NO field here for the models to embed: a parsed
+   *  file's models are `LoadedWorkspace.projectFitModels`, which
+   *  `serializeWorkspace` never reads. */
+  fitModelCarry?: unknown[];
 }
 
 /** A parsed workspace — every field populated (folder tree defaults to empty,
@@ -181,6 +193,9 @@ export interface LoadedWorkspace {
   visibleDetailsColumns: LibraryDetailsColumnKey[]; // PR L slice 2 — always populated
   plotRecipes: PlotRecipe[]; // P1.3 — always populated
   /** Were `plotRecipes` and `quickPlotTemplates` read from this file WHOLE?
+   *  (Saved fit models are judged by the store from `fitModelCarry` instead —
+   *  store/recipeFidelity.ts's `recipeSourcesWhole` — so the carry and the
+   *  verdict can never disagree after an undo.)
    *
    *  False when either field was present but not an array, or when its
    *  sanitizer dropped a record. Transient and derived — never serialized (it
@@ -192,6 +207,13 @@ export interface LoadedWorkspace {
    *  prune sidecar favorites/tags against. See `slotFidelity` for why the
    *  measurement happens BEFORE the dangling-scope prune. */
   recipeSourcesComplete: boolean;
+  /** P2.7 follow-up: the file's readable saved fit models, merged into the
+   *  local library by the store's load/append (`adoptProjectFitModels`) and
+   *  NEVER serialized from here (a save reads the library), and the
+   *  unreadable ones, carried. Always populated by `parseWorkspace`; optional
+   *  only for the hand-built fixtures, like `mapViews`. */
+  projectFitModels?: CustomFitModel[];
+  fitModelCarry?: unknown[];
 }
 
 
@@ -376,6 +398,9 @@ export function parseWorkspace(
   const expandedWorkbookIds = stringsIn(o.expandedWorkbookIds, workbookIds);
   const collections = sanitizeCollections(o.collections);
   const plotRecipes = sanitizeRecipes(o.plotRecipes); // P1.3 — drop-malformed-never-throw, same as sanitizeQuickPlotTemplates
+  // P2.7 follow-up: an unreadable embedded fit model is carried; the store
+  // derives the Recipe Library's completeness from that carry.
+  const fitModels = splitProjectFitModels(o.customFitModels, migrationWarnings);
   const recipeSourcesComplete =
     slotFidelity(o.plotRecipes, plotRecipes.length) &&
     slotFidelity(o.quickPlotTemplates, sanitizedQuickPlotTemplates.length);
@@ -411,6 +436,8 @@ export function parseWorkspace(
     visibleDetailsColumns: sanitizeVisibleDetailsColumns(o.visibleDetailsColumns),
     plotRecipes,
     recipeSourcesComplete,
+    projectFitModels: fitModels.models,
+    fitModelCarry: fitModels.carry,
   };
 }
 
@@ -425,3 +452,7 @@ export * from "./workspaceMerge";
 // extracted to ./workspaceSerialize.ts under this file's size pin, re-exported
 // here so every caller keeps importing it from `lib/workspace`.
 export * from "./workspaceSerialize";
+
+// The store's load/append reach the fit-model merge through this (already
+// loaded) codec rather than a chunk of their own — lib/fitModelsProject.ts.
+export { adoptProjectFitModels, autosaveRestoreFitModels } from "./fitModelsProject";

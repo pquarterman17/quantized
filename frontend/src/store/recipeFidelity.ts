@@ -35,17 +35,74 @@
 export interface RecipeFidelitySlice {
   /** False when the open project's `plotRecipes` or `quickPlotTemplates` field
    *  was present but unreadable, or had records dropped by its sanitizer.
+   *  Read it through `recipeSourcesWhole`, which also counts the carry.
    *
    *  True on a fresh session: an empty app has lost nothing. Consumers must
    *  combine it with the OTHER recipe systems' own signals — see
    *  `lib/recipeSources.ts`'s `collectRecipes`, which will not let sidecar
    *  favorites/tags be pruned against a collection any source doubts. */
   recipeSourcesComplete: boolean;
+  /** P2.7 follow-up: the saved fit-model records the open project(s) carried
+   *  that the local library does not hold — ones this build cannot read (a
+   *  newer version, a damaged entry) and ones the library refused (storage
+   *  full, a damaged slot). Never shown or edited — only written back into
+   *  the `.dwk` on the next save (lib/fitModelsProject.ts; the one change a
+   *  save makes is to RENAME a record whose name is already written, so the
+   *  file holds one record per name), so opening a
+   *  project in an older build and saving it does not destroy a newer build's
+   *  models. Replaced by a load, grown by an append and by a refused merge. A
+   *  non-empty carry makes `recipeSourcesWhole` false — DERIVED, never
+   *  assigned, so undo cannot desync the two. UNDOABLE, unlike the flag (it
+   *  is in HistorySnapshot): it is project content that travels with the
+   *  datasets. PERSISTED and AUTOSAVED, unlike the flag: `serializeWorkspace`
+   *  reads it from the state it is given, and useWorkspaceAutosave's
+   *  `shouldAutosave` tracks it. */
+  fitModelCarry: unknown[];
 }
 
-/** State only, no action: the single write site is `useApp.loadWorkspace`'s
- *  own `set()`, which restores this field alongside the two lists it
- *  describes. A setter here would have no caller. */
+/** Are EVERY workspace-backed recipe source whole — the lists the load
+ *  judged (`recipeSourcesComplete`) AND no carried fit models? The one
+ *  reader of the verdict (the Recipe Library panel). Derived from the carry
+ *  on every read rather than folded into the flag at load: the carry is
+ *  undoable and the flag is not, so a stored combination would disagree
+ *  with the carry after an undo (undoing "remove all" brings the carry back,
+ *  but not a `false`). */
+export function recipeSourcesWhole(s: RecipeFidelitySlice): boolean {
+  return s.recipeSourcesComplete && s.fitModelCarry.length === 0;
+}
+
+// Which carries are the SAME project's, grown: an append and a refused merge
+// grow the carry (`grownCarry`), while a load, "remove all" and an undo
+// REPLACE it. The async merge (store/workspaceHydration.ts's
+// `adoptFitModels`) writes its refused records only into a carry that grew
+// from the one it started with — never into another project's (PR #432
+// review: comparing identity alone lost them when a second append landed
+// first). Each grown array remembers the array its lineage began with.
+const carryRoots = new WeakMap<unknown[], unknown[]>();
+const rootOf = (carry: unknown[]): unknown[] => carryRoots.get(carry) ?? carry;
+
+/** `carry` with `more` appended — the same project's carry, grown. */
+export function grownCarry(carry: unknown[], more: readonly unknown[]): unknown[] {
+  const next = [...carry, ...more];
+  carryRoots.set(next, rootOf(carry));
+  return next;
+}
+
+/** Is `current` the carry `expected` was, or grown from it — not a load's,
+ *  a "remove all"'s or an undo's replacement? */
+export function carryGrewFrom(current: unknown[], expected: unknown[]): boolean {
+  if (current === expected) return true;
+  return (
+    rootOf(current) === rootOf(expected) &&
+    current.length >= expected.length &&
+    expected.every((r, i) => current[i] === r)
+  );
+}
+
+/** State only, no action: the write sites are `loadWorkspace` (replace) and
+ *  `appendWorkspace` (grow), store/workspaceHydration.ts, and the refused
+ *  merge they start (its `adoptFitModels`). A setter here would have no
+ *  caller. */
 export function createRecipeFidelitySlice(): RecipeFidelitySlice {
-  return { recipeSourcesComplete: true };
+  return { recipeSourcesComplete: true, fitModelCarry: [] };
 }

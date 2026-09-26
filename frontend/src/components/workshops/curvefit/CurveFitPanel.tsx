@@ -10,7 +10,7 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { DataTable } from "../../primitives/DataTable";
 import { Button, Select } from "../../primitives";
 import { reportEmit } from "../../../lib/api";
-import { loadCustomModelsChecked, type CustomFitModel } from "../../../lib/fitmodels";
+import type { CustomFitModel } from "../../../lib/fitmodels";
 import { fmtNum as fmt } from "../../../lib/format";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
@@ -24,6 +24,7 @@ import FitParamsSection from "./FitParamsSection";
 import WeightingSection from "./WeightingSection";
 import { useCurveFit } from "./useCurveFit";
 import { useModelScan } from "./useModelScan";
+import { useSavedFitModels } from "./useSavedFitModels";
 
 // Custom-model picker values are namespaced "custom:<name>"; the bare prefix
 // is the blank "type a new equation" entry (GOTO #1).
@@ -103,9 +104,11 @@ export default function CurveFitPanel() {
   const applyScanned = (kind: "registry" | "equation", name: string) =>
     setModelName(kind === "equation" ? `${CUSTOM_PREFIX}${name}` : name);
 
-  // Saved custom equation models (GOTO #1) — listed alongside registry models.
-  const [storedModels] = useState(loadCustomModelsChecked);
-  const [customModels, setCustomModels] = useState<CustomFitModel[]>(storedModels.models);
+  // Saved custom equation models (GOTO #1) — listed alongside registry models,
+  // re-read on every library write (a save here, or a project open merging
+  // models in — PR #432 review).
+  const storedModels = useSavedFitModels();
+  const customModels = storedModels.models;
   useEffect(() => {
     const w = storedModels.warning;
     if (w && !warnedModelLoads.has(w)) {
@@ -121,11 +124,13 @@ export default function CurveFitPanel() {
     { value: CUSTOM_PREFIX, label: "Custom equation…" },
     ...customModels.map((m) => ({ value: `${CUSTOM_PREFIX}${m.name}`, label: customLabel(m) })),
   ];
-  const onSavedChange = (list: CustomFitModel[]) => {
-    setCustomModels(list);
-    // Deleting the loaded model orphans the picker value — fall back to blank.
-    if (customName && !list.some((m) => m.name === customName)) setModelName(CUSTOM_PREFIX);
-  };
+  // Deleting (or renaming) the loaded model — here, in the Recipe Library, or
+  // anywhere else that writes the library — orphans the picker value: fall
+  // back to the blank equation instead of a value no option matches.
+  const orphaned = customName !== "" && currentCustom === null;
+  useEffect(() => {
+    if (orphaned) setModelName(CUSTOM_PREFIX);
+  }, [orphaned, setModelName]);
 
   const close = () => {
     clear();
@@ -187,7 +192,6 @@ export default function CurveFitPanel() {
         <EquationModelPanel
           key={modelName}
           initial={currentCustom}
-          onSavedChange={onSavedChange}
         />
         <ModelScanSection state={modelScan} onApply={applyScanned} />
       </ToolWindow>

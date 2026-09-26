@@ -370,6 +370,7 @@ export type AutosaveState = Pick<
   // whole-state-spread save path with no trigger here — a recipe CRUD edit
   // left the title bar showing clean right up to a crash.
   | "plotRecipes"
+  | "fitModelCarry" // P2.7: a refused fit-model merge grows it on its own (store/workspaceHydration.ts)
 >;
 
 export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boolean {
@@ -401,7 +402,7 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.mapViews === prev.mapViews &&
     state.collections === prev.collections &&
     state.visibleDetailsColumns === prev.visibleDetailsColumns &&
-    state.plotRecipes === prev.plotRecipes
+    state.plotRecipes === prev.plotRecipes && state.fitModelCarry === prev.fitModelCarry
   );
 }
 

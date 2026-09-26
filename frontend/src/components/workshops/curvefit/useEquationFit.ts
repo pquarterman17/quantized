@@ -14,12 +14,14 @@ import {
   equationRunProblem,
   newEquationRow,
   parseEquationRows,
+  savedModelRows,
   type EquationParamRow,
 } from "../../../lib/equationRows";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { recordUse } from "../../../lib/recipeIndex";
 import {
   buildCustomFitModel,
+  checkFitModelRecord,
   deleteCustomModel,
   loadCustomModels,
   saveCustomModel,
@@ -292,26 +294,47 @@ export function useEquationFit(
   function save(): CustomFitModel[] | null {
     const name = modelName.trim();
     if (!name || status !== "ok" || rows.length === 0) return null;
+    const numbers = savedModelRows(rows);
+    if ("error" in numbers) {
+      setError(`can't save the model: ${numbers.error}`);
+      return null;
+    }
     const model = buildCustomFitModel({
       name,
       equation,
       params: rows.map((r) => r.name),
-      guesses: rows.map((r) => {
-        const v = Number(r.guess);
-        return Number.isFinite(v) && r.guess.trim() !== "" ? v : 1;
-      }),
-      lower: rows.map((r) => (r.min.trim() === "" || !Number.isFinite(Number(r.min)) ? null : Number(r.min))),
-      upper: rows.map((r) => (r.max.trim() === "" || !Number.isFinite(Number(r.max)) ? null : Number(r.max))),
+      ...numbers,
       description,
       units: rows.map((r) => r.unit),
     });
+    // The same creation check an imported model file gets (lib/fitmodels'
+    // `checkFitModelRecord`): a model saved here with a typed start outside
+    // its bounds would be refused on every other way in — so it is refused
+    // here, naming the parameter.
     try {
-      return saveCustomModel(model);
+      checkFitModelRecord(model);
+    } catch (e) {
+      setError(`can't save the model: ${e instanceof Error ? e.message : "invalid"}`);
+      return null;
+    }
+    let list: CustomFitModel[];
+    try {
+      list = saveCustomModel(model);
     } catch (e) {
       // A stored record this build cannot read holds that name (lib/fitmodels).
       setError(e instanceof Error ? e.message : "could not save the model");
       return null;
     }
+    // A write storage refused (full, blocked) is swallowed by the library, so
+    // re-read: the model is saved only if THIS record is there — not merely
+    // its name, which an older version being overwritten still holds. The
+    // picker lists what storage holds (the lib/nameKeyedRecipes precedent).
+    const back = loadCustomModels().find((m) => m.name === name);
+    if (!back || JSON.stringify(back) !== JSON.stringify(model)) {
+      setError("could not save the model — browser storage is full or unavailable");
+      return null;
+    }
+    return list;
   }
 
   function remove(name: string): CustomFitModel[] {

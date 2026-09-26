@@ -3,7 +3,8 @@
 // sidecar index, and advanced Plot Recipe operations stay in their existing
 // manager until the operation layer reaches parity across all six kinds.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { customModelsRevision, subscribeCustomModels } from "../../../lib/fitmodels";
 import { pruneEntries } from "../../../lib/recipeIndex";
 import {
   RECIPE_KIND_LABEL,
@@ -13,6 +14,7 @@ import {
 } from "../../../lib/recipeLibrary";
 import { collectRecipes, liveKeys, type RecipeSourceInput } from "../../../lib/recipeSources";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
+import { recipeSourcesWhole } from "../../../store/recipeFidelity";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -50,7 +52,12 @@ export default function RecipeLibraryPanel() {
   // and `quickPlotTemplates` are sanitized at project load, and until this
   // existed nothing downstream could tell a load that dropped records from a
   // clean one — only the global slot vouched for itself.
-  const workspaceComplete = useApp((s) => s.recipeSourcesComplete);
+  // P2.7: ...and no carried fit models (derived, store/recipeFidelity.ts).
+  const workspaceComplete = useApp(recipeSourcesWhole);
+  // P2.7: subscribed only to RE-RENDER on any fit-model library write — a
+  // save in the fit workshop, or a project open merging models in — so an
+  // open panel lists them instead of the library as it was.
+  useSyncExternalStore(subscribeCustomModels, customModelsRevision);
   const hydrateGlobal = useGlobalPlotRecipes((s) => s.hydrate);
   const [kind, setKind] = useState<KindFilter>("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);

@@ -3137,6 +3137,15 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/reimport.ts",
     "/lib/dependencyImpact.ts",
     "/lib/originSources.ts",
+    // P2.7 follow-up: the .dwk fit-model bridge and the library it reads are
+    // reached only through the codec (the store calls it via
+    // `workspaceCodec()`), never statically from the entry chunk.
+    "/lib/fitModelsProject.ts",
+    "/lib/fitmodels.ts",
+    // ...and funded by this pair leaving: store/recalcFits.ts needed only
+    // `boundsFromWire`, now in lib/fitBoundsWire.ts.
+    "/lib/fitParams.ts",
+    "/lib/paramRowCheck.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

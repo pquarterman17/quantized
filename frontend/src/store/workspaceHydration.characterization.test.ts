@@ -315,6 +315,7 @@ describe("loadWorkspace — legacy/fresh path (no persisted plot-window layout)"
       "figureDocSeed",
       "figureDocs",
       "figurePublicationSession",
+      "fitModelCarry", // P2.7 follow-up: a load REPLACES the carried unreadable fit models
       "fitOverlay",
       "focusedWindowId",
       "folders",
@@ -524,6 +525,7 @@ describe("loadWorkspace — restored plot-window layout path (restoredHasPlot tr
       "figureDocSeed",
       "figureDocs",
       "figurePublicationSession",
+      "fitModelCarry", // P2.7 follow-up: a load REPLACES the carried unreadable fit models
       "fitOverlay",
       "focusedWindowId",
       "folders",

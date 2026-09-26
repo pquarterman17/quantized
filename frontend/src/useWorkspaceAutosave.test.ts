@@ -69,6 +69,7 @@ const base: AutosaveState = {
   collections: [],
   visibleDetailsColumns: [],
   plotRecipes: [],
+  fitModelCarry: [],
 };
 
 describe("shouldAutosave", () => {
@@ -118,6 +119,8 @@ describe("shouldAutosave", () => {
       "savedRois",
       "collections",
       "plotRecipes",
+      // PR #432 review: a refused fit-model merge grows the carry on its own.
+      "fitModelCarry",
     ] as const,
   )("saves when %s changes", (field) => {
     expect(shouldAutosave({ ...base, [field]: [] }, base)).toBe(true);
@@ -433,6 +436,16 @@ const AUTOSAVE_EXCLUDED: Record<string, string> = {
     "change is structurally impossible today, so tracking it separately " +
     "would never change autosave behavior. Re-check this exclusion if a " +
     "future edit gives techniqueViewMemory an independent mutation site.",
+  // P2.7 follow-up. The doc field is two things: the GLOBAL localStorage
+  // fit-model library (lib/fitmodels.ts), read by serializeWorkspace at write
+  // time, plus the store's `fitModelCarry` — and the carry half IS tracked
+  // (shouldAutosave compares `fitModelCarry`).
+  customFitModels:
+    "the library half is not project state: saving a model in the fit " +
+    "workshop writes localStorage and deliberately schedules no autosave — " +
+    "the model is already durable on this machine, which is the only place " +
+    "an autosave can be restored, and an autosave does not embed the library " +
+    "at all (lib/autosave.test.ts). The carry half is tracked as fitModelCarry.",
 };
 
 describe("AutosaveState completeness sweep (P2-1)", () => {
