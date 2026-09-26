@@ -18,9 +18,13 @@ export async function runTemplateOnDataset(
   targetId: string,
   displayName: string,
 ): Promise<BatchRow> {
-  const { fits, log } = await executeSteps(t.steps, targetId);
+  // A transform step (P2.5) moves the run onto its output, so the fit report
+  // cites the dataset the fit actually ran on (`fitTargets`), not the input.
+  const { fits, fitTargets, log } = await executeSteps(t.steps, targetId);
   const failedSteps = Object.values(log).filter((l) => l.status === "failed");
   const lastFit = fits[fits.length - 1];
+  const fitOn = fitTargets[fitTargets.length - 1] ?? targetId;
+  const fitName = fitOn === targetId ? displayName : (useApp.getState().datasets.find((d) => d.id === fitOn)?.name ?? displayName);
 
   if (lastFit) {
     try {
@@ -34,9 +38,9 @@ export async function runTemplateOnDataset(
             ? names
             : Array.from({ length: nParams }, (_, k) => `p${k}`),
         title: `${t.name} — ${displayName}`,
-        source_refs: [{ kind: "dataset", id: targetId, name: displayName }],
+        source_refs: [{ kind: "dataset", id: fitOn, name: fitName }],
       });
-      useApp.getState().addReport(`${t.name} — ${displayName}`, report, targetId);
+      useApp.getState().addReport(`${t.name} — ${displayName}`, report, fitOn);
     } catch {
       /* offline / report route down — the extracted row still lands */
     }
