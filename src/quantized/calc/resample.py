@@ -31,11 +31,19 @@ _METHODS = ("linear", "pchip", "spline", "makima")
 
 
 def _colon(a: float, d: float, b: float) -> NDArray[np.float64]:
-    """MATLAB ``a:d:b`` colon grid (endpoint included only if it lands exactly)."""
+    """MATLAB ``a:d:b`` colon grid (endpoint included only if it lands exactly).
+
+    Built as ``a + n*d``, which can overshoot the endpoint it just decided
+    DOES land by a ulp (``0:0.1:0.3`` -> ``0.30000000000000004``); snapped
+    back to exactly ``b`` there, as MATLAB's own colon returns ``b`` itself.
+    """
     if d == 0:
         raise ValueError("resample step must be non-zero")
     n = int(math.floor((b - a) / d + 1e-10))
-    return np.asarray(a + np.arange(n + 1) * d, dtype=float)
+    g = np.asarray(a + np.arange(n + 1) * d, dtype=float)
+    if g.size and abs(g[-1] - b) <= 1e-10 * abs(d):
+        g[-1] = b
+    return g
 
 
 def _sanitize_xy(

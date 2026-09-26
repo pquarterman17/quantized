@@ -28,7 +28,12 @@ export type TransformWarningCode =
   | "missing-split-key"
   | "units-dropped"
   | "aggregated"
-  | "rows-dropped";
+  | "rows-dropped"
+  // Resample / align (calc.resample_align, sent by the backend):
+  | "duplicate-x"
+  | "blank-values"
+  | "blank-output"
+  | "reordered";
 
 export interface TransformWarning {
   code: TransformWarningCode;

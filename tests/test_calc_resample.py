@@ -66,6 +66,19 @@ def test_resample_too_few_points() -> None:
         resample_data(ds, n_points=10)
 
 
+def test_step_grid_lands_exactly_on_the_stop_value() -> None:
+    """0:0.1:0.3 must reach exactly 0.3, not overshoot it by an ulp
+    (0.30000000000000004) -- past the source's last x, extrapolate=False
+    would blank it, and a grid equal to the source x would stop being an
+    identity (audit P2.5 review finding #6, the root ``_colon`` fix)."""
+    ds = DataStruct.create([0.0, 0.1, 0.2, 0.3], [0.0, 1.0, 2.0, 3.0])
+    out = resample_data(ds, step=0.1, method="linear")
+    assert out.time[-1] == 0.3
+    assert np.isfinite(out.values[-1, 0])
+    assert_allclose(out.time, [0.0, 0.1, 0.2, 0.3])
+    assert_allclose(out.values[:, 0], [0.0, 1.0, 2.0, 3.0])
+
+
 def test_resample_match_dataset() -> None:
     src = DataStruct.create(np.linspace(0.0, 10.0, 11), np.linspace(0.0, 20.0, 11))
     ref = DataStruct.create(np.linspace(0.0, 10.0, 7), np.zeros(7))

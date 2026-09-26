@@ -9202,6 +9202,242 @@
         "title": "ReportExportRequest",
         "type": "object"
       },
+      "ResampleRequest": {
+        "properties": {
+          "allow_unit_mismatch": {
+            "default": false,
+            "title": "Allow Unit Mismatch",
+            "type": "boolean"
+          },
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "match_x": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Match X"
+          },
+          "match_x_unit": {
+            "default": "",
+            "title": "Match X Unit",
+            "type": "string"
+          },
+          "method": {
+            "default": "linear",
+            "enum": [
+              "linear",
+              "pchip",
+              "spline",
+              "makima"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "mode": {
+            "enum": [
+              "n_points",
+              "step",
+              "range",
+              "match"
+            ],
+            "title": "Mode",
+            "type": "string"
+          },
+          "n_points": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "N Points"
+          },
+          "out_of_range": {
+            "default": "nan",
+            "enum": [
+              "nan",
+              "clip"
+            ],
+            "title": "Out Of Range",
+            "type": "string"
+          },
+          "start": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start"
+          },
+          "step": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Step"
+          },
+          "stop": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stop"
+          },
+          "unsorted": {
+            "default": "refuse",
+            "enum": [
+              "refuse",
+              "sort"
+            ],
+            "title": "Unsorted",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset",
+          "mode"
+        ],
+        "title": "ResampleRequest",
+        "type": "object"
+      },
+      "ResampleResponse": {
+        "properties": {
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "rows_in": {
+            "title": "Rows In",
+            "type": "integer"
+          },
+          "rows_out": {
+            "title": "Rows Out",
+            "type": "integer"
+          },
+          "source_range": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 2,
+            "minItems": 2,
+            "title": "Source Range",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/ResampleWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dataset",
+          "warnings",
+          "source_range",
+          "rows_in",
+          "rows_out"
+        ],
+        "title": "ResampleResponse",
+        "type": "object"
+      },
+      "ResampleWarning": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Columns"
+          },
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "info": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Info"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "text"
+        ],
+        "title": "ResampleWarning",
+        "type": "object"
+      },
       "ResistivityRequest": {
         "properties": {
           "rs": {
@@ -21081,6 +21317,48 @@
         "summary": "Thermal Mismatch",
         "tags": [
           "thin-film"
+        ]
+      }
+    },
+    "/api/transform/resample": {
+      "post": {
+        "description": "Resample a dataset onto a target grid; warnings say what that did.",
+        "operationId": "resample_api_transform_resample_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResampleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ResampleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resample",
+        "tags": [
+          "transform"
         ]
       }
     },

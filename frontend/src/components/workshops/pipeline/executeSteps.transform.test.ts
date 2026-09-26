@@ -34,6 +34,27 @@ vi.mock("../../../lib/api/datasetAlgebra", () => ({
   })),
 }));
 
+// Resample is a backend call too: a deterministic stand-in (n points over the
+// source range, or the matched x; each value = the row's grid x) that echoes
+// what the request asked for into metadata, so the replay must ask the same.
+vi.mock("../../../lib/api/resample", () => ({
+  resampleDataset: vi.fn(async (body: import("../../../lib/api/resample").ResampleRequest) => {
+    const t = body.dataset.time.filter(Number.isFinite);
+    const [lo, hi] = [Math.min(...t), Math.max(...t)];
+    const n = body.n_points ?? 2;
+    const grid = body.mode === "match" ? (body.match_x ?? []).filter((v): v is number => v !== null)
+      : Array.from({ length: n }, (_, k) => lo + ((hi - lo) * k) / (n - 1));
+    const { dataset: _d, match_x: _m, ...asked } = body;
+    return {
+      dataset: { time: grid, values: grid.map((x) => [x]), labels: ["v"], units: [""], metadata: { asked } },
+      warnings: [{ code: "duplicate-x", text: "1 row repeats an x value already present" }],
+      source_range: [lo, hi],
+      rows_in: body.dataset.time.length,
+      rows_out: grid.length,
+    };
+  }),
+}));
+
 // 14 rows, a two-setpoint column (5 K / 10 K) plus a blank one for split.
 const main: DataStruct = {
   time: [0, 1, 2, 3, 4, 5, 6],
@@ -113,6 +134,9 @@ const cases: [string, TransformParams][] = [
   ["join", { op: "join", leftKey: 0, rightKey: 0, mode: "full", with: { id: "oth", name: "oth.dat" } }],
   ["merge", { op: "merge", with: [{ id: "oth", name: "oth.dat" }] }],
   ["algebra", { op: "algebra", operation: "A-B", interp: "linear", with: { id: "oth", name: "oth.dat" } }],
+  ["resample (points)", { op: "resample", mode: "n_points", nPoints: 5, method: "linear", outOfRange: "nan", sortUnsorted: false }],
+  ["resample (range)", { op: "resample", mode: "range", start: 0, stop: 6, step: 0.5, method: "makima", outOfRange: "clip", sortUnsorted: false }],
+  ["resample (match)", { op: "resample", mode: "match", with: { id: "oth", name: "oth.dat" }, method: "pchip", outOfRange: "clip", sortUnsorted: true, acceptedXUnits: ["s", "Oe"] }],
 ];
 
 describe("transform steps replay to the same output", () => {
@@ -161,6 +185,16 @@ describe("executeSteps with transform steps", () => {
     const { log } = await executeSteps(steps, "src");
     expect(log[steps[0].id]).toEqual({ status: "failed", note: 'the recorded input "oth.dat" is not in this workspace' });
     expect(useApp.getState().datasets).toHaveLength(1);
+  });
+
+  it("a resample onto a dataset's x that is no longer in the workspace fails by name, never guesses a grid", async () => {
+    const step = makeStep("transform", "Resample src onto gone.dat's x", "qz.transform()", {
+      op: "resample", mode: "match", with: { id: "gone", name: "gone.dat" }, method: "linear",
+      outOfRange: "nan", sortUnsorted: false,
+    });
+    const { log } = await executeSteps(saved([step]), "src");
+    expect(Object.values(log)[0]).toEqual({ status: "failed", note: 'the recorded input "gone.dat" is not in this workspace' });
+    expect(useApp.getState().datasets).toHaveLength(2);
   });
 
   it("steps after a FAILED transform are skipped, never run on the input", async () => {

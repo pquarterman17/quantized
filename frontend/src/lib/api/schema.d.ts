@@ -4825,6 +4825,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/transform/resample": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resample
+         * @description Resample a dataset onto a target grid; warnings say what that did.
+         */
+        post: operations["resample_api_transform_resample_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/vacuum/gas-flow": {
         parameters: {
             query?: never;
@@ -8665,6 +8685,86 @@ export interface components {
             report: {
                 [key: string]: unknown;
             };
+        };
+        /** ResampleRequest */
+        ResampleRequest: {
+            /**
+             * Allow Unit Mismatch
+             * @default false
+             */
+            allow_unit_mismatch?: boolean;
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /** Match X */
+            match_x?: (number | null)[] | null;
+            /**
+             * Match X Unit
+             * @default
+             */
+            match_x_unit?: string;
+            /**
+             * Method
+             * @default linear
+             * @enum {string}
+             */
+            method?: "linear" | "pchip" | "spline" | "makima";
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "n_points" | "step" | "range" | "match";
+            /** N Points */
+            n_points?: number | null;
+            /**
+             * Out Of Range
+             * @default nan
+             * @enum {string}
+             */
+            out_of_range?: "nan" | "clip";
+            /** Start */
+            start?: number | null;
+            /** Step */
+            step?: number | null;
+            /** Stop */
+            stop?: number | null;
+            /**
+             * Unsorted
+             * @default refuse
+             * @enum {string}
+             */
+            unsorted?: "refuse" | "sort";
+        };
+        /** ResampleResponse */
+        ResampleResponse: {
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /** Rows In */
+            rows_in: number;
+            /** Rows Out */
+            rows_out: number;
+            /** Source Range */
+            source_range: number[];
+            /** Warnings */
+            warnings: components["schemas"]["ResampleWarning"][];
+        };
+        /** ResampleWarning */
+        ResampleWarning: {
+            /** Code */
+            code: string;
+            /** Columns */
+            columns?: string[] | null;
+            /** Confirm */
+            confirm?: boolean | null;
+            /** Count */
+            count?: number | null;
+            /** Info */
+            info?: boolean | null;
+            /** Text */
+            text: string;
         };
         /** ResistivityRequest */
         ResistivityRequest: {
@@ -17377,6 +17477,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resample_api_transform_resample_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResampleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResampleResponse"];
                 };
             };
             /** @description Validation Error */

@@ -72,6 +72,7 @@ from quantized.routes import (
     superconductor,
     thermal,
     thin_film,
+    transform,
     vacuum,
     workbook_transfer,
     xray,
@@ -257,6 +258,7 @@ def create_app(*, dev_origins: Collection[str] | None = None) -> FastAPI:
     application.include_router(superconductor.router)
     application.include_router(magnetic.router)
     application.include_router(aggregate.router)
+    application.include_router(transform.router)
     application.include_router(calc.router)
     application.include_router(workbook_transfer.router)
 

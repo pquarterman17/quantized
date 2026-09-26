@@ -6,6 +6,7 @@
 
 import type { StoreGet } from "../lib/exportActive";
 import type { Action } from "../store/commands";
+import { openResampleDialog } from "../store/resampleDialog";
 import { SHOW_SQLITE_QUERY } from "../store/sqliteQueryDialog";
 import { onLoadFailure, runLazy } from "./fileCommands";
 
@@ -82,6 +83,21 @@ export function buildDataCommands(s: StoreGet): Action[] {
       label: "Dataset math (combine two datasets)…",
       description: "Create a derived dataset by mathematically combining two existing datasets.",
       run: () => s().setDatasetMathOpen(true),
+    },
+    {
+      // P2.5 align/interpolate: the Library selection, else the active
+      // dataset, seeds the pick; the workshop previews before creating.
+      id: "resample",
+      group: "Data",
+      section: "Combine & split",
+      label: "Resample / align to a common grid…",
+      description: "Interpolate one or more datasets onto a new x-grid or another dataset's x, with a live preview.",
+      keywords: "interpolate interp1 align regrid common grid match x resample",
+      run: () => {
+        const st = s();
+        const picked = st.selectedIds.filter((id) => st.datasets.some((d) => d.id === id));
+        openResampleDialog(picked.length ? picked : st.activeId ? [st.activeId] : []);
+      },
     },
     { id: "transpose", group: "Data", section: "Combine & split", label: "Transpose worksheet…", description: "Swap worksheet rows and columns in a new derived dataset.", run: () => runWorksheetTransform(s, (m) => m.runTransposeWorksheet) },
     { id: "stack-columns", group: "Data", section: "Combine & split", label: "Stack columns to long form…", description: "Reshape selected wide columns into value and category columns in long form.", keywords: "jmp reshape stack long form wide", run: () => runWorksheetTransform(s, (m) => m.runStackWorksheet) },
