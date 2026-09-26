@@ -292,6 +292,9 @@ export interface StatplotFigureSpec {
   // `caveat` (lib/groupAxis.balanceCaveat) becomes a figure footnote.
   show_n?: boolean;
   caveat?: string | null;
+  /** Per group: the connect-means line lifts BEFORE it (a hidden empty level
+   *  sat there). Absent = only empty groups and nested boundaries break it. */
+  connect_breaks?: boolean[] | null;
 }
 
 /** Render a statistical plot (box/violin/Q-Q/histogram) server-side

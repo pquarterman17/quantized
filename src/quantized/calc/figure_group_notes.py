@@ -42,6 +42,7 @@ __all__ = [
     "annotate_top_counts",
     "connect_segments",
     "mark_empty_slots",
+    "supxlabel_above_caveat",
 ]
 
 EMPTY_MARKER = "n=0"
@@ -92,12 +93,29 @@ def add_caveat(fig: Any, caveat: str | None) -> tuple[float, float, float, float
     return (0.0, CAVEAT_BAND, 1.0, 1.0)
 
 
+def supxlabel_above_caveat(fig: Any, x_label: str, caveat: str | None) -> None:
+    """A figure-level x title (the faceted grids' ``supxlabel``) that clears
+    the caveat footnote. ``supxlabel`` sits at figure y=0.01 by default -- the
+    footnote's own baseline -- so with a caveat it is lifted to the top of the
+    reserved band instead (the axes are laid out above it by the
+    ``tight_layout(rect=...)`` ``add_caveat`` returns). Review round 2: the two
+    overprinted in every faceted export that carried a caveat."""
+    if not x_label:
+        return
+    if caveat:
+        fig.supxlabel(x_label, y=CAVEAT_BAND, va="bottom")
+    else:
+        fig.supxlabel(x_label)
+
+
 def _outer(label: str) -> str | None:
     i = label.find(NESTED_LABEL_SEP)
     return None if i < 0 else label[:i]
 
 
-def connect_segments(labels: Sequence[str], empty: Sequence[bool]) -> list[list[int]]:
+def connect_segments(
+    labels: Sequence[str], empty: Sequence[bool], breaks: Sequence[bool] | None = None,
+) -> list[list[int]]:
     """Slot indices of each connect-means polyline segment, in axis order.
 
     A segment ends at an empty slot (a line drawn across a missing level
@@ -105,7 +123,10 @@ def connect_segments(labels: Sequence[str], empty: Sequence[bool]) -> list[list[
     wherever the outer factor changes (the step from ``lot = 0 / wafer = 1``
     to ``lot = 1 / wafer = 0`` crosses into a different lot) -- the export
     twin of ``lib/statstage.connectMeansBreaks``. Single-point segments are
-    kept; the caller simply draws nothing for them."""
+    kept; the caller simply draws nothing for them. ``breaks[i]`` (optional,
+    parallel to ``labels``) forces a new segment AT slot ``i``: a HIDDEN empty
+    level sat just before it, so the line must still lift there (the screen's
+    ``AxisSlot.gapBefore``)."""
     segments: list[list[int]] = []
     current: list[int] = []
     prev_outer: str | None = None
@@ -117,7 +138,9 @@ def connect_segments(labels: Sequence[str], empty: Sequence[bool]) -> list[list[
             prev_outer = None
             continue
         outer = _outer(label)
-        if current and outer is not None and prev_outer is not None and outer != prev_outer:
+        forced = breaks is not None and i < len(breaks) and bool(breaks[i])
+        nested = outer is not None and prev_outer is not None and outer != prev_outer
+        if current and (forced or nested):
             segments.append(current)
             current = []
         current.append(i)

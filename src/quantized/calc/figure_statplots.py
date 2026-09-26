@@ -79,6 +79,7 @@ def render_statplot_figure(
     show_connect_means: bool = False,
     show_n: bool = False,
     caveat: str | None = None,
+    connect_breaks: list[bool] | None = None,
 ) -> bytes:
     """Render a statistical plot to image bytes.
 
@@ -115,6 +116,8 @@ def render_statplot_figure(
     per-group ``n=K`` annotation on a secondary top axis; ``caveat`` (the
     frontend's small-n / unbalanced-groups caveat, verbatim) becomes a
     one-line footnote. All three are ``calc.figure_group_notes``.
+    ``connect_breaks`` (parallel to ``data``) lifts the connect-means line
+    before a group whose HIDDEN empty level preceded it.
 
     ``dpi`` defaults to the style preset's calibrated resolution when not
     given (``None``), same as ``calc.figure``'s ``resolved_dpi`` convention;
@@ -154,7 +157,7 @@ def render_statplot_figure(
                 ax, kind, data, labels, dist, bins, fit, st,
                 show_points=show_points, point_row_indices=point_row_indices,
                 show_mean_ci=show_mean_ci, show_connect_means=show_connect_means,
-                show_n=show_n,
+                show_n=show_n, connect_breaks=connect_breaks,
             )
             layout_rect = add_caveat(fig, caveat)
             if title:
@@ -241,6 +244,7 @@ def _overlay_mean_ci(ax: Any, groups: list[np.ndarray], ticks: list[int]) -> Non
 
 def _draw_connect_means_line(
     ax: Any, groups: list[np.ndarray], ticks: list[int], labels: list[str],
+    breaks: list[bool] | None = None,
 ) -> None:
     """Connect-group-means line (JMP_GAP J5 residual): a dashed line through
     each group's mean, in on-screen category order -- the "interaction plot"
@@ -250,7 +254,7 @@ def _draw_connect_means_line(
     breaks it (``figure_group_notes.connect_segments``): at an empty slot and
     at a nested outer-factor boundary."""
     empty = [g.size == 0 for g in groups]
-    for seg in connect_segments(labels, empty):
+    for seg in connect_segments(labels, empty, breaks):
         if len(seg) < 2:
             continue
         means = [_box_stats(groups[i])["mean"] for i in seg]
@@ -275,6 +279,7 @@ def _draw_statplot(
     show_mean_ci: bool = False,
     show_connect_means: bool = False,
     show_n: bool = False,
+    connect_breaks: list[bool] | None = None,
 ) -> None:
     if kind in _GROUPED:
         if not isinstance(data, list) or not data:
@@ -323,7 +328,7 @@ def _draw_statplot(
         if kind in ("box", "strip") and show_mean_ci:
             _overlay_mean_ci(ax, groups, ticks)
         if kind in ("box", "strip") and show_connect_means and len(groups) > 1:
-            _draw_connect_means_line(ax, all_groups, all_ticks, cat_labels)
+            _draw_connect_means_line(ax, all_groups, all_ticks, cat_labels, connect_breaks)
         mark_empty_slots(ax, all_ticks, empty)
         if show_n:
             annotate_top_counts(ax, all_ticks, [g.size for g in all_groups])

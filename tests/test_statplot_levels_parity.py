@@ -253,3 +253,88 @@ def test_box_width_does_not_depend_on_where_the_empty_slots_fall() -> None:
     trailing = _box_widths([[1, 2, 3], [4, 5, 6], [], [], []])
     middle = _box_widths([[1, 2, 3], [], [4, 5, 6], [], [7, 8]])
     assert trailing == middle == {0.5}
+
+
+# ── Review round 2 ──────────────────────────────────────────────────────────
+
+
+def _dashed_vertex_counts(root: ET.Element) -> list[int]:
+    """Vertices of each dashed (connect-means) polyline in an exported SVG."""
+    return [
+        (p.get("d") or "").count("L") + 1
+        for p in root.iter(f"{_SVG}path") if "stroke-dasharray" in (p.get("style") or "")
+    ]
+
+
+def test_connect_breaks_lift_the_line_where_a_hidden_level_was() -> None:
+    """With empty levels HIDDEN there is no empty group left to break the
+    line, so the client sends ``connect_breaks`` -- the screen's gapBefore."""
+    body = {
+        "kind": "box", "data": [[1, 2, 3], [4, 5, 6], [7, 8, 9]], "labels": ["a", "c", "d"],
+        "show_connect_means": True,
+    }
+    assert _dashed_vertex_counts(_svg("/api/export/statplot-figure", body)) == [3]
+    broken = {**body, "connect_breaks": [False, True, False]}
+    # a | c-d: the lone "a" draws nothing, c-d is one two-point segment.
+    assert _dashed_vertex_counts(_svg("/api/export/statplot-figure", broken)) == [2]
+    assert connect_segments(["a", "c", "d"], [False] * 3, [False, True, False]) == [[0], [1, 2]]
+
+
+LONG_CAVEAT = (
+    "Caveat: n < 3 in 4 groups; unbalanced groups (n 1-40) - summaries and intervals are "
+    "unreliable"
+)
+
+
+def _render_capturing(monkeypatch: pytest.MonkeyPatch, render: Any) -> Any:
+    """Run a renderer and keep the figure it would have closed."""
+    from quantized.calc import figure_facets
+
+    kept: list[Any] = []
+    monkeypatch.setattr(figure_facets.plt, "close", kept.append)
+    render()
+    monkeypatch.undo()  # the real plt.close again, for the caller's cleanup
+    assert kept, "renderer did not close a figure"
+    return kept[0]
+
+
+def _no_overlap(fig: Any, a: str, b: str) -> None:
+    from matplotlib.text import Text
+
+    fig.canvas.draw()
+    renderer = fig.canvas.get_renderer()
+    boxes = {}
+    for t in fig.findobj(Text):
+        if t.get_text() in (a, b) and t.get_visible():
+            boxes[t.get_text()] = t.get_window_extent(renderer)
+    assert set(boxes) == {a, b}, boxes
+    overlap = boxes[a].overlaps(boxes[b])
+    plt.close(fig)
+    assert not overlap, (boxes[a], boxes[b])
+
+
+def test_faceted_stat_caveat_does_not_overprint_the_x_title(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from quantized.calc.figure_facets import render_stat_facets_figure
+
+    panels = [
+        {"label": "f0", "data": [[1, 2, 3], []], "labels": ["a", "b"]},
+        {"label": "f1", "data": [[1, 2], [3, 4, 5]], "labels": ["a", "b"]},
+    ]
+    fig = _render_capturing(monkeypatch, lambda: render_stat_facets_figure(
+        panels, default_kind="box", x_label="THE X TITLE", caveat=LONG_CAVEAT, fmt="svg",
+    ))
+    _no_overlap(fig, "THE X TITLE", LONG_CAVEAT)
+
+
+def test_faceted_bar_caveat_does_not_overprint_the_x_title(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from quantized.calc.figure_facets import render_categorical_facets_figure
+
+    panels = [{"label": "f", "groups": ["A", "B"], "series": ["y"], "values": [[1.0], [None]]}]
+    fig = _render_capturing(monkeypatch, lambda: render_categorical_facets_figure(
+        panels, x_label="THE X TITLE", caveat=LONG_CAVEAT, fmt="svg",
+    ))
+    _no_overlap(fig, "THE X TITLE", LONG_CAVEAT)

@@ -10106,6 +10106,20 @@
             ],
             "title": "Caveat"
           },
+          "connect_breaks": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "boolean"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connect Breaks"
+          },
           "data": {
             "anyOf": [
               {

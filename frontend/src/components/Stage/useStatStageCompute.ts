@@ -11,7 +11,7 @@
 // precomputed boxes/violins), while bar facets don't need it (`draw.data`
 // already has everything exportFigure needs, mean/SEM per category/series).
 
-import { statsBox, statsViolin } from "../../lib/api";
+import { statsBox, statsHistogram, statsQQ, statsViolin } from "../../lib/api";
 import { buildBarMatrix, seriesStat, type BarChartData } from "../../lib/barlayout";
 import type { GroupSpec } from "../../lib/statschooser";
 import { groupBoxStatsClient, resolveGroups, type IndexedGroupSpec } from "../../lib/statstage";
@@ -25,6 +25,42 @@ export interface FacetDraw {
   label: string;
   draw: StatDrawData;
   rawGroups?: { label: string; values: number[] }[];
+}
+
+/** Q-Q mode's draw from a `/api/stats/qq` response. Moved here with
+ *  `histogramDraw` (P2.6 box 2) from the hook's effect, which sits on a line
+ *  pin: pure response -> draw mapping, no React. */
+export function qqDraw(r: Awaited<ReturnType<typeof statsQQ>>, valueLabel: string): StatDrawData {
+  return {
+    mode: "qq",
+    theo: r.theoretical_quantiles,
+    obs: r.sample_quantiles,
+    slope: r.slope,
+    intercept: r.intercept,
+    dist: r.dist,
+    valueLabel,
+  };
+}
+
+function numArr(v: unknown): number[] {
+  return Array.isArray(v) ? v.map((x) => Number(x)) : [];
+}
+
+/** Histogram mode's draw from a `/api/stats/histogram` response. */
+export function histogramDraw(
+  r: Awaited<ReturnType<typeof statsHistogram>>,
+  fit: string | null,
+  valueLabel: string,
+): StatDrawData {
+  const fitBlock = r.fit as Record<string, unknown> | undefined;
+  return {
+    mode: "histogram",
+    edges: numArr(r.edges),
+    counts: numArr(r.counts),
+    density: Boolean(r.density),
+    fit: fitBlock ? { dist: String(fitBlock.dist ?? fit), x: numArr(fitBlock.x), pdf: numArr(fitBlock.pdf) } : undefined,
+    valueLabel,
+  };
 }
 
 /** Bar mode's category x series matrix for one dataset (flat OR one facet

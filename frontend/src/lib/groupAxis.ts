@@ -26,9 +26,10 @@
 //     as before, and `alignSlots` threads them onto the axis BY ORDER: the
 //     slots with `n > 0`, in axis order, are exactly those groups in theirs
 //     (`orderLevels` restricted to a subset preserves relative order, so the
-//     two walks cannot disagree). A count OR label mismatch (e.g. a stale
-//     draw mid-recompute) returns null and the caller
-//     keeps the old, closed-up axis rather than mislabel a box.
+//     two walks cannot disagree). The slot labels (ONE resolution over the
+//     universe) then name the groups too. A stale draw is refused upstream
+//     (the stage keys each draw to its inputs); a count mismatch returns null
+//     and the caller keeps the old, closed-up axis rather than mislabel a box.
 //
 // THE SLOT CAP (`MAX_AXIS_SLOTS`). Showing every declared level and every
 // nested combination is the right default until it is absurd: 30 lots x 25
@@ -50,6 +51,7 @@
 
 import { resolveCategoryLabels } from "./barlayout";
 import { categoricalLevels, columnOf, levelOrderFor, levelsOf, orderLevels } from "./categorical";
+import { plural } from "./plural";
 import { NESTED_LABEL_SEP, columnDisplayName } from "./statschooser";
 import type { DataStruct } from "./types";
 
@@ -61,7 +63,8 @@ export const UNBALANCED_RATIO = 0.2;
 export const SMALL_N = 3;
 
 export interface AxisSlot {
-  /** Tick label. For a filled slot, the plotted group's own label. */
+  /** Tick label — ONE resolution over the whole level universe, used for the
+   *  slot AND (after `alignSlots`) for the plotted group that fills it. */
   label: string;
   /** Index into the plotted (non-empty) groups; null = an EMPTY slot. */
   group: number | null;
@@ -73,6 +76,10 @@ export interface AxisSlot {
   excluded: number;
   /** No row of the whole dataset carries this level / combination. */
   absent: boolean;
+  /** Set by `visibleSlots` when HIDDEN empty slots sit just before this one:
+   *  the connect-means line must still lift here (it would otherwise bridge
+   *  the missing level), on screen and in the export. */
+  gapBefore?: boolean;
 }
 
 export interface GroupAxis {
@@ -82,6 +89,22 @@ export interface GroupAxis {
   hiddenAbsent: number;
   /** Counted rows that carry no level at all (a non-finite factor code). */
   unassigned: number;
+}
+
+/** The whole-dataset half of an axis — the level universe, its ONE label
+ *  resolution, the cap, and the key of every slot. Computed once and shared
+ *  by the flat axis and every facet panel (`countGroupAxis`), so a faceted
+ *  plot does not redo universe / label / co-occurrence work per panel. */
+export interface AxisPlan {
+  groupCol: number | null;
+  group2Col: number | null;
+  /** No `groupCol`: the channels, one slot each. */
+  fallbackCols: readonly number[];
+  labels: string[];
+  absent: boolean[];
+  /** Slot key (`"a"` or `"a|b"`) -> slot index. */
+  index: Map<string, number>;
+  hiddenAbsent: number;
 }
 
 export interface AxisInput {
@@ -105,7 +128,7 @@ export interface AxisInput {
 
 /** A channel's level universe: declared codes ∪ codes any row carries, in the
  *  user's display order. */
-function universe(data: DataStruct, col: number): number[] {
+export function levelUniverse(data: DataStruct, col: number): number[] {
   const declared = (categoricalLevels(data, col) ?? []).map((_, code) => code);
   return orderLevels(levelsOf([...declared, ...columnOf(data, col)]), levelOrderFor(data, col));
 }
@@ -117,57 +140,47 @@ function levelText(data: DataStruct, col: number, codes: readonly number[]): Map
   return new Map(codes.map((code, i) => [code, texts[i]]));
 }
 
-const emptySlot = (label: string, absent: boolean): AxisSlot => ({
-  label, group: null, n: 0, nonFinite: 0, excluded: 0, absent,
-});
+const key2 = (a: number, b: number) => `${a}|${b}`;
 
-function countRow(slot: AxisSlot, dropped: boolean, usable: boolean): void {
-  if (dropped) slot.excluded++;
-  else if (usable) slot.n++;
-  else slot.nonFinite++;
-}
-
-/** Build the axis (see the module header). Pure; allocates one slot per axis
- *  position and walks the rows once. */
-export function buildGroupAxis(input: AxisInput): GroupAxis {
-  const { levels, rows, dropped, groupCol, group2Col, valueCols, prefixed } = input;
-  const nRows = rows.time.length;
+/** Plan the axis once (see `AxisPlan`). */
+export function planGroupAxis(
+  levels: DataStruct,
+  groupCol: number | null,
+  group2Col: number | null,
+  fallbackCols: readonly number[],
+  prefixed: boolean,
+): AxisPlan {
+  const base = { groupCol, group2Col, fallbackCols };
   if (groupCol == null) {
-    const slots = input.fallbackCols.map((c) => emptySlot(columnDisplayName(levels, c), false));
-    input.fallbackCols.forEach((c, i) => {
-      const col = columnOf(rows, c);
-      for (let r = 0; r < nRows; r++) countRow(slots[i], dropped.has(r), Number.isFinite(col[r]));
-    });
-    return { slots, hiddenAbsent: 0, unassigned: 0 };
+    return {
+      ...base,
+      labels: fallbackCols.map((c) => columnDisplayName(levels, c)),
+      absent: fallbackCols.map(() => false),
+      index: new Map(),
+      hiddenAbsent: 0,
+    };
   }
-
-  const vals = valueCols.map((c) => columnOf(rows, c));
-  const usable = (r: number) => vals.some((col) => Number.isFinite(col[r]));
   const name = (col: number, text: string) => (prefixed ? `${columnDisplayName(levels, col)} = ${text}` : text);
-  const aCodes = universe(levels, groupCol);
+  const aCodes = levelUniverse(levels, groupCol);
   const aText = levelText(levels, groupCol, aCodes);
   const aAll = columnOf(levels, groupCol);
-  const aRows = columnOf(rows, groupCol);
+  const aName = (a: number) => name(groupCol, aText.get(a) ?? String(a));
 
   if (group2Col == null) {
     const seen = new Set(aAll);
-    let keep = aCodes;
-    if (aCodes.length > MAX_AXIS_SLOTS) keep = aCodes.filter((code) => seen.has(code));
-    const index = new Map(keep.map((code, i) => [code, i]));
-    const slots = keep.map((code) => emptySlot(name(groupCol, aText.get(code) ?? String(code)), !seen.has(code)));
-    let unassigned = 0;
-    for (let r = 0; r < nRows; r++) {
-      const i = index.get(aRows[r]);
-      if (i === undefined) unassigned++;
-      else countRow(slots[i], dropped.has(r), usable(r));
-    }
-    return { slots, hiddenAbsent: aCodes.length - keep.length, unassigned };
+    const keep = aCodes.length > MAX_AXIS_SLOTS ? aCodes.filter((code) => seen.has(code)) : aCodes;
+    return {
+      ...base,
+      labels: keep.map(aName),
+      absent: keep.map((code) => !seen.has(code)),
+      index: new Map(keep.map((code, i) => [String(code), i])),
+      hiddenAbsent: aCodes.length - keep.length,
+    };
   }
 
-  const bCodes = universe(levels, group2Col);
+  const bCodes = levelUniverse(levels, group2Col);
   const bText = levelText(levels, group2Col, bCodes);
   const bAll = columnOf(levels, group2Col);
-  const key = (a: number, b: number) => `${a}|${b}`;
   const cross = aCodes.length * bCodes.length;
   // Over the cap the axis is built from the combinations that OCCUR, walked
   // per A level and put in B's display order — never by materializing the
@@ -179,7 +192,6 @@ export function buildGroupAxis(input: AxisInput): GroupAxis {
     const bs = byA.get(a) ?? new Set<number>();
     byA.set(a, bs.add(bAll[r]));
   });
-  const occursUnder = (a: number, b: number) => byA.get(a)?.has(b) === true;
   const keep: (readonly [number, number])[] =
     cross <= MAX_AXIS_SLOTS
       ? aCodes.flatMap((a) => bCodes.map((b) => [a, b] as const))
@@ -188,42 +200,91 @@ export function buildGroupAxis(input: AxisInput): GroupAxis {
             .sort((x, y) => (bRank.get(x) ?? 0) - (bRank.get(y) ?? 0))
             .map((b) => [a, b] as const),
         );
-  const index = new Map(keep.map(([a, b], i) => [key(a, b), i]));
-  const slots = keep.map(([a, b]) =>
-    emptySlot(
-      `${name(groupCol, aText.get(a) ?? String(a))}${NESTED_LABEL_SEP}${name(group2Col, bText.get(b) ?? String(b))}`,
-      !occursUnder(a, b),
-    ),
-  );
-  const bRows = columnOf(rows, group2Col);
+  return {
+    ...base,
+    labels: keep.map(([a, b]) => `${aName(a)}${NESTED_LABEL_SEP}${name(group2Col, bText.get(b) ?? String(b))}`),
+    absent: keep.map(([a, b]) => byA.get(a)?.has(b) !== true),
+    index: new Map(keep.map(([a, b], i) => [key2(a, b), i])),
+    hiddenAbsent: cross - keep.length,
+  };
+}
+
+function countRow(slot: AxisSlot, dropped: boolean, usable: boolean): void {
+  if (dropped) slot.excluded++;
+  else if (usable) slot.n++;
+  else slot.nonFinite++;
+}
+
+/** Count `rows` onto a planned axis: one walk over the rows. */
+export function countGroupAxis(
+  plan: AxisPlan,
+  rows: DataStruct,
+  dropped: ReadonlySet<number>,
+  valueCols: readonly number[],
+): GroupAxis {
+  const slots: AxisSlot[] = plan.labels.map((label, i) => ({
+    label, group: null, n: 0, nonFinite: 0, excluded: 0, absent: plan.absent[i],
+  }));
+  const nRows = rows.time.length;
+  const { groupCol, group2Col } = plan;
+  if (groupCol == null) {
+    plan.fallbackCols.forEach((c, i) => {
+      const col = columnOf(rows, c);
+      for (let r = 0; r < nRows; r++) countRow(slots[i], dropped.has(r), Number.isFinite(col[r]));
+    });
+    return { slots, hiddenAbsent: 0, unassigned: 0 };
+  }
+  const vals = valueCols.map((c) => columnOf(rows, c));
+  const aRows = columnOf(rows, groupCol);
+  const bRows = group2Col == null ? null : columnOf(rows, group2Col);
   let unassigned = 0;
   for (let r = 0; r < nRows; r++) {
-    const i = index.get(key(aRows[r], bRows[r]));
+    const i = plan.index.get(bRows ? key2(aRows[r], bRows[r]) : String(aRows[r]));
     if (i === undefined) unassigned++;
-    else countRow(slots[i], dropped.has(r), usable(r));
+    else countRow(slots[i], dropped.has(r), vals.some((col) => Number.isFinite(col[r])));
   }
-  return { slots, hiddenAbsent: cross - keep.length, unassigned };
+  return { slots, hiddenAbsent: plan.hiddenAbsent, unassigned };
+}
+
+/** Plan + count in one call (the flat, single-use case). */
+export function buildGroupAxis(input: AxisInput): GroupAxis {
+  const plan = planGroupAxis(input.levels, input.groupCol, input.group2Col, input.fallbackCols, input.prefixed);
+  return countGroupAxis(plan, input.rows, input.dropped, input.valueCols);
 }
 
 /** Thread the plotted groups onto the axis by ORDER (module header): the
- *  `n > 0` slots, in axis order, must be exactly the groups — same count AND
- *  the same label, slot for slot — and then take their indices; the rest stay
- *  empty. Null otherwise, and the caller keeps its old closed-up axis rather
- *  than risk putting a box over the wrong tick. The label check is what
- *  catches a STALE draw (the async compute still holding the previous
- *  grouping while the axis already describes the new one); a count alone
- *  cannot tell two groupings with the same number of levels apart. */
-export function alignSlots(slots: readonly AxisSlot[], groupLabels: readonly string[]): AxisSlot[] | null {
-  const filled = slots.filter((s) => s.n > 0);
-  if (filled.length !== groupLabels.length || filled.some((s, i) => s.label !== groupLabels[i])) return null;
+ *  `n > 0` slots, in axis order, ARE the groups (`orderLevels` restricted to
+ *  a subset keeps relative order), so a matching COUNT is the whole check and
+ *  each filled slot takes the next group index. The slot keeps its own label,
+ *  and the caller relabels the group to it — one label resolution for both,
+ *  so a text sidecar that reads differently over the analysis view than over
+ *  the whole column (an excluded row with inconsistent text) cannot make the
+ *  two disagree. Null on a count mismatch; a STALE draw (computed for other
+ *  picks) is the caller's to refuse before calling this — the stage keys each
+ *  draw to the inputs it was computed from (`useStatStageDraws`). */
+export function alignSlots(slots: readonly AxisSlot[], groupCount: number): AxisSlot[] | null {
+  if (slots.filter((s) => s.n > 0).length !== groupCount) return null;
   let k = 0;
   return slots.map((s) => (s.n > 0 ? { ...s, group: k++ } : { ...s, group: null }));
 }
 
 /** The slots actually drawn: every slot, or only the filled ones when the
- *  user has chosen to hide empty levels. */
+ *  user has chosen to hide empty levels — in which case a filled slot that
+ *  had hidden empties before it (since the previous filled one) carries
+ *  `gapBefore`, so the connect-means line still lifts across the hidden
+ *  level. */
 export function visibleSlots(slots: readonly AxisSlot[], hideEmpty: boolean): AxisSlot[] {
-  return hideEmpty ? slots.filter((s) => s.group !== null) : [...slots];
+  if (!hideEmpty) return [...slots];
+  const out: AxisSlot[] = [];
+  let gap = false;
+  for (const s of slots) {
+    if (s.group === null) gap = true;
+    else {
+      out.push(gap && out.length > 0 ? { ...s, gapBefore: true } : s);
+      gap = false;
+    }
+  }
+  return out;
 }
 
 // ── Notice ─────────────────────────────────────────────────────────────────
@@ -235,7 +296,7 @@ export interface CountedGroup {
   n: number;
 }
 
-const plural = (k: number, word: string) => `${k} ${word}${k === 1 ? "" : "s"}`;
+const count = (k: number, word: string) => `${k} ${word}${plural(k)}`;
 
 /** The small-n / unbalanced caveat, or null. The ONE text both the screen's
  *  notice and the export's footnote carry (`calc.figure_group_notes`), so
@@ -245,7 +306,7 @@ export function balanceCaveat(groups: readonly CountedGroup[]): string | null {
   const filled = groups.filter((g) => g.n > 0);
   const parts: string[] = [];
   const small = filled.filter((g) => g.n < SMALL_N);
-  if (small.length) parts.push(`n < ${SMALL_N} in ${plural(small.length, "group")}`);
+  if (small.length) parts.push(`n < ${SMALL_N} in ${count(small.length, "group")}`);
   if (filled.length >= 2) {
     const ns = filled.map((g) => g.n);
     const lo = Math.min(...ns);
@@ -272,8 +333,9 @@ export interface NoticeInput {
   hideEmpty: boolean;
   hiddenAbsent: number;
   unassigned: number;
-  /** Facet panels left out because they had nothing to draw. */
-  droppedPanels?: number;
+  /** Facet levels (declared or carried by any row) with no panel on screen —
+   *  every row excluded / filtered, or no usable value. Named in the tooltip. */
+  missingPanels?: readonly string[];
 }
 
 const DETAIL_LINES = 30;
@@ -281,19 +343,19 @@ const DETAIL_LINES = 30;
 /** Everything the stage must say about its groups, or null when there is
  *  nothing to say (every level present, balanced, nothing dropped). */
 export function groupNotice(input: NoticeInput): GroupNotice | null {
-  const { slots, counted, hideEmpty, hiddenAbsent, unassigned, droppedPanels = 0 } = input;
+  const { slots, counted, hideEmpty, hiddenAbsent, unassigned, missingPanels = [] } = input;
   const caveat = balanceCaveat(counted);
   const parts: string[] = caveat ? [caveat.replace(/ - .*$/, "")] : [];
   const empty = slots.filter((s) => s.n === 0).length;
-  if (empty) parts.push(hideEmpty ? `${plural(empty, "empty level")} hidden` : `${plural(empty, "empty level")} (n=0)`);
+  if (empty) parts.push(hideEmpty ? `${count(empty, "empty level")} hidden` : `${count(empty, "empty level")} (n=0)`);
   const nonFinite = slots.reduce((a, s) => a + s.nonFinite, 0);
   const excluded = slots.reduce((a, s) => a + s.excluded, 0);
   if (nonFinite || excluded) {
-    parts.push(`${plural(nonFinite + excluded, "row")} dropped (${nonFinite} non-finite, ${excluded} excluded/filtered)`);
+    parts.push(`${count(nonFinite + excluded, "row")} dropped (${nonFinite} non-finite, ${excluded} excluded/filtered)`);
   }
-  if (unassigned) parts.push(`${plural(unassigned, "row")} with no level`);
-  if (hiddenAbsent) parts.push(`${plural(hiddenAbsent, "never-occurring level")} not shown (over ${MAX_AXIS_SLOTS} slots)`);
-  if (droppedPanels) parts.push(`${plural(droppedPanels, "facet panel")} with no data not shown`);
+  if (unassigned) parts.push(`${count(unassigned, "row")} with no level`);
+  if (hiddenAbsent) parts.push(`${count(hiddenAbsent, "never-occurring level")} not shown (over ${MAX_AXIS_SLOTS} slots)`);
+  if (missingPanels.length) parts.push(`${count(missingPanels.length, "facet level")} with no usable data not shown`);
   if (!parts.length) return null;
   const rows = slots
     .filter((s) => s.n === 0 || s.nonFinite > 0 || s.excluded > 0)
@@ -305,7 +367,8 @@ export function groupNotice(input: NoticeInput): GroupNotice | null {
   const shown = rows.slice(0, DETAIL_LINES);
   if (rows.length > DETAIL_LINES) shown.push(`... and ${rows.length - DETAIL_LINES} more`);
   const small = counted.filter((g) => g.n > 0 && g.n < SMALL_N).map((g) => `${g.label}: n=${g.n}`);
-  const detail = [...(small.length ? [`small groups: ${small.slice(0, 10).join("; ")}`] : []), ...shown].join("\n");
+  const facets = missingPanels.length ? [`no panel (no usable data): ${missingPanels.slice(0, 10).join("; ")}`] : [];
+  const detail = [...(small.length ? [`small groups: ${small.slice(0, 10).join("; ")}`] : []), ...facets, ...shown].join("\n");
   return { line: parts.join(" · "), detail, caveat };
 }
 

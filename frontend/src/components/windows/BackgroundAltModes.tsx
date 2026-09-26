@@ -86,7 +86,19 @@ export function BackgroundStatWindow({ dataset, view }: BackgroundModeProps) {
           {st.error}
         </div>
       )}
-      {st.note && <div className="qzk-glass qzk-readout">{st.note}</div>}
+      {/* P2.6 box 2: the background window draws the same decorated axis as
+          the focused stage, so it carries the same notice — one compact,
+          ellipsized line (the caveat leads it), the breakdown on hover. */}
+      {(st.note || st.groupNotice) && (
+        <div
+          className="qzk-glass qzk-readout"
+          data-testid="bg-stat-group-notice"
+          title={st.groupNotice?.detail}
+          style={{ maxWidth: "90%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+        >
+          {[st.note, st.groupNotice?.line].filter(Boolean).join(" · ")}
+        </div>
+      )}
     </>
   );
 }

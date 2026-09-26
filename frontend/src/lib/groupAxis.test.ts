@@ -168,10 +168,10 @@ describe("buildGroupAxis — nested", () => {
 });
 
 describe("alignSlots — threads the plotted groups onto the axis by order", () => {
-  it("filled slots take resolveGroups' own labels and indices, in order", () => {
+  it("filled slots take the plotted groups' indices, in order", () => {
     const analysis = pruneExcluded(DATA, DROPPED);
     const groups = resolveGroups(analysis, 0, 1, [1]);
-    const aligned = alignSlots(buildGroupAxis(input()).slots, groups.map((g) => g.label));
+    const aligned = alignSlots(buildGroupAxis(input()).slots, groups.length);
     expect(aligned?.map((s) => [s.label, s.group])).toEqual([
       ["grp = A", 0],
       ["grp = B", null],
@@ -200,7 +200,7 @@ describe("alignSlots — threads the plotted groups onto the axis by order", () 
     const axis = buildGroupAxis({
       levels: d, rows: d, dropped: new Set(), groupCol: 0, group2Col: 1, valueCols: [2], fallbackCols: [], prefixed: true,
     });
-    const aligned = alignSlots(axis.slots, groups.map((g) => g.label));
+    const aligned = alignSlots(axis.slots, groups.length);
     expect(aligned).not.toBeNull();
     // Filled slots, read back in axis order, ARE the plotted groups in theirs.
     expect(aligned!.filter((s) => s.group !== null).map((s) => s.label)).toEqual(groups.map((g) => g.label));
@@ -209,19 +209,27 @@ describe("alignSlots — threads the plotted groups onto the axis by order", () 
   });
 
   it("refuses (null) when the group count disagrees, rather than mislabel a box", () => {
-    expect(alignSlots(buildGroupAxis(input()).slots, ["x", "y"])).toBeNull();
-  });
-
-  it("refuses a STALE draw whose count matches but whose groups are another column's", () => {
-    // One filled slot here (grp = A); a draw still holding a different
-    // grouping with one group must not be threaded onto it.
-    expect(alignSlots(buildGroupAxis(input()).slots, ["fac = 0"])).toBeNull();
+    expect(alignSlots(buildGroupAxis(input()).slots, 2)).toBeNull();
   });
 
   it("visibleSlots drops only the empty slots when hiding", () => {
-    const aligned = alignSlots(buildGroupAxis(input()).slots, ["grp = A"])!;
+    const aligned = alignSlots(buildGroupAxis(input()).slots, 1)!;
     expect(visibleSlots(aligned, true).map((s) => s.label)).toEqual(["grp = A"]);
     expect(visibleSlots(aligned, false)).toHaveLength(4);
+  });
+
+  it("hiding empties still marks the gap they leave, so the connect-means line lifts there", () => {
+    // Filled / empty / filled / empty / empty / filled.
+    const slot = (label: string, n: number) => ({ label, group: null, n, nonFinite: 0, excluded: 0, absent: false });
+    const aligned = alignSlots([slot("a", 2), slot("b", 0), slot("c", 3), slot("d", 0), slot("e", 0), slot("f", 1)], 3)!;
+    expect(visibleSlots(aligned, true).map((s) => [s.label, s.gapBefore === true])).toEqual([
+      ["a", false],
+      ["c", true],
+      ["f", true],
+    ]);
+    // A LEADING empty is no gap: nothing precedes it to bridge from.
+    const lead = alignSlots([slot("z", 0), slot("a", 2), slot("c", 3)], 2)!;
+    expect(visibleSlots(lead, true).map((s) => s.gapBefore === true)).toEqual([false, false]);
   });
 });
 
@@ -244,7 +252,7 @@ describe("balanceCaveat", () => {
 
 describe("groupNotice", () => {
   it("names empties, drops, unassigned rows and the caveat on one line, per level in the tooltip", () => {
-    const aligned = alignSlots(buildGroupAxis(input()).slots, ["grp = A"])!;
+    const aligned = alignSlots(buildGroupAxis(input()).slots, 1)!;
     const n = groupNotice({
       slots: aligned, counted: [{ label: "grp = A", n: 3 }], hideEmpty: false, hiddenAbsent: 0, unassigned: 1,
     });
@@ -260,7 +268,7 @@ describe("groupNotice", () => {
   });
 
   it("says they are hidden when the user hides them", () => {
-    const aligned = alignSlots(buildGroupAxis(input()).slots, ["grp = A"])!;
+    const aligned = alignSlots(buildGroupAxis(input()).slots, 1)!;
     const n = groupNotice({ slots: aligned, counted: [], hideEmpty: true, hiddenAbsent: 0, unassigned: 0 });
     expect(n?.line.startsWith("3 empty levels hidden")).toBe(true);
   });

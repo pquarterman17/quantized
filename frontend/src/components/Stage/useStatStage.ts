@@ -63,8 +63,11 @@ import {
   computeFacetGroupDraws,
   computeStripDraw,
   computeViolinDraw,
+  histogramDraw,
+  qqDraw,
   type FacetDraw,
 } from "./useStatStageCompute";
+import { useStatStageDraws } from "./useStatStageDraws";
 import { useStatStagePicks } from "./useStatStagePicks";
 
 export type { FacetDraw } from "./useStatStageCompute";
@@ -171,10 +174,6 @@ export interface StatStageState {
   exportFigure: (fmt: string) => Promise<void>;
 }
 
-function numArr(v: unknown): number[] {
-  return Array.isArray(v) ? v.map((x) => Number(x)) : [];
-}
-
 export function useStatStage(params: UseStatStageParams): StatStageState {
   const { active, yKeys, xKey, seriesOrder, seed, onSeedConsumed } = params;
   const hideEmpty = params.hideEmptyLevels ?? false;
@@ -229,8 +228,6 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
-  const [drawData, setDrawData] = useState<StatDrawData | null>(null);
-  const [drawFacets, setDrawFacets] = useState<FacetDraw[] | null>(null);
 
   // Nesting (Group R) applies to the 1-D group list ONLY. Bar builds a
   // category x series MATRIX (lib/barlayout) whose category slots come from a
@@ -293,6 +290,20 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     return computeBarData(data, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel);
   }, [data, mode, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel]);
 
+  // P2.6 box 2: facet slices computed ONCE, shared by the compute effect and
+  // the level axes; and every draw keyed to the grouping inputs it was
+  // computed for, so a stale draw is never threaded onto a new axis.
+  const slices = useMemo(
+    () => (data && effectiveFacetCol != null ? facetSlices(data, effectiveFacetCol) : null),
+    [data, effectiveFacetCol],
+  );
+  const drawKey = useMemo(
+    () => ({ data, mode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels, effectiveFacetCol }),
+    [data, mode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels, effectiveFacetCol],
+  );
+  const { drawData, drawFacets, fresh: { draw: freshDraw, facets: freshFacets }, setDrawData, setDrawFacets } =
+    useStatStageDraws(drawKey);
+
   useEffect(() => {
     let cancelled = false;
     setError(null);
@@ -309,7 +320,6 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     // `drawFacets` instead, GUI_INTERACTION #12 slice 4b).
     if (effectiveFacetCol != null && (mode === "box" || mode === "violin" || mode === "bar")) {
       setDrawData(null);
-      const slices = facetSlices(data, effectiveFacetCol);
       const finishFacets = (results: FacetDraw[]) => {
         if (cancelled) return;
         if (results.length === 0) {
@@ -325,7 +335,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         // below, which also skips busy/cancelled bookkeeping.
         finishFacets(
           computeFacetBarDraws(
-            slices,
+            slices ?? [],
             effectiveGroupCol,
             barValueChannels,
             barLabels,
@@ -341,7 +351,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         };
       }
       setBusy(true);
-      void computeFacetGroupDraws(slices, mode, effectiveGroupCol, valueCol, plotted, valueLabel, groupLabel, nestCol)
+      void computeFacetGroupDraws(slices ?? [], mode, effectiveGroupCol, valueCol, plotted, valueLabel, groupLabel, nestCol)
         .then(finishFacets)
         .finally(() => !cancelled && setBusy(false));
       return () => {
@@ -415,18 +425,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
       }
       setBusy(true);
       statsQQ(finite, dist)
-        .then((r) => {
-          if (cancelled) return;
-          setDrawData({
-            mode: "qq",
-            theo: r.theoretical_quantiles,
-            obs: r.sample_quantiles,
-            slope: r.slope,
-            intercept: r.intercept,
-            dist: r.dist,
-            valueLabel,
-          });
-        })
+        .then((r) => !cancelled && setDrawData(qqDraw(r, valueLabel)))
         .catch((e: unknown) => {
           if (cancelled) return;
           setDrawData(null);
@@ -442,20 +441,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
       }
       setBusy(true);
       statsHistogram(finite, bins, fit)
-        .then((r) => {
-          if (cancelled) return;
-          const fitBlock = r.fit as Record<string, unknown> | undefined;
-          setDrawData({
-            mode: "histogram",
-            edges: numArr(r.edges),
-            counts: numArr(r.counts),
-            density: Boolean(r.density),
-            fit: fitBlock
-              ? { dist: String(fitBlock.dist ?? fit), x: numArr(fitBlock.x), pdf: numArr(fitBlock.pdf) }
-              : undefined,
-            valueLabel,
-          });
-        })
+        .then((r) => !cancelled && setDrawData(histogramDraw(r, fit, valueLabel)))
         .catch((e: unknown) => {
           if (cancelled) return;
           setDrawData(null);
@@ -490,18 +476,21 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     plotted,
     barValueChannels,
     barLabels,
+    slices,
+    setDrawData,
+    setDrawFacets,
   ]);
 
   // P2.6 box 2: thread the draws onto the full category axis (empty slots,
   // n captions) and build the notice — decoration only, see statStageLevels.
   // The axes depend on the data + picks alone, so they are memoized apart.
   const axes = useMemo(() => levelAxes({
-    active, data, mode, groupCol: effectiveGroupCol, group2Col: nestCol, valueCol, plotted, barValueChannels,
+    active, data, mode, groupCol: effectiveGroupCol, group2Col: nestCol, valueCol, plotted, barValueChannels, slices,
     facetCol: mode === "box" || mode === "violin" || mode === "bar" ? effectiveFacetCol : null,
-  }), [active, data, mode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels, effectiveFacetCol]);
+  }), [active, data, mode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels, effectiveFacetCol, slices]);
   const levels = useMemo(
-    () => applyLevels(axes, { hideEmpty, showN }, drawData, drawFacets),
-    [axes, hideEmpty, showN, drawData, drawFacets],
+    () => applyLevels(axes, { hideEmpty, showN }, drawData, drawFacets, { draw: freshDraw, facets: freshFacets }),
+    [axes, hideEmpty, showN, drawData, drawFacets, freshDraw, freshFacets],
   );
 
   async function exportFigure(fmt: string): Promise<void> {

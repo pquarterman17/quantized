@@ -139,24 +139,24 @@ export interface FacetedExportInputs {
 
 /** Restate raw groups on the draw's axis (P2.6 box 2): one entry per AXIS
  *  slot, an empty slot as `[]` (the backend keeps its tick and marks it
- *  `n=0`). Returns null — keep the groups as they are — when there is no axis
- *  or it does not place exactly these groups, by label, in order (the export
- *  reads the CURRENT groups while the draw may still be a stale one
- *  mid-recompute). */
+ *  `n=0`), under the SLOT labels — the same ones the screen relabelled its
+ *  groups to — plus where the connect-means line must lift (`breaks`: a
+ *  hidden empty level sat before that slot). Returns null — keep the groups
+ *  as they are — when there is no axis or it does not place exactly these
+ *  groups in order. A stale draw never gets here with slots: the stage only
+ *  decorates draws computed for the current picks (`useStatStageDraws`). */
 export function onAxis<T>(
   slots: readonly AxisSlot[] | null | undefined,
   perGroup: readonly T[],
-  groupLabels: readonly string[],
   empty: T,
-): { labels: string[]; values: T[] } | null {
+): { labels: string[]; values: T[]; breaks: boolean[] } | null {
   if (!slots) return null;
   const filled = slots.filter((s) => s.group !== null);
-  if (filled.length !== perGroup.length || filled.some((s, i) => s.group !== i || s.label !== groupLabels[i])) {
-    return null;
-  }
+  if (filled.length !== perGroup.length || filled.some((s, i) => s.group !== i)) return null;
   return {
     labels: slots.map((s) => s.label),
     values: slots.map((s) => (s.group === null ? empty : perGroup[s.group])),
+    breaks: slots.map((s) => s.gapBefore === true),
   };
 }
 
@@ -220,7 +220,7 @@ export async function exportFacetedFigure(
   for (const f of drawFacets) {
     if (!f.rawGroups || f.rawGroups.length === 0) continue;
     const slots = f.draw.mode === "box" || f.draw.mode === "violin" ? f.draw.slots : null;
-    const axis = onAxis(slots, f.rawGroups.map((g) => g.values), f.rawGroups.map((g) => g.label), []);
+    const axis = onAxis(slots, f.rawGroups.map((g) => g.values), []);
     facets.push({
       label: f.label,
       kind: f.draw.mode === "violin" ? "violin" : "box",
@@ -304,12 +304,14 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
   if (!spec) return;
   if (mode === "box" || mode === "violin" || mode === "strip") {
     const slots = draw && (draw.mode === "box" || draw.mode === "violin" || draw.mode === "strip") ? draw.slots : null;
-    const labels = spec.labels ?? [];
-    const axis = onAxis(slots, spec.data as number[][], labels, []);
+    const axis = onAxis(slots, spec.data as number[][], []);
     if (axis) {
       spec.data = axis.values;
       spec.labels = axis.labels;
-      if (pointRowIndices) spec.point_row_indices = onAxis(slots, pointRowIndices, labels, [])?.values ?? null;
+      if (pointRowIndices) spec.point_row_indices = onAxis(slots, pointRowIndices, [])?.values ?? null;
+      // Only when a HIDDEN empty level must break the line (visible empties
+      // travel as `[]` groups and break it on their own).
+      if (o.connectMeans && axis.breaks.some(Boolean)) spec.connect_breaks = axis.breaks;
     }
     spec.show_n = showN;
     spec.caveat = caveat;

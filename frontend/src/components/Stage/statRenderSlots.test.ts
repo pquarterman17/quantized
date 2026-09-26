@@ -11,7 +11,7 @@ import { boxStatsClient } from "../../lib/statstage";
 import type { StatDrawData } from "./statRender";
 import { drawBar } from "./statRenderBar";
 import { drawBoxesWithMarks, drawStrip } from "./statRenderBox";
-import { gapsBefore, slotPlan } from "./statRenderSlots";
+import { slotPlan } from "./statRenderSlots";
 
 interface Call {
   fn: string;
@@ -61,7 +61,7 @@ describe("slotPlan", () => {
     expect(plan.labels).toEqual(["g = A", "g = B", "g = C"]);
     expect(plan.groupSlot).toEqual([0, 2]);
     expect(plan.empty).toEqual([1]);
-    expect(gapsBefore(plan)).toEqual([false, true]);
+    expect(plan.gaps).toEqual([false, true]);
   });
 
   it("is the identity without an axis, or with one that does not place every group once", () => {
@@ -100,6 +100,23 @@ describe("box / strip with an empty slot", () => {
     const dashed = calls.findIndex((c) => c.fn === "setLineDash" && (c.args[0] as number[]).length > 0);
     const after = calls.slice(dashed).filter((c) => c.fn === "moveTo" || c.fn === "lineTo").map((c) => c.fn);
     expect(after).toEqual(["moveTo", "moveTo"]);
+  });
+
+  it("connect-means still lifts where empty levels were HIDDEN (gapBefore), not only where one is shown", () => {
+    const { ctx, calls } = recorder();
+    // The empty level B hidden: two visible slots, the second marked gapBefore.
+    const hidden = [slot("g = A", 0, 3), { ...slot("g = C", 1, 2), gapBefore: true }];
+    drawBoxesWithMarks(ctx, RECT, boxDraw({ connectMeans: true, slots: hidden }), "#000", "#888");
+    const dashed = calls.findIndex((c) => c.fn === "setLineDash" && (c.args[0] as number[]).length > 0);
+    const after = calls.slice(dashed).filter((c) => c.fn === "moveTo" || c.fn === "lineTo").map((c) => c.fn);
+    expect(after).toEqual(["moveTo", "moveTo"]);
+    // ... and draws ONE segment when nothing was hidden between them.
+    const { ctx: ctx2, calls: calls2 } = recorder();
+    drawBoxesWithMarks(ctx2, RECT, boxDraw({ connectMeans: true, slots: [hidden[0], slot("g = C", 1, 2)] }), "#000", "#888");
+    const d2 = calls2.findIndex((c) => c.fn === "setLineDash" && (c.args[0] as number[]).length > 0);
+    expect(calls2.slice(d2).filter((c) => c.fn === "moveTo" || c.fn === "lineTo").map((c) => c.fn)).toEqual([
+      "moveTo", "lineTo",
+    ]);
   });
 
   it("strip mode lays out on the same axis", () => {

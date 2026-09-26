@@ -9030,6 +9030,8 @@ export interface components {
             bins?: string | number;
             /** Caveat */
             caveat?: string | null;
+            /** Connect Breaks */
+            connect_breaks?: boolean[] | null;
             /** Data */
             data: number[][] | number[];
             /**

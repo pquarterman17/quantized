@@ -3486,6 +3486,20 @@ violin, bar, strip, or summary plots.
   `tests/test_statplot_levels_parity.py` posts that fixture to the real route
   and reads the SVG back (tick labels, `n=0` markers, `n=K` counts, caveat).
   E2E: `e2e/specs/stat-missing-levels.spec.ts`.
+  **Review round 2 (independent review, 10 findings, all fixed with a
+  sabotage-verified test each):** every draw is now KEYED to the inputs it
+  was computed for (`useStatStageDraws`, flat and facet keys separate), so a
+  stale draw mid-recompute is never threaded onto a new axis and no stale or
+  negative panel count is printed; the plotted groups are RELABELLED with the
+  axis's single label resolution (an Origin text sidecar whose excluded row
+  disagrees no longer knocks the plot back to closed-up); hidden empty levels
+  still break the connect-means line (`AxisSlot.gapBefore` on screen,
+  `connect_breaks` on the wire); facet levels with no panel (declared-only,
+  all rows excluded/filtered, or no usable value) are counted and named in the
+  notice, and the notice says "hidden" whenever a panel fell back to
+  closed-up; the faceted exports lift the x title clear of the caveat
+  footnote; background stat windows show the notice; the axis is planned once
+  and only counted per panel, over the slices the compute already built.
   **Not done:** the Graph Builder's own box/violin PREVIEW
   (`lib/plotspec.specToRender`) still closes empty levels up — it is a
   preview whose "send to stage" lands on the stage, which shows them; the

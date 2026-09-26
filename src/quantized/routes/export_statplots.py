@@ -102,6 +102,9 @@ class StatplotFigureRequest(BaseModel):
     # Defaults off/None -- byte-identical to before.
     show_n: bool = False
     caveat: str | None = None
+    # Per group: lift the connect-means line BEFORE it (a hidden empty level
+    # sat there -- the screen's AxisSlot.gapBefore). None = no forced breaks.
+    connect_breaks: list[bool] | None = None
 
 
 @router.post("/statplot-figure")
@@ -138,7 +141,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 title=req.title, x_label=req.x_label, y_label=req.y_label, dpi=dpi,
                 show_points=req.show_points, point_row_indices=req.point_row_indices,
                 show_mean_ci=req.show_mean_ci, show_connect_means=req.show_connect_means,
-                show_n=req.show_n, caveat=req.caveat,
+                show_n=req.show_n, caveat=req.caveat, connect_breaks=req.connect_breaks,
             )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

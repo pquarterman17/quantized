@@ -243,7 +243,7 @@ function drawViolins(
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
   const plan = slotPlan(d.slots, d.violins.map((v) => v.label));
   drawCategoryAxis(ctx, rect, plan.slots, plan.labels, d.groupLabel, ink, muted);
-  drawEmptySlotMarkers(ctx, rect, plan, muted);
+  drawEmptySlotMarkers(ctx, rect, plan.slots, plan.empty, muted);
   if (d.showN !== false) drawSlotCounts(ctx, rect, plan, d.violins.map((v) => v.n), muted);
 
   const vy = (v: number) => rect.y + rect.h - ((v - domain[0]) / (domain[1] - domain[0])) * rect.h;

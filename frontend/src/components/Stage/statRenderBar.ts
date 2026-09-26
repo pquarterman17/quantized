@@ -76,7 +76,7 @@ export function drawBar(
   const slots = categorySlots(groups.length);
   drawCategoryAxis(ctx, rect, slots, groups.map((g) => g.label), d.groupLabel, ink, muted);
   const empty = groups.flatMap((g, i) => (g.series.every((s) => s.n === 0) ? [i] : []));
-  drawEmptySlotMarkers(ctx, rect, { labels: [], slots, groupSlot: [], empty }, muted);
+  drawEmptySlotMarkers(ctx, rect, slots, empty, muted);
   const showN = d.showN !== false;
 
   const vy = (v: number) => rect.y + rect.h - ((v - domain[0]) / (domain[1] - domain[0])) * rect.h;

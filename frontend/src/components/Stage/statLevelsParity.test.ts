@@ -191,3 +191,88 @@ describe("Stat Stage missing levels — screen and export describe the same axis
     expect(spec.show_n).toBe(true);
   });
 });
+
+describe("Stat Stage missing levels — review round 2", () => {
+  const params = (active: Dataset, over: Record<string, unknown> = {}) => ({
+    active, yKeys: null, xKey: null, seriesOrder: null, seed: null, onSeedConsumed: () => {}, ...over,
+  });
+
+  it("HIDDEN empty levels still break the connect-means line, on screen and in the export alike", async () => {
+    // Level order A, C, B, D, E: C (declared, no rows) sits BETWEEN A and B.
+    const ordered: Dataset = { ...DS, data: { ...DATA, level_order: { 0: [0, 2, 1, 3, 4] } } };
+    const { result } = renderHook(() => useStatStage(params(ordered, { hideEmptyLevels: true })));
+    act(() => result.current.setShowConnectMeans(true));
+    await waitFor(() => {
+      const d = result.current.draw;
+      expect(d?.mode === "box" && d.connectMeans && d.slots != null).toBe(true);
+    });
+    const draw = result.current.draw;
+    if (draw?.mode !== "box" || !draw.slots) throw new Error("expected a slotted box draw");
+    // Screen: C is hidden, and B carries the gap it left.
+    expect(draw.slots.map((s) => [s.label, s.gapBefore === true])).toEqual([["grp = A", false], ["grp = B", true]]);
+    await act(async () => {
+      await result.current.exportFigure("svg");
+    });
+    const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0];
+    expect(spec.labels).toEqual(["grp = A", "grp = B"]);
+    // Export: the same break, where the backend's connect_segments reads it.
+    expect(spec.connect_breaks).toEqual(draw.slots.map((s) => s.gapBefore === true));
+  });
+
+  it("a stale draw (the compute still holding the previous grouping) is never threaded onto the new axis", async () => {
+    // Two categorical factors; the second has a different level count.
+    const two: Dataset = {
+      ...DS,
+      data: {
+        ...DATA,
+        values: DATA.values.map((r, i) => [r[0], r[1], i % 2]),
+        labels: ["grp", "y", "half"],
+        units: ["", "", ""],
+        cat_levels: { 0: ["A", "B", "C", "D", "E"], 2: ["odd", "even"] },
+      },
+    };
+    const { result } = renderHook(() => useStatStage(params(two)));
+    await waitFor(() => expect(result.current.groupNotice).not.toBeNull());
+    // Freeze the compute: the next box request never settles.
+    vi.mocked(statsBox).mockImplementation(() => new Promise(() => {}));
+    act(() => result.current.setGroupCol(2));
+    // The previous grouping's draw is still on screen — undecorated, with no
+    // notice claiming anything about the new column's levels.
+    const d = result.current.draw;
+    expect(d?.mode === "box" && d.boxes.map((b) => b.label)).toEqual(["grp = A", "grp = B"]);
+    expect(d?.mode === "box" && d.slots).toBeFalsy();
+    expect(result.current.groupNotice).toBeNull();
+  });
+
+  it("Origin text sidecar with an INCONSISTENT excluded row: one label resolution, axis still threads", async () => {
+    // Codes 0/1 labelled by a text column. The excluded row 3 names code 0
+    // "Other", which disqualifies the sidecar over the WHOLE column but not
+    // over the analysis view — the two resolutions disagree.
+    const sidecar: Dataset = {
+      id: "s", name: "s.opj",
+      data: {
+        time: [0, 1, 2, 3, 4, 5],
+        values: [[0, 1], [0, 2], [0, 3], [0, 99], [1, 4], [1, 5]],
+        labels: ["batch", "y"],
+        units: ["", ""],
+        metadata: { text_columns: { B: ["Ref", "Ref", "Ref", "Other", "Test", "Test"] } },
+      },
+      excludedRows: [3],
+      channelTypes: { 0: "nominal" },
+    };
+    const { result } = renderHook(() => useStatStage(params(sidecar)));
+    await waitFor(() => {
+      const d = result.current.draw;
+      expect(d?.mode === "box" && d.slots != null).toBe(true);
+    });
+    const draw = result.current.draw;
+    if (draw?.mode !== "box" || !draw.slots) throw new Error("expected a slotted box draw");
+    // The box labels ARE the slot labels (one resolution, over the universe).
+    expect(draw.boxes.map((b) => b.label)).toEqual(draw.slots.map((s) => s.label));
+    await act(async () => {
+      await result.current.exportFigure("svg");
+    });
+    const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0];
+    expect(spec.labels).toEqual(draw.slots.map((s) => s.label));
+  });
+});

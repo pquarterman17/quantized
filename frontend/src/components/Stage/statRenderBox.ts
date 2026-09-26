@@ -27,7 +27,7 @@ import {
   type Rect,
   type StatDrawData,
 } from "./statRender";
-import { drawEmptySlotMarkers, drawSlotCounts, gapsBefore, slotPlan, type SlotPlan } from "./statRenderSlots";
+import { drawEmptySlotMarkers, drawSlotCounts, slotPlan, type SlotPlan } from "./statRenderSlots";
 
 /** Jittered raw-point overlay for one category slot (JMP_GAP J5 #1): each
  *  point's horizontal offset is `deterministicJitter(rowIndex, category) *
@@ -112,8 +112,8 @@ export function drawConnectMeansLine(
   rect: Rect,
   vy: (v: number) => number,
   ink: string,
-  /** P2.6 box 2: true where an EMPTY axis slot sits before box i — the line
-   *  lifts there too (`statRenderSlots.gapsBefore`; export:
+  /** P2.6 box 2: true where an EMPTY axis slot (shown or hidden) sits before
+   *  box i — the line lifts there too (`SlotPlan.gaps`; export:
    *  `calc.figure_group_notes.connect_segments`). */
   gaps: readonly boolean[] = [],
 ) {
@@ -157,7 +157,7 @@ function drawGroupAxis(
 ): SlotPlan {
   const plan = slotPlan(d.slots, labels);
   drawCategoryAxis(ctx, rect, plan.slots, plan.labels, d.groupLabel, ink, muted);
-  drawEmptySlotMarkers(ctx, rect, plan, muted);
+  drawEmptySlotMarkers(ctx, rect, plan.slots, plan.empty, muted);
   if (d.showN !== false) drawSlotCounts(ctx, rect, plan, groupN, muted);
   return plan;
 }
@@ -247,7 +247,7 @@ export function drawBoxesWithMarks(
 
   // Connect-means line last (JMP_GAP J5 residual) so it draws on top of
   // every box glyph.
-  if (d.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, gapsBefore(plan));
+  if (d.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, plan.gaps);
 }
 
 // ── Strip (points-only, JMP_GAP J5 #3) ──────────────────────────────────────
@@ -286,5 +286,5 @@ export function drawStrip(
 
   // Connect-means line last (JMP_GAP J5 residual) so it draws on top of the
   // jittered points.
-  if (d.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, gapsBefore(plan));
+  if (d.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, plan.gaps);
 }

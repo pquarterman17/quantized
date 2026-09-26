@@ -276,7 +276,7 @@ def render_stat_facets_figure(
     including P2.6 box 2's empty slots, ``show_n`` counts and ``caveat``
     footnote (``calc.figure_group_notes``).
     """
-    from quantized.calc.figure_group_notes import add_caveat
+    from quantized.calc.figure_group_notes import add_caveat, supxlabel_above_caveat
     from quantized.calc.figure_statplots import _GROUPED, _draw_statplot
 
     if fmt not in _FORMATS:
@@ -330,8 +330,7 @@ def render_stat_facets_figure(
                     ax.spines["right"].set_visible(False)
             if title:
                 fig.suptitle(title)
-            if x_label:
-                fig.supxlabel(x_label)
+            supxlabel_above_caveat(fig, x_label, caveat)
             if y_label:
                 fig.supylabel(y_label)
             fig.tight_layout(rect=add_caveat(fig, caveat))  # None = default layout
@@ -379,7 +378,7 @@ def render_categorical_facets_figure(
         _to_error_matrix,
         _to_matrix,
     )
-    from quantized.calc.figure_group_notes import add_caveat
+    from quantized.calc.figure_group_notes import add_caveat, supxlabel_above_caveat
 
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -438,8 +437,7 @@ def render_categorical_facets_figure(
                 )
             if title:
                 fig.suptitle(title)
-            if x_label:
-                fig.supxlabel(x_label)
+            supxlabel_above_caveat(fig, x_label, caveat)
             if y_label:
                 fig.supylabel(y_label)
             fig.tight_layout(rect=add_caveat(fig, caveat))  # None = default layout

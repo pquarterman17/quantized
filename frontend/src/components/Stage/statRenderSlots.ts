@@ -24,6 +24,11 @@ export interface SlotPlan {
   groupSlot: number[];
   /** Axis-slot indices that hold no group. */
   empty: number[];
+  /** Per plotted group: must the connect-means line LIFT before it? True
+   *  where a visible empty slot sits between it and the previous group, or
+   *  where hidden empties did (`AxisSlot.gapBefore`, `groupAxis.visibleSlots`).
+   *  Export twin: `calc.figure_group_notes.connect_segments`' breaks. */
+  gaps: boolean[];
 }
 
 function identity(groupLabels: readonly string[]): SlotPlan {
@@ -32,6 +37,7 @@ function identity(groupLabels: readonly string[]): SlotPlan {
     slots: categorySlots(groupLabels.length),
     groupSlot: groupLabels.map((_, i) => i),
     empty: [],
+    gaps: groupLabels.map(() => false),
   };
 }
 
@@ -51,29 +57,26 @@ export function slotPlan(axis: readonly AxisSlot[] | null | undefined, groupLabe
     }
   });
   if (placed !== groupLabels.length || placed + empty.length !== axis.length) return identity(groupLabels);
-  return { labels: axis.map((s) => s.label), slots: categorySlots(axis.length), groupSlot, empty };
+  // A line drawn across a missing level asserts a trend through data that does
+  // not exist, so it lifts at a visible empty slot AND at a hidden one.
+  const gaps = groupSlot.map((s, i) => i > 0 && (s !== groupSlot[i - 1] + 1 || axis[s].gapBefore === true));
+  return { labels: axis.map((s) => s.label), slots: categorySlots(axis.length), groupSlot, empty, gaps };
 }
 
-/** Per plotted group: does a GAP (an empty axis slot) sit between it and the
- *  previous group? The connect-means line lifts there — a line drawn across a
- *  missing level asserts a trend through data that does not exist. */
-export function gapsBefore(plan: SlotPlan): boolean[] {
-  return plan.groupSlot.map((s, i) => i > 0 && s !== plan.groupSlot[i - 1] + 1);
-}
-
-/** The muted, italic `n=0` marker in every empty slot, mid-panel. */
+/** The muted, italic `n=0` marker in every `empty` slot, mid-panel. */
 export function drawEmptySlotMarkers(
   ctx: CanvasRenderingContext2D,
   rect: Rect,
-  plan: SlotPlan,
+  slots: readonly CategorySlot[],
+  empty: readonly number[],
   muted: string,
 ) {
-  if (!plan.empty.length) return;
+  if (!empty.length) return;
   ctx.fillStyle = muted;
   ctx.font = "italic 10px 'JetBrains Mono', monospace";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  for (const i of plan.empty) ctx.fillText("n=0", rect.x + plan.slots[i].cx * rect.w, rect.y + rect.h / 2);
+  for (const i of empty) ctx.fillText("n=0", rect.x + slots[i].cx * rect.w, rect.y + rect.h / 2);
 }
 
 /** "n=<count>" caption above one slot (shared by box / violin / strip / bar). */
