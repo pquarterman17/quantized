@@ -3483,15 +3483,9 @@ violin, bar, strip, or summary plots.
     by a load, grown by an append in the same set() as its datasets,
     UNDOABLE with the project) and written back on the next save, never
     destroyed (a save drops a readable carried record the library already
-    holds, so a file never holds a model twice); they also make
-    `recipeSourcesComplete` false. An open Recipe
-    Library re-renders on the merge. Autosave embeds the library at every
-    write, but a crash-recovery RESTORE merges no models (lib/autosave.ts):
-    the autosave came from this very library, which is newer, so merging
-    would only resurrect deletions -- the ones the library does NOT hold
-    (deleted since, or refused by the browser) move to the carry, so the
-    project keeps them. Saving a model does NOT schedule an
-    autosave (it is already durable in localStorage). Known and intended:
+    holds, so a file never holds a model twice). Saving a model does NOT
+    schedule an autosave (it is already durable in localStorage). Known and
+    intended:
     opening a project that holds a model the user deleted locally brings it
     back -- the project needs it. Compatibility: no version bump --
     `parseWorkspace` picks fields by name, so an older build ignores the key
@@ -3499,11 +3493,57 @@ violin, bar, strip, or summary plots.
     Funded eager-neutral by moving `boundsFromWire` to `lib/fitBoundsWire.ts`,
     which took `lib/fitParams.ts` + `lib/paramRowCheck.ts` out of the entry
     chunk (net eager -1,094 B after the review round). NOT covered: workbook transfer packages
-    (copy/duplicate a workbook) carry no fit models; an already-open Curve
-    Fit picker lists merged models only when reopened; the Recipe Library's
+    (copy/duplicate a workbook) carry no fit models; the Recipe Library's
     export/import remains the per-model path. The "(from project N)"
     naming is deliberately separate from the library's "<name> copy"
     dedupe (`uniqueTemplateName`): it says where the model came from.
+    **PR #432 review round 2 (2026-09-26), ten findings, each with a
+    sabotage-verified test:** (1) the crash-recovery autosave now embeds
+    the CARRY only, never the library (`serializeWorkspace(ws,
+    { fitModelLibrary: false })`), and a restore merges nothing -- so a
+    restart can no longer pin an edited library model's stale version, or
+    resurrect a deleted one, as a same-name carried record; the carry is
+    exactly the project's unreadable records plus the ones the library
+    refused. (2) A save writes ONE record per name: the library wins, and
+    a carried record whose name is already written is renamed to the first
+    free "(from project[ N])" (the only change a save makes to a carried
+    record; nothing is dropped for its name). (3) The Recipe Library's
+    verdict is DERIVED -- `recipeSourcesWhole` = the load's list flag AND
+    an empty carry -- so undo (which restores the carry but not the flag)
+    cannot desync them; `parseWorkspace`'s `recipeSourcesComplete` is back
+    to describing the two recipe lists only. (4) `fitModelCarry` is tracked
+    by `shouldAutosave`: a refused merge growing it marks the project dirty
+    and autosaves, so "kept in the project" survives a crash. (5) The
+    library bumps a revision on every write (`subscribeCustomModels`), and
+    the Curve Fit picker (`useSavedFitModels`) and the Recipe Library
+    re-read on it; project state is no longer re-set to force re-renders.
+    (6) A plain open never writes a DAMAGED local slot: nothing appended,
+    nothing moved aside, every incoming model carried, and the toast says
+    the list was left untouched. (7) The workshop saves a BLANK start as 1
+    clamped into its bounds (the start the engine would use), instead of
+    refusing a guess the user never typed. (8) `WorkspaceState` no longer
+    has a models field: a save always reads library + carry, and a parsed
+    file's models are `LoadedWorkspace.projectFitModels`, which nothing
+    serializes. (9) `nameOf` and the unreadable-records warning are shared
+    from `lib/fitmodels.ts`. (10) The toast says why each rename happened:
+    a different local model ("yours was kept"), an unreadable local record
+    (left untouched), or another model from the same project. Self-review
+    (code-review skill, two rounds) added: the carry has a LINEAGE
+    (`grownCarry`/`carryGrewFrom`, store/recipeFidelity.ts), so a refused
+    merge still lands after a second append grew the carry, but never in a
+    load's or undo's replacement; a codec chunk that will not load carries
+    the project's models instead of losing them on the next save; a save's
+    rename never takes the name a later carried record keeps (no swaps);
+    deleting the loaded model anywhere falls the Curve Fit picker back to a
+    blank equation; the workshop's Save follows the fit's own row checks
+    (`savedModelRows`: a guess or bound that is not a number is refused, not
+    saved as a default) and reports a write storage refused, overwrite
+    included; another window's library write (the `storage` event) refreshes
+    open panels too. Known and left: a merge that lands after an append and
+    is then undone WITH that append leaves the project (the refused records
+    were added after the undo snapshot); a codec failure carries even models
+    the library holds (telling which needs the unloadable chunk; the save
+    drops them again).
 - [ ] Stretch: pretty LaTeX rendering while Python remains editable source.
 - **Progress 2026-09-25:** slices 1-3 plus a self-review round (identifier
   rule restored to the historical one; a damaged storage slot is moved aside
