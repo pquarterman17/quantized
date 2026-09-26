@@ -331,6 +331,13 @@ def _draw_statplot(
     if kind in _GROUPED:
         if not isinstance(data, list) or not data:
             raise ValueError(f"{kind} needs a non-empty list of groups")
+        if labels and len(labels) != len(data):
+            # Checked up front: the empty-slot path indexes `labels` per slot,
+            # which would otherwise surface as a bare "list index out of range".
+            raise ValueError(
+                f"labels must have one entry per group: got {len(labels)} labels "
+                f"for {len(data)} groups"
+            )
         groups, row_indices = _clean_groups_with_indices(data, point_row_indices)
         ticks = list(range(1, len(groups) + 1))
         cat_labels = labels or [f"group {i + 1}" for i in range(len(groups))]

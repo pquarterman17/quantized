@@ -181,3 +181,11 @@ def test_connect_means_ignored_for_violin_and_single_group() -> None:
         "box", [_GROUPS[0]], fmt="png", labels=["A"], show_connect_means=True,
     )
     assert out_single[:4] == _MAGIC["png"]
+
+
+@pytest.mark.parametrize("kind", ["box", "violin", "strip"])
+def test_a_labels_data_length_mismatch_is_a_descriptive_error(kind: str) -> None:
+    # PR #433 review: the empty-slot path indexed `labels` per slot, so a
+    # mismatch surfaced as a bare IndexError ("list index out of range").
+    with pytest.raises(ValueError, match="one entry per group: got 1 labels for 2 groups"):
+        render_statplot_figure(kind, [[1.0, 2.0], [np.nan]], labels=["a"], fmt="svg")

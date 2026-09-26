@@ -253,3 +253,10 @@ def test_connect_means_breaks_at_each_new_outer_factor_of_a_nested_plot() -> Non
     dashed = re.findall(r'<path d="([^"]+)"[^>]*stroke-dasharray', svg)
     assert len(dashed) == 2, dashed
     assert all(d.count("L") == 1 for d in dashed)  # two points per lot
+
+
+def test_a_labels_data_mismatch_is_a_descriptive_422() -> None:
+    req = {**_request(), "labels": ["only one"]}
+    resp = client.post("/api/export/statplot-figure", json=req)
+    assert resp.status_code == 422
+    assert "one entry per group" in resp.text
