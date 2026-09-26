@@ -30,9 +30,9 @@ from quantized.calc.report_emit import (
     from_batch_integrate,
     from_curve_fit,
     from_integrate,
-    from_multipeak_fit,
     from_stats_table,
 )
+from quantized.calc.report_emit_peaks import from_multipeak_fit
 from quantized.calc.stats_anova2 import anova2
 
 
@@ -239,7 +239,24 @@ def test_from_multipeak_fit_prints_model_fit_errors_and_objective() -> None:
 
 def test_from_multipeak_fit_model_fit_explains_the_dash() -> None:
     rep = from_multipeak_fit(_model_fit_result())
-    assert any(b["type"] == "text" and "1σ" in b["text"] for b in rep.iter_blocks())
+    notes = [b["text"] for b in rep.iter_blocks() if b["type"] == "text"]
+    assert any("1σ" in t for t in notes)
+    # errors without an objective (not a model fit): the note claims no producer
+    classic_err = {"peaks": [{"model": "Gaussian", "center": 10.0, "fwhm": 1.2, "height": 100.0,
+                              "area": 150.0, "centerErr": 0.01}], "nPeaks": 1}
+    notes = [b["text"] for b in from_multipeak_fit(classic_err).iter_blocks()
+             if b["type"] == "text"]
+    assert notes and not any("Peak Analyzer" in t for t in notes)
+
+
+def test_from_multipeak_fit_marks_excluded_peaks() -> None:
+    peaks = [{**_MF_PEAKS[0], "excluded": True}, {**_MF_PEAKS[1], "excluded": False}]
+    peaks_t, _ = _tables(_model_fit_result(peaks=peaks))
+    assert peaks_t["columns"][-1] == "Included"
+    assert [r[-1] for r in peaks_t["rows"]] == ["no (excluded)", "yes"]
+    assert peaks_t["caption"] == "2 peak(s), 1 excluded"
+    none_excluded, _ = _tables(_model_fit_result())
+    assert "Included" not in none_excluded["columns"]
 
 
 def test_from_multipeak_fit_model_fit_keeps_the_pm_layout_when_every_error_is_null() -> None:

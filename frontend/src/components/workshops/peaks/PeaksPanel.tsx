@@ -75,7 +75,7 @@ export default function PeaksPanel() {
         kind: "multipeak_fit",
         // A published model-fit table's errors and objective ride along, so
         // the report says what the table shows (./peakReport).
-        result: peakReportResult(fitResult, entries, peakTable),
+        result: peakReportResult(fitResult, peakTable, active.id),
         title: `Peak fit — ${active.name}`,
         source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
       });

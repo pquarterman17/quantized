@@ -11,7 +11,7 @@ import { findPeaks, fitMultiPeak } from "../../../lib/api/peaks";
 import { peakDataFingerprint, peakTableFromFit } from "../../../lib/peakTableFit";
 import type { Dataset } from "../../../lib/types";
 import { askConfirm } from "../../../store/confirmDialog";
-import { editPeak, publishPeakTable } from "../../../store/peakTables";
+import { editPeak, publishPeakTable, removePeaks, setPeakExcluded } from "../../../store/peakTables";
 import { useApp } from "../../../store/useApp";
 import { modelFitResponse } from "../peakwizard/modelFit.testkit";
 import { peakTableFromModelFit } from "../peakwizard/modelFitPeakTable";
@@ -225,6 +225,28 @@ describe("PeaksPanel — a published model-fit table", () => {
     ]);
     expect(peaks.map((p) => [p.eta, p.etaErr])).toEqual([[1, null], [null, null]]);
     expect(result).toMatchObject({ objective: "chi2", ssr: 0.012, chi2: 9.5, R2: 0.998 });
+  });
+
+  it("→ Report reads the durable table even while the panel's copy is stale after a removal, and marks exclusions", async () => {
+    vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } } as never);
+    const table = peakTableFromModelFit(modelFitResponse(), DS, {
+      xKey: null, recipe: null, baseline: "none", bgAtCenter: [0.5, 0.5], fingerprint: peakDataFingerprint(DS),
+    }, null);
+    show({ ...DS, peakTable: table });
+    const grid = await screen.findByRole("table", { name: "fitted peaks" });
+    await waitFor(() => expect(within(grid).getAllByRole("cell")[1]).toHaveTextContent("2.01 ± 0.004"));
+    act(() => setPeakExcluded("d1", table.peaks[0].id, true));
+    // Hold the panel's refresh so its local fit copy still has BOTH peaks
+    // after the store drops one: the rows are then unpaired.
+    act(() => useApp.setState({ resolveDataset: () => new Promise<undefined>(() => {}) }));
+    act(() => void removePeaks("d1", new Set([table.peaks[1].id])));
+    fireEvent.click(screen.getByRole("button", { name: "→ Report" }));
+    await waitFor(() => expect(useApp.getState().reports).toHaveLength(1));
+    const result = vi.mocked(reportEmit).mock.calls[0][0].result as Record<string, unknown>;
+    const peaks = result.peaks as Record<string, unknown>[];
+    expect(peaks).toHaveLength(1);
+    expect(peaks[0]).toMatchObject({ center: 2.01, centerErr: 0.004, excluded: true });
+    expect(result.objective).toBe("ssr");
   });
 
   it("→ Report of a legacy table sends the fit result unchanged — no error fields, no objective", async () => {

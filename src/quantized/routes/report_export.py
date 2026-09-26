@@ -17,7 +17,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
-from quantized.calc import report_emit
+from quantized.calc import report_emit, report_emit_peaks
 from quantized.calc.report import ReportSheet, validate_report
 from quantized.io.report_export import ReportExportError, render_report
 from quantized.routes._errors import CALC_ERRORS, call_calc
@@ -69,8 +69,8 @@ def _emit_sheet(req: ReportEmitRequest) -> ReportSheet:
             model_name=req.model_name, source_refs=refs,
         )
     simple = {
-        "multipeak_fit": report_emit.from_multipeak_fit,
-        "peak_model_fit": report_emit.from_peak_model_fit,
+        "multipeak_fit": report_emit_peaks.from_multipeak_fit,
+        "peak_model_fit": report_emit_peaks.from_peak_model_fit,
         "refl_fit": report_emit.from_refl_fit,
         "integrate": report_emit.from_integrate,
         "batch_integrate": report_emit.from_batch_integrate,

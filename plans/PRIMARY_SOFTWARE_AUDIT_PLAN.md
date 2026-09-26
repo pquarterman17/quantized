@@ -3120,11 +3120,15 @@ a plan edit.
   #435):** the Peaks workshop's "→ Report" of a published model-fit table now
   sends the durable rows' 1σ errors (centre / FWHM / height / area / η, and a
   Voigt row's G/L widths) and the objective, SSR, χ² and R²
-  (`peaks/peakReport.ts`); `calc/report_emit.from_multipeak_fit` prints a "±"
+  (`peaks/peakReport.ts`); `calc/report_emit_peaks.from_multipeak_fit` prints a "±"
   column after each value ("—" for a null error), the Voigt width columns
   only when a row has them, and R² (weighted for a χ² fit) / SSR / χ² in the
-  goodness-of-fit table. A classic table's request and report are unchanged,
-  pinned by a whole-sheet test.
+  goodness-of-fit table. The request reads the durable table itself (not the
+  panel's row pairing, which lapses for a moment after a removal) and carries
+  each row's `excluded` flag, which the report shows as an "Included" column.
+  The peak emitters moved to `calc/report_emit_peaks.py` (500-line ceiling).
+  A classic table's request and report are unchanged, pinned by a
+  whole-sheet test.
 - [~] Manual peak edits and reviewed batch recipe. **2026-09-23 slice:** fitted
   peak rows can now be selected, edited (center/FWHM/height/area), or removed
   directly in the Peaks workshop. The durable `PeakTable` is the source of
