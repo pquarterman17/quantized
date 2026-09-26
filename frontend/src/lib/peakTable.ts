@@ -14,14 +14,21 @@
 // belongs to — the same additive-optional shape as `Dataset.fitSpec`, absent
 // meaning "no peak table", never an ad-hoc dict (CLAUDE.md's data contract).
 //
-// UNCERTAINTIES ARE MODELLED, NOT YET MEASURED. `centerErr`/`fwhmErr`/
-// `heightErr` are `number | null` and every producer here writes `null`:
-// neither `calc/peak_multifit.fit_multi_peak` nor `calc/peak_fit.fit_peak`
-// returns a covariance or a standard error today, and inventing one would be
-// new numerics with no MATLAB golden to check them against (CLAUDE.md's
-// golden-parity rule). The COLUMNS are durable now so that adding the numbers
-// later is an additive backend change rather than another `.dwk` migration;
-// P2.1's plan entry records the numerics as the next box.
+// UNCERTAINTIES: ONE PRODUCER MEASURES THEM, THE LEGACY ONES DO NOT.
+// `centerErr`/`fwhmErr`/`heightErr` (and the optional `areaErr`) are
+// `number | null`. The Peaks workshop's producers write `null`: neither
+// `calc/peak_multifit.fit_multi_peak` nor `calc/peak_fit.fit_peak` returns a
+// covariance or a standard error, and inventing one would be new numerics
+// with no MATLAB golden to check them against (CLAUDE.md's golden-parity
+// rule). The Peak Analyzer's mixed-shape model fit (`calc/peak_model_fit.py`,
+// P2.4) DOES return them — delta-method errors from the fit's own pinv
+// covariance — and its "Publish to peak table" action
+// (components/workshops/peakwizard/modelFitPeakTable.ts) fills the columns,
+// marks the record `provenance.producer = "model_fit"`, and keeps a null
+// error null (a fixed, tied, at-bound or undetermined parameter), with WHY in
+// `errReasons`. Every model-fit-only field below is OPTIONAL and ABSENT on a
+// legacy record — the sanitizer never materialises it — so a pre-existing
+// `.dwk` round-trips byte-identical and no version bump was needed.
 //
 // INVALIDATION (review rounds 2 and 3, 2026-09-15). A durable record of a fit
 // is a LIE the moment the data it was fit from changes, so
@@ -56,12 +63,13 @@
 // click, and it is the honest one.
 //
 // WHAT LIVES WHERE. This file is the CONTRACT (the types) plus the `.dwk`
-// sanitize/serialize pair, and nothing else — it is imported by the EAGER
-// workspace path (lib/workspaceDatasetParse.ts, lib/workspaceSerialize.ts), so
-// everything in it is paid for in the eager bundle. The fit-side helpers
-// (building a table from a fit, rehydrating one, `includedPeaks`,
-// `withPeakExcluded`) live in ./peakTableFit, which only lazy workshop code
-// imports; see that file's header for the measured reason.
+// sanitize/serialize pair, and nothing else. It is reached from the `.dwk`
+// codec (lib/workspaceDatasetParse.ts, lib/workspaceSerialize.ts), which has
+// been a LAZY chunk since bundle-headroom slice 9 (lib/workspaceCodecLazy.ts);
+// measured 2026-09-26, this module builds as its own lazy `peakTable-*.js`
+// chunk. The fit-side helpers (building a table from a fit, rehydrating one,
+// `includedPeaks`, `withPeakExcluded`) live in ./peakTableFit, which only lazy
+// workshop code imports; see that file's header for the measured reason.
 //
 // Pure lib — no store, no React, no fetch.
 
@@ -133,8 +141,8 @@ export interface SinglePeakFit {
 export interface PeakTableEntry {
   id: string;
   center: number;
-  /** 1σ on `center`, or null when the fit engine reports none (always, today —
-   *  see the module header). Same for the two below. */
+  /** 1σ on `center`, or null when the fit engine reports none (always, for
+   *  the legacy producers — see the module header). Same for the two below. */
   centerErr: number | null;
   fwhm: number;
   fwhmErr: number | null;
@@ -151,7 +159,45 @@ export interface PeakTableEntry {
    *  exclusion is reviewable) but is omitted from every downstream consumer —
    *  see `includedPeaks`. */
   excluded: boolean;
+  // ── model-fit rows only (`provenance.producer === "model_fit"`) ──────────
+  // ABSENT on every legacy row; present (possibly null) on a model-fit row.
+  /** 1σ on `area` (delta method through height, width(s) and η). */
+  areaErr?: number | null;
+  /** 1σ on `eta` — pseudo-Voigt rows; null elsewhere. */
+  etaErr?: number | null;
+  /** Voigt rows: the Gaussian and Lorentzian FWHM components `fwhm` is
+   *  derived from, with their errors; null for every other shape. A manual
+   *  FWHM edit clears them (the split is then unknown). */
+  fwhmG?: number | null;
+  fwhmGErr?: number | null;
+  fwhmL?: number | null;
+  fwhmLErr?: number | null;
+  /** Why a field's 1σ is null (not converged / fixed / tied / on a bound /
+   *  undetermined / edited by hand) — the text the Peak Analyzer shows on
+   *  hover. Keyed by every `ERR_FIELDS` field, the shape parameters (η, the
+   *  Voigt widths) included; a key is present only for a field that HAS a
+   *  value on this row and whose error is null. */
+  errReasons?: Partial<Record<PeakErrField, string>>;
 }
+
+/** THE list of fields a row can carry a 1σ for, and the column holding it —
+ *  the one definition the builder, the `.dwk` sanitizer, the manual-edit
+ *  contract and the Peaks cell all read. The first four are the derived
+ *  per-peak quantities every producer writes; the last three are shape
+ *  parameters only a model fit has. */
+export const ERR_COLUMNS = {
+  center: "centerErr",
+  fwhm: "fwhmErr",
+  height: "heightErr",
+  area: "areaErr",
+  eta: "etaErr",
+  fwhmG: "fwhmGErr",
+  fwhmL: "fwhmLErr",
+} as const;
+export type PeakErrField = keyof typeof ERR_COLUMNS;
+export const ERR_FIELDS = Object.keys(ERR_COLUMNS) as PeakErrField[];
+/** The optional numeric model-fit columns, in the order `parseEntry` reads them. */
+const MODEL_FIT_NUMS = ["areaErr", "etaErr", "fwhmG", "fwhmGErr", "fwhmL", "fwhmLErr"] as const;
 
 /** Where a `PeakTable` came from and what produced it. Enough to answer "which
  *  data, which model, which settings, when" without re-running anything. */
@@ -193,6 +239,33 @@ export interface PeakTableProvenance {
   fingerprint: string | null;
   /** ISO-8601 instant the fit completed. */
   fittedAt: string;
+  // ── model-fit tables only ──────────────────────────────────────────────
+  /** Absent = the Peaks workshop (legacy `fit_multi_peak` / `fit_peak`, no
+   *  uncertainties). "model_fit" = the Peak Analyzer's mixed-shape engine,
+   *  published with standard errors. Every field below is present exactly when
+   *  this is. For a model-fit table `method` is "simultaneous" (it is one
+   *  global fit), `model` names the shape(s), `bgDegree` is the model
+   *  background's polynomial degree (-1 = none), `linkMode` is "" and
+   *  `constrain` false (widths are shared by the parameter table's ties, not a
+   *  link mode), and `bgCoeffs` is EMPTY: the model's coefficients are in
+   *  `(x - x_ref)` over a baseline-subtracted trace, a different basis from
+   *  the legacy `polyval(x)` ones, and mixing the two would be a silent lie.
+   *  `rmse` is `sqrt(ssr / n_points)`, the legacy definition. */
+  producer?: "model_fit";
+  /** The fit engine (`"peak_model_fit"`). */
+  engine?: string;
+  /** The Peak Analyzer recipe name the fit ran under, or null (unsaved). */
+  recipe?: string | null;
+  /** Which objective was minimised: "chi2" only for a weighted fit. */
+  objective?: "ssr" | "chi2";
+  /** The unweighted sum of squared residuals (always), and χ² (weighted fits
+   *  only, else null). Cleared with R²/RMSE by a manual edit or removal. */
+  ssr?: number | null;
+  chi2?: number | null;
+  /** The model background and step-① baseline, e.g. "linear after als baseline". */
+  background?: string;
+  /** The fit's own warnings, verbatim. */
+  warnings?: string[];
 }
 
 /** A dataset's durable fitted-peak table. `version` is the record's own schema
@@ -211,9 +284,8 @@ function num(v: unknown): number | null {
 }
 
 /** "a string, or the absent-field default" — the coercion every text field in
- *  this sanitizer needs. One helper rather than six inline `typeof` ternaries:
- *  this module is paid for in the EAGER bundle (see the module header), and
- *  the six call sites below cost measurably less through it. */
+ *  this sanitizer needs. One helper rather than a dozen inline `typeof`
+ *  ternaries (it was introduced when this module was still eager). */
 function str(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
@@ -228,7 +300,7 @@ function parseEntry(v: unknown, index: number): PeakTableEntry | null {
   // of them is unusable, so it is DROPPED rather than defaulted to a number
   // that would quietly enter a Williamson-Hall fit.
   if (center === null || fwhm === null || height === null) return null;
-  return {
+  const entry: PeakTableEntry = {
     id: str(o.id) || `peak-restored-${index}`,
     center,
     centerErr: num(o.centerErr),
@@ -242,6 +314,34 @@ function parseEntry(v: unknown, index: number): PeakTableEntry | null {
     model: str(o.model),
     status: str(o.status),
     excluded: o.excluded === true,
+  };
+  // Model-fit columns: copied ONLY when the saved row has them, so a legacy
+  // row reopens exactly as it was saved (no `null`s materialised).
+  for (const k of MODEL_FIT_NUMS) if (k in o) entry[k] = num(o[k]);
+  const r = o.errReasons;
+  if (typeof r === "object" && r !== null) {
+    const reasons: Partial<Record<PeakErrField, string>> = {};
+    for (const f of ERR_FIELDS) {
+      const text = (r as Record<string, unknown>)[f];
+      if (typeof text === "string" && text) reasons[f] = text;
+    }
+    entry.errReasons = reasons;
+  }
+  return entry;
+}
+
+/** The model-fit provenance fields, only for a record that claims them. */
+function modelFitProvenance(p: Record<string, unknown>): Partial<PeakTableProvenance> {
+  if (p.producer !== "model_fit") return {};
+  return {
+    producer: "model_fit",
+    engine: str(p.engine),
+    recipe: str(p.recipe) || null,
+    objective: p.objective === "chi2" ? "chi2" : "ssr",
+    ssr: num(p.ssr),
+    chi2: num(p.chi2),
+    background: str(p.background),
+    warnings: Array.isArray(p.warnings) ? p.warnings.filter((w): w is string => typeof w === "string") : [],
   };
 }
 
@@ -286,6 +386,7 @@ export function sanitizePeakTable(v: unknown): PeakTable | undefined {
       xUnit: str(p.xUnit),
       fingerprint: str(p.fingerprint) || null,
       fittedAt: str(p.fittedAt),
+      ...modelFitProvenance(p),
     },
   };
 }
@@ -296,7 +397,11 @@ export function sanitizePeakTable(v: unknown): PeakTable | undefined {
 export function serializePeakTable(table: PeakTable): PeakTable {
   return {
     version: table.version,
-    peaks: table.peaks.map((p) => ({ ...p })),
-    provenance: { ...table.provenance, bgCoeffs: [...table.provenance.bgCoeffs] },
+    peaks: table.peaks.map((p) => (p.errReasons ? { ...p, errReasons: { ...p.errReasons } } : { ...p })),
+    provenance: {
+      ...table.provenance,
+      bgCoeffs: [...table.provenance.bgCoeffs],
+      ...(table.provenance.warnings ? { warnings: [...table.provenance.warnings] } : {}),
+    },
   };
 }

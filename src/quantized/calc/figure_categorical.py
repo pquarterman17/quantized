@@ -21,6 +21,7 @@ matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph o
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 
+from quantized.calc.figure_group_notes import add_caveat, mark_empty_slots  # noqa: E402
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_styles import figure_style  # noqa: E402
 
@@ -36,12 +37,20 @@ def _draw_categorical_bars(
     vals: Any,
     errs: Any | None,
     stacked: bool,
+    counts: Any | None = None,
 ) -> None:
     """Draw one grouped/stacked bar panel into `ax` — shared by the flat
     single-panel path below and `figure_facets.render_categorical_facets_figure`
     (GUI_INTERACTION #12 slice 4b), so a faceted panel matches the flat
     export exactly. Caller applies title/axis-labels/spines/legend/grid —
-    this function only draws the bars + category ticks + zero baseline."""
+    this function only draws the bars + category ticks + zero baseline.
+
+    P2.6 box 2: a NaN height (a series with no finite value in that
+    category) draws no bar -- never a zero-height stand-in -- and a category
+    whose every series is NaN keeps its tick with an ``n=0`` marker.
+    ``counts`` (``[group][series]`` sample sizes, optional) adds an ``n=K``
+    label over each GROUPED bar, where the screen draws its own; stacked
+    bars carry none, on screen or here."""
     n_groups, n_series = len(groups), len(series)
     x = np.arange(n_groups, dtype=float)
     if stacked:
@@ -62,18 +71,61 @@ def _draw_categorical_bars(
                 x + offset, vals[:, si], width * 0.85, yerr=yerr, capsize=3,
                 label=series[si],
             )
+        if counts is not None:
+            _label_bar_counts(ax, x, width, vals, errs, counts, n_series)
     ax.set_xticks(x)
     ax.set_xticklabels(groups)
     ax.axhline(0, color="0.3", linewidth=0.8)  # baseline, visible for mixed-sign data
+    if not np.all(np.isfinite(vals)):
+        # A NaN bar adds nothing to autoscale, so an edge category with no
+        # data would fall outside the axes; pin every category slot in view.
+        ax.set_xlim(-0.5, n_groups - 0.5)
+    mark_empty_slots(ax, list(x), [bool(np.all(~np.isfinite(vals[g]))) for g in range(n_groups)])
+
+
+def _label_bar_counts(
+    ax: Any, x: Any, width: float, vals: Any, errs: Any | None, counts: Any, n_series: int,
+) -> None:
+    """``n=K`` over each grouped bar, where the screen draws its caption
+    (``statRenderBar.ts`` / ``lib/groupAxis.barCountAnchor``): above the
+    bar's upper error whisker, never below the zero baseline, and AT the
+    baseline for a missing (NaN) bar. The offset is in points, so it is
+    size-independent."""
+    for si in range(n_series):
+        offset = (si - (n_series - 1) / 2) * width
+        for gi in range(len(x)):
+            mean = float(vals[gi, si])
+            sem = float(errs[gi, si]) if errs is not None else float("nan")
+            reach = mean + sem if np.isfinite(sem) else mean
+            top = max(reach, 0.0) if np.isfinite(mean) else 0.0
+            ax.annotate(
+                f"n={int(counts[gi][si])}", (x[gi] + offset, top), xytext=(0, 2),
+                textcoords="offset points", ha="center", va="bottom", fontsize="x-small",
+                color="0.45", annotation_clip=False,
+            )
 
 
 def _to_matrix(
-    values: list[list[float]], n_groups: int, n_series: int, name: str
+    values: list[list[float | None]], n_groups: int, n_series: int, name: str
 ) -> np.ndarray:
-    arr = np.asarray(values, dtype=float)
+    """``None`` entries (a series with no finite value in that category, P2.6
+    box 2 -- JSON has no NaN) become NaN: no bar is drawn for them."""
+    arr = np.asarray(
+        [[np.nan if v is None else v for v in row] for row in values], dtype=float,
+    ) if values else np.asarray(values, dtype=float)
     if arr.shape != (n_groups, n_series):
         raise ValueError(f"{name} must have shape ({n_groups}, {n_series}), got {arr.shape}")
     return arr
+
+
+def _to_counts(
+    counts: list[list[int]] | None, n_groups: int, n_series: int
+) -> list[list[int]] | None:
+    if counts is None:
+        return None
+    if len(counts) != n_groups or any(len(row) != n_series for row in counts):
+        raise ValueError(f"counts must have shape ({n_groups}, {n_series})")
+    return [[int(c) for c in row] for row in counts]
 
 
 def _to_error_matrix(
@@ -96,10 +148,12 @@ def _to_error_matrix(
 def render_categorical_figure(
     groups: list[str],
     series: list[str],
-    values: list[list[float]],
+    values: list[list[float | None]],
     errors: list[list[float | None]] | None = None,
     *,
     stacked: bool = False,
+    counts: list[list[int]] | None = None,
+    caveat: str | None = None,
     title: str = "",
     x_label: str = "",
     y_label: str = "",
@@ -119,6 +173,10 @@ def render_categorical_figure(
     error bar is drawn, matching the interactive stat stage's convention —
     a stacked bar's lower segments' own spread isn't visually meaningful once
     summed).
+
+    ``counts`` / ``caveat`` (P2.6 box 2): see ``_draw_categorical_bars`` and
+    ``calc.figure_group_notes.add_caveat``. Both default off --
+    byte-identical to before.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -135,6 +193,7 @@ def render_categorical_figure(
     n_groups, n_series = len(groups), len(series)
     vals = _to_matrix(values, n_groups, n_series, "values")
     errs = _to_error_matrix(errors, n_groups, n_series)
+    cnts = _to_counts(counts, n_groups, n_series) if not stacked else None
 
     st = figure_style(style)
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
@@ -150,7 +209,8 @@ def render_categorical_figure(
     with matplotlib.rc_context(rc):  # type: ignore[arg-type]
         fig, ax = plt.subplots(figsize=figsize)
         try:
-            _draw_categorical_bars(ax, groups, series, vals, errs, stacked)
+            _draw_categorical_bars(ax, groups, series, vals, errs, stacked, cnts)
+            layout_rect = add_caveat(fig, caveat)
             if title:
                 ax.set_title(title)
             if x_label:
@@ -166,7 +226,7 @@ def render_categorical_figure(
                 )
             if st.grid_alpha > 0:
                 ax.grid(True, alpha=st.grid_alpha, axis="y")
-            fig.tight_layout()
+            fig.tight_layout(rect=layout_rect)  # None = the default layout
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=dpi)
             return buf.getvalue()

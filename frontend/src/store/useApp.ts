@@ -357,7 +357,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   composition: Composition | null;
   insetMode: boolean; // show a magnifier inset over the plot
   polarMode: boolean; // render the active series in polar (angle vs radius)
-  statMode: boolean; // render the Statistics stage (box/violin/qq/histogram, gap #16)
+  statMode: boolean; statHideEmptyLevels: boolean; statShowGroupN: boolean; // Statistics stage (gap #16) + its P2.6 options
   xLim: [number, number] | null; // explicit X range (null = autoscale)
   yLim: [number, number] | null; // explicit Y range (null = autoscale)
   // Origin's decoded major-tick increment for a FIXED log axis (plot-fidelity
@@ -720,7 +720,7 @@ export const useApp = create<AppState>((set, get) => ({
   composition: null,
   insetMode: false,
   polarMode: false,
-  statMode: false,
+  statMode: false, statHideEmptyLevels: false, statShowGroupN: true,
   xLim: null,
   yLim: null,
   xStep: null,

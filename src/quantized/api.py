@@ -79,9 +79,9 @@ from quantized.calc.report_emit import (
     from_batch_integrate,
     from_curve_fit,
     from_integrate,
-    from_multipeak_fit,
     from_stats_table,
 )
+from quantized.calc.report_emit_peaks import from_multipeak_fit
 
 # ── Statistical plots ──────────────────────────────────────────────────────
 from quantized.calc.statplots import (

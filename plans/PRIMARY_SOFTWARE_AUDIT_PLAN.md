@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-26 (latest): **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-26 (latest): **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -3009,12 +3009,126 @@ a plan edit.
   only `alpha_average` at byte 616, so every Bruker RAW pattern currently
   adopts the Kα1/Kα2 average as "the wavelength this pattern was measured at".
   Backend change; needs a golden RAW fixture.
-- [ ] Per-peak fit uncertainties. `calc/peak_multifit.fit_multi_peak` and
-  `calc/peak_fit.fit_peak` return no covariance and no standard error, so the
-  `*Err` columns above are always null today; `calc/reductions.
-  williamson_hall` likewise takes no weights. Filling either in is new
-  numerics and needs a MATLAB golden first (CLAUDE.md's golden-parity rule) —
-  deliberately not invented here.
+- [~] Per-peak fit uncertainties. **Filled for the model-fit path; the legacy
+  producers still write null.** `calc/peak_multifit.fit_multi_peak` and
+  `calc/peak_fit.fit_peak` (the Peaks workshop's "Fit together" / "Fit
+  each") return no covariance and no standard error, so a table THEY produce
+  still has null `*Err` columns; adding errors there is new numerics and
+  needs a MATLAB golden first (CLAUDE.md's golden-parity rule) — still not
+  invented. `calc/reductions.williamson_hall` likewise still takes no
+  weights (see the note below).
+  **Progress 2026-09-26 (Opus 5.5):** the Peak Analyzer's mixed-shape model
+  fit (P2.4, `calc/peak_model_fit.py`) already returned delta-method standard
+  errors from its pinv covariance (`calc/_bounded_lsq.py`), so this was
+  wiring, not numerics, and needed no golden. Step 4 has a "Publish to peak
+  table" action (`peakwizard/modelFitPeakTable.ts` builds, `store/
+  peakTables.publishBuiltPeakTable` writes, one undo step) that writes one
+  durable row per peak: centre / FWHM / height / area with their stderr in
+  `centerErr` / `fwhmErr` / `heightErr` and a new optional `areaErr`; the
+  shape per row (`model`), eta (+ `etaErr`) for pseudo-Voigt, and new
+  optional `fwhmG` / `fwhmL` (+ errors) for Voigt; `bg` = the model's
+  background polynomial evaluated at each centre plus the step-① baseline at
+  the nearest sample, as the wizard's markers read it (so `height + bg` is
+  the plotted apex, as for every other producer). Provenance: new
+  optional `producer: "model_fit"`, `engine`, `recipe`, `objective`, `ssr`,
+  `chi2` (weighted fits only), `background`, `warnings`, plus the existing
+  dataset / x-axis / wavelength / fingerprint / R² / time; `rmse =
+  sqrt(ssr / n_points)` (the legacy definition); `bgCoeffs` is left EMPTY
+  (the model's are in `(x - x_ref)` over a baseline-subtracted trace, a
+  different basis). A null stderr (fixed, tied, on a bound, undetermined)
+  stays null — never 0, never NaN — with `modelFitReasons`' text saved in
+  the row's `errReasons`; a non-converged fit, a non-finite derived value, a
+  stale table (edited since the fit) and a dataset whose data changed since
+  the fit (fit-time `peakDataFingerprint`, even in an unfitted column) are
+  refused with the reason. Replacing an existing table asks first (a
+  narrow-range fit would otherwise silently shrink a full-pattern table;
+  exclusions carry over by peak identity and Undo restores the old one);
+  the recipe name and baseline method are captured when the fit lands; one
+  publish runs at a time. The Peaks workshop shows such a table as "value
+  ± error" ("± —" with the reason on hover); a legacy table renders bare,
+  as before. Manual edits keep their contract and now bite on real errors:
+  each changed field's error is cleared (area's too when a height/FWHM edit
+  rescales it, with its own "rescaled" reason; a FWHM edit forgets the Voigt
+  G/L split) with an "edited by hand" reason, and SSR/χ² clear with
+  R²/RMSE. `.dwk`: every new field is
+  optional and ABSENT on a legacy record (the sanitizer never materialises
+  it), so an old workspace reopens unchanged; a published table round-trips
+  with every error, null and reason. Williamson-Hall loads such a table
+  unchanged (centres + FWHM only) and its caption says "per-peak errors not
+  used (unweighted fit)". Verified: vitest `modelFitPeakTable` (incl. the
+  `.dwk` round trip and legacy-record test), `peakTablesModelFit` (publish
+  refusal/undo, manual edits with real errors), `PeakWizardPublish`,
+  `PeaksPanelModelFit`, `WilliamsonHallSection`; Chromium e2e
+  `peak-model-fit.spec.ts` (real backend: fit, publish, the Peaks workshop
+  shows 36 ± σ / 44 ± σ). Sabotage (each reverted from a file copy): 16
+  mutations, every one red — null stderr written as 0, sanitizer dropping or
+  materialising the new columns, area error kept after a rescale, no reasons,
+  no fingerprint check, bare Peaks cells (unit AND e2e), no publish guard
+  (with the button's own disable), no replace confirm, non-converged
+  publishable, stale note kept, wrong rescale reason, SSR kept after an
+  edit, WH caption, baseline left out of `bg`. Eager bundle: 865,631 ->
+  865,639 B (+8 B, pin unchanged at 866,358): no eager code — the shared
+  lazy chunk `peaks-*.js` became `peakTables-*.js` in the entry's preload
+  map (+5) and the wizard's preload list gained the already-shared
+  `xrdWavelength` chunk's index (+3).
+  **Review round 2 (same day, 8 findings fixed, each with a test that went
+  red when its fix was reverted):** the Peaks table pairs the durable rows
+  with the shown fit by CENTRES as well as count, so a publish while the
+  panel shows another same-length fit never pairs old values with new
+  errors; the builder runs before the undo step is recorded (a throwing
+  builder leaves no empty history entry); once published the button stays
+  disabled ("already published") while that table is the dataset's, and an
+  Undo re-enables it and drops the "published" note; an unedited model fit
+  whose R² is undefined says so instead of "cleared by manual changes";
+  Williamson-Hall's stale-table remedy names the Peak Analyzer for a model-
+  fit table; the provenance names only a baseline that was really subtracted
+  (a failed step-① baseline leaves the fit on the raw trace); the data
+  fingerprint is taken at publish time from the fit-time record (records are
+  immutable), so a fit that is never published never hashes the dataset.
+  **Review round 3 (independent review, same day, 8 findings fixed; 13
+  sabotages each went red, restored from file copies):** (1) a re-fit, reset
+  or dataset switch during an in-flight publish now CANCELS the write — the
+  store re-checks the hook's `seq` after its await, before building or
+  writing — and Fit is disabled while a publish runs; (2) a refusal is its own
+  dataset-keyed state that `reset` does not clear, so resolving a pending
+  preview (which swaps the record and resets the hook) can no longer hide why
+  nothing was published; (3) one shared replace guard
+  (`store/peakTables.confirmReplacingPeakTable`): the Peak Analyzer asks for
+  any existing table, the Peaks workshop's "Fit all together" / "Fit each"
+  ask BEFORE fitting when the table is a model fit (a Peaks re-fit of its own
+  table stays one click, and stays synchronous); (4) the background under a
+  centre uses an order-independent nearest-sample lookup (down-sweeps,
+  binding-energy axes, non-monotonic x); (5) once the durable table is paired
+  with the shown fit, the Peaks cells and header read the TABLE, never the
+  local `fitResult` copy, so a FWHM/height edit or a publish shows the new
+  value at once; (6) one full-dataset hash per publish (skipped for the live
+  record when it IS the fit-time record, counted in a test); (7) one
+  `ERR_COLUMNS`/`ERR_FIELDS` map in lib/peakTable.ts read by the builder, the
+  sanitizer, the manual-edit loop (now a single loop; a legacy row gains no
+  `areaErr`) and the Peaks cell; (8) `errReasons` covers η and the Voigt
+  widths too (a fixed/tied/at-bound shape parameter says why), round-trips
+  through `.dwk`, and a FWHM edit drops the width reasons with the widths.
+  **Deferred:** (a) Williamson-Hall WEIGHTING by
+  these errors — new numerics, needs a MATLAB golden of a weighted WH
+  first; per-point error bars on the WH plot were not added either; (b)
+  publishing from the batch table (a batch row has no fit curve for `bg`,
+  and each dataset's x channel / fingerprint would have to be captured at
+  prepare time); (c) the reduced SSR / reduced χ² are not in the Peaks
+  workshop's report of a published model-fit table: the durable table stores
+  SSR and χ² but not the fit's dof.
+  **2026-09-26, report errors (ported from PR #434, closed as a duplicate of
+  #435):** the Peaks workshop's "→ Report" of a published model-fit table now
+  sends the durable rows' 1σ errors (centre / FWHM / height / area / η, and a
+  Voigt row's G/L widths) and the objective, SSR, χ² and R²
+  (`peaks/peakReport.ts`); `calc/report_emit_peaks.from_multipeak_fit` prints a "±"
+  column after each value ("—" for a null error), the Voigt width columns
+  only when a row has them, and R² (weighted for a χ² fit) / SSR / χ² in the
+  goodness-of-fit table. The request reads the durable table itself (not the
+  panel's row pairing, which lapses for a moment after a removal) and carries
+  each row's `excluded` flag, which the report shows as an "Included" column.
+  The peak emitters moved to `calc/report_emit_peaks.py` (500-line ceiling).
+  A classic table's request and report are unchanged, pinned by a
+  whole-sheet test.
 - [~] Manual peak edits and reviewed batch recipe. **2026-09-23 slice:** fitted
   peak rows can now be selected, edited (center/FWHM/height/area), or removed
   directly in the Peaks workshop. The durable `PeakTable` is the source of
@@ -3293,8 +3407,10 @@ reaching the job API, stored edits applied. Eager bundle unchanged (845.0
 kB). Residuals: the in-panel table is session state (the added table
 dataset is the durable result; it does not reopen as the interactive
 table); the wizard sends no y errors, so a χ²-labelled batch is reachable
-only through the API today; durable peak-table publishing with stderr +
-shape and a correlation view remain open (below the boxes, not new boxes).
+only through the API today; a correlation view remains open (below the
+boxes, not a new box). Durable peak-table publishing with stderr + shape
+shipped 2026-09-26 for the single fit — see P2.1 "Per-peak fit
+uncertainties" (batch-row publishing deferred there).
 Review round (same day, 10 findings fixed, each with a test that went red
 when the fix was reverted): a dataset whose LOADING throws is an error row
 and preparation always ends; preparation runs 4 at a time (`mapPool`, rows
@@ -3384,7 +3500,70 @@ violin, bar, strip, or summary plots.
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5. **Dependencies:** P1.4-P1.5.
 
 - [ ] Nested grouping/order/labels/jitter/summary/errors/raw-point visibility.
-- [ ] Missing levels and unbalanced groups are explicit.
+- [x] Missing levels and unbalanced groups are explicit. (2026-09-26)
+  **Survey (before):** every categorical path closed the axis up silently.
+  `categoryLevels` never saw a level declared in `cat_levels` that no row
+  uses; `statschooser.groupsByCategory` dropped a level whose Y was all NaN
+  (`parts.has`); `nestedCells` dropped every empty (A, B) cell and
+  `nestedLevels` only ever offered co-occurring B levels; a level whose rows
+  were all EXCLUDED was pruned from the analysis view before anything looked.
+  n per group: the Canvas stage always drew `n=` captions, the export never
+  did. Bar mode drew a NaN mean as a 1-pixel bar at zero, and its export
+  422'd outright (`values: list[list[float]]`, the client's NaN arriving as
+  JSON null). The export's connect-means line also ran straight across a
+  nested outer-factor boundary the screen breaks at.
+  **Now:** `lib/groupAxis` builds the axis from the level UNIVERSE (declared
+  codes ∪ codes any row of the full dataset carries, in the user's level
+  order; nested = the full A x B cross product) and counts, per slot, usable
+  rows, non-finite rows and excluded/filtered rows. The stage's compute is
+  unchanged; `components/Stage/statStageLevels` threads its draws onto that
+  axis by order AND label (a stale draw mid-recompute is refused, and the
+  plot then renders closed up as before, with the notice saying "hidden").
+  An empty slot keeps its tick with an italic `n=0` marker on screen
+  (`statRenderSlots`) and in the export (`calc/figure_group_notes`), for
+  box / violin / strip / bar, flat and faceted (panels share the whole-plot
+  axis). **Slot cap:** over 200 slots, levels / combinations that NO row
+  carries are left off and counted in the notice; ones that occur but have no
+  usable value always stay. Below the cap a genuinely nested design shows
+  every pair (the rule, accepted; see the `groupAxis` header).
+  **Options, persisted:** `PlotView.statHideEmptyLevels` (default false) and
+  `statShowGroupN` (default TRUE — the stage's long-standing `n=` captions,
+  now honoured by the export as a top-axis `n=K` annotation) ride every
+  window snapshot, undo entry and `.dwk` (tested through a real
+  serialize/parse/load). Writers live in the lazy `store/statLevelOptions`
+  to keep them out of the eager bundle.
+  **Notice:** one line in the stage's readout — the small-n (n < 3) /
+  unbalanced (min/max n < 0.2 among non-empty groups) caveat, empty levels,
+  rows dropped (non-finite vs excluded/filtered), rows with no level,
+  hidden never-occurring slots, facet panels with no data — with a per-level
+  breakdown as its tooltip. The caveat text (`groupAxis.balanceCaveat`) is
+  also posted to the export and typeset as a footnote, so summaries and
+  error bars on such groups never leave without it.
+  **Parity:** `statLevelsParity.test.ts` drives the real hook and asserts the
+  screen's slots and the export spec agree slot for slot, and pins the spec
+  as `tests/fixtures/wire/statplot_levels_export.json`;
+  `tests/test_statplot_levels_parity.py` posts that fixture to the real route
+  and reads the SVG back (tick labels, `n=0` markers, `n=K` counts, caveat).
+  E2E: `e2e/specs/stat-missing-levels.spec.ts`.
+  **Review round 2 (independent review, 10 findings, all fixed with a
+  sabotage-verified test each):** every draw is now KEYED to the inputs it
+  was computed for (`useStatStageDraws`, flat and facet keys separate), so a
+  stale draw mid-recompute is never threaded onto a new axis and no stale or
+  negative panel count is printed; the plotted groups are RELABELLED with the
+  axis's single label resolution (an Origin text sidecar whose excluded row
+  disagrees no longer knocks the plot back to closed-up); hidden empty levels
+  still break the connect-means line (`AxisSlot.gapBefore` on screen,
+  `connect_breaks` on the wire); facet levels with no panel (declared-only,
+  all rows excluded/filtered, or no usable value) are counted and named in the
+  notice, and the notice says "hidden" whenever a panel fell back to
+  closed-up; the faceted exports lift the x title clear of the caveat
+  footnote; background stat windows show the notice; the axis is planned once
+  and only counted per panel, over the slices the compute already built.
+  **Not done:** the Graph Builder's own box/violin PREVIEW
+  (`lib/plotspec.specToRender`) still closes empty levels up — it is a
+  preview whose "send to stage" lands on the stage, which shows them; the
+  XY colour split (`calc.plotting.build_grouped_series` / `plotGroupSplit`)
+  has no category axis to leave a slot on, so it is unaffected by design.
 - [ ] Summary table links to selected groups.
 - [ ] ANOVA/post-hoc, PCA, regression/correlation, GLM, survival, and ROC stay
   lower priority until demand is shown. **Demand shown 2026-07-28**: the

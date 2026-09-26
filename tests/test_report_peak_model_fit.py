@@ -1,4 +1,4 @@
-"""Peak model fit -> report (audit P2.4 slice 2): ``calc.report_emit.
+"""Peak model fit -> report (audit P2.4 slice 2): ``calc.report_emit_peaks.
 from_peak_model_fit`` and its ``/api/report/emit`` kind.
 
 The Peak Analyzer sends ``fit_peak_model``'s result minus its curves through
@@ -19,7 +19,7 @@ from fastapi.testclient import TestClient
 from quantized.app import app
 from quantized.calc.peak_model_fit import fit_peak_model
 from quantized.calc.report import validate_report
-from quantized.calc.report_emit import from_peak_model_fit
+from quantized.calc.report_emit_peaks import from_peak_model_fit
 
 client = TestClient(app)
 

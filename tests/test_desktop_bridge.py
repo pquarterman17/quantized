@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import json
 import os
-import sys
 import threading
 import time
 from pathlib import Path
@@ -32,6 +31,7 @@ from quantized.desktop_consent import (
 from quantized.desktop_source_probe import probe_source_path
 from quantized.portable.pack import pack_project
 from quantized.portable.project_rewrite import resolve_bundle_source
+from unc_fakes import unmounted_volume_path
 
 
 class FakeWindow:
@@ -290,38 +290,23 @@ def test_path_status_missing_when_the_root_is_reachable(tmp_path: Path) -> None:
     assert DesktopApi().path_status(str(tmp_path / "nope.csv"))["state"] == "missing"
 
 
-def _unmounted_volume_path() -> str:
-    """A path on a volume that is definitely not mounted, per platform.
-
-    The UNC prefix is assembled from ``chr(92)`` rather than written as a
-    literal: this test was briefly WRONG because a quoting layer ate one
-    backslash, leaving a single-backslash string. That is a rooted LOCAL path,
-    whose anchor is a real drive, so the test asserted "offline" against a case
-    that is legitimately "missing" and blamed the implementation for it.
-    """
-    if os.name == "nt":
-        b = chr(92)
-        return b + b + "no-such-server" + b + "share" + b + "run.dat"
-    # POSIX mounts volumes under these prefixes, so an absent mount point IS
-    # the statement "that volume is not attached".
-    base = "/Volumes" if sys.platform == "darwin" else "/mnt"
-    return f"{base}/qz-no-such-volume/run.dat"
-
-
-def test_path_status_offline_when_the_volume_is_not_mounted() -> None:
+def test_path_status_offline_when_the_volume_is_not_mounted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A vanished share must NOT be reported as a deleted file — that is how an
     app talks a user into discarding a source that is fine and will be back."""
-    assert DesktopApi().path_status(_unmounted_volume_path())["state"] == "offline"
+    path = unmounted_volume_path(monkeypatch)
+    assert DesktopApi().path_status(path)["state"] == "offline"
 
 
 def test_path_status_distinguishes_a_local_miss_from_an_unmounted_volume(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The two states must not collapse — that distinction IS the sub-item. A
     gone file on a live volume is 'missing'; an unmounted volume is 'offline',
     and only the first justifies suggesting the source is gone."""
     local_miss = DesktopApi().path_status(str(tmp_path / "gone.csv"))["state"]
-    remote_state = DesktopApi().path_status(_unmounted_volume_path())["state"]
+    remote_state = DesktopApi().path_status(unmounted_volume_path(monkeypatch))["state"]
     assert local_miss == "missing"
     assert remote_state == "offline"
 
@@ -420,10 +405,12 @@ def test_probe_source_still_no_checksum_for_a_typed_unconsented_candidate(
     assert "checksum" not in out
 
 
-def test_probe_source_missing_and_offline_states(tmp_path: Path) -> None:
+def test_probe_source_missing_and_offline_states(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     api = DesktopApi()
     assert api.probe_source(str(tmp_path / "nope.csv"))["state"] == "missing"
-    assert api.probe_source(_unmounted_volume_path())["state"] == "offline"
+    assert api.probe_source(unmounted_volume_path(monkeypatch))["state"] == "offline"
 
 
 def test_probe_source_invalid_path_never_raises() -> None:

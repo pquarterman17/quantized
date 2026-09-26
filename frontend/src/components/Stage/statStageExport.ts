@@ -38,9 +38,12 @@ import {
   type StatplotFacetSpec,
   type StatplotFigureSpec,
 } from "../../lib/api/figures";
+import type { BarChartData } from "../../lib/barlayout";
+import type { AxisSlot } from "../../lib/groupAxis";
 import type { GroupSpec } from "../../lib/statschooser";
-import { finiteOf, type StatMode } from "../../lib/statstage";
+import { finiteOf, type IndexedGroupSpec, type StatMode } from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
+import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
 
 export function buildExportSpec(
@@ -128,6 +131,45 @@ export interface FacetedExportInputs {
   groupLabel: string;
   barValueLabel: string;
   valueLabel: string;
+  /** P2.6 box 2: the per-group n annotation and the small-n / unbalanced
+   *  caveat, exactly as the screen shows them. */
+  showN?: boolean;
+  caveat?: string | null;
+}
+
+/** Restate raw groups on the draw's axis (P2.6 box 2): one entry per AXIS
+ *  slot, an empty slot as `[]` (the backend keeps its tick and marks it
+ *  `n=0`), under the SLOT labels — the same ones the screen relabelled its
+ *  groups to — plus where the connect-means line must lift (`breaks`: a
+ *  hidden empty level sat before that slot). Returns null — keep the groups
+ *  as they are — when there is no axis or it does not place exactly these
+ *  groups in order. A stale draw never gets here with slots: the stage only
+ *  decorates draws computed for the current picks (`useStatStageDraws`). */
+export function onAxis<T>(
+  slots: readonly AxisSlot[] | null | undefined,
+  perGroup: readonly T[],
+  empty: T,
+): { labels: string[]; values: T[]; breaks: boolean[] } | null {
+  if (!slots) return null;
+  const filled = slots.filter((s) => s.group !== null);
+  if (filled.length !== perGroup.length || filled.some((s, i) => s.group !== i)) return null;
+  return {
+    labels: slots.map((s) => s.label),
+    values: slots.map((s) => (s.group === null ? empty : perGroup[s.group])),
+    breaks: slots.map((s) => s.gapBefore === true),
+  };
+}
+
+/** A bar matrix on the wire: NaN means become null (JSON has no NaN; the
+ *  route draws no bar for them), and `counts` rides only when n is shown. */
+function barWire(d: BarChartData, showN: boolean) {
+  return {
+    groups: d.groups.map((g) => g.label),
+    series: d.seriesLabels,
+    values: d.groups.map((g) => g.series.map((s) => (Number.isFinite(s.mean) ? s.mean : null))),
+    errors: d.groups.map((g) => g.series.map((s) => (Number.isFinite(s.sem) ? s.sem : null))),
+    counts: showN ? d.groups.map((g) => g.series.map((s) => s.n)) : null,
+  };
 }
 
 /** Rebuilds a `facets[]` wire payload from `drawFacets` and renders one
@@ -145,19 +187,15 @@ export async function exportFacetedFigure(
   o: FacetedExportInputs,
 ): Promise<void> {
   const { drawFacets, mode, barStack, groupLabel, barValueLabel, valueLabel } = o;
+  const showN = o.showN ?? false;
+  const caveat = o.caveat ?? null;
   if (!drawFacets || drawFacets.length === 0) return;
   if (mode === "bar") {
     const facets: CategoricalFacetSpec[] = [];
     for (const f of drawFacets) {
       const draw = f.draw;
       if (draw.mode !== "bar") continue;
-      facets.push({
-        label: f.label,
-        groups: draw.data.groups.map((g) => g.label),
-        series: draw.data.seriesLabels,
-        values: draw.data.groups.map((g) => g.series.map((s) => s.mean)),
-        errors: draw.data.groups.map((g) => g.series.map((s) => (Number.isFinite(s.sem) ? s.sem : null))),
-      });
+      facets.push({ label: f.label, ...barWire(draw.data, showN && !barStack) });
     }
     if (!facets.length) return;
     const spec: CategoricalFigureSpec = {
@@ -172,6 +210,7 @@ export async function exportFacetedFigure(
       y_label: barValueLabel,
       filename: `bar_${barValueLabel}_faceted`,
       facets,
+      caveat,
     };
     await exportCategoricalFigure(spec);
     return;
@@ -180,11 +219,13 @@ export async function exportFacetedFigure(
   const facets: StatplotFacetSpec[] = [];
   for (const f of drawFacets) {
     if (!f.rawGroups || f.rawGroups.length === 0) continue;
+    const slots = f.draw.mode === "box" || f.draw.mode === "violin" ? f.draw.slots : null;
+    const axis = onAxis(slots, f.rawGroups.map((g) => g.values), []);
     facets.push({
       label: f.label,
       kind: f.draw.mode === "violin" ? "violin" : "box",
-      data: f.rawGroups.map((g) => g.values),
-      labels: f.rawGroups.map((g) => g.label),
+      data: axis ? axis.values : f.rawGroups.map((g) => g.values),
+      labels: axis ? axis.labels : f.rawGroups.map((g) => g.label),
     });
   }
   if (!facets.length) return;
@@ -198,6 +239,82 @@ export async function exportFacetedFigure(
     y_label: valueLabel,
     filename: `${mode}_${valueLabel}_faceted`,
     facets,
+    show_n: showN,
+    caveat,
   };
+  await exportStatplotFigure(spec);
+}
+
+/** Everything the stage's "Export" button needs — moved out of
+ *  `useStatStage.exportFigure` (P2.6 box 2 funded its line pin with it). The
+ *  draws are the DECORATED ones (`statStageLevels.applyLevels`), so the export
+ *  reads the same axis, empty slots and caveat the screen shows. */
+export interface StatStageExportInputs extends FacetedExportInputs {
+  data: DataStruct;
+  draw: StatDrawData | null;
+  groups: GroupSpec[];
+  indexedGroups: IndexedGroupSpec[];
+  valueCol: number;
+  dist: string;
+  bins: string;
+  fit: string | null;
+  showPoints: boolean;
+  showMeanCI: boolean;
+  connectMeans: boolean;
+}
+
+export async function exportStatStage(fmt: string, o: StatStageExportInputs): Promise<void> {
+  const { mode, draw } = o;
+  const showN = o.showN ?? false;
+  const caveat = o.caveat ?? null;
+  // Faceted export (GUI_INTERACTION #12 slice 4b): drawFacets is set for
+  // exactly the modes that facet (box/violin/bar). Checked first.
+  if (o.drawFacets && o.drawFacets.length > 0) {
+    await exportFacetedFigure(fmt, o);
+    return;
+  }
+  if (mode === "bar") {
+    if (!draw || draw.mode !== "bar" || draw.data.groups.length === 0) return;
+    await exportCategoricalFigure({
+      ...barWire(draw.data, showN && !o.barStack),
+      stacked: o.barStack,
+      caveat,
+      fmt,
+      title: `${o.barValueLabel} by ${o.groupLabel}`,
+      x_label: o.groupLabel,
+      y_label: o.barValueLabel,
+      filename: `bar_${o.barValueLabel}`,
+    });
+    return;
+  }
+  // Box's points overlay (JMP_GAP J5 #1) and Strip mode (#3, which always
+  // shows points) both need each group's ORIGINAL dataset row indices --
+  // `point_row_indices` (parallel to the values `buildExportSpec` sends)
+  // so the export scatters points in the SAME relative spot the screen
+  // does (identical deterministic-jitter hash, both sides).
+  let pointRowIndices: number[][] | null = null;
+  if (mode === "strip" || (mode === "box" && o.showPoints)) {
+    const finiteIndexed = o.indexedGroups.filter((g) => g.points.length > 0);
+    pointRowIndices = finiteIndexed.map((g) => g.points.map((p) => p.rowIndex));
+  }
+  const spec = buildExportSpec(
+    mode, o.data, o.groups, o.valueCol, o.valueLabel, o.groupLabel, o.dist, o.bins, o.fit, fmt,
+    o.showPoints, pointRowIndices, o.showMeanCI, o.connectMeans,
+  );
+  if (!spec) return;
+  if (mode === "box" || mode === "violin" || mode === "strip") {
+    const slots = draw && (draw.mode === "box" || draw.mode === "violin" || draw.mode === "strip") ? draw.slots : null;
+    const axis = onAxis(slots, spec.data as number[][], []);
+    if (axis) {
+      spec.data = axis.values;
+      spec.labels = axis.labels;
+      if (pointRowIndices) spec.point_row_indices = onAxis(slots, pointRowIndices, [])?.values ?? null;
+      // Only when a HIDDEN empty level must break the line (visible empties
+      // travel as `[]` groups and break it on their own).
+      if (o.connectMeans && axis.breaks.some(Boolean)) spec.connect_breaks = axis.breaks;
+    }
+    spec.show_n = showN;
+    spec.caveat = caveat;
+  }
   await exportStatplotFigure(spec);
 }

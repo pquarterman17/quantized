@@ -287,6 +287,14 @@ export interface StatplotFigureSpec {
   // JMP_GAP J5 residual: connect-group-means "interaction plot" line
   // (box/strip only) through each group's mean, in on-screen category order.
   show_connect_means?: boolean;
+  // P2.6 box 2 (calc.figure_group_notes): an EMPTY group in `data` keeps its
+  // slot with an n=0 marker; `show_n` adds each group's n on a top axis;
+  // `caveat` (lib/groupAxis.balanceCaveat) becomes a figure footnote.
+  show_n?: boolean;
+  caveat?: string | null;
+  /** Per group: the connect-means line lifts BEFORE it (a hidden empty level
+   *  sat there). Absent = only empty groups and nested boundaries break it. */
+  connect_breaks?: boolean[] | null;
 }
 
 /** Render a statistical plot (box/violin/Q-Q/histogram) server-side
@@ -309,8 +317,10 @@ export interface CategoricalFacetSpec {
   label: string;
   groups: string[];
   series: string[];
-  values: number[][];
+  values: (number | null)[][];
   errors: (number | null)[][];
+  /** P2.6 box 2: [group][series] n -> an n=K label over each grouped bar. */
+  counts?: number[][] | null;
 }
 
 /** A grouped/stacked bar-chart export request (StatStage bar mode's "Export
@@ -320,8 +330,10 @@ export interface CategoricalFacetSpec {
 export interface CategoricalFigureSpec {
   groups: string[]; // category tick labels, in axis order
   series: string[]; // series (legend) labels, in stack/cluster order
-  values: number[][]; // [group][series] bar height (mean)
+  values: (number | null)[][]; // [group][series] bar height (mean); null = no data (P2.6 box 2)
   errors: (number | null)[][]; // [group][series] SEM (null = no whisker)
+  counts?: number[][] | null; // P2.6 box 2: [group][series] n labels (grouped bars)
+  caveat?: string | null; // P2.6 box 2: lib/groupAxis.balanceCaveat, as a footnote
   stacked?: boolean;
   fmt?: string;
   style?: string;

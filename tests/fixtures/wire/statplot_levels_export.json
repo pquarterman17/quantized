@@ -1,0 +1,66 @@
+{
+  "kind": "box",
+  "data": [
+    [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12
+    ],
+    [
+      10,
+      12
+    ],
+    [],
+    [],
+    []
+  ],
+  "labels": [
+    "grp = A",
+    "grp = B",
+    "grp = C",
+    "grp = D",
+    "grp = E"
+  ],
+  "fmt": "svg",
+  "title": "y by grp",
+  "x_label": "grp",
+  "y_label": "y",
+  "filename": "box_y",
+  "show_points": true,
+  "point_row_indices": [
+    [
+      0,
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9,
+      10,
+      11
+    ],
+    [
+      12,
+      13
+    ],
+    [],
+    [],
+    []
+  ],
+  "show_mean_ci": true,
+  "show_connect_means": false,
+  "show_n": true,
+  "caveat": "Caveat: n < 3 in 1 group; unbalanced groups (n 2-12) - summaries and intervals are unreliable"
+}

@@ -256,6 +256,8 @@ def render_stat_facets_figure(
     width_in: float | None = None,
     height_in: float | None = None,
     dpi: int | None = None,
+    show_n: bool = False,
+    caveat: str | None = None,
 ) -> bytes:
     """Faceted box/violin export (GUI_INTERACTION #12 slice 4b, StatStage's
     "facet by" grid). Each ``panels[i]`` is ``{"label": str, "kind": "box" |
@@ -270,8 +272,11 @@ def render_stat_facets_figure(
     ``kind`` reproduces a mixed grid exactly as the screen showed it.
 
     Reuses ``figure_statplots._draw_statplot`` for each panel so a single
-    facet renders byte-identically to that module's flat single-panel path.
+    facet renders byte-identically to that module's flat single-panel path --
+    including P2.6 box 2's empty slots, ``show_n`` counts and ``caveat``
+    footnote (``calc.figure_group_notes``).
     """
+    from quantized.calc.figure_group_notes import add_caveat, supxlabel_above_caveat
     from quantized.calc.figure_statplots import _GROUPED, _draw_statplot
 
     if fmt not in _FORMATS:
@@ -318,18 +323,17 @@ def render_stat_facets_figure(
         fig, axes = _new_grid_figure(n, figsize)
         try:
             for ax, (label, kind, data, flabels) in zip(axes, prepared, strict=True):
-                _draw_statplot(ax, kind, data, flabels, dist, bins, fit, st)
+                _draw_statplot(ax, kind, data, flabels, dist, bins, fit, st, show_n=show_n)
                 ax.set_title(label, fontsize=st.font_size)
                 if not st.box_on:
                     ax.spines["top"].set_visible(False)
                     ax.spines["right"].set_visible(False)
             if title:
                 fig.suptitle(title)
-            if x_label:
-                fig.supxlabel(x_label)
+            supxlabel_above_caveat(fig, x_label, caveat)
             if y_label:
                 fig.supylabel(y_label)
-            fig.tight_layout()
+            fig.tight_layout(rect=add_caveat(fig, caveat))  # None = default layout
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=resolved_dpi)
             return buf.getvalue()
@@ -349,6 +353,7 @@ def render_categorical_facets_figure(
     width_in: float | None = None,
     height_in: float | None = None,
     dpi: int = 200,
+    caveat: str | None = None,
 ) -> bytes:
     """Faceted grouped/stacked bar export (GUI_INTERACTION #12 slice 4b,
     StatStage's bar-mode "facet by" grid). Each ``panels[i]`` is
@@ -362,12 +367,18 @@ def render_categorical_facets_figure(
     ``series`` is assumed consistent across panels (the same plotted
     channels every slice draws), so ONE legend on the first panel documents
     the whole figure rather than repeating it in every small cell.
+
+    P2.6 box 2: an optional per-panel ``"counts"`` (``[group][series]``)
+    labels each grouped bar ``n=K``, and ``caveat`` becomes a footnote --
+    the flat renderer's behaviour, via the same helpers.
     """
     from quantized.calc.figure_categorical import (
         _draw_categorical_bars,
+        _to_counts,
         _to_error_matrix,
         _to_matrix,
     )
+    from quantized.calc.figure_group_notes import add_caveat, supxlabel_above_caveat
 
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -404,13 +415,14 @@ def render_categorical_facets_figure(
             raise ValueError(f"facet {label!r} needs a non-empty series list")
         vals = _to_matrix(p.get("values", []), len(groups), len(series), f"facet {label!r} values")
         errs = _to_error_matrix(p.get("errors"), len(groups), len(series))
-        prepared.append((label, groups, series, vals, errs))
+        cnts = None if stacked else _to_counts(p.get("counts"), len(groups), len(series))
+        prepared.append((label, groups, series, vals, errs, cnts))
 
     with matplotlib.rc_context(rc):  # type: ignore[arg-type]
         fig, axes = _new_grid_figure(n, figsize)
         try:
-            for ax, (label, groups, series, vals, errs) in zip(axes, prepared, strict=True):
-                _draw_categorical_bars(ax, groups, series, vals, errs, stacked)
+            for ax, (label, groups, series, vals, errs, cnts) in zip(axes, prepared, strict=True):
+                _draw_categorical_bars(ax, groups, series, vals, errs, stacked, cnts)
                 ax.set_title(label, fontsize=st.font_size)
                 if not st.box_on:
                     ax.spines["top"].set_visible(False)
@@ -425,11 +437,10 @@ def render_categorical_facets_figure(
                 )
             if title:
                 fig.suptitle(title)
-            if x_label:
-                fig.supxlabel(x_label)
+            supxlabel_above_caveat(fig, x_label, caveat)
             if y_label:
                 fig.supylabel(y_label)
-            fig.tight_layout()
+            fig.tight_layout(rect=add_caveat(fig, caveat))  # None = default layout
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=dpi)
             return buf.getvalue()

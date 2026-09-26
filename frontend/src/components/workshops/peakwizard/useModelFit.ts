@@ -37,15 +37,39 @@
 // restores the step-① preview; across a dataset switch it only clears (the
 // baseline in hand belongs to the OLD dataset). Components and residuals have
 // no plot slot; the step's own preview (ModelFitPreview) draws them.
+//
+// PUBLISH (audit P2.1 uncertainties). "Publish to peak table" writes the
+// CURRENT, converged result as the dataset's durable `PeakTable`, standard
+// errors and shapes included (./modelFitPeakTable). What the table needs
+// beyond the response is captured WHEN THE FIT LANDS — the dataset record
+// the fit ran on (hashed once, at publish time, so a fit that is never
+// published never pays for it; records are immutable, so it is still the
+// fit-time data), the x channel, the recipe name and the baseline actually
+// subtracted, the background under each centre — never re-read from the live
+// inputs, which may have moved on. Once published, the button stays disabled
+// while that table is still the dataset's (an Undo or a later write
+// re-enables it and drops the note). Replacing an existing table asks first
+// (store/peakTables' shared `confirmReplacingPeakTable`). One publish runs at
+// a time and Fit is blocked meanwhile; a re-fit, reset or dataset switch that
+// still happens during it (the dataset resolving, say) CANCELS the write —
+// the store re-checks `seq` after its await, before writing. A refusal or
+// failure is ALWAYS shown: it lives in its own state (`refusal`, keyed by the
+// dataset) that `reset` does not clear, because resolving a pending preview
+// swaps the record and resets this hook AFTER the refusal was set (the store
+// update renders in a later task). The next Fit or Publish clears it.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fitPeakModel, type PeakModelFitResponse } from "../../../lib/api/peaks";
+import type { PeakTable } from "../../../lib/peakTable";
+import { plural } from "../../../lib/plural";
 import type { PeakRecipe } from "../../../lib/peakwizard";
 import { DEFAULT_FIT, type FitEngine, type PeakRecipeFit } from "../../../lib/peakRecipeFit";
 import type { BaselineOverlay, Dataset, FitOverlay } from "../../../lib/types";
+import { confirmReplacingPeakTable, incomingPeaks, publishBuiltPeakTable } from "../../../store/peakTables";
 import { useApp } from "../../../store/useApp";
 import { curveToRows, segmentRows, segmentToFullRows } from "./modelFitOverlay";
+import { modelFitPublishProblem, peakBackgrounds, peakTableFromModelFit } from "./modelFitPeakTable";
 import { setupProblems } from "./modelSetupChecks";
 import {
   backgroundNote,
@@ -90,6 +114,16 @@ export interface ModelFitState {
   stale: boolean;
   run: () => Promise<void>;
   cancel: () => void;
+  /** Why the result cannot be published to the peak table, or null. */
+  publishBlock: string | null;
+  /** Write the result as the dataset's durable peak table (with errors). */
+  publishToTable: () => Promise<void>;
+  /** The last publish's outcome, cleared by any new fit, reset or table
+   *  edit; a success note shows only while its table is still the dataset's. */
+  publishNote: { ok: boolean; text: string } | null;
+  /** This fit is the dataset's current peak table. */
+  published: boolean;
+  publishing: boolean;
   startFromResult: () => void;
   /** Drop the result, any in-flight request and our overlays. Stable. */
   clear: () => void;
@@ -106,6 +140,23 @@ export interface ModelFitInputs {
   /** The recipe's fit section — the single store of the user's edits. */
   fit: PeakRecipeFit;
   setFit: (update: (fit: PeakRecipeFit) => PeakRecipeFit) => void;
+  /** Provenance for a publish: the plotted x channel the segment was cut
+   *  from, the recipe's name and its step-① baseline method. */
+  xKey?: number | null;
+  recipeName?: string;
+  baselineMethod?: string;
+}
+
+/** A landed fit plus what a publish needs from the moment it landed. */
+interface Ran {
+  result: PeakModelFitResponse;
+  setup: string;
+  /** The dataset record the fit ran on (immutable). */
+  dataset: Dataset;
+  xKey: number | null;
+  recipe: string | null;
+  baseline: string;
+  bgAtCenter: number[];
 }
 
 function digest(v: readonly number[] | null | undefined): [number, number, number] {
@@ -129,7 +180,12 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
-  const [ran, setRan] = useState<{ result: PeakModelFitResponse; setup: string } | null>(null);
+  const [ran, setRan] = useState<Ran | null>(null);
+  const [publishNote, setPublishNote] = useState<{ ok: boolean; text: string } | null>(null);
+  const [refusal, setRefusal] = useState<{ datasetId: string; text: string } | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  const [publishedTable, setPublishedTable] = useState<PeakTable | null>(null);
+  const existingTable = useApp((s) => s.datasets.find((d) => d.id === active?.id)?.peakTable ?? null);
   const seq = useRef(0);
   const abortRef = useRef<AbortController | null>(null);
   const own = useRef<Owned>({ fit: null, bg: null });
@@ -185,6 +241,8 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     setRan(null);
     setError(null);
     setNotice(null);
+    setPublishNote(null);
+    setPublishedTable(null);
     dropOverlays(restore);
   }, [dropOverlays]);
   const clear = useCallback(() => reset(false), [reset]);
@@ -201,7 +259,9 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
 
   const stale = ran !== null && ran.setup !== setupJson;
   useEffect(() => {
-    if (stale) dropOverlays(true);
+    if (!stale) return;
+    dropOverlays(true);
+    setPublishNote(null); // "published" no longer describes what is on screen
   }, [stale, dropOverlays]);
 
   const publish = (res: PeakModelFitResponse, ds: Dataset, seg: { x: number[]; kept: number[] }) => {
@@ -219,6 +279,7 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
   };
 
   const run = async () => {
+    if (publishing) return; // a publish in flight must finish (or be refused) first
     if (!active || !segment || !workingY || peaks.length === 0) {
       setError("include at least one peak first");
       return;
@@ -235,11 +296,19 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     setBusy(true);
     setError(null);
     setNotice(null);
+    setPublishNote(null);
+    setRefusal(null);
+    setPublishedTable(null);
     try {
       const res = await fitPeakModel(modelFitBody(setup, segment.x, workingY), controller.signal);
       if (seq.current !== id) return; // superseded — a newer run/cancel/reset owns this panel
       dropOverlays(false);
-      setRan({ result: res, setup: sent });
+      setRan({
+        result: res, setup: sent, dataset: active, xKey: inp.xKey ?? null, recipe: inp.recipeName || null,
+        // What was really subtracted: a failed or pending baseline leaves workingY raw.
+        baseline: baselineOn && baseline ? inp.baselineMethod ?? "on" : "none",
+        bgAtCenter: peakBackgrounds(res, segment.x, baselineOn ? baseline : null),
+      });
       publish(res, active, segment);
     } catch (e) {
       if (seq.current !== id) return;
@@ -258,6 +327,42 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     abortRef.current = null;
     setBusy(false);
     setNotice("fit cancelled — the server may still finish it; its answer will be ignored");
+  };
+
+  const published = publishedTable !== null && existingTable === publishedTable;
+  const publishBlock = !ran
+    ? "fit first"
+    : stale
+      ? "the parameters changed since this fit — re-fit before publishing"
+      : published
+        ? "already published: this fit is the dataset's peak table"
+        : modelFitPublishProblem(ran.result);
+  const publishToTable = async () => {
+    if (!ran || publishBlock || publishing) return;
+    const id = seq.current;
+    const n = ran.result.peaks.length;
+    // A refusal survives a reset (see the header); a success is `publishNote`.
+    const datasetId = ran.dataset.id;
+    const fail = (why: string) => setRefusal({ datasetId, text: `not published — ${why}` });
+    setRefusal(null);
+    setPublishing(true);
+    try {
+      if (!(await confirmReplacingPeakTable(ran.dataset.id, incomingPeaks(n, "this model fit")))) return;
+      const out = await publishBuiltPeakTable(ran.dataset, (ds, fingerprint) =>
+        peakTableFromModelFit(ran.result, ds, {
+          xKey: ran.xKey, recipe: ran.recipe, baseline: ran.baseline, bgAtCenter: ran.bgAtCenter, fingerprint,
+        }, ds.peakTable), () => seq.current === id);
+      if ("reason" in out) {
+        fail(out.reason);
+      } else {
+        setPublishedTable(out.table);
+        setPublishNote({ ok: true, text: `published ${n} peak${plural(n)} with their errors to the peak table` });
+      }
+    } catch (e) {
+      fail(e instanceof Error ? e.message : "publishing failed");
+    } finally {
+      setPublishing(false);
+    }
   };
 
   const shared = fwhmShared(setup.params);
@@ -291,6 +396,13 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     stale,
     run,
     cancel,
+    publishBlock,
+    publishToTable,
+    publishNote: refusal && refusal.datasetId === activeId
+      ? { ok: false, text: refusal.text }
+      : publishNote?.ok && !published ? null : publishNote,
+    published,
+    publishing,
     startFromResult: () => {
       if (ran) edit({ ...setup, params: startFromFit(setup.params, ran.result.parameters) });
     },

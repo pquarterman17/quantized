@@ -109,6 +109,24 @@ def test_emit_multipeak_fit() -> None:
     assert report["title"] == "XRD peaks"
 
 
+def test_emit_multipeak_fit_carries_a_model_fit_tables_errors() -> None:
+    # The shape the Peaks workshop's "→ Report" sends for a published model fit.
+    resp = client.post("/api/report/emit", json={
+        "kind": "multipeak_fit",
+        "result": {"peaks": [{"model": "gaussian", "center": 1.0, "fwhm": 0.2,
+                              "height": 5.0, "area": 1.1, "centerErr": 0.01,
+                              "fwhmErr": None, "heightErr": 0.1, "areaErr": 0.05}],
+                   "rmse": 0.01, "nPeaks": 1, "model": "gaussian",
+                   "objective": "ssr", "ssr": 0.4, "chi2": None, "R2": 0.98},
+    })
+    assert resp.status_code == 200
+    report = resp.json()["report"]
+    validate_report(report)
+    peaks_t, gof_t = [b for b in report["sections"][0]["blocks"] if b["type"] == "table"]
+    assert peaks_t["rows"][0][2:6] == [1.0, 0.01, 0.2, "—"]
+    assert ["SSR", 0.4] in gof_t["rows"] and ["R²", 0.98] in gof_t["rows"]
+
+
 def test_emit_stats_table_needs_records() -> None:
     resp = client.post("/api/report/emit", json={"kind": "stats_table"})
     assert resp.status_code == 422

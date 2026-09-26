@@ -36,7 +36,7 @@ const finite = (xs: number[]): number[] => xs.filter((v) => Number.isFinite(v));
  *  `groupsFromColumns` honoured `metadata.x_column_name` for the x column while
  *  the two label builders hardcoded "x", so the same column was "Time (s)" in
  *  columns mode and "x" in a group label. */
-const columnDisplayName = (data: DataStruct, col: number): string =>
+export const columnDisplayName = (data: DataStruct, col: number): string =>
   col < 0
     ? String(data.metadata?.["x_column_name"] ?? "x")
     : (data.labels[col] ?? `col ${col}`);

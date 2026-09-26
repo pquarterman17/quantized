@@ -305,6 +305,7 @@ export function usePeakWizard(): PeakWizardState {
   const model = useModelFit({
     active, segment, workingY, baseline, baselineOn: recipe.baseline.method !== "none",
     peaks: included, model: recipe.model, fit: recipe.fit, setFit,
+    xKey, recipeName: recipe.name, baselineMethod: recipe.baseline.method,
   });
   // Step ⑤ reads the ACTIVE engine's CURRENT fit only: a stale model result
   // (table edited since) is blocked, with the reason shown there.

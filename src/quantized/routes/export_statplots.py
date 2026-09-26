@@ -95,6 +95,16 @@ class StatplotFigureRequest(BaseModel):
     # None/absent = today's single-panel behaviour, byte-identical; `data`/
     # `labels` above are still required by the schema but unused in that case.
     facets: list[StatplotFacet] | None = None
+    # P2.6 box 2 (calc.figure_group_notes): `show_n` annotates each group's
+    # n on a top axis; `caveat` is the frontend's small-n / unbalanced-groups
+    # caveat, drawn verbatim as a footnote. An EMPTY group in `data` (box/
+    # violin/strip) is a missing level: it keeps its slot with an n=0 marker.
+    # Defaults off/None -- byte-identical to before.
+    show_n: bool = False
+    caveat: str | None = None
+    # Per group: lift the connect-means line BEFORE it (a hidden empty level
+    # sat there -- the screen's AxisSlot.gapBefore). None = no forced breaks.
+    connect_breaks: list[bool] | None = None
 
 
 @router.post("/statplot-figure")
@@ -118,7 +128,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
             img = render_stat_facets_figure(
                 panels, default_kind=req.kind, dist=req.dist, bins=req.bins, fit=req.fit,
                 title=req.title, x_label=req.x_label, y_label=req.y_label,
-                fmt=req.fmt, style=req.style, dpi=dpi,
+                fmt=req.fmt, style=req.style, dpi=dpi, show_n=req.show_n, caveat=req.caveat,
             )
         else:
             from quantized.calc.figure_statplots import render_statplot_figure  # lazy
@@ -131,6 +141,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 title=req.title, x_label=req.x_label, y_label=req.y_label, dpi=dpi,
                 show_points=req.show_points, point_row_indices=req.point_row_indices,
                 show_mean_ci=req.show_mean_ci, show_connect_means=req.show_connect_means,
+                show_n=req.show_n, caveat=req.caveat, connect_breaks=req.connect_breaks,
             )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -150,15 +161,25 @@ class CategoricalFacet(BaseModel):
     label: str
     groups: list[str]
     series: list[str]
-    values: list[list[float]]
+    values: list[list[float | None]]
     errors: list[list[float | None]] | None = None
+    counts: list[list[int]] | None = None
 
 
 class CategoricalFigureRequest(BaseModel):
     groups: list[str]  # category tick labels, in axis order
     series: list[str]  # series (legend) labels, in stack/cluster order
-    values: list[list[float]]  # [group][series] bar height (mean)
+    # [group][series] bar height (mean). `null` = no finite value in that
+    # cell (P2.6 box 2): no bar is drawn, and a category that is null in
+    # every series keeps its tick with an n=0 marker. It used to be
+    # `list[list[float]]`, so a bar chart with an all-NaN level 422'd on
+    # export (JSON has no NaN; the client's NaN mean arrived as null).
+    values: list[list[float | None]]
     errors: list[list[float | None]] | None = None  # [group][series] SEM
+    # P2.6 box 2: [group][series] sample sizes -> an n=K label over each
+    # grouped bar; `caveat` -> footnote. Defaults off -- byte-identical.
+    counts: list[list[int]] | None = None
+    caveat: str | None = None
     stacked: bool = False
     fmt: str = "pdf"
     style: str = "default"
@@ -193,13 +214,14 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
             panels: list[dict[str, Any]] = [
                 {
                     "label": f.label, "groups": f.groups, "series": f.series,
-                    "values": f.values, "errors": f.errors,
+                    "values": f.values, "errors": f.errors, "counts": f.counts,
                 }
                 for f in req.facets
             ]
             img = render_categorical_facets_figure(
                 panels, stacked=req.stacked, title=req.title, x_label=req.x_label,
                 y_label=req.y_label, fmt=req.fmt, style=req.style, dpi=dpi,
+                caveat=req.caveat,
             )
         else:
             from quantized.calc.figure_categorical import render_categorical_figure  # lazy
@@ -207,7 +229,7 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
             img = render_categorical_figure(
                 req.groups, req.series, req.values, req.errors, stacked=req.stacked,
                 fmt=req.fmt, style=req.style, title=req.title, x_label=req.x_label,
-                y_label=req.y_label, dpi=dpi,
+                y_label=req.y_label, dpi=dpi, counts=req.counts, caveat=req.caveat,
             )
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc

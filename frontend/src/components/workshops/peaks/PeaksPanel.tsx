@@ -8,12 +8,16 @@
 // (`Dataset.peakTable`, lib/peakTable.ts), so it survives a dataset switch, a
 // panel close, and a `.dwk` save/reopen, and each row carries an "incl."
 // checkbox whose state travels with it. Williamson-Hall's "Use fitted peaks"
-// reads that same table and honours the exclusions set here.
+// reads that same table and honours the exclusions set here. A table the Peak
+// Analyzer's model fit published carries standard errors: its cells read
+// "value ± error" (PeakValueCell), and the header names that producer.
 
 import { useState } from "react";
 
 import PeakFitControls from "./PeakFitControls";
 import PeakTable from "./PeakTable";
+import PeakValueCell from "./PeakValueCell";
+import { peakReportResult } from "./peakReport";
 import { usePeakTableSelection } from "./peakSelection";
 import { usePeaks } from "./usePeaks";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -69,7 +73,9 @@ export default function PeaksPanel() {
     try {
       const { report } = await reportEmit({
         kind: "multipeak_fit",
-        result: fitResult as unknown as Record<string, unknown>,
+        // A published model-fit table's errors and objective ride along, so
+        // the report says what the table shows (./peakReport).
+        result: peakReportResult(fitResult, peakTable, active.id),
         title: `Peak fit — ${active.name}`,
         source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
       });
@@ -139,20 +145,34 @@ export default function PeaksPanel() {
   // Require the table to be THIS dataset's and to have the same row count
   // before pairing at all; otherwise no checkbox renders for that one frame,
   // which is the honest answer rather than a wrong one.
+  //
+  // ONE SOURCE FOR THE NUMBERS (2026-09-26). Once paired, every value cell and
+  // the header metrics read the DURABLE table, never `fitResult` — the local
+  // copy usePeakManualEdits re-derives from the table only after an async
+  // resolve. Reading the copy let a hand edit of FWHM or height, or a table
+  // published from the Peak Analyzer, show the OLD value beside the NEW row's
+  // error for that interval. `fitResult` still drives what the table cannot:
+  // the unpublished-fit case, and the row selection (whose reset is keyed on
+  // that array's identity).
   const entries =
     peakTable &&
     peakTable.provenance.datasetId === active?.id &&
     peakTable.peaks.length === (fitResult?.peaks.length ?? -1)
       ? peakTable.peaks
       : null;
-  const fitRows = (fitResult?.peaks ?? []).map((p, i) => {
+  const shown = entries ?? fitResult?.peaks ?? [];
+  const metrics = entries && peakTable ? peakTable.provenance : fitResult;
+  // Errors are shown only for a table that measured them (a model fit's).
+  const modelFit = entries !== null && peakTable?.provenance.producer === "model_fit";
+  const fitRows = shown.map((p, i) => {
     const entry = entries?.[i];
+    const errOf = modelFit ? entry : undefined;
     return [
       i + 1,
-      fmtNum(p.center),
-      fmtNum(p.height),
-      fmtNum(p.fwhm),
-      fmtNum(p.area),
+      <PeakValueCell key="c" value={p.center} field="center" entry={errOf} />,
+      <PeakValueCell key="h" value={p.height} field="height" entry={errOf} />,
+      <PeakValueCell key="w" value={p.fwhm} field="fwhm" entry={errOf} />,
+      <PeakValueCell key="a" value={p.area} field="area" entry={errOf} />,
       entry ? (
         <input
           type="checkbox"
@@ -270,16 +290,19 @@ export default function PeaksPanel() {
       {fitResult && fitResult.peaks.length > 0 && (
         <div style={{ marginTop: 8 }}>
           <div className="qzk-ds-meta" style={{ ...faint, marginBottom: 4 }}>
-            {fitResult.model} ·{" "}
-            {fitResult.R2 != null
-              ? `R² = ${fmtNum(fitResult.R2)}`
+            {metrics?.model} ·{" "}
+            {metrics?.R2 != null
+              ? `R² = ${fmtNum(metrics.R2)}`
               : !entries
                 ? "" // table not yet paired with this fit (one frame on a switch)
                 : peakTable?.provenance.method === "independent"
                   ? "independent fits"
-                  : "fit metrics cleared by manual changes"}
-            {manualEditCount(fitResult.peaks) > 0 && ` · ${manualEditCount(fitResult.peaks)} edited by hand`}
-            {fitResult.rmse != null && ` · RMSE = ${fmtNum(fitResult.rmse)}`}
+                  : modelFit && peakTable?.provenance.ssr != null
+                    ? "R² undefined" // an unedited model fit (SSR clears with R² on any edit)
+                    : "fit metrics cleared by manual changes"}
+            {modelFit && " · Peak Analyzer model fit"}
+            {manualEditCount(shown) > 0 && ` · ${manualEditCount(shown)} edited by hand`}
+            {metrics?.rmse != null && ` · RMSE = ${fmtNum(metrics.rmse)}`}
             {excludedCount > 0 && ` · ${excludedCount} excluded`}
           </div>
           <PeakTable
