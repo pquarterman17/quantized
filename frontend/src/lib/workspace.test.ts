@@ -6,7 +6,7 @@ import { createFigureDocument } from "./figureDocument";
 import type { OriginFigureEntry } from "./originFigures";
 import type { OriginFidelityEntry } from "./originFidelity";
 import { createPageDocument } from "./pageDocumentActions";
-import { serializePeakTable, type PeakTable } from "./peakTable";
+import { INVALID_SAVED_ERROR, serializePeakTable, type PeakTable } from "./peakTable";
 import { peakTableFromFit, withPeakExcluded } from "./peakTableFit";
 import { captureRecipe, type PlotRecipe } from "./plotRecipe";
 import { emptySpec, type PlotSpec, type SavedPlotSpec } from "./plotspec";
@@ -2682,6 +2682,10 @@ describe("workspace durable peak table (PRIMARY_SOFTWARE_AUDIT_PLAN P2.1)", () =
     doc.datasets[0].peakTable.provenance.objective = { kind: "rmse", value: 1 };
     const t = parseWorkspace(JSON.stringify(doc)).datasets[0].peakTable!;
     expect([t.peaks[0].centerErr, t.peaks[0].fwhmErr, t.peaks[0].heightErr, t.peaks[0].areaErr]).toEqual([null, null, null, null]);
+    // an unusable error keeps a reason; a plain null (areaErr) needs none
+    expect(t.peaks[0].errReasons).toEqual({
+      center: INVALID_SAVED_ERROR, fwhm: INVALID_SAVED_ERROR, height: INVALID_SAVED_ERROR,
+    });
     expect("errReasons" in t.peaks[1]).toBe(false);
     expect("objective" in t.provenance).toBe(false);
   });

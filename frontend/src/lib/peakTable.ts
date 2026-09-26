@@ -267,6 +267,9 @@ function err(v: unknown): number | null {
   return n !== null && n > 0 ? n : null;
 }
 
+/** The `errReasons` text for an error the `.dwk` held but could not use. */
+export const INVALID_SAVED_ERROR = "invalid error in the saved file (not a positive number); treated as not reported";
+
 function parseEntry(v: unknown, index: number): PeakTableEntry | null {
   if (typeof v !== "object" || v === null) return null;
   const o = v as Record<string, unknown>;
@@ -297,13 +300,17 @@ function parseEntry(v: unknown, index: number): PeakTableEntry | null {
   if ("areaErr" in o) entry.areaErr = err(o.areaErr);
   if ("fwhmG" in o) entry.fwhmG = num(o.fwhmG);
   if ("fwhmL" in o) entry.fwhmL = num(o.fwhmL);
-  const reasons = o.errReasons;
-  if (typeof reasons === "object" && reasons !== null) {
-    const r = reasons as Record<string, unknown>;
-    const kept: Partial<Record<PeakErrKey, string>> = {};
-    for (const k of PEAK_ERR_KEYS) if (typeof r[k] === "string" && r[k]) kept[k] = r[k];
-    if (Object.keys(kept).length > 0) entry.errReasons = kept;
+  const r = (typeof o.errReasons === "object" && o.errReasons !== null ? o.errReasons : {}) as Record<string, unknown>;
+  const kept: Partial<Record<PeakErrKey, string>> = {};
+  for (const k of PEAK_ERR_KEYS) {
+    // An error that WAS written but is not a positive finite number (0, a
+    // negative, text) reopens as null — and says so, rather than reading as
+    // an error the fit simply never reported.
+    const raw = o[`${k}Err`];
+    if (typeof r[k] === "string" && r[k]) kept[k] = r[k];
+    else if (raw !== undefined && raw !== null && err(raw) === null) kept[k] = INVALID_SAVED_ERROR;
   }
+  if (Object.keys(kept).length > 0) entry.errReasons = kept;
   return entry;
 }
 
