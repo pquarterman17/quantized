@@ -288,6 +288,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/crystallography/bond-angle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Atomic Bond Angle
+         * @description Angle atom1-vertex-atom3 from fractional unit-cell coordinates.
+         */
+        post: operations["atomic_bond_angle_api_crystallography_bond_angle_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/crystallography/cell": {
         parameters: {
             query?: never;
@@ -5296,6 +5316,53 @@ export interface components {
              */
             unit?: string;
         };
+        /** BondAngleRequest */
+        BondAngleRequest: {
+            /** A */
+            a: number;
+            /**
+             * Alpha
+             * @default 90
+             */
+            alpha?: number;
+            /** Atom1 */
+            atom1: [
+                number,
+                number,
+                number
+            ];
+            /** Atom3 */
+            atom3: [
+                number,
+                number,
+                number
+            ];
+            /** B */
+            b: number;
+            /**
+             * Beta
+             * @default 90
+             */
+            beta?: number;
+            /** C */
+            c: number;
+            /**
+             * Gamma
+             * @default 90
+             */
+            gamma?: number;
+            /**
+             * Minimum Image
+             * @default true
+             */
+            minimum_image?: boolean;
+            /** Vertex */
+            vertex: [
+                number,
+                number,
+                number
+            ];
+        };
         /** BookDataRequest */
         BookDataRequest: {
             /** Book Id */
@@ -10080,6 +10147,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["InterplanarAngleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    atomic_bond_angle_api_crystallography_bond_angle_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BondAngleRequest"];
             };
         };
         responses: {

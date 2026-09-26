@@ -25,6 +25,7 @@ vi.mock("../../../lib/api/reference", () => ({
 }));
 
 vi.mock("../../../lib/api/crystallography", () => ({
+  crystalBondAngle: vi.fn(),
   crystalInterplanarAngle: vi.fn(),
 }));
 

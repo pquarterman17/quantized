@@ -52,6 +52,7 @@ import math
 from collections.abc import Callable
 from typing import Any
 
+from quantized.calc.bond_geometry import bond_angle
 from quantized.calc.constants import constants
 from quantized.calc.miller_bravais import (
     direction_uvtw_to_uvw,
@@ -66,6 +67,7 @@ from quantized.calc.plane_spacings import plane_spacings
 # calc.plane_spacings modules — see each module's docstring for why).
 __all__ = [
     "CRYSTAL_SYSTEMS",
+    "bond_angle",
     "cell_volume",
     "d_spacing",
     "direction_uvtw_to_uvw",

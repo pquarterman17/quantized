@@ -507,6 +507,103 @@
         "title": "BohrMagnetonRequest",
         "type": "object"
       },
+      "BondAngleRequest": {
+        "properties": {
+          "a": {
+            "title": "A",
+            "type": "number"
+          },
+          "alpha": {
+            "default": 90.0,
+            "title": "Alpha",
+            "type": "number"
+          },
+          "atom1": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Atom1",
+            "type": "array"
+          },
+          "atom3": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Atom3",
+            "type": "array"
+          },
+          "b": {
+            "title": "B",
+            "type": "number"
+          },
+          "beta": {
+            "default": 90.0,
+            "title": "Beta",
+            "type": "number"
+          },
+          "c": {
+            "title": "C",
+            "type": "number"
+          },
+          "gamma": {
+            "default": 90.0,
+            "title": "Gamma",
+            "type": "number"
+          },
+          "minimum_image": {
+            "default": true,
+            "title": "Minimum Image",
+            "type": "boolean"
+          },
+          "vertex": {
+            "maxItems": 3,
+            "minItems": 3,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Vertex",
+            "type": "array"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "c",
+          "atom1",
+          "vertex",
+          "atom3"
+        ],
+        "title": "BondAngleRequest",
+        "type": "object"
+      },
       "BookDataRequest": {
         "properties": {
           "book_id": {
@@ -12062,6 +12159,50 @@
           }
         },
         "summary": "Angle",
+        "tags": [
+          "crystallography"
+        ]
+      }
+    },
+    "/api/crystallography/bond-angle": {
+      "post": {
+        "description": "Angle atom1-vertex-atom3 from fractional unit-cell coordinates.",
+        "operationId": "atomic_bond_angle_api_crystallography_bond_angle_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BondAngleRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Atomic Bond Angle Api Crystallography Bond Angle Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Atomic Bond Angle",
         "tags": [
           "crystallography"
         ]

@@ -13,6 +13,7 @@ import pytest
 
 from quantized.calc.crystallography import (
     CRYSTAL_SYSTEMS,
+    bond_angle,
     cell_volume,
     d_spacing,
     direction_uvtw_to_uvw,
@@ -348,3 +349,82 @@ def test_interplanar_angle_rhombohedral_defaults_beta_gamma_to_alpha() -> None:
     # reduce exactly to the cubic (100)^(110) = 45 deg identity.
     r = interplanar_angle("rhombohedral", 4.0, 0.0, 0.0, 1, 0, 0, 1, 1, 0, alpha=90.0)
     assert r["angle_deg"] == pytest.approx(45.0, abs=1e-9)
+
+
+# ── Atomic bond angle (fractional coordinates) ──────────────────────────────
+def test_bond_angle_cubic_reference_is_90deg() -> None:
+    result = bond_angle(4.0, 4.0, 4.0, 90.0, 90.0, 90.0, (0.25, 0, 0), (0, 0, 0), (0, 0.25, 0))
+    assert result["angle_deg"] == pytest.approx(90.0, abs=1e-12)
+    assert result["distance1"] == pytest.approx(1.0, abs=1e-12)
+    assert result["distance3"] == pytest.approx(1.0, abs=1e-12)
+    assert result["image1"] == [0, 0, 0]
+    assert result["image3"] == [0, 0, 0]
+
+
+def test_bond_angle_minimum_image_wraps_across_cell_boundary() -> None:
+    args = (4.0, 4.0, 4.0, 90.0, 90.0, 90.0, (0.05, 0, 0), (0.95, 0, 0), (0.85, 0.1, 0))
+    wrapped = bond_angle(*args)
+    same_cell = bond_angle(*args, minimum_image=False)
+    assert wrapped["angle_deg"] == pytest.approx(135.0, abs=1e-12)
+    assert same_cell["angle_deg"] == pytest.approx(45.0, abs=1e-12)
+    assert wrapped["image1"] == [1, 0, 0]
+    assert wrapped["image3"] == [0, 0, 0]
+
+
+def test_bond_angle_triclinic_matches_explicit_cartesian_vectors() -> None:
+    cell = (5.0, 6.0, 7.0, 80.0, 95.0, 105.0)
+    atom1 = (0.2, 0.1, 0.0)
+    vertex = (0.0, 0.0, 0.0)
+    atom3 = (0.0, 0.15, 0.1)
+    result = bond_angle(*cell, atom1, vertex, atom3, minimum_image=False)
+
+    alpha, beta, gamma = map(math.radians, cell[3:])
+    basis = (
+        (cell[0], 0.0, 0.0),
+        (cell[1] * math.cos(gamma), cell[1] * math.sin(gamma), 0.0),
+        (
+            cell[2] * math.cos(beta),
+            cell[2] * (math.cos(alpha) - math.cos(beta) * math.cos(gamma)) / math.sin(gamma),
+            cell_volume(*cell) / (cell[0] * cell[1] * math.sin(gamma)),
+        ),
+    )
+    vectors = []
+    for fractional in (atom1, atom3):
+        vectors.append(tuple(sum(fractional[i] * basis[i][j] for i in range(3)) for j in range(3)))
+    norm1 = math.sqrt(sum(value * value for value in vectors[0]))
+    norm3 = math.sqrt(sum(value * value for value in vectors[1]))
+    expected = math.degrees(
+        math.acos(sum(x * y for x, y in zip(*vectors, strict=True)) / (norm1 * norm3))
+    )
+    assert result["angle_deg"] == pytest.approx(expected, rel=1e-12)
+
+
+def test_bond_angle_skew_cell_uses_exact_not_componentwise_minimum_image() -> None:
+    # For gamma=30 degrees the a and b vectors are nearly parallel.  The
+    # component-wise wrapped delta (0.49, 0.49, 0) is not the shortest image;
+    # translating one component by -1 produces a much shorter displacement.
+    result = bond_angle(
+        1.0,
+        1.0,
+        1.0,
+        90.0,
+        90.0,
+        30.0,
+        (0.49, 0.49, 0.0),
+        (0.0, 0.0, 0.0),
+        (0.0, 0.0, 0.25),
+    )
+    componentwise_distance = 0.49 * math.sqrt(2.0 + 2.0 * math.cos(math.radians(30.0)))
+    assert result["distance1"] < componentwise_distance
+    assert result["image1"] != [0, 0, 0]
+
+
+def test_bond_angle_rejects_neighbour_equivalent_to_vertex() -> None:
+    with pytest.raises(ValueError, match="distinct from the vertex"):
+        bond_angle(4.0, 4.0, 4.0, 90.0, 90.0, 90.0, (1, 0, 0), (0, 0, 0), (0, 0.2, 0))
+
+
+@pytest.mark.parametrize("coordinate", [(0.0, 0.0), (0.0, math.inf, 0.0)])
+def test_bond_angle_rejects_invalid_fractional_coordinate(coordinate: tuple[float, ...]) -> None:
+    with pytest.raises(ValueError, match="atom1"):
+        bond_angle(4.0, 4.0, 4.0, 90.0, 90.0, 90.0, coordinate, (0, 0, 0), (0, 0.2, 0))

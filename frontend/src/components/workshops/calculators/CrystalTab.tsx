@@ -11,6 +11,7 @@ import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { crystalInterplanarAngle } from "../../../lib/api/crystallography";
+import BondAngleCard from "./BondAngleCard";
 import { Card, CopyButton, ROW, dual, resultLine, useCard, withTouch } from "./shared";
 import {
   assembleCell,
@@ -291,6 +292,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
         </div>
         {resultLine(angleCard.result)}
       </Card>
+      <BondAngleCard crystal={c.crystal} />
     </div>
   );
 }

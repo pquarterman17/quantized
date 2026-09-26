@@ -100,3 +100,52 @@ def test_angle_zero_hkl_is_422() -> None:
     body = {"system": "cubic", "a": 4.0, "h1": 0, "k1": 0, "l1": 0, "h2": 1, "k2": 1, "l2": 0}
     r = client.post("/api/crystallography/angle", json=body)
     assert r.status_code == 422
+
+
+# ── Atomic bond angle ────────────────────────────────────────────────────────
+def test_bond_angle_cubic_reference() -> None:
+    response = client.post(
+        "/api/crystallography/bond-angle",
+        json={
+            "a": 4.0,
+            "b": 4.0,
+            "c": 4.0,
+            "atom1": [0.25, 0.0, 0.0],
+            "vertex": [0.0, 0.0, 0.0],
+            "atom3": [0.0, 0.25, 0.0],
+        },
+    )
+    assert response.status_code == 200
+    assert response.json()["angle_deg"] == pytest.approx(90.0, abs=1e-12)
+    assert response.json()["distance1"] == pytest.approx(1.0, abs=1e-12)
+
+
+def test_bond_angle_equivalent_neighbour_is_422() -> None:
+    response = client.post(
+        "/api/crystallography/bond-angle",
+        json={
+            "a": 4.0,
+            "b": 4.0,
+            "c": 4.0,
+            "atom1": [1.0, 0.0, 0.0],
+            "vertex": [0.0, 0.0, 0.0],
+            "atom3": [0.0, 0.25, 0.0],
+        },
+    )
+    assert response.status_code == 422
+    assert "distinct from the vertex" in response.json()["detail"]
+
+
+def test_bond_angle_wrong_coordinate_length_is_422() -> None:
+    response = client.post(
+        "/api/crystallography/bond-angle",
+        json={
+            "a": 4.0,
+            "b": 4.0,
+            "c": 4.0,
+            "atom1": [0.25, 0.0],
+            "vertex": [0.0, 0.0, 0.0],
+            "atom3": [0.0, 0.25, 0.0],
+        },
+    )
+    assert response.status_code == 422
