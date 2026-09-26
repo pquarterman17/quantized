@@ -5,27 +5,32 @@ module doc.
 
 from __future__ import annotations
 
+import errno
+import ntpath
 import os
-import sys
 from pathlib import Path
 
 import pytest
 
-from quantized.desktop_source_probe import probe_source_path, volume_present
+from quantized.desktop_source_probe import _on_network_share, probe_source_path, volume_present
+from unc_fakes import (
+    ERROR_BAD_NET_NAME,
+    ERROR_BAD_NETPATH,
+    ERROR_INVALID_NAME,
+    ERROR_LOGON_FAILURE,
+    ERROR_NO_LOGON_SERVERS,
+    ERROR_NO_NET_OR_BAD_PATH,
+    ERROR_NOT_AUTHENTICATED,
+    NETWORK_EINVAL_WINERRORS,
+    unmounted_volume_path,
+    windows_oserror,
+)
 
 
 def _file(tmp_path: Path, name: str = "run.csv", content: str = "T,M\n1,10\n") -> Path:
     p = tmp_path / name
     p.write_text(content, encoding="utf-8")
     return p
-
-
-def _unmounted_volume_path() -> str:
-    if os.name == "nt":
-        b = chr(92)
-        return b + b + "no-such-server" + b + "share" + b + "run.dat"
-    base = "/Volumes" if sys.platform == "darwin" else "/mnt"
-    return f"{base}/qz-no-such-volume/run.dat"
 
 
 # --- state classification ----------------------------------------------
@@ -76,8 +81,8 @@ def test_probe_missing_when_the_volume_is_reachable(tmp_path: Path) -> None:
     assert out["state"] == "missing"
 
 
-def test_probe_offline_when_the_volume_is_not_mounted() -> None:
-    out = probe_source_path(_unmounted_volume_path(), compute_checksum=False)
+def test_probe_offline_when_the_volume_is_not_mounted(monkeypatch: pytest.MonkeyPatch) -> None:
+    out = probe_source_path(unmounted_volume_path(monkeypatch), compute_checksum=False)
     assert out["state"] == "offline"
 
 
@@ -112,7 +117,7 @@ def test_probe_stale_mount_oserror_is_offline_not_invalid(
     ETIMEDOUT from stat — NOT ENOENT — and must still read as offline
     (the volume is gone), never as a malformed path, or every downstream
     consumer offers Locate/cleanup for a project that is fine."""
-    target = _unmounted_volume_path()
+    target = unmounted_volume_path(monkeypatch)
     real_stat = os.stat
 
     def _stale(path: str, *a: object, **kw: object) -> object:
@@ -139,6 +144,175 @@ def test_probe_generic_oserror_on_a_live_volume_is_invalid(
 
     monkeypatch.setattr("quantized.desktop_source_probe.os.stat", _boom)
     assert probe_source_path(target, compute_checksum=False)["state"] == "invalid"
+
+
+@pytest.mark.parametrize(
+    "winerror", (*NETWORK_EINVAL_WINERRORS, ERROR_NOT_AUTHENTICATED, ERROR_NO_LOGON_SERVERS)
+)
+def test_probe_network_winerror_is_offline_on_a_live_non_unc_volume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, winerror: int
+) -> None:
+    """A mapped network drive (``Z:``) is not recognisable as a share from
+    the path, and its root still answers ``isdir`` (a lapsed SMB session
+    keeps the cached connection). The winerror alone says the link failed,
+    so it is `offline`, not the `invalid` a plain EINVAL on a live volume
+    would get."""
+    target = str(tmp_path / "run.csv")
+    real_stat = os.stat
+
+    def _net(path: str, *a: object, **kw: object) -> object:
+        if path == target:
+            raise windows_oserror(winerror, path)
+        return real_stat(path, *a, **kw)
+
+    monkeypatch.setattr("quantized.desktop_source_probe.os.stat", _net)
+    assert probe_source_path(target, compute_checksum=False)["state"] == "offline"
+
+
+def test_probe_malformed_winerror_on_a_live_volume_is_invalid(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    target = str(tmp_path / "bad name")
+    real_stat = os.stat
+
+    def _bad(path: str, *a: object, **kw: object) -> object:
+        if path == target:
+            raise windows_oserror(ERROR_INVALID_NAME, path)
+        return real_stat(path, *a, **kw)
+
+    monkeypatch.setattr("quantized.desktop_source_probe.os.stat", _bad)
+    assert probe_source_path(target, compute_checksum=False)["state"] == "invalid"
+
+
+@pytest.mark.parametrize("name", ["ESTALE", "ENOTCONN", "ETIMEDOUT", "EHOSTDOWN"])
+def test_probe_posix_network_errno_is_offline_on_a_live_volume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    """The POSIX side of the same rule: a stale NFS handle answers ESTALE, a
+    dead FUSE/sshfs mount ENOTCONN, a hung NFS mount ETIMEDOUT, and none is
+    a malformed path even when the path sits outside the known mount
+    prefixes."""
+    code = getattr(errno, name, None)
+    if code is None:
+        pytest.skip(f"errno.{name} is not defined on this platform")
+    target = str(tmp_path / "run.csv")
+    real_stat = os.stat
+
+    def _net(path: str, *a: object, **kw: object) -> object:
+        if path == target:
+            raise OSError(code, name, path)
+        return real_stat(path, *a, **kw)
+
+    monkeypatch.setattr("quantized.desktop_source_probe.os.stat", _net)
+    assert probe_source_path(target, compute_checksum=False)["state"] == "offline"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="the mount-prefix rule is POSIX-only")
+@pytest.mark.parametrize(("under_prefix", "expected"), [(True, "offline"), (False, "invalid")])
+def test_probe_eio_is_offline_only_under_a_volume_prefix(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, under_prefix: bool, expected: str
+) -> None:
+    """EIO is what a CIFS mount or a yanked USB drive gives once its device
+    is gone, so under a removable/network mount prefix it is `offline`. A
+    failing local disk gives the same EIO and will not come back, so
+    elsewhere it keeps the old `invalid`."""
+    volume = tmp_path / "vol"
+    volume.mkdir()
+    target = str(volume / "run.csv")
+    if under_prefix:
+        monkeypatch.setattr(
+            "quantized.desktop_source_probe._POSIX_VOLUME_PREFIXES", (str(tmp_path),)
+        )
+    real_stat = os.stat
+
+    def _eio(path: str, *a: object, **kw: object) -> object:
+        if path == target:
+            raise OSError(errno.EIO, "Input/output error", path)
+        return real_stat(path, *a, **kw)
+
+    monkeypatch.setattr("quantized.desktop_source_probe.os.stat", _eio)
+    assert probe_source_path(target, compute_checksum=False)["state"] == expected
+
+
+@pytest.mark.parametrize("winerror", [ERROR_BAD_NETPATH, ERROR_BAD_NET_NAME])
+def test_probe_enoent_network_winerror_is_offline_on_a_live_volume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, winerror: int
+) -> None:
+    """ERROR_BAD_NETPATH and ERROR_BAD_NET_NAME arrive as FileNotFoundError,
+    but they say the server or share was not found, not the file. A mapped
+    drive whose root still answers from a cached connection is `offline`,
+    not `missing`."""
+    target = str(tmp_path / "run.csv")
+    real_stat = os.stat
+
+    def _net(path: str, *a: object, **kw: object) -> object:
+        if path == target:
+            raise windows_oserror(winerror, path)
+        return real_stat(path, *a, **kw)
+
+    monkeypatch.setattr("quantized.desktop_source_probe.os.stat", _net)
+    assert probe_source_path(target, compute_checksum=False)["state"] == "offline"
+
+
+@pytest.mark.parametrize("winerror", [ERROR_NO_NET_OR_BAD_PATH, ERROR_LOGON_FAILURE])
+def test_probe_ambiguous_network_winerror_keeps_invalid_on_a_live_non_unc_volume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, winerror: int
+) -> None:
+    """Codes that may mean a mistyped path or a wrong password are not taken
+    as "will come back on its own", which `offline` promises and which hides
+    relink. On a UNC path the UNC rule still reads them `offline`."""
+    target = str(tmp_path / "run.csv")
+    real_stat = os.stat
+
+    def _amb(path: str, *a: object, **kw: object) -> object:
+        if path == target:
+            raise windows_oserror(winerror, path)
+        return real_stat(path, *a, **kw)
+
+    monkeypatch.setattr("quantized.desktop_source_probe.os.stat", _amb)
+    assert probe_source_path(target, compute_checksum=False)["state"] == "invalid"
+
+
+def test_probe_ok_does_not_stat_the_file_a_second_time(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The regular-file check reads the stat already in hand. A second stat
+    through `os.path.isfile` is another SMB round trip, and a share that
+    drops between the two made it return False, reported `invalid`."""
+    f = _file(tmp_path)
+
+    def _dropped(path: object) -> bool:
+        return False
+
+    monkeypatch.setattr(os.path, "isfile", _dropped)
+    assert probe_source_path(str(f), compute_checksum=False)["state"] == "ok"
+
+
+_B = chr(92)
+
+
+@pytest.mark.parametrize(
+    ("path", "expected"),
+    [
+        (f"{_B}{_B}server{_B}share{_B}f", True),
+        ("//server/share/f", True),
+        (f"{_B}{_B}?{_B}UNC{_B}server{_B}share{_B}f", True),
+        (f"{_B}{_B}?{_B}unc{_B}server{_B}share{_B}f", True),
+        (f"{_B}{_B}.{_B}UNC{_B}server{_B}share{_B}f", True),
+        (f"{_B}{_B}?{_B}C:{_B}f", False),
+        (f"{_B}{_B}.{_B}C:{_B}f", False),
+        (f"C:{_B}f", False),
+    ],
+)
+def test_on_network_share_uses_windows_drive_parsing(
+    monkeypatch: pytest.MonkeyPatch, path: str, expected: bool
+) -> None:
+    """Driven by the real ntpath.splitdrive, so the Windows parsing is
+    exercised on every host. An extended-length local path (``\\\\?\\C:``)
+    must not count as a share just because it starts with two
+    backslashes."""
+    monkeypatch.setattr(os.path, "splitdrive", ntpath.splitdrive)
+    assert _on_network_share(path) is expected
 
 
 def test_probe_degrades_to_invalid_when_stat_raises_valueerror_not_oserror(
@@ -255,5 +429,5 @@ def test_volume_present_true_for_a_normal_reachable_path(tmp_path: Path) -> None
     assert volume_present(str(tmp_path)) is True
 
 
-def test_volume_present_false_for_an_unmounted_volume() -> None:
-    assert volume_present(_unmounted_volume_path()) is False
+def test_volume_present_false_for_an_unmounted_volume(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert volume_present(unmounted_volume_path(monkeypatch)) is False
