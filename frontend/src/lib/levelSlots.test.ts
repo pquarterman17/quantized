@@ -180,6 +180,13 @@ describe("countLabels / isCaveated / levelNotice", () => {
     expect(levelNotice([0, 0])).toBeNull();
   });
 
+  it("says 'Small groups', not 'Unbalanced', when only the low-n rule fired (PR #433 nit)", () => {
+    expect(levelNotice([2])).toMatch(new RegExp(`^${CAVEAT} Small groups \\(n = 2 to 2; 1 group with n < 3\\)`));
+    expect(levelNotice([2, 2])).toContain("Small groups");
+    expect(levelNotice([10, 2])).toContain("Small groups"); // ratio exactly 0.2: not unbalanced
+    expect(levelNotice([11, 2])).toContain("Unbalanced groups"); // ratio 0.18
+  });
+
   it("never prints a false inequality: a ratio just under 0.2 is floored, not rounded up", () => {
     expect(levelNotice([1000, 199])).toContain("min/max n = 0.19 < 0.2");
   });

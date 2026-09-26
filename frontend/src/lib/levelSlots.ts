@@ -340,8 +340,11 @@ export function levelNotice(counts: readonly number[], hiddenEmpty = 0, capped =
       low > 0 ? `${low} group${low === 1 ? "" : "s"} with n < ${LOW_N}` : null,
     ].filter((w): w is string => w !== null);
     if (why.length > 0) {
+      // "Unbalanced" only when the ratio rule fired; a lone n=2 group, or
+      // several equally tiny ones, are small, not unbalanced (PR #433 nit).
+      const head = ratio < UNBALANCED_RATIO ? "Unbalanced groups" : "Small groups";
       parts.push(
-        `${CAVEAT} Unbalanced groups (n = ${min} to ${max}; ${why.join("; ")}): ` +
+        `${CAVEAT} ${head} (n = ${min} to ${max}; ${why.join("; ")}): ` +
           `summary stats and error bars on ${CAVEAT} groups are unreliable`,
       );
     }
