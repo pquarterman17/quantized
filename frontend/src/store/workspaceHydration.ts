@@ -82,6 +82,10 @@ export interface WorkspaceHydrationSlice {
   // names, see lib/workspace.mergeWorkspace); activeId, plotWindows, every
   // view-state field, and the existing datasets are left completely alone.
   appendWorkspace: (ws: LoadedWorkspace) => void;
+  // Wipe the whole library (datasets + folders + figures + selection + view
+  // state) — the File ▸ Remove all command. Moved here from useApp.ts
+  // (2026-09-25, P2.5) because it IS loadWorkspace with an empty workspace.
+  clearAll: () => void;
 }
 
 export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): WorkspaceHydrationSlice {
@@ -266,6 +270,26 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
       adoptFitModels(ws, set, get);
     },
     appendWorkspace: (ws) => runAppendWorkspace(set, get, ws),
+    // Reuses loadWorkspace's "replace everything" reset (clears per-dataset
+    // view state, overlays, styles, folders, figures) with an empty
+    // workspace, so nothing stale survives; autosave self-clears on the
+    // resulting empty-datasets state.
+    clearAll: () => {
+      get().recordHistory("remove all");
+      get().loadWorkspace({
+        datasets: [],
+        folders: [],
+        activeId: null,
+        selectedIds: [],
+        expandedFolders: [],
+        originFigures: [],
+        originFidelity: [],
+        reports: [],
+        figureDocs: [],
+        editableFigures: [],
+      });
+      set({ status: "removed all datasets, folders, figures, and reports" });
+    },
   };
 }
 

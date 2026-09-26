@@ -135,6 +135,14 @@ describe("store load/append merge the project's fit models", () => {
     }
   });
 
+  it("remove all (clearAll, now in store/workspaceHydration.ts) empties the carry; undo brings it back", () => {
+    useApp.getState().loadWorkspace(parseWorkspace(projectText([FUTURE])));
+    useApp.getState().clearAll();
+    expect(useApp.getState().fitModelCarry).toEqual([]);
+    useApp.getState().undo();
+    expect(useApp.getState().fitModelCarry).toEqual([FUTURE]);
+  });
+
   it("undo of an open restores the previous project's carry (it is project content)", () => {
     useApp.getState().loadWorkspace(parseWorkspace(projectText([FUTURE], "a1")));
     useApp.getState().recordHistory("open workspace");

@@ -233,6 +233,29 @@ describe("SplitDatasetDialog — confirm / cancel", () => {
     expect(useApp.getState().splitDialogTargetId).toBeNull();
   });
 
+  it("P2.5: warns before splitting when rows have no split value, and records it on the children", async () => {
+    const withBlank: DataStruct = {
+      ...wobble,
+      time: [...wobble.time, 6],
+      values: [...wobble.values, [Number.NaN]],
+    };
+    useApp.setState({ datasets: [{ id: "d1", name: "run1.dat", data: withBlank }], splitDialogTargetId: "d1" });
+    render(<SplitDatasetDialog />);
+    const list = screen.getByRole("list", { name: "Transform warnings" });
+    expect(list.textContent).toBe('1 row has no value in "T" and goes to a separate "(other)" dataset.');
+    fireEvent.click(screen.getByText("Split into 3 datasets"));
+    await vi.waitFor(() => expect(useApp.getState().datasets).toHaveLength(4));
+    const child = useApp.getState().datasets[1];
+    expect(child.data.metadata.worksheet_transform).toBe("split");
+    expect(child.data.metadata.transform_warnings).toEqual([list.textContent]);
+  });
+
+  it("P2.5: a split with no blank values shows no warning", () => {
+    useApp.setState({ splitDialogTargetId: "d1" });
+    render(<SplitDatasetDialog />);
+    expect(screen.queryByRole("list", { name: "Transform warnings" })).toBeNull();
+  });
+
   it("Confirm is disabled (a no-op) when only one group is detected", () => {
     useApp.setState({
       datasets: [{ id: "d1", name: "flat.dat", data: { ...wobble, values: wobble.values.map(() => [5]) } }],

@@ -63,6 +63,14 @@ export const WORKSPACE_FORMAT = "quantized-workspace";
 // saved fit models, written only when there are any; an older build never reads the key (this
 // parser picks its fields by name), so no bump.
 export const WORKSPACE_VERSION = 4;
+// v5 (P2.5, PR #431 review): written ONLY when the pipeline holds a `transform` step; every other
+// save stays v4, so ordinary files still open in older builds. The reason is an older reader's
+// `sanitizeSteps`, which silently DROPS a step kind it does not know — it would load the pipeline
+// minus its transforms and then run the later steps on the input dataset instead of the transform's
+// output, editing the source in place. A v1-v4 reader refuses v5 outright ("unsupported workspace
+// version"), which is the safe failure. Content is otherwise identical to v4. (Templates need no
+// bump: an older `parseTemplate` already rejects the whole file on an unknown step kind.)
+export const WORKSPACE_VERSION_TRANSFORM_STEPS = 5;
 
 /** The persistable slice of app state (input to serialize). The store's AppState
  *  is a structural superset, so `useApp.getState()` can be passed directly where
@@ -302,7 +310,7 @@ export function parseWorkspace(
   if (o.format !== WORKSPACE_FORMAT) {
     throw new Error("not a quantized workspace (.dwk) file");
   }
-  if (o.version !== 1 && o.version !== 2 && o.version !== 3 && o.version !== 4) {
+  if (o.version !== 1 && o.version !== 2 && o.version !== 3 && o.version !== 4 && o.version !== 5) {
     throw new Error(`unsupported workspace version: ${String(o.version)}`);
   }
   if (!Array.isArray(o.datasets)) {

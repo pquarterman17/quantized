@@ -47,7 +47,47 @@ describe("useDatasetMath", () => {
     const ds = useApp.getState().datasets;
     expect(ds).toHaveLength(3);
     expect(ds[2].name).toBe("scan1 − scan2");
-    expect(ds[2].data).toEqual(out);
+    // The backend result, plus the P2.5 provenance: operands and the
+    // (empty — same units, same x) warning list.
+    expect(ds[2].data).toEqual({
+      ...out,
+      metadata: { algebra_operands: ["scan1.dat", "scan2.dat"], worksheet_transform: "algebra", transform_warnings: [] },
+    });
+  });
+
+  it("previews unit mismatches and blocks Combine until acknowledged for THIS pick", async () => {
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "scan1.dat", data: a },
+        { id: "d2", name: "scan2.dat", data: { ...b, units: ["y"] } },
+        { id: "d3", name: "scan3.dat", data: { ...b, units: ["z"] } },
+      ],
+    });
+    vi.mocked(datasetAlgebra).mockResolvedValue(a);
+    const { result } = renderHook(() => useDatasetMath());
+    expect(result.current.warnings.map((w) => w.code)).toEqual(["unit-mismatch"]);
+    expect(result.current.blockedByUnits).toBe(true);
+
+    // compute() itself refuses too (a keyboard path must not bypass the gate).
+    await act(async () => {
+      await result.current.compute();
+    });
+    expect(useApp.getState().datasets).toHaveLength(3);
+    expect(result.current.error).toContain("units differ");
+
+    act(() => result.current.setUnitsAcknowledged(true));
+    expect(result.current.blockedByUnits).toBe(false);
+    // A different B is a different question — the acknowledgment does not carry.
+    act(() => result.current.setIdB("d3"));
+    expect(result.current.blockedByUnits).toBe(true);
+    act(() => result.current.setUnitsAcknowledged(true));
+    await act(async () => {
+      await result.current.compute();
+    });
+    const made = useApp.getState().datasets[3];
+    expect(made.data.metadata.transform_warnings).toEqual([
+      expect.stringContaining("Y units differ"),
+    ]);
   });
 
   it("passes a changed operation and interpolation through", async () => {
