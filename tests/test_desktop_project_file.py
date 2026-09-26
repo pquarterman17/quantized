@@ -121,7 +121,7 @@ def test_backend_accepts_the_frontends_current_workspace_format_and_version() ->
     # transform step (WORKSPACE_VERSION_TRANSFORM_STEPS). A native save of
     # such a project must pass this gate too.
     transform_match = re.search(r"WORKSPACE_VERSION_TRANSFORM_STEPS\s*=\s*(\d+)", src)
-    assert transform_match is not None, "WORKSPACE_VERSION_TRANSFORM_STEPS not found in workspace.ts"
+    assert transform_match is not None, "WORKSPACE_VERSION_TRANSFORM_STEPS missing"
     assert int(transform_match.group(1)) in WORKSPACE_VERSIONS, (
         "the frontend's WORKSPACE_VERSION_TRANSFORM_STEPS is not in backend WORKSPACE_VERSIONS"
     )
