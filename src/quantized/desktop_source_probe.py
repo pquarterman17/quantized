@@ -27,6 +27,7 @@ path is trusted enough to read, this module never guesses.
 
 from __future__ import annotations
 
+import errno
 import hashlib
 import os
 from typing import Any
@@ -76,6 +77,111 @@ def volume_present(resolved: str) -> bool:
         except OSError:
             return False
     return True  # not on a recognizable volume — cannot tell, so do not claim offline
+
+
+# Windows error codes a stat can return when the network, not the path, is
+# at fault. CPython maps every one of them to EINVAL (PC/errmap.h has no case
+# for them, so they fall through to its `default`), the same errno a genuinely
+# malformed name gets. Only `winerror` tells the two apart. ERROR_BAD_NETPATH
+# (53) and ERROR_BAD_NET_NAME (67) are listed for completeness even though
+# CPython maps them to ENOENT, which reaches the FileNotFoundError branch.
+_WINDOWS_NETWORK_ERRORS = frozenset(
+    {
+        51,  # ERROR_REM_NOT_LIST
+        53,  # ERROR_BAD_NETPATH
+        54,  # ERROR_NETWORK_BUSY
+        55,  # ERROR_DEV_NOT_EXIST
+        59,  # ERROR_UNEXP_NET_ERR
+        64,  # ERROR_NETNAME_DELETED
+        67,  # ERROR_BAD_NET_NAME
+        121,  # ERROR_SEM_TIMEOUT
+        1167,  # ERROR_DEVICE_NOT_CONNECTED
+        1203,  # ERROR_NO_NET_OR_BAD_PATH
+        1222,  # ERROR_NO_NETWORK
+        1225,  # ERROR_CONNECTION_REFUSED
+        1231,  # ERROR_NETWORK_UNREACHABLE
+        1232,  # ERROR_HOST_UNREACHABLE
+        1236,  # ERROR_CONNECTION_ABORTED
+        2250,  # ERROR_NOT_CONNECTED
+    }
+)
+
+# Windows error codes that mean the NAME itself is bad. Both map to EINVAL, so
+# on a UNC path they are the one EINVAL that must stay `invalid`.
+_WINDOWS_MALFORMED_PATH_ERRORS = frozenset(
+    {
+        87,  # ERROR_INVALID_PARAMETER
+        123,  # ERROR_INVALID_NAME ("syntax is incorrect")
+    }
+)
+
+# The POSIX errnos a dead network or FUSE mount gives a stat. `getattr`
+# because not every platform's errno module defines all of them.
+_POSIX_NETWORK_ERRNOS = frozenset(
+    code
+    for code in (
+        getattr(errno, name, None)
+        for name in (
+            "ESTALE",
+            "ETIMEDOUT",
+            "EHOSTDOWN",
+            "EHOSTUNREACH",
+            "ENETDOWN",
+            "ENETUNREACH",
+            "ECONNREFUSED",
+            "ECONNRESET",
+            "ECONNABORTED",
+            "ENOTCONN",
+        )
+    )
+    if code is not None
+)
+
+
+def _on_network_share(resolved: str) -> bool:
+    """Is ``resolved`` a UNC path (``\\\\server\\share\\...``, or its
+    extended-length ``\\\\?\\UNC\\server\\share\\...`` spelling)?
+
+    Decided from ``os.path.splitdrive`` alone, so it never touches the
+    network. POSIX's splitdrive never returns a drive, so this is always
+    False there. A mapped drive letter (``Z:``) is not detectable without a
+    Win32 call, which is why the ``winerror`` check below does not depend on
+    this."""
+    drive = os.path.splitdrive(resolved)[0].replace("/", "\\")
+    if drive.startswith(("\\\\?\\", "\\\\.\\")):
+        return drive[4:].upper().startswith("UNC\\")
+    return drive.startswith("\\\\")
+
+
+def _classify_stat_oserror(resolved: str, exc: OSError) -> str:
+    """State for an ``os.stat`` OSError that is neither ENOENT nor EACCES.
+
+    A plain OSError is ambiguous: EINVAL is both "malformed name" and, on
+    Windows, every network failure CPython has no errno for (a runner whose
+    SMB lookup times out gets ERROR_SEM_TIMEOUT -> EINVAL). Treating the
+    second as `invalid` offers relink or cleanup for a file whose share is
+    only flaky, so the order is:
+
+    1. A Windows malformed-name code: the path is bad wherever it points.
+    2. A network error code (Windows ``winerror`` or POSIX errno): the file's
+       volume is unreachable right now, so `offline`, even if the share root
+       still answered ``isdir`` a moment ago.
+    3. Any other error on a UNC path: `offline`. Everything between this
+       process and the file there is network, so an unrecognised failure is
+       far more likely the link than the name.
+    4. Otherwise the pre-existing rule: `invalid` on a present volume,
+       `offline` on an absent one.
+
+    ``winerror`` is read with ``getattr`` because only Windows' OSError has
+    the attribute."""
+    winerror = getattr(exc, "winerror", None)
+    if winerror in _WINDOWS_MALFORMED_PATH_ERRORS:
+        return "invalid" if volume_present(resolved) else "offline"
+    if winerror in _WINDOWS_NETWORK_ERRORS or exc.errno in _POSIX_NETWORK_ERRNOS:
+        return "offline"
+    if _on_network_share(resolved):
+        return "offline"
+    return "invalid" if volume_present(resolved) else "offline"
 
 
 # Chunked so memory stays bounded regardless of file size — a project's own
@@ -147,11 +253,11 @@ def probe_source_path(resolved: str, *, compute_checksum: bool) -> dict[str, Any
             "state": "missing" if volume_present(resolved) else "offline",
             "path": resolved,
         }
-    except (OSError, ValueError):
-        # A stale/unreachable mount surfaces as ESTALE/EIO/ETIMEDOUT (or
-        # Windows' ERROR_NOT_READY/ERROR_SEM_TIMEOUT -> EINVAL), never as
-        # ENOENT — still "the volume is gone", so still offline, not a
-        # malformed path (P1.1 self-review).
+    except OSError as exc:
+        return {"state": _classify_stat_oserror(resolved, exc), "path": resolved}
+    except ValueError:
+        # Always a malformed path (the embedded-null case above), so only an
+        # absent volume turns it into offline.
         return {
             "state": "invalid" if volume_present(resolved) else "offline",
             "path": resolved,
