@@ -71,6 +71,9 @@ export function publishFitResult(
         linkMode: opts.linkMode,
         constrain: opts.constrain,
         wavelengthA: wavelengthFromMetadata(ds.data.metadata),
+        // TWIN: store/peakTablePublish.ts stamps the model-fit producer's
+        // tables with these same fields — change both together (that file's
+        // header says why they cannot share one function).
         // Review round 2: both halves of "does this table still describe the
         // live data" are stamped HERE, from the same live `ds` the exclusions
         // are read from — the x axis the fit ran on (so Williamson-Hall can

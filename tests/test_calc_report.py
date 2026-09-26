@@ -168,6 +168,43 @@ def test_from_multipeak_fit_builds_table() -> None:
 
 
 
+def test_from_multipeak_fit_prints_model_fit_errors_and_objective() -> None:
+    # A peak table published from the Peak Analyzer's model fit (P2.1) carries
+    # 1-sigma errors, null where the fit reported none, and its objective.
+    result = {
+        "peaks": [
+            {"model": "Gaussian", "center": 36.0, "fwhm": 0.4, "height": 800.0,
+             "area": 340.0, "eta": None, "centerErr": 0.0003, "fwhmErr": 0.001,
+             "heightErr": 2.0, "areaErr": 1.5},
+            {"model": "Lorentzian", "center": 44.0, "fwhm": 0.6, "height": 400.0,
+             "area": 377.0, "eta": None, "centerErr": None, "fwhmErr": 0.002,
+             "heightErr": 1.0, "areaErr": None},
+        ],
+        "R2": 0.9999, "rmse": None, "nPeaks": 2, "model": "Gaussian + Lorentzian",
+        "objective": {"kind": "ssr", "value": 12.5, "reduced": 0.031},
+    }
+    rep = from_multipeak_fit(result)
+    validate_report(rep.to_dict())
+    peaks_t, gof_t = [b for b in rep.iter_blocks() if b["type"] == "table"]
+    assert peaks_t["columns"] == ["Peak", "Model", "Center", "± center", "FWHM", "± FWHM",
+                                  "Height", "± height", "Area", "± area", "η"]
+    assert peaks_t["rows"][0][2:10] == [36.0, 0.0003, 0.4, 0.001, 800.0, 2.0, 340.0, 1.5]
+    assert peaks_t["rows"][1][3] == "—" and peaks_t["rows"][1][9] == "—"
+    assert ["SSR", 12.5] in gof_t["rows"] and ["reduced SSR", 0.031] in gof_t["rows"]
+    assert not any(r[0] == "χ²" for r in gof_t["rows"])
+
+
+def test_from_multipeak_fit_classic_table_is_unchanged_by_error_support() -> None:
+    result = {
+        "peaks": [{"model": "Gaussian", "center": 10.0, "fwhm": 1.2, "height": 100.0,
+                   "area": 150.0, "eta": None, "centerErr": None}],
+        "rmse": 2.5, "nPeaks": 1, "model": "Gaussian",
+    }
+    peaks_t, gof_t = [b for b in from_multipeak_fit(result).iter_blocks() if b["type"] == "table"]
+    assert peaks_t["columns"] == ["Peak", "Model", "Center", "FWHM", "Height", "Area", "η"]
+    assert gof_t["rows"] == [["RMSE", 2.5], ["Peaks", 1]]
+
+
 def test_from_multipeak_fit_marks_hand_edited_rows() -> None:
     result = {
         "peaks": [

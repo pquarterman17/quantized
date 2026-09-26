@@ -2624,6 +2624,76 @@ describe("workspace durable peak table (PRIMARY_SOFTWARE_AUDIT_PLAN P2.1)", () =
     expect(t.provenance.bgCoeffs).toEqual([5, 0]);
   });
 
+  /** A Peak Analyzer model-fit table, as modelFitPublish.ts writes one: real
+   *  errors, a null error with its reason, a Voigt row's widths, and the
+   *  model-fit provenance fields. Built literally so this file needs nothing
+   *  from the workshop. */
+  const modelFitTable = (): PeakTable => {
+    const base = table();
+    return {
+      ...base,
+      peaks: [
+        { ...base.peaks[0], centerErr: 0.004, fwhmErr: 0.01, heightErr: 0.5, areaErr: 0.3, model: "Pseudo-Voigt", eta: 0.4 },
+        {
+          ...base.peaks[1], centerErr: null, fwhmErr: 0.02, heightErr: 0.6, areaErr: null, model: "Voigt",
+          fwhmG: 0.1, fwhmL: 0.2, errReasons: { center: "fixed: not fitted, so it has no error", area: "not available: #2 FWHM L on a bound" },
+        },
+      ],
+      provenance: {
+        ...base.provenance,
+        producer: "model_fit",
+        engine: "mixed-shape model fit · linear background · 41 evaluations",
+        recipe: '"film" · full range · baseline none',
+        objective: { kind: "ssr", value: 12.5, reduced: 0.031 },
+        rmse: null,
+      },
+    };
+  };
+
+  it("a model-fit table keeps its errors, reasons, widths and provenance across save -> reopen", () => {
+    const ds = makeDataset("a", "film");
+    ds.peakTable = modelFitTable();
+    const [restored] = parse(ser([ds]));
+    expect(restored.peakTable).toEqual(ds.peakTable);
+    const [p0, p1] = restored.peakTable!.peaks;
+    expect([p0.centerErr, p0.fwhmErr, p0.heightErr, p0.areaErr]).toEqual([0.004, 0.01, 0.5, 0.3]);
+    expect([p1.centerErr, p1.areaErr]).toEqual([null, null]);
+    expect(p1.errReasons?.center).toMatch(/^fixed/);
+    expect([p1.fwhmG, p1.fwhmL]).toEqual([0.1, 0.2]);
+    expect(restored.peakTable?.provenance.producer).toBe("model_fit");
+    expect(restored.peakTable?.provenance.objective).toEqual({ kind: "ssr", value: 12.5, reduced: 0.031 });
+  });
+
+  it("a pre-model-fit table reopens without any of the new optional fields", () => {
+    const ds = makeDataset("a", "film");
+    ds.peakTable = table();
+    const [restored] = parse(ser([ds]));
+    const p = restored.peakTable!.peaks[0];
+    for (const k of ["areaErr", "errReasons", "fwhmG", "fwhmL"]) expect(k in p).toBe(false);
+    for (const k of ["producer", "engine", "recipe", "objective"]) expect(k in restored.peakTable!.provenance).toBe(false);
+  });
+
+  it("a hand-edited error of 0, a negative one or a string reopens as null, never as a measurement", () => {
+    const ds = makeDataset("a", "film");
+    ds.peakTable = modelFitTable();
+    const doc = JSON.parse(ser([ds]));
+    Object.assign(doc.datasets[0].peakTable.peaks[0], { centerErr: 0, fwhmErr: -0.1, heightErr: "0.5", areaErr: null });
+    doc.datasets[0].peakTable.peaks[1].errReasons = { center: 7, bogus: "x", fwhm: "" };
+    doc.datasets[0].peakTable.provenance.objective = { kind: "rmse", value: 1 };
+    const t = parseWorkspace(JSON.stringify(doc)).datasets[0].peakTable!;
+    expect([t.peaks[0].centerErr, t.peaks[0].fwhmErr, t.peaks[0].heightErr, t.peaks[0].areaErr]).toEqual([null, null, null, null]);
+    expect("errReasons" in t.peaks[1]).toBe(false);
+    expect("objective" in t.provenance).toBe(false);
+  });
+
+  it("serializePeakTable copies the nested reasons and objective, never aliases them", () => {
+    const t = modelFitTable();
+    const copy = serializePeakTable(t);
+    expect(copy).toEqual(t);
+    expect(copy.peaks[1].errReasons).not.toBe(t.peaks[1].errReasons);
+    expect(copy.provenance.objective).not.toBe(t.provenance.objective);
+  });
+
   it("a table whose fingerprint no longer matches still round-trips verbatim", () => {
     // The `.dwk` layer stores; the READERS decide (lib/peakTable.ts's
     // INVALIDATION header). Saving must never quietly drop a stale table, or

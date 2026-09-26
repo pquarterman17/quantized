@@ -44,8 +44,10 @@ import { fitPeakModel, type PeakModelFitResponse } from "../../../lib/api/peaks"
 import type { PeakRecipe } from "../../../lib/peakwizard";
 import { DEFAULT_FIT, type FitEngine, type PeakRecipeFit } from "../../../lib/peakRecipeFit";
 import type { BaselineOverlay, Dataset, FitOverlay } from "../../../lib/types";
+import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { curveToRows, segmentRows, segmentToFullRows } from "./modelFitOverlay";
+import { interpolateAt, modelFitDraft, modelFitPublishBlock } from "./modelFitPublish";
 import { setupProblems } from "./modelSetupChecks";
 import {
   backgroundNote,
@@ -91,6 +93,11 @@ export interface ModelFitState {
   run: () => Promise<void>;
   cancel: () => void;
   startFromResult: () => void;
+  /** Why the result cannot go to the durable peak table now, or null. */
+  publishBlock: string | null;
+  /** Write the result into the active dataset's durable peak table (audit
+   *  P2.1) — values, standard errors, shapes and provenance. One undo step. */
+  publish: () => Promise<void>;
   /** Drop the result, any in-flight request and our overlays. Stable. */
   clear: () => void;
 }
@@ -106,6 +113,8 @@ export interface ModelFitInputs {
   /** The recipe's fit section — the single store of the user's edits. */
   fit: PeakRecipeFit;
   setFit: (update: (fit: PeakRecipeFit) => PeakRecipeFit) => void;
+  /** The recipe's name / range / baseline, for the published provenance. */
+  recipe?: Pick<PeakRecipe, "name" | "range" | "baseline">;
 }
 
 function digest(v: readonly number[] | null | undefined): [number, number, number] {
@@ -126,6 +135,10 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
   const engine = fit.engine;
   const setFitOverlay = useApp((s) => s.setFitOverlay);
   const setBaselineOverlay = useApp((s) => s.setBaselineOverlay);
+  // The channel the working segment was cut from (usePeakWizard's
+  // `selectedFitData(active, xKey, ...)`): a change moves the segment and so
+  // drops the result, so at publish time it is the axis the fit ran on.
+  const xKey = useApp((s) => s.xKey);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -260,6 +273,35 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     setNotice("fit cancelled — the server may still finish it; its answer will be ignored");
   };
 
+  const publishBlock = active ? modelFitPublishBlock(ran?.result ?? null, stale) : "select a dataset first";
+  // Publish (audit P2.1): the draft is built here, the lazy half (ids,
+  // exclusions, store write) loads on demand — ./modelFitPublish's header says
+  // why. `seq` guards the await: a reset or a new run in the meantime means
+  // this result is no longer the one on screen. A failure (the chunk will not
+  // load, the store write throws) is shown, never swallowed.
+  const publishToTable = async () => {
+    const res = ran?.result;
+    if (!active || !segment || !res || publishBlock) {
+      if (publishBlock) setError(publishBlock);
+      return;
+    }
+    const offsets = baselineOn && baseline ? baseline : null;
+    const xs = segment.x;
+    const draft = modelFitDraft(res, {
+      recipe: inp.recipe ?? null,
+      offsetAt: offsets ? (x) => interpolateAt(xs, offsets, x) : null,
+    });
+    const id = seq.current;
+    try {
+      const { publishModelFit } = await import("./modelFitPublishRun");
+      if (seq.current !== id) return;
+      const n = publishModelFit(active.id, xKey, draft);
+      if (n !== null) toast(`published ${n} peak(s) to the peak table of ${active.name}`);
+    } catch (e) {
+      if (seq.current === id) setError(`could not publish to the peak table — ${e instanceof Error ? e.message : "unknown error"}`);
+    }
+  };
+
   const shared = fwhmShared(setup.params);
   return {
     engine,
@@ -294,6 +336,8 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     startFromResult: () => {
       if (ran) edit({ ...setup, params: startFromFit(setup.params, ran.result.parameters) });
     },
+    publishBlock,
+    publish: publishToTable,
     clear,
   };
 }

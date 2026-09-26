@@ -7,8 +7,9 @@
 // Which fit feeds step ⑤ is the ACTIVE engine's: the mixed-shape model result
 // (reported through the `peak_model_fit` emitter, which carries each peak's
 // shape and every standard error) or the classic multifit (`multipeak_fit`).
-// The report is the wizard's durable output, as before; it never writes the
-// Peaks workshop's durable peak table (it never did).
+// The report is one durable output; this path never writes the durable peak
+// table. Step ④'s "Publish to peak table" does, for a model fit (useModelFit
+// + ./modelFitPublish).
 
 import { useCallback, useState } from "react";
 

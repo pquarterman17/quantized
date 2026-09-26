@@ -1,7 +1,9 @@
 // Peak Analyzer step ④ for the mixed-shape model engine (audit P2.4 slice 2):
 // run / cancel `/api/peaks/model-fit` over the wizard's fitted x-range, show
 // the backend's ASCII error detail verbatim, then the result and a preview.
-// "Start from fit" copies the fitted values into the step-③ start values.
+// "Start from fit" copies the fitted values into the step-③ start values;
+// "Publish to peak table" writes a converged, current fit into the dataset's
+// durable peak table (./modelFitPublish) — its tooltip says why when it can't.
 
 import { Button } from "../../primitives";
 import ModelFitPreview from "./ModelFitPreview";
@@ -39,6 +41,19 @@ export default function ModelFitStep({ w }: { w: PeakWizardState }) {
         {r && !m.busy && (
           <Button size="sm" variant="ghost" title="use the fitted values as the next start" onClick={m.startFromResult}>
             Start from fit
+          </Button>
+        )}
+        {r && !m.busy && (
+          <Button
+            size="sm"
+            disabled={m.publishBlock !== null}
+            title={
+              m.publishBlock ??
+              "save these peaks, their standard errors and shapes as the dataset's peak table (Peaks workshop, Williamson-Hall, saved projects)"
+            }
+            onClick={() => void m.publish()}
+          >
+            Publish to peak table
           </Button>
         )}
       </div>

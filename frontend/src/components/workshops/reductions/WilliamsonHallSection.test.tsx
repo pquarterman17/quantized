@@ -141,6 +141,29 @@ describe("Williamson-Hall — Use fitted peaks (P2.1)", () => {
     ).toBeInTheDocument();
   });
 
+  it("loads a Peak Analyzer model-fit table (with errors) unweighted, naming the producer", async () => {
+    // P2.1: the model-fit producer fills the *Err columns; WH reads centre /
+    // FWHM exactly as before and sends NO errors (weighting is new numerics
+    // that would need a golden — see the plan's P2.1 note).
+    const t = table();
+    mount({
+      ...t,
+      peaks: t.peaks.map((p) => ({ ...p, centerErr: 0.002, fwhmErr: 0.01, areaErr: 0.5, model: "Voigt", fwhmG: 0.1, fwhmL: 0.15 })),
+      provenance: { ...t.provenance, producer: "model_fit", model: "Voigt", objective: { kind: "ssr", value: 3, reduced: 0.1 } },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Use fitted peaks (3)" }));
+    expect(screen.getByText("3 fitted peaks from film.xrdml · Voigt (model fit)")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+    await screen.findByText("Grain size");
+    expect(williamsonHall).toHaveBeenCalledWith({
+      two_theta_deg: [30.1, 43.2, 50.5],
+      fwhm_deg: [0.2, 0.25, 0.3],
+      wavelength_a: 1.5406,
+      k_factor: 0.9,
+      instrumental_broadening_deg: 0,
+    });
+  });
+
   it("drops the provenance line the moment a row is edited by hand", () => {
     mount(table());
     fireEvent.click(screen.getByRole("button", { name: "Use fitted peaks (3)" }));

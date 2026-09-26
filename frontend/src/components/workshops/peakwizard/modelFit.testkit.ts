@@ -4,6 +4,9 @@
 // constant background. `over` patches the top level; `metrics` merges.
 
 import type { PeakModelFitResponse } from "../../../lib/api/peaks";
+import type { PeakTable } from "../../../lib/peakTable";
+import { modelFitDraft, type ModelFitDraftOptions, type PublishableFit } from "./modelFitPublish";
+import { assembleModelFitTable, type TableStamp } from "./modelFitPublishRun";
 
 type Over = Partial<Omit<PeakModelFitResponse, "metrics">> & {
   metrics?: Partial<PeakModelFitResponse["metrics"]>;
@@ -59,4 +62,14 @@ export function modelFitResponse(over: Over = {}): PeakModelFitResponse {
     warnings: ["parameters ended on a bound (errors not reported): p0.eta"],
     ...rest,
   };
+}
+
+/** The durable table a publish of `res` would write, without the store:
+ *  draft (./modelFitPublish) + assembly (./modelFitPublishRun). */
+export function modelFitTable(
+  res: PublishableFit,
+  source: TableStamp & ModelFitDraftOptions,
+  prior?: PeakTable | null,
+): PeakTable {
+  return assembleModelFitTable(modelFitDraft(res, source), source, prior);
 }

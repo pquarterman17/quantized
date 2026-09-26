@@ -12,6 +12,7 @@
 
 import { useState } from "react";
 
+import { producerNote, reportResult, ValueErr } from "./fittedPeakCells";
 import PeakFitControls from "./PeakFitControls";
 import PeakTable from "./PeakTable";
 import { usePeakTableSelection } from "./peakSelection";
@@ -69,7 +70,9 @@ export default function PeaksPanel() {
     try {
       const { report } = await reportEmit({
         kind: "multipeak_fit",
-        result: fitResult as unknown as Record<string, unknown>,
+        // A model-fit table's errors and objective ride along, so the report
+        // says what the table shows (./fittedPeakCells).
+        result: reportResult(fitResult, entries, peakTable?.provenance) as unknown as Record<string, unknown>,
         title: `Peak fit — ${active.name}`,
         source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
       });
@@ -147,12 +150,14 @@ export default function PeaksPanel() {
       : null;
   const fitRows = (fitResult?.peaks ?? []).map((p, i) => {
     const entry = entries?.[i];
+    // Errors and their reasons come from the durable row (./fittedPeakCells);
+    // the row's shape is on the "#" cell's tooltip.
     return [
-      i + 1,
-      fmtNum(p.center),
-      fmtNum(p.height),
-      fmtNum(p.fwhm),
-      fmtNum(p.area),
+      <span key="n" title={entry?.model || undefined}>{i + 1}</span>,
+      <ValueErr key="c" value={p.center} entry={entry} field="center" />,
+      <ValueErr key="h" value={p.height} entry={entry} field="height" />,
+      <ValueErr key="w" value={p.fwhm} entry={entry} field="fwhm" />,
+      <ValueErr key="a" value={p.area} entry={entry} field="area" />,
       entry ? (
         <input
           type="checkbox"
@@ -277,9 +282,14 @@ export default function PeaksPanel() {
                 ? "" // table not yet paired with this fit (one frame on a switch)
                 : peakTable?.provenance.method === "independent"
                   ? "independent fits"
-                  : "fit metrics cleared by manual changes"}
+                  // A model fit keeps its objective until a manual change
+                  // clears it, so a null R² beside one is the fit's own.
+                  : peakTable?.provenance.objective
+                    ? "R² not available"
+                    : "fit metrics cleared by manual changes"}
             {manualEditCount(fitResult.peaks) > 0 && ` · ${manualEditCount(fitResult.peaks)} edited by hand`}
             {fitResult.rmse != null && ` · RMSE = ${fmtNum(fitResult.rmse)}`}
+            {entries && producerNote(peakTable?.provenance)}
             {excludedCount > 0 && ` · ${excludedCount} excluded`}
           </div>
           <PeakTable

@@ -84,6 +84,9 @@ def from_curve_fit(
     )
 
 
+_PEAK_KEYS = ("center", "fwhm", "height", "area")
+
+
 def from_multipeak_fit(
     result: Mapping[str, Any],
     *,
@@ -92,7 +95,14 @@ def from_multipeak_fit(
 ) -> ReportSheet:
     """Build a report from a ``calc.peak_multifit`` result dict."""
     peaks = list(result.get("peaks", []))
-    cols = ["Peak", "Model", "Center", "FWHM", "Height", "Area", "η"]
+    # A table published from the Peak Analyzer's model fit carries each
+    # peak's 1-sigma errors (``centerErr``... null where the fit reported
+    # none) and the minimised objective; print both so the report says what
+    # the peak table shows. A classic fit carries neither: columns unchanged.
+    has_err = any(_finite(pk.get(f"{k}Err")) is not None for pk in peaks for k in _PEAK_KEYS)
+    cols = (["Peak", "Model", "Center", "± center", "FWHM", "± FWHM", "Height", "± height",
+             "Area", "± area", "η"] if has_err
+            else ["Peak", "Model", "Center", "FWHM", "Height", "Area", "η"])
     # Rows the user edited by hand are not fit output; say so rather than let
     # manual numbers read as fitted values. Only shown when there are any.
     n_edited = sum(1 for pk in peaks if pk.get("status") == "manual-edit")
@@ -100,18 +110,24 @@ def from_multipeak_fit(
         cols.append("Source")
     rows = []
     for i, pk in enumerate(peaks, start=1):
-        row = [
-            i, pk.get("model", result.get("model", "")),
-            pk.get("center"), pk.get("fwhm"), pk.get("height"),
-            pk.get("area"), pk.get("eta"),
-        ]
+        values = ([v for k in _PEAK_KEYS for v in _pm(pk.get(k), pk.get(f"{k}Err"))] if has_err
+                  else [pk.get(k) for k in _PEAK_KEYS])
+        row = [i, pk.get("model", result.get("model", "")), *values, pk.get("eta")]
         if n_edited:
             row.append("edited by hand" if pk.get("status") == "manual-edit" else "fit")
         rows.append(row)
     caption = f"{len(peaks)} peak(s)" + (f", {n_edited} edited by hand" if n_edited else "")
+    gof = [[label, result[key]] for label, key in (("RMSE", "rmse"), ("Peaks", "nPeaks"))
+           if result.get(key) is not None]
+    objective = result.get("objective")
+    if isinstance(objective, Mapping) and objective.get("kind") in ("ssr", "chi2"):
+        label = "χ²" if objective["kind"] == "chi2" else "SSR"
+        gof += [[f"{name}", v] for name, v in ((label, objective.get("value")),
+                                               (f"reduced {label}", objective.get("reduced")))
+                if _finite(v) is not None]
     blocks: list[dict[str, Any]] = [
         table_block(cols, rows, caption=caption),
-        _gof_table(result, [("RMSE", "rmse"), ("Peaks", "nPeaks")]),
+        table_block(["Metric", "Value"], gof, caption="Goodness of fit"),
     ]
     return ReportSheet(
         title=title,

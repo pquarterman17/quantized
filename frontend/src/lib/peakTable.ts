@@ -14,14 +14,22 @@
 // belongs to — the same additive-optional shape as `Dataset.fitSpec`, absent
 // meaning "no peak table", never an ad-hoc dict (CLAUDE.md's data contract).
 //
-// UNCERTAINTIES ARE MODELLED, NOT YET MEASURED. `centerErr`/`fwhmErr`/
-// `heightErr` are `number | null` and every producer here writes `null`:
-// neither `calc/peak_multifit.fit_multi_peak` nor `calc/peak_fit.fit_peak`
-// returns a covariance or a standard error today, and inventing one would be
-// new numerics with no MATLAB golden to check them against (CLAUDE.md's
-// golden-parity rule). The COLUMNS are durable now so that adding the numbers
-// later is an additive backend change rather than another `.dwk` migration;
-// P2.1's plan entry records the numerics as the next box.
+// UNCERTAINTIES — ONE PRODUCER MEASURES THEM, ONE DOES NOT (2026-09-25).
+// `centerErr`/`fwhmErr`/`heightErr`/`areaErr` are 1σ standard errors or
+// null, NEVER 0 and never NaN (`sanitizePeakTable` enforces "finite and > 0"
+// on the way in). Two producers write this table:
+//   • the Peaks workshop's classic fit (`provenance.producer` absent) writes
+//     null for all of them: neither `calc/peak_multifit.fit_multi_peak` nor
+//     `calc/peak_fit.fit_peak` returns a covariance, and inventing one would
+//     be new numerics with no MATLAB golden (CLAUDE.md's golden-parity rule);
+//   • the Peak Analyzer's mixed-shape model fit (`producer: "model_fit"`,
+//     peakwizard/modelFitPublish.ts) copies the backend's delta-method errors
+//     (`calc/peak_model_fit.py`, pinv covariance) verbatim. An error the
+//     backend could not determine — fixed, tied to one, on a bound, or after a
+//     non-converged stop — stays null, and WHY is kept in `errReasons`.
+// `areaErr`, the Voigt widths, `errReasons` and the model-fit provenance
+// fields are all OPTIONAL: a record written before them simply lacks them,
+// so no `PEAK_TABLE_VERSION` bump was needed.
 //
 // INVALIDATION (review rounds 2 and 3, 2026-09-15). A durable record of a fit
 // is a LIE the moment the data it was fit from changes, so
@@ -133,16 +141,26 @@ export interface SinglePeakFit {
 export interface PeakTableEntry {
   id: string;
   center: number;
-  /** 1σ on `center`, or null when the fit engine reports none (always, today —
-   *  see the module header). Same for the two below. */
+  /** 1σ on `center`, or null when the producer reports none (see the module
+   *  header: the classic fit never does, the model fit does when it can).
+   *  Same for the three below — never 0, never NaN. */
   centerErr: number | null;
   fwhm: number;
   fwhmErr: number | null;
   height: number;
   heightErr: number | null;
   area: number;
+  /** Optional (added with the model-fit producer); absent reads as null. */
+  areaErr?: number | null;
+  /** Why a null `*Err` is null, keyed by field — the producer's own reason
+   *  (e.g. "on a bound"), or "edited by hand" after a manual edit. Optional. */
+  errReasons?: Partial<Record<PeakErrKey, string>>;
   bg: number;
   eta: number | null;
+  /** Voigt rows only: the Gaussian and Lorentzian component FWHMs (x units)
+   *  whose combination is `fwhm`. Optional; absent for every other shape. */
+  fwhmG?: number | null;
+  fwhmL?: number | null;
   /** The peak-shape model this row was fit with (per row: a future mixed-model
    *  fit can vary it, and P2.4 plans exactly that). */
   model: string;
@@ -193,6 +211,29 @@ export interface PeakTableProvenance {
   fingerprint: string | null;
   /** ISO-8601 instant the fit completed. */
   fittedAt: string;
+  /** Which producer wrote the table: absent = the Peaks workshop's classic
+   *  fit; "model_fit" = the Peak Analyzer's mixed-shape model fit, whose
+   *  `bgDegree` is the polynomial's degree (-1 = no background term) and
+   *  whose `bgCoeffs` are that polynomial in powers of x — empty when the fit
+   *  ran after a baseline subtraction, since it then describes the subtracted
+   *  trace, not the raw one each row's `bg` is on. */
+  producer?: "model_fit";
+  /** Human-readable engine and recipe summaries (model_fit only). */
+  engine?: string;
+  recipe?: string;
+  /** The minimised objective under its honest name — SSR for an unweighted
+   *  fit, χ² only for a weighted one — and its reduced value. Cleared, like
+   *  `R2`/`rmse`, by a manual edit or removal. */
+  objective?: PeakTableObjective;
+}
+
+export type PeakErrKey = "center" | "fwhm" | "height" | "area";
+export const PEAK_ERR_KEYS: readonly PeakErrKey[] = ["center", "fwhm", "height", "area"];
+
+export interface PeakTableObjective {
+  kind: "ssr" | "chi2";
+  value: number | null;
+  reduced: number | null;
 }
 
 /** A dataset's durable fitted-peak table. `version` is the record's own schema
@@ -218,6 +259,14 @@ function str(v: unknown): string {
   return typeof v === "string" ? v : "";
 }
 
+/** A standard error: finite and strictly positive, else null. A 0 or negative
+ *  "error" in a hand-edited record would read as "exactly known" downstream,
+ *  which is the one claim a missing error must never make. */
+function err(v: unknown): number | null {
+  const n = num(v);
+  return n !== null && n > 0 ? n : null;
+}
+
 function parseEntry(v: unknown, index: number): PeakTableEntry | null {
   if (typeof v !== "object" || v === null) return null;
   const o = v as Record<string, unknown>;
@@ -228,14 +277,14 @@ function parseEntry(v: unknown, index: number): PeakTableEntry | null {
   // of them is unusable, so it is DROPPED rather than defaulted to a number
   // that would quietly enter a Williamson-Hall fit.
   if (center === null || fwhm === null || height === null) return null;
-  return {
+  const entry: PeakTableEntry = {
     id: str(o.id) || `peak-restored-${index}`,
     center,
-    centerErr: num(o.centerErr),
+    centerErr: err(o.centerErr),
     fwhm,
-    fwhmErr: num(o.fwhmErr),
+    fwhmErr: err(o.fwhmErr),
     height,
-    heightErr: num(o.heightErr),
+    heightErr: err(o.heightErr),
     area: num(o.area) ?? 0,
     bg: num(o.bg) ?? 0,
     eta: num(o.eta),
@@ -243,6 +292,26 @@ function parseEntry(v: unknown, index: number): PeakTableEntry | null {
     status: str(o.status),
     excluded: o.excluded === true,
   };
+  // The optional fields are written only when PRESENT, so a record from before
+  // they existed round-trips to exactly the object it was.
+  if ("areaErr" in o) entry.areaErr = err(o.areaErr);
+  if ("fwhmG" in o) entry.fwhmG = num(o.fwhmG);
+  if ("fwhmL" in o) entry.fwhmL = num(o.fwhmL);
+  const reasons = o.errReasons;
+  if (typeof reasons === "object" && reasons !== null) {
+    const r = reasons as Record<string, unknown>;
+    const kept: Partial<Record<PeakErrKey, string>> = {};
+    for (const k of PEAK_ERR_KEYS) if (typeof r[k] === "string" && r[k]) kept[k] = r[k];
+    if (Object.keys(kept).length > 0) entry.errReasons = kept;
+  }
+  return entry;
+}
+
+function parseObjective(v: unknown): PeakTableObjective | undefined {
+  if (typeof v !== "object" || v === null) return undefined;
+  const o = v as Record<string, unknown>;
+  if (o.kind !== "ssr" && o.kind !== "chi2") return undefined;
+  return { kind: o.kind, value: num(o.value), reduced: num(o.reduced) };
 }
 
 /** Validate a persisted `Dataset.peakTable` from a `.dwk`. A hand-edited,
@@ -265,38 +334,46 @@ export function sanitizePeakTable(v: unknown): PeakTable | undefined {
   }
   if (peaks.length === 0) return undefined;
   const method = p.method === "independent" ? "independent" : "simultaneous";
-  return {
-    version: PEAK_TABLE_VERSION,
-    peaks,
-    provenance: {
-      datasetId: p.datasetId,
-      datasetName: str(p.datasetName),
-      method,
-      model: str(p.model),
-      bgDegree: num(p.bgDegree) ?? 0,
-      linkMode: str(p.linkMode),
-      constrain: p.constrain === true,
-      bgCoeffs: Array.isArray(p.bgCoeffs)
-        ? p.bgCoeffs.filter((c): c is number => typeof c === "number" && Number.isFinite(c))
-        : [],
-      R2: num(p.R2),
-      rmse: num(p.rmse),
-      wavelengthA: num(p.wavelengthA),
-      xLabel: str(p.xLabel),
-      xUnit: str(p.xUnit),
-      fingerprint: str(p.fingerprint) || null,
-      fittedAt: str(p.fittedAt),
-    },
+  const provenance: PeakTableProvenance = {
+    datasetId: p.datasetId,
+    datasetName: str(p.datasetName),
+    method,
+    model: str(p.model),
+    bgDegree: num(p.bgDegree) ?? 0,
+    linkMode: str(p.linkMode),
+    constrain: p.constrain === true,
+    bgCoeffs: Array.isArray(p.bgCoeffs)
+      ? p.bgCoeffs.filter((c): c is number => typeof c === "number" && Number.isFinite(c))
+      : [],
+    R2: num(p.R2),
+    rmse: num(p.rmse),
+    wavelengthA: num(p.wavelengthA),
+    xLabel: str(p.xLabel),
+    xUnit: str(p.xUnit),
+    fingerprint: str(p.fingerprint) || null,
+    fittedAt: str(p.fittedAt),
   };
+  if (p.producer === "model_fit") provenance.producer = "model_fit";
+  if (str(p.engine)) provenance.engine = str(p.engine);
+  if (str(p.recipe)) provenance.recipe = str(p.recipe);
+  const objective = parseObjective(p.objective);
+  if (objective) provenance.objective = objective;
+  return { version: PEAK_TABLE_VERSION, peaks, provenance };
 }
 
 /** Serialize for the `.dwk` doc. A defensive deep-ish copy, the same shape
  *  `store/rois.ts`'s `serializeRois` uses: the record is plain JSON already, so
- *  this exists to stop a live store object being aliased into the saved doc. */
+ *  this exists to stop a live store object being aliased into the saved doc.
+ *  The nested optionals (`errReasons`, `objective`) are copied too. */
 export function serializePeakTable(table: PeakTable): PeakTable {
+  const { objective } = table.provenance;
   return {
     version: table.version,
-    peaks: table.peaks.map((p) => ({ ...p })),
-    provenance: { ...table.provenance, bgCoeffs: [...table.provenance.bgCoeffs] },
+    peaks: table.peaks.map((p) => (p.errReasons ? { ...p, errReasons: { ...p.errReasons } } : { ...p })),
+    provenance: {
+      ...table.provenance,
+      bgCoeffs: [...table.provenance.bgCoeffs],
+      ...(objective ? { objective: { ...objective } } : {}),
+    },
   };
 }

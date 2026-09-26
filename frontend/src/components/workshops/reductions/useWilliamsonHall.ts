@@ -159,7 +159,11 @@ export function useWilliamsonHall(): WilliamsonHallState {
     // the NEW provenance line, which is the exact untraceable pairing this
     // feature exists to remove.
     setResult(null);
-    const { datasetName, model, method } = table.provenance;
+    // The producer, not the classic fit's method, names a Peak Analyzer model
+    // fit. Its standard errors are NOT used here (no weighting — that would be
+    // new numerics needing a golden; PRIMARY_SOFTWARE_AUDIT_PLAN P2.1).
+    const { datasetName, model, producer } = table.provenance;
+    const method = producer === "model_fit" ? "model fit" : table.provenance.method;
     const excluded = table.peaks.length - included.length;
     const edited = manualEditCount(included);
     setFittedSource(
