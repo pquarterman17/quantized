@@ -41,11 +41,20 @@ export interface RecipeFidelitySlice {
    *  `lib/recipeSources.ts`'s `collectRecipes`, which will not let sidecar
    *  favorites/tags be pruned against a collection any source doubts. */
   recipeSourcesComplete: boolean;
+  /** P2.7 follow-up: the saved fit-model records the open project(s) carried
+   *  that this build cannot read (a newer version, a damaged entry). Never
+   *  shown or edited — only written back into the `.dwk` on the next save
+   *  (lib/fitModelsProject.ts), so opening a project in an older build and
+   *  saving it does not destroy a newer build's models. Replaced by a load,
+   *  grown by an append; a non-empty carry is also why `recipeSourcesComplete`
+   *  is false. Not undoable for the same reason as the flag. PERSISTED, unlike
+   *  the flag: `serializeWorkspace` reads it from the state it is given. */
+  fitModelCarry: unknown[];
 }
 
-/** State only, no action: the single write site is `useApp.loadWorkspace`'s
- *  own `set()`, which restores this field alongside the two lists it
- *  describes. A setter here would have no caller. */
+/** State only, no action: the write sites are `loadWorkspace` (replace) and
+ *  `appendWorkspace` (grow), store/workspaceHydration.ts. A setter here would
+ *  have no caller. */
 export function createRecipeFidelitySlice(): RecipeFidelitySlice {
-  return { recipeSourcesComplete: true };
+  return { recipeSourcesComplete: true, fitModelCarry: [] };
 }

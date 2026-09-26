@@ -60,6 +60,7 @@ import { sanitizeTechniqueViewMemory } from "../lib/techniqueViewMemory";
 import { nextStageTab } from "../lib/stagetab";
 import type { LoadedWorkspace, WorkspaceState } from "../lib/workspace";
 import { sanitizeDocumentBackedPlotWindows } from "../lib/windowDocumentPersistence";
+import { workspaceCodecOrReport } from "../lib/workspaceCodecLazy";
 import { mergeWorkspace } from "../lib/workspaceMerge";
 import { nextDatasetId, nextFolderId } from "./idSeq";
 import { loadedMapViews } from "./rois"; // loadedMapViews: P2.8, see store/mapView.ts
@@ -91,7 +92,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
     // Runs on BOTH triggers that call this action: the autosave restore on
     // startup, and an explicit File ▸ Open .dwk — so a legacy v1 doc's `group`
     // strings get promoted to folders (item 6) either way, exactly once.
-    loadWorkspace: (ws, options) =>
+    loadWorkspace: (ws, options) => {
       set((s) => {
         const skipLayout = options?.skipLayout ?? false; // PR E2, see AppState doc
         // v1/legacy compat: promote any un-foldered `Dataset.group` into a
@@ -191,6 +192,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           // above calls out). MUST be explicit, same reasoning.
           plotRecipes: ws.plotRecipes ?? [],
           recipeSourcesComplete: ws.recipeSourcesComplete ?? true, // stale `true` would re-certify what THIS load lost
+          fitModelCarry: ws.fitModelCarry ?? [], // P2.7: THIS project's unreadable fit models, never the previous one's
           visibleDetailsColumns: sanitizeVisibleDetailsColumns(ws.visibleDetailsColumns), // PR L slice 2 — .dwk v4 additive
           activePlotSpecId: null, // transient binding — a fresh load never resumes mid-edit
           quickFigureBuilderDatasetId: null, // transient UI (like worksheetId) — never resumes on a fresh load
@@ -260,10 +262,26 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           ...(restoredView ?? {}),
           status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}${migrationNotice}`,
         };
-      }),
+      });
+      adoptFitModels(ws, set);
+    },
     appendWorkspace: (ws) => runAppendWorkspace(set, get, ws),
   };
 }
+
+/** P2.7 follow-up: merge a loaded/appended project's saved fit models into
+ *  the local library, and on an APPEND grow the unreadable carry —
+ *  lib/fitModelsProject.ts's `adoptProjectFitModels` has the rule and the one
+ *  toast. Reached through the `.dwk` codec, so none of it costs eager bytes;
+ *  usually already loaded, except after the browser picker's Worker parse,
+ *  when this is its first fetch (a failure is toasted by the loader). */
+function adoptFitModels(ws: WorkspaceState, set: SliceSet, append?: boolean): void {
+  if (ws.customFitModels?.length || ws.fitModelCarry?.length)
+    void workspaceCodecOrReport("Adding the project's fit models", noop).then((c) =>
+      c?.adoptProjectFitModels(ws, set, append),
+    );
+}
+const noop = (): void => {};
 
 /** Append Project (MAIN_PLAN #16, workbook transfer LIBRARY_WORKBOOK_UX_PLAN
  *  PR A4): join a freshly-parsed .dwk's flat dataset list AND its referenced
@@ -295,6 +313,7 @@ function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorkspace): 
   const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)${wbNote}`;
   set({ datasets, workbooks: [...get().workbooks, ...workbooks], status: msg });
   toast(msg, "ok");
+  adoptFitModels(ws, set, true); // P2.7: merge its fit models, grow the carry
   // BUG-010: `ws.migrationWarnings` (produced when the appended .dwk was
   // parsed) has no status-line fold here at all — this never routes through
   // loadWorkspace — so the toast is its only surface.

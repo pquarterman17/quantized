@@ -51,6 +51,11 @@ export default function RecipeLibraryPanel() {
   // existed nothing downstream could tell a load that dropped records from a
   // clean one — only the global slot vouched for itself.
   const workspaceComplete = useApp((s) => s.recipeSourcesComplete);
+  // P2.7: subscribed only to RE-RENDER — opening a project merges its fit
+  // models into localStorage (unsubscribable) and then re-sets this array
+  // (lib/fitModelsProject.ts's `adoptProjectFitModels`), so an open panel
+  // lists them instead of the pre-merge library.
+  useApp((s) => s.fitModelCarry);
   const hydrateGlobal = useGlobalPlotRecipes((s) => s.hydrate);
   const [kind, setKind] = useState<KindFilter>("all");
   const [favoritesOnly, setFavoritesOnly] = useState(false);

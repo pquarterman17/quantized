@@ -36,6 +36,7 @@ import type { WorkbookNode } from "./workbooks";
 import type { OriginFidelityEntry } from "./originFidelity";
 import type { OriginFigureEntry } from "./originFigures";
 import { deriveBundleRelativePath } from "./bundlePath";
+import { projectFitModelsForSave } from "./fitModelsProject";
 import { encodePersistedCells, type WireDataStruct } from "./nonFiniteCells";
 import type { DatasetSource } from "./datasetSource";
 import type { Dataset, FolderNode } from "./types";
@@ -144,6 +145,8 @@ interface WorkspaceDoc {
   collections: Collection[];
   visibleDetailsColumns: LibraryDetailsColumnKey[];
   plotRecipes: PlotRecipe[];
+  /** P2.7 follow-up — absent when there are none (lib/fitModelsProject.ts). */
+  customFitModels?: unknown[];
 }
 
 /** Serialize the library + folder tree to a pretty-printed .dwk JSON
@@ -157,6 +160,7 @@ interface WorkspaceDoc {
  *  `serializeDatasetSource` for the per-source rule this enables. */
 export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: string }): string {
   const projectDir = opts?.projectDir;
+  const fitModels = projectFitModelsForSave(ws.customFitModels, ws.fitModelCarry);
   const doc: WorkspaceDoc = {
     format: WORKSPACE_FORMAT,
     version: WORKSPACE_VERSION,
@@ -216,6 +220,10 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
     collections: ws.collections ?? [],
     visibleDetailsColumns: ws.visibleDetailsColumns ?? [], // PR L slice 2 — verbatim; sanitizeVisibleDetailsColumns defaults on PARSE
     plotRecipes: ws.plotRecipes ?? [], // P1.3 — verbatim, same convention as savedPlotSpecs/quickPlotTemplates
+    // P2.7 follow-up: the saved fit models (the local library unless the
+    // caller supplies them) plus the opened project's unreadable carry —
+    // lib/fitModelsProject.ts. Written only when non-empty, the mapViews rule.
+    ...(fitModels.length ? { customFitModels: fitModels } : {}),
     datasets: ws.datasets.map((d) => ({
       id: d.id,
       name: d.name,

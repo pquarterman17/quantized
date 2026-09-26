@@ -130,6 +130,28 @@ describe("autosave round-trip (pre-#32 behaviour, preserved)", () => {
 // an autosave generation that a reopen could ever resolve against the
 // process's own CWD instead of the (nonexistent, for autosave) project
 // directory.
+describe("autosave carries the saved fit models (P2.7 follow-up)", () => {
+  it("embeds the local fit-model library and the project's unreadable carry, and restores both", async () => {
+    const model = { version: 1, name: "Arrhenius", equation: "y = A*exp(-E/x)", params: ["A", "E"], guesses: [1, 2], lower: [null, 0], upper: [null, null] };
+    const future = { version: 9, name: "FromTheFuture", equation: "y = a" };
+    localStorage.setItem("qz.customFitModels", JSON.stringify([model]));
+    // The state shape the store hands autosave: no `customFitModels` (the
+    // library is not store state), a `fitModelCarry` from the opened project.
+    expect(await saveAutosave({ datasets: [ds("a", "first")], fitModelCarry: [future] })).toBe(true);
+    const [gen] = await listAutosaveGenerations();
+    expect(JSON.parse(gen.text).customFitModels).toEqual([model, future]);
+    const restored = await loadAutosave();
+    expect(restored?.customFitModels).toEqual([model]);
+    expect(restored?.fitModelCarry).toEqual([future]);
+  });
+
+  it("writes no customFitModels key when there are none (an ordinary project is unchanged)", async () => {
+    expect(await saveAutosave({ datasets: [ds("a", "first")] })).toBe(true);
+    const [gen] = await listAutosaveGenerations();
+    expect("customFitModels" in JSON.parse(gen.text)).toBe(false);
+  });
+});
+
 describe("crash-recovery autosave never writes a bundle-relative source (P1.7 PR 5 audit item 10)", () => {
   it("autosaves an absolute kind:path source even for a dataset resolved from a packed bundle", async () => {
     const packedDataset: Dataset = {

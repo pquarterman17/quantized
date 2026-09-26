@@ -433,6 +433,16 @@ const AUTOSAVE_EXCLUDED: Record<string, string> = {
     "change is structurally impossible today, so tracking it separately " +
     "would never change autosave behavior. Re-check this exclusion if a " +
     "future edit gives techniqueViewMemory an independent mutation site.",
+  // P2.7 follow-up. Not AppState at all: the doc field is the GLOBAL
+  // localStorage fit-model library (lib/fitmodels.ts), read by
+  // serializeWorkspace at write time, plus the store's `fitModelCarry`.
+  customFitModels:
+    "the library is not project state: saving a model in the fit workshop " +
+    "writes localStorage and deliberately schedules no autosave — the model " +
+    "is already durable on this machine, which is the only place an autosave " +
+    "can be restored, and the next autosave write embeds it (pinned by " +
+    "lib/autosave.test.ts). `fitModelCarry` changes only in a load's own " +
+    "set() (with datasets) or right after an append's datasets change.",
 };
 
 describe("AutosaveState completeness sweep (P2-1)", () => {

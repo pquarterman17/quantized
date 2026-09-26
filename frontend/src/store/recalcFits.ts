@@ -12,7 +12,7 @@
 
 import { fitModel } from "../lib/api";
 import { dropGapRows, restoreGapRows } from "../lib/api/finitePairs";
-import { boundsFromWire } from "../lib/fitParams";
+import { boundsFromWire } from "../lib/fitBoundsWire";
 import { fitDataForSpec, stampRecompute } from "../lib/fitselection";
 import { activeRowIndices, droppedRows, expandToFull } from "../lib/rowstate";
 import type { AppState } from "./useApp";

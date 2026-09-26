@@ -1970,6 +1970,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   quickFigureBuilderDatasetId: "Quick Figure Builder source target; transient UI state cleared on cancel",
 
   recipeSourcesComplete: "workspace recipe-source fidelity (P3.5); DERIVED at project load, never user-edited — there is nothing to undo TO, and restoring a stale `true` over a genuine `false` would re-certify sources the load actually lost",
+  fitModelCarry: "unreadable saved fit models carried from the opened project (P2.7 follow-up); set at load/append, never user-edited — undoing an append must not drop records the file still holds",
 
   // history slice: the undo stack itself (not a field to undo INTO)
   history: "undo stack; the history system itself, not undoable data",
@@ -3105,6 +3106,15 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/reimport.ts",
     "/lib/dependencyImpact.ts",
     "/lib/originSources.ts",
+    // P2.7 follow-up: the .dwk fit-model bridge and the library it reads are
+    // reached only through the codec (the store calls it via
+    // `workspaceCodec()`), never statically from the entry chunk.
+    "/lib/fitModelsProject.ts",
+    "/lib/fitmodels.ts",
+    // ...and funded by this pair leaving: store/recalcFits.ts needed only
+    // `boundsFromWire`, now in lib/fitBoundsWire.ts.
+    "/lib/fitParams.ts",
+    "/lib/paramRowCheck.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

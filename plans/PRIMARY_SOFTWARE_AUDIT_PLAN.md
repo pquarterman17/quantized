@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-25 (latest): **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-26 (latest): **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -3399,16 +3399,37 @@ violin, bar, strip, or summary plots.
   Library details list the description and units. E2E:
   `e2e/specs/equation-fit.spec.ts` (inline error position, `**`, hold,
   units, save + picker, six-column table fits the window).
-  - **Follow-up (not done): saved models in the workspace (.dwk).** Custom
-    fit models are a GLOBAL localStorage library, not store state, so there
-    is no existing seam: carrying them in a project would need a
-    serialize/parse slot, a merge policy on open (a same-named model with a
-    different equation in the file vs the browser), the Recipe Library's
-    `recipeSourcesComplete` fidelity flag, the merge-workspace path and
-    autosave triggers -- the project-scoped recipes that do ride the .dwk
-    (`quickPlotTemplates`, `plotRecipes`) touch ~34 files. Deferred rather
-    than half-done; until then a model travels between machines via the
-    Recipe Library's export/import.
+  - [x] **Follow-up: saved models in the workspace (.dwk).** (2026-09-26)
+    `lib/fitModelsProject.ts`, reached only through the lazy `.dwk` codec.
+    SAVE embeds every readable model in the local library (top-level
+    `customFitModels`, written only when non-empty, so a project without
+    models is byte-identical to before): nothing records which saved model a
+    fit used (an equation fit writes no `fitSpec`), so "used by the project"
+    is not derivable -- the cost, deliberate, is that a shared project
+    carries the sender's whole model library. Peak recipes are NOT a
+    precedent here (they never ride the .dwk). OPEN and APPEND merge in file
+    order: identical same-named record = no-op; free name = added; same
+    name with different content, or a name held by an unreadable local
+    record = the local one is never touched and the project's is added as
+    "<name> (from project)" / "(from project 2)" ..., unless an identical
+    copy already sits under one of those names (reopen does not pile up
+    copies); one info toast names what was added/renamed. Unreadable
+    embedded records (newer version, damaged entry, a non-array field) are
+    skipped with one migration warning and carried in the store
+    (`fitModelCarry`, replaced by a load, grown by an append, not undoable)
+    and written back on the next save, never destroyed; they also make
+    `recipeSourcesComplete` false. An open Recipe Library re-renders on the
+    merge. Autosave embeds the library at every write; saving a model does
+    NOT schedule an autosave (it is already durable in localStorage on the
+    only machine an autosave restores on). Compatibility: no version bump --
+    `parseWorkspace` picks fields by name, so an older build ignores the key
+    (pinned with an unknown-key test); old files load with no models.
+    Funded eager-neutral by moving `boundsFromWire` to `lib/fitBoundsWire.ts`,
+    which took `lib/fitParams.ts` + `lib/paramRowCheck.ts` out of the entry
+    chunk (net eager -1,252 B). NOT covered: workbook transfer packages
+    (copy/duplicate a workbook) carry no fit models; an already-open Curve
+    Fit picker lists merged models only when reopened; the Recipe Library's
+    export/import remains the per-model path.
 - [ ] Stretch: pretty LaTeX rendering while Python remains editable source.
 - **Progress 2026-09-25:** slices 1-3 plus a self-review round (identifier
   rule restored to the historical one; a damaged storage slot is moved aside

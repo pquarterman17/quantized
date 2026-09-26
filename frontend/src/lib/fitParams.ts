@@ -126,18 +126,6 @@ export function rowsAreDefault(
   );
 }
 
-/** Wire-shaped bounds: `null` where unbounded, so a recorded recipe round-trips
- *  through JSON (which has no Infinity literal — a bare Infinity serializes to
- *  `null` anyway, and relying on that is how a bound silently becomes garbage). */
-export function boundsForWire(values: readonly number[]): (number | null)[] {
-  return values.map((v) => (Number.isFinite(v) ? v : null));
-}
-
-/** Inverse of `boundsForWire` — restore ±Infinity from a recorded recipe. */
-export function boundsFromWire(
-  values: readonly (number | null)[] | undefined,
-  sign: 1 | -1,
-): number[] | undefined {
-  if (!values) return undefined;
-  return values.map((v) => (v == null ? sign * Number.POSITIVE_INFINITY : v));
-}
+// The ±Infinity <-> null wire encoding lives in ./fitBoundsWire (eager code
+// needs it without this module); re-exported so importers are unchanged.
+export { boundsForWire, boundsFromWire } from "./fitBoundsWire";
