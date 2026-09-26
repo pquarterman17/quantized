@@ -1093,6 +1093,23 @@
       "CategoricalFacet": {
         "description": "One bar-chart small-multiple panel (GUI_INTERACTION #12 slice 4b \u2014\nStatStage bar mode's faceted export). Self-contained (own ``groups``):\na facet-column level can be absent from one slice, so panels never share\none category set.",
         "properties": {
+          "counts": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counts"
+          },
           "errors": {
             "anyOf": [
               {
@@ -1138,7 +1155,14 @@
           "values": {
             "items": {
               "items": {
-                "type": "number"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "type": "array"
             },
@@ -1157,6 +1181,34 @@
       },
       "CategoricalFigureRequest": {
         "properties": {
+          "caveat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caveat"
+          },
+          "counts": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Counts"
+          },
           "dpi": {
             "default": 200,
             "title": "Dpi",
@@ -1242,7 +1294,14 @@
           "values": {
             "items": {
               "items": {
-                "type": "number"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "type": "array"
             },
@@ -10036,6 +10095,17 @@
             "default": "fd",
             "title": "Bins"
           },
+          "caveat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caveat"
+          },
           "data": {
             "anyOf": [
               {
@@ -10150,6 +10220,11 @@
           "show_mean_ci": {
             "default": false,
             "title": "Show Mean Ci",
+            "type": "boolean"
+          },
+          "show_n": {
+            "default": false,
+            "title": "Show N",
             "type": "boolean"
           },
           "show_points": {

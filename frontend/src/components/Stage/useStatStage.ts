@@ -36,10 +36,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { exportCategoricalFigure, exportStatplotFigure, type CategoricalFigureSpec } from "../../lib/api/figures";
 import { statsHistogram, statsQQ } from "../../lib/api";
 import { type BarChartData } from "../../lib/barlayout";
 import { facetSlices } from "../../lib/facet";
+import type { GroupNotice } from "../../lib/groupAxis";
 import { effectiveChannels } from "../../lib/plotdata";
 import { analysisData } from "../../lib/rowstate";
 import type { GroupSpec } from "../../lib/statschooser";
@@ -54,7 +54,8 @@ import {
 import type { Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
 import type { StatDrawData } from "./statRender";
-import { buildExportSpec, exportFacetedFigure } from "./statStageExport";
+import { exportStatStage } from "./statStageExport";
+import { applyLevels } from "./statStageLevels";
 import {
   computeBarData,
   computeBoxDraw,
@@ -87,6 +88,10 @@ export interface UseStatStageParams {
   /** Called once a non-null `seed` has been applied (the focused wrapper
    *  passes `clearStatStageSeed`; background windows pass a no-op). */
   onSeedConsumed: () => void;
+  /** P2.6 box 2 — the window's persisted `PlotView.statHideEmptyLevels` /
+   *  `statShowGroupN` (defaults false / true: see `lib/plotview`). */
+  hideEmptyLevels?: boolean;
+  showGroupN?: boolean;
 }
 
 export const DISTRIBUTIONS = ["norm", "logistic", "laplace", "uniform"] as const;
@@ -147,6 +152,9 @@ export interface StatStageState {
   error: string | null;
   /** Non-fatal note (e.g. an offline degrade) shown alongside the plot. */
   note: string | null;
+  /** P2.6 box 2: empty levels, small / unbalanced groups and dropped rows
+   *  (`lib/groupAxis.groupNotice`), or null when there is nothing to say. */
+  groupNotice: GroupNotice | null;
   draw: StatDrawData | null;
   /** Small multiples for Box/Violin/Bar (#11) — one draw per facet-column
    *  level, non-null only when `facetCol` is set AND the mode is box/violin/
@@ -169,6 +177,8 @@ function numArr(v: unknown): number[] {
 
 export function useStatStage(params: UseStatStageParams): StatStageState {
   const { active, yKeys, xKey, seriesOrder, seed, onSeedConsumed } = params;
+  const hideEmpty = params.hideEmptyLevels ?? false;
+  const showN = params.showGroupN ?? true;
 
   const data = useMemo(() => analysisData(active), [active]);
 
@@ -482,49 +492,30 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     barLabels,
   ]);
 
+  // P2.6 box 2: thread the draws onto the full category axis (empty slots,
+  // n captions) and build the notice — decoration only, see statStageLevels.
+  const levels = useMemo(
+    () =>
+      applyLevels(
+        {
+          active, data, mode, groupCol: effectiveGroupCol, group2Col: nestCol, valueCol, plotted,
+          barValueChannels, facetCol: effectiveFacetCol, hideEmpty, showN,
+        },
+        drawData,
+        drawFacets,
+      ),
+    [active, data, mode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels,
+      effectiveFacetCol, hideEmpty, showN, drawData, drawFacets],
+  );
+
   async function exportFigure(fmt: string): Promise<void> {
     if (!data) return;
-    // Faceted export (GUI_INTERACTION #12 slice 4b): drawFacets is set for
-    // exactly the modes that facet (box/violin/bar) — see the useEffect
-    // above. Checked before the flat branches below.
-    if (drawFacets && drawFacets.length > 0) {
-      await exportFacetedFigure(fmt, {
-        drawFacets, mode, barStack, groupLabel, barValueLabel, valueLabel,
-      });
-      return;
-    }
-    if (mode === "bar") {
-      if (!barData || barData.groups.length === 0) return;
-      const spec: CategoricalFigureSpec = {
-        groups: barData.groups.map((g) => g.label),
-        series: barData.seriesLabels,
-        values: barData.groups.map((g) => g.series.map((s) => s.mean)),
-        errors: barData.groups.map((g) => g.series.map((s) => (Number.isFinite(s.sem) ? s.sem : null))),
-        stacked: barStack,
-        fmt,
-        title: `${barValueLabel} by ${groupLabel}`,
-        x_label: groupLabel,
-        y_label: barValueLabel,
-        filename: `bar_${barValueLabel}`,
-      };
-      await exportCategoricalFigure(spec);
-      return;
-    }
-    // Box's points overlay (JMP_GAP J5 #1) and Strip mode (#3, which always
-    // shows points) both need each group's ORIGINAL dataset row indices --
-    // `point_row_indices` (parallel to the values `buildExportSpec` sends)
-    // so the export scatters points in the SAME relative spot the screen
-    // does (identical deterministic-jitter hash, both sides).
-    let pointRowIndices: number[][] | null = null;
-    if (mode === "strip" || (mode === "box" && showPoints)) {
-      const finiteIndexed = indexedGroups.filter((g) => g.points.length > 0);
-      pointRowIndices = finiteIndexed.map((g) => g.points.map((p) => p.rowIndex));
-    }
-    const spec = buildExportSpec(
-      mode, data, groups, valueCol, valueLabel, groupLabel, dist, bins, fit, fmt,
-      showPoints, pointRowIndices, showMeanCI, showConnectMeans && effectiveGroupCol != null,
-    );
-    if (spec) await exportStatplotFigure(spec);
+    await exportStatStage(fmt, {
+      data, mode, draw: levels.draw, drawFacets: levels.drawFacets, groups, indexedGroups, valueCol,
+      valueLabel, groupLabel, barValueLabel, barStack, dist, bins, fit, showPoints, showMeanCI,
+      connectMeans: showConnectMeans && effectiveGroupCol != null,
+      showN, caveat: levels.notice?.caveat ?? null,
+    });
   }
 
   return {
@@ -561,8 +552,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     busy,
     error,
     note,
-    draw: drawData,
-    drawFacets,
+    groupNotice: levels.notice,
+    draw: levels.draw,
+    drawFacets: levels.drawFacets,
     exportFigure,
   };
 }

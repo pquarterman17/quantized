@@ -22,6 +22,12 @@ import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
 from numpy.typing import ArrayLike  # noqa: E402
 
+from quantized.calc.figure_group_notes import (  # noqa: E402
+    add_caveat,
+    annotate_top_counts,
+    connect_segments,
+    mark_empty_slots,
+)
 from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
 from quantized.calc.figure_styles import figure_style  # noqa: E402
 from quantized.calc.statplots import box_stats as _box_stats  # noqa: E402
@@ -71,6 +77,8 @@ def render_statplot_figure(
     point_row_indices: list[list[int]] | None = None,
     show_mean_ci: bool = False,
     show_connect_means: bool = False,
+    show_n: bool = False,
+    caveat: str | None = None,
 ) -> bytes:
     """Render a statistical plot to image bytes.
 
@@ -99,6 +107,14 @@ def render_statplot_figure(
     on-screen category order — the "interaction plot" read for a grouped
     box/strip plot (reads the SAME ``box_stats`` mean as ``show_mean_ci``,
     never a second computation).
+
+    EMPTY groups (P2.6 box 2) are allowed for the grouped kinds, as long as
+    at least one group has a finite value: an empty group keeps its category
+    tick and gets an ``n=0`` marker instead of a glyph -- a declared level with
+    no usable data is shown as missing, never closed up. ``show_n`` adds the
+    per-group ``n=K`` annotation on a secondary top axis; ``caveat`` (the
+    frontend's small-n / unbalanced-groups caveat, verbatim) becomes a
+    one-line footnote. All three are ``calc.figure_group_notes``.
 
     ``dpi`` defaults to the style preset's calibrated resolution when not
     given (``None``), same as ``calc.figure``'s ``resolved_dpi`` convention;
@@ -138,7 +154,9 @@ def render_statplot_figure(
                 ax, kind, data, labels, dist, bins, fit, st,
                 show_points=show_points, point_row_indices=point_row_indices,
                 show_mean_ci=show_mean_ci, show_connect_means=show_connect_means,
+                show_n=show_n,
             )
+            layout_rect = add_caveat(fig, caveat)
             if title:
                 ax.set_title(title)
             if x_label:
@@ -148,7 +166,10 @@ def render_statplot_figure(
             if not st.box_on:
                 ax.spines["top"].set_visible(False)
                 ax.spines["right"].set_visible(False)
-            fig.tight_layout()
+            if layout_rect is None:
+                fig.tight_layout()
+            else:
+                fig.tight_layout(rect=layout_rect)
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=resolved_dpi)
             return buf.getvalue()
@@ -165,14 +186,16 @@ def _clean_groups_with_indices(
     dropping non-finite values. A missing/length-mismatched ``row_indices``
     entry degrades to a plain ``0..n-1`` sequence for that group (never
     raises -- jitter identity with the screen is best-effort, not load-
-    bearing for the plot to render)."""
+    bearing for the plot to render).
+
+    A group with no finite value is kept, EMPTY, at its position (P2.6 box
+    2: its slot stays on the axis with an ``n=0`` marker); only a request in
+    which EVERY group is empty is refused."""
     groups: list[np.ndarray] = []
     idxs: list[list[int]] = []
     for i, g in enumerate(data):
         v = np.asarray(g, dtype=float).ravel()
         mask = np.isfinite(v)
-        if not mask.any():
-            raise ValueError("every group must have at least one finite value")
         groups.append(v[mask])
         raw_idx = row_indices[i] if row_indices is not None and i < len(row_indices) else None
         if raw_idx is not None and len(raw_idx) == v.size:
@@ -180,6 +203,8 @@ def _clean_groups_with_indices(
             idxs.append([int(x) for x in idx_arr])
         else:
             idxs.append(list(range(int(mask.sum()))))
+    if not any(g.size for g in groups):
+        raise ValueError("at least one group must have a finite value")
     return groups, idxs
 
 
@@ -217,14 +242,25 @@ def _overlay_mean_ci(ax: Any, groups: list[np.ndarray], ticks: list[int]) -> Non
         )
 
 
-def _draw_connect_means_line(ax: Any, groups: list[np.ndarray], ticks: list[int]) -> None:
+def _draw_connect_means_line(
+    ax: Any, groups: list[np.ndarray], ticks: list[int], labels: list[str],
+) -> None:
     """Connect-group-means line (JMP_GAP J5 residual): a dashed line through
     each group's mean, in on-screen category order -- the "interaction plot"
     read for a box/strip plot grouped by a categorical column. Reads the
     SAME ``box_stats`` mean ``_overlay_mean_ci`` uses, never a second/
-    independent computation."""
-    means = [_box_stats(g)["mean"] for g in groups]
-    ax.plot(ticks, means, color="black", linewidth=1.25, linestyle="--", zorder=5)
+    independent computation. Broken into segments exactly where the screen
+    breaks it (``figure_group_notes.connect_segments``): at an empty slot and
+    at a nested outer-factor boundary."""
+    empty = [g.size == 0 for g in groups]
+    for seg in connect_segments(labels, empty):
+        if len(seg) < 2:
+            continue
+        means = [_box_stats(groups[i])["mean"] for i in seg]
+        ax.plot(
+            [ticks[i] for i in seg], means, color="black", linewidth=1.25, linestyle="--",
+            zorder=5,
+        )
 
 
 def _draw_statplot(
@@ -241,33 +277,52 @@ def _draw_statplot(
     point_row_indices: list[list[int]] | None = None,
     show_mean_ci: bool = False,
     show_connect_means: bool = False,
+    show_n: bool = False,
 ) -> None:
     if kind in _GROUPED:
         if not isinstance(data, list) or not data:
             raise ValueError(f"{kind} needs a non-empty list of groups")
-        groups, row_indices = _clean_groups_with_indices(data, point_row_indices)
-        ticks = list(range(1, len(groups) + 1))
-        cat_labels = labels or [f"group {i + 1}" for i in range(len(groups))]
+        all_groups, all_idx = _clean_groups_with_indices(data, point_row_indices)
+        all_ticks = list(range(1, len(all_groups) + 1))
+        cat_labels = labels or [f"group {i + 1}" for i in range(len(all_groups))]
+        empty = [g.size == 0 for g in all_groups]
+        # Only FILLED slots get a glyph; an empty one keeps its tick (below).
+        # With no empty slot these are the full lists and every call is the
+        # one this function always made.
+        filled = [i for i, e in enumerate(empty) if not e]
+        groups = [all_groups[i] for i in filled]
+        ticks = [all_ticks[i] for i in filled]
+        row_indices = [all_idx[i] for i in filled]
+        filled_labels = [cat_labels[i] for i in filled]
         if kind == "box":
             # A caller-provided mean+-CI marker replaces boxplot's own tiny
             # mean-triangle (showmeans) -- one mean glyph on screen, not two.
-            ax.boxplot(groups, tick_labels=labels, showmeans=not show_mean_ci)
+            if any(empty):
+                ax.boxplot(groups, positions=ticks, showmeans=not show_mean_ci)
+                ax.set_xticks(all_ticks)
+                ax.set_xticklabels(labels or [str(t) for t in all_ticks])
+            else:
+                ax.boxplot(groups, tick_labels=labels, showmeans=not show_mean_ci)
         elif kind == "violin":
             parts = ax.violinplot(groups, positions=ticks, showmeans=True, showextrema=True)
-            if labels:
-                ax.set_xticks(ticks)
-                ax.set_xticklabels(labels)
+            if labels or any(empty):
+                ax.set_xticks(all_ticks)
+                ax.set_xticklabels(labels or [str(t) for t in all_ticks])
             del parts
         else:  # strip (JMP_GAP J5 #3): points-only, no box/violin glyph
-            ax.set_xticks(ticks)
+            ax.set_xticks(all_ticks)
             ax.set_xticklabels(cat_labels)
-            ax.set_xlim(0.5, len(groups) + 0.5)
+        if kind == "strip" or any(empty):
+            ax.set_xlim(0.5, len(all_groups) + 0.5)
         if kind in ("box", "strip") and show_points:
-            _scatter_jittered_points(ax, groups, cat_labels, ticks, row_indices)
+            _scatter_jittered_points(ax, groups, filled_labels, ticks, row_indices)
         if kind in ("box", "strip") and show_mean_ci:
             _overlay_mean_ci(ax, groups, ticks)
         if kind in ("box", "strip") and show_connect_means and len(groups) > 1:
-            _draw_connect_means_line(ax, groups, ticks)
+            _draw_connect_means_line(ax, all_groups, all_ticks, cat_labels)
+        mark_empty_slots(ax, all_ticks, empty)
+        if show_n:
+            annotate_top_counts(ax, all_ticks, [g.size for g in all_groups])
         return
 
     sample = np.asarray(data, dtype=float).ravel()

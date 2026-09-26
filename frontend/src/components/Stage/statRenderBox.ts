@@ -13,7 +13,6 @@
 
 import { deterministicJitter } from "../../lib/jitter";
 import {
-  categorySlots,
   connectMeansBreaks,
   connectMeansSeries,
   finiteDomain,
@@ -23,12 +22,12 @@ import {
 import { seriesColor } from "../../lib/uplotOpts";
 import {
   drawCategoryAxis,
-  drawCountLabel,
   drawValueAxis,
   type BoxPointsGroup,
   type Rect,
   type StatDrawData,
 } from "./statRender";
+import { drawEmptySlotMarkers, drawSlotCounts, gapsBefore, slotPlan, type SlotPlan } from "./statRenderSlots";
 
 /** Jittered raw-point overlay for one category slot (JMP_GAP J5 #1): each
  *  point's horizontal offset is `deterministicJitter(rowIndex, category) *
@@ -113,12 +112,16 @@ export function drawConnectMeansLine(
   rect: Rect,
   vy: (v: number) => number,
   ink: string,
+  /** P2.6 box 2: true where an EMPTY axis slot sits before box i — the line
+   *  lifts there too (`statRenderSlots.gapsBefore`; export:
+   *  `calc.figure_group_notes.connect_segments`). */
+  gaps: readonly boolean[] = [],
 ) {
   const means = connectMeansSeries(boxes);
   // Review finding 2: under NESTED grouping the line must not run across an
   // outer-factor boundary — see `connectMeansBreaks` for why that reading is
   // wrong. Non-nested plots get exactly one segment, as before.
-  const breaks = connectMeansBreaks(boxes);
+  const breaks = connectMeansBreaks(boxes).map((b, i) => b || gaps[i] === true);
   ctx.save();
   ctx.strokeStyle = ink;
   ctx.lineWidth = 1.5;
@@ -138,6 +141,25 @@ export function drawConnectMeansLine(
   });
   ctx.stroke();
   ctx.restore();
+}
+
+/** The category axis, the empty-slot markers and the optional `n=` captions
+ *  for a box/strip draw — one call so both modes lay out identically. The
+ *  returned plan's `slots[groupSlot[i]]` is group i's slot. */
+function drawGroupAxis(
+  ctx: CanvasRenderingContext2D,
+  rect: Rect,
+  d: Extract<StatDrawData, { mode: "box" | "strip" }>,
+  labels: readonly string[],
+  groupN: readonly number[],
+  ink: string,
+  muted: string,
+): SlotPlan {
+  const plan = slotPlan(d.slots, labels);
+  drawCategoryAxis(ctx, rect, plan.slots, plan.labels, d.groupLabel, ink, muted);
+  drawEmptySlotMarkers(ctx, rect, plan, muted);
+  if (d.showN !== false) drawSlotCounts(ctx, rect, plan, groupN, muted);
+  return plan;
 }
 
 // ── Box (+ optional points / mean-CI overlays) ──────────────────────────────
@@ -169,8 +191,8 @@ export function drawBoxesWithMarks(
   if (!d.boxes.length) return;
   const domain = boxValueDomain(d.boxes, d.showMeanCI);
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
-  const slots = categorySlots(d.boxes.length);
-  drawCategoryAxis(ctx, rect, slots, d.boxes.map((b) => b.label), d.groupLabel, ink, muted);
+  const plan = drawGroupAxis(ctx, rect, d, d.boxes.map((b) => b.label), d.boxes.map((b) => b.n), ink, muted);
+  const slots = plan.groupSlot.map((i) => plan.slots[i]);
 
   const vy = (v: number) => rect.y + rect.h - ((v - domain[0]) / (domain[1] - domain[0])) * rect.h;
 
@@ -221,13 +243,11 @@ export function drawBoxesWithMarks(
     const pointsGroup = d.points?.[i];
     if (pointsGroup) drawJitteredPoints(ctx, pointsGroup, cx, hw, vy, color);
     if (d.showMeanCI) drawMeanCIMarker(ctx, cx, b, vy, ink);
-
-    drawCountLabel(ctx, cx, rect.y, b.n, muted);
   });
 
   // Connect-means line last (JMP_GAP J5 residual) so it draws on top of
   // every box glyph.
-  if (d.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink);
+  if (d.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, gapsBefore(plan));
 }
 
 // ── Strip (points-only, JMP_GAP J5 #3) ──────────────────────────────────────
@@ -246,8 +266,10 @@ export function drawStrip(
     : [];
   const domain = finiteDomain([...valueLists, ciExtents]);
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
-  const slots = categorySlots(d.points.length);
-  drawCategoryAxis(ctx, rect, slots, d.points.map((g) => g.label), d.groupLabel, ink, muted);
+  const plan = drawGroupAxis(
+    ctx, rect, d, d.points.map((g) => g.label), d.points.map((g) => g.points.length), ink, muted,
+  );
+  const slots = plan.groupSlot.map((i) => plan.slots[i]);
 
   const vy = (v: number) => rect.y + rect.h - ((v - domain[0]) / (domain[1] - domain[0])) * rect.h;
 
@@ -260,11 +282,9 @@ export function drawStrip(
     drawJitteredPoints(ctx, g, cx, hw, vy, color, 0.85);
     const b = d.boxes[i];
     if (d.showMeanCI && b) drawMeanCIMarker(ctx, cx, b, vy, ink);
-
-    drawCountLabel(ctx, cx, rect.y, g.points.length, muted);
   });
 
   // Connect-means line last (JMP_GAP J5 residual) so it draws on top of the
   // jittered points.
-  if (d.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink);
+  if (d.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, gapsBefore(plan));
 }

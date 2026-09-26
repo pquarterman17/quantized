@@ -13,17 +13,11 @@
 // shared axis helpers below are exported so that module can reuse them
 // rather than duplicating axis-drawing code.
 
-import {
-  groupedBarSlots,
-  stackedSegments,
-  stackedTotal,
-  type BarChartData,
-} from "../../lib/barlayout";
+import type { BarChartData } from "../../lib/barlayout";
+import type { AxisSlot } from "../../lib/groupAxis";
 import { niceTicks } from "../../lib/ticks";
 import { drawCategoryAxis } from "./statRenderAxes";
 import {
-  barValueDomain,
-  categorySlots,
   finiteDomain,
   violinOutline,
   zeroBasedDomain,
@@ -31,7 +25,9 @@ import {
   type IndexedGroupSpec,
 } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
+import { drawBar } from "./statRenderBar";
 import { drawBoxesWithMarks, drawStrip } from "./statRenderBox";
+import { drawEmptySlotMarkers, drawSlotCounts, slotPlan } from "./statRenderSlots";
 
 const MARGIN = { left: 60, right: 20, top: 20, bottom: 48 };
 
@@ -48,6 +44,15 @@ export interface ViolinGroup {
  *  jittered overlay (JMP_GAP J5 #1) — structurally the same shape
  *  `resolveGroupsIndexed` returns (`lib/statschooser.IndexedGroupSpec`). */
 export type BoxPointsGroup = IndexedGroupSpec;
+
+/** P2.6 box 2, on every categorical draw: `slots` places the plotted groups on
+ *  an axis that may carry EMPTY slots (`lib/groupAxis`; absent = one slot per
+ *  group, as before), and `showN` gates the `n=` captions (absent = shown, the
+ *  stage's long-standing behaviour). */
+export interface CategoryAxisMarks {
+  slots?: AxisSlot[] | null;
+  showN?: boolean;
+}
 
 export type StatDrawData =
   | {
@@ -67,8 +72,8 @@ export type StatDrawData =
        *  category order (JMP_GAP J5 residual, the "interaction plot" read)
        *  — reads `boxes[i].mean` via `lib/statstage.connectMeansSeries`. */
       connectMeans?: boolean;
-    }
-  | { mode: "violin"; violins: ViolinGroup[]; valueLabel: string; groupLabel: string }
+    } & CategoryAxisMarks
+  | ({ mode: "violin"; violins: ViolinGroup[]; valueLabel: string; groupLabel: string } & CategoryAxisMarks)
   | {
       mode: "qq";
       theo: number[];
@@ -94,6 +99,9 @@ export type StatDrawData =
       /** false = clustered (grouped) bars side by side; true = one stacked
        *  bar per category, series drawn bottom-to-top. */
       stacked: boolean;
+      /** Gates the per-bar `n=` captions (absent = shown). An empty category
+       *  is a group whose every series has n=0 (`lib/groupAxis.padBarData`). */
+      showN?: boolean;
     }
   | {
       /** Points-only categorical plot (JMP_GAP J5 #3): same category slots
@@ -108,7 +116,7 @@ export type StatDrawData =
       showMeanCI: boolean;
       /** See the `box` variant's `connectMeans` doc above. */
       connectMeans: boolean;
-    };
+    } & CategoryAxisMarks;
 
 export type Rect = { x: number; y: number; w: number; h: number };
 
@@ -123,21 +131,6 @@ export function fmt(v: number): string {
   const a = Math.abs(v);
   if (a !== 0 && (a < 1e-3 || a >= 1e5)) return v.toExponential(2);
   return Number(v.toPrecision(4)).toString();
-}
-
-/** "n=<count>" caption above a box/violin/strip (shared by all three). */
-export function drawCountLabel(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  top: number,
-  n: number,
-  muted: string,
-) {
-  ctx.fillStyle = muted;
-  ctx.font = "9px 'JetBrains Mono', monospace";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "bottom";
-  ctx.fillText(`n=${n}`, cx, top - 4);
 }
 
 function plotRect(w: number, h: number): Rect {
@@ -176,7 +169,7 @@ export function draw(canvas: HTMLCanvasElement, host: HTMLElement, data: StatDra
   else drawHistogram(ctx, rect, data, ink, muted);
 }
 
-// ── Shared axes (also used by statRenderBox.ts's box/strip family) ─────────
+// ── Shared axes (also used by statRenderBox.ts / statRenderBar.ts) ──────────
 
 export function drawValueAxis(
   ctx: CanvasRenderingContext2D,
@@ -236,118 +229,6 @@ function drawNumericXAxis(
   ctx.fillText(caption, rect.x + rect.w / 2, rect.y + rect.h + 24);
 }
 
-// ── Bar (gap #20 categorical plots: grouped / stacked, error bars) ─────────
-
-/** A vertical error-bar whisker (± SEM) with end caps, matching box mode's
- *  whisker/cap drawing. */
-function drawWhisker(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  yLo: number,
-  yHi: number,
-  capHalfWidth: number,
-  color: string,
-) {
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.25;
-  ctx.beginPath();
-  ctx.moveTo(cx, yLo);
-  ctx.lineTo(cx, yHi);
-  ctx.moveTo(cx - capHalfWidth, yLo);
-  ctx.lineTo(cx + capHalfWidth, yLo);
-  ctx.moveTo(cx - capHalfWidth, yHi);
-  ctx.lineTo(cx + capHalfWidth, yHi);
-  ctx.stroke();
-}
-
-function drawBar(
-  ctx: CanvasRenderingContext2D,
-  rect: Rect,
-  d: Extract<StatDrawData, { mode: "bar" }>,
-  ink: string,
-  muted: string,
-) {
-  const groups = d.data.groups;
-  if (!groups.length) return;
-  const nSeries = d.data.seriesLabels.length;
-
-  // Domain candidates: every drawn extent (bar top/bottom ± error), always
-  // including 0 (barValueDomain's job).
-  const candidates: number[] = [0];
-  groups.forEach((g) => {
-    if (d.stacked) {
-      candidates.push(stackedTotal(g.series));
-      const last = g.series[g.series.length - 1];
-      if (last && Number.isFinite(last.sem)) {
-        candidates.push(stackedTotal(g.series) + last.sem, stackedTotal(g.series) - last.sem);
-      }
-    } else {
-      g.series.forEach((s) => {
-        if (!Number.isFinite(s.mean)) return;
-        candidates.push(s.mean);
-        if (Number.isFinite(s.sem)) candidates.push(s.mean + s.sem, s.mean - s.sem);
-      });
-    }
-  });
-  const domain = barValueDomain(candidates);
-  drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
-  const slots = categorySlots(groups.length);
-  drawCategoryAxis(ctx, rect, slots, groups.map((g) => g.label), d.groupLabel, ink, muted);
-
-  const vy = (v: number) => rect.y + rect.h - ((v - domain[0]) / (domain[1] - domain[0])) * rect.h;
-  const zeroY = vy(0);
-
-  groups.forEach((g, gi) => {
-    const slot = slots[gi];
-    const cx = rect.x + slot.cx * rect.w;
-    const catFullW = slot.halfWidth * 2 * rect.w;
-
-    if (d.stacked) {
-      const hw = slot.halfWidth * 0.85 * rect.w;
-      const segs = stackedSegments(g.series);
-      segs.forEach((seg, si) => {
-        const color = seriesColor(si);
-        const yTop = vy(seg.top);
-        const yBot = vy(seg.base);
-        ctx.globalAlpha = 0.75;
-        ctx.fillStyle = color;
-        ctx.fillRect(cx - hw, yTop, hw * 2, Math.max(1, yBot - yTop));
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(cx - hw, yTop, hw * 2, Math.max(1, yBot - yTop));
-      });
-      const last = g.series[g.series.length - 1];
-      if (last && Number.isFinite(last.sem)) {
-        const top = stackedTotal(g.series);
-        drawWhisker(ctx, cx, vy(top + last.sem), vy(top - last.sem), hw * 0.5, ink);
-      }
-    } else {
-      const subSlots = groupedBarSlots(nSeries);
-      g.series.forEach((s, si) => {
-        const sub = subSlots[si];
-        const barCx = cx + sub.offset * catFullW;
-        const hw = sub.halfWidth * catFullW;
-        const color = seriesColor(si);
-        const mean = Number.isFinite(s.mean) ? s.mean : 0;
-        const yTop = vy(Math.max(mean, 0));
-        const yBot = vy(Math.min(mean, 0));
-        ctx.globalAlpha = 0.75;
-        ctx.fillStyle = color;
-        ctx.fillRect(barCx - hw, yTop, hw * 2, Math.max(1, yBot - yTop));
-        ctx.globalAlpha = 1;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(barCx - hw, yTop, hw * 2, Math.max(1, yBot - yTop));
-        if (Number.isFinite(s.sem)) {
-          drawWhisker(ctx, barCx, vy(mean + s.sem), vy(mean - s.sem), hw * 0.6, ink);
-        }
-        if (s.n > 0) drawCountLabel(ctx, barCx, Math.min(yTop, zeroY), s.n, muted);
-      });
-    }
-  });
-}
-
 // ── Violin ───────────────────────────────────────────────────────────────────
 
 function drawViolins(
@@ -360,13 +241,15 @@ function drawViolins(
   if (!d.violins.length) return;
   const domain = finiteDomain(d.violins.map((v) => [v.x[0] ?? 0, v.x[v.x.length - 1] ?? 0]));
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
-  const slots = categorySlots(d.violins.length);
-  drawCategoryAxis(ctx, rect, slots, d.violins.map((v) => v.label), d.groupLabel, ink, muted);
+  const plan = slotPlan(d.slots, d.violins.map((v) => v.label));
+  drawCategoryAxis(ctx, rect, plan.slots, plan.labels, d.groupLabel, ink, muted);
+  drawEmptySlotMarkers(ctx, rect, plan, muted);
+  if (d.showN !== false) drawSlotCounts(ctx, rect, plan, d.violins.map((v) => v.n), muted);
 
   const vy = (v: number) => rect.y + rect.h - ((v - domain[0]) / (domain[1] - domain[0])) * rect.h;
 
   d.violins.forEach((v, i) => {
-    const slot = slots[i];
+    const slot = plan.slots[plan.groupSlot[i]];
     const cx = rect.x + slot.cx * rect.w;
     const hw = slot.halfWidth * rect.w;
     const color = seriesColor(i);
@@ -406,8 +289,6 @@ function drawViolins(
     ctx.beginPath();
     ctx.arc(cx, vy(med), 2, 0, 2 * Math.PI);
     ctx.fill();
-
-    drawCountLabel(ctx, cx, rect.y, v.n, muted);
   });
 }
 
@@ -502,3 +383,4 @@ function drawHistogram(
 
 // Re-exported so `statRenderBox.ts` and the tests keep one import site.
 export { drawCategoryAxis } from "./statRenderAxes";
+export { drawCountLabel } from "./statRenderSlots";

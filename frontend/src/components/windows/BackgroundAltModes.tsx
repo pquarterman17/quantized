@@ -72,6 +72,8 @@ export function BackgroundStatWindow({ dataset, view }: BackgroundModeProps) {
     seriesOrder: view.seriesOrder,
     seed: null,
     onSeedConsumed: noSeedConsumed,
+    hideEmptyLevels: view.statHideEmptyLevels,
+    showGroupN: view.statShowGroupN,
   });
   return (
     <>

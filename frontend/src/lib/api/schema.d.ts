@@ -5523,6 +5523,8 @@ export interface components {
          *     one category set.
          */
         CategoricalFacet: {
+            /** Counts */
+            counts?: number[][] | null;
             /** Errors */
             errors?: (number | null)[][] | null;
             /** Groups */
@@ -5532,10 +5534,14 @@ export interface components {
             /** Series */
             series: string[];
             /** Values */
-            values: number[][];
+            values: (number | null)[][];
         };
         /** CategoricalFigureRequest */
         CategoricalFigureRequest: {
+            /** Caveat */
+            caveat?: string | null;
+            /** Counts */
+            counts?: number[][] | null;
             /**
              * Dpi
              * @default 200
@@ -5575,7 +5581,7 @@ export interface components {
              */
             title?: string;
             /** Values */
-            values: number[][];
+            values: (number | null)[][];
             /**
              * X Label
              * @default
@@ -9022,6 +9028,8 @@ export interface components {
              * @default fd
              */
             bins?: string | number;
+            /** Caveat */
+            caveat?: string | null;
             /** Data */
             data: number[][] | number[];
             /**
@@ -9061,6 +9069,11 @@ export interface components {
              * @default false
              */
             show_mean_ci?: boolean;
+            /**
+             * Show N
+             * @default false
+             */
+            show_n?: boolean;
             /**
              * Show Points
              * @default false

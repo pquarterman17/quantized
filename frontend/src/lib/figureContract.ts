@@ -62,6 +62,8 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   insetMode: canonical("plot.inset.enabled"),
   polarMode: canonical("plot.coordinateSystem", "Represent the current polar mode as an explicit coordinate system."),
   statMode: canonical("plot.statMode"),
+  statHideEmptyLevels: canonical("plot.stat.hideEmptyLevels"),
+  statShowGroupN: canonical("plot.stat.showGroupN"),
   xLim: canonical("axes.x.limits"),
   yLim: canonical("axes.y.limits"),
   xStep: canonical("axes.x.step"),

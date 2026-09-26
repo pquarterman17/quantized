@@ -14,12 +14,12 @@
 import {
   legendXYOrNull,
   sanitizeAnnotations,
-  sanitizeRegionShades,
   sanitizeShapes,
   LEGEND_POS,
   isAxisScale,
   type LegendPos,
 } from "./plotview";
+import { sanitizeRegionShades } from "./plotviewSanitize";
 import { PLOT_MARKS, type PlotMark } from "./plotspec";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import type { SignatureErrorRole } from "./quickPlotTemplates";

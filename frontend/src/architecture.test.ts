@@ -671,7 +671,11 @@ const MODULE_PINS: Record<string, number> = {
   // a non-string rename is dropped here instead of crashing the canvas in
   // `richtext.hasMarkup`. The four-line ternary went out; the call, its
   // one-line note and the import came in: a ratchet, not a bump.
-  "/lib/plotview.ts": 980,
+  // 980 -> 945 (P2.6 box 2): `sanitizeRegionShades` and the plain-boolean
+  // fields' sanitizing (now one loop, `boolViewFields`) moved to
+  // lib/plotviewSanitize.ts, funding the two persisted Stat Stage options
+  // (`statHideEmptyLevels`/`statShowGroupN`) in lines AND in eager bytes.
+  "/lib/plotview.ts": 945,
 };
 
 describe("module-size ratchet (JMP_GAP #14)", () => {
@@ -790,7 +794,10 @@ const TS_MODULE_PINS: Record<string, number> = {
   //     eager bundle worse, see that file's header. Its column helpers went to
   //     lib/statstage.ts instead, since the render path calls them
   //     synchronously.
-  "/components/Stage/useStatStage.ts": 569,
+  // 569 -> 561 (P2.6 box 2): the Export button's body moved to
+  //     statStageExport.exportStatStage, funding the level-accounting wiring
+  //     (applyLevels + the two persisted display options).
+  "/components/Stage/useStatStage.ts": 561,
   // useCalculators.ts GRADUATED 2026-08-15 (pin was 681): the DIRACULATOR_AUDIT
   // P3 split moved each shared-state domain to its own bounded hook
   // (useUnitsCalc / useXrayCalc / useCrystalCalc / useSldCalc, all under the
@@ -836,12 +843,10 @@ const TS_MODULE_PINS: Record<string, number> = {
   // drag-to-place dispatch whole to previewDrag.ts, which dropped the hook
   // under the general ceiling and off this list entirely.
   "/lib/uplotShapes.ts": 593,
-  // 527 -> 505 (2026-09-11, Group R review finding 1): the CATEGORY axis —
-  // `drawCategoryAxis` and the `truncateLabel` budget it is the only caller of
-  // — moved to components/Stage/statRenderAxes.ts. The nested-label fix (two
-  // stacked lines instead of one truncated one) pushed this file past the pin,
-  // and the label-fitting rule is a real unit, not a convenient offcut.
-  "/components/Stage/statRender.ts": 505,
+  // components/Stage/statRender.ts GRADUATED (P2.6 box 2, pin was 505): the
+  // bar painter moved whole to statRenderBar.ts (the missing-level work
+  // changes it more than any other mode) and the `n=` caption helper to
+  // statRenderSlots.ts, dropping the dispatcher under the general ceiling.
 };
 
 describe("general .ts module-size ceiling (RSM_CUTS_PLAN #20)", () => {
@@ -1850,6 +1855,8 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   insetMode: "display toggle, not channel-indexed",
   polarMode: "display toggle, not channel-indexed",
   statMode: "display toggle, not channel-indexed",
+  statHideEmptyLevels: "display toggle (P2.6 box 2), not channel-indexed",
+  statShowGroupN: "display toggle (P2.6 box 2), not channel-indexed",
   xLim: "x-axis range [min, max], not a column index",
   yLim: "y-axis range [min, max], not a column index",
   xStep: "x-axis tick step, not a column index",
