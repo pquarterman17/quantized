@@ -1,8 +1,11 @@
 // Merge (concatenate) several datasets row-wise into one (#19) — MATLAB
 // "Data ▸ Merge Selected". Datasets are joined by column position, so they must
-// share a column count; labels/units come from the first. Use the worksheet sort
+// share a column count; labels/units come from the first. P2.5: or by column
+// NAME (`match = "name"`, lib/mergeByName.ts), where a column one input lacks
+// is NaN-filled for its rows. Use the worksheet sort
 // afterwards if the merged x needs ordering (concatenation preserves input order).
 
+import { alignByName, type AppendMatch } from "./mergeByName";
 import { concatRowSidecars, sidecarRowCount, withoutRowSidecars } from "./rowSidecars";
 import type { DataStruct } from "./types";
 
@@ -81,10 +84,11 @@ function planChannel(datasets: readonly DataStruct[], c: number): ChannelPlan | 
  *  codes losslessly when tables differ (`planChannel`); a channel missing
  *  its table on even one input still drops (can't invent a mapping for raw,
  *  never-coded values). */
-export function mergeDatasets(datasets: DataStruct[], names: string[]): DataStruct {
-  if (datasets.length < 2) {
+export function mergeDatasets(inputs: DataStruct[], names: string[], match: AppendMatch = "position"): DataStruct {
+  if (inputs.length < 2) {
     throw new Error("merge needs at least 2 datasets");
   }
+  const datasets = match === "name" ? alignByName(inputs) : inputs;
   const ncol = datasets[0].labels.length;
   for (let i = 1; i < datasets.length; i++) {
     if (datasets[i].labels.length !== ncol) {
@@ -197,6 +201,7 @@ export function mergeDatasets(datasets: DataStruct[], names: string[]): DataStru
       ...concatRowSidecars(datasets.map((d, i) => ({ metadata: d.metadata, rowCount: spans[i] }))),
       merged_from: names.join(" + "),
       merged_count: datasets.length,
+      ...(match === "name" ? { merged_by: "name" } : {}),
     },
     ...(plans.size ? { cat_levels } : {}),
     ...(Object.keys(level_order).length ? { level_order } : {}),

@@ -10,6 +10,7 @@ import {
   DESIGNATION_BADGE,
   hasOriginReportSheets,
   ORIGIN_DESIGNATIONS,
+  originTextColumnNames,
   originTextColumns,
 } from "./columnmeta";
 import type { DataStruct } from "./types";
@@ -195,6 +196,35 @@ describe("originTextColumns (item 8)", () => {
   it("ignores a malformed origin_text_columns value defensively", () => {
     const ds: DataStruct = { ...plain, metadata: { origin_text_columns: "not an object" } };
     expect(originTextColumns(ds)).toEqual([]);
+  });
+});
+
+// P2.5 review finding 6: `transformForm.ts`'s join-key picker used to call
+// `originTextColumns` — which copies every row of every text column — just to
+// read the column NAMES. `originTextColumnNames` must name exactly the same
+// columns, in the same order, without that copy.
+describe("originTextColumnNames (review finding 6)", () => {
+  it("names exactly the columns originTextColumns would, in the same order — for every case above", () => {
+    const cases: DataStruct[] = [
+      plain,
+      { ...plain, metadata: { origin_text_columns: { B: ["hi", "lo"], A: ["x", "y"] } } },
+      { ...plain, metadata: { origin_text_columns: "not an object" } },
+      { ...plain, metadata: { text_columns: { sample: ["A", "B", "C"] } } },
+    ];
+    for (const ds of cases) {
+      expect(originTextColumnNames(ds)).toEqual(originTextColumns(ds).map((c) => c.shortName));
+    }
+  });
+
+  it("never reads a cell — a column whose cells throw on being stringified is still named", () => {
+    // A real array (so it passes the `Array.isArray` filter both readers
+    // share) whose one cell throws if actually converted to a string —
+    // exactly what `originTextColumns`' `rows.map(String)` does and
+    // `originTextColumnNames` must not.
+    const poisoned = [{ toString: () => { throw new Error("cell was read"); } }];
+    const ds: DataStruct = { ...plain, metadata: { text_columns: { A: poisoned } } };
+    expect(originTextColumnNames(ds)).toEqual(["A"]);
+    expect(() => originTextColumns(ds)).toThrow("cell was read");
   });
 });
 

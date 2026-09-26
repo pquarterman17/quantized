@@ -133,6 +133,7 @@ const cases: [string, TransformParams][] = [
   ["unstack", { op: "unstack", key: 0, category: 1, value: 2, aggregate: "mean" }],
   ["join", { op: "join", leftKey: 0, rightKey: 0, mode: "full", with: { id: "oth", name: "oth.dat" } }],
   ["merge", { op: "merge", with: [{ id: "oth", name: "oth.dat" }] }],
+  ["merge (by column name)", { op: "merge", with: [{ id: "oth", name: "oth.dat" }], match: "name" }],
   ["algebra", { op: "algebra", operation: "A-B", interp: "linear", with: { id: "oth", name: "oth.dat" } }],
   ["resample (points)", { op: "resample", mode: "n_points", nPoints: 5, method: "linear", outOfRange: "nan", sortUnsorted: false }],
   ["resample (range)", { op: "resample", mode: "range", start: 0, stop: 6, step: 0.5, method: "makima", outOfRange: "clip", sortUnsorted: false }],
@@ -145,6 +146,28 @@ describe("transform steps replay to the same output", () => {
       const out = await runTransform(useApp.getState, params, "src", async () => true);
       return out ? [out.id] : [];
     });
+  });
+
+  it("join on a text column (the key is recorded by name)", async () => {
+    const text = (ids: string[]): Record<string, unknown> => ({ text_columns: { ID: ids } });
+    useApp.setState({
+      datasets: [
+        { ...SRC, data: { ...main, metadata: text(["a", "b", "b", "c", "d", "e", ""]) } },
+        { ...OTH, data: { ...other, metadata: text(["b", "a", "z", "e"]) } },
+      ],
+    });
+    await recordThenReplay(async () => {
+      const out = await runTransform(
+        useApp.getState,
+        { op: "join", leftKey: "ID", rightKey: "ID", mode: "left", with: { id: "oth", name: "oth.dat" } },
+        "src",
+        async () => true,
+      );
+      return out ? [out.id] : [];
+    });
+    expect(useApp.getState().macroSteps[0].params).toMatchObject({ leftKey: "ID", rightKey: "ID" });
+    const joined = useApp.getState().datasets.filter((d) => d.name.endsWith("(joined)"));
+    expect(joined[0].data.cat_levels?.[0]).toEqual(["a", "b", "c", "d", "e"]);
   });
 
   it("split (recorded by the store action itself)", async () => {

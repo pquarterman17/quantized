@@ -1965,7 +1965,17 @@ describe("useApp lazy per-book import (ORIGIN_FILE_DECODE_PLAN #38)", () => {
     });
   });
 
-  describe("mergeSelected resolves pending picks first (#38)", () => {
+  // P2.5: "Merge selected" now opens the previewed append (the Reshape &
+  // combine workshop); its Create commits through `runTransform`, which is
+  // what must resolve a still-pending pick before merging.
+  describe("a merge commit resolves pending picks first (#38)", () => {
+    const mergeD2Into = async (primary: string) =>
+      (await import("../lib/transformRun")).runTransform(
+        useApp.getState,
+        { op: "merge", with: [{ id: "d2", name: "book.opj" }] },
+        primary,
+      );
+
     it("resolves a still-pending selected dataset before merging", async () => {
       useApp.setState({
         datasets: [
@@ -1982,7 +1992,11 @@ describe("useApp lazy per-book import (ORIGIN_FILE_DECODE_PLAN #38)", () => {
       });
       vi.mocked(fetchBookData).mockResolvedValue(raw);
 
+      // mergeSelected itself only opens the preview: nothing is created yet.
       await useApp.getState().mergeSelected();
+      expect(useApp.getState().datasets).toHaveLength(2);
+
+      await mergeD2Into("d1");
 
       expect(useApp.getState().datasets.find((d) => d.id === "d2")!.pending).toBeUndefined();
       const merged = useApp.getState().datasets.find((d) => d.name.startsWith("merged"));
@@ -2006,10 +2020,9 @@ describe("useApp lazy per-book import (ORIGIN_FILE_DECODE_PLAN #38)", () => {
       });
       vi.mocked(fetchBookData).mockRejectedValue(new Error("network down"));
 
-      await useApp.getState().mergeSelected();
+      await expect(mergeD2Into("d1")).rejects.toThrow("network down");
 
       expect(useApp.getState().datasets.some((d) => d.name.startsWith("merged"))).toBe(false);
-      expect(useApp.getState().status).toContain("network down");
     });
   });
 });

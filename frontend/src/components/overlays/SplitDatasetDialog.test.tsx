@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -250,6 +250,50 @@ describe("SplitDatasetDialog — confirm / cancel", () => {
     expect(child.data.metadata.transform_warnings).toEqual([list.textContent]);
   });
 
+  it("P2.5: previews the chosen group's rows (names, units, sizes); the created child IS that preview", async () => {
+    useApp.setState({ splitDialogTargetId: "d1" });
+    render(<SplitDatasetDialog />);
+    const table = () => screen.getByRole("table", { name: "Preview rows" });
+    const cells = () => within(table()).getAllByRole("cell").map((c) => c.textContent);
+    expect(within(table()).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["X", "T (K)"]);
+    expect(cells()).toEqual(["0", "4.998", "1", "5", "2", "5.003"]);
+    expect(screen.getByLabelText("Preview size").textContent).toBe(
+      "run1.dat: 6 rows × 1 columns → 2 datasets; this one: 3 rows × 1 columns",
+    );
+    fireEvent.change(screen.getByLabelText("Preview group"), { target: { value: "1" } });
+    expect(cells()).toEqual(["3", "9.997", "4", "10", "5", "10.003"]);
+    const shown = cells();
+
+    fireEvent.click(screen.getByText("Split into 2 datasets"));
+    await vi.waitFor(() => expect(useApp.getState().datasets).toHaveLength(3));
+    // Parity: the commit ran the dialog's own compute (lib/splitCompute.ts).
+    const { computeSplit, splitChildData } = await import("../../lib/splitCompute");
+    const { groups, warnings } = computeSplit({ id: "d1", name: "run1.dat", data: wobble }, 0);
+    const created = useApp.getState().datasets.slice(1);
+    expect(created.map((d) => d.data)).toEqual(groups.map((g) => splitChildData(wobble, g, warnings)));
+    const second = created[1].data;
+    expect(second.time.flatMap((x, i) => [String(x), String(second.values[i][0])])).toEqual(shown);
+  });
+
+  it("P2.5: the previewed group resets when the split itself changes (the dialog stays mounted)", () => {
+    useApp.setState({ splitDialogTargetId: "d1" });
+    render(<SplitDatasetDialog />);
+    const pick = () => screen.getByLabelText("Preview group") as HTMLSelectElement;
+    fireEvent.change(pick(), { target: { value: "1" } });
+    expect(pick().value).toBe("1");
+    fireEvent.change(screen.getByLabelText("Tolerance"), { target: { value: "0.5" } });
+    expect(pick().value).toBe("0");
+  });
+
+  it("P2.5: a still-loading book's split preview is labelled preview-only", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run1.dat", data: wobble, pending: { kind: "path", path: "/r.opj", bookId: "B", rows: 60, cols: 1 } }],
+      splitDialogTargetId: "d1",
+    });
+    render(<SplitDatasetDialog />);
+    expect(screen.getByText(/^Preview only:/)).toBeTruthy();
+  });
+
   it("P2.5: a split with no blank values shows no warning", () => {
     useApp.setState({ splitDialogTargetId: "d1" });
     render(<SplitDatasetDialog />);
@@ -279,7 +323,7 @@ describe("SplitDatasetDialog focus-in / Tab trap / Escape / restore (P3.3 R1)", 
     expect(screen.getByLabelText("Split column")).toHaveFocus();
   });
 
-  it("Tab wraps between Column, Tolerance, Cancel, and Split instead of walking out to the page behind it", async () => {
+  it("Tab wraps between Column, Tolerance, Preview group, Cancel, and Split instead of walking out to the page behind it", async () => {
     const user = userEvent.setup();
     render(
       <>
@@ -297,6 +341,8 @@ describe("SplitDatasetDialog focus-in / Tab trap / Escape / restore (P3.3 R1)", 
 
     await user.tab();
     expect(tolerance).toHaveFocus();
+    await user.tab(); // P2.5: which group the data preview shows
+    expect(screen.getByLabelText("Preview group")).toHaveFocus();
     await user.tab();
     expect(cancel).toHaveFocus();
     await user.tab();
@@ -360,10 +406,13 @@ describe("SplitDatasetDialog — an explicit cat_levels table (BUG-008)", () => 
 
   it("previews one group per LEVEL NAME, not one merged group", () => {
     render(<SplitDatasetDialog />);
-    expect(screen.getByText("A123")).toBeInTheDocument();
-    expect(screen.getByText("B456")).toBeInTheDocument();
-    expect(screen.getByText("C789")).toBeInTheDocument();
-    expect(screen.getAllByText("2 rows")).toHaveLength(3);
+    // Scoped to the group list: the preview table below also shows the level
+    // text in its cells.
+    const groups = within(screen.getByRole("group", { name: "Detected groups" }));
+    expect(groups.getByText("A123")).toBeInTheDocument();
+    expect(groups.getByText("B456")).toBeInTheDocument();
+    expect(groups.getByText("C789")).toBeInTheDocument();
+    expect(groups.getAllByText("2 rows")).toHaveLength(3);
     expect(screen.getByText("Split into 3 datasets")).toBeInTheDocument();
   });
 
@@ -384,7 +433,7 @@ describe("SplitDatasetDialog — an explicit cat_levels table (BUG-008)", () => 
     });
     render(<SplitDatasetDialog />);
     expect(screen.getByText("Split into 3 datasets")).toBeInTheDocument();
-    expect(screen.getAllByText("dup")).toHaveLength(2);
+    expect(within(screen.getByRole("group", { name: "Detected groups" })).getAllByText("dup")).toHaveLength(2);
     expect(warn).not.toHaveBeenCalled(); // no duplicate-key warning
     warn.mockRestore();
   });

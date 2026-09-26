@@ -143,17 +143,34 @@ export interface TextColumn {
   rows: string[];
 }
 
-/** `metadata.origin_text_columns` as an ordered list (Origin short-name sort:
- *  length-then-lex, so "A".."Z" then "AA".."AZ", …), or `[]` when the sheet
- *  carries none (every non-Origin dataset, and most Origin sheets). */
-export function originTextColumns(ds: DataStruct): TextColumn[] {
+/** The raw `[shortName, rows]` entries behind `originTextColumns`/
+ *  `originTextColumnNames`, in the SAME Origin short-name sort (length-then-
+ *  lex) both read — the one place that order and filter live, so the two
+ *  can never disagree on which columns exist or in what order. */
+function textColumnEntries(ds: Pick<DataStruct, "metadata">): [string, unknown[]][] {
   const metadata = ds.metadata ?? {};
   const raw = metadata["text_columns"] ?? metadata["origin_text_columns"];
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
   return Object.entries(raw as Record<string, unknown>)
     .filter((entry): entry is [string, unknown[]] => Array.isArray(entry[1]))
-    .sort(([a], [b]) => a.length - b.length || a.localeCompare(b))
-    .map(([shortName, rows]) => ({ shortName, rows: rows.map(String) }));
+    .sort(([a], [b]) => a.length - b.length || a.localeCompare(b));
+}
+
+/** `metadata.origin_text_columns` as an ordered list (Origin short-name sort:
+ *  length-then-lex, so "A".."Z" then "AA".."AZ", …), or `[]` when the sheet
+ *  carries none (every non-Origin dataset, and most Origin sheets). */
+export function originTextColumns(ds: DataStruct): TextColumn[] {
+  return textColumnEntries(ds).map(([shortName, rows]) => ({ shortName, rows: rows.map(String) }));
+}
+
+/** Just the ordered short names `originTextColumns` would return, without
+ *  copying any column's row strings — for a caller (e.g. a join-key picker)
+ *  that only needs to NAME the columns, never read their cells. Copying every
+ *  row of every text sidecar just to list column names is wasted work on a
+ *  worksheet with many/long text columns, and it scales with row count for a
+ *  form that only re-renders a short label list. */
+export function originTextColumnNames(ds: Pick<DataStruct, "metadata">): string[] {
+  return textColumnEntries(ds).map(([shortName]) => shortName);
 }
 
 /** True when the sheet carries any `metadata.origin_report_sheets` columns

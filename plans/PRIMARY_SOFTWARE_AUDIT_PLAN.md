@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-26 (latest): **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-26 (latest): **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -3438,7 +3438,8 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
 
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5.
 
-- [ ] Previewed append, keyed join, align/interpolate, reshape, split.
+- [x] Previewed append, keyed join, align/interpolate, reshape, split.
+  (2026-09-26: all five ops preview live before anything is created.)
   - [x] **align/interpolate** (2026-09-26). Data > "Resample / align to a
     common grid…" opens a lazy workshop (`components/workshops/resample/`,
     open flag in the tiny `store/resampleDialog.ts`, zero `useApp.ts` lines).
@@ -3488,13 +3489,99 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
     the 846.1 kB budget, pin unchanged. The workshop is a lazy chunk; the
     eager cost is the command entry and the tiny open-flag store.
     **Not done:**
-    - Append, keyed join, reshape and split still review their warnings in a
-      confirm dialog rather than a live data preview. That is why the parent
-      box stays open.
+    - ~~Append, keyed join, reshape and split still review their warnings in
+      a confirm dialog rather than a live data preview.~~ Done the same day;
+      see the next entry.
     - Aligning N datasets makes N undo entries, not one.
     - A categorical channel still refuses a new grid (the calc layer's
       BUG-005 rule), rather than offering nearest-neighbour.
     - There is no per-channel method choice.
+  - [x] **append, keyed join, reshape, split** (2026-09-26). Data > Transpose
+    / Stack / Unstack / Join by key and "Merge selected" (Data menu and the
+    Library context menu) now open one lazy **Reshape & combine** workshop
+    (`components/workshops/transformPreview/`, open flag in the tiny
+    `store/transformPreviewDialog.ts`, zero `useApp.ts` lines) with an
+    operation picker. It replaces the ParamDialog module
+    `lib/worksheetTransformCommands.ts` and its review confirm. The pick is
+    previewed LIVE, debounced, through `lib/transformRun.computeTransform`,
+    the same function the commit and the pipeline replay run. The preview
+    shows:
+    - the first 20 rows of the result (`components/overlays/TransformPreviewTable.tsx`),
+      with column names and units, level text for categorical cells and the
+      text columns;
+    - each input's rows × columns (what the transform actually read, i.e. the
+      analysis rows for the reshapes and the join) against the result's;
+    - the #431 warnings.
+
+    Nothing is created until Create. Create is disabled while the preview is
+    stale (an edit, or a changed input dataset) and, on a unit mismatch, until
+    "Create despite the unit mismatch" is ticked for THIS form. A still-loading
+    Origin book is labelled "Preview only". Its commit resolves the full rows
+    and, if they warn differently from what was previewed, falls back to the
+    review dialog instead of creating silently. Recording, provenance
+    (`recordedProvenance`) and one-entry undo are the existing
+    `runTransform` path, unchanged.
+
+    **Split** keeps its dialog, which already previewed the groups. It now
+    also previews a chosen group's rows (the same table), the source and
+    child sizes, and the preview-only note. The dialog and the store action
+    share `lib/splitCompute.ts` (`computeSplit` + `splitChildData`). The
+    action's body moved to a lazy `store/splitRun.ts`, which also funded the
+    workshop's eager open flag.
+
+    **Append by column NAME** (`lib/mergeByName.ts`, `mergeDatasets(…,
+    "name")`; position stays the default). Names match trimmed and
+    case-insensitively, a repeated name pairs occurrence by occurrence, and
+    an unnamed column pairs only with an unnamed column at the same position.
+    Output columns are the first input's in order, then new names as met, so
+    dataset 0's column indices never move. A column an input lacks is filled
+    with NaN for that input's rows and reported by the new `missing-columns`
+    warning (`lib/appendWarnings.ts`, split out of `transformWarnings.ts`),
+    never dropped silently. Categorical tables are remapped by level text.
+    Recorded as `match: "name"`; an old step without `match` replays by
+    position.
+
+    **Text/categorical join keys** (`lib/worksheetJoin.ts`, split out of
+    `worksheetTransforms.ts`). A key may be a categorical channel, matched by
+    its LEVEL TEXT (never its code), or a text sidecar column by name
+    (`metadata.text_columns ?? origin_text_columns`). Keys are trimmed.
+    `joinKeyColumn` is shared with `analyzeJoin`, so the duplicate, blank and
+    unmatched counts are over the same keys. A text key cannot be an X, so
+    the output X is the row number, the key becomes a categorical first
+    column, and each side's own X is carried as a column. Other channels keep
+    their own side's level table (the numeric join used to drop them). A text
+    key against a numeric one is refused rather than guessed. The recorded
+    step stores the text column's name as the key.
+
+    **Tests:**
+    - `useReshapePreview.test.ts`: preview/commit parity for every op (the
+      created dataset equals the previewed result plus the stamped
+      provenance); staleness; the pending-book re-review.
+    - `ReshapePanel.test.tsx`: each op's table, sizes and warnings before
+      create; the unit acknowledgment.
+    - `mergeByName.test.ts`, `worksheetJoin.test.ts`, `transformForm.test.ts`.
+    - Replay cases for append-by-name and a text-column join
+      (`executeSteps.transform.test.ts`).
+    - Split preview + parity (`SplitDatasetDialog.test.tsx`).
+    - e2e `transform-safety.spec.ts`, rewritten for the workshop: open a join,
+      the preview shows 2 rows and the duplicate-key warning, acknowledge the
+      K/mK mismatch, create, replay.
+
+    **Self-review round:** code-review high, 9 findings, 7 fixed, among them
+    a text-key join dropping both X axes, a stale split-group pick, and a
+    deleted-column join key. The key guards were sabotage-verified.
+
+    **Eager bundle:** 865,754 → 865,342 B (845.1 kB of the 846.1 kB budget),
+    pin unchanged.
+
+    **Not done:**
+    - The live preview computes the whole result to show 20 rows. That is
+      linear and capped at 5M cells/rows, as in the resample workshop, but
+      large books can stall briefly after each edit.
+    - A NUMERIC join on a channel key still drops both sides' X
+      (pre-existing behaviour, kept so existing outputs and replays do not
+      change).
+    - Aligning N datasets (resample) still makes N undo entries.
 - [ ] Python-like derived expressions, units, fitted-value use, defined error
   propagation.
 - [ ] Metadata cleanup/promotion to factors.

@@ -1,8 +1,8 @@
 // P2.5 transform-safety preview: the warnings a combine/reshape would produce,
 // rendered inline in a dialog BEFORE the user commits (Split by column value,
-// Dataset Math). The ParamDialog-driven reshapes show the same sentences in
-// their review confirm (lib/transformRun.reviewTransform). Only lazy dialogs
-// import this.
+// Dataset Math, Resample, Reshape & combine). The append import shows the
+// same sentences in its review confirm (lib/transformRun.reviewTransform).
+// Only lazy dialogs import this.
 
 import type { TransformWarning } from "../../lib/transformWarnings";
 
