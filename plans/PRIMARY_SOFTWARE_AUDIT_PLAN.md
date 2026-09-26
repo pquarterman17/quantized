@@ -3380,7 +3380,32 @@ violin, bar, strip, or summary plots.
   the start or after `(` keeps the historical encoding bit for bit, so every
   previously-correct equation (and the golden set) is unchanged. Also: `x²`
   is now an "unexpected character" error instead of a parameter named `x²`.
-- [ ] Save model with units/description.
+- [x] Save model with units/description. (slice 3, 2026-09-25) Saved
+  custom models (`lib/fitmodels`) are versioned: v2 adds an optional
+  `description` and per-parameter `units`; a record is written as v2 only
+  when it carries one of them (otherwise still v1, readable by older
+  builds), and old v1 records load byte for byte unchanged. Load is
+  tolerant: an unreadable stored record is skipped and reported ONCE per
+  session (`loadCustomModelsChecked` -> a Curve Fit toast), and saves /
+  deletes rewrite the slot AROUND it instead of destroying it. File import
+  stays strict (`parseFitModelFile`: unsupported version, misaligned or
+  non-string units, a non-string description are refused; the sniffer routes
+  any numeric version to it). The equation table has a unit column; the
+  picker labels a model with the start of its description and the panel
+  shows the full text; fitted values and errors carry their unit; the Recipe
+  Library details list the description and units. E2E:
+  `e2e/specs/equation-fit.spec.ts` (inline error position, `**`, hold,
+  units, save + picker, six-column table fits the window).
+  - **Follow-up (not done): saved models in the workspace (.dwk).** Custom
+    fit models are a GLOBAL localStorage library, not store state, so there
+    is no existing seam: carrying them in a project would need a
+    serialize/parse slot, a merge policy on open (a same-named model with a
+    different equation in the file vs the browser), the Recipe Library's
+    `recipeSourcesComplete` fidelity flag, the merge-workspace path and
+    autosave triggers -- the project-scoped recipes that do ride the .dwk
+    (`quickPlotTemplates`, `plotRecipes`) touch ~34 files. Deferred rather
+    than half-done; until then a model travels between machines via the
+    Recipe Library's export/import.
 - [ ] Stretch: pretty LaTeX rendering while Python remains editable source.
 
 ### P2.8 — 2-D map polish

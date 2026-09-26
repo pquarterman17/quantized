@@ -4,13 +4,13 @@
 // design — all state/logic lives in the hook. "→ Report" lands the fit as a
 // #36 report sheet in the library (emitted server-side, one source of truth).
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { DataTable } from "../../primitives/DataTable";
 import { Button, Select } from "../../primitives";
 import { reportEmit } from "../../../lib/api";
-import { loadCustomModels, type CustomFitModel } from "../../../lib/fitmodels";
+import { loadCustomModelsChecked, type CustomFitModel } from "../../../lib/fitmodels";
 import { fmtNum as fmt } from "../../../lib/format";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
@@ -28,6 +28,17 @@ import { useModelScan } from "./useModelScan";
 // Custom-model picker values are namespaced "custom:<name>"; the bare prefix
 // is the blank "type a new equation" entry (GOTO #1).
 const CUSTOM_PREFIX = "custom:";
+
+// Unreadable saved models are reported ONCE per session however often the
+// panel mounts (P2.7 slice 3: tolerant load, single warning).
+const warnedModelLoads = new Set<string>();
+
+/** Picker label of a saved model: its name plus the start of its description. */
+function customLabel(m: CustomFitModel): string {
+  const d = m.description?.trim();
+  if (!d) return `ƒ ${m.name}`;
+  return `ƒ ${m.name} — ${d.length > 32 ? `${d.slice(0, 31)}…` : d}`;
+}
 
 export default function CurveFitPanel() {
   const setOpen = useApp((s) => s.setCurveFitOpen);
@@ -93,14 +104,22 @@ export default function CurveFitPanel() {
     setModelName(kind === "equation" ? `${CUSTOM_PREFIX}${name}` : name);
 
   // Saved custom equation models (GOTO #1) — listed alongside registry models.
-  const [customModels, setCustomModels] = useState<CustomFitModel[]>(() => loadCustomModels());
+  const [storedModels] = useState(loadCustomModelsChecked);
+  const [customModels, setCustomModels] = useState<CustomFitModel[]>(storedModels.models);
+  useEffect(() => {
+    const w = storedModels.warning;
+    if (w && !warnedModelLoads.has(w)) {
+      warnedModelLoads.add(w);
+      toast(w, "danger");
+    }
+  }, [storedModels]);
   const isCustom = modelName.startsWith(CUSTOM_PREFIX);
   const customName = isCustom ? modelName.slice(CUSTOM_PREFIX.length) : "";
   const currentCustom = customModels.find((m) => m.name === customName) ?? null;
   const modelOptions = [
     ...models.map((m) => ({ value: m.name, label: m.name })),
     { value: CUSTOM_PREFIX, label: "Custom equation…" },
-    ...customModels.map((m) => ({ value: `${CUSTOM_PREFIX}${m.name}`, label: `ƒ ${m.name}` })),
+    ...customModels.map((m) => ({ value: `${CUSTOM_PREFIX}${m.name}`, label: customLabel(m) })),
   ];
   const onSavedChange = (list: CustomFitModel[]) => {
     setCustomModels(list);

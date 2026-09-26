@@ -43,10 +43,15 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
   const resultNames = (eq.result?.paramNames as string[] | undefined) ?? eq.paramNames;
   // A held parameter kept its guess and has no standard error (P2.7) — say
   // "held" rather than the blank a failed error estimate would show.
+  // Units are display metadata from the table, matched by name (P2.7).
+  const unitOf = (name: string | undefined) => {
+    const u = eq.rows.find((r) => r.name === name)?.unit.trim();
+    return u ? ` ${u}` : "";
+  };
   const paramRows = params.map((p, i) => [
     resultNames[i] ?? `p${i}`,
-    fmt(p),
-    eq.fitHeld[i] ? "held" : fmt(errors[i]),
+    `${fmt(p)}${unitOf(resultNames[i])}`,
+    eq.fitHeld[i] ? "held" : `${fmt(errors[i])}${Number.isFinite(errors[i]) ? unitOf(resultNames[i]) : ""}`,
   ]);
   const statRows: (string | number)[][] = eq.result
     ? [
@@ -58,6 +63,11 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
 
   return (
     <div>
+      {initial?.description && (
+        <div className="qzk-ds-meta qzk-msg" style={{ marginTop: 6 }} aria-label="model description">
+          {initial.description}
+        </div>
+      )}
       <label className="qzk-field-lbl" style={{ marginTop: 10 }}>
         Equation
       </label>
@@ -144,7 +154,7 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
           size="sm"
           disabled={eq.status !== "ok" || eq.rows.length === 0 || !eq.modelName.trim()}
           onClick={doSave}
-          title="Save the equation + guesses/bounds as a reusable named model"
+          title="Save the equation + guesses/bounds/units + description as a reusable named model"
         >
           Save
         </Button>
@@ -154,6 +164,14 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
           </Button>
         )}
       </div>
+      <input
+        className="qz-input"
+        style={{ display: "block", width: "100%", marginTop: 6 }}
+        placeholder="description (optional)"
+        aria-label="model description text"
+        value={eq.description}
+        onChange={(e) => eq.setDescription(e.target.value)}
+      />
     </div>
   );
 }

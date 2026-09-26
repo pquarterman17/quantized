@@ -18,6 +18,7 @@ import {
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { recordUse } from "../../../lib/recipeIndex";
 import {
+  buildCustomFitModel,
   deleteCustomModel,
   loadCustomModels,
   saveCustomModel,
@@ -52,7 +53,7 @@ export interface EquationFitState {
    *  validate route located it (P2.7); null for any other text. */
   errorSpan: TextSpan | null;
   rows: EquationParamRow[];
-  setRow: (index: number, field: "guess" | "min" | "max", value: string) => void;
+  setRow: (index: number, field: "guess" | "min" | "max" | "unit", value: string) => void;
   /** Hold (or release) one parameter at its guess (P2.7). */
   setHeld: (index: number, held: boolean) => void;
   /** Before-run summary from the last successful validate; null otherwise. */
@@ -73,6 +74,9 @@ export interface EquationFitState {
   /** Save-as-named-model controls. */
   modelName: string;
   setModelName: (name: string) => void;
+  /** Saved-model description (P2.7 slice 3); "" = none. */
+  description: string;
+  setDescription: (text: string) => void;
   save: () => CustomFitModel[] | null;
   remove: (name: string) => CustomFitModel[];
   /** [min, max] of the fitted x data — the domain Find X/Y (MAIN #15)
@@ -106,6 +110,7 @@ function rowsFromModel(m: CustomFitModel): EquationParamRow[] {
       min: lo === null ? "" : String(lo),
       max: hi === null ? "" : String(hi),
       fixed: false,
+      unit: m.units?.[i] ?? "",
     };
   });
 }
@@ -134,6 +139,7 @@ export function useEquationFit(
   const [fitHeld, setFitHeld] = useState<boolean[]>([]);
   const [paramNames, setParamNames] = useState<string[]>(initial ? [...initial.params] : []);
   const [modelName, setModelName] = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
   const [summary, setSummary] = useState<EquationSummary | null>(null);
   const runProblem = useMemo(() => equationRunProblem(rows), [rows]);
 
@@ -193,7 +199,7 @@ export function useEquationFit(
     };
   }, [equation, debounceMs]);
 
-  function setRow(index: number, field: "guess" | "min" | "max", value: string): void {
+  function setRow(index: number, field: "guess" | "min" | "max" | "unit", value: string): void {
     setRows((prev) => prev.map((r, i) => (i === index ? { ...r, [field]: value } : r)));
   }
 
@@ -275,8 +281,7 @@ export function useEquationFit(
   function save(): CustomFitModel[] | null {
     const name = modelName.trim();
     if (!name || status !== "ok" || rows.length === 0) return null;
-    const model: CustomFitModel = {
-      version: 1,
+    const model = buildCustomFitModel({
       name,
       equation,
       params: rows.map((r) => r.name),
@@ -286,7 +291,9 @@ export function useEquationFit(
       }),
       lower: rows.map((r) => (r.min.trim() === "" || !Number.isFinite(Number(r.min)) ? null : Number(r.min))),
       upper: rows.map((r) => (r.max.trim() === "" || !Number.isFinite(Number(r.max)) ? null : Number(r.max))),
-    };
+      description,
+      units: rows.map((r) => r.unit),
+    });
     return saveCustomModel(model);
   }
 
@@ -315,6 +322,8 @@ export function useEquationFit(
     clear,
     modelName,
     setModelName,
+    description,
+    setDescription,
     save,
     remove,
     xRange,

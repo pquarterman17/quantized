@@ -18,6 +18,8 @@ export interface EquationParamRow {
   max: string; // "" = unbounded
   /** Hold this parameter at its guess instead of fitting it (P2.7). */
   fixed: boolean;
+  /** Display unit (saved with the model, shown beside fitted values); "" = none. */
+  unit: string;
 }
 
 export interface ParsedEquationRows {
@@ -75,5 +77,5 @@ export function equationRunProblem(rows: readonly EquationParamRow[]): string | 
 
 /** Seed a row for a parameter the equation just gained. */
 export function newEquationRow(name: string): EquationParamRow {
-  return { name, guess: "1", min: "", max: "", fixed: false };
+  return { name, guess: "1", min: "", max: "", fixed: false, unit: "" };
 }

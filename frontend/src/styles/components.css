@@ -494,6 +494,14 @@
   color: var(--text-dim);
   border-bottom: 1px solid var(--border-soft);
 }
+/* Dense variant for a wide input table in a narrow tool window — the
+   custom-equation parameter table (param/guess/min/max/unit/hold) in the
+   340 px Curve Fit window overflowed it with the default 8 px side padding. */
+.qzk-dense-table .qz-table th,
+.qzk-dense-table .qz-table td {
+  padding-left: 3px;
+  padding-right: 3px;
+}
 /* N2 (peaks-workshop row selection): excludes a PeakTable selected row
  * (aria-selected="true" — the only consumer of that attribute on a
  * .qz-table row today) so the selected highlight — an inline style on the

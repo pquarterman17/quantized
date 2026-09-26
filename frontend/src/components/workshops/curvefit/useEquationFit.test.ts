@@ -56,9 +56,9 @@ describe("useEquationFit validation", () => {
     await waitFor(() => expect(result.current.status).toBe("ok"));
     expect(validateEquation).toHaveBeenCalledWith("a*exp(-x/t)+c");
     expect(result.current.rows).toEqual([
-      { name: "a", guess: "1", min: "", max: "", fixed: false },
-      { name: "t", guess: "1", min: "", max: "", fixed: false },
-      { name: "c", guess: "1", min: "", max: "", fixed: false },
+      { name: "a", guess: "1", min: "", max: "", fixed: false, unit: "" },
+      { name: "t", guess: "1", min: "", max: "", fixed: false, unit: "" },
+      { name: "c", guess: "1", min: "", max: "", fixed: false, unit: "" },
     ]);
   });
 
@@ -93,8 +93,8 @@ describe("useEquationFit validation", () => {
     });
     await waitFor(() =>
       expect(result.current.rows).toEqual([
-        { name: "a", guess: "5", min: "", max: "", fixed: false }, // survived, edit kept
-        { name: "c", guess: "1", min: "", max: "", fixed: false }, // new, neutral guess
+        { name: "a", guess: "5", min: "", max: "", fixed: false, unit: "" }, // survived, edit kept
+        { name: "c", guess: "1", min: "", max: "", fixed: false, unit: "" }, // new, neutral guess
       ]),
     );
   });
@@ -311,8 +311,8 @@ describe("useEquationFit saved models", () => {
     // The mount re-validate must keep the saved guesses/bounds (matched by name).
     await waitFor(() => expect(result.current.status).toBe("ok"));
     expect(result.current.rows).toEqual([
-      { name: "a", guess: "2.5", min: "0", max: "", fixed: false },
-      { name: "t", guess: "1.7", min: "", max: "100", fixed: false },
+      { name: "a", guess: "2.5", min: "0", max: "", fixed: false, unit: "" },
+      { name: "t", guess: "1.7", min: "", max: "100", fixed: false, unit: "" },
     ]);
   });
 

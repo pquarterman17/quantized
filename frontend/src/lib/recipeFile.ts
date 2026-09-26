@@ -54,7 +54,9 @@ export function sniffRecipeKind(parsed: unknown): RecipeKind | null {
   if (typeof parsed.version === "number" && isObj(parsed.baseline) && isObj(parsed.model) && isObj(parsed.find)) {
     return "peak";
   }
-  if (parsed.version === 1 && typeof parsed.equation === "string" && Array.isArray(parsed.params)) {
+  // Fit models are versioned too (v2 added description/units, audit P2.7):
+  // any numeric version routes here and the fit-model parser decides.
+  if (typeof parsed.version === "number" && typeof parsed.equation === "string" && Array.isArray(parsed.params)) {
     return "fitModel";
   }
   if (
