@@ -36,7 +36,7 @@ beforeEach(() => {
 });
 
 function renderWith(text: string) {
-  render(<EquationModelPanel initial={null} onSavedChange={() => {}} />);
+  render(<EquationModelPanel initial={null} />);
   fireEvent.change(screen.getByLabelText("Equation"), { target: { value: text } });
 }
 

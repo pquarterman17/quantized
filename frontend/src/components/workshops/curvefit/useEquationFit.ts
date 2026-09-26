@@ -14,6 +14,7 @@ import {
   equationRunProblem,
   newEquationRow,
   parseEquationRows,
+  savedModelRows,
   type EquationParamRow,
 } from "../../../lib/equationRows";
 import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
@@ -293,47 +294,45 @@ export function useEquationFit(
   function save(): CustomFitModel[] | null {
     const name = modelName.trim();
     if (!name || status !== "ok" || rows.length === 0) return null;
-    const bound = (t: string): number | null => (t.trim() === "" || !Number.isFinite(Number(t)) ? null : Number(t));
-    const lower = rows.map((r) => bound(r.min));
-    const upper = rows.map((r) => bound(r.max));
+    const numbers = savedModelRows(rows);
+    if ("error" in numbers) {
+      setError(`can't save the model: ${numbers.error}`);
+      return null;
+    }
     const model = buildCustomFitModel({
       name,
       equation,
       params: rows.map((r) => r.name),
-      // A BLANK start is saved as 1 CLAMPED INTO the row's bounds — the start
-      // the engine would use, since it clips every start into its bounds
-      // (lib/paramRowCheck). Unclamped, a blank start with min 5 was refused
-      // below as "guess[t]: outside its bounds", a guess the user never typed
-      // (PR #432 review). A TYPED start outside its bounds is still refused.
-      guesses: rows.map((r, i) => {
-        const v = Number(r.guess);
-        if (Number.isFinite(v) && r.guess.trim() !== "") return v;
-        const lo = lower[i];
-        const hi = upper[i];
-        return hi !== null && hi < 1 ? hi : lo !== null && lo > 1 ? lo : 1;
-      }),
-      lower,
-      upper,
+      ...numbers,
       description,
       units: rows.map((r) => r.unit),
     });
     // The same creation check an imported model file gets (lib/fitmodels'
-    // `checkFitModelRecord`): a model saved here with min > max, or a typed
-    // start outside its bounds, would be refused on every other way in — so
-    // it is refused here, naming the parameter.
+    // `checkFitModelRecord`): a model saved here with a typed start outside
+    // its bounds would be refused on every other way in — so it is refused
+    // here, naming the parameter.
     try {
       checkFitModelRecord(model);
     } catch (e) {
       setError(`can't save the model: ${e instanceof Error ? e.message : "invalid"}`);
       return null;
     }
+    let list: CustomFitModel[];
     try {
-      return saveCustomModel(model);
+      list = saveCustomModel(model);
     } catch (e) {
       // A stored record this build cannot read holds that name (lib/fitmodels).
       setError(e instanceof Error ? e.message : "could not save the model");
       return null;
     }
+    // A write storage refused (full, blocked) is swallowed by the library, so
+    // re-read: the model is saved only if it is THERE — the picker lists what
+    // storage holds (the lib/nameKeyedRecipes import precedent).
+    if (!loadCustomModels().some((m) => m.name === name)) {
+      setError("could not save the model — browser storage is full or unavailable");
+      return null;
+    }
+    return list;
   }
 
   function remove(name: string): CustomFitModel[] {

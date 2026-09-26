@@ -242,13 +242,6 @@ export function unreadableCustomModelNames(): string[] {
   return scan().unreadable.map(nameOf).filter((n): n is string => !!n);
 }
 
-/** Is the slot present but not a JSON array at all? Its models cannot be
- *  listed, and the next save/delete moves its text aside (`writeRaw`). A
- *  project open checks this first and does not write (`appendCustomModels`). */
-export function customModelsSlotDamaged(): boolean {
-  return readSlot().damaged !== null;
-}
-
 // ── Change notification ─────────────────────────────────────────────────────
 // localStorage has no same-tab change event, so every write here bumps a
 // revision and tells its subscribers: the fit workshop's picker and the
@@ -329,21 +322,19 @@ export function saveCustomModel(m: CustomFitModel): CustomFitModel[] {
 
 /** Append several records in ONE read and ONE write (a project open,
  *  lib/fitModelsProject.ts). The caller guarantees every name is free — this
- *  never replaces anything. Returns the readable list AS RE-READ from storage,
- *  so a write that storage refused (quota, blocked) is visible to the caller
- *  instead of reported as done.
+ *  never replaces anything. Returns the readable list AS RE-READ from storage
+ *  (`stored`), so a write that storage refused (quota, blocked) is visible to
+ *  the caller instead of reported as done.
  *
- *  A DAMAGED slot is not written at all (nothing appended, nothing moved
- *  aside): an open is not the user choosing to replace a list they cannot
- *  see, and they were never told it happened. The re-read then shows none of
- *  the records, so the caller carries them — and says why
- *  (`customModelsSlotDamaged`). */
-export function appendCustomModels(records: readonly CustomFitModel[]): CustomFitModel[] {
-  if (records.length === 0) return loadCustomModels();
+ *  A DAMAGED slot (not a JSON array) is not written at all — nothing
+ *  appended, nothing moved aside — and `damaged` is true: an open is not the
+ *  user choosing to replace a list they cannot see, and they were never told
+ *  it happened. The caller carries the records and says why. */
+export function appendCustomModels(records: readonly CustomFitModel[]): { stored: CustomFitModel[]; damaged: boolean } {
   const { list, damaged } = readSlot();
-  if (damaged !== null) return [];
-  writeRaw(damaged, [...list, ...records]);
-  return loadCustomModels();
+  if (damaged !== null) return { stored: [], damaged: true };
+  if (records.length > 0) writeRaw(damaged, [...list, ...records]);
+  return { stored: loadCustomModels(), damaged: false };
 }
 
 /** Delete the READABLE record(s) of that name; an unreadable one is kept. */

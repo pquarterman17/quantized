@@ -326,8 +326,33 @@ describe("useEquationFit saved models", () => {
     expect(typed.error).toContain("guess[t]: outside its bounds");
     const inverted = await decayWithRows([[1, "min", "5"], [1, "max", "1"]]);
     expect(inverted.saved).toBeNull();
-    expect(inverted.error).toContain("bounds[t]: lower > upper");
+    expect(inverted.error).toContain("t: min is above max");
     expect(loadCustomModels()).toEqual([]);
+  });
+
+  it("save refuses what the FIT refuses — a guess or bound that is not a number — instead of saving a default (review)", async () => {
+    // Was: "abc" read as blank and silently saved as the default start, and a
+    // min of "abc" as unbounded, while Fit said "not a number".
+    const guess = await decayWithRows([[1, "guess", "abc"], [1, "min", "5"]]);
+    expect(guess.saved).toBeNull();
+    expect(guess.error).toContain("t: guess is not a number");
+    const min = await decayWithRows([[1, "min", "1e"]]);
+    expect(min.saved).toBeNull();
+    expect(min.error).toContain("t: min is not a number");
+    expect(loadCustomModels()).toEqual([]);
+  });
+
+  it("a save browser storage refuses is reported, not claimed — the picker lists only what storage holds (review)", async () => {
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    try {
+      const refused = await decayWithRows([]);
+      expect(refused.saved).toBeNull();
+      expect(refused.error).toContain("browser storage is full or unavailable");
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("save is a no-op without a name or a valid equation", () => {

@@ -80,7 +80,7 @@ describe("saved model description + units (P2.7 slice 3)", () => {
       yFit: [1, 2, 3, 4],
       paramNames: ["a", "t"],
     });
-    render(<EquationModelPanel initial={DECAY} onSavedChange={() => {}} />);
+    render(<EquationModelPanel initial={DECAY} />);
     expect(screen.getByLabelText("model description")).toHaveValue("single exponential decay");
     expect(screen.getByLabelText("unit a")).toHaveValue("V");
     expect(screen.getByLabelText("unit t")).toHaveValue("s");
@@ -100,7 +100,7 @@ describe("saved model description + units (P2.7 slice 3)", () => {
   });
 
   it("saves the description and units as a v2 record", async () => {
-    render(<EquationModelPanel initial={null} onSavedChange={() => {}} />);
+    render(<EquationModelPanel initial={null} />);
     fireEvent.change(screen.getByLabelText("Equation"), { target: { value: "a*exp(-x/t)" } });
     fireEvent.change(await screen.findByLabelText("unit t"), { target: { value: "s" } });
     fireEvent.change(screen.getByPlaceholderText("model name"), { target: { value: "Mine" } });

@@ -21,21 +21,20 @@ import { useEquationFit } from "./useEquationFit";
 interface Props {
   /** Saved model to prefill from (picker selection), or null for a blank panel. */
   initial: CustomFitModel | null;
-  /** Fired after save/delete so the picker options refresh. */
-  onSavedChange: (models: CustomFitModel[]) => void;
 }
 
-export default function EquationModelPanel({ initial, onSavedChange }: Props) {
+// The picker's options refresh on their own after a save or delete: the
+// library notifies its subscribers (CurveFitPanel's `useSavedFitModels`).
+export default function EquationModelPanel({ initial }: Props) {
   const eq = useEquationFit(initial);
 
   const doSave = () => {
-    const list = eq.save();
-    if (list) onSavedChange(list);
+    eq.save();
   };
 
   const doDelete = () => {
     if (!initial) return;
-    onSavedChange(eq.remove(initial.name));
+    eq.remove(initial.name);
   };
 
   const params = (eq.result?.params as number[] | undefined) ?? [];

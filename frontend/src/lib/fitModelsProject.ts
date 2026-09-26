@@ -98,7 +98,6 @@
 
 import {
   appendCustomModels,
-  customModelsSlotDamaged,
   isCustomFitModel,
   loadCustomModels,
   nameOf,
@@ -146,22 +145,32 @@ export function projectFitModelsForSave(
   opts: { fitModelLibrary?: boolean } = {},
 ): unknown[] {
   const lib = opts.fitModelLibrary === false ? [] : loadCustomModels();
-  const out: unknown[] = [...lib];
   const taken = new Set(lib.map((m) => m.name));
   const held = new Set(lib.map(heldKey));
   const seen = new Set<string>();
+  // Pass 1: which records are written, and which keep their own name (the
+  // first to claim a name the library does not hold).
+  const kept: { record: unknown; clash: boolean }[] = [];
   for (const r of carry ?? []) {
     const key = JSON.stringify(r) ?? "undefined";
     if (seen.has(key) || (isCustomFitModel(r) && held.has(heldKey(r)))) continue;
     seen.add(key);
+    if (isCustomFitModel(r)) held.add(heldKey(r)); // a rename keeps the base name
     const name = nameOf(r);
-    const record = name !== null && taken.has(name) ? { ...(r as object), name: freeName(name, taken) } : r;
-    const written = nameOf(record);
-    if (written !== null) taken.add(written);
-    if (isCustomFitModel(record)) held.add(heldKey(record));
-    out.push(record);
+    const clash = name !== null && taken.has(name);
+    if (name !== null) taken.add(name);
+    kept.push({ record: r, clash });
   }
-  return out;
+  // Pass 2: a clashing record takes a name NO record holds — `taken` now
+  // includes every later record's own name, so a rename never lands on the
+  // name a later record keeps (which would swap the two).
+  const renamed = kept.map(({ record, clash }) => {
+    if (!clash) return record;
+    const name = freeName(nameOf(record) as string, taken);
+    taken.add(name);
+    return { ...(record as object), name };
+  });
+  return [...lib, ...renamed];
 }
 
 /** A crash-recovery restore (lib/autosave.ts). The autosave embeds only the
@@ -236,7 +245,8 @@ export interface AdoptResult {
 export function mergeProjectFitModels(incoming: readonly CustomFitModel[]): AdoptResult {
   const result: AdoptResult = { added: [], renamed: [], unstored: [] };
   if (incoming.length === 0) return result;
-  if (customModelsSlotDamaged()) return { ...result, unstored: [...incoming], libraryDamaged: true };
+  // A damaged slot reads as empty here; `appendCustomModels` then refuses to
+  // write it and says so — the one guard for that case.
   const local = loadCustomModels();
   const localNames = new Set(local.map((m) => m.name));
   const unreadable = new Set(unreadableCustomModelNames());
@@ -265,7 +275,9 @@ export function mergeProjectFitModels(incoming: readonly CustomFitModel[]): Adop
     hold(record);
   }
   if (toWrite.length === 0) return result;
-  const stored = new Map(appendCustomModels(toWrite).map((m) => [m.name, m]));
+  const { stored: back, damaged } = appendCustomModels(toWrite);
+  if (damaged) return { ...result, unstored: toWrite, libraryDamaged: true };
+  const stored = new Map(back.map((m) => [m.name, m]));
   toWrite.forEach((record, i) => {
     const step = plan[i];
     const back = stored.get(step.to);
@@ -335,34 +347,20 @@ export function adoptionMessage(
   return parts.length ? parts.join(". ") : null;
 }
 
-/** The slice of the store's `set` this module writes through. */
-type CarrySet = (fn: (s: { fitModelCarry: unknown[] }) => { fitModelCarry?: unknown[] }) => void;
-
 /** What the store's load/append runs after its own `set()`
- *  (store/workspaceHydration.ts, which already put this file's carry in
- *  place): merge the project's accepted models into the library and toast
- *  once. An open panel listing the library re-reads on its own
- *  (lib/fitmodels.ts's `subscribeCustomModels`). `expected` is the carry the
- *  store held right after that `set()`; records the library did not take are
- *  added to it only if it is still there — if another load replaced it
- *  meanwhile, nothing is written: that project must not inherit this one's
- *  records. The carry changing is a project edit, so it autosaves and marks
- *  the project dirty like any other (useWorkspaceAutosave's `shouldAutosave`). */
+ *  (store/workspaceHydration.ts's `adoptFitModels`, which already put this
+ *  file's carry in place): merge the project's accepted models into the
+ *  library and toast once. An open panel listing the library re-reads on its
+ *  own (lib/fitmodels.ts's `subscribeCustomModels`). `carry` hands the
+ *  records the library did not take back to the store, which adds them to the
+ *  project's carry — if it is still that project's (see
+ *  store/recipeFidelity.ts's `carryGrewFrom`) — and says whether it did. */
 export function adoptProjectFitModels(
   ws: { projectFitModels?: readonly CustomFitModel[] },
-  set: CarrySet,
-  expected: unknown[],
+  carry: (unstored: readonly CustomFitModel[]) => boolean,
 ): void {
   const result = mergeProjectFitModels(ws.projectFitModels ?? []);
-  let kept = false;
-  if (result.unstored.length) {
-    // Zustand runs the updater synchronously, so `kept` is settled below.
-    set((s) => {
-      if (s.fitModelCarry !== expected) return {};
-      kept = true;
-      return { fitModelCarry: [...expected, ...result.unstored] };
-    });
-  }
+  const kept = result.unstored.length > 0 && carry(result.unstored);
   const msg = adoptionMessage(result, kept);
   if (msg) toast(msg, result.unstored.length ? "danger" : "info");
 }

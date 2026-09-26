@@ -69,10 +69,38 @@ export function recipeSourcesWhole(s: RecipeFidelitySlice): boolean {
   return s.recipeSourcesComplete && s.fitModelCarry.length === 0;
 }
 
+// Which carries are the SAME project's, grown: an append and a refused merge
+// grow the carry (`grownCarry`), while a load, "remove all" and an undo
+// REPLACE it. The async merge (store/workspaceHydration.ts's
+// `adoptFitModels`) writes its refused records only into a carry that grew
+// from the one it started with — never into another project's (PR #432
+// review: comparing identity alone lost them when a second append landed
+// first). Each grown array remembers the array its lineage began with.
+const carryRoots = new WeakMap<unknown[], unknown[]>();
+const rootOf = (carry: unknown[]): unknown[] => carryRoots.get(carry) ?? carry;
+
+/** `carry` with `more` appended — the same project's carry, grown. */
+export function grownCarry(carry: unknown[], more: readonly unknown[]): unknown[] {
+  const next = [...carry, ...more];
+  carryRoots.set(next, rootOf(carry));
+  return next;
+}
+
+/** Is `current` the carry `expected` was, or grown from it — not a load's,
+ *  a "remove all"'s or an undo's replacement? */
+export function carryGrewFrom(current: unknown[], expected: unknown[]): boolean {
+  if (current === expected) return true;
+  return (
+    rootOf(current) === rootOf(expected) &&
+    current.length >= expected.length &&
+    expected.every((r, i) => current[i] === r)
+  );
+}
+
 /** State only, no action: the write sites are `loadWorkspace` (replace) and
  *  `appendWorkspace` (grow), store/workspaceHydration.ts, and the refused
- *  merge they start (lib/fitModelsProject.ts's `adoptProjectFitModels`). A
- *  setter here would have no caller. */
+ *  merge they start (its `adoptFitModels`). A setter here would have no
+ *  caller. */
 export function createRecipeFidelitySlice(): RecipeFidelitySlice {
   return { recipeSourcesComplete: true, fitModelCarry: [] };
 }

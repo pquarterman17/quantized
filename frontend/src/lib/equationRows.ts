@@ -55,6 +55,36 @@ export function parseEquationRows(rows: readonly EquationParamRow[]): EquationRo
   return out;
 }
 
+/** The numbers a SAVED model records for these rows, or why it cannot be
+ *  saved: the fit's own per-row checks (`checkParamRow` — a guess, min or max
+ *  that is not a number, min above max), with two differences. A BLANK guess
+ *  is 1 clamped into the row's bounds — the start the engine would use, since
+ *  it clips every start into its bounds (PR #432 review: unclamped, a blank
+ *  guess with min 5 was refused as a guess the user never typed). And the
+ *  hold flag plays no part: a saved model does not record it. A TYPED guess
+ *  outside its bounds is left for the creation check (lib/fitmodels'
+ *  `checkFitModelRecord`) to refuse, naming it. */
+export function savedModelRows(
+  rows: readonly EquationParamRow[],
+): { guesses: number[]; lower: (number | null)[]; upper: (number | null)[] } | { error: string } {
+  const out: { guesses: number[]; lower: (number | null)[]; upper: (number | null)[] } = { guesses: [], lower: [], upper: [] };
+  const read = (t: string): number | null => (t.trim() === "" || !Number.isFinite(Number(t)) ? null : Number(t));
+  for (const r of rows) {
+    const lo = read(r.min);
+    const hi = read(r.max);
+    const blankStart = hi !== null && hi < 1 ? hi : lo !== null && lo > 1 ? lo : 1;
+    const c = checkParamRow(
+      { name: r.name, start: r.guess, min: r.min, max: r.max, held: false },
+      { startLabel: "guess", blankStart },
+    );
+    if ("error" in c) return { error: c.error };
+    out.guesses.push(c.start);
+    out.lower.push(c.lo);
+    out.upper.push(c.hi);
+  }
+  return out;
+}
+
 /** Why the Fit button must stay disabled right now, or null when it can run.
  *  An empty table is not a "problem" to explain here: the validation line
  *  already says the equation has no free parameters. */

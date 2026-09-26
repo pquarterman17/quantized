@@ -269,6 +269,17 @@ describe("unreadable records in the file", () => {
     expect(new Set(writtenNames).size).toBe(writtenNames.length);
   });
 
+  it("a save's rename never lands on a name a LATER carried record keeps — no swapped names (review)", () => {
+    localStorage.setItem(KEY, JSON.stringify([model("X", "y = a")]));
+    const first = { version: 9, name: "X", v: 1 };
+    const second = { version: 9, name: "X (from project)", v: 2 };
+    expect(projectFitModelsForSave([first, second])).toEqual([
+      model("X", "y = a"),
+      { ...first, name: "X (from project 2)" },
+      second, // keeps its own name
+    ]);
+  });
+
   it("a save renames a collision WITHIN the carry too (two appended projects' records), but writes an exact duplicate once", () => {
     const a = { version: 9, name: "F", v: 1 };
     const b = { version: 9, name: "F", v: 2 };

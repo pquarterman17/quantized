@@ -124,11 +124,13 @@ export default function CurveFitPanel() {
     { value: CUSTOM_PREFIX, label: "Custom equation…" },
     ...customModels.map((m) => ({ value: `${CUSTOM_PREFIX}${m.name}`, label: customLabel(m) })),
   ];
-  const onSavedChange = (list: CustomFitModel[]) => {
-    // The list itself refreshes through `useSavedFitModels`. Deleting the
-    // loaded model orphans the picker value — fall back to blank.
-    if (customName && !list.some((m) => m.name === customName)) setModelName(CUSTOM_PREFIX);
-  };
+  // Deleting (or renaming) the loaded model — here, in the Recipe Library, or
+  // anywhere else that writes the library — orphans the picker value: fall
+  // back to the blank equation instead of a value no option matches.
+  const orphaned = customName !== "" && currentCustom === null;
+  useEffect(() => {
+    if (orphaned) setModelName(CUSTOM_PREFIX);
+  }, [orphaned, setModelName]);
 
   const close = () => {
     clear();
@@ -190,7 +192,6 @@ export default function CurveFitPanel() {
         <EquationModelPanel
           key={modelName}
           initial={currentCustom}
-          onSavedChange={onSavedChange}
         />
         <ModelScanSection state={modelScan} onApply={applyScanned} />
       </ToolWindow>

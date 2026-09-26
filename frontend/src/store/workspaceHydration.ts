@@ -59,16 +59,11 @@ import { hydrateView } from "../lib/plotview";
 import { sanitizeTechniqueViewMemory } from "../lib/techniqueViewMemory";
 import { nextStageTab } from "../lib/stagetab";
 import type { LoadedWorkspace, WorkspaceState } from "../lib/workspace";
-
-/** What `loadWorkspace` takes: any workspace state, plus — from a parsed
- *  file — its fit models to merge into the library. That field is kept OUT of
- *  `WorkspaceState` so no save can ever serialize a parsed file's models
- *  (lib/fitModelsProject.ts). */
-export type WorkspaceToLoad = WorkspaceState & Pick<LoadedWorkspace, "projectFitModels">;
 import { sanitizeDocumentBackedPlotWindows } from "../lib/windowDocumentPersistence";
 import { workspaceCodecOrReport } from "../lib/workspaceCodecLazy";
 import { mergeWorkspace } from "../lib/workspaceMerge";
 import { nextDatasetId, nextFolderId } from "./idSeq";
+import { carryGrewFrom, grownCarry } from "./recipeFidelity";
 import { loadedMapViews } from "./rois"; // loadedMapViews: P2.8, see store/mapView.ts
 import { notifyMigrationWarnings, toast } from "./toasts";
 import type { AppState } from "./useApp";
@@ -77,6 +72,12 @@ import { nextWorkbookId } from "./workbookIds";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
+
+/** What `loadWorkspace` takes: any workspace state, plus — from a parsed
+ *  file — its fit models to merge into the library. That field is kept OUT of
+ *  `WorkspaceState` so no save can ever serialize a parsed file's models
+ *  (lib/fitModelsProject.ts). */
+export type WorkspaceToLoad = WorkspaceState & Pick<LoadedWorkspace, "projectFitModels">;
 
 export interface WorkspaceHydrationSlice {
   // `skipLayout` (PR E2 "Open without layout…") ignores plotWindows/
@@ -309,11 +310,27 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
  *  loaded, except after the browser picker's Worker parse, when this is its
  *  first fetch (a failure is toasted by the loader). */
 function adoptFitModels(ws: WorkspaceToLoad, set: SliceSet, get: SliceGet): void {
+  const models = ws.projectFitModels ?? [];
+  if (!models.length) return;
   const expected = get().fitModelCarry;
-  if (ws.projectFitModels?.length)
-    void workspaceCodecOrReport("Adding the project's fit models", noop).then((c) =>
-      c?.adoptProjectFitModels(ws, set, expected),
-    );
+  /** Add records the library did not take to THIS project's carry (so a save
+   *  still writes them); false when a load, "remove all" or an undo replaced
+   *  it meanwhile — that project must not inherit them. */
+  const carry = (unstored: readonly unknown[]): boolean => {
+    let kept = false;
+    set((s) => {
+      if (!carryGrewFrom(s.fitModelCarry, expected)) return {};
+      kept = true; // Zustand runs the updater synchronously
+      return { fitModelCarry: grownCarry(s.fitModelCarry, unstored) };
+    });
+    return kept;
+  };
+  // A codec that will not load (toasted by the loader) cannot merge — carry
+  // the models instead: they exist nowhere else, and a save reads only the
+  // library and the carry (PR #432 review).
+  void workspaceCodecOrReport("Adding the project's fit models", noop).then((c) =>
+    c ? c.adoptProjectFitModels(ws, carry) : void carry(models),
+  );
 }
 const noop = (): void => {};
 
@@ -353,7 +370,7 @@ function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorkspace): 
     datasets,
     workbooks: [...get().workbooks, ...workbooks],
     status: msg,
-    ...(carry.length ? { fitModelCarry: [...get().fitModelCarry, ...carry] } : {}),
+    ...(carry.length ? { fitModelCarry: grownCarry(get().fitModelCarry, carry) } : {}),
   });
   toast(msg, "ok");
   adoptFitModels(ws, set, get);

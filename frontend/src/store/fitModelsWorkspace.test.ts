@@ -124,6 +124,27 @@ describe("store load/append merge the project's fit models", () => {
     }
   });
 
+  it("a second append landing before the first's merge does not lose the first's refused models (review)", async () => {
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    try {
+      useApp.getState().loadWorkspace(parseWorkspace(projectText([], "base")));
+      const refused = model("FromA", "y = a");
+      const other = { version: 7, name: "B's unreadable" };
+      // Both appends run synchronously; B's set() GROWS the carry before A's
+      // async merge resolves — the same project, so A's records still belong.
+      useApp.getState().appendWorkspace(parseWorkspace(projectText([refused], "a1")));
+      useApp.getState().appendWorkspace(parseWorkspace(projectText([other], "b1")));
+      await vi.waitFor(() => expect(useApp.getState().fitModelCarry).toEqual([other, refused]));
+      const msg = useToasts.getState().toasts.find((t) => t.msg.includes('"FromA"'))!.msg;
+      expect(msg).toContain("kept in the project");
+      expect(msg).not.toContain("replaced");
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("a model storage refuses is carried, so the next save still writes it into the project", async () => {
     const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
       throw new Error("QuotaExceededError");

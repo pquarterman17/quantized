@@ -109,4 +109,17 @@ describe("CurveFitPanel — saved-model picker stays current", () => {
     });
     expect(option("Elsewhere")).toBeNull();
   });
+
+  it("deleting the LOADED model elsewhere falls the picker back to a blank equation (review)", async () => {
+    saveCustomModel(model("Loaded"));
+    render(<CurveFitPanel />);
+    await screen.findByLabelText("By (optional)");
+    const picker = () => screen.getByRole("option", { name: "Custom equation…" }).closest("select")!;
+    fireEvent.change(picker(), { target: { value: "custom:Loaded" } });
+    expect(picker()).toHaveValue("custom:Loaded");
+    act(() => {
+      deleteCustomModel("Loaded"); // e.g. from the Recipe Library
+    });
+    expect(picker()).toHaveValue("custom:");
+  });
 });
