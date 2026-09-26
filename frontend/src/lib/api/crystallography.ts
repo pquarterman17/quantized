@@ -66,7 +66,10 @@ export function crystalInterplanarAngle(body: {
 }
 
 /** Atomic angle atom1-vertex-atom3 from fractional unit-cell coordinates.
- *  Neighbours use their nearest periodic images unless explicitly disabled. */
+ *  Neighbours use their nearest periodic images unless explicitly disabled.
+ *  `ambiguous`/`warnings` flag a neighbour that sits exactly (within
+ *  tolerance) on a periodic-image boundary: the chosen image is still
+ *  deterministic, but a genuinely different image would be equally valid. */
 export function crystalBondAngle(body: {
   a: number;
   b: number;
@@ -84,6 +87,8 @@ export function crystalBondAngle(body: {
   distance3: number;
   image1: [number, number, number];
   image3: [number, number, number];
+  ambiguous: boolean;
+  warnings: string[];
 }> {
   return postJSON("/api/crystallography/bond-angle", body);
 }

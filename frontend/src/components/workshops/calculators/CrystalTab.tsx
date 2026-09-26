@@ -44,12 +44,20 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
   const [ak2, setAk2] = useState("1");
   const [al2, setAl2] = useState("0");
   const angleCard = useCard("Crystal");
-  // The angle card consumes the shared lattice as well as its local hkl pairs.
-  // Keep that dependency explicit so a lattice edit clears a completed result
-  // and disowns an in-flight request for the previous cell.
+  // The bond-angle card is owned HERE (not inside BondAngleCard) so its
+  // invalidation goes through the same single touch path as the interplanar
+  // angle card below — one mechanism invalidates every lattice-dependent
+  // card on this tab synchronously, rather than each card independently
+  // diffing the lattice via its own effect.
+  const bondCard = useCard("Crystal");
+  // Both cards consume the shared lattice as well as their own local
+  // inputs (hkl pairs / fractional coordinates). Keep that dependency
+  // explicit so a lattice edit clears a completed result and disowns an
+  // in-flight request for the previous cell.
   const updateLattice = (patch: Partial<CrystalForm>): void => {
     c.updCrystal(patch);
     angleCard.touch();
+    bondCard.touch();
   };
   const show4Index = isHex && millerMode === "4";
   const hNum = Number(c.crystal.h);
@@ -292,7 +300,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
         </div>
         {resultLine(angleCard.result)}
       </Card>
-      <BondAngleCard crystal={c.crystal} />
+      <BondAngleCard crystal={c.crystal} card={bondCard} />
     </div>
   );
 }

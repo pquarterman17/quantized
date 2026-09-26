@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { crystalBondAngle } from "../../../lib/api/crystallography";
 import BondAngleCard from "./BondAngleCard";
+import { useCard } from "./shared";
 import type { CrystalForm } from "./useCalculators";
 
 vi.mock("../../../lib/api/crystallography", () => ({
@@ -30,7 +31,24 @@ const result = {
   distance3: 1,
   image1: [0, 0, 0] as [number, number, number],
   image3: [0, 0, 0] as [number, number, number],
+  ambiguous: false,
+  warnings: [] as string[],
 };
+
+// The production owner of this card's `useCard` instance is CrystalTab
+// (finding #6: one lattice-invalidation mechanism, its `updateLattice()`
+// touch path, shared by every card on the tab). This harness plays that
+// role for the component in isolation: a "touch lattice" button stands in
+// for CrystalTab calling `bondCard.touch()` from `updateLattice()`.
+function Harness({ crystal: c }: { crystal: CrystalForm }) {
+  const card = useCard("Crystal");
+  return (
+    <div>
+      <button onClick={() => card.touch()}>touch lattice</button>
+      <BondAngleCard crystal={c} card={card} />
+    </div>
+  );
+}
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -39,7 +57,7 @@ beforeEach(() => {
 
 describe("BondAngleCard", () => {
   it("computes an atomic angle from fractional coordinates and the shared cell", async () => {
-    render(<BondAngleCard crystal={crystal} />);
+    render(<Harness crystal={crystal} />);
     fireEvent.click(screen.getByText("="));
 
     expect(await screen.findByText(/θ = 90.*r₁ = 1 Å.*r₂ = 1 Å/)).toBeInTheDocument();
@@ -58,7 +76,7 @@ describe("BondAngleCard", () => {
   });
 
   it("validates that every coordinate is a finite fractional triple", async () => {
-    render(<BondAngleCard crystal={crystal} />);
+    render(<Harness crystal={crystal} />);
     fireEvent.change(screen.getByLabelText("neighbor 1 fractional coordinates"), {
       target: { value: "0.25 0" },
     });
@@ -68,8 +86,21 @@ describe("BondAngleCard", () => {
     expect(crystalBondAngle).not.toHaveBeenCalled();
   });
 
+  it("accepts simple fractions (a/b, including negatives) in fractional coordinates", async () => {
+    render(<Harness crystal={crystal} />);
+    fireEvent.change(screen.getByLabelText("neighbor 1 fractional coordinates"), {
+      target: { value: "1/3 2/3 -1/4" },
+    });
+    fireEvent.click(screen.getByText("="));
+
+    await screen.findByText(/θ = 90/);
+    expect(crystalBondAngle).toHaveBeenCalledWith(
+      expect.objectContaining({ atom1: [1 / 3, 2 / 3, -1 / 4] }),
+    );
+  });
+
   it("can use coordinates as entered instead of nearest periodic images", async () => {
-    render(<BondAngleCard crystal={crystal} />);
+    render(<Harness crystal={crystal} />);
     fireEvent.change(screen.getByLabelText("periodic image handling"), {
       target: { value: "entered" },
     });
@@ -79,8 +110,20 @@ describe("BondAngleCard", () => {
     expect(crystalBondAngle).toHaveBeenCalledWith(expect.objectContaining({ minimum_image: false }));
   });
 
-  it("invalidates a completed result when a coordinate or shared lattice changes", async () => {
-    const view = render(<BondAngleCard crystal={crystal} />);
+  it("shows an ambiguous-tie warning when the API flags one", async () => {
+    vi.mocked(crystalBondAngle).mockResolvedValue({
+      ...result,
+      ambiguous: true,
+      warnings: ["atom1: another periodic image is equidistant from the vertex (alternate shift: (-1, 0, 0))"],
+    });
+    render(<Harness crystal={crystal} />);
+    fireEvent.click(screen.getByText("="));
+
+    expect(await screen.findByText(/ambiguous/i)).toBeInTheDocument();
+  });
+
+  it("invalidates a completed result when a coordinate changes", async () => {
+    render(<Harness crystal={crystal} />);
     fireEvent.click(screen.getByText("="));
     expect(await screen.findByText(/θ = 90/)).toBeInTheDocument();
 
@@ -91,19 +134,26 @@ describe("BondAngleCard", () => {
 
     fireEvent.click(screen.getByText("="));
     expect(await screen.findByText(/θ = 90/)).toBeInTheDocument();
-    view.rerender(<BondAngleCard crystal={{ ...crystal, a: "5" }} />);
+  });
+
+  it("invalidates a completed result when the shared lattice is touched", async () => {
+    render(<Harness crystal={crystal} />);
+    fireEvent.click(screen.getByText("="));
+    expect(await screen.findByText(/θ = 90/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("touch lattice"));
     expect(screen.queryByText(/θ = 90/)).not.toBeInTheDocument();
   });
 
-  it("disowns an in-flight result when the shared lattice changes", async () => {
+  it("disowns an in-flight result when the shared lattice is touched", async () => {
     let resolve!: (value: typeof result) => void;
     const pending = new Promise<typeof result>((done) => {
       resolve = done;
     });
     vi.mocked(crystalBondAngle).mockReturnValue(pending);
-    const view = render(<BondAngleCard crystal={crystal} />);
+    render(<Harness crystal={crystal} />);
     fireEvent.click(screen.getByText("="));
-    view.rerender(<BondAngleCard crystal={{ ...crystal, a: "5" }} />);
+    fireEvent.click(screen.getByText("touch lattice"));
 
     await act(async () => {
       resolve(result);
