@@ -17,32 +17,41 @@ export function formatMetaValue(v: unknown): string {
   }
 }
 
-/** Flatten a metadata record into sorted [key, formattedValue] rows. The
- *  internal plot-x hints (`x_column_name`/`x_column_unit`) are dropped — they're
- *  wiring, not instrument metadata, and already shown as the X column. The
- *  Origin provenance keys (`origin_results_log[_records]`, `origin_notes`,
- *  `origin_report_sheets`, `origin_text_columns`) are also dropped — they
- *  have their own dedicated Inspector card (OriginProvenanceCard) that
- *  renders them readably instead of as raw text/JSON rows.
+/** Wiring/provenance keys hidden from ordinary metadata display: the plot-x
+ *  hints (`x_column_name`/`x_column_unit`) are wiring, not instrument
+ *  metadata, and already shown as the X column; the Origin provenance keys
+ *  (`origin_results_log[_records]`, `origin_notes`, `origin_report_sheets`,
+ *  `origin_text_columns`) have their own dedicated Inspector card
+ *  (OriginProvenanceCard) that renders them readably instead of as raw
+ *  text/JSON rows; `preview_source_rows` (`lib/rowSidecars.PREVIEW_SOURCE_ROWS`)
+ *  is WIRING — which source row each row of a still-loading book's preview is
+ *  — and `formatMetaValue` would render it as one JSON row of up to 200
+ *  integers in a card meant for instrument header fields.
  *
- *  `preview_source_rows` (`lib/rowSidecars.PREVIEW_SOURCE_ROWS`) is dropped for
- *  the same reason as the plot-x hints: it is WIRING — which source row each row
- *  of a still-loading book's preview is — and `formatMetaValue` would render it
- *  as one JSON row of up to 200 integers in a card meant for instrument header
- *  fields. */
+ *  Exported (as `isHiddenMetadataKey`) so `lib/metadataKeys.ts`'s "metadata →
+ *  factors" candidate list checks the SAME set — a key hidden here (e.g.
+ *  `origin_notes`) must never be offered as a promotable/unifiable factor
+ *  field either; the two lists diverging was a real bug (P2.5 review). */
+const HIDDEN_METADATA_KEYS = new Set([
+  "x_column_name",
+  "x_column_unit",
+  "origin_results_log",
+  "origin_results_log_records",
+  "origin_notes",
+  "origin_report_sheets",
+  "origin_text_columns",
+  PREVIEW_SOURCE_ROWS,
+]);
+
+export function isHiddenMetadataKey(key: string): boolean {
+  return HIDDEN_METADATA_KEYS.has(key);
+}
+
+/** Flatten a metadata record into sorted [key, formattedValue] rows, dropping
+ *  the wiring/provenance keys `isHiddenMetadataKey` names (module doc above). */
 export function metadataRows(metadata: Record<string, unknown>): [string, string][] {
-  const hidden = new Set([
-    "x_column_name",
-    "x_column_unit",
-    "origin_results_log",
-    "origin_results_log_records",
-    "origin_notes",
-    "origin_report_sheets",
-    "origin_text_columns",
-    PREVIEW_SOURCE_ROWS,
-  ]);
   return Object.keys(metadata)
-    .filter((k) => !hidden.has(k))
+    .filter((k) => !isHiddenMetadataKey(k))
     .sort((a, b) => a.localeCompare(b))
     .map((k) => [k, formatMetaValue(metadata[k])]);
 }

@@ -27,6 +27,9 @@ export interface TransformForm {
   /** Append: every picked dataset, in order (the first is the primary). */
   appendIds: string[];
   match: AppendMatch;
+  /** Append: add a column naming each row's source dataset (P2.5). */
+  sourceOn: boolean;
+  sourceName: string;
   right: string;
   /** Join keys as option values (`keyOptions`). */
   leftKey: string;
@@ -58,6 +61,8 @@ export function seedForm(op: PreviewOp, seed: readonly string[], datasets: reado
     primary,
     appendIds: ids.length ? ids : primary ? [primary] : [],
     match: "position",
+    sourceOn: false,
+    sourceName: "source",
     right: ids[1] ?? datasets.find((d) => d.id !== primary)?.id ?? "",
     leftKey: "-1",
     rightKey: "-1",
@@ -109,9 +114,16 @@ export function formToRun(form: TransformForm, datasets: readonly Named[]): Tran
   if (form.op === "merge") {
     const picks = form.appendIds.flatMap((id) => find(id) ?? []);
     if (picks.length < 2) return "Tick at least two datasets to append.";
+    const source = form.sourceName.trim();
+    if (form.sourceOn && !source) return "Name the source column.";
     const [first, ...rest] = picks;
     return {
-      params: { op: "merge", with: rest.map(ref), ...(form.match === "name" ? { match: "name" as const } : {}) },
+      params: {
+        op: "merge",
+        with: rest.map(ref),
+        ...(form.match === "name" ? { match: "name" as const } : {}),
+        ...(form.sourceOn ? { sourceFactor: source } : {}),
+      },
       primaryId: first.id,
       otherIds: rest.map((d) => d.id),
     };

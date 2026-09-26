@@ -121,7 +121,7 @@ export async function computeTransformPreview(p: TransformParams, primary: Datas
       // rows (lib/transformRun.ts's own `rowsOf` doc) — matched here too.
       const fulls = all.map((d) => d.data);
       const capped = fulls.map((d) => headOfDataStruct(d, PREVIEW_CAP));
-      const data = mergeDatasets(capped, names, p.match);
+      const data = mergeDatasets(capped, names, p.match, p.sourceFactor);
       const pv = preview(`Append ${all.length} datasets`, data, analyzeMerge(fulls, names, p.match), all.map((d, i) => [d.name, fulls[i]]));
       return { data, name: `merged (${all.length})`, preview: withCapNote(pv, capped.some((d, i) => d !== fulls[i])) };
     }
