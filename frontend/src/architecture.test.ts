@@ -794,10 +794,10 @@ const TS_MODULE_PINS: Record<string, number> = {
   //     eager bundle worse, see that file's header. Its column helpers went to
   //     lib/statstage.ts instead, since the render path calls them
   //     synchronously.
-  // 569 -> 561 (P2.6 box 2): the Export button's body moved to
+  // 569 -> 557 (P2.6 box 2): the Export button's body moved to
   //     statStageExport.exportStatStage, funding the level-accounting wiring
   //     (applyLevels + the two persisted display options).
-  "/components/Stage/useStatStage.ts": 561,
+  "/components/Stage/useStatStage.ts": 557,
   // useCalculators.ts GRADUATED 2026-08-15 (pin was 681): the DIRACULATOR_AUDIT
   // P3 split moved each shared-state domain to its own bounded hook
   // (useUnitsCalc / useXrayCalc / useCrystalCalc / useSldCalc, all under the

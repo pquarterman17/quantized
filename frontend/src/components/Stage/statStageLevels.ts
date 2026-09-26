@@ -42,6 +42,11 @@ export interface LevelsInput {
   plotted: readonly number[];
   barValueChannels: readonly number[];
   facetCol: number | null;
+}
+
+/** The two display options — the only inputs that change a decoration
+ *  without changing an axis. */
+export interface LevelsDisplay {
   hideEmpty: boolean;
   showN: boolean;
 }
@@ -145,33 +150,59 @@ export interface LevelsResult {
   notice: GroupNotice | null;
 }
 
+/** Every axis the stage can need for these picks: the whole-plot one, and
+ *  (faceted) one per facet slice, keyed by the slice label. Depends on the
+ *  DATA and the picks only — not on the draws or the display options — so the
+ *  hook memoizes it apart from `applyLevels` (review: toggling "n" must not
+ *  re-slice and re-walk the dataset). */
+export interface LevelAxes {
+  flat: GroupAxis;
+  panels: Map<string, GroupAxis | null> | null;
+}
+
+export function levelAxes(p: LevelsInput): LevelAxes | null {
+  const flat = flatAxis(p);
+  if (!flat || !p.data) return null;
+  if (p.facetCol == null) return { flat, panels: null };
+  const none = new Set<number>();
+  const panels = new Map(facetSlices(p.data, p.facetCol).map((s) => [s.label, axisFor(p, s.data, none)] as const));
+  return { flat, panels };
+}
+
 /** Decorate the flat draw or every facet panel, and build the notice. */
 export function applyLevels(
-  p: LevelsInput,
+  axes: LevelAxes | null,
+  opts: LevelsDisplay,
   draw: StatDrawData | null,
   drawFacets: FacetDraw[] | null,
 ): LevelsResult {
-  const axis = flatAxis(p);
-  if (!axis || !p.data) return { draw, drawFacets, notice: null };
-  const base = { hideEmpty: p.hideEmpty, hiddenAbsent: axis.hiddenAbsent, unassigned: axis.unassigned };
-  if (drawFacets && p.facetCol != null) {
-    const slices = facetSlices(p.data, p.facetCol);
-    const none = new Set<number>();
-    const panels = drawFacets.map((f) => {
-      const slice = slices.find((s) => s.label === f.label);
-      const panelAxis = slice ? axisFor(p, slice.data, none) : null;
-      return { ...f, draw: decorateDraw(f.draw, panelAxis, p.hideEmpty, p.showN).draw };
-    });
+  if (!axes) return { draw, drawFacets, notice: null };
+  const { flat } = axes;
+  const base = { hiddenAbsent: flat.hiddenAbsent, unassigned: flat.unassigned };
+  if (drawFacets && axes.panels) {
+    const panels = drawFacets.map((f) => ({
+      ...f,
+      draw: decorateDraw(f.draw, axes.panels?.get(f.label) ?? null, opts.hideEmpty, opts.showN).draw,
+    }));
     const notice = groupNotice({
       ...base,
-      slots: axis.slots,
+      hideEmpty: opts.hideEmpty,
+      slots: flat.slots,
       counted: panels.flatMap((f) => counted(f.draw, `${f.label}: `)),
-      droppedPanels: slices.length - drawFacets.length,
+      droppedPanels: axes.panels.size - drawFacets.length,
     });
     return { draw, drawFacets: panels, notice };
   }
   if (!draw) return { draw, drawFacets, notice: null };
-  const { draw: decorated, aligned } = decorateDraw(draw, axis, p.hideEmpty, p.showN);
-  const notice = groupNotice({ ...base, slots: aligned ?? axis.slots, counted: counted(decorated) });
+  const { draw: decorated, aligned } = decorateDraw(draw, flat, opts.hideEmpty, opts.showN);
+  // Review: when the draw could not be threaded onto the axis it renders
+  // closed up, as before — so its empty levels are NOT on screen, and the
+  // notice must say "hidden", not "(n=0)".
+  const notice = groupNotice({
+    ...base,
+    hideEmpty: opts.hideEmpty || !aligned,
+    slots: aligned ?? flat.slots,
+    counted: counted(decorated),
+  });
   return { draw: decorated, drawFacets, notice };
 }

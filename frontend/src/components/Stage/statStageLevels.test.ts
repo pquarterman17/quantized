@@ -6,7 +6,9 @@ import { describe, expect, it } from "vitest";
 import { boxStatsClient } from "../../lib/statstage";
 import type { DataStruct, Dataset } from "../../lib/types";
 import type { StatDrawData } from "./statRender";
-import { applyLevels, decorateDraw, flatAxis, type LevelsInput } from "./statStageLevels";
+import { applyLevels, decorateDraw, flatAxis, levelAxes, type LevelsInput } from "./statStageLevels";
+
+const SHOW = { hideEmpty: false, showN: true };
 
 // grp declares A B C; C has no rows. Row 4 (grp B) is excluded.
 const DATA: DataStruct = {
@@ -30,7 +32,7 @@ const ANALYSIS: DataStruct = { ...DATA, time: [0, 1, 2, 3, 5], values: DATA.valu
 function lv(over: Partial<LevelsInput> = {}): LevelsInput {
   return {
     active: DS, data: ANALYSIS, mode: "box", groupCol: 0, group2Col: null, valueCol: 1, plotted: [1],
-    barValueChannels: [1], facetCol: null, hideEmpty: false, showN: true, ...over,
+    barValueChannels: [1], facetCol: null, ...over,
   };
 }
 
@@ -93,7 +95,7 @@ describe("decorateDraw", () => {
 
 describe("applyLevels", () => {
   it("flat: decorated draw plus a notice naming the empty level and the dropped rows, with the caveat", () => {
-    const r = applyLevels(lv(), boxDraw(), null);
+    const r = applyLevels(levelAxes(lv()), SHOW, boxDraw(), null);
     expect(r.notice?.line).toBe(
       "Caveat: n < 3 in 1 group · 1 empty level (n=0) · 2 rows dropped (1 non-finite, 1 excluded/filtered)",
     );
@@ -111,7 +113,7 @@ describe("applyLevels", () => {
       boxes: [boxStatsClient([3], 1.5, "grp = A"), boxStatsClient([4], 1.5, "grp = B")],
       valueLabel: "y", groupLabel: "grp",
     };
-    const r = applyLevels(lv({ facetCol: 2 }), null, [facetDraw("f0", f0), facetDraw("f1", f1)]);
+    const r = applyLevels(levelAxes(lv({ facetCol: 2 })), SHOW, null, [facetDraw("f0", f0), facetDraw("f1", f1)]);
     const labels = r.drawFacets?.map((f) => (f.draw.mode === "box" ? f.draw.slots?.map((s) => `${s.label}:${s.group}`) : null));
     expect(labels).toEqual([
       ["grp = A:0", "grp = B:null", "grp = C:null"],
@@ -121,8 +123,18 @@ describe("applyLevels", () => {
     expect(r.notice?.caveat).toContain("n < 3 in 3 groups");
   });
 
+  it("a draw that cannot be threaded onto the axis renders closed up, and the notice says 'hidden'", () => {
+    const stale: StatDrawData = {
+      mode: "box", boxes: [boxStatsClient([1, 2, 3], 1.5, "other = X"), boxStatsClient([4], 1.5, "other = Y")],
+      valueLabel: "y", groupLabel: "other",
+    };
+    const r = applyLevels(levelAxes(lv()), SHOW, stale, null);
+    expect(r.draw?.mode === "box" && r.draw.slots).toBeNull();
+    expect(r.notice?.line).toContain("1 empty level hidden");
+  });
+
   it("returns the draws untouched outside the categorical modes", () => {
-    const r = applyLevels(lv({ mode: "histogram" }), null, null);
+    const r = applyLevels(levelAxes(lv({ mode: "histogram" })), SHOW, null, null);
     expect(r).toEqual({ draw: null, drawFacets: null, notice: null });
   });
 });

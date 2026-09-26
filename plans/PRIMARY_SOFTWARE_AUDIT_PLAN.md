@@ -3421,7 +3421,56 @@ violin, bar, strip, or summary plots.
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5. **Dependencies:** P1.4-P1.5.
 
 - [ ] Nested grouping/order/labels/jitter/summary/errors/raw-point visibility.
-- [ ] Missing levels and unbalanced groups are explicit.
+- [x] Missing levels and unbalanced groups are explicit. (2026-09-26)
+  **Survey (before):** every categorical path closed the axis up silently.
+  `categoryLevels` never saw a level declared in `cat_levels` that no row
+  uses; `statschooser.groupsByCategory` dropped a level whose Y was all NaN
+  (`parts.has`); `nestedCells` dropped every empty (A, B) cell and
+  `nestedLevels` only ever offered co-occurring B levels; a level whose rows
+  were all EXCLUDED was pruned from the analysis view before anything looked.
+  n per group: the Canvas stage always drew `n=` captions, the export never
+  did. Bar mode drew a NaN mean as a 1-pixel bar at zero, and its export
+  422'd outright (`values: list[list[float]]`, the client's NaN arriving as
+  JSON null). The export's connect-means line also ran straight across a
+  nested outer-factor boundary the screen breaks at.
+  **Now:** `lib/groupAxis` builds the axis from the level UNIVERSE (declared
+  codes ∪ codes any row of the full dataset carries, in the user's level
+  order; nested = the full A x B cross product) and counts, per slot, usable
+  rows, non-finite rows and excluded/filtered rows. The stage's compute is
+  unchanged; `components/Stage/statStageLevels` threads its draws onto that
+  axis by order AND label (a stale draw mid-recompute is refused, and the
+  plot then renders closed up as before, with the notice saying "hidden").
+  An empty slot keeps its tick with an italic `n=0` marker on screen
+  (`statRenderSlots`) and in the export (`calc/figure_group_notes`), for
+  box / violin / strip / bar, flat and faceted (panels share the whole-plot
+  axis). **Slot cap:** over 200 slots, levels / combinations that NO row
+  carries are left off and counted in the notice; ones that occur but have no
+  usable value always stay. Below the cap a genuinely nested design shows
+  every pair (the rule, accepted; see the `groupAxis` header).
+  **Options, persisted:** `PlotView.statHideEmptyLevels` (default false) and
+  `statShowGroupN` (default TRUE — the stage's long-standing `n=` captions,
+  now honoured by the export as a top-axis `n=K` annotation) ride every
+  window snapshot, undo entry and `.dwk` (tested through a real
+  serialize/parse/load). Writers live in the lazy `store/statLevelOptions`
+  to keep them out of the eager bundle.
+  **Notice:** one line in the stage's readout — the small-n (n < 3) /
+  unbalanced (min/max n < 0.2 among non-empty groups) caveat, empty levels,
+  rows dropped (non-finite vs excluded/filtered), rows with no level,
+  hidden never-occurring slots, facet panels with no data — with a per-level
+  breakdown as its tooltip. The caveat text (`groupAxis.balanceCaveat`) is
+  also posted to the export and typeset as a footnote, so summaries and
+  error bars on such groups never leave without it.
+  **Parity:** `statLevelsParity.test.ts` drives the real hook and asserts the
+  screen's slots and the export spec agree slot for slot, and pins the spec
+  as `tests/fixtures/wire/statplot_levels_export.json`;
+  `tests/test_statplot_levels_parity.py` posts that fixture to the real route
+  and reads the SVG back (tick labels, `n=0` markers, `n=K` counts, caveat).
+  E2E: `e2e/specs/stat-missing-levels.spec.ts`.
+  **Not done:** the Graph Builder's own box/violin PREVIEW
+  (`lib/plotspec.specToRender`) still closes empty levels up — it is a
+  preview whose "send to stage" lands on the stage, which shows them; the
+  XY colour split (`calc.plotting.build_grouped_series` / `plotGroupSplit`)
+  has no category axis to leave a slot on, so it is unaffected by design.
 - [ ] Summary table links to selected groups.
 - [ ] ANOVA/post-hoc, PCA, regression/correlation, GLM, survival, and ROC stay
   lower priority until demand is shown. **Demand shown 2026-07-28**: the

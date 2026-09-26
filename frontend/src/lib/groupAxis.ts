@@ -26,7 +26,8 @@
 //     as before, and `alignSlots` threads them onto the axis BY ORDER: the
 //     slots with `n > 0`, in axis order, are exactly those groups in theirs
 //     (`orderLevels` restricted to a subset preserves relative order, so the
-//     two walks cannot disagree). A count mismatch returns null and the caller
+//     two walks cannot disagree). A count OR label mismatch (e.g. a stale
+//     draw mid-recompute) returns null and the caller
 //     keeps the old, closed-up axis rather than mislabel a box.
 //
 // THE SLOT CAP (`MAX_AXIS_SLOTS`). Showing every declared level and every
@@ -38,6 +39,14 @@
 // have no usable value (all NaN, all excluded) always stay — those are the
 // informative ones. The axis can still exceed the cap if that many levels
 // genuinely occur; that is the data, not padding.
+//
+// KNOWN COST of the rule, accepted deliberately: below the cap a genuinely
+// NESTED design (wafer IDs unique per lot: 5 lots x 25 wafer codes = 125
+// slots, 25 occurring) shows every lot x wafer pair, most of them n=0. The
+// brief is that a never-occurring combination is shown, not silently closed
+// up; "empty levels" off (persisted per plot) hides them in one click, and the
+// notice counts them either way. The same holds per facet panel, which shares
+// the whole-plot axis so panels line up.
 
 import { resolveCategoryLabels } from "./barlayout";
 import { categoricalLevels, columnOf, levelOrderFor, levelsOf, orderLevels } from "./categorical";
@@ -159,14 +168,31 @@ export function buildGroupAxis(input: AxisInput): GroupAxis {
   const bText = levelText(levels, group2Col, bCodes);
   const bAll = columnOf(levels, group2Col);
   const key = (a: number, b: number) => `${a}|${b}`;
-  const occurs = new Set(aAll.map((a, r) => key(a, bAll[r])));
-  const cross = aCodes.flatMap((a) => bCodes.map((b) => [a, b] as const));
-  const keep = cross.length > MAX_AXIS_SLOTS ? cross.filter(([a, b]) => occurs.has(key(a, b))) : cross;
+  const cross = aCodes.length * bCodes.length;
+  // Over the cap the axis is built from the combinations that OCCUR, walked
+  // per A level and put in B's display order — never by materializing the
+  // whole product (two ID-like factors can make it millions of pairs).
+  const bRank = new Map(bCodes.map((b, i) => [b, i]));
+  const byA = new Map<number, Set<number>>();
+  aAll.forEach((a, r) => {
+    if (!bRank.has(bAll[r])) return;
+    const bs = byA.get(a) ?? new Set<number>();
+    byA.set(a, bs.add(bAll[r]));
+  });
+  const occursUnder = (a: number, b: number) => byA.get(a)?.has(b) === true;
+  const keep: (readonly [number, number])[] =
+    cross <= MAX_AXIS_SLOTS
+      ? aCodes.flatMap((a) => bCodes.map((b) => [a, b] as const))
+      : aCodes.flatMap((a) =>
+          [...(byA.get(a) ?? [])]
+            .sort((x, y) => (bRank.get(x) ?? 0) - (bRank.get(y) ?? 0))
+            .map((b) => [a, b] as const),
+        );
   const index = new Map(keep.map(([a, b], i) => [key(a, b), i]));
   const slots = keep.map(([a, b]) =>
     emptySlot(
       `${name(groupCol, aText.get(a) ?? String(a))}${NESTED_LABEL_SEP}${name(group2Col, bText.get(b) ?? String(b))}`,
-      !occurs.has(key(a, b)),
+      !occursUnder(a, b),
     ),
   );
   const bRows = columnOf(rows, group2Col);
@@ -176,17 +202,22 @@ export function buildGroupAxis(input: AxisInput): GroupAxis {
     if (i === undefined) unassigned++;
     else countRow(slots[i], dropped.has(r), usable(r));
   }
-  return { slots, hiddenAbsent: cross.length - keep.length, unassigned };
+  return { slots, hiddenAbsent: cross - keep.length, unassigned };
 }
 
 /** Thread the plotted groups onto the axis by ORDER (module header): the
- *  `n > 0` slots take the groups' own labels and indices, the rest stay
- *  empty. Null when the counts disagree — the caller then keeps its old
- *  closed-up axis rather than risk putting a box over the wrong tick. */
+ *  `n > 0` slots, in axis order, must be exactly the groups — same count AND
+ *  the same label, slot for slot — and then take their indices; the rest stay
+ *  empty. Null otherwise, and the caller keeps its old closed-up axis rather
+ *  than risk putting a box over the wrong tick. The label check is what
+ *  catches a STALE draw (the async compute still holding the previous
+ *  grouping while the axis already describes the new one); a count alone
+ *  cannot tell two groupings with the same number of levels apart. */
 export function alignSlots(slots: readonly AxisSlot[], groupLabels: readonly string[]): AxisSlot[] | null {
-  if (slots.filter((s) => s.n > 0).length !== groupLabels.length) return null;
+  const filled = slots.filter((s) => s.n > 0);
+  if (filled.length !== groupLabels.length || filled.some((s, i) => s.label !== groupLabels[i])) return null;
   let k = 0;
-  return slots.map((s) => (s.n > 0 ? { ...s, label: groupLabels[k], group: k++ } : { ...s, group: null }));
+  return slots.map((s) => (s.n > 0 ? { ...s, group: k++ } : { ...s, group: null }));
 }
 
 /** The slots actually drawn: every slot, or only the filled ones when the

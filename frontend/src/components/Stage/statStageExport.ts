@@ -140,14 +140,20 @@ export interface FacetedExportInputs {
 /** Restate raw groups on the draw's axis (P2.6 box 2): one entry per AXIS
  *  slot, an empty slot as `[]` (the backend keeps its tick and marks it
  *  `n=0`). Returns null — keep the groups as they are — when there is no axis
- *  or it does not place exactly these groups (a stale draw mid-recompute). */
+ *  or it does not place exactly these groups, by label, in order (the export
+ *  reads the CURRENT groups while the draw may still be a stale one
+ *  mid-recompute). */
 export function onAxis<T>(
   slots: readonly AxisSlot[] | null | undefined,
   perGroup: readonly T[],
+  groupLabels: readonly string[],
   empty: T,
 ): { labels: string[]; values: T[] } | null {
   if (!slots) return null;
-  if (slots.filter((s) => s.group !== null).length !== perGroup.length) return null;
+  const filled = slots.filter((s) => s.group !== null);
+  if (filled.length !== perGroup.length || filled.some((s, i) => s.group !== i || s.label !== groupLabels[i])) {
+    return null;
+  }
   return {
     labels: slots.map((s) => s.label),
     values: slots.map((s) => (s.group === null ? empty : perGroup[s.group])),
@@ -189,7 +195,7 @@ export async function exportFacetedFigure(
     for (const f of drawFacets) {
       const draw = f.draw;
       if (draw.mode !== "bar") continue;
-      facets.push({ label: f.label, ...barWire(draw.data, showN) });
+      facets.push({ label: f.label, ...barWire(draw.data, showN && !barStack) });
     }
     if (!facets.length) return;
     const spec: CategoricalFigureSpec = {
@@ -214,7 +220,7 @@ export async function exportFacetedFigure(
   for (const f of drawFacets) {
     if (!f.rawGroups || f.rawGroups.length === 0) continue;
     const slots = f.draw.mode === "box" || f.draw.mode === "violin" ? f.draw.slots : null;
-    const axis = onAxis(slots, f.rawGroups.map((g) => g.values), []);
+    const axis = onAxis(slots, f.rawGroups.map((g) => g.values), f.rawGroups.map((g) => g.label), []);
     facets.push({
       label: f.label,
       kind: f.draw.mode === "violin" ? "violin" : "box",
@@ -298,11 +304,12 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
   if (!spec) return;
   if (mode === "box" || mode === "violin" || mode === "strip") {
     const slots = draw && (draw.mode === "box" || draw.mode === "violin" || draw.mode === "strip") ? draw.slots : null;
-    const axis = onAxis(slots, spec.data as number[][], []);
+    const labels = spec.labels ?? [];
+    const axis = onAxis(slots, spec.data as number[][], labels, []);
     if (axis) {
       spec.data = axis.values;
       spec.labels = axis.labels;
-      if (pointRowIndices) spec.point_row_indices = onAxis(slots, pointRowIndices, [])?.values ?? null;
+      if (pointRowIndices) spec.point_row_indices = onAxis(slots, pointRowIndices, labels, [])?.values ?? null;
     }
     spec.show_n = showN;
     spec.caveat = caveat;

@@ -334,8 +334,7 @@ def render_stat_facets_figure(
                 fig.supxlabel(x_label)
             if y_label:
                 fig.supylabel(y_label)
-            rect = add_caveat(fig, caveat)
-            fig.tight_layout() if rect is None else fig.tight_layout(rect=rect)
+            fig.tight_layout(rect=add_caveat(fig, caveat))  # None = default layout
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=resolved_dpi)
             return buf.getvalue()
@@ -443,8 +442,7 @@ def render_categorical_facets_figure(
                 fig.supxlabel(x_label)
             if y_label:
                 fig.supylabel(y_label)
-            rect = add_caveat(fig, caveat)
-            fig.tight_layout() if rect is None else fig.tight_layout(rect=rect)
+            fig.tight_layout(rect=add_caveat(fig, caveat))  # None = default layout
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=dpi)
             return buf.getvalue()

@@ -166,10 +166,7 @@ def render_statplot_figure(
             if not st.box_on:
                 ax.spines["top"].set_visible(False)
                 ax.spines["right"].set_visible(False)
-            if layout_rect is None:
-                fig.tight_layout()
-            else:
-                fig.tight_layout(rect=layout_rect)
+            fig.tight_layout(rect=layout_rect)  # None = the default layout
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=resolved_dpi)
             return buf.getvalue()
@@ -298,7 +295,14 @@ def _draw_statplot(
             # A caller-provided mean+-CI marker replaces boxplot's own tiny
             # mean-triangle (showmeans) -- one mean glyph on screen, not two.
             if any(empty):
-                ax.boxplot(groups, positions=ticks, showmeans=not show_mean_ci)
+                # boxplot sizes boxes from the spread of the positions it is
+                # GIVEN (clip(0.15*ptp, 0.15, 0.5)); pass the width the full
+                # axis would get, so where the empty slots fall cannot change
+                # every box's width.
+                width = float(np.clip(0.15 * (len(all_ticks) - 1), 0.15, 0.5))
+                ax.boxplot(
+                    groups, positions=ticks, widths=width, showmeans=not show_mean_ci,
+                )
                 ax.set_xticks(all_ticks)
                 ax.set_xticklabels(labels or [str(t) for t in all_ticks])
             else:

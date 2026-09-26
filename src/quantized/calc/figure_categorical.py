@@ -226,10 +226,7 @@ def render_categorical_figure(
                 )
             if st.grid_alpha > 0:
                 ax.grid(True, alpha=st.grid_alpha, axis="y")
-            if layout_rect is None:
-                fig.tight_layout()
-            else:
-                fig.tight_layout(rect=layout_rect)
+            fig.tight_layout(rect=layout_rect)  # None = the default layout
             buf = BytesIO()
             fig.savefig(buf, format=fmt, dpi=dpi)
             return buf.getvalue()

@@ -30,11 +30,13 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 
+import matplotlib.pyplot as plt
 import pytest
 from fastapi.testclient import TestClient
 
 from quantized.app import app
 from quantized.calc.figure_group_notes import EMPTY_MARKER, connect_segments
+from quantized.calc.figure_statplots import _draw_statplot
 
 client = TestClient(app)
 
@@ -224,3 +226,30 @@ def test_connect_means_line_is_segmented_in_the_export() -> None:
         if "stroke-dasharray" in (p.get("style") or "")
     ]
     assert len(dashed) == 1
+
+
+def test_a_caveat_with_stray_mathtext_still_renders() -> None:
+    body = {"kind": "box", "data": [[1, 2, 3], [4]], "caveat": "n < 3 in $group"}
+    r = client.post("/api/export/statplot-figure", json={**body, "fmt": "svg"})
+    assert r.status_code == 200, r.text
+
+
+def _box_widths(data: list[list[float]]) -> set[float]:
+    """Widths of the box outlines matplotlib drew (5-point closed Line2Ds)."""
+    fig, ax = plt.subplots()
+    try:
+        _draw_statplot(ax, "box", data, None, "norm", "fd", None, None)
+        return {
+            round(float(max(ln.get_xdata()) - min(ln.get_xdata())), 6)
+            for ln in ax.lines if len(ln.get_xdata()) == 5
+        }
+    finally:
+        plt.close(fig)
+
+
+def test_box_width_does_not_depend_on_where_the_empty_slots_fall() -> None:
+    """boxplot sizes boxes from the positions it is GIVEN; the renderer pins
+    the width to the full axis, so an empty slot's position is irrelevant."""
+    trailing = _box_widths([[1, 2, 3], [4, 5, 6], [], [], []])
+    middle = _box_widths([[1, 2, 3], [], [4, 5, 6], [], [7, 8]])
+    assert trailing == middle == {0.5}

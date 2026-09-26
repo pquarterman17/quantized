@@ -33,6 +33,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
+from quantized.calc.figure_labels import safe_mathtext_label
+
 __all__ = [
     "EMPTY_MARKER",
     "NESTED_LABEL_SEP",
@@ -78,10 +80,15 @@ def annotate_top_counts(ax: Any, ticks: Sequence[float], counts: Sequence[int]) 
 def add_caveat(fig: Any, caveat: str | None) -> tuple[float, float, float, float] | None:
     """Place ``caveat`` as a one-line italic footnote at the bottom-left of
     ``fig`` and return the ``tight_layout`` rect that keeps the axes clear of
-    it (``None`` = no caveat, lay out as before -- byte-identical output)."""
+    it (``None`` = no caveat, lay out as before -- byte-identical output).
+    De-mathed like every other label (``safe_mathtext_label``): it is a
+    free-form API field, and an unbalanced ``$`` must not fail the export."""
     if not caveat:
         return None
-    fig.text(0.01, 0.01, caveat, ha="left", va="bottom", fontsize="small", style="italic")
+    fig.text(
+        0.01, 0.01, safe_mathtext_label(caveat), ha="left", va="bottom", fontsize="small",
+        style="italic",
+    )
     return (0.0, CAVEAT_BAND, 1.0, 1.0)
 
 

@@ -55,7 +55,7 @@ import type { Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
 import type { StatDrawData } from "./statRender";
 import { exportStatStage } from "./statStageExport";
-import { applyLevels } from "./statStageLevels";
+import { applyLevels, levelAxes } from "./statStageLevels";
 import {
   computeBarData,
   computeBoxDraw,
@@ -494,18 +494,14 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
 
   // P2.6 box 2: thread the draws onto the full category axis (empty slots,
   // n captions) and build the notice — decoration only, see statStageLevels.
+  // The axes depend on the data + picks alone, so they are memoized apart.
+  const axes = useMemo(() => levelAxes({
+    active, data, mode, groupCol: effectiveGroupCol, group2Col: nestCol, valueCol, plotted, barValueChannels,
+    facetCol: mode === "box" || mode === "violin" || mode === "bar" ? effectiveFacetCol : null,
+  }), [active, data, mode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels, effectiveFacetCol]);
   const levels = useMemo(
-    () =>
-      applyLevels(
-        {
-          active, data, mode, groupCol: effectiveGroupCol, group2Col: nestCol, valueCol, plotted,
-          barValueChannels, facetCol: effectiveFacetCol, hideEmpty, showN,
-        },
-        drawData,
-        drawFacets,
-      ),
-    [active, data, mode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels,
-      effectiveFacetCol, hideEmpty, showN, drawData, drawFacets],
+    () => applyLevels(axes, { hideEmpty, showN }, drawData, drawFacets),
+    [axes, hideEmpty, showN, drawData, drawFacets],
   );
 
   async function exportFigure(fmt: string): Promise<void> {

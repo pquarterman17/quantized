@@ -144,6 +144,27 @@ describe("buildGroupAxis — nested", () => {
     expect(axis.slots.every((s) => s.n === 1)).toBe(true);
     expect(axis.hiddenAbsent).toBe(n * n - n);
   });
+
+  it("over the cap, each A level's occurring B levels still follow B's display order", () => {
+    // 15 x 15 > 200. Lot 0 carries wafers 3, 1, 2 (row order); wafer order is
+    // descending, so the slots must read 3, 2, 1 under lot 0.
+    const rows = [[0, 3], [0, 1], [0, 2], ...Array.from({ length: 14 }, (_, i) => [i + 1, i])];
+    const d: DataStruct = {
+      time: rows.map((_, i) => i),
+      values: rows.map(([a, b]) => [a, b, 1]),
+      labels: ["lot", "wafer", "y"],
+      units: ["", "", ""],
+      metadata: {},
+      level_order: { 1: Array.from({ length: 15 }, (_, i) => 14 - i) },
+    };
+    const axis = buildGroupAxis(nested({ levels: d, rows: d }));
+    expect(axis.slots.slice(0, 3).map((s) => s.label)).toEqual([
+      "lot = 0 / wafer = 3",
+      "lot = 0 / wafer = 2",
+      "lot = 0 / wafer = 1",
+    ]);
+    expect(axis.slots.every((s) => !s.absent)).toBe(true);
+  });
 });
 
 describe("alignSlots — threads the plotted groups onto the axis by order", () => {
@@ -189,6 +210,12 @@ describe("alignSlots — threads the plotted groups onto the axis by order", () 
 
   it("refuses (null) when the group count disagrees, rather than mislabel a box", () => {
     expect(alignSlots(buildGroupAxis(input()).slots, ["x", "y"])).toBeNull();
+  });
+
+  it("refuses a STALE draw whose count matches but whose groups are another column's", () => {
+    // One filled slot here (grp = A); a draw still holding a different
+    // grouping with one group must not be threaded onto it.
+    expect(alignSlots(buildGroupAxis(input()).slots, ["fac = 0"])).toBeNull();
   });
 
   it("visibleSlots drops only the empty slots when hiding", () => {
