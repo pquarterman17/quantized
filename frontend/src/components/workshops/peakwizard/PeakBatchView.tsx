@@ -14,7 +14,7 @@ import { useApp } from "../../../store/useApp";
 import { Button, Select, StatusDot } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import PeakBatchTable from "./PeakBatchTable";
-import { batchCsv, batchTableRows, nextSort, sortRows, type BatchSort } from "./peakBatchTable";
+import { batchCsv, batchTableRows, nextSort, sortRows, type BatchSort } from "./peakBatchRows";
 import { usePeakBatch } from "./usePeakBatch";
 
 const faint = { color: "var(--text-faint)" } as const;
