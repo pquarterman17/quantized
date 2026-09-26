@@ -51,7 +51,7 @@ the same points and weights mean anything).
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
 
 import numpy as np
@@ -118,6 +118,7 @@ def fit_peak_model(
     bg_x_ref: float | None = None,
     max_nfev: int = 1000,
     deadline_s: float | None = None,
+    abort_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     """Fit peaks of the given ``shapes`` + a polynomial ``background``.
 
@@ -130,6 +131,9 @@ def fit_peak_model(
     ``success``/``message``/``n_evaluations``, ``curves`` on the fitted points
     (x, y, y_err, model, background, components - each peak without
     background - residual y - model, normalized_residual), and ``warnings``.
+    ``abort_check`` (a batch job's cancel flag) is polled before every model
+    evaluation; once it returns True the fit raises
+    :class:`quantized.calc._bounded_lsq.FitAborted` instead of finishing.
     """
     m, xa, ya, ea, n_dropped, n_excluded = _prepare(x, y, y_err, x_min, x_max)
     xf, yf = xa[m], ya[m]
@@ -153,7 +157,7 @@ def fit_peak_model(
 
     warnings: list[str] = []
     fit = solve_bounded(residuals, params.x0(), params.x_bounds(), max_nfev=max_nfev,
-                        deadline_s=deadline_s)
+                        deadline_s=deadline_s, abort_check=abort_check)
     xs, success, message = fit.x, fit.success, fit.message
     if fit.status == "not_converged":
         warnings.append(f"the optimiser stopped without converging: {message}; the last "

@@ -59,3 +59,17 @@ describe("setupProblems", () => {
     expect(setupProblems(patchParam(s, "p1.fwhm_g", { value: 0, vary: false }))).toEqual([]);
   });
 });
+
+describe("setupProblems: non-finite numbers (slice-4 review)", () => {
+  it("a NaN / infinite start or bound is a problem, even on a tied parameter", () => {
+    const s = base(["gaussian", "gaussian"]);
+    expect(setupProblems(patchParam(s, "p0.center", { value: Number.NaN }))).toEqual([
+      "#1 center: the start value is not a finite number",
+    ]);
+    expect(setupProblems(patchParam(s, "p0.fwhm", { max: Number.POSITIVE_INFINITY }))).toEqual([
+      "#1 FWHM: a bound is not a finite number",
+    ]);
+    const tied = patchParam(s, "p1.fwhm", { tie: "p0.fwhm", value: Number.NaN });
+    expect(setupProblems(tied)).toEqual(["#2 FWHM: the start value is not a finite number"]);
+  });
+});

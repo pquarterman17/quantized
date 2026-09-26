@@ -13,7 +13,8 @@
 import type { PeakModelFitResponse } from "../../../lib/api/peaks";
 import { paramLabel } from "./peakModelParams";
 
-type Result = PeakModelFitResponse;
+/** What the reasons read: a live fit, or a batch row's fit (no curves). */
+type Result = Pick<PeakModelFitResponse, "parameters" | "peaks" | "success">;
 type ParamOut = Result["parameters"][number];
 export type DerivedKey = "center" | "fwhm" | "height" | "area";
 
@@ -58,7 +59,7 @@ export function derivedErrorReason(result: Result, k: number, key: DerivedKey): 
 }
 
 /** The metrics block, the objective under its honest label first. */
-export function metricRows(m: Result["metrics"]): [string, number | null][] {
+export function metricRows(m: PeakModelFitResponse["metrics"]): [string, number | null][] {
   const objective: [string, number | null][] = m.objective === "chi2"
     ? [["χ²", m.chi2], ["reduced χ²", m.reduced_chi2]]
     : [["SSR", m.ssr], ["reduced SSR", m.reduced_ssr]];

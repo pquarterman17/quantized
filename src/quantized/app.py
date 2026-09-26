@@ -52,6 +52,7 @@ from quantized.routes import (
     optics,
     parsers,
     peaks,
+    peaks_batch,
     plot,
     reductions,
     reference,
@@ -236,6 +237,7 @@ def create_app(*, dev_origins: Collection[str] | None = None) -> FastAPI:
     application.include_router(report_export.router)
     application.include_router(magnetometry.router)
     application.include_router(peaks.router)
+    application.include_router(peaks_batch.router)
     application.include_router(reductions.router)
     application.include_router(reflectivity.router)
     application.include_router(rsm.router)

@@ -6943,6 +6943,65 @@
         "title": "PeakModelBackgroundOut",
         "type": "object"
       },
+      "PeakModelBatchRequest": {
+        "description": "``items``: each a ``PeakModelFitRequest``-shaped problem (without the\nrange / budget fields) plus ``id``; bodies are validated per item in the\njob, so the schema here only types the envelope.",
+        "properties": {
+          "item_deadline_s": {
+            "default": 10.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 30.0,
+            "title": "Item Deadline S",
+            "type": "number"
+          },
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Items",
+            "type": "array"
+          },
+          "max_nfev": {
+            "default": 1000,
+            "maximum": 10000.0,
+            "minimum": 1.0,
+            "title": "Max Nfev",
+            "type": "integer"
+          },
+          "total_deadline_s": {
+            "default": 600.0,
+            "exclusiveMinimum": 0.0,
+            "maximum": 1800.0,
+            "title": "Total Deadline S",
+            "type": "number"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "PeakModelBatchRequest",
+        "type": "object"
+      },
+      "PeakModelBatchSubmitted": {
+        "properties": {
+          "job_id": {
+            "title": "Job Id",
+            "type": "string"
+          },
+          "n_items": {
+            "title": "N Items",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "job_id",
+          "n_items"
+        ],
+        "title": "PeakModelBatchSubmitted",
+        "type": "object"
+      },
       "PeakModelCurves": {
         "description": "On the fitted points; ``components`` are the peaks without background.",
         "properties": {
@@ -15642,6 +15701,48 @@
           }
         },
         "summary": "Model Fit",
+        "tags": [
+          "peaks"
+        ]
+      }
+    },
+    "/api/peaks/model-fit-batch": {
+      "post": {
+        "description": "Queue the batch; poll ``/api/jobs/{job_id}`` for progress and rows.",
+        "operationId": "model_fit_batch_api_peaks_model_fit_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PeakModelBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeakModelBatchSubmitted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Model Fit Batch",
         "tags": [
           "peaks"
         ]

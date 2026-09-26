@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-06 (latest): **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-25 (latest): **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -3244,7 +3244,76 @@ each load warning shows once per session.
 Remaining for slice 4: batch recipe (run a saved v2 recipe over many
 datasets) and the uncertainty/diagnostic result table; durable peak-table
 publishing with stderr + shape and a correlation view are still open.
-- [ ] Batch recipe and uncertainty/diagnostic result table.
+
+**Progress 2026-09-25 (slice 4, batch recipe + result table; Opus 5.5):**
+the Peak Analyzer has a "Batch" mode (`peakwizard/PeakBatchView.tsx`, kept
+mounted while the wizard is shown, so switching never cancels a run): pick a
+SAVED v2 recipe and datasets (checklist, "Library selection", All/None),
+Run, Cancel, n/N progress. SPLIT: the client prepares each dataset with the
+wizard's own code — X/Y are the wizard's plotted columns MATCHED BY NAME in
+every dataset (a missing column is an error row naming it, never another
+column), analysis rows, range cut, gap drop, the recipe's baseline and find
+(`peakwizard/recipeSteps.ts`, now shared with `usePeakBaseline` /
+`usePeakCandidates`), then `buildSetup` (fresh seed + the stored edits) and
+the model-table checks (`peakBatchPrep.ts`) — because the seeding lives in
+TS and a Python copy would be a second definition of a recipe that could
+drift. The fits (the long part) run as ONE job on the poll queue: `POST
+/api/peaks/model-fit-batch` (`routes/peaks_batch.py`; each item is a
+`/model-fit` body, caps 200 items / 2M points / 30 s per fit / 30 min per
+batch) over `calc/peak_model_batch.py`: each fit in its own try (a rejected
+or crashing item is an error row — uncurated exception text never reaches
+it), cancel polled before every item AND before every model evaluation (new
+optional `abort_check` in `_bounded_lsq.solve_bounded` /
+`fit_peak_model`), total deadline -> named "not_run" rows. A Classic-engine
+recipe is refused with the way out. TABLE (`peakBatchTable.ts` +
+`PeakBatchTable.tsx`): one row per (dataset, peak) — shape, centre / FWHM /
+height / area +- stderr ("—" with `modelFitReasons`' reason on hover),
+status, R², the objective under its honest label (SSR, or χ² only when
+`metrics.objective` is chi2; separate SSR / χ² columns in CSV and table
+dataset, χ² empty/NaN when unweighted), AIC/BIC, points, warnings (count;
+texts on hover and expand), at-bound / undetermined flags per peak (+ bg);
+a failed dataset is ONE row with the stage and reason. Sortable (missing
+last), CSV export, and "Add as table" — the standard `addDataset` derived
+path, so it saves with the workspace: numeric channels (NaN kept by
+`nonFiniteCells`), text as `metadata.text_columns`, provenance
+`metadata.peakBatch` = recipe name + the recipe as run + every source id /
+name + time. Verified: `tests/test_calc_peak_model_batch.py` (truth
+recovery on 3 synthetic datasets, isolation incl. an unexpected exception,
+cancel between items and mid-fit, total + per-item deadline, progress
+propagation), `tests/test_api_peak_model_batch.py` (real job queue, rows ==
+calc, error row, cancel via `/api/jobs` mid-fit, ASCII 422s, caps); vitest
+`peakBatchTable` (incl. `.dwk` save/reopen of the table), `peakBatchPrep`
+(item == the wizard's body with stored edits; by-name columns; reasons),
+`PeakBatchView` (run, isolation, SSR/χ², reasons, sort, cancel while
+preparing / fitting / on close, failed job, CSV, add-as-table provenance,
+mode switch keeps the run); Chromium e2e `peak-batch.spec.ts` (3 datasets,
+real backend, one isolated). Sabotages went red: backend isolation, cancel,
+total deadline; χ² label, null-stderr reason, client isolation, cancel
+reaching the job API, stored edits applied. Eager bundle unchanged (845.0
+kB). Residuals: the in-panel table is session state (the added table
+dataset is the durable result; it does not reopen as the interactive
+table); the wizard sends no y errors, so a χ²-labelled batch is reachable
+only through the API today; durable peak-table publishing with stderr +
+shape and a correlation view remain open (below the boxes, not new boxes).
+Review round (same day, 10 findings fixed, each with a test that went red
+when the fix was reverted): a dataset whose LOADING throws is an error row
+and preparation always ends; preparation runs 4 at a time (`mapPool`, rows
+in picked order); the route's 2M-point total is enforced client-side
+before submit (`applyPointBudget`: overflow datasets are "not run" rows
+saying to pick fewer); the route validates each item INSIDE the job
+(`TypeAdapter`), so one bad item (a NaN start sent as null, an unknown
+shape) is its error row, never a 422 for the batch — the envelope (count,
+unique ids, total points) still 422s — and `setupProblems` now rejects
+non-finite starts/bounds; the job closure no longer holds the parsed
+request; the total deadline is `min(1800, n x 10 s + 30 s)`, not a flat 30
+min; `stopped = "deadline"` also when the budget cut the LAST fit short,
+and the status says so; Export CSV follows the on-screen sort (sort state
+lifted to the view); batch items and `/model-fit` share one
+`PeakModelProblem` model; only ValueError / ArithmeticError / LinAlgError
+text reaches a row (KeyError / IndexError / TypeError get the generic
+type-only message).
+- [x] Batch recipe and uncertainty/diagnostic result table. (slice 4,
+  2026-09-25)
 
 ### P2.5 — Transform/combine/clean wizard
 
