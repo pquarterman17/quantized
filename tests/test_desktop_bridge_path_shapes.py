@@ -35,6 +35,15 @@ from quantized.desktop_consent import (
 )
 from quantized.desktop_project_file import payload_declares_source
 from quantized.desktop_source_probe import probe_source_path, volume_present
+from unc_fakes import (
+    ERROR_BAD_NETPATH,
+    ERROR_INVALID_NAME,
+    ERROR_NETWORK_UNREACHABLE,
+    NETWORK_EINVAL_WINERRORS,
+    install_unc_fakes,
+    unc_file,
+    unc_share,
+)
 
 
 class FakeWindow:
@@ -375,116 +384,40 @@ def test_pick_files_consents_a_specially_charactered_name_on_every_platform(
     assert is_consented(str(f))
 
 
-# === UNC / network-path classification (mocked; no real share) =============
+# === UNC / network-path classification (faked; no real share) ==============
 #
-# This repo already has `_unmounted_volume_path()` fixtures that build a
-# UNC-*shaped* string, but on POSIX (where this whole gate runs)
-# `os.path.splitdrive` never treats a leading double-backslash as a drive at
-# all, so the Windows-only branch of `volume_present` is otherwise never
-# actually exercised outside a Windows CI runner. The tests below mock
-# `os.path.splitdrive`/`os.path.isdir` to model exactly what Windows itself
-# would report for a UNC root, so the CLASSIFICATION LOGIC (reachable share
-# -> "missing" for an absent file; unreachable share -> "offline") is
-# covered on every host. What this does NOT cover: an actual SMB/CIFS
-# connection, real Windows `_getfinalpathname` behavior, or an extended-
-# length `\\?\` prefix's own special-cased parsing -- that needs a real
-# Windows box with a real (or deliberately downed) share, which is exactly
-# the packaged-E2E gap this plan item's other half still names.
-
-
-def _unc_path(reachable_share: bool) -> tuple[str, str, str]:
-    """Returns (share_root, file_path, host_note) for a synthetic
-    ``\\\\server\\share`` UNC root -- built from `chr(92)` for the same
-    reason `test_desktop_bridge.py`'s own `_unmounted_volume_path` does: a
-    quoting layer eating one backslash silently turns this into a rooted
-    local path instead of a UNC one, which would make the test assert the
-    wrong thing without failing loudly."""
-    b = chr(92)
-    share = f"{b}{b}qz-test-server{b}share"
-    return share, f"{share}{b}run.dwk", ("reachable" if reachable_share else "unreachable")
-
-
-def _patch_unc_classification(
-    monkeypatch: pytest.MonkeyPatch, share_root: str, *, mounted: bool
-) -> None:
-    """Model what NTFS/ntpath itself would do for a UNC-rooted string, since
-    POSIX's `os.path` treats every one of these three calls differently for
-    a leading-double-backslash string than Windows' own `os.path` (== ntpath)
-    would:
-
-    - `splitdrive`/`isdir`: as before, faked for the exact fake share root.
-    - `realpath`: ntpath treats a UNC path as already absolute and (with no
-      symlinks in a synthetic path) returns it unchanged. POSIX's realpath
-      does NOT recognize a leading `\\\\` as absolute, so on an unpatched
-      POSIX host it silently rewrites the fake path onto the CWD, and every
-      caller that calls `os.path.realpath` before classifying (`path_status`,
-      `probe_source`, both in desktop_bridge_dialogs.py) would then classify
-      a mangled, no-longer-UNC-shaped string -- caught red-handed by
-      `test_path_status_offline_on_an_unreachable_unc_share` below, which
-      failed with `missing` instead of `offline` before this fix. Patched to
-      the real ntpath.realpath's OWN observable behavior (identity, for an
-      already-absolute string with no symlink components) for exactly the
-      fake root, so the classification the caller sees is what a real
-      Windows host would actually hand `probe_source_path`.
-    - `stat`: faked for every path under the fake share, because leaving it
-      real made these tests depend on the network. On Windows the real
-      `os.stat` sends `\\\\qz-test-server\\share\\run.dwk` to the SMB
-      redirector, which resolves a host that does not exist. A dev box
-      answers ERROR_BAD_NETPATH (53, measured after ~2.8 s), which Python
-      maps to ENOENT -> FileNotFoundError -> `missing`. A runner whose name
-      resolution fails differently answers ERROR_NETWORK_UNREACHABLE (1231),
-      ERROR_SEM_TIMEOUT (121), ERROR_UNEXP_NET_ERR (59) and so on. Python maps
-      all of those to EINVAL, a plain OSError, which `probe_source_path`
-      classifies as `invalid` once `volume_present` (patched True) says the
-      share is up. That is the `'invalid' == 'missing'` CI failure on
-      windows-latest/3.11. The fake raises what Windows raises for these
-      exact shapes. A reachable share with an absent file gives
-      ERROR_FILE_NOT_FOUND. An unreachable share gives ERROR_BAD_NETPATH.
-      Both map to FileNotFoundError, so the only variable left is `mounted`.
-    """
-    real_splitdrive = os.path.splitdrive
-    real_isdir = os.path.isdir
-    real_realpath = os.path.realpath
-    real_stat = os.stat
-
-    def fake_splitdrive(p: str) -> tuple[str, str]:
-        if p == share_root:
-            return (share_root, "")
-        if p.startswith(share_root + chr(92)):
-            return (share_root, p[len(share_root) :])
-        return real_splitdrive(p)
-
-    def fake_isdir(p: str) -> bool:
-        if p in (share_root, share_root + os.sep):
-            return mounted
-        return real_isdir(p)
-
-    def fake_realpath(p: str, *a: object, **kw: object) -> str:
-        if p == share_root or p.startswith(share_root + chr(92)):
-            return p  # ntpath.realpath: already absolute, no symlinks -> unchanged
-        return real_realpath(p, *a, **kw)  # type: ignore[arg-type]
-
-    def fake_stat(p: Any, *a: Any, **kw: Any) -> os.stat_result:
-        if isinstance(p, str) and p.startswith(share_root + chr(92)):
-            raise FileNotFoundError(errno.ENOENT, "No such file (faked UNC stat)", p)
-        return real_stat(p, *a, **kw)
-
-    monkeypatch.setattr(os, "stat", fake_stat)
-    monkeypatch.setattr(os.path, "splitdrive", fake_splitdrive)
-    monkeypatch.setattr(os.path, "isdir", fake_isdir)
-    monkeypatch.setattr(os.path, "realpath", fake_realpath)
+# On POSIX, where most of this gate runs, `os.path.splitdrive` never treats a
+# leading double backslash as a drive, so the UNC branch of `volume_present`
+# and `_classify_stat_oserror` would otherwise only run on a Windows runner.
+# `unc_fakes.install_unc_fakes` fakes `os.stat`, `os.path.splitdrive`,
+# `os.path.isdir` and `os.path.realpath` for every path under a synthetic
+# share, the way ntpath and the SMB redirector would answer, so the
+# classification (reachable share -> `missing` for an absent file;
+# unreachable share, or a network error from a live one -> `offline`;
+# malformed name -> `invalid`) is covered on every host with no network I/O.
+#
+# What this does NOT cover:
+# - which Windows error a real host returns for an unreachable share. The
+#   fakes inject the codes observed so far (ERROR_BAD_NETPATH on a dev box,
+#   network codes such as ERROR_NETWORK_UNREACHABLE on a CI runner) through
+#   CPython's own errno mapping, but a host may answer a code nobody has
+#   seen yet;
+# - an actual SMB/CIFS connection, or real `_getfinalpathname` behavior;
+# - an extended-length `\\?\UNC\` prefix's own parsing.
+# Those need a real Windows box with a real (or deliberately downed) share,
+# which is the packaged-E2E gap this plan item's other half still names.
 
 
 def test_volume_present_true_for_a_reachable_unc_share(monkeypatch: pytest.MonkeyPatch) -> None:
-    share, file_path, _ = _unc_path(reachable_share=True)
-    _patch_unc_classification(monkeypatch, share, mounted=True)
-    assert volume_present(file_path) is True
+    share = unc_share()
+    install_unc_fakes(monkeypatch, share, mounted=True)
+    assert volume_present(unc_file(share)) is True
 
 
 def test_volume_present_false_for_an_unreachable_unc_share(monkeypatch: pytest.MonkeyPatch) -> None:
-    share, file_path, _ = _unc_path(reachable_share=False)
-    _patch_unc_classification(monkeypatch, share, mounted=False)
-    assert volume_present(file_path) is False
+    share = unc_share()
+    install_unc_fakes(monkeypatch, share, mounted=False)
+    assert volume_present(unc_file(share)) is False
 
 
 def test_probe_source_missing_on_a_reachable_unc_share_for_an_absent_file(
@@ -493,52 +426,96 @@ def test_probe_source_missing_on_a_reachable_unc_share_for_an_absent_file(
     """A UNC file that does not exist, but whose SHARE root is mounted, is
     `missing` (the file is genuinely gone) -- not `offline` (the volume is
     fine)."""
-    share, file_path, _ = _unc_path(reachable_share=True)
-    _patch_unc_classification(monkeypatch, share, mounted=True)
-    assert probe_source_path(file_path, compute_checksum=False)["state"] == "missing"
+    share = unc_share()
+    install_unc_fakes(monkeypatch, share, mounted=True)
+    assert probe_source_path(unc_file(share), compute_checksum=False)["state"] == "missing"
 
 
-def test_unc_classification_ignores_the_hosts_real_network_answer(
+@pytest.mark.parametrize("winerror", NETWORK_EINVAL_WINERRORS)
+def test_probe_source_offline_when_a_live_unc_share_answers_a_network_error(
+    monkeypatch: pytest.MonkeyPatch, winerror: int
+) -> None:
+    """The windows-latest/3.11 failure, driven through production: the share
+    root still answers `isdir`, but the file's stat fails with a network code
+    that CPython maps to a plain EINVAL OSError. That is a flaky share, so
+    `offline`. Before the classifier read `winerror` this was `invalid`,
+    which offers relink or cleanup for a file that will be back."""
+    share = unc_share()
+    install_unc_fakes(monkeypatch, share, mounted=True, stat_winerror=winerror)
+    file_path = unc_file(share)
+    assert probe_source_path(file_path, compute_checksum=False)["state"] == "offline"
+    assert DesktopApi().path_status(file_path)["state"] == "offline"
+
+
+def test_probe_source_offline_for_an_unrecognised_oserror_on_a_unc_path(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Forces the windows-latest/3.11 CI failure: the host's real `os.stat`
-    for the fake share answers with a network error that Python maps to a
-    plain EINVAL OSError, for example ERROR_NETWORK_UNREACHABLE. Before
-    `_patch_unc_classification` faked `stat`, this answer reached
-    `probe_source_path` and turned `missing` into `invalid`. The helper must
-    own every input, so the host's network answer cannot matter."""
-    share, file_path, _ = _unc_path(reachable_share=True)
+    """A stat failure with no known code on a UNC path is still `offline`:
+    everything between this process and the file is network there."""
+    share = unc_share()
+    install_unc_fakes(monkeypatch, share, mounted=True)
     real_stat = os.stat
+    file_path = unc_file(share)
 
-    def network_error_stat(p: Any, *a: Any, **kw: Any) -> os.stat_result:
-        if isinstance(p, str) and p.startswith(share + chr(92)):
-            raise OSError(errno.EINVAL, "forced ERROR_NETWORK_UNREACHABLE (1231)", p)
+    def eio_stat(p: Any, *a: Any, **kw: Any) -> os.stat_result:
+        if p == file_path:
+            raise OSError(errno.EIO, "I/O error with no winerror", p)
         return real_stat(p, *a, **kw)
 
-    monkeypatch.setattr(os, "stat", network_error_stat)
-    _patch_unc_classification(monkeypatch, share, mounted=True)
-    assert probe_source_path(file_path, compute_checksum=False)["state"] == "missing"
-
-
-def test_probe_source_offline_on_an_unreachable_unc_share(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """The counterpart: the SAME absent-file stat failure, but the share
-    root itself is not mounted -- `offline`, not `missing`, so nothing
-    downstream offers to clean up a source that is fine and will be back."""
-    share, file_path, _ = _unc_path(reachable_share=False)
-    _patch_unc_classification(monkeypatch, share, mounted=False)
+    monkeypatch.setattr(os, "stat", eio_stat)
     assert probe_source_path(file_path, compute_checksum=False)["state"] == "offline"
 
 
-def test_path_status_offline_on_an_unreachable_unc_share(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_probe_source_invalid_for_a_malformed_name_on_a_live_unc_share(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The counterpart that keeps `invalid` meaningful: ERROR_INVALID_NAME
+    is also EINVAL, but it says the name is bad, not the link."""
+    share = unc_share()
+    install_unc_fakes(monkeypatch, share, mounted=True, stat_winerror=ERROR_INVALID_NAME)
+    assert probe_source_path(unc_file(share), compute_checksum=False)["state"] == "invalid"
+
+
+@pytest.mark.parametrize("as_type", ["pathlike", "bytes"])
+def test_unc_fake_stat_intercepts_pathlike_and_bytes(
+    monkeypatch: pytest.MonkeyPatch, as_type: str
+) -> None:
+    """`os.stat` accepts str, bytes and PathLike. A fake that matched only
+    `str` would let the other two reach the real SMB redirector."""
+    share = unc_share()
+    install_unc_fakes(monkeypatch, share, mounted=True, stat_winerror=ERROR_NETWORK_UNREACHABLE)
+    file_path = unc_file(share)
+    arg: Any = Path(file_path) if as_type == "pathlike" else os.fsencode(file_path)
+    with pytest.raises(OSError) as info:
+        os.stat(arg)
+    assert getattr(info.value, "winerror", None) == ERROR_NETWORK_UNREACHABLE
+
+
+@pytest.mark.parametrize("winerror", [ERROR_BAD_NETPATH, ERROR_NETWORK_UNREACHABLE])
+def test_probe_source_offline_on_an_unreachable_unc_share(
+    monkeypatch: pytest.MonkeyPatch, winerror: int
+) -> None:
+    """The counterpart: the share root itself is not mounted -- `offline`,
+    not `missing`, so nothing downstream offers to clean up a source that is
+    fine and will be back. Both answers a real host gives for an unreachable
+    server are covered: ERROR_BAD_NETPATH (FileNotFoundError) and a network
+    code mapped to EINVAL."""
+    share = unc_share()
+    install_unc_fakes(monkeypatch, share, mounted=False, stat_winerror=winerror)
+    assert probe_source_path(unc_file(share), compute_checksum=False)["state"] == "offline"
+
+
+@pytest.mark.parametrize("winerror", [ERROR_BAD_NETPATH, ERROR_NETWORK_UNREACHABLE])
+def test_path_status_offline_on_an_unreachable_unc_share(
+    monkeypatch: pytest.MonkeyPatch, winerror: int
+) -> None:
     """Same classification, through the js_api method a real dialog result
     would actually reach (`DesktopApi.path_status`), not just the pure
     helper."""
-    share, file_path, _ = _unc_path(reachable_share=False)
-    _patch_unc_classification(monkeypatch, share, mounted=False)
+    share = unc_share()
+    install_unc_fakes(monkeypatch, share, mounted=False, stat_winerror=winerror)
     api = DesktopApi()
-    assert api.path_status(file_path)["state"] == "offline"
+    assert api.path_status(unc_file(share))["state"] == "offline"
 
 
 # === Quick-save must never write through an absent mount point =============
