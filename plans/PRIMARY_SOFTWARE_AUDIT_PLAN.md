@@ -3113,10 +3113,22 @@ a plan edit.
   first; per-point error bars on the WH plot were not added either; (b)
   publishing from the batch table (a batch row has no fit curve for `bg`,
   and each dataset's x channel / fingerprint would have to be captured at
-  prepare time); (c) the Peaks workshop's "→ Report" still emits a
-  published model-fit table through the `multipeak_fit` emitter, which has
-  no error columns (the Peak Analyzer's own report carries them) — needs an
-  emitter change.
+  prepare time); (c) the reduced SSR / reduced χ² are not in the Peaks
+  workshop's report of a published model-fit table: the durable table stores
+  SSR and χ² but not the fit's dof.
+  **2026-09-26, report errors (ported from PR #434, closed as a duplicate of
+  #435):** the Peaks workshop's "→ Report" of a published model-fit table now
+  sends the durable rows' 1σ errors (centre / FWHM / height / area / η, and a
+  Voigt row's G/L widths) and the objective, SSR, χ² and R²
+  (`peaks/peakReport.ts`); `calc/report_emit_peaks.from_multipeak_fit` prints a "±"
+  column after each value ("—" for a null error), the Voigt width columns
+  only when a row has them, and R² (weighted for a χ² fit) / SSR / χ² in the
+  goodness-of-fit table. The request reads the durable table itself (not the
+  panel's row pairing, which lapses for a moment after a removal) and carries
+  each row's `excluded` flag, which the report shows as an "Included" column.
+  The peak emitters moved to `calc/report_emit_peaks.py` (500-line ceiling).
+  A classic table's request and report are unchanged, pinned by a
+  whole-sheet test.
 - [~] Manual peak edits and reviewed batch recipe. **2026-09-23 slice:** fitted
   peak rows can now be selected, edited (center/FWHM/height/area), or removed
   directly in the Peaks workshop. The durable `PeakTable` is the source of
