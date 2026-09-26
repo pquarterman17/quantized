@@ -5,13 +5,34 @@
 // "Metadata → factors…" from the row's context menu, preview and promote
 // `sample` to a factor column, then merge the two (with the source column):
 // every merged row still says which sample — and which file — it came from.
-// (The fixtures are synthetic, a few lines each; no instrument corpus.)
+// The two files are synthetic, a few lines each, and are WRITTEN BY THE SPEC
+// (the repo's .gitignore keeps every `.dat` out of git as instrument data).
+
+import fs from "node:fs";
 
 import { expect, test, type Page } from "@playwright/test";
 
 import { dropFileOnto } from "../utils/dnd";
-import { fixturePath } from "../utils/fixtures";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
+
+/** A minimal Quantum Design MPMS file whose header names its sample. */
+function qdFile(name: string, sample: string): string {
+  const file = test.info().outputPath(name);
+  const lines = [
+    "[Header]",
+    "; MPMS3 Data File (default extension .dat)",
+    "TITLE,",
+    "BYAPP,SQUID VSM,1.0",
+    `INFO,${sample},sample`,
+    "[Data]",
+    "Comment,Time Stamp (sec),Temperature (K),Magnetic Field (Oe),Moment (emu)",
+    ",1000.0,300.0,5000.0,0.000121",
+    ",1001.5,300.0,0.0,0.000001",
+    ",1003.0,300.0,-5000.0,-0.000121",
+  ];
+  fs.writeFileSync(file, `${lines.join("\n")}\n`);
+  return file;
+}
 
 interface DS {
   id: string;
@@ -38,9 +59,9 @@ test.describe("Metadata → factors (P2.5)", () => {
   test("select 2 datasets → promote `sample` → merge → the merged rows keep their sample", async ({ page }) => {
     await gotoApp(page);
     const library = page.locator(".qzk-library");
-    await dropFileOnto(page, library, fixturePath("sample-s1.dat"));
+    await dropFileOnto(page, library, qdFile("sample-s1.dat", "S1"));
     await waitForDatasetCount(page, 1);
-    await dropFileOnto(page, library, fixturePath("sample-s2.dat"));
+    await dropFileOnto(page, library, qdFile("sample-s2.dat", "S2"));
     await waitForDatasetCount(page, 2);
 
     // ── Select both rows (click, Ctrl+click) and open the workshop from the row menu ──
