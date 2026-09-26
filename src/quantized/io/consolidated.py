@@ -25,6 +25,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.x_units import x_unit_of
 
 __all__ = ["consolidate_csv"]
 
@@ -57,7 +58,11 @@ def _meta_get(meta: dict[str, Any], *keys: str, default: Any = None) -> Any:
 
 
 def _resolve_x_unit(ds: DataStruct) -> str:
-    return str(_meta_get(dict(ds.metadata), "xUnit", "x_column_unit", "xColumnUnit", default=""))
+    """The dataset's x unit -- ``quantized.x_units.x_unit_of``, shared with
+    ``calc.resample_align`` so both sides agree on what the unit IS (audit
+    P2.5 review finding #7: this used to be its own copy, with a different
+    key order than ``calc``'s)."""
+    return x_unit_of(ds)
 
 
 def _dataset_filename(ds: DataStruct, name: str) -> str:

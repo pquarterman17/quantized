@@ -50,17 +50,29 @@ export function defaultForm(matchId: string): ResampleForm {
 
 const tidy = (v: number): string => String(Number(v.toPrecision(6)));
 
+/** `tidy`, but never outside `[lo, hi]` -- `toPrecision(6)` rounds to the
+ *  NEAREST 6-sig-fig value, which can land past the very bound it's meant to
+ *  represent (0.6666666666666666 -> "0.666667", just above 2/3; 0.3333333333333333
+ *  -> "0.333333", just below 1/3). A default start/stop presented as inside the
+ *  data's own range must actually be, so clamp back to the bound after rounding
+ *  rather than skip rounding (keeps the field's usual short display). */
+function tidyWithin(v: number, lo: number, hi: number): string {
+  const clamped = Math.min(hi, Math.max(lo, Number(v.toPrecision(6))));
+  return String(clamped);
+}
+
 /** Seed the empty step/range fields from a dataset's x-range (100 intervals),
  *  leaving anything the user already typed alone. */
 export function withRangeDefaults(f: ResampleForm, data: DataStruct | undefined): ResampleForm {
   const r = data ? xExtent(data.time) : null;
   if (!r || r[1] <= r[0]) return f;
-  const step = tidy((r[1] - r[0]) / 100);
+  const [lo, hi] = r;
+  const step = tidy((hi - lo) / 100);
   return {
     ...f,
     step: f.step || step,
-    start: f.start || tidy(r[0]),
-    stop: f.stop || tidy(r[1]),
+    start: f.start || tidyWithin(lo, lo, hi),
+    stop: f.stop || tidyWithin(hi, lo, hi),
     rangeStep: f.rangeStep || step,
   };
 }

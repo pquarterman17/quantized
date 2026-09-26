@@ -36,10 +36,13 @@ describe("resampleRequest", () => {
     expect(resampleRequest(accepted, celsius, other).allow_unit_mismatch).toBe(false);
   });
 
-  it("reads the x unit under the same keys as the backend (x_column_unit, xUnit, xColumnUnit; trimmed)", () => {
+  it("reads the x unit under the same keys, in the same order, as the backend (xUnit, x_column_unit, xColumnUnit; trimmed)", () => {
     expect(xUnitOf({ ...src, metadata: { xUnit: " Oe " } })).toBe("Oe");
     expect(xUnitOf({ ...src, metadata: { xColumnUnit: "T" } })).toBe("T");
     expect(xUnitOf({ ...src, metadata: { x_column_unit: "  ", xUnit: "K" } })).toBe("K");
+    // Key order matters when more than one is genuinely set: xUnit wins,
+    // matching the backend's shared `quantized.x_units.x_unit_of`.
+    expect(xUnitOf({ ...src, metadata: { x_column_unit: "Oe", xUnit: "K" } })).toBe("K");
     expect(resampleRequest(match, src, { ...other, metadata: { xUnit: "Oe" } }).match_x_unit).toBe("Oe");
     expect(xUnitConflict(src, { ...other, metadata: {} })).toBeUndefined();
     expect(xUnitConflict(src, other)).toEqual(["K", "Oe"]);

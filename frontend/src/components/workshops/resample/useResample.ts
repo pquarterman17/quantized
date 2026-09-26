@@ -63,6 +63,10 @@ export interface ResampleState {
   channel: number;
   setChannel: (c: number) => void;
   warnings: TransformWarning[];
+  /** A picked (or matched) dataset is a still-loading book: the preview above
+   *  is counted on its downsampled preview rows, not the full data Create
+   *  resolves and resamples. */
+  previewOnly: boolean;
   blockedByUnits: boolean;
   unitsAcknowledged: boolean;
   setUnitsAcknowledged: (ok: boolean) => void;
@@ -158,7 +162,15 @@ export function useResample(): ResampleState {
 
   const fresh = previews.key === key && key !== "";
   const entries = fresh ? previews.entries : [];
-  const warnings = entries.flatMap((e) => e.result?.warnings ?? []);
+  // Several targets can echo the identical sentence (e.g. every pick hits
+  // the same "X units differ" or "N rows lie outside the range"); prefix by
+  // source name so they read distinctly AND so the code+text pair
+  // `TransformWarningList` keys its <li> by stays unique per dataset.
+  const warnings = entries.flatMap((e) => {
+    const ws = e.result?.warnings ?? [];
+    return targets.length > 1 ? ws.map((w) => ({ ...w, text: `${e.name}: ${w.text}` })) : ws;
+  });
+  const previewOnly = targets.some((d) => d.pending) || Boolean(matchDs?.pending);
   const unitsAcknowledged = ackFor === key && key !== "";
   const blockedByUnits = needsConfirm(warnings) && !unitsAcknowledged;
   const allOk = entries.length === targets.length && entries.every((e) => e.result);
@@ -169,7 +181,12 @@ export function useResample(): ResampleState {
     setFormState((f) => {
       const next = { ...f, ...patch };
       if (patch.mode === "step" || patch.mode === "range") {
-        return withRangeDefaults(next, datasets.find((d) => d.id === picks[0])?.data);
+        // Seed from the first ACTUAL target (never `picks[0]`, which may be
+        // the match dataset -- not resampled itself, and not necessarily
+        // first in `targets`), and from its analysis rows (exclusions/
+        // filters pruned), not the possibly-wider stored `.data`.
+        const seed = targets[0];
+        return withRangeDefaults(next, seed ? resampleSource(seed) : undefined);
       }
       return next;
     });
@@ -227,6 +244,7 @@ export function useResample(): ResampleState {
     channel,
     setChannel,
     warnings,
+    previewOnly,
     blockedByUnits,
     unitsAcknowledged,
     setUnitsAcknowledged: (ok) => setAckFor(ok ? key : null),

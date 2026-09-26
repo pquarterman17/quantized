@@ -5,11 +5,11 @@ Pure calc layer. A guard-and-report wrapper around the golden
 it builds the target grid, refuses the inputs that would silently produce a
 wrong answer, and reports -- as plain sentences -- everything the user should
 know BEFORE the derived dataset is created. The interpolation numerics are
-``resample_data``'s own, untouched (its ``n_points`` and ``grid`` modes). The
-one grid difference is deliberate: a ``step`` / ``range`` endpoint that lands
-on the stop value is exactly that value, as in MATLAB's colon, where
-``resample_data``'s ``step`` mode can overshoot it by an ulp
-(``_colon_snapped``).
+``resample_data``'s own, untouched (its ``n_points`` and ``grid`` modes). A
+``step`` / ``range`` endpoint that lands on the stop value is exactly that
+value, as in MATLAB's colon (``calc.resample._colon``, which snaps its own
+ulp overshoot -- ``0:0.1:0.3`` would otherwise end at
+0.30000000000000004 -- to the stop value itself).
 
 The rules, each a deliberate product decision:
 
@@ -41,6 +41,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..datastruct import DataStruct
+from ..x_units import x_unit_of
 from .resample import _colon, resample_data
 
 __all__ = ["MAX_GRID_POINTS", "AlignResult", "align_resample", "x_unit_of"]
@@ -63,15 +64,6 @@ class AlignResult:
     #: Rows in / rows out.
     rows_in: int = 0
     rows_out: int = 0
-
-
-def x_unit_of(ds: DataStruct) -> str:
-    """The x-axis unit recorded in ``ds.metadata`` (``""`` when unknown)."""
-    for key in ("x_column_unit", "xUnit", "xColumnUnit"):
-        raw = ds.metadata.get(key)
-        if isinstance(raw, str) and raw.strip():
-            return raw.strip()
-    return ""
 
 
 def _warn(code: str, text: str, **extra: Any) -> dict[str, Any]:
@@ -103,20 +95,6 @@ def _positive(name: str, v: float | None) -> float:
     return float(v)
 
 
-def _colon_snapped(a: float, d: float, b: float) -> NDArray[np.float64]:
-    """``_colon`` (MATLAB ``a:d:b``) with an endpoint that LANDS on ``b`` set to
-    exactly ``b``. ``_colon`` counts a point as landing when ``(b-a)/d`` is an
-    integer to within 1e-10, but builds it as ``a + n*d``, which can overshoot
-    by an ulp (``0:0.1:0.3`` ends at 0.30000000000000004). Past the source's
-    last x that point would come out blank or be clipped, and a grid equal to
-    the source x would stop being an identity. MATLAB's colon returns ``b``
-    itself there; so does this."""
-    g = _colon(a, d, b)
-    if g.size and abs(g[-1] - b) <= 1e-10 * abs(d):
-        g[-1] = b
-    return g
-
-
 def _target_grid(
     mode: str,
     lo: float,
@@ -130,9 +108,10 @@ def _target_grid(
     warnings: list[dict[str, Any]],
 ) -> NDArray[np.float64]:
     """The target grid for this mode: ``resample_data``'s own ``linspace`` for
-    ``n_points``, and its MATLAB-colon rule (endpoint snapped, see
-    ``_colon_snapped``) for ``step`` / ``range``. The counts and out-of-range
-    checks run on exactly the points that are then interpolated onto."""
+    ``n_points``, and its MATLAB-colon rule (``_colon``, endpoint snapped to
+    exactly ``stop`` when it lands) for ``step`` / ``range``. The counts and
+    out-of-range checks run on exactly the points that are then interpolated
+    onto."""
     if mode == "n_points":
         if n_points is None or n_points < 2:
             raise ValueError("the number of points must be at least 2")
@@ -140,7 +119,7 @@ def _target_grid(
     if mode == "step":
         d = _positive("step", step)
         _check_count((hi - lo) / d + 1)
-        return _colon_snapped(lo, d, hi)
+        return _colon(lo, d, hi)
     if mode == "range":
         if start is None or stop is None or not (math.isfinite(start) and math.isfinite(stop)):
             raise ValueError("start and stop must be finite numbers")
@@ -151,7 +130,7 @@ def _target_grid(
                 f"a step of {_fmt(step)} never reaches {_fmt(stop)} from {_fmt(start)}"
             )
         _check_count((stop - start) / step + 1)
-        return _colon_snapped(float(start), float(step), float(stop))
+        return _colon(float(start), float(step), float(stop))
     # match
     if match_x is None or match_x.size == 0:
         raise ValueError("the dataset to match has no x values")
@@ -347,24 +326,27 @@ def align_resample(
             )
         )
 
-    # n_points: resample_data's own linspace (never outside [lo, hi], so never
-    # clipped). Every other mode passes the grid built above -- the snapped,
-    # possibly clipped one -- so the output has exactly the reported points.
-    if mode == "n_points":
-        out = resample_data(data, n_points=grid.size, method=method)
-    else:
-        out = resample_data(data, grid=grid, method=method)
+    # Every mode has already built its own exact grid above -- `grid` for
+    # n_points is resample_data's own linspace bit-for-bit (same lo/hi), so
+    # passing it explicitly rather than re-deriving it from `n_points` is a
+    # no-op; every mode now shares one call.
+    out = resample_data(data, grid=grid, method=method)
 
     # Blank OUTPUT inside the source range: a channel whose own finite data
     # stops short of the range (NaN at its ends) or has < 2 usable points.
-    inside = (np.asarray(out.time) >= lo) & (np.asarray(out.time) <= hi)
-    vals = np.asarray(out.values, dtype=float).reshape(out.time.size, -1)
-    short = [
-        (data.labels[c], int(np.count_nonzero(~np.isfinite(vals[inside, c]))))
-        for c in range(vals.shape[1])
-        if c not in (data.cat_levels or {}) and not coincident
-    ]
-    short = [(name, k) for name, k in short if k]
+    # A coincident grid never blanks output -- it's `resample_data`'s own
+    # identity copy -- so skip the scan entirely rather than repeat the check
+    # per column.
+    short: list[tuple[str, int]] = []
+    if not coincident:
+        inside = (np.asarray(out.time) >= lo) & (np.asarray(out.time) <= hi)
+        vals = np.asarray(out.values, dtype=float).reshape(out.time.size, -1)
+        for c in range(vals.shape[1]):
+            if c in (data.cat_levels or {}):
+                continue
+            k = int(np.count_nonzero(~np.isfinite(vals[inside, c])))
+            if k:
+                short.append((data.labels[c], k))
     if short:
         warnings.append(
             _warn(

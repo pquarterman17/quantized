@@ -73,10 +73,11 @@ const stem = (name: string): string => name.replace(/\.[^.]+$/, "");
 export const resampleSource = (ds: Dataset): DataStruct => analysisData(ds) ?? ds.data;
 
 /** A dataset's recorded x unit ("" when unknown) — the same keys, in the same
- *  order, as the backend's `calc.resample_align.x_unit_of`, so both sides
- *  agree on what the unit IS. */
+ *  order, as the backend's shared `quantized.x_units.x_unit_of` (which
+ *  `calc.resample_align` and `io.consolidated` both now call), so every side
+ *  agrees on what the unit IS. */
 export function xUnitOf(data: DataStruct): string {
-  for (const key of ["x_column_unit", "xUnit", "xColumnUnit"]) {
+  for (const key of ["xUnit", "x_column_unit", "xColumnUnit"]) {
     const raw = data.metadata?.[key];
     if (typeof raw === "string" && raw.trim()) return raw.trim();
   }

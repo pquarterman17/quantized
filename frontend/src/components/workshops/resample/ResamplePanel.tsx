@@ -85,6 +85,11 @@ function Preview({ r }: { r: ResampleState }) {
           </li>
         ))}
       </ul>
+      {r.previewOnly && (
+        <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
+          Counted on the loaded preview; the full data is resampled when you create.
+        </div>
+      )}
       <TransformWarningList warnings={r.warnings} />
     </div>
   );
