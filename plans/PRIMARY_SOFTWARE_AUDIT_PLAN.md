@@ -3356,7 +3356,15 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
   Dataset Math acknowledgment checkbox, keyed to the exact pick). The
   append import offers "Cancel imports them as separate datasets". Derived
   datasets carry `transform_warnings` (sentences) beside
-  `worksheet_transform`. Eager bundle -223 B (merge body moved lazy).
+  `worksheet_transform`. Eager bundle -158 B (merge body moved lazy).
+  Self-review round (10 findings fixed, sabotage-verified): a failed
+  transform skips the steps recorded against its output rather than
+  running them on the source; fit reports cite the dataset the fit ran on;
+  stack channels are cleaned before recording; algebra warnings name the
+  backend's real unit label. Known residuals: declining the append-import
+  review re-uploads the files through `importFiles`; the pending-edit
+  ratchet cannot see a shorthand `data` write (`{ ...d, data }` in
+  `setCellValue`) — pre-existing, found while sabotage-testing, not fixed.
 
 ### P2.6 — Categorical/JMP-style plot workbench
 
