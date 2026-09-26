@@ -72,9 +72,14 @@ describe("append by column name", () => {
   });
 
   it("an unnamed column pairs only with an unnamed column at the same position", () => {
-    const u1: DataStruct = { time: [0], values: [[1, 2]], labels: ["M", ""], units: ["", ""], metadata: {} };
-    const u2: DataStruct = { time: [0], values: [[3, 4, 5]], labels: ["M", "", "Column 2"], units: ["", "", ""], metadata: {} };
-    expect(alignColumnsByName([u1, u2])).toMatchObject({ labels: ["M", "", "Column 2"], cols: [[0, 1, -1], [0, 1, 2]] });
+    // u1's unnamed 3rd column must not swallow u2's real "Column 3"; it pairs
+    // with u2's unnamed 3rd column instead.
+    const u1: DataStruct = { time: [0], values: [[1, 2, 3]], labels: ["M", "x", ""], units: ["", "", ""], metadata: {} };
+    const u2: DataStruct = { time: [0], values: [[4, 5, 6]], labels: ["M", "Column 3", ""], units: ["", "", ""], metadata: {} };
+    expect(alignColumnsByName([u1, u2])).toMatchObject({
+      labels: ["M", "x", "", "Column 3"],
+      cols: [[0, 1, 2, -1], [0, -1, 2, 1]],
+    });
   });
 
   it("keeps a categorical column categorical, remapping each input's codes by level text", () => {
