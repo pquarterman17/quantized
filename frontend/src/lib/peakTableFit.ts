@@ -14,7 +14,8 @@
 // 919,257); with them here it rises 1,657 B (916,515 -> 918,172).
 // Every consumer of this file (store/peakTables.ts, the Peaks workshop, the
 // Reductions workshop) is lazy — keep it that way, and put anything the `.dwk`
-// path needs in ./peakTable instead.
+// path needs in ./peakTable instead. (The `.dwk` codec itself has since gone
+// lazy, lib/workspaceCodecLazy.ts; the split now keeps that chunk small.)
 
 import { PEAK_TABLE_VERSION, type MultiFitResult, type PeakTable, type PeakTableEntry } from "./peakTable";
 import { analysisData } from "./rowstate";
@@ -24,8 +25,9 @@ let _peakSeq = 0;
 
 /** Stable per-peak id, same `Date.now().toString(36)` + module counter shape as
  *  every other id generator in the app (store/useApp.ts's `nextFigureId`,
- *  store/rois.ts's `nextRoiId`). */
-function nextPeakId(): string {
+ *  store/rois.ts's `nextRoiId`). Exported for the Peak Analyzer's model-fit
+ *  table builder, so every producer mints ids the same way. */
+export function nextPeakId(): string {
   return `peak-${Date.now().toString(36)}-${++_peakSeq}`;
 }
 
@@ -248,7 +250,10 @@ export function xChannelIdentity(
  *  "its neighbour", and a TIE (two prior peaks equidistant — the merged-peak
  *  case) resolves to NOT carrying: an ambiguous inheritance that silently
  *  drops a peak from a reduction is worse than a checkbox the user re-ticks. */
-function carriedExclusions(result: MultiFitResult, prior: PeakTable | null | undefined): boolean[] {
+export function carriedExclusions(
+  result: { peaks: readonly { center: number; fwhm: number }[] },
+  prior: PeakTable | null | undefined,
+): boolean[] {
   const flags = result.peaks.map(() => false);
   const priorPeaks = prior?.peaks ?? [];
   const taken = new Set<number>();
@@ -427,20 +432,37 @@ export function withPeakManualEdit(table: PeakTable, id: string, patch: PeakManu
   const differs = (key: keyof PeakManualPatch): boolean =>
     patch[key] !== undefined && patch[key] !== current[key];
   if (!(["center", "fwhm", "height", "area"] as const).some(differs)) return table;
-  const next = { ...current, ...patch, status: "manual-edit" };
+  const next: PeakTableEntry = { ...current, ...patch, status: "manual-edit" };
   if (!differs("area") && (differs("height") || differs("fwhm")) && current.height !== 0 && current.fwhm !== 0) {
     next.area = current.area * (next.height / current.height) * (next.fwhm / current.fwhm);
   }
   if (differs("center")) next.centerErr = null;
   if (differs("fwhm")) next.fwhmErr = null;
   if (differs("height")) next.heightErr = null;
+  // Model-fit rows (the Peak Analyzer's publish): area has an error too, and
+  // it goes whenever the area VALUE moved — typed, or rescaled above. A new
+  // FWHM makes the Voigt G/L split unknown. Each cleared error says why.
+  if (table.provenance.producer === "model_fit") {
+    const changed = (["center", "fwhm", "height", "area"] as const).filter((k) => next[k] !== current[k]);
+    if (changed.includes("area")) next.areaErr = null;
+    if (changed.includes("fwhm")) Object.assign(next, { fwhmG: null, fwhmGErr: null, fwhmL: null, fwhmLErr: null });
+    next.errReasons = { ...current.errReasons };
+    for (const k of changed) next.errReasons[k] = k === "area" && !differs("area") ? RESCALED_ERR_REASON : MANUAL_ERR_REASON;
+  }
   const peaks = [...table.peaks];
   peaks[index] = next;
-  return {
-    ...table,
-    peaks,
-    provenance: { ...table.provenance, R2: null, rmse: null },
-  };
+  return { ...table, peaks, provenance: metricsCleared(table.provenance) };
+}
+
+/** Why a model-fit row's error is null after a hand edit of that field. */
+export const MANUAL_ERR_REASON = "edited by hand: a typed value has no fit uncertainty";
+/** …and for an area rescaled because its height or FWHM was edited. */
+export const RESCALED_ERR_REASON = "rescaled with a hand-edited height/FWHM: no fit uncertainty";
+
+/** Global fit metrics no longer describe a table whose rows were edited or
+ *  removed: R²/RMSE always, and a model fit's SSR/χ² with them. */
+function metricsCleared(p: PeakTable["provenance"]): PeakTable["provenance"] {
+  return { ...p, R2: null, rmse: null, ...(p.producer === "model_fit" ? { ssr: null, chi2: null } : {}) };
 }
 
 /** How many rows of a table carry hand-edited values. */
@@ -454,9 +476,5 @@ export function withoutPeaks(table: PeakTable, ids: ReadonlySet<string>): PeakTa
   const peaks = table.peaks.filter((p) => !ids.has(p.id));
   if (peaks.length === table.peaks.length) return table;
   if (peaks.length === 0) return null;
-  return {
-    ...table,
-    peaks,
-    provenance: { ...table.provenance, R2: null, rmse: null },
-  };
+  return { ...table, peaks, provenance: metricsCleared(table.provenance) };
 }

@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-25 (latest): **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-26 (latest): **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -3009,12 +3009,75 @@ a plan edit.
   only `alpha_average` at byte 616, so every Bruker RAW pattern currently
   adopts the Kα1/Kα2 average as "the wavelength this pattern was measured at".
   Backend change; needs a golden RAW fixture.
-- [ ] Per-peak fit uncertainties. `calc/peak_multifit.fit_multi_peak` and
-  `calc/peak_fit.fit_peak` return no covariance and no standard error, so the
-  `*Err` columns above are always null today; `calc/reductions.
-  williamson_hall` likewise takes no weights. Filling either in is new
-  numerics and needs a MATLAB golden first (CLAUDE.md's golden-parity rule) —
-  deliberately not invented here.
+- [~] Per-peak fit uncertainties. **Filled for the model-fit path; the legacy
+  producers still write null.** `calc/peak_multifit.fit_multi_peak` and
+  `calc/peak_fit.fit_peak` (the Peaks workshop's "Fit together" / "Fit
+  each") return no covariance and no standard error, so a table THEY produce
+  still has null `*Err` columns; adding errors there is new numerics and
+  needs a MATLAB golden first (CLAUDE.md's golden-parity rule) — still not
+  invented. `calc/reductions.williamson_hall` likewise still takes no
+  weights (see the note below).
+  **Progress 2026-09-26 (Opus 5.5):** the Peak Analyzer's mixed-shape model
+  fit (P2.4, `calc/peak_model_fit.py`) already returned delta-method standard
+  errors from its pinv covariance (`calc/_bounded_lsq.py`), so this was
+  wiring, not numerics, and needed no golden. Step 4 has a "Publish to peak
+  table" action (`peakwizard/modelFitPeakTable.ts` builds, `store/
+  peakTables.publishBuiltPeakTable` writes, one undo step) that writes one
+  durable row per peak: centre / FWHM / height / area with their stderr in
+  `centerErr` / `fwhmErr` / `heightErr` and a new optional `areaErr`; the
+  shape per row (`model`), eta (+ `etaErr`) for pseudo-Voigt, and new
+  optional `fwhmG` / `fwhmL` (+ errors) for Voigt; `bg` = the model's
+  background polynomial evaluated at each centre plus the step-① baseline at
+  the nearest sample, as the wizard's markers read it (so `height + bg` is
+  the plotted apex, as for every other producer). Provenance: new
+  optional `producer: "model_fit"`, `engine`, `recipe`, `objective`, `ssr`,
+  `chi2` (weighted fits only), `background`, `warnings`, plus the existing
+  dataset / x-axis / wavelength / fingerprint / R² / time; `rmse =
+  sqrt(ssr / n_points)` (the legacy definition); `bgCoeffs` is left EMPTY
+  (the model's are in `(x - x_ref)` over a baseline-subtracted trace, a
+  different basis). A null stderr (fixed, tied, on a bound, undetermined)
+  stays null — never 0, never NaN — with `modelFitReasons`' text saved in
+  the row's `errReasons`; a non-converged fit, a non-finite derived value, a
+  stale table (edited since the fit) and a dataset whose data changed since
+  the fit (fit-time `peakDataFingerprint`, even in an unfitted column) are
+  refused with the reason. Replacing an existing table asks first (a
+  narrow-range fit would otherwise silently shrink a full-pattern table;
+  exclusions carry over by peak identity and Undo restores the old one);
+  the recipe name and baseline method are captured when the fit lands; one
+  publish runs at a time. The Peaks workshop shows such a table as "value
+  ± error" ("± —" with the reason on hover); a legacy table renders bare,
+  as before. Manual edits keep their contract and now bite on real errors:
+  each changed field's error is cleared (area's too when a height/FWHM edit
+  rescales it, with its own "rescaled" reason; a FWHM edit forgets the Voigt
+  G/L split) with an "edited by hand" reason, and SSR/χ² clear with
+  R²/RMSE. `.dwk`: every new field is
+  optional and ABSENT on a legacy record (the sanitizer never materialises
+  it), so an old workspace reopens unchanged; a published table round-trips
+  with every error, null and reason. Williamson-Hall loads such a table
+  unchanged (centres + FWHM only) and its caption says "per-peak errors not
+  used (unweighted fit)". Verified: vitest `modelFitPeakTable` (incl. the
+  `.dwk` round trip and legacy-record test), `peakTablesModelFit` (publish
+  refusal/undo, manual edits with real errors), `PeakWizardPublish`,
+  `PeaksPanelModelFit`, `WilliamsonHallSection`; Chromium e2e
+  `peak-model-fit.spec.ts` (real backend: fit, publish, the Peaks workshop
+  shows 36 ± σ / 44 ± σ). Sabotage (each reverted from a file copy): 16
+  mutations, every one red — null stderr written as 0, sanitizer dropping or
+  materialising the new columns, area error kept after a rescale, no reasons,
+  no fingerprint check, bare Peaks cells (unit AND e2e), no publish guard
+  (with the button's own disable), no replace confirm, non-converged
+  publishable, stale note kept, wrong rescale reason, SSR kept after an
+  edit, WH caption, baseline left out of `bg`. Eager bundle: 865,631 ->
+  865,639 B (+8 B, pin unchanged at 866,358): no eager code — the shared
+  lazy chunk `peaks-*.js` became `peakTables-*.js` in the entry's preload
+  map (+5) and the wizard's preload list gained the already-shared
+  `xrdWavelength` chunk's index (+3). **Deferred:** (a) Williamson-Hall WEIGHTING by
+  these errors — new numerics, needs a MATLAB golden of a weighted WH
+  first; per-point error bars on the WH plot were not added either; (b)
+  publishing from the batch table (a batch row has no fit curve for `bg`,
+  and each dataset's x channel / fingerprint would have to be captured at
+  prepare time); (c) the Peaks workshop's "→ Report" still emits a
+  published model-fit table through the `multipeak_fit` emitter, which has
+  no error columns (the Peak Analyzer's own report carries them).
 - [~] Manual peak edits and reviewed batch recipe. **2026-09-23 slice:** fitted
   peak rows can now be selected, edited (center/FWHM/height/area), or removed
   directly in the Peaks workshop. The durable `PeakTable` is the source of
@@ -3293,8 +3356,10 @@ reaching the job API, stored edits applied. Eager bundle unchanged (845.0
 kB). Residuals: the in-panel table is session state (the added table
 dataset is the durable result; it does not reopen as the interactive
 table); the wizard sends no y errors, so a χ²-labelled batch is reachable
-only through the API today; durable peak-table publishing with stderr +
-shape and a correlation view remain open (below the boxes, not new boxes).
+only through the API today; a correlation view remains open (below the
+boxes, not a new box). Durable peak-table publishing with stderr + shape
+shipped 2026-09-26 for the single fit — see P2.1 "Per-peak fit
+uncertainties" (batch-row publishing deferred there).
 Review round (same day, 10 findings fixed, each with a test that went red
 when the fix was reverted): a dataset whose LOADING throws is an error row
 and preparation always ends; preparation runs 4 at a time (`mapPool`, rows

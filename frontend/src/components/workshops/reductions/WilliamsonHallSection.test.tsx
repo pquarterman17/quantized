@@ -11,6 +11,8 @@ import type { MultiFitResult, PeakTable } from "../../../lib/peakTable";
 import { peakDataFingerprint, peakTableFromFit, withPeakExcluded } from "../../../lib/peakTableFit";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { modelFitResponse } from "../peakwizard/modelFit.testkit";
+import { peakTableFromModelFit } from "../peakwizard/modelFitPeakTable";
 import ReductionsPanel from "./ReductionsPanel";
 
 vi.mock("../../../lib/api/reductions", () => ({
@@ -260,5 +262,27 @@ describe("Williamson-Hall — the previous result never outlives its inputs (rev
     fireEvent.change(screen.getByLabelText("Wavelength (Å)"), { target: { value: "0.7093" } });
     expect(screen.queryByText(/fitted peaks from film.xrdml/)).not.toBeInTheDocument();
     expect(fieldValue("Wavelength (Å)")).toBe("0.7093");
+  });
+});
+
+describe("Williamson-Hall — a table the Peak Analyzer published (model fit, with errors)", () => {
+  it("loads its peaks, sends NO weights (unweighted, golden path), and says the errors are unused", async () => {
+    const res = modelFitResponse();
+    res.peaks = res.peaks.map((p, i) => ({ ...p, center: [30.1, 43.2][i], fwhm: [0.2, 0.25][i] }));
+    const t = peakTableFromModelFit(res, { id: "d1", name: "film.xrdml", data: scan }, {
+      xKey: null, recipe: "xrd", baseline: "none", bgAtCenter: [5, 5], fingerprint: "unused",
+    }, null);
+    mount({ ...t, provenance: { ...t.provenance, fingerprint: null, xLabel: "2-Theta", xUnit: "deg" } });
+    fireEvent.click(screen.getByRole("button", { name: "Use fitted peaks (2)" }));
+    expect(screen.getByText(/Peak Analyzer model fit.*per-peak errors not used \(unweighted fit\)/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+    await screen.findByText("Grain size");
+    expect(williamsonHall).toHaveBeenCalledWith({
+      two_theta_deg: [30.1, 43.2],
+      fwhm_deg: [0.2, 0.25],
+      wavelength_a: 1.5406,
+      k_factor: 0.9,
+      instrumental_broadening_deg: 0,
+    });
   });
 });

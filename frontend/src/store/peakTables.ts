@@ -33,6 +33,7 @@ import {
   xChannelIdentity,
   type PeakManualPatch,
 } from "../lib/peakTableFit";
+import type { Dataset } from "../lib/types";
 import { wavelengthFromMetadata } from "../lib/xrdWavelength";
 import { useApp } from "./useApp";
 
@@ -87,6 +88,29 @@ export function publishFitResult(
       ds.peakTable ?? null,
     ),
   );
+}
+
+/** Publish a table another workshop BUILT — the Peak Analyzer's model fit
+ *  (peakwizard/modelFitPeakTable.ts). Resolves the dataset first (never a
+ *  still-pending preview), then refuses when its analysis view is no longer
+ *  what the fit ran on (`fitFingerprint`, `peakDataFingerprint` of the dataset
+ *  at fit time): publishing a table every reader would reject as stale helps
+ *  nobody. `build` receives the LIVE record, so the exclusions the user has
+ *  now carry over. One undo step. Returns why nothing was written, or null. */
+export async function publishBuiltPeakTable(
+  datasetId: string,
+  fitFingerprint: string,
+  build: (ds: Dataset) => PeakTable,
+): Promise<string | null> {
+  await useApp.getState().resolveDataset(datasetId);
+  const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
+  if (!ds) return "the dataset is no longer available";
+  if (ds.pending || peakDataFingerprint(ds) !== fitFingerprint) {
+    return "the dataset's data changed since this fit (or only a preview had loaded) — re-fit, then publish";
+  }
+  useApp.getState().recordHistory("publish model fit to peak table");
+  publishPeakTable(datasetId, build(ds));
+  return null;
 }
 
 /** Flip one peak's `excluded` flag, addressed by its durable id.

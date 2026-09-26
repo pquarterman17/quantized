@@ -8,12 +8,15 @@
 // (`Dataset.peakTable`, lib/peakTable.ts), so it survives a dataset switch, a
 // panel close, and a `.dwk` save/reopen, and each row carries an "incl."
 // checkbox whose state travels with it. Williamson-Hall's "Use fitted peaks"
-// reads that same table and honours the exclusions set here.
+// reads that same table and honours the exclusions set here. A table the Peak
+// Analyzer's model fit published carries standard errors: its cells read
+// "value ± error" (PeakValueCell), and the header names that producer.
 
 import { useState } from "react";
 
 import PeakFitControls from "./PeakFitControls";
 import PeakTable from "./PeakTable";
+import PeakValueCell from "./PeakValueCell";
 import { usePeakTableSelection } from "./peakSelection";
 import { usePeaks } from "./usePeaks";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -145,14 +148,17 @@ export default function PeaksPanel() {
     peakTable.peaks.length === (fitResult?.peaks.length ?? -1)
       ? peakTable.peaks
       : null;
+  // Errors are shown only for a table that measured them (a model fit's).
+  const modelFit = entries !== null && peakTable?.provenance.producer === "model_fit";
   const fitRows = (fitResult?.peaks ?? []).map((p, i) => {
     const entry = entries?.[i];
+    const errOf = modelFit ? entry : undefined;
     return [
       i + 1,
-      fmtNum(p.center),
-      fmtNum(p.height),
-      fmtNum(p.fwhm),
-      fmtNum(p.area),
+      <PeakValueCell key="c" value={p.center} field="center" entry={errOf} />,
+      <PeakValueCell key="h" value={p.height} field="height" entry={errOf} />,
+      <PeakValueCell key="w" value={p.fwhm} field="fwhm" entry={errOf} />,
+      <PeakValueCell key="a" value={p.area} field="area" entry={errOf} />,
       entry ? (
         <input
           type="checkbox"
@@ -278,6 +284,7 @@ export default function PeaksPanel() {
                 : peakTable?.provenance.method === "independent"
                   ? "independent fits"
                   : "fit metrics cleared by manual changes"}
+            {modelFit && " · Peak Analyzer model fit"}
             {manualEditCount(fitResult.peaks) > 0 && ` · ${manualEditCount(fitResult.peaks)} edited by hand`}
             {fitResult.rmse != null && ` · RMSE = ${fmtNum(fitResult.rmse)}`}
             {excludedCount > 0 && ` · ${excludedCount} excluded`}
