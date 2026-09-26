@@ -15,7 +15,8 @@
 // it through on a plain "OK" — they ask for an explicit confirm naming it.
 
 import type { DataStruct } from "./types";
-import type { AggregateMode, JoinMode } from "./worksheetTransforms";
+import { joinKeyColumn, type JoinKey, type JoinMode } from "./worksheetJoin";
+import type { AggregateMode } from "./worksheetTransforms";
 
 export type TransformWarningCode =
   | "duplicate-keys"
@@ -29,6 +30,7 @@ export type TransformWarningCode =
   | "units-dropped"
   | "aggregated"
   | "rows-dropped"
+  | "missing-columns"
   // Resample / align (calc.resample_align, sent by the backend):
   | "duplicate-x"
   | "blank-values"
@@ -51,14 +53,18 @@ export interface TransformWarning {
   info?: boolean;
 }
 
-/** Display name of a `-1 = X, 0.. = channel` column. */
-export function columnName(ds: DataStruct, key: number): string {
+/** Display name of a `-1 = X, 0.. = channel` column (or a text column,
+ *  named by itself). */
+export function columnName(ds: DataStruct, key: JoinKey): string {
+  if (typeof key === "string") return key;
   if (key < 0) return String(ds.metadata?.x_column_name ?? "") || "X";
   return ds.labels[key] || `column ${key + 1}`;
 }
 
-/** Unit of a `-1 = X, 0.. = channel` column ("" when unknown). */
-export function columnUnitOf(ds: DataStruct, key: number): string {
+/** Unit of a `-1 = X, 0.. = channel` column ("" when unknown, and always for
+ *  a text column). */
+export function columnUnitOf(ds: DataStruct, key: JoinKey): string {
+  if (typeof key === "string") return "";
   const raw = key < 0 ? ds.metadata?.x_column_unit : ds.units[key];
   return typeof raw === "string" ? raw.trim() : "";
 }
@@ -66,7 +72,7 @@ export function columnUnitOf(ds: DataStruct, key: number): string {
 /** Two units conflict only when BOTH are known and differ. An empty unit is
  *  "not recorded", not a different unit — flagging every unit-less column
  *  against a labelled one would bury the real mismatches. */
-function unitsConflict(a: string, b: string): boolean {
+export function unitsConflict(a: string, b: string): boolean {
   return a !== "" && b !== "" && a !== b;
 }
 
@@ -80,21 +86,21 @@ interface KeySide {
   blank: number;
   duplicateRows: number;
   duplicateKeys: number;
-  /** Distinct finite keys, first-appearance order (the join's own map). */
-  keys: Set<number>;
+  /** Distinct keys, first-appearance order (the join's own map). */
+  keys: Set<string>;
 }
 
-function keySide(values: readonly number[]): KeySide {
+/** Counts over the SAME match strings the join keys on
+ *  (`lib/worksheetJoin.joinKeyColumn`), so the two agree on what one key is. */
+function keySide(values: readonly (string | null)[]): KeySide {
   // levels-allowlist: a JOIN KEY's distinct values (for duplicate/unmatched
   // counts), not a categorical column's level set; order is never used.
-  const keys = new Set<number>();
-  const dupKeys = new Set<number>();
+  const keys = new Set<string>();
+  const dupKeys = new Set<string>();
   let blank = 0;
   let duplicateRows = 0;
   for (const v of values) {
-    if (!Number.isFinite(v)) { blank += 1; continue; }
-    // `String(v)` is what the join keys on, and it merges -0 with 0 exactly
-    // as a Set of numbers does — the two agree on what one key is.
+    if (v === null) { blank += 1; continue; }
     if (keys.has(v)) { duplicateRows += 1; dupKeys.add(v); } else keys.add(v);
   }
   return { rows: values.length, blank, duplicateRows, duplicateKeys: dupKeys.size, keys };
@@ -107,20 +113,22 @@ function keySide(values: readonly number[]): KeySide {
 export function analyzeJoin(
   left: DataStruct,
   right: DataStruct,
-  leftKey: number,
-  rightKey: number,
+  leftKey: JoinKey,
+  rightKey: JoinKey,
   mode: JoinMode,
   leftName: string,
   rightName: string,
 ): TransformWarning[] {
   const out: TransformWarning[] = [];
-  const l = keySide(keyColumn(left, leftKey));
-  const r = keySide(keyColumn(right, rightKey));
+  const lk = joinKeyColumn(left, leftKey);
+  const l = keySide(lk.keys);
+  const r = keySide(joinKeyColumn(right, rightKey).keys);
+  const blankWord = lk.kind === "text" ? "blank" : "blank or non-numeric";
   const lCol = columnName(left, leftKey);
   const rCol = columnName(right, rightKey);
   const lUnit = columnUnitOf(left, leftKey);
   const rUnit = columnUnitOf(right, rightKey);
-  if (unitsConflict(lUnit, rUnit)) {
+  if (lk.kind === "number" && unitsConflict(lUnit, rUnit)) {
     out.push({
       code: "unit-mismatch",
       text: `Key units differ: "${lCol}" is ${lUnit} in ${leftName} but "${rCol}" is ${rUnit} in ${rightName}. Keys are matched as raw numbers, so rows may pair up wrongly.`,
@@ -140,7 +148,7 @@ export function analyzeJoin(
     if (side.blank) {
       out.push({
         code: "blank-keys",
-        text: `${name}: ${plural(side.blank, "row")} with a blank or non-numeric "${col}" cannot match anything and ${side.blank === 1 ? "is" : "are"} dropped.`,
+        text: `${name}: ${plural(side.blank, "row")} with a ${blankWord} "${col}" cannot match anything and ${side.blank === 1 ? "is" : "are"} dropped.`,
         count: side.blank,
         columns: [col],
       });
@@ -246,63 +254,6 @@ export function analyzeTranspose(ds: DataStruct): TransformWarning[] {
     count: withUnits.length,
     columns: withUnits.map((c) => columnName(ds, c)),
   }];
-}
-
-/** Warnings for `mergeDatasets(datasets, names)` — an APPEND BY POSITION, so
- *  column k of every input lands in column k of the result under the FIRST
- *  input's name and unit. A differing unit is a real mismatch; a differing
- *  name is the tell that positions may not line up. */
-export function analyzeMerge(datasets: readonly DataStruct[], names: readonly string[]): TransformWarning[] {
-  const out: TransformWarning[] = [];
-  if (datasets.length < 2) return out;
-  const first = datasets[0];
-  const unitNotes: string[] = [];
-  const unitCols = new Set<string>();
-  const labelNotes: string[] = [];
-  const labelCols = new Set<string>();
-  const xUnit = columnUnitOf(first, -1);
-  for (let i = 1; i < datasets.length; i += 1) {
-    const d = datasets[i];
-    const dx = columnUnitOf(d, -1);
-    if (unitsConflict(xUnit, dx)) {
-      unitNotes.push(`X is ${xUnit} in ${names[0]} but ${dx} in ${names[i]}`);
-      unitCols.add(columnName(first, -1));
-    }
-    const n = Math.min(first.labels.length, d.labels.length);
-    for (let c = 0; c < n; c += 1) {
-      const a = columnUnitOf(first, c);
-      const b = columnUnitOf(d, c);
-      const col = columnName(first, c);
-      if (unitsConflict(a, b)) {
-        unitNotes.push(`"${col}" is ${a} in ${names[0]} but ${b} in ${names[i]}`);
-        unitCols.add(col);
-      }
-      const la = (first.labels[c] ?? "").trim();
-      const lb = (d.labels[c] ?? "").trim();
-      if (la && lb && la.toLowerCase() !== lb.toLowerCase()) {
-        labelNotes.push(`column ${c + 1} is "${la}" in ${names[0]} but "${lb}" in ${names[i]}`);
-        labelCols.add(col);
-      }
-    }
-  }
-  if (unitNotes.length) {
-    out.push({
-      code: "unit-mismatch",
-      text: `Units differ at the same column position: ${unitNotes.join("; ")}. Rows are appended by position and keep ${names[0]}'s units.`,
-      count: unitNotes.length,
-      columns: [...unitCols],
-      confirm: true,
-    });
-  }
-  if (labelNotes.length) {
-    out.push({
-      code: "label-mismatch",
-      text: `Column names differ at the same position: ${labelNotes.join("; ")}. Rows are appended by position and keep ${names[0]}'s names.`,
-      count: labelNotes.length,
-      columns: [...labelCols],
-    });
-  }
-  return out;
 }
 
 /** Operations whose result is only meaningful when A and B share a Y unit

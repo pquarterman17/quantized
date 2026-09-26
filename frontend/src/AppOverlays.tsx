@@ -76,6 +76,7 @@ import { useRecode } from "./store/recode";
 import { useLevelOrderPanel } from "./store/levelOrderPanel";
 import { useCombineDialog } from "./store/combineDialog";
 import { useResampleDialog } from "./store/resampleDialog";
+import { useTransformPreviewDialog } from "./store/transformPreviewDialog";
 import { useRecipeManager } from "./store/recipeManager";
 import { useWorkbookPropertiesDialog } from "./store/workbookPropertiesDialog";
 import { lazyRegion } from "./lib/lazyRegion";
@@ -113,6 +114,7 @@ const BaselinePanel = lazyPanel(() => import("./components/workshops/baseline/Ba
 const CalculatorsPanel = lazyPanel(() => import("./components/workshops/calculators/CalculatorsPanel"), "CalculatorsPanel");
 const DatasetMathPanel = lazyPanel(() => import("./components/workshops/datasetmath/DatasetMathPanel"), "DatasetMathPanel");
 const ResamplePanel = lazyPanel(() => import("./components/workshops/resample/ResamplePanel"), "ResamplePanel");
+const ReshapePanel = lazyPanel(() => import("./components/workshops/transformPreview/ReshapePanel"), "ReshapePanel");
 const TabulatePanel = lazyPanel(() => import("./components/workshops/tabulate/TabulatePanel"), "TabulatePanel");
 const DistributionPanel = lazyPanel(() => import("./components/workshops/distribution/DistributionPanel"), "DistributionPanel");
 const FitYByXPanel = lazyPanel(() => import("./components/workshops/fityx/FitYByXPanel"), "FitYByXPanel");
@@ -215,6 +217,7 @@ export default function AppOverlays() {
   const magToolsOpen = useApp((s) => s.magToolsOpen);
   const datasetMathOpen = useApp((s) => s.datasetMathOpen);
   const resampleOpen = useResampleDialog((s) => s.seed !== null);
+  const reshapeOpen = useTransformPreviewDialog((s) => s.op !== null);
   const tabulateOpen = useApp((s) => s.tabulateOpen);
   const distributionOpen = useApp((s) => s.distributionOpen);
   const fitYByXOpen = useFitYByXStore((s) => s.open);
@@ -303,6 +306,7 @@ export default function AppOverlays() {
       {digitizerOpen && <DigitizerView />}
       {datasetMathOpen && <DatasetMathPanel />}
       {resampleOpen && <ResamplePanel />}
+      {reshapeOpen && <ReshapePanel />}
       {tabulateOpen && <TabulatePanel />}
       {distributionOpen && <DistributionPanel />}
       {fitYByXOpen && <FitYByXPanel />}

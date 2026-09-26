@@ -78,26 +78,19 @@
 // Undoing this one transaction therefore restores the complete pre-split
 // organization without leaving an empty folder artifact.
 
-// LAZY ON PURPOSE (bundle ratchet). `lib/datasetsplit.ts` is ~3.5 kB of pure
-// splitting/slicing math, and this store slice was its ONLY eager consumer —
-// every other importer (SplitDatasetDialog, the worksheet's extractRows, the
-// workshops' byPartition) already sits behind a lazy panel. Splitting a dataset
-// is strictly a post-user-action operation, which is exactly the case the
-// eager-bundle ratchet says to defer, so the whole module now loads on first
-// split instead of at first paint. `splitDatasetByColumn` was already `async`
-// and the await lands BEFORE any `recordHistory`/`set`, so the slice's
-// "build fully, swap once" contract is unchanged.
-import { childFolders, createFolder as treeCreateFolder } from "../lib/foldertree";
-import { lit } from "../lib/macro";
-import { nextStageTab } from "../lib/stagetab";
-import type { Dataset } from "../lib/types";
-import { toast } from "./toasts";
-import { nextDatasetId, nextFolderId } from "./idSeq";
+// LAZY ON PURPOSE (bundle ratchet). The action's whole body lives in
+// ./splitRun.ts, loaded on the first split: splitting is strictly a
+// post-user-action operation, which is exactly the case the eager-bundle
+// ratchet says to defer. (It began with `lib/datasetsplit.ts` alone, ~3.5 kB
+// of pure math this slice was the only eager consumer of; P2.5 moved the rest
+// of the body — the child/folder/macro build, ~1.8 kB — to fund the Reshape &
+// combine workshop's eager open flag.) `splitDatasetByColumn` was already
+// `async` and every await lands BEFORE any `recordHistory`/`set`, so the
+// slice's "build fully, swap once" contract is unchanged.
 import type { AppState } from "./useApp";
-import { datasetViewDefaults, focusTransientReset } from "./windows";
 
-type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
-type SliceGet = () => AppState;
+export type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
+export type SliceGet = () => AppState;
 
 export interface SplitSlice {
   /** The dataset id the "Split by column value…" dialog is open for, or
@@ -126,97 +119,7 @@ export function createSplitSlice(set: SliceSet, get: SliceGet): SplitSlice {
     openSplitDialog: (id) => set({ splitDialogTargetId: id }),
     closeSplitDialog: () => set({ splitDialogTargetId: null }),
 
-    splitDatasetByColumn: async (id, col, tolerance) => {
-      // A never-activated, still-pending Origin book only carries a small
-      // downsampled preview (ORIGIN_FILE_DECODE_PLAN #38) — resolve the
-      // full data first so the split groups the REAL rows, not a preview's.
-      await get().resolveDataset(id);
-      const src = get().datasets.find((d) => d.id === id);
-      if (!src) return [];
-
-      const [{ splitColumn, sliceDataStruct, tooManyGroups }, tw] = await Promise.all([
-        import("../lib/datasetsplit"),
-        import("../lib/transformWarnings"),
-      ]);
-      const { groups } = splitColumn(src, col, tolerance);
-      if (groups.length < 2) {
-        toast(`"${src.name}" doesn't split into more than one group on that column`, "danger");
-        return [];
-      }
-      if (tooManyGroups(groups)) {
-        toast(`too many groups (${groups.length}) — pick a different column or a wider tolerance`, "danger");
-        return [];
-      }
-      // P2.5: rows with no split value land in "(other)" — say so on every
-      // child, beside the provenance, and record a replayable step.
-      const warnings = tw.analyzeSplit(groups, tw.columnName(src.data, col));
-
-      get().recordHistory("split dataset");
-      // Re-splitting the same source (e.g. after tweaking the tolerance)
-      // must not mint a SECOND identically-named sibling folder — reuse the
-      // existing one if a prior split already created it under the same
-      // parent. Only an exact name match counts as "the same split family";
-      // an unrelated folder that happens to share a name some other way is
-      // never touched.
-      const existingFolder = childFolders(get().folders, src.folderId ?? null).find(
-        (f) => f.name === (src.name.trim() || "New Folder"),
-      );
-      const folderId = existingFolder ? existingFolder.id : nextFolderId();
-      // Read BEFORE the commit below makes the first child active.
-      const inputIsTarget = get().activeId === id;
-      const children: Dataset[] = groups.map((g) => {
-        const stamped = tw.stampWarnings(sliceDataStruct(src.data, g.rowIndexes), "split", warnings);
-        const child: Dataset = {
-          id: nextDatasetId(),
-          name: `${src.name} (${g.label})`,
-          // `split_group` names the group; pipeline replay matches a recorded
-          // child to its replay counterpart by it (lib/transformReplay.ts).
-          data: { ...stamped, metadata: { ...stamped.metadata, split_group: g.label } },
-          folderId,
-        };
-        if (src.formulas?.length) child.formulas = src.formulas.map((f) => ({ ...f }));
-        if (src.channelRoles) child.channelRoles = { ...src.channelRoles };
-        if (src.channelTypes) child.channelTypes = { ...src.channelTypes };
-        // F5: preserve `[]` (O1 marker) vs `undefined` exactly -- `[]` is
-        // truthy, so this carries an explicit empty array too, unlike a
-        // `?.length` guard which would collapse it to "not carried".
-        if (src.errorRoles) child.errorRoles = [...src.errorRoles];
-        return child;
-      });
-      const firstChild = children[0];
-
-      set((s) => ({
-        folders: existingFolder
-          ? s.folders
-          : treeCreateFolder(s.folders, src.folderId ?? null, src.name, folderId),
-        datasets: [...s.datasets, ...children],
-        activeId: firstChild.id,
-        worksheetId: null,
-        selectedIds: children.map((c) => c.id),
-        librarySelection: null, // L0.25 coherence (retrospective-audit fix)
-        stageTab: nextStageTab(firstChild, s.stageTab),
-        ...datasetViewDefaults(firstChild),
-        ...focusTransientReset(),
-        expandedFolders: [...new Set([...s.expandedFolders, folderId])],
-        splitDialogTargetId: null,
-      }));
-
-      get().recordMacro(`Split ${src.name} by column value`, `qz.transform("split", "<active>", ${lit({ col, tolerance: tolerance ?? null })})`, {
-        kind: "transform",
-        // Same provenance shape as lib/transformRun.recordedProvenance (not
-        // imported: that module is lazy and this slice is eager).
-        params: {
-          op: "split",
-          col,
-          tolerance: tolerance ?? null,
-          input: { id, name: src.name },
-          inputIsTarget,
-          outputs: children.map((c, k) => ({ id: c.id, key: groups[k].label })),
-        },
-      });
-      get().setStatus(`split "${src.name}" into ${children.length} datasets`);
-      toast(`split into ${children.length} datasets`, "ok");
-      return children.map((c) => c.id);
-    },
+    splitDatasetByColumn: async (id, col, tolerance) =>
+      (await import("./splitRun")).runSplit(set, get, id, col, tolerance),
   };
 }

@@ -5,6 +5,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useTransformPreviewDialog } from "../store/transformPreviewDialog";
 import { useApp } from "../store/useApp";
 import type { TransformPreview } from "./transformRun";
 import type { DataStruct, Dataset } from "./types";
@@ -180,27 +181,39 @@ describe("Merge selected / append import (by column position)", () => {
   const A: Dataset = { id: "A", name: "a.dat", data: { time: [1], values: [[1]], labels: ["M"], units: ["emu"], metadata: {} } };
   const B: Dataset = { id: "B", name: "b.dat", data: { time: [2], values: [[2]], labels: ["M"], units: ["A m2"], metadata: {} } };
 
-  it("a unit mismatch must be confirmed; declining adds nothing", async () => {
-    useApp.setState({ datasets: [A, B], selectedIds: ["A", "B"] });
-    vi.mocked(askConfirm).mockResolvedValue(false);
+  it("Merge selected opens the previewed append on the selection, in order, and creates nothing itself", async () => {
+    useApp.setState({ datasets: [A, B], selectedIds: ["B", "A"], activeId: "A" });
     await runMergeSelected(useApp.getState);
+    expect(useTransformPreviewDialog.getState()).toMatchObject({ op: "merge", seed: ["B", "A"] });
+    expect(useApp.getState().datasets).toHaveLength(2);
+    expect(askConfirm).not.toHaveBeenCalled();
+    // Nothing selected: the active dataset seeds it (the user ticks the rest).
+    useApp.setState({ selectedIds: [] });
+    await runMergeSelected(useApp.getState);
+    expect(useTransformPreviewDialog.getState().seed).toEqual(["A"]);
+  });
+
+  it("a unit mismatch must be confirmed; declining adds nothing", async () => {
+    useApp.setState({ datasets: [A, B] });
+    vi.mocked(askConfirm).mockResolvedValue(false);
+    await runTransform(useApp.getState, { op: "merge", with: [{ id: "B", name: "b.dat" }] }, "A", reviewTransform);
     expect(vi.mocked(askConfirm).mock.calls[0][3]).toBe(true);
     expect(useApp.getState().datasets).toHaveLength(2);
     expect(useApp.getState().macroSteps).toEqual([]);
   });
 
-  it("confirmed: merges in selection order, records the others by id, keeps the old status", async () => {
-    useApp.setState({ datasets: [A, B], selectedIds: ["B", "A"] });
+  it("confirmed: merges in order, records the others by id", async () => {
+    useApp.setState({ datasets: [A, B], activeId: "A" });
     vi.mocked(askConfirm).mockResolvedValue(true);
-    await runMergeSelected(useApp.getState);
+    await runTransform(useApp.getState, { op: "merge", with: [{ id: "A", name: "a.dat" }] }, "B", reviewTransform);
     const merged = useApp.getState().datasets.find((d) => d.name === "merged (2)");
     expect(merged?.data.time).toEqual([2, 1]);
     expect(merged?.data.metadata.transform_warnings).toHaveLength(1);
-    expect(useApp.getState().status).toBe("merged 2 datasets → 2 rows — 1 warning recorded in its metadata");
     expect(useApp.getState().macroSteps[0].params).toMatchObject({ op: "merge", with: [{ id: "A", name: "a.dat" }], input: { id: "B" },
       // B was not the active dataset, so replay must not swap it for the target.
       inputIsTarget: false,
     });
+    expect(useApp.getState().macroSteps[0].params).not.toHaveProperty("match");
   });
 
   it("the append import returns null when declined and stamped data when accepted", async () => {

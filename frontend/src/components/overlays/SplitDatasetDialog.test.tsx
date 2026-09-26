@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -279,7 +279,7 @@ describe("SplitDatasetDialog focus-in / Tab trap / Escape / restore (P3.3 R1)", 
     expect(screen.getByLabelText("Split column")).toHaveFocus();
   });
 
-  it("Tab wraps between Column, Tolerance, Cancel, and Split instead of walking out to the page behind it", async () => {
+  it("Tab wraps between Column, Tolerance, Preview group, Cancel, and Split instead of walking out to the page behind it", async () => {
     const user = userEvent.setup();
     render(
       <>
@@ -297,6 +297,8 @@ describe("SplitDatasetDialog focus-in / Tab trap / Escape / restore (P3.3 R1)", 
 
     await user.tab();
     expect(tolerance).toHaveFocus();
+    await user.tab(); // P2.5: which group the data preview shows
+    expect(screen.getByLabelText("Preview group")).toHaveFocus();
     await user.tab();
     expect(cancel).toHaveFocus();
     await user.tab();
@@ -360,10 +362,13 @@ describe("SplitDatasetDialog — an explicit cat_levels table (BUG-008)", () => 
 
   it("previews one group per LEVEL NAME, not one merged group", () => {
     render(<SplitDatasetDialog />);
-    expect(screen.getByText("A123")).toBeInTheDocument();
-    expect(screen.getByText("B456")).toBeInTheDocument();
-    expect(screen.getByText("C789")).toBeInTheDocument();
-    expect(screen.getAllByText("2 rows")).toHaveLength(3);
+    // Scoped to the group list: the preview table below also shows the level
+    // text in its cells.
+    const groups = within(screen.getByRole("group", { name: "Detected groups" }));
+    expect(groups.getByText("A123")).toBeInTheDocument();
+    expect(groups.getByText("B456")).toBeInTheDocument();
+    expect(groups.getByText("C789")).toBeInTheDocument();
+    expect(groups.getAllByText("2 rows")).toHaveLength(3);
     expect(screen.getByText("Split into 3 datasets")).toBeInTheDocument();
   });
 
@@ -384,7 +389,7 @@ describe("SplitDatasetDialog — an explicit cat_levels table (BUG-008)", () => 
     });
     render(<SplitDatasetDialog />);
     expect(screen.getByText("Split into 3 datasets")).toBeInTheDocument();
-    expect(screen.getAllByText("dup")).toHaveLength(2);
+    expect(within(screen.getByRole("group", { name: "Detected groups" })).getAllByText("dup")).toHaveLength(2);
     expect(warn).not.toHaveBeenCalled(); // no duplicate-key warning
     warn.mockRestore();
   });

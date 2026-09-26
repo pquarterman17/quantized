@@ -29,15 +29,16 @@
 
 import { datasetAlgebra } from "./api/datasetAlgebra";
 
+import { analyzeMerge } from "./appendWarnings";
 import { lit } from "./macro";
 import { mergeDatasets } from "./merge";
+import type { AppendMatch } from "./mergeByName";
 import { analysisData } from "./rowstate";
 import { computeResample, resampleLabel, resampleParamsOf, type ResampleParams } from "./transformResample";
 import {
   actionable,
   analyzeAlgebra,
   analyzeJoin,
-  analyzeMerge,
   analyzeStack,
   analyzeTranspose,
   analyzeUnstack,
@@ -55,8 +56,9 @@ import {
   type AggregateMode,
   type JoinMode,
 } from "./worksheetTransforms";
+import type { JoinKey } from "./worksheetJoin";
 import { askConfirm } from "../store/confirmDialog";
-import { toast } from "../store/toasts";
+import { openTransformPreview } from "../store/transformPreviewDialog";
 import { nextDatasetId, type AppState } from "../store/useApp";
 
 /** The store accessor. Typed on the `AppState` interface, not
@@ -73,8 +75,9 @@ export type TransformParams =
   | { op: "transpose" }
   | { op: "stack"; channels: number[] }
   | { op: "unstack"; key: number; category: number; value: number; aggregate: AggregateMode }
-  | { op: "join"; leftKey: number; rightKey: number; mode: JoinMode; with: DatasetRef }
-  | { op: "merge"; with: DatasetRef[] }
+  | { op: "join"; leftKey: JoinKey; rightKey: JoinKey; mode: JoinMode; with: DatasetRef }
+  // `match` absent = by position (every step recorded before P2.5's preview).
+  | { op: "merge"; with: DatasetRef[]; match?: AppendMatch }
   | { op: "algebra"; operation: string; interp: string; with: DatasetRef }
   | { op: "split"; col: number; tolerance: number | null }
   | ResampleParams;
@@ -85,6 +88,9 @@ export interface TransformPreview {
   /** "Result: 12 rows × 3 columns" and similar. */
   summary: string;
   warnings: TransformWarning[];
+  /** What the transform read: each input's name and rows x columns (the
+   *  analysis rows where that is what it reads). */
+  inputs: { name: string; rows: number; cols: number }[];
 }
 
 /** Returns true to commit. Interactive callers pass `reviewTransform`;
@@ -119,7 +125,7 @@ export function transformStepText(p: TransformParams, primaryName: string): { la
   let label: string;
   switch (p.op) {
     case "join": label = `Join ${primaryName} with ${refs[0]} (${p.mode})`; break;
-    case "merge": label = `Append ${refs.join(", ")} to ${primaryName}`; break;
+    case "merge": label = `Append ${refs.join(", ")} to ${primaryName}${p.match === "name" ? " by column name" : ""}`; break;
     case "algebra": label = `Dataset math ${primaryName} ${p.operation} ${refs[0]}`; break;
     case "split": label = `Split ${primaryName} by column value`; break;
     case "resample": label = resampleLabel(p, primaryName); break;
@@ -128,47 +134,63 @@ export function transformStepText(p: TransformParams, primaryName: string): { la
   return { label, code: `qz.transform(${lit(op)}, "<active>", ${lit(args)})` };
 }
 
-interface Computed {
+/** One transform's result, before anything is committed. */
+export interface TransformComputed {
   data: DataStruct;
   name: string;
   preview: TransformPreview;
 }
 
-function preview(title: string, data: DataStruct, warnings: TransformWarning[]): TransformPreview {
+function preview(
+  title: string,
+  data: DataStruct,
+  warnings: TransformWarning[],
+  inputs: [string, DataStruct][],
+): TransformPreview {
   const rows = data.time.length;
   const cols = data.labels.length;
-  return { title, summary: `Result: ${rows} row${rows === 1 ? "" : "s"} × ${cols} column${cols === 1 ? "" : "s"} (plus X).`, warnings };
+  return {
+    title,
+    summary: `Result: ${rows} row${rows === 1 ? "" : "s"} × ${cols} column${cols === 1 ? "" : "s"} (plus X).`,
+    warnings,
+    inputs: inputs.map(([name, d]) => ({ name, rows: d.time.length, cols: d.labels.length })),
+  };
 }
 
-async function compute(p: TransformParams, primary: Dataset, others: Dataset[]): Promise<Computed> {
+/** THE compute for every single-output transform: the live preview
+ *  (components/workshops/transformPreview), the commit below and the pipeline
+ *  replay all call it, so what was previewed is what gets created. It reads
+ *  the datasets it is handed as they are — the preview passes a still-loading
+ *  book's preview rows, and `runTransform` resolves the full data first. */
+export async function computeTransform(p: TransformParams, primary: Dataset, others: Dataset[]): Promise<TransformComputed> {
   const src = rowsOf(primary);
   switch (p.op) {
     case "transpose": {
       const data = transposeWorksheet(src);
-      return { data, name: `${primary.name} (transposed)`, preview: preview("Transpose", data, analyzeTranspose(src)) };
+      return { data, name: `${primary.name} (transposed)`, preview: preview("Transpose", data, analyzeTranspose(src), [[primary.name, src]]) };
     }
     case "stack": {
       const data = stackWorksheet(src, p.channels);
-      return { data, name: `${primary.name} (stacked)`, preview: preview("Stack columns", data, analyzeStack(src, p.channels)) };
+      return { data, name: `${primary.name} (stacked)`, preview: preview("Stack columns", data, analyzeStack(src, p.channels), [[primary.name, src]]) };
     }
     case "unstack": {
       const data = unstackWorksheet(src, p.key, p.category, p.value, p.aggregate);
       const w = analyzeUnstack(src, p.key, p.category, p.value, p.aggregate);
-      return { data, name: `${primary.name} (unstacked)`, preview: preview("Unstack", data, w) };
+      return { data, name: `${primary.name} (unstacked)`, preview: preview("Unstack", data, w, [[primary.name, src]]) };
     }
     case "join": {
       const right = others[0];
       const rsrc = rowsOf(right);
       const data = joinWorksheets(src, rsrc, p.leftKey, p.rightKey, p.mode);
       const w = analyzeJoin(src, rsrc, p.leftKey, p.rightKey, p.mode, primary.name, right.name);
-      return { data, name: `${primary.name} + ${right.name} (joined)`, preview: preview(`Join (${p.mode})`, data, w) };
+      return { data, name: `${primary.name} + ${right.name} (joined)`, preview: preview(`Join (${p.mode})`, data, w, [[primary.name, src], [right.name, rsrc]]) };
     }
     case "merge": {
       const all = [primary, ...others];
       const names = all.map((d) => d.name);
-      const data = mergeDatasets(all.map((d) => d.data), names);
-      const w = analyzeMerge(all.map((d) => d.data), names);
-      return { data, name: `merged (${all.length})`, preview: preview(`Append ${all.length} datasets`, data, w) };
+      const data = mergeDatasets(all.map((d) => d.data), names, p.match);
+      const w = analyzeMerge(all.map((d) => d.data), names, p.match);
+      return { data, name: `merged (${all.length})`, preview: preview(`Append ${all.length} datasets`, data, w, all.map((d) => [d.name, d.data])) };
     }
     case "algebra": {
       const b = others[0];
@@ -181,13 +203,13 @@ async function compute(p: TransformParams, primary: Dataset, others: Dataset[]):
       const sym = ALGEBRA_SYMBOL[p.operation] ?? p.operation;
       const w = analyzeAlgebra(primary.data, b.data, p.operation, primary.name, b.name);
       const stamped = { ...data, metadata: { ...data.metadata, algebra_operands: [primary.name, b.name] } };
-      return { data: stamped, name: `${stem(primary.name)} ${sym} ${stem(b.name)}`, preview: preview("Dataset math", data, w) };
+      return { data: stamped, name: `${stem(primary.name)} ${sym} ${stem(b.name)}`, preview: preview("Dataset math", data, w, [[primary.name, primary.data], [b.name, b.data]]) };
     }
     case "resample": {
       // One compute for the workshop's live preview and this commit/replay.
       const m = others[0];
       const r = await computeResample(p, { name: primary.name, data: src }, m ? { name: m.name, data: m.data } : null);
-      return { data: r.data, name: r.name, preview: preview("Resample", r.data, r.warnings) };
+      return { data: r.data, name: r.name, preview: preview("Resample", r.data, r.warnings, [[primary.name, src]]) };
     }
     default:
       throw new Error(`"${p.op}" is not a single-output transform`);
@@ -279,7 +301,7 @@ export async function runTransform(
   const primary = await s().resolveDataset(primaryId);
   if (!primary) throw new Error("the input dataset is unavailable");
   const others = await resolveRefs(s, refsOf(p));
-  const c = await compute(p, primary, others);
+  const c = await computeTransform(p, primary, others);
   if (review && !(await review(c.preview))) {
     s().setStatus(`${c.preview.title} cancelled — nothing was created`);
     return null;
@@ -339,11 +361,15 @@ export function transformParamsOf(raw: Record<string, unknown>): TransformParams
     case "join": {
       const mode = String(raw.mode ?? "inner");
       if (!["inner", "left", "right", "full"].includes(mode)) throw new Error(`unknown join mode "${mode}"`);
-      return { op, leftKey: num("leftKey"), rightKey: num("rightKey"), mode: mode as JoinMode, with: ref(raw.with) };
+      // A key is a column index, or a text column's name (lib/worksheetJoin).
+      const key = (k: string): JoinKey => (typeof raw[k] === "string" && raw[k] ? (raw[k] as string) : num(k));
+      return { op, leftKey: key("leftKey"), rightKey: key("rightKey"), mode: mode as JoinMode, with: ref(raw.with) };
     }
     case "merge": {
       if (!Array.isArray(raw.with) || !raw.with.length) throw new Error('transform "merge" has no recorded inputs');
-      return { op, with: raw.with.map(ref) };
+      const match = String(raw.match ?? "position");
+      if (match !== "position" && match !== "name") throw new Error(`unknown append match "${match}"`);
+      return { op, with: raw.with.map(ref), ...(match === "name" ? { match } : {}) };
     }
     case "algebra":
       return { op, operation: String(raw.operation ?? ""), interp: String(raw.interp ?? "pchip"), with: ref(raw.with) };
@@ -363,37 +389,16 @@ export function transformParamsOf(raw: Record<string, unknown>): TransformParams
 export async function reviewedAppend(datas: DataStruct[], names: string[]): Promise<DataStruct | null> {
   const data = mergeDatasets(datas, names);
   const warnings = analyzeMerge(datas, names);
-  const pv = preview(`Append ${datas.length} files`, data, warnings);
+  const pv = preview(`Append ${datas.length} files`, data, warnings, datas.map((d, i) => [names[i], d]));
   pv.summary += " Cancel imports them as separate datasets instead.";
   return (await reviewTransform(pv)) ? stampWarnings(data, "merge", warnings) : null;
 }
 
-/** "Merge selected" (Data menu / Library): append the selection in order,
- *  reviewing unit/label mismatches first. The first pick is the primary. */
+/** "Merge selected" (Data menu / Library): open the previewed append on the
+ *  selection, in order (the first pick is the primary), else on the active
+ *  dataset. Nothing is merged until the workshop's Create. */
 export async function runMergeSelected(s: StoreGet): Promise<void> {
   const st = s();
-  const pickIds = st.selectedIds.filter((id) => st.datasets.some((d) => d.id === id));
-  if (pickIds.length < 2) {
-    st.setStatus("select ≥2 datasets to merge");
-    return;
-  }
-  try {
-    // #38 deferred edge: resolve every still-pending pick first (bounded
-    // concurrency) rather than silently merging previews.
-    const picks = await s().resolveDatasets(pickIds);
-    if (picks.length < 2) {
-      s().setStatus("select ≥2 datasets to merge");
-      return;
-    }
-    const [first, ...rest] = picks;
-    const out = await runTransform(s, { op: "merge", with: rest.map((d) => ({ id: d.id, name: d.name })) }, first.id, reviewTransform);
-    if (!out) return;
-    const rows = s().datasets.find((d) => d.id === out.id)?.data.time.length ?? 0;
-    s().setStatus(`merged ${picks.length} datasets → ${rows} rows${recordedNote(out.warnings)}`);
-    toast(`merged ${picks.length} datasets`, "ok");
-  } catch (e) {
-    const msg = `could not merge the selected datasets: ${e instanceof Error ? e.message : "unknown error"} — nothing was added`;
-    s().setStatus(msg);
-    toast(msg, "danger");
-  }
+  const picks = st.selectedIds.filter((id) => st.datasets.some((d) => d.id === id));
+  openTransformPreview("merge", picks.length ? picks : st.activeId ? [st.activeId] : []);
 }

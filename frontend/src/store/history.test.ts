@@ -240,7 +240,9 @@ describe("per-action-class undo/redo coverage", () => {
     expect(useApp.getState().datasets).toEqual(post);
   });
 
-  it("merge (mergeSelected)", async () => {
+  // P2.5: "Merge selected" opens the previewed append; its Create commits
+  // through runTransform — that commit is the undoable action.
+  it("merge (the append commit)", async () => {
     useApp.setState({
       datasets: [
         { id: "d1", name: "a", data: raw },
@@ -251,7 +253,11 @@ describe("per-action-class undo/redo coverage", () => {
     });
     const pre = useApp.getState().datasets;
 
-    await useApp.getState().mergeSelected();
+    await (await import("../lib/transformRun")).runTransform(
+      useApp.getState,
+      { op: "merge", with: [{ id: "d2", name: "b" }] },
+      "d1",
+    );
     expect(useApp.getState().datasets).toHaveLength(3); // a, b, + the merged result
     const post = useApp.getState().datasets;
 

@@ -15,12 +15,12 @@ import {
   autoTolerance,
   columnValues,
   isCategoricalColumn,
-  splitColumn,
   tooManyGroups,
   SPLIT_GROUP_CAP,
 } from "../../lib/datasetsplit";
 import { pickDefaultSplitColumn } from "../../lib/datasetsplitDefault";
-import { analyzeSplit, columnName } from "../../lib/transformWarnings";
+import { computeSplit, splitChildData } from "../../lib/splitCompute";
+import TransformPreviewTable from "./TransformPreviewTable";
 import TransformWarningList from "./TransformWarningList";
 import { NumberField } from "../primitives/NumberField";
 import { Button, Select } from "../primitives";
@@ -39,6 +39,8 @@ export default function SplitDatasetDialog() {
 
   const [col, setCol] = useState(0);
   const [toleranceText, setToleranceText] = useState("0");
+  // Which group's rows the preview table shows (P2.5 live data preview).
+  const [focus, setFocus] = useState(0);
 
   // Re-seed the column every time the dialog opens for a (possibly different)
   // dataset — never carry a stale pick from the last time it was open on some
@@ -137,10 +139,17 @@ export default function SplitDatasetDialog() {
   // number, since `splitColumn`'s `tolerance ?? autoTolerance(...)` only
   // catches null/undefined, not NaN/negative).
   const resolvedTolerance = categorical || !validTolerance ? undefined : tolerance;
+  // P2.5: the SAME compute the commit runs (lib/splitCompute.ts, called by
+  // store/split.ts's splitDatasetByColumn) — groups AND warnings.
   const result = useMemo(() => {
-    if (!dataset) return { groups: [], tolerance: null };
-    return splitColumn(dataset, col, resolvedTolerance);
+    if (!dataset) return { groups: [], warnings: [] };
+    return computeSplit(dataset, col, resolvedTolerance);
   }, [dataset, col, resolvedTolerance]);
+  const focusGroup = result.groups[Math.min(focus, result.groups.length - 1)];
+  const child = useMemo(
+    () => (dataset && focusGroup ? splitChildData(dataset.data, focusGroup, result.warnings) : null),
+    [dataset, focusGroup, result.warnings],
+  );
 
   if (!targetId || !dataset) return null;
 
@@ -205,7 +214,7 @@ export default function SplitDatasetDialog() {
             )}
           </div>
         )}
-        <div style={{ maxHeight: 260, overflowY: "auto", marginTop: 8, display: "grid", gap: 4 }}>
+        <div role="group" aria-label="Detected groups" style={{ maxHeight: 260, overflowY: "auto", marginTop: 8, display: "grid", gap: 4 }}>
           {overCap ? (
             <div className="qzk-ds-meta" style={{ color: "var(--danger, #d33)" }}>
               {groups.length} groups detected — too many to split at once (cap {SPLIT_GROUP_CAP}).{" "}
@@ -239,7 +248,29 @@ export default function SplitDatasetDialog() {
             ))
           )}
         </div>
-        {canSplit && <TransformWarningList warnings={analyzeSplit(groups, columnName(dataset.data, col))} />}
+        {canSplit && child && (
+          <div role="group" aria-label="Split preview" style={{ marginTop: 8 }}>
+            <div className="qz-ws-row">
+              <span className="k">Preview</span>
+              <Select
+                aria-label="Preview group"
+                options={groups.map((g, i) => ({ value: String(i), label: `group ${i + 1}: ${g.label}` }))}
+                value={String(Math.min(focus, groups.length - 1))}
+                onChange={(e) => setFocus(Number(e.target.value))}
+              />
+            </div>
+            <div className="qzk-ds-meta" aria-label="Preview size">
+              {`${dataset.name}: ${dataset.data.time.length} rows × ${dataset.data.labels.length} columns → ${groups.length} datasets; this one: ${child.time.length} rows × ${child.labels.length} columns`}
+            </div>
+            {dataset.pending && (
+              <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
+                Preview only: counted on the loaded preview of a book that is still loading; the full data is split when you confirm.
+              </div>
+            )}
+            <TransformPreviewTable data={child} />
+          </div>
+        )}
+        {canSplit && <TransformWarningList warnings={result.warnings} />}
         <div className="qz-btn-row">
           <Button onClick={close}>Cancel</Button>
           <Button variant="primary" disabled={!canSplit} onClick={runSplit}>

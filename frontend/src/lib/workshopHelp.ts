@@ -37,6 +37,7 @@ export const WORKSHOP_HELP: Readonly<Record<string, string>> = {
   "recipe-manager": "Plot recipes",
   "recode-workshop": "Recode",
   resample: "Resample",
+  reshape: "reshape",
   reflview: "Reflectometry view",
   report: "Report",
   "roi-cuts": "ROI cuts",

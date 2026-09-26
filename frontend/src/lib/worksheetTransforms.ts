@@ -1,7 +1,7 @@
 import { PREVIEW_SOURCE_ROWS, ROW_INDEXED_SIDECARS } from "./rowSidecars";
 import type { DataStruct } from "./types";
 
-export type JoinMode = "inner" | "left" | "right" | "full";
+export { joinWorksheets, type JoinMode } from "./worksheetJoin";
 export type AggregateMode = "mean" | "first" | "last";
 
 const column = (ds: DataStruct, key: number): number[] =>
@@ -12,7 +12,7 @@ function finiteKey(value: number): string | null {
 }
 
 function provenance(ds: DataStruct, operation: string): Record<string, unknown> {
-  // NB `joinWorksheets` does NOT call this — it builds its own metadata with the
+  // NB `joinWorksheets` (lib/worksheetJoin.ts) does NOT call this — it builds its own metadata with the
   // two sides nested under `left_metadata`/`right_metadata`, where no reader
   // looks (every sidecar reader is top-level only), so nothing there is
   // misaligned and nothing is lost. The "stack/unstack/join" list below is
@@ -193,70 +193,5 @@ export function unstackWorksheet(
     labels: categoryOrder.map((category) => `Category ${category}`),
     units: categoryOrder.map(() => valueColumn < 0 ? "" : (ds.units[valueColumn] ?? "")),
     metadata: { ...provenance(ds, "unstack"), unstack_aggregate: aggregate },
-  };
-}
-
-/** Exact numeric key join. Duplicate keys retain their first row, making the
- * operation deterministic and preventing an accidental many-to-many explosion.
- * Rows whose join-column value is not finite (NaN/blank) are excluded on that
- * side — a non-finite key cannot match anything — so a `left` join keeps every
- * left row that HAS a finite key, not literally every left row. */
-export function joinWorksheets(
-  left: DataStruct,
-  right: DataStruct,
-  leftKey: number,
-  rightKey: number,
-  mode: JoinMode = "inner",
-): DataStruct {
-  // Cheap upper-bound guard, before building any maps: a join's output can
-  // never exceed left + right rows (full outer with disjoint keys). Refusing
-  // on that bound keeps the "won't overwhelm the UI" contract without paying
-  // to materialize a giant result first.
-  if (left.time.length + right.time.length > 5_000_000) {
-    throw new Error("Join would create more than 5,000,000 rows; filter or subset the inputs first");
-  }
-  const leftKeys = column(left, leftKey);
-  const rightKeys = column(right, rightKey);
-  const leftMap = new Map<string, number>();
-  const rightMap = new Map<string, number>();
-  leftKeys.forEach((value, row) => { const key = finiteKey(value); if (key !== null && !leftMap.has(key)) leftMap.set(key, row); });
-  rightKeys.forEach((value, row) => { const key = finiteKey(value); if (key !== null && !rightMap.has(key)) rightMap.set(key, row); });
-  const keys = mode === "left"
-    ? [...leftMap.keys()]
-    : mode === "right"
-      ? [...rightMap.keys()]
-      : mode === "inner"
-        ? [...leftMap.keys()].filter((key) => rightMap.has(key))
-        : [...leftMap.keys(), ...[...rightMap.keys()].filter((key) => !leftMap.has(key))];
-  // Same ascending-x invariant unstack restores above: Map keys iterate in
-  // SOURCE-ROW order, and `full` appends every right-only key AFTER all left
-  // keys regardless of value. Either way an unsorted key column (or a right
-  // side holding lower keys) emitted a non-monotonic x, which uPlot reads as
-  // the axis max and renders as a collapsed range. Sort numerically.
-  keys.sort((a, b) => Number(a) - Number(b));
-  const leftChannels = left.labels.map((_, i) => i).filter((i) => i !== leftKey);
-  const rightChannels = right.labels.map((_, i) => i).filter((i) => i !== rightKey);
-  const leftNames = new Set(leftChannels.map((i) => left.labels[i]));
-  return {
-    time: keys.map(Number),
-    values: keys.map((key) => {
-      const li = leftMap.get(key);
-      const ri = rightMap.get(key);
-      return [
-        ...leftChannels.map((channel) => li === undefined ? Number.NaN : left.values[li]?.[channel] ?? Number.NaN),
-        ...rightChannels.map((channel) => ri === undefined ? Number.NaN : right.values[ri]?.[channel] ?? Number.NaN),
-      ];
-    }),
-    labels: [
-      ...leftChannels.map((i) => left.labels[i]),
-      ...rightChannels.map((i) => leftNames.has(right.labels[i]) ? `Right: ${right.labels[i]}` : right.labels[i]),
-    ],
-    units: [...leftChannels.map((i) => left.units[i] ?? ""), ...rightChannels.map((i) => right.units[i] ?? "")],
-    metadata: {
-      worksheet_transform: "join",
-      join_mode: mode,
-      left_metadata: left.metadata,
-      right_metadata: right.metadata,
-    },
   };
 }

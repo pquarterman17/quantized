@@ -5,12 +5,12 @@
 
 import { describe, expect, it } from "vitest";
 
+import { analyzeMerge } from "./appendWarnings";
 import { mergeDatasets } from "./merge";
 import {
   actionable,
   analyzeAlgebra,
   analyzeJoin,
-  analyzeMerge,
   analyzeSplit,
   analyzeStack,
   analyzeTranspose,

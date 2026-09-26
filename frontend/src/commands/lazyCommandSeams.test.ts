@@ -1,8 +1,9 @@
-// COLD-path coverage for the two command seams taken out of the eager bundle
-// on 2026-09-14 (`plans/BUNDLE_HEADROOM.md` slice 2's shape: metadata eager,
-// handler lazy): the four Data-menu worksheet reshapes
-// (`lib/worksheetTransformCommands.ts`) and Page setup
-// (`lib/pageSetupCommand.ts`).
+// COLD-path coverage for the command seam taken out of the eager bundle on
+// 2026-09-14 (`plans/BUNDLE_HEADROOM.md` slice 2's shape: metadata eager,
+// handler lazy): Page setup (`lib/pageSetupCommand.ts`). The four Data-menu
+// worksheet reshapes had the same seam until 2026-09-26, when P2.5 replaced
+// their ParamDialog module with the lazy Reshape & combine workshop (covered
+// by components/workshops/transformPreview/ReshapePanel.test.tsx).
 //
 // `src/architecture.test.ts` holds the STATIC half of the guard (nothing may
 // value-import either module). This spec holds the BEHAVIOURAL half, which
@@ -59,39 +60,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  vi.doUnmock("../lib/worksheetTransformCommands");
   vi.doUnmock("../lib/pageSetupCommand");
   vi.resetModules();
-});
-
-describe("Data ▸ Transpose worksheet — chunk-deferred handler", () => {
-  it("still creates the derived dataset after loading its chunk", async () => {
-    askParamsMock.mockResolvedValue({ confirm: true });
-    findCommand("transpose").run();
-
-    // The command's own metadata is eager; only the handler is not, so nothing
-    // has happened yet on the turn of the click itself.
-    expect(useApp.getState().datasets).toHaveLength(1);
-
-    await vi.waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
-    expect(useApp.getState().datasets[1].name).toBe("Sample (transposed)");
-    expect(useApp.getState().status).toBe("created Sample (transposed)");
-    expect(dangerToasts()).toEqual([]);
-  });
-
-  it("reports a chunk that will not load instead of failing silently", async () => {
-    vi.doMock("../lib/worksheetTransformCommands", () => {
-      throw new Error("network error");
-    });
-    findCommand("transpose").run();
-
-    await vi.waitFor(() =>
-      expect(dangerToasts().some((t) => t.startsWith("Could not load the worksheet reshape"))).toBe(true),
-    );
-    // Nothing was created, and the dialog was never opened.
-    expect(useApp.getState().datasets).toHaveLength(1);
-    expect(askParamsMock).not.toHaveBeenCalled();
-  });
 });
 
 describe("Plot ▸ Page setup — chunk-deferred handler", () => {
@@ -124,46 +94,26 @@ describe("Plot ▸ Page setup — chunk-deferred handler", () => {
     expect(useApp.getState().pageSetup).toBeNull();
     expect(askParamsMock).not.toHaveBeenCalled();
   });
-});
 
-// 2026-09-15 review, finding 9: only `transpose` had chunk-load coverage, and
-// nothing covered retry. The other three reshapes share `runWorksheetTransform`
-// with it, so these are cheap — and they are what keeps the shared wrapper's
-// refusal wording from silently drifting per command.
-describe("the other three worksheet reshapes report a chunk that will not load", () => {
-  it.each([
-    ["stack-columns", "runStackWorksheet"],
-    ["unstack-columns", "runUnstackWorksheet"],
-    ["join-by-key", "runJoinWorksheets"],
-  ])("%s", async (id) => {
-    vi.doMock("../lib/worksheetTransformCommands", () => {
-      throw new Error("network error");
-    });
-    findCommand(id).run();
-
-    await vi.waitFor(() =>
-      expect(dangerToasts().some((t) => t.startsWith("Could not load the worksheet reshape"))).toBe(true),
-    );
-    expect(useApp.getState().datasets).toHaveLength(1);
-    expect(askParamsMock).not.toHaveBeenCalled();
-  });
-
+  // Carried over from the retired reshape seam (2026-09-15 review, finding 9).
   it("retries after a failed load instead of staying broken", async () => {
-    askParamsMock.mockResolvedValue({ confirm: true });
-    vi.doMock("../lib/worksheetTransformCommands", () => {
+    askParamsMock.mockResolvedValue({
+      width: 8, height: 6, unit: "in", mleft: 1, mright: 1, mtop: 1, mbottom: 1,
+    });
+    vi.doMock("../lib/pageSetupCommand", () => {
       throw new Error("network error");
     });
-    findCommand("transpose").run();
+    findCommand("page-setup").run();
     await vi.waitFor(() =>
-      expect(dangerToasts().some((t) => t.startsWith("Could not load the worksheet reshape"))).toBe(true),
+      expect(dangerToasts().some((t) => t.startsWith("Could not load the page setup"))).toBe(true),
     );
-    expect(useApp.getState().datasets).toHaveLength(1);
+    expect(useApp.getState().pageSetup).toBeNull();
 
     // A rejected dynamic import is not cached, so the next gesture refetches.
-    vi.doUnmock("../lib/worksheetTransformCommands");
+    vi.doUnmock("../lib/pageSetupCommand");
     vi.resetModules();
-    findCommand("transpose").run();
-    await vi.waitFor(() => expect(useApp.getState().datasets).toHaveLength(2));
+    findCommand("page-setup").run();
+    await vi.waitFor(() => expect(useApp.getState().pageSetup).not.toBeNull());
   });
 });
 
@@ -223,19 +173,19 @@ describe("a chunk-deferred handler's OWN failure is not swallowed with the load'
 
   it("lets a throw from the loaded handler surface as a rejection", async () => {
     const boom = new Error("BOOM from the handler");
-    vi.doMock("../lib/worksheetTransformCommands", () => ({
-      runTransposeWorksheet: () => {
+    vi.doMock("../lib/pageSetupCommand", () => ({
+      runPageSetupDialog: () => {
         throw boom;
       },
     }));
 
-    expect(await unhandledRejectionFrom(() => findCommand("transpose").run())).toBe(boom);
+    expect(await unhandledRejectionFrom(() => findCommand("page-setup").run())).toBe(boom);
     // ...and it is NOT mis-reported as a chunk-load failure.
     expect(dangerToasts()).toEqual([]);
   });
 
   it("still handles a chunk-load failure itself — toasted, and no unhandled rejection", async () => {
-    vi.doMock("../lib/worksheetTransformCommands", () => {
+    vi.doMock("../lib/pageSetupCommand", () => {
       throw new Error("network error");
     });
 
@@ -243,10 +193,10 @@ describe("a chunk-deferred handler's OWN failure is not swallowed with the load'
     // the `toBeUndefined()` an assertion about a SETTLED seam rather than
     // about one that has not finished loading yet.
     const reason = await unhandledRejectionFrom(
-      () => findCommand("transpose").run(),
+      () => findCommand("page-setup").run(),
       () => dangerToasts().length > 0,
     );
     expect(reason).toBeUndefined();
-    expect(dangerToasts().some((t) => t.startsWith("Could not load the worksheet reshape"))).toBe(true);
+    expect(dangerToasts().some((t) => t.startsWith("Could not load the page setup"))).toBe(true);
   });
 });

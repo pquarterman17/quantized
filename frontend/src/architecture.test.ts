@@ -115,10 +115,11 @@ describe("workshop dataset identity", () => {
   // P2.5 moved these two producers' id minting into lib/transformRun.ts, so
   // they no longer call nextDatasetId() themselves — but they must still never
   // grow a PRIVATE sequence back (PR #431 review: that half of the check had
-  // been lost with them).
+  // been lost with them). The reshapes' producer is now the Reshape & combine
+  // workshop's hook (it replaced lib/worksheetTransformCommands.ts, 2026-09-26).
   const delegating = [
     "/components/workshops/datasetmath/useDatasetMath.ts",
-    "/lib/worksheetTransformCommands.ts",
+    "/components/workshops/transformPreview/useReshapePreview.ts",
   ];
 
   it("keeps delegating producers free of a private dataset-id sequence", () => {
@@ -923,8 +924,9 @@ describe("general .ts module-size ceiling (RSM_CUTS_PLAN #20)", () => {
 //    components/ — lib/api.ts importing SubstrateInfo from SubstratesTab.tsx
 //    made a UI file the owner of a wire contract. Wire types live beside
 //    their wrappers (lib/api/substrates.ts is the template). Hard ban.
-// 2. The rest of lib/ carries a RATCHET: eleven command/menu-glue modules
-//    (discovered 2026-08-15) import UI primitives (askParams/askConfirm,
+// 2. The rest of lib/ carries a RATCHET: eleven command/menu-glue modules (ten since
+//    2026-09-26, when lib/worksheetTransformCommands.ts was replaced by the
+//    Reshape & combine workshop; discovered 2026-08-15) import UI primitives (askParams/askConfirm,
 //    ContextMenuItem) — UI-adjacent orchestration that predates this guard.
 //    They are grandfathered; NEW lib files must not import components/, and
 //    a grandfathered file that drops the import must leave the list.
@@ -939,7 +941,6 @@ const LIB_UI_GRANDFATHERED = new Set([
   "./lib/plotMenu.ts",
   "./lib/plotToolbarDefs.ts",
   "./lib/workbookContextActions.ts",
-  "./lib/worksheetTransformCommands.ts",
 ]);
 
 // store/ layering guard (P4.1 review F1, 2026-09-17). store/plotViewSettings.ts's
@@ -2558,7 +2559,9 @@ describe("the Origin-apply half stays lazily reachable (BUNDLE_HEADROOM slice 1)
 // four Data-menu worksheet reshapes, the Page setup dialog, the workbook
 // Copy/Paste/Duplicate core, and the saved-Origin-preview window behind
 // FigureRow's "▣". Each is now reached through a dynamic `import()` from the
-// one file that used to import it statically.
+// one file that used to import it statically. (The reshapes' seam left the
+// list on 2026-09-26: P2.5 replaced their ParamDialog module with the lazy
+// Reshape & combine workshop, mounted through AppOverlays' lazyPanel.)
 //
 // This is the same guard `LAZY`/`LAZY_IMPORTERS` above gives the Origin-apply
 // split, and it exists for the same reason: Rollup ships a module to wherever
@@ -2575,11 +2578,6 @@ describe("the Origin-apply half stays lazily reachable (BUNDLE_HEADROOM slice 1)
 // is not a `from "…"` clause at all.
 describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)", () => {
   const SEAMS = [
-    {
-      module: "/lib/worksheetTransformCommands.ts",
-      loader: "/commands/dataCommands.ts",
-      call: 'import("../lib/worksheetTransformCommands")',
-    },
     {
       module: "/lib/pageSetupCommand.ts",
       loader: "/commands/plotCommands.ts",
