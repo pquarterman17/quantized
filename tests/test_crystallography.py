@@ -424,6 +424,24 @@ def test_bond_angle_rejects_neighbour_equivalent_to_vertex() -> None:
         bond_angle(4.0, 4.0, 4.0, 90.0, 90.0, 90.0, (1, 0, 0), (0, 0, 0), (0, 0.2, 0))
 
 
+def test_bond_angle_large_finite_cell_does_not_overflow_norm_or_dot_product() -> None:
+    result = bond_angle(
+        1e308,
+        1e308,
+        1e308,
+        90.0,
+        90.0,
+        90.0,
+        (0.1, 0.0, 0.0),
+        (0.0, 0.0, 0.0),
+        (0.0, 0.1, 0.0),
+        minimum_image=False,
+    )
+    assert result["angle_deg"] == pytest.approx(90.0, abs=1e-12)
+    assert result["distance1"] == pytest.approx(1e307)
+    assert result["distance3"] == pytest.approx(1e307)
+
+
 @pytest.mark.parametrize("coordinate", [(0.0, 0.0), (0.0, math.inf, 0.0)])
 def test_bond_angle_rejects_invalid_fractional_coordinate(coordinate: tuple[float, ...]) -> None:
     with pytest.raises(ValueError, match="atom1"):

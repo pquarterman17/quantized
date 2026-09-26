@@ -54,7 +54,7 @@ def _direct_basis(
     if volume_factor_sq <= 1e-14 or abs(sin_gamma) <= 1e-14:
         raise ValueError("cell geometry is degenerate")
 
-    return np.array(
+    basis = np.array(
         [
             [a, 0.0, 0.0],
             [b * cos_gamma, b * sin_gamma, 0.0],
@@ -66,13 +66,21 @@ def _direct_basis(
         ],
         dtype=float,
     )
+    if not np.all(np.isfinite(basis)):
+        raise ValueError("cell parameters are outside the supported numeric range")
+    return basis
 
 
 def _minimum_image(
     delta: NDArray[np.float64], basis: NDArray[np.float64]
 ) -> tuple[NDArray[np.float64], NDArray[np.int64]]:
     """Return the exact shortest lattice image, not component-wise rounding."""
-    metric = basis @ basis.T
+    # A uniform basis rescale leaves the shortest image unchanged and avoids
+    # overflowing the metric tensor for large-but-finite cell lengths.
+    scaled_basis = basis / float(np.max(np.abs(basis)))
+    metric = scaled_basis @ scaled_basis.T
+    if np.any(np.abs(delta) > np.iinfo(np.int64).max // 2):
+        raise ValueError("fractional coordinate difference is outside the supported numeric range")
     seed = -np.rint(delta).astype(np.int64)
     best_shift = seed
     best_delta = delta + seed
@@ -124,8 +132,11 @@ def bond_angle(
     centre = _fractional_coordinate(vertex, "vertex")
     third = _fractional_coordinate(atom3, "atom3")
 
-    delta1 = first - centre
-    delta3 = third - centre
+    with np.errstate(over="ignore", invalid="ignore"):
+        delta1 = first - centre
+        delta3 = third - centre
+    if not np.all(np.isfinite(delta1)) or not np.all(np.isfinite(delta3)):
+        raise ValueError("fractional coordinate difference is outside the supported numeric range")
     image1 = np.zeros(3, dtype=np.int64)
     image3 = np.zeros(3, dtype=np.int64)
     if minimum_image:
@@ -134,12 +145,14 @@ def bond_angle(
 
     vector1 = delta1 @ basis
     vector3 = delta3 @ basis
-    distance1 = float(np.linalg.norm(vector1))
-    distance3 = float(np.linalg.norm(vector3))
+    distance1 = math.hypot(*(float(value) for value in vector1))
+    distance3 = math.hypot(*(float(value) for value in vector3))
+    if not math.isfinite(distance1) or not math.isfinite(distance3):
+        raise ValueError("cell and coordinates produce non-finite bond geometry")
     if distance1 <= 1e-14 or distance3 <= 1e-14:
         raise ValueError("each neighbour must be distinct from the vertex")
 
-    cosine = float(np.dot(vector1, vector3) / (distance1 * distance3))
+    cosine = float(np.dot(vector1 / distance1, vector3 / distance3))
     angle_deg = math.degrees(math.acos(min(1.0, max(-1.0, cosine))))
     return {
         "angle_deg": angle_deg,
