@@ -71,6 +71,12 @@ describe("append by column name", () => {
     expect(mergeDatasets([d1, d2], ["d1", "d2"], "name").values[1]).toEqual([3, Number.NaN]);
   });
 
+  it("an unnamed column pairs only with an unnamed column at the same position", () => {
+    const u1: DataStruct = { time: [0], values: [[1, 2]], labels: ["M", ""], units: ["", ""], metadata: {} };
+    const u2: DataStruct = { time: [0], values: [[3, 4, 5]], labels: ["M", "", "Column 2"], units: ["", "", ""], metadata: {} };
+    expect(alignColumnsByName([u1, u2])).toMatchObject({ labels: ["M", "", "Column 2"], cols: [[0, 1, -1], [0, 1, 2]] });
+  });
+
   it("keeps a categorical column categorical, remapping each input's codes by level text", () => {
     const c1: DataStruct = { time: [0, 1], values: [[0, 5], [1, 6]], labels: ["S", "Y"], units: ["", ""], metadata: {}, cat_levels: { 0: ["x", "y"] } };
     // "S" at position 1 here, with a different level table; no "Y".

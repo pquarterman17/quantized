@@ -120,8 +120,10 @@ describe("Reshape & combine — the created dataset IS the previewed one", () =>
       return { shown, created: useApp.getState().datasets[2] };
     })();
     expect(shown.preview.warnings.map((w) => w.code)).toEqual(["duplicate-keys"]);
-    // x matched r's "x" (its code 1), y matched r's "y" (its code 0).
-    expect(shown.data.values).toEqual([[0, 1, 8], [1, 2, 9]]);
+    // x matched r's "x" (its code 1), y matched r's "y" (its code 0); each
+    // side's X rides along as a column.
+    expect(shown.data.labels).toEqual(["S", "X", "a", "Right: X", "b"]);
+    expect(shown.data.values).toEqual([[0, 1, 1, 1, 8], [1, 2, 2, 0, 9]]);
     expectParity(shown, created, "join");
     expect(useApp.getState().macroSteps[0].params).toMatchObject({ op: "join", leftKey: 0, rightKey: 0, with: { id: "R" } });
   });

@@ -8,8 +8,10 @@
 // for the identical reasoning.
 //
 // The pure grouping/slicing math lives in lib/datasetsplit.ts (unit-tested
-// there in isolation); this file is the thin store wrapper: resolve a
-// still-pending Origin book first (duplicateDataset/mergeSelected
+// there in isolation) behind lib/splitCompute.ts (the compute the dialog's
+// preview shares); this slice holds the dialog flag, and its action's body
+// (store/splitRun.ts, lazy) is the thin store wrapper: resolve a
+// still-pending Origin book first (duplicateDataset/runTransform
 // precedent), mint one child Dataset per group, place them all in ONE new
 // Library folder named after the source, and commit everything as a SINGLE
 // recordHistory entry so undo restores the pre-split library in one step

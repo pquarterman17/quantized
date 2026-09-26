@@ -23,7 +23,10 @@ export interface NameAlignment {
   cols: number[][];
 }
 
-const norm = (label: string, c: number): string => (label.trim() || `column ${c + 1}`).toLowerCase();
+/** A column's match name. An UNNAMED column has no name to match, so it pairs
+ *  only with another unnamed column at the same position — never with a real
+ *  column that happens to be called "Column 3". */
+const norm = (label: string, c: number): string => label.trim().toLowerCase() || `\u0000unnamed ${c}`;
 
 /** The shared column list for `datasets` and where each input's columns go. */
 export function alignColumnsByName(datasets: readonly DataStruct[]): NameAlignment {

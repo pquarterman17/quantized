@@ -28,6 +28,18 @@ export interface JoinKeyColumn {
   keys: (string | null)[];
 }
 
+/** A text cell as a key: trimmed ("S1 " from a spreadsheet export is "S1"),
+ *  and blank = no key. */
+const textKey = (s: string | null): string | null => s?.trim() || null;
+
+/** A column's display name / unit, for `-1` = X as for a channel. */
+const nameOf = (ds: DataStruct, c: number): string =>
+  c < 0 ? String(ds.metadata?.x_column_name ?? "") || "X" : ds.labels[c];
+const unitOf = (ds: DataStruct, c: number): string => {
+  const u = c < 0 ? ds.metadata?.x_column_unit : ds.units[c];
+  return typeof u === "string" ? u : "";
+};
+
 /** The match strings of `key` in `ds`. Numbers key on `String(v)`, which
  *  merges -0 with 0 (as a Set of numbers does). Throws for a text column that
  *  does not exist. */
@@ -35,11 +47,11 @@ export function joinKeyColumn(ds: DataStruct, key: JoinKey): JoinKeyColumn {
   if (typeof key === "string") {
     const col = originTextColumns(ds).find((c) => c.shortName === key);
     if (!col) throw new Error(`there is no text column "${key}"`);
-    return { kind: "text", keys: col.rows.map((s) => (s.trim() === "" ? null : s)) };
+    return { kind: "text", keys: col.rows.map(textKey) };
   }
   const levels = key >= 0 ? categoricalLevels(ds, key) : null;
   const raw = key < 0 ? ds.time : ds.values.map((row) => row[key]);
-  if (levels) return { kind: "text", keys: raw.map((code) => labelForCode(levels, code)) };
+  if (levels) return { kind: "text", keys: raw.map((code) => textKey(labelForCode(levels, code))) };
   return { kind: "number", keys: raw.map((v) => (Number.isFinite(v) ? String(v) : null)) };
 }
 
@@ -59,9 +71,10 @@ function firstRows(keys: readonly (string | null)[]): Map<string, number> {
  *  key, not literally every left row.
  *
  *  A NUMERIC key becomes the output X, sorted ascending. A TEXT key cannot be
- *  an X, so the output X is the row number and the key is the first channel,
- *  categorical, in first-appearance order (left keys, then right-only ones).
- *  Every other channel keeps its own side's level table. */
+ *  an X, so the output X is the row number, the key is the first channel,
+ *  categorical, in first-appearance order (left keys, then right-only ones),
+ *  and each side's own X follows as an ordinary column rather than being
+ *  lost. Every other channel keeps its own side's level table. */
 export function joinWorksheets(
   left: DataStruct,
   right: DataStruct,
@@ -96,22 +109,31 @@ export function joinWorksheets(
   // uPlot reads the LAST x as the axis max, so a non-monotonic x collapses the
   // range. Sort numerically. Text keys are not an axis and keep their order.
   if (!text) keys.sort((a, b) => Number(a) - Number(b));
-  const leftChannels = left.labels.map((_, i) => i).filter((i) => i !== leftKey);
-  const rightChannels = right.labels.map((_, i) => i).filter((i) => i !== rightKey);
-  const leftNames = new Set(leftChannels.map((i) => left.labels[i]));
+  // A text key takes the X's place, so each side's own X would be lost: it is
+  // carried as an ordinary column (`-1` below) instead. A numeric key keeps
+  // the long-standing shape — the key IS the new X, the other channels follow.
+  const channelsOf = (ds: DataStruct, key: JoinKey) => [
+    ...(text && key !== -1 ? [-1] : []),
+    ...ds.labels.map((_, i) => i).filter((i) => i !== key),
+  ];
+  const leftChannels = channelsOf(left, leftKey);
+  const rightChannels = channelsOf(right, rightKey);
+  const leftNames = new Set(leftChannels.map((c) => nameOf(left, c)));
   const lead = text ? 1 : 0;
   const cat_levels: Record<number, string[]> = text && keys.length ? { 0: keys } : {};
   const level_order: Record<number, number[]> = {};
   const carry = (ds: DataStruct, channels: number[], offset: number) =>
     channels.forEach((c, j) => {
-      const levels = categoricalLevels(ds, c);
+      const levels = c >= 0 ? categoricalLevels(ds, c) : null;
       if (levels) cat_levels[offset + j] = levels;
       const order = ds.level_order?.[c];
       if (levels && Array.isArray(order)) level_order[offset + j] = [...order];
     });
   carry(left, leftChannels, lead);
   carry(right, rightChannels, lead + leftChannels.length);
-  const keyName = typeof leftKey === "string" ? leftKey : leftKey < 0 ? "X" : left.labels[leftKey] || "Key";
+  const keyName = typeof leftKey === "string" ? leftKey : nameOf(left, leftKey) || "Key";
+  const at = (ds: DataStruct, row: number | undefined, c: number): number =>
+    row === undefined ? Number.NaN : ((c < 0 ? ds.time[row] : ds.values[row]?.[c]) ?? Number.NaN);
   return {
     time: text ? keys.map((_, k) => k) : keys.map(Number),
     values: keys.map((key, k) => {
@@ -119,19 +141,19 @@ export function joinWorksheets(
       const ri = rightMap.get(key);
       return [
         ...(text ? [k] : []),
-        ...leftChannels.map((channel) => li === undefined ? Number.NaN : left.values[li]?.[channel] ?? Number.NaN),
-        ...rightChannels.map((channel) => ri === undefined ? Number.NaN : right.values[ri]?.[channel] ?? Number.NaN),
+        ...leftChannels.map((c) => at(left, li, c)),
+        ...rightChannels.map((c) => at(right, ri, c)),
       ];
     }),
     labels: [
       ...(text ? [keyName] : []),
-      ...leftChannels.map((i) => left.labels[i]),
-      ...rightChannels.map((i) => leftNames.has(right.labels[i]) ? `Right: ${right.labels[i]}` : right.labels[i]),
+      ...leftChannels.map((c) => nameOf(left, c)),
+      ...rightChannels.map((c) => (leftNames.has(nameOf(right, c)) ? `Right: ${nameOf(right, c)}` : nameOf(right, c))),
     ],
     units: [
       ...(text ? [""] : []),
-      ...leftChannels.map((i) => left.units[i] ?? ""),
-      ...rightChannels.map((i) => right.units[i] ?? ""),
+      ...leftChannels.map((c) => unitOf(left, c)),
+      ...rightChannels.map((c) => unitOf(right, c)),
     ],
     metadata: {
       worksheet_transform: "join",

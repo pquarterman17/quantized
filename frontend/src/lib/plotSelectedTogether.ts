@@ -45,7 +45,8 @@ export async function plotSelectedTogether(ids: readonly string[]): Promise<void
   }
   // #38-style deferred edge: a still-pending Origin book (lazy multi-book
   // import) must be fully loaded before its channels/rows are readable —
-  // mergeSelected (store/useApp.ts) resolves the same way before combining.
+  // An append (lib/transformRun.runTransform, the Reshape & combine commit)
+  // resolves the same way before combining.
   const resolved = await useApp.getState().resolveDatasets([...ids]);
   if (resolved.length < MIN_SELECTION) {
     toast("couldn't resolve enough of the selected datasets to plot together", "danger");

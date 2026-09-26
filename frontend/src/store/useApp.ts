@@ -518,9 +518,9 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // distinct from removeSelected. `{permanent}` (P3.7) bypasses Trash.
   removeDatasets: (ids: string[], opts?: { permanent?: boolean }) => void;
   // clearAll: see store/workspaceHydration.ts (WorkspaceHydrationSlice).
-  // Concatenate the multi-selected datasets (≥2) row-wise into a new dataset.
-  // Resolves any still-pending picks first (#38) — a batch of arbitrary
-  // selected datasets is exactly the "never activated" risk case.
+  // Open the previewed append (Reshape & combine) on the selection (P2.5).
+  // Its Create resolves any still-pending picks first (#38) — a batch of
+  // arbitrary selected datasets is exactly the "never activated" risk case.
   mergeSelected: () => Promise<void>;
   // Resolves a still-pending source first (#38): `pending` isn't copied onto
   // the clone, so without this the copy would silently become a SEPARATE
@@ -1001,9 +1001,9 @@ export const useApp = create<AppState>((set, get) => ({
 
   // clearAll: see store/workspaceHydration.ts (it is loadWorkspace(empty)).
 
-  // Concatenate the selected datasets (in selection order) row-wise into one new
-  // library dataset — reviewed for unit/label mismatches and recorded as a
-  // replayable step (P2.5). Body: lib/transformRun.ts (lazy, post-click).
+  // Open the Reshape & combine workshop's append on the selection, in order: it
+  // previews the result live and its Create records a replayable step (P2.5).
+  // Body: lib/transformRun.ts (lazy — the workshop's commit needs it anyway).
   mergeSelected: async () => (await import("../lib/transformRun")).runMergeSelected(get),
 
   // Deep-copy a dataset (incl. raw/corrections/bgRef) as an independent "(copy)"

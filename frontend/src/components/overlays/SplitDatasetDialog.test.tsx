@@ -275,6 +275,16 @@ describe("SplitDatasetDialog — confirm / cancel", () => {
     expect(second.time.flatMap((x, i) => [String(x), String(second.values[i][0])])).toEqual(shown);
   });
 
+  it("P2.5: the previewed group resets when the split itself changes (the dialog stays mounted)", () => {
+    useApp.setState({ splitDialogTargetId: "d1" });
+    render(<SplitDatasetDialog />);
+    const pick = () => screen.getByLabelText("Preview group") as HTMLSelectElement;
+    fireEvent.change(pick(), { target: { value: "1" } });
+    expect(pick().value).toBe("1");
+    fireEvent.change(screen.getByLabelText("Tolerance"), { target: { value: "0.5" } });
+    expect(pick().value).toBe("0");
+  });
+
   it("P2.5: a still-loading book's split preview is labelled preview-only", () => {
     useApp.setState({
       datasets: [{ id: "d1", name: "run1.dat", data: wobble, pending: { kind: "path", path: "/r.opj", bookId: "B", rows: 60, cols: 1 } }],

@@ -125,6 +125,11 @@ export function formToRun(form: TransformForm, datasets: readonly Named[]): Tran
       const right = find(form.right);
       if (!right) return "Pick a second dataset to join.";
       if (right.id === primary.id) return "Pick two different datasets to join.";
+      // A key picked before the dataset changed shape (a deleted column) must
+      // not silently key on nothing.
+      const offered = (d: Named, v: string) => keyOptions(d.data).some((o) => o.value === v);
+      if (!offered(primary, form.leftKey)) return "Pick the left key.";
+      if (!offered(right, form.rightKey)) return "Pick the right key.";
       return {
         params: { op: "join", leftKey: parseKey(form.leftKey), rightKey: parseKey(form.rightKey), mode: form.mode, with: ref(right) },
         primaryId: primary.id,

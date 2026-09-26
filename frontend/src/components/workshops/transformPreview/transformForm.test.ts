@@ -40,6 +40,10 @@ describe("transformForm", () => {
     });
     expect(formToRun({ ...f, op: "merge", appendIds: ["a"] }, sets)).toBe("Tick at least two datasets to append.");
     expect(formToRun({ ...f, right: "b" }, sets)).toBe("Pick two different datasets to join.");
+    // A key that no longer exists (a deleted column / text column) is a form
+    // error, never a join on nothing.
+    expect(formToRun({ ...f, leftKey: "5" }, sets)).toBe("Pick the left key.");
+    expect(formToRun({ ...f, rightKey: "t:Gone" }, sets)).toBe("Pick the right key.");
     expect(formToRun({ ...f, op: "merge", match: "name" }, sets)).toMatchObject({
       params: { op: "merge", match: "name", with: [{ id: "a", name: "a.dat" }] },
       primaryId: "b",

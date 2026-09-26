@@ -33,13 +33,15 @@ describe("join by a text key", () => {
     const out = joinWorksheets(left, right, 0, 0, "inner");
     // Left order of first appearance; B's duplicate (row 2) and the blank key
     // (row 3) are not joined.
-    expect(out.labels).toEqual(["Sample", "Tc", "Hc", "Grade"]);
+    // Each side's own X is carried as a column: a text key cannot be the X.
+    expect(out.labels).toEqual(["Sample", "X", "Tc", "Right: X", "Hc", "Grade"]);
     expect(out.time).toEqual([0, 1]);
     expect(out.cat_levels?.[0]).toEqual(["A", "B"]);
-    // A: Tc 1.5 / right row 2 (Hc 9, Grade code 1 = "hi"); B: Tc 2.5 / right row 0.
-    expect(out.values).toEqual([[0, 1.5, 9, 1], [1, 2.5, 7, 1]]);
+    // A: left row 0 (x 0, Tc 1.5) / right row 2 (x 2, Hc 9, Grade code 1 =
+    // "hi"); B: left row 1 / right row 0.
+    expect(out.values).toEqual([[0, 0, 1.5, 2, 9, 1], [1, 1, 2.5, 0, 7, 1]]);
     // The right side's own level table travels with its column.
-    expect(out.cat_levels?.[3]).toEqual(["lo", "hi"]);
+    expect(out.cat_levels?.[5]).toEqual(["lo", "hi"]);
     expect(out.metadata).toMatchObject({ worksheet_transform: "join", join_key: "text", x_column_name: "Row" });
   });
 
@@ -47,8 +49,8 @@ describe("join by a text key", () => {
     const out = joinWorksheets(left, right, 0, 0, "full");
     expect(out.cat_levels?.[0]).toEqual(["A", "B", "C"]);
     expect(out.values[2][0]).toBe(2);
-    expect(out.values[2][1]).toBeNaN();
-    expect(out.values[2][2]).toBe(8);
+    expect(out.values[2][2]).toBeNaN(); // no left Tc for C
+    expect(out.values[2][4]).toBe(8);
   });
 
   it("keys on a text sidecar column by name", () => {
@@ -57,14 +59,15 @@ describe("join by a text key", () => {
       values: [[1], [2], [3]],
       labels: ["v"],
       units: [""],
-      metadata: { text_columns: { ID: ["s1", "s2", ""] } },
+      metadata: { text_columns: { ID: ["s1", "s2", "  "] } },
     };
-    const other: DataStruct = { ...withText, values: [[10], [20], [30]], labels: ["w"], metadata: { text_columns: { ID: ["s2", "s9", "s1"] } } };
+    // "s1 " (a spreadsheet export's trailing space) is still s1.
+    const other: DataStruct = { ...withText, values: [[10], [20], [30]], labels: ["w"], metadata: { text_columns: { ID: ["s2", "s9", "s1 "] } } };
     expect(joinKeyColumn(withText, "ID")).toEqual({ kind: "text", keys: ["s1", "s2", null] });
     const out = joinWorksheets(withText, other, "ID", "ID", "inner");
-    expect(out.labels).toEqual(["ID", "v", "w"]);
+    expect(out.labels).toEqual(["ID", "X", "v", "Right: X", "w"]);
     expect(out.cat_levels?.[0]).toEqual(["s1", "s2"]);
-    expect(out.values).toEqual([[0, 1, 30], [1, 2, 10]]);
+    expect(out.values).toEqual([[0, 0, 1, 2, 30], [1, 1, 2, 0, 10]]);
     expect(() => joinWorksheets(withText, other, "Nope", "ID")).toThrow('there is no text column "Nope"');
   });
 

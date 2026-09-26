@@ -39,8 +39,10 @@ export default function SplitDatasetDialog() {
 
   const [col, setCol] = useState(0);
   const [toleranceText, setToleranceText] = useState("0");
-  // Which group's rows the preview table shows (P2.5 live data preview).
-  const [focus, setFocus] = useState(0);
+  // Which group's rows the preview table shows (P2.5 live data preview),
+  // tagged with the split it indexes: the dialog is keep-mounted, so a pick
+  // must not carry to another dataset, column or tolerance.
+  const [focusPick, setFocusPick] = useState({ split: "", index: 0 });
 
   // Re-seed the column every time the dialog opens for a (possibly different)
   // dataset — never carry a stale pick from the last time it was open on some
@@ -145,7 +147,9 @@ export default function SplitDatasetDialog() {
     if (!dataset) return { groups: [], warnings: [] };
     return computeSplit(dataset, col, resolvedTolerance);
   }, [dataset, col, resolvedTolerance]);
-  const focusGroup = result.groups[Math.min(focus, result.groups.length - 1)];
+  const split = `${targetId}|${col}|${resolvedTolerance}`;
+  const focus = focusPick.split === split ? Math.min(focusPick.index, result.groups.length - 1) : 0;
+  const focusGroup = result.groups[focus];
   const child = useMemo(
     () => (dataset && focusGroup ? splitChildData(dataset.data, focusGroup, result.warnings) : null),
     [dataset, focusGroup, result.warnings],
@@ -255,8 +259,8 @@ export default function SplitDatasetDialog() {
               <Select
                 aria-label="Preview group"
                 options={groups.map((g, i) => ({ value: String(i), label: `group ${i + 1}: ${g.label}` }))}
-                value={String(Math.min(focus, groups.length - 1))}
-                onChange={(e) => setFocus(Number(e.target.value))}
+                value={String(focus)}
+                onChange={(e) => setFocusPick({ split, index: Number(e.target.value) })}
               />
             </div>
             <div className="qzk-ds-meta" aria-label="Preview size">
