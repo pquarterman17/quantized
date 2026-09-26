@@ -31,6 +31,7 @@ BACKSLASH = chr(92)
 # Windows error codes the tests inject. Values from winerror.h.
 ERROR_FILE_NOT_FOUND = 2
 ERROR_BAD_NETPATH = 53
+ERROR_BAD_NET_NAME = 67
 ERROR_UNEXP_NET_ERR = 59
 ERROR_SEM_TIMEOUT = 121
 ERROR_INVALID_PARAMETER = 87
@@ -38,6 +39,8 @@ ERROR_INVALID_NAME = 123
 ERROR_NETWORK_UNREACHABLE = 1231
 ERROR_NOT_AUTHENTICATED = 1244
 ERROR_NO_LOGON_SERVERS = 1311
+ERROR_NO_NET_OR_BAD_PATH = 1203
+ERROR_LOGON_FAILURE = 1326
 ERROR_CANT_RESOLVE_FILENAME = 1921
 
 # The network codes seen on (or plausible for) a runner that cannot resolve
@@ -93,19 +96,29 @@ def _unc_key(s: str) -> str:
     return s.replace("/", BACKSLASH).casefold()
 
 
-def _under_share(p: object, share_root: str) -> bool:
-    """Is ``p`` (str, bytes or PathLike) the share root or a path below it?"""
+def _split_share(p: object, share_root: str) -> tuple[str, str] | None:
+    """``(drive, rest)`` when ``p`` (str, bytes or PathLike) is the share root
+    or a path below it, else None. The drive is the caller's own spelling,
+    cut at ``len(share_root)`` before comparing, so a case fold that changes
+    a string's length cannot shift the split."""
     s = _as_text(p)
     if s is None:
-        return False
-    key, root = _unc_key(s), _unc_key(share_root)
-    return key == root or key.startswith(root + BACKSLASH)
+        return None
+    n = len(share_root)
+    drive, rest = s[:n], s[n:]
+    if _unc_key(drive) != _unc_key(share_root) or rest[:1] not in ("", "/", BACKSLASH):
+        return None
+    return drive, rest
+
+
+def _under_share(p: object, share_root: str) -> bool:
+    return _split_share(p, share_root) is not None
 
 
 def _is_share_root(p: object, share_root: str) -> bool:
-    """The root itself, with or without one trailing separator."""
-    s = _as_text(p)
-    return s is not None and _unc_key(s).rstrip(BACKSLASH) == _unc_key(share_root)
+    """The root itself, with or without trailing separators."""
+    split = _split_share(p, share_root)
+    return split is not None and split[1].strip("/" + BACKSLASH) == ""
 
 
 def install_unc_fakes(
@@ -160,11 +173,12 @@ def install_unc_fakes(
         stat_winerror = ERROR_FILE_NOT_FOUND if mounted else ERROR_BAD_NETPATH
 
     def fake_splitdrive(p: Any) -> tuple[Any, Any]:
-        if not _under_share(p, share_root):
+        split = _split_share(p, share_root)
+        if split is None:
             return real_splitdrive(p)
-        s = os.fspath(p)
-        n = len(os.fsencode(share_root)) if isinstance(s, bytes) else len(share_root)
-        return (s[:n], s[n:])  # ntpath keeps the caller's own spelling of the drive
+        if isinstance(os.fspath(p), bytes):
+            return (os.fsencode(split[0]), os.fsencode(split[1]))
+        return split
 
     def fake_isdir(p: Any) -> bool:
         if _is_share_root(p, share_root):
