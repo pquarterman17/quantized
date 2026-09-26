@@ -3375,6 +3375,13 @@ violin, bar, strip, or summary plots.
   `resolveGroups`. **Residual (not this box):** faceted Stat Stage panels and
   the Graph Builder mini-preview still group through `resolveGroups` and drop
   empty levels; the stage hides the toggles and the notice while faceted.
+  PR #433 review round (2026-09-26): stacked bars now label each category
+  with its TOTAL n (rows with a value in any stacked series; the caveat and
+  notice use it too) instead of the top segment's n, which printed `n=0` over
+  visible bars; the empty-slot splice refuses a stale draw unless labels and
+  n match the filled slots in order; a statplot labels/data length mismatch
+  is a descriptive 422; the notice reads "Small groups" when only the n < 3
+  rule fired.
 - [ ] Summary table links to selected groups.
 - [ ] ANOVA/post-hoc, PCA, regression/correlation, GLM, survival, and ROC stay
   lower priority until demand is shown. **Demand shown 2026-07-28**: the
