@@ -9,10 +9,12 @@ from __future__ import annotations
 
 import math
 
+import numpy as np
 import pytest
 
 from quantized.calc.crystallography import (
     CRYSTAL_SYSTEMS,
+    bond_angle,
     cell_volume,
     d_spacing,
     direction_uvtw_to_uvw,
@@ -348,3 +350,272 @@ def test_interplanar_angle_rhombohedral_defaults_beta_gamma_to_alpha() -> None:
     # reduce exactly to the cubic (100)^(110) = 45 deg identity.
     r = interplanar_angle("rhombohedral", 4.0, 0.0, 0.0, 1, 0, 0, 1, 1, 0, alpha=90.0)
     assert r["angle_deg"] == pytest.approx(45.0, abs=1e-9)
+
+
+# ── Atomic bond angle (fractional coordinates) ──────────────────────────────
+def test_bond_angle_cubic_reference_is_90deg() -> None:
+    result = bond_angle(4.0, 4.0, 4.0, 90.0, 90.0, 90.0, (0.25, 0, 0), (0, 0, 0), (0, 0.25, 0))
+    assert result["angle_deg"] == pytest.approx(90.0, abs=1e-12)
+    assert result["distance1"] == pytest.approx(1.0, abs=1e-12)
+    assert result["distance3"] == pytest.approx(1.0, abs=1e-12)
+    assert result["image1"] == [0, 0, 0]
+    assert result["image3"] == [0, 0, 0]
+
+
+def test_bond_angle_minimum_image_wraps_across_cell_boundary() -> None:
+    args = (4.0, 4.0, 4.0, 90.0, 90.0, 90.0, (0.05, 0, 0), (0.95, 0, 0), (0.85, 0.1, 0))
+    wrapped = bond_angle(*args)
+    same_cell = bond_angle(*args, minimum_image=False)
+    assert wrapped["angle_deg"] == pytest.approx(135.0, abs=1e-12)
+    assert same_cell["angle_deg"] == pytest.approx(45.0, abs=1e-12)
+    assert wrapped["image1"] == [1, 0, 0]
+    assert wrapped["image3"] == [0, 0, 0]
+
+
+def test_bond_angle_triclinic_matches_explicit_cartesian_vectors() -> None:
+    cell = (5.0, 6.0, 7.0, 80.0, 95.0, 105.0)
+    atom1 = (0.2, 0.1, 0.0)
+    vertex = (0.0, 0.0, 0.0)
+    atom3 = (0.0, 0.15, 0.1)
+    result = bond_angle(*cell, atom1, vertex, atom3, minimum_image=False)
+
+    alpha, beta, gamma = map(math.radians, cell[3:])
+    basis = (
+        (cell[0], 0.0, 0.0),
+        (cell[1] * math.cos(gamma), cell[1] * math.sin(gamma), 0.0),
+        (
+            cell[2] * math.cos(beta),
+            cell[2] * (math.cos(alpha) - math.cos(beta) * math.cos(gamma)) / math.sin(gamma),
+            cell_volume(*cell) / (cell[0] * cell[1] * math.sin(gamma)),
+        ),
+    )
+    vectors = []
+    for fractional in (atom1, atom3):
+        vectors.append(tuple(sum(fractional[i] * basis[i][j] for i in range(3)) for j in range(3)))
+    norm1 = math.sqrt(sum(value * value for value in vectors[0]))
+    norm3 = math.sqrt(sum(value * value for value in vectors[1]))
+    expected = math.degrees(
+        math.acos(sum(x * y for x, y in zip(*vectors, strict=True)) / (norm1 * norm3))
+    )
+    assert result["angle_deg"] == pytest.approx(expected, rel=1e-12)
+
+
+def test_bond_angle_skew_cell_uses_exact_not_componentwise_minimum_image() -> None:
+    # For gamma=30 degrees the a and b vectors are nearly parallel.  The
+    # component-wise wrapped delta (0.49, 0.49, 0) is not the shortest image;
+    # translating one component by -1 produces a much shorter displacement.
+    result = bond_angle(
+        1.0,
+        1.0,
+        1.0,
+        90.0,
+        90.0,
+        30.0,
+        (0.49, 0.49, 0.0),
+        (0.0, 0.0, 0.0),
+        (0.0, 0.0, 0.25),
+    )
+    componentwise_distance = 0.49 * math.sqrt(2.0 + 2.0 * math.cos(math.radians(30.0)))
+    assert result["distance1"] < componentwise_distance
+    assert result["image1"] != [0, 0, 0]
+
+
+def test_bond_angle_rejects_neighbour_equivalent_to_vertex() -> None:
+    with pytest.raises(ValueError, match="distinct from the vertex"):
+        bond_angle(4.0, 4.0, 4.0, 90.0, 90.0, 90.0, (1, 0, 0), (0, 0, 0), (0, 0.2, 0))
+
+
+def test_bond_angle_large_finite_cell_does_not_overflow_norm_or_dot_product() -> None:
+    result = bond_angle(
+        1e308,
+        1e308,
+        1e308,
+        90.0,
+        90.0,
+        90.0,
+        (0.1, 0.0, 0.0),
+        (0.0, 0.0, 0.0),
+        (0.0, 0.1, 0.0),
+        minimum_image=False,
+    )
+    assert result["angle_deg"] == pytest.approx(90.0, abs=1e-12)
+    assert result["distance1"] == pytest.approx(1e307)
+    assert result["distance3"] == pytest.approx(1e307)
+
+
+@pytest.mark.parametrize("coordinate", [(0.0, 0.0), (0.0, math.inf, 0.0)])
+def test_bond_angle_rejects_invalid_fractional_coordinate(coordinate: tuple[float, ...]) -> None:
+    with pytest.raises(ValueError, match="atom1"):
+        bond_angle(4.0, 4.0, 4.0, 90.0, 90.0, 90.0, coordinate, (0, 0, 0), (0, 0.2, 0))
+
+
+# ── PR review (2026-09-26): minimum-image search fixes ──────────────────────
+# finding #1 -- a loose, shared search-box bound (one radius from the metric's
+# smallest eigenvalue, applied to every axis) rejected valid anisotropic cells
+# as "too close to degenerate". finding #2 -- the per-candidate Python loop
+# was slow (up to ~2s/request). Both are fixed by a per-axis
+# `|n_i| <= ceil(sqrt(best_norm_sq * inv(G)_ii))` bound plus a vectorized
+# numpy search over that (now tight) grid.
+@pytest.mark.parametrize("c", [200.0, 250.0, 300.0])
+def test_bond_angle_anisotropic_slab_cell_is_not_rejected_as_degenerate(c: float) -> None:
+    # a=b=2.46 A, c=200..300 A, gamma=120 deg: a real (if extreme) thin-slab
+    # hexagonal-ish cell. The old shared-radius bound sized EVERY axis' range
+    # by the worst-conditioned (long-c) direction and blew the 1e6-candidate
+    # cap; each axis individually needs only a handful of candidates.
+    result = bond_angle(
+        2.46,
+        2.46,
+        c,
+        90.0,
+        90.0,
+        120.0,
+        (0.3333, 0.6667, 0.4),
+        (0.0, 0.0, 0.0),
+        (0.6667, 0.3333, 0.1),
+    )
+    assert math.isfinite(result["angle_deg"])
+    assert 0.0 <= result["angle_deg"] <= 180.0
+    assert math.isfinite(result["distance1"])
+    assert math.isfinite(result["distance3"])
+
+
+def test_bond_angle_acute_gamma_cell_is_not_rejected_as_degenerate() -> None:
+    # gamma = 2 deg is sharply skewed but not actually degenerate -- must
+    # resolve to the exact same 2 deg angle as the direct a-vs-b cell edge.
+    result = bond_angle(4.0, 4.0, 4.0, 90.0, 90.0, 2.0, (0.25, 0, 0), (0, 0, 0), (0, 0.25, 0))
+    assert result["angle_deg"] == pytest.approx(2.0, abs=1e-9)
+
+
+def test_bond_angle_anisotropic_cell_completes_well_under_a_loose_ceiling() -> None:
+    # Timing-invariant per docs/testing.md: the primary assertion above is
+    # that the call succeeds at all (proving the search box stayed under the
+    # candidate cap -- see the dedicated box-size test below). This is only a
+    # loose wall-clock backstop, generous enough to never flake: local
+    # measurement is a few ms; the old code either raised outright or, for
+    # cells just under the cap, took up to ~2s.
+    import time
+
+    t0 = time.perf_counter()
+    bond_angle(
+        2.46,
+        2.46,
+        300.0,
+        90.0,
+        90.0,
+        120.0,
+        (0.3333, 0.6667, 0.4),
+        (0, 0, 0),
+        (0.6667, 0.3333, 0.1),
+    )
+    assert time.perf_counter() - t0 < 1.0
+
+
+def test_minimum_image_axis_bounds_stay_tight_for_an_anisotropic_cell() -> None:
+    # Direct, load-invariant check on the search-box SIZE (not wall clock):
+    # the per-axis bound must keep every axis' candidate range small for the
+    # same anisotropic cell that used to blow the 1e6-candidate cap under the
+    # old shared-eigenvalue radius.
+    from quantized.calc.bond_geometry import _axis_bounds, _direct_basis
+
+    basis = _direct_basis(2.46, 2.46, 250.0, 90.0, 90.0, 120.0)
+    scaled_basis = basis / float(np.max(np.abs(basis)))
+    metric = scaled_basis @ scaled_basis.T
+    canonical_delta = np.array([0.3333, 0.6667, 0.4])
+    best_norm_sq = float(canonical_delta @ metric @ canonical_delta)
+    bounds = _axis_bounds(canonical_delta, metric, best_norm_sq)
+    box_size = math.prod(len(b) for b in bounds)
+    assert box_size < 100_000  # the old shared-radius bound put this over 1e6
+
+
+# finding #3 -- two periodic images that are genuinely equidistant from the
+# vertex (an atom sitting exactly on a cell-boundary midpoint) used to resolve
+# differently depending on which periodic copy of the coordinate the caller
+# wrote (0.5 vs 1.5), because the search seeded from the RAW, uncanonicalized
+# delta. Canonicalizing to [0, 1) first makes the choice depend only on the
+# physical displacement, and a genuine tie is now flagged.
+def test_bond_angle_tie_is_deterministic_regardless_of_input_image() -> None:
+    cubic = (4.0, 4.0, 4.0, 90.0, 90.0, 90.0)
+    vertex = (0.0, 0.0, 0.0)
+    atom3 = (0.25, 0.25, 0.0)
+    as_written = bond_angle(*cubic, (0.5, 0.0, 0.0), vertex, atom3)
+    shifted_image = bond_angle(*cubic, (1.5, 0.0, 0.0), vertex, atom3)
+    assert as_written["angle_deg"] == shifted_image["angle_deg"]
+    assert as_written["distance1"] == shifted_image["distance1"]
+    assert as_written["ambiguous"] is True
+    assert shifted_image["ambiguous"] is True
+
+
+def test_bond_angle_ambiguous_tie_reports_the_alternative_image() -> None:
+    result = bond_angle(
+        4.0, 4.0, 4.0, 90.0, 90.0, 90.0, (0.5, 0.0, 0.0), (0.0, 0.0, 0.0), (0.25, 0.25, 0.0)
+    )
+    assert result["ambiguous"] is True
+    assert len(result["warnings"]) == 1
+    assert "atom1" in result["warnings"][0]
+
+
+def test_bond_angle_unambiguous_case_reports_no_warnings() -> None:
+    result = bond_angle(
+        4.0, 4.0, 4.0, 90.0, 90.0, 90.0, (0.25, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.25, 0.0)
+    )
+    assert result["ambiguous"] is False
+    assert result["warnings"] == []
+
+
+# finding #5 -- `_direct_basis` used to duplicate the cell-volume radicand
+# (with its own threshold/message) instead of sharing it with
+# `cell_volume`. Both now compute the SAME radicand via
+# `crystallography._cell_volume_radicand` and agree on a genuinely
+# non-physical cell (they may still differ right at the boundary -- see
+# `_direct_basis`'s own docstring -- because bond_geometry needs a small
+# epsilon margin that plain cell-volume validation does not).
+def test_direct_basis_and_cell_volume_share_the_radicand_helper() -> None:
+    from quantized.calc.bond_geometry import _direct_basis
+    from quantized.calc.crystallography import _cell_volume_radicand
+
+    alpha, beta, gamma = 20.0, 20.0, 150.0
+    *_, radicand = _cell_volume_radicand(alpha, beta, gamma)
+    assert radicand < 0
+    with pytest.raises(ValueError, match="non-physical"):
+        cell_volume(4.0, 4.0, 4.0, alpha, beta, gamma)
+    with pytest.raises(ValueError, match="cell geometry is degenerate"):
+        _direct_basis(4.0, 4.0, 4.0, alpha, beta, gamma)
+
+
+# finding #7 -- `_fractional_coordinate` only checked `len(value) == 3`, so a
+# nested, wrong-shaped input (e.g. three 3-tuples) slipped through and went on
+# to silently broadcast against the other coordinates instead of failing with
+# a clear message.
+def test_bond_angle_rejects_nested_fractional_coordinate() -> None:
+    with pytest.raises(ValueError, match="atom1 must contain exactly three"):
+        bond_angle(
+            4.0,
+            4.0,
+            4.0,
+            90.0,
+            90.0,
+            90.0,
+            [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+            (0, 0, 0),
+            (0, 0.25, 0),
+        )
+
+
+def test_call_calculator_bond_angle_rejects_nested_coordinate() -> None:
+    from quantized.calc.registry import call_calculator
+
+    with pytest.raises(ValueError, match="atom1 must contain exactly three"):
+        call_calculator(
+            "crystal.bond_angle",
+            {
+                "a": 4.0,
+                "b": 4.0,
+                "c": 4.0,
+                "alpha": 90.0,
+                "beta": 90.0,
+                "gamma": 90.0,
+                "atom1": [[1, 2, 3], [4, 5, 6], [7, 8, 9]],
+                "vertex": [0, 0, 0],
+                "atom3": [0, 0.25, 0],
+            },
+        )
