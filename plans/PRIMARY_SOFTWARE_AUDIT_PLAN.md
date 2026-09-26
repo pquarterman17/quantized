@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-26 (latest): **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-26 (latest): **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -3439,6 +3439,62 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5.
 
 - [ ] Previewed append, keyed join, align/interpolate, reshape, split.
+  - [x] **align/interpolate** (2026-09-26). Data > "Resample / align to a
+    common grid…" opens a lazy workshop (`components/workshops/resample/`,
+    open flag in the tiny `store/resampleDialog.ts`, zero `useApp.ts` lines).
+    Pick one or more datasets and a grid: N points or a fixed step over the
+    data range, an explicit start:step:stop, or another dataset's x. Choose
+    the method (linear / pchip / spline / makima) and what happens to target
+    points outside the data (left blank or dropped). Every pick is resampled
+    LIVE, debounced, through the same `computeResample` that the commit and
+    the pipeline replay use (`lib/transformResample.ts`). The preview shows a
+    source-vs-resampled SVG overlay, rows in → out, the source x-range and
+    the warnings, and nothing is created until Create. Aligning several
+    datasets means picking them all with one grid, or "match" one dataset's
+    x (that dataset is the grid and is not itself resampled). Create adds one
+    derived dataset per pick through `lib/transformRun` (op `resample`). Each
+    carries `worksheet_transform`, `transform_warnings`, `resample_of`,
+    `resample_grid` and `aligned_to`, alongside the backend's
+    `resampled` / `resampleMethod` / `resampleMode`. Each is one undo entry
+    (the existing `addDataset`), and each records a replayable `transform`
+    step (the matched dataset is a dataset-id reference, refused by name on
+    replay when it is gone).
+    **Backend:** `POST /api/transform/resample` (`routes/transform.py`) is a
+    thin route over the pure `calc/resample_align.py`, which wraps the golden
+    `calc.resample.resample_data` with its numerics untouched.
+    - It never extrapolates.
+    - It refuses x that changes direction (a loop or a repeated sweep)
+      unless "sort" is opted into, and reports it when sorted.
+    - It reports blank-x rows dropped, blank y values skipped (bridged),
+      averaged duplicate x, and blank output where a channel has no data.
+    - It refuses a match whose x unit differs, unless acknowledged. The
+      acknowledgment is recorded as the exact accepted unit PAIR, so a
+      replay onto any other mismatch is refused again.
+    - A grid equal to the source x stays an identity with no warnings.
+
+    **One deliberate grid difference from `resample_data`'s step mode:** a
+    step/range endpoint that lands on the stop value IS that value (MATLAB
+    colon). `_colon`'s `a+n*d` can overshoot by one ulp, which blanked or
+    clipped the last point of `0:0.1:0.3`.
+    **Tests:** `tests/test_transform_resample_route.py` (grid modes, every
+    method equal to `resample_data`, NaN x/y, non-monotonic, out of range
+    nan/clip, unit mismatch); `ResamplePanel.test.tsx` (preview before
+    create, a stale preview blocks Create, the unit acknowledgment, align
+    several, partial failure, re-seed); `transformResample.test.ts`; replay
+    cases in `executeSteps.transform.test.ts`; e2e
+    `e2e/specs/resample-align.spec.ts` (open → preview → create against the
+    real backend). Self-review round (code-review high, 10 findings fixed;
+    the key guards were sabotage-verified). Eager bundle: 845.5 kB against
+    the 846.1 kB budget, pin unchanged. The workshop is a lazy chunk; the
+    eager cost is the command entry and the tiny open-flag store.
+    **Not done:**
+    - Append, keyed join, reshape and split still review their warnings in a
+      confirm dialog rather than a live data preview. That is why the parent
+      box stays open.
+    - Aligning N datasets makes N undo entries, not one.
+    - A categorical channel still refuses a new grid (the calc layer's
+      BUG-005 rule), rather than offering nearest-neighbour.
+    - There is no per-channel method choice.
 - [ ] Python-like derived expressions, units, fitted-value use, defined error
   propagation.
 - [ ] Metadata cleanup/promotion to factors.
