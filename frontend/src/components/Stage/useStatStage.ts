@@ -306,8 +306,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   // and the unbalanced/cap notice, over whichever slot family this mode draws.
   const slots = shown ?? barSlots;
   const slotCounts = useMemo(
-    () => (mode === "bar" ? (barData ? barCounts(barData, barStack) : []) : groups.map((g) => g.values.length)),
-    [mode, barData, barStack, groups],
+    () => (mode === "bar" ? (barData ? barCounts(barData, barStack, barSlots) : []) : groups.map((g) => g.values.length)),
+    [mode, barData, barStack, barSlots, groups],
   );
   const slotLabels = useMemo(() => countLabels(slotCounts, showGroupN), [slotCounts, showGroupN]);
   const notice = !faceted && (slots || barData) ? levelNotice(slotCounts, slots?.hiddenEmpty, slots?.capped) : null;

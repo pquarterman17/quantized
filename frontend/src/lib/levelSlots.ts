@@ -277,13 +277,25 @@ export function barChartFromSlots(b: BarLevelSlots, seriesLabels: readonly strin
   };
 }
 
-/** The n behind each bar-mode count label: one per bar when grouped, and per
- *  category when stacked — the TOP segment's n, because the top segment's SEM
- *  is the only error bar a stacked bar draws. */
-export function barCounts(data: BarChartData, stacked: boolean): number[] {
-  return stacked
-    ? data.groups.map((g) => g.series[g.series.length - 1]?.n ?? 0)
-    : data.groups.flatMap((g) => g.series.map((s) => s.n));
+/** The n behind each bar-mode count label: one per bar when grouped, and ONE
+ *  PER CATEGORY when stacked — the category's TOTAL n, i.e. how many rows of
+ *  that category have a finite value in at least one stacked series.
+ *
+ *  Why the total and not a segment's n (PR #433 review): a stacked bar is one
+ *  visible glyph per category, so its label must describe the whole bar. The
+ *  earlier top-segment n printed "n=0" over a visible bar whenever only the
+ *  lower series had rows, and let a small top series dagger a large category.
+ *  The caveat (and the unbalanced notice) is therefore computed on the totals
+ *  too — the per-segment SEM on the top segment is a drawing convention, not a
+ *  sample the reader is comparing across categories.
+ *
+ *  `slots` (a picked group column) supplies the row identities; without it
+ *  (the per-plotted-channel fallback) every category holds a single series, so
+ *  its n IS the category's n. */
+export function barCounts(data: BarChartData, stacked: boolean, slots: BarLevelSlots | null = null): number[] {
+  if (!stacked) return data.groups.flatMap((g) => g.series.map((s) => s.n));
+  if (!slots) return data.groups.map((g) => g.series.reduce((m, s) => Math.max(m, s.n), 0));
+  return slots.labels.map((_, i) => new Set(slots.channels.flatMap((run) => run[i].points.map((p) => p.rowIndex))).size);
 }
 
 // ── Count labels, caveat and the one-line notice ────────────────────────────

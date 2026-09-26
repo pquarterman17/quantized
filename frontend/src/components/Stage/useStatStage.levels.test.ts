@@ -3,7 +3,7 @@
 // backend computed for the filled groups only) AND the export request, with the
 // same count labels; the hide option, the notice and the dropped-row line.
 
-import { renderHook, waitFor } from "@testing-library/react";
+import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportCategoricalFigure, exportStatplotFigure } from "../../lib/api/figures";
@@ -136,6 +136,42 @@ describe("useStatStage — empty level slots (P2.6)", () => {
     result.current.setFacetCol(0);
     await waitFor(() => expect(result.current.levelNotice).toBeNull());
     expect(result.current.dropped).toBeNull();
+  });
+});
+
+describe("useStatStage — STACKED bar counts (PR #433)", () => {
+  // lot A: 6 rows with y only — y2 is the top segment, so the old top-segment
+  // n labelled lot A's visible bar "n=0". lot B: 6 rows ALTERNATING y-only and
+  // y2-only, so its total (6) differs from any single series' n (3): only a
+  // count over row identities gets it right.
+  const STACK: Dataset = {
+    id: "s1",
+    name: "stack",
+    data: {
+      time: Array.from({ length: 12 }, (_, i) => i),
+      values: Array.from({ length: 12 }, (_, i) =>
+        i < 6 ? [0, i, NaN] : i % 2 === 0 ? [1, i, NaN] : [1, NaN, i],
+      ),
+      labels: ["lot", "y", "y2"],
+      units: ["", "", ""],
+      metadata: {},
+      cat_levels: { 0: ["A", "B"] },
+    },
+  };
+  const KEYS = [1, 2];
+
+  it("labels each stacked category with its total n, on screen and in the export", async () => {
+    vi.mocked(exportCategoricalFigure).mockResolvedValue(undefined);
+    const { result } = renderHook(() => useStatStage(params({ active: STACK, yKeys: KEYS })));
+    act(() => {
+      result.current.setMode("bar");
+      result.current.setBarStack(true);
+    });
+    await waitFor(() => expect(result.current.draw?.mode === "bar" && result.current.draw.stacked).toBe(true));
+    expect(result.current.draw?.countLabels).toEqual(["n=6", "n=6"]);
+    expect(result.current.levelNotice).toBeNull();
+    await result.current.exportFigure("svg");
+    expect(vi.mocked(exportCategoricalFigure).mock.lastCall?.[0].count_labels).toEqual(["n=6", "n=6"]);
   });
 });
 

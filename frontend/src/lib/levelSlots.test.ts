@@ -246,6 +246,28 @@ describe("buildBarLevelSlots — bar categories follow the same slot rule", () =
     const b = buildBarLevelSlots({ id: "d", name: "d", data: d }, 0, [1, 3], true);
     expect(b.labels).toEqual(["A", "B"]);
     expect(barCounts(barChartFromSlots(b, ["y", "z"]), false)).toEqual([4, 0, 0, 2]);
-    expect(barCounts(barChartFromSlots(b, ["y", "z"]), true)).toEqual([0, 2]);
+  });
+
+  it("STACKED labels each category with its TOTAL n — never n=0 over a visible bar (PR #433)", () => {
+    // Lot A has rows only in y, lot B only in z (the TOP segment). The old
+    // top-segment n printed "n=0" over lot A's visible bar.
+    const d = data();
+    d.values = d.values.map((row) => [...row, row[0] === 1 ? 5 : NaN]);
+    d.labels = [...d.labels, "z"];
+    d.units = [...d.units, ""];
+    const b = buildBarLevelSlots({ id: "d", name: "d", data: d }, 0, [1, 3], true);
+    const counts = barCounts(barChartFromSlots(b, ["y", "z"]), true, b);
+    expect(counts).toEqual([4, 2]);
+    expect(countLabels(counts, true)).toEqual(["n=4", `n=2${CAVEAT}`]);
+  });
+
+  it("STACKED counts a row that has values in several series ONCE", () => {
+    const d = data();
+    d.values = d.values.map((row) => [...row, 7]); // z finite on every row
+    d.labels = [...d.labels, "z"];
+    d.units = [...d.units, ""];
+    const b = buildBarLevelSlots({ id: "d", name: "d", data: d }, 0, [1, 3], false);
+    // A: 4 rows (y and z both finite -> still 4); B: 2 rows (z only); C: none.
+    expect(barCounts(barChartFromSlots(b, ["y", "z"]), true, b)).toEqual([4, 2, 0]);
   });
 });
