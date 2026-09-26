@@ -120,18 +120,8 @@ describe("autosave round-trip (pre-#32 behaviour, preserved)", () => {
   });
 });
 
-// P1.7 PR 5 audit item 10: a crash-recovery autosave snapshot has no `.dwk`
-// file of its own to resolve a bundle-relative source against (it's a
-// localStorage/IndexedDB blob, not a path on disk) — `saveAutosave` calls
-// `serializeWorkspace(ws)` with no `projectDir` (this module's own source,
-// unchanged by this test), which `serializeDatasetSource` treats as "always
-// write the absolute kind:path form" (lib/workspaceSerialize.ts). This is
-// what makes recovery safe: there is no relative bundle string anywhere in
-// an autosave generation that a reopen could ever resolve against the
-// process's own CWD instead of the (nonexistent, for autosave) project
-// directory.
 describe("autosave carries the saved fit models (P2.7 follow-up)", () => {
-  it("embeds the local fit-model library and the project's unreadable carry, and restores both", async () => {
+  it("embeds the local fit-model library and the project's carry; a restore keeps the carry but merges no models", async () => {
     const model = { version: 1, name: "Arrhenius", equation: "y = A*exp(-E/x)", params: ["A", "E"], guesses: [1, 2], lower: [null, 0], upper: [null, null] };
     const future = { version: 9, name: "FromTheFuture", equation: "y = a" };
     localStorage.setItem("qz.customFitModels", JSON.stringify([model]));
@@ -140,8 +130,12 @@ describe("autosave carries the saved fit models (P2.7 follow-up)", () => {
     expect(await saveAutosave({ datasets: [ds("a", "first")], fitModelCarry: [future] })).toBe(true);
     const [gen] = await listAutosaveGenerations();
     expect(JSON.parse(gen.text).customFitModels).toEqual([model, future]);
+    // The autosave came from THIS library, which is newer: the user deletes
+    // the model after the autosave was written, and a restore must not bring
+    // it back.
+    localStorage.removeItem("qz.customFitModels");
     const restored = await loadAutosave();
-    expect(restored?.customFitModels).toEqual([model]);
+    expect(restored?.customFitModels).toEqual([]);
     expect(restored?.fitModelCarry).toEqual([future]);
   });
 
@@ -152,6 +146,16 @@ describe("autosave carries the saved fit models (P2.7 follow-up)", () => {
   });
 });
 
+// P1.7 PR 5 audit item 10: a crash-recovery autosave snapshot has no `.dwk`
+// file of its own to resolve a bundle-relative source against (it's a
+// localStorage/IndexedDB blob, not a path on disk) — `saveAutosave` calls
+// `serializeWorkspace(ws)` with no `projectDir` (this module's own source,
+// unchanged by this test), which `serializeDatasetSource` treats as "always
+// write the absolute kind:path form" (lib/workspaceSerialize.ts). This is
+// what makes recovery safe: there is no relative bundle string anywhere in
+// an autosave generation that a reopen could ever resolve against the
+// process's own CWD instead of the (nonexistent, for autosave) project
+// directory.
 describe("crash-recovery autosave never writes a bundle-relative source (P1.7 PR 5 audit item 10)", () => {
   it("autosaves an absolute kind:path source even for a dataset resolved from a packed bundle", async () => {
     const packedDataset: Dataset = {

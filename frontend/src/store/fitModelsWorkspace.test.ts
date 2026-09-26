@@ -86,12 +86,55 @@ describe("store load/append merge the project's fit models", () => {
     expect(useApp.getState().recipeSourcesComplete).toBe(true);
   });
 
-  it("append: merges under the same rule and GROWS the carry", async () => {
+  it("append: merges under the same rule and GROWS the carry in the same set() as its datasets", async () => {
     useApp.getState().loadWorkspace(parseWorkspace(projectText([FUTURE], "d1")));
     const other = { version: 7, name: "Other" };
     useApp.getState().appendWorkspace(parseWorkspace(projectText([model("Line", "y = a*x"), other], "d2")));
-    await vi.waitFor(() => expect(names()).toEqual(["Line"]));
-    await vi.waitFor(() => expect(useApp.getState().fitModelCarry).toEqual([FUTURE, other]));
+    // Synchronous: a crash (or a second open) before the async merge cannot lose it.
+    expect(useApp.getState().fitModelCarry).toEqual([FUTURE, other]);
     expect(useApp.getState().recipeSourcesComplete).toBe(false);
+    await vi.waitFor(() => expect(names()).toEqual(["Line"]));
+    expect(useApp.getState().fitModelCarry).toEqual([FUTURE, other]);
+  });
+
+  it("an open replaced before its merge lands does not write into the NEW project's carry", async () => {
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    try {
+      // A's model cannot be stored, so A's merge WOULD carry it — but B was
+      // opened in between, and B must not inherit A's record.
+      useApp.getState().loadWorkspace(parseWorkspace(projectText([model("OnlyInA", "y = a")], "a1")));
+      useApp.getState().loadWorkspace(parseWorkspace(projectText([], "b1")));
+      await vi.waitFor(() =>
+        expect(useToasts.getState().toasts.some((t) => t.msg.includes("could not be saved"))).toBe(true),
+      );
+      expect(useApp.getState().fitModelCarry).toEqual([]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("a model storage refuses is carried, so the next save still writes it into the project", async () => {
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    try {
+      const m = model("Kept", "y = a");
+      useApp.getState().loadWorkspace(parseWorkspace(projectText([m])));
+      await vi.waitFor(() => expect(useApp.getState().fitModelCarry).toEqual([m]));
+      const saved = JSON.parse(serializeWorkspace(useApp.getState())) as { customFitModels: unknown[] };
+      expect(saved.customFitModels).toEqual([m]);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it("undo of an open restores the previous project's carry (it is project content)", () => {
+    useApp.getState().loadWorkspace(parseWorkspace(projectText([FUTURE], "a1")));
+    useApp.getState().recordHistory("open workspace");
+    useApp.getState().loadWorkspace(parseWorkspace(projectText([{ version: 8, name: "B's" }], "b1")));
+    useApp.getState().undo();
+    expect(useApp.getState().fitModelCarry).toEqual([FUTURE]);
   });
 });

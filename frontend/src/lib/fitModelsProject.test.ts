@@ -2,7 +2,7 @@
 // (lib/fitModelsProject.ts's header), the unreadable-record carry, the
 // workspace round trip, and a legacy file with no field.
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildCustomFitModel, loadCustomModels, type CustomFitModel } from "./fitmodels";
 import {
@@ -40,29 +40,41 @@ const ds: Dataset = {
 beforeEach(() => localStorage.clear());
 
 describe("merge rule on open", () => {
+  const none = { added: [], renamed: [], unstored: [] };
+
   it("rule 1: an identical record under the same name is a no-op (nothing written)", () => {
     const m = model("Linear");
     localStorage.setItem(KEY, JSON.stringify([m]));
     const before = localStorage.getItem(KEY);
-    expect(mergeProjectFitModels([m])).toEqual({ added: [], renamed: [] });
+    expect(mergeProjectFitModels([m])).toEqual(none);
     expect(localStorage.getItem(KEY)).toBe(before);
+  });
+
+  it("rule 1: the same model with different last-used starts/bounds is a no-op — the local starts win", () => {
+    const local = buildCustomFitModel({ name: "L", equation: "y = a*x + b", params: ["a", "b"], guesses: [3, 4], lower: [0, null], upper: [null, null] });
+    localStorage.setItem(KEY, JSON.stringify([local]));
+    expect(mergeProjectFitModels([model("L")])).toEqual(none);
+    expect(loadCustomModels()).toEqual([local]);
+  });
+
+  it("rule 1: version and blank units/description do not make a different model", () => {
+    localStorage.setItem(KEY, JSON.stringify([model("A")]));
+    const v2 = { ...model("A"), version: 2 as const, description: "", units: ["", ""] };
+    expect(mergeProjectFitModels([v2])).toEqual(none);
   });
 
   it("rule 2: a name free locally is added under its own name", () => {
     localStorage.setItem(KEY, JSON.stringify([model("Other")]));
     const incoming = model("Arrhenius", "y = A*exp(-E/x)");
-    expect(mergeProjectFitModels([incoming])).toEqual({ added: ["Arrhenius"], renamed: [] });
+    expect(mergeProjectFitModels([incoming])).toEqual({ ...none, added: ["Arrhenius"] });
     expect(loadCustomModels()).toEqual([model("Other"), incoming]);
   });
 
-  it("rule 3: same name, different content keeps the local one and adds the project's under a suffix", () => {
+  it("rule 3: same name, different model keeps the local one and adds the project's under a suffix", () => {
     const local = model("Arrhenius", "y = A*exp(-E/x)");
     localStorage.setItem(KEY, JSON.stringify([local]));
     const incoming = model("Arrhenius", "y = A*exp(-E/(k*x))");
-    expect(mergeProjectFitModels([incoming])).toEqual({
-      added: [],
-      renamed: [["Arrhenius", "Arrhenius (from project)"]],
-    });
+    expect(mergeProjectFitModels([incoming])).toEqual({ ...none, renamed: [["Arrhenius", "Arrhenius (from project)"]] });
     const lib = loadCustomModels();
     expect(lib[0]).toEqual(local); // never overwritten
     expect(lib[1]).toEqual({ ...incoming, name: "Arrhenius (from project)" });
@@ -72,8 +84,25 @@ describe("merge rule on open", () => {
     localStorage.setItem(KEY, JSON.stringify([model("A", "y = a")]));
     const incoming = model("A", "y = b*x");
     mergeProjectFitModels([incoming]);
-    expect(mergeProjectFitModels([incoming])).toEqual({ added: [], renamed: [] });
+    expect(mergeProjectFitModels([incoming])).toEqual(none);
     expect(names()).toEqual(["A", "A (from project)"]);
+  });
+
+  it("rule 1 looks past a GAP in the suffixes (a deleted '(from project)')", () => {
+    localStorage.setItem(KEY, JSON.stringify([model("A", "y = a"), model("A (from project 2)", "y = b*x")]));
+    expect(mergeProjectFitModels([model("A", "y = b*x")])).toEqual(none);
+  });
+
+  it("a model that went A -> B -> A comes home instead of growing a second suffix", () => {
+    // Machine B saved our "A" as "A (from project)"; it is our own model.
+    localStorage.setItem(KEY, JSON.stringify([model("A", "y = a")]));
+    expect(mergeProjectFitModels([model("A (from project)", "y = a")])).toEqual(none);
+    // And a different one under that name is suffixed from the BASE name.
+    expect(mergeProjectFitModels([model("A (from project)", "y = z")]).renamed).toEqual([]);
+    expect(names()).toEqual(["A", "A (from project)"]);
+    expect(mergeProjectFitModels([model("A (from project)", "y = w")]).renamed).toEqual([
+      ["A (from project)", "A (from project 2)"],
+    ]);
   });
 
   it("rule 3: a third distinct version takes the next free suffix", () => {
@@ -91,19 +120,37 @@ describe("merge rule on open", () => {
     expect(names()).toEqual(["A (from project)"]);
   });
 
-  it("a description difference is a content difference; a v1 record matches itself exactly", () => {
+  it("a description difference is a different model", () => {
     localStorage.setItem(KEY, JSON.stringify([model("A")]));
     expect(mergeProjectFitModels([model("A", "y = a*x + b", { description: "line" })]).renamed).toHaveLength(1);
   });
 
+  it("everything is ONE storage write", () => {
+    const spy = vi.spyOn(Storage.prototype, "setItem");
+    mergeProjectFitModels([model("A"), model("B"), model("C")]);
+    expect(spy.mock.calls.filter(([k]) => k === KEY)).toHaveLength(1);
+    spy.mockRestore();
+  });
+
+  it("a write storage refuses is reported UNSTORED, not added", () => {
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    const incoming = model("A");
+    expect(mergeProjectFitModels([incoming])).toEqual({ ...none, unstored: [incoming] });
+    spy.mockRestore();
+    expect(adoptionMessage({ ...none, unstored: [incoming] })).toContain("could not be saved");
+  });
+
   it("the message names what happened, once, and is null for an ordinary reopen", () => {
-    expect(adoptionMessage({ added: [], renamed: [] })).toBeNull();
-    const msg = adoptionMessage({ added: ["B"], renamed: [["A", "A (from project)"]] });
+    expect(adoptionMessage(none)).toBeNull();
+    const msg = adoptionMessage({ ...none, added: ["B"], renamed: [["A", "A (from project)"]] });
     expect(msg).toContain('"B"');
     expect(msg).toContain('"A" as "A (from project)"');
     expect(msg).toContain("kept");
   });
 });
+
 
 describe("unreadable records in the file", () => {
   it("are skipped with ONE warning naming them, and carried untouched", () => {
@@ -116,6 +163,17 @@ describe("unreadable records in the file", () => {
     expect(warnings).toHaveLength(1);
     expect(warnings[0]).toContain('"Future", "Broken"');
     expect(warnings[0]).toContain("kept in the project file");
+  });
+
+  it("the file-boundary checks apply: an unusable record is carried, never stored; extra keys are stripped", () => {
+    const infeasible = { version: 1, name: "X", equation: "y = a", params: ["a"], guesses: [5], lower: [10], upper: [0] };
+    const dupParams = { version: 1, name: "D", equation: "y = a", params: ["a", "a"], guesses: [1, 1], lower: [null, null], upper: [null, null] };
+    const extra = { ...model("Ok"), evil: { payload: 1 } };
+    const warnings: string[] = [];
+    const { models, carry } = splitProjectFitModels([infeasible, dupParams, extra], warnings);
+    expect(carry).toEqual([infeasible, dupParams]);
+    expect(models).toEqual([model("Ok")]);
+    expect("evil" in models[0]).toBe(false);
   });
 
   it("a field that is not an array is carried as one record, not dropped", () => {

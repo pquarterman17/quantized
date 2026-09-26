@@ -47,8 +47,9 @@ export interface RecipeFidelitySlice {
    *  (lib/fitModelsProject.ts), so opening a project in an older build and
    *  saving it does not destroy a newer build's models. Replaced by a load,
    *  grown by an append; a non-empty carry is also why `recipeSourcesComplete`
-   *  is false. Not undoable for the same reason as the flag. PERSISTED, unlike
-   *  the flag: `serializeWorkspace` reads it from the state it is given. */
+   *  is false. UNDOABLE, unlike the flag (it is in HistorySnapshot): it is
+   *  project content that travels with the datasets. PERSISTED, unlike the
+   *  flag: `serializeWorkspace` reads it from the state it is given. */
   fitModelCarry: unknown[];
 }
 

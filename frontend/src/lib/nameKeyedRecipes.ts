@@ -39,7 +39,7 @@ import { isGraphTemplate, loadGraphTemplates, saveGraphTemplate, deleteGraphTemp
 import { sanitizeFigureOverrides } from "./figureOverrides";
 import { sanitizeExportSeriesStyles } from "./publicationStyles";
 import {
-  buildCustomFitModel,
+  checkFitModelRecord,
   CUSTOM_FIT_MODEL_VERSION,
   deleteCustomModel,
   isCustomFitModel,
@@ -275,31 +275,13 @@ function parseFitModelFile(text: string): NamedRecord {
   }
   if (!isCustomFitModel(o)) throw new Error("not a valid fit model file");
   requireName(o, "fit model");
-  const bad = (field: string): never => {
-    throw new Error(`not a valid fit model file (${field})`);
-  };
-  const seen = new Set<string>();
-  o.params.forEach((name, i) => {
-    if (!name.trim()) bad(`params[${i}]: empty name`);
-    if (seen.has(name)) bad(`params[${i}]: duplicate "${name}"`);
-    seen.add(name);
-    const lo = o.lower[i];
-    const hi = o.upper[i];
-    if ((lo !== null && !Number.isFinite(lo)) || (hi !== null && !Number.isFinite(hi))) bad(`bounds[${name}]`);
-    if (lo !== null && hi !== null && lo > hi) bad(`bounds[${name}]: lower > upper`);
-    const g = o.guesses[i];
-    if ((lo !== null && g < lo) || (hi !== null && g > hi)) bad(`guess[${name}]: outside its bounds`);
-  });
-  return buildCustomFitModel({
-    name: o.name,
-    equation: o.equation,
-    params: [...o.params],
-    guesses: [...o.guesses],
-    lower: [...o.lower],
-    upper: [...o.upper],
-    description: o.description,
-    units: o.units,
-  });
+  // The field checks + rebuild are shared with a project's embedded models
+  // (lib/fitModelsProject.ts), so both file boundaries refuse the same things.
+  try {
+    return checkFitModelRecord(o);
+  } catch (e) {
+    throw new Error(`not a valid fit model file (${e instanceof Error ? e.message : "invalid"})`);
+  }
 }
 
 /** FIELD-LEVEL validation at the file boundary (review finding on #290).

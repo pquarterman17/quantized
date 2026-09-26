@@ -83,6 +83,12 @@ export interface HistorySnapshot {
   // rename/re-query/delete is an undoable project edit, same class as
   // `quickPlotTemplates`/`smartFolders` right above.
   collections: AppState["collections"];
+  // P2.7 follow-up — the opened project's fit-model records this build could
+  // not accept, written back into the .dwk on save. PROJECT state, so it
+  // travels with the datasets: undoing an open must not leave the other
+  // project's records to be saved into this one, nor undoing "remove all"
+  // leave them emptied.
+  fitModelCarry: AppState["fitModelCarry"];
   plotWindows: AppState["plotWindows"];
   focusedWindowId: AppState["focusedWindowId"];
   view: PlotView;
@@ -112,6 +118,7 @@ export function snapshotOf(s: AppState): HistorySnapshot {
     quickPlotTemplates: s.quickPlotTemplates,
     plotRecipes: s.plotRecipes,
     collections: s.collections,
+    fitModelCarry: s.fitModelCarry,
     plotWindows: s.plotWindows,
     focusedWindowId: s.focusedWindowId,
     view: snapshotView(s),

@@ -1970,7 +1970,6 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   quickFigureBuilderDatasetId: "Quick Figure Builder source target; transient UI state cleared on cancel",
 
   recipeSourcesComplete: "workspace recipe-source fidelity (P3.5); DERIVED at project load, never user-edited — there is nothing to undo TO, and restoring a stale `true` over a genuine `false` would re-certify sources the load actually lost",
-  fitModelCarry: "unreadable saved fit models carried from the opened project (P2.7 follow-up); set at load/append, never user-edited — undoing an append must not drop records the file still holds",
 
   // history slice: the undo stack itself (not a field to undo INTO)
   history: "undo stack; the history system itself, not undoable data",

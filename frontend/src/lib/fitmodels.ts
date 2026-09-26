@@ -66,6 +66,45 @@ export function isCustomFitModel(v: unknown): v is CustomFitModel {
   return true;
 }
 
+/** The FILE-BOUNDARY check (a record arriving from outside this browser: an
+ *  imported model file, lib/nameKeyedRecipes' `parseFitModelFile`, or a
+ *  project's embedded models, lib/fitModelsProject.ts). `isCustomFitModel`
+ *  proves the SHAPE (aligned arrays, finite guesses), but a record can still
+ *  be well-typed and unusable — a bound pair with lower > upper, a starting
+ *  guess outside its own bounds (scipy refuses an infeasible x0 at fit
+ *  time), a blank or duplicated parameter name. Those throw, naming the
+ *  field; a usable record is REBUILT from its known fields, so unknown extra
+ *  keys never reach `qz.customFitModels`. */
+export function checkFitModelRecord(o: unknown): CustomFitModel {
+  const bad = (field: string): never => {
+    throw new Error(field);
+  };
+  if (!isCustomFitModel(o)) bad("not a valid fit model");
+  const m = o as CustomFitModel;
+  const seen = new Set<string>();
+  m.params.forEach((name, i) => {
+    if (!name.trim()) bad(`params[${i}]: empty name`);
+    if (seen.has(name)) bad(`params[${i}]: duplicate "${name}"`);
+    seen.add(name);
+    const lo = m.lower[i];
+    const hi = m.upper[i];
+    if ((lo !== null && !Number.isFinite(lo)) || (hi !== null && !Number.isFinite(hi))) bad(`bounds[${name}]`);
+    if (lo !== null && hi !== null && lo > hi) bad(`bounds[${name}]: lower > upper`);
+    const g = m.guesses[i];
+    if ((lo !== null && g < lo) || (hi !== null && g > hi)) bad(`guess[${name}]: outside its bounds`);
+  });
+  return buildCustomFitModel({
+    name: m.name,
+    equation: m.equation,
+    params: [...m.params],
+    guesses: [...m.guesses],
+    lower: [...m.lower],
+    upper: [...m.upper],
+    description: m.description,
+    units: m.units,
+  });
+}
+
 /** Build a record at the lowest version that holds it: v1 unless it has a
  *  description or any unit (see VERSIONS above). Blank text is dropped. */
 export function buildCustomFitModel(
@@ -219,6 +258,18 @@ export function saveCustomModel(m: CustomFitModel): CustomFitModel[] {
   readable.push(m);
   writeRaw(damaged, raw);
   return readable;
+}
+
+/** Append several records in ONE read and ONE write (a project open,
+ *  lib/fitModelsProject.ts). The caller guarantees every name is free — this
+ *  never replaces anything. Returns the readable list AS RE-READ from storage,
+ *  so a write that storage refused (quota, blocked) is visible to the caller
+ *  instead of reported as done. */
+export function appendCustomModels(records: readonly CustomFitModel[]): CustomFitModel[] {
+  if (records.length === 0) return loadCustomModels();
+  const { list, damaged } = readSlot();
+  writeRaw(damaged, [...list, ...records]);
+  return loadCustomModels();
 }
 
 /** Delete the READABLE record(s) of that name; an unreadable one is kept. */

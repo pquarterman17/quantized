@@ -3407,29 +3407,43 @@ violin, bar, strip, or summary plots.
     fit used (an equation fit writes no `fitSpec`), so "used by the project"
     is not derivable -- the cost, deliberate, is that a shared project
     carries the sender's whole model library. Peak recipes are NOT a
-    precedent here (they never ride the .dwk). OPEN and APPEND merge in file
-    order: identical same-named record = no-op; free name = added; same
-    name with different content, or a name held by an unreadable local
-    record = the local one is never touched and the project's is added as
-    "<name> (from project)" / "(from project 2)" ..., unless an identical
-    copy already sits under one of those names (reopen does not pile up
-    copies); one info toast names what was added/renamed. Unreadable
-    embedded records (newer version, damaged entry, a non-array field) are
-    skipped with one migration warning and carried in the store
-    (`fitModelCarry`, replaced by a load, grown by an append, not undoable)
-    and written back on the next save, never destroyed; they also make
-    `recipeSourcesComplete` false. An open Recipe Library re-renders on the
-    merge. Autosave embeds the library at every write; saving a model does
-    NOT schedule an autosave (it is already durable in localStorage on the
-    only machine an autosave restores on). Compatibility: no version bump --
+    precedent here (they never ride the .dwk). "The same model" = same
+    equation, parameter names, description and units -- NOT the last-used
+    starts/bounds the fit workshop rewrites on every fit, nor the record
+    version. OPEN and APPEND merge in file order, by BASE name (trailing
+    "(from project[ N])" stripped, so a model that went A -> B -> A comes
+    home): the same model already held under that base = no-op (the local
+    starts win); free name = added; same name holding a different model,
+    or a name held by an unreadable local record = the local one is never
+    touched and the project's is added as "<base> (from project)" /
+    "(from project 2)" ...; one storage write, RE-READ, so a write the
+    browser refuses is reported and carried instead of claimed; one toast.
+    Embedded records pass the same file-boundary checks as a model-file
+    import (`checkFitModelRecord`, now shared with `parseFitModelFile`:
+    lower > upper, guess outside bounds, blank/duplicate params, unknown
+    keys stripped). Records this build cannot accept (newer version,
+    damaged, failing those checks, a non-array field) are skipped with one
+    migration warning and carried in the store (`fitModelCarry`: replaced
+    by a load, grown by an append in the same set() as its datasets,
+    UNDOABLE with the project) and written back on the next save, never
+    destroyed; they also make `recipeSourcesComplete` false. An open Recipe
+    Library re-renders on the merge. Autosave embeds the library at every
+    write, but a crash-recovery RESTORE merges no models (lib/autosave.ts):
+    the autosave came from this very library, which is newer, so merging
+    would only resurrect deletions. Saving a model does NOT schedule an
+    autosave (it is already durable in localStorage). Known and intended:
+    opening a project that holds a model the user deleted locally brings it
+    back -- the project needs it. Compatibility: no version bump --
     `parseWorkspace` picks fields by name, so an older build ignores the key
     (pinned with an unknown-key test); old files load with no models.
     Funded eager-neutral by moving `boundsFromWire` to `lib/fitBoundsWire.ts`,
     which took `lib/fitParams.ts` + `lib/paramRowCheck.ts` out of the entry
-    chunk (net eager -1,252 B). NOT covered: workbook transfer packages
+    chunk (net eager -1,094 B after the review round). NOT covered: workbook transfer packages
     (copy/duplicate a workbook) carry no fit models; an already-open Curve
     Fit picker lists merged models only when reopened; the Recipe Library's
-    export/import remains the per-model path.
+    export/import remains the per-model path. The "(from project N)"
+    naming is deliberately separate from the library's "<name> copy"
+    dedupe (`uniqueTemplateName`): it says where the model came from.
 - [ ] Stretch: pretty LaTeX rendering while Python remains editable source.
 - **Progress 2026-09-25:** slices 1-3 plus a self-review round (identifier
   rule restored to the historical one; a damaged storage slot is moved aside

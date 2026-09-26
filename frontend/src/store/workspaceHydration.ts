@@ -263,22 +263,26 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
           status: `loaded workspace — ${datasets.length} dataset${datasets.length === 1 ? "" : "s"}${migrationNotice}`,
         };
       });
-      adoptFitModels(ws, set);
+      adoptFitModels(ws, set, get);
     },
     appendWorkspace: (ws) => runAppendWorkspace(set, get, ws),
   };
 }
 
 /** P2.7 follow-up: merge a loaded/appended project's saved fit models into
- *  the local library, and on an APPEND grow the unreadable carry —
- *  lib/fitModelsProject.ts's `adoptProjectFitModels` has the rule and the one
- *  toast. Reached through the `.dwk` codec, so none of it costs eager bytes;
- *  usually already loaded, except after the browser picker's Worker parse,
- *  when this is its first fetch (a failure is toasted by the loader). */
-function adoptFitModels(ws: WorkspaceState, set: SliceSet, append?: boolean): void {
-  if (ws.customFitModels?.length || ws.fitModelCarry?.length)
+ *  the local library — lib/fitModelsProject.ts's `adoptProjectFitModels` has
+ *  the rule and the one toast. Called AFTER the caller's own `set()` has put
+ *  the carry in place (synchronously, so a crash or a second open in between
+ *  cannot lose or misplace it); `get().fitModelCarry` is passed so the async
+ *  merge writes to that carry only if no other load replaced it. Reached
+ *  through the `.dwk` codec, so none of it costs eager bytes; usually already
+ *  loaded, except after the browser picker's Worker parse, when this is its
+ *  first fetch (a failure is toasted by the loader). */
+function adoptFitModels(ws: WorkspaceState, set: SliceSet, get: SliceGet): void {
+  const expected = get().fitModelCarry;
+  if (ws.customFitModels?.length)
     void workspaceCodecOrReport("Adding the project's fit models", noop).then((c) =>
-      c?.adoptProjectFitModels(ws, set, append),
+      c?.adoptProjectFitModels(ws, set, expected),
     );
 }
 const noop = (): void => {};
@@ -311,9 +315,17 @@ function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorkspace): 
       ? ` — ${workbooks.length} workbook${workbooks.length === 1 ? "" : "s"} landed at Library root`
       : "";
   const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)${wbNote}`;
-  set({ datasets, workbooks: [...get().workbooks, ...workbooks], status: msg });
+  // P2.7: the appended file's unaccepted fit models JOIN the carry (and so
+  // un-certify the Recipe Library) in the same set() as its datasets.
+  const carry = ws.fitModelCarry ?? [];
+  set({
+    datasets,
+    workbooks: [...get().workbooks, ...workbooks],
+    status: msg,
+    ...(carry.length ? { fitModelCarry: [...get().fitModelCarry, ...carry], recipeSourcesComplete: false } : {}),
+  });
   toast(msg, "ok");
-  adoptFitModels(ws, set, true); // P2.7: merge its fit models, grow the carry
+  adoptFitModels(ws, set, get);
   // BUG-010: `ws.migrationWarnings` (produced when the appended .dwk was
   // parsed) has no status-line fold here at all — this never routes through
   // loadWorkspace — so the toast is its only surface.

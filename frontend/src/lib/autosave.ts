@@ -121,7 +121,11 @@ export async function loadAutosaveGeneration(): Promise<
     const generations = await withLegacyGeneration(read.value, parseWorkspace);
     const pick = pickRestorable(generations, (text) => isRestorable(parseWorkspace, text));
     health = { ...health, count: generations.length };
-    return pick ? { workspace: parseWorkspace(pick.text), at: pick.at } : null;
+    // P2.7: an autosave was written from THIS browser's fit-model library,
+    // which is newer than the copy it embeds — so its readable models are
+    // not merged back on restore (that would only resurrect deletions and
+    // renames made since). Its carry (project content) restores as usual.
+    return pick ? { workspace: { ...parseWorkspace(pick.text), customFitModels: [] }, at: pick.at } : null;
   } catch {
     return null; // never block startup on a bad autosave
   }
