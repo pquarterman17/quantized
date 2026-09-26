@@ -23,7 +23,7 @@
 // renamed key's original name and value, and an original "300 K", stay on
 // record (and Ctrl+Z undoes the whole commit).
 
-import { isPresent, isScalar, metaValue, pathLabel, type MetaPath, type MetaScalar } from "./metadataKeys";
+import { isHiddenMetaKey, isPresent, isScalar, metaValue, pathLabel, type MetaPath, type MetaScalar } from "./metadataKeys";
 
 export interface UnifyRule {
   to: string;
@@ -77,15 +77,19 @@ const QUANTITY = /^([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)\s*([A-Za-zµμΩ�
 
 export type Quantity = { n: number; unit: string } | { error: string };
 
-/** "300 K" → {300, "K"}; "300" → {300, ""}; a number passes through. */
+/** "300 K" → {300, "K"}; "300" → {300, ""}; a number passes through. Refuses
+ *  a non-finite result ("1e999" overflows to Infinity) rather than parse it
+ *  — never a value the unit-parsed column could actually hold. */
 export function parseQuantity(v: MetaScalar): Quantity {
-  if (typeof v === "number") return { n: v, unit: "" };
+  if (typeof v === "number") return Number.isFinite(v) ? { n: v, unit: "" } : { error: "is not a finite number" };
   if (typeof v !== "string") return { error: "is not a number" };
   const s = v.trim();
   if (s.includes(",")) return { error: "has a comma (decimal or thousands separator?)" };
   const m = QUANTITY.exec(s);
   if (!m) return { error: "is not a single number with a unit" };
-  return { n: Number(m[1]), unit: m[2] ?? "" };
+  const n = Number(m[1]);
+  if (!Number.isFinite(n)) return { error: "is not a finite number" };
+  return { n, unit: m[2] ?? "" };
 }
 
 function normalizeText(v: MetaScalar, rule: NormalizeRule): MetaScalar {
@@ -117,6 +121,15 @@ export function planCleanup(targets: readonly Target[], plan: CleanupPlan): Clea
   for (const rule of plan.unify) {
     const to = rule.to.trim();
     if (!to) continue;
+    // Finding #6: a unify target must be real metadata, never wiring/
+    // provenance (x_column_name, an origin_* key, this feature's own
+    // metadata_cleanup log, …) — refusing here, before any dataset is
+    // touched, keeps the whole rule a no-op rather than silently
+    // overwriting a key another part of the app depends on.
+    if (isHiddenMetaKey(to)) {
+      refusals.push(`“${to}” is a wiring/provenance key, not metadata — not unified.`);
+      continue;
+    }
     const sources = [[to], ...rule.from.filter((p) => !(p.length === 1 && p[0] === to))];
     targets.forEach((t, i) => {
       const found = sources
@@ -134,9 +147,37 @@ export function planCleanup(targets: readonly Target[], plan: CleanupPlan): Clea
         );
         return;
       }
+      // Finding #1: a renamed-away top-level source's `<key>_unit` sibling
+      // must move (or merge) with it, never sit orphaned under a key that
+      // no longer exists. Collect every present sibling — `to`'s own, plus
+      // each source's — and refuse (nothing touched) rather than pick a
+      // winner when they disagree, the same rule the values above follow.
+      const renamedFrom = found.filter((s) => s.p.length === 1 && s.p[0] !== to);
+      const toUnitKey = `${to}_unit`;
+      const unitSiblings = [
+        ...(isScalar(work[i][toUnitKey]) ? [{ key: toUnitKey, unit: work[i][toUnitKey] as MetaScalar }] : []),
+        ...renamedFrom.flatMap((s) => {
+          const key = `${s.p[0]}_unit`;
+          const unit = work[i][key];
+          return isScalar(unit) ? [{ key, unit }] : [];
+        }),
+      ];
+      const unitClash = unitSiblings.slice(1).find((u) => !same(u.unit, unitSiblings[0].unit));
+      if (unitClash) {
+        refusals.push(
+          `${t.name}: ${unitClash.key} (${String(unitClash.unit)}) and ${unitSiblings[0].key} (${String(unitSiblings[0].unit)}) disagree — “${to}” not unified.`,
+        );
+        return;
+      }
       set(i, to, found[0].v, found[0].p.length === 1 && found[0].p[0] === to ? "kept" : `from ${pathLabel(found[0].p)}`);
-      for (const s of found) {
-        if (s.p.length === 1 && s.p[0] !== to) set(i, s.p[0], undefined, `renamed to ${to}`);
+      for (const s of renamedFrom) set(i, s.p[0], undefined, `renamed to ${to}`);
+      if (unitSiblings.length) {
+        const unit = unitSiblings[0].unit;
+        set(i, toUnitKey, unit, "unit moved");
+        for (const s of renamedFrom) {
+          const key = `${s.p[0]}_unit`;
+          if (key !== toUnitKey) set(i, key, undefined, `renamed to ${toUnitKey}`);
+        }
       }
     });
   }

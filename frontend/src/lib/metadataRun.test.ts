@@ -75,6 +75,13 @@ describe("promoteFactor", () => {
     expect(useApp.getState().macroSteps).toEqual([]);
   });
 
+  it("records the exact qz.transform() code line (finding #8's single source)", async () => {
+    await promoteFactor(useApp.getState, ["a"], ["sample"], "auto", "sample");
+    expect(useApp.getState().macroSteps[0].code).toBe(
+      'qz.transform("promote", "<active>", { path: ["sample"], as: "categorical", name: "sample" })',
+    );
+  });
+
   it("records a transform step that replays onto another dataset after a save/load", async () => {
     await promoteFactor(useApp.getState, ["a", "b"], ["sample"], "auto", "sample");
     const steps = useApp.getState().macroSteps;
@@ -106,6 +113,36 @@ describe("promoteFactor", () => {
     expect(byId("a").data.labels).toEqual(["M", "Sample ID"]);
     expect(byId("a").data.cat_levels?.[1]).toEqual(["S1"]);
     expect(byId("a").formulas?.[0].factor?.value).toBe("S1");
+  });
+
+  it("carries an existing recode column's custom level_order across an appended factor", async () => {
+    // "M" (channel 0) is itself categorical; "grp" (channel 1) recodes it
+    // 1:1 (identity mapping) and has a user-set display order [1, 0] — the
+    // kind of state store/levelOrder.ts writes after a drag-reorder.
+    const withRecode: Dataset = {
+      id: "a",
+      name: "a.dat",
+      data: {
+        time: [0, 1, 2],
+        values: [[0, 0], [1, 1], [0, 0]],
+        labels: ["M", "grp"],
+        units: ["emu", ""],
+        metadata: { sample: "S1" },
+        // Both the base categorical column (0) AND the recode's own,
+        // already-computed table (1) — a real dataset's `.data` snapshot
+        // carries the LATTER too, from when the recode column was created.
+        cat_levels: { 0: ["Low", "High"], 1: ["Low", "High"] },
+        level_order: { 1: [1, 0] },
+      },
+      formulas: [{ name: "grp", expr: "recode(A)", deps: ["A"], recode: { sourceLetter: "A", mapping: { groups: [] } } }],
+    };
+    useApp.setState({ datasets: [withRecode, B, C] });
+    await promoteFactor(useApp.getState, ["a"], ["sample"], "auto", "sample");
+    const a = byId("a");
+    expect(a.data.labels).toEqual(["M", "grp", "sample"]);
+    expect(a.data.cat_levels?.[1]).toEqual(["Low", "High"]); // the recode column, unchanged
+    expect(a.data.cat_levels?.[2]).toEqual(["S1"]); // the new factor
+    expect(a.data.level_order?.[1]).toEqual([1, 0]); // its custom order survives the append
   });
 });
 
@@ -157,6 +194,27 @@ describe("applyMetadataCleanup", () => {
     // replayed on a file that is already clean: done, not failed
     const { log: again } = await executeSteps(saved(steps), "e");
     expect(Object.values(again)[0]).toEqual({ status: "ok", note: "metadata already clean — nothing changed" });
+  });
+
+  it("records the exact qz.transform() code line for metaclean too", async () => {
+    await applyMetadataCleanup(useApp.getState, ["a"], { unify: [{ to: "temperature", from: [["T"]] }], normalize: [] });
+    expect(useApp.getState().macroSteps[0].code).toBe(
+      'qz.transform("metaclean", "<active>", { unify: [{ to: "temperature", from: [["T"]] }], normalize: [] })',
+    );
+  });
+
+  it("logs a replay whose rules were all refused as warn, naming the refusal (not 'already clean')", async () => {
+    await applyMetadataCleanup(useApp.getState, ["a"], { unify: [{ to: "temperature", from: [["T"]] }], normalize: [] });
+    const steps = useApp.getState().macroSteps;
+    useApp.getState().stopMacro();
+    // "f" already has BOTH the target key and the source, disagreeing —
+    // every source found for it is refused, so nothing changes, but that is
+    // a refusal, not a genuinely clean file.
+    useApp.setState({ datasets: [...useApp.getState().datasets, { id: "f", name: "f.dat", data: data({ temperature: "1", T: "2" }) }] });
+    const { log } = await executeSteps(saved(steps), "f");
+    expect(Object.values(log)[0].status).toBe("warn");
+    expect(Object.values(log)[0].note).toMatch(/disagree/);
+    expect(byId("f").data.metadata).toEqual({ temperature: "1", T: "2" }); // untouched
   });
 });
 

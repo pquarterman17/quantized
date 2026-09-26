@@ -22,9 +22,9 @@ import { applyCleanup, planCleanup, type CleanupPlan, type CleanupResult, type L
 import { factorColumn, planFactor, type FactorAs, type FactorPlan } from "./metadataFactor";
 import { isScalar, pathLabel, type MetaPath, type MetaScalar } from "./metadataKeys";
 import { plural } from "./plural";
-import { baseColumns } from "./formula";
-import type { Dataset } from "./types";
-import { withRecomputedFormulas } from "../store/computedColumns";
+import { applyFormulas, formulaErrors } from "./formula";
+import { asAlreadyComputed, baseColumns, carryComputedLevelOrder } from "./formulaInputs";
+import type { ComputedColumn, Dataset } from "./types";
 import { useApp, type AppState } from "../store/useApp";
 
 type StoreGet = () => AppState;
@@ -32,6 +32,15 @@ type StoreGet = () => AppState;
 export type MetaStepParams =
   | { op: "promote"; path: MetaPath; as: FactorAs; name: string }
   | ({ op: "metaclean" } & CleanupPlan);
+
+/** The op names `MetaStepParams` covers — ops that edit their dataset IN
+ *  PLACE and create no output (module doc above). The one shared source
+ *  (finding #7) for what used to be scattered `op === "promote" || op ===
+ *  "metaclean"` checks: `lib/transformRun.ts`'s `isInPlaceOp` wraps this for
+ *  its own typed narrowing, and `PipelinePanel.tsx` reads it directly — a
+ *  lighter import than pulling in all of `lib/transformRun.ts` (datasetAlgebra,
+ *  worksheetTransforms, …) just for two literal strings. */
+export const IN_PLACE_OPS: ReadonlySet<string> = new Set<MetaStepParams["op"]>(["promote", "metaclean"]);
 
 /** Full (not preview) data for every id, in order; throws naming a dataset
  *  that is gone or cannot be loaded, rather than committing a subset. */
@@ -53,17 +62,46 @@ export function metaStepLabel(p: MetaStepParams): string {
   return `Clean up metadata (${n} rule${plural(n)})`;
 }
 
-function record(s: StoreGet, p: MetaStepParams, applied: readonly Dataset[]): void {
+/** The label + `qz.transform()` code line for a promote/metaclean step — the
+ *  ONE place that builds it (finding #8: `record()` below used to
+ *  reimplement this by hand, and `lib/transformRun.ts`'s `transformStepText`
+ *  — the generic dispatcher for every OTHER transform op — carried a second,
+ *  never-reached copy of the same shape for these two ops, since `runTransform`
+ *  handles them before it ever gets there). `transformStepText` delegates to
+ *  this for promote/metaclean instead of repeating it; it cannot be the other
+ *  way around (`record` calling it) — `transformRun.ts` imports FROM this
+ *  module for `MetaStepParams`, so the reverse import would cycle. */
+export function metaStepText(p: MetaStepParams): { label: string; code: string } {
   const { op, ...args } = p;
-  s().recordMacro(metaStepLabel(p), `qz.transform(${lit(op)}, "<active>", ${lit(args)})`, {
-    kind: "transform",
-    params: { ...p, datasets: refs(applied) },
-  });
+  return { label: metaStepLabel(p), code: `qz.transform(${lit(op)}, "<active>", ${lit(args)})` };
+}
+
+function record(s: StoreGet, p: MetaStepParams, applied: readonly Dataset[]): void {
+  const { label, code } = metaStepText(p);
+  s().recordMacro(label, code, { kind: "transform", params: { ...p, datasets: refs(applied) } });
 }
 
 export interface PromoteOutcome {
   plan: FactorPlan;
   note: string;
+}
+
+/** Append `col` to `d`'s formulas and recompute — like
+ *  `store/computedColumns.ts`'s `withRecomputedFormulas`, but carrying
+ *  forward any user-set `level_order` on the EXISTING computed columns
+ *  (finding #2). That helper's own recompute path, `lib/formula.ts`'s
+ *  `recomputeWithErrors`, strips `formulas.length` columns off `data` before
+ *  reapplying the SAME (unchanged) list — right for a plain recompute, but
+ *  `formulas` here is one LONGER than what `d.data` actually carries (the
+ *  newly-appended factor), so that strip would eat a real base column
+ *  instead. Stripping by the OLD count (as `withRecomputedFormulas` does)
+ *  and then calling `carryComputedLevelOrder` directly gets both right. */
+function appendFactorColumn(d: Dataset, col: ComputedColumn): Pick<Dataset, "formulas" | "data" | "formulaErrors"> {
+  const base = baseColumns(d.data, d.formulas?.length ?? 0);
+  const formulas = [...(d.formulas ?? []), col];
+  const data = carryComputedLevelOrder(asAlreadyComputed(d.data), applyFormulas(base, formulas));
+  const errors = formulaErrors(base, formulas);
+  return { formulas, data, formulaErrors: Object.keys(errors).length ? errors : undefined };
 }
 
 /** Add `name` — the metadata field at `path` — as a factor column to every
@@ -84,10 +122,7 @@ export async function promoteFactor(
   useApp.setState((st) => ({
     datasets: st.datasets.map((d) => {
       const col = cols.get(d.id);
-      if (!col) return d;
-      const base = baseColumns(d.data, d.formulas?.length ?? 0);
-      const formulas = [...(d.formulas ?? []), col];
-      return { ...d, formulas, ...withRecomputedFormulas(base, formulas) };
+      return col ? { ...d, ...appendFactorColumn(d, col) } : d;
     }),
   }));
   for (const id of cols.keys()) s().touchDataset(id);
@@ -101,12 +136,21 @@ export async function promoteFactor(
 export interface CleanupOutcome {
   result: CleanupResult;
   note: string;
+  /** Set only on a replay that changed nothing because every rule that would
+   *  have applied to this dataset was REFUSED (finding #4) — as opposed to
+   *  genuinely having nothing to do (no rule matched anything). The pipeline
+   *  runner (`components/workshops/pipeline/executeSteps.ts`) reads this to
+   *  log the step "warn" instead of "ok", so the batch log points at the
+   *  right step instead of reading like a clean pass. */
+  refused?: boolean;
 }
 
 /** Apply `plan` to the metadata of every dataset in `ids` (their `raw` too,
  *  so a corrections re-apply keeps it). Interactively, a plan that changes
  *  nothing throws (Apply is a no-op the user should hear about); a REPLAY of
- *  it on a file that is already clean is simply done. */
+ *  it on a file that is already clean is simply done — but a replay whose
+ *  rules ALL refused (finding #4) is reported as such, naming the refusal,
+ *  rather than folded into the same "already clean" wording. */
 export async function applyMetadataCleanup(
   s: StoreGet,
   ids: readonly string[],
@@ -117,7 +161,10 @@ export async function applyMetadataCleanup(
   const result = planCleanup(targets, plan);
   const count = result.datasets.reduce((n, d) => n + d.changes.length, 0);
   const why = result.refusals.length ? `: ${result.refusals.join(" ")}` : "";
-  if (!count && replay) return { result, note: `metadata already clean — nothing changed${why}` };
+  if (!count && replay) {
+    const refused = result.refusals.length > 0;
+    return { result, note: refused ? `metadata cleanup refused${why}` : "metadata already clean — nothing changed", refused };
+  }
   if (!count) throw new Error(why ? `nothing changed${why}` : "nothing to change");
   const at = new Date().toISOString();
   const byId = new Map(result.datasets.map((d) => [d.id, d.changes]));
@@ -143,10 +190,19 @@ export async function applyMetadataCleanup(
   return { result, note };
 }
 
+export interface MetaStepOutcome {
+  note: string;
+  /** Finding #4: true only for a metaclean replay whose rules were all
+   *  refused — never set for "promote" (it has no such silent-refusal case;
+   *  a blocked plan throws instead). */
+  refused: boolean;
+}
+
 /** Replay one recorded step on `targetId`. */
-export async function runMetaStep(s: StoreGet, p: MetaStepParams, targetId: string): Promise<string> {
-  if (p.op === "promote") return (await promoteFactor(s, [targetId], p.path, p.as, p.name, true)).note;
-  return (await applyMetadataCleanup(s, [targetId], { unify: p.unify, normalize: p.normalize }, true)).note;
+export async function runMetaStep(s: StoreGet, p: MetaStepParams, targetId: string): Promise<MetaStepOutcome> {
+  if (p.op === "promote") return { note: (await promoteFactor(s, [targetId], p.path, p.as, p.name, true)).note, refused: false };
+  const out = await applyMetadataCleanup(s, [targetId], { unify: p.unify, normalize: p.normalize }, true);
+  return { note: out.note, refused: out.refused ?? false };
 }
 
 const CASES: readonly LetterCase[] = ["keep", "lower", "upper"];

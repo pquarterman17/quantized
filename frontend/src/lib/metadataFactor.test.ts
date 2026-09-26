@@ -85,6 +85,28 @@ describe("planFactor", () => {
     expect(text.blocked).toMatch(/“four” in b\.dat is not a number/);
   });
 
+  it('auto falls back to categorical for a leading-zero ID or a numeric collision, but "0"/"0.5" stay numeric', () => {
+    const leadingZero = planFactor([ds("a", { id: "01" }), ds("b", { id: "02" })], ["id"], "auto", "id");
+    expect(leadingZero.as).toBe("categorical");
+    expect(leadingZero.rows.map((r) => r.cell)).toEqual(["01", "02"]); // the leading zero survives as text
+    const collide = planFactor([ds("a", { id: "01" }), ds("b", { id: "1" })], ["id"], "auto", "id");
+    expect(collide.as).toBe("categorical"); // "01" and "1" would otherwise collide on Number()
+    const bareZero = planFactor([ds("a", { v: "0" }), ds("b", { v: "0.5" })], ["v"], "auto", "v");
+    expect(bareZero.as).toBe("numeric"); // neither is a leading-zero ID
+    // the user's own "numeric" choice is never second-guessed by this heuristic
+    expect(planFactor([ds("a", { id: "01" })], ["id"], "numeric", "id").blocked).toBeNull();
+  });
+
+  it("Infinity ('1e999' overflows) is never numeric: auto is categorical, a forced numeric type is refused", () => {
+    expect(numericOf("1e999")).toBeNull();
+    expect(numericOf(Number.POSITIVE_INFINITY)).toBeNull();
+    const auto = planFactor([ds("a", { v: "1e999" })], ["v"], "auto", "v");
+    expect(auto.as).toBe("categorical");
+    expect(auto.rows[0].cell).toBe("1e999");
+    const forced = planFactor([ds("a", { v: "1e999" })], ["v"], "numeric", "v");
+    expect(forced.blocked).toMatch(/“1e999” in a\.dat is not a number/);
+  });
+
   it("refuses a name clash, an empty name, and a field no dataset has", () => {
     expect(planFactor([ds("a", { M: "x" })], ["M"], "auto", "m").blocked).toMatch(/already has a column named “m”/);
     expect(planFactor([ds("a", { s: "x" })], ["s"], "auto", "  ").blocked).toMatch(/Name the new column/);

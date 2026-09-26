@@ -7,6 +7,7 @@
 import { useState } from "react";
 
 import { saveBlob } from "../../../lib/download";
+import { IN_PLACE_OPS } from "../../../lib/metadataRun";
 import { pipelineToScript, STEP_FIELDS, type PipelineStep } from "../../../lib/pipeline";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -20,6 +21,7 @@ const TONE: Record<StepStatus, "ok" | "warn" | "danger"> = {
   ok: "ok",
   skipped: "warn",
   failed: "danger",
+  warn: "warn",
 };
 
 /** Inline param editor for a selected step: schema fields for known kinds,
@@ -46,7 +48,7 @@ function StepEditor({
         )}
         {step.kind === "transform" && (
           <div className="qzk-ds-meta" style={{ color: "var(--text-faint)", marginTop: 4 }}>
-            {step.params.op === "promote" || step.params.op === "metaclean"
+            {typeof step.params.op === "string" && IN_PLACE_OPS.has(step.params.op)
               ? "Edits the current dataset in place (a metadata factor column, or its metadata); later steps continue on it."
               : "Derives a new dataset from the current one; later steps continue on it. A second input is the recorded dataset (matched by id — the step fails if it is no longer in this workspace)."}
           </div>

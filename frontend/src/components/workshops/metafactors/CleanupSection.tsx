@@ -38,7 +38,7 @@ function KeysTable({ m, ticked, toggle }: { m: MetaFactorsState; ticked: string[
                   <input type="checkbox" aria-label={`Merge ${k.label}`} checked={ticked.includes(id)} onChange={(e) => toggle(id, e.target.checked)} />
                 </td>
                 <td>{k.label}</td>
-                <td>{`${k.ids.length}/${m.picked.length}${miss.length ? ` — not in ${miss.join(", ")}` : ""}`}</td>
+                <td style={{ fontFamily: "var(--font-mono)" }}>{`${k.ids.length}/${m.picked.length}${miss.length ? ` — not in ${miss.join(", ")}` : ""}`}</td>
               </tr>
             );
           })}
@@ -68,8 +68,8 @@ function Preview({ m }: { m: MetaFactorsState }) {
                 <tr key={i} title={c.note}>
                   <td>{d.name}</td>
                   <td>{c.key}</td>
-                  <td>{shown(c.before)}</td>
-                  <td>{c.after === undefined ? `(removed — ${c.note})` : shown(c.after)}</td>
+                  <td style={{ fontFamily: "var(--font-mono)" }}>{shown(c.before)}</td>
+                  <td style={{ fontFamily: "var(--font-mono)" }}>{c.after === undefined ? `(removed — ${c.note})` : shown(c.after)}</td>
                 </tr>
               ))}
             </tbody>

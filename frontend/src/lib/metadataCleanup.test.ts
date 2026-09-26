@@ -42,6 +42,36 @@ describe("unify synonyms", () => {
     expect(res.datasets).toEqual([]);
     expect(res.refusals[0]).toMatch(/already holds a collection/);
   });
+
+  it("moves a renamed top-level key's <key>_unit sibling along with it", () => {
+    const res = planCleanup([t("a", { Temp: "300", Temp_unit: "K" })], { ...none, unify: [{ to: "temperature", from: [["Temp"]] }] });
+    expect(res.refusals).toEqual([]);
+    expect(res.datasets[0].changes).toEqual([
+      { key: "temperature", before: undefined, after: "300", note: "from Temp" },
+      { key: "Temp", before: "300", after: undefined, note: "renamed to temperature" },
+      { key: "temperature_unit", before: undefined, after: "K", note: "unit moved" },
+      { key: "Temp_unit", before: "K", after: undefined, note: "renamed to temperature_unit" },
+    ]);
+  });
+
+  it("refuses a rename whose unit siblings disagree, orphaning neither", () => {
+    const res = planCleanup([t("a", { Temp: "300", Temp_unit: "K", temperature: "300", temperature_unit: "C" })], {
+      ...none,
+      unify: [{ to: "temperature", from: [["Temp"]] }],
+    });
+    expect(res.datasets).toEqual([]); // nothing touched — not the value, not either unit
+    expect(res.refusals).toEqual(["a: Temp_unit (K) and temperature_unit (C) disagree — “temperature” not unified."]);
+  });
+
+  it("refuses a unify target that is wiring/provenance, not metadata", () => {
+    const wiring = planCleanup([t("a", { Temp: "300" })], { ...none, unify: [{ to: "x_column_name", from: [["Temp"]] }] });
+    expect(wiring.datasets).toEqual([]);
+    expect(wiring.refusals).toEqual(["“x_column_name” is a wiring/provenance key, not metadata — not unified."]);
+
+    const origin = planCleanup([t("a", { Temp: "300" })], { ...none, unify: [{ to: "origin_notes", from: [["Temp"]] }] });
+    expect(origin.datasets).toEqual([]);
+    expect(origin.refusals[0]).toMatch(/“origin_notes” is a wiring\/provenance key/);
+  });
 });
 
 describe("normalize values", () => {
@@ -77,6 +107,14 @@ describe("normalize values", () => {
     const refused = run(["300 K", "27 C "]);
     expect(refused.datasets.map((d) => d.changes.map((c) => c.after))).toEqual([["27 C"]]); // trim only
     expect(parseQuantity(12)).toEqual({ n: 12, unit: "" });
+  });
+
+  it("refuses a non-finite quantity (\"1e999\" overflows to Infinity) rather than parse it", () => {
+    expect(parseQuantity("1e999 K")).toEqual({ error: "is not a finite number" });
+    expect(parseQuantity(Number.POSITIVE_INFINITY)).toEqual({ error: "is not a finite number" });
+    const res = planCleanup([t("a", { T: "1e999 K" })], { ...none, normalize: [{ key: "T", trim: true, letterCase: "keep", units: true }] });
+    expect(res.refusals[0]).toMatch(/1e999 K.*is not a finite number/);
+    expect(res.datasets).toEqual([]); // already trimmed: refusing the unit parse leaves nothing else to change
   });
 
   it("an already-parsed number counts with the unit its <key>_unit records", () => {

@@ -136,6 +136,22 @@ describe("clean up", () => {
     act(() => useApp.getState().undo());
     expect(byId("a").data.metadata).toEqual(A.data.metadata);
   });
+
+  it("renders the coverage counts and the Before/After values in JetBrains Mono (finding #10)", () => {
+    open();
+    render(<MetaFactorsPanel />);
+    fireEvent.click(screen.getByRole("tab", { name: "Clean up metadata" }));
+    const coverageCell = within(screen.getByRole("table", { name: "Metadata keys" })).getAllByRole("row")[1].children[2] as HTMLElement;
+    expect(coverageCell.style.fontFamily).toBe("var(--font-mono)");
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Merge Temp" }));
+    fireEvent.click(screen.getByRole("checkbox", { name: "Merge T_set" }));
+    fireEvent.change(screen.getByLabelText("Merge the ticked keys into"), { target: { value: "temperature" } });
+    fireEvent.click(screen.getByRole("button", { name: "Add merge" }));
+    const previewRow = within(screen.getByRole("table", { name: "Cleanup preview" })).getAllByRole("row")[1];
+    expect((previewRow.children[2] as HTMLElement).style.fontFamily).toBe("var(--font-mono)"); // Before
+    expect((previewRow.children[3] as HTMLElement).style.fontFamily).toBe("var(--font-mono)"); // After
+  });
 });
 
 describe("Reshape append: source column option", () => {

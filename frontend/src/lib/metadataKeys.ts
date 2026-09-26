@@ -14,14 +14,19 @@
 // `comments`, `text_columns`, `label_rows`, a decoded Origin book inventory —
 // are not one value per dataset, so they cannot become a per-dataset factor.
 
-import { PREVIEW_SOURCE_ROWS } from "./rowSidecars";
+import { isHiddenMetadataKey } from "./metadata";
 
 export type MetaScalar = string | number | boolean;
 export type MetaPath = string[];
 
-/** Wiring, not instrument metadata (lib/metadata.ts hides the same keys from
- *  the Inspector card), plus this feature's own provenance log. */
-const HIDDEN = new Set(["x_column_name", "x_column_unit", PREVIEW_SOURCE_ROWS, "metadata_cleanup"]);
+/** Wiring/provenance (`lib/metadata.ts`'s `isHiddenMetadataKey` — the SAME
+ *  predicate that hides these from the Inspector card, so the two lists can
+ *  never diverge again), plus this feature's own provenance log. Exported
+ *  for `lib/metadataCleanup.ts`, which refuses a unify rule whose TARGET is
+ *  one of these (finding #6) — a cleanup must never write over wiring. */
+export function isHiddenMetaKey(key: string): boolean {
+  return isHiddenMetadataKey(key) || key === "metadata_cleanup";
+}
 
 export function isScalar(v: unknown): v is MetaScalar {
   return typeof v === "string" || typeof v === "boolean" || (typeof v === "number" && Number.isFinite(v));
@@ -34,7 +39,7 @@ export function scalarFields(meta: Record<string, unknown> | undefined): [MetaPa
   const out: [MetaPath, MetaScalar][] = [];
   const nested: [MetaPath, MetaScalar][] = [];
   for (const [k, v] of Object.entries(meta ?? {})) {
-    if (HIDDEN.has(k)) continue;
+    if (isHiddenMetaKey(k)) continue;
     if (isScalar(v)) out.push([[k], v]);
     else if (isDict(v)) {
       for (const [k2, v2] of Object.entries(v)) if (isScalar(v2)) nested.push([[k, k2], v2]);

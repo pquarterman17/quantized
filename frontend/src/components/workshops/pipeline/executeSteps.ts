@@ -12,7 +12,7 @@ import { analysisData } from "../../../lib/rowstate";
 import type { CalcResult, CorrectionParams } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 
-export type StepStatus = "ok" | "skipped" | "failed";
+export type StepStatus = "ok" | "skipped" | "failed" | "warn";
 
 export interface StepLogEntry {
   status: StepStatus;
@@ -163,7 +163,10 @@ export async function executeSteps(
           target = out.id;
           const n = out.warnings.length;
           log[step.id] = {
-            status: "ok",
+            // Finding #4: a metaclean replay whose rules were all refused
+            // logs "warn" (naming the refusal in `note`), not "ok" — the
+            // batch log should point at this step, not read as a clean pass.
+            status: out.refused ? "warn" : "ok",
             note: out.note ?? `created "${out.name}"${n ? ` (${n} warning${n === 1 ? "" : "s"}: ${out.warnings.map((w) => w.text).join(" ")})` : ""}`,
           };
           break;

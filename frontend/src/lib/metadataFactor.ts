@@ -44,11 +44,44 @@ const NUMERIC_TEXT = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 /** A value as a number: a number itself, or text that is exactly one plain
  *  number ("300", " 1e-3 "). "300 K" is NOT — the cleanup's unit parse is what
- *  turns that into 300 with a unit. */
+ *  turns that into 300 with a unit. Never non-finite: "1e999" overflows to
+ *  `Infinity`, which is not a usable factor value, so it is reported "not a
+ *  number" exactly like text — auto-typing falls back to categorical for it
+ *  the same way it does for "four". */
 export function numericOf(v: MetaScalar): number | null {
-  if (typeof v === "number") return v;
-  if (typeof v === "string" && NUMERIC_TEXT.test(v.trim())) return Number(v.trim());
+  if (typeof v === "number") return Number.isFinite(v) ? v : null;
+  if (typeof v === "string" && NUMERIC_TEXT.test(v.trim())) {
+    const n = Number(v.trim());
+    return Number.isFinite(n) ? n : null;
+  }
   return null;
+}
+
+/** A string with a leading zero the way an ID has one ("01", "007") — never
+ *  a bare "0" or a decimal starting "0." ("0.5"). */
+const LEADING_ZERO = /^[+-]?0\d/;
+
+/** Whether `present` is SAFE for "auto" to type numeric: every value parses
+ *  (`numericOf`), none is written with a leading zero (`Number("01")` loses
+ *  it, and "01" would then collide with a plain "1"), and no two distinct
+ *  source texts land on the same number regardless. Any of those means the
+ *  field reads as an ID, not a measurement — auto falls back to categorical,
+ *  which keeps the original text as the level label. The user's own explicit
+ *  "numeric" choice is a different code path (`planFactor`'s `bad` check)
+ *  and is never second-guessed here. */
+function safeAsNumeric(present: readonly MetaScalar[]): boolean {
+  if (!present.length) return false;
+  const seen = new Map<number, string>();
+  for (const v of present) {
+    const text = String(v).trim();
+    if (typeof v === "string" && LEADING_ZERO.test(text)) return false;
+    const n = numericOf(v);
+    if (n === null) return false;
+    const prior = seen.get(n);
+    if (prior !== undefined && prior !== text) return false;
+    seen.set(n, text);
+  }
+  return true;
 }
 
 interface Target {
@@ -102,8 +135,7 @@ export function planFactor(
 ): FactorPlan {
   const values = targets.map((t) => metaValue(t.data.metadata, path));
   const present = values.filter(isPresent);
-  const kind: FactorAs =
-    as !== "auto" ? as : present.length && present.every((v) => numericOf(v) !== null) ? "numeric" : "categorical";
+  const kind: FactorAs = as !== "auto" ? as : safeAsNumeric(present) ? "numeric" : "categorical";
   const name = columnName.trim();
   const rows = targets.map((t, i): FactorRow => {
     const v = values[i];

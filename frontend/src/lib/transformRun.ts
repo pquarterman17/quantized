@@ -33,7 +33,7 @@ import { analyzeMerge } from "./appendWarnings";
 import { lit } from "./macro";
 import { mergeDatasets } from "./merge";
 import type { AppendMatch } from "./mergeByName";
-import { metaParamsOf, metaStepLabel, runMetaStep, type MetaStepParams } from "./metadataRun";
+import { IN_PLACE_OPS, metaParamsOf, metaStepText, runMetaStep, type MetaStepParams } from "./metadataRun";
 import { analysisData } from "./rowstate";
 import { computeResample, resampleLabel, resampleParamsOf, type ResampleParams } from "./transformResample";
 import {
@@ -130,8 +130,18 @@ function refsOf(p: TransformParams): DatasetRef[] {
   return [];
 }
 
-/** Pipeline label + script line for a transform step. */
+/** Typed narrowing wrapper over `lib/metadataRun.ts`'s `IN_PLACE_OPS`
+ *  (finding #7's shared source) — `transformStepText` and `runTransform`
+ *  below use this instead of repeating the two op names. */
+export function isInPlaceOp(p: TransformParams): p is MetaStepParams {
+  return IN_PLACE_OPS.has(p.op);
+}
+
+/** Pipeline label + script line for a transform step. Promote/metaclean
+ *  delegate to `lib/metadataRun.ts`'s `metaStepText` (finding #8's single
+ *  source) instead of duplicating its shape here. */
 export function transformStepText(p: TransformParams, primaryName: string): { label: string; code: string } {
+  if (isInPlaceOp(p)) return metaStepText(p);
   const refs = refsOf(p).map((r) => r.name);
   const { op, ...rest } = p;
   const args: Record<string, unknown> = { ...rest };
@@ -143,7 +153,6 @@ export function transformStepText(p: TransformParams, primaryName: string): { la
     case "algebra": label = `Dataset math ${primaryName} ${p.operation} ${refs[0]}`; break;
     case "split": label = `Split ${primaryName} by column value`; break;
     case "resample": label = resampleLabel(p, primaryName); break;
-    case "promote": case "metaclean": label = metaStepLabel(p); break;
     default: label = `${op[0].toUpperCase()}${op.slice(1)} ${primaryName}`;
   }
   return { label, code: `qz.transform(${lit(op)}, "<active>", ${lit(args)})` };
@@ -280,6 +289,10 @@ export interface TransformOutcome {
   outputs: TransformOutput[];
   /** The pipeline-log line for an in-place op (no dataset was created). */
   note?: string;
+  /** Finding #4: true only for an in-place `metaclean` replay whose rules
+   *  were all refused — `executeSteps.ts` logs the step "warn" instead of
+   *  "ok" when this is set. */
+  refused?: boolean;
 }
 
 /** The provenance a recorded `transform` step carries beside its op params
@@ -323,9 +336,16 @@ export async function runTransform(
       outputs: ids.map((cid, k) => ({ id: cid, key: String(children[k]?.data.metadata?.split_group ?? "") })),
     };
   }
-  if (p.op === "promote" || p.op === "metaclean") {
-    const note = await runMetaStep(s, p, primaryId);
-    return { id: primaryId, name: s().datasets.find((d) => d.id === primaryId)?.name ?? primaryId, warnings: [], outputs: [], note };
+  if (isInPlaceOp(p)) {
+    const { note, refused } = await runMetaStep(s, p, primaryId);
+    return {
+      id: primaryId,
+      name: s().datasets.find((d) => d.id === primaryId)?.name ?? primaryId,
+      warnings: [],
+      outputs: [],
+      note,
+      ...(refused ? { refused: true } : {}),
+    };
   }
   const primary = await s().resolveDataset(primaryId);
   if (!primary) throw new Error("the input dataset is unavailable");
