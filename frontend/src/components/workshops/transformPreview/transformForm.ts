@@ -4,7 +4,7 @@
 // the commit run (lib/transformRun.computeTransform). No React, no store.
 
 import { isCategoricalChannel } from "../../../lib/categorical";
-import { originTextColumns } from "../../../lib/columnmeta";
+import { originTextColumnNames } from "../../../lib/columnmeta";
 import type { AppendMatch } from "../../../lib/mergeByName";
 import type { TransformParams } from "../../../lib/transformRun";
 import type { DataStruct } from "../../../lib/types";
@@ -86,7 +86,7 @@ export function keyOptions(data: DataStruct | undefined): KeyOption[] {
       value: String(i),
       label: `${label || `column ${i + 1}`}${isCategoricalChannel(data, i) ? " (text levels)" : ""}`,
     })),
-    ...originTextColumns(data).map((c) => ({ value: `t:${c.shortName}`, label: `${c.shortName} (text column)` })),
+    ...originTextColumnNames(data).map((name) => ({ value: `t:${name}`, label: `${name} (text column)` })),
   ];
 }
 
@@ -131,7 +131,11 @@ export function formToRun(form: TransformForm, datasets: readonly Named[]): Tran
       if (!offered(primary, form.leftKey)) return "Pick the left key.";
       if (!offered(right, form.rightKey)) return "Pick the right key.";
       return {
-        params: { op: "join", leftKey: parseKey(form.leftKey), rightKey: parseKey(form.rightKey), mode: form.mode, with: ref(right) },
+        // `keyMode: "text"` explicitly, so a freshly-created step is always
+        // recorded with it — replay never has to guess a NEW step's intent
+        // the way it must for one recorded before this field existed
+        // (lib/transformRun.ts's TransformParams doc).
+        params: { op: "join", leftKey: parseKey(form.leftKey), rightKey: parseKey(form.rightKey), mode: form.mode, keyMode: "text", with: ref(right) },
         primaryId: primary.id,
         otherIds: [right.id],
       };

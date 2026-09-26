@@ -10,6 +10,8 @@
 
 import { create } from "zustand";
 
+import type { StoreGet } from "../lib/exportActive";
+
 export type PreviewOp = "merge" | "join" | "stack" | "unstack" | "transpose";
 
 interface TransformPreviewState {
@@ -30,4 +32,15 @@ export const useTransformPreviewDialog = create<TransformPreviewState>((set) => 
 /** Open the workshop on `op` with `ids` (in order; the first is the primary). */
 export function openTransformPreview(op: PreviewOp, ids: readonly string[]): void {
   useTransformPreviewDialog.setState((s) => ({ op, seed: [...ids], opened: s.opened + 1 }));
+}
+
+/** The Library selection, else the active dataset — what a Data-menu
+ *  workshop opens on (review finding 8: shared by `commands/dataCommands.ts`'s
+ *  `openReshape` and `useApp.ts`'s own `mergeSelected` action, rather than
+ *  each keeping its own copy of the same "picked, or fall back to active"
+ *  rule). */
+export function seedIds(s: StoreGet): string[] {
+  const st = s();
+  const picked = st.selectedIds.filter((id) => st.datasets.some((d) => d.id === id));
+  return picked.length ? picked : st.activeId ? [st.activeId] : [];
 }

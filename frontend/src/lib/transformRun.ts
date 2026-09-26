@@ -56,9 +56,8 @@ import {
   type AggregateMode,
   type JoinMode,
 } from "./worksheetTransforms";
-import type { JoinKey } from "./worksheetJoin";
+import type { JoinKey, JoinKeyMode } from "./worksheetJoin";
 import { askConfirm } from "../store/confirmDialog";
-import { openTransformPreview } from "../store/transformPreviewDialog";
 import { nextDatasetId, type AppState } from "../store/useApp";
 
 /** The store accessor. Typed on the `AppState` interface, not
@@ -75,7 +74,10 @@ export type TransformParams =
   | { op: "transpose" }
   | { op: "stack"; channels: number[] }
   | { op: "unstack"; key: number; category: number; value: number; aggregate: AggregateMode }
-  | { op: "join"; leftKey: JoinKey; rightKey: JoinKey; mode: JoinMode; with: DatasetRef }
+  // `keyMode` absent = a step recorded before a categorical key joined by its
+  // LEVEL TEXT (worksheetJoin.ts module doc) — it replays with the OLD
+  // numeric-code semantics instead, never the new one silently.
+  | { op: "join"; leftKey: JoinKey; rightKey: JoinKey; mode: JoinMode; keyMode?: JoinKeyMode; with: DatasetRef }
   // `match` absent = by position (every step recorded before P2.5's preview).
   | { op: "merge"; with: DatasetRef[]; match?: AppendMatch }
   | { op: "algebra"; operation: string; interp: string; with: DatasetRef }
@@ -91,6 +93,12 @@ export interface TransformPreview {
   /** What the transform read: each input's name and rows x columns (the
    *  analysis rows where that is what it reads). */
   inputs: { name: string; rows: number; cols: number }[];
+  /** True only from `lib/transformPreviewCompute.ts`'s bounded LIVE preview
+   *  (review finding 5), when the real result is bigger than what got
+   *  materialized — never from `computeTransform` itself (Create/replay are
+   *  always exact). `ReshapePanel.tsx` shows "Preview shows the first N
+   *  rows" when this is true. */
+  previewCapped?: boolean;
 }
 
 /** Returns true to commit. Interactive callers pass `reviewTransform`;
@@ -106,8 +114,9 @@ const stem = (name: string): string => name.replace(/\.[^.]+$/, "");
 /** The dataset's ANALYSIS rows (exclusion ∪ filter pruned) — the reshape
  *  commands have always derived from these (architecture-guards #11). Merge
  *  and algebra have always used `.data`; both are kept exactly as they were,
- *  so recording changed no output. */
-const rowsOf = (ds: Dataset): DataStruct => analysisData(ds) ?? ds.data;
+ *  so recording changed no output. Exported for `lib/transformPreviewCompute.ts`,
+ *  whose bounded live preview must read the SAME rows the full compute does. */
+export const rowsOf = (ds: Dataset): DataStruct => analysisData(ds) ?? ds.data;
 
 function refsOf(p: TransformParams): DatasetRef[] {
   if (p.op === "join" || p.op === "algebra") return [p.with];
@@ -141,7 +150,11 @@ export interface TransformComputed {
   preview: TransformPreview;
 }
 
-function preview(
+/** Exported for `lib/transformPreviewCompute.ts`'s bounded preview builders —
+ *  they report the SAME "Result: N rows × M columns" shape this does, just
+ *  over a (possibly capped) `data` and the caller's own choice of what counts
+ *  as "input". */
+export function preview(
   title: string,
   data: DataStruct,
   warnings: TransformWarning[],
@@ -181,8 +194,12 @@ export async function computeTransform(p: TransformParams, primary: Dataset, oth
     case "join": {
       const right = others[0];
       const rsrc = rowsOf(right);
-      const data = joinWorksheets(src, rsrc, p.leftKey, p.rightKey, p.mode);
-      const w = analyzeJoin(src, rsrc, p.leftKey, p.rightKey, p.mode, primary.name, right.name);
+      // Absent `keyMode` = a step recorded before the text-key feature
+      // existed (module doc on the TransformParams union above): replay it
+      // with the OLD numeric-code semantics, not today's default.
+      const keyMode = p.keyMode ?? "code";
+      const data = joinWorksheets(src, rsrc, p.leftKey, p.rightKey, p.mode, keyMode);
+      const w = analyzeJoin(src, rsrc, p.leftKey, p.rightKey, p.mode, primary.name, right.name, keyMode);
       return { data, name: `${primary.name} + ${right.name} (joined)`, preview: preview(`Join (${p.mode})`, data, w, [[primary.name, src], [right.name, rsrc]]) };
     }
     case "merge": {
@@ -363,7 +380,14 @@ export function transformParamsOf(raw: Record<string, unknown>): TransformParams
       if (!["inner", "left", "right", "full"].includes(mode)) throw new Error(`unknown join mode "${mode}"`);
       // A key is a column index, or a text column's name (lib/worksheetJoin).
       const key = (k: string): JoinKey => (typeof raw[k] === "string" && raw[k] ? (raw[k] as string) : num(k));
-      return { op, leftKey: key("leftKey"), rightKey: key("rightKey"), mode: mode as JoinMode, with: ref(raw.with) };
+      // Absent (an older recording) is NOT normalized to a default here —
+      // `computeTransform` is the one place that decides what "absent" means
+      // (the OLD numeric-code semantics), so a step this function round-trips
+      // (read then re-recorded verbatim) cannot accidentally gain a field it
+      // never had.
+      const km = raw.keyMode;
+      const keyMode = km === "text" || km === "code" ? km : undefined;
+      return { op, leftKey: key("leftKey"), rightKey: key("rightKey"), mode: mode as JoinMode, ...(keyMode ? { keyMode } : {}), with: ref(raw.with) };
     }
     case "merge": {
       if (!Array.isArray(raw.with) || !raw.with.length) throw new Error('transform "merge" has no recorded inputs');
@@ -392,13 +416,4 @@ export async function reviewedAppend(datas: DataStruct[], names: string[]): Prom
   const pv = preview(`Append ${datas.length} files`, data, warnings, datas.map((d, i) => [names[i], d]));
   pv.summary += " Cancel imports them as separate datasets instead.";
   return (await reviewTransform(pv)) ? stampWarnings(data, "merge", warnings) : null;
-}
-
-/** "Merge selected" (Data menu / Library): open the previewed append on the
- *  selection, in order (the first pick is the primary), else on the active
- *  dataset. Nothing is merged until the workshop's Create. */
-export async function runMergeSelected(s: StoreGet): Promise<void> {
-  const st = s();
-  const picks = st.selectedIds.filter((id) => st.datasets.some((d) => d.id === id));
-  openTransformPreview("merge", picks.length ? picks : st.activeId ? [st.activeId] : []);
 }

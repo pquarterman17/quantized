@@ -69,9 +69,13 @@ describe("ReshapePanel — live data preview", () => {
     run("stack-columns");
     render(<ReshapePanel />);
     await waitFor(() => expect(table()).toBeTruthy());
-    // 30 rows x 2 channels = 60 long rows; the table shows the first 20.
+    // The LIVE preview is bounded (P2.5 review finding 5): wide.dat's 30 rows
+    // are capped to 20 before stacking, so the previewed long form is
+    // 20 x 2 channels = 40 rows (the table shows the first 20 of those), with
+    // a note that the created result (60 long rows) will be bigger.
     expect(within(table()).getAllByRole("row")).toHaveLength(PREVIEW_ROWS + 1);
-    expect(screen.getByText(`First ${PREVIEW_ROWS} of 60 rows.`)).toBeTruthy();
+    expect(screen.getByText(`First ${PREVIEW_ROWS} of 40 rows.`)).toBeTruthy();
+    expect(screen.getByText(/Preview shows the first 20 rows/)).toBeTruthy();
     const head = within(table()).getAllByRole("columnheader").map((h) => h.textContent);
     expect(head).toEqual(["X", "Source channel", "Value (mixed)", "Source"]);
     const first = within(table()).getAllByRole("row")[1];
@@ -139,7 +143,11 @@ describe("ReshapePanel — live data preview", () => {
     // column-name mismatch it would silently paper over.
     await waitFor(() => expect(screen.getByText(/Column names differ at the same position/)).toBeTruthy());
     fireEvent.change(screen.getByRole("combobox", { name: "Match columns" }), { target: { value: "name" } });
-    await waitFor(() => expect(sizes().textContent).toContain("Result “merged (2)”: 34 rows × 3 columns"));
+    // The LIVE preview is bounded (P2.5 review finding 5): wide.dat's 30 rows
+    // are over the cap, so the previewed merge is only 20 + 4 = 24 rows, with
+    // a note saying so — the WARNING below still counts wide.dat's real 30.
+    await waitFor(() => expect(sizes().textContent).toContain("Result “merged (2)”: 24 rows × 3 columns"));
+    expect(screen.getByText(/Preview shows the first 20 rows/)).toBeTruthy();
     expect(within(table()).getAllByRole("columnheader").map((h) => h.textContent)).toEqual([
       "Field (Oe)", "M (emu)", "T (K)", "Q",
     ]);

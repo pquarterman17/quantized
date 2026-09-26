@@ -1,10 +1,13 @@
 // Reshape & combine workshop — state hook (audit P2.5, "previewed append,
-// keyed join, reshape"). The op and its fields are previewed LIVE through
-// `computeTransform` (lib/transformRun.ts) — the SAME function the commit and
-// the pipeline replay run — debounced, and nothing is added to the workspace
-// until Create. Create then runs `runTransform` with the same params: one
-// undo entry, provenance and warnings stamped into the metadata, and one
-// recorded, replayable `transform` step.
+// keyed join, reshape"). The op and its fields are previewed LIVE, debounced,
+// through `computeTransformPreview` (lib/transformPreviewCompute.ts) — a
+// BOUNDED counterpart of `computeTransform` (review finding 5: the full
+// compute used to run on every edit, materializing a result that can reach
+// millions of rows just to show ~20 of them) — and nothing is added to the
+// workspace until Create. Create then runs `runTransform` — the FULL,
+// uncapped compute — with the same params: one undo entry, provenance and
+// warnings stamped into the metadata, and one recorded, replayable
+// `transform` step.
 //
 // Create is disabled while the preview is stale (an edit, or a changed input
 // dataset, since the last preview), and a unit mismatch keeps it disabled
@@ -13,10 +16,11 @@
 // book whose full rows arrive at Create — it falls back to the review dialog
 // rather than creating silently.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
+import { useAckForKey, useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
+import { computeTransformPreview } from "../../../lib/transformPreviewCompute";
 import {
-  computeTransform,
   reviewTransform,
   runTransform,
   type TransformComputed,
@@ -62,19 +66,6 @@ export interface ReshapeState {
 
 const message = (e: unknown, fallback: string): string => (e instanceof Error ? e.message : fallback);
 
-// A dataset's identity token: the store replaces a Dataset object on every
-// edit (data, exclusions, filters), so a new object = possibly new rows.
-const tokens = new WeakMap<Dataset, number>();
-let nextToken = 0;
-function tokenOf(ds: Dataset): number {
-  let t = tokens.get(ds);
-  if (t === undefined) {
-    t = ++nextToken;
-    tokens.set(ds, t);
-  }
-  return t;
-}
-
 /** The warnings the commit may create without asking again: exactly the
  *  sentences that were previewed (and acknowledged, for a unit mismatch). */
 function samePreview(a: TransformPreview, b: TransformPreview): boolean {
@@ -90,7 +81,6 @@ export function useReshapePreview(): ReshapeState {
   const datasets = useApp((s) => s.datasets);
   const [form, setFormState] = useState<TransformForm>(() => seedForm(op ?? "merge", seed, datasets));
   const [preview, setPreview] = useState<Preview>({ key: "" });
-  const [ackFor, setAckFor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [commitError, setCommitError] = useState<string | null>(null);
 
@@ -110,31 +100,24 @@ export function useReshapePreview(): ReshapeState {
   );
 
   // Re-run when the KEY changes, not whenever an unrelated store change hands
-  // `run`/`inputs` a new identity. The inputs are read from a ref.
-  const latest = useRef({ run, inputs });
-  useEffect(() => {
-    latest.current = { run, inputs };
-  });
-  useEffect(() => {
+  // `run`/`inputs` a new identity. The inputs are read from a ref
+  // (lib/previewKey.ts — shared with the resample workshop's own preview).
+  const latest = useLatestRef({ run, inputs });
+  useDebouncedPreview(key, PREVIEW_DELAY_MS, () => {
     const { run, inputs } = latest.current;
-    if (typeof run === "string" || !inputs.length) return;
+    if (typeof run === "string" || !inputs.length) return undefined;
     let live = true;
-    const timer = setTimeout(() => {
-      const [primary, ...others] = inputs;
-      computeTransform(run.params, primary, others).then(
-        (computed) => { if (live) setPreview({ key, computed }); },
-        (e: unknown) => { if (live) setPreview({ key, error: message(e, "the transform failed") }); },
-      );
-    }, PREVIEW_DELAY_MS);
-    return () => {
-      live = false;
-      clearTimeout(timer);
-    };
-  }, [key]);
+    const [primary, ...others] = inputs;
+    computeTransformPreview(run.params, primary, others).then(
+      (computed) => { if (live) setPreview({ key, computed }); },
+      (e: unknown) => { if (live) setPreview({ key, error: message(e, "the transform failed") }); },
+    );
+    return () => { live = false; };
+  });
 
   const fresh = preview.key === key && key !== "";
   const computed = fresh ? (preview.computed ?? null) : null;
-  const unitsAcknowledged = ackFor === key && key !== "";
+  const { acknowledged: unitsAcknowledged, setAcknowledged: setUnitsAcknowledged } = useAckForKey(key);
   const blockedByUnits = !!computed && needsConfirm(computed.preview.warnings) && !unitsAcknowledged;
 
   function setForm(patch: Partial<TransformForm>): void {
@@ -182,7 +165,7 @@ export function useReshapePreview(): ReshapeState {
     previewOnly: inputs.some((d) => d.pending),
     blockedByUnits,
     unitsAcknowledged,
-    setUnitsAcknowledged: (ok) => setAckFor(ok ? key : null),
+    setUnitsAcknowledged,
     canCreate: !!computed && !blockedByUnits && !busy,
     busy,
     commitError,

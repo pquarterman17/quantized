@@ -92,6 +92,7 @@ import { createViewAppliersSlice, type ViewAppliersSlice } from "./viewAppliers"
 import { createWorkspaceHydrationSlice, type WorkspaceHydrationSlice } from "./workspaceHydration";
 import { createMacroPipelineSlice, type MacroPipelineSlice } from "./macroPipeline";
 import { toast } from "./toasts";
+import { openTransformPreview, seedIds } from "./transformPreviewDialog";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
 import { createOriginImportSlice, type OriginImportSlice } from "./originImport";
 import { createRecipeFidelitySlice, type RecipeFidelitySlice } from "./recipeFidelity";
@@ -1001,10 +1002,9 @@ export const useApp = create<AppState>((set, get) => ({
 
   // clearAll: see store/workspaceHydration.ts (it is loadWorkspace(empty)).
 
-  // Open the Reshape & combine workshop's append on the selection, in order: it
-  // previews the result live and its Create records a replayable step (P2.5).
-  // Body: lib/transformRun.ts (lazy — the workshop's commit needs it anyway).
-  mergeSelected: async () => (await import("../lib/transformRun")).runMergeSelected(get),
+  // Open the Reshape & combine workshop's append on the selection (P2.5).
+  // EAGER, not a lazy lib/transformRun import (finding 8) — Create lazy-loads that chunk.
+  mergeSelected: async () => { openTransformPreview("merge", seedIds(get)); },
 
   // Deep-copy a dataset (incl. raw/corrections/bgRef) as an independent "(copy)"
   // — for trying different corrections/formulas while keeping the original.

@@ -15,7 +15,7 @@
 // it through on a plain "OK" — they ask for an explicit confirm naming it.
 
 import type { DataStruct } from "./types";
-import { joinKeyColumn, type JoinKey, type JoinMode } from "./worksheetJoin";
+import { joinKeyColumn, planCarriedText, type JoinKey, type JoinKeyMode, type JoinMode } from "./worksheetJoin";
 import type { AggregateMode } from "./worksheetTransforms";
 
 export type TransformWarningCode =
@@ -31,6 +31,7 @@ export type TransformWarningCode =
   | "aggregated"
   | "rows-dropped"
   | "missing-columns"
+  | "text-column-dropped"
   // Resample / align (calc.resample_align, sent by the backend):
   | "duplicate-x"
   | "blank-values"
@@ -118,11 +119,12 @@ export function analyzeJoin(
   mode: JoinMode,
   leftName: string,
   rightName: string,
+  keyMode: JoinKeyMode = "text",
 ): TransformWarning[] {
   const out: TransformWarning[] = [];
-  const lk = joinKeyColumn(left, leftKey);
+  const lk = joinKeyColumn(left, leftKey, keyMode);
   const l = keySide(lk.keys);
-  const r = keySide(joinKeyColumn(right, rightKey).keys);
+  const r = keySide(joinKeyColumn(right, rightKey, keyMode).keys);
   const blankWord = lk.kind === "text" ? "blank" : "blank or non-numeric";
   const lCol = columnName(left, leftKey);
   const rCol = columnName(right, rightKey);
@@ -175,6 +177,19 @@ export function analyzeJoin(
           text: `${name}: ${plural(n, "key value")} ${n === 1 ? "has" : "have"} no match in ${other}; ${other}'s columns stay blank there.`,
           count: n,
         });
+  }
+  // Finding 1: a non-key text sidecar column that could not be carried (its
+  // L/R-suffixed name still collided with another carried column) is named
+  // here rather than silently vanishing — the SAME plan `joinWorksheets`
+  // itself carries out, so the two can never disagree on what got dropped.
+  for (const d of planCarriedText(left, right, leftKey, rightKey).dropped) {
+    const name = d.side === "left" ? leftName : rightName;
+    out.push({
+      code: "text-column-dropped",
+      text: `${name}: its text column "${d.shortName}" could not be carried into the result — the name "${d.name}" is already used by another carried column.`,
+      count: 1,
+      columns: [d.shortName],
+    });
   }
   return out;
 }

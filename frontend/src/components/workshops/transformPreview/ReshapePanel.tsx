@@ -9,6 +9,7 @@ import TransformPreviewTable from "../../overlays/TransformPreviewTable";
 import TransformWarningList from "../../overlays/TransformWarningList";
 import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
+import { PREVIEW_CAP } from "../../../lib/transformPreviewCompute";
 import { useTransformPreviewDialog, type PreviewOp } from "../../../store/transformPreviewDialog";
 import ReshapeFields from "./ReshapeFields";
 import { OP_OPTIONS } from "./transformForm";
@@ -43,6 +44,11 @@ function Preview({ r }: { r: ReshapeState }) {
       {r.previewOnly && (
         <div className="qzk-ds-meta" style={faint}>
           Preview only: counted on the loaded preview of a book that is still loading; the full data is used when you create.
+        </div>
+      )}
+      {c.preview.previewCapped && (
+        <div className="qzk-ds-meta" style={faint}>
+          {`Preview shows the first ${PREVIEW_CAP} rows; the created result is the full one.`}
         </div>
       )}
       <TransformPreviewTable data={c.data} />

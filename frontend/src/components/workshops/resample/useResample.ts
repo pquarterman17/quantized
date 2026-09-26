@@ -13,8 +13,9 @@
 // grid and is not itself resampled). An x unit mismatch keeps Create disabled
 // until the explicit acknowledgment for THIS pick and grid is ticked.
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
+import { useAckForKey, useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
 import {
   computeResample,
   resampleSource,
@@ -79,19 +80,6 @@ export interface ResampleState {
 
 const message = (e: unknown, fallback: string): string => (e instanceof Error ? e.message : fallback);
 
-// A dataset's identity token: the store replaces a Dataset object on every
-// edit (data, exclusions, filters), so a new object = possibly new rows.
-const tokens = new WeakMap<Dataset, number>();
-let nextToken = 0;
-function tokenOf(ds: Dataset): number {
-  let t = tokens.get(ds);
-  if (t === undefined) {
-    t = ++nextToken;
-    tokens.set(ds, t);
-  }
-  return t;
-}
-
 export function useResample(): ResampleState {
   const seed = useResampleDialog((s) => s.seed);
   const close = useResampleDialog((s) => s.close);
@@ -103,7 +91,6 @@ export function useResample(): ResampleState {
   const [focus, setFocusId] = useState("");
   const [channel, setChannel] = useState(0);
   const [previews, setPreviews] = useState<Previews>({ key: "", entries: [] });
-  const [ackFor, setAckFor] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -127,38 +114,31 @@ export function useResample(): ResampleState {
   // The preview re-runs when the KEY changes, not whenever an unrelated store
   // change hands `targets` / `matchDs` a new identity (adding or renaming
   // another dataset, or each addDataset during create()). The inputs are read
-  // from a ref the effect above keeps current (effects run in order).
-  const inputs = useRef({ parsed, targets, matchDs });
-  useEffect(() => {
-    inputs.current = { parsed, targets, matchDs };
-  });
-  useEffect(() => {
+  // from a ref (lib/previewKey.ts — shared with the reshape workshop's own
+  // preview).
+  const inputs = useLatestRef({ parsed, targets, matchDs });
+  useDebouncedPreview(key, PREVIEW_DELAY_MS, () => {
     const { parsed, targets, matchDs } = inputs.current;
-    if (typeof parsed === "string" || !targets.length) return;
+    if (typeof parsed === "string" || !targets.length) return undefined;
     const ctrl = new AbortController();
-    const timer = setTimeout(() => {
-      const match = matchDs ? { name: matchDs.name, data: matchDs.data } : null;
-      void Promise.all(
-        targets.map(async (ds): Promise<PreviewEntry> => {
-          try {
-            const result = await computeResample(parsed, { name: ds.name, data: resampleSource(ds) }, match, {
-              preview: true,
-              signal: ctrl.signal,
-            });
-            return { id: ds.id, name: ds.name, result };
-          } catch (e) {
-            return { id: ds.id, name: ds.name, error: message(e, "resample failed") };
-          }
-        }),
-      ).then((entries) => {
-        if (!ctrl.signal.aborted) setPreviews({ key, entries });
-      });
-    }, PREVIEW_DELAY_MS);
-    return () => {
-      clearTimeout(timer);
-      ctrl.abort();
-    };
-  }, [key]);
+    const match = matchDs ? { name: matchDs.name, data: matchDs.data } : null;
+    void Promise.all(
+      targets.map(async (ds): Promise<PreviewEntry> => {
+        try {
+          const result = await computeResample(parsed, { name: ds.name, data: resampleSource(ds) }, match, {
+            preview: true,
+            signal: ctrl.signal,
+          });
+          return { id: ds.id, name: ds.name, result };
+        } catch (e) {
+          return { id: ds.id, name: ds.name, error: message(e, "resample failed") };
+        }
+      }),
+    ).then((entries) => {
+      if (!ctrl.signal.aborted) setPreviews({ key, entries });
+    });
+    return () => { ctrl.abort(); };
+  });
 
   const fresh = previews.key === key && key !== "";
   const entries = fresh ? previews.entries : [];
@@ -171,7 +151,7 @@ export function useResample(): ResampleState {
     return targets.length > 1 ? ws.map((w) => ({ ...w, text: `${e.name}: ${w.text}` })) : ws;
   });
   const previewOnly = targets.some((d) => d.pending) || Boolean(matchDs?.pending);
-  const unitsAcknowledged = ackFor === key && key !== "";
+  const { acknowledged: unitsAcknowledged, setAcknowledged: setUnitsAcknowledged } = useAckForKey(key);
   const blockedByUnits = needsConfirm(warnings) && !unitsAcknowledged;
   const allOk = entries.length === targets.length && entries.every((e) => e.result);
   const focusId = targets.some((d) => d.id === focus) ? focus : (targets[0]?.id ?? "");
@@ -247,7 +227,7 @@ export function useResample(): ResampleState {
     previewOnly,
     blockedByUnits,
     unitsAcknowledged,
-    setUnitsAcknowledged: (ok) => setAckFor(ok ? key : null),
+    setUnitsAcknowledged,
     canCreate: allOk && !blockedByUnits && !busy && targets.length > 0,
     busy,
     error,

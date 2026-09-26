@@ -34,7 +34,7 @@ describe("transformForm", () => {
     const f = seedForm("join", ["b", "a"], sets);
     expect([f.primary, f.right, f.appendIds]).toEqual(["b", "a", ["b", "a"]]);
     expect(formToRun({ ...f, leftKey: "t:ID", rightKey: "0" }, sets)).toEqual({
-      params: { op: "join", leftKey: "ID", rightKey: 0, mode: "inner", with: { id: "a", name: "a.dat" } },
+      params: { op: "join", leftKey: "ID", rightKey: 0, mode: "inner", keyMode: "text", with: { id: "a", name: "a.dat" } },
       primaryId: "b",
       otherIds: ["a"],
     });

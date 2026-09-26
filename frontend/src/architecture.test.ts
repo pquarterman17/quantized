@@ -560,6 +560,27 @@ describe("store-size ratchet (MAIN_PLAN #2)", () => {
   });
 });
 
+// Review finding 8 (P2.5): "Merge N selected" used to lazy-import the whole
+// lib/transformRun chunk JUST to open the (already-lazy) Reshape & combine
+// workshop — a chunk-load failure there surfaces as an unhandled rejection
+// for an action that does no async work at all. Opening is now a plain,
+// eager store/transformPreviewDialog.ts write; only the workshop's OWN
+// Create still lazy-loads lib/transformRun. Grep-level, matching this file's
+// own SEAMS/ratchet idiom, so a regression back to `await import(...)` here
+// fails a fast unit test rather than only showing up as a bundle-size or
+// runtime surprise.
+describe("mergeSelected opens the workshop eagerly (review finding 8)", () => {
+  it("store/useApp.ts's mergeSelected action never lazy-imports lib/transformRun", () => {
+    const [, src] = sources().find(([p]) => p.endsWith("/store/useApp.ts"))!;
+    // `mergeSelected: () => Promise<void>;` (the interface field) also
+    // contains "mergeSelected:" — match the IMPLEMENTATION line specifically
+    // (`mergeSelected: async`), never the type declaration above it.
+    const line = src.split("\n").find((l) => l.includes("mergeSelected: async"));
+    expect(line, "mergeSelected: async ... not found in store/useApp.ts").toBeDefined();
+    expect(line).not.toMatch(/import\(/);
+  });
+});
+
 // Module-size ratchet for non-store `.ts` (JMP_GAP #14, 2026-07-29). The two
 // guards above cover `.tsx` components and the store slices; everything else
 // under lib/ and the workshop hooks sat in a gap, and the JMP campaign found

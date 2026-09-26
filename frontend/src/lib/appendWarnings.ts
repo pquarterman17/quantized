@@ -5,6 +5,7 @@
 // what the append will do to the data.
 
 import { alignColumnsByName, type AppendMatch } from "./mergeByName";
+import { sidecarRowCount } from "./rowSidecars";
 import { columnName, columnUnitOf, unitsConflict, type TransformWarning } from "./transformWarnings";
 import type { DataStruct } from "./types";
 
@@ -51,7 +52,11 @@ export function analyzeMerge(
     datasets.forEach((d, i) => {
       const missing = a.labels.filter((_, c) => a.cols[i][c] < 0);
       if (!missing.length) return;
-      const rows = Math.max(d.time.length, d.values.length);
+      // The SAME row count `mergeDatasets` (lib/merge.ts) pads this input to
+      // — `sidecarRowCount`, not the bare numeric grid — so a text-only or
+      // sidecar-padded part's row count is not under-reported here (review
+      // finding 4).
+      const rows = sidecarRowCount(d.metadata, Math.max(d.time.length, d.values.length));
       out.push({
         code: "missing-columns",
         text: `${names[i]} has no ${missing.map((m) => `"${m}"`).join(", ")} column${missing.length === 1 ? "" : "s"}; ${rows === 1 ? "its row is" : `its ${rows} rows are`} left blank (NaN) there.`,

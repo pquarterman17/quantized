@@ -18,7 +18,6 @@ const { datasetAlgebra } = await import("./api/datasetAlgebra");
 const {
   reviewedAppend,
   reviewTransform,
-  runMergeSelected,
   runTransform,
   transformParamsOf,
   transformStepText,
@@ -177,19 +176,68 @@ describe("transformParamsOf (recorded params are user-editable JSON)", () => {
   });
 });
 
+// Review finding 2: a categorical channel now keys by its LEVEL TEXT, and the
+// two datasets here deliberately number "lo"/"hi" in OPPOSITE order, so the
+// old (raw-code) and new (level-text) semantics pair up different rows —
+// proof positive of which one actually ran, not just "it didn't throw".
+describe("join keyMode — old steps replay unchanged (review finding 2)", () => {
+  const lg: Dataset = {
+    id: "LG",
+    name: "left.dat",
+    data: { time: [10, 20], values: [[0, 100], [1, 200]], labels: ["grade", "v"], units: ["", ""], metadata: {}, cat_levels: { 0: ["lo", "hi"] } },
+  };
+  const rg: Dataset = {
+    id: "RG",
+    name: "right.dat",
+    data: { time: [1, 2], values: [[0, 7], [1, 8]], labels: ["grade", "w"], units: ["", ""], metadata: {}, cat_levels: { 0: ["hi", "lo"] } },
+  };
+  const params = { op: "join" as const, leftKey: 0, rightKey: 0, mode: "inner" as const, with: { id: "RG", name: "right.dat" } };
+
+  beforeEach(() => {
+    useApp.setState({ datasets: [lg, rg], activeId: "LG", selectedIds: ["LG"], macroRecording: true, macroSteps: [] });
+  });
+
+  it("no keyMode field (a step recorded before this feature existed) replays with the OLD numeric-code semantics", async () => {
+    const out = await runTransform(useApp.getState, params, "LG", async () => true);
+    const ds = useApp.getState().datasets.find((d) => d.id === out!.id)!;
+    // Raw codes matched directly: left's code 0 (v=100) with right's code 0
+    // (w=7) — "lo" in the LEFT table, "hi" in the right one, but "code" mode
+    // never looks at either table.
+    expect(ds.data.labels).toEqual(["v", "w"]);
+    expect(ds.data.values).toEqual([[100, 7], [200, 8]]);
+    // Round-tripping the recorded step (as a .dwk/template would) carries no
+    // keyMode either — replay stays on "code" forever, not just this once.
+    expect(transformParamsOf({ ...useApp.getState().macroSteps[0].params })).not.toHaveProperty("keyMode");
+  });
+
+  it("keyMode: 'text' (how every step is recorded now) replays by LEVEL TEXT instead", async () => {
+    const out = await runTransform(useApp.getState, { ...params, keyMode: "text" as const }, "LG", async () => true);
+    const ds = useApp.getState().datasets.find((d) => d.id === out!.id)!;
+    // "lo" (left code 0) matches right's "lo", which is code 1 there
+    // (v=100, w=8); "hi" (left code 1) matches right's "hi" (code 0, w=7) —
+    // the OPPOSITE pairing from the "code" test above.
+    expect(ds.data.labels).toEqual(["grade", "X", "v", "Right: X", "w"]);
+    expect(ds.data.values).toEqual([[0, 10, 100, 2, 8], [1, 20, 200, 1, 7]]);
+    expect(useApp.getState().macroSteps[0].params).toMatchObject({ keyMode: "text" });
+  });
+});
+
 describe("Merge selected / append import (by column position)", () => {
   const A: Dataset = { id: "A", name: "a.dat", data: { time: [1], values: [[1]], labels: ["M"], units: ["emu"], metadata: {} } };
   const B: Dataset = { id: "B", name: "b.dat", data: { time: [2], values: [[2]], labels: ["M"], units: ["A m2"], metadata: {} } };
 
   it("Merge selected opens the previewed append on the selection, in order, and creates nothing itself", async () => {
+    // Goes straight through useApp.ts's own `mergeSelected` action now
+    // (review finding 8) — no `lib/transformRun` import needed to open the
+    // workshop, so this exercises exactly what a click on the command runs.
     useApp.setState({ datasets: [A, B], selectedIds: ["B", "A"], activeId: "A" });
-    await runMergeSelected(useApp.getState);
+    await useApp.getState().mergeSelected();
     expect(useTransformPreviewDialog.getState()).toMatchObject({ op: "merge", seed: ["B", "A"] });
     expect(useApp.getState().datasets).toHaveLength(2);
     expect(askConfirm).not.toHaveBeenCalled();
     // Nothing selected: the active dataset seeds it (the user ticks the rest).
     useApp.setState({ selectedIds: [] });
-    await runMergeSelected(useApp.getState);
+    await useApp.getState().mergeSelected();
     expect(useTransformPreviewDialog.getState().seed).toEqual(["A"]);
   });
 

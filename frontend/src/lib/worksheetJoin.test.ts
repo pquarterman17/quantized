@@ -8,7 +8,7 @@ import { describe, expect, it } from "vitest";
 import { transformParamsOf } from "./transformRun";
 import { analyzeJoin } from "./transformWarnings";
 import type { DataStruct } from "./types";
-import { joinKeyColumn, joinWorksheets } from "./worksheetJoin";
+import { joinKeyColumn, joinWorksheets, planCarriedText } from "./worksheetJoin";
 
 // Sample ids as a categorical channel. Left numbers "B" as code 1, right as 0.
 const left: DataStruct = {
@@ -35,7 +35,8 @@ describe("join by a text key", () => {
     // (row 3) are not joined.
     // Each side's own X is carried as a column: a text key cannot be the X.
     expect(out.labels).toEqual(["Sample", "X", "Tc", "Right: X", "Hc", "Grade"]);
-    expect(out.time).toEqual([0, 1]);
+    // 1-based, like every other Row axis in the app (finding 9).
+    expect(out.time).toEqual([1, 2]);
     expect(out.cat_levels?.[0]).toEqual(["A", "B"]);
     // A: left row 0 (x 0, Tc 1.5) / right row 2 (x 2, Hc 9, Grade code 1 =
     // "hi"); B: left row 1 / right row 0.
@@ -107,5 +108,125 @@ describe("join by a text key", () => {
     const p = transformParamsOf({ op: "join", leftKey: "ID", rightKey: 0, mode: "left", with: { id: "R", name: "r" } });
     expect(p).toEqual({ op: "join", leftKey: "ID", rightKey: 0, mode: "left", with: { id: "R", name: "r" } });
     expect(() => transformParamsOf({ op: "join", leftKey: 1.5, rightKey: 0, with: { id: "R" } })).toThrow(/integer "leftKey"/);
+  });
+
+  // Review finding 2: `keyMode` only changes how a CATEGORICAL channel keys —
+  // "code" (the pre-P2.5 default every unversioned recorded step replays
+  // with) reads its raw numeric code; "text" (this function's own default,
+  // matching every direct call above) reads its level string instead. The
+  // two datasets below number "lo"/"hi" in opposite order, so the two modes
+  // genuinely pair up different rows.
+  it("keyMode 'code' joins a categorical channel by its raw code, not its level text", () => {
+    const l: DataStruct = { time: [10, 20], values: [[0, 100], [1, 200]], labels: ["grade", "v"], units: ["", ""], metadata: {}, cat_levels: { 0: ["lo", "hi"] } };
+    const r: DataStruct = { time: [1, 2], values: [[0, 7], [1, 8]], labels: ["grade", "w"], units: ["", ""], metadata: {}, cat_levels: { 0: ["hi", "lo"] } };
+    const byText = joinWorksheets(l, r, 0, 0, "inner"); // default: "text"
+    expect(byText.labels).toEqual(["grade", "X", "v", "Right: X", "w"]);
+    expect(byText.values).toEqual([[0, 10, 100, 2, 8], [1, 20, 200, 1, 7]]);
+    const byCode = joinWorksheets(l, r, 0, 0, "inner", "code");
+    expect(byCode.labels).toEqual(["v", "w"]); // no key channel at all under "code" — a plain numeric join
+    expect(byCode.values).toEqual([[100, 7], [200, 8]]);
+  });
+
+  it("keyMode 'code' never refuses a text-vs-numeric pairing (that distinction didn't exist yet)", () => {
+    expect(() => joinWorksheets(left, right, 0, 1, "inner", "code")).not.toThrow();
+  });
+});
+
+describe("join — carried non-key text columns (finding 1)", () => {
+  const l: DataStruct = {
+    time: [0, 1, 2],
+    values: [[0], [1], [2]],
+    labels: ["k"],
+    units: [""],
+    metadata: { text_columns: { Notes: ["ln0", "ln1", "ln2"], Batch: ["B1", "B2", "B3"] } },
+  };
+  const r: DataStruct = {
+    time: [0, 1],
+    values: [[0], [1]],
+    labels: ["k"],
+    units: [""],
+    metadata: { text_columns: { Notes: ["rn0", "rn1"] } },
+  };
+
+  it("carries every non-key text column, row-aligned, L/R-suffixed on a name clash", () => {
+    const out = joinWorksheets(l, r, 0, 0, "left");
+    expect(out.time).toEqual([0, 1, 2]); // every left key kept — right's k=2 is missing
+    expect(out.metadata.text_columns).toEqual({
+      Notes: ["ln0", "ln1", "ln2"],
+      Batch: ["B1", "B2", "B3"],
+      // Right's OWN "Notes" collides with left's — suffixed like a numeric
+      // channel would be; blank ("") for the row right has no match for.
+      "Right: Notes": ["rn0", "rn1", ""],
+    });
+  });
+
+  it("a text-key join carries non-key columns too (not just a numeric key)", () => {
+    const withKey: DataStruct = { ...l, metadata: { text_columns: { Notes: ["ln0", "ln1", "ln2"], Batch: ["B1", "B2", "B3"], ID: ["a", "b", "c"] } } };
+    const rWithKey: DataStruct = { ...r, metadata: { text_columns: { Notes: ["rn0", "rn1"], ID: ["a", "b"] } } };
+    const out = joinWorksheets(withKey, rWithKey, "ID", "ID", "left");
+    // "ID" itself is excluded from carrying (it's already the join's key
+    // channel); Notes/Batch are carried exactly as in the numeric-key case.
+    expect(out.metadata.text_columns).toEqual({ Notes: ["ln0", "ln1", "ln2"], Batch: ["B1", "B2", "B3"], "Right: Notes": ["rn0", "rn1", ""] });
+  });
+
+  it("planCarriedText drops a column whose suffixed name still collides, and analyzeJoin names it", () => {
+    const rClash: DataStruct = { ...r, metadata: { text_columns: { Notes: ["x", "y"], "Right: Notes": ["p", "q"] } } };
+    const plan = planCarriedText(l, rClash, 0, 0);
+    // Origin short-name order (length-then-lex): "Batch" before "Notes".
+    expect(plan.kept.map((c) => c.name)).toEqual(["Batch", "Notes", "Right: Notes"]);
+    expect(plan.dropped).toEqual([{ name: "Right: Notes", side: "right", shortName: "Right: Notes", col: { shortName: "Right: Notes", rows: ["p", "q"] } }]);
+    const w = analyzeJoin(l, rClash, 0, 0, "left", "l.dat", "r.dat");
+    const dropped = w.find((x) => x.code === "text-column-dropped");
+    expect(dropped?.text).toBe('r.dat: its text column "Right: Notes" could not be carried into the result — the name "Right: Notes" is already used by another carried column.');
+  });
+});
+
+describe("join — a text-sidecar key shorter than the dataset's rows (finding 3)", () => {
+  it("treats a missing sidecar cell as a blank key, COUNTED, rather than silently uncounted", () => {
+    const ds: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [[1], [2], [3], [4]],
+      labels: ["v"],
+      units: [""],
+      // Only 2 of 4 rows have an ID cell — rows 2 and 3 must not just vanish
+      // from `joinKeyColumn`'s own output (one key per DATA row, not per
+      // sidecar cell).
+      metadata: { text_columns: { ID: ["s1", "s2"] } },
+    };
+    expect(joinKeyColumn(ds, "ID")).toEqual({ kind: "text", keys: ["s1", "s2", null, null] });
+    const other: DataStruct = { time: [0], values: [[10]], labels: ["w"], units: [""], metadata: { text_columns: { ID: ["s1"] } } };
+    // The join itself is unaffected here (a blank key never matches either
+    // way) — what changes is the WARNING: rows 2/3 are now counted rather
+    // than silently missing from both the match and the count.
+    const out = joinWorksheets(ds, other, "ID", "ID", "left");
+    expect(out.time).toEqual([1, 2]); // s1 (matched) and s2 (left-only)
+    const w = analyzeJoin(ds, other, "ID", "ID", "left", "ds.dat", "other.dat");
+    expect(w.find((x) => x.code === "blank-keys")).toMatchObject({
+      count: 2,
+      text: 'ds.dat: 2 rows with a blank "ID" cannot match anything and are dropped.',
+    });
+  });
+});
+
+describe("join — bounded output for a live preview (finding 5)", () => {
+  const l: DataStruct = { time: [0, 1, 2, 3, 4], values: [[10], [11], [12], [13], [14]], labels: ["a"], units: [""], metadata: {} };
+  const r: DataStruct = { time: [0, 1, 2, 3, 4], values: [[20], [21], [22], [23], [24]], labels: ["b"], units: [""], metadata: {} };
+
+  it("caps the materialized rows and records the true count, without changing which keys match", () => {
+    const full = joinWorksheets(l, r, -1, -1, "inner");
+    expect(full.time).toEqual([0, 1, 2, 3, 4]);
+    expect(full.metadata).not.toHaveProperty("preview_truncated_from");
+
+    const capped = joinWorksheets(l, r, -1, -1, "inner", "text", 3);
+    expect(capped.time).toEqual([0, 1, 2]); // the first 3 of the 5 real matches
+    expect(capped.values).toEqual(full.values.slice(0, 3));
+    expect(capped.metadata.preview_truncated_from).toBe(5);
+  });
+
+  it("a limit at or above the real row count changes nothing — an exact preview stays exact", () => {
+    const exact = joinWorksheets(l, r, -1, -1, "inner", "text", 5);
+    const full = joinWorksheets(l, r, -1, -1, "inner");
+    expect(exact).toEqual(full);
+    expect(exact.metadata).not.toHaveProperty("preview_truncated_from");
   });
 });

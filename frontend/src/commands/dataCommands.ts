@@ -8,15 +8,7 @@ import type { StoreGet } from "../lib/exportActive";
 import type { Action } from "../store/commands";
 import { openResampleDialog } from "../store/resampleDialog";
 import { SHOW_SQLITE_QUERY } from "../store/sqliteQueryDialog";
-import { openTransformPreview, type PreviewOp } from "../store/transformPreviewDialog";
-
-/** The Library selection, else the active dataset — what a Data-menu
- *  workshop opens on. */
-function seedIds(s: StoreGet): string[] {
-  const st = s();
-  const picked = st.selectedIds.filter((id) => st.datasets.some((d) => d.id === id));
-  return picked.length ? picked : st.activeId ? [st.activeId] : [];
-}
+import { openTransformPreview, seedIds, type PreviewOp } from "../store/transformPreviewDialog";
 
 /** P2.5: the reshapes and the join open the lazy Reshape & combine workshop
  *  (a live preview before anything is created) with the ACTIVE dataset as the
