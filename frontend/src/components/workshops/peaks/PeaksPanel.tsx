@@ -142,10 +142,14 @@ export default function PeaksPanel() {
   // Require the table to be THIS dataset's and to have the same row count
   // before pairing at all; otherwise no checkbox renders for that one frame,
   // which is the honest answer rather than a wrong one.
+  // …and (2026-09-26) the same CENTRES: a table published from the Peak
+  // Analyzer while this panel shows another fit of the same length would
+  // otherwise pair the old values with the new errors until the refresh lands.
   const entries =
     peakTable &&
     peakTable.provenance.datasetId === active?.id &&
-    peakTable.peaks.length === (fitResult?.peaks.length ?? -1)
+    peakTable.peaks.length === (fitResult?.peaks.length ?? -1) &&
+    peakTable.peaks.every((e, i) => e.center === fitResult?.peaks[i]?.center)
       ? peakTable.peaks
       : null;
   // Errors are shown only for a table that measured them (a model fit's).
@@ -283,7 +287,9 @@ export default function PeaksPanel() {
                 ? "" // table not yet paired with this fit (one frame on a switch)
                 : peakTable?.provenance.method === "independent"
                   ? "independent fits"
-                  : "fit metrics cleared by manual changes"}
+                  : modelFit && peakTable?.provenance.ssr != null
+                    ? "R² undefined" // an unedited model fit (SSR clears with R² on any edit)
+                    : "fit metrics cleared by manual changes"}
             {modelFit && " · Peak Analyzer model fit"}
             {manualEditCount(fitResult.peaks) > 0 && ` · ${manualEditCount(fitResult.peaks)} edited by hand`}
             {fitResult.rmse != null && ` · RMSE = ${fmtNum(fitResult.rmse)}`}

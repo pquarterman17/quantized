@@ -63,6 +63,36 @@ function wizardWithTwoPeaks() {
   return hook;
 }
 
+describe("useModelFit — publish provenance (P2.1)", () => {
+  const route = (failBaseline: boolean) => (i: number) => {
+    const url = calls[i].url;
+    if (url.includes("model-fit")) return json(200, modelFitResponse());
+    if (failBaseline) return json(500, { detail: "baseline failed" });
+    return json(200, { baseline: DATA.values.map(() => 0.25) });
+  };
+
+  it.each([
+    [false, "constant background after als baseline", 0.75],
+    [true, "constant background", 0.5], // a FAILED baseline was never subtracted
+  ])("records the baseline actually subtracted (baseline fails: %s)", async (failBaseline, label, bg) => {
+    stubFetch(route(failBaseline));
+    const { result } = wizardWithTwoPeaks();
+    act(() => result.current.patchRecipe({ baseline: { method: "als" } }));
+    // Wait for the step-① baseline to settle: an error when it fails, else done.
+    await waitFor(() => {
+      expect(result.current.baselineBusy).toBe(false);
+      if (failBaseline) expect(result.current.baselineError).not.toBeNull();
+      else expect(calls.some((c) => !c.url.includes("model-fit"))).toBe(true);
+    });
+    await act(() => result.current.model.run());
+    await waitFor(() => expect(result.current.model.result).not.toBeNull());
+    await act(() => result.current.model.publishToTable());
+    const t = useApp.getState().datasets[0].peakTable!;
+    expect(t.provenance.background).toBe(label);
+    expect(t.peaks[0].bg).toBeCloseTo(bg, 12);
+  });
+});
+
 describe("useModelFit — request", () => {
   it("is the default engine and posts shapes, background and every parameter over the cut segment", async () => {
     stubFetch(() => json(200, modelFitResponse()));

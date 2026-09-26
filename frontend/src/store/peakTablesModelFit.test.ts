@@ -31,7 +31,8 @@ beforeEach(() => {
 
 describe("publishBuiltPeakTable", () => {
   it("publishes the built table as one undo step", async () => {
-    expect(await publishBuiltPeakTable("d1", FP, build)).toBeNull();
+    const out = await publishBuiltPeakTable("d1", FP, build);
+    expect("table" in out && out.table).toBe(table());
     expect(table().provenance.producer).toBe("model_fit");
     expect(table().peaks[0].centerErr).toBe(0.004);
     expect(useApp.getState().history.map((h) => h.label)).toEqual(["publish model fit to peak table"]);
@@ -42,13 +43,22 @@ describe("publishBuiltPeakTable", () => {
   it("refuses, writing nothing, when the data changed since the fit", async () => {
     const edited = { ...DS, data: { ...DS.data, values: [[1], [2], [7], [2], [3], [1]] } };
     useApp.setState({ datasets: [edited] });
-    expect(await publishBuiltPeakTable("d1", FP, build)).toMatch(/changed since this fit/);
+    expect(await publishBuiltPeakTable("d1", FP, build)).toEqual({ reason: expect.stringMatching(/changed since this fit/) });
     expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
     expect(useApp.getState().history).toHaveLength(0);
   });
 
   it("refuses for a dataset that is gone", async () => {
-    expect(await publishBuiltPeakTable("gone", FP, build)).toMatch(/no longer available/);
+    expect(await publishBuiltPeakTable("gone", FP, build)).toEqual({ reason: expect.stringMatching(/no longer available/) });
+  });
+
+  it("a builder that throws writes nothing and leaves NO undo step", async () => {
+    const boom = () => {
+      throw new Error("bad response");
+    };
+    await expect(publishBuiltPeakTable("d1", FP, boom)).rejects.toThrow("bad response");
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
   });
 
   it("builds against the LIVE record, so a re-publish keeps the user's exclusions", async () => {

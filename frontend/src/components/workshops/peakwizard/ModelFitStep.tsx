@@ -52,7 +52,7 @@ export default function ModelFitStep({ w }: { w: PeakWizardState }) {
           </Button>
         )}
       </div>
-      {r && !m.busy && m.publishBlock && (
+      {r && !m.busy && m.publishBlock && !m.published && (
         <div className="qzk-ds-meta" style={{ ...faint, marginTop: 6 }}>
           Not publishable: {m.publishBlock}
         </div>

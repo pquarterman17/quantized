@@ -107,7 +107,8 @@ export function useWilliamsonHall(): WilliamsonHallState {
     // always true is that this table can no longer be trusted as a
     // measurement of these rows, and that re-fitting is the one fix.
     if (!peakTableMatchesData(table, active))
-      return "this dataset has changed since the fit — re-fit the peaks in the Peaks workshop";
+      return `this dataset has changed since the fit — re-fit the peaks in the ${
+        table.provenance.producer === "model_fit" ? "Peak Analyzer and publish again" : "Peaks workshop"}`;
     if (!peakTableXIsDegrees(table))
       return `fit on ${table.provenance.xLabel || "a non-2θ axis"} (${table.provenance.xUnit || "no unit recorded"}), not 2θ in degrees`;
     return null;

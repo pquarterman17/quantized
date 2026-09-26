@@ -96,21 +96,24 @@ export function publishFitResult(
  *  what the fit ran on (`fitFingerprint`, `peakDataFingerprint` of the dataset
  *  at fit time): publishing a table every reader would reject as stale helps
  *  nobody. `build` receives the LIVE record, so the exclusions the user has
- *  now carry over. One undo step. Returns why nothing was written, or null. */
+ *  now carry over; it runs BEFORE the undo step is recorded, so a builder
+ *  that throws leaves no empty history entry. One undo step. Returns the
+ *  table written, or why nothing was. */
 export async function publishBuiltPeakTable(
   datasetId: string,
   fitFingerprint: string,
   build: (ds: Dataset) => PeakTable,
-): Promise<string | null> {
+): Promise<{ table: PeakTable } | { reason: string }> {
   await useApp.getState().resolveDataset(datasetId);
   const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
-  if (!ds) return "the dataset is no longer available";
+  if (!ds) return { reason: "the dataset is no longer available" };
   if (ds.pending || peakDataFingerprint(ds) !== fitFingerprint) {
-    return "the dataset's data changed since this fit (or only a preview had loaded) — re-fit, then publish";
+    return { reason: "the dataset's data changed since this fit (or only a preview had loaded) — re-fit, then publish" };
   }
+  const table = build(ds);
   useApp.getState().recordHistory("publish model fit to peak table");
-  publishPeakTable(datasetId, build(ds));
-  return null;
+  publishPeakTable(datasetId, table);
+  return { table };
 }
 
 /** Flip one peak's `excluded` flag, addressed by its durable id.

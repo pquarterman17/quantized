@@ -92,6 +92,19 @@ describe("Peak Analyzer — Publish to peak table", () => {
     expect(useApp.getState().history.map((h) => h.label)).toEqual(["publish model fit to peak table"]);
   });
 
+  it("stays disabled once published, until an Undo takes the table back", async () => {
+    await fit(modelFitResponse());
+    fireEvent.click(publishBtn());
+    await screen.findByText(/published 2 peaks/);
+    expect(publishBtn()).toBeDisabled();
+    expect(publishBtn()).toHaveAttribute("title", expect.stringMatching(/already published/));
+    expect(screen.queryByText(/Not publishable/)).not.toBeInTheDocument();
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
+    expect(screen.queryByText(/published 2 peaks/)).not.toBeInTheDocument();
+    expect(publishBtn()).toBeEnabled();
+  });
+
   it("publishes once per click burst: a double click is one undo step", async () => {
     await fit(modelFitResponse());
     fireEvent.click(publishBtn());

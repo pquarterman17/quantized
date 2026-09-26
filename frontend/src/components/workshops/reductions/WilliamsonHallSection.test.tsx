@@ -285,4 +285,13 @@ describe("Williamson-Hall — a table the Peak Analyzer published (model fit, wi
       instrumental_broadening_deg: 0,
     });
   });
+
+  it("a stale model-fit table names the Peak Analyzer as the remedy, not the Peaks workshop", () => {
+    const t = peakTableFromModelFit(modelFitResponse(), { id: "d1", name: "film.xrdml", data: scan }, {
+      xKey: null, recipe: null, baseline: "none", bgAtCenter: [5, 5], fingerprint: "fp-of-other-data",
+    }, null);
+    mount({ ...t, provenance: { ...t.provenance, xLabel: "2-Theta", xUnit: "deg" } });
+    expect(screen.getByText(/re-fit the peaks in the Peak Analyzer and publish again/)).toBeInTheDocument();
+    expect(screen.queryByText(/Peaks workshop$/)).not.toBeInTheDocument();
+  });
 });

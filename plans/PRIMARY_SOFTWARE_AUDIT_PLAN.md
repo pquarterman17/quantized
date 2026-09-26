@@ -3070,14 +3070,33 @@ a plan edit.
   865,639 B (+8 B, pin unchanged at 866,358): no eager code — the shared
   lazy chunk `peaks-*.js` became `peakTables-*.js` in the entry's preload
   map (+5) and the wizard's preload list gained the already-shared
-  `xrdWavelength` chunk's index (+3). **Deferred:** (a) Williamson-Hall WEIGHTING by
+  `xrdWavelength` chunk's index (+3).
+  **Review round 2 (same day, 8 findings fixed, each with a test that went
+  red when its fix was reverted):** the Peaks table pairs the durable rows
+  with the shown fit by CENTRES as well as count, so a publish while the
+  panel shows another same-length fit never pairs old values with new
+  errors; the builder runs before the undo step is recorded (a throwing
+  builder leaves no empty history entry); once published the button stays
+  disabled ("already published") while that table is the dataset's, and an
+  Undo re-enables it and drops the "published" note; an unedited model fit
+  whose R² is undefined says so instead of "cleared by manual changes";
+  Williamson-Hall's stale-table remedy names the Peak Analyzer for a model-
+  fit table; the provenance names only a baseline that was really subtracted
+  (a failed step-① baseline leaves the fit on the raw trace); the data
+  fingerprint is taken at publish time from the fit-time record (records are
+  immutable), so a fit that is never published never hashes the dataset.
+  **Deferred:** (a) Williamson-Hall WEIGHTING by
   these errors — new numerics, needs a MATLAB golden of a weighted WH
   first; per-point error bars on the WH plot were not added either; (b)
   publishing from the batch table (a batch row has no fit curve for `bg`,
   and each dataset's x channel / fingerprint would have to be captured at
   prepare time); (c) the Peaks workshop's "→ Report" still emits a
   published model-fit table through the `multipeak_fit` emitter, which has
-  no error columns (the Peak Analyzer's own report carries them).
+  no error columns (the Peak Analyzer's own report carries them) — needs an
+  emitter change; (d) a Peaks-workshop re-fit replaces a published model-fit
+  table without a prompt (the existing re-fit semantics, one undo step;
+  `usePeaks.ts` sits at 491/500 lines, so a confirm there wants a split
+  first).
 - [~] Manual peak edits and reviewed batch recipe. **2026-09-23 slice:** fitted
   peak rows can now be selected, edited (center/FWHM/height/area), or removed
   directly in the Peaks workshop. The durable `PeakTable` is the source of

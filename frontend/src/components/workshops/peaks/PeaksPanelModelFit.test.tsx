@@ -33,9 +33,13 @@ function show(ds: Dataset) {
   render(<PeaksPanel />);
 }
 
+// One test holds `resolveDataset` open; every test starts from the real one.
+const realResolve = useApp.getState().resolveDataset;
+
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(findPeaks).mockResolvedValue({ peaks: [], background: [] });
+  useApp.setState({ resolveDataset: realResolve });
 });
 
 describe("PeaksPanel — a published model-fit table", () => {
@@ -78,6 +82,39 @@ describe("PeaksPanel — a published model-fit table", () => {
     const fresh = await screen.findByRole("table", { name: "fitted peaks" });
     await waitFor(() => expect(within(fresh).getAllByRole("cell")[1]).toHaveTextContent("2.01 ± 0.004"));
     expect(within(fresh).getAllByRole("row")[2]).toHaveTextContent("4");
+  });
+
+  it("never pairs the OLD fit's values with a newly published table's errors while the refresh is pending", async () => {
+    const legacy = peakTableFromFit(
+      { peaks: [7, 9].map((c) => ({ center: c, fwhm: 0.8, height: 5, bg: 0.5, eta: null, area: 4, status: "fitted", model: "Gaussian" })),
+        bgCoeffs: [0.5], R2: 0.9, rmse: 0.1, nPeaks: 2, model: "Gaussian" },
+      { datasetId: "d1", datasetName: "x.dat", method: "simultaneous", bgDegree: 0, linkMode: "None",
+        constrain: false, wavelengthA: null, fingerprint: peakDataFingerprint(DS) },
+    );
+    show({ ...DS, peakTable: legacy });
+    const grid = await screen.findByRole("table", { name: "fitted peaks" });
+    await waitFor(() => expect(within(grid).getAllByRole("cell")[1]).toHaveTextContent("7"));
+    // Hold the panel's refresh (it awaits resolveDataset) so the frame between
+    // the store write and the refresh is observable.
+    act(() => useApp.setState({ resolveDataset: () => new Promise<undefined>(() => {}) }));
+    const published = peakTableFromModelFit(modelFitResponse(), DS, {
+      xKey: null, recipe: null, baseline: "none", bgAtCenter: [0.5, 0.5], fingerprint: peakDataFingerprint(DS),
+    }, legacy);
+    act(() => publishPeakTable("d1", published));
+    const now = screen.getByRole("table", { name: "fitted peaks" });
+    expect(within(now).getAllByRole("cell")[1]).toHaveTextContent(/^7$/); // old value, no borrowed error
+    expect(now).not.toHaveTextContent("±");
+  });
+
+  it("an unedited model fit with no R² says 'R² undefined', not 'cleared by manual changes'", async () => {
+    const res = modelFitResponse({ metrics: { r_squared: null } });
+    const table = peakTableFromModelFit(res, DS, {
+      xKey: null, recipe: null, baseline: "none", bgAtCenter: [0.5, 0.5], fingerprint: peakDataFingerprint(DS),
+    }, null);
+    show({ ...DS, peakTable: table });
+    await screen.findByRole("table", { name: "fitted peaks" });
+    expect(screen.getByText(/R² undefined/)).toBeInTheDocument();
+    expect(screen.queryByText(/cleared by manual changes/)).not.toBeInTheDocument();
   });
 
   it("keeps a legacy table's cells bare — no column of dashes for errors never measured", async () => {
