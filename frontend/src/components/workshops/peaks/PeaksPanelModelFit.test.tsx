@@ -104,6 +104,18 @@ describe("PeaksPanel — a model-fit peak table", () => {
     expect(screen.queryByText(/cleared by manual changes/)).not.toBeInTheDocument();
   });
 
+  it("a χ² (weighted) fit's R² is labelled weighted", async () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "x.dat", data: DATA, peakTable: modelTable(modelFitResponse({
+        metrics: { objective: "chi2", chi2: 9.5, reduced_chi2: 1.1 },
+      })) }],
+    });
+    render(<PeaksPanel />);
+    await screen.findByRole("table", { name: "fitted peaks" });
+    expect(screen.getByText(/weighted R² = 0\.998/)).toBeInTheDocument();
+    expect(screen.getByText(/model fit · χ² = 9\.5/)).toBeInTheDocument();
+  });
+
   it("a manual edit drops only the edited field's error", async () => {
     vi.mocked(askParams).mockResolvedValue({ center: 2.05, fwhm: 0.81, height: 5.2, area: 5.9 });
     render(<PeaksPanel />);

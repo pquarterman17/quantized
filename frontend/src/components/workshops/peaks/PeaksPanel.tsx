@@ -12,7 +12,7 @@
 
 import { useState } from "react";
 
-import { producerNote, reportResult, ValueErr } from "./fittedPeakCells";
+import { producerNote, r2Label, reportResult, ValueErr } from "./fittedPeakCells";
 import PeakFitControls from "./PeakFitControls";
 import PeakTable from "./PeakTable";
 import { usePeakTableSelection } from "./peakSelection";
@@ -277,7 +277,7 @@ export default function PeaksPanel() {
           <div className="qzk-ds-meta" style={{ ...faint, marginBottom: 4 }}>
             {fitResult.model} ·{" "}
             {fitResult.R2 != null
-              ? `R² = ${fmtNum(fitResult.R2)}`
+              ? `${r2Label(peakTable?.provenance)} = ${fmtNum(fitResult.R2)}`
               : !entries
                 ? "" // table not yet paired with this fit (one frame on a switch)
                 : peakTable?.provenance.method === "independent"

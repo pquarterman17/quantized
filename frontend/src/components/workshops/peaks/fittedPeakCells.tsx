@@ -39,6 +39,12 @@ export function ValueErr({ value, entry, field }: {
   );
 }
 
+/** "weighted R²" for a χ² (weighted) model fit — its R² is computed with the
+ *  same weights (calc/peak_model_fit.py) — else "R²". */
+export function r2Label(p: PeakTableProvenance | undefined): string {
+  return p?.objective?.kind === "chi2" ? "weighted R²" : "R²";
+}
+
 /** " · model fit · SSR = …" for a model-fit table; "" for a classic one. The
  *  objective keeps its honest name: χ² only for a weighted fit. */
 export function producerNote(p: PeakTableProvenance | undefined): string {

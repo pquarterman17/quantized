@@ -194,6 +194,34 @@ def test_from_multipeak_fit_prints_model_fit_errors_and_objective() -> None:
     assert not any(r[0] == "χ²" for r in gof_t["rows"])
 
 
+def test_from_multipeak_fit_model_fit_keeps_the_pm_layout_when_every_error_is_null() -> None:
+    result = {
+        "peaks": [{"model": "Gaussian", "center": 36.0, "fwhm": 0.4, "height": 800.0,
+                   "area": 340.0, "eta": None, "centerErr": None, "fwhmErr": None,
+                   "heightErr": None, "areaErr": None}],
+        "R2": 0.99, "rmse": None, "nPeaks": 1, "model": "Gaussian",
+        "objective": {"kind": "ssr", "value": 3.0, "reduced": 0.1},
+    }
+    peaks_t, _ = [b for b in from_multipeak_fit(result).iter_blocks() if b["type"] == "table"]
+    assert "± center" in peaks_t["columns"]
+    assert peaks_t["rows"][0][3] == "—" and peaks_t["rows"][0][9] == "—"
+
+
+def test_from_multipeak_fit_labels_a_chi2_fits_r2_as_weighted() -> None:
+    base = {
+        "peaks": [{"model": "Gaussian", "center": 36.0, "fwhm": 0.4, "height": 800.0,
+                   "area": 340.0, "eta": None, "centerErr": 0.001}],
+        "R2": 0.97, "rmse": None, "nPeaks": 1, "model": "Gaussian",
+    }
+    chi = {**base, "objective": {"kind": "chi2", "value": 12.0, "reduced": 1.2}}
+    _, gof = [b for b in from_multipeak_fit(chi).iter_blocks() if b["type"] == "table"]
+    assert ["weighted R²", 0.97] in gof["rows"] and ["χ²", 12.0] in gof["rows"]
+    assert not any(r[0] == "R²" for r in gof["rows"])
+    ssr = {**base, "objective": {"kind": "ssr", "value": 3.0, "reduced": 0.1}}
+    _, gof = [b for b in from_multipeak_fit(ssr).iter_blocks() if b["type"] == "table"]
+    assert ["R²", 0.97] in gof["rows"]
+
+
 def test_from_multipeak_fit_classic_table_is_unchanged_by_error_support() -> None:
     result = {
         "peaks": [{"model": "Gaussian", "center": 10.0, "fwhm": 1.2, "height": 100.0,

@@ -99,7 +99,12 @@ def from_multipeak_fit(
     # peak's 1-sigma errors (``centerErr``... null where the fit reported
     # none) and the minimised objective; print both so the report says what
     # the peak table shows. A classic fit carries neither: columns unchanged.
-    has_err = any(_finite(pk.get(f"{k}Err")) is not None for pk in peaks for k in _PEAK_KEYS)
+    # A model-fit table (it carries ``objective``) always gets the "±"
+    # layout, even when every error is null: its dashes are information.
+    objective = result.get("objective")
+    is_model_fit = isinstance(objective, Mapping) and objective.get("kind") in ("ssr", "chi2")
+    has_err = is_model_fit or any(
+        _finite(pk.get(f"{k}Err")) is not None for pk in peaks for k in _PEAK_KEYS)
     cols = (["Peak", "Model", "Center", "± center", "FWHM", "± FWHM", "Height", "± height",
              "Area", "± area", "η"] if has_err
             else ["Peak", "Model", "Center", "FWHM", "Height", "Area", "η"])
@@ -119,11 +124,13 @@ def from_multipeak_fit(
     caption = f"{len(peaks)} peak(s)" + (f", {n_edited} edited by hand" if n_edited else "")
     gof = [[label, result[key]] for label, key in (("RMSE", "rmse"), ("Peaks", "nPeaks"))
            if result.get(key) is not None]
-    objective = result.get("objective")
-    if isinstance(objective, Mapping) and objective.get("kind") in ("ssr", "chi2"):
-        label = "χ²" if objective["kind"] == "chi2" else "SSR"
-        gof += [[f"{name}", v] for name, v in ((label, objective.get("value")),
-                                               (f"reduced {label}", objective.get("reduced")))
+    if is_model_fit and isinstance(objective, Mapping):
+        chi2 = objective["kind"] == "chi2"
+        label = "χ²" if chi2 else "SSR"
+        # R² of a chi-square fit is the WEIGHTED one (calc/peak_model_fit.py).
+        gof += [[name, v] for name, v in (("weighted R²" if chi2 else "R²", result.get("R2")),
+                                          (label, objective.get("value")),
+                                          (f"reduced {label}", objective.get("reduced")))
                 if _finite(v) is not None]
     blocks: list[dict[str, Any]] = [
         table_block(cols, rows, caption=caption),
