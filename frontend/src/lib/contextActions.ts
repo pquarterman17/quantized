@@ -23,7 +23,6 @@
 // #1).
 
 import { multiSelected } from "./multiSelected";
-import { openMetaFactors } from "../store/metaFactorsDialog";
 // folderOps (and the pipeline runner + template libs it pulls in) load on
 // the click, not at launch: every use is inside a `run` (bundle-size ratchet).
 const folderOps = () => import("../components/Library/folderOps");
@@ -224,8 +223,6 @@ export const datasetCoreActions: ContextAction<DatasetActionTarget>[] = [
     label: "Split by column value…",
     run: (t) => useApp.getState().openSplitDialog(t.dataset.id),
   },
-  // P2.5: the whole selection when this row is in it, else this row alone.
-  { id: "dataset.metaFactors", label: "Metadata → factors…", run: (t) => openMetaFactors(multiSelected(t) ? t.selectedIds : [t.dataset.id]) },
 ];
 
 /** Appended right after the dynamic per-folder move list. */

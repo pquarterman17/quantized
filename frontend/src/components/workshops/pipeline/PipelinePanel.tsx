@@ -46,8 +46,9 @@ function StepEditor({
         )}
         {step.kind === "transform" && (
           <div className="qzk-ds-meta" style={{ color: "var(--text-faint)", marginTop: 4 }}>
-            Derives a new dataset from the current one; later steps continue on it. A second input is the
-            recorded dataset (matched by id — the step fails if it is no longer in this workspace).
+            {step.params.op === "promote" || step.params.op === "metaclean"
+              ? "Edits the current dataset in place (a metadata factor column, or its metadata); later steps continue on it."
+              : "Derives a new dataset from the current one; later steps continue on it. A second input is the recorded dataset (matched by id — the step fails if it is no longer in this workspace)."}
           </div>
         )}
       </div>

@@ -31,6 +31,7 @@ import {
 } from "../../lib/contextActions";
 import { datasetCombineSeparateActions } from "../../lib/combineSeparateActions";
 import { datasetDerivedWorksheetActions } from "../../lib/derivedWorksheetActions";
+import { datasetMetaFactorsAction } from "../../lib/metaFactorsAction";
 import { withQuickPlot } from "../../lib/quickPlotActions";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -98,7 +99,7 @@ export function buildDatasetRowMenu(
     // PR K slice 2 (L0.50): Create Derived Worksheet / Freeze Copy — each
     // entry gates its OWN visibility (hidden), so this splices unconditionally.
     { separator: true },
-    ...buildMenuItems(datasetDerivedWorksheetActions, target),
+    ...buildMenuItems([...datasetDerivedWorksheetActions, datasetMetaFactorsAction], target),
     // PR J slice 2 (L0.32-L0.34/L0.51): Combine (multi-selection only, gates
     // itself hidden) / Separate (any selection) — same unconditional-splice
     // convention as the derived-worksheet group right above.

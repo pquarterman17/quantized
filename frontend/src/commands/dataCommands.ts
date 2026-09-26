@@ -72,7 +72,7 @@ export function buildDataCommands(s: StoreGet): Action[] {
       keywords: "interpolate interp1 align regrid common grid match x resample",
       run: () => openResampleDialog(seedIds(s)),
     },
-    { id: "meta-factors", group: "Data", section: "Combine & split", label: "Metadata → factors…", description: "Clean up metadata keys and values, and add a metadata field as a per-row factor column.", keywords: "promote sample factor rename unify", run: () => openMetaFactors(seedIds(s)) },
+    { id: "meta-factors", group: "Data", section: "Combine & split", label: "Metadata → factors…", description: "Clean up metadata; add a metadata field as a factor column.", keywords: "promote sample unify", run: () => openMetaFactors(seedIds(s)) },
     { id: "transpose", group: "Data", section: "Combine & split", label: "Transpose worksheet…", description: "Swap worksheet rows and columns in a new derived dataset.", keywords: "reshape", run: () => openReshape(s, "transpose") },
     { id: "stack-columns", group: "Data", section: "Combine & split", label: "Stack columns to long form…", description: "Reshape selected wide columns into value and category columns in long form.", keywords: "jmp reshape stack long form wide", run: () => openReshape(s, "stack") },
     { id: "unstack-columns", group: "Data", section: "Combine & split", label: "Unstack / pivot to wide form…", description: "Pivot category and value columns into separate columns in a wide worksheet.", keywords: "jmp unstack pivot wide long reshape", run: () => openReshape(s, "unstack") },
