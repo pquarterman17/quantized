@@ -6,6 +6,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { reportEmit } from "../../../lib/api";
 import { findPeaks, fitMultiPeak } from "../../../lib/api/peaks";
 import { peakDataFingerprint, peakTableFromFit } from "../../../lib/peakTableFit";
 import type { Dataset } from "../../../lib/types";
@@ -30,7 +31,7 @@ const DS: Dataset = {
 function show(ds: Dataset) {
   useApp.setState({
     datasets: [ds], activeId: "d1", xKey: null, yKeys: null, seriesOrder: null,
-    peakOverlay: null, annotations: [], history: [], future: [], peaksOpen: true,
+    peakOverlay: null, annotations: [], history: [], future: [], peaksOpen: true, reports: [],
   });
   render(<PeaksPanel />);
 }
@@ -199,5 +200,49 @@ describe("PeaksPanel — a published model-fit table", () => {
     await waitFor(() => expect(within(grid).getAllByRole("row")).toHaveLength(2));
     expect(grid).not.toHaveTextContent("±");
     expect(screen.queryByText(/Peak Analyzer model fit/)).not.toBeInTheDocument();
+  });
+
+  it("→ Report sends each peak's errors (null = none reported) and the fit's objective", async () => {
+    vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } } as never);
+    const res = modelFitResponse({ metrics: { objective: "chi2", chi2: 9.5, reduced_chi2: 1.1 } });
+    const table = peakTableFromModelFit(res, DS, {
+      xKey: null, recipe: null, baseline: "none", bgAtCenter: [0.5, 0.5], fingerprint: peakDataFingerprint(DS),
+    }, null);
+    show({ ...DS, peakTable: table });
+    const grid = await screen.findByRole("table", { name: "fitted peaks" });
+    await waitFor(() => expect(within(grid).getAllByRole("cell")[1]).toHaveTextContent("2.01 ± 0.004"));
+    fireEvent.click(screen.getByRole("button", { name: "→ Report" }));
+    // Wait on STATE (the report landing in the store), not on the mock.
+    await waitFor(() => expect(useApp.getState().reports).toHaveLength(1));
+    expect(reportEmit).toHaveBeenCalledTimes(1);
+    const body = vi.mocked(reportEmit).mock.calls[0][0];
+    expect(body.kind).toBe("multipeak_fit");
+    const result = body.result as Record<string, unknown>;
+    const peaks = result.peaks as Record<string, unknown>[];
+    expect(peaks.map((p) => [p.centerErr, p.fwhmErr, p.heightErr, p.areaErr])).toEqual([
+      [0.004, 0.01, 0.05, null],
+      [null, 0.01, 0.04, 0.03],
+    ]);
+    expect(peaks.map((p) => [p.eta, p.etaErr])).toEqual([[1, null], [null, null]]);
+    expect(result).toMatchObject({ objective: "chi2", ssr: 0.012, chi2: 9.5, R2: 0.998 });
+  });
+
+  it("→ Report of a legacy table sends the fit result unchanged — no error fields, no objective", async () => {
+    vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } } as never);
+    const legacy = peakTableFromFit(
+      { peaks: [{ center: 2, fwhm: 0.8, height: 5, bg: 0.5, eta: null, area: 4, status: "fitted", model: "Gaussian" }],
+        bgCoeffs: [0.5], R2: 0.9, rmse: 0.1, nPeaks: 1, model: "Gaussian" },
+      { datasetId: "d1", datasetName: "x.dat", method: "simultaneous", bgDegree: 0, linkMode: "None",
+        constrain: false, wavelengthA: null, fingerprint: peakDataFingerprint(DS) },
+    );
+    show({ ...DS, peakTable: legacy });
+    const grid = await screen.findByRole("table", { name: "fitted peaks" });
+    await waitFor(() => expect(within(grid).getAllByRole("row")).toHaveLength(2));
+    fireEvent.click(screen.getByRole("button", { name: "→ Report" }));
+    await waitFor(() => expect(useApp.getState().reports).toHaveLength(1));
+    expect(vi.mocked(reportEmit).mock.calls[0][0].result).toEqual({
+      peaks: [{ center: 2, fwhm: 0.8, height: 5, bg: 0.5, eta: null, area: 4, status: "fitted", model: "Gaussian" }],
+      bgCoeffs: [0.5], R2: 0.9, rmse: 0.1, nPeaks: 1, model: "Gaussian",
+    });
   });
 });

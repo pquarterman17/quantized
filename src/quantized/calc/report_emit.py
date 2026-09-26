@@ -84,15 +84,56 @@ def from_curve_fit(
     )
 
 
+# The derived per-peak quantities a model-fit peak table carries a 1σ for.
+_PEAK_KEYS = ("center", "fwhm", "height", "area")
+# A Voigt row's Gaussian / Lorentzian FWHM components, and their column label.
+_VOIGT_WIDTHS = (("fwhmG", "FWHM (G)"), ("fwhmL", "FWHM (L)"))
+_PEAK_ERR_NOTE = (
+    "± is the 1σ standard error from the Peak Analyzer model fit; — marks a value "
+    "it reports no error for (fixed, tied, on a bound, undetermined, or edited by hand)."
+)
+
+
+def _pm_opt(value: Any, err: Any) -> list[Any]:
+    """:func:`_pm` for a shape parameter only some rows have: blank where absent."""
+    return _pm(value, err) if _finite(value) is not None else [None, None]
+
+
 def from_multipeak_fit(
     result: Mapping[str, Any],
     *,
     title: str = "Multi-peak fit",
     source_refs: Sequence[Mapping[str, Any]] | None = None,
 ) -> ReportSheet:
-    """Build a report from a ``calc.peak_multifit`` result dict."""
+    """Build a report from a ``calc.peak_multifit`` result dict.
+
+    A durable peak table the Peak Analyzer's model fit published (the
+    frontend's ``PeakTable`` with ``producer: "model_fit"``) arrives in the
+    same shape plus ``objective`` (``"ssr"`` / ``"chi2"``), ``ssr``, ``chi2``,
+    ``R2`` and, per peak, the 1σ errors ``centerErr`` / ``fwhmErr`` /
+    ``heightErr`` / ``areaErr`` / ``etaErr`` and a Voigt row's ``fwhmG`` /
+    ``fwhmL`` (with ``fwhmGErr`` / ``fwhmLErr``), null where the fit reported
+    none. Its table then gains a "±" column after each value ("—" for a null
+    error, even when every error is null: the dashes are information), the
+    Voigt width columns when a row has them, and the goodness-of-fit table
+    gains R² (labelled weighted for a χ² fit, calc/peak_model_fit.py), SSR and
+    χ² (weighted fits only). A payload with neither ``objective`` nor any
+    finite error (every classic fit) is laid out exactly as before.
+    (Ported from PR #434, adapted to the PeakTable field names.)
+    """
     peaks = list(result.get("peaks", []))
-    cols = ["Peak", "Model", "Center", "FWHM", "Height", "Area", "η"]
+    objective = result.get("objective")
+    model_fit = objective in ("ssr", "chi2")
+    has_err = model_fit or any(
+        _finite(pk.get(f"{k}Err")) is not None for pk in peaks for k in _PEAK_KEYS)
+    widths = [(k, label) for k, label in _VOIGT_WIDTHS
+              if has_err and any(_finite(pk.get(k)) is not None for pk in peaks)]
+    if has_err:
+        cols = ["Peak", "Model", "Center", "± center", "FWHM", "± FWHM", "Height", "± height",
+                "Area", "± area", "η", "± η"]
+        cols += [c for _, label in widths for c in (label, f"± {label}")]
+    else:
+        cols = ["Peak", "Model", "Center", "FWHM", "Height", "Area", "η"]
     # Rows the user edited by hand are not fit output; say so rather than let
     # manual numbers read as fitted values. Only shown when there are any.
     n_edited = sum(1 for pk in peaks if pk.get("status") == "manual-edit")
@@ -100,19 +141,29 @@ def from_multipeak_fit(
         cols.append("Source")
     rows = []
     for i, pk in enumerate(peaks, start=1):
-        row = [
-            i, pk.get("model", result.get("model", "")),
-            pk.get("center"), pk.get("fwhm"), pk.get("height"),
-            pk.get("area"), pk.get("eta"),
-        ]
+        if has_err:
+            values = [v for k in _PEAK_KEYS for v in _pm(pk.get(k), pk.get(f"{k}Err"))]
+            values += _pm_opt(pk.get("eta"), pk.get("etaErr"))
+            values += [v for k, _ in widths for v in _pm_opt(pk.get(k), pk.get(f"{k}Err"))]
+        else:
+            values = [pk.get("center"), pk.get("fwhm"), pk.get("height"),
+                      pk.get("area"), pk.get("eta")]
+        row = [i, pk.get("model", result.get("model", "")), *values]
         if n_edited:
             row.append("edited by hand" if pk.get("status") == "manual-edit" else "fit")
         rows.append(row)
     caption = f"{len(peaks)} peak(s)" + (f", {n_edited} edited by hand" if n_edited else "")
+    gof = [("RMSE", "rmse"), ("Peaks", "nPeaks")]
+    if model_fit:
+        chi2 = objective == "chi2"
+        gof += [("weighted R²" if chi2 else "R²", "R2"), ("SSR", "ssr")]
+        gof += [("χ²", "chi2")] if chi2 else []
     blocks: list[dict[str, Any]] = [
         table_block(cols, rows, caption=caption),
-        _gof_table(result, [("RMSE", "rmse"), ("Peaks", "nPeaks")]),
+        _gof_table(result, gof),
     ]
+    if has_err:
+        blocks.append(text_block(_PEAK_ERR_NOTE))
     return ReportSheet(
         title=title,
         sections=(section("Peak fit", blocks),),

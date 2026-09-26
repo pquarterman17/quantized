@@ -17,6 +17,7 @@ import { useState } from "react";
 import PeakFitControls from "./PeakFitControls";
 import PeakTable from "./PeakTable";
 import PeakValueCell from "./PeakValueCell";
+import { peakReportResult } from "./peakReport";
 import { usePeakTableSelection } from "./peakSelection";
 import { usePeaks } from "./usePeaks";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -72,7 +73,9 @@ export default function PeaksPanel() {
     try {
       const { report } = await reportEmit({
         kind: "multipeak_fit",
-        result: fitResult as unknown as Record<string, unknown>,
+        // A published model-fit table's errors and objective ride along, so
+        // the report says what the table shows (./peakReport).
+        result: peakReportResult(fitResult, entries, peakTable),
         title: `Peak fit — ${active.name}`,
         source_refs: [{ kind: "dataset", id: active.id, name: active.name }],
       });

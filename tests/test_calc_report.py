@@ -192,6 +192,114 @@ def test_from_multipeak_fit_has_no_source_column_for_pure_fits() -> None:
     table = next(b for b in from_multipeak_fit(result).iter_blocks() if b["type"] == "table")
     assert "Source" not in table["columns"]
 
+
+# ── a published model-fit peak table (ported from PR #434) ──────────────────
+# The Peaks workshop's "→ Report" sends the durable PeakTable's per-peak 1σ
+# errors (null where the fit reported none) and the model fit's objective.
+
+_MF_PEAKS: list[dict[str, object]] = [
+    {"model": "pseudo_voigt", "center": 36.0, "fwhm": 0.4, "height": 800.0,
+     "area": 340.0, "eta": 0.3, "centerErr": 0.0003, "fwhmErr": 0.001,
+     "heightErr": 2.0, "areaErr": 1.5, "etaErr": 0.02,
+     "fwhmG": None, "fwhmGErr": None, "fwhmL": None, "fwhmLErr": None},
+    {"model": "gaussian", "center": 44.0, "fwhm": 0.6, "height": 400.0,
+     "area": 377.0, "eta": None, "centerErr": None, "fwhmErr": 0.002,
+     "heightErr": 1.0, "areaErr": None, "etaErr": None,
+     "fwhmG": None, "fwhmGErr": None, "fwhmL": None, "fwhmLErr": None},
+]
+
+
+def _model_fit_result(**over: object) -> dict[str, object]:
+    result: dict[str, object] = {
+        "peaks": _MF_PEAKS,
+        "R2": 0.9999, "rmse": 0.05, "nPeaks": 2, "model": "mixed (pseudo_voigt, gaussian)",
+        "objective": "ssr", "ssr": 12.5, "chi2": None,
+    }
+    result.update(over)
+    return result
+
+
+def _tables(result: dict[str, object]) -> list[dict[str, object]]:
+    rep = from_multipeak_fit(result)
+    validate_report(rep.to_dict())
+    return [b for b in rep.iter_blocks() if b["type"] == "table"]
+
+
+def test_from_multipeak_fit_prints_model_fit_errors_and_objective() -> None:
+    peaks_t, gof_t = _tables(_model_fit_result())
+    assert peaks_t["columns"] == ["Peak", "Model", "Center", "± center", "FWHM", "± FWHM",
+                                  "Height", "± height", "Area", "± area", "η", "± η"]
+    assert peaks_t["rows"][0][2:12] == [36.0, 0.0003, 0.4, 0.001, 800.0, 2.0, 340.0, 1.5,
+                                        0.3, 0.02]
+    # a null error is the dash; a shape parameter the row does not have is blank
+    assert peaks_t["rows"][1][3] == "—" and peaks_t["rows"][1][9] == "—"
+    assert peaks_t["rows"][1][10:12] == [None, None]
+    assert gof_t["rows"] == [["RMSE", 0.05], ["Peaks", 2], ["R²", 0.9999], ["SSR", 12.5]]
+
+
+def test_from_multipeak_fit_model_fit_explains_the_dash() -> None:
+    rep = from_multipeak_fit(_model_fit_result())
+    assert any(b["type"] == "text" and "1σ" in b["text"] for b in rep.iter_blocks())
+
+
+def test_from_multipeak_fit_model_fit_keeps_the_pm_layout_when_every_error_is_null() -> None:
+    # A manual edit clears errors and the global metrics; the dashes stay.
+    peak = {"model": "gaussian", "center": 36.0, "fwhm": 0.4, "height": 800.0,
+            "area": 340.0, "eta": None, "centerErr": None, "fwhmErr": None,
+            "heightErr": None, "areaErr": None, "status": "manual-edit"}
+    peaks_t, gof_t = _tables(_model_fit_result(peaks=[peak], R2=None, rmse=None, ssr=None,
+                                               nPeaks=1))
+    assert "± center" in peaks_t["columns"] and peaks_t["columns"][-1] == "Source"
+    assert peaks_t["rows"][0][3] == "—" and peaks_t["rows"][0][9] == "—"
+    assert gof_t["rows"] == [["Peaks", 1]]
+
+
+def test_from_multipeak_fit_labels_a_chi2_fits_r2_as_weighted() -> None:
+    _, gof = _tables(_model_fit_result(objective="chi2", chi2=9.5, R2=0.97))
+    assert ["weighted R²", 0.97] in gof["rows"] and ["χ²", 9.5] in gof["rows"]
+    assert ["SSR", 12.5] in gof["rows"]
+    assert not any(r[0] == "R²" for r in gof["rows"])
+    _, gof = _tables(_model_fit_result(chi2=9.5))  # an SSR fit never prints χ²
+    assert not any(r[0] == "χ²" for r in gof["rows"])
+
+
+def test_from_multipeak_fit_prints_voigt_widths_only_when_a_row_has_them() -> None:
+    voigt = {"model": "voigt", "center": 50.0, "fwhm": 0.5, "height": 300.0, "area": 170.0,
+             "eta": None, "centerErr": 0.001, "fwhmErr": 0.003, "heightErr": 3.0,
+             "areaErr": 2.0, "etaErr": None, "fwhmG": 0.3, "fwhmGErr": 0.01,
+             "fwhmL": 0.25, "fwhmLErr": None}
+    peaks_t, _ = _tables(_model_fit_result(peaks=[*_MF_PEAKS, voigt], nPeaks=3))
+    assert peaks_t["columns"][-4:] == ["FWHM (G)", "± FWHM (G)", "FWHM (L)", "± FWHM (L)"]
+    assert peaks_t["rows"][2][-4:] == [0.3, 0.01, 0.25, "—"]
+    assert peaks_t["rows"][0][-4:] == [None, None, None, None]
+    no_voigt, _ = _tables(_model_fit_result())
+    assert "FWHM (G)" not in no_voigt["columns"]
+
+
+def test_from_multipeak_fit_classic_table_is_unchanged_by_error_support() -> None:
+    # The whole sheet, pinned: a classic (legacy) fit's report must stay
+    # byte-identical to the one emitted before model-fit errors were added.
+    result = {
+        "peaks": [
+            {"model": "pseudo-voigt", "center": 10.0, "fwhm": 1.2, "height": 100.0,
+             "area": 150.0, "eta": 0.3, "bg": 2.0, "status": "fitted", "centerErr": None},
+            {"model": "pseudo-voigt", "center": 20.0, "fwhm": 1.4, "height": 50.0,
+             "area": 90.0, "eta": 0.5, "bg": 1.0, "status": "manual-edit"},
+        ],
+        "bgCoeffs": [1.0, 0.1], "R2": 0.99, "rmse": 2.5, "nPeaks": 2, "model": "pseudo-voigt",
+    }
+    assert from_multipeak_fit(result, title="T").to_dict()["sections"] == [{
+        "title": "Peak fit",
+        "blocks": [
+            {"type": "table", "caption": "2 peak(s), 1 edited by hand",
+             "columns": ["Peak", "Model", "Center", "FWHM", "Height", "Area", "η", "Source"],
+             "rows": [[1, "pseudo-voigt", 10.0, 1.2, 100.0, 150.0, 0.3, "fit"],
+                      [2, "pseudo-voigt", 20.0, 1.4, 50.0, 90.0, 0.5, "edited by hand"]]},
+            {"type": "table", "caption": "Goodness of fit", "columns": ["Metric", "Value"],
+             "rows": [["RMSE", 2.5], ["Peaks", 2]]},
+        ],
+    }]
+
 def test_from_anova_uses_real_result() -> None:
     battery = [
         [[130, 155, 74, 180], [34, 40, 80, 75]],
