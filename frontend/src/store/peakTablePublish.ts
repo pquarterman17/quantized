@@ -36,7 +36,8 @@ export interface LiveStamp {
 /** Publish a table built from the LIVE dataset's stamp and its current table
  *  (whose exclusions the builder carries). `xKey` must be the channel the fit
  *  really ran on. One undo step. Returns the published table, or null for an
- *  unknown dataset (it can be removed while a fit is on screen). */
+ *  unknown dataset (it can be removed while a fit is on screen); throws for a
+ *  dataset still showing its lazy-book preview (`pending`). */
 export function publishBuiltTable(
   datasetId: string,
   xKey: number | null,
@@ -45,6 +46,9 @@ export function publishBuiltTable(
 ): PeakTable | null {
   const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
   if (!ds) return null;
+  // Belt and braces for useModelFit's own refusal: never stamp a lazy book's
+  // PREVIEW as the data a durable table was measured from.
+  if (ds.pending) throw new Error("the dataset's full data is still loading; re-fit once it has loaded");
   const table = build(
     {
       datasetId,

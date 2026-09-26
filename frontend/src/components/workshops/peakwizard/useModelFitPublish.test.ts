@@ -7,11 +7,14 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PeakModelFitResponse } from "../../../lib/api/peaks";
-import type { DataStruct } from "../../../lib/types";
+import type { DataStruct, Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { modelFitResponse } from "./modelFit.testkit";
 import * as run from "./modelFitPublishRun";
 import { usePeakWizard } from "./usePeakWizard";
+
+/** A lazy-book reference; its shape never matters here (nothing fetches). */
+const PENDING = { kind: "origin", path: "x.opju", book: "Book1" } as unknown as NonNullable<Dataset["pending"]>;
 
 const N = 60;
 const DATA: DataStruct = {
@@ -83,6 +86,25 @@ describe("useModelFit — publish to the durable peak table", () => {
     } finally {
       spy.mockRestore();
     }
+  });
+
+  it("activating a lazy book does NOT resolve it synchronously (why the next test exists)", () => {
+    // setActive -> ensureBookData only STARTS the fetch; hold it open.
+    vi.stubGlobal("fetch", () => new Promise<Response>(() => {}));
+    useApp.setState({ datasets: [{ id: "d2", name: "book", data: DATA, pending: PENDING }] });
+    useApp.getState().setActive("d2");
+    expect(useApp.getState().datasets[0].pending).toBeDefined();
+  });
+
+  it("refuses to publish a fit made on a lazy book's PREVIEW, and says why", async () => {
+    const { result } = await fitted(modelFitResponse());
+    act(() => {
+      useApp.setState((s) => ({ datasets: s.datasets.map((d) => ({ ...d, pending: PENDING })) }));
+    });
+    expect(result.current.model.publishBlock).toMatch(/full data is still loading.*preview/);
+    await act(() => result.current.model.publish());
+    expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
+    expect(result.current.model.error).toMatch(/still loading/);
   });
 
   it("refuses a fit that did not converge", async () => {

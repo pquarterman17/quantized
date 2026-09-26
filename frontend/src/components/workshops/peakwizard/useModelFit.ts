@@ -273,7 +273,19 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     setNotice("fit cancelled — the server may still finish it; its answer will be ignored");
   };
 
-  const publishBlock = active ? modelFitPublishBlock(ran?.result ?? null, stale) : "select a dataset first";
+  // A lazy Origin book still showing its downsampled PREVIEW (`pending`,
+  // lib/types.ts): activating it only STARTS the full-data fetch
+  // (useApp.setActive -> ensureBookData, not awaited), and the wizard resolves
+  // it only on the baseline path, so a fit can run on the preview. Its values
+  // and fingerprint would describe rows the saved dataset does not have, and
+  // every reader would later drop the table silently — refuse instead. When
+  // the full data lands, `active.data` changes, the content key moves and the
+  // preview fit is dropped anyway, so a re-fit is all it takes.
+  const publishBlock = !active
+    ? "select a dataset first"
+    : active.pending
+      ? "this dataset's full data is still loading — the fit ran on its preview; Re-fit once it has loaded"
+      : modelFitPublishBlock(ran?.result ?? null, stale);
   // Publish (audit P2.1): the draft is built here, the lazy half (ids,
   // exclusions, store write) loads on demand — ./modelFitPublish's header says
   // why. `seq` guards the await: a reset or a new run in the meantime means

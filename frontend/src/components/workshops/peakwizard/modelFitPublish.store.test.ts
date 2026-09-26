@@ -53,6 +53,15 @@ describe("publishBuiltTable with a model fit", () => {
     expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
   });
 
+  it("refuses (throws) for a dataset still showing its lazy-book preview, writing nothing", () => {
+    useApp.setState((s) => ({
+      datasets: s.datasets.map((d) => ({ ...d, pending: { kind: "origin" } as unknown as NonNullable<typeof d.pending> })),
+    }));
+    expect(() => publish()).toThrow(/still loading/);
+    expect(useApp.getState().datasets[0].peakTable).toBeUndefined();
+    expect(useApp.getState().history).toHaveLength(0);
+  });
+
   it("is a no-op for an unknown dataset", () => {
     expect(publishBuiltTable("gone", null, "x", () => { throw new Error("must not build"); })).toBeNull();
     expect(useApp.getState().history).toHaveLength(0);
