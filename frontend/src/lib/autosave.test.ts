@@ -120,36 +120,55 @@ describe("autosave round-trip (pre-#32 behaviour, preserved)", () => {
   });
 });
 
-describe("autosave carries the saved fit models (P2.7 follow-up)", () => {
-  it("embeds the local fit-model library and the project's carry; a restore keeps the carry but merges no models", async () => {
-    const model = { version: 1, name: "Arrhenius", equation: "y = A*exp(-E/x)", params: ["A", "E"], guesses: [1, 2], lower: [null, 0], upper: [null, null] };
+describe("autosave carries the project's fit-model carry, never the library (P2.7 follow-up)", () => {
+  const model = (name: string, equation = "y = a") => ({ version: 1, name, equation, params: ["a"], guesses: [1], lower: [null], upper: [null] });
+  const lib = (...models: unknown[]) => localStorage.setItem("qz.customFitModels", JSON.stringify(models));
+  const names = (records: unknown[] | undefined) => (records ?? []).map((r) => (r as { name: string }).name);
+
+  it("embeds the carry only; a restore keeps the carry and merges nothing", async () => {
     const future = { version: 9, name: "FromTheFuture", equation: "y = a" };
-    localStorage.setItem("qz.customFitModels", JSON.stringify([model]));
-    // The state shape the store hands autosave: no `customFitModels` (the
-    // library is not store state), a `fitModelCarry` from the opened project.
-    expect(await saveAutosave({ datasets: [ds("a", "first")], fitModelCarry: [future] })).toBe(true);
+    const refused = model("Refused", "y = r");
+    lib(model("Arrhenius", "y = A*exp(-E/x)"));
+    // The state shape the store hands autosave: the library is not store
+    // state; `fitModelCarry` is the project's unreadable + refused records.
+    expect(await saveAutosave({ datasets: [ds("a", "first")], fitModelCarry: [future, refused] })).toBe(true);
     const [gen] = await listAutosaveGenerations();
-    expect(JSON.parse(gen.text).customFitModels).toEqual([model, future]);
-    // The autosave came from THIS library, which is newer: the user deletes
-    // the model after the autosave was written, and a restore must not merge
-    // it back into the library — but the PROJECT still keeps it (carried),
-    // which is also what saves a model the browser had refused to store.
-    localStorage.removeItem("qz.customFitModels");
+    expect(JSON.parse(gen.text).customFitModels).toEqual([future, refused]);
     const restored = await loadAutosave();
-    expect(restored?.customFitModels).toEqual([]);
-    expect(restored?.fitModelCarry).toEqual([future, model]);
+    expect(restored?.projectFitModels).toEqual([]);
+    expect(restored?.fitModelCarry).toEqual([future, refused]);
   });
 
-  it("a restore drops a model the library still holds (no duplicate carry)", async () => {
-    const model = { version: 1, name: "Held", equation: "y = a", params: ["a"], guesses: [1], lower: [null], upper: [null] };
-    localStorage.setItem("qz.customFitModels", JSON.stringify([model]));
+  it("a restart after EDITING a library model does not pin the stale version as a same-name carry (PR #432 review)", async () => {
+    lib(model("Decay", "y = a*exp(-x)"));
     expect(await saveAutosave({ datasets: [ds("a", "first")] })).toBe(true);
+    lib(model("Decay", "y = a*exp(-x/2)")); // edited after the autosave was written
     const restored = await loadAutosave();
-    expect(restored?.customFitModels).toEqual([]);
+    expect(restored?.fitModelCarry).toEqual([]);
+    // ...so the next save writes the library's CURRENT Decay, once.
+    const saved = JSON.parse(serializeWorkspace({ datasets: [ds("a", "first")], fitModelCarry: restored?.fitModelCarry }));
+    expect(saved.customFitModels).toEqual([model("Decay", "y = a*exp(-x/2)")]);
+  });
+
+  it("a restart after DELETING a library model does not resurrect it (PR #432 review)", async () => {
+    lib(model("Gone"), model("Stays", "y = s"));
+    expect(await saveAutosave({ datasets: [ds("a", "first")] })).toBe(true);
+    lib(model("Stays", "y = s")); // "Gone" deleted after the autosave was written
+    const restored = await loadAutosave();
+    expect(names(restored?.fitModelCarry)).toEqual([]);
+    expect(names(restored?.projectFitModels)).toEqual([]);
+  });
+
+  it("a restore drops a carried model the library has since come to hold (no duplicate carry)", async () => {
+    const m = model("Held");
+    expect(await saveAutosave({ datasets: [ds("a", "first")], fitModelCarry: [m] })).toBe(true);
+    lib(m);
+    const restored = await loadAutosave();
     expect(restored?.fitModelCarry).toEqual([]);
   });
 
-  it("writes no customFitModels key when there are none (an ordinary project is unchanged)", async () => {
+  it("writes no customFitModels key when the carry is empty, even with a library (an ordinary project is unchanged)", async () => {
+    lib(model("Mine"));
     expect(await saveAutosave({ datasets: [ds("a", "first")] })).toBe(true);
     const [gen] = await listAutosaveGenerations();
     expect("customFitModels" in JSON.parse(gen.text)).toBe(false);
@@ -159,7 +178,7 @@ describe("autosave carries the saved fit models (P2.7 follow-up)", () => {
 // P1.7 PR 5 audit item 10: a crash-recovery autosave snapshot has no `.dwk`
 // file of its own to resolve a bundle-relative source against (it's a
 // localStorage/IndexedDB blob, not a path on disk) — `saveAutosave` calls
-// `serializeWorkspace(ws)` with no `projectDir` (this module's own source,
+// `serializeWorkspace` with no `projectDir` (this module's own source,
 // unchanged by this test), which `serializeDatasetSource` treats as "always
 // write the absolute kind:path form" (lib/workspaceSerialize.ts). This is
 // what makes recovery safe: there is no relative bundle string anywhere in

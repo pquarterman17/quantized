@@ -288,25 +288,45 @@ describe("useEquationFit saved models", () => {
     ]);
   });
 
-  it("save refuses what a project/import would refuse — min > max, or a (blank=1) start outside its bounds", async () => {
-    // PR #432 review: the workshop used to save these, and the model then came
-    // back from its own project as "could not be read".
+  async function decayWithRows(rows: [number, "guess" | "min" | "max", string][]) {
     vi.mocked(validateEquation).mockResolvedValue({ ok: true, params: ["a", "t"] });
-    const { result } = renderHook(() => useEquationFit(null, NO_DEBOUNCE));
+    const hook = renderHook(() => useEquationFit(null, NO_DEBOUNCE));
     act(() => {
-      result.current.setEquation("a*exp(-x/t)");
+      hook.result.current.setEquation("a*exp(-x/t)");
     });
-    await waitFor(() => expect(result.current.status).toBe("ok"));
+    await waitFor(() => expect(hook.result.current.status).toBe("ok"));
     act(() => {
-      result.current.setRow(1, "min", "5"); // t's start is blank -> 1, below its min
-      result.current.setModelName("Decay");
+      for (const [i, field, value] of rows) hook.result.current.setRow(i, field, value);
+      hook.result.current.setModelName("Decay");
     });
     let saved: CustomFitModel[] | null = [];
     act(() => {
-      saved = result.current.save();
+      saved = hook.result.current.save();
     });
-    expect(saved).toBeNull();
-    expect(result.current.error).toContain("guess[t]: outside its bounds");
+    return { saved: saved as CustomFitModel[] | null, error: hook.result.current.error };
+  }
+
+  it("a BLANK start is saved as 1 clamped into its bounds — never refused for a guess the user did not type (PR #432 review)", async () => {
+    // Was: blank -> 1, then refused as "guess[t]: outside its bounds". (A new
+    // row SHOWS "1"; blank means the user cleared the field.)
+    const above = await decayWithRows([[1, "guess", ""], [1, "min", "5"]]);
+    expect(above.error).toBeNull();
+    expect(above.saved?.[0]).toMatchObject({ name: "Decay", guesses: [1, 5], lower: [null, 5], upper: [null, null] });
+    const below = await decayWithRows([[0, "guess", "2"], [1, "guess", " "], [1, "max", "0.5"]]);
+    expect(below.saved?.[0]).toMatchObject({ guesses: [2, 0.5], upper: [null, 0.5] });
+    const inside = await decayWithRows([[1, "guess", ""], [1, "min", "-3"], [1, "max", "3"]]);
+    expect(inside.saved?.[0]).toMatchObject({ guesses: [1, 1] });
+  });
+
+  it("save refuses what a project/import would refuse — min > max, or a TYPED start outside its bounds", async () => {
+    // PR #432 review: the workshop used to save these, and the model then came
+    // back from its own project as "could not be read".
+    const typed = await decayWithRows([[1, "guess", "2"], [1, "min", "5"]]);
+    expect(typed.saved).toBeNull();
+    expect(typed.error).toContain("guess[t]: outside its bounds");
+    const inverted = await decayWithRows([[1, "min", "5"], [1, "max", "1"]]);
+    expect(inverted.saved).toBeNull();
+    expect(inverted.error).toContain("bounds[t]: lower > upper");
     expect(loadCustomModels()).toEqual([]);
   });
 

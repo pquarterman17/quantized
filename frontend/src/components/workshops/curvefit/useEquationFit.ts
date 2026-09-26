@@ -293,23 +293,34 @@ export function useEquationFit(
   function save(): CustomFitModel[] | null {
     const name = modelName.trim();
     if (!name || status !== "ok" || rows.length === 0) return null;
+    const bound = (t: string): number | null => (t.trim() === "" || !Number.isFinite(Number(t)) ? null : Number(t));
+    const lower = rows.map((r) => bound(r.min));
+    const upper = rows.map((r) => bound(r.max));
     const model = buildCustomFitModel({
       name,
       equation,
       params: rows.map((r) => r.name),
-      guesses: rows.map((r) => {
+      // A BLANK start is saved as 1 CLAMPED INTO the row's bounds — the start
+      // the engine would use, since it clips every start into its bounds
+      // (lib/paramRowCheck). Unclamped, a blank start with min 5 was refused
+      // below as "guess[t]: outside its bounds", a guess the user never typed
+      // (PR #432 review). A TYPED start outside its bounds is still refused.
+      guesses: rows.map((r, i) => {
         const v = Number(r.guess);
-        return Number.isFinite(v) && r.guess.trim() !== "" ? v : 1;
+        if (Number.isFinite(v) && r.guess.trim() !== "") return v;
+        const lo = lower[i];
+        const hi = upper[i];
+        return hi !== null && hi < 1 ? hi : lo !== null && lo > 1 ? lo : 1;
       }),
-      lower: rows.map((r) => (r.min.trim() === "" || !Number.isFinite(Number(r.min)) ? null : Number(r.min))),
-      upper: rows.map((r) => (r.max.trim() === "" || !Number.isFinite(Number(r.max)) ? null : Number(r.max))),
+      lower,
+      upper,
       description,
       units: rows.map((r) => r.unit),
     });
     // The same creation check an imported model file gets (lib/fitmodels'
-    // `checkFitModelRecord`): a model saved here with min > max, or a start
-    // outside its bounds (a blank start is 1), would be refused on every
-    // other way in — so it is refused here, naming the parameter.
+    // `checkFitModelRecord`): a model saved here with min > max, or a typed
+    // start outside its bounds, would be refused on every other way in — so
+    // it is refused here, naming the parameter.
     try {
       checkFitModelRecord(model);
     } catch (e) {

@@ -18,6 +18,17 @@
 // material the Recipe Library's export already hands out. The top-level key
 // is written only when there is something to write, so a project saved by a
 // user with no models is byte-identical to one saved before this existed.
+// A save ALWAYS reads the library and the store's carry — never models a
+// parsed workspace happens to hold (those are `projectFitModels`, outside
+// `WorkspaceState`, so re-serializing a parsed file cannot write them).
+//
+// ONE RECORD PER NAME IN THE FILE (`projectFitModelsForSave`). The library
+// wins: a carried record whose name the library (or an earlier carried
+// record) already holds is written under the first free
+// "<base> (from project[ N])" — the same suffix an open would give it — and
+// a READABLE carried record the library already holds as the same model is
+// not written at all. The rename is the only change a save ever makes to a
+// carried record; nothing carried is ever dropped for its name.
 //
 // THE SAME MODEL. Two records are the same model when their DEFINITION agrees:
 // equation, parameter names, description and units (a missing description or
@@ -40,23 +51,31 @@
 //      fit results are untouched.
 //   2. The name is free locally (no readable or unreadable record holds it):
 //      the model is added under its own name.
-//   3. Otherwise (the name holds a DIFFERENT model, or belongs to a local
-//      record this build cannot read): the local one is NEVER touched; the
-//      incoming one is added as "<base> (from project)", then
-//      "(from project 2)", ... — the first name nothing holds.
+//   3. Otherwise the incoming one is added as "<base> (from project)", then
+//      "(from project 2)", ... — the first name nothing holds. The name was
+//      held by a DIFFERENT local model (yours is kept), by a local record
+//      this build cannot read (left untouched), or by an earlier, different
+//      model in the same project; the toast says which.
 // All additions are one storage write, then RE-READ: a record storage refused
 // (quota, blocked) is not reported as added; it joins the carry below, so the
-// next save still writes it into the project. One toast per open.
+// next save still writes it into the project. One toast per open. A DAMAGED
+// local slot (not a JSON array) is not written at all — an open never moves
+// the user's unreadable list aside behind their back (lib/fitmodels.ts's
+// `appendCustomModels`); every incoming model is carried instead and the
+// toast says the list was left untouched.
 //
 // Adding to the library is not undoable, exactly like saving a model from the
 // fit workshop: the library is not project state. It also means a model the
 // user deleted locally comes back when they open a project that holds it —
-// the project needs it, and that is the point of carrying it. A crash-
-// recovery AUTOSAVE is the exception (`autosaveRestoreFitModels`): it was
-// written from this very library, which is newer, so its models are NOT
-// merged back (that would resurrect deletions); the ones this library does not
-// hold are moved to the carry instead, so the project still keeps them — a
-// model the browser refused to store must survive a crash too.
+// the project needs it, and that is the point of carrying it.
+//
+// CRASH-RECOVERY AUTOSAVE is the exception. An autosave is restored only on
+// this machine, where the library already lives, so it embeds the CARRY only
+// (`serializeWorkspace(ws, { fitModelLibrary: false })`, lib/autosave.ts), and
+// a restore (`autosaveRestoreFitModels`) merges nothing: every record it holds
+// goes back to the carry. Library models never enter an autosave, so a
+// restart can neither resurrect a model deleted since nor pin an edited
+// model's stale version as a second same-name record.
 //
 // THE PROJECT BOUNDARY ACCEPTS WHAT THE LOCAL SLOT ACCEPTS: any record
 // `isCustomFitModel` reads, rebuilt from its known fields
@@ -67,28 +86,28 @@
 // travels: a record this library holds must never come back from its own
 // project as "could not be read".
 //
-// RECORDS THIS BUILD CANNOT READ — a newer build's version, a damaged entry,
-// or a field that is not an array at all — are
-// skipped with a migration warning and NEVER destroyed: they ride in the store
-// (`fitModelCarry`, undoable with the rest of the project) and are written
-// back into the file on the next save, the same "rewrite around it" rule
-// lib/fitmodels.ts applies to its own slot. They also make the Recipe
-// Library's `recipeSourcesComplete` false for the session.
+// THE CARRY (`fitModelCarry`, store/recipeFidelity.ts) holds exactly the
+// project content the library does not: records this build cannot read — a
+// newer build's version, a damaged entry, or a field that is not an array at
+// all — skipped with a migration warning and NEVER destroyed, plus readable
+// records the library refused (storage full, or a damaged slot). It is
+// undoable with the rest of the project, autosaved, and written back into the
+// file on the next save, the same "rewrite around it" rule lib/fitmodels.ts
+// applies to its own slot. A non-empty carry makes the Recipe Library's
+// sources incomplete (`recipeSourcesWhole`).
 
 import {
   appendCustomModels,
+  customModelsSlotDamaged,
   isCustomFitModel,
   loadCustomModels,
+  nameOf,
   rebuildCustomFitModel,
   unreadableCustomModelNames,
+  unreadableFitModelsWarning,
   type CustomFitModel,
 } from "./fitmodels";
 import { toast } from "../store/toasts";
-
-const nameOf = (r: unknown): string | null =>
-  typeof r === "object" && r !== null && typeof (r as { name?: unknown }).name === "string"
-    ? (r as { name: string }).name
-    : null;
 
 /** The file's `customFitModels` field, split into what this build accepts
  *  (validated and rebuilt from known fields) and what it must carry untouched.
@@ -108,52 +127,55 @@ export function splitProjectFitModels(
     else carry.push(r);
   }
   if (carry.length > 0) {
-    const names = carry.map(nameOf).filter((n): n is string => !!n);
-    const what = carry.length === 1 ? "1 saved fit model" : `${carry.length} saved fit models`;
-    const which = names.length ? ` (${names.map((n) => `"${n}"`).join(", ")})` : "";
-    migrationWarnings.push(
-      `${what} in this project could not be read by this build and ${carry.length === 1 ? "was" : "were"} skipped${which}; kept in the project file`,
-    );
+    migrationWarnings.push(unreadableFitModelsWarning(carry, " in this project", "kept in the project file"));
   }
   return { models, carry };
 }
 
-/** The records a save writes: the given models (a parsed project re-saved) or
- *  else the local library's readable models, then the carried records — each
- *  once (appending the same project twice must not double them), and a
- *  READABLE carried record not at all when the library already holds that
- *  model under its base name (one the browser refused earlier and has since
- *  stored, say), so a file never holds a model twice. Reads localStorage; a
- *  storage failure reads as an empty library, exactly as `loadCustomModels`
- *  does. */
+/** The records a save writes: the local library's readable models (unless
+ *  `fitModelLibrary` is false — the crash-recovery autosave, see the header),
+ *  then the carried records, ONE PER NAME (see the header): each exact record
+ *  once (appending the same project twice must not double it), a READABLE
+ *  carried record not at all when the library already holds that model under
+ *  its base name (one the browser refused earlier and has since stored, say),
+ *  and a carried record whose name is already written renamed to the first
+ *  free "(from project[ N])". Reads localStorage; a storage failure reads as
+ *  an empty library, exactly as `loadCustomModels` does. */
 export function projectFitModelsForSave(
-  models: readonly CustomFitModel[] | undefined,
   carry: readonly unknown[] | undefined,
+  opts: { fitModelLibrary?: boolean } = {},
 ): unknown[] {
-  const lib = models ?? loadCustomModels();
+  const lib = opts.fitModelLibrary === false ? [] : loadCustomModels();
   const out: unknown[] = [...lib];
+  const taken = new Set(lib.map((m) => m.name));
   const held = new Set(lib.map(heldKey));
   const seen = new Set<string>();
   for (const r of carry ?? []) {
     const key = JSON.stringify(r) ?? "undefined";
     if (seen.has(key) || (isCustomFitModel(r) && held.has(heldKey(r)))) continue;
     seen.add(key);
-    out.push(r);
+    const name = nameOf(r);
+    const record = name !== null && taken.has(name) ? { ...(r as object), name: freeName(name, taken) } : r;
+    const written = nameOf(record);
+    if (written !== null) taken.add(written);
+    if (isCustomFitModel(record)) held.add(heldKey(record));
+    out.push(record);
   }
   return out;
 }
 
-/** A crash-recovery restore (lib/autosave.ts): the autosave's models that
- *  this library already holds (same base name, same definition) are dropped —
- *  the library is newer — and the REST move to the carry, so they are kept
- *  in the project without being merged back into the library. */
+/** A crash-recovery restore (lib/autosave.ts). The autosave embeds only the
+ *  CARRY (see the header), so everything it holds goes back to the carry —
+ *  readable or not — and nothing is merged into the library. A readable one
+ *  the library has since come to hold (same base name, same definition) is
+ *  dropped: the library already keeps it. */
 export function autosaveRestoreFitModels(ws: {
-  customFitModels?: CustomFitModel[];
+  projectFitModels?: CustomFitModel[];
   fitModelCarry?: unknown[];
-}): { customFitModels: CustomFitModel[]; fitModelCarry: unknown[] } {
+}): { projectFitModels: CustomFitModel[]; fitModelCarry: unknown[] } {
   const held = new Set(loadCustomModels().map(heldKey));
-  const keep = (ws.customFitModels ?? []).filter((m) => !held.has(heldKey(m)));
-  return { customFitModels: [], fitModelCarry: [...(ws.fitModelCarry ?? []), ...keep] };
+  const keep = (ws.projectFitModels ?? []).filter((m) => !held.has(heldKey(m)));
+  return { projectFitModels: [], fitModelCarry: [...(ws.fitModelCarry ?? []), ...keep] };
 }
 
 /** "This library holds that model" — base name + definition. */
@@ -176,17 +198,37 @@ function baseName(name: string): string {
   return b || name;
 }
 
-function suffixed(base: string, n: number): string {
-  return n === 1 ? `${base} (from project)` : `${base} (from project ${n})`;
+/** The first "<base> (from project[ N])" that `taken` does not hold. */
+function freeName(name: string, taken: ReadonlySet<string>): string {
+  const base = baseName(name);
+  let n = 1;
+  const at = (k: number): string => (k === 1 ? `${base} (from project)` : `${base} (from project ${k})`);
+  while (taken.has(at(n))) n++;
+  return at(n);
+}
+
+/** Why rule 3 renamed a model: its name was held by a different LOCAL model,
+ *  by a local record this build cannot READ, or by an earlier, different
+ *  model in the same PROJECT. */
+export type RenameReason = "local" | "unreadable" | "project";
+
+export interface Renamed {
+  from: string;
+  to: string;
+  reason: RenameReason;
 }
 
 export interface AdoptResult {
   /** Names added to the library under their own name (rule 2). */
   added: string[];
-  /** Rule 3: `[incoming name, name it was added under]`. */
-  renamed: [string, string][];
-  /** Records storage refused — the caller carries them so a save keeps them. */
+  /** Rule 3, with why. */
+  renamed: Renamed[];
+  /** Records the library did not take — the caller carries them so a save
+   *  keeps them. */
   unstored: CustomFitModel[];
+  /** True when `unstored` is everything because the local slot is DAMAGED
+   *  and was left untouched, rather than because storage refused a write. */
+  libraryDamaged?: boolean;
 }
 
 /** Merge a project's accepted models into the local library under the rule in
@@ -194,8 +236,11 @@ export interface AdoptResult {
 export function mergeProjectFitModels(incoming: readonly CustomFitModel[]): AdoptResult {
   const result: AdoptResult = { added: [], renamed: [], unstored: [] };
   if (incoming.length === 0) return result;
+  if (customModelsSlotDamaged()) return { ...result, unstored: [...incoming], libraryDamaged: true };
   const local = loadCustomModels();
-  const taken = new Set([...local.map((m) => m.name), ...unreadableCustomModelNames()]);
+  const localNames = new Set(local.map((m) => m.name));
+  const unreadable = new Set(unreadableCustomModelNames());
+  const taken = new Set([...localNames, ...unreadable]);
   // Every definition already held under each base name (rule 1's lookup).
   const held = new Map<string, Set<string>>();
   const hold = (m: CustomFitModel): void => {
@@ -204,59 +249,87 @@ export function mergeProjectFitModels(incoming: readonly CustomFitModel[]): Adop
   };
   local.forEach(hold);
   const toWrite: CustomFitModel[] = [];
-  const plan: [string, string][] = []; // [incoming name, stored name]
+  const plan: Renamed[] = []; // `to` = the stored name; reason unused when from === to
   for (const m of incoming) {
-    const base = baseName(m.name);
-    if (held.get(base)?.has(definitionKey(m))) continue; // rule 1
+    if (held.get(baseName(m.name))?.has(definitionKey(m))) continue; // rule 1
     let name = m.name;
+    let reason: RenameReason = "project";
     if (taken.has(name)) {
-      let n = 1;
-      while (taken.has(suffixed(base, n))) n++;
-      name = suffixed(base, n); // rule 3
+      reason = localNames.has(name) ? "local" : unreadable.has(name) ? "unreadable" : "project";
+      name = freeName(m.name, taken); // rule 3
     }
     const record: CustomFitModel = { ...m, name };
     toWrite.push(record);
-    plan.push([m.name, name]);
+    plan.push({ from: m.name, to: name, reason });
     taken.add(name);
     hold(record);
   }
   if (toWrite.length === 0) return result;
   const stored = new Map(appendCustomModels(toWrite).map((m) => [m.name, m]));
   toWrite.forEach((record, i) => {
-    const [from, to] = plan[i];
-    const back = stored.get(to);
+    const step = plan[i];
+    const back = stored.get(step.to);
     if (!back || definitionKey(back) !== definitionKey(record)) result.unstored.push(record);
-    else if (from === to) result.added.push(to);
-    else result.renamed.push([from, to]);
+    else if (step.from === step.to) result.added.push(step.to);
+    else result.renamed.push(step);
   });
   return result;
 }
 
 const quoted = (names: readonly string[]): string => names.map((n) => `"${n}"`).join(", ");
 
+/** One clause per rule-3 cause, so the toast never claims "yours was kept"
+ *  when there was no model of yours under that name. */
+function renamedClauses(renamed: readonly Renamed[]): string[] {
+  const clauses: string[] = [];
+  const of = (reason: RenameReason): Renamed[] => renamed.filter((r) => r.reason === reason);
+  const as = (list: readonly Renamed[]): string => list.map(({ from, to }) => `"${from}" as "${to}"`).join(", ");
+  const local = of("local");
+  if (local.length) {
+    const one = local.length === 1;
+    clauses.push(
+      `${one ? "1 fit model differs" : `${local.length} fit models differ`} from the one saved here under the same name; yours ${one ? "was" : "were"} kept and the project's added as ${as(local)}`,
+    );
+  }
+  const unreadable = of("unreadable");
+  if (unreadable.length) {
+    const one = unreadable.length === 1;
+    clauses.push(
+      `${one ? "1 fit model's name is" : `${unreadable.length} fit models' names are`} held by a saved model here that this build cannot read (left untouched); the project's ${one ? "was" : "were"} added as ${as(unreadable)}`,
+    );
+  }
+  const project = of("project");
+  if (project.length) {
+    clauses.push(
+      `the project holds different fit models under the same name; the later ${project.length === 1 ? "one was" : "ones were"} added as ${as(project)}`,
+    );
+  }
+  return clauses;
+}
+
 /** The ONE message an open shows for a merge, or null when the project brought
  *  nothing new (the common reopen). `kept` says whether the refused records
  *  actually reached the carry — false when another load or an undo replaced
  *  the project before the merge landed, and the message must not claim it. */
-export function adoptionMessage({ added, renamed, unstored }: AdoptResult, kept = true): string | null {
+export function adoptionMessage(
+  { added, renamed, unstored, libraryDamaged }: AdoptResult,
+  kept = true,
+): string | null {
   const parts: string[] = [];
   if (added.length) {
     parts.push(
       `added ${added.length === 1 ? "1 fit model" : `${added.length} fit models`} from the project to your library: ${quoted(added)}`,
     );
   }
-  if (renamed.length) {
-    const list = renamed.map(([from, to]) => `"${from}" as "${to}"`).join(", ");
-    parts.push(
-      `${renamed.length === 1 ? "1 fit model differs" : `${renamed.length} fit models differ`} from the one saved here under the same name; yours ${renamed.length === 1 ? "was" : "were"} kept and the project's added as ${list}`,
-    );
-  }
+  parts.push(...renamedClauses(renamed));
   if (unstored.length) {
+    const where = kept
+      ? "kept in the project"
+      : "the project was replaced before it could be kept — it is still in the project file; reopen that file to try again";
     parts.push(
-      `${quoted(unstored.map((m) => m.name))} could not be saved to your library (browser storage refused it); ` +
-        (kept
-          ? "kept in the project"
-          : "the project was replaced before it could be kept — it is still in the project file; reopen that file to try again"),
+      libraryDamaged
+        ? `your saved fit model list could not be read, so the project's ${quoted(unstored.map((m) => m.name))} ${unstored.length === 1 ? "was" : "were"} not added to it and the list was left untouched; ${where}`
+        : `${quoted(unstored.map((m) => m.name))} could not be saved to your library (browser storage refused it); ${where}`,
     );
   }
   return parts.length ? parts.join(". ") : null;
@@ -268,22 +341,21 @@ type CarrySet = (fn: (s: { fitModelCarry: unknown[] }) => { fitModelCarry?: unkn
 /** What the store's load/append runs after its own `set()`
  *  (store/workspaceHydration.ts, which already put this file's carry in
  *  place): merge the project's accepted models into the library and toast
- *  once. `expected` is the carry the store held right after that `set()`;
- *  if it is still there, records storage refused are added to it (so the
- *  next save keeps them) and it is re-set to a fresh array either way, so a
- *  subscriber re-renders — the library is localStorage, which nothing can
- *  subscribe to, and an OPEN Recipe Library panel (which subscribes to
- *  `fitModelCarry` for this) would otherwise keep listing the pre-merge
- *  models. If another load replaced it meanwhile, nothing is written: that
- *  project must not inherit this one's records. */
+ *  once. An open panel listing the library re-reads on its own
+ *  (lib/fitmodels.ts's `subscribeCustomModels`). `expected` is the carry the
+ *  store held right after that `set()`; records the library did not take are
+ *  added to it only if it is still there — if another load replaced it
+ *  meanwhile, nothing is written: that project must not inherit this one's
+ *  records. The carry changing is a project edit, so it autosaves and marks
+ *  the project dirty like any other (useWorkspaceAutosave's `shouldAutosave`). */
 export function adoptProjectFitModels(
-  ws: { customFitModels?: readonly CustomFitModel[] },
+  ws: { projectFitModels?: readonly CustomFitModel[] },
   set: CarrySet,
   expected: unknown[],
 ): void {
-  const result = mergeProjectFitModels(ws.customFitModels ?? []);
+  const result = mergeProjectFitModels(ws.projectFitModels ?? []);
   let kept = false;
-  if (result.added.length || result.renamed.length || result.unstored.length) {
+  if (result.unstored.length) {
     // Zustand runs the updater synchronously, so `kept` is settled below.
     set((s) => {
       if (s.fitModelCarry !== expected) return {};

@@ -157,10 +157,18 @@ interface WorkspaceDoc {
  *  a caller that actually knows one (`store/workspaceIO.ts`'s
  *  `runSaveWorkspace`/`runSaveWorkspaceToFile`), never by autosave or a
  *  browser download, which have no durable directory to reason about. See
- *  `serializeDatasetSource` for the per-source rule this enables. */
-export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: string }): string {
+ *  `serializeDatasetSource` for the per-source rule this enables.
+ *
+ *  `opts.fitModelLibrary` (P2.7 follow-up): false ONLY for the crash-recovery
+ *  autosave (lib/autosave.ts), which embeds the fit-model carry without the
+ *  local library — lib/fitModelsProject.ts's header says why. Every other
+ *  save embeds the library, read from localStorage now. */
+export function serializeWorkspace(
+  ws: WorkspaceState,
+  opts?: { projectDir?: string; fitModelLibrary?: boolean },
+): string {
   const projectDir = opts?.projectDir;
-  const fitModels = projectFitModelsForSave(ws.customFitModels, ws.fitModelCarry);
+  const fitModels = projectFitModelsForSave(ws.fitModelCarry, { fitModelLibrary: opts?.fitModelLibrary });
   const doc: WorkspaceDoc = {
     format: WORKSPACE_FORMAT,
     // v5 only when a `transform` step is present — see WORKSPACE_VERSION_TRANSFORM_STEPS.
@@ -221,9 +229,9 @@ export function serializeWorkspace(ws: WorkspaceState, opts?: { projectDir?: str
     collections: ws.collections ?? [],
     visibleDetailsColumns: ws.visibleDetailsColumns ?? [], // PR L slice 2 — verbatim; sanitizeVisibleDetailsColumns defaults on PARSE
     plotRecipes: ws.plotRecipes ?? [], // P1.3 — verbatim, same convention as savedPlotSpecs/quickPlotTemplates
-    // P2.7 follow-up: the saved fit models (the local library unless the
-    // caller supplies them) plus the opened project's unreadable carry —
-    // lib/fitModelsProject.ts. Written only when non-empty, the mapViews rule.
+    // P2.7 follow-up: the saved fit models (the local library) plus the
+    // store's carry, one record per name — lib/fitModelsProject.ts. Written
+    // only when non-empty, the mapViews rule.
     ...(fitModels.length ? { customFitModels: fitModels } : {}),
     datasets: ws.datasets.map((d) => ({
       id: d.id,

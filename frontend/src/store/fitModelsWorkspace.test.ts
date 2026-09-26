@@ -5,11 +5,16 @@
 // lib/fitModelsProject.test.ts; these pin the store wiring
 // (store/workspaceHydration.ts's `adoptFitModels`).
 
+import { renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { memoryBackend } from "../lib/autosaveBackend";
+import { listAutosaveGenerations, setAutosaveBackend } from "../lib/autosave";
 import { buildCustomFitModel, loadCustomModels } from "../lib/fitmodels";
 import type { Dataset } from "../lib/types";
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
+import { flushAutosaveNow, useWorkspaceAutosave } from "../useWorkspaceAutosave";
+import { recipeSourcesWhole } from "./recipeFidelity";
 import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
 
@@ -28,7 +33,7 @@ const FUTURE = { version: 9, name: "Future", equation: "y = a" };
 
 /** A project file as another machine would have written it. */
 function projectText(models: unknown[], id = "d1"): string {
-  const doc = JSON.parse(serializeWorkspace({ datasets: [ds(id)], customFitModels: [] }));
+  const doc = JSON.parse(serializeWorkspace({ datasets: [ds(id)] }));
   return JSON.stringify({ ...doc, customFitModels: models });
 }
 
@@ -49,7 +54,7 @@ describe("store load/append merge the project's fit models", () => {
     useApp.getState().loadWorkspace(ws);
     // The carry is set synchronously with the rest of the load.
     expect(useApp.getState().fitModelCarry).toEqual([FUTURE]);
-    expect(useApp.getState().recipeSourcesComplete).toBe(false);
+    expect(recipeSourcesWhole(useApp.getState())).toBe(false);
 
     await vi.waitFor(() => expect(names()).toEqual(["Arrhenius", "Arrhenius (from project)", "Line"]));
     expect(loadCustomModels()[0]).toEqual(local); // the local one is never overwritten
@@ -83,7 +88,7 @@ describe("store load/append merge the project's fit models", () => {
     expect(useApp.getState().fitModelCarry).toEqual([FUTURE]);
     useApp.getState().loadWorkspace(parseWorkspace(projectText([])));
     expect(useApp.getState().fitModelCarry).toEqual([]);
-    expect(useApp.getState().recipeSourcesComplete).toBe(true);
+    expect(recipeSourcesWhole(useApp.getState())).toBe(true);
   });
 
   it("append: merges under the same rule and GROWS the carry in the same set() as its datasets", async () => {
@@ -92,7 +97,7 @@ describe("store load/append merge the project's fit models", () => {
     useApp.getState().appendWorkspace(parseWorkspace(projectText([model("Line", "y = a*x"), other], "d2")));
     // Synchronous: a crash (or a second open) before the async merge cannot lose it.
     expect(useApp.getState().fitModelCarry).toEqual([FUTURE, other]);
-    expect(useApp.getState().recipeSourcesComplete).toBe(false);
+    expect(recipeSourcesWhole(useApp.getState())).toBe(false);
     await vi.waitFor(() => expect(names()).toEqual(["Line"]));
     expect(useApp.getState().fitModelCarry).toEqual([FUTURE, other]);
   });
@@ -141,6 +146,45 @@ describe("store load/append merge the project's fit models", () => {
     expect(useApp.getState().fitModelCarry).toEqual([]);
     useApp.getState().undo();
     expect(useApp.getState().fitModelCarry).toEqual([FUTURE]);
+  });
+
+  it("undo cannot desync the Recipe Library's verdict from the carry — it is DERIVED (PR #432 review)", () => {
+    useApp.getState().loadWorkspace(parseWorkspace(projectText([FUTURE])));
+    expect(recipeSourcesWhole(useApp.getState())).toBe(false);
+    useApp.getState().clearAll();
+    expect(recipeSourcesWhole(useApp.getState())).toBe(true);
+    // Undo restores the carry but not the (non-undoable) load flag: the
+    // verdict must follow the carry, not the flag clearAll left at true.
+    useApp.getState().undo();
+    expect(useApp.getState().fitModelCarry).toEqual([FUTURE]);
+    expect(recipeSourcesWhole(useApp.getState())).toBe(false);
+    useApp.getState().redo();
+    expect(recipeSourcesWhole(useApp.getState())).toBe(true);
+  });
+
+  it("a refused merge growing the carry marks the project dirty and reaches the autosave (PR #432 review)", async () => {
+    setAutosaveBackend(memoryBackend());
+    const hook = renderHook(() => useWorkspaceAutosave());
+    const m = model("Refused", "y = a");
+    const text = projectText([m]);
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    try {
+      useApp.getState().loadWorkspace(parseWorkspace(text));
+      // What the open command's own setCurrentProject does right after the
+      // load: the file on disk matches, so the project reads clean.
+      useApp.setState({ projectDirty: false });
+      await vi.waitFor(() => expect(useApp.getState().fitModelCarry).toEqual([m]));
+      expect(useApp.getState().projectDirty).toBe(true);
+      await flushAutosaveNow();
+      const [gen] = await listAutosaveGenerations();
+      expect(JSON.parse(gen.text).customFitModels).toEqual([m]);
+    } finally {
+      spy.mockRestore();
+      hook.unmount();
+      useApp.setState({ projectDirty: false });
+    }
   });
 
   it("undo of an open restores the previous project's carry (it is project content)", () => {

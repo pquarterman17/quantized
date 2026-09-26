@@ -35,6 +35,7 @@
 export interface RecipeFidelitySlice {
   /** False when the open project's `plotRecipes` or `quickPlotTemplates` field
    *  was present but unreadable, or had records dropped by its sanitizer.
+   *  Read it through `recipeSourcesWhole`, which also counts the carry.
    *
    *  True on a fresh session: an empty app has lost nothing. Consumers must
    *  combine it with the OTHER recipe systems' own signals — see
@@ -42,20 +43,36 @@ export interface RecipeFidelitySlice {
    *  favorites/tags be pruned against a collection any source doubts. */
   recipeSourcesComplete: boolean;
   /** P2.7 follow-up: the saved fit-model records the open project(s) carried
-   *  that this build cannot read (a newer version, a damaged entry). Never
-   *  shown or edited — only written back into the `.dwk` on the next save
-   *  (lib/fitModelsProject.ts), so opening a project in an older build and
-   *  saving it does not destroy a newer build's models. Replaced by a load,
-   *  grown by an append; a non-empty carry is also why `recipeSourcesComplete`
-   *  is false. UNDOABLE, unlike the flag (it is in HistorySnapshot): it is
-   *  project content that travels with the datasets. PERSISTED, unlike the
-   *  flag: `serializeWorkspace` reads it from the state it is given. */
+   *  that the local library does not hold — ones this build cannot read (a
+   *  newer version, a damaged entry) and ones the library refused (storage
+   *  full, a damaged slot). Never shown or edited — only written back into
+   *  the `.dwk` on the next save (lib/fitModelsProject.ts), so opening a
+   *  project in an older build and saving it does not destroy a newer build's
+   *  models. Replaced by a load, grown by an append and by a refused merge. A
+   *  non-empty carry makes `recipeSourcesWhole` false — DERIVED, never
+   *  assigned, so undo cannot desync the two. UNDOABLE, unlike the flag (it
+   *  is in HistorySnapshot): it is project content that travels with the
+   *  datasets. PERSISTED and AUTOSAVED, unlike the flag: `serializeWorkspace`
+   *  reads it from the state it is given, and useWorkspaceAutosave's
+   *  `shouldAutosave` tracks it. */
   fitModelCarry: unknown[];
 }
 
+/** Are EVERY workspace-backed recipe source whole — the lists the load
+ *  judged (`recipeSourcesComplete`) AND no carried fit models? The one
+ *  reader of the verdict (the Recipe Library panel). Derived from the carry
+ *  on every read rather than folded into the flag at load: the carry is
+ *  undoable and the flag is not, so a stored combination would disagree
+ *  with the carry after an undo (undoing "remove all" brings the carry back,
+ *  but not a `false`). */
+export function recipeSourcesWhole(s: RecipeFidelitySlice): boolean {
+  return s.recipeSourcesComplete && s.fitModelCarry.length === 0;
+}
+
 /** State only, no action: the write sites are `loadWorkspace` (replace) and
- *  `appendWorkspace` (grow), store/workspaceHydration.ts. A setter here would
- *  have no caller. */
+ *  `appendWorkspace` (grow), store/workspaceHydration.ts, and the refused
+ *  merge they start (lib/fitModelsProject.ts's `adoptProjectFitModels`). A
+ *  setter here would have no caller. */
 export function createRecipeFidelitySlice(): RecipeFidelitySlice {
   return { recipeSourcesComplete: true, fitModelCarry: [] };
 }

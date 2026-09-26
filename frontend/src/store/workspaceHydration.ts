@@ -59,6 +59,12 @@ import { hydrateView } from "../lib/plotview";
 import { sanitizeTechniqueViewMemory } from "../lib/techniqueViewMemory";
 import { nextStageTab } from "../lib/stagetab";
 import type { LoadedWorkspace, WorkspaceState } from "../lib/workspace";
+
+/** What `loadWorkspace` takes: any workspace state, plus — from a parsed
+ *  file — its fit models to merge into the library. That field is kept OUT of
+ *  `WorkspaceState` so no save can ever serialize a parsed file's models
+ *  (lib/fitModelsProject.ts). */
+export type WorkspaceToLoad = WorkspaceState & Pick<LoadedWorkspace, "projectFitModels">;
 import { sanitizeDocumentBackedPlotWindows } from "../lib/windowDocumentPersistence";
 import { workspaceCodecOrReport } from "../lib/workspaceCodecLazy";
 import { mergeWorkspace } from "../lib/workspaceMerge";
@@ -75,7 +81,7 @@ type SliceGet = () => AppState;
 export interface WorkspaceHydrationSlice {
   // `skipLayout` (PR E2 "Open without layout…") ignores plotWindows/
   // focusedWindowId/toolWindowLayout, falling through to the same default.
-  loadWorkspace: (ws: WorkspaceState, options?: { skipLayout?: boolean }) => void;
+  loadWorkspace: (ws: WorkspaceToLoad, options?: { skipLayout?: boolean }) => void;
   // Append a second .dwk's datasets into the CURRENT library (Origin's
   // "Append Project", MAIN_PLAN #16) — the additive opposite of
   // loadWorkspace: only the flat dataset list joins (collision-free ids +
@@ -302,9 +308,9 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
  *  through the `.dwk` codec, so none of it costs eager bytes; usually already
  *  loaded, except after the browser picker's Worker parse, when this is its
  *  first fetch (a failure is toasted by the loader). */
-function adoptFitModels(ws: WorkspaceState, set: SliceSet, get: SliceGet): void {
+function adoptFitModels(ws: WorkspaceToLoad, set: SliceSet, get: SliceGet): void {
   const expected = get().fitModelCarry;
-  if (ws.customFitModels?.length)
+  if (ws.projectFitModels?.length)
     void workspaceCodecOrReport("Adding the project's fit models", noop).then((c) =>
       c?.adoptProjectFitModels(ws, set, expected),
     );
@@ -339,14 +345,15 @@ function runAppendWorkspace(set: SliceSet, get: SliceGet, ws: LoadedWorkspace): 
       ? ` — ${workbooks.length} workbook${workbooks.length === 1 ? "" : "s"} landed at Library root`
       : "";
   const msg = `appended ${n} dataset${n === 1 ? "" : "s"} (${renamed} renamed)${wbNote}`;
-  // P2.7: the appended file's unaccepted fit models JOIN the carry (and so
-  // un-certify the Recipe Library) in the same set() as its datasets.
+  // P2.7: the appended file's unaccepted fit models JOIN the carry (which
+  // un-certifies the Recipe Library, store/recipeFidelity.ts's
+  // `recipeSourcesWhole`) in the same set() as its datasets.
   const carry = ws.fitModelCarry ?? [];
   set({
     datasets,
     workbooks: [...get().workbooks, ...workbooks],
     status: msg,
-    ...(carry.length ? { fitModelCarry: [...get().fitModelCarry, ...carry], recipeSourcesComplete: false } : {}),
+    ...(carry.length ? { fitModelCarry: [...get().fitModelCarry, ...carry] } : {}),
   });
   toast(msg, "ok");
   adoptFitModels(ws, set, get);

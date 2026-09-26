@@ -29,7 +29,7 @@ const plot = {
 
 beforeEach(() => {
   localStorage.clear();
-  useApp.setState({ plotRecipes: [], quickPlotTemplates: [], recipeSourcesComplete: true });
+  useApp.setState({ plotRecipes: [], quickPlotTemplates: [], recipeSourcesComplete: true, fitModelCarry: [] });
   useGlobalPlotRecipes.setState({ recipes: [], hydrated: true, complete: true });
   useRecipeManager.setState({ open: true, library: true });
 });
@@ -85,7 +85,7 @@ describe("RecipeLibraryPanel", () => {
   it("an OPEN panel lists fit models a project open merges in, and warns about ones it could not read (P2.7)", async () => {
     render(<RecipeLibraryPanel />);
     expect(screen.getByText("No saved recipes yet")).toBeInTheDocument();
-    const doc = JSON.parse(serializeWorkspace({ datasets: [], customFitModels: [] }));
+    const doc = JSON.parse(serializeWorkspace({ datasets: [] }));
     doc.datasets = [{ id: "d1", name: "d1", data: { time: [0], values: [[1]], labels: ["y"], units: [""], metadata: {} } }];
     doc.customFitModels = [
       { version: 1, name: "Carried in", equation: "y = a", params: ["a"], guesses: [1], lower: [null], upper: [null] },
@@ -94,6 +94,16 @@ describe("RecipeLibraryPanel", () => {
     act(() => useApp.getState().loadWorkspace(parseWorkspace(JSON.stringify(doc))));
     expect(await screen.findByText("Carried in")).toBeInTheDocument();
     expect(screen.getByText(/Some recipe sources could not be read completely/)).toBeInTheDocument();
+  });
+
+  it("an OPEN panel lists a fit model saved ANYWHERE else — no project state involved (PR #432 review)", () => {
+    render(<RecipeLibraryPanel />);
+    expect(screen.getByText("No saved recipes yet")).toBeInTheDocument();
+    // E.g. the fit workshop's Save: a library write, nothing in the store.
+    act(() => {
+      saveCustomModel({ version: 1, name: "Saved elsewhere", equation: "y = a", params: ["a"], guesses: [1], lower: [null], upper: [null] });
+    });
+    expect(screen.getByText("Saved elsewhere")).toBeInTheDocument();
   });
 
   it("shows no warning when every source, project included, is whole", () => {
@@ -136,7 +146,7 @@ describe("pruning the sidecar index (P3.5)", () => {
 
   beforeEach(() => {
     localStorage.clear();
-    useApp.setState({ plotRecipes: [], quickPlotTemplates: [], recipeSourcesComplete: true });
+    useApp.setState({ plotRecipes: [], quickPlotTemplates: [], recipeSourcesComplete: true, fitModelCarry: [] });
     useGlobalPlotRecipes.setState({ recipes: [], hydrated: true, complete: true });
     useRecipeManager.setState({ open: true, library: true });
   });
@@ -776,7 +786,7 @@ describe("row actions (P3.5 slice 3)", () => {
 describe("library-level import (P3.5 slice 4)", () => {
   beforeEach(() => {
     localStorage.clear();
-    useApp.setState({ plotRecipes: [], quickPlotTemplates: [], recipeSourcesComplete: true });
+    useApp.setState({ plotRecipes: [], quickPlotTemplates: [], recipeSourcesComplete: true, fitModelCarry: [] });
     useGlobalPlotRecipes.setState({ recipes: [], hydrated: true, complete: true });
     useRecipeManager.setState({ open: true, library: true });
   });

@@ -81,7 +81,9 @@ export async function saveAutosave(ws: WorkspaceState, now = Date.now()): Promis
     // generation on its own axis (count / age / size) — see
     // autosaveGenerations.ts's docs on rotate/capByAge/capBySize.
     const kept = capBySize(
-      capByAge(rotate(existing, { at: now, text: serializeWorkspace(ws) }), now),
+      // P2.7: the fit-model CARRY only, not the library — a restore happens
+      // on this machine, whose library is newer (lib/fitModelsProject.ts).
+      capByAge(rotate(existing, { at: now, text: serializeWorkspace(ws, { fitModelLibrary: false }) }), now),
       AUTOSAVE_BUDGET_BYTES,
     );
     await backend.write(kept);
@@ -121,11 +123,10 @@ export async function loadAutosaveGeneration(): Promise<
     const generations = await withLegacyGeneration(read.value, parseWorkspace);
     const pick = pickRestorable(generations, (text) => isRestorable(parseWorkspace, text));
     health = { ...health, count: generations.length };
-    // P2.7: an autosave was written from THIS browser's fit-model library,
-    // which is newer than the copy it embeds — so its models are not merged
-    // back on restore (that would only resurrect deletions and renames made
-    // since); the ones the library does not hold move to the carry, so the
-    // project keeps them (lib/fitModelsProject.ts).
+    // P2.7: an autosave embeds the fit-model CARRY only (above), so a
+    // restore merges nothing into the library — merging would resurrect
+    // deletions and pin stale versions — and puts every record it holds back
+    // in the carry (lib/fitModelsProject.ts).
     if (!pick) return null;
     const ws = parseWorkspace(pick.text);
     return { workspace: { ...ws, ...autosaveRestoreFitModels(ws) }, at: pick.at };
