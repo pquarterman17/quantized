@@ -250,6 +250,40 @@ describe("SplitDatasetDialog — confirm / cancel", () => {
     expect(child.data.metadata.transform_warnings).toEqual([list.textContent]);
   });
 
+  it("P2.5: previews the chosen group's rows (names, units, sizes); the created child IS that preview", async () => {
+    useApp.setState({ splitDialogTargetId: "d1" });
+    render(<SplitDatasetDialog />);
+    const table = () => screen.getByRole("table", { name: "Preview rows" });
+    const cells = () => within(table()).getAllByRole("cell").map((c) => c.textContent);
+    expect(within(table()).getAllByRole("columnheader").map((h) => h.textContent)).toEqual(["X", "T (K)"]);
+    expect(cells()).toEqual(["0", "4.998", "1", "5", "2", "5.003"]);
+    expect(screen.getByLabelText("Preview size").textContent).toBe(
+      "run1.dat: 6 rows × 1 columns → 2 datasets; this one: 3 rows × 1 columns",
+    );
+    fireEvent.change(screen.getByLabelText("Preview group"), { target: { value: "1" } });
+    expect(cells()).toEqual(["3", "9.997", "4", "10", "5", "10.003"]);
+    const shown = cells();
+
+    fireEvent.click(screen.getByText("Split into 2 datasets"));
+    await vi.waitFor(() => expect(useApp.getState().datasets).toHaveLength(3));
+    // Parity: the commit ran the dialog's own compute (lib/splitCompute.ts).
+    const { computeSplit, splitChildData } = await import("../../lib/splitCompute");
+    const { groups, warnings } = computeSplit({ id: "d1", name: "run1.dat", data: wobble }, 0);
+    const created = useApp.getState().datasets.slice(1);
+    expect(created.map((d) => d.data)).toEqual(groups.map((g) => splitChildData(wobble, g, warnings)));
+    const second = created[1].data;
+    expect(second.time.flatMap((x, i) => [String(x), String(second.values[i][0])])).toEqual(shown);
+  });
+
+  it("P2.5: a still-loading book's split preview is labelled preview-only", () => {
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run1.dat", data: wobble, pending: { kind: "path", path: "/r.opj", bookId: "B", rows: 60, cols: 1 } }],
+      splitDialogTargetId: "d1",
+    });
+    render(<SplitDatasetDialog />);
+    expect(screen.getByText(/^Preview only:/)).toBeTruthy();
+  });
+
   it("P2.5: a split with no blank values shows no warning", () => {
     useApp.setState({ splitDialogTargetId: "d1" });
     render(<SplitDatasetDialog />);

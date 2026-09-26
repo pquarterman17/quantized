@@ -1,9 +1,10 @@
-// Transform safety (PRIMARY_SOFTWARE_AUDIT_PLAN P2.5), end to end against the
-// real backend's CSV parser: a key join whose key units differ (K vs mK) and
-// whose left key repeats stops at a review BEFORE anything is created — the
-// counts in plain text, the unit mismatch as a named, explicit confirm — and
-// the confirmed join is recorded as a pipeline step that the Pipeline panel
-// replays to the same output.
+// Transform preview + safety (PRIMARY_SOFTWARE_AUDIT_PLAN P2.5), end to end
+// against the real backend's CSV parser: "Join datasets by key…" opens the
+// Reshape & combine workshop, which previews the join LIVE — its rows, its
+// size, the duplicate-key warning and the key-unit mismatch (K vs mK) — while
+// NOTHING is created. The mismatch keeps Create off until it is explicitly
+// acknowledged; the created join is recorded as a pipeline step that the
+// Pipeline panel replays to the same output.
 
 import { expect, test, type Page } from "@playwright/test";
 
@@ -22,20 +23,8 @@ const store = (page: Page) =>
     return { datasets: s.datasets, macroSteps: s.macroSteps };
   });
 
-async function joinOnFirstChannel(page: Page) {
-  await runPaletteCommand(page, "Join datasets by key…");
-  const step1 = page.locator(".qz-dialog").filter({ hasText: "step 1 of 2" });
-  await expect(step1).toBeVisible();
-  await step1.locator("select").nth(1).selectOption({ index: 1 }); // 0: T
-  await step1.getByRole("button", { name: "Run" }).click();
-  const step2 = page.locator(".qz-dialog").filter({ hasText: "step 2 of 2" });
-  await expect(step2).toBeVisible();
-  await step2.locator("select").first().selectOption({ index: 1 }); // 0: T
-  await step2.getByRole("button", { name: "Run" }).click();
-}
-
-test.describe("Transform safety review + replay (P2.5)", () => {
-  test("a unit-mismatched join is reviewed first, then recorded and replayed", async ({ page }) => {
+test.describe("Transform preview + safety (P2.5)", () => {
+  test("open a join → the preview shows its rows and the duplicate-key warning → create → recorded and replayed", async ({ page }) => {
     await gotoApp(page);
     const library = page.locator(".qzk-library");
     await dropFileOnto(page, library, fixturePath("join-right.csv"));
@@ -48,23 +37,33 @@ test.describe("Transform safety review + replay (P2.5)", () => {
         .startMacro()),
     );
 
-    // ── Declining the review creates nothing ─────────────────────────────
-    await joinOnFirstChannel(page);
-    const review = page.locator(".qz-dialog").filter({ has: page.getByRole("heading", { name: "Join (inner): units differ" }) });
-    await expect(review).toBeVisible();
-    await expect(review).toContainText("Result: 2 rows");
-    await expect(review).toContainText("Key units differ");
-    await expect(review).toContainText("1 row repeats an earlier key");
-    await expect(review).toContainText("2 key values have no match in join-right.csv");
-    await review.getByRole("button", { name: "Cancel" }).click();
-    await expect(review).toHaveCount(0);
-    await waitForDatasetCount(page, 2);
+    // ── Open the join: the live preview, nothing created ────────────────
+    await runPaletteCommand(page, "Join datasets by key…");
+    const panel = page.locator(".qzk-win").filter({ hasText: "Reshape & combine" });
+    await expect(panel).toBeVisible();
+    await expect(panel.getByRole("combobox", { name: "Left dataset" })).toHaveValue(/.+/);
+    await panel.getByRole("combobox", { name: "Left key" }).selectOption("0"); // T
+    await panel.getByRole("combobox", { name: "Right key" }).selectOption("0"); // T
+
+    const sizes = panel.getByRole("list", { name: "Preview size" });
+    await expect(sizes).toContainText("Result “join-left.csv + join-right.csv (joined)”: 2 rows × 2 columns");
+    await expect(sizes).toContainText("join-left.csv: 5 rows × 2 columns");
+    const table = panel.getByRole("table", { name: "Preview rows" });
+    await expect(table.getByRole("row")).toHaveCount(3); // header + the 2 joined rows
+    const warnings = panel.getByRole("list", { name: "Transform warnings" });
+    await expect(warnings.locator('[data-code="duplicate-keys"]')).toContainText("1 row repeats an earlier key");
+    await expect(warnings.locator('[data-code="unit-mismatch"]')).toContainText("Key units differ");
+    await expect(warnings).toContainText("2 key values have no match in join-right.csv");
+    expect((await store(page)).datasets).toHaveLength(2);
     expect((await store(page)).macroSteps).toEqual([]);
 
-    // ── Confirming names the override, creates, stamps and records ───────
-    await joinOnFirstChannel(page);
-    await page.getByRole("button", { name: "Create despite unit mismatch" }).click();
+    // ── The unit mismatch blocks Create until acknowledged ──────────────
+    const create = panel.getByRole("button", { name: "Create", exact: true });
+    await expect(create).toBeDisabled();
+    await panel.getByRole("checkbox", { name: "Create despite the unit mismatch" }).check();
+    await create.click();
     await waitForDatasetCount(page, 3);
+    await expect(panel).toHaveCount(0);
     const after = await store(page);
     const joined = after.datasets.find((d) => d.name.endsWith("(joined)"))!;
     expect(joined.data.time).toEqual([5, 10]);
