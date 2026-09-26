@@ -114,7 +114,7 @@ describe("useEquationFit hold column + summary (P2.7)", () => {
       result.current.setRow(0, "min", "5");
       result.current.setRow(0, "max", "1");
     });
-    expect(result.current.runProblem).toBe('"m": min is above max');
+    expect(result.current.runProblem).toBe("m: min is above max");
     await act(async () => {
       await result.current.fit();
     });
@@ -153,5 +153,62 @@ describe("useEquationFit hold column + summary (P2.7)", () => {
     expect(seen.some((r) => r.eq === "a+;b" && r.status === "error")).toBe(true);
     // ... and never carries the old span.
     expect(seen.filter((r) => r.span !== null && r.eq !== "a+;")).toEqual([]);
+  });
+
+  it("records a macro step that carries the whole fit setup (P2.7 review)", async () => {
+    vi.mocked(fitEquation).mockResolvedValue({ params: [10, 1], errors: [0.1, null], yFit: [1, 2, 3, 4] });
+    useApp.setState({ macroRecording: true, macroSteps: [], pipelineRunning: false });
+    const { result } = await validated();
+    act(() => {
+      result.current.setRow(0, "guess", "2");
+      result.current.setRow(0, "min", "0");
+      result.current.setHeld(1, true);
+    });
+    await act(async () => {
+      await result.current.fit();
+    });
+    const step = useApp.getState().macroSteps.at(-1);
+    expect(step?.kind).toBe("ui");
+    expect(step?.code).toBe(
+      'qz.fitEquation("m*x + b", { guesses: [2, 1], lower: [0, null], upper: [null, null], fixed: [false, true] })',
+    );
+    expect(step?.params).toEqual({
+      equation: "m*x + b",
+      guesses: [2, 1],
+      lower: [0, null],
+      upper: [null, null],
+      fixed: [false, true],
+    });
+    useApp.setState({ macroRecording: false, macroSteps: [] });
+  });
+
+  it("snapshots units at fit time (P2.7 review)", async () => {
+    vi.mocked(fitEquation).mockResolvedValue({ params: [10, 1], errors: [0.1, 0.2], yFit: [1, 2, 3, 4] });
+    const { result } = await validated();
+    act(() => {
+      result.current.setRow(0, "unit", " V/s ");
+    });
+    await act(async () => {
+      await result.current.fit();
+    });
+    expect(result.current.fitUnits).toEqual(["V/s", ""]);
+    act(() => {
+      result.current.setRow(0, "unit", "mV/s");
+    });
+    expect(result.current.fitUnits).toEqual(["V/s", ""]);
+  });
+
+  it("surfaces a refused save instead of throwing (P2.7 review)", async () => {
+    localStorage.setItem("qz.customFitModels", JSON.stringify([{ version: 9, name: "Future" }]));
+    const { result } = await validated();
+    act(() => {
+      result.current.setModelName("Future");
+    });
+    let out: unknown = "unset";
+    act(() => {
+      out = result.current.save();
+    });
+    expect(out).toBeNull();
+    expect(result.current.error).toContain('a saved fit model named "Future" could not be read');
   });
 });

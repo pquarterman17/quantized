@@ -14,7 +14,9 @@
 // TOLERANT ON LOAD, STRICT ON IMPORT. A stored record that is not a valid v1
 // or v2 (damaged, or written by a newer build) is skipped on load — and
 // reported ONCE by `loadCustomModelsChecked` for the workshop to show — but
-// never destroyed: saves and deletes rewrite the slot around it. An imported
+// never destroyed: saves and deletes rewrite the slot around it, and its NAME
+// stays taken (a save onto it is refused). A slot that is not a JSON array at
+// all is moved aside to DAMAGED_BACKUP_KEY before the next write. An imported
 // FILE gets no such leniency (lib/nameKeyedRecipes' `parseFitModelFile`).
 
 export const CUSTOM_FIT_MODEL_VERSION = 2;
@@ -113,8 +115,19 @@ function readSlot(): Slot {
   }
 }
 
-function readRaw(): unknown[] {
-  return readSlot().list;
+/** One pass over the slot: each raw entry is validated ONCE and lands in
+ *  exactly one of the two lists (raw order kept in `raw`). */
+interface Scan extends Slot {
+  readable: CustomFitModel[];
+  unreadable: unknown[];
+}
+
+function scan(): Scan {
+  const slot = readSlot();
+  const readable: CustomFitModel[] = [];
+  const unreadable: unknown[] = [];
+  for (const r of slot.list) (isCustomFitModel(r) ? readable : unreadable).push(r as CustomFitModel);
+  return { ...slot, readable, unreadable };
 }
 
 function nameOf(v: unknown): string | null {
@@ -132,7 +145,7 @@ export interface CheckedCustomModels {
 /** Every readable saved model plus ONE warning naming the records skipped
  *  (a damaged entry, or one a newer build wrote). */
 export function loadCustomModelsChecked(): CheckedCustomModels {
-  const { list: raw, damaged } = readSlot();
+  const { readable: models, unreadable: skipped, damaged } = scan();
   if (damaged !== null) {
     return {
       models: [],
@@ -141,10 +154,8 @@ export function loadCustomModelsChecked(): CheckedCustomModels {
         `(${DAMAGED_BACKUP_KEY}) when a model is next saved`,
     };
   }
-  const models = raw.filter(isCustomFitModel);
-  const skipped = raw.filter((r) => !isCustomFitModel(r));
   if (skipped.length === 0) return { models, warning: null };
-  const names = skipped.map((r) => nameOf(r)).filter((n): n is string => !!n);
+  const names = skipped.map(nameOf).filter((n): n is string => !!n);
   const what = skipped.length === 1 ? "1 saved fit model" : `${skipped.length} saved fit models`;
   const which = names.length ? `: ${names.map((n) => `"${n}"`).join(", ")}` : "";
   return {
@@ -154,17 +165,24 @@ export function loadCustomModelsChecked(): CheckedCustomModels {
 }
 
 export function loadCustomModels(): CustomFitModel[] {
-  return readRaw().filter(isCustomFitModel);
+  return scan().readable;
 }
 
-/** Rewrite the slot as `raw` — unreadable records ride through untouched —
- *  and return the readable list (session-local if storage refuses). */
-function writeRaw(raw: unknown[]): CustomFitModel[] {
+/** Names held by stored records this app cannot read (a newer build's
+ *  version, a damaged entry). They are TAKEN, as peak recipes' are
+ *  (lib/peakwizard `unreadablePeakRecipeNames`): a save onto one is refused,
+ *  and rename / duplicate / import dedupe around it (lib/nameKeyedRecipes). */
+export function unreadableCustomModelNames(): string[] {
+  return scan().unreadable.map(nameOf).filter((n): n is string => !!n);
+}
+
+/** Rewrite the slot as `raw` (unreadable records ride through untouched),
+ *  moving a damaged slot aside first. Session-local if storage refuses. */
+function writeRaw(damaged: string | null, raw: unknown[]): void {
   try {
     // A damaged slot (not a JSON array at all) is moved aside, never simply
     // overwritten: it may hold every model the user had. An earlier backup
     // is never replaced either; a second one gets a numbered key.
-    const { damaged } = readSlot();
     if (damaged !== null) {
       let key = DAMAGED_BACKUP_KEY;
       for (let n = 2; localStorage.getItem(key) !== null && localStorage.getItem(key) !== damaged; n++) {
@@ -176,15 +194,44 @@ function writeRaw(raw: unknown[]): CustomFitModel[] {
   } catch {
     /* storage unavailable — the change stays session-local */
   }
-  return raw.filter(isCustomFitModel);
 }
 
-/** Save (upsert by name) and return the new list. */
+/** Save (upsert by name) and return the new readable list. Throws, writing
+ *  nothing, when the name belongs to a stored record this app cannot read:
+ *  keeping both would leave two records under one name, and replacing it
+ *  would destroy a newer build's model. */
 export function saveCustomModel(m: CustomFitModel): CustomFitModel[] {
-  return writeRaw([...readRaw().filter((x) => !isCustomFitModel(x) || x.name !== m.name), m]);
+  const { list, damaged } = readSlot();
+  const raw: unknown[] = [];
+  const readable: CustomFitModel[] = [];
+  for (const r of list) {
+    const ok = isCustomFitModel(r);
+    if (!ok && nameOf(r) === m.name) {
+      throw new Error(
+        `a saved fit model named "${m.name}" could not be read (a newer or damaged record) — save under another name`,
+      );
+    }
+    if (ok && r.name === m.name) continue;
+    raw.push(r);
+    if (ok) readable.push(r);
+  }
+  raw.push(m);
+  readable.push(m);
+  writeRaw(damaged, raw);
+  return readable;
 }
 
 /** Delete the READABLE record(s) of that name; an unreadable one is kept. */
 export function deleteCustomModel(name: string): CustomFitModel[] {
-  return writeRaw(readRaw().filter((x) => !isCustomFitModel(x) || x.name !== name));
+  const { list, damaged } = readSlot();
+  const raw: unknown[] = [];
+  const readable: CustomFitModel[] = [];
+  for (const r of list) {
+    const ok = isCustomFitModel(r);
+    if (ok && r.name === name) continue;
+    raw.push(r);
+    if (ok) readable.push(r);
+  }
+  writeRaw(damaged, raw);
+  return readable;
 }

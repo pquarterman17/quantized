@@ -26,6 +26,7 @@ from quantized.calc.fit_equation import (
     equation_model,
 )
 from quantized.calc.fit_findxy import find_x, find_y
+from quantized.calc.fit_holds import check_held_starts
 from quantized.calc.fit_models import FIT_MODELS, evaluate
 from quantized.calc.fit_scan import scan_models
 from quantized.calc.fitting import curve_fit, weights_from_dy
@@ -114,6 +115,9 @@ def fit(req: FitRequest) -> dict[str, Any]:
 
     try:
         p0 = req.p0 if req.p0 is not None else auto_guess(req.model, req.x, req.y)
+        # curve_fit would clip a held start into its bounds and still call it
+        # held; refuse instead (P2.7 review, shared with /equation/fit).
+        check_held_starts(FIT_MODELS[req.model]["paramNames"], p0, req.fixed, req.lower, req.upper)
         result = curve_fit(
             req.x,
             req.y,

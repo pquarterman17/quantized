@@ -229,7 +229,7 @@ describe("useEquationFit fitting", () => {
       await result.current.fit();
     });
     expect(fitEquation).not.toHaveBeenCalled();
-    expect(result.current.error).toContain('guess for "m"');
+    expect(result.current.error).toBe("m: guess is not a number");
   });
 
   it("surfaces a backend fit failure (e.g. 422) as an error", async () => {

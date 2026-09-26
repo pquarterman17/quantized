@@ -9,7 +9,9 @@ the golden set (``test_calc_parseeqn``) covers the rest of the old behaviour.
 
 from __future__ import annotations
 
+import copy
 import math
+import pickle
 
 import numpy as np
 import pytest
@@ -212,3 +214,44 @@ def test_syntax_error_is_a_value_error() -> None:
     # keeps working unchanged.
     assert issubclass(EquationSyntaxError, ValueError)
     assert math.isfinite(_const("pi**2"))
+
+
+# ── P2.7 review ─────────────────────────────────────────────────────────────
+
+
+def test_syntax_error_survives_pickle_and_deepcopy() -> None:
+    with pytest.raises(EquationSyntaxError) as info:
+        parse_equation("a*foo(x)")
+    err = info.value
+    for clone in (pickle.loads(pickle.dumps(err)), copy.deepcopy(err), copy.copy(err)):
+        assert type(clone) is EquationSyntaxError
+        assert str(clone) == str(err)
+        assert (clone.start, clone.end, clone.detail) == (err.start, err.end, err.detail)
+
+
+def test_exponent_chain_associativity_is_pinned() -> None:
+    # MATLAB-PARITY ITEM (see the fit_equation_syntax docstring): ^ and ** are
+    # right-associative here and a sign after ^ binds the rest of the chain.
+    # MATLAB is believed to evaluate ^ left to right (2^3^2 = 64). Pinned so
+    # it cannot change silently; 2^3^2 = 512 predates P2.7.
+    assert _const("2^3^2") == 512.0
+    assert _const("2**3**2") == 512.0
+    assert _const("2^-3^2") == 2.0**-9
+    assert _const("2**-3**2") == 2.0**-9
+
+
+def test_unicode_decimal_digits_still_start_a_number() -> None:
+    # Before P2.7 any str.isdigit() character started a number and float()
+    # read it, so saved models written with fullwidth or Arabic-Indic digits
+    # validated; they still do.
+    fcn, names = parse_equation("\uff12*x + a")  # fullwidth 2
+    assert names == ["a"]
+    assert fcn(np.array([3.0]), [1.0])[0] == 7.0
+    assert _const("\u0663.5") == 3.5  # Arabic-Indic 3
+    assert _const("1e\uff12") == 100.0
+
+
+def test_a_digit_float_cannot_read_is_a_positioned_error() -> None:
+    with pytest.raises(EquationSyntaxError, match="Malformed number") as info:
+        parse_equation("a + \u00b2")
+    assert (info.value.start, info.value.end) == (4, 5)

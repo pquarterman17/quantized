@@ -94,6 +94,9 @@ describe("saved model description + units (P2.7 slice 3)", () => {
     const rows = within(table).getAllByRole("row");
     expect(rows[1]).toHaveTextContent("a2.5 V0.01 V");
     expect(rows[2]).toHaveTextContent("t1.7 sheld");
+    // Editing a unit AFTER the fit does not relabel the reported values.
+    fireEvent.change(screen.getByLabelText("unit a"), { target: { value: "mV" } });
+    expect(within(table).getAllByRole("row")[1]).toHaveTextContent("a2.5 V0.01 V");
   });
 
   it("saves the description and units as a v2 record", async () => {

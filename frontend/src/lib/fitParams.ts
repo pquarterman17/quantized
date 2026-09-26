@@ -12,6 +12,7 @@
 // half-typed "-" must not be parsed as a number mid-keystroke); parsing and
 // validation happen once, at fit time.
 
+import { ALL_HELD_ERROR, allHeld, checkParamRow } from "./paramRowCheck";
 import type { FitModel } from "./types";
 
 export interface FitParamRow {
@@ -70,13 +71,6 @@ export function resetRows(model: FitModel | undefined): FitParamRow[] {
   return rowsFromModel(model);
 }
 
-function parseOptional(text: string, fallback: number): number {
-  const t = text.trim();
-  if (t === "") return fallback;
-  const n = Number(t);
-  return Number.isFinite(n) ? n : Number.NaN;
-}
-
 /** Parse the table into the vectors `/api/fitting/fit` expects.
  *
  *  Validation is deliberately strict about the one mistake that produces a
@@ -96,26 +90,19 @@ export function parseFitParams(
 
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i];
-    const start = parseOptional(row.start, model.p0[i] ?? 1);
-    const lo = parseOptional(row.min, Number.NEGATIVE_INFINITY);
-    const hi = parseOptional(row.max, Number.POSITIVE_INFINITY);
-    if (Number.isNaN(start)) return { ...empty, error: `${row.name}: start is not a number` };
-    if (Number.isNaN(lo)) return { ...empty, error: `${row.name}: min is not a number` };
-    if (Number.isNaN(hi)) return { ...empty, error: `${row.name}: max is not a number` };
-    if (lo > hi) return { ...empty, error: `${row.name}: min is above max` };
-    // The engine clips every start into its bounds, so a held value outside
-    // them would silently move (the equation table refuses this too, P2.7).
-    if (row.fixed && (start < lo || start > hi)) {
-      return { ...empty, error: `${row.name}: held at ${start}, outside its bounds` };
-    }
-    p0.push(start);
-    lower.push(lo);
-    upper.push(hi);
+    // Shared with the equation table (lib/paramRowCheck); here a blank start
+    // falls back to the model's default and a blank bound is unbounded.
+    const r = checkParamRow(
+      { name: row.name, start: row.start, min: row.min, max: row.max, held: row.fixed },
+      { startLabel: "start", blankStart: model.p0[i] ?? 1 },
+    );
+    if ("error" in r) return { ...empty, error: r.error };
+    p0.push(r.start);
+    lower.push(r.lo ?? Number.NEGATIVE_INFINITY);
+    upper.push(r.hi ?? Number.POSITIVE_INFINITY);
     fixed.push(row.fixed);
   }
-  if (fixed.every(Boolean)) {
-    return { ...empty, error: "every parameter is fixed — nothing left to fit" };
-  }
+  if (allHeld(fixed)) return { ...empty, error: ALL_HELD_ERROR };
   return { p0, lower, upper, fixed };
 }
 

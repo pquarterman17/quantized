@@ -10,6 +10,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { fitEquation, validateEquation, type EquationValidateResult } from "../../../lib/api/curvefit";
 import {
+  equationFitStep,
   equationRunProblem,
   newEquationRow,
   parseEquationRows,
@@ -68,6 +69,10 @@ export interface EquationFitState {
    *  params), so the results table labels held values even after the table
    *  is edited again. Empty when there is no result. */
   fitHeld: boolean[];
+  /** Units the CURRENT result was fitted with (trimmed; "" = none), snapshot
+   *  at fit time like `fitHeld`, so editing a unit afterwards cannot relabel
+   *  a value that was already reported. */
+  fitUnits: string[];
   paramNames: string[];
   fit: () => Promise<void>;
   clear: () => void;
@@ -137,6 +142,7 @@ export function useEquationFit(
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<CalcResult | null>(null);
   const [fitHeld, setFitHeld] = useState<boolean[]>([]);
+  const [fitUnits, setFitUnits] = useState<string[]>([]);
   const [paramNames, setParamNames] = useState<string[]>(initial ? [...initial.params] : []);
   const [modelName, setModelName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
@@ -215,6 +221,7 @@ export function useEquationFit(
       const parsed = parseEquationRows(rows);
       if ("error" in parsed) throw new Error(parsed.error);
       const { guesses, lower, upper, fixed } = parsed;
+      const units = rows.map((r) => r.unit.trim());
 
       // Resolve a still-pending dataset first (#38), then fit the plotted
       // X/primary-Y over the analysis view (#50/#53) — the same channels + rows
@@ -241,6 +248,7 @@ export function useEquationFit(
       });
       setResult(r);
       setFitHeld(fixed);
+      setFitUnits(units);
       // P3.5 "recently used" — the one genuinely ambiguous kind, so it is
       // wired precisely. Selecting a saved model from the dropdown is a
       // BROWSE; the use is the fit actually running with it. And the name is
@@ -252,10 +260,12 @@ export function useEquationFit(
         recordUse({ kind: "fitModel", scope: "global", id: modelName });
       }
       // Script-only macro step ("ui" kind): the pipeline runner's "fit" step
-      // re-executes registry models by name, which a raw equation is not.
+      // re-executes registry models by name, which a raw equation is not. It
+      // carries the full setup that ran (lib/equationRows equationFitStep).
+      const step = equationFitStep(equation, parsed);
       useApp
         .getState()
-        .recordMacro(`Fit equation ${modelName || equation}`, `qz.fitEquation(${JSON.stringify(equation)})`);
+        .recordMacro(`Fit equation ${modelName || equation}`, step.code, { kind: "ui", params: step.params });
       const yFit = r.yFit as (number | null)[] | undefined;
       if (Array.isArray(yFit)) {
         const n = ds.data.time.length;
@@ -274,6 +284,7 @@ export function useEquationFit(
   function clear(): void {
     setResult(null);
     setFitHeld([]);
+    setFitUnits([]);
     setError(null);
     setFitOverlay(null);
   }
@@ -294,7 +305,13 @@ export function useEquationFit(
       description,
       units: rows.map((r) => r.unit),
     });
-    return saveCustomModel(model);
+    try {
+      return saveCustomModel(model);
+    } catch (e) {
+      // A stored record this build cannot read holds that name (lib/fitmodels).
+      setError(e instanceof Error ? e.message : "could not save the model");
+      return null;
+    }
   }
 
   function remove(name: string): CustomFitModel[] {
@@ -317,6 +334,7 @@ export function useEquationFit(
     error,
     result,
     fitHeld,
+    fitUnits,
     paramNames,
     fit,
     clear,

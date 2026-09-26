@@ -43,15 +43,12 @@ export default function EquationModelPanel({ initial, onSavedChange }: Props) {
   const resultNames = (eq.result?.paramNames as string[] | undefined) ?? eq.paramNames;
   // A held parameter kept its guess and has no standard error (P2.7) — say
   // "held" rather than the blank a failed error estimate would show.
-  // Units are display metadata from the table, matched by name (P2.7).
-  const unitOf = (name: string | undefined) => {
-    const u = eq.rows.find((r) => r.name === name)?.unit.trim();
-    return u ? ` ${u}` : "";
-  };
+  // Units as they were when this result was fitted (snapshot, like held).
+  const unitOf = (i: number) => (eq.fitUnits[i] ? ` ${eq.fitUnits[i]}` : "");
   const paramRows = params.map((p, i) => [
     resultNames[i] ?? `p${i}`,
-    `${fmt(p)}${unitOf(resultNames[i])}`,
-    eq.fitHeld[i] ? "held" : `${fmt(errors[i])}${Number.isFinite(errors[i]) ? unitOf(resultNames[i]) : ""}`,
+    `${fmt(p)}${unitOf(i)}`,
+    eq.fitHeld[i] ? "held" : `${fmt(errors[i])}${Number.isFinite(errors[i]) ? unitOf(i) : ""}`,
   ]);
   const statRows: (string | number)[][] = eq.result
     ? [

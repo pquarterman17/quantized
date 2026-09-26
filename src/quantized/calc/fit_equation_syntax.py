@@ -20,6 +20,20 @@ equation that already worked, including the golden set). After a binary
 operator or another sign it is a prefix ``neg`` token; the historical
 ``0 -`` encoding was simply wrong there (``3*-2`` gave -2, ``2^-3`` gave -2,
 ``3--2`` gave 1), so only those previously-wrong results change.
+
+MATLAB PARITY, NEEDS VERIFICATION. ``^`` (and ``**``) are right-associative
+here and a sign after ``^`` binds only the next power chain: ``2^3^2`` is
+``2^(3^2)`` = 512 and ``2^-3^2`` is ``2^(-(3^2))`` = 2^-9. MATLAB evaluates
+``^`` LEFT to right (``2^3^2`` = 64 there). The right-associative ``2^3^2``
+predates P2.7 (the shunting-yard's ``^`` rule); it is kept as-is and pinned by
+``tests/test_calc_equation_syntax.py`` so it cannot change silently, pending a
+check against ``quantized_matlab``'s parseEquation (not available when this
+was written).
+
+Numbers start on any Unicode decimal digit (``str.isdigit`` + ``float``),
+exactly as before P2.7, so a saved model written with fullwidth digits keeps
+validating; a digit ``float`` cannot read (a superscript ``2``) is a
+positioned "Malformed number".
 """
 
 from __future__ import annotations
@@ -39,7 +53,6 @@ _FUNCTION_SET = frozenset(FUNCTION_NAMES)
 CONSTANTS: dict[str, float] = {"pi": math.pi, "e": math.e}
 # Binary operators, plus the prefix "neg" (between * / and ^: see the module doc).
 _PREC = {"+": 1.0, "-": 1.0, "*": 2.0, "/": 2.0, "neg": 2.5, "^": 3.0}
-_DIGITS = "0123456789"
 _VALUE_TYPES = ("number", "x", "param")
 _LHS = re.compile(r"^\s*(y|f\(x\))\s*=\s*")
 
@@ -60,7 +73,14 @@ class EquationSyntaxError(ValueError):
         #: REWRITTEN string whose columns mean nothing to the user
         #: (``calc.fit_constraints``).
         self.detail = _ascii(message)
+        self._message = message
         super().__init__(f"{self.detail} (column {start + 1})")
+
+    def __reduce__(self) -> tuple[type[EquationSyntaxError], tuple[str, int, int]]:
+        # BaseException pickles as ``cls(*self.args)``; args is the one
+        # formatted string, which this three-argument constructor cannot
+        # take -- so copy/deepcopy/pickle rebuild from the real arguments.
+        return (type(self), (self._message, self.start, self.end))
 
 
 def _tok(kind: str, value: Any, start: int, end: int, text: str) -> Token:
@@ -69,13 +89,13 @@ def _tok(kind: str, value: Any, start: int, end: int, text: str) -> Token:
 
 def _number(s: str, pos: int, base: int) -> tuple[Token, int]:
     start, n = pos, len(s)
-    while pos < n and (s[pos] in _DIGITS or s[pos] == "."):
+    while pos < n and (s[pos].isdigit() or s[pos] == "."):
         pos += 1
     if pos < n and s[pos] in "eE":
         pos += 1
         if pos < n and s[pos] in "+-":
             pos += 1
-        while pos < n and s[pos] in _DIGITS:
+        while pos < n and s[pos].isdigit():
             pos += 1
     text = s[start:pos]
     try:
@@ -136,7 +156,7 @@ def _tokenize(s: str, base: int) -> tuple[list[Token], list[str], dict[str, tupl
         if ch in " \t":
             pos += 1
             continue
-        if ch in _DIGITS or (ch == "." and pos + 1 < n and s[pos + 1] in _DIGITS):
+        if ch.isdigit() or (ch == "." and pos + 1 < n and s[pos + 1].isdigit()):
             tok, pos = _number(s, pos, base)
             tokens.append(tok)
             prev = "value"

@@ -3418,6 +3418,29 @@ violin, bar, strip, or summary plots.
   bundle 845.0 -> 845.1 kB (budget 846.1). Open: the stretch box, saved
   models in the .dwk (above), and one shared row parser for
   `lib/fitParams` + `lib/equationRows`.
+- **Review round 2 (2026-09-26, coordinator code review, nine findings):**
+  a held start outside its bounds is now refused at EVERY route that takes
+  `fixed` (`/fit` and `/equation/fit`, shared `calc/fit_holds.py`;
+  `curve_fit` itself is unchanged and golden-locked -- `calc.batch_fit` is
+  the one internal caller that relies on its clipping, for auto-guessed
+  starts it may hold, and has no route); `EquationSyntaxError` survives
+  pickle / deepcopy; a save onto a name held by an unreadable stored model
+  is refused and that name counts as taken for rename/duplicate/import; the
+  results table's units are snapshot at fit time; the recorded
+  `qz.fitEquation(equation, { guesses, lower, upper, fixed })` step carries
+  the whole setup (second argument optional, so old one-argument steps stay
+  valid); Unicode decimal digits start a number again, as before P2.7; one
+  shared row validator (`lib/paramRowCheck`) with one wording for both fit
+  tables (which closes the "shared row parser" follow-up above); fitmodels
+  reads its slot once per operation.
+  - **MATLAB-parity item, NEEDS VERIFICATION:** `^`/`**` are
+    right-associative and a sign after `^` binds the rest of the chain, so
+    `2^3^2` = 512 and `2^-3^2` = 2^-9. MATLAB evaluates `^` left to right
+    (`2^3^2` = 64 there). The right-associative `2^3^2` predates P2.7; it is
+    pinned by `test_exponent_chain_associativity_is_pinned` and documented
+    in `calc/fit_equation_syntax.py`, pending a check against
+    `quantized_matlab`'s parseEquation (not available in this environment).
+    Semantics deliberately NOT changed.
 
 ### P2.8 — 2-D map polish
 

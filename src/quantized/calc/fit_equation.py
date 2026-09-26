@@ -27,6 +27,7 @@ from numpy.typing import ArrayLike, NDArray
 from scipy.special import erf, erfc
 
 from .fit_equation_syntax import FUNCTION_NAMES, EquationSyntaxError, parse_tokens
+from .fit_holds import check_held_starts
 
 __all__ = [
     "EquationInfo",
@@ -196,8 +197,7 @@ def check_param_vectors(
     for k, name in enumerate(names):
         if lo[k] > hi[k]:
             raise ValueError(f'parameter "{name}": min is above max')
-        if held[k] and not lo[k] <= p0[k] <= hi[k]:
-            raise ValueError(f'parameter "{name}" is held at {p0[k]:g}, outside its bounds')
+    check_held_starts(names, p0, held, lo, hi)
 
 
 def default_guesses(param_names: Sequence[str]) -> list[float]:

@@ -513,6 +513,15 @@ describe("import validates FIELDS at the file boundary, not just the shape (revi
     expect(out.ok && JSON.parse(out.text)).toEqual(JSON.parse(text));
   });
 
+  it("treats a fit model name held by an unreadable record as taken (P2.7 review)", () => {
+    localStorage.setItem("qz.customFitModels", JSON.stringify([{ version: 9, name: "Future" }]));
+    const text = JSON.stringify({
+      version: 1, name: "Future", equation: "y = a*x", params: ["a"], guesses: [1], lower: [null], upper: [null],
+    });
+    expect(importNameKeyed("fitModel", text)).toEqual({ ok: true, name: "Future (2)" });
+    expect(loadCustomModels().map((m) => m.name)).toEqual(["Future (2)"]);
+  });
+
   it("is STRICT about a fit model file's version and v2 fields (audit P2.7)", () => {
     const model = (patch: Record<string, unknown>) =>
       JSON.stringify({

@@ -2,7 +2,7 @@
 // name, delete, malformed entries dropped on load (the analysis-template
 // pattern).
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildCustomFitModel,
@@ -12,6 +12,7 @@ import {
   loadCustomModels,
   loadCustomModelsChecked,
   saveCustomModel,
+  unreadableCustomModelNames,
   type CustomFitModel,
 } from "./fitmodels";
 
@@ -156,11 +157,45 @@ describe("fitmodels tolerant load (audit P2.7 slice 3)", () => {
     localStorage.setItem(KEY, JSON.stringify([model(), future]));
     saveCustomModel(model({ name: "Other" }));
     deleteCustomModel("Decay");
-    // Even a save UNDER the unreadable record's name keeps it.
-    saveCustomModel(model({ name: "Future" }));
+    deleteCustomModel("Future"); // only READABLE records of a name are deleted
     const raw = JSON.parse(localStorage.getItem(KEY) ?? "[]") as unknown[];
     expect(raw).toContainEqual(future);
-    expect(loadCustomModels().map((m) => m.name)).toEqual(["Other", "Future"]);
+    expect(loadCustomModels().map((m) => m.name)).toEqual(["Other"]);
+  });
+
+  it("refuses a save onto a name an unreadable record holds (review: no two records per name)", () => {
+    const future = { version: 9, name: "Future", equation: "a*x" };
+    localStorage.setItem(KEY, JSON.stringify([model(), future]));
+    const before = localStorage.getItem(KEY);
+    expect(unreadableCustomModelNames()).toEqual(["Future"]);
+    expect(() => saveCustomModel(model({ name: "Future" }))).toThrow(
+      'a saved fit model named "Future" could not be read (a newer or damaged record) — save under another name',
+    );
+    expect(localStorage.getItem(KEY)).toBe(before); // nothing written
+    // ...and the skipped-record warning still describes storage exactly.
+    expect(loadCustomModelsChecked().warning).toBe(
+      '1 saved fit model could not be read and was skipped: "Future" (left in storage untouched)',
+    );
+  });
+});
+
+describe("fitmodels reads the slot once per operation (review)", () => {
+  it("parses storage exactly once in save, delete and the checked load", () => {
+    localStorage.setItem(KEY, JSON.stringify([model(), { version: 9, name: "Future" }]));
+    const parse = vi.spyOn(JSON, "parse");
+    try {
+      for (const op of [
+        () => saveCustomModel(model({ name: "Other" })),
+        () => deleteCustomModel("Other"),
+        () => loadCustomModelsChecked(),
+      ]) {
+        parse.mockClear();
+        op();
+        expect(parse).toHaveBeenCalledTimes(1);
+      }
+    } finally {
+      parse.mockRestore();
+    }
   });
 });
 

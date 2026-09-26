@@ -176,3 +176,46 @@ def test_scan_job_returns_429_when_queue_full(monkeypatch) -> None:
     resp = client.post("/api/fitting/scan/job", json={"x": x, "y": y})
     assert resp.status_code == 429
     assert "full" in resp.json()["detail"]
+
+
+# ── held start outside its bounds (P2.7 review) ─────────────────────────────
+# curve_fit clips every start into its bounds, held ones included, so without
+# a route-boundary check a held value would silently move yet report "held".
+
+
+def _line() -> tuple[list[float], list[float]]:
+    x = list(np.linspace(0, 10, 50))
+    return x, [2.0 * v + 1.0 for v in x]
+
+
+def test_fit_refuses_a_held_start_outside_its_bounds() -> None:
+    x, y = _line()
+    resp = client.post(
+        "/api/fitting/fit",
+        json={"model": "Linear", "x": x, "y": y, "p0": [5.0, 0.0],
+              "lower": [-10.0, -10.0], "upper": [2.0, 10.0], "fixed": [True, False]},
+    )
+    assert resp.status_code == 422
+    assert resp.json()["detail"] == 'parameter "m" is held at 5, outside its bounds'
+
+
+def test_fit_keeps_a_held_start_inside_its_bounds() -> None:
+    x, y = _line()
+    resp = client.post(
+        "/api/fitting/fit",
+        json={"model": "Linear", "x": x, "y": y, "p0": [1.5, 0.0],
+              "lower": [-10.0, -10.0], "upper": [2.0, 10.0], "fixed": [True, False]},
+    )
+    assert resp.status_code == 200
+    assert resp.json()["params"][0] == 1.5
+
+
+def test_fit_still_clips_a_free_start_outside_its_bounds() -> None:
+    # Unchanged behaviour: a FREE start outside the box is the solver's to clip.
+    x, y = _line()
+    resp = client.post(
+        "/api/fitting/fit",
+        json={"model": "Linear", "x": x, "y": y, "p0": [5.0, 0.0],
+              "lower": [-10.0, -10.0], "upper": [2.0, 10.0]},
+    )
+    assert resp.status_code == 200

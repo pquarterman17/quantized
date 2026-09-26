@@ -117,7 +117,8 @@ describe("parseFitParams", () => {
 
   it("refuses an all-fixed table rather than sending a no-op fit", () => {
     const rows = rowsFromModel(gauss).map((r) => ({ ...r, fixed: true }));
-    expect(parseFitParams(rows, gauss).error).toContain("nothing left to fit");
+    // One wording with the equation table (lib/paramRowCheck, P2.7 review).
+    expect(parseFitParams(rows, gauss).error).toBe("every parameter is held — nothing left to fit");
   });
 
   it("allows SOME parameters fixed", () => {

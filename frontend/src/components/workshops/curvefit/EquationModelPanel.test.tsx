@@ -96,7 +96,7 @@ describe("EquationModelPanel — before-run summary + hold (P2.7)", () => {
     typeEquation("A*exp(-x/t)");
     fireEvent.change(await screen.findByLabelText("min A"), { target: { value: "3" } });
     fireEvent.change(screen.getByLabelText("max A"), { target: { value: "1" } });
-    expect(screen.getByRole("alert")).toHaveTextContent('"A": min is above max');
+    expect(screen.getByRole("alert")).toHaveTextContent("A: min is above max");
     expect(screen.getByRole("button", { name: "Fit" })).toBeDisabled();
   });
 });

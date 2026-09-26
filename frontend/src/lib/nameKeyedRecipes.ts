@@ -45,6 +45,7 @@ import {
   isCustomFitModel,
   loadCustomModels,
   saveCustomModel,
+  unreadableCustomModelNames,
 } from "./fitmodels";
 import {
   deleteRecipe as deletePeakRecipe,
@@ -373,6 +374,7 @@ const ADAPTERS: Record<NameKeyedKind, Adapter> = {
     remove: (name) => void deleteCustomModel(name),
     serialize: serializeRecord,
     parse: parseFitModelFile,
+    hidden: unreadableCustomModelNames,
   },
 };
 
