@@ -227,7 +227,10 @@ export function mergeDatasets(
 
 /** The source factor for a merge: level k is input k's name (made unique, so
  *  two inputs with one name stay two levels), each part's rows coded k; the
- *  column label is made unique against the merged labels. */
+ *  column label is made unique against the merged labels. Not
+ *  lib/uniqueName's `uniqueTemplateName`: the label must be unique
+ *  CASE-INSENSITIVELY, because an append by name pairs columns that way
+ *  (lib/mergeByName). */
 export function sourceFactorColumn(
   label: string,
   labels: readonly string[],

@@ -146,7 +146,13 @@ export function planCleanup(targets: readonly Target[], plan: CleanupPlan): Clea
     const unitKey = `${key}_unit`;
     let parsed: (Quantity | null)[] = [];
     if (rule.units) {
-      parsed = work.map((m) => (isPresent(metaValue(m, [key])) ? parseQuantity(m[key] as MetaScalar) : null));
+      parsed = work.map((m) => {
+        if (!isPresent(metaValue(m, [key]))) return null;
+        const q = parseQuantity(m[key] as MetaScalar);
+        // An already-parsed number keeps the unit its `<key>_unit` records,
+        // so a selection mixing cleaned and uncleaned datasets still agrees.
+        return "unit" in q && !q.unit && typeof m[unitKey] === "string" ? { n: q.n, unit: m[unitKey] as string } : q;
+      });
       const badAt = parsed.findIndex((q) => q !== null && "error" in q);
       const units = [...new Set(parsed.flatMap((q) => (q && "unit" in q ? [q.unit] : [])))];
       const clashAt = work.findIndex((m, i) => {

@@ -79,6 +79,15 @@ describe("normalize values", () => {
     expect(parseQuantity(12)).toEqual({ n: 12, unit: "" });
   });
 
+  it("an already-parsed number counts with the unit its <key>_unit records", () => {
+    const res = planCleanup([t("a", { T: 300, T_unit: "K" }), t("b", { T: "10 K" })], {
+      ...none,
+      normalize: [{ key: "T", trim: true, letterCase: "keep", units: true }],
+    });
+    expect(res.refusals).toEqual([]);
+    expect(res.datasets.map((d) => [d.id, d.changes.map((c) => [c.key, c.after])])).toEqual([["b", [["T", 10], ["T_unit", "K"]]]]);
+  });
+
   it("refuses a parsed unit that contradicts an existing <key>_unit", () => {
     const res = planCleanup([t("a", { T: "300 K", T_unit: "C" })], { ...none, normalize: [{ key: "T", trim: false, letterCase: "keep", units: true }] });
     expect(res.refusals[0]).toMatch(/already has T_unit = “C”/);

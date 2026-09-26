@@ -11,12 +11,16 @@
 // replayed, it applies to the run's target (a template's file), which is what
 // "promote `sample` on every file" means.
 //
+// `s` is the store getter every caller passes as `useApp.getState` (the
+// runTransform convention); the writes go through `useApp.setState`, the
+// store/recode.ts precedent, since the store has no generic dataset setter.
+//
 // Lazy: reached only from the workshop and the pipeline runner.
 
 import { lit } from "./macro";
 import { applyCleanup, planCleanup, type CleanupPlan, type CleanupResult, type LetterCase } from "./metadataCleanup";
 import { factorColumn, planFactor, type FactorAs, type FactorPlan } from "./metadataFactor";
-import { pathLabel, type MetaPath } from "./metadataKeys";
+import { isScalar, pathLabel, type MetaPath, type MetaScalar } from "./metadataKeys";
 import { plural } from "./plural";
 import { baseColumns } from "./formula";
 import type { Dataset } from "./types";
@@ -70,9 +74,10 @@ export async function promoteFactor(
   path: MetaPath,
   as: FactorAs | "auto",
   name: string,
+  replay = false,
 ): Promise<PromoteOutcome> {
   const targets = await resolveAll(s, ids);
-  const plan = planFactor(targets, path, as, name);
+  const plan = planFactor(targets, path, as, name, replay);
   if (plan.blocked) throw new Error(plan.blocked);
   const cols = new Map(plan.rows.map((r) => [r.id, factorColumn(plan, r, path)]));
   s().recordHistory(`add factor “${plan.name}”`);
@@ -99,12 +104,21 @@ export interface CleanupOutcome {
 }
 
 /** Apply `plan` to the metadata of every dataset in `ids` (their `raw` too,
- *  so a corrections re-apply keeps it). Throws when nothing would change. */
-export async function applyMetadataCleanup(s: StoreGet, ids: readonly string[], plan: CleanupPlan): Promise<CleanupOutcome> {
+ *  so a corrections re-apply keeps it). Interactively, a plan that changes
+ *  nothing throws (Apply is a no-op the user should hear about); a REPLAY of
+ *  it on a file that is already clean is simply done. */
+export async function applyMetadataCleanup(
+  s: StoreGet,
+  ids: readonly string[],
+  plan: CleanupPlan,
+  replay = false,
+): Promise<CleanupOutcome> {
   const targets = await resolveAll(s, ids);
   const result = planCleanup(targets, plan);
   const count = result.datasets.reduce((n, d) => n + d.changes.length, 0);
-  if (!count) throw new Error(result.refusals.length ? `nothing changed: ${result.refusals.join(" ")}` : "nothing to change");
+  const why = result.refusals.length ? `: ${result.refusals.join(" ")}` : "";
+  if (!count && replay) return { result, note: `metadata already clean — nothing changed${why}` };
+  if (!count) throw new Error(why ? `nothing changed${why}` : "nothing to change");
   const at = new Date().toISOString();
   const byId = new Map(result.datasets.map((d) => [d.id, d.changes]));
   s().recordHistory("clean up metadata");
@@ -113,9 +127,15 @@ export async function applyMetadataCleanup(s: StoreGet, ids: readonly string[], 
       const changes = byId.get(d.id);
       if (!changes) return d;
       const data = { ...d.data, metadata: applyCleanup(d.data.metadata, changes, at) };
-      return d.raw ? { ...d, data, raw: { ...d.raw, metadata: applyCleanup(d.raw.metadata, changes, at) } } : { ...d, data };
+      if (!d.raw) return { ...d, data };
+      // `raw` gets the same outcome (a corrections re-apply derives `data`
+      // from it), logged with the values RAW held, not the data side's.
+      const rawMeta = d.raw.metadata;
+      const rawChanges = changes.map((c) => ({ ...c, before: isScalar(rawMeta[c.key]) ? (rawMeta[c.key] as MetaScalar) : undefined }));
+      return { ...d, data, raw: { ...d.raw, metadata: applyCleanup(rawMeta, rawChanges, at) } };
     }),
   }));
+  for (const id of byId.keys()) s().touchDataset(id);
   record(s, { op: "metaclean", unify: plan.unify, normalize: plan.normalize }, targets);
   const refused = result.refusals.length ? ` (${result.refusals.length} refused: ${result.refusals.join(" ")})` : "";
   const note = `cleaned metadata: ${count} change${plural(count)} in ${result.datasets.length} dataset${plural(result.datasets.length)}${refused}`;
@@ -125,8 +145,8 @@ export async function applyMetadataCleanup(s: StoreGet, ids: readonly string[], 
 
 /** Replay one recorded step on `targetId`. */
 export async function runMetaStep(s: StoreGet, p: MetaStepParams, targetId: string): Promise<string> {
-  if (p.op === "promote") return (await promoteFactor(s, [targetId], p.path, p.as, p.name)).note;
-  return (await applyMetadataCleanup(s, [targetId], { unify: p.unify, normalize: p.normalize })).note;
+  if (p.op === "promote") return (await promoteFactor(s, [targetId], p.path, p.as, p.name, true)).note;
+  return (await applyMetadataCleanup(s, [targetId], { unify: p.unify, normalize: p.normalize }, true)).note;
 }
 
 const CASES: readonly LetterCase[] = ["keep", "lower", "upper"];

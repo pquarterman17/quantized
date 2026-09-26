@@ -60,6 +60,8 @@ describe("planFactor", () => {
     expect(out.units[1]).toBe("K");
     expect(out.cat_levels?.[1]).toBeUndefined();
     expect(numericOf("300 K")).toBeNull();
+    expect(plan.unitsDiffer).toEqual(["K", ""]); // reported, each column keeps its own
+    expect(planFactor([ds("a", { T: 1, T_unit: "K" }), ds("b", { T: 2, T_unit: "K" })], ["T"], "auto", "T").unitsDiffer).toEqual([]);
   });
 
   it("a missing value is blank (NaN) and reported, never defaulted", () => {
@@ -87,5 +89,8 @@ describe("planFactor", () => {
     expect(planFactor([ds("a", { M: "x" })], ["M"], "auto", "m").blocked).toMatch(/already has a column named “m”/);
     expect(planFactor([ds("a", { s: "x" })], ["s"], "auto", "  ").blocked).toMatch(/Name the new column/);
     expect(planFactor([ds("a", {})], ["s"], "auto", "s").blocked).toMatch(/No picked dataset has a value/);
+    // a replay onto one file without the field: blank + reported, not refused
+    const replay = planFactor([ds("a", {})], ["s"], "categorical", "s", true);
+    expect([replay.blocked, replay.missing]).toEqual([null, ["a.dat"]]);
   });
 });

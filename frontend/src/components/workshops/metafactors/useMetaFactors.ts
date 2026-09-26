@@ -33,7 +33,7 @@ const message = (e: unknown): string => (e instanceof Error ? e.message : "faile
 export function useMetaFactors() {
   const seed = useMetaFactorsDialog((s) => s.seed);
   const datasets = useApp((s) => s.datasets);
-  const [picked, setPicked] = useState<string[]>(() => (seed ?? []).filter((id) => datasets.some((d) => d.id === id)));
+  const [pickedIds, setPicked] = useState<string[]>(() => seed ?? []);
   const [tab, setTab] = useState<MetaTab>("promote");
   const [keyId, setKeyId] = useState("");
   const [as, setAs] = useState<FactorAs | "auto">("auto");
@@ -42,10 +42,14 @@ export function useMetaFactors() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Only LIVE picks: a dataset deleted while the workshop is open drops out
+  // of the preview, the coverage counts and the commit alike (it has no
+  // checkbox left to untick).
   const targets = useMemo(
-    () => picked.flatMap((id) => datasets.find((d) => d.id === id) ?? []),
-    [picked, datasets],
+    () => pickedIds.flatMap((id) => datasets.find((d) => d.id === id) ?? []),
+    [pickedIds, datasets],
   );
+  const picked = useMemo(() => targets.map((d) => d.id), [targets]);
   const keys: MetaKeyInfo[] = useMemo(() => keysAcross(targets), [targets]);
   // A key that no picked dataset carries any more falls back to the first.
   const key = keys.find((k) => pathId(k.path) === keyId) ?? keys[0] ?? null;

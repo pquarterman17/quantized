@@ -72,6 +72,10 @@ export interface FactorPlan {
   rows: FactorRow[];
   /** Names of the datasets with no value — their column is blank. */
   missing: string[];
+  /** Numeric only: the distinct units, when the datasets disagree — each
+   *  column keeps its own dataset's unit (and a later merge asks before
+   *  mixing them, lib/appendWarnings' unit-mismatch confirm). */
+  unitsDiffer: string[];
   /** Why the promotion cannot be committed, or null. */
   blocked: string | null;
 }
@@ -84,12 +88,17 @@ function unitOf(meta: Record<string, unknown>, path: MetaPath): string {
 }
 
 /** Plan promoting `path` over `targets`. `as: "auto"` is numeric when every
- *  present value is a number, else categorical. */
+ *  present value is a number, else categorical. Interactively, a field NO
+ *  picked dataset carries is refused (a whole-selection blank column is
+ *  surely a wrong pick); a pipeline REPLAY (`replay`) applies the recorded
+ *  step to one file at a time, and a file without the field gets the same
+ *  blank, reported column any other dataset without it gets. */
 export function planFactor(
   targets: readonly Target[],
   path: MetaPath,
   as: FactorAs | "auto",
   columnName: string,
+  replay = false,
 ): FactorPlan {
   const values = targets.map((t) => metaValue(t.data.metadata, path));
   const present = values.filter(isPresent);
@@ -109,10 +118,11 @@ export function planFactor(
   const clash = targets.find((t) => t.data.labels.some((l) => l.trim().toLowerCase() === name.toLowerCase()));
   if (!targets.length) blocked = "Pick at least one dataset.";
   else if (!name) blocked = "Name the new column.";
-  else if (!present.length) blocked = `No picked dataset has a value for “${pathLabel(path)}”.`;
+  else if (!present.length && !replay) blocked = `No picked dataset has a value for “${pathLabel(path)}”.`;
   else if (bad) blocked = `“${String(bad.value)}” in ${bad.name} is not a number — promote as categorical, or clean the values first.`;
   else if (clash) blocked = `${clash.name} already has a column named “${name}” — pick another name.`;
-  return { as: kind, name, rows, missing, blocked };
+  const units = [...new Set(rows.filter((r) => r.value !== undefined).map((r) => r.unit))];
+  return { as: kind, name, rows, missing, unitsDiffer: units.length > 1 ? units : [], blocked };
 }
 
 /** The computed column one plan row adds to its dataset. */

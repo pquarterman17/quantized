@@ -48,11 +48,15 @@ describe("opening", () => {
   it("the Data command and the Library row menu open on the selection", () => {
     open();
     expect(useMetaFactorsDialog.getState().seed).toEqual(["a", "b"]);
-    const menu = buildDatasetRowMenu(C, false, false, [], false, false, () => {}, () => {});
-    act(() => menu.find((i) => i.label === "Metadata → factors…")!.run!());
+    const runEntry = (d: Dataset, selected: boolean) => {
+      const menu = buildDatasetRowMenu(d, selected, selected, [], false, false, () => {}, () => {});
+      const item = menu.find((i) => "run" in i && i.label === "Metadata → factors…");
+      if (!item || !("run" in item)) throw new Error("no Metadata → factors… entry");
+      act(() => item.run());
+    };
+    runEntry(C, false);
     expect(useMetaFactorsDialog.getState().seed).toEqual(["c"]); // a row outside the selection: just that row
-    const inSel = buildDatasetRowMenu(A, true, true, [], false, false, () => {}, () => {});
-    act(() => inSel.find((i) => i.label === "Metadata → factors…")!.run!());
+    runEntry(A, true);
     expect(useMetaFactorsDialog.getState().seed).toEqual(["a", "b"]);
   });
 });
@@ -73,6 +77,16 @@ describe("promote", () => {
     expect(byId("b").data.cat_levels?.[1]).toEqual(["S2"]);
     expect(byId("c").data.values.every((r) => Number.isNaN(r[1]))).toBe(true);
     expect(useApp.getState().macroSteps.map((s) => s.params.op)).toEqual(["promote"]);
+  });
+
+  it("a picked dataset deleted while the workshop is open drops out of the preview and the commit", async () => {
+    open();
+    render(<MetaFactorsPanel />);
+    act(() => useApp.setState({ datasets: [A, C] }));
+    expect(screen.getByRole("combobox", { name: "Metadata field" })).toHaveDisplayValue("sample (1/1)");
+    fireEvent.click(screen.getByRole("button", { name: "Add factor column" }));
+    await waitFor(() => expect(byId("a").data.labels).toEqual(["M", "sample"]));
+    expect(screen.queryByRole("alert")).toBeNull();
   });
 
   it("an instrument sidecar field promotes as numeric; the override and a name clash are honoured", async () => {

@@ -156,7 +156,8 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
           if (d.id !== id || !d.formulas) return d;
           const base = baseColumns(d.data, d.formulas.length);
           const formulas = d.formulas.map((f, i): ComputedColumn =>
-            i === index ? { name, expr, ...(unit ? { unit } : {}), deps } : f,
+            // A metadata factor (P2.5) stays one while only its name/unit change.
+            i === index ? { name, expr, ...(unit ? { unit } : {}), deps, ...(f.factor && expr === f.expr ? { factor: f.factor } : {}) } : f,
           );
           return { ...d, formulas, ...withRecomputedFormulas(base, formulas) };
         }),

@@ -63,6 +63,11 @@ export default function PromoteSection({ m }: { m: MetaFactorsState }) {
           {`No value in ${plan.missing.join(", ")}: its rows are left blank, not filled in.`}
         </div>
       )}
+      {plan && plan.unitsDiffer.length > 0 && (
+        <div className="qzk-ds-meta" style={{ ...faint, color: "var(--warn)" }}>
+          {`The units differ (${plan.unitsDiffer.map((u) => u || "none").join(", ")}): each dataset's column keeps its own unit, and a merge asks before mixing them.`}
+        </div>
+      )}
       {plan?.blocked && (
         <div className="qzk-ds-meta" style={{ ...faint, color: "var(--danger)" }}>{plan.blocked}</div>
       )}

@@ -7,7 +7,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { executeSteps } from "../components/workshops/pipeline/executeSteps";
-import { sanitizeSteps, type PipelineStep } from "./pipeline";
+import { makeStep, sanitizeSteps, type PipelineStep } from "./pipeline";
 import { parseTemplate, serializeTemplate, toTemplate } from "./template";
 import { applyMetadataCleanup, metaParamsOf, promoteFactor } from "./metadataRun";
 import { runTransform, transformParamsOf } from "./transformRun";
@@ -90,9 +90,22 @@ describe("promoteFactor", () => {
     expect(byId("d").data.labels).toEqual(["M", "sample"]);
     expect(byId("d").data.cat_levels?.[1]).toEqual(["S9"]);
 
-    // on a file without the field the step FAILS loudly rather than adding a blank column silently
-    const { log: miss } = await executeSteps(saved(steps), "c");
-    expect(Object.values(miss)[0]).toMatchObject({ status: "failed", note: expect.stringMatching(/No picked dataset has a value for “sample”/) });
+    // a file without the field gets the blank column any dataset without it
+    // gets, REPORTED in the log — and the pipeline carries on
+    const addCol = makeStep("expression", "Add column dbl", "qz.addColumn()", { name: "dbl", expr: "A*2" });
+    const { log: miss } = await executeSteps([...saved(steps), addCol], "c");
+    expect(Object.values(miss)[0]).toEqual({ status: "ok", note: "added categorical factor “sample” to 1 dataset — no value (left blank) in c.dat" });
+    expect(miss[addCol.id].status).toBe("ok");
+    expect(byId("c").data.labels).toEqual(["M", "sample", "dbl"]);
+    expect(column(byId("c"), 1).every(Number.isNaN)).toBe(true);
+  });
+
+  it("a rename keeps the factor a factor (its level text survives)", async () => {
+    await promoteFactor(useApp.getState, ["a"], ["sample"], "auto", "sample");
+    useApp.getState().updateFormula("a", 0, { name: "Sample ID" });
+    expect(byId("a").data.labels).toEqual(["M", "Sample ID"]);
+    expect(byId("a").data.cat_levels?.[1]).toEqual(["S1"]);
+    expect(byId("a").formulas?.[0].factor?.value).toBe("S1");
   });
 });
 
@@ -122,6 +135,15 @@ describe("applyMetadataCleanup", () => {
     expect(byId("b").data.metadata).toEqual(B.data.metadata);
   });
 
+  it("logs RAW's own before values when raw and data metadata differ", async () => {
+    useApp.setState({ datasets: [{ ...A, raw: data({ sample: "S1", T: "299 K" }) }, B, C] });
+    await applyMetadataCleanup(useApp.getState, ["a"], { unify: [{ to: "temperature", from: [["T"]] }], normalize: [] });
+    const log = (m: Record<string, unknown>) => (m.metadata_cleanup as { key: string; before: unknown }[]).map((e) => [e.key, e.before]);
+    expect(log(byId("a").data.metadata)).toEqual([["temperature", null], ["T", "300 K"]]);
+    expect(log(byId("a").raw!.metadata)).toEqual([["temperature", null], ["T", "299 K"]]);
+    expect(byId("a").raw!.metadata.temperature).toBe("300 K"); // the same outcome on both sides
+  });
+
   it("refuses when nothing would change, and replays a recorded cleanup", async () => {
     await expect(applyMetadataCleanup(useApp.getState, ["c"], { unify: [], normalize: [] })).rejects.toThrow(/nothing to change/);
     await applyMetadataCleanup(useApp.getState, ["a"], { unify: [{ to: "temperature", from: [["T"]] }], normalize: [] });
@@ -132,6 +154,9 @@ describe("applyMetadataCleanup", () => {
     const { log } = await executeSteps(saved(steps), "e");
     expect(Object.values(log)[0].status).toBe("ok");
     expect(byId("e").data.metadata).toMatchObject({ temperature: "5 K" });
+    // replayed on a file that is already clean: done, not failed
+    const { log: again } = await executeSteps(saved(steps), "e");
+    expect(Object.values(again)[0]).toEqual({ status: "ok", note: "metadata already clean — nothing changed" });
   });
 });
 
