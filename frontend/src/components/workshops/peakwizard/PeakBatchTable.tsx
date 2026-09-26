@@ -1,5 +1,5 @@
 // Peak Analyzer batch — the sortable uncertainty / diagnostic table (audit
-// P2.4 slice 4). Rows come from ./peakBatchTable (pure): one per (dataset,
+// P2.4 slice 4). Rows come from ./peakBatchRows (pure): one per (dataset,
 // peak), a failed dataset as one row with its reason. Every missing error is
 // "± —" whose tooltip says WHY (./modelFitReasons); the objective column
 // names what each fit minimised (SSR, or χ² only for a weighted fit); the
@@ -10,7 +10,7 @@
 import type { ReactNode } from "react";
 
 import { fmtNum } from "../../../lib/format";
-import { DERIVED, type BatchSort, type BatchTableRow, type SortKey, type ValueErr } from "./peakBatchTable";
+import { DERIVED, type BatchSort, type BatchTableRow, type SortKey, type ValueErr } from "./peakBatchRows";
 
 const faint = { color: "var(--text-faint)" } as const;
 const mono = { fontFamily: "var(--font-mono)", whiteSpace: "nowrap" } as const;
