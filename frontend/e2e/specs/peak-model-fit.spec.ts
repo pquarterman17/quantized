@@ -87,18 +87,8 @@ test.describe("Peak Analyzer mixed-shape model fit", () => {
     // components + residuals preview
     await expect(panel.getByRole("img", { name: /model fit preview/ })).toBeVisible();
 
-    // ⑤ report through the peak_model_fit emitter
-    await panel.locator(".qzk-wizard-step", { hasText: "Report" }).click();
-    await panel.getByRole("button", { name: "→ Report" }).click();
-    await expect.poll(async () => (await readStore(page)).reports.length).toBe(1);
-    const report = (await readStore(page)).reports[0];
-    expect(report).toContain("± area");
-    expect(report).toContain("SSR = ");
-    expect(report).not.toContain("χ²");
-
-    // ④ → durable peak table (audit P2.1): publish, then the Peaks workshop
-    // shows every value with its standard error
-    await panel.locator(".qzk-wizard-step", { hasText: "Fit & review" }).click();
+    // ④ → durable peak table (audit P2.1), published while step ④ is still
+    // showing — the report window opened below can land over the step bar
     await panel.getByRole("button", { name: "Publish to peak table" }).click();
     const table = () =>
       page.evaluate(() => {
@@ -118,6 +108,16 @@ test.describe("Peak Analyzer mixed-shape model fit", () => {
       expect(p.areaErr).toBeGreaterThan(0);
     }
 
+    // ⑤ report through the peak_model_fit emitter
+    await panel.locator(".qzk-wizard-step", { hasText: "Report" }).click();
+    await panel.getByRole("button", { name: "→ Report" }).click();
+    await expect.poll(async () => (await readStore(page)).reports.length).toBe(1);
+    const report = (await readStore(page)).reports[0];
+    expect(report).toContain("± area");
+    expect(report).toContain("SSR = ");
+    expect(report).not.toContain("χ²");
+
+    // …and the Peaks workshop shows every value with its standard error
     await runPaletteCommand(page, "Find peaks…");
     const fitted = page.getByRole("table", { name: "fitted peaks" });
     await expect(fitted.locator("tbody tr")).toHaveCount(2, { timeout: 15_000 });

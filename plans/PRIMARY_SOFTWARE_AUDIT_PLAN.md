@@ -3042,7 +3042,12 @@ a plan edit.
   trace), with `bgDegree` -1 for no background. No `PEAK_TABLE_VERSION` bump:
   an old `.dwk` loads with none of the new keys. Refused (button disabled,
   reason on hover): a stale fit, a non-converged one, a peak with no finite
-  value; a failed publish is shown, not swallowed. Consumers: the Peaks
+  value, and a fit made on a lazy Origin book's still-loading PREVIEW
+  (`pending`: activating a book only starts its fetch) — the review round on
+  PR #434 found that one; a failed publish is shown, not swallowed. A `.dwk`
+  error that was written but is unusable reopens null WITH a reason; a
+  model-fit report keeps its "±" columns even when every error is null; a χ²
+  fit's R² is labelled "weighted R²". Consumers: the Peaks
   workshop shows "value ± err" (or "± —" with the reason), names the
   producer and objective, and its → Report now carries the errors and the
   objective (`calc/report_emit.from_multipeak_fit` prints "±" columns and
