@@ -46,7 +46,9 @@ export interface RecipeFidelitySlice {
    *  that the local library does not hold — ones this build cannot read (a
    *  newer version, a damaged entry) and ones the library refused (storage
    *  full, a damaged slot). Never shown or edited — only written back into
-   *  the `.dwk` on the next save (lib/fitModelsProject.ts), so opening a
+   *  the `.dwk` on the next save (lib/fitModelsProject.ts; the one change a
+   *  save makes is to RENAME a record whose name is already written, so the
+   *  file holds one record per name), so opening a
    *  project in an older build and saving it does not destroy a newer build's
    *  models. Replaced by a load, grown by an append and by a refused merge. A
    *  non-empty carry makes `recipeSourcesWhole` false — DERIVED, never

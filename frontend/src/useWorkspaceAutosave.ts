@@ -370,13 +370,7 @@ export type AutosaveState = Pick<
   // whole-state-spread save path with no trigger here — a recipe CRUD edit
   // left the title bar showing clean right up to a crash.
   | "plotRecipes"
-  // P2.7 follow-up (PR #432 review): the project's carried fit-model records
-  // (store/recipeFidelity.ts). Usually set in a load's or append's own set()
-  // with the datasets, but a merge the library REFUSED grows it later, on its
-  // own (lib/fitModelsProject.ts's `adoptProjectFitModels`) — and the toast
-  // then says "kept in the project", which only a crash-surviving autosave
-  // makes true.
-  | "fitModelCarry"
+  | "fitModelCarry" // P2.7: a refused fit-model merge grows it on its own (store/workspaceHydration.ts)
 >;
 
 export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boolean {
@@ -408,8 +402,7 @@ export function shouldAutosave(state: AutosaveState, prev: AutosaveState): boole
     state.mapViews === prev.mapViews &&
     state.collections === prev.collections &&
     state.visibleDetailsColumns === prev.visibleDetailsColumns &&
-    state.plotRecipes === prev.plotRecipes &&
-    state.fitModelCarry === prev.fitModelCarry
+    state.plotRecipes === prev.plotRecipes && state.fitModelCarry === prev.fitModelCarry
   );
 }
 

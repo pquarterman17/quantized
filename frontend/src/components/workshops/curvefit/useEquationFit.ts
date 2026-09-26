@@ -326,9 +326,11 @@ export function useEquationFit(
       return null;
     }
     // A write storage refused (full, blocked) is swallowed by the library, so
-    // re-read: the model is saved only if it is THERE — the picker lists what
-    // storage holds (the lib/nameKeyedRecipes import precedent).
-    if (!loadCustomModels().some((m) => m.name === name)) {
+    // re-read: the model is saved only if THIS record is there — not merely
+    // its name, which an older version being overwritten still holds. The
+    // picker lists what storage holds (the lib/nameKeyedRecipes precedent).
+    const back = loadCustomModels().find((m) => m.name === name);
+    if (!back || JSON.stringify(back) !== JSON.stringify(model)) {
       setError("could not save the model — browser storage is full or unavailable");
       return null;
     }

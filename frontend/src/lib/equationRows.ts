@@ -11,7 +11,7 @@
 // Pure: no React, no store.
 
 import { lit } from "./macro";
-import { ALL_HELD_ERROR, allHeld, checkParamRow } from "./paramRowCheck";
+import { ALL_HELD_ERROR, allHeld, checkParamRow, readParamNumber } from "./paramRowCheck";
 
 export interface EquationParamRow {
   name: string;
@@ -68,10 +68,11 @@ export function savedModelRows(
   rows: readonly EquationParamRow[],
 ): { guesses: number[]; lower: (number | null)[]; upper: (number | null)[] } | { error: string } {
   const out: { guesses: number[]; lower: (number | null)[]; upper: (number | null)[] } = { guesses: [], lower: [], upper: [] };
-  const read = (t: string): number | null => (t.trim() === "" || !Number.isFinite(Number(t)) ? null : Number(t));
   for (const r of rows) {
-    const lo = read(r.min);
-    const hi = read(r.max);
+    // An unreadable bound is refused by checkParamRow below; here it only
+    // must not move the blank start.
+    const lo = readParamNumber(r.min) ?? null;
+    const hi = readParamNumber(r.max) ?? null;
     const blankStart = hi !== null && hi < 1 ? hi : lo !== null && lo > 1 ? lo : 1;
     const c = checkParamRow(
       { name: r.name, start: r.guess, min: r.min, max: r.max, held: false },

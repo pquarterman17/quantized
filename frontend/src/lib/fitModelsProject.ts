@@ -54,8 +54,9 @@
 //   3. Otherwise the incoming one is added as "<base> (from project)", then
 //      "(from project 2)", ... — the first name nothing holds. The name was
 //      held by a DIFFERENT local model (yours is kept), by a local record
-//      this build cannot read (left untouched), or by an earlier, different
-//      model in the same project; the toast says which.
+//      this build cannot read (left untouched), or by another model from the
+//      same project (same name, or a name this open just gave it); the toast
+//      says which.
 // All additions are one storage write, then RE-READ: a record storage refused
 // (quota, blocked) is not reported as added; it joins the carry below, so the
 // next save still writes it into the project. One toast per open. A DAMAGED
@@ -217,8 +218,8 @@ function freeName(name: string, taken: ReadonlySet<string>): string {
 }
 
 /** Why rule 3 renamed a model: its name was held by a different LOCAL model,
- *  by a local record this build cannot READ, or by an earlier, different
- *  model in the same PROJECT. */
+ *  by a local record this build cannot READ, or by another model from the
+ *  same PROJECT — one that had that name, or was just given it by this open. */
 export type RenameReason = "local" | "unreadable" | "project";
 
 export interface Renamed {
@@ -312,8 +313,9 @@ function renamedClauses(renamed: readonly Renamed[]): string[] {
   }
   const project = of("project");
   if (project.length) {
+    const one = project.length === 1;
     clauses.push(
-      `the project holds different fit models under the same name; the later ${project.length === 1 ? "one was" : "ones were"} added as ${as(project)}`,
+      `${one ? "1 fit model's name was" : `${project.length} fit models' names were`} already taken by another model from this project; added as ${as(project)}`,
     );
   }
   return clauses;

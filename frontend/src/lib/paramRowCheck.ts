@@ -33,12 +33,7 @@ export function checkParamRow(
   row: ParamRowInput,
   opts: { startLabel: string; blankStart?: number },
 ): ParamRowNumbers | { error: string } {
-  const read = (text: string): number | null | undefined => {
-    const t = text.trim();
-    if (t === "") return null;
-    const v = Number(t);
-    return Number.isFinite(v) ? v : undefined;
-  };
+  const read = readParamNumber;
   const s = read(row.start);
   const start = s === null ? opts.blankStart : s;
   if (start === undefined) return { error: `${row.name}: ${opts.startLabel} is not a number` };
@@ -51,6 +46,14 @@ export function checkParamRow(
     return { error: `${row.name}: held at ${start}, outside its bounds` };
   }
   return { start, lo, hi };
+}
+
+/** One cell of a row: null when blank, undefined when not a finite number. */
+export function readParamNumber(text: string): number | null | undefined {
+  const t = text.trim();
+  if (t === "") return null;
+  const v = Number(t);
+  return Number.isFinite(v) ? v : undefined;
 }
 
 /** Is every parameter held (so nothing is left to fit)? An empty table is not. */

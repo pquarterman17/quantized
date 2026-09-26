@@ -110,6 +110,18 @@ describe("CurveFitPanel — saved-model picker stays current", () => {
     expect(option("Elsewhere")).toBeNull();
   });
 
+  it("lists a model another WINDOW saved (the storage event) — review", async () => {
+    render(<CurveFitPanel />);
+    await screen.findByLabelText("By (optional)");
+    // Another window's write: storage changes with no call into this module.
+    localStorage.setItem("qz.customFitModels", JSON.stringify([model("Other window")]));
+    expect(option("Other window")).toBeNull();
+    act(() => {
+      window.dispatchEvent(new StorageEvent("storage", { key: "qz.customFitModels" }));
+    });
+    expect(option("Other window")).toBeInTheDocument();
+  });
+
   it("deleting the LOADED model elsewhere falls the picker back to a blank equation (review)", async () => {
     saveCustomModel(model("Loaded"));
     render(<CurveFitPanel />);

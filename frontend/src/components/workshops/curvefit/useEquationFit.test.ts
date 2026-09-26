@@ -355,6 +355,21 @@ describe("useEquationFit saved models", () => {
     }
   });
 
+  it("an OVERWRITE storage refuses is reported too — the old version still holding the name is not the save (review)", async () => {
+    expect((await decayWithRows([])).saved).not.toBeNull(); // "Decay" stored, t's guess 1
+    const spy = vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("QuotaExceededError");
+    });
+    try {
+      const edited = await decayWithRows([[1, "guess", "7"]]);
+      expect(edited.saved).toBeNull();
+      expect(edited.error).toContain("browser storage is full or unavailable");
+    } finally {
+      spy.mockRestore();
+    }
+    expect(loadCustomModels()[0].guesses).toEqual([1, 1]);
+  });
+
   it("save is a no-op without a name or a valid equation", () => {
     const { result } = renderHook(() => useEquationFit(null, NO_DEBOUNCE));
     expect(result.current.save()).toBeNull();

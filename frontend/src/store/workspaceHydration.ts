@@ -326,8 +326,10 @@ function adoptFitModels(ws: WorkspaceToLoad, set: SliceSet, get: SliceGet): void
     return kept;
   };
   // A codec that will not load (toasted by the loader) cannot merge — carry
-  // the models instead: they exist nowhere else, and a save reads only the
-  // library and the carry (PR #432 review).
+  // the models instead: they may exist nowhere else, and a save reads only
+  // the library and the carry (PR #432 review). All of them, even ones the
+  // library may hold: telling which needs lib/fitmodels, which is in that
+  // same unloadable chunk; the save drops a held one again.
   void workspaceCodecOrReport("Adding the project's fit models", noop).then((c) =>
     c ? c.adoptProjectFitModels(ws, carry) : void carry(models),
   );

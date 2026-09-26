@@ -247,20 +247,28 @@ export function unreadableCustomModelNames(): string[] {
 // revision and tells its subscribers: the fit workshop's picker and the
 // Recipe Library (`useSyncExternalStore(subscribeCustomModels,
 // customModelsRevision)`) re-read after a save, a delete, or a project open
-// that merged models in — whichever panel made the change.
+// that merged models in — whichever panel made the change. A write from
+// ANOTHER window of this origin arrives as a `storage` event, which bumps it
+// the same way while anything is subscribed.
 let revision = 0;
 const listeners = new Set<() => void>();
+const onStorage = (e: StorageEvent): void => {
+  if (e.key === KEY || e.key === null) notifyChanged(); // null = storage cleared
+};
 
 /** A number that changes on every write to the library. */
 export function customModelsRevision(): number {
   return revision;
 }
 
-/** Call `listener` after every write to the library; returns the unsubscribe. */
+/** Call `listener` after every write to the library, from this window or
+ *  another; returns the unsubscribe. */
 export function subscribeCustomModels(listener: () => void): () => void {
+  if (listeners.size === 0) window.addEventListener("storage", onStorage);
   listeners.add(listener);
   return () => {
     listeners.delete(listener);
+    if (listeners.size === 0) window.removeEventListener("storage", onStorage);
   };
 }
 

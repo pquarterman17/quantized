@@ -169,8 +169,19 @@ describe("merge rule on open", () => {
     expect(within.renamed).toEqual([{ from: "P", to: "P (from project)", reason: "project" }]);
     const withinMsg = adoptionMessage(within)!;
     expect(withinMsg).not.toContain("yours");
-    expect(withinMsg).toContain("the project holds different fit models under the same name");
+    expect(withinMsg).toContain("already taken by another model from this project");
     expect(withinMsg).toContain('"P" as "P (from project)"');
+
+    // A name THIS open just gave another project model (a rename) is also
+    // "another model from this project" — never "the project holds two".
+    localStorage.setItem(KEY, JSON.stringify([model("Foo", "y = 3")]));
+    const chained = mergeProjectFitModels([model("Foo", "y = 1"), model("Foo (from project)", "y = 2")]);
+    expect(chained.renamed).toEqual([
+      { from: "Foo", to: "Foo (from project)", reason: "local" },
+      { from: "Foo (from project)", to: "Foo (from project 2)", reason: "project" },
+    ]);
+    expect(adoptionMessage(chained)).toContain('1 fit model\'s name was already taken by another model from this project; added as "Foo (from project)" as "Foo (from project 2)"');
+    localStorage.clear();
 
     // An unreadable local record holds the name: it is not "yours was kept".
     localStorage.setItem(KEY, JSON.stringify([{ version: 9, name: "U" }]));
