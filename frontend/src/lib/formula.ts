@@ -444,6 +444,7 @@ function computeFormulas(
       }
     }
     for (let r = 0; r < rowCount; r++) values[r].push(colValues[r]);
+    if (Array.isArray(f.factor?.levels)) catLevels[labels.length] = [...f.factor.levels]; // P2.5 lib/metadataFactor.ts
     labels.push(f.name);
     units.push(f.unit ?? "");
   }

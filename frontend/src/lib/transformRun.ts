@@ -33,6 +33,7 @@ import { analyzeMerge } from "./appendWarnings";
 import { lit } from "./macro";
 import { mergeDatasets } from "./merge";
 import type { AppendMatch } from "./mergeByName";
+import { IN_PLACE_OPS, metaParamsOf, metaStepText, runMetaStep, type MetaStepParams } from "./metadataRun";
 import { analysisData } from "./rowstate";
 import { computeResample, resampleLabel, resampleParamsOf, type ResampleParams } from "./transformResample";
 import {
@@ -79,10 +80,14 @@ export type TransformParams =
   // numeric-code semantics instead, never the new one silently.
   | { op: "join"; leftKey: JoinKey; rightKey: JoinKey; mode: JoinMode; keyMode?: JoinKeyMode; with: DatasetRef }
   // `match` absent = by position (every step recorded before P2.5's preview).
-  | { op: "merge"; with: DatasetRef[]; match?: AppendMatch }
+  // `sourceFactor`: the name of an added column saying which input each row
+  // came from (P2.5 "Metadata → factors"); absent = no such column.
+  | { op: "merge"; with: DatasetRef[]; match?: AppendMatch; sourceFactor?: string }
   | { op: "algebra"; operation: string; interp: string; with: DatasetRef }
   | { op: "split"; col: number; tolerance: number | null }
-  | ResampleParams;
+  | ResampleParams
+  // In place, no output (lib/metadataRun.ts): a metadata factor / cleanup.
+  | MetaStepParams;
 
 /** What the review step sees before anything is committed. */
 export interface TransformPreview {
@@ -125,8 +130,18 @@ function refsOf(p: TransformParams): DatasetRef[] {
   return [];
 }
 
-/** Pipeline label + script line for a transform step. */
+/** Typed narrowing wrapper over `lib/metadataRun.ts`'s `IN_PLACE_OPS`
+ *  (finding #7's shared source) — `transformStepText` and `runTransform`
+ *  below use this instead of repeating the two op names. */
+export function isInPlaceOp(p: TransformParams): p is MetaStepParams {
+  return IN_PLACE_OPS.has(p.op);
+}
+
+/** Pipeline label + script line for a transform step. Promote/metaclean
+ *  delegate to `lib/metadataRun.ts`'s `metaStepText` (finding #8's single
+ *  source) instead of duplicating its shape here. */
 export function transformStepText(p: TransformParams, primaryName: string): { label: string; code: string } {
+  if (isInPlaceOp(p)) return metaStepText(p);
   const refs = refsOf(p).map((r) => r.name);
   const { op, ...rest } = p;
   const args: Record<string, unknown> = { ...rest };
@@ -205,7 +220,7 @@ export async function computeTransform(p: TransformParams, primary: Dataset, oth
     case "merge": {
       const all = [primary, ...others];
       const names = all.map((d) => d.name);
-      const data = mergeDatasets(all.map((d) => d.data), names, p.match);
+      const data = mergeDatasets(all.map((d) => d.data), names, p.match, p.sourceFactor);
       const w = analyzeMerge(all.map((d) => d.data), names, p.match);
       return { data, name: `merged (${all.length})`, preview: preview(`Append ${all.length} datasets`, data, w, all.map((d) => [d.name, d.data])) };
     }
@@ -272,6 +287,12 @@ export interface TransformOutcome {
   name: string;
   warnings: TransformWarning[];
   outputs: TransformOutput[];
+  /** The pipeline-log line for an in-place op (no dataset was created). */
+  note?: string;
+  /** Finding #4: true only for an in-place `metaclean` replay whose rules
+   *  were all refused — `executeSteps.ts` logs the step "warn" instead of
+   *  "ok" when this is set. */
+  refused?: boolean;
 }
 
 /** The provenance a recorded `transform` step carries beside its op params
@@ -315,6 +336,17 @@ export async function runTransform(
       outputs: ids.map((cid, k) => ({ id: cid, key: String(children[k]?.data.metadata?.split_group ?? "") })),
     };
   }
+  if (isInPlaceOp(p)) {
+    const { note, refused } = await runMetaStep(s, p, primaryId);
+    return {
+      id: primaryId,
+      name: s().datasets.find((d) => d.id === primaryId)?.name ?? primaryId,
+      warnings: [],
+      outputs: [],
+      note,
+      ...(refused ? { refused: true } : {}),
+    };
+  }
   const primary = await s().resolveDataset(primaryId);
   if (!primary) throw new Error("the input dataset is unavailable");
   const others = await resolveRefs(s, refsOf(p));
@@ -344,7 +376,7 @@ function recordedNote(warnings: readonly TransformWarning[]): string {
   return n ? ` — ${n} warning${n === 1 ? "" : "s"} recorded in its metadata` : "";
 }
 
-const OPS = new Set(["transpose", "stack", "unstack", "join", "merge", "algebra", "split", "resample"]);
+const OPS = new Set(["transpose", "stack", "unstack", "join", "merge", "algebra", "split", "resample", "promote", "metaclean"]);
 
 /** Validate a recorded `transform` step's params (a .dwk / template is user-
  *  editable JSON) into `TransformParams`, or throw naming what is wrong. */
@@ -393,12 +425,16 @@ export function transformParamsOf(raw: Record<string, unknown>): TransformParams
       if (!Array.isArray(raw.with) || !raw.with.length) throw new Error('transform "merge" has no recorded inputs');
       const match = String(raw.match ?? "position");
       if (match !== "position" && match !== "name") throw new Error(`unknown append match "${match}"`);
-      return { op, with: raw.with.map(ref), ...(match === "name" ? { match } : {}) };
+      const sf = typeof raw.sourceFactor === "string" && raw.sourceFactor.trim() ? { sourceFactor: raw.sourceFactor } : {};
+      return { op, with: raw.with.map(ref), ...(match === "name" ? { match } : {}), ...sf };
     }
     case "algebra":
       return { op, operation: String(raw.operation ?? ""), interp: String(raw.interp ?? "pchip"), with: ref(raw.with) };
     case "resample":
       return resampleParamsOf(raw);
+    case "promote":
+    case "metaclean":
+      return metaParamsOf(raw);
     default: {
       const tol = raw.tolerance;
       return { op: "split", col: num("col"), tolerance: typeof tol === "number" && Number.isFinite(tol) ? tol : null };

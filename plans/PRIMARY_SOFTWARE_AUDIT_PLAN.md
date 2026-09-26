@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-26 (latest): **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-26 (latest): **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -3584,7 +3584,100 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
     - Aligning N datasets (resample) still makes N undo entries.
 - [ ] Python-like derived expressions, units, fitted-value use, defined error
   propagation.
-- [ ] Metadata cleanup/promotion to factors.
+- [x] Metadata cleanup/promotion to factors. (2026-09-26.) Data > "Metadata →
+  factors…" and the Library row menu ("Metadata → factors…", on the selection
+  when the row is in it) open one lazy workshop
+  (`components/workshops/metafactors/`, open flag in the tiny
+  `store/metaFactorsDialog.ts`, zero `useApp.ts` lines) over the picked
+  datasets. Both jobs preview every change before anything is written.
+  - **Promote to factor.** Any scalar metadata field is offered, top level or
+    one level into an instrument sidecar (`instrument › sample` from a QD
+    `INFO` line, `header_fields › T_set`), with its coverage ("2/3").
+    Automatic type is numeric when every present value is a number (or plain
+    numeric text), else categorical; the user can override it. Numeric refuses
+    text rather than inventing NaN. The preview lists the value every row of
+    each dataset gets. A dataset with no value gets a BLANK (NaN) column and is
+    named in the preview, the status and the pipeline log, never defaulted. A
+    field no picked dataset carries, a blank name, or a name clash is refused.
+    A numeric factor takes its unit from a sibling `<key>_unit` (what the
+    cleanup's unit parse writes); units that differ between datasets are
+    reported (each column keeps its own; a merge then asks before mixing them).
+  - **Design: the factor is a COMPUTED column** (`ComputedColumn.factor`,
+    `lib/metadataFactor.ts`), appended after every column like a recode. A new
+    base column would have to go before the computed ones and renumber every
+    channel-indexed binding (lib/channelRemap's whole ripple); appended, nothing
+    moves, and it survives corrections re-applies and `.dwk` through the
+    existing formulas pass-through. Its `expr` is the constant itself (`0`, the
+    number, or `0/0`), so the evaluator and the incremental path need no special
+    case; `factor` holds the provenance (path, type, raw value) and a
+    categorical level table, which `lib/formula.ts` installs as `cat_levels`
+    (one line). A rename keeps the spec (`updateFormula`).
+  - **Clean up metadata** (`lib/metadataCleanup.ts`). The keys across the picks
+    with per-dataset coverage ("1/2 — not in b.dat"). Tick synonyms and merge
+    them into one key: per dataset the first source present supplies the value
+    (the target key counts first); two sources that DISAGREE are refused for
+    that dataset, never resolved by picking one; a top-level source is renamed
+    away, a sidecar source is copied, never deleted. Normalize a key: trim and
+    collapse whitespace, lower/upper case, and parse "300 K" → 300 with
+    `<key>_unit: "K"`. The unit parse is all-or-nothing per key across the
+    selection and REFUSES when it would guess: a value that is not one number
+    and one unit ("300-310 K", "~300 K"), a comma ("1,5 K"), units that differ
+    ("300 K" vs "27 C", or "300" beside "300 K"), or a contradicting existing
+    `<key>_unit`. An already-parsed number counts with its recorded unit. Rules
+    join a draft; the preview lists every change (dataset, key, before, after)
+    and every refusal before Apply.
+  - **Nothing destroyed:** every change is appended to
+    `metadata.metadata_cleanup` with its before value (renamed keys' names and
+    values, original "300 K"); applied to `raw` too, logged with raw's own
+    before values, so a corrections re-apply keeps it.
+  - **Undo, recording, provenance:** each commit is ONE undo entry however many
+    datasets it touches (`lib/metadataRun.ts`) and records one `transform` step
+    (`op: "promote"` / `"metaclean"`, validated by `metaParamsOf`), replayed
+    IN PLACE on the run's target through `runTransform` (no output dataset;
+    later steps continue on the same one; the log shows the step's own note). A
+    replay onto a file without the field adds the blank, reported column; a
+    cleanup replay on an already-clean file is done, not failed.
+  - **Merge keeps where rows came from:** the Reshape workshop's append has
+    "Add a column naming each row's source dataset" (named, default `source`):
+    `mergeDatasets(…, sourceFactor)` adds a categorical column over the same
+    per-part row spans as the rows (levels = the input names, made unique;
+    label unique case-insensitively). Recorded as `sourceFactor`; an old step
+    without it replays unchanged. A promoted factor rides a merge like any
+    categorical column (by position or name, level tables remapped by text).
+  - **Tests:** `metadataFactor.test.ts` (keys + coverage, text / numeric /
+    missing, override, refusals, units differ), `metadataCleanup.test.ts`
+    (synonym merge, disagreement refusal, sidecar copy, trim/case, unit parse
+    and every ambiguity refusal, provenance log), `metadataRun.test.ts` (one
+    undo entry, recorded-step replay after a `.dwk`/template save, replay onto a
+    file without the field, cleanup on data + raw and its undo, merge source
+    factor + replay, a promoted factor through a by-name merge, params
+    validation), `metadataFactor.dwk.test.ts` (`.dwk` save → reopen keeps the
+    factor, its spec — it recomputes after reopen — the cleaned metadata and
+    log, the source column and the steps), `MetaFactorsPanel.test.tsx` (Data
+    command + row menu open on the selection, promote/cleanup previews and
+    commits, a deleted pick drops out). e2e `metadata-factors.spec.ts`: two
+    synthetic QD files (written by the spec — `.gitignore` keeps `.dat` out),
+    Ctrl-select both, row menu → promote `instrument › sample` → merge with
+    the source column → every merged row carries its sample and file.
+  - **Self-review:** code-review high, 10 findings, 8 fixed (replay failures
+    that blocked later steps, stale picks, a rename dropping the spec, the unit
+    parse ignoring `<key>_unit`, raw's log, touch after cleanup, units-differ
+    report); the other two answered in comments (the case-insensitive source
+    label, the store-write convention). Key guards sabotage-verified (level
+    table, blank-not-default, unit refusal, undo entry, replay, source codes,
+    `.dwk` spec survival, stale picks, replay-missing).
+  - **Eager bundle:** 845.0 → 845.7 kB (866,044 B of the 866,358 B budget),
+    pin unchanged. The workshop and the commit logic are lazy; the eager cost is
+    the command entry, the row-menu entry, the open flag and one formula line.
+    (The row-menu entry lives in `lib/metaFactorsAction.ts`, not
+    `lib/contextActions.ts`: importing the open flag there split it into an
+    extra eager chunk, measured +0.3 kB.)
+  - **Not done:** the cleanup has no explicit per-key value mapping beyond
+    trim/case/units (use Recode on the promoted factor for level merges); saved
+    cleanup rule sets are not a reusable library (the recorded step is the
+    reusable form); unit parsing does not convert between units (it refuses
+    instead); `updateFormula` editing a factor's EXPRESSION turns it into an
+    ordinary formula (by design — it is no longer the metadata value).
 - [ ] Saved transformation recipe, undo, provenance, derived output.
   **Progress (opener slice, 2026-09-25) — recording part only:** join, stack,
   unstack, transpose, merge/append ("Merge selected"), split and dataset

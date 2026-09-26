@@ -8,6 +8,7 @@ import type { ColormapName } from "./colormap";
 import type { DatasetSource } from "./datasetSource";
 import type { PeakTable } from "./peakTable";
 import type { RecodeSpec } from "./recode";
+import type { FactorSpec } from "./metadataFactor";
 
 /** DataStruct as serialized by `datastruct_payload` / `DataStruct.to_dict`. */
 export interface DataStruct {
@@ -330,9 +331,8 @@ export interface MapResponse {
 }
 
 // RsmPeak/RsmAnalysisResponse/RsmStrainResponse moved to lib/reductionTypes.ts
-// (J2/P1.6b, funding the new ComputedColumn.recode field below without
-// raising this file's TS_MODULE_PINS ceiling) — re-exported so every import
-// site (`from "./types"`) is unaffected.
+// (J2/P1.6b, funding ComputedColumn.recode below without raising this file's
+// TS_MODULE_PINS ceiling) — re-exported, so `from "./types"` is unaffected.
 export type { RsmPeak, RsmAnalysisResponse, RsmStrainResponse } from "./reductionTypes";
 
 /** A worksheet computed column: a display `name` and a formula `expr` over `x`
@@ -349,6 +349,7 @@ export interface ComputedColumn {
    *  exclusive with a real `expr` (formula.computeFormulas branches on this
    *  field instead of compiling `expr` when present) — see lib/recode.ts. */
   recode?: RecodeSpec;
+  factor?: FactorSpec; // P2.5: a metadata field promoted to a per-row factor (lib/metadataFactor.ts)
 }
 
 /** One column's non-destructive filter predicate (#53). `col` is -1 for x, 0..

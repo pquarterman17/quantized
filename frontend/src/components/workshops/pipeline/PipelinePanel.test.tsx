@@ -117,6 +117,32 @@ describe("PipelinePanel", () => {
     expect(useApp.getState().macroSteps.map((s) => s.label)).toEqual(["two"]);
   });
 
+  it("describes a promote/metaclean transform step as in-place, others as derived (finding #7)", () => {
+    useApp.setState({
+      macroSteps: [
+        makeStep("transform", "Promote metadata sample", 'qz.transform("promote", "<active>", {})', {
+          op: "promote",
+          path: ["sample"],
+          as: "categorical",
+          name: "sample",
+        }),
+        makeStep("transform", "Join scan with other (inner)", 'qz.transform("join", "<active>", {})', {
+          op: "join",
+          leftKey: 0,
+          rightKey: 0,
+          mode: "inner",
+          with: { id: "x", name: "other" },
+        }),
+      ],
+    });
+    render(<PipelinePanel />);
+    fireEvent.click(screen.getByText("Promote metadata sample"));
+    expect(screen.getByText(/Edits the current dataset in place/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Promote metadata sample")); // deselect
+    fireEvent.click(screen.getByText("Join scan with other (inner)"));
+    expect(screen.getByText(/Derives a new dataset from the current one/)).toBeInTheDocument();
+  });
+
   it("failure isolation: a bad step logs failed and the run continues", async () => {
     useApp.setState({
       macroSteps: [
