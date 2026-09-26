@@ -347,17 +347,22 @@ export function analyzeAlgebra(
           columns: cols,
         });
   }
-  // B's usable support: the finite (x, y) pairs the backend interpolates over.
+  // B's usable support: the DISTINCT x of its finite (x, y) pairs — the
+  // backend (`calc.resample._sanitize_xy`) drops non-finite pairs and
+  // averages repeated x into one point before interpolating, so two rows at
+  // the same x are one point, not two.
   let lo = Number.POSITIVE_INFINITY;
   let hi = Number.NEGATIVE_INFINITY;
-  let usable = 0;
+  // levels-allowlist: distinct interpolation abscissae, not category levels.
+  const xs = new Set<number>();
   b.time.forEach((x, i) => {
     const y = b.values[i]?.[channelB];
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
-    usable += 1;
+    xs.add(x);
     if (x < lo) lo = x;
     if (x > hi) hi = x;
   });
+  const usable = xs.size;
   const n = a.time.length;
   if (usable < 2) {
     if (n) {

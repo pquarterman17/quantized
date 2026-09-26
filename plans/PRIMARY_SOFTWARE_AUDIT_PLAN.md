@@ -3365,6 +3365,16 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
   review re-uploads the files through `importFiles`; the pending-edit
   ratchet cannot see a shorthand `data` write (`{ ...d, data }` in
   `setCellValue`) — pre-existing, found while sabotage-testing, not fixed.
+  PR #431 review (7 findings fixed, each sabotage-verified): a recorded
+  primary input that was not the active dataset (Dataset Math, Merge
+  selected) is an explicit reference on replay, never the run's target;
+  references to an earlier step's output follow that step's replay output
+  (split children matched by group label) and fail when it was not
+  reproduced (`lib/transformReplay.ts`); a disabled transform blocks later
+  steps like a failed one; Enter off the buttons no longer confirms a danger
+  dialog; a `.dwk` whose pipeline holds a transform step is written as v5
+  so older builds refuse it instead of dropping the step (other saves stay
+  v4; backend accepts 5); algebra counts B's distinct x.
 
 ### P2.6 — Categorical/JMP-style plot workbench
 

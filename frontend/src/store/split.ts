@@ -162,11 +162,16 @@ export function createSplitSlice(set: SliceSet, get: SliceGet): SplitSlice {
         (f) => f.name === (src.name.trim() || "New Folder"),
       );
       const folderId = existingFolder ? existingFolder.id : nextFolderId();
+      // Read BEFORE the commit below makes the first child active.
+      const inputIsTarget = get().activeId === id;
       const children: Dataset[] = groups.map((g) => {
+        const stamped = tw.stampWarnings(sliceDataStruct(src.data, g.rowIndexes), "split", warnings);
         const child: Dataset = {
           id: nextDatasetId(),
           name: `${src.name} (${g.label})`,
-          data: tw.stampWarnings(sliceDataStruct(src.data, g.rowIndexes), "split", warnings),
+          // `split_group` names the group; pipeline replay matches a recorded
+          // child to its replay counterpart by it (lib/transformReplay.ts).
+          data: { ...stamped, metadata: { ...stamped.metadata, split_group: g.label } },
           folderId,
         };
         if (src.formulas?.length) child.formulas = src.formulas.map((f) => ({ ...f }));
@@ -198,7 +203,16 @@ export function createSplitSlice(set: SliceSet, get: SliceGet): SplitSlice {
 
       get().recordMacro(`Split ${src.name} by column value`, `qz.transform("split", "<active>", ${lit({ col, tolerance: tolerance ?? null })})`, {
         kind: "transform",
-        params: { op: "split", col, tolerance: tolerance ?? null, input: { id, name: src.name } },
+        // Same provenance shape as lib/transformRun.recordedProvenance (not
+        // imported: that module is lazy and this slice is eager).
+        params: {
+          op: "split",
+          col,
+          tolerance: tolerance ?? null,
+          input: { id, name: src.name },
+          inputIsTarget,
+          outputs: children.map((c, k) => ({ id: c.id, key: groups[k].label })),
+        },
       });
       get().setStatus(`split "${src.name}" into ${children.length} datasets`);
       toast(`split into ${children.length} datasets`, "ok");

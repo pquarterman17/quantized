@@ -172,7 +172,7 @@ describe("executeSteps with transform steps", () => {
     expect(log[join.id].status).toBe("failed");
     expect(log[addCol.id]).toEqual({
       status: "skipped",
-      note: "not run — an earlier transform failed (Join src with gone.dat (inner))",
+      note: "not run — an earlier transform did not run (Join src with gone.dat (inner) failed)",
     });
     expect(byId("src").formulas).toBeUndefined();
     expect(target).toBe("src");
@@ -190,6 +190,19 @@ describe("executeSteps with transform steps", () => {
     expect(fitModel).toHaveBeenCalledTimes(1);
   });
 
+  it("a disabled transform blocks the later steps too — they never edit the input in place", async () => {
+    const stack = { ...makeStep("transform", "Stack src", "qz.transform()", { op: "stack", channels: [1, 2] }), enabled: false };
+    const addCol = makeStep("expression", "Add column dbl", "qz.addColumn()", { name: "dbl", expr: "B*2" });
+    const { log } = await executeSteps([stack, addCol], "src");
+    expect(log[stack.id]).toEqual({ status: "skipped", note: "disabled" });
+    expect(log[addCol.id]).toEqual({
+      status: "skipped",
+      note: "not run — an earlier transform did not run (Stack src is disabled)",
+    });
+    expect(byId("src").formulas).toBeUndefined();
+    expect(useApp.getState().datasets).toHaveLength(2);
+  });
+
   it("logs the recorded warnings on replay", async () => {
     const step = makeStep("transform", "Join", "qz.transform()", {
       op: "join", leftKey: 0, rightKey: 0, mode: "inner", with: { id: "oth", name: "oth.dat" },
@@ -197,6 +210,87 @@ describe("executeSteps with transform steps", () => {
     const { log } = await executeSteps([step], "src");
     expect(log[step.id].status).toBe("ok");
     expect(log[step.id].note).toContain("an earlier key");
+  });
+});
+
+describe("recorded references replay to the right datasets (PR #431 review)", () => {
+  const THIRD: Dataset = {
+    id: "third",
+    name: "third.dat",
+    data: { ...other, values: other.values.map((r) => [r[0], r[1], r[2] * 10]) },
+  };
+
+  it("a primary input that was NOT the active dataset replays on that input, not the run's target", async () => {
+    // Active = src; Dataset Math computes oth − third (A is not active).
+    useApp.setState({ datasets: [SRC, OTH, THIRD], activeId: "src" });
+    const first = await runTransform(
+      useApp.getState,
+      { op: "algebra", operation: "A-B", interp: "linear", with: { id: "third", name: "third.dat" } },
+      "oth",
+    );
+    const [step] = useApp.getState().macroSteps;
+    expect(step.params).toMatchObject({ input: { id: "oth" }, inputIsTarget: false });
+    useApp.getState().stopMacro();
+    const before = ids();
+    const { log } = await executeSteps(saved([step]), "src");
+    expect(log[Object.keys(log)[0]].status).toBe("ok");
+    const [replayed] = [...ids()].filter((id) => !before.has(id));
+    expect(byId(replayed).data).toEqual(byId(first!.id).data);
+
+    // ...and refuses, naming it, when that input is gone.
+    useApp.setState({ datasets: [SRC, THIRD] });
+    const again = await executeSteps(saved([step]), "src");
+    expect(Object.values(again.log)[0]).toEqual({ status: "failed", note: 'the recorded input "oth.dat" is not in this workspace' });
+  });
+
+  /** Record "split X by T", then "X(5 K) − X(10 K)" on the split's children. */
+  async function recordSplitThenSubtract(x: string) {
+    const kids = await useApp.getState().splitDatasetByColumn(x, 1, 1);
+    const name = (id: string) => byId(id).name;
+    // Dataset Math on the two children: A = first child (active after split).
+    await runTransform(
+      useApp.getState,
+      { op: "algebra", operation: "A-B", interp: "linear", with: { id: kids[1], name: name(kids[1]) } },
+      kids[0],
+    );
+    useApp.getState().stopMacro();
+    return useApp.getState().macroSteps;
+  }
+
+  it("a reference to an earlier step's output follows that step's REPLAY output", async () => {
+    // B: same shape as src, different numbers, so A's children and B's differ.
+    const B: Dataset = {
+      id: "b", name: "b.dat",
+      data: { ...main, values: main.values.map((r) => [r[0], r[1], r[2] + 1000]) },
+    };
+    useApp.setState({ datasets: [SRC, OTH, B] });
+    const steps = await recordSplitThenSubtract("src");
+    expect(steps.map((s) => s.kind)).toEqual(["transform", "transform"]);
+    const { datasetAlgebra } = await import("../../../lib/api/datasetAlgebra");
+    vi.mocked(datasetAlgebra).mockClear();
+
+    const { log } = await executeSteps(saved(steps), "b");
+    expect(Object.values(log).map((l) => l.status)).toEqual(["ok", "ok"]);
+    const [body] = vi.mocked(datasetAlgebra).mock.calls[0];
+    const bKids = useApp.getState().datasets.filter((d) => d.name.startsWith("b.dat ("));
+    // Both operands are B's children — never src's.
+    expect(body.dataset_a).toEqual(bKids.find((d) => d.name === "b.dat (5 K)")!.data);
+    expect(body.dataset_b).toEqual(bKids.find((d) => d.name === "b.dat (10 K)")!.data);
+  });
+
+  it("fails when the earlier step did not reproduce the referenced output (a missing group)", async () => {
+    // C has only the 5 K setpoint: its split cannot produce the "10 K" child.
+    const C: Dataset = {
+      id: "c", name: "c.dat",
+      data: { ...main, values: main.values.map((r, i) => [r[0], i % 2 ? 5 : Number.NaN, r[2]]) },
+    };
+    useApp.setState({ datasets: [SRC, OTH, C] });
+    const steps = await recordSplitThenSubtract("src");
+    const { log } = await executeSteps(saved(steps), "c");
+    const [split, math] = Object.values(log);
+    expect(split.status).toBe("ok");
+    expect(math.status).toBe("failed");
+    expect(math.note).toContain("was created by an earlier step that did not produce it in this run");
   });
 });
 

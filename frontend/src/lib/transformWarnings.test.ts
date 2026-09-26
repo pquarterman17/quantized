@@ -142,6 +142,14 @@ describe("analyzeAlgebra", () => {
     expect(analyzeAlgebra(a, b, "A-B", "a", "b").find((x) => x.code === "out-of-range")?.count).toBe(6);
   });
 
+  it("repeated x in B counts once (the backend averages duplicates before interpolating)", () => {
+    // Two finite pairs, both at x=2: one distinct point — every row is blank.
+    const b = ds([2, 2], [[1, 3]], ["B"], ["K"]);
+    const w = analyzeAlgebra(a, b, "A-B", "a", "b").find((x) => x.code === "out-of-range");
+    expect(w?.count).toBe(6);
+    expect(w?.text).toContain("1 usable point");
+  });
+
   it("a Y unit mismatch needs confirm for A-B but only informs for A/B", () => {
     const b = ds([0, 5], [[1, 1]], ["B"], ["T"]);
     expect(needsConfirm(analyzeAlgebra(a, b, "A-B", "a", "b"))).toBe(true);

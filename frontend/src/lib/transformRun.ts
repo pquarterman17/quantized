@@ -16,11 +16,13 @@
 // model is a dataset id — a `correction` step's background is
 // `bg: {datasetId}` and replays by looking that id up. Join / merge / algebra
 // record their SECOND inputs the same way (`with: {id, name}`; the name is for
-// display only). The PRIMARY input is never an id: like every other step, a
-// transform applies to the pipeline's current target, so a template batch
-// joins/merges each file with the recorded second input. A reference whose
-// dataset is no longer in the workspace (another session's template) fails
-// that step with a message naming it — never a guess by name.
+// display only). The PRIMARY input is the pipeline's current target when it
+// was the active dataset at recording time (so a template batch joins/merges
+// each file with the recorded second input); otherwise it too is an explicit
+// reference (`recordedProvenance`). A reference whose dataset is no longer in
+// the workspace fails that step with a message naming it — never a guess by
+// name — and a reference to a dataset an EARLIER step created is rewritten to
+// that step's replay output (lib/transformReplay.ts).
 //
 // Lazy on purpose: only reached from Data-menu commands, the dataset-math
 // workshop, the merge action and the pipeline runner — all post-click.
@@ -208,10 +210,37 @@ export function reviewTransform(pv: TransformPreview): Promise<boolean> {
   );
 }
 
+/** One dataset a transform created. `key` tells replay which output is which
+ *  when there are several: a split child's group label ("5 K"), "" otherwise. */
+export interface TransformOutput {
+  id: string;
+  key: string;
+}
+
 export interface TransformOutcome {
+  /** The output later steps continue on (a split's first child). */
   id: string;
   name: string;
   warnings: TransformWarning[];
+  outputs: TransformOutput[];
+}
+
+/** The provenance a recorded `transform` step carries beside its op params
+ *  (lib/transformReplay.ts reads it back):
+ *   - `input`: the primary input as recorded;
+ *   - `inputIsTarget`: whether that input was the ACTIVE dataset — i.e. the
+ *     pipeline's target — when recorded. Only then does replay apply the step
+ *     to the run's target; otherwise `input` is an explicit reference (Dataset
+ *     Math with A not active, Merge selected whose first pick is not active),
+ *     resolved or refused on replay, never silently swapped for the target;
+ *   - `outputs`: the datasets it created, so a later step's reference to one
+ *     of them is rewritten to the replay's own output. */
+export function recordedProvenance(
+  input: { id: string; name: string },
+  inputIsTarget: boolean,
+  outputs: readonly TransformOutput[],
+): Record<string, unknown> {
+  return { input: { id: input.id, name: input.name }, inputIsTarget, outputs: outputs.map((o) => ({ ...o })) };
 }
 
 /** Run one transform with `primaryId` as its primary input. Returns null when
@@ -228,12 +257,13 @@ export async function runTransform(
     // The store action already said why (a notification): fewer than two
     // groups, or more than the group cap. Point at it rather than guess.
     if (!ids.length) throw new Error("the split was refused — see the notification for why");
-    const first = s().datasets.find((d) => d.id === ids[0]);
-    const w = first?.data.metadata?.transform_warnings;
+    const children = ids.map((cid) => s().datasets.find((d) => d.id === cid));
+    const w = children[0]?.data.metadata?.transform_warnings;
     return {
       id: ids[0],
-      name: first?.name ?? ids[0],
+      name: children[0]?.name ?? ids[0],
       warnings: Array.isArray(w) ? w.map((text) => ({ code: "missing-split-key" as const, text: String(text) })) : [],
+      outputs: ids.map((cid, k) => ({ id: cid, key: String(children[k]?.data.metadata?.split_group ?? "") })),
     };
   }
   const primary = await s().resolveDataset(primaryId);
@@ -244,15 +274,18 @@ export async function runTransform(
     s().setStatus(`${c.preview.title} cancelled — nothing was created`);
     return null;
   }
+  // Read BEFORE addDataset, which makes the output active.
+  const inputIsTarget = s().activeId === primary.id;
   const id = nextDatasetId();
   s().addDataset({ id, name: c.name, data: stampWarnings(c.data, p.op, c.preview.warnings) });
   const { label, code } = transformStepText(p, primary.name);
+  const outputs = [{ id, key: "" }];
   s().recordMacro(label, code, {
     kind: "transform",
-    params: { ...p, input: { id: primary.id, name: primary.name } },
+    params: { ...p, ...recordedProvenance(primary, inputIsTarget, outputs) },
   });
   s().setStatus(`created ${c.name}${recordedNote(c.preview.warnings)}`);
-  return { id, name: c.name, warnings: c.preview.warnings };
+  return { id, name: c.name, warnings: c.preview.warnings, outputs };
 }
 
 /** " — N warnings recorded in its metadata" (every stamped warning, info
@@ -309,18 +342,6 @@ export function transformParamsOf(raw: Record<string, unknown>): TransformParams
       return { op: "split", col: num("col"), tolerance: typeof tol === "number" && Number.isFinite(tol) ? tol : null };
     }
   }
-}
-
-/** Pipeline replay of a recorded `transform` step against `targetId` (no
- *  review — warnings are stamped and returned for the run log). */
-export async function replayTransform(
-  s: StoreGet,
-  params: Record<string, unknown>,
-  targetId: string,
-): Promise<TransformOutcome> {
-  const out = await runTransform(s, transformParamsOf(params), targetId);
-  if (!out) throw new Error("transform produced no output");
-  return out;
 }
 
 /** Import-time append (`importFilesAppended`): the same by-position merge and

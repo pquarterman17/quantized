@@ -86,6 +86,9 @@ function offenders(re: RegExp, allow: string[]): string[] {
 // durable dataset ids.  A restored project can already contain any id minted
 // during an earlier page lifetime, so every dataset producer must draw from
 // the workspace-wide sequence instead of restarting at 1 after reload.
+const PRIVATE_ID_SEQUENCE =
+  /(?:const\s+id\s*=|id:)\s*`(?:bgsub|hystbg|magbg|magunit|refl-model|refl-sld|demo|sample|tplf|subset|sqlite|math|digi|impwiz|tplb|tplsum|fftthk|reflfft|tab|transform)-/;
+
 describe("workshop dataset identity", () => {
   const migrated = [
     "/components/workshops/baseline/useBaseline.ts",
@@ -109,14 +112,29 @@ describe("workshop dataset identity", () => {
     "/components/workshops/tabulate/useTabulate.ts",
   ];
 
+  // P2.5 moved these two producers' id minting into lib/transformRun.ts, so
+  // they no longer call nextDatasetId() themselves — but they must still never
+  // grow a PRIVATE sequence back (PR #431 review: that half of the check had
+  // been lost with them).
+  const delegating = [
+    "/components/workshops/datasetmath/useDatasetMath.ts",
+    "/lib/worksheetTransformCommands.ts",
+  ];
+
+  it("keeps delegating producers free of a private dataset-id sequence", () => {
+    const found = sources().filter(([path]) => delegating.some((suffix) => path.endsWith(suffix)));
+    expect(found.map(([path]) => path)).toHaveLength(delegating.length);
+    for (const [path, src] of found) {
+      expect(src, `${path} must not restore a private durable dataset-id sequence`).not.toMatch(PRIVATE_ID_SEQUENCE);
+    }
+  });
+
   it("keeps the BUG-020 workshop producers on the shared dataset-id sequence", () => {
     const workshopSources = sources().filter(([path]) => migrated.some((suffix) => path.endsWith(suffix)));
     expect(workshopSources.map(([path]) => path)).toHaveLength(migrated.length);
     for (const [path, src] of workshopSources) {
       expect(src, `${path} must mint durable ids through store/idSeq.ts`).toContain("nextDatasetId()");
-      expect(src, `${path} must not restore a private durable dataset-id sequence`).not.toMatch(
-        /(?:const\s+id\s*=|id:)\s*`(?:bgsub|hystbg|magbg|magunit|refl-model|refl-sld|demo|sample|tplf|subset|sqlite|math|digi|impwiz|tplb|tplsum|fftthk|reflfft|tab|transform)-/,
-      );
+      expect(src, `${path} must not restore a private durable dataset-id sequence`).not.toMatch(PRIVATE_ID_SEQUENCE);
     }
   });
 });

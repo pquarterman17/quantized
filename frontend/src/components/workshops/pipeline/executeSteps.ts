@@ -64,18 +64,24 @@ export async function executeSteps(
   // dataset and every later step continues on THAT output — the same thing
   // recording did, since the output became the active dataset.
   let target = targetId;
-  // Set when a transform FAILS: every later step was recorded against that
-  // transform's output, which does not exist — running them on the input
-  // instead would edit the user's source dataset in place. They are skipped.
+  // Set when a transform FAILS or is DISABLED: every later step was recorded
+  // against that transform's output, which does not exist — running them on
+  // the input instead would edit the user's source dataset in place. They
+  // are skipped.
   let blockedBy: string | null = null;
+  // Recorded transform outputs -> this run's outputs (lib/transformReplay.ts),
+  // so a later step's reference to an earlier step's output follows the replay.
+  const produced = new Map<string, string | null>();
   for (const step of steps) {
-    if (!step.enabled) {
-      log[step.id] = { status: "skipped", note: "disabled" };
-      onProgress?.({ ...log });
-      continue;
-    }
-    if (blockedBy) {
-      log[step.id] = { status: "skipped", note: `not run — an earlier transform failed (${blockedBy})` };
+    if (!step.enabled || blockedBy) {
+      if (step.kind === "transform") {
+        (await import("../../../lib/transformReplay")).markNotReproduced(produced, step.params);
+        if (!step.enabled) blockedBy ??= `${step.label} is disabled`;
+      }
+      log[step.id] = {
+        status: "skipped",
+        note: step.enabled ? `not run — an earlier transform did not run (${blockedBy})` : "disabled",
+      };
       onProgress?.({ ...log });
       continue;
     }
@@ -152,8 +158,8 @@ export async function executeSteps(
         }
         case "transform": {
           // Lazy: only a pipeline that recorded a transform pays for it.
-          const { replayTransform } = await import("../../../lib/transformRun");
-          const out = await replayTransform(store, step.params, target);
+          const { replayTransform } = await import("../../../lib/transformReplay");
+          const out = await replayTransform(store, step.params, target, produced);
           target = out.id;
           const n = out.warnings.length;
           log[step.id] = {
@@ -173,7 +179,7 @@ export async function executeSteps(
         status: "failed",
         note: e instanceof Error ? e.message : "error",
       };
-      if (step.kind === "transform") blockedBy = step.label;
+      if (step.kind === "transform") blockedBy = `${step.label} failed`;
     }
     onProgress?.({ ...log });
   }

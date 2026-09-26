@@ -75,7 +75,12 @@ describe("runTransform", () => {
     expect(recorded.some((t) => t.includes("an earlier key"))).toBe(true);
     const [step] = useApp.getState().macroSteps;
     expect(step.kind).toBe("transform");
-    expect(step.params).toEqual({ ...joinParams, input: { id: "L", name: "left.dat" } });
+    expect(step.params).toEqual({
+      ...joinParams,
+      input: { id: "L", name: "left.dat" },
+      inputIsTarget: true,
+      outputs: [{ id: out!.id, key: "" }],
+    });
     expect(step.code).toBe('qz.transform("join", "<active>", { leftKey: 0, rightKey: 0, mode: "inner", with: "right.dat" })');
   });
 
@@ -192,7 +197,10 @@ describe("Merge selected / append import (by column position)", () => {
     expect(merged?.data.time).toEqual([2, 1]);
     expect(merged?.data.metadata.transform_warnings).toHaveLength(1);
     expect(useApp.getState().status).toBe("merged 2 datasets → 2 rows — 1 warning recorded in its metadata");
-    expect(useApp.getState().macroSteps[0].params).toMatchObject({ op: "merge", with: [{ id: "A", name: "a.dat" }], input: { id: "B" } });
+    expect(useApp.getState().macroSteps[0].params).toMatchObject({ op: "merge", with: [{ id: "A", name: "a.dat" }], input: { id: "B" },
+      // B was not the active dataset, so replay must not swap it for the target.
+      inputIsTarget: false,
+    });
   });
 
   it("the append import returns null when declined and stamped data when accepted", async () => {

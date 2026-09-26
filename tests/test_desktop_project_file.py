@@ -117,6 +117,15 @@ def test_backend_accepts_the_frontends_current_workspace_format_and_version() ->
         f"WORKSPACE_VERSIONS {WORKSPACE_VERSIONS} — update quantized/desktop_project_file.py"
     )
 
+    # P2.5: the frontend writes a higher version when the pipeline holds a
+    # transform step (WORKSPACE_VERSION_TRANSFORM_STEPS). A native save of
+    # such a project must pass this gate too.
+    transform_match = re.search(r"WORKSPACE_VERSION_TRANSFORM_STEPS\s*=\s*(\d+)", src)
+    assert transform_match is not None, "WORKSPACE_VERSION_TRANSFORM_STEPS not found in workspace.ts"
+    assert int(transform_match.group(1)) in WORKSPACE_VERSIONS, (
+        "the frontend's WORKSPACE_VERSION_TRANSFORM_STEPS is not in backend WORKSPACE_VERSIONS"
+    )
+
     # The end-to-end proof, not just the two constants in isolation: a
     # payload built from the frontend's OWN current values must actually
     # pass the backend's gate.
