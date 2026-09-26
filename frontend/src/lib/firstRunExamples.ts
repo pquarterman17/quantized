@@ -12,7 +12,6 @@ export interface FirstRunExample {
   description: string;
   data: DataStruct;
   groupKey: number | null;
-  stageTab: "plot" | "map";
 }
 
 function lineData(): DataStruct {
@@ -76,7 +75,6 @@ export function makeFirstRunExample(kind: FirstRunExampleKind): FirstRunExample 
       description: "Three lots grouped on one plot",
       data: groupedData(),
       groupKey: 1,
-      stageTab: "plot",
     };
   }
   if (kind === "map") {
@@ -86,7 +84,6 @@ export function makeFirstRunExample(kind: FirstRunExampleKind): FirstRunExample 
       description: "A small 2-D intensity map",
       data: mapData(),
       groupKey: null,
-      stageTab: "map",
     };
   }
   return {
@@ -95,6 +92,5 @@ export function makeFirstRunExample(kind: FirstRunExampleKind): FirstRunExample 
     description: "A simple publication-style line plot",
     data: lineData(),
     groupKey: null,
-    stageTab: "plot",
   };
 }

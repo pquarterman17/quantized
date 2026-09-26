@@ -1,6 +1,8 @@
 // P3.2 first-run acceptance: the true empty workspace presents an optional
-// example and the choice reaches a useful scientific view without a backend
-// round trip, file picker, command palette, or seeded harness state.
+// example, and the choice reaches a scientific view with no file picker,
+// command palette, or seeded harness state. Loading the example itself needs
+// no backend round trip (it is generated in the page); rendering it uses the
+// ordinary plot/map fetch-with-offline-fallback path like any dataset.
 
 import { expect, test } from "@playwright/test";
 

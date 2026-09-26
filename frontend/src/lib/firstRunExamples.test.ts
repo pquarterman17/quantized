@@ -26,7 +26,6 @@ describe("first-run examples", () => {
 
   it("makes a map that follows the ordinary 2-D capability contract", () => {
     const example = makeFirstRunExample("map");
-    expect(example.stageTab).toBe("map");
     expect(is2DMap(example.data)).toBe(true);
     expect(example.data.labels).toEqual(["Qx", "Qz", "Intensity"]);
   });

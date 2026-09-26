@@ -49,8 +49,9 @@ const MultiSelectBar = lazyRegion(() => import("./MultiSelectBar"), "Library");
 const LibraryTree = lazyRegion(() => import("./LibraryTree"), "Library");
 const LibraryDetails = lazyRegion(() => import("./LibraryDetails"), "Library");
 // The resume/start surface exists only for a genuinely empty Library. Keep it
-// out of every established project's startup bundle; its fallback is the same
-// small Library loading treatment used by the other optional Library bodies.
+// out of every established project's startup bundle. Like the other optional
+// Library bodies it has no Suspense fallback: an empty Library shows nothing
+// below the header for the one localhost chunk fetch, then Home.
 const HomeScreen = lazyRegion(() => import("./HomeScreen"), "Library");
 // Bundle diet slice 6 (plans/BUNDLE_HEADROOM.md): the flat-list fallback body
 // (query empty, hierarchy empty) — see LibraryFlatRows.tsx's own header for

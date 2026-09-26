@@ -14,11 +14,12 @@
 // nothing more — no automatic cleanup, no "tidy up your recents", because a
 // share that is merely unmounted must never be treated as a deleted file.
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useId, useState, useRef } from "react";
 import { plural } from "../../lib/plural";
 
 import { pathState, type PathState } from "../../lib/desktopBridge";
-import type { FirstRunExampleKind } from "../../lib/firstRunExamples";
+import { makeFirstRunExample, type FirstRunExampleKind } from "../../lib/firstRunExamples";
+import { plotIntentStageTab } from "../../lib/stagetab";
 import { recentKey, recentParentLabel, relativeTime, type RecentFile } from "../../lib/recentFiles";
 import { reopenRecent } from "../../lib/reopenRecent";
 import { openRecentProject } from "../../commands/recentProjectsCommands";
@@ -60,13 +61,42 @@ function useRecentStates(recent: RecentFile[]): Record<string, PathState> {
   return states;
 }
 
+/** Load a first-run example as ONE user action, through the ordinary
+ *  `addDataset` entry point (the same one import/paste/demo use).
+ *
+ *  Synchronous on purpose. The generator ships in Home's own lazy chunk
+ *  (Library.tsx loads Home through `lazyRegion`), so it costs the eager
+ *  bundle nothing — and a second dynamic import here would only reopen an
+ *  async gap in which a real import could land first and the example then
+ *  pile on top of it.
+ *
+ *  Never over existing data: Home is mounted only over an empty Library, but
+ *  a fast double-click dispatches twice before React re-renders Home away. */
+function loadFirstRunExample(kind: FirstRunExampleKind): void {
+  const s = useApp.getState();
+  if (s.datasets.length > 0) return;
+  const example = makeFirstRunExample(kind);
+  const ds = { id: nextDatasetId(), name: example.name, data: example.data };
+  s.addDataset(ds); // records the one "add dataset" undo entry
+  // Grouping + tab ride that same entry: its pre-mutation snapshot already
+  // restores both. `setGroupKey` would push a SECOND "change group" entry
+  // (one Undo then leaves an ungrouped dataset behind) and record a macro
+  // step the user never took. The tab is plot-intent routing (the rule
+  // "Plot (make active)" uses), so a Worksheet-tab start still shows a plot.
+  useApp.setState({ groupKey: example.groupKey, stageTab: plotIntentStageTab(ds) });
+  s.setStatus(`loaded example: ${example.description}`);
+}
+
 export default function HomeScreen({ onImport }: { onImport: () => void }) {
   const recent = useApp((s) => s.recent);
   const removeRecent = useApp((s) => s.removeRecent);
   const recentProjects = useRecentProjects((s) => s.recentProjects);
   const homeRef = useRef<HTMLDivElement>(null);
-  const exampleInFlight = useRef(false);
-  const [loadingExample, setLoadingExample] = useState<FirstRunExampleKind | null>(null);
+  // A double-click on a project row must not start a second reopen: the
+  // second would find the first's workspace applied and ask "Replace the
+  // current workspace?" about the very project just opened.
+  const reopening = useRef(false);
+  const examplesLabelId = useId();
   const paths = useWorkingPaths((s) => s.paths);
   const setPinned = useWorkingPaths((s) => s.setPinned);
   // Not `usePath`: a `use`-prefixed local reads as a React hook (and trips
@@ -74,27 +104,13 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
   const recordPathUse = useWorkingPaths((s) => s.use);
   const health = useAutosaveStatus((s) => s.health);
   const states = useRecentStates(recent);
-  const addExample = async (kind: FirstRunExampleKind): Promise<void> => {
-    if (exampleInFlight.current) return;
-    exampleInFlight.current = true;
-    setLoadingExample(kind);
-    // Examples are an optional first-run path. Keep their generators out of
-    // the already-tight eager bundle and load them only after an explicit
-    // click, just like the larger Library surfaces around this component.
+  const reopenProject = async (name: string, path: string): Promise<void> => {
+    if (reopening.current) return;
+    reopening.current = true;
     try {
-      const { makeFirstRunExample } = await import("../../lib/firstRunExamples");
-      const example = makeFirstRunExample(kind);
-      const state = useApp.getState();
-      state.addDataset({ id: nextDatasetId(), name: example.name, data: example.data });
-      if (example.groupKey != null) useApp.getState().setGroupKey(example.groupKey);
-      useApp.getState().setStageTab(example.stageTab);
-      useApp.getState().setStatus(`loaded ${example.description.toLowerCase()}`);
-      // Success unmounts Home because the Library is no longer empty. Do not
-      // enqueue a redundant state reset on that disappearing component.
-    } catch {
-      exampleInFlight.current = false;
-      setLoadingExample(null);
-      useApp.getState().setStatus("example could not be loaded — try again");
+      await openRecentProject(name, path); // the one missing/offline-aware path
+    } finally {
+      reopening.current = false;
     }
   };
 
@@ -131,7 +147,7 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
               className="qzk-menu-item"
               style={{ width: "100%", textAlign: "left" }}
               title={project.path}
-              onClick={() => void openRecentProject(project.name, project.path)}
+              onClick={() => void reopenProject(project.name, project.path)}
             >
               <span className="qzk-menu-trunc">{project.name}</span>
               <span className="qz-shortcut">{relativeTime(project.at, Date.now())}</span>
@@ -225,16 +241,20 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
       )}
 
       <div>
-        <div className="qzk-menu-label">Try an example</div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 4 }}>
-          <button className="qzk-menu-item" disabled={loadingExample != null} title="Load a simple 1-D line example" onClick={() => void addExample("line")}>
-            {loadingExample === "line" ? "Loading…" : "1-D"}
+        <div className="qzk-menu-label" id={examplesLabelId}>Try an example</div>
+        <div
+          role="group"
+          aria-labelledby={examplesLabelId}
+          style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 4 }}
+        >
+          <button className="qzk-menu-item" title="Load a simple 1-D line example" onClick={() => loadFirstRunExample("line")}>
+            1-D
           </button>
-          <button className="qzk-menu-item" disabled={loadingExample != null} title="Load data grouped by lot" onClick={() => void addExample("grouped")}>
-            {loadingExample === "grouped" ? "Loading…" : "Grouped"}
+          <button className="qzk-menu-item" title="Load data grouped by lot" onClick={() => loadFirstRunExample("grouped")}>
+            Grouped
           </button>
-          <button className="qzk-menu-item" disabled={loadingExample != null} title="Load a small 2-D intensity map" onClick={() => void addExample("map")}>
-            {loadingExample === "map" ? "Loading…" : "2-D"}
+          <button className="qzk-menu-item" title="Load a small 2-D intensity map" onClick={() => loadFirstRunExample("map")}>
+            2-D
           </button>
         </div>
         <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
