@@ -14,10 +14,15 @@
 //
 // PREFLIGHT refuses (nothing runs on that dataset) for an unbound or blank
 // required column, a required metadata field the dataset lacks, a recorded
-// second input that is not in this workspace, a unit mismatch that was not
-// acknowledged, and a recipe with nothing to run. It notes (never refuses) a
+// second input (a transform's, or a correction's background) that is not in
+// this workspace, a unit mismatch that was not acknowledged, a recipe with
+// nothing to run or that would derive nothing (a fit-only analysis template —
+// the file batch and the folder run are its paths), and a recipe that applies
+// its own corrections to a dataset that already has some (the working copy
+// holds the corrected values, so they would stack). It notes (never refuses) a
 // step that acts on a recorded dataset rather than this one, a blank filler
-// column, and corrections already applied to the target.
+// column, corrections already applied to the target, and fit steps (they run,
+// but an apply keeps only the derived dataset, not a fit result).
 //
 // THE WORKING COPY (`conformData`) is the target's rows with the bound columns
 // at the recorded positions, then every target column not bound, in order.
@@ -27,7 +32,8 @@
 // `level_order`) move with their columns; Origin's per-column name list is
 // dropped when the order changed, since it is positional.
 
-import { hasMetadata, inputSegment, editsInPlace, type ExpectedColumn, type RecipeExpectations } from "./recipeExpect";
+import { derivesOutput, hasMetadata, inputSegment, editsInPlace, type ExpectedColumn, type RecipeExpectations } from "./recipeExpect";
+import type { ErrorBinding } from "./errorRoles";
 import type { PipelineStep } from "./pipeline";
 import type { ColumnFilter, DataStruct, Dataset } from "./types";
 
@@ -41,6 +47,9 @@ export type PreflightKind =
   | "missing-metadata"
   | "missing-reference"
   | "no-steps"
+  | "no-output"
+  | "corrections-conflict"
+  | "fit-not-kept"
   | "recorded-input"
   | "blank-column"
   | "corrections";
@@ -109,8 +118,11 @@ function externalRefs(steps: readonly PipelineStep[]): { step: PipelineStep; ref
   const produced = new Set<string>();
   const out: { step: PipelineStep; ref: Ref; isInput: boolean }[] = [];
   for (const s of steps) {
-    if (!s.enabled || s.kind !== "transform") continue;
     const p = s.params;
+    // A correction's reference background (`bg: {datasetId}`, executeSteps).
+    const bg = s.enabled && s.kind === "correction" ? (p.bg as { datasetId?: unknown } | undefined)?.datasetId : undefined;
+    if (typeof bg === "string") out.push({ step: s, ref: { id: bg, name: "its background dataset" }, isInput: false });
+    if (!s.enabled || s.kind !== "transform") continue;
     const withRefs = (Array.isArray(p.with) ? p.with : p.with === undefined ? [] : [p.with]).map(refOf);
     for (const r of withRefs) if (r && !produced.has(r.id)) out.push({ step: s, ref: r, isInput: false });
     const input = p.inputIsTarget === false ? refOf(p.input) : null;
@@ -135,7 +147,13 @@ export function preflightRecipe(
   const issues: PreflightIssue[] = [];
   const push = (kind: PreflightKind, text: string, blocking: boolean) => issues.push({ kind, text, blocking });
   const d = ds.data;
-  if (!runnableSteps(recipe.steps).length) push("no-steps", "the recipe has no steps to run", true);
+  const runnable = runnableSteps(recipe.steps);
+  if (!runnable.length) push("no-steps", "the recipe has no steps to run", true);
+  else if (!runnable.some((s) => derivesOutput(s) || editsInPlace(s))) {
+    push("no-output", "the recipe derives no dataset (a fit-only template: use Batch… or the folder's template run)", true);
+  } else if (runnable.some((s) => s.kind === "fit")) {
+    push("fit-not-kept", "its fit steps run, but only the derived dataset is kept, not a fit result", false);
+  }
   let unitMismatch = false;
   (recipe.expects?.columns ?? []).forEach((c, i) => {
     const b = bound(bindings[i], d);
@@ -162,7 +180,13 @@ export function preflightRecipe(
       push("recorded-input", `“${step.label}” runs on the recorded dataset “${ref.name}”, not on this one`, false);
     }
   }
-  if (ds.corrections) push("corrections", "corrections are applied — the recipe runs on the corrected values", false);
+  if (ds.corrections) {
+    // The working copy holds the CORRECTED values (not `raw`), so a recipe
+    // correction would stack on the dataset's own, and a reset undo nothing.
+    const corrects = inputSegment(recipe.steps).some((s) => s.kind === "correction" || s.kind === "reset");
+    if (corrects) push("corrections-conflict", "this dataset has corrections applied and the recipe applies its own — reset them first", true);
+    else push("corrections", "corrections are applied — the recipe runs on the corrected values", false);
+  }
   return { issues, blocked: issues.some((x) => x.blocking), unitMismatch };
 }
 
@@ -218,6 +242,18 @@ export function conformData(src: DataStruct, columns: readonly ExpectedColumn[],
     ...(lvl ? { level_order: lvl } : {}),
   };
   return { data, indexOf: (old) => first.get(old) ?? null };
+}
+
+/** The target's error-column roles carried onto the working copy (both ends
+ *  renumbered; the x axis, -1, stays), so a correction still treats its error
+ *  columns as errors. A role whose column is not in the copy is dropped. */
+export function conformErrorRoles(roles: readonly ErrorBinding[] | undefined, c: Conformed): ErrorBinding[] | undefined {
+  if (!roles) return undefined;
+  return roles.flatMap((r) => {
+    const channel = c.indexOf(r.channel);
+    const target = r.target < 0 ? r.target : c.indexOf(r.target);
+    return channel === null || target === null ? [] : [{ ...r, channel, target }];
+  });
 }
 
 /** The target's row filter carried onto the working copy (columns renumbered;

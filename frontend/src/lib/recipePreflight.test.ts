@@ -4,7 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { makeStep } from "./pipeline";
 import type { ExpectedColumn, RecipeExpectations } from "./recipeExpect";
-import { conformData, conformFilter, defaultBindings, isIdentityBinding, needsWorkingCopy, preflightRecipe } from "./recipePreflight";
+import { conformData, conformErrorRoles, conformFilter, defaultBindings, isIdentityBinding, needsWorkingCopy, preflightRecipe } from "./recipePreflight";
 import type { DataStruct, Dataset } from "./types";
 
 const COLS: ExpectedColumn[] = [
@@ -78,6 +78,31 @@ describe("preflightRecipe", () => {
     expect(pf.issues.map((i) => i.kind)).toEqual(["blank-column", "recorded-input", "corrections"]);
   });
 
+  it("refuses a recipe that derives nothing (fit-only) and notes a fit that is not kept", () => {
+    const fit = makeStep("fit", "Fit", "", { model: "Linear", yKey: 1, xKey: null });
+    const d = ds(data(["T", "M"], ["K", "emu"]));
+    expect(preflightRecipe({ steps: [fit], expects: EXPECTS }, d, [0, 1], IDS, false).issues).toEqual([
+      expect.objectContaining({ kind: "no-output", blocking: true }),
+    ]);
+    const pf = preflightRecipe({ steps: [STACK, fit], expects: EXPECTS }, d, [0, 1], IDS, false);
+    expect(pf.issues.map((i) => [i.kind, i.blocking])).toEqual([["fit-not-kept", false]]);
+  });
+
+  it("refuses a recipe that corrects a dataset that already has corrections (they would stack)", () => {
+    const corr = makeStep("correction", "Corrections", "", { params: { yOff: 5 } });
+    const d = ds(data(["T", "M"], ["K", "emu"]), { corrections: { yOff: 5 } });
+    expect(preflightRecipe({ steps: [corr], expects: EXPECTS }, d, [0, 1], IDS, false).issues).toEqual([
+      expect.objectContaining({ kind: "corrections-conflict", blocking: true }),
+    ]);
+  });
+
+  it("refuses a correction whose recorded background dataset is not loaded", () => {
+    const corr = makeStep("correction", "Corrections", "", { params: {}, bg: { datasetId: "bg", interp: "linear" } });
+    const d = ds(data(["T", "M"], ["K", "emu"]));
+    expect(preflightRecipe({ steps: [corr], expects: EXPECTS }, d, [0, 1], IDS, false).issues[0]).toMatchObject({ kind: "missing-reference", blocking: true });
+    expect(preflightRecipe({ steps: [corr], expects: EXPECTS }, d, [0, 1], new Set(["t", "bg"]), false).blocked).toBe(false);
+  });
+
   it("a stale binding (the target lost columns) reads as unbound", () => {
     expect(preflightRecipe(RECIPE, ds(data(["T"], ["K"])), [0, 5], IDS, false).issues[0].kind).toBe("missing-column");
   });
@@ -116,6 +141,22 @@ describe("conformData — the working copy", () => {
     const c = conformData(src, [{ name: "Moment", unit: "emu", required: true }], [0]);
     expect(c.data.labels).toEqual(src.labels);
     expect(c.data.metadata.origin_column_names).toEqual(["A", "B", "C"]);
+  });
+
+  it("carries the error-column roles onto the moved columns (x axis stays -1)", () => {
+    const c = conformData(src, COLS, [1, 0]);
+    expect(
+      conformErrorRoles(
+        [
+          { channel: 2, target: 0, axis: "y", side: "both" },
+          { channel: 1, target: -1, axis: "x", side: "both" },
+        ],
+        c,
+      ),
+    ).toEqual([
+      { channel: 2, target: 1, axis: "y", side: "both" },
+      { channel: 0, target: -1, axis: "x", side: "both" },
+    ]);
   });
 
   it("carries the row filter onto the moved columns", () => {

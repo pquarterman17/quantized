@@ -30,10 +30,12 @@ export default function TemplatesSection() {
   const steps = useApp((s) => s.macroSteps);
   const datasets = useApp((s) => s.datasets);
   const activeId = useApp((s) => s.activeId);
-  // `null` = follow the recording's input; a pick overrides it.
-  const [exampleChoice, setExampleChoice] = useState<string | null>(null);
+  // `undefined` = follow the recording's input; "" = no example (save without
+  // an expected input); an id = that dataset.
+  const [exampleChoice, setExampleChoice] = useState<string | undefined>(undefined);
   const loaded = useMemo(() => new Set(datasets.map((d) => d.id)), [datasets]);
-  const exampleId = exampleChoice && loaded.has(exampleChoice) ? exampleChoice : recordingInputId(steps, loaded, activeId);
+  const exampleId =
+    exampleChoice === "" ? null : exampleChoice && loaded.has(exampleChoice) ? exampleChoice : recordingInputId(steps, loaded, activeId);
   const example = datasets.find((d) => d.id === exampleId);
   const expects = useMemo(() => (example && steps.length ? deriveExpectations(steps, example) : undefined), [example, steps]);
   const recipe = t.templates.find((x) => x.name === picked);
@@ -55,7 +57,8 @@ export default function TemplatesSection() {
           size="sm"
           disabled={!name.trim()}
           onClick={() => {
-            void t.saveCurrent(name.trim(), { description, exampleId }).then((err) => {
+            // null = "no example" picked: save without an expected input.
+            void t.saveCurrent(name.trim(), { description, exampleId: exampleChoice === "" ? null : (exampleId ?? undefined) }).then((err) => {
               setError(err);
               if (!err) {
                 setName("");
@@ -88,7 +91,7 @@ export default function TemplatesSection() {
             numeric={false}
             width={180}
             value={description}
-            placeholder="description (optional)"
+            placeholder="description (blank keeps the saved one)"
             aria-label="Recipe description"
             onChange={setDescription}
           />
@@ -97,7 +100,7 @@ export default function TemplatesSection() {
             title="the dataset the recipe's expected input is read from"
             options={[{ value: "", label: "no example" }, ...datasets.map((d) => ({ value: d.id, label: d.name }))]}
             value={exampleId ?? ""}
-            onChange={(e) => setExampleChoice(e.target.value || null)}
+            onChange={(e) => setExampleChoice(e.target.value)}
           />
         </div>
       )}
@@ -163,7 +166,11 @@ export default function TemplatesSection() {
           {recipe.expects && <div>Expects: {expectationsText(recipe.expects)}</div>}
         </div>
       )}
-      {recipe && applying && <ApplyRecipeSection key={recipe.name} recipe={recipe} onClose={() => setApplying(false)} />}
+      {recipe && applying && (
+        // Keyed by revision too: a re-save changes the expected columns, and
+        // bindings chosen against the old list must not carry over.
+        <ApplyRecipeSection key={`${recipe.name}#${recipe.revision ?? 0}`} recipe={recipe} onClose={() => setApplying(false)} />
+      )}
 
       {t.batch && (
         <div className="qzk-ds-meta" style={{ marginTop: 6 }}>

@@ -172,6 +172,13 @@ describe("applyRecipe", () => {
     expect(r.note).toContain("nothing kept");
     expect(ids()).toEqual(before);
     expect(byId("b")!.data).toEqual(B.data);
+    expect(store().activeId).toBe("src"); // the view goes back to what it showed
+  });
+
+  it("refuses a fit-only template instead of running a fit it would throw away", async () => {
+    const fitOnly = toTemplate("fit", [makeStep("fit", "Fit Linear", "", { model: "Linear", yKey: 0, xKey: null })], ["R2"]);
+    const [r] = await applyRecipe(fitOnly, [{ datasetId: "b", bindings: [] }], { ackUnits: false });
+    expect(r).toMatchObject({ status: "refused", note: expect.stringContaining("derives no dataset") });
   });
 });
 

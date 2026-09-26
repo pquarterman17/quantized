@@ -102,6 +102,7 @@ export function inputColumnRefs(steps: readonly PipelineStep[]): { all: boolean;
       // A legacy {model}-only step fits values[0] (executeSteps).
       add(typeof p.yKey === "number" ? p.yKey : 0);
       add(p.xKey);
+      add((p.weight as { errKey?: unknown } | undefined)?.errKey); // a weighted fit's σ column
     } else if (derivesOutput(s)) {
       if (p.inputIsTarget === false) break; // reads a recorded dataset, not this one
       switch (String(p.op)) {

@@ -18,7 +18,8 @@
 //      only counts saves): nothing;
 //   2. the name is free locally: added under its own name, revision kept;
 //   3. otherwise added as "<base> (from project)", "(from project 2)", …
-// One storage write, then one toast. Never overwrites or deletes a local
+// One storage write, READ BACK (a write storage refused is reported as such,
+// never as added), then one toast. Never overwrites or deletes a local
 // template. Adding to the library is not undoable (the library is not
 // project state), exactly like saving a template from the Pipeline workshop.
 //
@@ -88,11 +89,13 @@ function freeName(name: string, taken: ReadonlySet<string>): string {
 export interface TemplateAdoption {
   added: string[];
   renamed: { from: string; to: string }[];
+  /** Names storage refused (quota, blocked) — read back, not assumed. */
+  unstored: string[];
 }
 
 /** Merge a project's templates into the local library (the rule above). */
 export function mergeProjectTemplates(incoming: readonly AnalysisTemplate[]): TemplateAdoption {
-  const result: TemplateAdoption = { added: [], renamed: [] };
+  const result: TemplateAdoption = { added: [], renamed: [], unstored: [] };
   if (!incoming.length) return result;
   const local = loadTemplates();
   const taken = new Set(local.map((t) => t.name));
@@ -108,14 +111,23 @@ export function mergeProjectTemplates(incoming: readonly AnalysisTemplate[]): Te
     taken.add(name);
     held.add(key);
   }
-  if (toWrite.length) saveTemplates([...local, ...toWrite]);
-  return result;
+  if (!toWrite.length) return result;
+  saveTemplates([...local, ...toWrite]);
+  // Read back: a refused write must not be reported as added.
+  const back = new Map(loadTemplates().map((t) => [t.name, definitionKey(t)]));
+  const lost = new Set(toWrite.filter((t) => back.get(t.name) !== definitionKey(t)).map((t) => t.name));
+  if (!lost.size) return result;
+  return {
+    added: result.added.filter((n) => !lost.has(n)),
+    renamed: result.renamed.filter((r) => !lost.has(r.to)),
+    unstored: [...lost],
+  };
 }
 
 /** The load/append hook (store/workspaceHydration.ts, through the codec):
  *  merge and toast once, or nothing when the project brought nothing new. */
 export function adoptProjectTemplates(ws: { projectTemplates?: readonly AnalysisTemplate[] }): void {
-  const { added, renamed } = mergeProjectTemplates(ws.projectTemplates ?? []);
+  const { added, renamed, unstored } = mergeProjectTemplates(ws.projectTemplates ?? []);
   const parts: string[] = [];
   if (added.length) parts.push(`added ${added.length === 1 ? "1 saved template" : `${added.length} saved templates`} from the project: ${added.map((n) => `"${n}"`).join(", ")}`);
   if (renamed.length) {
@@ -123,5 +135,11 @@ export function adoptProjectTemplates(ws: { projectTemplates?: readonly Analysis
       `${renamed.length === 1 ? "1 template differs" : `${renamed.length} templates differ`} from yours under the same name; yours kept, the project's added as ${renamed.map((r) => `"${r.to}"`).join(", ")}`,
     );
   }
-  if (parts.length) toast(parts.join(". "));
+  if (unstored.length) {
+    // No carry (module header): say plainly that a save would drop them.
+    parts.push(
+      `${unstored.map((n) => `"${n}"`).join(", ")} could not be saved to your library (browser storage refused it) — still in this project file, but saving the project now would leave ${unstored.length === 1 ? "it" : "them"} out`,
+    );
+  }
+  if (parts.length) toast(parts.join(". "), unstored.length ? "danger" : "info");
 }

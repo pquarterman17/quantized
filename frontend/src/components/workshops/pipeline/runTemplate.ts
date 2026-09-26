@@ -24,18 +24,30 @@
 //
 // ONE UNDO STEP PER APPLY, however many datasets and steps. The steps run
 // through store actions that each record their own history entry and do not
-// take a `withHistoryBatch` token (threading one through executeSteps' every
-// action is the alternative, and a much wider change), so `asOneUndoStep`
-// collapses the entries the apply pushed into one, holding the state from
-// before it. KNOWN LIMITATION, the same class `withHistoryBatch` documents: an
-// unrelated edit made WHILE an apply is running (its steps await the backend)
-// folds into the apply's entry, so undoing the apply also undoes that edit.
-// Recording is suppressed while it runs (`pipelineRunning`), exactly like a
-// folder batch.
+// take a `withHistoryBatch` token, so `asOneUndoStep` collapses the entries
+// the apply pushed into one, holding the state from before it. KNOWN
+// LIMITATION: an unrelated edit made WHILE an apply is running (its steps
+// await the backend) folds into the apply's entry, so undoing the apply also
+// undoes that edit. Threading a `withHistoryBatch` token through every action
+// executeSteps drives (formulas, corrections, transforms, split, metadata)
+// would give that edit its own entry, but not stop undoing the batch from
+// reverting it: the batch restores an absolute snapshot, and its own doc
+// (store/history.ts) says any await after its last fold reopens exactly this
+// hole — executeSteps awaits the backend between folds. So the much wider
+// change would not make it safe. Recording is suppressed while it runs
+// (`pipelineRunning`), exactly like a folder batch.
 
 import { executeSteps } from "./executeSteps";
 import { reportEmit } from "../../../lib/api";
-import { conformData, conformFilter, needsWorkingCopy, preflightRecipe, runnableSteps, type Binding } from "../../../lib/recipePreflight";
+import {
+  conformData,
+  conformErrorRoles,
+  conformFilter,
+  needsWorkingCopy,
+  preflightRecipe,
+  runnableSteps,
+  type Binding,
+} from "../../../lib/recipePreflight";
 import { excludedSet } from "../../../lib/rowstate";
 import { extractOutputs, type AnalysisTemplate, type BatchRow } from "../../../lib/template";
 import { HISTORY_DEPTH } from "../../../store/history";
@@ -181,10 +193,12 @@ async function applyOne(recipe: AnalysisTemplate, plan: ApplyPlan, ackUnits: boo
   }
   const columns = recipe.expects?.columns ?? [];
   const existing = new Set(s().datasets.map((d) => d.id));
+  const active = s().activeId;
   let start = ds.id;
   if (needsWorkingCopy(recipe.steps, plan.bindings)) {
     const c = conformData(ds.data, columns, plan.bindings);
     const filter = conformFilter(ds.filter, c);
+    const errorRoles = conformErrorRoles(ds.errorRoles, c);
     // Same rows, so the row exclusions carry over as they are.
     const excluded = [...excludedSet(ds)].sort((a, b) => a - b);
     start = nextDatasetId();
@@ -194,6 +208,7 @@ async function applyOne(recipe: AnalysisTemplate, plan: ApplyPlan, ackUnits: boo
       data: { ...c.data, metadata: { ...c.data.metadata, recipe_working_copy: { recipe: recipe.name, of: { id: ds.id, name: ds.name } } } },
       ...(excluded.length ? { excludedRows: excluded } : {}),
       ...(filter ? { filter } : {}),
+      ...(errorRoles ? { errorRoles } : {}),
     });
   }
   const run = await executeSteps(recipe.steps, start);
@@ -206,6 +221,8 @@ async function applyOne(recipe: AnalysisTemplate, plan: ApplyPlan, ackUnits: boo
     // rewrites every history entry, which `asOneUndoStep` tells apart by
     // identity. The undo entry this apply makes predates them anyway.
     if (created.length) useApp.setState((st) => removeDatasetsPatch(st, created));
+    // An output made itself active; hand the view back to what it showed.
+    if (active && active !== s().activeId && s().datasets.some((d) => d.id === active)) s().setActive(active);
     const why = failed.length ? failed.map((l) => l.note ?? "a step failed").join("; ") : "no step derived a dataset";
     return { ...base, status: "failed", note: `${why} — nothing kept` };
   }

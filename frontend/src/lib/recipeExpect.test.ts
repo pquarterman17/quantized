@@ -53,6 +53,11 @@ describe("inputColumnRefs — only the steps that read the INPUT", () => {
     expect([...r.cols].sort()).toEqual([0, 1, 2, 3]);
   });
 
+  it("a weighted fit's σ column is an input too", () => {
+    const fit = makeStep("fit", "Fit", "", { model: "Linear", yKey: 1, xKey: 0, weight: { mode: "yerr", errKey: 3 } });
+    expect([...inputColumnRefs([fit]).cols].sort()).toEqual([0, 1, 3]);
+  });
+
   it("a whole-table op requires every column; append BY NAME and resample need none", () => {
     expect(inputColumnRefs([transform({ op: "transpose" })]).all).toBe(true);
     expect(inputColumnRefs([transform({ op: "merge", with: [{ id: "o", name: "o" }] })]).all).toBe(true);

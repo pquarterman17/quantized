@@ -59,10 +59,20 @@ describe("save a transformation recipe", () => {
     let [t] = loadTemplates();
     expect(t).toMatchObject({ name: "two steps", description: "stack then transpose", revision: 1 });
     expect(t.expects?.columns.map((c) => [c.name, c.unit, c.required])).toEqual([["key", "", false], ["T", "K", true], ["v", "emu", true]]);
+    // A re-save with a blank description keeps the saved one.
     await saveAs("two steps", "");
     [t] = loadTemplates();
     expect(t.revision).toBe(2);
-    expect(t.description).toBeUndefined();
+    expect(t.description).toBe("stack then transpose");
+    expect(t.expects?.columns).toHaveLength(3);
+    // "no example" really saves without an expected input.
+    fireEvent.change(screen.getByRole("combobox", { name: "Example dataset" }), { target: { value: "" } });
+    expect(screen.getByRole("combobox", { name: "Example dataset" })).toHaveValue("");
+    expect(screen.getByRole("note", { name: "Expected input" })).toHaveTextContent("Expects: no declared input");
+    await saveAs("two steps", "");
+    [t] = loadTemplates();
+    expect(t.revision).toBe(3);
+    expect(t.expects).toBeUndefined();
   });
 });
 

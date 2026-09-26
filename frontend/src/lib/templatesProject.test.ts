@@ -55,10 +55,31 @@ describe("save → open round trip", () => {
     localStorage.clear();
     useApp.getState().appendWorkspace(parseWorkspace(text));
     await vi.waitFor(() => expect(loadTemplates().map((t) => t.name)).toEqual(["Stack M"]));
-    useApp.getState().appendWorkspace(parseWorkspace(text));
-    await new Promise((r) => setTimeout(r, 20)); // the codec is cached: the merge settles within a tick
-    expect(loadTemplates().map((t) => t.name)).toEqual(["Stack M"]); // same definition: nothing new
-    expect(useToasts.getState().toasts.filter((t) => t.msg.includes("saved template"))).toHaveLength(1);
+    // Again, plus one new recipe: its arrival proves this merge RAN, and
+    // "Stack M" (the same definition) is still there once.
+    const again = JSON.parse(text);
+    again.analysisTemplates.push(JSON.parse(JSON.stringify(recipe("Other"))));
+    useApp.getState().appendWorkspace(parseWorkspace(JSON.stringify(again)));
+    await vi.waitFor(() => expect(loadTemplates().map((t) => t.name)).toEqual(["Stack M", "Other"]));
+  });
+
+  it("an open whose write storage refuses says so and does not claim it added the recipe", async () => {
+    saveTemplate(recipe("Stack M"));
+    const text = serializeWorkspace({ datasets: [ds] });
+    localStorage.clear();
+    const set = vi.spyOn(Storage.prototype, "setItem").mockImplementation((key: string) => {
+      if (key === "qz.analysisTemplates") throw new Error("QuotaExceededError");
+    });
+    try {
+      useApp.getState().loadWorkspace(parseWorkspace(text));
+      await vi.waitFor(() => expect(useToasts.getState().toasts.some((t) => t.msg.includes("could not be saved"))).toBe(true));
+    } finally {
+      set.mockRestore();
+    }
+    const msgs = useToasts.getState().toasts.map((t) => t.msg).join(" ");
+    expect(msgs).toContain('"Stack M" could not be saved to your library');
+    expect(msgs).not.toContain("added 1 saved template");
+    expect(loadTemplates()).toEqual([]);
   });
 
   it("no templates → no key (a project without them is unchanged); the autosave never embeds them", () => {
@@ -72,19 +93,19 @@ describe("the merge rule", () => {
   it("a same-named, different recipe is added as '(from project)'; the local one is kept", () => {
     saveTemplate(recipe("Stack M", "mine"));
     const r = mergeProjectTemplates([recipe("Stack M", "theirs"), recipe("Other")]);
-    expect(r).toEqual({ added: ["Other"], renamed: [{ from: "Stack M", to: "Stack M (from project)" }] });
+    expect(r).toEqual({ added: ["Other"], renamed: [{ from: "Stack M", to: "Stack M (from project)" }], unstored: [] });
     expect(loadTemplates().map((t) => [t.name, t.description])).toEqual([
       ["Stack M", "mine"],
       ["Stack M (from project)", "theirs"],
       ["Other", "stack M"],
     ]);
     // Coming home: the renamed copy's base name matches and the definition is held.
-    expect(mergeProjectTemplates([{ ...recipe("Stack M", "theirs"), name: "Stack M (from project)" }])).toEqual({ added: [], renamed: [] });
+    expect(mergeProjectTemplates([{ ...recipe("Stack M", "theirs"), name: "Stack M (from project)" }])).toEqual({ added: [], renamed: [], unstored: [] });
   });
 
   it("a different revision of the same definition is the same recipe", () => {
     saveTemplate(recipe("Stack M"));
-    expect(mergeProjectTemplates([{ ...recipe("Stack M"), revision: 7 }])).toEqual({ added: [], renamed: [] });
+    expect(mergeProjectTemplates([{ ...recipe("Stack M"), revision: 7 }])).toEqual({ added: [], renamed: [], unstored: [] });
   });
 
   it("an unreadable record is skipped with a migration warning, the readable ones kept", () => {

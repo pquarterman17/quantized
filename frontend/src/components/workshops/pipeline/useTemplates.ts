@@ -39,8 +39,10 @@ export interface BatchProgress {
 
 /** P2.5 box 4: what makes a saved template a transformation recipe. */
 export interface SaveRecipeOptions {
+  /** Blank keeps a re-saved recipe's description. */
   description?: string;
-  /** The dataset the expected input is read from (usually the recording's). */
+  /** The dataset the expected input is read from (usually the recording's);
+   *  null = explicitly none; absent or not loaded = keep a re-saved recipe's. */
   exampleId?: string | null;
 }
 
@@ -83,14 +85,18 @@ export function useTemplates(): TemplatesState {
     const outputs = await deriveOutputs(steps);
     // P2.5 box 4: a re-save under the same name is the next revision, and the
     // expected input is read off the example dataset (lib/recipeExpect.ts).
+    // A blank description keeps the saved one; so does the expected input
+    // when no example is available — only an explicit "no example" (null)
+    // drops it.
     const prior = loadTemplates().find((t) => t.name === name);
     const example = useApp.getState().datasets.find((d) => d.id === recipe.exampleId);
+    const expects = example ? deriveExpectations(steps, example) : recipe.exampleId === null ? undefined : prior?.expects;
     setTemplates(
       saveTemplate(
         toTemplate(name, steps, outputs, {
-          description: recipe.description,
+          description: recipe.description?.trim() ? recipe.description : prior?.description,
           revision: prior ? (prior.revision ?? 1) + 1 : 1,
-          ...(example ? { expects: deriveExpectations(steps, example) } : {}),
+          ...(expects ? { expects } : {}),
         }),
       ),
     );
