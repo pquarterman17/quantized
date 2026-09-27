@@ -253,6 +253,37 @@ def _detect_depth_unit(col_headers: Sequence[str], header_meta: Sequence[str]) -
     return "nm"
 
 
+_TIME_UNIT_CANON = {
+    "s": "s", "sec": "s", "secs": "s", "second": "s", "seconds": "s", "ms": "ms",
+    "min": "min", "mins": "min", "minute": "min", "minutes": "min",
+    "h": "h", "hr": "h", "hrs": "h", "hour": "h", "hours": "h",
+}
+_TIME_WORD_RE = re.compile(r"\btime\b", re.IGNORECASE)
+
+
+def _detect_time_axis(x_header: str) -> str | None:
+    """The x axis's time unit when its header names sputter TIME, else None.
+
+    Not in MATLAB's ``importSIMS`` (which only reads depth-axis profiles and
+    labels any x "Depth" in nm): a quantized extension so a raw time-axis
+    export reaches depth calibration labelled as what it is. ``"Time (s)"`` /
+    ``"Sputter time [min]"`` / ``"t (s)"`` give their unit; a bare ``"Time"``
+    gives ``""`` (unit unknown -- calibration then asks for it rather than
+    guessing seconds).
+    """
+    h = x_header.strip()
+    unit = ""
+    m = _PAREN_RE.match(h) or _BRACK_RE.match(h)
+    if m:
+        h, unit = m.group(1).strip(), m.group(2).strip()
+    canon = _TIME_UNIT_CANON.get(unit.lower())
+    if canon is not None:
+        return canon
+    if not unit and _TIME_WORD_RE.search(h):
+        return ""
+    return None
+
+
 def _read_text_tokens(path: Path) -> list[list[str]]:
     raw_lines = _read_raw_lines(path.read_text(encoding="latin-1"))
     if not raw_lines:
@@ -357,10 +388,16 @@ def import_sims(
     else:
         resolved_unit = _detect_depth_unit(col_headers, header_meta)
 
+    x_name = "Depth"
+    time_axis = _detect_time_axis(col_headers[0]) if depth_unit == "auto" else None
+    if time_axis is not None:
+        # A raw sputter-TIME profile (P2.3): never label its x as a depth in nm.
+        x_name, resolved_unit = "Time", time_axis
+
     metadata: dict[str, Any] = {
         "source": str(path),
         "parser_name": "import_sims",
-        "x_column_name": "Depth",
+        "x_column_name": x_name,
         "x_column_unit": resolved_unit,
         "is_paired_layout": is_paired,
     }

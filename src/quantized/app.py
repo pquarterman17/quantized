@@ -61,6 +61,7 @@ from quantized.routes import (
     rsm,
     samples,
     semiconductor,
+    sims,
     sld,
     spectral,
     statplots,
@@ -259,6 +260,7 @@ def create_app(*, dev_origins: Collection[str] | None = None) -> FastAPI:
     application.include_router(magnetic.router)
     application.include_router(aggregate.router)
     application.include_router(transform.router)
+    application.include_router(sims.router)
     application.include_router(calc.router)
     application.include_router(workbook_transfer.router)
 

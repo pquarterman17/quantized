@@ -9987,6 +9987,320 @@
         "title": "ShirleyRequest",
         "type": "object"
       },
+      "SimsBackground": {
+        "properties": {
+          "hi": {
+            "title": "Hi",
+            "type": "number"
+          },
+          "lo": {
+            "title": "Lo",
+            "type": "number"
+          }
+        },
+        "required": [
+          "lo",
+          "hi"
+        ],
+        "title": "SimsBackground",
+        "type": "object"
+      },
+      "SimsCalibration": {
+        "properties": {
+          "crater_depth": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crater Depth"
+          },
+          "crater_unit": {
+            "default": "nm",
+            "title": "Crater Unit",
+            "type": "string"
+          },
+          "depth_unit": {
+            "default": "nm",
+            "title": "Depth Unit",
+            "type": "string"
+          },
+          "method": {
+            "enum": [
+              "rate",
+              "crater"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "rate_unit": {
+            "default": "nm/s",
+            "title": "Rate Unit",
+            "type": "string"
+          },
+          "sputter_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sputter Rate"
+          },
+          "time_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time Unit"
+          },
+          "total_time": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Time"
+          }
+        },
+        "required": [
+          "method"
+        ],
+        "title": "SimsCalibration",
+        "type": "object"
+      },
+      "SimsNormalization": {
+        "properties": {
+          "reference": {
+            "minimum": 0.0,
+            "title": "Reference",
+            "type": "integer"
+          },
+          "rsf": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rsf"
+          },
+          "rsf_unit": {
+            "default": "",
+            "title": "Rsf Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reference"
+        ],
+        "title": "SimsNormalization",
+        "type": "object"
+      },
+      "SimsProcessRequest": {
+        "properties": {
+          "background": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimsBackground"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "calibration": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimsCalibration"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "normalization": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimsNormalization"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "smoothing": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SimsSmoothing"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "dataset"
+        ],
+        "title": "SimsProcessRequest",
+        "type": "object"
+      },
+      "SimsProcessResponse": {
+        "properties": {
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "stages": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Stages",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SimsWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dataset",
+          "warnings",
+          "stages"
+        ],
+        "title": "SimsProcessResponse",
+        "type": "object"
+      },
+      "SimsSmoothing": {
+        "properties": {
+          "method": {
+            "default": "moving",
+            "enum": [
+              "moving",
+              "gaussian",
+              "savitzky-golay"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "poly_order": {
+            "default": 2,
+            "maximum": 10.0,
+            "minimum": 0.0,
+            "title": "Poly Order",
+            "type": "integer"
+          },
+          "window": {
+            "default": 2,
+            "maximum": 500.0,
+            "minimum": 1.0,
+            "title": "Window",
+            "type": "integer"
+          }
+        },
+        "title": "SimsSmoothing",
+        "type": "object"
+      },
+      "SimsWarning": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Columns"
+          },
+          "confirm": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirm"
+          },
+          "count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Count"
+          },
+          "info": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Info"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "text"
+        ],
+        "title": "SimsWarning",
+        "type": "object"
+      },
       "SimulateRequest": {
         "description": "Simulate R(Q) from a layer stack over a linear Q grid.",
         "properties": {
@@ -18039,6 +18353,48 @@
         "summary": "Thermal Velocity",
         "tags": [
           "semiconductor"
+        ]
+      }
+    },
+    "/api/sims/process": {
+      "post": {
+        "description": "Calibrate / correct a SIMS profile; warnings say what that did.",
+        "operationId": "process_api_sims_process_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimsProcessRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimsProcessResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Process",
+        "tags": [
+          "sims"
         ]
       }
     },
