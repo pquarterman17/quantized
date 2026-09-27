@@ -12,8 +12,10 @@ tested against hand-computed values:
 - **Background** (``subtract_background``): a constant per species, the mean
   of its finite values inside an x-region (typically deep in the substrate,
   where the species is at its detection floor), subtracted from the whole
-  profile. The reference (matrix) species is never background-subtracted --
-  its signal in that region is the matrix itself, not a floor.
+  profile. The region is inclusive to a 1e-9 relative tolerance. The
+  reference (matrix) species, and any column the caller keeps, is never
+  background-subtracted -- its signal in that region is the matrix itself,
+  not a floor.
 - **Reference normalization** (``normalize_to_reference``): the SIMS
   quantification ``C_i = RSF_i * I_i / I_ref`` point by point. Without an RSF
   the result is the plain ratio ``I_i / I_ref`` (unit ``"ratio to <ref>"``).
@@ -73,7 +75,10 @@ def subtract_background(
     a, b = (lo, hi) if lo <= hi else (hi, lo)
     xv = np.asarray(x, dtype=float)
     mat = np.array(values, dtype=float, copy=True)
-    in_region = (xv >= a) & (xv <= b)
+    # Inclusive, with a 1e-9 relative tolerance: a limit typed from the
+    # displayed depth (400) must catch a computed 400.00000000000006.
+    tol = 1e-9 * max(abs(a), abs(b), b - a)
+    in_region = (xv >= a - tol) & (xv <= b + tol)
     if not bool(np.any(in_region)):
         raise ValueError(f"no rows lie in the background region {a:.6g} .. {b:.6g}")
     levels: dict[str, float | None] = {}

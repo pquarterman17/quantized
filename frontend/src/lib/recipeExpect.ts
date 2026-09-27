@@ -116,7 +116,9 @@ export function inputColumnRefs(steps: readonly PipelineStep[]): { all: boolean;
         case "unstack": add([p.key, p.category, p.value]); break;
         case "join": add(p.leftKey); break; // a text key is a sidecar name, not a channel
         case "split": add(p.col); break;
-        default: break; // resample reads every channel but needs none of them
+        // resample reads every channel but needs none of them; sims (P2.3)
+        // names its reference/RSF/kept columns BY NAME, refused by name on replay.
+        default: break;
       }
     }
   }

@@ -47,6 +47,18 @@ def test_rate_calibration_is_rate_times_time() -> None:
     assert ws == []
 
 
+def test_calibration_is_exact_in_matching_units_and_the_region_tolerates_float_noise() -> None:
+    t = np.array([0.0, 10.0, 20.0, 30.0, 40.0, 50.0])
+    depth, prov, _ = calibrate_depth(t, x_unit="s", method="crater", crater_depth=500.0)
+    assert depth.tolist() == [0.0, 100.0, 200.0, 300.0, 400.0, 500.0]  # exact, not approx
+    assert prov["sputter_rate_nm_per_s"] == 10.0
+    x = np.array([399.99999999999994, 450.0, 500.00000000000006])
+    out, _, _ = subtract_background(
+        x, np.array([[1.0], [2.0], [3.0]]), lo=400, hi=500, labels=["B"]
+    )
+    np.testing.assert_allclose(out[:, 0], [-1.0, 0.0, 1.0])  # all three rows in the region
+
+
 def test_rate_units_convert() -> None:
     # 3 A/s for 1 min = 180 A = 18 nm = 0.018 um.
     depth, prov, _ = calibrate_depth(

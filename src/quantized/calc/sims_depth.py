@@ -43,6 +43,7 @@ __all__ = [
     "TIME_UNITS",
     "calibrate_depth",
     "length_factor",
+    "length_ratio",
     "rate_factor",
     "time_factor",
 ]
@@ -119,6 +120,14 @@ def rate_factor(unit: str) -> float:
     return length_factor(parts[0]) / time_factor(parts[1])
 
 
+def length_ratio(a: str, b: str) -> float:
+    """``a`` per ``b`` as an exact power of ten (every length unit here is one),
+    so a same-unit ratio is exactly 1.0 and nm -> um is exactly 1e-3."""
+    exp_a = round(math.log10(length_factor(a)))
+    exp_b = round(math.log10(length_factor(b)))
+    return float(10.0 ** (exp_a - exp_b))
+
+
 def canonical_length(unit: str) -> str:
     """The spelling recorded for a length unit (``µm`` -> ``um``, ``Å`` -> ``A``)."""
     u = unit.strip()
@@ -179,11 +188,15 @@ def calibrate_depth(
     if method not in ("rate", "crater"):
         raise ValueError(f"calibration method must be 'rate' or 'crater', got {method!r}")
     unit, warnings = _resolve_time_unit(x_unit.strip(), time_unit.strip() if time_unit else None)
-    t_s = np.asarray(x, dtype=float) * time_factor(unit)
-    out_m = length_factor(depth_unit)
-    finite = t_s[np.isfinite(t_s)]
+    # Arithmetic stays in x's OWN time unit and the output length unit, with
+    # exact power-of-ten length ratios, so a 500 nm crater over 50 s is exactly
+    # 10 nm/s and t = 40 s is exactly 400 nm -- not 400.00000000000006, which
+    # would drop that point from a background region typed as "400 to 500".
+    tx = np.asarray(x, dtype=float)
+    finite = tx[np.isfinite(tx)]
     if finite.size == 0:
         raise ValueError("the x axis has no finite time values to calibrate")
+    length_factor(depth_unit)  # validate
 
     prov: dict[str, Any] = {
         "stage": "calibration",
@@ -196,18 +209,25 @@ def calibrate_depth(
     if method == "rate":
         if sputter_rate is None or not math.isfinite(sputter_rate) or sputter_rate <= 0:
             raise ValueError("the sputter rate must be a positive number")
-        rate_ms = sputter_rate * rate_factor(rate_unit)
+        rate_factor(rate_unit)  # validate the length/time form
+        rate_len, rate_time = rate_unit.split("/")
+        # depth units per x time unit
+        rate_x = (
+            sputter_rate
+            * length_ratio(rate_len, depth_unit)
+            * (time_factor(unit) / time_factor(rate_time))
+        )
         prov.update({"sputter_rate": sputter_rate, "rate_unit": rate_unit})
     else:
         if crater_depth is None or not math.isfinite(crater_depth) or crater_depth <= 0:
             raise ValueError("the crater depth must be a positive number")
         if total_time is None:
-            t_total_s = float(finite.max())
+            t_total = float(finite.max())
             warnings.append(
                 _warn(
                     "assumed-total-time",
                     "total sputter time taken as the last time point "
-                    f"({_g(t_total_s / time_factor(unit))} {unit}); "
+                    f"({_g(t_total)} {unit}); "
                     "enter it if the beam ran on after the last cycle",
                     info=True,
                 )
@@ -215,21 +235,21 @@ def calibrate_depth(
         else:
             if not math.isfinite(total_time) or total_time <= 0:
                 raise ValueError("the total sputter time must be a positive number")
-            t_total_s = total_time * time_factor(unit)
-        if t_total_s <= 0:
+            t_total = float(total_time)
+        if t_total <= 0:
             raise ValueError(
                 "the total sputter time must be positive (the last time point is <= 0)"
             )
-        rate_ms = crater_depth * length_factor(crater_unit) / t_total_s
+        rate_x = crater_depth * length_ratio(crater_unit, depth_unit) / t_total
         prov.update(
             {
                 "crater_depth": crater_depth,
                 "crater_unit": crater_unit,
-                "total_time": t_total_s / time_factor(unit),
+                "total_time": t_total,
                 "total_time_assumed": total_time is None,
             }
         )
-        beyond = int(np.count_nonzero(finite > t_total_s * (1 + 1e-12)))
+        beyond = int(np.count_nonzero(finite > t_total * (1 + 1e-12)))
         if beyond:
             warnings.append(
                 _warn(
@@ -239,8 +259,8 @@ def calibrate_depth(
                     count=beyond,
                 )
             )
-    prov["sputter_rate_nm_per_s"] = rate_ms / 1e-9
-    depth = np.asarray(t_s * rate_ms / out_m, dtype=float)
+    prov["sputter_rate_nm_per_s"] = rate_x * length_ratio(depth_unit, "nm") / time_factor(unit)
+    depth = np.asarray(tx * rate_x, dtype=float)
 
     negative = int(np.count_nonzero(finite < 0))
     if negative:
