@@ -362,6 +362,7 @@ body {
 .qzk-tag-x:hover { opacity: 1; }
 .qzk-tag-add { background: transparent; color: var(--text-faint); border: 1px dashed var(--border); }
 .qzk-tag-input { height: 18px; width: 76px; padding: 0 4px; font-size: var(--type-nano); }
+.qzk-origin-kind { display: inline-flex; flex: 0 0 auto; align-items: center; height: 16px; padding: 0 4px; border: 1px solid var(--border); border-radius: 3px; color: var(--text-faint); font-size: var(--type-nano); line-height: 1; white-space: nowrap; }
 /* Collapsible sidebar sections (Figures, Reports, Book families, …) — also
    reused by the folder tree's caret/name/count (below). */
 .qzk-lib-group { display: flex; flex-direction: column; gap: var(--pad); }

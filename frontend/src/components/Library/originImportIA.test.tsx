@@ -168,6 +168,14 @@ describe("UX-R3 + F1 — a multi-book Origin import reveals hierarchy progressiv
     render(<TreeHarness />);
     expect(folderRow(proj).querySelector('[title="Folder"]')).toBeInTheDocument();
     expect(workbookRow(wb1).querySelector('[title="Workbook"]')).toBeInTheDocument();
+    expect(workbookRow(wb1)).toHaveTextContent("Origin book");
+  });
+
+  it("an expanded Origin worksheet names its type visibly instead of relying on the glyph tooltip", async () => {
+    const { d2 } = await seedMultiBookImport();
+    render(<TreeHarness />);
+    const row = worksheetRow(d2);
+    expect(row.querySelector('[title="Origin worksheet"]')).toHaveTextContent("Sheet");
   });
 
   it("search still finds a worksheet tucked inside the still-collapsed sibling workbook group", async () => {

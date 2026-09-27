@@ -157,8 +157,8 @@ export default function WorkbookRow({ node, depth, expanded, hasChildren }: Prop
         </span>
       )}
       {workbook.originBook && (
-        <span className="qzk-tag" title={`Origin workbook "${workbook.originBook}"`}>
-          Origin
+        <span className="qzk-origin-kind" title={`Origin workbook "${workbook.originBook}"`}>
+          Origin book
         </span>
       )}
       <span

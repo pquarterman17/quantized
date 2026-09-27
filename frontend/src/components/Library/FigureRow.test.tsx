@@ -39,6 +39,11 @@ describe("FigureRow — PR C additions", () => {
     expect(container.querySelector('[data-lib-row="origin-figure:g1"]')).toBeInTheDocument();
   });
 
+  it("names the recovered object as a Graph without requiring glyph knowledge", () => {
+    render(<FigureRow entry={entry("g1", "a")} />);
+    expect(screen.getByTitle("Recovered Origin graph")).toHaveTextContent("Graph");
+  });
+
   it("opening records workbookLastChild for the bound dataset's workbook", () => {
     render(<FigureRow entry={entry("g1", "a")} />);
     fireEvent.click(screen.getByRole("button", { name: /MokeGraph/ }));

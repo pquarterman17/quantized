@@ -72,8 +72,39 @@ describe("DatasetRow — Tree (treeMode) compact worksheet row (UX-001)", () => 
   });
 
   it("carries an explicit, tooltipped Worksheet type glyph", () => {
-    render(<DatasetRow dataset={ds} {...baseProps} treeMode />);
+    const { container } = render(<DatasetRow dataset={ds} {...baseProps} treeMode />);
     expect(screen.getByTitle("Worksheet")).toBeInTheDocument();
+    expect(container.querySelector(".qzk-origin-kind")).toBeNull();
+  });
+
+  it("only shortens an untouched importer-generated Origin name in Tree view", () => {
+    const origin: Dataset = {
+      ...ds,
+      name: "Moke:Book4 — 30 nm MnN",
+      data: { ...ds.data, metadata: { origin_book: "Book4", origin_book_long: "30 nm MnN" } },
+      source: { kind: "path", path: "C:\\data\\Moke.opju" },
+    };
+    const first = render(<DatasetRow dataset={origin} {...baseProps} treeMode />);
+    expect(first.container.querySelector(".qzk-ds-name")).toHaveTextContent("Book4 — 30 nm MnN");
+    expect(first.container.querySelector(".qzk-ds-name")).not.toHaveTextContent("Moke:");
+    expect(first.container.querySelector(".qzk-ds-name")).toHaveAttribute(
+      "title",
+      "Moke:Book4 — 30 nm MnN — double-click to rename",
+    );
+    first.unmount();
+
+    const renamed = { ...origin, name: "My review copy" };
+    const second = render(<DatasetRow dataset={renamed} {...baseProps} treeMode />);
+    expect(screen.getByText("My review copy")).toBeInTheDocument();
+    second.unmount();
+
+    const sourceLess = { ...origin, source: undefined };
+    const third = render(<DatasetRow dataset={sourceLess} {...baseProps} treeMode />);
+    expect(screen.getByText("Moke:Book4 — 30 nm MnN")).toBeInTheDocument();
+    third.unmount();
+
+    render(<DatasetRow dataset={origin} {...baseProps} />);
+    expect(screen.getByText("Moke:Book4 — 30 nm MnN")).toBeInTheDocument();
   });
 
   it("shows concise rows/channels meta text on the one line", () => {
