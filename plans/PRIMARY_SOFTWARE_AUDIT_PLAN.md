@@ -8524,8 +8524,36 @@ was not raised.
 
 - [ ] Windows/macOS vector copy and 300-DPI raster fallback.
 - [ ] Expected bounding box, transparency, fonts, and scale.
-- [ ] Office report export embeds the actual rendered figure when SVG is
-  requested, not placeholder text.
+- [x] ~~Office report export embeds the actual rendered figure when SVG is
+  requested, not placeholder text.~~ DONE 2026-09-27. A report figure block
+  may now carry `spec` (the exact `POST /api/export/figure` body);
+  `/api/report/export` renders it through `routes.export_figures.
+  render_figure_request` -- the one body `/figure` itself runs, so the
+  embedded PNG is byte-identical to that route's 300-DPI export of the same
+  spec (tested by hash). Word/PowerPoint embed that 300-DPI PNG at the
+  spec's requested size (scaled down, aspect kept, only to fit the page /
+  slide; a figure that no longer fits continues on a "(cont.)" slide), with
+  alt text (`descr` = caption or name, `title` = name) and a caption; a
+  vector request (`fmt` svg/pdf) ALSO embeds the SVG via the Office 2016+
+  `asvg:svgBlip` extension on the picture, with the PNG as the fallback
+  older readers draw -- a failed vector with a good raster is stated in the
+  caption and warnings, never silent. A figure that cannot be rendered (bad
+  spec, missing/malformed dataset, bad channel, render error) becomes
+  `[figure: <name> — not embedded: <reason>]` and the response's
+  `X-Report-Warnings` header (JSON list; `X-Report-Warning-Count`) names
+  it; the export never fails on a figure. An SVG-only `image` with no spec
+  still cannot be rasterised server-side (no SVG rasteriser dependency) and
+  now says exactly that instead of a bare placeholder. HTML inlines the SVG
+  (or the PNG for a raster request); LaTeX, a single .tex, emits an
+  `\IfFileExists`-guarded `\includegraphics{fig-<name>.pdf}` plus a warning
+  naming the file to export beside it (no bundle format exists). Reports
+  without figures render byte-for-byte as before (verified against the
+  previous module for all four formats). NOT done: the frontend creates no
+  spec-bearing figure blocks yet and does not surface the warnings header
+  (a figure-to-report action is future UI work); the Word/PowerPoint output
+  was checked structurally (parts, relationships, content types, extents),
+  not opened in Office or LibreOffice; EMF and editable embedded figures
+  remain the two boxes below.
 - [ ] Consider EMF only if Windows Office tests show material benefit.
 - [ ] Editable embedded figures remain a future goal, not release blocker.
 

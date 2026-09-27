@@ -14,7 +14,8 @@ are a small closed set discriminated by ``"type"``::
     text    {"type": "text",   "text": str}
     table   {"type": "table",  "columns": [str], "rows": [[cell]], "caption"?}
     params  {"type": "params", "params": [{name, value, error?, unit?}], "caption"?}
-    figure  {"type": "figure", "name": str, "image"?: {mime, data}, "caption"?}
+    figure  {"type": "figure", "name": str, "image"?: {mime, data}, "caption"?,
+             "spec"?: <a POST /api/export/figure body>}
 
 A table cell is ``str | float | int | None``. Builders validate and normalize
 on the way in (numpy scalars -> python scalars); :func:`validate_report`
@@ -130,12 +131,21 @@ def figure_block(
     *,
     image: Mapping[str, str] | None = None,
     caption: str | None = None,
+    spec: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """A figure reference, optionally carrying an embedded image.
+    """A figure reference, optionally carrying an embedded image or a render spec.
 
     ``image`` is ``{"mime": "image/png"|"image/svg+xml"|..., "data": <base64>}``
     so an exporter can embed the figure without re-rendering; without it the
     block is a pure reference (``name`` points at a FigureDoc, #12).
+
+    ``spec`` (PRIMARY_SOFTWARE_AUDIT_PLAN P3.6) is the exact JSON body of
+    ``POST /api/export/figure`` for this figure (dataset + channel picks +
+    style + optional ``width_in``/``height_in``). ``/api/report/export``
+    renders it through that same exporter and embeds the result -- a 300-DPI
+    PNG in Word/PowerPoint, plus the SVG when ``spec["fmt"]`` is vector
+    (``svg``/``pdf``, the exporter's default); inline SVG in HTML. A spec wins
+    over ``image`` when both are present.
     """
     block: dict[str, Any] = {"type": "figure", "name": str(name)}
     if image is not None:
@@ -144,6 +154,10 @@ def figure_block(
         block["image"] = {"mime": str(image["mime"]), "data": str(image["data"])}
     if caption:
         block["caption"] = str(caption)
+    if spec is not None:
+        if not isinstance(spec, Mapping):
+            raise ValueError("figure spec must be a mapping (a /api/export/figure body)")
+        block["spec"] = json.loads(json.dumps(spec))  # detached, JSON-clean copy
     return block
 
 
