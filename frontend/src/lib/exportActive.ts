@@ -75,6 +75,15 @@ export function cancelled(s: StoreGet, verb: string): void {
   s().setStatus(`${verb} cancelled`);
 }
 
+/** The filename stem every export/send path uses for a figure/report name:
+ *  the dataset or figure's own `name` with a trailing extension stripped
+ *  (`"scan.dat"` -> `"scan"`). Shared (finding #4, P3.6 review round 2) so
+ *  `lib/sendFigureToReport.ts`'s Library path cannot drift from this
+ *  function's own inline use below and use the raw, un-stripped name. */
+export function stemFromName(name: string): string {
+  return name.replace(/\.[^.]+$/, "");
+}
+
 export async function exportActive(
   s: StoreGet,
   fn: (
@@ -114,7 +123,7 @@ export async function exportActive(
       toast(msg, "danger");
       return;
     }
-    const stem = ds.name.replace(/\.[^.]+$/, "");
+    const stem = stemFromName(ds.name);
     await fn(stem, ds, controller.signal);
     // Race guard: `fn` resolving successfully right as Cancel lands.
     if (controller.signal.aborted) {

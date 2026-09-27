@@ -8777,6 +8777,25 @@ was not raised.
   `sol/report-figure-connection`) onto this PR's lazy design; #454's own
   eager store action/command/Plot-menu entry were not ported (superseded by
   this design's lazy module + last-"Figures"-section placement).
+  **Review round (2026-09-27), 10 findings, all fixed; each behavioral fix
+  sabotage-verified:** the Library path's live-figure binding
+  (`data.mode`/`bindings.datasetId`) is now re-checked against a fresh read
+  after every await (the dialog, then the dataset resolve), failing closed
+  rather than pairing a stale binding's resolved dataset with the figure's
+  new one; that dataset resolve runs under a `beginOp`/`endOp` pendingOps
+  busy entry with a Cancel affordance (mirroring `exportActive`) plus a
+  same-figure concurrency guard so a double-click adds one block, not two;
+  the plot path's no-active-dataset check now runs before any dialog opens;
+  both send paths share one `stemFromName` filename-stem helper (so
+  `scan.dat` becomes `scan` in both) and one `askSendToReport` dialog
+  built from an extracted, deduplicated field list — the second "name the
+  new report" modal is gone, folded into that dialog's own always-present
+  "New report name" field, and `addFigureToReport`'s now-dead
+  `` `${stem} figures` `` fallback went with it; and `lib/report.ts`'s
+  `decodeFigureSpec` decodes a reopened report figure's `time`/`values` in
+  one pass, independently of `labels`/`units`/`metadata`, warning
+  (naming the report and figure) instead of leaving stale sentinel strings
+  silently in place when the rest of the dataset is malformed.
 - [ ] Consider EMF only if Windows Office tests show material benefit.
 - [ ] Editable embedded figures remain a future goal, not release blocker.
 

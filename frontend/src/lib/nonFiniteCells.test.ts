@@ -23,6 +23,7 @@ import { resetBookTransportForTests } from "./bookData";
 import { createFigureDocument } from "./figureDocument";
 import {
   decodeCell,
+  decodeWireRow,
   encodeCell,
   encodeCells,
   encodeDataStruct,
@@ -112,6 +113,40 @@ describe("encoder/decoder unit contract", () => {
   it("does not apply sentinels to unrelated numeric configuration arrays", () => {
     const config = { axisRange: [-0, Infinity], metadata: { z: [-0, Infinity] } };
     expect(JSON.stringify(config, encodePersistedCells)).toBe(JSON.stringify(config));
+  });
+
+  // P3.6 review round 2 (finding #10): `decodeWireRow` is the single-pass
+  // check-and-decode `lib/report.ts`'s report-figure-spec decode uses instead
+  // of the isWireCellArray + decodeCells two-pass composition above.
+  describe("decodeWireRow (single-pass check-and-decode)", () => {
+    it("decodes a row with sentinels, returning a NEW array and changed:true", () => {
+      const row = [1, "NaN", "-0"];
+      const r = decodeWireRow(row);
+      expect(r.ok).toBe(true);
+      expect(r.changed).toBe(true);
+      expect(r.value).not.toBe(row); // detached, not the original reference
+      expect(r.value).toEqual([1, Number.NaN, -0]);
+      expect(Object.is((r.value as number[])[2], -0)).toBe(true);
+    });
+
+    it("returns the SAME array reference, unchanged, for an already-clean row", () => {
+      const row = [1, 2, 3];
+      const r = decodeWireRow(row);
+      expect(r).toEqual({ value: row, changed: false, ok: true });
+      expect(r.value).toBe(row);
+    });
+
+    it("bails on the FIRST undecodable cell (null, or any other string), leaving the row untouched even when an earlier cell was a real sentinel", () => {
+      const row = ["NaN", "not-a-sentinel"];
+      const r = decodeWireRow(row);
+      expect(r).toEqual({ value: row, changed: false, ok: false });
+      expect(r.value).toBe(row); // never partially decoded
+    });
+
+    it("rejects a non-array the same way isWireCellArray does", () => {
+      expect(decodeWireRow("not an array")).toEqual({ value: "not an array", changed: false, ok: false });
+      expect(decodeWireRow(null)).toEqual({ value: null, changed: false, ok: false });
+    });
   });
 });
 

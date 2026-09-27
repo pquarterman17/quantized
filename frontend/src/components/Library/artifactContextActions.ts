@@ -7,7 +7,7 @@ import { renameLibraryNode } from "../../lib/libraryRename";
 import { askParams } from "../overlays/ParamDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
-import { onLoadFailure, runLazy } from "../../commands/fileCommands";
+import { sendEditableFigureToReport } from "../../commands/plotCommands";
 import { buildMenuItems, runContextAction, type ContextAction, type MenuEntry } from "../../lib/contextActions";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
@@ -89,16 +89,14 @@ const artifactActions: MenuEntry<ArtifactTarget>[] = [
     label: "Add to Report…",
     hidden: (target) => target.node.kind !== "editable-figure",
     run: (target) => {
-      // Same `runLazy` + `.then(onRun, onLoadFailure)` shape as the Plot menu's
-      // "Send figure to report…" (commands/plotCommands.ts) and the plot
-      // context menu that reuses it: a pendingOps busy entry for the chunk
-      // fetch, a danger toast (not a silent no-op) if it fails to load, and
-      // none of lib/sendFigureToReport.ts's figure-spec/export machinery sits
-      // on the eager bundle for a menu entry most sessions never open.
-      void runLazy("Loading report tools…", () => import("../../lib/sendFigureToReport")).then(
-        (m) => m.runSendEditableFigureToReport(useApp.getState, target.node.entityId),
-        onLoadFailure,
-      );
+      // Finding #9 (P3.6 review round 2): routed through the Plot menu's own
+      // `commands/plotCommands.ts` helper — the SAME `runLazy` + `.then(onRun,
+      // onLoadFailure)` shape (a pendingOps busy entry for the chunk fetch, a
+      // danger toast, not a silent no-op, if it fails to load, and none of
+      // lib/sendFigureToReport.ts's figure-spec/export machinery on the eager
+      // bundle for a menu entry most sessions never open) now lives in ONE
+      // place instead of being duplicated verbatim here.
+      void sendEditableFigureToReport(useApp.getState, target.node.entityId);
     },
   },
   {

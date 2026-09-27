@@ -141,7 +141,7 @@ async function exportBodyFor(fmt: string, style: string, greyscale: boolean) {
 
 describe("runSendFigureToReportCommand — the spec IS the Export figure… spec", () => {
   it("live-view route (no focused document): block.spec equals the export body", async () => {
-    vi.mocked(askParams).mockResolvedValueOnce(sendParams()).mockResolvedValueOnce({});
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams());
     await runSendFigureToReportCommand(useApp.getState);
     const s = useApp.getState();
     expect(s.reports).toHaveLength(1);
@@ -168,9 +168,7 @@ describe("runSendFigureToReportCommand — the spec IS the Export figure… spec
       groupKey: 1,
     });
     useApp.setState({ plotWindows: [win({ document })], focusedWindowId: "w1" });
-    vi.mocked(askParams)
-      .mockResolvedValueOnce(sendParams({ fmt: "png", style: "default", greyscale: false }))
-      .mockResolvedValueOnce({});
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams({ fmt: "png", style: "default", greyscale: false }));
     await runSendFigureToReportCommand(useApp.getState);
     const [block] = figureBlocks(useApp.getState().reports[0].id);
     const body = await exportBodyFor("png", "default", false);
@@ -181,14 +179,13 @@ describe("runSendFigureToReportCommand — the spec IS the Export figure… spec
 
 describe("runSendFigureToReportCommand — targets, undo, failure", () => {
   it("a new report: named after the dataset, a Figures section, captioned, opened, ONE undo step", async () => {
-    vi.mocked(askParams)
-      .mockImplementationOnce(async () => sendParams({ caption: "  Fig. 1  " }))
-      .mockImplementationOnce(async (_title, fields) => {
-        // The name prompt defaults to the SAME "<stem> figures" convention
-        // the report ends up named — an empty answer keeps it.
-        expect(fields.find((f) => f.key === "name")?.default).toBe("scan figures");
-        return {};
-      });
+    vi.mocked(askParams).mockImplementationOnce(async (_title, fields) => {
+      // The dialog's own "New report name" field defaults to the SAME
+      // "<stem> figures" convention the report ends up named — an empty
+      // answer (finding #8: ONE dialog, no second modal) keeps it.
+      expect(fields.find((f) => f.key === "newReportName")?.default).toBe("scan figures");
+      return sendParams({ caption: "  Fig. 1  " });
+    });
     await runSendFigureToReportCommand(useApp.getState);
     const s = useApp.getState();
     const entry = s.reports[0];
@@ -203,18 +200,9 @@ describe("runSendFigureToReportCommand — targets, undo, failure", () => {
   });
 
   it("a new report: a typed name overrides the '<stem> figures' default", async () => {
-    vi.mocked(askParams)
-      .mockResolvedValueOnce(sendParams())
-      .mockResolvedValueOnce({ name: "  Hall sweep results  " });
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams({ newReportName: "  Hall sweep results  " }));
     await runSendFigureToReportCommand(useApp.getState);
     expect(useApp.getState().reports[0].name).toBe("Hall sweep results");
-  });
-
-  it("cancelling the new-report name prompt leaves reports and history unchanged", async () => {
-    vi.mocked(askParams).mockResolvedValueOnce(sendParams()).mockResolvedValueOnce(null);
-    await runSendFigureToReportCommand(useApp.getState);
-    expect(useApp.getState().reports).toEqual([]);
-    expect(useApp.getState().history).toEqual([]);
   });
 
   it("an existing report: appended to a new Figures section after its analysis sections, one undo step", async () => {
@@ -236,7 +224,7 @@ describe("runSendFigureToReportCommand — targets, undo, failure", () => {
   });
 
   it("names each figure uniquely within the target report (scan, scan-2, scan-3)", async () => {
-    vi.mocked(askParams).mockResolvedValueOnce(sendParams()).mockResolvedValueOnce({});
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams());
     await runSendFigureToReportCommand(useApp.getState);
     const id = useApp.getState().reports[0].id;
     for (let k = 0; k < 2; k++) {
@@ -248,7 +236,7 @@ describe("runSendFigureToReportCommand — targets, undo, failure", () => {
   });
 
   it("an info toast warns when the sent spec is large; a small one says nothing", async () => {
-    vi.mocked(askParams).mockResolvedValueOnce(sendParams()).mockResolvedValueOnce({});
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams());
     await runSendFigureToReportCommand(useApp.getState);
     expect(useToasts.getState().toasts.some((t) => /MB of plotted data/.test(t.msg))).toBe(false);
     // ~6.5 MB estimated: 180k rows x (time + 2 channels) numbers x 12 B.
@@ -266,7 +254,7 @@ describe("runSendFigureToReportCommand — targets, undo, failure", () => {
       yScale: "linear",
     });
     useToasts.setState({ toasts: [] });
-    vi.mocked(askParams).mockResolvedValueOnce(sendParams()).mockResolvedValueOnce({});
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams());
     await runSendFigureToReportCommand(useApp.getState);
     const notice = useToasts.getState().toasts.find((t) => /MB of plotted data/.test(t.msg));
     expect(notice?.kind).toBe("info");
@@ -282,8 +270,33 @@ describe("runSendFigureToReportCommand — targets, undo, failure", () => {
 
   it("a target deleted before the send lands fails loudly and records nothing", () => {
     const block: ReportFigureBlock = { type: "figure", name: "scan", spec: { dataset: {} } };
-    expect(() => addFigureToReport(useApp.getState, "rep-gone", block, "scan", DS)).toThrow(/deleted/);
+    // targetId is non-null here, so `newReportName` ("unused") is never read.
+    expect(() => addFigureToReport(useApp.getState, "rep-gone", block, "scan", DS, "unused")).toThrow(/deleted/);
     expect(useApp.getState().history).toEqual([]);
+  });
+
+  // Finding #3 (P3.6 review round 2): the no-active-dataset check happens
+  // BEFORE any dialog opens.
+  it("no active dataset: fails before any dialog opens", async () => {
+    useApp.setState({ datasets: [], activeId: null });
+    await runSendFigureToReportCommand(useApp.getState);
+    expect(askParams).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toBe("no dataset to send");
+    expect(useToasts.getState().toasts.some((t) => t.kind === "danger" && t.msg === "no dataset to send")).toBe(true);
+  });
+
+  // Finding #4 (P3.6 review round 2): the plot path strips the dataset's
+  // filename extension for its figure/report-name stem exactly like the
+  // Library path now does (lib/exportActive.ts's shared `stemFromName`) —
+  // pinned here on the plot side; `store/reportFigureConnection.test.ts`
+  // pins the Library side of the same claim.
+  it("strips the dataset filename's extension for the figure name and default report name ('scan.dat' -> 'scan')", async () => {
+    vi.mocked(askParams).mockImplementationOnce(async (_title, fields) => {
+      expect(fields.find((f) => f.key === "newReportName")?.default).toBe("scan figures");
+      return sendParams();
+    });
+    await runSendFigureToReportCommand(useApp.getState);
+    expect(figureBlocks(useApp.getState().reports[0].id)[0].name).toBe("scan");
   });
 
   it("the deleted-target race surfaces as a failed-send toast through exportActive", async () => {
