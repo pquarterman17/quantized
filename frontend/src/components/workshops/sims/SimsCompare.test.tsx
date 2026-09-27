@@ -145,6 +145,37 @@ describe("SIMS Compare tab", () => {
     expect(screen.getByText("Pick at least one species.")).toBeTruthy();
   });
 
+  it("refuses a stagger whose span would exceed the ±30-decade limit before it reaches the preview (finding 2: 8 traces × 6 decades)", async () => {
+    // 8 profiles, one shared species -- 8 resulting traces. At stagger 6 the
+    // last trace would sit 7*6=42 decades up, past what `logOffsetDecades`/
+    // `log_offset_decades` actually honour (MAX_DECADES=30): the COMMITTED
+    // plot would silently zero it while an unclamped preview kept drawing it
+    // offset. The form must refuse this stagger outright instead.
+    const many = Array.from({ length: 8 }, (_, i) => ({
+      id: `m${i}`,
+      name: `p${i}.csv`,
+      data: {
+        time: [0, 10],
+        values: [[1e18], [2e18]],
+        labels: ["B"],
+        units: ["atoms/cm3"],
+        metadata: { x_column_name: "Depth", x_column_unit: "nm", technique: "sims" },
+      },
+    }));
+    useApp.setState({ datasets: many, selectedIds: many.map((d) => d.id), activeId: many[0].id });
+    useSimsDialog.setState({ seed: many[0].id, opened: 2 });
+    openCompare();
+    expect(within(screen.getByRole("group", { name: "Profiles" })).getAllByRole("checkbox", { checked: true })).toHaveLength(8);
+    fireEvent.change(screen.getByRole("textbox", { name: "Stagger (decades per trace)" }), { target: { value: "6" } });
+    expect(screen.getByText(/8 traces × 6 decades would span 42 decades/)).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Create comparison" })).toBeDisabled();
+    // The gate means no offset preview is ever drawn for this stagger.
+    expect(screen.queryByRole("group", { name: "Comparison preview" })).toBeNull();
+    // A stagger small enough to fit is accepted again.
+    fireEvent.change(screen.getByRole("textbox", { name: "Stagger (decades per trace)" }), { target: { value: "4" } });
+    await waitFor(() => expect(screen.getByRole("group", { name: "Comparison preview" })).toBeTruthy());
+  });
+
   it("steps the current plot's offsets one decade per click, and clears them in one undo entry", () => {
     openCompare();
     const offsets = within(screen.getByRole("group", { name: "Decade offsets" }));

@@ -30,6 +30,7 @@
 import { datasetAlgebra } from "./api/datasetAlgebra";
 
 import { analyzeMerge } from "./appendWarnings";
+import { blanksToNaN } from "./blankCells";
 import { lit } from "./macro";
 import { mergeDatasets } from "./merge";
 import type { AppendMatch } from "./mergeByName";
@@ -232,12 +233,16 @@ export async function computeTransform(p: TransformParams, primary: Dataset, oth
     }
     case "algebra": {
       const b = others[0];
-      const data = await datasetAlgebra({
+      // A non-finite result (a divide by zero, log/sqrt of an out-of-domain
+      // value) arrives as JSON null; stored as NaN so the `.dwk` reopens --
+      // the same fix `transformSims.ts`/`transformResample.ts` apply
+      // (lib/blankCells.ts).
+      const data = blanksToNaN(await datasetAlgebra({
         dataset_a: primary.data,
         dataset_b: b.data,
         operation: p.operation,
         interp_method: p.interp,
-      });
+      }));
       const sym = ALGEBRA_SYMBOL[p.operation] ?? p.operation;
       const w = analyzeAlgebra(primary.data, b.data, p.operation, primary.name, b.name);
       const stamped = { ...data, metadata: { ...data.metadata, algebra_operands: [primary.name, b.name] } };

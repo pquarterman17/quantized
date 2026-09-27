@@ -33,7 +33,7 @@ import numpy as np
 from ..datastruct import DataStruct
 from ..x_units import x_unit_of
 from ._warn import warn as _warn
-from .sims_depth import canonical_length, length_factor, length_ratio
+from .sims_depth import canonical_length, is_length_unit, length_ratio
 
 __all__ = ["CompareResult", "compare_profiles"]
 
@@ -43,16 +43,6 @@ class CompareResult:
     data: DataStruct
     warnings: list[dict[str, Any]] = field(default_factory=list)
     traces: list[dict[str, Any]] = field(default_factory=list)
-
-
-def _is_length(unit: str) -> bool:
-    if not unit.strip():
-        return False
-    try:
-        length_factor(unit)
-    except ValueError:
-        return False
-    return True
 
 
 def _stem(name: str) -> str:
@@ -67,7 +57,7 @@ def _x_factors(profiles: Sequence[tuple[str, DataStruct]]) -> tuple[str, list[fl
     if all(u == target for u in units):
         return target, [1.0] * len(units)
     bad = [f"{n} ({u or 'no unit'})" for (n, _), u in zip(profiles, units, strict=True)
-           if not _is_length(u)]
+           if not is_length_unit(u)]
     if bad:
         raise ValueError(
             "the profiles' x units differ and these are not depth units: "

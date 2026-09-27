@@ -252,6 +252,46 @@ describe("captureTechniqueView — memory does not leak across techniques", () =
   });
 });
 
+describe("captureTechniqueView / applyTechniqueMemory — logOffset never leaks (finding 5)", () => {
+  it("strips logOffset from a captured style, keeping its other fields", () => {
+    const first = ds("d1", "sims", ["B — a", "B — b"]);
+    const outgoingView = view({
+      yKeys: [0, 1],
+      seriesStyles: { 0: { logOffset: 0 }, 1: { color: "red", logOffset: 3 } },
+    });
+    const memory = captureTechniqueView(first, outgoingView, {});
+    expect(memory["sims"]?.seriesStyles).toEqual({ 0: {}, 1: { color: "red" } });
+  });
+
+  it("does not replay profile A's stagger onto profile B's same-named channel", () => {
+    // Profile A: compared, then staggered by 3 decades on channel "B".
+    const a = ds("d1", "sims", ["B", "Si"]);
+    const memory = captureTechniqueView(
+      a,
+      view({ yKeys: [0, 1], seriesStyles: { 0: { logOffset: 3 } } }),
+      {},
+    );
+    // Switching to profile B (same technique, a column also named "B") must
+    // NOT resolve a logOffset for it -- that offset belonged to A's plot.
+    const b = ds("d2", "sims", ["B", "Si"]);
+    const resolved = applyTechniqueMemory(b, memory);
+    expect(resolved?.seriesStyles[0]?.logOffset).toBeUndefined();
+  });
+
+  it("sanitizeTechniqueViewMemory strips a hand-edited .dwk's logOffset too", () => {
+    const raw = {
+      "sims": {
+        xKey: null, yKeys: [0], yScale: "log", xScale: "linear",
+        seriesStyles: { 0: { color: "red", logOffset: 2 } },
+        seriesLabels: {}, seriesOrder: null, errKeys: {}, hiddenChannels: [],
+        labels: { 0: "B" },
+      },
+    };
+    const out = sanitizeTechniqueViewMemory(raw);
+    expect(out["sims"]?.seriesStyles).toEqual({ 0: { color: "red" } });
+  });
+});
+
 describe("sanitizeTechniqueViewMemory — the .dwk untrusted-boundary parse", () => {
   it("absent/malformed input sanitizes to {}", () => {
     expect(sanitizeTechniqueViewMemory(undefined)).toEqual({});

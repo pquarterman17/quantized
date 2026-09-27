@@ -242,17 +242,17 @@ function SimsWorkshop() {
       ) : (
         <>
           <SegmentedControl<Tab> options={TABS} value={tab} onChange={pick} />
-          {pane("process", <ProcessView />)}
-          {pane("compare", <SimsCompareView />)}
-          {pane("region", <SimsRegionView />)}
+          {pane("process", <ProcessView active={tab === "process"} />)}
+          {pane("compare", <SimsCompareView active={tab === "compare"} />)}
+          {pane("region", <SimsRegionView active={tab === "region"} />)}
         </>
       )}
     </ToolWindow>
   );
 }
 
-function ProcessView() {
-  const r = useSims();
+function ProcessView({ active }: { active: boolean }) {
+  const r = useSims(active);
   const f = r.form;
   return (
         <>

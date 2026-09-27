@@ -28,9 +28,18 @@ hand-computed values:
 - **Junction / interface depth**: the depth where the species crosses a
   threshold -- an absolute value, or a fraction (default 50 %) of its own
   peak in the region -- linearly interpolated between the two bracketing
-  samples. Every crossing is listed (with its direction); the junction is
-  the first, shallowest one. A sample exactly ON the threshold between a
-  sign change is the crossing itself; touching it without crossing is not.
+  samples. Every crossing is listed (with its direction). The JUNCTION
+  itself is the metallurgical-junction convention: moving away from the
+  species' own peak and INTO the substrate, the first depth at which the
+  concentration falls back through the threshold -- i.e. the first FALLING
+  crossing at or beyond the peak's own depth. A rising crossing on the
+  profile's leading edge (before the peak -- the surface side of a buried
+  implant) is listed among the crossings but is never the junction; a
+  surface-peaked profile (the peak already at the region's shallow edge)
+  has no leading edge to exclude, so its first falling crossing IS its
+  first crossing, same as before this rule was stated explicitly. A sample
+  exactly ON the threshold between a sign change is the crossing itself;
+  touching it without crossing is not.
 """
 
 from __future__ import annotations
@@ -49,7 +58,7 @@ from ..datastruct import DataStruct
 from ..x_units import x_unit_of
 from ._warn import warn as _warn
 from .sims_correct import region_mask
-from .sims_depth import length_factor, length_ratio
+from .sims_depth import is_length_unit, length_ratio
 
 __all__ = ["areal_dose_unit", "region_measures", "region_summary_csv", "threshold_crossings"]
 
@@ -111,12 +120,7 @@ def _dose_scale(x_unit: str, value_unit: str) -> tuple[float, str, str]:
     """(factor, unit, kind) turning a trapezoid in (value x x_unit) into the
     reported integral: an areal dose in cm^-2 when the units support it."""
     dose = areal_dose_unit(value_unit)
-    try:
-        length_factor(x_unit)
-        is_length = bool(x_unit.strip())
-    except ValueError:
-        is_length = False
-    if dose is not None and is_length:
+    if dose is not None and is_length_unit(x_unit):
         return length_ratio(x_unit, "cm"), dose, "areal-dose"
     parts = [u for u in (value_unit.strip(), x_unit.strip()) if u]
     return 1.0, "·".join(parts), "raw"
@@ -174,9 +178,17 @@ def _species(
     row["threshold"] = level
     crossings = threshold_crossings(xs, ys, level)
     row["crossings"] = crossings
-    if crossings:
-        row["junction_depth"] = crossings[0]["depth"]
-        row["junction_direction"] = crossings[0]["direction"]
+    # Metallurgical-junction convention (see the module doc): the first
+    # FALLING crossing at or beyond the species' own peak depth -- moving
+    # away from the peak into the substrate, where the concentration first
+    # falls back through the threshold. A rising crossing on the leading
+    # (surface-side) edge, before the peak, is listed but never the junction.
+    after_peak_falling = [
+        c for c in crossings if c["direction"] == "falling" and c["depth"] >= row["peak_depth"]
+    ]
+    if after_peak_falling:
+        row["junction_depth"] = after_peak_falling[0]["depth"]
+        row["junction_direction"] = after_peak_falling[0]["direction"]
     return row
 
 
@@ -301,7 +313,8 @@ def region_measures(
             ),
             "mean": "point average of the finite samples (not depth-weighted)",
             "junction": (
-                "first (shallowest) threshold crossing, linear interpolation between samples"
+                "first falling threshold crossing at or beyond the species' own peak depth "
+                "(metallurgical-junction convention), linear interpolation between samples"
             ),
             "threshold_mode": threshold_mode,
             "threshold": threshold,

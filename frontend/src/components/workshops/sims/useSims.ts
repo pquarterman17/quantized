@@ -66,7 +66,7 @@ export interface SimsState {
 
 const message = (e: unknown, fallback: string): string => (e instanceof Error ? e.message : fallback);
 
-export function useSims(): SimsState {
+export function useSims(active: boolean): SimsState {
   const seed = useSimsDialog((s) => s.seed);
   const close = useSimsDialog((s) => s.close);
   const datasets = useApp((s) => s.datasets);
@@ -83,10 +83,16 @@ export function useSims(): SimsState {
   const labels = useMemo(() => [...(source?.labels ?? [])], [source]);
   const parsed = useMemo(() => formToParams(form, labels), [form, labels]);
   // Everything the preview depends on: the params, the dataset id (recorded
-  // in the output's provenance) and its data by object identity.
+  // in the output's provenance) and its data by object identity. Finding 9:
+  // a tab stays MOUNTED (hidden) when the workshop switches away from it, so
+  // its form keeps its half-filled state -- but that means its debounced
+  // preview would otherwise keep firing full-dataset POSTs in the
+  // background too. `active` (this tab being the VISIBLE one) gates the key
+  // to `""`, which `useDebouncedPreview` already treats as "nothing to
+  // preview" -- the same no-op path an incomplete form takes.
   const key = useMemo(
-    () => (typeof parsed === "string" || !dataset ? "" : JSON.stringify([parsed, dataset.id, tokenOf(dataset)])),
-    [parsed, dataset],
+    () => (!active || typeof parsed === "string" || !dataset ? "" : JSON.stringify([parsed, dataset.id, tokenOf(dataset)])),
+    [active, parsed, dataset],
   );
   const inputs = useLatestRef({ parsed, dataset, source });
   useDebouncedPreview(key, PREVIEW_DELAY_MS, () => {

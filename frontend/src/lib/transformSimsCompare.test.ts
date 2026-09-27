@@ -124,10 +124,18 @@ describe("staggerComparison", () => {
   it("offsets trace c by c·k decades on a log axis, as one undo entry; a no-op off the plot", async () => {
     const out = await runTransform(store, PARAMS, "a");
     const h = store().history.length;
+    const m = store().macroSteps.length;
     expect(staggerComparison(store, useApp.setState, out!.id, -1)).toBe(true);
     expect(store().seriesStyles).toEqual({ 0: { logOffset: 0 }, 1: { logOffset: -1 } });
     expect(store().yScale).toBe("log");
     expect(store().history).toHaveLength(h + 1);
+    // Finding 7: the raw `set()` that flips `yScale` must still record the
+    // SAME macro step `setYScale("log")` would, so a replay switches the
+    // axis too, not just the offsets -- without pushing a SECOND history
+    // entry (still exactly h + 1 above).
+    const steps = store().macroSteps;
+    expect(steps).toHaveLength(m + 1);
+    expect(steps[steps.length - 1].code).toBe('qz.setYScale("log")');
     expect(staggerComparison(store, useApp.setState, out!.id, 0)).toBe(false);
     expect(staggerComparison(store, useApp.setState, "a", 2)).toBe(false); // not the plot's dataset
   });

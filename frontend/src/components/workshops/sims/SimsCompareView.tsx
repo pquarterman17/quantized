@@ -41,8 +41,8 @@ function Preview({ r }: { r: SimsCompareState }) {
   );
 }
 
-export default function SimsCompareView() {
-  const r = useSimsCompare();
+export default function SimsCompareView({ active }: { active: boolean }) {
+  const r = useSimsCompare(active);
   return (
     <div>
       <label className="qzk-field-lbl">Profiles</label>

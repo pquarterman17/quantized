@@ -88,6 +88,32 @@ const stem = (name: string): string => name.replace(/\.[^.]+$/, "");
 /** The rows SIMS processing reads: the dataset's ANALYSIS rows. */
 export const simsSource = (ds: Dataset): DataStruct => analysisData(ds) ?? ds.data;
 
+/** The `DataStruct` fields the `/api/sims/*` wire actually reads -- shared by
+ *  every SIMS request builder (`simsRequest` below, `computeSimsCompare`,
+ *  `useSimsRegion`'s live preview) so the projection is defined once
+ *  (finding 10 dedupe). Deliberately NOT the whole `DataStruct` type verbatim
+ *  (structurally the same shape today, but this is the wire's own contract,
+ *  not an alias for it). */
+export function simsWireDataset(
+  d: DataStruct,
+): Pick<DataStruct, "time" | "values" | "labels" | "units" | "metadata" | "cat_levels" | "level_order"> {
+  return {
+    time: d.time, values: d.values, labels: d.labels, units: d.units,
+    metadata: d.metadata, cat_levels: d.cat_levels, level_order: d.level_order,
+  };
+}
+
+/** The species (column) names a SIMS source offers -- every non-categorical
+ *  column, since a categorical one is a grouping label, not a measured
+ *  signal. Shared by the Compare tab's species picker, the Region tab's
+ *  species picker and dataset-switch re-seed, and the reference-normalization
+ *  picker (finding 10 dedupe: this exact `cat_levels`-filter was copied three
+ *  times). */
+export function speciesOf(d: Pick<DataStruct, "labels" | "cat_levels">): string[] {
+  const cats = new Set(Object.keys(d.cat_levels ?? {}).map(Number));
+  return d.labels.filter((_, i) => !cats.has(i));
+}
+
 /** Which stages `p` runs, in the backend's order ("depth · bg · norm · smooth"). */
 export function simsStagesText(p: SimsParams): string {
   const parts: string[] = [];
@@ -131,17 +157,7 @@ function resolvedTimeUnit(c: SimsCalibration, source: DataStruct, preview: boole
 
 /** The request body for `p` over `source`. `preview`: see `resolvedTimeUnit`. */
 export function simsRequest(p: SimsParams, source: DataStruct, opts: { preview?: boolean } = {}): SimsProcessRequest {
-  const body: SimsProcessRequest = {
-    dataset: {
-      time: source.time,
-      values: source.values,
-      labels: source.labels,
-      units: source.units,
-      metadata: source.metadata,
-      cat_levels: source.cat_levels,
-      level_order: source.level_order,
-    },
-  };
+  const body: SimsProcessRequest = { dataset: simsWireDataset(source) };
   const c = p.calibration;
   if (c) {
     body.calibration = {

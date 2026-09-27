@@ -17,8 +17,9 @@
 
 import { compareSims } from "./api/sims";
 import { blanksToNaN } from "./blankCells";
+import { lit } from "./macro";
 import type { DatasetRef } from "./transformRun";
-import { simsWarningOf } from "./transformSims";
+import { simsWarningOf, simsWireDataset } from "./transformSims";
 import type { TransformWarning } from "./transformWarnings";
 import type { DataStruct, SeriesStyle } from "./types";
 import type { AppState } from "../store/useApp";
@@ -49,11 +50,6 @@ export function simsCompareOutputName(primaryName: string, others: number): stri
   return others ? `${stem(primaryName)} + ${others} (SIMS comparison)` : `${stem(primaryName)} (SIMS comparison)`;
 }
 
-const wire = (d: DataStruct) => ({
-  time: d.time, values: d.values, labels: d.labels, units: d.units,
-  metadata: d.metadata, cat_levels: d.cat_levels, level_order: d.level_order,
-});
-
 /** THE compute for the workshop's live preview, the commit and the replay:
  *  `profiles[0]` is the primary. Throws the backend's refusal message. */
 export async function computeSimsCompare(
@@ -62,7 +58,7 @@ export async function computeSimsCompare(
   opts: { signal?: AbortSignal } = {},
 ): Promise<SimsCompareComputed> {
   const res = await compareSims(
-    { profiles: profiles.map((d) => ({ name: d.name, dataset: wire(d.data) })), species: p.species },
+    { profiles: profiles.map((d) => ({ name: d.name, dataset: simsWireDataset(d.data) })), species: p.species },
     opts.signal,
   );
   const sources = profiles.map((d) => ({ id: d.id, name: d.name }));
@@ -97,6 +93,13 @@ export function staggerComparison(
     made.data.labels.forEach((_, c) => { next[c] = { ...next[c], logOffset: c === 0 ? 0 : c * k }; });
     return { seriesStyles: next, yScale: "log" };
   });
+  // Finding 7: `yScale` is set on the raw `set()` above (so the whole stagger
+  // stays ONE undo entry, per this function's own doc), which bypasses
+  // `setYScale`'s own `recordMacro` call -- a recorded macro would replay the
+  // offsets but never the log axis they need. Record the SAME step
+  // `setYScale("log")` would, without calling the action itself (which would
+  // push a second, unwanted history entry).
+  get().recordMacro("Y axis log", `qz.setYScale(${lit("log")})`);
   return true;
 }
 
