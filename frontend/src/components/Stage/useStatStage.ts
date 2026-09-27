@@ -49,8 +49,11 @@ import {
   resolveGroupsIndexed,
   type IndexedGroupSpec,
 } from "../../lib/statstage";
+import type { StatMarksByMode, StatMarksMode } from "../../lib/plotviewSanitize";
+import type { StatMarks } from "../../lib/statMarks";
 import { exportStatStage } from "./statStageExport";
 import { applyLevels, levelAxes } from "./statStageLevels";
+import { needsPoints, stageMarks, withMarks, withNestLabel } from "./statStageMarks";
 import {
   computeBarData,
   computeBoxDraw,
@@ -120,14 +123,32 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const [bins, setBins] = useState<string>("fd");
   const [fit, setFit] = useState<string | null>(null);
   const [barStack, setBarStack] = useState(false);
-  // Box/Strip mark toggles (JMP_GAP J5 #1/#2) — display-only, no re-fetch
-  // needed on their own (the flat box/strip effect below depends on them
-  // only to decide whether to resolve the indexed points groups).
-  const [showPoints, setShowPoints] = useState(false);
-  const [showMeanCI, setShowMeanCI] = useState(false);
-  // Connect-means line toggle (JMP_GAP J5 residual) — same display-only
-  // character as showPoints/showMeanCI above.
-  const [showConnectMeans, setShowConnectMeans] = useState(false);
+  // P2.6 box 1: the categorical marks (points / jitter / summary / error bars
+  // / connect-means / labels) are the window's persisted `PlotView.statMarks`
+  // when the caller passes them (focused stage + background windows), else
+  // hook-local (a bare hook in a test). Display-only: they re-fetch nothing;
+  // the only compute they reach is WHICH raw points to resolve (`needsPoints`).
+  //
+  // Review finding 6: stored and patched PER MODE (`StatMarksByMode`), never
+  // as one flat object every mode read from alike — a choice made in one
+  // mode (strip's `points: "none"`, say) must never read as another mode's
+  // DEFAULT (box's fliers going dark too) purely because the two shared the
+  // same stored fields. `marksMode` is null outside the four modes marks
+  // apply to at all (qq/histogram); the hook still holds a slot for them in
+  // `localMarks` so a mode switch never drops what was already set for one.
+  const marksMode: StatMarksMode | null =
+    mode === "box" || mode === "violin" || mode === "strip" || mode === "bar" ? mode : null;
+  const [localMarks, setLocalMarks] = useState<StatMarksByMode>({});
+  const marksByMode = params.marks ?? localMarks;
+  const marks = marksMode ? marksByMode[marksMode] ?? null : null;
+  const patchMarks = (patch: StatMarks, label?: string) => {
+    if (!marksMode) return;
+    if (params.onMarksChange) params.onMarksChange(marksMode, patch, label);
+    else setLocalMarks((m) => ({ ...m, [marksMode]: { ...m[marksMode], ...patch } }));
+  };
+  const grouped = effectiveGroupCol != null;
+  const rm = useMemo(() => stageMarks(mode, marks, grouped), [mode, marks, grouped]);
+  const wantPoints = needsPoints(mode, rm);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -155,12 +176,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   // needed (box's "show points" toggle, or strip mode which always shows
   // points) so an ordinary box/violin render skips this extra pass.
   const indexedGroups = useMemo<IndexedGroupSpec[]>(() => {
-    if (!data) return [];
-    if (mode === "strip" || (mode === "box" && showPoints)) {
-      return resolveGroupsIndexed(data, effectiveGroupCol, valueCol, plotted, nestCol, rowIds);
-    }
-    return [];
-  }, [data, rowIds, mode, showPoints, effectiveGroupCol, valueCol, plotted, nestCol]);
+    if (!data || !wantPoints) return [];
+    return resolveGroupsIndexed(data, effectiveGroupCol, valueCol, plotted, nestCol, rowIds);
+  }, [data, rowIds, wantPoints, effectiveGroupCol, valueCol, plotted, nestCol]);
 
   const valueLabel = columns.find((c) => c.index === valueCol)?.label ?? (valueCol < 0 ? "x" : "value");
   const labelOf = (i: number | null): string | null =>
@@ -172,6 +190,10 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     effectiveGroupCol != null
       ? [labelOf(effectiveGroupCol), labelOf(nestCol)].filter((l) => l != null).join(" / ")
       : "channel";
+  // Review finding 4: the STRUCTURAL "is this axis nested" signal, stamped
+  // on every draw (`nestLabel`) so a two-tier axis is never inferred from a
+  // label's own text (`lib/statMarks.nestedTiers`'s doc).
+  const nestLabel = nestCol != null ? labelOf(nestCol) : null;
 
   // Bar mode (gap #20): a category x series matrix, not a 1-D group list —
   // when a categorical column is picked, every PLOTTED channel becomes its
@@ -257,7 +279,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         };
       }
       setBusy(true);
-      void computeFacetGroupDraws(slices ?? [], mode, effectiveGroupCol, valueCol, plotted, valueLabel, groupLabel, nestCol)
+      void computeFacetGroupDraws(
+        slices ?? [], mode, effectiveGroupCol, valueCol, plotted, valueLabel, groupLabel, nestCol, nestLabel,
+      )
         .then(finishFacets)
         .finally(() => !cancelled && setBusy(false));
       return () => {
@@ -277,28 +301,24 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
       // valueCol/plotted), so both filters drop exactly the same levels —
       // index-aligned with `finiteGroups`/`r.boxes` for the renderer.
       const finiteIndexedGroups = indexedGroups.filter((g) => g.points.length > 0);
-      // Connect-means only reads as an "interaction plot" once the categories
-      // come from an actual picked categorical column, not the per-plotted-
-      // channel fallback (JMP_GAP J5 residual) — force off in that case even
-      // if the toggle was left on from a previous groupCol.
-      const effectiveConnectMeans = showConnectMeans && effectiveGroupCol != null;
+      const pts = wantPoints ? finiteIndexedGroups : null;
+      // The marks themselves (summary, error bars, connect-means, ...) are
+      // stamped on after the compute (`withMarks`), so toggling one never
+      // re-fetches the box stats.
       setBusy(true);
       if (mode === "box") {
-        void computeBoxDraw(
-          finiteGroups, valueLabel, groupLabel,
-          showPoints ? finiteIndexedGroups : null, showMeanCI, effectiveConnectMeans,
-        )
+        void computeBoxDraw(finiteGroups, valueLabel, groupLabel, pts)
           .then(({ draw, degraded }) => {
             if (cancelled) return;
-            setDrawData(draw);
+            setDrawData(withNestLabel(draw, nestLabel));
             if (degraded) setNote("backend unavailable — computed locally");
           })
           .finally(() => !cancelled && setBusy(false));
       } else if (mode === "strip") {
-        void computeStripDraw(finiteGroups, finiteIndexedGroups, valueLabel, groupLabel, showMeanCI, effectiveConnectMeans)
+        void computeStripDraw(finiteGroups, finiteIndexedGroups, valueLabel, groupLabel)
           .then(({ draw, degraded }) => {
             if (cancelled) return;
-            setDrawData(draw);
+            setDrawData(withNestLabel(draw, nestLabel));
             if (degraded) setNote("backend unavailable — computed locally");
           })
           .finally(() => !cancelled && setBusy(false));
@@ -309,7 +329,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         void computeViolinDraw(finiteGroups, valueLabel, groupLabel)
           .then((draw) => {
             if (cancelled) return;
-            setDrawData(draw);
+            const withPoints = pts && (draw.mode === "violin" || draw.mode === "box") ? { ...draw, points: pts } : draw;
+            setDrawData(withNestLabel(withPoints, nestLabel));
             if (draw.mode === "box") setNote("violin (KDE) unavailable — showing box plot");
           })
           .finally(() => !cancelled && setBusy(false));
@@ -364,9 +385,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     mode,
     groups,
     indexedGroups,
-    showPoints,
-    showMeanCI,
-    showConnectMeans,
+    wantPoints,
     valueCol,
     dist,
     bins,
@@ -379,6 +398,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     effectiveFacetCol,
     effectiveGroupCol,
     nestCol,
+    nestLabel,
     plotted,
     barValueChannels,
     barLabels,
@@ -398,13 +418,13 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     () => applyLevels(axes, { hideEmpty, showN }, drawData, drawFacets, { draw: freshDraw, facets: freshFacets }),
     [axes, hideEmpty, showN, drawData, drawFacets, freshDraw, freshFacets],
   );
+  const shown = useMemo(() => withMarks(levels.draw, levels.drawFacets, rm), [levels, rm]);
 
   async function exportFigure(fmt: string): Promise<void> {
     if (!data) return;
     await exportStatStage(fmt, {
-      data, mode, draw: levels.draw, drawFacets: levels.drawFacets, groups, indexedGroups, valueCol,
-      valueLabel, groupLabel, barValueLabel, barStack, dist, bins, fit, showPoints, showMeanCI,
-      connectMeans: showConnectMeans && effectiveGroupCol != null,
+      data, mode, draw: shown.draw, drawFacets: shown.drawFacets, groups, indexedGroups, valueCol,
+      valueLabel, groupLabel, barValueLabel, barStack, dist, bins, fit, marks: rm,
       showN, caveat: levels.notice?.caveat ?? null,
     });
   }
@@ -432,20 +452,16 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setFit,
     barStack,
     setBarStack,
-    showPoints,
-    setShowPoints,
-    showMeanCI,
-    setShowMeanCI,
-    showConnectMeans,
-    setShowConnectMeans,
+    marks: rm,
+    setMarks: patchMarks,
     facetCol: effectiveFacetCol,
     setFacetCol,
     busy,
     error,
     note,
     groupNotice: levels.notice,
-    draw: levels.draw,
-    drawFacets: levels.drawFacets,
+    draw: shown.draw,
+    drawFacets: shown.drawFacets,
     exportFigure,
     axes,
   };

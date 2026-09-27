@@ -26,8 +26,10 @@ from numpy.typing import NDArray
 from scipy import stats as sps
 
 __all__ = [
+    "ERROR_BAR_KINDS",
     "box_stats",
     "deterministic_jitter",
+    "error_bar_bounds",
     "grouped_box_stats",
     "histogram",
     "qq_plot",
@@ -120,17 +122,21 @@ def box_stats(
     # mirrors matplotlib's own local convention. n<2 has no defined spread
     # (ddof=1 sample std needs >=2 points); the CI degenerates to the mean
     # itself and sem is NaN, mirroring `boxStatsClient`'s same-n edge case.
+    # ``sd`` (P2.6 box 1, the SD error bar) is the same ddof=1 sample SD the
+    # sem is built from, NaN below n=2 exactly like ``sem``.
     if n >= 2:
-        sem = float(v.std(ddof=1) / np.sqrt(n))
+        sd = float(v.std(ddof=1))
+        sem = float(sd / np.sqrt(n))
         t_crit = float(sps.t.ppf(0.975, n - 1))
         ci_lo, ci_hi = mean - t_crit * sem, mean + t_crit * sem
     else:
-        sem = float("nan")
+        sd = sem = float("nan")
         ci_lo = ci_hi = mean
     return {
         "q1": q1, "median": med, "q3": q3, "iqr": iqr,
         "whislo": whislo, "whishi": whishi,
         "mean": mean,
+        "sd": sd,
         "sem": sem,
         "ci_lo": ci_lo,
         "ci_hi": ci_hi,
@@ -138,6 +144,35 @@ def box_stats(
         "fliers": [float(x) for x in np.sort(fliers)],
         "whis": whis,
     }
+
+
+# Error-bar kinds for the categorical plots' mean marker (P2.6 box 1). All
+# three are about the MEAN, with the conventions pinned once here and mirrored
+# by ``frontend/src/lib/statMarks.ts`` (``errorBounds``), which the shared
+# fixture ``tests/fixtures/wire/stat_error_bars.json`` holds both to:
+#   sd   -- mean +/- s, s the SAMPLE standard deviation (n-1 denominator);
+#   se   -- mean +/- s/sqrt(n);
+#   ci95 -- mean +/- t(0.975, n-1) * s/sqrt(n), the two-sided 95% Student-t
+#           interval (``box_stats``'s own ci_lo/ci_hi).
+# Undefined below n=2 (no spread): no error bar is drawn.
+ERROR_BAR_KINDS = ("sd", "se", "ci95")
+
+
+def error_bar_bounds(stats: dict[str, Any], kind: str) -> tuple[float, float] | None:
+    """``(lo, hi)`` of ``kind``'s error bar around ``stats["mean"]`` (one
+    ``box_stats`` result), or ``None`` when there is none to draw: ``kind`` is
+    ``"none"``, or n < 2 so the spread is undefined."""
+    if kind == "none":
+        return None
+    if kind not in ERROR_BAR_KINDS:
+        raise ValueError(f"error bars must be one of {('none', *ERROR_BAR_KINDS)}")
+    if int(stats["n"]) < 2:
+        return None
+    mean = float(stats["mean"])
+    if kind == "ci95":
+        return float(stats["ci_lo"]), float(stats["ci_hi"])
+    half = float(stats["sd"] if kind == "sd" else stats["sem"])
+    return mean - half, mean + half
 
 
 def grouped_box_stats(

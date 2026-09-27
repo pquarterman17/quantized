@@ -1278,6 +1278,16 @@
       },
       "CategoricalFigureRequest": {
         "properties": {
+          "axis_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoryAxisStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "caveat": {
             "anyOf": [
               {
@@ -1422,6 +1432,65 @@
           "values"
         ],
         "title": "CategoricalFigureRequest",
+        "type": "object"
+      },
+      "CategoryAxisStyle": {
+        "description": "P2.6 box 1: how the category tick labels are set -- the SAME options\nthe Canvas stage reads (``statRenderAxes.ts``). ``wrap`` is the line\nwidth in characters (``calc.figure_category_axis.wrap_label``);\n``tiered`` draws a nested axis in two tiers with separators. Defaults =\nthe axis before these options.\n\n``tiers`` (P2.6 review finding 4) is the request's OWN [outer, inner]\npair per label (`lib/statMarks.nestedTiers`, split at the nest column's\nown marker rather than the first ``\" / \"`` in the composite string) --\nwhen given, ``calc.figure_category_axis.style_category_axis`` uses these\npairs directly instead of re-splitting the label text itself, so an\nouter level whose own text contains ``\" / \"`` groups correctly. Only\nmeaningful on the FLAT (non-faceted) request's top-level ``axis_style``\n-- a faceted request's per-panel pairs ride ``StatplotFacet.tiers``\ninstead (a nested axis's pairs are per-panel data).",
+        "properties": {
+          "rotation": {
+            "default": 0,
+            "enum": [
+              0,
+              45,
+              90
+            ],
+            "title": "Rotation",
+            "type": "integer"
+          },
+          "tiered": {
+            "default": false,
+            "title": "Tiered",
+            "type": "boolean"
+          },
+          "tiers": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiers"
+          },
+          "wrap": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 4.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wrap"
+          }
+        },
+        "title": "CategoryAxisStyle",
         "type": "object"
       },
       "CellRequest": {
@@ -11116,6 +11185,51 @@
               }
             ],
             "title": "Labels"
+          },
+          "tiers": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiers"
+          },
+          "y_domain": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Domain"
           }
         },
         "required": [
@@ -11127,6 +11241,16 @@
       },
       "StatplotFigureRequest": {
         "properties": {
+          "axis_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoryAxisStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "bins": {
             "anyOf": [
               {
@@ -11200,6 +11324,23 @@
             ],
             "title": "Dpi"
           },
+          "error_bars": {
+            "anyOf": [
+              {
+                "enum": [
+                  "none",
+                  "sd",
+                  "se",
+                  "ci95"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Bars"
+          },
           "facets": {
             "anyOf": [
               {
@@ -11234,6 +11375,19 @@
             "default": "pdf",
             "title": "Fmt",
             "type": "string"
+          },
+          "jitter_width": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jitter Width"
           },
           "kind": {
             "title": "Kind",
@@ -11270,6 +11424,22 @@
             ],
             "title": "Point Row Indices"
           },
+          "points": {
+            "anyOf": [
+              {
+                "enum": [
+                  "all",
+                  "outliers",
+                  "none"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points"
+          },
           "show_connect_means": {
             "default": false,
             "title": "Show Connect Means",
@@ -11295,6 +11465,22 @@
             "title": "Style",
             "type": "string"
           },
+          "summary": {
+            "anyOf": [
+              {
+                "enum": [
+                  "none",
+                  "mean",
+                  "median"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
+          },
           "title": {
             "default": "",
             "title": "Title",
@@ -11304,6 +11490,27 @@
             "default": "",
             "title": "X Label",
             "type": "string"
+          },
+          "y_domain": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Domain"
           },
           "y_label": {
             "default": "",

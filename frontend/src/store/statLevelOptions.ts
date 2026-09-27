@@ -10,6 +10,7 @@
 // adding to first paint (the `store/levelOrder.ts` shape: plain functions over
 // `useApp.getState()` with one `recordHistory` per edit).
 
+import type { StatMarks, StatMarksMode } from "../lib/plotviewSanitize";
 import { useApp } from "./useApp";
 
 export function setStatHideEmptyLevels(statHideEmptyLevels: boolean): void {
@@ -20,4 +21,16 @@ export function setStatHideEmptyLevels(statHideEmptyLevels: boolean): void {
 export function setStatShowGroupN(statShowGroupN: boolean): void {
   useApp.getState().recordHistory("toggle group n");
   useApp.setState({ statShowGroupN });
+}
+
+/** P2.6 box 1: merge `patch` into the persisted categorical-plot marks —
+ *  `PlotView.statMarks[mode]` ONLY (review finding 6: each mode keeps its
+ *  own bucket, so a choice made in one mode — say strip's `points: "none"`
+ *  — can never read as another mode's default — say box's fliers going
+ *  dark too, because the two used to share one flat object). One undo
+ *  entry per edit. */
+export function setStatMarks(mode: StatMarksMode, patch: StatMarks, label = "change plot marks"): void {
+  const st = useApp.getState();
+  st.recordHistory(label);
+  useApp.setState({ statMarks: { ...st.statMarks, [mode]: { ...st.statMarks[mode], ...patch } } });
 }

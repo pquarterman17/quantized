@@ -26,10 +26,10 @@ reaching the Content-Disposition header.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quantized.heavy_import import heavy_imports
 from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
@@ -42,6 +42,33 @@ from quantized.routes._export_common import (
 )
 
 router = APIRouter(prefix="/api/export", tags=["export"])
+
+
+class CategoryAxisStyle(BaseModel):
+    """P2.6 box 1: how the category tick labels are set -- the SAME options
+    the Canvas stage reads (``statRenderAxes.ts``). ``wrap`` is the line
+    width in characters (``calc.figure_category_axis.wrap_label``);
+    ``tiered`` draws a nested axis in two tiers with separators. Defaults =
+    the axis before these options.
+
+    ``tiers`` (P2.6 review finding 4) is the request's OWN [outer, inner]
+    pair per label (`lib/statMarks.nestedTiers`, split at the nest column's
+    own marker rather than the first ``" / "`` in the composite string) --
+    when given, ``calc.figure_category_axis.style_category_axis`` uses these
+    pairs directly instead of re-splitting the label text itself, so an
+    outer level whose own text contains ``" / "`` groups correctly. Only
+    meaningful on the FLAT (non-faceted) request's top-level ``axis_style``
+    -- a faceted request's per-panel pairs ride ``StatplotFacet.tiers``
+    instead (a nested axis's pairs are per-panel data)."""
+
+    rotation: Literal[0, 45, 90] = 0
+    wrap: int | None = Field(default=None, ge=4, le=60)
+    tiered: bool = False
+    tiers: list[tuple[str, str]] | None = None
+
+
+def _axis_style(style: CategoryAxisStyle | None) -> dict[str, Any] | None:
+    return style.model_dump() if style is not None else None
 
 
 class StatplotFacet(BaseModel):
@@ -57,6 +84,15 @@ class StatplotFacet(BaseModel):
     kind: str | None = None
     data: list[list[float]]
     labels: list[str] | None = None
+    # P2.6 review finding 2: this panel's own canvas y-domain (box only —
+    # see StatplotFigureRequest.y_domain's doc). None = today's
+    # autoscale-to-drawn-artists behaviour.
+    y_domain: tuple[float, float] | None = None
+    # P2.6 review finding 4: this panel's OWN [outer, inner] pairs, one per
+    # `labels` entry -- never the request's SHARED top-level
+    # `axis_style.tiers` (see CategoryAxisStyle.tiers's doc). None = no
+    # tiering for this panel beyond the shared `axis_style.tiered` gate.
+    tiers: list[tuple[str, str]] | None = None
 
 
 class StatplotFigureRequest(BaseModel):
@@ -106,6 +142,30 @@ class StatplotFigureRequest(BaseModel):
     # Per group: lift the connect-means line BEFORE it (a hidden empty level
     # sat there -- the screen's AxisSlot.gapBefore). None = no forced breaks.
     connect_breaks: list[bool] | None = None
+    # P2.6 box 1 (calc.figure_stat_marks): raw-point visibility, jitter
+    # width (fraction of the glyph half-width; 0 = none), the summary marker
+    # and the mean's error bars. None = the request before these fields,
+    # rendered as before (`show_points` / `show_mean_ci` keep their meaning).
+    points: Literal["all", "outliers", "none"] | None = None
+    jitter_width: float | None = Field(default=None, ge=0.0, le=1.0)
+    summary: Literal["none", "mean", "median"] | None = None
+    error_bars: Literal["none", "sd", "se", "ci95"] | None = None
+    axis_style: CategoryAxisStyle | None = None
+    # P2.6 review finding 2: an explicit y-axis range (the canvas's own
+    # box/strip value domain, `Stage/statStageExport.canvasYDomain`),
+    # applied with `ax.set_ylim` after drawing so matplotlib's own
+    # autoscale-to-drawn-artists can never disagree with the screen's
+    # domain (which deliberately spans hidden fliers/points so toggling a
+    # mark never rescales the plot). None = today's autoscale behaviour.
+    y_domain: tuple[float, float] | None = None
+
+    def marks(self) -> dict[str, Any] | None:
+        fields = {
+            "points": self.points, "jitter_width": self.jitter_width,
+            "summary": self.summary, "error_bars": self.error_bars,
+        }
+        out = {k: v for k, v in fields.items() if v is not None}
+        return out or None
 
 
 @router.post("/statplot-figure")
@@ -124,13 +184,17 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 from quantized.calc.figure_facets import render_stat_facets_figure  # lazy
 
             panels: list[dict[str, Any]] = [
-                {"label": f.label, "kind": f.kind, "data": f.data, "labels": f.labels}
+                {
+                    "label": f.label, "kind": f.kind, "data": f.data, "labels": f.labels,
+                    "y_domain": f.y_domain, "tiers": f.tiers,
+                }
                 for f in req.facets
             ]
             img = render_stat_facets_figure(
                 panels, default_kind=req.kind, dist=req.dist, bins=req.bins, fit=req.fit,
                 title=req.title, x_label=req.x_label, y_label=req.y_label,
                 fmt=req.fmt, style=req.style, dpi=dpi, show_n=req.show_n, caveat=req.caveat,
+                marks=req.marks(), axis_style=_axis_style(req.axis_style),
             )
         else:
             with heavy_imports("quantized.calc.figure_statplots"):
@@ -145,6 +209,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 show_points=req.show_points, point_row_indices=req.point_row_indices,
                 show_mean_ci=req.show_mean_ci, show_connect_means=req.show_connect_means,
                 show_n=req.show_n, caveat=req.caveat, connect_breaks=req.connect_breaks,
+                marks=req.marks(), axis_style=_axis_style(req.axis_style), y_domain=req.y_domain,
             )
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)
@@ -178,7 +243,10 @@ class CategoricalFigureRequest(BaseModel):
     # `list[list[float]]`, so a bar chart with an all-NaN level 422'd on
     # export (JSON has no NaN; the client's NaN mean arrived as null).
     values: list[list[float | None]]
-    errors: list[list[float | None]] | None = None  # [group][series] SEM
+    # [group][series] error-bar half-width. The client computes it for the
+    # error-bar kind on screen (P2.6 box 1: SEM by default, or SD / 95% t-CI,
+    # `lib/statMarks.errorHalfWidth`), so the figure draws what the screen does.
+    errors: list[list[float | None]] | None = None
     # P2.6 box 2: [group][series] sample sizes -> an n=K label over each
     # grouped bar; `caveat` -> footnote. Defaults off -- byte-identical.
     counts: list[list[int]] | None = None
@@ -196,6 +264,7 @@ class CategoricalFigureRequest(BaseModel):
     # byte-identical; `groups`/`series`/`values` above are still required by
     # the schema but unused in that case.
     facets: list[CategoricalFacet] | None = None
+    axis_style: CategoryAxisStyle | None = None  # P2.6 box 1, see StatplotFigureRequest
 
 
 @router.post("/categorical-figure")
@@ -225,7 +294,7 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
             img = render_categorical_facets_figure(
                 panels, stacked=req.stacked, title=req.title, x_label=req.x_label,
                 y_label=req.y_label, fmt=req.fmt, style=req.style, dpi=dpi,
-                caveat=req.caveat,
+                caveat=req.caveat, axis_style=_axis_style(req.axis_style),
             )
         else:
             with heavy_imports("quantized.calc.figure_categorical"):
@@ -235,6 +304,7 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
                 req.groups, req.series, req.values, req.errors, stacked=req.stacked,
                 fmt=req.fmt, style=req.style, title=req.title, x_label=req.x_label,
                 y_label=req.y_label, dpi=dpi, counts=req.counts, caveat=req.caveat,
+                axis_style=_axis_style(req.axis_style),
             )
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)

@@ -40,11 +40,37 @@ import {
 } from "../../lib/api/figures";
 import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
+import { axisStyleWire, errorHalfWidth, nestedTiers, type ResolvedStatMarks } from "../../lib/statMarks";
 import type { GroupSpec } from "../../lib/statschooser";
 import { finiteOf, type IndexedGroupSpec, type StatMode } from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
+import { boxValueDomain, drawMarks, stripValueDomain } from "./statDrawMarks";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
+
+/** Review finding 2: the canvas's box/strip value domain (`statDrawMarks.
+ *  boxValueDomain`/`stripValueDomain`) always spans every raw datum
+ *  (fliers, hidden points) so toggling a mark never rescales the plot --
+ *  but matplotlib autoscales to whatever it actually drew, which is a
+ *  NARROWER range whenever a mark is hidden (`points: "none"`, say). Rather
+ *  than change either side's domain rule, send the canvas's own range as an
+ *  explicit y-limit so the export matches it exactly (`ax.set_ylim`, see
+ *  `figure_statplots.render_statplot_figure`'s `y_domain`). Violin has no
+ *  such divergence (its domain is the KDE curve's own extent, never the
+ *  points') so this is box/strip only. */
+export function canvasYDomain(draw: StatDrawData | null, m: ResolvedStatMarks | null): [number, number] | null {
+  if (!draw) return null;
+  if (draw.mode === "box") return boxValueDomain(draw.boxes, m ?? drawMarks(draw));
+  if (draw.mode === "strip") return stripValueDomain(draw);
+  return null;
+}
+
+/** Review finding 4: `draw.nestLabel` when `draw` carries one (box/violin/
+ *  strip/bar all share `CategoryAxisMarks`), else null — never guessed from
+ *  the draw's labels. */
+function nestLabelOf(draw: StatDrawData | null): string | null {
+  return draw && "nestLabel" in draw ? draw.nestLabel ?? null : null;
+}
 
 export function buildExportSpec(
   mode: StatMode,
@@ -61,6 +87,10 @@ export function buildExportSpec(
   pointRowIndices: number[][] | null = null,
   showMeanCI = false,
   showConnectMeans = false,
+  /** P2.6 box 1: the resolved marks the screen draws with. When given they
+   *  are posted as `points` / `jitter_width` / `summary` / `error_bars`
+   *  (and connect-means), superseding the legacy flags above. */
+  marks: ResolvedStatMarks | null = null,
 ): StatplotFigureSpec | null {
   if (mode === "box" || mode === "violin" || mode === "strip") {
     const finiteGroups = groups.filter((g) => g.values.length > 0);
@@ -70,7 +100,7 @@ export function buildExportSpec(
     // points overlay is always on (no toggle for it -- it's the whole plot),
     // so `show_points` is forced true there regardless of the (box-only)
     // `showPoints` toggle state.
-    const marks =
+    const legacy =
       mode === "violin"
         ? {}
         : {
@@ -79,6 +109,7 @@ export function buildExportSpec(
             show_mean_ci: showMeanCI,
             show_connect_means: showConnectMeans,
           };
+    const wire = marks ? marksWire(mode, marks, pointRowIndices) : legacy;
     return {
       kind: mode,
       data: finiteGroups.map((g) => g.values),
@@ -88,7 +119,7 @@ export function buildExportSpec(
       x_label: groupLabel,
       y_label: valueLabel,
       filename: `${mode}_${valueLabel}`,
-      ...marks,
+      ...wire,
     };
   }
   const values = finiteOf(data, valueCol);
@@ -119,6 +150,19 @@ export function buildExportSpec(
   };
 }
 
+/** The marks as the export request carries them (P2.6 box 1) — the SAME
+ *  resolved object the canvas draws with. Violin takes the points only (its
+ *  summary is its inner quartile glyph); summary / error bars / connect-means
+ *  are box / strip marks. */
+function marksWire(mode: StatMode, m: ResolvedStatMarks, rows: number[][] | null) {
+  const pts = { points: m.points, jitter_width: m.jitterWidth, point_row_indices: rows };
+  if (mode === "violin") return pts;
+  return {
+    ...pts, show_points: m.points === "all", summary: m.summary, error_bars: m.errorBars,
+    show_mean_ci: m.summary === "mean", show_connect_means: m.connectMeans,
+  };
+}
+
 /** Everything `exportFacetedFigure` used to close over as a method on the
  *  hook. Passed explicitly so the whole export path can live out here.
  *  (Review finding 4: this said "and be loaded on demand", which the same
@@ -135,6 +179,8 @@ export interface FacetedExportInputs {
    *  caveat, exactly as the screen shows them. */
   showN?: boolean;
   caveat?: string | null;
+  /** P2.6 box 1: the marks the screen draws with (null: legacy request). */
+  marks?: ResolvedStatMarks | null;
 }
 
 /** Restate raw groups on the draw's axis (P2.6 box 2): one entry per AXIS
@@ -161,15 +207,32 @@ export function onAxis<T>(
 }
 
 /** A bar matrix on the wire: NaN means become null (JSON has no NaN; the
- *  route draws no bar for them), and `counts` rides only when n is shown. */
-function barWire(d: BarChartData, showN: boolean) {
+ *  route draws no bar for them), and `counts` rides only when n is shown.
+ *  `errors` are the half-widths of the error-bar kind on screen (P2.6 box 1:
+ *  `lib/statMarks.errorHalfWidth`, SEM unless the marks pick SD / 95% CI /
+ *  none) — the export draws exactly the whiskers the canvas does. */
+function barWire(d: BarChartData, showN: boolean, m: ResolvedStatMarks | null = null) {
+  const kind = m?.errorBars ?? "se";
+  const half = (s: { sem: number; n: number }) => errorHalfWidth(kind, s.sem, s.n);
   return {
     groups: d.groups.map((g) => g.label),
     series: d.seriesLabels,
     values: d.groups.map((g) => g.series.map((s) => (Number.isFinite(s.mean) ? s.mean : null))),
-    errors: d.groups.map((g) => g.series.map((s) => (Number.isFinite(s.sem) ? s.sem : null))),
+    errors: d.groups.map((g) => g.series.map((s) => (Number.isFinite(half(s)) ? half(s) : null))),
     counts: showN ? d.groups.map((g) => g.series.map((s) => s.n)) : null,
   };
+}
+
+/** The label options on the wire for these tick labels (null: none set).
+ *  `nestLabel` (review finding 4) is the STRUCTURAL "is this axis nested"
+ *  signal (`StatDrawData.nestLabel`) — null for bar/facet call sites that
+ *  never nest. */
+function axisWire(
+  m: ResolvedStatMarks | null | undefined,
+  labels: readonly string[],
+  nestLabel: string | null | undefined = null,
+) {
+  return m ? axisStyleWire(m, labels, nestLabel) : null;
 }
 
 /** Rebuilds a `facets[]` wire payload from `drawFacets` and renders one
@@ -189,13 +252,14 @@ export async function exportFacetedFigure(
   const { drawFacets, mode, barStack, groupLabel, barValueLabel, valueLabel } = o;
   const showN = o.showN ?? false;
   const caveat = o.caveat ?? null;
+  const m = o.marks ?? null;
   if (!drawFacets || drawFacets.length === 0) return;
   if (mode === "bar") {
     const facets: CategoricalFacetSpec[] = [];
     for (const f of drawFacets) {
       const draw = f.draw;
       if (draw.mode !== "bar") continue;
-      facets.push({ label: f.label, ...barWire(draw.data, showN && !barStack) });
+      facets.push({ label: f.label, ...barWire(draw.data, showN && !barStack, m) });
     }
     if (!facets.length) return;
     const spec: CategoricalFigureSpec = {
@@ -211,24 +275,40 @@ export async function exportFacetedFigure(
       filename: `bar_${barValueLabel}_faceted`,
       facets,
       caveat,
+      axis_style: axisWire(m, facets.flatMap((f) => f.groups)),
     };
     await exportCategoricalFigure(spec);
     return;
   }
   if (mode !== "box" && mode !== "violin") return;
+  // Review finding 4: every panel shares the SAME nest column (a single
+  // `useStatStage` compute, stamped uniformly by `computeFacetGroupDraws`),
+  // so its `nestLabel` is read once, off the first panel, for the SHARED
+  // `tiered` flag below; each panel's own [outer, inner] PAIRS still come
+  // from ITS OWN labels (`StatplotFacetSpec.tiers`'s doc — a panel's pairs
+  // are not the flattened cross-panel list a shared field would carry).
+  const nestLabel = nestLabelOf(drawFacets[0]?.draw ?? null);
   const facets: StatplotFacetSpec[] = [];
   for (const f of drawFacets) {
     if (!f.rawGroups || f.rawGroups.length === 0) continue;
     const slots = f.draw.mode === "box" || f.draw.mode === "violin" ? f.draw.slots : null;
     const axis = onAxis(slots, f.rawGroups.map((g) => g.values), []);
+    const labels = axis ? axis.labels : f.rawGroups.map((g) => g.label);
     facets.push({
       label: f.label,
       kind: f.draw.mode === "violin" ? "violin" : "box",
       data: axis ? axis.values : f.rawGroups.map((g) => g.values),
-      labels: axis ? axis.labels : f.rawGroups.map((g) => g.label),
+      labels,
+      // Review finding 2: this panel's OWN canvas domain, under its OWN
+      // facet-adjusted marks (`statStageMarks.facetMarks`, already stamped
+      // on `f.draw.marks`) — each panel autoscales independently, on screen
+      // and in the export alike.
+      y_domain: canvasYDomain(f.draw, null),
+      tiers: nestedTiers(labels, nestLabel)?.pairs ?? null,
     });
   }
   if (!facets.length) return;
+  const style = axisWire(m, facets.flatMap((f) => f.labels ?? []), nestLabel);
   const spec: StatplotFigureSpec = {
     kind: mode,
     data: facets[0].data,
@@ -241,6 +321,12 @@ export async function exportFacetedFigure(
     facets,
     show_n: showN,
     caveat,
+    ...(m ? { summary: m.summary, error_bars: m.errorBars, points: m.points } : {}),
+    // `tiered` (whether nesting is active) is shared; `tiers` itself is
+    // NOT — dropped here so it can never be applied, uniformly and wrongly,
+    // to every panel's own different label set (each panel's pairs ride
+    // its own `StatplotFacetSpec.tiers` above instead).
+    axis_style: style ? { rotation: style.rotation, wrap: style.wrap, tiered: style.tiered } : null,
   };
   await exportStatplotFigure(spec);
 }
@@ -258,9 +344,6 @@ export interface StatStageExportInputs extends FacetedExportInputs {
   dist: string;
   bins: string;
   fit: string | null;
-  showPoints: boolean;
-  showMeanCI: boolean;
-  connectMeans: boolean;
 }
 
 export async function exportStatStage(fmt: string, o: StatStageExportInputs): Promise<void> {
@@ -276,7 +359,8 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
   if (mode === "bar") {
     if (!draw || draw.mode !== "bar" || draw.data.groups.length === 0) return;
     await exportCategoricalFigure({
-      ...barWire(draw.data, showN && !o.barStack),
+      ...barWire(draw.data, showN && !o.barStack, o.marks ?? null),
+      axis_style: axisWire(o.marks, draw.data.groups.map((g) => g.label)),
       stacked: o.barStack,
       caveat,
       fmt,
@@ -292,14 +376,17 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
   // `point_row_indices` (parallel to the values `buildExportSpec` sends)
   // so the export scatters points in the SAME relative spot the screen
   // does (identical deterministic-jitter hash, both sides).
+  // Whatever raw points the stage resolved for its marks (`statStageMarks.
+  // needsPoints`) are exactly the ones the export needs.
+  const m = o.marks ?? null;
   let pointRowIndices: number[][] | null = null;
-  if (mode === "strip" || (mode === "box" && o.showPoints)) {
+  if (o.indexedGroups.length && m && m.points !== "none") {
     const finiteIndexed = o.indexedGroups.filter((g) => g.points.length > 0);
     pointRowIndices = finiteIndexed.map((g) => g.points.map((p) => p.rowIndex));
   }
   const spec = buildExportSpec(
     mode, o.data, o.groups, o.valueCol, o.valueLabel, o.groupLabel, o.dist, o.bins, o.fit, fmt,
-    o.showPoints, pointRowIndices, o.showMeanCI, o.connectMeans,
+    m?.points === "all", pointRowIndices, m?.summary === "mean", m?.connectMeans ?? false, m,
   );
   if (!spec) return;
   if (mode === "box" || mode === "violin" || mode === "strip") {
@@ -311,10 +398,15 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
       if (pointRowIndices) spec.point_row_indices = onAxis(slots, pointRowIndices, [])?.values ?? null;
       // Only when a HIDDEN empty level must break the line (visible empties
       // travel as `[]` groups and break it on their own).
-      if (o.connectMeans && axis.breaks.some(Boolean)) spec.connect_breaks = axis.breaks;
+      if (m?.connectMeans && axis.breaks.some(Boolean)) spec.connect_breaks = axis.breaks;
     }
     spec.show_n = showN;
     spec.caveat = caveat;
+    spec.axis_style = axisWire(m, spec.labels ?? [], nestLabelOf(draw));
+    // Review finding 2: send the canvas's own y-domain so matplotlib's
+    // autoscale-to-drawn-artists can never disagree with it (points/fliers
+    // hidden by the current marks would otherwise narrow the export's range).
+    spec.y_domain = canvasYDomain(draw, m);
   }
   await exportStatplotFigure(spec);
 }

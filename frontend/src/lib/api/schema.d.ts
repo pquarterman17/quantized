@@ -5685,6 +5685,7 @@ export interface components {
         };
         /** CategoricalFigureRequest */
         CategoricalFigureRequest: {
+            axis_style?: components["schemas"]["CategoryAxisStyle"] | null;
             /** Caveat */
             caveat?: string | null;
             /** Counts */
@@ -5739,6 +5740,44 @@ export interface components {
              * @default
              */
             y_label?: string;
+        };
+        /**
+         * CategoryAxisStyle
+         * @description P2.6 box 1: how the category tick labels are set -- the SAME options
+         *     the Canvas stage reads (``statRenderAxes.ts``). ``wrap`` is the line
+         *     width in characters (``calc.figure_category_axis.wrap_label``);
+         *     ``tiered`` draws a nested axis in two tiers with separators. Defaults =
+         *     the axis before these options.
+         *
+         *     ``tiers`` (P2.6 review finding 4) is the request's OWN [outer, inner]
+         *     pair per label (`lib/statMarks.nestedTiers`, split at the nest column's
+         *     own marker rather than the first ``" / "`` in the composite string) --
+         *     when given, ``calc.figure_category_axis.style_category_axis`` uses these
+         *     pairs directly instead of re-splitting the label text itself, so an
+         *     outer level whose own text contains ``" / "`` groups correctly. Only
+         *     meaningful on the FLAT (non-faceted) request's top-level ``axis_style``
+         *     -- a faceted request's per-panel pairs ride ``StatplotFacet.tiers``
+         *     instead (a nested axis's pairs are per-panel data).
+         */
+        CategoryAxisStyle: {
+            /**
+             * Rotation
+             * @default 0
+             * @enum {integer}
+             */
+            rotation?: 0 | 45 | 90;
+            /**
+             * Tiered
+             * @default false
+             */
+            tiered?: boolean;
+            /** Tiers */
+            tiers?: [
+                string,
+                string
+            ][] | null;
+            /** Wrap */
+            wrap?: number | null;
         };
         /** CellRequest */
         CellRequest: {
@@ -9489,9 +9528,20 @@ export interface components {
             label: string;
             /** Labels */
             labels?: string[] | null;
+            /** Tiers */
+            tiers?: [
+                string,
+                string
+            ][] | null;
+            /** Y Domain */
+            y_domain?: [
+                number,
+                number
+            ] | null;
         };
         /** StatplotFigureRequest */
         StatplotFigureRequest: {
+            axis_style?: components["schemas"]["CategoryAxisStyle"] | null;
             /**
              * Bins
              * @default fd
@@ -9510,6 +9560,8 @@ export interface components {
             dist?: string;
             /** Dpi */
             dpi?: number | null;
+            /** Error Bars */
+            error_bars?: ("none" | "sd" | "se" | "ci95") | null;
             /** Facets */
             facets?: components["schemas"]["StatplotFacet"][] | null;
             /**
@@ -9524,12 +9576,16 @@ export interface components {
              * @default pdf
              */
             fmt?: string;
+            /** Jitter Width */
+            jitter_width?: number | null;
             /** Kind */
             kind: string;
             /** Labels */
             labels?: string[] | null;
             /** Point Row Indices */
             point_row_indices?: number[][] | null;
+            /** Points */
+            points?: ("all" | "outliers" | "none") | null;
             /**
              * Show Connect Means
              * @default false
@@ -9555,6 +9611,8 @@ export interface components {
              * @default default
              */
             style?: string;
+            /** Summary */
+            summary?: ("none" | "mean" | "median") | null;
             /**
              * Title
              * @default
@@ -9565,6 +9623,11 @@ export interface components {
              * @default
              */
             x_label?: string;
+            /** Y Domain */
+            y_domain?: [
+                number,
+                number
+            ] | null;
             /**
              * Y Label
              * @default

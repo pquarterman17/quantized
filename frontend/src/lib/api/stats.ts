@@ -183,6 +183,8 @@ export interface BoxStatWire {
    *  optional for wire back-compat with older test fixtures/mocks; the live
    *  backend always sends them (`calc.statplots.box_stats`). */
   sem?: number;
+  /** Sample SD (ddof=1), P2.6 box 1's SD error bar. */
+  sd?: number;
   ci_lo?: number;
   ci_hi?: number;
   n: number;

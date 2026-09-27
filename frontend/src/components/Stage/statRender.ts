@@ -15,8 +15,10 @@
 
 import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
+import type { ResolvedStatMarks } from "../../lib/statMarks";
 import { niceTicks } from "../../lib/ticks";
-import { drawCategoryAxis } from "./statRenderAxes";
+import { axisLabelsOf, axisStyleOf } from "./statDrawMarks";
+import { categoryAxisLayout, drawCategoryAxis } from "./statRenderAxes";
 import {
   finiteDomain,
   violinOutline,
@@ -26,7 +28,7 @@ import {
 } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
 import { drawBar } from "./statRenderBar";
-import { drawBoxesWithMarks, drawStrip } from "./statRenderBox";
+import { drawBoxesWithMarks, drawJitteredPoints, drawStrip } from "./statRenderBox";
 import { drawEmptySlotMarkers, drawSlotCounts, slotPlan } from "./statRenderSlots";
 import { drawSlotSelection, type StatSelectionMarks } from "./statRenderSelection";
 
@@ -61,6 +63,22 @@ export interface CategoryAxisMarks {
    *  this DIRECTLY to decide which points get a ring, rather than through a
    *  copy carried inside `StatSelectionMarks` (P2.6 review finding 7). */
   selectedRows?: ReadonlySet<number> | null;
+  /** P2.6 box 1: points / jitter / summary / error bars / label options
+   *  (`lib/statMarks.resolveStatMarks`). Absent = the legacy flags below
+   *  (`statDrawMarks.drawMarks`). */
+  marks?: ResolvedStatMarks | null;
+  /** Review finding 4: the STRUCTURAL signal for a two-tier nested axis —
+   *  the nest (second factor) column's own display name when one is
+   *  active, null/absent otherwise. Whether a label is drawn/exported in
+   *  two tiers must never be read off the label TEXT (a flat category
+   *  value containing " / ", e.g. "Co / Pt", would then be misread as
+   *  nested) — it is exactly whether this is set, mirroring `groupLabel`'s
+   *  own "channel" vs `"{col} / {col}"` split (`useStatStage`'s `nestCol`,
+   *  null outside box/violin/strip). Also used to split a composite label
+   *  at ITS marker (`lib/statMarks.nestedTiers`), not the first
+   *  `NESTED_LABEL_SEP` in the string, so a NESTED outer level whose own
+   *  text contains " / " groups correctly too. */
+  nestLabel?: string | null;
 }
 
 export type StatDrawData =
@@ -74,15 +92,16 @@ export type StatDrawData =
        *  off, so `drawBoxesWithMarks` simply skips the overlay. Index-aligned
        *  with `boxes` (same group order). */
       points?: BoxPointsGroup[] | null;
-      /** Draw a mean +/- 95% CI diamond+whisker marker per group (JMP_GAP J5
-       *  #2), reading `boxes[i].mean/ciLo/ciHi`. */
-      showMeanCI?: boolean;
-      /** Draw a dashed line connecting each group's mean, in on-screen
-       *  category order (JMP_GAP J5 residual, the "interaction plot" read)
-       *  — reads `boxes[i].mean` via `lib/statstage.connectMeansSeries`. */
-      connectMeans?: boolean;
     } & CategoryAxisMarks
-  | ({ mode: "violin"; violins: ViolinGroup[]; valueLabel: string; groupLabel: string } & CategoryAxisMarks)
+  | ({
+      mode: "violin";
+      violins: ViolinGroup[];
+      valueLabel: string;
+      groupLabel: string;
+      /** P2.6 box 1: each group's raw points (index-aligned with `violins`)
+       *  when the marks show any. */
+      points?: BoxPointsGroup[] | null;
+    } & CategoryAxisMarks)
   | {
       mode: "qq";
       theo: number[];
@@ -116,6 +135,12 @@ export type StatDrawData =
       slots?: AxisSlot[] | null;
       selection?: StatSelectionMarks | null;
       selectedRows?: ReadonlySet<number> | null;
+      /** P2.6 box 1: the error-bar kind and label options. */
+      marks?: ResolvedStatMarks | null;
+      /** Review finding 4: always null/absent — bar never nests (`useStatStage`'s
+       *  `nestCol` is gated to box/violin/strip). Present only so `withNestLabel`'s
+       *  union spread type-checks uniformly across every non-qq/histogram mode. */
+      nestLabel?: string | null;
     }
   | {
       /** Points-only categorical plot (JMP_GAP J5 #3): same category slots
@@ -127,12 +152,20 @@ export type StatDrawData =
       points: BoxPointsGroup[];
       valueLabel: string;
       groupLabel: string;
-      showMeanCI: boolean;
-      /** See the `box` variant's `connectMeans` doc above. */
-      connectMeans: boolean;
     } & CategoryAxisMarks;
 
-export type Rect = { x: number; y: number; w: number; h: number };
+export type Rect = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  /** Review finding 7: the SAME cap (`h * 0.45`, floored at `MARGIN.bottom`)
+   *  `plotRect` sized this rect's own margin from — carried on the rect so
+   *  the painter (`drawCategoryAxis`) computes the IDENTICAL capped layout
+   *  rather than an uncapped one nothing else agrees with. Absent when
+   *  `data` has no category axis at all (bottom is the plain margin). */
+  maxBottom?: number;
+};
 
 export function cssVar(name: string, fallback: string): string {
   if (typeof getComputedStyle !== "function") return fallback;
@@ -147,12 +180,25 @@ export function fmt(v: number): string {
   return Number(v.toPrecision(4)).toString();
 }
 
-export function plotRect(w: number, h: number): Rect {
+/** The plot area of a `w` x `h` canvas. A categorical `data` sizes the bottom
+ *  margin from its category axis (wrapped / rotated / two-tier labels need
+ *  more than one line — `statRenderAxes.categoryAxisLayout`); pass the SAME
+ *  draw the painter got so a click maps onto what was painted. */
+export function plotRect(w: number, h: number, data: StatDrawData | null = null): Rect {
+  const labels = axisLabelsOf(data);
+  // Review finding 7: ONE cap, computed once and carried on the returned
+  // rect (`maxBottom`) — `categoryAxisLayout` itself degrades the layout to
+  // fit it (shorter wrap, then no rotation, then an outright clamp) instead
+  // of this function clamping the NUMBER externally while the painter drew
+  // an uncapped one nothing here agreed with.
+  const maxBottom = Math.max(MARGIN.bottom, h * 0.45);
+  const bottom = labels.length ? categoryAxisLayout(labels, axisStyleOf(data), maxBottom).bottom : MARGIN.bottom;
   return {
     x: MARGIN.left,
     y: MARGIN.top,
     w: Math.max(1, w - MARGIN.left - MARGIN.right),
-    h: Math.max(1, h - MARGIN.top - MARGIN.bottom),
+    h: Math.max(1, h - MARGIN.top - bottom),
+    maxBottom,
   };
 }
 
@@ -170,7 +216,7 @@ export function draw(canvas: HTMLCanvasElement, host: HTMLElement, data: StatDra
 
   const ink = cssVar("--text", "#e6e6e6");
   const muted = cssVar("--text-dim", "#9aa");
-  const rect = plotRect(W, H);
+  const rect = plotRect(W, H, data);
   ctx.strokeStyle = muted;
   ctx.lineWidth = 1;
   ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w, rect.h);
@@ -257,7 +303,7 @@ function drawViolins(
   const domain = finiteDomain(d.violins.map((v) => [v.x[0] ?? 0, v.x[v.x.length - 1] ?? 0]));
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
   const plan = slotPlan(d.slots, d.violins.map((v) => v.label));
-  drawCategoryAxis(ctx, rect, plan.slots, plan.labels, d.groupLabel, ink, muted);
+  drawCategoryAxis(ctx, rect, plan.slots, plan.labels, d.groupLabel, ink, muted, axisStyleOf(d));
   drawEmptySlotMarkers(ctx, rect, plan.slots, plan.empty, muted);
   if (d.showN !== false) drawSlotCounts(ctx, rect, plan, d.violins.map((v) => v.n), muted);
 
@@ -304,6 +350,12 @@ function drawViolins(
     ctx.beginPath();
     ctx.arc(cx, vy(med), 2, 0, 2 * Math.PI);
     ctx.fill();
+
+    // P2.6 box 1: raw points over the violin (all / outliers only).
+    const pts = d.points?.[i];
+    if (pts && d.marks && d.marks.points !== "none") {
+      drawJitteredPoints(ctx, pts, cx, hw, vy, color, d.marks.jitterWidth, d.selectedRows, d.marks.points);
+    }
   });
 }
 

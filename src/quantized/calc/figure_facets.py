@@ -236,6 +236,16 @@ def render_facets_figure(
         return savefig_bytes(built.fig, fmt, dpi=dpi, transparent=transparent)
 
 
+def _facet_marks(marks: dict[str, Any] | None, kind: str) -> dict[str, Any] | None:
+    """A facet panel carries no row indices, so no jittered points (P2.6 box
+    1): a box panel shows its fliers for ``points`` "all" or "outliers", a
+    violin panel none -- the screen's ``statStageMarks.facetMarks``."""
+    if not marks or "points" not in marks:
+        return marks
+    shown = kind == "box" and marks["points"] != "none"
+    return {**marks, "points": "outliers" if shown else "none"}
+
+
 def render_stat_facets_figure(
     panels: list[dict[str, Any]],
     *,
@@ -253,6 +263,8 @@ def render_stat_facets_figure(
     dpi: int | None = None,
     show_n: bool = False,
     caveat: str | None = None,
+    marks: dict[str, Any] | None = None,
+    axis_style: dict[str, Any] | None = None,
 ) -> bytes:
     """Faceted box/violin export (GUI_INTERACTION #12 slice 4b, StatStage's
     "facet by" grid). Each ``panels[i]`` is ``{"label": str, "kind": "box" |
@@ -269,7 +281,10 @@ def render_stat_facets_figure(
     Reuses ``figure_statplots._draw_statplot`` for each panel so a single
     facet renders byte-identically to that module's flat single-panel path --
     including P2.6 box 2's empty slots, ``show_n`` counts and ``caveat``
-    footnote (``calc.figure_group_notes``).
+    footnote (``calc.figure_group_notes``) and P2.6 box 1's ``marks``
+    (summary marker / error bars / fliers -- faceted panels carry no row
+    indices, so no jittered points) and ``axis_style`` (label rotation /
+    wrapping / two-tier nested axis), applied to every panel alike.
     """
     with heavy_imports("quantized.calc.figure_group_notes", "quantized.calc.figure_statplots"):
         from quantized.calc.figure_group_notes import add_caveat, supxlabel_above_caveat
@@ -307,7 +322,7 @@ def render_stat_facets_figure(
         title = safe_mathtext_label(title)
         x_label = safe_mathtext_label(x_label)
         y_label = safe_mathtext_label(y_label)
-        prepared: list[tuple[str, str, Any, list[str] | None]] = []
+        prepared: list[tuple[str, str, Any, list[str] | None, Any, Any, list[str] | None]] = []
         for p in panels:
             label = safe_mathtext_label(str(p.get("label", "")))
             kind = p.get("kind") or default_kind
@@ -317,21 +332,51 @@ def render_stat_facets_figure(
             if not isinstance(data, list) or not data:
                 raise ValueError(f"facet {label!r} needs a non-empty list of groups")
             flabels = p.get("labels")
+            # Review finding 8: the raw labels ride alongside the sanitized
+            # ones (`_draw_statplot`'s own `raw_labels` doc).
+            raw_flabels = [str(g) for g in flabels] if flabels else None
             flabels = [safe_mathtext_label(str(g)) for g in flabels] if flabels else flabels
-            prepared.append((label, kind, data, flabels))
+            prepared.append(
+                (label, kind, data, flabels, p.get("y_domain"), p.get("tiers"), raw_flabels),
+            )
         fig, axes = _new_grid_figure(n, figsize)
-        for ax, (label, kind, data, flabels) in zip(axes, prepared, strict=True):
-            _draw_statplot(ax, kind, data, flabels, dist, bins, fit, st, show_n=show_n)
+        panel_rows = zip(axes, prepared, strict=True)
+        any_outer = False
+        for ax, (label, kind, data, flabels, y_domain, panel_tiers, raw_flabels) in panel_rows:
+            # Review finding 4: a nested axis's [outer, inner] pairs are
+            # PER-PANEL (each panel's own composite labels) -- never the
+            # shared top-level `axis_style`, whose own `tiers` (if any) was
+            # computed for a DIFFERENT set of labels entirely. `tiered`
+            # alone stays shared (a global on/off), gating each panel's own
+            # string-split fallback when it carries no `tiers` of its own.
+            panel_style = (
+                {**(axis_style or {}), "tiers": panel_tiers} if panel_tiers else axis_style
+            )
+            outer = _draw_statplot(
+                ax, kind, data, flabels, dist, bins, fit, st, show_n=show_n,
+                marks=_facet_marks(marks, kind), axis_style=panel_style, raw_labels=raw_flabels,
+            )
+            # Review finding 5: at least one panel drew a two-tier nested
+            # axis (its own outer-level row) -- the shared x title/caveat
+            # band below (there is no single outer axis, unlike the flat
+            # path's `(outer or ax).set_xlabel`, to move it onto) needs the
+            # same TIER_BAND more room, or it sits on top of that tier.
+            any_outer = any_outer or outer is not None
+            # Review finding 2: this panel's OWN canvas domain (see
+            # `render_statplot_figure`'s ``y_domain`` doc) -- each panel
+            # autoscales independently, on screen and in the export alike.
+            if y_domain is not None:
+                ax.set_ylim(float(y_domain[0]), float(y_domain[1]))
             ax.set_title(label, fontsize=st.font_size)
             if not st.box_on:
                 ax.spines["top"].set_visible(False)
                 ax.spines["right"].set_visible(False)
         if title:
             fig.suptitle(title)
-        supxlabel_above_caveat(fig, x_label, caveat)
+        supxlabel_above_caveat(fig, x_label, caveat, tiered=any_outer)
         if y_label:
             fig.supylabel(y_label)
-        fig.tight_layout(rect=add_caveat(fig, caveat))  # None = default layout
+        fig.tight_layout(rect=add_caveat(fig, caveat, tiered=any_outer))  # None = default layout
         return savefig_bytes(fig, fmt, dpi=resolved_dpi)
 
 
@@ -348,6 +393,7 @@ def render_categorical_facets_figure(
     height_in: float | None = None,
     dpi: int = 200,
     caveat: str | None = None,
+    axis_style: dict[str, Any] | None = None,
 ) -> bytes:
     """Faceted grouped/stacked bar export (GUI_INTERACTION #12 slice 4b,
     StatStage's bar-mode "facet by" grid). Each ``panels[i]`` is
@@ -407,7 +453,8 @@ def render_categorical_facets_figure(
         prepared = []
         for p in panels:
             label = safe_mathtext_label(str(p.get("label", "")))
-            groups = [safe_mathtext_label(str(g)) for g in p.get("groups", [])]
+            raw_groups = [str(g) for g in p.get("groups", [])]  # review finding 8
+            groups = [safe_mathtext_label(g) for g in raw_groups]
             series = [safe_mathtext_label(str(s)) for s in p.get("series", [])]
             if not groups:
                 raise ValueError(f"facet {label!r} needs a non-empty groups list")
@@ -418,10 +465,13 @@ def render_categorical_facets_figure(
             )
             errs = _to_error_matrix(p.get("errors"), len(groups), len(series))
             cnts = None if stacked else _to_counts(p.get("counts"), len(groups), len(series))
-            prepared.append((label, groups, series, vals, errs, cnts))
+            prepared.append((label, groups, series, vals, errs, cnts, raw_groups))
         fig, axes = _new_grid_figure(n, figsize)
-        for ax, (label, groups, series, vals, errs, cnts) in zip(axes, prepared, strict=True):
-            _draw_categorical_bars(ax, groups, series, vals, errs, stacked, cnts)
+        cat_rows = zip(axes, prepared, strict=True)
+        for ax, (label, groups, series, vals, errs, cnts, raw_groups) in cat_rows:
+            _draw_categorical_bars(
+                ax, groups, series, vals, errs, stacked, cnts, axis_style, raw_groups,
+            )
             ax.set_title(label, fontsize=st.font_size)
             if not st.box_on:
                 ax.spines["top"].set_visible(False)

@@ -24,7 +24,7 @@ import {
   type PanelLayout,
 } from "./panelwindow";
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
-import { boolViewFields, sanitizeRegionShades } from "./plotviewSanitize";
+import { boolViewFields, sanitizeRegionShades, sanitizeStatMarksByMode, type StatMarksByMode } from "./plotviewSanitize";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
@@ -133,12 +133,12 @@ export interface PlotView {
   insetMode: boolean;
   polarMode: boolean;
   statMode: boolean;
-  /** P2.6 box 2 — Stat Stage display options that persist with the plot:
-   *  hide empty category levels (default false: an empty level keeps its slot
-   *  with an n=0 marker), and the per-group n annotation (default true, the
-   *  stage's long-standing `n=` captions). Screen and export both honour them. */
+  /** P2.6 — Stat Stage display options that persist with the plot (screen and
+   *  export both honour them): hide empty levels (default false: n=0 slots), the
+   *  per-group n captions (default true), box 1's marks (per mode: `StatMarksByMode`). */
   statHideEmptyLevels: boolean;
   statShowGroupN: boolean;
+  statMarks: StatMarksByMode;
   xLim: [number, number] | null;
   yLim: [number, number] | null;
   xStep: number | null;
@@ -209,8 +209,7 @@ export function defaultPlotView(): PlotView {
     insetMode: false,
     polarMode: false,
     statMode: false,
-    statHideEmptyLevels: false,
-    statShowGroupN: true,
+    statHideEmptyLevels: false, statShowGroupN: true, statMarks: {},
     xLim: null,
     yLim: null,
     xStep: null,
@@ -685,6 +684,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     yScale: axisScaleOrDefault(o.yScale, o.yLog, fb.yScale),
     xScale: axisScaleOrDefault(o.xScale, o.xLog, fb.xScale),
     ...boolViewFields(o, fb),
+    statMarks: sanitizeStatMarksByMode(o.statMarks),
     legendPos: LEGEND_POS.includes(o.legendPos as LegendPos) ? (o.legendPos as LegendPos) : fb.legendPos,
     legendXY: legendXYOrNull(o.legendXY),
     // Same fraction shape + clamp-not-drop convention as `legendXY` (decode #52).

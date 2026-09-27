@@ -13,6 +13,14 @@
 
 import { stackedTotal } from "../../lib/barlayout";
 import { barValueDomain, finiteDomain } from "../../lib/statstage";
+import {
+  barDomainCandidates,
+  barErrorHalf,
+  boxValueDomain,
+  drawMarks,
+  stripValueDomain,
+  summaryExtents,
+} from "./statDrawMarks";
 import type { Rect, StatDrawData } from "./statRender";
 import { plotRect } from "./statRender";
 import { slotPlan } from "./statRenderSlots";
@@ -71,9 +79,16 @@ export function drawSlotSelection(
  *  x-bucket + "is this row/column on the canvas at all" test — it does NOT
  *  know whether slot i actually drew anything at this y (see `clickedSlotAt`,
  *  which layers that check on top for the real click handler). */
-export function slotIndexAt(width: number, height: number, x: number, y: number, count: number): number | null {
+export function slotIndexAt(
+  width: number,
+  height: number,
+  x: number,
+  y: number,
+  count: number,
+  data: StatDrawData | null = null,
+): number | null {
   if (count <= 0) return null;
-  const rect = plotRect(width, height);
+  const rect = plotRect(width, height, data);
   if (x < rect.x || x > rect.x + rect.w || y < rect.y || y > height) return null;
   return Math.min(count - 1, Math.max(0, Math.floor(((x - rect.x) / rect.w) * count)));
 }
@@ -100,13 +115,9 @@ function slotContentPixelRange(data: StatDrawData, rect: Rect, slotIndex: number
       const gi = plan.groupSlot.indexOf(slotIndex);
       if (gi < 0) return null; // an empty slot: no box drawn
       const b = data.boxes[gi];
-      const ciExtents = data.showMeanCI
-        ? data.boxes.flatMap((x) => [x.ciLo, x.ciHi]).filter((v): v is number => Number.isFinite(v))
-        : [];
-      const domain = finiteDomain([...data.boxes.map((x) => [x.whislo, x.whishi, ...x.fliers]), ciExtents]);
-      const own = [b.whislo, b.whishi, ...b.fliers, ...(data.showMeanCI ? [b.ciLo, b.ciHi] : [])].filter((v): v is number =>
-        Number.isFinite(v),
-      );
+      const m = drawMarks(data);
+      const domain = boxValueDomain(data.boxes, m);
+      const own = [b.whislo, b.whishi, ...b.fliers, ...summaryExtents(b, m)].filter((v) => Number.isFinite(v));
       if (!own.length) return null;
       return span(Math.min(...own), Math.max(...own), domain);
     }
@@ -117,12 +128,9 @@ function slotContentPixelRange(data: StatDrawData, rect: Rect, slotIndex: number
       if (gi < 0) return null;
       const g = data.points[gi];
       if (!g.points.length) return null;
-      const valueLists = data.points.map((gr) => gr.points.map((p) => p.value));
-      const ciExtents = data.showMeanCI
-        ? data.boxes.flatMap((x) => [x.ciLo, x.ciHi]).filter((v): v is number => Number.isFinite(v))
-        : [];
-      const domain = finiteDomain([...valueLists, ciExtents]);
-      const vals = g.points.map((p) => p.value);
+      const domain = stripValueDomain(data);
+      const b = data.boxes[gi];
+      const vals = [...g.points.map((p) => p.value), ...(b ? summaryExtents(b, drawMarks(data)) : [])];
       return span(Math.min(...vals), Math.max(...vals), domain);
     }
     case "violin": {
@@ -141,32 +149,27 @@ function slotContentPixelRange(data: StatDrawData, rect: Rect, slotIndex: number
       const groups = data.data.groups;
       const g = groups[slotIndex];
       if (!g || g.series.every((s) => s.n === 0)) return null; // an empty slot
-      const candidates: number[] = [0];
-      groups.forEach((gr) => {
-        if (data.stacked) {
-          candidates.push(stackedTotal(gr.series));
-        } else {
-          gr.series.forEach((s) => {
-            if (!Number.isFinite(s.mean)) return;
-            candidates.push(s.mean);
-            if (Number.isFinite(s.sem)) candidates.push(s.mean + s.sem, s.mean - s.sem);
-          });
-        }
-      });
-      const domain = barValueDomain(candidates);
+      // Review finding 10: resolved ONCE, shared with barDomainCandidates
+      // and every series' half-width below (a click hit-test, but the same
+      // "don't re-derive per series" rule the painter follows).
+      const barMarks = drawMarks(data);
+      const domain = barValueDomain(barDomainCandidates(data, barMarks));
+      const halfOf = (s: (typeof g.series)[number]) => {
+        const h = barErrorHalf(data, s, barMarks);
+        return Number.isFinite(h) ? h : 0;
+      };
       if (data.stacked) {
         const total = stackedTotal(g.series);
         const last = g.series[g.series.length - 1];
-        const sem = last && Number.isFinite(last.sem) ? last.sem : 0;
-        return span(Math.min(0, total - sem), total + sem, domain);
+        const half = last ? halfOf(last) : 0;
+        return span(Math.min(0, total - half), total + half, domain);
       }
       let lo = 0;
       let hi = 0;
       g.series.forEach((s) => {
         if (!Number.isFinite(s.mean)) return;
-        const sem = Number.isFinite(s.sem) ? s.sem : 0;
-        lo = Math.min(lo, s.mean - sem);
-        hi = Math.max(hi, s.mean + sem);
+        lo = Math.min(lo, s.mean - halfOf(s));
+        hi = Math.max(hi, s.mean + halfOf(s));
       });
       return span(lo, hi, domain);
     }
@@ -189,9 +192,9 @@ export function clickedSlotAt(
   y: number,
   count: number,
 ): number | null {
-  const i = slotIndexAt(width, height, x, y, count);
+  const i = slotIndexAt(width, height, x, y, count, data);
   if (i === null) return null;
-  const rect = plotRect(width, height);
+  const rect = plotRect(width, height, data);
   if (y > rect.y + rect.h) return i; // the tick-label band: always content
   const extent = slotContentPixelRange(data, rect, i);
   return extent && y >= extent[0] && y <= extent[1] ? i : null;
