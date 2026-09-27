@@ -72,6 +72,7 @@ export default function WindowCanvas() {
   const pendingHydration = useWindowHydration((s) => s.pending);
 
   const hostRef = useRef<HTMLDivElement>(null);
+  const boundsRef = useRef<{ width: number; height: number } | null>(null);
   const [bounds, setBounds] = useState<{ width: number; height: number } | undefined>(undefined);
   // Item 14: a Library dataset drag hovering the EMPTY canvas background
   // (drops on a frame stop propagation, so this never double-lights).
@@ -88,13 +89,21 @@ export default function WindowCanvas() {
     const ro = new ResizeObserver(([entry]) => {
       const box = entry?.contentRect;
       if (box) {
-        setBounds({ width: box.width, height: box.height });
-        setPlotCanvasBounds({ width: box.width, height: box.height });
+        const next = { width: Math.round(box.width), height: Math.round(box.height) };
+        const previous = boundsRef.current;
+        // ResizeObserver may repeat an unchanged box (notably while panels
+        // animate or the desktop webview settles). Avoid a redundant React
+        // render and global-store broadcast to every window subscriber.
+        if (previous?.width === next.width && previous.height === next.height) return;
+        boundsRef.current = next;
+        setBounds(next);
+        setPlotCanvasBounds(next);
       }
     });
     ro.observe(host);
     return () => {
       ro.disconnect();
+      boundsRef.current = null;
       setPlotCanvasBounds(null);
     };
   }, [setPlotCanvasBounds]);

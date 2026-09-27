@@ -1,9 +1,8 @@
 // PlotWindowFrame owns geometry drag/resize (through the real store actions),
 // close, and the "any pointerdown on an unfocused frame focuses it" contract
-// (item 3/4). Drag/resize are rAF-throttled; jsdom's requestAnimationFrame
-// never actually fires (no paint loop to synchronize with), so it's stubbed
-// to invoke its callback synchronously — the store update then lands within
-// the same `fireEvent`-wrapped `act()` and can be asserted immediately.
+// (item 3/4). Drag/resize previews are rAF-throttled DOM writes; Zustand is
+// updated exactly once, at gesture end. jsdom's requestAnimationFrame never
+// fires by itself, so the default stub invokes its callback synchronously.
 
 import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -63,24 +62,51 @@ describe("PlotWindowFrame", () => {
         <div>content</div>
       </PlotWindowFrame>,
     );
-    const grip = container.querySelector(".qzk-plotwin-resize")!;
+    const grip = container.querySelector('[data-resize-edge="se"]')!;
     fireEvent.pointerDown(grip, { clientX: 0, clientY: 0, button: 0 });
     fireEvent.pointerMove(window, { clientX: 60, clientY: 40 });
     fireEvent.pointerUp(window, { clientX: 60, clientY: 40 });
     await waitFor(() => expect(geomOf("w1")).toEqual({ x: 100, y: 80, w: 540, h: 400 }));
 
-    // A big negative drag clamps to the minimum size, never collapses to zero.
+    // A big negative drag previews at the minimum size without touching the
+    // store, then commits exactly that preview at gesture end.
     // (win's geometry PROP is a fixed snapshot from this test's one render, so
     // this second gesture's origin is still the pre-drag 480×360 — the store
     // itself already holds 540×400 from the first gesture above.)
     fireEvent.pointerDown(grip, { clientX: 0, clientY: 0, button: 0 });
     fireEvent.pointerMove(window, { clientX: -10000, clientY: -10000 });
-    await waitFor(() => {
-      const g = geomOf("w1");
-      expect(g.w).toBeGreaterThanOrEqual(1);
-      expect(g.h).toBeGreaterThanOrEqual(1);
-      expect(g.w).toBeLessThan(300); // clamped to MIN_W, not left at the pre-drag 540
-    });
+    expect(container.querySelector<HTMLElement>(".qzk-plotwin")!.style.width).toBe("240px");
+    expect(geomOf("w1").w).toBe(540);
+    fireEvent.pointerUp(window);
+    expect(geomOf("w1")).toMatchObject({ w: 240, h: 160 });
+  });
+
+  it("previews many pointer moves without rerendering children or rewriting global state", () => {
+    let childRenders = 0;
+    function Child() {
+      childRenders += 1;
+      return <div>heavy plot</div>;
+    }
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1">
+        <Child />
+      </PlotWindowFrame>,
+    );
+    const beforeWindows = useApp.getState().plotWindows;
+    const titlebar = container.querySelector(".qzk-plotwin-titlebar")!;
+    fireEvent.pointerDown(titlebar, { clientX: 100, clientY: 100, button: 0 });
+    for (let i = 1; i <= 25; i++) {
+      fireEvent.pointerMove(window, { clientX: 100 + i, clientY: 100 + i });
+    }
+    const frame = container.querySelector<HTMLElement>(".qzk-plotwin")!;
+    expect(frame.style.left).toBe("125px");
+    expect(frame.style.top).toBe("105px");
+    expect(useApp.getState().plotWindows).toBe(beforeWindows);
+    expect(childRenders).toBe(1);
+
+    fireEvent.pointerUp(window);
+    expect(geomOf("w1")).toMatchObject({ x: 125, y: 105 });
+    expect(useApp.getState().history.at(-1)?.label).toBe("move window");
   });
 
   it("commits the final move when pointerup beats the queued animation frame", () => {
@@ -115,7 +141,7 @@ describe("PlotWindowFrame", () => {
         <div>content</div>
       </PlotWindowFrame>,
     );
-    const grip = container.querySelector(".qzk-plotwin-resize")!;
+    const grip = container.querySelector('[data-resize-edge="se"]')!;
     fireEvent.pointerDown(grip, { clientX: 0, clientY: 0, button: 0 });
     fireEvent.pointerMove(window, { clientX: 60, clientY: 40 });
     expect(geomOf("w1")).toEqual({ x: 100, y: 80, w: 480, h: 360 });
@@ -382,7 +408,7 @@ describe("PlotWindowFrame", () => {
 
   it("a resize snaps the moving right edge onto the canvas edge (item 12)", async () => {
     const { container } = renderSnapFrame();
-    const grip = container.querySelector(".qzk-plotwin-resize")!;
+    const grip = container.querySelector('[data-resize-edge="se"]')!;
     fireEvent.pointerDown(grip, { clientX: 0, clientY: 0, button: 0 });
     // Raw size would be 695×400: right edge 795 → snaps to 800 (w 700);
     // bottom edge 480 is far from every line, so h stays 400 — the axes
@@ -390,6 +416,32 @@ describe("PlotWindowFrame", () => {
     fireEvent.pointerMove(window, { clientX: 215, clientY: 40 });
     fireEvent.pointerUp(window, { clientX: 215, clientY: 40 });
     await waitFor(() => expect(geomOf("w1")).toEqual({ x: 100, y: 80, w: 700, h: 400 }));
+  });
+
+  it("resizes from the north-west corner while anchoring the opposite edges", () => {
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    const grip = container.querySelector('[data-resize-edge="nw"]')!;
+    fireEvent.pointerDown(grip, { clientX: 100, clientY: 80, button: 0 });
+    fireEvent.pointerMove(window, { clientX: 140, clientY: 110, altKey: true });
+    const frame = container.querySelector<HTMLElement>(".qzk-plotwin")!;
+    expect({ left: frame.style.left, top: frame.style.top, width: frame.style.width, height: frame.style.height })
+      .toEqual({ left: "140px", top: "110px", width: "440px", height: "330px" });
+    fireEvent.pointerUp(window);
+    expect(geomOf("w1")).toEqual({ x: 140, y: 110, w: 440, h: 330 });
+  });
+
+  it("offers native-style resize targets on every edge and corner", () => {
+    const { container } = render(
+      <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1">
+        <div>content</div>
+      </PlotWindowFrame>,
+    );
+    expect(Array.from(container.querySelectorAll("[data-resize-edge]"), (node) => node.getAttribute("data-resize-edge")))
+      .toEqual(["n", "e", "s", "w", "ne", "nw", "se", "sw"]);
   });
 });
 

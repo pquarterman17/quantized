@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { WindowGeometry } from "./plotview";
-import { SNAP_THRESHOLD, snapMovePosition, snapResizeSize } from "./windowSnap";
+import { SNAP_THRESHOLD, snapMovePosition, snapResizeGeometry, snapResizeSize } from "./windowSnap";
 
 describe("snapMovePosition / snapResizeSize (item 12 — edge/sibling snapping)", () => {
   const bounds = { width: 800, height: 600 };
@@ -82,6 +82,20 @@ describe("snapMovePosition / snapResizeSize (item 12 — edge/sibling snapping)"
       w: 400,
       h: 200,
     });
+  });
+
+  it("snaps north/west resize edges without moving the anchored opposite edges", () => {
+    const originalRight = 700;
+    const originalBottom = 500;
+    const snapped = snapResizeGeometry(
+      { x: 6, y: 7, w: originalRight - 6, h: originalBottom - 7 },
+      { n: true, w: true },
+      bounds,
+      [],
+    );
+    expect(snapped).toEqual({ x: 0, y: 0, w: 700, h: 500 });
+    expect(snapped.x + snapped.w).toBe(originalRight);
+    expect(snapped.y + snapped.h).toBe(originalBottom);
   });
 
   it("with no bounds and no siblings the geometry is unchanged", () => {

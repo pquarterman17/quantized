@@ -2,8 +2,9 @@
 // a draggable title bar (window title + dataset badge), a resize grip, a
 // close button, and a focus highlight using `--accent`. Geometry/z mutations
 // flow through the existing store actions (moveWindow/resizeWindow/
-// raiseWindow/focusWindow — Key Decision 3), rAF-throttled so a fast native
-// drag doesn't fire a store update (and a React re-render) per pointermove.
+// raiseWindow/focusWindow — Key Decision 3). Live gestures preview directly
+// on this frame once per animation frame and commit to the store only on
+// release, keeping sibling plots out of React's hot path.
 //
 // Item 8 adds double-click-the-title-BAR to toggle maximize/restore (the
 // Origin habit); item 10 adds double-click-the-title-TEXT to rename inline
@@ -23,16 +24,18 @@
 // viewport). It shares the `qzk-win*` naming FAMILY (see shell.css) under a
 // distinct `qzk-plotwin*` prefix so the two don't collide in the stylesheet.
 
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 
-import { type PlotWindow, type WindowGeometry } from "../../lib/plotview";
+import { type PlotWindow } from "../../lib/plotview";
 import { resolvePlotBg } from "../../lib/uplotOpts";
-import { snapMovePosition, snapResizeSize } from "../../lib/windowSnap";
 import { useApp } from "../../store/useApp";
 import { useWindowsStore } from "../../store/hooks/useWindowsStore";
 import { DATASET_DND } from "../Library/dnd";
 import { Badge } from "../primitives";
 import WindowTitleButtons from "./WindowTitleButtons";
+import { clampPlotWindowPosition, type ResizeEdge, usePlotWindowGesture } from "./usePlotWindowGesture";
+
+const RESIZE_EDGES: ResizeEdge[] = ["n", "e", "s", "w", "ne", "nw", "se", "sw"];
 
 export interface PlotWindowFrameProps {
   win: PlotWindow;
@@ -51,38 +54,6 @@ export interface PlotWindowFrameProps {
   children: ReactNode;
 }
 
-const MIN_W = 240;
-const MIN_H = 160;
-// A dragged/reflowed window always keeps at least this much of its title bar
-// on-canvas, so it's never lost off-screen (item 3's "geometry clamped to
-// the canvas" requirement).
-const TITLE_MIN_VISIBLE = 80;
-const TITLEBAR_H = 28;
-
-/** Clamp a title-bar-reachable position into `bounds` (no-op without bounds). */
-function clampPos(x: number, y: number, bounds: { width: number; height: number } | undefined) {
-  if (!bounds) return { x: Math.max(0, x), y: Math.max(0, y) };
-  return {
-    x: Math.min(Math.max(0, x), Math.max(0, bounds.width - TITLE_MIN_VISIBLE)),
-    y: Math.min(Math.max(0, y), Math.max(0, bounds.height - TITLEBAR_H)),
-  };
-}
-
-type DragMode = "move" | "resize";
-interface DragState {
-  mode: DragMode;
-  startX: number;
-  startY: number;
-  origX: number;
-  origY: number;
-  origW: number;
-  origH: number;
-  siblings: WindowGeometry[];
-  historyRecorded: boolean;
-}
-
-const END_GESTURE_EVENTS = ["pointerup", "pointercancel", "blur"] as const;
-
 export default function PlotWindowFrame({
   win,
   focused,
@@ -92,12 +63,12 @@ export default function PlotWindowFrame({
   children,
 }: PlotWindowFrameProps) {
   const moveWindow = useWindowsStore((s) => s.moveWindow);
-  const resizeWindow = useWindowsStore((s) => s.resizeWindow);
   const focusWindow = useWindowsStore((s) => s.focusWindow);
   const toggleMaximizeWindow = useWindowsStore((s) => s.toggleMaximizeWindow);
   const renameWindow = useWindowsStore((s) => s.renameWindow);
   const rebindWindow = useWindowsStore((s) => s.rebindWindow);
   const activeDrag = useApp((s) => s.activeDrag);
+  const { frameRef, beginDrag } = usePlotWindowGesture(win, bounds);
 
   // Item 14: this frame is a drop target for a Library dataset drag
   // (DATASET_DND — the SAME dataTransfer type DatasetRow sets, so a row
@@ -123,7 +94,7 @@ export default function PlotWindowFrame({
   // window shrink can otherwise strand a window's grab handle off-canvas).
   useEffect(() => {
     if (!bounds || win.winState === "maximized") return;
-    const clamped = clampPos(win.geometry.x, win.geometry.y, bounds);
+    const clamped = clampPlotWindowPosition(win.geometry.x, win.geometry.y, bounds);
     if (clamped.x !== win.geometry.x || clamped.y !== win.geometry.y) {
       moveWindow(win.id, clamped.x, clamped.y);
     }
@@ -131,115 +102,6 @@ export default function PlotWindowFrame({
     // not on every geometry tick (that would fight live dragging).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bounds?.width, bounds?.height, win.id, win.winState]);
-
-  // Store at most one geometry update per animation frame. `scheduledRef`
-  // stays separate because test rAF stubs may invoke callbacks synchronously.
-  const dragRef = useRef<DragState | null>(null);
-  const pendingRef = useRef<{ a: number; b: number } | null>(null);
-  const scheduledRef = useRef(false);
-  const rafIdRef = useRef<number | null>(null);
-
-  const flush = useCallback(() => {
-    scheduledRef.current = false;
-    rafIdRef.current = null;
-    const pending = pendingRef.current;
-    const drag = dragRef.current;
-    if (!pending || !drag) return;
-    pendingRef.current = null;
-    const changed = drag.mode === "move" ? pending.a !== drag.origX || pending.b !== drag.origY
-      : pending.a !== drag.origW || pending.b !== drag.origH;
-    if (!changed) return;
-    if (!drag.historyRecorded) {
-      useApp.getState().recordHistory(drag.mode === "move" ? "move window" : "resize window");
-      drag.historyRecorded = true;
-    }
-    if (drag.mode === "move") moveWindow(win.id, pending.a, pending.b);
-    else resizeWindow(win.id, pending.a, pending.b);
-  }, [win.id, moveWindow, resizeWindow]);
-
-  const schedule = useCallback(
-    (a: number, b: number) => {
-      pendingRef.current = { a, b };
-      if (!scheduledRef.current) {
-        scheduledRef.current = true;
-        rafIdRef.current = requestAnimationFrame(flush);
-      }
-    },
-    [flush],
-  );
-
-  const onPointerMove = useCallback(
-    (e: PointerEvent) => {
-      const drag = dragRef.current;
-      if (!drag) return;
-      const dx = e.clientX - drag.startX;
-      const dy = e.clientY - drag.startY;
-      // Item 12: snap to canvas + sibling edges while dragging; holding Alt
-      // bypasses it (the WM convention). Math lives in lib/plotview.
-      if (drag.mode === "move") {
-        let x = drag.origX + dx;
-        let y = drag.origY + dy;
-        if (!e.altKey) {
-          ({ x, y } = snapMovePosition({ x, y, w: drag.origW, h: drag.origH }, bounds, drag.siblings));
-        }
-        const p = clampPos(x, y, bounds);
-        schedule(p.x, p.y);
-      } else {
-        let w = Math.max(MIN_W, drag.origW + dx);
-        let h = Math.max(MIN_H, drag.origH + dy);
-        if (!e.altKey) {
-          const s = snapResizeSize({ x: drag.origX, y: drag.origY, w, h }, bounds, drag.siblings);
-          w = Math.max(MIN_W, s.w);
-          h = Math.max(MIN_H, s.h);
-        }
-        schedule(w, h);
-      }
-    },
-    [schedule, bounds],
-  );
-
-  const finishGesture = useCallback(() => {
-    if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
-    // A release can beat the queued frame, so commit its last position first.
-    flush();
-    dragRef.current = null;
-    pendingRef.current = null;
-    scheduledRef.current = false;
-    rafIdRef.current = null;
-    window.removeEventListener("pointermove", onPointerMove);
-    END_GESTURE_EVENTS.forEach((event) => window.removeEventListener(event, finishGesture));
-  }, [flush, onPointerMove]);
-
-  useEffect(
-    () => () => {
-      if (rafIdRef.current != null) cancelAnimationFrame(rafIdRef.current);
-      window.removeEventListener("pointermove", onPointerMove);
-      END_GESTURE_EVENTS.forEach((event) => window.removeEventListener(event, finishGesture));
-    },
-    [onPointerMove, finishGesture],
-  );
-
-  const beginDrag = (mode: DragMode) => (e: React.PointerEvent) => {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    dragRef.current = {
-      mode,
-      startX: e.clientX,
-      startY: e.clientY,
-      origX: win.geometry.x,
-      origY: win.geometry.y,
-      origW: win.geometry.w,
-      origH: win.geometry.h,
-      historyRecorded: false,
-      // Capture other visible rectangles once so handlers stay stable.
-      siblings: useApp
-        .getState()
-        .plotWindows.filter((w) => w.id !== win.id && w.winState !== "minimized")
-        .map((w) => w.geometry),
-    };
-    window.addEventListener("pointermove", onPointerMove);
-    END_GESTURE_EVENTS.forEach((event) => window.addEventListener(event, finishGesture));
-  };
 
   // Capture-phase focus raises the frame before child/uPlot handlers run.
   const onFrameCapture = () => {
@@ -279,6 +141,7 @@ export default function PlotWindowFrame({
 
   return (
     <div
+      ref={frameRef}
       className={`qzk-plotwin${focused ? " focused" : ""}${dropping ? " dropping" : ""}${isDropCandidate ? " drop-candidate" : ""}`}
       style={style}
       onPointerDownCapture={onFrameCapture}
@@ -388,11 +251,15 @@ export default function PlotWindowFrame({
         {children}
       </div>
       {!maximized && (
-        <div
-          className="qzk-plotwin-resize"
-          aria-hidden="true"
-          onPointerDown={beginDrag("resize")}
-        />
+        RESIZE_EDGES.map((edge) => (
+          <div
+            key={edge}
+            className={`qzk-plotwin-resize qzk-plotwin-resize-${edge}`}
+            data-resize-edge={edge}
+            aria-hidden="true"
+            onPointerDown={beginDrag(edge)}
+          />
+        ))
       )}
     </div>
   );
