@@ -48,8 +48,11 @@ nothing for a global backend switch to protect -- and forcing one used to
 force-switch a notebook/desktop caller's own pyplot backend as a side effect
 of merely importing this module.
 
-Pure layer: no fastapi/pydantic. Lock ordering: ``RENDER_LOCK`` is the only
-lock taken in the render path, so there is no ordering hazard.
+Pure layer: no fastapi/pydantic. Lock ordering: a renderer's lazy
+cross-import mid-render takes ``quantized.heavy_import``'s import lock while
+``RENDER_LOCK`` is held; never the reverse (a ``heavy_imports`` block only
+imports, and no module takes ``RENDER_LOCK`` at import time), so there is no
+ordering hazard.
 """
 
 from __future__ import annotations

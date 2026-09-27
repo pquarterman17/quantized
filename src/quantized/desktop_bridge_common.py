@@ -13,6 +13,8 @@ future dialog kind is added in exactly one place.
 
 from __future__ import annotations
 
+from quantized.heavy_import import heavy_imports
+
 __all__ = [
     "FOLDER_DIALOG_DEFAULT",
     "OPEN_DIALOG_DEFAULT",
@@ -36,7 +38,8 @@ def dialog_kind(name: str, fallback: int) -> int:
     installed and defines an int-valued attribute of that name; otherwise
     ``fallback``."""
     try:
-        import webview
+        with heavy_imports("webview"):
+            import webview
 
         value = getattr(webview, name, fallback)
         return int(value) if isinstance(value, int) else fallback

@@ -24,6 +24,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
+from quantized.heavy_import import heavy_imports
 from quantized.routes._errors import call_calc
 from quantized.routes._export_common import (
     _DPI_MAX,
@@ -93,7 +94,8 @@ def export_map_figure(req: MapFigureRequest) -> Response:
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
-    from quantized.calc.figure_map import render_map_figure  # lazy: matplotlib is heavy
+    with heavy_imports("quantized.calc.figure_map"):
+        from quantized.calc.figure_map import render_map_figure  # lazy: matplotlib is heavy
 
     data = call_calc(render_map_figure,
         req.x_axis, req.y_axis, req.z_grid,
@@ -142,7 +144,8 @@ def export_corner_figure(req: CornerFigureRequest) -> Response:
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
-    from quantized.calc.figure_corner import render_corner_figure  # lazy: matplotlib is heavy
+    with heavy_imports("quantized.calc.figure_corner"):
+        from quantized.calc.figure_corner import render_corner_figure  # lazy: matplotlib is heavy
 
     img = call_calc(render_corner_figure,
         req.samples, req.param_names, truths=req.truths,
@@ -178,7 +181,8 @@ def export_ternary_figure(req: TernaryFigureRequest) -> Response:
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
-    from quantized.calc.figure_ternary import render_ternary_figure  # lazy: matplotlib
+    with heavy_imports("quantized.calc.figure_ternary"):
+        from quantized.calc.figure_ternary import render_ternary_figure  # lazy: matplotlib
 
     img = call_calc(render_ternary_figure,
         req.data, labels=req.labels, values=req.values,
@@ -217,7 +221,8 @@ def export_field_figure(req: FieldFigureRequest) -> Response:
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
-    from quantized.calc.figure_field import render_field_figure  # lazy: matplotlib
+    with heavy_imports("quantized.calc.figure_field"):
+        from quantized.calc.figure_field import render_field_figure  # lazy: matplotlib
 
     img = call_calc(render_field_figure,
         req.x_axis, req.y_axis, req.u_grid, req.v_grid,

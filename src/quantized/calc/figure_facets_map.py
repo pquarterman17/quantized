@@ -36,6 +36,7 @@ from quantized.calc.figure_overrides import _validate_overrides
 from quantized.calc.figure_render import new_figure, render_scope
 from quantized.calc.figure_scale import resolve_axis_scale
 from quantized.calc.figure_styles import figure_style
+from quantized.heavy_import import heavy_imports
 
 __all__ = ["render_facets_figure_map"]
 
@@ -200,7 +201,8 @@ def render_facets_figure_map(
     drag-edit for the legend, or drawing an annotation/reference-line/shape
     into a panel at all, is future work, not silently faked here.
     """
-    from quantized.calc.figure_hitmap import collect_facet_map
+    with heavy_imports("quantized.calc.figure_hitmap"):
+        from quantized.calc.figure_hitmap import collect_facet_map
 
     with _facet_grid(
         panels, x_log=x_log, y_log=y_log, x_scale=x_scale, y_scale=y_scale,

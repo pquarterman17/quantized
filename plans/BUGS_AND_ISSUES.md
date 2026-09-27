@@ -117,7 +117,7 @@ This is a working document, not a claim that every observation is already reprod
 | UX-007 | P2 | Workbook Properties command | The workbook right-click menu showed **Properties…** permanently disabled and explained it with the internal roadmap text “arrives with Details/Properties (PR D)”, even though PR D shipped; the result was a prominent dead end in the new Origin-like Library | ChatGPT-Sol | **FIXED 2026-09-20** — Properties now opens a bounded read-only inspector from the shared workbook action registry in Tree, Details, and Tiles. It projects canonical workbook children, location, recorded source/Origin provenance, availability, member/artifact counts, member tags, and import time only when present; Close/Escape restores its invoking row/tile focus. Editing remains in existing commands. Focused 42 tests, full frontend suite, forced typecheck, lint, build/bundle, and integrity gates run; full pickup brief retained in `POST_RELEASE_PROBLEM_AUDIT.md` |
 | BUG-030 | P1 | Local API Origin guard (security) | `origin_allowed` accepted any `localhost`/`127.0.0.1` origin on any port, so another local dev server or app page could trigger write routes (file writes, job submission) with a simple text/plain POST | Claude (agent) | **FIXED 2026-09-25** on branch `origin-guard` — Origin must match the request's own scheme + Host port (both loopback aliases); the Vite origin is admitted in `qz --dev` only. Tauri-origin residual recorded in the entry |
 | BUG-031 | P2 | Lazy promise dialogs (Confirm/Param) — keyboard hand-off | On the first ask of a session the lazy dialog body painted one macrotask BEFORE it took focus: the background was already `inert` and the pending-ask guard had dropped its Enter/Space swallow, but focus was still on the control behind the backdrop and the body's own Enter handler and Tab trap were not installed yet | Claude (agent) | **FIXED 2026-09-25** — `useRegionLoaded` commits the load flip with `flushSync`, so the body's passive effects run in the task that paints it; forced by `lazyDialogPaintFocus.test.tsx` (fails 2/2 with the fix reverted). Found as a one-off full-suite failure of `dialogFocus.a11y.test.tsx`, whose second reported failure was a cascade (fixed in its `beforeEach`) |
-| BUG-032 | P1 | Cold-process concurrent export — renderer module import race | On a freshly started process, a burst of concurrent first-ever figure exports triggers several `calc/figure_*.py` renderer modules' (and matplotlib's own submodules') FIRST import from several threadpool threads at once; CPython serializes concurrent imports of the SAME module name but not of different names racing on shared not-yet-finished state (matplotlib's own `__init__`, `matplotlib.transforms`/`matplotlib.artist`) | Claude (agent) | **FIXED 2026-09-27** — found while hardening PR #448's render lock (which serializes *renders*, not *imports*); `calc/figure_preload.py` imports every `calc.figure*` module once, single-threaded, from `quantized.app`'s startup lifespan (`asyncio.to_thread`, awaited before it yields), so no request thread exists yet to race the imports the routes' existing lazy `from quantized.calc.figure_map import ...` statements still perform. Forced with a `threading.Barrier` in a fresh subprocess interpreter: 15/16 threads failed on main pre-fix (10/10 cold runs), 0/16 post-fix, 20/20 clean runs of the full suite in `tests/test_figure_cold_import_race.py` |
+| BUG-032 | P1 | Cold process — concurrent first imports of lazily imported heavy modules | The app defers matplotlib (every `calc/figure*.py` renderer), lifelines, statsmodels, bumps, openpyxl, h5py, periodictable, `scipy.io`, python-docx/pptx to function-level imports. Sync routes and jobs run on worker threads, so on a freshly started process concurrent requests can perform several DIFFERENT modules' first import at once; CPython locks imports per module name only, so threads racing into a shared package another thread is still initialising see it half-built and fail -- for matplotlib, for the rest of the process's life | Claude (agent) | **FIXED 2026-09-27** — new pure `quantized/heavy_import.py`: one process-wide re-entrant lock that every lazy heavy import in `src/` goes through (`with heavy_imports("<module>"):`), skipped once the named modules are fully imported; `tests/test_heavy_import_guard.py` fails any new function-level import that bypasses it. Nothing is preloaded: startup cost unchanged, and a broken optional dependency still fails only its own feature. Forced 58-thread cold race (`tests/test_heavy_import_cold_race.py`): 0 failures in 20 runs; with the lock sabotaged 27-33/58 fail, 7/7 runs. Supersedes a first attempt (startup preload of `calc/figure*`, withdrawn: see the entry) |
 
 ---
 
@@ -8890,102 +8890,158 @@ Cancel right after `findByRole("dialog")`.
 
 ---
 
-## BUG-032 — a cold process's concurrent first exports can race the renderer modules' own import, not just their render
+## BUG-032 — a cold process's concurrent first imports of lazily imported heavy modules corrupt them
 
-**Priority:** P1 — corrupts the process, not one request: once a renderer module partially imports, every later export using it fails for the rest of the process's life
+**Priority:** P1 — can break the process, not one request: a matplotlib import that fails this way keeps failing on every later export until restart
 **State:** Fixed (agent); no owner check required
-**Reported:** 2026-09-27 by Claude (agent), while hardening PR #448's render-lock fix
+**Reported:** 2026-09-27 by Claude (agent), while hardening PR #448's render lock
 **Investigated:** 2026-09-27, Claude (agent)
 **Suggested implementation owner/model:** —
-**Related plan:** `calc/render_lock.py` / `calc/figure_render.py` (PR #448, serializes *renders*)
+**Related plan:** `calc/render_lock.py` / `calc/figure_render.py` (PR #448, serializes *renders*, not imports)
 
 #### User-visible problem
 
-`routes/export*.py` reach every renderer through a function-level lazy
-import (`from quantized.calc.figure_map import render_map_figure`, etc.,
-each explicitly commented `# lazy: matplotlib is heavy`), so a caller that
-never renders never pays matplotlib's import cost. FastAPI runs the sync
-export routes in a threadpool, so on a freshly started process a burst of
-concurrent first-ever exports triggers several DIFFERENT renderer modules'
-first import from several threads at once. PR #448's `RENDER_LOCK`
-serializes *renders*, once matplotlib is already imported; it does nothing
-for the import itself. CPython's per-module import lock serializes two
-threads importing the SAME module name, but not two threads importing
-DIFFERENT names that race on shared, not-yet-finished state — here,
-matplotlib's own package `__init__` (`matplotlib.get_data_path` is set near
-the end of it) and heavily cross-imported submodules
-(`matplotlib.transforms`/`matplotlib.artist`).
+Heavy optional dependencies are imported inside functions so a launch that
+never uses a feature never pays for it: every export route reaches its
+renderer through `from quantized.calc.figure_map import ...` (and friends,
+`# lazy: matplotlib is heavy`), the renderers lazily cross-import each other,
+and the stats, fitting and I/O paths lazily import lifelines, statsmodels,
+pandas, bumps, periodictable, openpyxl, h5py, `scipy.io`, python-docx and
+python-pptx. FastAPI runs sync routes on a threadpool and `quantized.jobs`
+runs jobs on its own pool, so on a freshly started process several requests
+can perform several DIFFERENT modules' first import at the same moment.
+CPython's import lock is per module name: two threads importing different
+names that both reach a package a third thread is still initialising
+(`matplotlib/__init__`, `matplotlib.transforms`, `lifelines.statistics` ...)
+see it half-built.
 
 #### Reproduction
 
-- [x] Starting state: a fresh interpreter, nothing imported yet
-- [x] Actions: 16 threads, one per distinct renderer-module lazy-import
-      statement copied verbatim from `routes/export*.py`, released together
-      off a `threading.Barrier` (not a timing guess)
-- [x] Actual: 15/16 threads raised — `ImportError: cannot import name
-      'Transform' from partially initialized module
-      'matplotlib.transforms'`, `AttributeError: module 'matplotlib' has no
-      attribute 'get_data_path'`, plain `NameError`s inside a
-      still-importing module, and the same shapes against
-      `quantized.calc.figure*` modules themselves
-- [x] Expected: all 16 imports succeed, as they do run sequentially
-- [x] Reproduced by an agent: 10/10 cold subprocess runs during
-      investigation; see `test_unguarded_concurrent_first_import_corrupts_modules_on_this_interpreter`
+- [x] Starting state: a fresh interpreter after `import quantized.app` (what
+      startup imports; matplotlib is not loaded)
+- [x] Actions: one thread per lazy import statement (19 statements:
+      renderers, lifelines, lifelines.statistics, statsmodels.api, pandas,
+      bumps, openpyxl, h5py, periodictable, `scipy.io`, mathtext), all
+      released together off a `threading.Barrier`
+- [x] Actual, on the pre-fix code: 9-11 of 19 threads failed, 5/5 runs.
+      Shapes observed: `ImportError: cannot import name 'Transform' from
+      partially initialized module 'matplotlib.transforms' (most likely due
+      to a circular import)`; `AttributeError: partially initialized module
+      'matplotlib.artist' has no attribute 'Artist'`; `AttributeError: module
+      'matplotlib' has no attribute '_docstring'` (also `'get_data_path'`);
+      `ImportError: cannot import name 'savefig_bytes' from
+      'quantized.calc.figure_render'` (our own modules, cascading);
+      `ImportError: cannot import name 'proportional_hazard_test' from
+      partially initialized module 'lifelines.statistics'`; and CPython's
+      own `_DeadlockError: deadlock detected by _ModuleLock('matplotlib.artist')`
+      (also on `lifelines.statistics`). The failure text is whichever line
+      each thread was on, not a fixed set.
+- [x] Persistence, measured by re-running each failed statement in the same
+      process afterwards: every matplotlib-dependent one still failed
+      (`module 'matplotlib' has no attribute '_docstring'`), 5/5 runs, so
+      every later export in that process fails. The lifelines failures did
+      not persist.
+- [x] Expected: every import succeeds, as each does run alone
 
 #### Investigation
 
-- [x] Owner: every `routes/export*.py` lazy import, plus `calc/figure.py`'s
-      and `calc/figure_facets.py`'s own internal lazy cross-imports
-      (avoiding circular imports at module load time, same hazard)
-- [x] Root cause confirmed: first-ever import concurrency, not render
-      concurrency — PR #448's fix does not touch this
+- [x] Root cause: concurrent FIRST imports, not concurrent renders; PR #448's
+      `RENDER_LOCK` is taken after the imports
+- [x] First attempt (withdrawn, same day): `calc/figure_preload.py` imported
+      every `calc/figure*` module from the app's startup lifespan. A review
+      found it inadequate (the first and third points re-measured here): the
+      same race still failed 5/5 runs in lifelines (1-2 of 19 threads,
+      `partially initialized module 'lifelines.statistics'` /
+      `_DeadlockError`) because only `figure*` modules were covered; a
+      preload failure took the whole server down at startup instead of one
+      feature; it added 0.4-1.1 s before `/api/health` answered on every
+      launch and every `qz --dev` reload, reversing the deliberate lazy
+      imports; discovery by the `figure` name prefix could silently find
+      nothing; and its tests hard-asserted the hazard still existed, counted
+      a broken barrier as corruption, never entered the lifespan in
+      in-process clients, and cost ~7.6 s in four fresh interpreters.
 
 #### Implementation
 
-- [x] New pure module `calc/figure_preload.py` (`iter_renderer_module_names`,
-      `preload_renderer_modules`): walks `quantized.calc.__path__` for every
-      `figure*` submodule and imports each once, sequentially, so a future
-      renderer is picked up automatically.
-- [x] `quantized.app`'s startup lifespan (`_app_lifespan`, before it yields)
-      calls it via `asyncio.to_thread`, awaited — startup does not complete,
-      and no request is served, until every renderer module has finished
-      importing, single-threaded, with no request thread yet alive to race
-      it. Cost measured ~0.3-1.1 s (import machinery + matplotlib's Agg
-      backend); worth the thread rather than blocking the event loop.
-      `routes/export*.py`'s existing lazy imports are left as-is — after
-      preload they are `sys.modules` cache hits, not re-executions.
+- [x] New pure module `quantized/heavy_import.py` (stdlib only):
+      `HEAVY_IMPORT_LOCK` (one process-wide `RLock`),
+      `heavy_imports(*modules)` (context manager) and `heavy_import(name)`
+      (for computed names). The body's imports run under the lock unless
+      every named module AND each of its parent packages is in
+      `sys.modules` with `__spec__._initializing` false, and no guarded
+      import is in progress in another thread (a module can finish while a
+      sibling it depends on is still mid-import in that thread). After the
+      cold phase the fast path is a few dict lookups; the lock is not
+      touched.
+- [x] Every function-level third-party / `quantized.*` import in `src/` now
+      goes through it: `routes/export_figures.py`, `export_figures_aux.py`,
+      `export_multivar.py`, `export_statplots.py`, `export_page.py`
+      (renderers); `calc/figure.py`, `figure_facets.py`,
+      `figure_facets_map.py`, `figure_page.py` (renderer cross-imports);
+      `calc/figure_hitmap.py`, `figure_labels.py` (matplotlib.transforms,
+      mathtext); `calc/stats_survival.py` (lifelines, pandas);
+      `calc/stats_glm.py` (statsmodels); `calc/fit_bumps.py`,
+      `refl_dream.py`, `dream_seed.py` (bumps); `calc/sld_formula.py`
+      (periodictable); `calc/backgrounds.py`, `corrections.py`
+      (scipy.interpolate); `io/netcdf.py` (`scipy.io`, h5py); `io/hdf5.py`
+      (h5py); `io/sims.py` (openpyxl); `io/registry.py` (`io.excel` ->
+      openpyxl); `io/report_export.py` (docx, pptx); `io/origin_com.py`
+      (win32com); `calc/bond_geometry.py`, `desktop_bridge_common.py`
+      (webview), `desktop_project_file.py`. Three trivially light lazy
+      imports were hoisted to module scope instead
+      (`calc.plot_log_offsets`, `calc.figure_group_styles`,
+      `calc.plotting` in the export routes; `.processing` in
+      `calc/magnetometry.py`).
+- [x] The startup preload and its lifespan hook are removed: startup
+      imports nothing extra, cannot fail on a heavy import, and a broken
+      optional dependency still fails only the feature that needs it.
+- [x] Lock ordering: `RENDER_LOCK` may be held while the import lock is
+      taken (a renderer's lazy cross-import mid-render), never the reverse
+      (`calc/figure_render.py`'s doc updated).
+- [x] Residual, out of reach by design: a library's OWN lazy imports inside
+      its call paths (e.g. matplotlib loading a backend module mid-render)
+      do not take this lock. Renders are serialized by `RENDER_LOCK`
+      already.
 
 #### Tests and acceptance
 
-- [x] `tests/test_figure_cold_import_race.py`:
-      `test_unguarded_concurrent_first_import_corrupts_modules_on_this_interpreter`
-      forces and documents the hazard (>=4/16 threads fail, unfixed);
-      `test_preload_then_concurrent_first_import_is_safe` forces the same
-      barrier race after calling the preload first (0/16 failures, must be
-      exact); `test_app_lifespan_preloads_renderer_modules_before_serving`
-      checks the real wiring; `test_concurrent_cold_export_requests_all_succeed`
-      hits 4 distinct real export endpoints concurrently on a genuinely cold
-      app and requires all HTTP 200.
-- [x] 20/20 clean loop runs of the full file post-fix.
-- [x] `test_create_app_does_not_import_optional_heavy_modules`
-      (`tests/test_startup_imports.py`) still passes — the preload runs only
-      when the ASGI lifespan actually starts, not merely on `create_app()`
-      or on importing `quantized.app`.
+- [x] `tests/test_heavy_import_guard.py`: AST scan of `src/quantized`; every
+      function-level non-stdlib import must sit inside a function-level
+      `with heavy_imports(...)` naming it (and, for `from pkg import sub`,
+      the submodule too), the block may hold only imports, every name must
+      be a real module (a typo would disable the fast path), no
+      `importlib.import_module`/`__import__` outside the helper, no
+      module-scope use. Launch-time-only sites (`cli.py`,
+      `server_launch.py`) sit on an explicit `ALLOWLIST` with reasons; a
+      stale entry fails. A synthetic-source test proves each rule fires.
+- [x] `tests/test_heavy_import.py` (in-process, <1 s): two first imports
+      never overlap under the helper (and an unguarded control proves the
+      probe sees overlap), the fast path ignores a held lock, a first import
+      waits for it, an in-progress guarded import disables the fast path,
+      `module_ready` sees an initialising module and parent, re-entrancy,
+      and release on error. Sabotaging the lock reddens 4 of the 7.
+- [x] `tests/test_heavy_import_cold_race.py`: one fresh interpreter, after
+      `import quantized.app`, races one thread per path (58 here) off one barrier: every
+      `with heavy_imports(...)` block in `src/` whose library is installed,
+      lifted verbatim by AST, plus real calls (Kaplan-Meier, log-rank,
+      Poisson GLM, SLD, mathtext parser, bumps, h5py). A broken barrier or a
+      hung thread is reported as a harness failure, never as corruption.
+      The matplotlib font cache is built in the pytest process first, so
+      the 240 s subprocess timeout only covers imports. With the helper made
+      a no-op: 27-33/58 failed, 7/7 runs. With it: 0/58 in 20 runs.
+- [x] `tests/test_startup_imports.py` passes unchanged: `create_app()`
+      still imports none of openpyxl, periodictable or matplotlib.
 - [x] Agent verifies acceptance criteria.
 - [ ] Owner verifies when required — not required.
 
 #### Completion record
 
-- PR/commit: see the change log row (branch commit, not pushed)
-- Automated tests: `ruff check src tests tools` 0, `mypy src` 0 (see the
-  change log row for the full-suite pytest/golden counts)
-- Agent verification: the forced barrier-race test suite (above); 10/10
-  cold-process reproductions of the unfixed hazard recorded during
-  investigation
+- PR/commit: see the change log row (branch commits, not pushed)
+- Automated tests: see the change log row
+- Agent verification: forced races above (pre-fix, first attempt, sabotaged
+  helper, fixed); startup timed against `main`: first `/api/health` after
+  import is ~0.01 s on both, versus ~0.4-1.1 s with the withdrawn preload
 - Owner verification: not required
-- Notes: the routes' own lazy imports (`# lazy: matplotlib is heavy`) are
-  unchanged and still correct documentation of why they exist — the preload
-  only guarantees they never race on a FIRST import again.
 
 ---
 
@@ -9023,4 +9079,4 @@ the end of it) and heavily cross-imported submodules
 | 2026-09-25 | Claude (agent) | **P3.3 residual R15 closed.** Global shortcuts no longer act on the app behind an open modal. `lib/appShortcuts.ts` is the one gate: the four app shortcut handlers (`useGlobalShortcuts`, `useHistoryCommands`, `useWindowCommands`, `CalcOnlyApp`) register through it, and while `modalInert` holds a dialog, or `usePendingDialogGuard` holds a lazy one still loading, only `?` and Ctrl/Cmd+, (which open a dialog on top, per R16) reach them. The gate never claims the key, so typing, Backspace and a field's native Ctrl+Z inside a dialog are unchanged. It also closes Ctrl+Z on a Preferences slider undoing the app behind it | `overlays/modalShortcuts.test.tsx` (34; 14 shortcut classes each act without a dialog and do nothing inside one); four sabotages each redden only their cases; `modal-inert.spec.ts` gains an R15 case and three cases re-routed off the now-blocked keys (removing the gate reddens exactly the three that assert R15); manual Chromium check against `uv run qz`; eager 867,372 -> 867,524 B, pin 868,308 unmoved |
 | 2026-09-25 | Claude (agent) | **BUG-030 filed and fixed** (P1, security review): `security.origin_allowed` accepted any `localhost`/`127.0.0.1` origin on any port, so another local page could drive write routes with a simple text/plain POST. The Origin must now match the request's own scheme + `Host` port (both loopback aliases); the Vite origin (guard + CORS) is admitted only when `qz --dev` exports `QZ_DEV_VITE_PORT`, and Vite runs with `--strictPort` on the one `_VITE_PORT` | Branch `origin-guard`; new `tests/test_origin_guard.py` (16 tests, 38 cases); 4 sabotage rounds each reddened the expected tests; ruff/mypy clean; pytest 5174 passed / 184 skipped / 18 xfailed; e2e 69 passed / 1 fixme-skipped; `qz --dev` smoke via Vite (proxied GET 200, POST reaches route, WS accepted, foreign origin 403) |
 | 2026-09-25 | Claude (agent) | **BUG-031 filed and fixed** (P2): the lazy Confirm/Param dialog body painted one macrotask before its passive effects took focus and the keyboard, with the pending guard already torn down. `useRegionLoaded` now commits the load flip with `flushSync`. Root-caused from a one-off full-suite failure of `dialogFocus.a11y.test.tsx`; its second logged failure was a cascade of the first through the un-reset `useConfirm` store, now reset in that file's `beforeEach` | New `lazyDialogPaintFocus.test.tsx` (2 forcing cases, red 2/2 with the fix reverted); after `npm ci`: `tsc -b --force` 0, `npm run lint` 0 (weak-wait ratchet unchanged), full `npx vitest run` 729 files / 12,212 passed + 2 expected-fail / 0 failed, `npm run build` bundle gate 844.8 kB eager vs the unmoved 846.1 kB budget (+~0.1 kB for the `flushSync` import; 844.7 kB without it) |
-| 2026-09-27 | Claude (agent) | **BUG-032 filed and fixed** (P1): a cold process's burst of concurrent first-ever exports can trigger several `calc/figure_*.py` renderer modules' (and matplotlib's own submodules') FIRST import from several threadpool threads at once — a hazard PR #448's render lock does not cover (it serializes renders, not imports). New `calc/figure_preload.py` imports every renderer module once, single-threaded, from `quantized.app`'s startup lifespan (`asyncio.to_thread`, awaited before it yields) | New `tests/test_figure_cold_import_race.py`: forced with a `threading.Barrier` in a fresh subprocess interpreter, 15/16 threads failed pre-fix (10/10 cold reproductions), 0/16 post-fix; 20/20 clean runs of the full file. `ruff check src tests tools` 0, `mypy src` 0 (332 files); full `pytest -q -n auto` 5688 passed / 184 skipped / 18 xfailed, 0 FAILED/ERROR; `pytest -q -m golden` 249 passed. `test_create_app_does_not_import_optional_heavy_modules` unaffected — preload runs only once the ASGI lifespan starts |
+| 2026-09-27 | Claude (agent) | **BUG-032 filed and fixed** (P1): on a cold process, concurrent first imports of different lazily imported heavy modules (matplotlib via the renderers, lifelines, statsmodels, bumps, openpyxl, h5py, periodictable, `scipy.io`, docx/pptx) race on half-initialised shared packages; matplotlib failures persist for the process. New pure `quantized/heavy_import.py` serializes those first imports behind one re-entrant lock with a lock-free fast path once loaded; every lazy import in `src/` routed through it and guarded by a static test. A first attempt the same day (startup preload of `calc/figure*`) was withdrawn after review: lifelines still failed 5/5 forced runs, a preload failure crashed startup, and it cost 0.4-1.1 s per launch | New `tests/test_heavy_import_guard.py`, `tests/test_heavy_import.py`, `tests/test_heavy_import_cold_race.py` (replaces `test_figure_cold_import_race.py`). Forced race: pre-fix 9-11/19 fail 5/5 runs; first attempt 1-2/19 fail 5/5 runs; helper sabotaged 27-33/58 fail 7/7 runs; fixed 0/58 in 20 runs. `ruff check src tests tools` 0, `mypy src` 0 (332 files); full `pytest -q -n auto` 5696 passed / 184 skipped / 18 xfailed, 0 FAILED/ERROR; `pytest -q -m golden` 249 passed; `test_startup_imports.py` passes unchanged. Startup vs `main`: first `/api/health` ~0.01 s on both (7 runs each), versus ~0.4-1.1 s with the withdrawn preload |

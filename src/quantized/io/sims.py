@@ -21,6 +21,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.heavy_import import heavy_imports
 from quantized.io import _delimited_layout as layout
 from quantized.io.base import read_head
 from quantized.time_units import TIME_UNIT_CANON
@@ -48,7 +49,8 @@ def _sims_signals(text: str) -> bool:
 
 def _excel_preview_text(path: Path, max_rows: int = 8) -> str:
     """First few rows of sheet 0 flattened to a string (for content sniffing)."""
-    import openpyxl
+    with heavy_imports("openpyxl"):
+        import openpyxl
 
     workbook = openpyxl.load_workbook(path, data_only=True, read_only=True)
     try:
@@ -297,7 +299,8 @@ def _read_text_tokens(path: Path) -> list[list[str]]:
 
 
 def _read_excel_tokens(path: Path, sheet: int | str) -> list[list[str]]:
-    import openpyxl
+    with heavy_imports("openpyxl"):
+        import openpyxl
 
     workbook = openpyxl.load_workbook(path, data_only=True, read_only=True)
     try:

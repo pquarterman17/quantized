@@ -20,6 +20,7 @@ from collections.abc import Callable, Mapping
 from typing import Any
 
 from quantized.desktop_source_identity import matches_declared_source
+from quantized.heavy_import import heavy_imports
 
 __all__ = [
     "WORKSPACE_FORMAT",
@@ -119,7 +120,8 @@ def declared_source_paths_of(
     # would be nothing to resolve against anyway.
     resolve_bundle_source: Callable[[str, str], str | None] | None = None
     if base_dir is not None:
-        from quantized.portable.project_rewrite import resolve_bundle_source
+        with heavy_imports("quantized.portable.project_rewrite"):
+            from quantized.portable.project_rewrite import resolve_bundle_source
     for owner in source_owners:
         if not isinstance(owner, dict):
             continue

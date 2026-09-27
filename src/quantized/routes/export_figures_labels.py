@@ -27,6 +27,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from quantized.calc.figure_labels import series_display_name
+from quantized.calc.plot_log_offsets import log_offset_decades, log_offset_suffix
 from quantized.calc.plotting import PlotSeries
 
 __all__ = ["derived_axis_label", "series_legends", "series_names", "solo_axis_label"]
@@ -84,8 +85,6 @@ def apply_offset_disclosure_to_renames(
     to a renamed series' resolved name too; an un-renamed series already
     carries it via its label, so this touches only the ones
     ``series_display_name`` used verbatim."""
-    from quantized.calc.plot_log_offsets import log_offset_decades, log_offset_suffix
-
     if not log_offsets:
         return list(names)
     return [

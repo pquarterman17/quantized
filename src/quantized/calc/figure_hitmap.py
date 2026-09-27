@@ -39,6 +39,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from quantized.calc.figure_render import savefig_bytes
+from quantized.heavy_import import heavy_imports
 
 __all__ = ["collect_map", "collect_facet_map"]
 
@@ -94,7 +95,8 @@ def _artist_window_extent(artist: Any, renderer: Any) -> Any:
     if get_offsets is not None and get_offset_transform is not None:
         pts = get_offset_transform().transform(get_offsets())
         if len(pts):
-            from matplotlib.transforms import Bbox
+            with heavy_imports("matplotlib.transforms"):
+                from matplotlib.transforms import Bbox
 
             return Bbox([pts.min(axis=0), pts.max(axis=0)])
     return artist.get_window_extent(renderer)

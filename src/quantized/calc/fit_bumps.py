@@ -28,6 +28,8 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from quantized.heavy_import import heavy_imports
+
 from .dream_seed import DreamCancelled, seeded_dream
 from .fit_models import FIT_MODELS, evaluate
 
@@ -55,7 +57,8 @@ _INSTALL_HINT = (
 def bumps_available() -> bool:
     """True when the optional bumps dependency is importable."""
     try:
-        import bumps  # noqa: F401
+        with heavy_imports("bumps"):
+            import bumps  # noqa: F401
     except ImportError:
         return False
     return True
@@ -64,9 +67,10 @@ def bumps_available() -> bool:
 def _import_bumps() -> tuple[Any, Any, Any, Any]:
     """Guarded import -> (Curve, FitProblem, FITTERS, FitDriver)."""
     try:
-        from bumps.curve import Curve
-        from bumps.fitproblem import FitProblem
-        from bumps.fitters import FITTERS, FitDriver
+        with heavy_imports("bumps.curve", "bumps.fitproblem", "bumps.fitters"):
+            from bumps.curve import Curve
+            from bumps.fitproblem import FitProblem
+            from bumps.fitters import FITTERS, FitDriver
     except ImportError as exc:
         raise ValueError(_INSTALL_HINT) from exc
     return Curve, FitProblem, FITTERS, FitDriver

@@ -31,6 +31,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
+from quantized.heavy_import import heavy_imports
 from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
 from quantized.routes._export_common import (
     _DPI_MAX,
@@ -119,7 +120,8 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
     try:
         if req.facets:
-            from quantized.calc.figure_facets import render_stat_facets_figure  # lazy
+            with heavy_imports("quantized.calc.figure_facets"):
+                from quantized.calc.figure_facets import render_stat_facets_figure  # lazy
 
             panels: list[dict[str, Any]] = [
                 {"label": f.label, "kind": f.kind, "data": f.data, "labels": f.labels}
@@ -131,7 +133,8 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 fmt=req.fmt, style=req.style, dpi=dpi, show_n=req.show_n, caveat=req.caveat,
             )
         else:
-            from quantized.calc.figure_statplots import render_statplot_figure  # lazy
+            with heavy_imports("quantized.calc.figure_statplots"):
+                from quantized.calc.figure_statplots import render_statplot_figure  # lazy
 
             data: Any = req.data
             data = [list(g) for g in data] if req.kind in ("box", "violin", "strip") else list(data)
@@ -209,7 +212,8 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
     try:
         if req.facets:
-            from quantized.calc.figure_facets import render_categorical_facets_figure  # lazy
+            with heavy_imports("quantized.calc.figure_facets"):
+                from quantized.calc.figure_facets import render_categorical_facets_figure  # lazy
 
             panels: list[dict[str, Any]] = [
                 {
@@ -224,7 +228,8 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
                 caveat=req.caveat,
             )
         else:
-            from quantized.calc.figure_categorical import render_categorical_figure  # lazy
+            with heavy_imports("quantized.calc.figure_categorical"):
+                from quantized.calc.figure_categorical import render_categorical_figure  # lazy
 
             img = render_categorical_figure(
                 req.groups, req.series, req.values, req.errors, stacked=req.stacked,

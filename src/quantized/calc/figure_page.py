@@ -68,6 +68,7 @@ from quantized.calc.figure_page_panel_labels import (
 from quantized.calc.figure_page_validate import _validate_page, _validate_page_rects
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import FigureStyle, figure_style
+from quantized.heavy_import import heavy_imports
 
 __all__ = ["PagePanel", "panel_label", "render_figure_page"]
 
@@ -422,7 +423,8 @@ def _draw_panel(fig: Any, ax: Any, p: PagePanel, st: FigureStyle) -> None:
         # Lazy import: mirrors calc.figure._render_impl's own lazy import of
         # this module -- keeps the twinx orchestration out of this module's
         # top-level import list.
-        from quantized.calc.figure_y2 import render_with_secondary_axis
+        with heavy_imports("quantized.calc.figure_y2"):
+            from quantized.calc.figure_y2 import render_with_secondary_axis
 
         render_with_secondary_axis(
             fig, ax, xv, series, styles, y2_mask,

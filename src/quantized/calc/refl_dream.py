@@ -72,6 +72,7 @@ from quantized.calc.dream_seed import DreamCancelled, seed_reproducible, seeded_
 from quantized.calc.refl_dream_bands import PERCENTILES, posterior_bands
 from quantized.calc.refl_fit import channel_model, channel_residuals
 from quantized.calc.refl_model import ReflChannel, ReflParams, validate_model
+from quantized.heavy_import import heavy_imports
 
 __all__ = [
     "MIN_CHAINS", "MIN_KEPT_GENERATIONS", "PERCENTILES", "RHAT_FLAG", "plan_sampling",
@@ -283,8 +284,9 @@ def sample_reflectivity(
     centre outside the bounds, bad settings, or a missing bumps install.
     """
     try:
-        from bumps.dream.core import Dream
-        from bumps.dream.gelman import gelman
+        with heavy_imports("bumps.dream.core", "bumps.dream.gelman"):
+            from bumps.dream.core import Dream
+            from bumps.dream.gelman import gelman
     except ImportError as exc:
         raise ValueError(_INSTALL_HINT) from exc
     s = _Setup(parameters, channels, centre, weighting, samples, burn, pop, thin, band_draws)

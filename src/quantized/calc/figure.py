@@ -27,6 +27,7 @@ from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle, figure_style
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
+from quantized.heavy_import import heavy_imports
 
 from .figure_errorbars import apply_error_bars
 
@@ -384,7 +385,8 @@ def _render_impl(
         # not applied together with x_breaks in this pass.
         if x_breaks and not collect_map:
             # Lazy import: split out purely to stay under the 500-line ceiling.
-            from quantized.calc.figure_break import _visible_bounds, render_breaks_impl
+            with heavy_imports("quantized.calc.figure_break"):
+                from quantized.calc.figure_break import _visible_bounds, render_breaks_impl
 
             visible_breaks = [(float(b[0]), float(b[1])) for b in x_breaks]
             if len(_visible_bounds(xv, visible_breaks)) >= 2:
@@ -417,7 +419,8 @@ def _render_impl(
             # Lazy import: mirrors figure_break's own lazy import above —
             # keeps this module's own top-level import list light, and
             # the twinx orchestration out of the 500-line ceiling here.
-            from quantized.calc.figure_y2 import render_with_secondary_axis
+            with heavy_imports("quantized.calc.figure_y2"):
+                from quantized.calc.figure_y2 import render_with_secondary_axis
 
             artists = render_with_secondary_axis(
                 fig, ax, xv, series, series_styles, y2_mask_list,

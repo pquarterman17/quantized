@@ -18,6 +18,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
+from quantized.heavy_import import heavy_imports
 from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
 from quantized.routes._export_common import (
     _DPI_MAX,
@@ -58,7 +59,8 @@ def export_correlation_heatmap_figure(req: CorrelationHeatmapFigureRequest) -> R
     on screen."""
     _check_fmt(req.fmt)
     try:
-        from quantized.calc.figure_multivar import render_correlation_heatmap_figure  # lazy
+        with heavy_imports("quantized.calc.figure_multivar"):
+            from quantized.calc.figure_multivar import render_correlation_heatmap_figure  # lazy
 
         img = render_correlation_heatmap_figure(
             req.labels, req.r, title=req.title, fmt=req.fmt, style=req.style,
@@ -93,7 +95,8 @@ def export_splom_figure(req: SplomFigureRequest) -> Response:
     histogram."""
     _check_fmt(req.fmt)
     try:
-        from quantized.calc.figure_multivar import render_splom_figure  # lazy
+        with heavy_imports("quantized.calc.figure_multivar"):
+            from quantized.calc.figure_multivar import render_splom_figure  # lazy
 
         img = render_splom_figure(
             req.labels, req.columns, title=req.title, fmt=req.fmt, style=req.style,
@@ -135,7 +138,8 @@ def export_pca_figure(req: PcaFigureRequest) -> Response:
     (``pcaScoresRender.ts``)."""
     _check_fmt(req.fmt)
     try:
-        from quantized.calc.figure_multivar import render_pca_figure  # lazy
+        with heavy_imports("quantized.calc.figure_multivar"):
+            from quantized.calc.figure_multivar import render_pca_figure  # lazy
 
         vectors: list[dict[str, Any]] | None = (
             [{"x": v.x, "y": v.y, "label": v.label} for v in req.vectors] if req.vectors else None
@@ -171,7 +175,8 @@ def export_pca_scree_figure(req: PcaScreeFigureRequest) -> Response:
     the same two arrays ``PcaScree.tsx`` draws as DOM bars."""
     _check_fmt(req.fmt)
     try:
-        from quantized.calc.figure_multivar import render_pca_scree_figure  # lazy
+        with heavy_imports("quantized.calc.figure_multivar"):
+            from quantized.calc.figure_multivar import render_pca_scree_figure  # lazy
 
         img = render_pca_scree_figure(
             req.explained, req.cumulative, title=req.title, fmt=req.fmt, style=req.style,

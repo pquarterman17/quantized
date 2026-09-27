@@ -12,13 +12,16 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from quantized.heavy_import import heavy_imports
+
 __all__ = ["kaplan_meier", "logrank_test", "cox_proportional_hazards"]
 
 
 def _check_lifelines() -> None:
     """Raise a clear error if lifelines is not installed."""
     try:
-        import lifelines  # noqa: F401
+        with heavy_imports("lifelines"):
+            import lifelines  # noqa: F401
     except ImportError as exc:
         raise RuntimeError(
             "Survival methods require lifelines. Install with: pip install quantized[stats]"
@@ -40,7 +43,8 @@ def kaplan_meier(
     Reference: Kaplan-Meier estimator via lifelines ``KaplanMeierFitter``.
     """
     _check_lifelines()
-    from lifelines import KaplanMeierFitter
+    with heavy_imports("lifelines"):
+        from lifelines import KaplanMeierFitter
 
     tv = np.asarray(time, dtype=float).ravel()
     ev = np.asarray(event, dtype=float).ravel()
@@ -112,7 +116,8 @@ def logrank_test(
     Reference: log-rank test via lifelines ``logrank_test``.
     """
     _check_lifelines()
-    from lifelines.statistics import logrank_test as logrank_test_fn
+    with heavy_imports("lifelines.statistics"):
+        from lifelines.statistics import logrank_test as logrank_test_fn
 
     t1v = np.asarray(time1, dtype=float).ravel()
     e1v = np.asarray(event1, dtype=float).ravel()
@@ -177,8 +182,9 @@ def cox_proportional_hazards(
     Reference: Cox PH via lifelines ``CoxPHFitter``.
     """
     _check_lifelines()
-    import pandas as pd
-    from lifelines import CoxPHFitter
+    with heavy_imports("pandas", "lifelines"):
+        import pandas as pd
+        from lifelines import CoxPHFitter
 
     tv = np.asarray(time, dtype=float).ravel()
     ev = np.asarray(event, dtype=float).ravel()

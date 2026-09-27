@@ -41,6 +41,7 @@ from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale
 from quantized.calc.figure_styles import figure_style
 from quantized.calc.figure_ticks import apply_tick_formats
+from quantized.heavy_import import heavy_imports
 
 __all__ = [
     "draw_facet_grid",
@@ -223,7 +224,8 @@ def render_facets_figure(
     # purely to stay under the 500-line god-module ceiling (that module
     # imports `draw_facet_grid` FROM this one at its own top level, so a
     # top-level import here would cycle) -- see that module's header.
-    from quantized.calc.figure_facets_map import _facet_grid
+    with heavy_imports("quantized.calc.figure_facets_map"):
+        from quantized.calc.figure_facets_map import _facet_grid
 
     with _facet_grid(
         panels, x_log=x_log, y_log=y_log, x_scale=x_scale, y_scale=y_scale,
@@ -269,8 +271,9 @@ def render_stat_facets_figure(
     including P2.6 box 2's empty slots, ``show_n`` counts and ``caveat``
     footnote (``calc.figure_group_notes``).
     """
-    from quantized.calc.figure_group_notes import add_caveat, supxlabel_above_caveat
-    from quantized.calc.figure_statplots import _GROUPED, _draw_statplot
+    with heavy_imports("quantized.calc.figure_group_notes", "quantized.calc.figure_statplots"):
+        from quantized.calc.figure_group_notes import add_caveat, supxlabel_above_caveat
+        from quantized.calc.figure_statplots import _GROUPED, _draw_statplot
 
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -363,13 +366,14 @@ def render_categorical_facets_figure(
     labels each grouped bar ``n=K``, and ``caveat`` becomes a footnote --
     the flat renderer's behaviour, via the same helpers.
     """
-    from quantized.calc.figure_categorical import (
-        _draw_categorical_bars,
-        _to_counts,
-        _to_error_matrix,
-        _to_matrix,
-    )
-    from quantized.calc.figure_group_notes import add_caveat, supxlabel_above_caveat
+    with heavy_imports("quantized.calc.figure_categorical", "quantized.calc.figure_group_notes"):
+        from quantized.calc.figure_categorical import (
+            _draw_categorical_bars,
+            _to_counts,
+            _to_error_matrix,
+            _to_matrix,
+        )
+        from quantized.calc.figure_group_notes import add_caveat, supxlabel_above_caveat
 
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")

@@ -29,13 +29,14 @@ installation at best, never across installations.
 
 from __future__ import annotations
 
-import importlib
 import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from typing import Any
 
 import numpy as np
+
+from quantized.heavy_import import heavy_import
 
 __all__ = ["DREAM_RNG_MODULES", "DreamCancelled", "seed_reproducible", "seeded_dream"]
 
@@ -57,7 +58,7 @@ class DreamCancelled(Exception):
 def seed_reproducible() -> bool:
     """False when bumps runs its DE step under numba, whose generator a seed
     set from Python cannot reach (a seeded run is then NOT reproducible)."""
-    diffev = importlib.import_module("bumps.dream.diffev")
+    diffev = heavy_import("bumps.dream.diffev")
     return getattr(diffev, "prange", range) is range
 
 
@@ -78,7 +79,7 @@ def seeded_dream(
     every quarter second; it may raise (``DreamCancelled``, or the job
     runner's cancellation) to give up, so a queued run stays cancellable.
     """
-    mods: list[Any] = [importlib.import_module(name) for name in DREAM_RNG_MODULES]
+    mods: list[Any] = [heavy_import(name) for name in DREAM_RNG_MODULES]
     diffev = mods[DREAM_RNG_MODULES.index("bumps.dream.diffev")]
     while not _LOCK.acquire(timeout=_WAIT_POLL_S):
         if while_waiting is not None:
