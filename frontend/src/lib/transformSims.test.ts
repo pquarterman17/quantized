@@ -208,4 +208,19 @@ describe("computeSims + runTransform", () => {
     const step = back.macroSteps?.find((st) => st.kind === "transform");
     expect(transformParamsOf(step?.params as Record<string, unknown>)).toEqual(NORM);
   });
+
+  it("a BLANK sample (JSON null off the wire) is stored as NaN, so the .dwk still reopens (slice 2)", async () => {
+    // The route writes NaN as null; a null cell is refused by the .dwk
+    // reader, which used to make a saved workspace holding a SIMS output with
+    // any blank (a non-positive reference, a union-grid gap) unopenable.
+    vi.mocked(processSims).mockImplementationOnce(async (body) => {
+      const r = await fakeBackend(body);
+      return { ...r, dataset: { ...r.dataset, values: [[null as unknown as number, 1000], [0.02, 1000], [0.01, 500]] } };
+    });
+    const out = await runTransform(useApp.getState, NORM, "p1");
+    const made = useApp.getState().datasets.find((d) => d.id === out?.id);
+    expect(Number.isNaN(made?.data.values[0][0])).toBe(true);
+    const back = parseWorkspace(serializeWorkspace({ datasets: useApp.getState().datasets }));
+    expect(Number.isNaN(back.datasets.find((d) => d.id === out?.id)?.data.values[0][0])).toBe(true);
+  });
 });

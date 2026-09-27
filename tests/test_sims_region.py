@@ -105,6 +105,22 @@ def test_blank_samples_are_skipped_and_bridged_and_reported() -> None:
     assert blank["count"] == 1 and blank["columns"] == ["B"]
 
 
+def test_a_comparison_tables_row_blocks_are_not_gaps() -> None:
+    # calc.sims_compare layout: trace 1 fills rows 0-2, trace 2 rows 3-4, each
+    # blank elsewhere. Neither has a GAP; each integrates over its own block.
+    nan = math.nan
+    ds = _ds(
+        x=[0.0, 10.0, 20.0, 0.0, 10.0],
+        cols={"B — a": [1e18, 3e18, 1e18, nan, nan], "B — b": [nan, nan, nan, 2e18, 2e18]},
+    )
+    res = region_measures(ds, lo=0, hi=20)
+    a, b = _sp(res, "B — a"), _sp(res, "B — b")
+    assert (a["blank"], b["blank"]) == (0, 0)
+    assert "blank-in-region" not in [w["code"] for w in res["warnings"]]
+    # a: (1+3)/2*10 + (3+1)/2*10 = 40 e18 nm -> 4e12; b: (2+2)/2*10 = 20 -> 2e12
+    assert a["integral"] == pytest.approx(4e12) and b["integral"] == pytest.approx(2e12)
+
+
 def test_unsorted_depth_gives_the_same_answer() -> None:
     fwd = region_measures(_ds(), lo=0, hi=40)
     rev = region_measures(_ds(x=X[::-1], cols={"B": B[::-1], "Si": SI}), lo=0, hi=40)

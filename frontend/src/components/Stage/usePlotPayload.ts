@@ -32,6 +32,7 @@ import {
   shouldRefetchWindow,
 } from "../../lib/plotDecimate";
 import { applyGroupSplit, canvasGroupCol, groupSplitChannelMap } from "../../lib/plotGroupSplit";
+import { applyLogOffsets, logOffsetsApply } from "../../lib/logOffset";
 import { droppedRows } from "../../lib/rowstate";
 import type { AxisScale, BaselineOverlay, Dataset, DefaultTrace, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
 import { useStableByValue } from "../../lib/useStableValue";
@@ -201,7 +202,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   const displayPayload = useMemo(
     () =>
       payload
-        ? composeDisplayPayload(payload, {
+        ? composeDisplayPayload(applyLogOffsets(payload, plotted, p.seriesStyles, logOffsetsApply(p.waterfall, groupCol)), {
             id: active?.id ?? null,
             waterfall: p.waterfall,
             dropped,
@@ -214,7 +215,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
           })
         : null,
     [
-      payload,
+      payload, plotted, p.seriesStyles, groupCol, // P2.3 decade offsets (lib/logOffset.ts)
       p.fitOverlay,
       p.peakOverlay,
       p.baselineOverlay,

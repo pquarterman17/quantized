@@ -34,6 +34,7 @@
 // mark reads. Lazy: only the workshop and the transform runner import this.
 
 import { processSims, type SimsProcessRequest, type SimsWarningWire } from "./api/sims";
+import { blanksToNaN } from "./blankCells";
 import { analysisData } from "./rowstate";
 import { xUnitOf } from "./transformResample";
 import type { TransformWarning, TransformWarningCode } from "./transformWarnings";
@@ -175,7 +176,9 @@ export function simsRequest(p: SimsParams, source: DataStruct, opts: { preview?:
   return body;
 }
 
-function toWarning(w: SimsWarningWire): TransformWarning {
+/** A backend SIMS warning as the transform layer's `TransformWarning` (shared by
+ *  lib/transformSimsCompare.ts). */
+export function simsWarningOf(w: SimsWarningWire): TransformWarning {
   const out: TransformWarning = { code: w.code as TransformWarningCode, text: w.text };
   if (w.count != null) out.count = w.count;
   if (w.columns != null) out.columns = w.columns;
@@ -196,9 +199,10 @@ export async function computeSims(
 ): Promise<SimsComputed> {
   const res = await processSims(simsRequest(p, source.data, { preview: opts.preview }), opts.signal);
   return {
-    data: { ...res.dataset, metadata: { ...res.dataset.metadata, sims_source: { id: source.id, name: source.name } } },
+    // Blanks arrive as JSON null; stored as NaN so the .dwk reopens (lib/blankCells).
+    data: blanksToNaN({ ...res.dataset, metadata: { ...res.dataset.metadata, sims_source: { id: source.id, name: source.name } } }),
     name: simsOutputName(source.name),
-    warnings: res.warnings.map(toWarning),
+    warnings: res.warnings.map(simsWarningOf),
     stages: res.stages,
   };
 }

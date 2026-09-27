@@ -4,9 +4,12 @@
 // have no place on a log axis and are skipped (the backend's `non-positive`
 // warning counts them). Decimated per column via the main plot's
 // `decimateRowIndices` so a long profile never stringifies a huge path.
+// `offsets` (the Compare tab's stagger) shifts column c by offsets[c] decades,
+// exactly as the plot will draw it (lib/logOffset.ts), and says so in the key.
 
 import { useMemo } from "react";
 
+import { logOffsetSuffix } from "../../../lib/logOffset";
 import { decimateRowIndices, xExtent } from "../../../lib/plotDecimate";
 import type { DataStruct } from "../../../lib/types";
 
@@ -19,19 +22,19 @@ const N_SERIES_TOKENS = 8;
 
 type Pt = [number, number];
 
-function logPairs(d: DataStruct, c: number): Pt[] {
+function logPairs(d: DataStruct, c: number, decades: number): Pt[] {
   const ys = d.values.map((row) => (typeof row?.[c] === "number" ? row[c] : null));
   const out: Pt[] = [];
   for (const i of decimateRowIndices([ys], 0, d.time.length, BUCKETS)) {
     const x = d.time[i];
     const y = ys[i];
-    if (Number.isFinite(x) && typeof y === "number" && y > 0 && Number.isFinite(y)) out.push([x, Math.log10(y)]);
+    if (Number.isFinite(x) && typeof y === "number" && y > 0 && Number.isFinite(y)) out.push([x, Math.log10(y) + decades]);
   }
   return out;
 }
 
-export default function SimsPreviewPlot({ data }: { data: DataStruct }) {
-  const series = useMemo(() => data.labels.map((_, c) => logPairs(data, c)), [data]);
+export default function SimsPreviewPlot({ data, offsets }: { data: DataStruct; offsets?: readonly number[] }) {
+  const series = useMemo(() => data.labels.map((_, c) => logPairs(data, c, offsets?.[c] ?? 0)), [data, offsets]);
   const all = series.flat();
   if (!all.length) {
     return <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>No positive values to plot on a log axis.</div>;
@@ -73,7 +76,7 @@ export default function SimsPreviewPlot({ data }: { data: DataStruct }) {
       <figcaption className="qzk-ds-meta" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 2 }}>
         {data.labels.map((l, c) => (
           <span key={c} style={{ color: `var(--series-${(c % N_SERIES_TOKENS) + 1})` }}>
-            ― {l || `column ${c + 1}`}
+            ― {l || `column ${c + 1}`}{logOffsetSuffix(offsets?.[c] ?? 0)}
           </span>
         ))}
       </figcaption>

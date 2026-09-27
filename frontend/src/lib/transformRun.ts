@@ -37,6 +37,7 @@ import { IN_PLACE_OPS, metaParamsOf, metaStepText, runMetaStep, type MetaStepPar
 import { analysisData } from "./rowstate";
 import { computeResample, resampleLabel, resampleParamsOf, type ResampleParams } from "./transformResample";
 import { computeSims, simsLabel, simsParamsOf, type SimsParams } from "./transformSims";
+import { computeSimsCompare, simsCompareLabel, simsCompareParamsOf, type SimsCompareParams } from "./transformSimsCompare";
 import {
   actionable,
   analyzeAlgebra,
@@ -88,6 +89,7 @@ export type TransformParams =
   | { op: "split"; col: number; tolerance: number | null }
   | ResampleParams
   | SimsParams
+  | SimsCompareParams
   // In place, no output (lib/metadataRun.ts): a metadata factor / cleanup.
   | MetaStepParams;
 
@@ -127,7 +129,7 @@ export const rowsOf = (ds: Dataset): DataStruct => analysisData(ds) ?? ds.data;
 
 function refsOf(p: TransformParams): DatasetRef[] {
   if (p.op === "join" || p.op === "algebra") return [p.with];
-  if (p.op === "merge") return p.with;
+  if (p.op === "merge" || p.op === "simscompare") return p.with;
   if (p.op === "resample") return p.with ? [p.with] : [];
   return [];
 }
@@ -156,6 +158,7 @@ export function transformStepText(p: TransformParams, primaryName: string): { la
     case "split": label = `Split ${primaryName} by column value`; break;
     case "resample": label = resampleLabel(p, primaryName); break;
     case "sims": label = simsLabel(p, primaryName); break;
+    case "simscompare": label = simsCompareLabel(p, primaryName); break;
     default: label = `${op[0].toUpperCase()}${op.slice(1)} ${primaryName}`;
   }
   return { label, code: `qz.transform(${lit(op)}, "<active>", ${lit(args)})` };
@@ -249,6 +252,12 @@ export async function computeTransform(p: TransformParams, primary: Dataset, oth
     case "sims": {
       const r = await computeSims(p, { id: primary.id, name: primary.name, data: src });
       return { data: r.data, name: r.name, preview: preview("SIMS processing", r.data, r.warnings, [[primary.name, src]]) };
+    }
+    case "simscompare": {
+      // Every profile's ANALYSIS rows, as the single-profile `sims` op reads.
+      const all = [primary, ...others].map((d) => ({ id: d.id, name: d.name, data: rowsOf(d) }));
+      const r = await computeSimsCompare(p, all);
+      return { data: r.data, name: r.name, preview: preview("SIMS comparison", r.data, r.warnings, all.map((d) => [d.name, d.data])) };
     }
     default:
       throw new Error(`"${p.op}" is not a single-output transform`);
@@ -383,7 +392,7 @@ function recordedNote(warnings: readonly TransformWarning[]): string {
   return n ? ` — ${n} warning${n === 1 ? "" : "s"} recorded in its metadata` : "";
 }
 
-const OPS = new Set(["transpose", "stack", "unstack", "join", "merge", "algebra", "split", "resample", "sims", "promote", "metaclean"]);
+const OPS = new Set(["transpose", "stack", "unstack", "join", "merge", "algebra", "split", "resample", "sims", "simscompare", "promote", "metaclean"]);
 
 /** Validate a recorded `transform` step's params (a .dwk / template is user-
  *  editable JSON) into `TransformParams`, or throw naming what is wrong. */
@@ -441,6 +450,8 @@ export function transformParamsOf(raw: Record<string, unknown>): TransformParams
       return resampleParamsOf(raw);
     case "sims":
       return simsParamsOf(raw);
+    case "simscompare":
+      return simsCompareParamsOf(raw);
     case "promote":
     case "metaclean":
       return metaParamsOf(raw);

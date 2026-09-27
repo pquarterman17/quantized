@@ -801,7 +801,12 @@ const TS_MODULE_PINS: Record<string, number> = {
   // and rehydrated into exactly those shapes. Re-exported from types.ts, so no
   // importer changed. Funds this item's own `Dataset.peakTable` field and
   // ratchets down by the balance.
-  "/lib/types.ts": 1009,
+  // 1009 -> 934 (2026-09-27, P2.3 SIMS slice 2): the series-style vocabulary
+  // (LineStyle/DefaultTrace/StepMode/MarkerShape/SeriesStyle) — a self-
+  // contained leaf block — moved verbatim to the new lib/seriesStyleTypes.ts
+  // and re-exported from types.ts (no importer changed). Funds the new
+  // `SeriesStyle.logOffset` field and ratchets down by the balance.
+  "/lib/types.ts": 934,
   "/lib/plotspec.ts": 893,
   // originFigures.ts GRADUATED 2026-08-30 (pin was 793; BUNDLE_HEADROOM
   // slice 1): 793 -> 208 lines. The apply-only half — legend/annotation/

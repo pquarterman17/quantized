@@ -11,8 +11,12 @@ hand-computed values:
 - **Integral** (the dose): the trapezoid rule over the species' FINITE
   samples inside the region, sorted by depth. It runs from the first to the
   last sampled depth in the region -- never extrapolated to the region's
-  edges -- and a blank sample is skipped, so the trapezoid bridges the gap it
-  leaves (counted and reported). When the values are a volume concentration
+  edges -- and a blank sample BETWEEN two measured ones is skipped, so the
+  trapezoid bridges the gap it leaves (counted and reported as ``blank``).
+  Blanks before the species' first or after its last measured row (an
+  ``io.sims`` union-grid end, another profile's row block in a
+  ``calc.sims_compare`` table) are outside its range, not gaps, and are
+  neither bridged nor counted. When the values are a volume concentration
   (``atoms/cm3``, ``cm^-3``, ...) and x is a length, the depth is converted to
   cm and the result is an AREAL DOSE (``atoms/cm^2``). Otherwise the integral
   is reported in the plain product of the two units (e.g. ``c/s·nm``) and
@@ -128,6 +132,12 @@ def _species(
     threshold: float,
 ) -> dict[str, Any]:
     finite = np.isfinite(col) & np.isfinite(x)
+    # A blank counts as a GAP only between the trace's first and last finite
+    # rows: rows before/after them are outside its measured range (an
+    # io.sims union-grid end, or another profile's block in a comparison
+    # table), which the integral never spans, so nothing is bridged there.
+    rows = np.flatnonzero(finite)
+    gaps = int(rows[-1] - rows[0] + 1 - rows.size) if rows.size else 0
     xs, ys = x[finite], col[finite]
     order = np.argsort(xs, kind="stable")
     xs, ys = xs[order], ys[order]
@@ -136,7 +146,7 @@ def _species(
         "name": name,
         "unit": unit,
         "points": int(xs.size),
-        "blank": int(col.size - xs.size),
+        "blank": gaps,
         "integral": None,
         "integral_unit": dose_unit,
         "integral_kind": kind,
@@ -286,8 +296,8 @@ def region_measures(
             "region": "inclusive, 1e-9 relative tolerance",
             "integral": (
                 "trapezoid over the finite samples inside the region, first to last "
-                "sampled depth (not extrapolated to the edges); blanks skipped (bridged); "
-                "depth converted to cm for an areal dose"
+                "sampled depth (not extrapolated to the edges); a blank between two "
+                "samples is skipped (bridged); depth converted to cm for an areal dose"
             ),
             "mean": "point average of the finite samples (not depth-weighted)",
             "junction": (
