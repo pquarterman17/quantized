@@ -14,15 +14,19 @@
 // nothing more — no automatic cleanup, no "tidy up your recents", because a
 // share that is merely unmounted must never be treated as a deleted file.
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useId, useState, useRef } from "react";
 import { plural } from "../../lib/plural";
 
 import { pathState, type PathState } from "../../lib/desktopBridge";
+import { makeFirstRunExample, type FirstRunExampleKind } from "../../lib/firstRunExamples";
+import { plotIntentStageTab } from "../../lib/stagetab";
 import { recentKey, recentParentLabel, relativeTime, type RecentFile } from "../../lib/recentFiles";
 import { reopenRecent } from "../../lib/reopenRecent";
+import { openRecentProject } from "../../commands/recentProjectsCommands";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
-import { useApp } from "../../store/useApp";
+import { nextDatasetId, useApp } from "../../store/useApp";
+import { useRecentProjects } from "../../store/recentProjects";
 import { useWorkingPaths } from "../../store/workingPaths";
 
 /** Short badge for a source's reachability. `ok`/`unknown` render nothing —
@@ -57,10 +61,42 @@ function useRecentStates(recent: RecentFile[]): Record<string, PathState> {
   return states;
 }
 
+/** Load a first-run example as ONE user action, through the ordinary
+ *  `addDataset` entry point (the same one import/paste/demo use).
+ *
+ *  Synchronous on purpose. The generator ships in Home's own lazy chunk
+ *  (Library.tsx loads Home through `lazyRegion`), so it costs the eager
+ *  bundle nothing — and a second dynamic import here would only reopen an
+ *  async gap in which a real import could land first and the example then
+ *  pile on top of it.
+ *
+ *  Never over existing data: Home is mounted only over an empty Library, but
+ *  a fast double-click dispatches twice before React re-renders Home away. */
+function loadFirstRunExample(kind: FirstRunExampleKind): void {
+  const s = useApp.getState();
+  if (s.datasets.length > 0) return;
+  const example = makeFirstRunExample(kind);
+  const ds = { id: nextDatasetId(), name: example.name, data: example.data };
+  s.addDataset(ds); // records the one "add dataset" undo entry
+  // Grouping + tab ride that same entry: its pre-mutation snapshot already
+  // restores both. `setGroupKey` would push a SECOND "change group" entry
+  // (one Undo then leaves an ungrouped dataset behind) and record a macro
+  // step the user never took. The tab is plot-intent routing (the rule
+  // "Plot (make active)" uses), so a Worksheet-tab start still shows a plot.
+  useApp.setState({ groupKey: example.groupKey, stageTab: plotIntentStageTab(ds) });
+  s.setStatus(`loaded example: ${example.description}`);
+}
+
 export default function HomeScreen({ onImport }: { onImport: () => void }) {
   const recent = useApp((s) => s.recent);
   const removeRecent = useApp((s) => s.removeRecent);
+  const recentProjects = useRecentProjects((s) => s.recentProjects);
   const homeRef = useRef<HTMLDivElement>(null);
+  // A double-click on a project row must not start a second reopen: the
+  // second would find the first's workspace applied and ask "Replace the
+  // current workspace?" about the very project just opened.
+  const reopening = useRef(false);
+  const examplesLabelId = useId();
   const paths = useWorkingPaths((s) => s.paths);
   const setPinned = useWorkingPaths((s) => s.setPinned);
   // Not `usePath`: a `use`-prefixed local reads as a React hook (and trips
@@ -68,6 +104,15 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
   const recordPathUse = useWorkingPaths((s) => s.use);
   const health = useAutosaveStatus((s) => s.health);
   const states = useRecentStates(recent);
+  const reopenProject = async (name: string, path: string): Promise<void> => {
+    if (reopening.current) return;
+    reopening.current = true;
+    try {
+      await openRecentProject(name, path); // the one missing/offline-aware path
+    } finally {
+      reopening.current = false;
+    }
+  };
 
   return (
     // tabIndex/keydown: hardening review fix — the recents ✕ removal needs a
@@ -76,13 +121,40 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
     // active dataset (lib/focusGuard.ts's incident class).
     <div ref={homeRef} tabIndex={-1} onKeyDown={absorbStrayDeleteOnContainer} style={{ padding: 10, display: "flex", flexDirection: "column", gap: 12 }}>
       <div>
+        <div className="qzk-menu-label">Start here</div>
         <button className="qz-btn" onClick={onImport} style={{ width: "100%" }}>
           ⊞ Import data…
         </button>
+        <button
+          className="qzk-menu-item"
+          onClick={() => useApp.getState().setImportWizardOpen(true)}
+          style={{ width: "100%", marginTop: 4, textAlign: "center" }}
+        >
+          Guided import for unfamiliar files…
+        </button>
         <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
-          or drop files anywhere in this panel
+          Drop files anywhere here. Quantized plots the first usable columns;
+          then drag columns onto X, Y, or Y2 to change them.
         </div>
       </div>
+
+      {recentProjects.length > 0 && (
+        <div>
+          <div className="qzk-menu-label">Recent projects</div>
+          {recentProjects.slice(0, 4).map((project) => (
+            <button
+              key={project.path}
+              className="qzk-menu-item"
+              style={{ width: "100%", textAlign: "left" }}
+              title={project.path}
+              onClick={() => void reopenProject(project.name, project.path)}
+            >
+              <span className="qzk-menu-trunc">{project.name}</span>
+              <span className="qz-shortcut">{relativeTime(project.at, Date.now())}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {recent.length > 0 && (
         <div>
@@ -167,6 +239,28 @@ export default function HomeScreen({ onImport }: { onImport: () => void }) {
           ))}
         </div>
       )}
+
+      <div>
+        <div className="qzk-menu-label" id={examplesLabelId}>Try an example</div>
+        <div
+          role="group"
+          aria-labelledby={examplesLabelId}
+          style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 4 }}
+        >
+          <button className="qzk-menu-item" title="Load a simple 1-D line example" onClick={() => loadFirstRunExample("line")}>
+            1-D
+          </button>
+          <button className="qzk-menu-item" title="Load data grouped by lot" onClick={() => loadFirstRunExample("grouped")}>
+            Grouped
+          </button>
+          <button className="qzk-menu-item" title="Load a small 2-D intensity map" onClick={() => loadFirstRunExample("map")}>
+            2-D
+          </button>
+        </div>
+        <div className="qzk-ds-meta" style={{ marginTop: 4, color: "var(--text-faint)" }}>
+          Examples are generated locally and never replace your files.
+        </div>
+      </div>
 
       <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
         {health.error ? (

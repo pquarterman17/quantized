@@ -30,7 +30,6 @@ import { useLibraryViewTransition } from "./useLibraryViewTransition";
 import { makeDemoDataset } from "../../lib/demo";
 import { folderPath } from "../../lib/foldertree";
 import { originSheetGroups, originSheetNumber } from "../../lib/grouping";
-import HomeScreen from "./HomeScreen";
 import { chooseAndImport } from "../../lib/importEntry";
 import { IMPORT_ACCEPT } from "../../lib/openFilePicker";
 import { matchesQuery, parseQuery } from "../../lib/smartfolders";
@@ -49,6 +48,11 @@ const MultiSelectBar = lazyRegion(() => import("./MultiSelectBar"), "Library");
 // useLibraryHierarchyRows since `rows.length` drives inTree/HomeScreen).
 const LibraryTree = lazyRegion(() => import("./LibraryTree"), "Library");
 const LibraryDetails = lazyRegion(() => import("./LibraryDetails"), "Library");
+// The resume/start surface exists only for a genuinely empty Library. Keep it
+// out of every established project's startup bundle. Like the other optional
+// Library bodies it has no Suspense fallback: an empty Library shows nothing
+// below the header for the one localhost chunk fetch, then Home.
+const HomeScreen = lazyRegion(() => import("./HomeScreen"), "Library");
 // Bundle diet slice 6 (plans/BUNDLE_HEADROOM.md): the flat-list fallback body
 // (query empty, hierarchy empty) — see LibraryFlatRows.tsx's own header for
 // why this is the only static edge that kept DatasetRow.tsx eager.

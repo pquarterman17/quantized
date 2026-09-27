@@ -4795,10 +4795,36 @@ covers a much smaller subset and guards focus on Analyze.
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
-- [ ] Home foregrounds projects, drop/import, working path, first-plot path.
-- [ ] Familiar Origin gesture tips without copying Origin's architecture.
-- [ ] Optional 1-D, grouped, and 2-D examples.
-- [ ] Hints stop once learned.
+- [x] Home foregrounds projects, drop/import, working path, first-plot path.
+- [x] Familiar Origin gesture tips without copying Origin's architecture.
+- [x] Optional 1-D, grouped, and 2-D examples.
+- [x] Hints stop once learned.
+
+**Completed 2026-09-26 (ChatGPT-Sol, Home/onboarding lane).** The true-empty
+Library now presents one ordered start surface: ordinary import/drop, guided
+import for unfamiliar files, recent projects through the existing safe-reopen
+contract, recent files, and working paths. Concise copy names the next
+mouse-first gesture (drag channels to X/Y/Y2), complementing the existing
+dismiss-once interaction-hints card and its explicit Help-menu reopen command.
+Three client-only examples exercise distinct real application paths: a 1-D
+line, categorical grouped series with human-readable lot labels, and a 2-D
+map that opens directly in Map. Examples are visibly identified as synthetic,
+never read or rewrite a source file, and never land on a non-empty Library.
+Home itself is a lazy Library region, so this first-run work reduced rather
+than consumed the eager-bundle margin. Unit coverage pins the data contracts,
+safe project-reopen delegation, guided-import action, and view selection; a
+real-browser journey pins grouped labels and the map path, including the
+latter at 100/125/200% scaling. The five-minute goal remains a timed
+owner-acceptance measurement under P0.1 rather than an automated claim.
+
+*Review round (Claude, 2026-09-26).* The generator now ships inside Home's
+own lazy chunk and loads synchronously: the PR's second dynamic import only
+reopened an async gap in which a real import could land first and the example
+pile on top of it. Loading an example is one undo step (grouping included,
+no stray macro step); a double-click loads one example and a double-clicked
+Recent Project row starts one reopen; the status line keeps the example's own
+notation ("2-D"); the example buttons form a labelled group. Each has a test
+that goes red without its fix.
 
 ### P3.3 — Accessibility/input-quality pass
 
