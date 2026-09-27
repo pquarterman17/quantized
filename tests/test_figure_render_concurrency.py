@@ -190,7 +190,7 @@ def test_export_code_uses_no_pyplot_or_global_rcparams_mutation() -> None:
     offenders = []
     for p in sorted(_SRC.rglob("*.py")):
         text = p.read_text(encoding="utf-8")
-        rel = str(p.relative_to(_SRC))
+        rel = p.relative_to(_SRC).as_posix()
         if pyplot.search(text) or rc_write.search(text):
             offenders.append(rel)
         elif rc_context.search(text) and rel != _rc_context_sanctioned:
