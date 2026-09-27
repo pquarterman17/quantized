@@ -174,6 +174,19 @@ export async function postDownload(
   fallbackName: string,
   signal?: AbortSignal,
 ): Promise<void> {
+  await postDownloadHeaders(path, body, fallbackName, signal);
+}
+
+/** `postDownload` that also returns the response headers once the file is
+ *  saved — for a route that reports side-channel results beside the file
+ *  (P3.6: `/api/report/export`'s `X-Report-Warnings`). Same transport, same
+ *  abort guard; `postDownload` is exactly this with the headers dropped. */
+export async function postDownloadHeaders(
+  path: string,
+  body: unknown,
+  fallbackName: string,
+  signal?: AbortSignal,
+): Promise<Headers> {
   const res = await fetch(path, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -183,6 +196,7 @@ export async function postDownload(
   const blob = await (await ensureOk(res)).blob();
   throwIfAborted(signal);
   saveBlob(blob, filenameFromDisposition(res.headers.get("Content-Disposition"), fallbackName));
+  return res.headers;
 }
 
 // --- Typed transport over the generated schema (schema.d.ts, `npm run

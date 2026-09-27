@@ -85,6 +85,9 @@ export interface PlotMenuContext {
   copyFigure: () => void;
   /** MAIN #35: vector copy. Absent when the browser won't take SVG. */
   copyFigureSvg?: () => void;
+  /** P3.6: add the plot to a report as a rendered figure block (lazy
+   *  lib/sendFigureToReport). Optional so existing callers/tests are unchanged. */
+  sendToReport?: () => void;
   /** The quick screen-resolution canvas grab. */
   copyImage: () => void;
   savePng: () => void;
@@ -305,6 +308,7 @@ export function buildPlotMenu(ctx: PlotMenuContext): ContextMenuItem[] {
   // always fails is worse than no entry — the PNG copy already serves
   // everyone, and "Export figure…" is the universal vector route.
   if (ctx.copyFigureSvg) items.push({ label: "Copy figure (vector)", run: ctx.copyFigureSvg });
+  if (ctx.sendToReport) items.push({ label: "Send to report…", run: ctx.sendToReport });
   items.push({ label: "Copy image (screen)", run: ctx.copyImage });
   items.push({ label: "Copy data (TSV)", run: ctx.copyData });
   items.push({ label: "Save as PNG", run: ctx.savePng });

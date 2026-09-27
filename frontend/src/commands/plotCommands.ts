@@ -36,6 +36,17 @@ function openPageSetup(s: StoreGet): void {
   );
 }
 
+/** "Send figure to report…" (P3.6). Same `runLazy` + `.then(act,
+ *  onLoadFailure)` shape as `openPageSetup` above. Exported so the plot
+ *  context menu's "Send to report…" (components/Stage/PlotContextMenu.tsx)
+ *  runs this exact path — same busy indicator, same load-failure toast. */
+export function sendFigureToReport(s: StoreGet): Promise<void> {
+  return runLazy("Loading report tools…", () => import("../lib/sendFigureToReport")).then(
+    (m) => m.runSendFigureToReportCommand(s),
+    onLoadFailure,
+  );
+}
+
 /** Build the Plot- and Insert-group curated palette actions against the
  *  live store handle (`useApp.getState`) — store setters are stable, so
  *  callers build once. */
@@ -296,6 +307,18 @@ export function buildPlotCommands(s: StoreGet): Action[] {
         "Merge two or more selected Library datasets into one overlay plot, one curve per dataset.",
       keywords: "combine merge overlay library selection",
       run: () => void plotSelectedTogether(s().selectedIds),
+    },
+    {
+      // P3.6: the frontend producer of spec-carrying report figure blocks.
+      // Click-only, like "Export figure…": the body (and the figure-spec
+      // builder behind it) loads on demand via runLazy.
+      id: "send-figure-to-report",
+      group: "Plot",
+      section: "Build & export",
+      label: "Send figure to report…",
+      description: "Add the current plot to a report; Word, PowerPoint and HTML report exports embed it as rendered.",
+      keywords: "report figure embed word powerpoint docx pptx html",
+      run: () => void sendFigureToReport(s),
     },
     // ── Insert (MAIN #27: drawing shapes on plots — the menu-driven
     // counterpart of PlotToolbar's dock flyout) ──

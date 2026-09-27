@@ -43,9 +43,10 @@ export * from "./api/plot"; // /api/plot/* wrappers (P3.4). New ones go THERE, n
 export * from "./api/crystallography"; // /api/crystallography/* wrappers. New ones go THERE, not here.
 export * from "./api/xray"; // /api/xray/* wrappers. New ones go THERE, not here.
 export * from "./api/figurePage"; // GOTO #4 figure-page wrappers. New fields go THERE, not here.
-// reportEmit/reportExport (R8 pass): genuinely eager via
+// reportEmit (R8 pass): genuinely eager via
 // folderOps.ts -> runTemplate.ts, so unlike this pass's other extractions,
-// this one stays re-exported — see api/report.ts's own header.
+// this one stays re-exported — see api/report.ts's own header. (reportExport
+// now lives, lazily, in ./api/reportExport — not re-exported.)
 export * from "./api/report";
 
 export interface SqliteQueryRequest {

@@ -52,7 +52,9 @@
 // snapshot, the ones NOT written), that none of the twelve pushes an undo
 // entry, the single macro step, what reaches the trash, and an edge case each.
 // They were written and run GREEN against the pre-extraction code in
-// useApp.ts, and pass BYTE-UNCHANGED against this module.
+// useApp.ts, and pass BYTE-UNCHANGED against this module. The thirteenth,
+// `updateReportSheet` (P3.6, added after the extraction), DOES record one undo
+// entry by design — pinned in store/reportFigureBlocks.test.ts.
 
 import { docRenderable, type FigureDoc } from "../lib/figuredoc";
 import { lit } from "../lib/macro";
@@ -70,6 +72,20 @@ export interface ReportsFigureDocsSlice {
   addReport: (name: string, report: ReportSheet, datasetId?: string | null) => void;
   removeReport: (id: string) => void;
   renameReport: (id: string, name: string) => void;
+  /** P3.6: apply `edit` to report `id`'s CURRENT sheet as ONE undo step
+   *  labelled `label` — the single write path for block-level edits (a
+   *  figure sent from the plot, a block moved or removed in the viewer).
+   *  `edit` runs against the store's live sheet, never a caller's stale
+   *  copy, so back-to-back edits compose. The ONLY report action here that
+   *  records history: those edits are small, easy to fumble, and have no
+   *  trash entry of their own (the others stay as they were). Returns
+   *  whether anything changed: an unknown id, or `edit` returning `null`
+   *  (nothing to do), writes and records nothing. */
+  updateReportSheet: (
+    id: string,
+    edit: (report: ReportSheet) => ReportSheet | null,
+    label: string,
+  ) => boolean;
   setOpenReport: (id: string | null) => void;
   // Figure documents (#12).
   addFigureDoc: (doc: FigureDoc) => void;
@@ -114,6 +130,14 @@ export function createReportsFigureDocsSlice(set: SliceSet, get: SliceGet): Repo
       set((s) => ({
         reports: s.reports.map((r) => (r.id === id ? { ...r, name } : r)),
       })),
+    updateReportSheet: (id, edit, label) => {
+      const entry = get().reports.find((r) => r.id === id);
+      const report = entry ? edit(entry.report) : null;
+      if (!report) return false;
+      get().recordHistory(label);
+      set((s) => ({ reports: s.reports.map((r) => (r.id === id ? { ...r, report } : r)) }));
+      return true;
+    },
     setOpenReport: (openReportId) => set({ openReportId }),
     // ── Figure documents (#12) ──────────────────────────────────────────────
     addFigureDoc: (doc) => set((s) => ({
