@@ -22,7 +22,7 @@
 
 import type { BarChartData, BarGroup } from "../../lib/barlayout";
 import { resolveCategoryLabels } from "../../lib/barlayout";
-import { categoryLevels } from "../../lib/categorical";
+import { categoryLevels, columnOf } from "../../lib/categorical";
 import type { FacetSlice } from "../../lib/facet";
 import {
   alignSlots,
@@ -36,7 +36,7 @@ import {
   type GroupAxis,
   type GroupNotice,
 } from "../../lib/groupAxis";
-import { droppedRows } from "../../lib/rowstate";
+import { activeRowIndices, droppedRows } from "../../lib/rowstate";
 import type { StatMode } from "../../lib/statstage";
 import type { DataStruct, Dataset } from "../../lib/types";
 import type { StatDrawData } from "./statRender";
@@ -80,6 +80,28 @@ export interface LevelAxes {
   facetGone: string[];
   /** Facet codes keyed by slice label, to tell which levels got no PANEL. */
   facetCodeOf: Map<string, number> | null;
+  /** P2.6 box 4 (summary table <-> selection): per `flat` slot, the ORIGINAL
+   *  dataset rows it counted as usable — collected by the SAME walk that
+   *  counted its `n` (`countGroupAxis`'s `collect`), so the table's rows and
+   *  the axis can never disagree about which rows stand behind a box. */
+  flatRows: number[][];
+  /** The value channels `flat` counted a row usable on (box family: the value
+   *  column; bar: every bar channel). The fallback's slots are channels. */
+  valueCols: readonly number[];
+  fallbackCols: readonly number[];
+  /** The facet column the `panels` split on (null when not faceted). */
+  facetCol: number | null;
+  /** Per facet panel label, each FLAT slot's rows (ORIGINAL dataset indices)
+   *  restricted to that panel, keyed by the slot's key — `flatRows` split
+   *  ONCE by facet code (P2.6 review finding 5), so the selection link's
+   *  `panelScope` is a lookup rather than a per-gesture facet-column walk.
+   *  Null when not faceted. */
+  panelRows: Map<string, Map<string, readonly number[]>> | null;
+  /** Per facet panel label, ORIGINAL row -> the slice-local point index a
+   *  faceted box/strip draw's `IndexedPoint.rowIndex` would carry for it
+   *  (P2.6 review finding 7) — built from `FacetSlice.rows` (the analysis-
+   *  view row behind each slice-local position). Null when not faceted. */
+  panelPointIndex: Map<string, Map<number, number>> | null;
 }
 
 export function levelAxes(p: LevelsInput): LevelAxes | null {
@@ -91,9 +113,12 @@ export function levelAxes(p: LevelsInput): LevelAxes | null {
     bar ? p.barValueChannels : p.plotted.length ? p.plotted : [p.valueCol], !bar,
   );
   const valueCols = bar ? p.barValueChannels : [p.valueCol];
-  const flat = countGroupAxis(plan, full, droppedRows(p.active), valueCols);
+  const flatRows: number[][] = [];
+  const dropped = droppedRows(p.active);
+  const flat = countGroupAxis(plan, full, dropped, valueCols, flatRows);
+  const rows = { flatRows, valueCols, fallbackCols: plan.fallbackCols, facetCol: p.facetCol };
   if (p.facetCol == null || !p.slices) {
-    return { flat, panels: null, facetGone: [], facetCodeOf: null };
+    return { flat, panels: null, facetGone: [], facetCodeOf: null, panelRows: null, panelPointIndex: null, ...rows };
   }
   const none = new Set<number>();
   const panels = new Map(p.slices.map((s) => [s.label, countGroupAxis(plan, s.data, none, valueCols)] as const));
@@ -105,7 +130,35 @@ export function levelAxes(p: LevelsInput): LevelAxes | null {
   const facetText = new Map(all.map((code, i) => [code, texts[i]] as const));
   const presentSet = new Set(present);
   const facetGone = all.filter((c) => !presentSet.has(c)).map((c) => facetText.get(c) ?? String(c));
-  return { flat, panels, facetGone, facetCodeOf };
+  // P2.6 review finding 5: each panel's rows, per flat slot, split ONCE from
+  // `flatRows` here — reused by every selection gesture / render instead of a
+  // fresh facet-column walk per call.
+  const facetVals = columnOf(full, p.facetCol);
+  const panelRows = new Map(
+    [...facetCodeOf.entries()].map(([label, code]) => {
+      const bySlot = new Map<string, readonly number[]>();
+      flat.slots.forEach((s, i) => {
+        if (s.key != null) bySlot.set(s.key, (flatRows[i] ?? []).filter((r) => facetVals[r] === code));
+      });
+      return [label, bySlot] as const;
+    }),
+  );
+  // P2.6 review finding 7: original row -> slice-local point index, per
+  // panel — `slice.rows[j]` is the ANALYSIS-view row behind slice-local
+  // position j, and `kept[analysisPos]` is that analysis position's ORIGINAL
+  // row (the same mapping `analysisPositions` builds the other way).
+  const kept = activeRowIndices(full.time.length, dropped);
+  const panelPointIndex = new Map(
+    p.slices.map((s) => {
+      const bySliceLocal = new Map<number, number>();
+      s.rows.forEach((analysisPos, j) => {
+        const orig = kept[analysisPos];
+        if (orig !== undefined) bySliceLocal.set(orig, j);
+      });
+      return [s.label, bySliceLocal] as const;
+    }),
+  );
+  return { flat, panels, facetGone, facetCodeOf, panelRows, panelPointIndex, ...rows };
 }
 
 const hasData = (g: BarGroup) => g.series.some((s) => s.n > 0);
@@ -180,7 +233,9 @@ export function decorateDraw(
     const data = aligned
       ? padBarData(draw.data, visibleSlots(aligned, hideEmpty))
       : { ...draw.data, groups: hideEmpty ? draw.data.groups.filter(hasData) : draw.data.groups };
-    return { draw: { ...draw, data, showN }, aligned };
+    // `slots` (the drawn categories, keyed) is what the selection link reads;
+    // the bar renderer itself lays out from `data.groups` alone.
+    return { draw: { ...draw, data, showN, slots: aligned ? visibleSlots(aligned, hideEmpty) : null }, aligned };
   }
   if (draw.mode !== "box" && draw.mode !== "strip" && draw.mode !== "violin") return { draw, aligned: null };
   if (!aligned) return { draw: { ...draw, slots: null, showN }, aligned };

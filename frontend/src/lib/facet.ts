@@ -48,6 +48,14 @@ export interface FacetPanel {
 export interface FacetSlice {
   label: string;
   data: DataStruct;
+  /** `rows[j]` is the row index into the `data` ARGUMENT passed to
+   *  `facetSlices` that slice-local position j came from — ascending, the
+   *  same order as `data.time`/`data.values`. Exists so a consumer that
+   *  reads a point's `rowIndex` INTO this slice (an `IndexedGroupSpec` built
+   *  from `s.data`, e.g. a faceted strip/box-points overlay) can map it back
+   *  to the row it was resolved from (P2.6 review finding 7 — the selection
+   *  link's per-panel point rings). */
+  rows: readonly number[];
 }
 
 /** Split `data` into one row-sliced `DataStruct` per distinct level of
@@ -74,7 +82,7 @@ export function facetSlices(data: DataStruct, facetCol: number): FacetSlice[] {
       time: rows.map((r) => data.time[r]),
       values: rows.map((r) => data.values[r]),
     };
-    return { label: labels[i], data: sliced };
+    return { label: labels[i], data: sliced, rows };
   });
 }
 
