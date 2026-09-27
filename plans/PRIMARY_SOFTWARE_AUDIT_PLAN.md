@@ -3214,11 +3214,50 @@ summary without leaving Quantized.
 
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5.
 
-- [ ] Depth/time calibration with units/provenance.
-- [ ] Normalization, baseline/smoothing into derived data.
-- [ ] Log comparison, vertical offsets, and saved recipe.
-- [ ] Region measures and summary export.
+- [x] Depth/time calibration with units/provenance. (slice 1, 2026-09-27)
+- [x] Normalization, baseline/smoothing into derived data. (slice 1,
+  2026-09-27)
+- [ ] Log comparison, vertical offsets, and saved recipe. Open: the
+  processing step records and replays (below), but no comparison or
+  offset view was built; a `sims` step inside a P2.5 transformation recipe
+  was not exercised.
+- [ ] Region measures and summary export. Open: not started.
 - [ ] Validate on owner data before expanding.
+
+**Progress 2026-09-27 (slice 1, boxes 1-2; Opus 5.5):** no MATLAB reference
+exists for any of this (`quantized_matlab`'s `importSIMS` only reads
+depth-axis profiles), so the formulas are the textbook ones, documented in
+the module headers and tested against hand-computed values, not a golden
+freeze. Backend: `calc/sims_depth.py` (sputter time -> depth at a constant
+rate, entered directly or from a crater depth over the total sputter time;
+the total defaults to the last time point and says so; an explicit
+length/time unit table where `A` is Angstrom; a blank or non-time x unit is
+refused unless the user states the time unit, which is then recorded as a
+confirm-level warning), `calc/sims_correct.py` (per-species region-mean
+background with a keep-list, the normalization reference always kept;
+`C = RSF * I / I_ref`, a plain ratio without an RSF, reference kept raw;
+smoothing through the golden `processing.smooth_data` applied per finite
+run so a blank is never smeared, with a non-uniform-grid note),
+`calc/sims_process.py` (fixed stage order, every stage's parameters and
+derived values appended to `metadata.sims_processing`, x name/unit
+rewritten), `POST /api/sims/process`. `io/sims.py` now labels a raw
+"Time (s)" export as Time in s instead of Depth in nm (a quantized
+extension). Frontend: lazy Analyze > "SIMS depth profile..." workshop
+(`components/workshops/sims`, state in `store/simsDialog.ts`, zero
+`useApp.ts` lines) previews the log-y result and every warning live; Create
+runs one recorded `sims` transform through `lib/transformRun` — one undo
+entry, a replayable pipeline step, `.dwk` persistence (tested), the
+Library's derived mark via `metadata.sims_source`. The reference, RSFs and
+kept columns are recorded BY NAME, so a replay onto a file with reordered
+columns divides by the right species, and one without that column is
+refused by name. The e2e journey (`sims-depth-profile.spec.ts`) caught a
+real bug before merge: depth computed via metres gave 400.00000000000006 nm,
+silently dropping a point from a background region typed as "400 to 500";
+calibration is now exact in matching units and the region is inclusive to a
+1e-9 relative tolerance. Eager bundle +0.6 kB (the menu entry, the dialog
+store and the lazy import's deps map). Not done: multi-layer (per-layer
+rate) calibration, depth-axis rescaling of an already-calibrated profile,
+batch processing of several profiles at once, and anything in boxes 3-5.
 
 ### P2.4 — Peak Analyzer refinement
 
