@@ -1,6 +1,6 @@
 // Global-scope Plot Recipe cache (P1.3 wave 3, Lane D). A STANDALONE Zustand
 // store -- like store/toasts.ts / store/quickPlotWithDialog.ts / store/
-// importDatasets.ts's `useImportBatch` -- rather than a field on `AppState`
+// importBatch.ts's `useImportBatch` -- rather than a field on `AppState`
 // (store/useApp.ts). The global recipe list is deliberately NOT project
 // state: it does not round-trip through `.dwk` (lib/workspace.ts's
 // `WorkspaceDoc` never mentions it), it must survive opening/closing a

@@ -895,9 +895,9 @@ export const useApp = create<AppState>((set, get) => ({
         failReason = e instanceof Error ? e.message : "append failed (column-count mismatch)";
       }
     }
-    // Degrade to N separate datasets rather than a dead import.
+    // Degrade to N separate datasets rather than a dead import (bypassGuard: "import-append" already holds it).
     toast(`${failReason} — importing separately instead`, failReason.startsWith("append cancelled") ? "info" : "danger");
-    await get().importFiles(files);
+    await get().importFiles(files, { bypassGuard: true });
   },
 
   // Body lives in ./workspaceIO, fetched on the first save by

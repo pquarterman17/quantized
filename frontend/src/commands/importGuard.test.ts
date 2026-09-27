@@ -12,13 +12,19 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildFileCommands } from "./fileCommands";
+import { uploadFile } from "../lib/api";
 import { chooseAndImport } from "../lib/importEntry";
 import { openFilePicker } from "../lib/openFilePicker";
-import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importDatasets";
+import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importBatch";
+import { resetImportCoreForTests } from "../store/importDatasetsLazy";
 import { usePendingOps } from "../store/pendingOps";
 import { useToasts } from "../store/toasts";
 import { useApp } from "../store/useApp";
 
+vi.mock("../lib/api", async (orig) => ({
+  ...(await orig<Record<string, unknown>>()),
+  uploadFile: vi.fn(),
+}));
 vi.mock("../lib/importEntry", () => ({ chooseAndImport: vi.fn(() => Promise.resolve()) }));
 vi.mock("../lib/openFilePicker", async (orig) => ({
   ...(await orig<typeof import("../lib/openFilePicker")>()),
@@ -38,6 +44,8 @@ function lastToast(): string | undefined {
 beforeEach(() => {
   vi.mocked(chooseAndImport).mockClear();
   vi.mocked(openFilePicker).mockClear();
+  vi.mocked(uploadFile).mockClear();
+  resetImportCoreForTests();
   useImportBatch.setState({ running: false });
   usePendingOps.setState({ ops: [] });
   useToasts.setState({ toasts: [] });
@@ -121,5 +129,29 @@ describe('"Import & append as one dataset…" pre-flight guard', () => {
     if (!cb) throw new Error("openFilePicker was never called");
     cb([]);
     expect(isImportRunning()).toBe(false);
+  });
+});
+
+// Review finding 1: before the fix, a COLD importFiles/importPaths call (⌘O,
+// drag-drop, Recent files, …) did not claim the guard until its lazy chunk
+// had actually loaded and the real `runImport` started — so during that
+// window `isImportRunning()` read `false`, and a SEPARATE synchronous
+// pre-flight check right here (import-append's `rejectIfImportRunning`)
+// could see the guard as free, claim it itself, and proceed; the earlier
+// (already in-flight) caller's own `runImport` then refused ITSELF once its
+// chunk finally arrived, silently dropping whatever it was importing — the
+// order of refusal reversed from what a warm session would ever produce.
+describe("cold-import + command-layer guard race (review finding 1)", () => {
+  it("a cold drop's importFiles claims the guard before its chunk even loads, so import-append's own pre-flight correctly refuses instead of racing ahead", () => {
+    vi.mocked(uploadFile).mockReturnValue(new Promise(() => {})); // never settles; only the synchronous guard state matters here
+    void useApp.getState().importFiles([new File(["x"], "dropped.csv")]);
+
+    // The guard is claimed on THIS tick — before the dynamic import() of the
+    // real module has had any chance to resolve.
+    expect(isImportRunning()).toBe(true);
+
+    findCmd("import-append").run();
+    expect(openFilePicker).not.toHaveBeenCalled();
+    expect(lastToast()).toBe(ALREADY_RUNNING_MSG);
   });
 });
