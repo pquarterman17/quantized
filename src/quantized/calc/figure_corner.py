@@ -16,21 +16,16 @@ export pipeline.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from io import BytesIO
 from typing import Any
 
-import matplotlib
+import numpy as np
+from matplotlib.artist import setp
+from matplotlib.ticker import MaxNLocator
+from numpy.typing import ArrayLike, NDArray
 
-matplotlib.use("Agg")  # headless
-matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
-
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-from matplotlib.ticker import MaxNLocator  # noqa: E402
-from numpy.typing import ArrayLike, NDArray  # noqa: E402
-
-from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_styles import figure_style  # noqa: E402
+from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
+from quantized.calc.figure_styles import figure_style
 
 __all__ = ["render_corner_figure"]
 
@@ -87,10 +82,8 @@ def render_corner_figure(
     _n_samples, k = arr.shape
     if k < 1:
         raise ValueError("samples needs at least one parameter column")
-    names = [safe_mathtext_label(str(nm)) for nm in param_names]
-    # (Rich-text labels, GOTO #5: de-math INVALID $...$ so savefig never raises.)
-    if len(names) != k:
-        raise ValueError(f"param_names has {len(names)} entries, samples has {k} columns")
+    if len(param_names) != k:
+        raise ValueError(f"param_names has {len(param_names)} entries, samples has {k} columns")
     if truths is not None and len(truths) != k:
         raise ValueError(f"truths has {len(truths)} entries, samples has {k} columns")
 
@@ -99,7 +92,6 @@ def render_corner_figure(
         raise ValueError("need at least 2 finite joint samples to render a corner plot")
     tr = np.asarray(truths, dtype=float) if truths is not None else None
 
-    title = safe_mathtext_label(title)
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
     figsize = (width_in or _PANEL_IN * k, height_in or _PANEL_IN * k)
@@ -119,35 +111,37 @@ def render_corner_figure(
     }
     ranges = [_pad_range(finite[:, i]) for i in range(k)]
 
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
-        fig, axes = plt.subplots(k, k, figsize=figsize, squeeze=False)
-        try:
-            for row in range(k):
-                for col in range(k):
-                    ax = axes[row][col]
-                    if col > row:
-                        ax.axis("off")
-                        continue
-                    truth_col = float(tr[col]) if tr is not None else None
-                    if col == row:
-                        _draw_marginal(ax, finite[:, col], bins, ranges[col], truth_col)
-                    else:
-                        truth_row = float(tr[row]) if tr is not None else None
-                        _draw_pair(
-                            ax, finite[:, col], finite[:, row], bins,
-                            ranges[col], ranges[row], truth_col, truth_row,
-                        )
-                    _style_panel(ax, row, col, k, names, st)
-            if title:
-                fig.suptitle(title, fontsize=st.title_font_size)
-                fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.96))
-            else:
-                fig.tight_layout()
-            buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=resolved_dpi)
-            return buf.getvalue()
-        finally:
-            plt.close(fig)
+    with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): reacquires the SAME
+        # re-entrant lock this scope already holds -- one real acquire per
+        # render, not one per label.
+        names = [safe_mathtext_label(str(nm)) for nm in param_names]
+        title = safe_mathtext_label(title)
+        fig = new_figure(figsize=figsize)
+        axes = fig.subplots(k, k, squeeze=False)
+        for row in range(k):
+            for col in range(k):
+                ax = axes[row][col]
+                if col > row:
+                    ax.axis("off")
+                    continue
+                truth_col = float(tr[col]) if tr is not None else None
+                if col == row:
+                    _draw_marginal(ax, finite[:, col], bins, ranges[col], truth_col)
+                else:
+                    truth_row = float(tr[row]) if tr is not None else None
+                    _draw_pair(
+                        ax, finite[:, col], finite[:, row], bins,
+                        ranges[col], ranges[row], truth_col, truth_row,
+                    )
+                _style_panel(ax, row, col, k, names, st)
+        if title:
+            fig.suptitle(title, fontsize=st.title_font_size)
+            fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.96))
+        else:
+            fig.tight_layout()
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi)
 
 
 def _pad_range(v: NDArray[np.float64]) -> tuple[float, float]:
@@ -218,7 +212,7 @@ def _style_panel(ax: Any, row: int, col: int, k: int, names: list[str], st: Any)
         ax.yaxis.set_major_locator(MaxNLocator(nbins=_MAX_TICKS, prune="both"))
     if row == k - 1:
         ax.set_xlabel(names[col])
-        plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
+        setp(ax.get_xticklabels(), rotation=45, ha="right")
     else:
         ax.tick_params(labelbottom=False)
     if col == 0 and row > 0:

@@ -54,6 +54,7 @@ import { pruneToLiveDataset } from "./rowstate";
 import { viewOverrides } from "./figureViewOverrides";
 import type { ErrorBinding } from "./errorRoles";
 import type { Dataset, DataStruct } from "./types";
+import { logOffsetWire } from "./logOffset";
 import { waterfallWire } from "./waterfallOffset";
 import { axisFmtParam } from "./types";
 
@@ -329,6 +330,9 @@ function buildFigureSpecForView(
     overrides: gatedOverrides,
     ...(extras.transparent === undefined ? {} : { transparent: extras.transparent }),
     ...(o.greyscale ? { greyscale: true } : {}),
+    // P2.3: the canvas' per-series decade offsets (log-y comparison) — see
+    // lib/logOffset.ts; never together with the waterfall below.
+    ...logOffsetWire({ plotted, seriesStyles: st.seriesStyles, waterfall: st.waterfall, view: cycleView, groupCol }),
     // BUG-013: the canvas' per-series waterfall stagger — see lib/waterfallOffset.ts.
     ...waterfallWire({
       data,

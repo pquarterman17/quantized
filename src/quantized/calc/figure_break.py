@@ -27,21 +27,15 @@ colour-mapped scatter are single-axes features, like the rest of gap #11.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from io import BytesIO
 from typing import Any
 
-import matplotlib
+import numpy as np
+from numpy.typing import ArrayLike, NDArray
 
-matplotlib.use("Agg")  # headless
-matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
-
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-from numpy.typing import ArrayLike, NDArray  # noqa: E402
-
-from quantized.calc.figure import _plot_kwargs  # noqa: E402
-from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale  # noqa: E402
-from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps  # noqa: E402
+from quantized.calc.figure import _plot_kwargs
+from quantized.calc.figure_render import in_render_scope, new_figure, savefig_bytes
+from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
+from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
 
 __all__ = ["render_breaks_impl"]
 
@@ -70,6 +64,7 @@ def _visible_bounds(
     return bounds or [(xlo, xhi)]
 
 
+@in_render_scope  # normally nested in calc.figure's scope; direct calls stay safe
 def render_breaks_impl(
     x: NDArray[np.float64],
     series: Sequence[tuple[str, ArrayLike]],
@@ -106,71 +101,67 @@ def render_breaks_impl(
     n = len(bounds)
     widths = [max(hi - lo, 1e-9) for lo, hi in bounds]
 
-    fig, axes_obj = plt.subplots(
-        1, n, sharey=True, figsize=figsize, gridspec_kw={"width_ratios": widths, "wspace": 0.06}
+    fig = new_figure(figsize=figsize)
+    axes_obj = fig.subplots(
+        1, n, sharey=True, gridspec_kw={"width_ratios": widths, "wspace": 0.06}
     )
     axes = [axes_obj] if n == 1 else list(axes_obj)
-    try:
-        handles: list[Any] = []
-        labels_out: list[str] = []
-        for i, ax in enumerate(axes):
-            for si, (label, y) in enumerate(series):
-                spec = series_styles[si] if series_styles and si < len(series_styles) else None
-                kw = _plot_kwargs(st.line_width, st.marker_size, spec)
-                ax.plot(x, np.asarray(y, dtype=float), label=label, **kw)
-            lo, hi = bounds[i]
-            ax.set_xlim(lo, hi)
-            resolved_x_scale = resolve_axis_scale(x_scale, x_log)
-            resolved_y_scale = resolve_axis_scale(y_scale, y_log)
-            apply_axis_scale(ax, "x", resolved_x_scale)
-            apply_axis_scale(ax, "y", resolved_y_scale)
-            apply_tick_steps(ax, x_step, y_step, resolved_x_scale, resolved_y_scale)
-            apply_tick_formats(ax, x_fmt, y_fmt)
-            if i == 0:
-                handles, labels_out = ax.get_legend_handles_labels()
-            if i > 0:
-                ax.spines["left"].set_visible(False)
-                ax.tick_params(left=False)
-            if i < n - 1:
-                ax.spines["right"].set_visible(False)
-            if not st.box_on:
-                ax.spines["top"].set_visible(False)
-            if st.grid_alpha > 0:
-                ax.grid(True, which="major", alpha=st.grid_alpha)
-                ax.grid(True, which="minor", alpha=st.grid_alpha * 0.4)
+    handles: list[Any] = []
+    labels_out: list[str] = []
+    for i, ax in enumerate(axes):
+        for si, (label, y) in enumerate(series):
+            spec = series_styles[si] if series_styles and si < len(series_styles) else None
+            kw = _plot_kwargs(st.line_width, st.marker_size, spec)
+            ax.plot(x, np.asarray(y, dtype=float), label=label, **kw)
+        lo, hi = bounds[i]
+        ax.set_xlim(lo, hi)
+        resolved_x_scale = resolve_axis_scale(x_scale, x_log)
+        resolved_y_scale = resolve_axis_scale(y_scale, y_log)
+        apply_axis_scale(ax, "x", resolved_x_scale)
+        apply_axis_scale(ax, "y", resolved_y_scale)
+        apply_tick_steps(ax, x_step, y_step, resolved_x_scale, resolved_y_scale)
+        apply_tick_formats(ax, x_fmt, y_fmt)
+        if i == 0:
+            handles, labels_out = ax.get_legend_handles_labels()
+        if i > 0:
+            ax.spines["left"].set_visible(False)
+            ax.tick_params(left=False)
+        if i < n - 1:
+            ax.spines["right"].set_visible(False)
+        if not st.box_on:
+            ax.spines["top"].set_visible(False)
+        if st.grid_alpha > 0:
+            ax.grid(True, which="major", alpha=st.grid_alpha)
+            ax.grid(True, which="minor", alpha=st.grid_alpha * 0.4)
 
-        # Diagonal break glyphs (matplotlib's standard broken-axis recipe):
-        # short strokes angled across each seam, on both the outgoing panel's
-        # right edge and the incoming panel's left edge.
-        d = 0.4
-        glyph_kw = {
-            "marker": [(-1, -d), (1, d)],
-            "markersize": 8,
-            "linestyle": "none",
-            "color": "k",
-            "mec": "k",
-            "mew": 1,
-            "clip_on": False,
-        }
-        for i in range(n - 1):
-            axes[i].plot([1], [0], transform=axes[i].transAxes, **glyph_kw)
-            axes[i].plot([1], [1], transform=axes[i].transAxes, **glyph_kw)
-            axes[i + 1].plot([0], [0], transform=axes[i + 1].transAxes, **glyph_kw)
-            axes[i + 1].plot([0], [1], transform=axes[i + 1].transAxes, **glyph_kw)
+    # Diagonal break glyphs (matplotlib's standard broken-axis recipe):
+    # short strokes angled across each seam, on both the outgoing panel's
+    # right edge and the incoming panel's left edge.
+    d = 0.4
+    glyph_kw = {
+        "marker": [(-1, -d), (1, d)],
+        "markersize": 8,
+        "linestyle": "none",
+        "color": "k",
+        "mec": "k",
+        "mew": 1,
+        "clip_on": False,
+    }
+    for i in range(n - 1):
+        axes[i].plot([1], [0], transform=axes[i].transAxes, **glyph_kw)
+        axes[i].plot([1], [1], transform=axes[i].transAxes, **glyph_kw)
+        axes[i + 1].plot([0], [0], transform=axes[i + 1].transAxes, **glyph_kw)
+        axes[i + 1].plot([0], [1], transform=axes[i + 1].transAxes, **glyph_kw)
 
-        if title:
-            fig.suptitle(title)
-        if x_label:
-            fig.supxlabel(x_label)
-        if y_label:
-            axes[0].set_ylabel(y_label)
-        if len(series) > 1 and "legend" not in ov and handles:
-            axes[-1].legend(
-                handles, labels_out, frameon=st.legend_box, fontsize=st.legend_font_size,
-                loc=st.legend_location,
-            )
-        buf = BytesIO()
-        fig.savefig(buf, format=fmt, dpi=dpi, transparent=transparent)
-        return buf.getvalue()
-    finally:
-        plt.close(fig)
+    if title:
+        fig.suptitle(title)
+    if x_label:
+        fig.supxlabel(x_label)
+    if y_label:
+        axes[0].set_ylabel(y_label)
+    if len(series) > 1 and "legend" not in ov and handles:
+        axes[-1].legend(
+            handles, labels_out, frameon=st.legend_box, fontsize=st.legend_font_size,
+            loc=st.legend_location,
+        )
+    return savefig_bytes(fig, fmt, dpi=dpi, transparent=transparent)

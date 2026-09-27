@@ -139,6 +139,26 @@ describe("runTransform", () => {
     expect(meta.algebra_operands).toEqual(["left.dat", "right.dat"]);
     expect(meta.worksheet_transform).toBe("algebra");
   });
+
+  it("a non-finite algebra result (e.g. a divide by zero) survives a .dwk round trip", async () => {
+    // The backend serializes a NaN/Infinity cell (a divide, log, or sqrt of
+    // an out-of-domain value) as JSON null, exactly like a resample's out-of-
+    // range fill or a SIMS comparison's blank block.
+    vi.mocked(datasetAlgebra).mockResolvedValue({
+      time: [0, 1],
+      values: [[1], [null as unknown as number]],
+      labels: ["T / T"], units: ["K"], metadata: { operation: "A/B" },
+    });
+    const out = await runTransform(
+      useApp.getState,
+      { op: "algebra", operation: "A/B", interp: "linear", with: { id: "R", name: "right.dat" } },
+      "L",
+    );
+    const made = created().find((d) => d.id === out?.id)!;
+    const { parseWorkspace, serializeWorkspace } = await import("./workspace");
+    const reopened = parseWorkspace(serializeWorkspace({ datasets: [made] }));
+    expect(Number.isNaN(reopened.datasets[0].data.values[1][0])).toBe(true);
+  });
 });
 
 describe("transformParamsOf (recorded params are user-editable JSON)", () => {

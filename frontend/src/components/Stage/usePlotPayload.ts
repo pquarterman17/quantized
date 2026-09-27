@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { groupLevelLabel, levelOrderFor } from "../../lib/categorical";
 import { buildColorByColumns, type ColorScatterSpec } from "../../lib/colorscatter";
-import { buildErrorColumns, buildErrorSpans, type ErrorSpan } from "../../lib/errorbars";
+import { buildErrorSpans, type ErrorSpan } from "../../lib/errorbars";
 import { hasOverlayCompanions } from "./overlayCompanions";
 import { hasRichErrorBindings, type ErrorBinding } from "../../lib/errorRoles";
 import { channelModelingType } from "../../lib/modeling";
@@ -32,9 +32,11 @@ import {
   shouldRefetchWindow,
 } from "../../lib/plotDecimate";
 import { applyGroupSplit, canvasGroupCol, groupSplitChannelMap } from "../../lib/plotGroupSplit";
+import { applyLogOffsets, scaleErrorSpans } from "../../lib/logOffset";
 import { droppedRows } from "../../lib/rowstate";
 import type { AxisScale, BaselineOverlay, Dataset, DefaultTrace, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
 import { useStableByValue } from "../../lib/useStableValue";
+import { useLogOffsetScaling, useOffsetErrorBars, useOffsetLabelList } from "./usePlotPayloadLogOffsets";
 
 export interface PlotPayloadParams {
   active: Dataset | null | undefined;
@@ -197,28 +199,37 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     [fetchChannels, groupCodes],
   );
 
+  const { offsetsApply, offsetsKey, scaledFitOverlay, scaledBaselineOverlay, scaledPeakOverlay, scaledDerivOverlay } =
+    useLogOffsetScaling({ // P2.3 decade offsets -- see usePlotPayloadLogOffsets.ts
+      plotted, hiddenChannels: p.hiddenChannels, seriesStyles: p.seriesStyles, waterfall: p.waterfall, groupCol,
+      fitOverlay: p.fitOverlay, baselineOverlay: p.baselineOverlay, peakOverlay: p.peakOverlay, derivOverlay: p.derivOverlay,
+    });
+
   // Fold overlays + exclusion mask + selection brush in (see composeDisplayPayload).
   const displayPayload = useMemo(
     () =>
       payload
-        ? composeDisplayPayload(payload, {
+        ? composeDisplayPayload(applyLogOffsets(payload, plotted, p.seriesStyles, offsetsApply), {
             id: active?.id ?? null,
             waterfall: p.waterfall,
             dropped,
             excludedDisplay: p.excludedDisplay,
-            fitOverlay: p.fitOverlay,
-            baselineOverlay: p.baselineOverlay,
-            peakOverlay: p.peakOverlay,
-            derivOverlay: p.derivOverlay,
+            fitOverlay: scaledFitOverlay,
+            baselineOverlay: scaledBaselineOverlay,
+            peakOverlay: scaledPeakOverlay,
+            derivOverlay: scaledDerivOverlay,
             selection: p.selection,
           })
         : null,
+    // `offsetsKey` stands in for `p.seriesStyles` (finding 8: this O(rows)
+    // memo must not recompose on a colour/marker-only edit) -- see its doc.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [
-      payload,
-      p.fitOverlay,
-      p.peakOverlay,
-      p.baselineOverlay,
-      p.derivOverlay,
+      payload, plotted, offsetsKey, offsetsApply, // P2.3 decade offsets (lib/logOffset.ts)
+      scaledFitOverlay,
+      scaledPeakOverlay,
+      scaledBaselineOverlay,
+      scaledDerivOverlay,
       p.waterfall,
       active,
       dropped,
@@ -235,23 +246,11 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     return displayPayload.series.map((_, i) => (i < plotted.length ? p.seriesStyles[plotted[i]] : undefined));
   }, [displayPayload, plotted, p.seriesStyles]);
 
-  // Legend-rename overrides, aligned 1:1 with the display series (overlays keep
-  // their default labels).
-  const labelList = useMemo(() => {
-    if (!displayPayload) return undefined;
-    return displayPayload.series.map((_, i) => (i < plotted.length ? p.seriesLabels[plotted[i]] : undefined));
-  }, [displayPayload, plotted, p.seriesLabels]);
-
-  // Error-bar magnitudes per plotted series (keyed by uPlot data column = p+1).
-  // P1.5: suppressed when grouped -- no sound 1:1 mapping to the wells'
-  // y-index pairing, same ruling plotspec.ts's specToRender already applies.
-  const errorBars = useMemo(
-    () =>
-      active && groupCol === null
-        ? buildErrorColumns(active.data, plotted, p.errKeys)
-        : new Map<number, (number | null)[]>(),
-    [active, plotted, p.errKeys, groupCol],
-  );
+  // Legend-rename overrides (finding 6 offset disclosure) and error-bar
+  // magnitudes (finding 3 scaling), both aligned 1:1 to `plotted` -- see
+  // usePlotPayloadLogOffsets.ts.
+  const labelList = useOffsetLabelList(displayPayload, plotted, p.seriesLabels, p.seriesStyles, offsetsApply);
+  const errorBars = useOffsetErrorBars(active, plotted, groupCol, p.errKeys, p.seriesStyles, offsetsApply);
 
   // Colour-mapped-scatter specs per plotted series (MAIN #14), same p+1 keying.
   const colorByColumns = useMemo(
@@ -479,8 +478,9 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     // P1.5: suppressed for a grouped render -- see the `errorBars` doc above.
     if (!active || groupCol !== null) return new Map<number, ErrorSpan[]>();
     const bindings = useDocumentErrors ? documentErrors! : active.errorRoles;
-    return bindings?.length ? buildErrorSpans(active.data, plotted, bindings) : new Map<number, ErrorSpan[]>();
-  }, [active, plotted, useDocumentErrors, documentErrors, groupCol]);
+    const spans = bindings?.length ? buildErrorSpans(active.data, plotted, bindings) : new Map<number, ErrorSpan[]>();
+    return scaleErrorSpans(spans, plotted, p.seriesStyles, offsetsApply); // finding 3, Y half only
+  }, [active, plotted, useDocumentErrors, documentErrors, groupCol, p.seriesStyles, offsetsApply]);
 
   return {
     payload,

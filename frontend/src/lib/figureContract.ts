@@ -191,6 +191,10 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
     "plot.waterfall.verticalOffset",
     "BUG-013: the per-series stagger RESOLVED at render time (lib/waterfallOffset.ts) from the canonical fraction above plus the display list -- Y data units, not a second source of the fraction itself. Nothing here is stored on the document.",
   ),
+  log_offsets: derived(
+    "series.styles",
+    "P2.3: each plotted series' whole-decade offset, read at render time from its canonical series style (SeriesStyle.logOffset, lib/logOffset.ts) -- not a second copy of it. Nothing here is stored on the document.",
+  ),
   overrides: derived(null, "Flatten canonical axes, legend, decor, and page state only at render time."),
   filename: output("output.filename"),
   greyscale: unsupported(

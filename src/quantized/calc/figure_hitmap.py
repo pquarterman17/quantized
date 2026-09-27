@@ -36,8 +36,9 @@ from __future__ import annotations
 import base64
 import math
 from collections.abc import Sequence
-from io import BytesIO
 from typing import Any
+
+from quantized.calc.figure_render import savefig_bytes
 
 __all__ = ["collect_map", "collect_facet_map"]
 
@@ -235,10 +236,8 @@ def collect_map(
 
     # `axes_px` was already computed above (fix round 5, V1) so `add_series`
     # could clip against it -- reused here verbatim, not recomputed.
-    buf = BytesIO()
-    fig.savefig(buf, format="png")
     return {
-        "image": base64.b64encode(buf.getvalue()).decode("ascii"),
+        "image": base64.b64encode(savefig_bytes(fig, "png")).decode("ascii"),
         "width": int(width),
         "height": int(height),
         "elements": elements,
@@ -461,10 +460,8 @@ def collect_facet_map(
             "yscale": y_scale,
         })
 
-    buf = BytesIO()
-    fig.savefig(buf, format="png")
     return {
-        "image": base64.b64encode(buf.getvalue()).decode("ascii"),
+        "image": base64.b64encode(savefig_bytes(fig, "png")).decode("ascii"),
         "width": int(width),
         "height": int(height),
         "elements": elements,

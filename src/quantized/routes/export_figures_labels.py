@@ -71,6 +71,31 @@ def series_names(
     ]
 
 
+def apply_offset_disclosure_to_renames(
+    names: Sequence[str],
+    legends: Sequence[str | None],
+    log_offsets: Sequence[object] | None,
+) -> list[str]:
+    """P2.3 review finding 6: ``series_display_name`` uses a RENAMED legend
+    verbatim, so the log-offset disclosure ``calc.plot_log_offsets.
+    apply_log_offsets`` already appended to the auto-derived label (before
+    ``series_names`` resolved it) never reaches a series a user renamed --
+    the export would hide the very offset it drew. Append the SAME suffix
+    to a renamed series' resolved name too; an un-renamed series already
+    carries it via its label, so this touches only the ones
+    ``series_display_name`` used verbatim."""
+    from quantized.calc.plot_log_offsets import log_offset_decades, log_offset_suffix
+
+    if not log_offsets:
+        return list(names)
+    return [
+        name + log_offset_suffix(log_offset_decades(log_offsets[i]))
+        if i < len(legends) and legends[i] is not None and i < len(log_offsets)
+        else name
+        for i, name in enumerate(names)
+    ]
+
+
 def derived_axis_label(explicit: str | None, label: str, unit: str) -> str:
     """An explicit caller override wins; otherwise derive "label (unit)"."""
     return explicit if explicit is not None else series_display_name(label, unit)

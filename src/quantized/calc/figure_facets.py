@@ -30,23 +30,17 @@ what's on screen.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from io import BytesIO
 from typing import Any
 
-import matplotlib
+import numpy as np
 
-matplotlib.use("Agg")  # headless
-matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
-
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-
-from quantized.calc.figure import _plot_kwargs  # noqa: E402
-from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_overrides import apply_axis_shape_overrides  # noqa: E402
-from quantized.calc.figure_scale import apply_axis_scale  # noqa: E402
-from quantized.calc.figure_styles import figure_style  # noqa: E402
-from quantized.calc.figure_ticks import apply_tick_formats  # noqa: E402
+from quantized.calc.figure import _plot_kwargs
+from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_overrides import apply_axis_shape_overrides
+from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
+from quantized.calc.figure_scale import apply_axis_scale
+from quantized.calc.figure_styles import figure_style
+from quantized.calc.figure_ticks import apply_tick_formats
 
 __all__ = [
     "draw_facet_grid",
@@ -74,7 +68,8 @@ def _new_grid_figure(n: int, figsize: tuple[float, float]) -> tuple[Any, list[An
     flattened + trimmed to exactly `n` (unused trailing cells past `n` are
     hidden, matching `render_facets_figure`'s own convention below)."""
     rows, cols = _grid_shape(n)
-    fig, axes_grid = plt.subplots(rows, cols, figsize=figsize, squeeze=False)
+    fig = new_figure(figsize=figsize)
+    axes_grid = fig.subplots(rows, cols, squeeze=False)
     flat = [ax for row in axes_grid for ax in row]
     for j in range(n, len(flat)):
         flat[j].set_visible(False)
@@ -115,7 +110,7 @@ def draw_facet_grid(
     the per-panel loop: creating the figure/axes (and any sharex/sharey
     wiring -- this function assumes ``axes`` are already linked/unlinked as
     the caller wants), the figure- or cell-level title/x_label/y_label,
-    layout, and savefig/close. ``axes`` must have length >= ``len(panels)``;
+    layout, and savefig. ``axes`` must have length >= ``len(panels)``;
     entries past that are hidden (``set_visible(False)``), matching
     ``render_facets_figure``'s own trailing-cell convention.
     """
@@ -236,9 +231,7 @@ def render_facets_figure(
         width_in=width_in, height_in=height_in, x_fmt=x_fmt, y_fmt=y_fmt,
         overrides=overrides,
     ) as built:
-        buf = BytesIO()
-        built.fig.savefig(buf, format=fmt, dpi=dpi, transparent=transparent)
-        return buf.getvalue()
+        return savefig_bytes(built.fig, fmt, dpi=dpi, transparent=transparent)
 
 
 def render_stat_facets_figure(
@@ -283,9 +276,6 @@ def render_stat_facets_figure(
         raise ValueError(f"fmt must be one of {_FORMATS}")
     if not panels:
         raise ValueError("panels must be non-empty")
-    title = safe_mathtext_label(title)
-    x_label = safe_mathtext_label(x_label)
-    y_label = safe_mathtext_label(y_label)
 
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
@@ -306,39 +296,40 @@ def render_stat_facets_figure(
         "ytick.right": st.box_on,
     }
 
-    prepared: list[tuple[str, str, Any, list[str] | None]] = []
-    for p in panels:
-        label = safe_mathtext_label(str(p.get("label", "")))
-        kind = p.get("kind") or default_kind
-        if kind not in _GROUPED:
-            raise ValueError(f"facet kind must be one of {_GROUPED}")
-        data = p.get("data")
-        if not isinstance(data, list) or not data:
-            raise ValueError(f"facet {label!r} needs a non-empty list of groups")
-        flabels = p.get("labels")
-        flabels = [safe_mathtext_label(str(g)) for g in flabels] if flabels else flabels
-        prepared.append((label, kind, data, flabels))
-
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
+    with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): every trial-parse below
+        # reacquires the SAME re-entrant lock this scope already holds --
+        # one real acquire per render, not one per label.
+        title = safe_mathtext_label(title)
+        x_label = safe_mathtext_label(x_label)
+        y_label = safe_mathtext_label(y_label)
+        prepared: list[tuple[str, str, Any, list[str] | None]] = []
+        for p in panels:
+            label = safe_mathtext_label(str(p.get("label", "")))
+            kind = p.get("kind") or default_kind
+            if kind not in _GROUPED:
+                raise ValueError(f"facet kind must be one of {_GROUPED}")
+            data = p.get("data")
+            if not isinstance(data, list) or not data:
+                raise ValueError(f"facet {label!r} needs a non-empty list of groups")
+            flabels = p.get("labels")
+            flabels = [safe_mathtext_label(str(g)) for g in flabels] if flabels else flabels
+            prepared.append((label, kind, data, flabels))
         fig, axes = _new_grid_figure(n, figsize)
-        try:
-            for ax, (label, kind, data, flabels) in zip(axes, prepared, strict=True):
-                _draw_statplot(ax, kind, data, flabels, dist, bins, fit, st, show_n=show_n)
-                ax.set_title(label, fontsize=st.font_size)
-                if not st.box_on:
-                    ax.spines["top"].set_visible(False)
-                    ax.spines["right"].set_visible(False)
-            if title:
-                fig.suptitle(title)
-            supxlabel_above_caveat(fig, x_label, caveat)
-            if y_label:
-                fig.supylabel(y_label)
-            fig.tight_layout(rect=add_caveat(fig, caveat))  # None = default layout
-            buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=resolved_dpi)
-            return buf.getvalue()
-        finally:
-            plt.close(fig)
+        for ax, (label, kind, data, flabels) in zip(axes, prepared, strict=True):
+            _draw_statplot(ax, kind, data, flabels, dist, bins, fit, st, show_n=show_n)
+            ax.set_title(label, fontsize=st.font_size)
+            if not st.box_on:
+                ax.spines["top"].set_visible(False)
+                ax.spines["right"].set_visible(False)
+        if title:
+            fig.suptitle(title)
+        supxlabel_above_caveat(fig, x_label, caveat)
+        if y_label:
+            fig.supylabel(y_label)
+        fig.tight_layout(rect=add_caveat(fig, caveat))  # None = default layout
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi)
 
 
 def render_categorical_facets_figure(
@@ -384,9 +375,6 @@ def render_categorical_facets_figure(
         raise ValueError(f"fmt must be one of {_FORMATS}")
     if not panels:
         raise ValueError("panels must be non-empty")
-    title = safe_mathtext_label(title)
-    x_label = safe_mathtext_label(x_label)
-    y_label = safe_mathtext_label(y_label)
 
     st = figure_style(style)
     n = len(panels)
@@ -404,45 +392,48 @@ def render_categorical_facets_figure(
         "axes.titlesize": st.font_size,
     }
 
-    prepared = []
-    for p in panels:
-        label = safe_mathtext_label(str(p.get("label", "")))
-        groups = [safe_mathtext_label(str(g)) for g in p.get("groups", [])]
-        series = [safe_mathtext_label(str(s)) for s in p.get("series", [])]
-        if not groups:
-            raise ValueError(f"facet {label!r} needs a non-empty groups list")
-        if not series:
-            raise ValueError(f"facet {label!r} needs a non-empty series list")
-        vals = _to_matrix(p.get("values", []), len(groups), len(series), f"facet {label!r} values")
-        errs = _to_error_matrix(p.get("errors"), len(groups), len(series))
-        cnts = None if stacked else _to_counts(p.get("counts"), len(groups), len(series))
-        prepared.append((label, groups, series, vals, errs, cnts))
-
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
+    with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): every trial-parse below
+        # reacquires the SAME re-entrant lock this scope already holds --
+        # one real acquire per render, not one per label.
+        title = safe_mathtext_label(title)
+        x_label = safe_mathtext_label(x_label)
+        y_label = safe_mathtext_label(y_label)
+        prepared = []
+        for p in panels:
+            label = safe_mathtext_label(str(p.get("label", "")))
+            groups = [safe_mathtext_label(str(g)) for g in p.get("groups", [])]
+            series = [safe_mathtext_label(str(s)) for s in p.get("series", [])]
+            if not groups:
+                raise ValueError(f"facet {label!r} needs a non-empty groups list")
+            if not series:
+                raise ValueError(f"facet {label!r} needs a non-empty series list")
+            vals = _to_matrix(
+                p.get("values", []), len(groups), len(series), f"facet {label!r} values"
+            )
+            errs = _to_error_matrix(p.get("errors"), len(groups), len(series))
+            cnts = None if stacked else _to_counts(p.get("counts"), len(groups), len(series))
+            prepared.append((label, groups, series, vals, errs, cnts))
         fig, axes = _new_grid_figure(n, figsize)
-        try:
-            for ax, (label, groups, series, vals, errs, cnts) in zip(axes, prepared, strict=True):
-                _draw_categorical_bars(ax, groups, series, vals, errs, stacked, cnts)
-                ax.set_title(label, fontsize=st.font_size)
-                if not st.box_on:
-                    ax.spines["top"].set_visible(False)
-                    ax.spines["right"].set_visible(False)
-                if st.grid_alpha > 0:
-                    ax.grid(True, alpha=st.grid_alpha, axis="y")
-            first_series = prepared[0][2]
-            if len(first_series) > 1:
-                axes[0].legend(
-                    frameon=st.legend_box, fontsize=max(6.0, st.legend_font_size - 2),
-                    loc=st.legend_location,
-                )
-            if title:
-                fig.suptitle(title)
-            supxlabel_above_caveat(fig, x_label, caveat)
-            if y_label:
-                fig.supylabel(y_label)
-            fig.tight_layout(rect=add_caveat(fig, caveat))  # None = default layout
-            buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=dpi)
-            return buf.getvalue()
-        finally:
-            plt.close(fig)
+        for ax, (label, groups, series, vals, errs, cnts) in zip(axes, prepared, strict=True):
+            _draw_categorical_bars(ax, groups, series, vals, errs, stacked, cnts)
+            ax.set_title(label, fontsize=st.font_size)
+            if not st.box_on:
+                ax.spines["top"].set_visible(False)
+                ax.spines["right"].set_visible(False)
+            if st.grid_alpha > 0:
+                ax.grid(True, alpha=st.grid_alpha, axis="y")
+        first_series = prepared[0][2]
+        if len(first_series) > 1:
+            axes[0].legend(
+                frameon=st.legend_box, fontsize=max(6.0, st.legend_font_size - 2),
+                loc=st.legend_location,
+            )
+        if title:
+            fig.suptitle(title)
+        supxlabel_above_caveat(fig, x_label, caveat)
+        if y_label:
+            fig.supylabel(y_label)
+        fig.tight_layout(rect=add_caveat(fig, caveat))  # None = default layout
+        return savefig_bytes(fig, fmt, dpi=dpi)

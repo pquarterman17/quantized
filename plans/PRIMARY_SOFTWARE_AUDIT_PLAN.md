@@ -3217,11 +3217,14 @@ summary without leaving Quantized.
 - [x] Depth/time calibration with units/provenance. (slice 1, 2026-09-27)
 - [x] Normalization, baseline/smoothing into derived data. (slice 1,
   2026-09-27)
-- [ ] Log comparison, vertical offsets, and saved recipe. Open: the
-  processing step records and replays (below), but no comparison or
-  offset view was built; a `sims` step inside a P2.5 transformation recipe
-  was not exercised.
-- [ ] Region measures and summary export. Open: not started.
+- [x] Log comparison, vertical offsets, and saved recipe. (slice 2,
+  2026-09-27: comparison table, whole-decade per-series offsets on canvas
+  and vector export, persisted with the plot; a `sims` step verified inside
+  a saved P2.5 recipe. Not done: offsets in multi-panel cells and grouped
+  plots, see slice 2 notes.)
+- [x] Region measures and summary export. (slice 2, 2026-09-27: dose,
+  peak, mean, junction depth per species; CSV with provenance and a
+  Reports entry. Not done: several regions at once, batch over profiles.)
 - [ ] Validate on owner data before expanding.
 
 **Progress 2026-09-27 (slice 1, boxes 1-2):** no MATLAB reference
@@ -3292,6 +3295,149 @@ and the duplicated time-unit spelling table (`io.sims` / `calc.sims_depth`)
 each now have one source (`calc/_warn.py`, `quantized/time_units.py` —
 pure, same precedent as `quantized/x_units.py`). No behavior change to the
 golden depth-axis parity cases or the e2e journey.
+
+**Progress 2026-09-27 (slice 2, boxes 3-4):** still no MATLAB reference, so
+every formula is the textbook one, stated in the module headers and tested
+against hand-computed values. The SIMS workshop now has three tabs (Process,
+Compare, Region; a tab mounts on first visit and keeps its form).
+- **Comparison table** (`calc/sims_compare.py`, `POST /api/sims/compare`):
+  several profiles' chosen species in ONE derived dataset laid out in row
+  blocks (profile 1's rows, then profile 2's; one column per profile ×
+  species, blank outside its own block). Nothing is interpolated, so every
+  value is a source value and each trace draws unbroken. Species are picked
+  by name. Depth units are copied when all profiles agree, else converted by
+  an exact power of ten to the first profile's unit (recorded), and a
+  time-vs-depth mix is refused by name. A missing species and mixed value
+  units are warned. The Compare tab previews live
+  (`lib/transformSimsCompare.ts`, the same compute the commit and replay run)
+  and Create runs one recorded `simscompare` transform: one undo entry, a
+  replayable step whose other profiles are dataset references (refused by
+  name when gone) and whose species are names (a reordered file picks the
+  same species), `.dwk` persistence, and `recipeExpect` declares the species
+  as required input columns.
+- **Decade offsets** (`lib/logOffset.ts`, `calc/plot_log_offsets.py`): on a
+  log axis an additive stagger means nothing, so each series can be DRAWN at
+  y × 10^k, k a whole number of decades (|k| ≤ 30). The data never change.
+  The offset is the series' own style (`SeriesStyle.logOffset`), so it
+  persists with the window, the `.dwk` and a saved figure document like a
+  colour does (tested through a real `.dwk` save/open). The canvas applies it
+  in `Stage/usePlotPayload` (the focused Stage and every background window),
+  and the legend says ` ×10^k` before the unit. The export wire carries
+  `log_offsets` aligned to `y_keys`, which the shared `_figure_series`
+  applies with the same suffix, so every figure export route agrees. Tests
+  pin the canvas values against the wire's k, the SVG legend text, and the
+  hit-map shift in decades. It is refused on both sides together with an
+  additive waterfall, a group split, facets and stack/polar/stat. Create can
+  stagger the new comparison's traces by n·k decades on a log y axis (its own
+  undo entry). The Compare tab also steps the current plot's offsets one
+  decade per click and clears them in one undo entry. The e2e journey
+  (`sims-compare-region.spec.ts`) checks the canvas legend, the publication
+  preview's own request (`log_offsets` [0, 1]) and the SVG rendered from it.
+- **Saved recipe**: a recorded `sims` step inside a P2.5 saved
+  transformation recipe was exercised end to end through the real store and
+  runner (`applyRecipe.sims.test.ts`). Record → save as a recipe (JSON round
+  trip) → apply to a profile whose columns come in the other order gives
+  B / Si, not B / B. A profile without the reference column is refused at
+  preflight, and the backend is never called. Nothing had to be fixed there.
+  One real bug was found nearby and fixed: the route writes every blank
+  (NaN) as JSON null, and a stored null made a saved `.dwk` refuse to reopen
+  (the BUG-017 cell rule). Every SIMS output with a blank was affected (a
+  non-positive reference, a union-grid end, and every comparison table), so
+  the SIMS transforms now store blanks as NaN (`lib/blankCells.ts`,
+  failing-first test).
+- **Region measures** (`calc/sims_region.py`, `POST /api/sims/region`):
+  per species over lo..hi (inclusive, the shared 1e-9 relative tolerance,
+  now one `calc.sims_correct.region_mask`):
+  - The dose is the trapezoid over the finite samples in the region, from
+    the first to the last sampled depth, never extrapolated to the region's
+    edges. A blank BETWEEN samples is bridged and counted. Blanks outside the
+    trace's measured rows (a union-grid end, another profile's block) are not
+    gaps.
+  - It is an areal dose in cm^-2 (`atoms/cm^2`) only when the values are a
+    volume concentration and x is a length. Otherwise it is a labelled raw
+    integral in the product of the units.
+  - Peak and its (shallowest) depth; the point mean (not depth-weighted).
+  - Every threshold crossing, linearly interpolated, for an absolute
+    threshold or a fraction (default 50 %) of each species' own peak. The
+    junction depth is the metallurgical-junction convention: the first
+    FALLING crossing at or beyond the species' own peak depth (moving away
+    from the peak into the substrate) — not simply the first, shallowest
+    crossing, which for a buried implant is its leading (rising) edge.
+
+  The Region tab measures live on the analysis rows (the CSV says so when
+  rows were excluded). Export CSV writes the backend's provenance-stamped
+  CSV: dataset, region, every stated rule, threshold, warnings, one row per
+  species. "Add to Reports" emits the new `sims_region` report kind
+  (`calc/report_emit_sims.py`) tied to the dataset. Measuring creates no
+  dataset and records no step.
+- **Size ratchets**: `lib/types.ts` gave its series-style block to the new
+  `lib/seriesStyleTypes.ts` (re-exported, pin 1009 → 934). The new workshop
+  hooks read the store through selectors, and the post-create stagger is an
+  injected-store helper, so the getState file count is unchanged. Eager
+  bundle 843.0 → 843.8 kB (the canvas/wire offset rule), budget 846.1 kB.
+  All new UI is in the lazy workshop chunk.
+- **Not done / open:**
+  - Offsets are not drawn in multi-panel cells (`lib/multipanel.ts`) or in a
+    spatial/axis-break arrangement. The export wire refuses stack/facet/group
+    but, like the waterfall, cannot see a break arrangement.
+  - The comparison has no Library "derived" mark (it has several sources;
+    `metadata.sims_compare_sources` records them).
+  - No per-trace unit conversion (mixed units are only warned).
+  - Region: one region at a time, no batch over profiles, and no
+    depth-weighted mean.
+  - Observed once in e2e and not investigated: two figure renders at the
+    same moment on the live server (the publication preview's hit-map, plus
+    a direct `/api/export/figure`) failed with "pop from empty list". The
+    same body succeeds alone.
+
+**Progress 2026-09-27 (slice 2 review fixes):** a review of the slice 2
+landing found ten issues, all fixed with a failing-first test each.
+- **Junction convention** (behaviour change): the junction is now the
+  metallurgical-junction convention stated above, not simply the first
+  crossing — a buried implant's junction used to report its shallow leading
+  (rising) edge instead of the depth beyond the peak where the species
+  falls back through the threshold. Verified against the stated analytic
+  Gaussian profile and a surface-peaked one.
+- **Decade offsets, consistency:** the Compare tab's stagger form now
+  refuses a span that would exceed the `±30`-decade limit
+  `logOffsetDecades`/`log_offset_decades` actually honour, so the preview
+  and the committed plot can no longer disagree on a large stagger over many
+  traces. Error bars/spans built from the raw dataset (canvas and export)
+  now scale by the same `10^k` as the series they bracket. A fit/baseline/
+  peak/deriv overlay (no channel of its own; every producer fits the first
+  VISIBLE plotted channel) scales by that channel's offset too, applied
+  before `composeDisplayPayload`. A RENAMED legend now carries the same
+  " ×10^k" disclosure the auto-derived label already did, on both canvas and
+  export. `staggerComparison`'s `yScale: "log"` write now records the same
+  macro step `setYScale` would, without a second undo entry. Per-technique
+  view memory (`techniqueViewMemory.ts`) no longer captures `logOffset` —
+  it is per-plot/per-dataset, not a technique preference, and was leaking a
+  profile's stagger onto a same-named channel of the next.
+- **Performance:** `usePlotPayload`'s `displayPayload` memo (the one that
+  walks the full row array) is now keyed on the derived per-channel offsets
+  vector instead of the whole `seriesStyles` map, so a colour/marker-only
+  edit no longer recomposes it.
+- **Hidden-tab previews:** each workshop tab's live-preview hook now takes
+  an `active` flag (gated by which tab is visible); a tab kept mounted
+  (hidden) to preserve its half-filled form no longer keeps POSTing full
+  datasets in the background.
+- **Dedupe:** the wire-dataset projection (`{time, values, labels, units,
+  metadata, cat_levels, level_order}`) and the non-categorical species
+  filter each now live once (`lib/transformSims.ts`'s `simsWireDataset`/
+  `speciesOf`), used by the Compare/Region hooks and the compute helpers
+  instead of three near-identical copies. The backend's length-unit check
+  (`calc.sims_compare`'s x-unit compatibility, `calc.sims_region`'s
+  areal-dose eligibility) is now one `calc.sims_depth.is_length_unit`.
+- **Blank-cell `.dwk` bug, confirmed and fixed beyond SIMS:** the null-blank
+  reopen bug this slice fixed for SIMS was reproduced (failing-first test)
+  for Resample (`computeResample`, an out-of-range `outOfRange: "nan"` fill)
+  and Dataset math (`runTransform`'s `algebra` case, e.g. a divide by zero) —
+  both routes serialize a non-finite cell as JSON null exactly like SIMS
+  did, and neither frontend compute converted it back. Both now apply the
+  same `lib/blankCells.ts` conversion at their wire boundary.
+- `routes/export_figures.py` gained a small helper module split
+  (`export_figures_labels.py`'s `apply_offset_disclosure_to_renames`) to
+  stay at the 500-line ceiling after the fixes above.
 
 ### P2.4 — Peak Analyzer refinement
 

@@ -142,6 +142,11 @@ export interface FigureSpec {
    *  and for the `group_col`/`facets` shapes whose renderer cannot align a
    *  `y_keys`-keyed list. */
   waterfall_offsets?: number[];
+  /** Per-series whole-DECADE offsets aligned to `y_keys` (audit P2.3): the
+   *  backend draws series i at y · 10^k with " ×10^k" in its legend, exactly
+   *  as the canvas does (`lib/logOffset.ts`). Omitted when nothing is offset,
+   *  with a waterfall, and for the `group_col`/`facets` shapes. */
+  log_offsets?: number[];
   /** Property-panel overrides (#11): fonts/legend/ticks/spines/limits/margins. */
   overrides?: FigureOverrides | null;
   filename?: string;

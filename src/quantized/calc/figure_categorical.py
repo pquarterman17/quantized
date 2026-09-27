@@ -10,20 +10,14 @@ on-screen bars. Shares ``render_figure``'s style presets and formats
 
 from __future__ import annotations
 
-from io import BytesIO
 from typing import Any
 
-import matplotlib
+import numpy as np
 
-matplotlib.use("Agg")  # headless
-matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
-
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-
-from quantized.calc.figure_group_notes import add_caveat, mark_empty_slots  # noqa: E402
-from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_styles import figure_style  # noqa: E402
+from quantized.calc.figure_group_notes import add_caveat, mark_empty_slots
+from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
+from quantized.calc.figure_styles import figure_style
 
 __all__ = ["render_categorical_figure"]
 
@@ -184,12 +178,6 @@ def render_categorical_figure(
         raise ValueError("groups must be non-empty")
     if not series:
         raise ValueError("series must be non-empty")
-    # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never raises.
-    title = safe_mathtext_label(title)
-    x_label = safe_mathtext_label(x_label)
-    y_label = safe_mathtext_label(y_label)
-    groups = [safe_mathtext_label(str(g)) for g in groups]
-    series = [safe_mathtext_label(str(s)) for s in series]
     n_groups, n_series = len(groups), len(series)
     vals = _to_matrix(values, n_groups, n_series, "values")
     errs = _to_error_matrix(errors, n_groups, n_series)
@@ -206,29 +194,34 @@ def render_categorical_figure(
         "axes.titlesize": st.title_font_size,
     }
 
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
-        fig, ax = plt.subplots(figsize=figsize)
-        try:
-            _draw_categorical_bars(ax, groups, series, vals, errs, stacked, cnts)
-            layout_rect = add_caveat(fig, caveat)
-            if title:
-                ax.set_title(title)
-            if x_label:
-                ax.set_xlabel(x_label)
-            if y_label:
-                ax.set_ylabel(y_label)
-            if not st.box_on:
-                ax.spines["top"].set_visible(False)
-                ax.spines["right"].set_visible(False)
-            if n_series > 1:
-                ax.legend(  # type: ignore[call-overload]
-                    frameon=st.legend_box, fontsize=st.legend_font_size, loc=st.legend_location,
-                )
-            if st.grid_alpha > 0:
-                ax.grid(True, alpha=st.grid_alpha, axis="y")
-            fig.tight_layout(rect=layout_rect)  # None = the default layout
-            buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=dpi)
-            return buf.getvalue()
-        finally:
-            plt.close(fig)
+    with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): each trial-parse below
+        # reacquires the SAME re-entrant lock this scope already holds --
+        # one real acquire per render, not one per label.
+        title = safe_mathtext_label(title)
+        x_label = safe_mathtext_label(x_label)
+        y_label = safe_mathtext_label(y_label)
+        groups = [safe_mathtext_label(str(g)) for g in groups]
+        series = [safe_mathtext_label(str(s)) for s in series]
+        fig = new_figure(figsize=figsize)
+        ax = fig.subplots()
+        _draw_categorical_bars(ax, groups, series, vals, errs, stacked, cnts)
+        layout_rect = add_caveat(fig, caveat)
+        if title:
+            ax.set_title(title)
+        if x_label:
+            ax.set_xlabel(x_label)
+        if y_label:
+            ax.set_ylabel(y_label)
+        if not st.box_on:
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+        if n_series > 1:
+            ax.legend(  # type: ignore[call-overload]
+                frameon=st.legend_box, fontsize=st.legend_font_size, loc=st.legend_location,
+            )
+        if st.grid_alpha > 0:
+            ax.grid(True, alpha=st.grid_alpha, axis="y")
+        fig.tight_layout(rect=layout_rect)  # None = the default layout
+        return savefig_bytes(fig, fmt, dpi=dpi)

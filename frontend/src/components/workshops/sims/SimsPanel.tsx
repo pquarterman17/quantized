@@ -1,10 +1,16 @@
-// SIMS depth-profile workshop — view (audit P2.3). Pick a profile, turn on the
-// stages you need (depth calibration, background, reference normalization,
-// smoothing); the backend processes it LIVE and the panel shows the log-scale
-// result and every warning before "Create" adds a new derived dataset. Thin —
-// the logic lives in useSims, the params in simsForm.
+// SIMS depth-profile workshop — view (audit P2.3). Three tabs:
+//   * Process — pick a profile, turn on the stages you need (depth
+//     calibration, background, reference normalization, smoothing); the
+//     backend processes it LIVE and the panel shows the log-scale result and
+//     every warning before "Create" adds a new derived dataset;
+//   * Compare — several profiles' species in one comparison table, plus the
+//     decade offsets of the current plot (SimsCompareView, slice 2);
+//   * Region — dose / peak / mean / junction depth over a depth region, as
+//     CSV or a report (SimsRegionView, slice 2).
+// A tab is mounted on its first visit and then kept (hidden), so switching
+// tabs never loses a half-filled form. Thin — the logic lives in the hooks.
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
 import TransformWarningList from "../../overlays/TransformWarningList";
@@ -14,7 +20,11 @@ import { NumberField } from "../../primitives/NumberField";
 import { SIMS_LENGTH_UNITS, SIMS_SMOOTH_METHODS, SIMS_TIME_UNITS, type SimsSmoothMethod } from "../../../lib/transformSims";
 import { xExtent } from "../../../lib/plotDecimate";
 import { useSimsDialog } from "../../../store/simsDialog";
+import { useApp } from "../../../store/useApp";
+import { SegmentedControl } from "../../primitives/SegmentedControl";
+import SimsCompareView from "./SimsCompareView";
 import SimsPreviewPlot from "./SimsPreviewPlot";
+import SimsRegionView from "./SimsRegionView";
 import { useSims, type SimsState } from "./useSims";
 
 const gap = { marginTop: 8 };
@@ -207,14 +217,44 @@ export default function SimsPanel() {
   return <SimsWorkshop key={opened} />;
 }
 
+type Tab = "process" | "compare" | "region";
+const TABS: { value: Tab; label: string }[] = [
+  { value: "process", label: "Process" },
+  { value: "compare", label: "Compare" },
+  { value: "region", label: "Region" },
+];
+
 function SimsWorkshop() {
-  const r = useSims();
-  const f = r.form;
+  const close = useSimsDialog((s) => s.close);
+  const hasData = useApp((s) => s.datasets.length > 0);
+  const [tab, setTab] = useState<Tab>("process");
+  const [visited, setVisited] = useState<Tab[]>(["process"]);
+  const pick = (t: Tab) => {
+    setTab(t);
+    setVisited((v) => (v.includes(t) ? v : [...v, t]));
+  };
+  const pane = (t: Tab, node: ReactNode) =>
+    visited.includes(t) ? <div hidden={tab !== t} style={{ marginTop: 8 }}>{node}</div> : null;
   return (
-    <ToolWindow id="sims" title="SIMS depth profile" width={360} onClose={r.close}>
-      {!r.datasets.length ? (
+    <ToolWindow id="sims" title="SIMS depth profile" width={380} onClose={close}>
+      {!hasData ? (
         <div className="qzk-ds-meta" style={faint}>Load a SIMS profile to process.</div>
       ) : (
+        <>
+          <SegmentedControl<Tab> options={TABS} value={tab} onChange={pick} />
+          {pane("process", <ProcessView active={tab === "process"} />)}
+          {pane("compare", <SimsCompareView active={tab === "compare"} />)}
+          {pane("region", <SimsRegionView active={tab === "region"} />)}
+        </>
+      )}
+    </ToolWindow>
+  );
+}
+
+function ProcessView({ active }: { active: boolean }) {
+  const r = useSims(active);
+  const f = r.form;
+  return (
         <>
           <label className="qzk-field-lbl">Profile</label>
           <Select
@@ -261,7 +301,5 @@ function SimsWorkshop() {
             </div>
           )}
         </>
-      )}
-    </ToolWindow>
   );
 }

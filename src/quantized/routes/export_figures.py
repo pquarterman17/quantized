@@ -22,7 +22,7 @@ from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field, field_validator
 
 from quantized.datastruct import DataStruct
-from quantized.routes._errors import CALC_ERRORS
+from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
 from quantized.routes._export_common import (
     _DPI_MAX,
     _DPI_MIN,
@@ -31,12 +31,14 @@ from quantized.routes._export_common import (
     _safe_name,
 )
 from quantized.routes.export_figures_labels import (
+    apply_offset_disclosure_to_renames,
     derived_axis_label,
     series_legends,
     series_names,
     solo_axis_label,
 )
 from quantized.routes.export_figures_schema import (
+    LOG_OFFSETS_DOC,
     SERIES_STYLES_DOC,
     WATERFALL_OFFSETS_DOC,
     FigureFacet,
@@ -181,6 +183,7 @@ class FigureRequest(BaseModel):
     waterfall_offsets: list[float] | None = Field(
         default=None, description=WATERFALL_OFFSETS_DOC
     )
+    log_offsets: list[float] | None = Field(default=None, description=LOG_OFFSETS_DOC)
     # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
     # limits / margins / grid / annotations — validated in calc.
     overrides: dict[str, Any] | None = None
@@ -205,9 +208,8 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
     (MAIN #13/#14's ``fill``/``color_by`` channel references —
     ``calc.plotting.resolve_style_channels``) — the ONLY place this
     resolution happens, so every figure-export route gets it for free.
-    Raises ``ValueError`` when ``req.y2_keys`` isn't a subset of
-    ``req.y_keys`` (``calc.plotting.validate_y2_subset``, mapped to a 422 by
-    every caller's existing ``except (ValueError, ...)`` handler).
+    Raises ``ValueError`` when ``req.y2_keys`` isn't a subset of ``req.y_keys``
+    (``calc.plotting.validate_y2_subset``, 422'd by every caller's ``except``).
 
     ``req.waterfall_offsets`` (BUG-013) shifts each resolved series up by its
     own offset (``calc.plotting.apply_waterfall_offsets``), so every caller of
@@ -222,6 +224,7 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
     never assigns a grouped series to the secondary axis, so there's no
     sound semantic to invent for the combination)."""
     from quantized.calc.figure_group_styles import expand_grouped_series_styles
+    from quantized.calc.plot_log_offsets import apply_log_offsets, scale_error_spans
     from quantized.calc.plotting import (
         PlotState,
         apply_waterfall_offsets,
@@ -262,8 +265,10 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
         g_styles = expand_grouped_series_styles(
             resolve_style_channels(ds, y_keys, req.series_styles), len(y_keys), len(g_series)
         )
+        # error_spans unscaled: log_offsets are refused with group_col.
         return _ResolvedFigure(
-            grouped.x, g_series, x_label, y_label, g_styles, [False] * len(g_series), ""
+            grouped.x, g_series, x_label, y_label, g_styles,
+            [False] * len(g_series), "", req.error_spans,
         )
 
     validate_y2_subset(req.y_keys, req.y2_keys)
@@ -275,22 +280,24 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
         y_log=req.y_log,
     )
     plot = build_series(ds, state)
-    # BUG-014: the per-series legend override (`series_styles[i].legend`) is
-    # used VERBATIM where present, so a renamed series exports with exactly
-    # the text the screen shows instead of the channel's unit being appended
-    # to it a second time. A solo axis title reads the SAME resolved name --
-    # `uplotOpts.buildOpts`' `soloLabel` reads the resolved legend too.
-    names = series_names(plot.series, series_legends(req.series_styles, len(plot.series)))
+    plot_series = apply_log_offsets(plot.series, req.log_offsets)  # P2.3 decade offsets
+    # BUG-014 rename is verbatim (see series_legends/series_names' docs); the
+    # offset disclosure (finding 6) is applied separately for that reason.
+    legends = series_legends(req.series_styles, len(plot_series))
+    names = apply_offset_disclosure_to_renames(
+        series_names(plot_series, legends), legends, req.log_offsets
+    )
     x_label = derived_axis_label(req.x_label, plot.x_label, plot.x_unit)
-    y_label = solo_axis_label(req.y_label, names, plot.series, 0)
-    y2_label = solo_axis_label(req.y2_label, names, plot.series, 1)
+    y_label = solo_axis_label(req.y_label, names, plot_series, 0)
+    y2_label = solo_axis_label(req.y2_label, names, plot_series, 1)
     series: list[tuple[str, Any]] = apply_waterfall_offsets(
-        [(name, s.values) for name, s in zip(names, plot.series, strict=True)],
+        [(name, s.values) for name, s in zip(names, plot_series, strict=True)],
         req.waterfall_offsets,
     )
     styles = resolve_style_channels(ds, req.y_keys, req.series_styles)
     y2_mask = [s.axis == 1 for s in plot.series]
-    return _ResolvedFigure(plot.x, series, x_label, y_label, styles, y2_mask, y2_label)
+    spans = scale_error_spans(req.error_spans, req.log_offsets)  # finding 3
+    return _ResolvedFigure(plot.x, series, x_label, y_label, styles, y2_mask, y2_label, spans)
 
 
 def _facet_panels(req: FigureRequest) -> list[dict[str, Any]]:
@@ -383,7 +390,7 @@ def export_figure(req: FigureRequest) -> Response:
                 fmt=req.fmt,
                 style=req.style,
                 series_styles=resolved.styles,
-                error_spans=req.error_spans,
+                error_spans=resolved.error_spans,
                 width_in=req.width_in,
                 height_in=req.height_in,
                 dpi=dpi,
@@ -400,8 +407,8 @@ def export_figure(req: FigureRequest) -> Response:
                 y2_fmt=_tick_fmt(req.y2_fmt),
                 y2_step=req.y2_step,
             )
-    except CALC_ERRORS as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except CALC_ERRORS_WITH_LOCK as exc:
+        raise_calc_error(exc)
     return Response(
         content=data,
         media_type=_FIGURE_MIME[req.fmt],
@@ -489,5 +496,5 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
             y2_fmt=_tick_fmt(req.y2_fmt),
             y2_step=req.y2_step,
         )
-    except CALC_ERRORS as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except CALC_ERRORS_WITH_LOCK as exc:
+        raise_calc_error(exc)

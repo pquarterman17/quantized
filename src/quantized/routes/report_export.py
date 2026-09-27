@@ -17,7 +17,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
-from quantized.calc import report_emit, report_emit_peaks
+from quantized.calc import report_emit, report_emit_peaks, report_emit_sims
 from quantized.calc.report import ReportSheet, validate_report
 from quantized.io.report_export import ReportExportError, render_report
 from quantized.routes._errors import CALC_ERRORS, call_calc
@@ -36,7 +36,7 @@ class ReportEmitRequest(BaseModel):
     """An analysis result + which emitter should shape it into a report."""
 
     # curve_fit | multipeak_fit | peak_model_fit | refl_fit | integrate |
-    # batch_integrate | anova | stats_table
+    # batch_integrate | anova | stats_table | sims_region
     kind: str
     result: dict[str, Any] | None = None
     records: list[dict[str, Any]] | None = None  # stats_table input
@@ -75,6 +75,7 @@ def _emit_sheet(req: ReportEmitRequest) -> ReportSheet:
         "integrate": report_emit.from_integrate,
         "batch_integrate": report_emit.from_batch_integrate,
         "anova": report_emit.from_anova,
+        "sims_region": report_emit_sims.from_sims_region,
     }
     if kind not in simple:
         raise ValueError(f"unknown report kind {kind!r}")

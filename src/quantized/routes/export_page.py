@@ -17,7 +17,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
-from quantized.routes._errors import CALC_ERRORS
+from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
 from quantized.routes._export_common import (
     _DPI_MAX,
     _DPI_MIN,
@@ -226,8 +226,8 @@ def export_figure_page(req: FigurePageRequest) -> Response:
             align_labels=req.align_labels,
             resize_mode=req.resize_mode,
         )
-    except CALC_ERRORS as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except CALC_ERRORS_WITH_LOCK as exc:
+        raise_calc_error(exc)
     return Response(
         content=data,
         media_type=_FIGURE_MIME[req.fmt],

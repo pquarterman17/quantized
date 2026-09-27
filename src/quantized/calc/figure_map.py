@@ -14,22 +14,17 @@ publication path; interactive 3-D is deferred (#22).
 
 from __future__ import annotations
 
-from io import BytesIO
 from typing import Any
 
 import matplotlib
+import matplotlib.tri as mtri
+import numpy as np
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers the 3d projection)
+from numpy.typing import ArrayLike, NDArray
 
-matplotlib.use("Agg")  # headless
-matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
-
-import matplotlib.pyplot as plt  # noqa: E402
-import matplotlib.tri as mtri  # noqa: E402
-import numpy as np  # noqa: E402
-from mpl_toolkits.mplot3d import Axes3D  # noqa: E402,F401  (registers the 3d projection)
-from numpy.typing import ArrayLike, NDArray  # noqa: E402
-
-from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_styles import figure_style  # noqa: E402
+from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
+from quantized.calc.figure_styles import figure_style
 
 __all__ = ["MAP_KINDS", "render_map_figure"]
 
@@ -127,11 +122,6 @@ def render_map_figure(
         raise ValueError(f"kind must be one of {MAP_KINDS}")
     if contour_source not in _CONTOUR_SOURCES:
         raise ValueError(f"contour_source must be one of {_CONTOUR_SOURCES}")
-    # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never raises.
-    title = safe_mathtext_label(title)
-    x_label = safe_mathtext_label(x_label)
-    y_label = safe_mathtext_label(y_label)
-    z_label = safe_mathtext_label(z_label)
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
 
@@ -186,33 +176,36 @@ def render_map_figure(
         "ytick.right": st.box_on,
     }
 
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
-        if kind in _3D_KINDS:
-            fig = plt.figure(figsize=figsize)
-            ax = fig.add_subplot(projection="3d")
-        else:
-            fig, ax = plt.subplots(figsize=figsize)
-        try:
-            mappable = _draw(
-                ax, kind, x, y, z, z_min, z_max, cmap, levels, level_scale,
-                label_contours, view_elev, view_azim, contour_source=contour_source,
-            )
-            if title:
-                ax.set_title(title)
-            if x_label:
-                ax.set_xlabel(x_label)
-            if y_label:
-                ax.set_ylabel(y_label)
-            if kind in _3D_KINDS and z_label:
-                ax.set_zlabel(z_label)
-            if colorbar and mappable is not None:
-                fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
-            fig.tight_layout()
-            buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=resolved_dpi)
-            return buf.getvalue()
-        finally:
-            plt.close(fig)
+    with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): every trial-parse below
+        # reacquires the SAME re-entrant lock this scope already holds --
+        # one real acquire per render, not one per label.
+        title = safe_mathtext_label(title)
+        x_label = safe_mathtext_label(x_label)
+        y_label = safe_mathtext_label(y_label)
+        z_label = safe_mathtext_label(z_label)
+        # One new_figure() for both branches (review fix -- was duplicated,
+        # one per branch, with the SAME arguments): only the axes-creation
+        # call differs (3-D projection vs. a plain 2-D subplot).
+        fig = new_figure(figsize=figsize)
+        ax: Any = fig.add_subplot(projection="3d") if kind in _3D_KINDS else fig.subplots()
+        mappable = _draw(
+            ax, kind, x, y, z, z_min, z_max, cmap, levels, level_scale,
+            label_contours, view_elev, view_azim, contour_source=contour_source,
+        )
+        if title:
+            ax.set_title(title)
+        if x_label:
+            ax.set_xlabel(x_label)
+        if y_label:
+            ax.set_ylabel(y_label)
+        if kind in _3D_KINDS and z_label:
+            ax.set_zlabel(z_label)
+        if colorbar and mappable is not None:
+            fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
+        fig.tight_layout()
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi)
 
 
 def _draw(

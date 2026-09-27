@@ -101,6 +101,9 @@ const ints = (v: unknown): number[] =>
 function simsColumnNames(step: PipelineStep): string[] {
   const p = step.params;
   const names: string[] = [];
+  // A `simscompare` step (lib/transformSimsCompare.ts) reads its species by
+  // name too — from the recipe's input as from each other profile.
+  if (Array.isArray(p.species)) names.push(...p.species.filter((n): n is string => typeof n === "string"));
   const bg = p.background as { keep?: unknown } | undefined;
   if (Array.isArray(bg?.keep)) names.push(...bg.keep.filter((n): n is string => typeof n === "string"));
   const norm = p.normalization as { reference?: unknown; rsf?: unknown } | undefined;
@@ -148,6 +151,7 @@ export function inputColumnRefs(
         case "split": add(p.col); break;
         // resample reads every channel but needs none of them.
         case "sims":
+        case "simscompare":
           for (const name of simsColumnNames(s)) {
             const i = labels.indexOf(name);
             if (i >= 0) cols.add(i);
