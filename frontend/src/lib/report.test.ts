@@ -9,6 +9,7 @@ import {
   type ReportEntry,
   type ReportSheet,
 } from "./report";
+import { encodePersistedCells } from "./nonFiniteCells";
 
 const SHEET: ReportSheet = {
   title: "Curve fit",
@@ -103,6 +104,35 @@ describe("sanitizeReports", () => {
     };
     const out = sanitizeReports([entry({ report: withSpec })], new Set());
     expect(out[0].report).toBe(withSpec);
+  });
+
+  it("decodes non-finite cells inside a persisted report figure spec", () => {
+    const report = entry({
+      report: {
+        title: "Figure",
+        sections: [{
+          title: "Figures",
+          blocks: [{
+            type: "figure", name: "f",
+            spec: {
+              dataset: {
+                time: [0, Number.NaN], values: [[Infinity, -Infinity, -0]],
+                labels: ["y"], units: [""], metadata: {},
+              },
+            },
+          }],
+        }],
+      },
+    });
+    const wire = JSON.parse(JSON.stringify([report], encodePersistedCells)) as unknown[];
+    const out = sanitizeReports(wire, new Set(["ds-1"]));
+    const block = out[0].report.sections[0].blocks[0];
+    if (block.type !== "figure") throw new Error("expected figure block");
+    const dataset = block.spec?.dataset as { time: number[]; values: number[][] };
+    expect(dataset.time[1]).toBeNaN();
+    expect(dataset.values[0][0]).toBe(Infinity);
+    expect(dataset.values[0][1]).toBe(-Infinity);
+    expect(Object.is(dataset.values[0][2], -0)).toBe(true);
   });
 
   it("a report dropped as unreadable gets ONE 'dropped' warning, never a strip warning", () => {

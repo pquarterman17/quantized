@@ -7,7 +7,7 @@
 // and the lazy send-to-report command, so it stays off the eager bundle.
 
 import type { FigureSpec } from "./api/figures";
-import type { ReportFigureBlock, ReportSheet } from "./report";
+import type { ReportFigureBlock, ReportSheet, ReportSourceRef } from "./report";
 
 // Stable, NON-persisted identity for a block, for React keys and focus
 // targeting in the viewer. Every edit above keeps untouched blocks as the
@@ -35,8 +35,13 @@ export const FIGURES_SECTION = "Figures";
  *  (the same copy semantics as the backend's `calc.report.figure_block`).
  *  `structuredClone`, not a JSON round-trip: one copy instead of a full
  *  serialized string plus a re-parsed copy at peak. It keeps NaN/undefined
- *  in memory; they serialize exactly as the export wire does (NaN -> null,
- *  undefined dropped) whenever the block is exported or saved. */
+ *  in memory: an EXPORT (a plain `JSON.stringify`, as the "compared as sent"
+ *  tests do) writes NaN as `null` and drops `undefined`, but a `.dwk` SAVE
+ *  goes through `workspaceSerialize.ts`'s `encodePersistedCells` replacer
+ *  over the whole document, which turns a non-finite/`-0` cell into its
+ *  string sentinel instead — `lib/report.ts`'s `decodeReportFigureSpecs`
+ *  reverses that on reopen, so a saved report figure's data survives intact
+ *  rather than degrading to `null`s the way a raw export would. */
 export function figureBlockFromSpec(spec: FigureSpec, name: string, caption: string): ReportFigureBlock {
   const block: ReportFigureBlock = {
     type: "figure",
@@ -115,6 +120,18 @@ export function appendFigureBlock(sheet: ReportSheet, block: ReportFigureBlock):
     ...sheet,
     sections: sheet.sections.map((sec, i) => (i === at ? { ...sec, blocks: [...sec.blocks, block] } : sec)),
   };
+}
+
+/** `sheet` with `refs` merged into its `source_refs`, skipping any already
+ *  present (same `kind`+`id`) so repeated sends of the same figure/dataset
+ *  into one report never pile up duplicate references. Pure — returns
+ *  `sheet` itself when there is nothing new to add. Shared by both send
+ *  paths (the active-plot command and the Library editable-figure action)
+ *  so a report's source refs cannot drift between the two. */
+export function withSourceRefs(sheet: ReportSheet, refs: readonly ReportSourceRef[]): ReportSheet {
+  const existing = sheet.source_refs ?? [];
+  const added = refs.filter((ref) => !existing.some((e) => e.kind === ref.kind && e.id === ref.id));
+  return added.length === 0 ? sheet : { ...sheet, source_refs: [...existing, ...added] };
 }
 
 /** `sheet` with block `bi` of section `si` moved by `delta` places within its
