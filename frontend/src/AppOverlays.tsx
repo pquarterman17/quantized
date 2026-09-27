@@ -76,6 +76,7 @@ import { useRecode } from "./store/recode";
 import { useLevelOrderPanel } from "./store/levelOrderPanel";
 import { useCombineDialog } from "./store/combineDialog";
 import { useResampleDialog } from "./store/resampleDialog";
+import { useSimsDialog } from "./store/simsDialog";
 import { useMetaFactorsDialog } from "./store/metaFactorsDialog";
 import { useTransformPreviewDialog } from "./store/transformPreviewDialog";
 import { useRecipeManager } from "./store/recipeManager";
@@ -115,6 +116,7 @@ const BaselinePanel = lazyPanel(() => import("./components/workshops/baseline/Ba
 const CalculatorsPanel = lazyPanel(() => import("./components/workshops/calculators/CalculatorsPanel"), "CalculatorsPanel");
 const DatasetMathPanel = lazyPanel(() => import("./components/workshops/datasetmath/DatasetMathPanel"), "DatasetMathPanel");
 const ResamplePanel = lazyPanel(() => import("./components/workshops/resample/ResamplePanel"), "ResamplePanel");
+const SimsPanel = lazyPanel(() => import("./components/workshops/sims/SimsPanel"), "SimsPanel");
 const ReshapePanel = lazyPanel(() => import("./components/workshops/transformPreview/ReshapePanel"), "ReshapePanel");
 const MetaFactorsPanel = lazyPanel(() => import("./components/workshops/metafactors/MetaFactorsPanel"), "MetaFactorsPanel");
 const TabulatePanel = lazyPanel(() => import("./components/workshops/tabulate/TabulatePanel"), "TabulatePanel");
@@ -219,6 +221,7 @@ export default function AppOverlays() {
   const magToolsOpen = useApp((s) => s.magToolsOpen);
   const datasetMathOpen = useApp((s) => s.datasetMathOpen);
   const resampleOpen = useResampleDialog((s) => s.seed !== null);
+  const simsOpen = useSimsDialog((s) => s.seed !== null);
   const reshapeOpen = useTransformPreviewDialog((s) => s.op !== null);
   const metaFactorsOpen = useMetaFactorsDialog((s) => s.seed !== null);
   const tabulateOpen = useApp((s) => s.tabulateOpen);
@@ -309,6 +312,7 @@ export default function AppOverlays() {
       {digitizerOpen && <DigitizerView />}
       {datasetMathOpen && <DatasetMathPanel />}
       {resampleOpen && <ResamplePanel />}
+      {simsOpen && <SimsPanel />}
       {reshapeOpen && <ReshapePanel />}
       {metaFactorsOpen && <MetaFactorsPanel />}
       {tabulateOpen && <TabulatePanel />}

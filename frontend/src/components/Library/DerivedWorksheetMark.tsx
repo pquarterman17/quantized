@@ -9,7 +9,8 @@
 // mark, read from its `metadata.reflFit` provenance (source ids + the fit's
 // number) — deliberately NOT `derivedFrom`, which would put it in the recalc
 // graph, whose executor would overwrite the fitted curve with its source's
-// corrected data. Lazy like the rest of the row (plans/BUNDLE_HEADROOM.md
+// corrected data. A SIMS-processed profile (`metadata.sims_source`, P2.3)
+// is marked the same way. Lazy like the rest of the row (plans/BUNDLE_HEADROOM.md
 // slice 6), so this costs the eager bundle nothing.
 
 import type { Dataset } from "../../lib/types";
@@ -22,7 +23,11 @@ export function derivedSource(d: Dataset): { datasetId: string; pipeline: string
   if (d.derivedFrom) return d.derivedFrom;
   const fit = d.data.metadata?.reflFit as { sourceIds?: unknown; seq?: unknown } | undefined;
   const id = Array.isArray(fit?.sourceIds) ? fit.sourceIds[0] : undefined;
-  return typeof id === "string" ? { datasetId: id, pipeline: `reflectivity fit #${String(fit?.seq ?? "?")}` } : null;
+  if (typeof id === "string") return { datasetId: id, pipeline: `reflectivity fit #${String(fit?.seq ?? "?")}` };
+  // P2.3: a SIMS-processed profile (lib/transformSims.ts) — same reasoning
+  // as the fit curve: provenance only, never the recalc graph.
+  const sims = d.data.metadata?.sims_source as { id?: unknown } | undefined;
+  return typeof sims?.id === "string" ? { datasetId: sims.id, pipeline: "SIMS processing" } : null;
 }
 
 export default function DerivedWorksheetMark({ dataset: d }: { dataset: Dataset }) {
