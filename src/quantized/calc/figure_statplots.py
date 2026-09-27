@@ -10,7 +10,6 @@ identical statistics. Shares ``render_figure``'s style presets and formats.
 
 from __future__ import annotations
 
-from io import BytesIO
 from typing import Any
 
 import numpy as np
@@ -23,7 +22,7 @@ from quantized.calc.figure_group_notes import (
     mark_empty_slots,
 )
 from quantized.calc.figure_labels import safe_mathtext_label
-from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 from quantized.calc.statplots import box_stats as _box_stats
 from quantized.calc.statplots import deterministic_jitter as _jitter
@@ -123,11 +122,6 @@ def render_statplot_figure(
         raise ValueError(f"fmt must be one of {_FORMATS}")
     if kind not in STATPLOT_KINDS:
         raise ValueError(f"kind must be one of {STATPLOT_KINDS}")
-    # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never raises.
-    title = safe_mathtext_label(title)
-    x_label = safe_mathtext_label(x_label)
-    y_label = safe_mathtext_label(y_label)
-    labels = [safe_mathtext_label(str(g)) for g in labels] if labels else labels
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
@@ -146,6 +140,14 @@ def render_statplot_figure(
     }
 
     with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): every trial-parse below
+        # reacquires the SAME re-entrant lock this scope already holds --
+        # one real acquire per render, not one per label.
+        title = safe_mathtext_label(title)
+        x_label = safe_mathtext_label(x_label)
+        y_label = safe_mathtext_label(y_label)
+        labels = [safe_mathtext_label(str(g)) for g in labels] if labels else labels
         fig = new_figure(figsize=figsize)
         ax = fig.subplots()
         _draw_statplot(
@@ -165,9 +167,7 @@ def render_statplot_figure(
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
         fig.tight_layout(rect=layout_rect)  # None = the default layout
-        buf = BytesIO()
-        fig.savefig(buf, format=fmt, dpi=resolved_dpi)
-        return buf.getvalue()
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi)
 
 
 def _clean_groups_with_indices(

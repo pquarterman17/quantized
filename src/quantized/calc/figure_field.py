@@ -9,14 +9,13 @@ Validates that x/y axes have matching grid shape to the (u, v) components.
 
 from __future__ import annotations
 
-from io import BytesIO
 from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike
 
 from quantized.calc.figure_labels import safe_mathtext_label
-from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
 __all__ = ["render_field_figure"]
@@ -59,10 +58,6 @@ def render_field_figure(
         raise ValueError(f"fmt must be one of {_FORMATS}")
     if kind not in ("quiver", "streamline"):
         raise ValueError("kind must be 'quiver' or 'streamline'")
-    # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never raises.
-    title = safe_mathtext_label(title)
-    x_label = safe_mathtext_label(x_label)
-    y_label = safe_mathtext_label(y_label)
 
     x_arr = np.asarray(x_axis, dtype=float)
     y_arr = np.asarray(y_axis, dtype=float)
@@ -100,6 +95,13 @@ def render_field_figure(
     xx, yy = np.meshgrid(x_arr, y_arr, indexing="xy")
 
     with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): every trial-parse below
+        # reacquires the SAME re-entrant lock this scope already holds --
+        # one real acquire per render, not one per label.
+        title = safe_mathtext_label(title)
+        x_label = safe_mathtext_label(x_label)
+        y_label = safe_mathtext_label(y_label)
         fig = new_figure(figsize=_FIGURE_SIZE_IN)
         ax = fig.subplots()
         if kind == "quiver":
@@ -126,6 +128,4 @@ def render_field_figure(
             ax.spines["right"].set_visible(False)
 
         fig.tight_layout()
-        buf = BytesIO()
-        fig.savefig(buf, format=fmt, dpi=resolved_dpi)
-        return buf.getvalue()
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi)

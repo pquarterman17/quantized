@@ -17,14 +17,13 @@ calibrated dpi is used.
 
 from __future__ import annotations
 
-from io import BytesIO
 from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure_labels import safe_mathtext_label
-from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
 __all__ = ["render_ternary_figure"]
@@ -68,13 +67,6 @@ def render_ternary_figure(
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
-    # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never raises.
-    title = safe_mathtext_label(title)
-    labels = (
-        safe_mathtext_label(str(labels[0])),
-        safe_mathtext_label(str(labels[1])),
-        safe_mathtext_label(str(labels[2])),
-    )
 
     arr = np.asarray(data, dtype=float)
     if arr.ndim != 2 or arr.shape[1] != 3:
@@ -128,6 +120,16 @@ def render_ternary_figure(
     }
 
     with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): every trial-parse below
+        # reacquires the SAME re-entrant lock this scope already holds --
+        # one real acquire per render, not one per label.
+        title = safe_mathtext_label(title)
+        labels = (
+            safe_mathtext_label(str(labels[0])),
+            safe_mathtext_label(str(labels[1])),
+            safe_mathtext_label(str(labels[2])),
+        )
         fig = new_figure(figsize=_FIGURE_SIZE_IN)
         ax = fig.subplots()
         _draw_ternary_scatter(
@@ -137,9 +139,7 @@ def render_ternary_figure(
         if title:
             fig.suptitle(title, fontsize=st.title_font_size)
         fig.tight_layout()
-        buf = BytesIO()
-        fig.savefig(buf, format=fmt, dpi=resolved_dpi)
-        return buf.getvalue()
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi)
 
 
 def _barycentric_to_cartesian(a: float, b: float, c: float) -> tuple[float, float]:

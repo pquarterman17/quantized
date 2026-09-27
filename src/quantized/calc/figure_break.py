@@ -27,14 +27,13 @@ colour-mapped scatter are single-axes features, like the rest of gap #11.
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from io import BytesIO
 from typing import Any
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure import _plot_kwargs
-from quantized.calc.figure_render import in_render_scope, new_figure
+from quantized.calc.figure_render import in_render_scope, new_figure, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
 
@@ -165,6 +164,4 @@ def render_breaks_impl(
             handles, labels_out, frameon=st.legend_box, fontsize=st.legend_font_size,
             loc=st.legend_location,
         )
-    buf = BytesIO()
-    fig.savefig(buf, format=fmt, dpi=dpi, transparent=transparent)
-    return buf.getvalue()
+    return savefig_bytes(fig, fmt, dpi=dpi, transparent=transparent)

@@ -10,14 +10,13 @@ on-screen bars. Shares ``render_figure``'s style presets and formats
 
 from __future__ import annotations
 
-from io import BytesIO
 from typing import Any
 
 import numpy as np
 
 from quantized.calc.figure_group_notes import add_caveat, mark_empty_slots
 from quantized.calc.figure_labels import safe_mathtext_label
-from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
 __all__ = ["render_categorical_figure"]
@@ -179,12 +178,6 @@ def render_categorical_figure(
         raise ValueError("groups must be non-empty")
     if not series:
         raise ValueError("series must be non-empty")
-    # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never raises.
-    title = safe_mathtext_label(title)
-    x_label = safe_mathtext_label(x_label)
-    y_label = safe_mathtext_label(y_label)
-    groups = [safe_mathtext_label(str(g)) for g in groups]
-    series = [safe_mathtext_label(str(s)) for s in series]
     n_groups, n_series = len(groups), len(series)
     vals = _to_matrix(values, n_groups, n_series, "values")
     errs = _to_error_matrix(errors, n_groups, n_series)
@@ -202,6 +195,15 @@ def render_categorical_figure(
     }
 
     with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): each trial-parse below
+        # reacquires the SAME re-entrant lock this scope already holds --
+        # one real acquire per render, not one per label.
+        title = safe_mathtext_label(title)
+        x_label = safe_mathtext_label(x_label)
+        y_label = safe_mathtext_label(y_label)
+        groups = [safe_mathtext_label(str(g)) for g in groups]
+        series = [safe_mathtext_label(str(s)) for s in series]
         fig = new_figure(figsize=figsize)
         ax = fig.subplots()
         _draw_categorical_bars(ax, groups, series, vals, errs, stacked, cnts)
@@ -222,6 +224,4 @@ def render_categorical_figure(
         if st.grid_alpha > 0:
             ax.grid(True, alpha=st.grid_alpha, axis="y")
         fig.tight_layout(rect=layout_rect)  # None = the default layout
-        buf = BytesIO()
-        fig.savefig(buf, format=fmt, dpi=dpi)
-        return buf.getvalue()
+        return savefig_bytes(fig, fmt, dpi=dpi)

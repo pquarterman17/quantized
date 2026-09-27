@@ -46,7 +46,6 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from io import BytesIO
 from typing import Any
 
 import numpy as np
@@ -67,7 +66,7 @@ from quantized.calc.figure_page_panel_labels import (
     panel_label,
 )
 from quantized.calc.figure_page_validate import _validate_page, _validate_page_rects
-from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import FigureStyle, figure_style
 
 __all__ = ["PagePanel", "panel_label", "render_figure_page"]
@@ -263,8 +262,6 @@ def render_figure_page(
         ordered = sorted(panels, key=_rect_sort_key)
     else:
         ordered = sorted(panels, key=lambda p: (p.row, p.col))
-    # (matplotlib's RcParams Literal-key type is impractical with the dynamic
-    # font.<generic> key -- same targeted ignore as calc.figure.)
     with render_scope(style_rc(st, {})):
         fig = _build_page_figure(
             ordered,
@@ -283,9 +280,7 @@ def render_figure_page(
             align_labels=align_labels,
             resize_mode=resize_mode,
         )
-        buf = BytesIO()
-        fig.savefig(buf, format=fmt, dpi=resolved_dpi)
-        return buf.getvalue()
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi)
 
 
 def _build_page_figure(

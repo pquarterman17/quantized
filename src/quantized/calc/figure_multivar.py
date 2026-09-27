@@ -12,7 +12,6 @@ convention. No ``corner.py`` / seaborn dependency -- plain matplotlib axes.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from io import BytesIO
 from typing import Any, Literal
 
 import numpy as np
@@ -21,7 +20,7 @@ from matplotlib.ticker import MaxNLocator
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure_labels import safe_mathtext_label
-from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
 __all__ = [
@@ -51,12 +50,6 @@ def _resolve(fmt: str, style: str, dpi: int | None) -> tuple[Any, int, dict[str,
     return st, resolved_dpi, rc
 
 
-def _savefig(fig: Any, fmt: str, dpi: int) -> bytes:
-    buf = BytesIO()
-    fig.savefig(buf, format=fmt, dpi=dpi)
-    return buf.getvalue()
-
-
 # ── Correlation heatmap ──────────────────────────────────────────────────────
 
 
@@ -83,8 +76,6 @@ def render_correlation_heatmap_figure(
         raise ValueError(f"r must be an {n}x{n} matrix matching labels, got {rmat.shape}")
     if n < 2:
         raise ValueError("correlation heatmap needs at least 2 variables")
-    names = [safe_mathtext_label(str(lab)) for lab in labels]
-    title = safe_mathtext_label(title)
 
     st, resolved_dpi, rc = _resolve(fmt, style, dpi)
     fig_w = width_in or max(st.fig_width_in, 0.55 * n + 1.2)
@@ -95,6 +86,12 @@ def render_correlation_heatmap_figure(
     rc["ytick.labelsize"] = tick_fs
 
     with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): every trial-parse below
+        # reacquires the SAME re-entrant lock this scope already holds --
+        # one real acquire per render, not one per label.
+        names = [safe_mathtext_label(str(lab)) for lab in labels]
+        title = safe_mathtext_label(title)
         fig = new_figure(figsize=figsize)
         ax = fig.subplots()
         # pcolormesh (not imshow) so the cells export as vector <path>
@@ -124,7 +121,7 @@ def render_correlation_heatmap_figure(
         if title:
             ax.set_title(title)
         fig.tight_layout()
-        return _savefig(fig, fmt, resolved_dpi)
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi)
 
 
 # ── SPLOM ─────────────────────────────────────────────────────────────────────
@@ -167,8 +164,6 @@ def render_splom_figure(
     for i, c in enumerate(cols):
         if not np.any(np.isfinite(c)):
             raise ValueError(f"column {i} ({labels[i]!r}) has no finite values")
-    names = [safe_mathtext_label(str(lab)) for lab in labels]
-    title = safe_mathtext_label(title)
 
     st, resolved_dpi, rc = _resolve(fmt, style, dpi)
     figsize = (width_in or _PANEL_IN * n, height_in or _PANEL_IN * n)
@@ -177,6 +172,12 @@ def render_splom_figure(
     rc["ytick.labelsize"] = tick_fs
 
     with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): every trial-parse below
+        # reacquires the SAME re-entrant lock this scope already holds --
+        # one real acquire per render, not one per label.
+        names = [safe_mathtext_label(str(lab)) for lab in labels]
+        title = safe_mathtext_label(title)
         fig = new_figure(figsize=figsize)
         axes = fig.subplots(n, n, squeeze=False)
         for i in range(n):
@@ -209,7 +210,7 @@ def render_splom_figure(
             fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.96))
         else:
             fig.tight_layout()
-        return _savefig(fig, fmt, resolved_dpi)
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi)
 
 
 # ── PCA scores / loadings / biplot ───────────────────────────────────────────
@@ -250,9 +251,6 @@ def render_pca_figure(
     vecs = vectors or []
     if pts.shape[0] == 0 and len(vecs) == 0:
         raise ValueError("render_pca_figure needs points and/or vectors")
-    title = safe_mathtext_label(title)
-    x_label = safe_mathtext_label(x_label)
-    y_label = safe_mathtext_label(y_label)
 
     st, resolved_dpi, rc = _resolve(fmt, style, dpi)
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
@@ -272,6 +270,14 @@ def render_pca_figure(
     vx, vy = vx * vec_scale, vy * vec_scale
 
     with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): every trial-parse below
+        # (this one and the per-vector one further down) reacquires the SAME
+        # re-entrant lock this scope already holds -- one real acquire per
+        # render, not one per label.
+        title = safe_mathtext_label(title)
+        x_label = safe_mathtext_label(x_label)
+        y_label = safe_mathtext_label(y_label)
         fig = new_figure(figsize=figsize)
         ax = fig.subplots()
         if has_points:
@@ -308,7 +314,7 @@ def render_pca_figure(
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
         fig.tight_layout()
-        return _savefig(fig, fmt, resolved_dpi)
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi)
 
 
 def render_pca_scree_figure(
@@ -333,13 +339,17 @@ def render_pca_scree_figure(
         raise ValueError("scree plot needs at least 1 component")
     if cum.size != k:
         raise ValueError(f"cumulative has {cum.size} entries, explained has {k}")
-    title = safe_mathtext_label(title)
 
     st, resolved_dpi, rc = _resolve(fmt, style, dpi)
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
     x = np.arange(1, k + 1)
 
     with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): reacquires the SAME
+        # re-entrant lock this scope already holds -- one real acquire per
+        # render, not one per label.
+        title = safe_mathtext_label(title)
         fig = new_figure(figsize=figsize)
         ax = fig.subplots()
         ax.bar(x, exp, color="0.6", edgecolor="white", linewidth=0.5, label="% explained")
@@ -359,4 +369,4 @@ def render_pca_scree_figure(
         if not st.box_on:
             ax.spines["top"].set_visible(False)
         fig.tight_layout()
-        return _savefig(fig, fmt, resolved_dpi)
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi)

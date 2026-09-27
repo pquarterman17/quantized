@@ -11,7 +11,6 @@ only (the heavy import is lazy at the route boundary).
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from io import BytesIO
 from typing import Any
 
 import numpy as np
@@ -24,7 +23,7 @@ from quantized.calc.figure_greyscale import apply_greyscale
 from quantized.calc.figure_hitmap import collect_map as _collect_map_impl
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_overrides import _apply_overrides, _validate_overrides
-from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle, figure_style
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
@@ -342,16 +341,6 @@ def _render_impl(
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
-    # Rich-text labels (GOTO #5): valid $...$ mathtext passes through to
-    # matplotlib untouched; INVALID mathtext is de-mathed here so it renders
-    # literally instead of raising inside savefig (an export must never 500).
-    # Sanitizing at entry also covers the figure_break branch below, which
-    # receives these same strings.
-    title = safe_mathtext_label(title)
-    x_label = safe_mathtext_label(x_label)
-    y_label = safe_mathtext_label(y_label)
-    y2_label = safe_mathtext_label(y2_label)
-    series = [(safe_mathtext_label(label), y) for label, y in series]
     if greyscale:
         series_styles = apply_greyscale(series_styles, len(series))
     st = figure_style(style)
@@ -373,6 +362,19 @@ def _render_impl(
     if has_y2 and x_breaks:
         raise ValueError("y2_keys is not supported together with x_breaks")
     with render_scope(rc):
+        # Rich-text labels (GOTO #5): valid $...$ mathtext passes through to
+        # matplotlib untouched; INVALID mathtext is de-mathed here so it
+        # renders literally instead of raising inside savefig (an export
+        # must never 500). Inside render_scope (not before it, review fix):
+        # every safe_mathtext_label trial-parse below reacquires the SAME
+        # re-entrant RENDER_LOCK this scope already holds -- one real
+        # acquire per render, not one per label. Sanitizing here also covers
+        # the figure_break branch below, which receives these same strings.
+        title = safe_mathtext_label(title)
+        x_label = safe_mathtext_label(x_label)
+        y_label = safe_mathtext_label(y_label)
+        y2_label = safe_mathtext_label(y2_label)
+        series = [(safe_mathtext_label(label), y) for label, y in series]
         # Manual axis breaks (gap #21): a distinct, twinned-panel rendering
         # path — not compatible with the hit-map collector (collect_map is
         # figure-hitmap's single-axes pixel harvesting) or the full
@@ -459,9 +461,7 @@ def _render_impl(
                 x_scale=resolve_axis_scale(x_scale, x_log),
                 y_scale=resolve_axis_scale(y_scale, y_log),
             )
-        buf = BytesIO()
-        fig.savefig(buf, format=fmt, dpi=resolved_dpi, transparent=transparent)
-        return buf.getvalue()
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi, transparent=transparent)
 
 
 def render_figure(

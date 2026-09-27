@@ -34,13 +34,15 @@ from __future__ import annotations
 
 import math
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import Any, NoReturn, TypeVar
 
 import numpy as np
 from fastapi import HTTPException, Request
 from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+
+from quantized.calc.render_lock import RenderLockTimeout
 
 _T = TypeVar("_T")
 
@@ -74,13 +76,39 @@ CALC_ERRORS: tuple[type[BaseException], ...] = (
 #: explicitly.
 CALC_ERRORS_IO: tuple[type[BaseException], ...] = (*CALC_ERRORS, OSError)
 
+#: ``CALC_ERRORS`` plus ``RenderLockTimeout`` (``calc.render_lock`` -- raised
+#: when the process-wide matplotlib render lock could not be acquired within
+#: its bounded timeout, see ``calc.figure_render``'s module doc), for every
+#: figure-export route. Listed separately from ``CALC_ERRORS`` -- a stuck/
+#: overloaded render is not a bad-input 422, it is a "the server is busy,
+#: retry" 503 (see :func:`raise_calc_error`). A starred unpack directly in an
+#: ``except`` clause isn't mypy-checkable (see ``CALC_ERRORS_IO``'s own note
+#: above), hence this named tuple rather than ``except (RenderLockTimeout,
+#: *CALC_ERRORS))`` inline at each call site.
+CALC_ERRORS_WITH_LOCK: tuple[type[BaseException], ...] = (RenderLockTimeout, *CALC_ERRORS)
+
+
+def raise_calc_error(exc: BaseException) -> NoReturn:
+    """Map a ``CALC_ERRORS_WITH_LOCK`` exception to its HTTP status and raise.
+
+    ``RenderLockTimeout`` -> 503 (busy/stuck render, retryable); every other
+    ``CALC_ERRORS`` member -> 422 (bad input), matching :func:`call_calc`'s
+    long-standing mapping. Pair with ``except CALC_ERRORS_WITH_LOCK as exc:``
+    at a call site that does more than call one ``calc/`` function (so
+    ``call_calc`` itself doesn't fit) but still wants this same mapping.
+    """
+    if isinstance(exc, RenderLockTimeout):
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    raise HTTPException(status_code=422, detail=str(exc)) from exc
+
 
 def call_calc(fn: Callable[..., _T], *args: Any, **kwargs: Any) -> _T:
-    """Call a pure ``calc/`` function, turning ``CALC_ERRORS`` into an HTTP 422."""
+    """Call a pure ``calc/`` function, turning ``CALC_ERRORS`` into an HTTP 422
+    and ``RenderLockTimeout`` (a figure renderer only) into an HTTP 503."""
     try:
         return fn(*args, **kwargs)
-    except CALC_ERRORS as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except CALC_ERRORS_WITH_LOCK as exc:
+        raise_calc_error(exc)
 
 
 def _json_safe(value: Any) -> Any:

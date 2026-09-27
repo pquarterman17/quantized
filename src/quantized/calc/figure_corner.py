@@ -16,7 +16,6 @@ export pipeline.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from io import BytesIO
 from typing import Any
 
 import numpy as np
@@ -25,7 +24,7 @@ from matplotlib.ticker import MaxNLocator
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure_labels import safe_mathtext_label
-from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
 from quantized.calc.figure_styles import figure_style
 
 __all__ = ["render_corner_figure"]
@@ -83,10 +82,8 @@ def render_corner_figure(
     _n_samples, k = arr.shape
     if k < 1:
         raise ValueError("samples needs at least one parameter column")
-    names = [safe_mathtext_label(str(nm)) for nm in param_names]
-    # (Rich-text labels, GOTO #5: de-math INVALID $...$ so savefig never raises.)
-    if len(names) != k:
-        raise ValueError(f"param_names has {len(names)} entries, samples has {k} columns")
+    if len(param_names) != k:
+        raise ValueError(f"param_names has {len(param_names)} entries, samples has {k} columns")
     if truths is not None and len(truths) != k:
         raise ValueError(f"truths has {len(truths)} entries, samples has {k} columns")
 
@@ -95,7 +92,6 @@ def render_corner_figure(
         raise ValueError("need at least 2 finite joint samples to render a corner plot")
     tr = np.asarray(truths, dtype=float) if truths is not None else None
 
-    title = safe_mathtext_label(title)
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
     figsize = (width_in or _PANEL_IN * k, height_in or _PANEL_IN * k)
@@ -116,6 +112,12 @@ def render_corner_figure(
     ranges = [_pad_range(finite[:, i]) for i in range(k)]
 
     with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): reacquires the SAME
+        # re-entrant lock this scope already holds -- one real acquire per
+        # render, not one per label.
+        names = [safe_mathtext_label(str(nm)) for nm in param_names]
+        title = safe_mathtext_label(title)
         fig = new_figure(figsize=figsize)
         axes = fig.subplots(k, k, squeeze=False)
         for row in range(k):
@@ -139,9 +141,7 @@ def render_corner_figure(
             fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.96))
         else:
             fig.tight_layout()
-        buf = BytesIO()
-        fig.savefig(buf, format=fmt, dpi=resolved_dpi)
-        return buf.getvalue()
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi)
 
 
 def _pad_range(v: NDArray[np.float64]) -> tuple[float, float]:

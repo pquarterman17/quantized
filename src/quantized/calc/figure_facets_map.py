@@ -97,10 +97,6 @@ def _facet_grid(
         raise ValueError("panels must be non-empty")
     ov = dict(overrides or {})
     _validate_overrides(ov)
-    # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never raises.
-    title = safe_mathtext_label(title)
-    x_label = safe_mathtext_label(x_label)
-    y_label = safe_mathtext_label(y_label)
 
     st = figure_style(style)
     n = len(panels)
@@ -123,6 +119,13 @@ def _facet_grid(
     resolved_y_scale = resolve_axis_scale(y_scale, y_log)
 
     with render_scope(rc):
+        # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
+        # raises. Inside render_scope (review fix): every trial-parse below
+        # reacquires the SAME re-entrant lock this scope already holds --
+        # one real acquire per render, not one per label.
+        title = safe_mathtext_label(title)
+        x_label = safe_mathtext_label(x_label)
+        y_label = safe_mathtext_label(y_label)
         fig = new_figure(figsize=figsize)
         axes_grid = fig.subplots(rows, cols, sharex=True, sharey=False, squeeze=False)
         flat = [ax for row in axes_grid for ax in row]
