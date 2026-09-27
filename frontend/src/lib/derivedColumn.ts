@@ -17,15 +17,14 @@
 // (store/derivedColumnRun.commitDerivedColumns) owns undo, the error binding and
 // the recorded step.
 
-import { children, columnsRead, parseExpr, type Node } from "./derivedExprAst";
-import { fitModelExpr } from "./derivedFitModels";
+import { columnsRead, parseExpr } from "./derivedExprAst";
 import { PropagationError, propagateSigma, type SigmaInput } from "./derivedPropagate";
 import { deriveUnit } from "./derivedUnits";
 import { inferErrorBindings } from "./errorRoles";
 import { channelLetter, compileFormula, referencedColumns } from "./formula";
-import { resnapFitRef } from "./derivedFitRefs";
+import { resolveFits } from "./derivedFitRefs";
 import { channelIndexOf } from "./formulaRename";
-import type { DerivedSpec, FitRefSnapshot } from "./formulaTypes";
+import type { DerivedSpec } from "./formulaTypes";
 import type { ComputedColumn, Dataset } from "./types";
 import { uniqueTemplateName } from "./uniqueName";
 
@@ -83,11 +82,6 @@ function positioned(expr: string, e: unknown): string {
   return msg;
 }
 
-function walk(n: Node, visit: (n: Node) => void): void {
-  visit(n);
-  for (const c of children(n)) walk(c, visit);
-}
-
 /** Every column `letter` is computed from, itself included (formula deps). */
 function upstreamOf(ds: Dataset, letter: string): Set<string> {
   const formulas = ds.formulas ?? [];
@@ -103,35 +97,6 @@ function upstreamOf(ds: Dataset, letter: string): Set<string> {
     if (f) stack.push(...(f.deps ?? referencedColumns(f.expr).letters));
   }
   return out;
-}
-
-function resolveFits(ds: Dataset, root: Node): { fits: FitRefSnapshot[] } | { error: string } {
-  const fits: FitRefSnapshot[] = [];
-  let error: string | undefined;
-  walk(root, (n) => {
-    if (error || (n.k !== "fit" && n.k !== "fitval")) return;
-    let s = fits.find((f) => f.model === n.model);
-    if (!s) {
-      const table = fitModelExpr(n.model);
-      s = resnapFitRef(
-        { model: n.model, paramNames: table ? [...table.params] : [], params: [], ...(table ? { expr: table.expr } : {}) },
-        ds.fitSpec,
-      );
-      if (s.missing) return void (error = `${n.k}("${n.model}"): ${s.missing}`);
-      fits.push(s);
-    }
-    if (n.k === "fitval" && !s.expr) {
-      error = `fitval() can only evaluate a closed-form model (Gaussian, Lorentzian, Linear, …); "${n.model}" is not one`;
-    } else if (n.k === "fit") {
-      const named = s.paramNames.indexOf(n.param);
-      const idx = named >= 0 ? named : /^p\d+$/.test(n.param) ? Number(n.param.slice(1)) : -1;
-      if (idx < 0 || idx >= s.params.length) {
-        const names = s.paramNames.length ? s.paramNames.join(", ") : s.params.map((_, i) => `p${i}`).join(", ");
-        error = `the "${n.model}" fit has no parameter "${n.param}" (it has ${names})`;
-      }
-    }
-  });
-  return error ? { error } : { fits };
 }
 
 export function deriveColumns(ds: Dataset, req: DeriveRequest): DeriveOutcome {

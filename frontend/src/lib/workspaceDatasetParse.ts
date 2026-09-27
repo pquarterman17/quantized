@@ -23,7 +23,7 @@ import { sanitizeFilter } from "./datafilter";
 import { sanitizeBindings } from "./errorRoles";
 import { baseColumns } from "./formula";
 import { sanitizePeakTable } from "./peakTable";
-import { applyComputedColumnsExtras, sanitizeDerived } from "./workspaceComputedColumns";
+import { applyComputedColumnsExtras, reresolveDerivedFitsOnLoad, sanitizeDerived } from "./workspaceComputedColumns";
 import { sanitizeExcluded } from "./rowstate";
 import type {
   BookSource,
@@ -276,6 +276,11 @@ export function parseWorkspaceDataset(d: unknown, i: number, projectDir?: string
     if (typeof fs.exitFlag === "number") spec.exitFlag = fs.exitFlag;
     ds.fitSpec = spec;
   }
+  // Review finding 10: NOW that both `ds.formulas` (with its type-checked-
+  // only fit snapshots) and `ds.fitSpec` are parsed, re-resolve every
+  // snapshot against the ACTUAL loaded fit — a stale snapshot (saved before
+  // the fit was redone or cleared) must not evaluate silently.
+  reresolveDerivedFitsOnLoad(ds);
   // Durable fitted-peak table (audit P2.1). Additive-optional exactly like
   // `fitSpec` above: absent (every pre-P2.1 `.dwk`) means the dataset simply
   // has no peak table, and a malformed record degrades to that same "none"

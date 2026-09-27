@@ -29,6 +29,9 @@ export interface WorksheetToolbarProps {
   /** P2.5: `errors` = also derive + bind a propagated-uncertainty column
    *  (the "± errors" toggle, local to this bar). */
   onAddColumn: (errors: boolean) => void;
+  /** #6: an add is in flight — disable submit and ignore Enter, so a rapid
+   *  repeat doesn't add the same column twice before the box clears. */
+  addColumnPending: boolean;
   showStats: boolean;
   onToggleStats: () => void;
   onCopy: () => void;
@@ -63,6 +66,7 @@ export default function WorksheetToolbar({
   setFormula,
   setColName,
   onAddColumn,
+  addColumnPending,
   showStats,
   onToggleStats,
   onCopy,
@@ -102,7 +106,7 @@ export default function WorksheetToolbar({
         title={FORMULA_HELP}
         value={formula}
         onChange={(e) => setFormula(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && formula.trim() && onAddColumn(propagate)}
+        onKeyDown={(e) => e.key === "Enter" && formula.trim() && !addColumnPending && onAddColumn(propagate)}
         style={{ width: 200 }}
       />
       <input
@@ -120,7 +124,7 @@ export default function WorksheetToolbar({
       >
         ± errors
       </button>
-      <button className="qz-btn" disabled={!formula.trim()} onClick={() => onAddColumn(propagate)}>
+      <button className="qz-btn" disabled={!formula.trim() || addColumnPending} onClick={() => onAddColumn(propagate)}>
         Add column
       </button>
       <button

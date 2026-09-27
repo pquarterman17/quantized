@@ -3786,6 +3786,71 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
     measured cuts funded it: parse-error columns moved to the lazy path, fit
     re-resolution made lazy, and a two-sided σ link replaced an eager
     letter-remap. Headroom left is 175 B.
+  - **Review round 2 (independent review, 10 findings, all fixed with a
+    sabotage-verified test each):**
+    - a unit-bearing exponent (`10**(A/10)` for dB, `e**(-B/x)`) was refused
+      instead of warned like `exp()`;
+    - a comparison / `row()` / `count()` / `sign()` was a strict
+      dimensionless UNIT, refusing to combine with any dimensioned operand
+      (`A + 5*(x>100)`) — now a plain number, like a literal;
+    - `refreshFitRefsFor`'s own `recalcNow()` call, reached mid-pass from
+      inside `recomputeStaleFits`, silently no-op'd against the in-progress
+      guard — `recalcNow` now queues a follow-up pass instead;
+    - editing/adding an expression that introduces `fit()`/`fitval()` for a
+      model never snapshotted before could never resolve (a refresh only
+      ever re-snapped an EXISTING array) — `refreshFitRefs` now resolves a
+      bare reference fresh too, and `addFormula`/`updateFormula` schedule it;
+    - `lib/pipeline.validateExpression` evaluated with no row/fit context,
+      so it flagged EVERY `fit()`/`fitval()`/aggregate expression — it now
+      validates syntactically (parse + column-reference check), never
+      evaluates, and `regenerateStep` no longer drops the `{ errors: true }`
+      propagate flag;
+    - the ƒx bar's add was async but the box cleared only after — two rapid
+      Enters/clicks added the column twice; an in-flight ref now ignores the
+      repeat;
+    - `refreshFitRefs` ran two hand-rolled `applyFormulas`/`formulaErrors`
+      calls and skipped `carryComputedLevelOrder` — a recode column's
+      `level_order` was dropped on a refit; it now goes through the single
+      `recomputeWithErrors` path;
+    - `refreshFitRefsLater` lazy-loaded the whole derived-expression chunk on
+      every `setFitSpec`/`removeFormula`/duplicate even with no `fit()`
+      columns, with no `.catch` — it now checks eagerly first, imports only
+      `store/fitRefsRun.ts` (`lib/derivedFitRefs.ts` alone, not
+      `lib/derivedColumn.ts`'s full tree), and reports an import failure
+      through `setStatus`;
+    - renaming either end of a value/σ pair permanently broke the link with
+      a misleading "edited or removed" message — `updateFormula` now carries
+      the rename into the other end's `sigma`/`sigmaOf.name`;
+    - a `.dwk`'s fit snapshots were type-checked but never re-resolved
+      against the loaded `fitSpec` — a stale snapshot (saved before the fit
+      was redone or cleared) evaluated silently; the load path now
+      re-resolves every snapshot once `fitSpec` is parsed and recomputes on a
+      mismatch.
+  - **Eager bundle:** 845.9 → 846.3 kB (866,617 B), npm ci-fresh, .vite
+    wiped — **over the 866,358 B budget by 259 B**, pin unchanged. All ten
+    fixes above landed in the already-lazy chunks (the derived-expression
+    tree, `store/fitRefsRun.ts`, the `.dwk` codec seam) except the
+    guard/rename/follow-up-pass logic that has to live in the eager
+    `store/computedColumns.ts` / `store/useApp.ts` (findings 3, 4, 8, 9),
+    measured at +434 B on its own — the opener's prior 175 B of headroom was
+    not enough to absorb even that. A dominator diff against `main`
+    (843.0 kB) attributes the REST of the opener's own +2,906 B to
+    `lib/formula.ts`'s core tokenizer/parser upgrade itself
+    (`formulaFitRefs.ts`, `formulaFuncs.ts`, `formulaTokenize.ts`) — every
+    worksheet formula compile needs it, so it is not behind any lazy
+    boundary to move; the derived-expression analysis tree (units, AST,
+    symbolic differentiation, fit resolution) was already fully lazy before
+    this round and stayed that way (confirmed: none of `derivedColumn.ts`/
+    `derivedExprAst.ts`/`derivedUnits.ts`/`derivedPropagate.ts`/
+    `derivedFitModels.ts`/`derivedFitRefs.ts` appear in the eager
+    `check-bundle-size.mjs` file list, before or after this round). Closing
+    the gap — let alone reaching a tighter external target another
+    concurrent branch's growth implied — needs a genuine diet slice
+    (`plans/BUNDLE_HEADROOM.md`'s pattern) against either that core-parser
+    weight or a banked-but-disqualified seam (`ConfirmDialog`'s static
+    import; the `PlotToolbar`/`CommandPalette` seams the headroom doc
+    explicitly disqualified on user-visible cost), neither of which is a
+    safe, scoped change for a review-fix pass. Flagged rather than forced.
   - **Not done:**
     - Fitted values come only from the dataset's OWN `fitSpec`. There are no
       cross-dataset references, and the durable peak table, reflectivity
@@ -3794,11 +3859,10 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
     - A replayed recipe's `fit` step does not write `fitSpec`
       (pre-existing), so a replayed `fit()` column needs the target to
       already hold a saved fit.
-    - The pipeline panel's add-expression validation
-      (`lib/pipeline.validateExpression`) still probes without row context,
-      so it flags `fit()` / aggregate formulas it cannot evaluate there.
     - Fit-reference refresh lands a tick after the fit changes (a lazy
-      import), not in the same state update. A fit whose OWN input is a
+      import), not in the same state update (review round 2's fix keeps a
+      request made during that tick from being silently dropped, but does
+      not make the refresh synchronous). A fit whose OWN input is a
       fit() column is not re-marked stale by it.
     - No explicit unit field on the ƒx bar (an operand unit is fixed in
       the Inspector). The derived unit is a snapshot: it is dropped when the

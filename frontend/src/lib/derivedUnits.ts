@@ -177,6 +177,13 @@ function scale(a: Dim, k: number): Dim {
 }
 const sameDim = (a: Dim, b: Dim): boolean => a.size === b.size && [...a].every(([s, e]) => b.get(s) === e);
 const DIMLESS: U = { t: "known", dim: new Map() };
+// Finding 2: a comparison/row()/count()/sign() result is a plain NUMBER
+// (like a literal), not a strictly dimensionless UNIT — `unify` already lets
+// a "lit" combine with any known unit (adopting the other side's unit in a
+// sum), where `DIMLESS` is a "known" empty-dim unit that a sum against a
+// dimensioned operand REFUSES on (sameDim mismatch). `A + 5*(x>100)` and
+// `A + 0.01*row()` were refused for exactly that reason.
+const LIT: U = { t: "lit" };
 
 class UnitError extends Error {}
 
@@ -227,7 +234,14 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
   function power(base: Node, exp: Node, what: string): U {
     const bu = u(base);
     const eu = u(exp);
-    if (eu.t === "known" && eu.dim.size) throw new UnitError(`the exponent in ${what} has a unit (${show(eu)}); it must be a pure number`);
+    if (eu.t === "known" && eu.dim.size) {
+      // Finding 1: consistent with exp()/log()/… — a unit-bearing exponent
+      // (10**(A/10) for dB, e**(-B/x)) warns and the result is dimensionless,
+      // never refused; only a genuine dimensional CONTRADICTION (K + s)
+      // refuses anywhere in this algebra.
+      warn(`${what}: the exponent (${show(eu)}) should be dimensionless; the result is treated as dimensionless`);
+      return DIMLESS;
+    }
     if (bu.t !== "known" || !bu.dim.size) return bu.t === "unknown" ? bu : DIMLESS;
     const k = constValue(exp);
     if (k === null) {
@@ -268,7 +282,7 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
       }
       case "cmp":
         unify([n.a, n.b], [u(n.a), u(n.b)], `"${printExpr(n)}"`);
-        return DIMLESS;
+        return LIT;
       case "and":
       case "or":
         u(n.a);
@@ -281,14 +295,14 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         u(n.c);
         return unify([n.a, n.b], [u(n.a), u(n.b)], `the branches of "${printExpr(n)}"`);
       case "row":
-        return DIMLESS;
+        return LIT;
       case "lag":
         u(n.n);
         return u({ k: "var", name: n.col });
       case "diff":
         return u({ k: "var", name: n.col });
       case "agg":
-        return n.fn === "count" ? DIMLESS : u({ k: "var", name: n.col });
+        return n.fn === "count" ? LIT : u({ k: "var", name: n.col });
       case "fit":
         warn(`fit("${n.model}", "${n.param}"): fitted parameters carry no recorded unit, so the result's unit is unknown`);
         return { t: "unknown" };
@@ -302,7 +316,7 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
         if (f === "sqrt") return power(n.args[0], { k: "num", v: 0.5 }, `"${printExpr(n)}"`);
         if (f === "pow" || f === "power") return power(n.args[0], n.args[1], `"${printExpr(n)}"`);
         const us = n.args.map(u);
-        if (f === "sign") return DIMLESS;
+        if (f === "sign") return LIT;
         if (SAME_UNIT.has(f)) return us[0];
         if (MATCHING.has(f)) return unify(n.args, us, `"${printExpr(n)}"`);
         if (f === "atan2") {

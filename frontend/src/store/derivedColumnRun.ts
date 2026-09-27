@@ -14,16 +14,20 @@
 // expression tree and symbolic differentiation stay out of the eager bundle.
 
 import { deriveColumns, type DeriveRequest } from "../lib/derivedColumn";
-import { refreshFitRefs } from "../lib/derivedFitRefs";
 import { inferErrorBindings } from "../lib/errorRoles";
 import { baseColumns, referencedColumns } from "../lib/formula";
 import { lit } from "../lib/macro";
-import { downstreamOf, markStale, recalcNodes, wouldCreateCycle } from "../lib/recalc";
+import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { ComputedColumn } from "../lib/types";
 import { formulaLetter, withRecomputedFormulas } from "./computedColumns";
 import { refusePendingEdit } from "./pendingEdit";
 import { useApp } from "./useApp";
 import { syncDatasetWindowDocuments } from "./windowDocuments";
+
+// Re-exported for existing callers/tests importing it from here — the
+// function itself moved to fitRefsRun.ts (finding 8's module split, see its
+// own doc) so a bare fit refresh no longer drags in lib/derivedColumn.ts.
+export { refreshFitRefsFor } from "./fitRefsRun";
 
 /** The last formula refused for a unit contradiction (dataset id + expr). */
 let lastUnitRefusal: string | null = null;
@@ -117,27 +121,4 @@ export async function addDerivedColumn(
   const withSigma = sigma ? ` with "${sigma.name}" bound as its error` : "";
   const notes = r.notes.length ? ` — ${r.notes.join("; ")}` : "";
   return { ok: true, message: `added column "${value.name}"${unit}${withSigma}${notes}` };
-}
-
-/** P2.5: re-resolve dataset `id`'s fitted-value columns against its current
- *  saved fit (store/computedColumns.refreshFitRefsLater schedules this). No
- *  undo entry of its own: it follows the fit change that caused it. When a
- *  value changed, what is downstream of this dataset (bgRef / derived-sheet
- *  chains and their fits) is marked stale like any data edit — but not this
- *  dataset's OWN fit, whose change caused the refresh (marking it would ask
- *  for a refit after every fit). */
-export function refreshFitRefsFor(id: string): void {
-  const get = useApp.getState;
-  const d = get().datasets.find((x) => x.id === id);
-  const next = d && refreshFitRefs(d);
-  if (!next || next === d) return;
-  useApp.setState((s) => ({ datasets: s.datasets.map((x) => (x === d ? next : x)) }));
-  const s = get();
-  if (s.recalcMode === "off") return;
-  const down = downstreamOf(s.datasets, id);
-  const staleDatasets = markStale(s.staleDatasets, down.datasets);
-  const staleFits = markStale(s.staleFits, down.fits.filter((f) => f !== id));
-  if (staleDatasets === s.staleDatasets && staleFits === s.staleFits) return;
-  useApp.setState({ staleDatasets, staleFits });
-  if (s.recalcMode === "auto") void get().recalcNow();
 }

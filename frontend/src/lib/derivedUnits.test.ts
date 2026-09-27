@@ -44,8 +44,15 @@ describe("products, quotients and powers", () => {
     expect(r.dimensionless).toBe(false);
     expect(r.warnings.join(" ")).toMatch(/non-constant power/);
   });
-  it("refuses an exponent that has a unit", () => {
-    expect(unitOf("2 ** A", { A: "s" }).error).toMatch(/exponent .* has a unit/);
+  it("a unit-bearing exponent WARNS (like exp()), never refuses (review finding 1)", () => {
+    const r = unitOf("2 ** A", { A: "s" });
+    expect(r.error).toBeUndefined();
+    expect(r.dimensionless).toBe(true);
+    expect(r.warnings[0]).toMatch(/exponent .* should be dimensionless/);
+  });
+  it("10**(A/10) (dB) and e**(-B/x) are not refused either (review finding 1)", () => {
+    expect(unitOf("10 ** (A / 10)", { A: "dB" }).error).toBeUndefined();
+    expect(unitOf("e ** (-B / x)", { B: "eV", x: "s" }).error).toBeUndefined();
   });
 });
 
@@ -66,6 +73,15 @@ describe("sums, comparisons and branches need one unit", () => {
     expect(unitOf("A - B", { A: "Oe", B: "Oe" }).unit).toBe("Oe");
     expect(unitOf("A + 273.15", { A: "K" }).unit).toBe("K");
     expect(unitOf("(A > 0) * B", { A: "K", B: "V" }).unit).toBe("V");
+  });
+  it("a comparison, row(), count() and sign() are plain numbers too (review finding 2)", () => {
+    // Each combines with ANY unit — a comparison/row/count/sign result is a
+    // NUMBER (like a literal), not a strictly dimensionless UNIT that a sum
+    // against a dimensioned operand would refuse on.
+    expect(unitOf("A + 5 * (x > 100)", { A: "Oe" })).toEqual({ unit: "Oe", dimensionless: false, warnings: [] });
+    expect(unitOf("A + 0.01 * row()", { A: "Oe" })).toEqual({ unit: "Oe", dimensionless: false, warnings: [] });
+    expect(unitOf("A + count(A)", { A: "Oe" })).toEqual({ unit: "Oe", dimensionless: false, warnings: [] });
+    expect(unitOf("A + sign(A)", { A: "Oe" })).toEqual({ unit: "Oe", dimensionless: false, warnings: [] });
   });
   it("an operand with no unit is assumed to match — and the assumption is stated", () => {
     const r = unitOf("A + B", { A: "K", B: "" });

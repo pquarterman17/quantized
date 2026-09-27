@@ -55,9 +55,11 @@ export interface DerivedSpec {
   /** The propagated-uncertainty LINK, held on both ends: the value column
    *  names its σ column (`sigma`), the σ column names its value column
    *  (`sigmaOf`). Editing the value column's formula drops its `derived`
-   *  (store/computedColumns.updateFormula), and removing or renaming either
-   *  end breaks the pair — every one of those makes the σ column an error
-   *  (lib/formula.ts), never a σ silently mismatched to its values. A removal
+   *  (store/computedColumns.updateFormula), and removing either end breaks
+   *  the pair — that makes the σ column an error (lib/formula.ts), never a σ
+   *  silently mismatched to its values. Renaming either end does NOT break
+   *  it (review finding 9): `updateFormula` follows the rename into the
+   *  other end's `sigma`/`sigmaOf.name` so the link survives it. A removal
    *  that merely shifts column letters keeps the pair. */
   sigma?: string;
   sigmaOf?: { name: string; method: "first-order, uncorrelated" };

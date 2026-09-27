@@ -4,7 +4,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { fetchBookData } from "../lib/api";
+import { applyCorrections, fetchBookData, fitModel } from "../lib/api";
 import { resetBookTransportForTests } from "../lib/bookData";
 import { makeStep } from "../lib/pipeline";
 import type { Dataset, FitSpec } from "../lib/types";
@@ -16,6 +16,10 @@ import { useApp } from "./useApp";
 vi.mock("../lib/api", async (orig) => ({
   ...(await orig<typeof import("../lib/api")>()),
   fetchBookData: vi.fn(),
+  // Review finding 3: fitModel/applyCorrections are mocked here (not just
+  // fetchBookData) so a recalcNow race can be forced deterministically.
+  fitModel: vi.fn(),
+  applyCorrections: vi.fn(),
 }));
 
 // A (V) ± B, C (A) ± D, E: no unit, no error.
@@ -47,6 +51,8 @@ const state = () => useApp.getState().datasets[0];
 beforeEach(() => {
   resetBookTransportForTests();
   vi.mocked(fetchBookData).mockReset().mockReturnValue(new Promise(() => {}));
+  vi.mocked(fitModel).mockReset();
+  vi.mocked(applyCorrections).mockReset();
   useApp.setState({ datasets: [ds()], activeId: "d", status: "", macroRecording: true, macroSteps: [], plotWindows: [] });
 });
 
@@ -115,17 +121,31 @@ describe("recompute", () => {
     expect(col(d, 6).every(Number.isNaN)).toBe(true);
     expect(d.formulas![0].unit).toBeUndefined(); // the auto unit described the old formula
   });
-  it("renaming or removing the value column also breaks the pair", async () => {
+  it("removing the value column breaks the pair — but renaming it does NOT (review finding 9)", async () => {
     await addDerivedColumn("d", { name: "P", expr: "A * C", propagate: true });
+    // Renaming the value column follows the link (updateFormula carries the
+    // rename into the σ column's derived.sigmaOf.name) — no stale error, and
+    // the σ still evaluates against the renamed column's own values.
     useApp.getState().updateFormula("d", 0, { name: "Q" });
-    expect(state().formulaErrors?.["σ(P)"]).toMatch(/stale σ/);
-    useApp.getState().undo();
     expect(state().formulaErrors).toBeUndefined();
+    expect(state().formulas![1].derived?.sigmaOf).toEqual({ name: "Q", method: "first-order, uncorrelated" });
+    expect(col(state(), 6).every((v) => !Number.isNaN(v))).toBe(true);
+    useApp.getState().undo();
+    expect(state().formulas![0].name).toBe("P");
+    expect(state().formulaErrors).toBeUndefined();
+    // Removing it for real is the one thing that still breaks the pair.
     useApp.getState().removeFormula("d", 0);
     expect(state().formulaErrors?.["σ(P)"]).toMatch(/stale σ/);
     // …and a new column taking the old name does not revive it.
     useApp.getState().addFormula("d", "P", "A");
     expect(state().formulaErrors?.["σ(P)"]).toMatch(/stale σ/);
+  });
+  it("renaming the σ column itself also follows the link (review finding 9)", async () => {
+    await addDerivedColumn("d", { name: "P", expr: "A * C", propagate: true });
+    useApp.getState().updateFormula("d", 1, { name: "sigP" });
+    expect(state().formulaErrors).toBeUndefined();
+    expect(state().formulas![0].derived?.sigma).toBe("sigP");
+    expect(col(state(), 6).every((v) => !Number.isNaN(v))).toBe(true);
   });
 });
 
@@ -200,6 +220,39 @@ describe("review round: edits, copies, refresh side effects", () => {
     await vi.waitFor(() => expect(useApp.getState().staleDatasets).toEqual(["w"]));
     expect(useApp.getState().staleFits).not.toContain("d");
   });
+  it("a fit refresh's own recalcNow, reached mid-pass, gets a follow-up pass — not a silent no-op (review finding 3)", async () => {
+    // Build "d"'s fit() column under a quiet (manual) mode first, so this
+    // setup step never itself races the auto-mode debounce below.
+    useApp.setState({ recalcMode: "manual", datasets: [ds("d", { fitSpec: lin })] });
+    const added = await addDerivedColumn("d", { name: "k", expr: 'fit("Linear", "m") * A', propagate: false });
+    expect(added.ok).toBe(true);
+    const dWithFit = state();
+    // "d" gets refit below, so its OWN refresh (refreshFitRefsLater ->
+    // refreshFitRefsFor -> recalcNow) reaches recalcNow WHILE the OUTER
+    // recalcNow() that is refitting BOTH "d" and "d2" is still busy on
+    // "d2"'s slower fit — the A ("d") -> B ("w") dependency case: "w" is
+    // downstream of "d", not of "d2".
+    useApp.setState({
+      recalcMode: "auto",
+      staleDatasets: [],
+      staleFits: ["d", "d2"],
+      datasets: [dWithFit, ds("d2", { fitSpec: lin }), ds("w", { derivedFrom: { datasetId: "d", pipeline: "copy" } })],
+    });
+    vi.mocked(applyCorrections).mockResolvedValue(ds("w").data); // "w"'s recompute, once reached
+    let resolveD2!: (v: { params: number[]; exitFlag: number }) => void;
+    vi.mocked(fitModel)
+      .mockResolvedValueOnce({ params: [5, 0], exitFlag: 1 }) // "d" resolves right away…
+      .mockImplementationOnce(() => new Promise((resolve) => (resolveD2 = resolve))); // …"d2" hangs
+    const p = useApp.getState().recalcNow(); // NOT awaited yet — still in flight below
+    // "d"'s fit settles, refreshFitRefsFor runs and marks "w" stale, all
+    // while `p` is still pending on "d2" — the exact mid-pass window.
+    await vi.waitFor(() => expect(useApp.getState().staleDatasets).toEqual(["w"]));
+    resolveD2({ params: [5, 0], exitFlag: 1 }); // let the original pass finish
+    await p;
+    // Without the fix, "w" is orphaned here forever (recalcNow no-op'd mid-
+    // pass); with it, the follow-up pass this settling triggers picks it up.
+    await vi.waitFor(() => expect(useApp.getState().staleDatasets).toEqual([]));
+  });
 });
 
 describe("unit contradictions: refused once, added on a second ask", () => {
@@ -237,6 +290,33 @@ describe(".dwk round-trip", () => {
     doc.datasets[0].formulas[0].derived = { fits: [{ model: "Linear", paramNames: "m", params: [1] }], sigma: 5, unitAuto: "yes" };
     const [bad] = parseWorkspace(JSON.stringify(doc)).datasets;
     expect(bad.formulas![0].derived).toBeUndefined();
+  });
+
+  it("re-resolves a stale fit snapshot against the LOADED fitSpec, not the saved one (review finding 10)", async () => {
+    useApp.setState({ datasets: [ds("d", { fitSpec: { model: "Linear", params: [2, 1], exitFlag: 1 } })] });
+    await addDerivedColumn("d", { name: "P", expr: 'A * fit("Linear", "m")', propagate: false });
+    const saved = state();
+    expect(saved.formulas![0].derived?.fits?.[0].params).toEqual([2, 1]);
+    expect(col(saved, saved.data.labels.indexOf("P"))).toEqual([4, 8, 12]); // A * 2
+    const doc = JSON.parse(serializeWorkspace({ datasets: [saved] }));
+    // The .dwk's OWN fitSpec was refit since the derived.fits snapshot was
+    // taken — an internally stale file, exactly what a hand edit or an old
+    // save produces.
+    doc.datasets[0].fitSpec.params = [9, 9];
+    const [reloaded] = parseWorkspace(JSON.stringify(doc)).datasets;
+    expect(reloaded.formulas![0].derived?.fits?.[0].params).toEqual([9, 9]); // re-resolved, not the stale [2,1]
+    expect(reloaded.formulaErrors).toBeUndefined();
+    expect(col(reloaded, reloaded.data.labels.indexOf("P"))).toEqual([18, 36, 54]); // A * 9, recomputed
+  });
+
+  it("a .dwk whose fit was cleared since the snapshot was saved becomes an explicit error on load, not a stale value (review finding 10)", async () => {
+    useApp.setState({ datasets: [ds("d", { fitSpec: { model: "Linear", params: [2, 1], exitFlag: 1 } })] });
+    await addDerivedColumn("d", { name: "P", expr: 'A * fit("Linear", "m")', propagate: false });
+    const doc = JSON.parse(serializeWorkspace({ datasets: [state()] }));
+    delete doc.datasets[0].fitSpec; // the fit was cleared since the snapshot was saved
+    const [reloaded] = parseWorkspace(JSON.stringify(doc)).datasets;
+    expect(reloaded.formulaErrors?.P).toMatch(/no saved fit/);
+    expect(col(reloaded, reloaded.data.labels.indexOf("P")).every(Number.isNaN)).toBe(true);
   });
 });
 

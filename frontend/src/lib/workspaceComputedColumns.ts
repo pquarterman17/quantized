@@ -7,8 +7,10 @@
 // anything stale or hand-edited on load" for these two; workspace.ts just
 // calls the two functions below (one call site each).
 
+import { recomputeWithErrors } from "./formula";
+import { asAlreadyComputed } from "./formulaInputs";
 import type { FitRefSnapshot } from "./formulaTypes";
-import type { ComputedColumn, Dataset } from "./types";
+import type { ComputedColumn, Dataset, FitSpec } from "./types";
 
 /** The `formulaErrors`/`derivedFrom` slice of a serialized dataset entry —
  *  spread into `serializeWorkspace`'s per-dataset object alongside every
@@ -71,4 +73,52 @@ export function sanitizeDerived(raw: unknown): ComputedColumn["derived"] {
   if (so && typeof so === "object" && typeof so.name === "string") out.sigmaOf = { name: so.name, method: "first-order, uncorrelated" };
   if (typeof r.sigma === "string") out.sigma = r.sigma;
   return Object.keys(out).length ? out : undefined;
+}
+
+// Review finding 10: the SAME "does this snapshot still match the CURRENT
+// saved fit" rule lib/derivedFitRefs.ts's `resnapFitRef` applies on a live
+// refit. Both this module and lib/derivedFitRefs.ts are lazy (this one is
+// on architecture.test.ts's DRAGGED_OUT list for the `.dwk` codec seam; that
+// one is only reached through the separate derived-expression seam), so
+// importing across is not an eager-boundary problem — it is duplicated
+// anyway (not imported) because measured, an import here adds a new static
+// edge between the two lazy chunks that costs a small amount of chunk-graph
+// overhead (+51 B measured) for no eager benefit; a bundle-diet task prefers
+// the byte-for-byte-smaller form even between two already-lazy modules.
+function resnapAgainstFitSpec(s: FitRefSnapshot, spec: FitSpec | undefined): FitRefSnapshot {
+  const p = spec?.params ?? [];
+  const ok =
+    spec?.model === s.model && (spec.exitFlag ?? 1) > 0 && p.length > 0 && p.every(Number.isFinite) && (!s.paramNames.length || p.length === s.paramNames.length);
+  const why = !spec ? "this dataset has no saved fit" : spec.model !== s.model ? `the saved fit is "${spec.model}"` : "the saved fit did not converge or has no usable parameters";
+  return { model: s.model, paramNames: s.paramNames, ...(s.expr ? { expr: s.expr } : {}), params: ok ? [...p] : [], ...(ok ? {} : { missing: why }) };
+}
+
+/** Review finding 10: a .dwk's fit()/fitval() snapshots are type-checked
+ *  (sanitizeDerived above) but never checked against the dataset's ACTUAL
+ *  loaded `fitSpec` — a stale snapshot (saved before the fit was redone or
+ *  cleared, or hand-edited) would otherwise evaluate silently with old
+ *  numbers. Call from the load path once BOTH `ds.formulas` and
+ *  `ds.fitSpec` are parsed: re-resolves every snapshot with the rule above
+ *  and, only when a resolution actually changed, recomputes `ds.data` +
+ *  `ds.formulaErrors` TOGETHER (never one without the other — the same
+ *  invariant `withRecomputedFormulas` keeps at runtime) so a mismatch
+ *  becomes an explicit per-column error rather than a silently stale value.
+ *  A dataset with no fit()/fitval() columns, or whose snapshots already
+ *  agree with the loaded fitSpec, is untouched. */
+export function reresolveDerivedFitsOnLoad(ds: Dataset): void {
+  const formulas = ds.formulas;
+  if (!formulas?.length) return;
+  let changed = false;
+  const next = formulas.map((f) => {
+    if (!f.derived?.fits?.length) return f;
+    const fits = f.derived.fits.map((s) => resnapAgainstFitSpec(s, ds.fitSpec));
+    if (JSON.stringify(fits) === JSON.stringify(f.derived.fits)) return f;
+    changed = true;
+    return { ...f, derived: { ...f.derived, fits } };
+  });
+  if (!changed) return;
+  ds.formulas = next;
+  const { data, errors } = recomputeWithErrors(asAlreadyComputed(ds.data), next);
+  ds.data = data;
+  ds.formulaErrors = Object.keys(errors).length ? errors : undefined;
 }

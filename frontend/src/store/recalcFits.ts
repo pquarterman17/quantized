@@ -69,7 +69,7 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
           d2.id === id && d2.fitSpec ? { ...d2, fitSpec: stampRecompute(d2.fitSpec, r) } : d2,
         ),
       }));
-      refreshFitRefsLater(id); // P2.5: fit() columns follow the refit
+      refreshFitRefsLater(id, get); // P2.5: fit() columns follow the refit
     } catch (e) {
       get().setStatus(
         `recalc fit failed: ${e instanceof Error ? e.message : "error"}`,

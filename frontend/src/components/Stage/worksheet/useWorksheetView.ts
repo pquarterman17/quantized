@@ -34,7 +34,7 @@
 // (`claimForPlotIntent`) so they can never silently retarget a plot showing
 // an unrelated dataset.
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { statsDescriptive } from "../../../lib/api/statsDescriptive";
 import { copyText, tableToTSV } from "../../../lib/clipboard";
@@ -114,6 +114,8 @@ export interface WorksheetView {
   colName: string;
   setColName: (v: string) => void;
   addColumn: (errors: boolean) => void;
+  /** #6: an add is in flight — the toolbar disables submit / ignores Enter. */
+  addColumnPending: boolean;
   promptColumn: () => Promise<void>;
   err: string | null;
 
@@ -214,6 +216,12 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   const [formula, setFormula] = useState("");
   const [colName, setColName] = useState("");
+  // #6: addColumn is async (commitColumn), and the formula/name boxes clear
+  // only once it settles — a ref (synchronous, unlike useState) so a SECOND
+  // Enter/click arriving before the first render sees it too, not just the
+  // eventual one.
+  const addPendingRef = useRef(false);
+  const [addColumnPending, setAddColumnPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showStats, setShowStats] = useState(false);
   const [colStats, setColStats] = useState<(CalcResult | null)[] | null>(null);
@@ -473,8 +481,13 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   }
 
   function addColumn(propagate: boolean) {
+    if (addPendingRef.current) return; // #6: ignore a repeat Enter/click while one is in flight
+    addPendingRef.current = true;
+    setAddColumnPending(true);
     setErr(null);
     void commitColumn(colName, formula, propagate).then((ok) => {
+      addPendingRef.current = false;
+      setAddColumnPending(false);
       if (!ok) return;
       setFormula("");
       setColName("");
@@ -581,6 +594,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     colName,
     setColName,
     addColumn,
+    addColumnPending,
     promptColumn,
     err,
     onEditCell: (row, col, value) => setCellValue(ds.id, row, col, value),

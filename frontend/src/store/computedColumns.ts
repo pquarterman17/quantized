@@ -92,10 +92,25 @@ function withRecomputedFormulasAnd(
   return { data: recomputed.data, formulaErrors: { ...(recomputed.formulaErrors ?? {}), ...forced } };
 }
 
-/** P2.5 fitted-value use: after `id`'s saved fit changed, re-resolve its
- *  columns' `fit()`/`fitval()` values (store/derivedColumnRun, lazy — so it
- *  lands a tick later; a no-op for a dataset without such columns). */
-export const refreshFitRefsLater = (id: string): void => void import("./derivedColumnRun").then((m) => m.refreshFitRefsFor(id));
+// Duplicated (not imported) so this EAGER module never pulls the lazy
+// derived-expression chunk across the boundary just to check a string —
+// review finding 8's eager guard, the same shape as lib/derivedColumn.ts's
+// documented `xUnitOf` duplication.
+const FIT_CALL_RE = /\bfit(val)?\(/;
+
+/** P2.5 fitted-value use: after `id`'s saved fit changed, OR an add/edit may
+ *  have introduced a fit()/fitval() reference with no snapshot yet (finding
+ *  4), re-resolve its columns' fitted values (store/derivedColumnRun, lazy —
+ *  so it lands a tick later). Finding 8: skip the import entirely when
+ *  nothing on `id` could need it, and report an import failure through the
+ *  app's own status line instead of an unhandled rejection. */
+export function refreshFitRefsLater(id: string, get: SliceGet): void {
+  const formulas = get().datasets.find((d) => d.id === id)?.formulas;
+  if (!formulas?.some((f) => f.derived?.fits?.length || FIT_CALL_RE.test(f.expr))) return;
+  void import("./fitRefsRun")
+    .then((m) => m.refreshFitRefsFor(id))
+    .catch((e) => get().setStatus(`could not refresh fitted-value columns: ${e instanceof Error ? e.message : "error"}`));
+}
 
 export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): ComputedColumnsSlice {
   return {
@@ -129,6 +144,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
         params: { name, expr },
       });
       get().touchDataset(id); // recalc graph (#1): data changed
+      refreshFitRefsLater(id, get); // finding 4: resolve a bare fit()/fitval() from add
       return true;
     },
     updateFormula: (id, index, patch) => {
@@ -163,16 +179,30 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
         }
       }
       get().recordHistory("edit column");
+      const renamed = name !== current.name;
       set((s) => ({
         datasets: s.datasets.map((d) => {
           if (d.id !== id || !d.formulas) return d;
           const base = baseColumns(d.data, d.formulas.length);
-          const formulas = d.formulas.map((f, i): ComputedColumn =>
+          let formulas = d.formulas.map((f, i): ComputedColumn =>
             // A metadata factor (P2.5) stays one while only its name/unit change.
             i === index
               ? { name, expr, ...(unit ? { unit } : {}), deps, ...(f.factor && !edited ? { factor: f.factor } : {}), ...(derived ? { derived } : {}) }
               : f,
           );
+          // Finding 9: renaming EITHER end of a σ pair used to permanently
+          // break the by-name link (lib/formula.ts's stale-σ check) since
+          // nothing followed the rename into the OTHER column's
+          // derived.sigma/sigmaOf.name. Carry it across the rename here —
+          // the link only actually breaks on a real edit/removal, which
+          // already clears `derived` for an expr edit, above).
+          if (renamed) {
+            formulas = formulas.map((f) => {
+              if (f.derived?.sigmaOf?.name === current.name) return { ...f, derived: { ...f.derived, sigmaOf: { ...f.derived.sigmaOf, name } } };
+              if (f.derived?.sigma === current.name) return { ...f, derived: { ...f.derived, sigma: name } };
+              return f;
+            });
+          }
           return { ...d, formulas, ...withRecomputedFormulas(base, formulas) };
         }),
       }));
@@ -181,6 +211,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
         params: { name, expr },
       });
       get().touchDataset(id); // recalc graph (#1): data changed
+      refreshFitRefsLater(id, get); // finding 4: resolve a newly introduced fit()/fitval()
       return true;
     },
     // Computed columns are the LAST formulas.length value columns, in order,
@@ -266,7 +297,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
         };
       });
       get().touchDataset(id); // recalc graph (#1): data changed
-      refreshFitRefsLater(id); // P2.5: removing the fit's own column drops the fit (remapFitSpec)
+      refreshFitRefsLater(id, get); // P2.5: removing the fit's own column drops the fit (remapFitSpec)
     },
   };
 }

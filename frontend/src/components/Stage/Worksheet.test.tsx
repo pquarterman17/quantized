@@ -379,6 +379,19 @@ describe("Worksheet computed columns (recompute)", () => {
     expect(useApp.getState().datasets[0].formulas).toBeUndefined();
   });
 
+  it("two rapid Enters add only ONE column, not two (review finding 6)", async () => {
+    render(<Worksheet />);
+    const input = screen.getByPlaceholderText("2*A + sqrt(B)");
+    fireEvent.change(input, { target: { value: "A + B" } });
+    fireEvent.change(screen.getByPlaceholderText("column name"), { target: { value: "S" } });
+    // Both fire before the first (async) add settles — the in-flight guard,
+    // not React re-rendering between them, must be what stops the second.
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(useApp.getState().datasets[0].formulas?.length ?? 0).toBeGreaterThan(0));
+    expect(useApp.getState().datasets[0].formulas).toHaveLength(1);
+  });
+
   it("adds a live computed column to the active dataset (in place, no new dataset)", async () => {
     render(<Worksheet />);
     await addColumn("A + B", "S");
