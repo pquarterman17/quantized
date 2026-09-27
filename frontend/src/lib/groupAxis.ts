@@ -80,6 +80,11 @@ export interface AxisSlot {
    *  the connect-means line must still lift here (it would otherwise bridge
    *  the missing level), on screen and in the export. */
   gapBefore?: boolean;
+  /** The slot's identity within its plan (`AxisPlan.keys`): stable across
+   *  hide-empty filtering and shared by every facet panel, unlike the slot's
+   *  POSITION or its label (two codes may resolve to the same text). The
+   *  summary table / plot selection link keys on it (P2.6 box 4). */
+  key?: string;
 }
 
 export interface GroupAxis {
@@ -104,6 +109,9 @@ export interface AxisPlan {
   absent: boolean[];
   /** Slot key (`"a"` or `"a|b"`) -> slot index. */
   index: Map<string, number>;
+  /** Per slot, its identity: the `index` key, or `ch:<col>` for a
+   *  per-channel fallback slot. */
+  keys: string[];
   hiddenAbsent: number;
 }
 
@@ -157,6 +165,7 @@ export function planGroupAxis(
       labels: fallbackCols.map((c) => columnDisplayName(levels, c)),
       absent: fallbackCols.map(() => false),
       index: new Map(),
+      keys: fallbackCols.map((c) => `ch:${c}`),
       hiddenAbsent: 0,
     };
   }
@@ -174,6 +183,7 @@ export function planGroupAxis(
       labels: keep.map(aName),
       absent: keep.map((code) => !seen.has(code)),
       index: new Map(keep.map((code, i) => [String(code), i])),
+      keys: keep.map(String),
       hiddenAbsent: aCodes.length - keep.length,
     };
   }
@@ -205,32 +215,41 @@ export function planGroupAxis(
     labels: keep.map(([a, b]) => `${aName(a)}${NESTED_LABEL_SEP}${name(group2Col, bText.get(b) ?? String(b))}`),
     absent: keep.map(([a, b]) => byA.get(a)?.has(b) !== true),
     index: new Map(keep.map(([a, b], i) => [key2(a, b), i])),
+    keys: keep.map(([a, b]) => key2(a, b)),
     hiddenAbsent: cross - keep.length,
   };
 }
 
-function countRow(slot: AxisSlot, dropped: boolean, usable: boolean): void {
+function countRow(slot: AxisSlot, dropped: boolean, usable: boolean, r: number, into?: number[]): void {
   if (dropped) slot.excluded++;
-  else if (usable) slot.n++;
-  else slot.nonFinite++;
+  else if (usable) {
+    slot.n++;
+    into?.push(r);
+  } else slot.nonFinite++;
 }
 
-/** Count `rows` onto a planned axis: one walk over the rows. */
+/** Count `rows` onto a planned axis: one walk over the rows. With `collect`,
+ *  each slot's USABLE row indices (into `rows`, ascending) are pushed onto
+ *  `collect[slot]` by the same walk that counts `n` — so a consumer that
+ *  needs the rows behind a box (the summary table's selection link) can never
+ *  disagree with the axis about which rows those are. */
 export function countGroupAxis(
   plan: AxisPlan,
   rows: DataStruct,
   dropped: ReadonlySet<number>,
   valueCols: readonly number[],
+  collect?: number[][],
 ): GroupAxis {
   const slots: AxisSlot[] = plan.labels.map((label, i) => ({
-    label, group: null, n: 0, nonFinite: 0, excluded: 0, absent: plan.absent[i],
+    label, group: null, n: 0, nonFinite: 0, excluded: 0, absent: plan.absent[i], key: plan.keys[i],
   }));
+  if (collect) plan.labels.forEach((_, i) => { collect[i] = []; });
   const nRows = rows.time.length;
   const { groupCol, group2Col } = plan;
   if (groupCol == null) {
     plan.fallbackCols.forEach((c, i) => {
       const col = columnOf(rows, c);
-      for (let r = 0; r < nRows; r++) countRow(slots[i], dropped.has(r), Number.isFinite(col[r]));
+      for (let r = 0; r < nRows; r++) countRow(slots[i], dropped.has(r), Number.isFinite(col[r]), r, collect?.[i]);
     });
     return { slots, hiddenAbsent: 0, unassigned: 0 };
   }
@@ -241,7 +260,7 @@ export function countGroupAxis(
   for (let r = 0; r < nRows; r++) {
     const i = plan.index.get(bRows ? key2(aRows[r], bRows[r]) : String(aRows[r]));
     if (i === undefined) unassigned++;
-    else countRow(slots[i], dropped.has(r), vals.some((col) => Number.isFinite(col[r])));
+    else countRow(slots[i], dropped.has(r), vals.some((col) => Number.isFinite(col[r])), r, collect?.[i]);
   }
   return { slots, hiddenAbsent: plan.hiddenAbsent, unassigned };
 }

@@ -3961,7 +3961,89 @@ violin, bar, strip, or summary plots.
   preview whose "send to stage" lands on the stage, which shows them; the
   XY colour split (`calc.plotting.build_grouped_series` / `plotGroupSplit`)
   has no category axis to leave a slot on, so it is unaffected by design.
-- [ ] Summary table links to selected groups.
+- [x] Summary table links to selected groups. (2026-09-27)
+  **Survey (before):** the Statistics stage (box / violin / strip / bar) had
+  no per-group table at all and no pointer interaction on its canvas — the
+  only group tables were Tabulate (a separate workshop, not linked to any
+  plot) and Fit Y by X's oneway `DataTable` (static). The app already had ONE
+  linked row selection (`store/rowState.selection`, original row indices,
+  live only for the active dataset) that the Worksheet, the XY brush,
+  Distribution's bin brush and "Exclude / Keep only selected" share; the stat
+  stage neither wrote nor showed it. Also found: the box/strip points'
+  `rowIndex` is an index into the PRUNED analysis view, not the original row
+  its comment claims, so any link must map through the kept rows.
+  **Now ("linked", concretely):** a "summary" toggle on the categorical
+  stage docks `StatSummaryTable` — one row per plotted category slot, empty
+  levels included (`n=0`, italic), with n, mean / SD / median / min / max of
+  the value column (one mean per channel for a multi-channel bar), rows
+  dropped at that level, and "sel" (k/n or "all"). Picking a row writes that
+  group's rows into the app's row selection — exactly the rows behind its box
+  (kept, usable value), collected by the SAME walk that counts the axis's `n`
+  (`groupAxis.countGroupAxis(..., collect)`), so an excluded / filtered /
+  non-finite row is never selected and table n = plot n by construction.
+  Click replaces, Ctrl/Cmd toggles, Shift takes the run; keyboard is a grid
+  with one roving tab stop (arrows / Home / End, Enter / Space pick, Shift+
+  Arrow extends, Escape clears, Delete consumed so it cannot delete the
+  dataset). A click on a category slot of the PLOT does the same (in a facet
+  panel, only the group's rows in that panel). The other way: any selection
+  (Worksheet, XY brush, bin brush, the table) shows per row, a fully-selected
+  group is `aria-selected`, and the canvas bands the slot (solid = all,
+  dashed = some) and rings the selected points (mapped original -> analysis
+  view). Rows are keyed by the axis slot's new `key` (code / `a|b` / `ch:<col>`,
+  `AxisPlan.keys`), never by position or label, so hide-empty, per-panel
+  visible slots and duplicate level texts cannot cross-wire. An EMPTY level is
+  selectable and selects nothing; its selected state is a local pick dropped
+  the moment anything else changes the selection (render-phase, sabotage-
+  tested: no resurrection when the selection later returns to null). A
+  dataset switch shows no stale selection (the store's selection is scoped to
+  its dataset; picks are keyed to the axis). A stale or closed-up draw (not
+  threaded onto the axis) gets no marks and no plot clicks.
+  **Where:** `components/Stage/statGroupSummary.ts` (pure),
+  `useStatGroupSelection.ts`, `StatSummaryTable.tsx`, `StatStagePlot.tsx`,
+  `statRenderSelection.ts`; the hook's public types moved to
+  `useStatStageTypes.ts`, graduating `useStatStage.ts` off its 546-line pin
+  (now 444). All in the lazy StatStage chunk: eager bundle unchanged at
+  841.9 kB. Tests: `statGroupSummary.test.ts`, `useStatGroupSelection.test.ts`,
+  `statRenderSelection.test.ts`, `StatSummaryTable.test.tsx` (real stage +
+  store).
+  **Not done:** the table's visibility is session-local (not persisted on
+  `PlotView` / `.dwk`); no column sorting; no drag-brush on the stat canvas
+  (click-a-slot only); the table is not exported with the figure; Fit Y by X's
+  oneway table and Tabulate are not linked; background (unfocused) stat
+  windows show no marks (the selection is the active dataset's); no e2e spec.
+  **Review round 2 (independent review, 10 findings, all fixed with a
+  sabotage-verified test each):** an empty slot's local pick is now scoped to
+  the PANEL it was picked in (`GroupPick`/`PickedKeys` carry it) — the same
+  key an empty level shares with every facet panel no longer paints as
+  selected in a panel that never made that pick, and `markOf`/`applyGesture`/
+  `selectionMarks` all take that panel as an explicit context. The Shift-range
+  anchor resets whenever the summary's identity changes (dataset / groupCol /
+  mode), not just when the local pick drops, so a stale key from a previous
+  axis can never seed a range on a new one. The table's Escape now claims the
+  key only when it has a live selection or pick of its own (`hasSelection`) —
+  otherwise it declines, matching the escapeStack invariant, and can never
+  clear a selection belonging to another dataset. Performance: the original-
+  row -> analysis-position map (`analysisPositions`) is memoized by dataset
+  identity instead of rebuilt on every selection change, and each facet
+  panel's rows are split ONCE from `flatRows` in `levelAxes`
+  (`LevelAxes.panelRows`) rather than re-derived from the facet column per
+  gesture/render. The table's mean/SD/median/min/max pass only runs while the
+  table is open (`buildGroupSummary`'s `computeStats`); the plot link needs
+  only rows/keys. Facet panels now ring their OWN selected points too, mapped
+  through a slice-local point index (`LevelAxes.panelPointIndex`, built from
+  `FacetSlice.rows`) rather than the flat analysis-view position — dead
+  ahead of production wiring, since faceted box/strip draws don't carry
+  points yet (JMP_GAP J5 residual), but the selection link is now correct for
+  when they do. A plot click now only selects on the slot's own drawn content
+  (box/violin/bar body, whisker/error-bar span, or its tick label) —
+  `statRenderSelection.clickedSlotAt` — not on blank background between or
+  around the glyphs. Cleanup: the per-channel fallback reads its slot's
+  column from `LevelAxes.fallbackCols` (index-aligned) instead of re-parsing
+  the `ch:<col>` key text, and `useStatGroupSelection` now calls the exported
+  `isPickLive` instead of re-implementing it inline. `lib/facet.FacetSlice`
+  gained a `rows` field (the analysis-view row behind each slice-local
+  position) to make the point-index mapping possible; no existing consumer
+  reads less than it did. Eager bundle unchanged: 841.9 kB.
 - [ ] ANOVA/post-hoc, PCA, regression/correlation, GLM, survival, and ROC stay
   lower priority until demand is shown. **Demand shown 2026-07-28**: the
   owner directed a full JMP replacement; the JMP-side platform work now
