@@ -142,11 +142,14 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       }
       const name = patch.name?.trim() || current.name;
       const expr = patch.expr ?? current.expr;
-      // P2.5: an auto-derived unit and the `derived` record (σ link, fitted
-      // values, notes) describe the OLD formula, so an expr edit drops them —
-      // which also unlinks a σ derived from this column (lib/formula.ts).
+      // P2.5: an auto-derived unit, the σ link and the notes describe the OLD
+      // formula, so an expr edit drops them (unlinking a σ derived from this
+      // column, lib/formula.ts) and keeps only the fitted-value snapshots. A
+      // typed unit is no longer an automatic one.
       const edited = expr !== current.expr;
-      const unit = patch.unit ?? (edited && current.derived?.unitAuto ? undefined : current.unit);
+      const d0 = current.derived;
+      const unit = patch.unit ?? (edited && d0?.unitAuto ? undefined : current.unit);
+      const derived = edited ? d0?.fits && { fits: d0.fits } : patch.unit && d0 ? { ...d0, unitAuto: undefined } : d0;
       const deps = referencedColumns(expr).letters;
       const target = formulaLetter(ds.data.labels.length, ds.formulas!.length, index);
       for (const dep of deps) {
@@ -167,7 +170,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
           const formulas = d.formulas.map((f, i): ComputedColumn =>
             // A metadata factor (P2.5) stays one while only its name/unit change.
             i === index
-              ? { name, expr, ...(unit ? { unit } : {}), deps, ...(f.factor && !edited ? { factor: f.factor } : {}), ...(f.derived && !edited ? { derived: f.derived } : {}) }
+              ? { name, expr, ...(unit ? { unit } : {}), deps, ...(f.factor && !edited ? { factor: f.factor } : {}), ...(derived ? { derived } : {}) }
               : f,
           );
           return { ...d, formulas, ...withRecomputedFormulas(base, formulas) };

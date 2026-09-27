@@ -3683,7 +3683,10 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
     TEXT). `* / ** sqrt pow` combine exponents ("emu/g", "V·A", "m/s²",
     "J/(mol·K)", "K^0.5"). `+ - % comparisons if/where min max hypot atan2`
     need one unit: a mismatch REFUSES the column, naming both units ("no
-    conversion is done; convert one first"). Transcendental functions return
+    conversion is done; convert one first"). Submitting the SAME formula again
+    right away adds it anyway, with no unit and the contradiction kept as a
+    note. A recorded step keeps that choice (`allowUnitMismatch`); a replay
+    onto contradicting units without it is refused. Transcendental functions return
     a dimensionless result and warn about a dimensioned argument; trig flags
     `deg`. The derived unit is stored as the column's unit (`derived.unitAuto`).
     - **Stated limits, each one said, never guessed:** no conversion and no
@@ -3704,7 +3707,10 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
     non-converged fit (`exitFlag <= 0`) or an unknown parameter refuses at
     authoring. Afterwards the snapshot is re-resolved whenever the fit changes
     (`setFitSpec`, the recalc graph's refit, removing the fit's column, split
-    children), scheduled lazily so it lands a tick later. The column follows
+    children, a duplicated dataset), scheduled lazily so it lands a tick
+    later. A refresh that changes a value marks what is downstream of the
+    dataset stale (not its own fit), and it keeps other columns' more specific
+    errors. An expr edit keeps the column's fit snapshots. The column follows
     the new fit, or becomes an explicit error saying why ("the saved fit is
     "Lorentzian""); it never keeps showing an old fit's numbers.
     - `fitval()` evaluates the backend's closed-form models, transcribed into
@@ -3758,14 +3764,28 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
     `setFitSpec`, .dwk round-trip + malformed input, recipe replay onto a
     dataset with other units and bindings), and `Worksheet.test.tsx` (unit
     derived and a refusal shown, "± errors" end to end with undo).
-  - **Eager bundle:** 843.0 → 845.9 kB (866,242 B against the 866,358 B
+  - **Self-review round:** code-review high, 10 findings, 9 fixed:
+    - constant sub-expressions (`A + sqrt(2)`) were wrongly refused;
+    - the `.member` form broke under the column-removal rewrite;
+    - a duplicated dataset kept the source's fitted values;
+    - a refresh did not mark downstream stale, and masked a more specific
+      removal error;
+    - an expr edit lost the fit snapshots, and a typed unit could still be
+      dropped as "automatic";
+    - a unit mismatch had no override;
+    - a no-op refresh still recomputed and wrote the store.
+
+    One was a false positive: re-import clears `fitSpec` only together with
+    the formulas. The error-preservation and printer guards were
+    sabotage-verified.
+  - **Eager bundle:** 843.0 → 845.9 kB (866,183 B against the 866,358 B
     budget, npm ci-fresh, .vite wiped), pin unchanged. Eager: the grammar
     additions, the fit-reference evaluator, the σ-link check, the ƒx toggle.
     Lazy: the tree parser, unit algebra, symbolic differentiation, the model
     table, fit resolution/refresh and the commit (one dynamic import). Three
     measured cuts funded it: parse-error columns moved to the lazy path, fit
     re-resolution made lazy, and a two-sided σ link replaced an eager
-    letter-remap. Headroom left is ~0.1 kB.
+    letter-remap. Headroom left is 175 B.
   - **Not done:**
     - Fitted values come only from the dataset's OWN `fitSpec`. There are no
       cross-dataset references, and the durable peak table, reflectivity
@@ -3778,8 +3798,9 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
       (`lib/pipeline.validateExpression`) still probes without row context,
       so it flags `fit()` / aggregate formulas it cannot evaluate there.
     - Fit-reference refresh lands a tick after the fit changes (a lazy
-      import), not in the same state update.
-    - No per-column unit override on the ƒx bar (an operand unit is fixed in
+      import), not in the same state update. A fit whose OWN input is a
+      fit() column is not re-marked stale by it.
+    - No explicit unit field on the ƒx bar (an operand unit is fixed in
       the Inspector). The derived unit is a snapshot: it is dropped when the
       expr is edited, not re-derived when an operand's unit changes later.
     - No correlated (covariance) propagation and no Monte Carlo option in the

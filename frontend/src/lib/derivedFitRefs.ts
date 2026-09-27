@@ -23,14 +23,27 @@ export function resnapFitRef(s: FitRefSnapshot, spec: FitSpec | undefined): FitR
 
 /** Re-resolve every `fit()`/`fitval()` snapshot on a dataset's computed
  *  columns against its CURRENT saved fit and recompute them, so a column
- *  follows the new fit or errors with why it cannot. Same dataset back when
- *  it has none. */
+ *  follows the new fit or errors with why it cannot. Returns the SAME dataset
+ *  when no snapshot changed (no recompute, no store write). A column without
+ *  fitted values keeps its existing error message: this pass cannot change
+ *  it, and must not replace a more specific one (removeFormula's "references
+ *  removed column X") with the evaluator's generic text. */
 export function refreshFitRefs(d: Dataset): Dataset {
-  if (!d.formulas?.some((f) => f.derived?.fits?.length)) return d;
-  const formulas = d.formulas.map((f) =>
-    f.derived?.fits?.length ? { ...f, derived: { ...f.derived, fits: f.derived.fits.map((r) => resnapFitRef(r, d.fitSpec)) } } : f,
-  );
+  const old = d.formulas ?? [];
+  let changed = false;
+  const formulas = old.map((f) => {
+    if (!f.derived?.fits?.length) return f;
+    const fits = f.derived.fits.map((r) => resnapFitRef(r, d.fitSpec));
+    if (JSON.stringify(fits) === JSON.stringify(f.derived.fits)) return f;
+    changed = true;
+    return { ...f, derived: { ...f.derived, fits } };
+  });
+  if (!changed) return d;
   const base = baseColumns(d.data, formulas.length);
   const errors = formulaErrors(base, formulas);
+  for (const f of formulas) {
+    const before = d.formulaErrors?.[f.name];
+    if (!f.derived?.fits?.length && before && errors[f.name]) errors[f.name] = before;
+  }
   return { ...d, formulas, data: applyFormulas(base, formulas), formulaErrors: Object.keys(errors).length ? errors : undefined };
 }

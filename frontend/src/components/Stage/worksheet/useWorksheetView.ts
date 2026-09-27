@@ -113,9 +113,7 @@ export interface WorksheetView {
   setFormula: (v: string) => void;
   colName: string;
   setColName: (v: string) => void;
-  propagate: boolean;
-  setPropagate: (v: boolean) => void;
-  addColumn: () => void;
+  addColumn: (errors: boolean) => void;
   promptColumn: () => Promise<void>;
   err: string | null;
 
@@ -216,7 +214,6 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   const [formula, setFormula] = useState("");
   const [colName, setColName] = useState("");
-  const [propagate, setPropagate] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showStats, setShowStats] = useState(false);
   const [colStats, setColStats] = useState<(CalcResult | null)[] | null>(null);
@@ -475,7 +472,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     await commitColumn(String(p.name), expr, p.errors === true);
   }
 
-  function addColumn() {
+  function addColumn(propagate: boolean) {
     setErr(null);
     void commitColumn(colName, formula, propagate).then((ok) => {
       if (!ok) return;
@@ -583,8 +580,6 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     setFormula,
     colName,
     setColName,
-    propagate,
-    setPropagate,
     addColumn,
     promptColumn,
     err,

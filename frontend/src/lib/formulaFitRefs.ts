@@ -54,9 +54,8 @@ export function tryParseFitRef(
     return {
       fn: (c, ex) => {
         const s = snap(ex, model);
-        if (!s.expr) throw new Error(`fitval "${model}": no model formula`);
         let m = compiledModels.get(s);
-        if (!m) compiledModels.set(s, (m = compile(s.expr)));
+        if (!m) compiledModels.set(s, (m = compile(s.expr ?? ""))); // none: "unexpected end"
         const mc: Record<string, number> = { x: arg(c, ex) };
         s.params.forEach((v, i) => (mc[`p${i}`] = v));
         return m(mc);

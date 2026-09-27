@@ -27,12 +27,17 @@ import { resnapFitRef } from "./derivedFitRefs";
 import { channelIndexOf } from "./formulaRename";
 import type { DerivedSpec, FitRefSnapshot } from "./formulaTypes";
 import type { ComputedColumn, Dataset } from "./types";
+import { uniqueTemplateName } from "./uniqueName";
 
 export interface DeriveRequest {
   name: string;
   expr: string;
   /** Also derive the propagated-uncertainty column. */
   propagate: boolean;
+  /** Add the column even though its operands' units contradict each other —
+   *  with NO unit and the contradiction kept as a note. The user asked twice
+   *  (store/derivedColumnRun.ts), or a recorded step said so. */
+  allowUnitMismatch?: boolean;
 }
 
 export type DeriveOutcome =
@@ -45,8 +50,10 @@ export type DeriveOutcome =
       unit: string;
       dimensionless: boolean;
       notes: string[];
+      /** The units contradicted each other and the column was added anyway. */
+      unitMismatchAllowed: boolean;
     }
-  | { ok: false; error: string };
+  | { ok: false; error: string; unitMismatch?: true };
 
 export const SIGMA_METHOD = "first-order, uncorrelated" as const;
 
@@ -79,13 +86,6 @@ function positioned(expr: string, e: unknown): string {
 function walk(n: Node, visit: (n: Node) => void): void {
   visit(n);
   for (const c of children(n)) walk(c, visit);
-}
-
-function uniqueName(want: string, taken: readonly string[]): string {
-  const lower = new Set(taken.map((t) => t.toLowerCase()));
-  let name = want;
-  for (let i = 2; lower.has(name.toLowerCase()); i++) name = `${want} ${i}`;
-  return name;
 }
 
 /** Every column `letter` is computed from, itself included (formula deps). */
@@ -167,9 +167,9 @@ export function deriveColumns(ds: Dataset, req: DeriveRequest): DeriveOutcome {
       return typeof y === "number" ? (units[y] ?? "") : "";
     },
   });
-  if (unitResult.error) return { ok: false, error: unitResult.error };
+  if (unitResult.error && !req.allowUnitMismatch) return { ok: false, error: unitResult.error, unitMismatch: true };
   const { unit } = unitResult;
-  const notes = [...unitResult.warnings];
+  const notes = [...unitResult.warnings, ...(unitResult.error ? [`${unitResult.error}; added WITHOUT a unit, as asked`] : [])];
   const spec = (extra: DerivedSpec, colNotes: string[]): DerivedSpec | undefined => {
     const out: DerivedSpec = { ...(unit ? { unitAuto: true } : {}), ...(colNotes.length ? { notes: colNotes } : {}), ...extra };
     return Object.keys(out).length ? out : undefined;
@@ -183,6 +183,7 @@ export function deriveColumns(ds: Dataset, req: DeriveRequest): DeriveOutcome {
     unit,
     dimensionless: unitResult.dimensionless,
     notes: [...notes, ...extra],
+    unitMismatchAllowed: !!unitResult.error,
   });
   if (!req.propagate) return done([value]);
 
@@ -222,7 +223,7 @@ export function deriveColumns(ds: Dataset, req: DeriveRequest): DeriveOutcome {
     }
   }
   const sigmaCol = withSpec(
-    { name: uniqueName(`σ(${name})`, [...labels, name]), expr: sigma.expr, ...(unit ? { unit } : {}) },
+    { name: uniqueTemplateName(`σ(${name})`, new Set([...labels, name])), expr: sigma.expr, ...(unit ? { unit } : {}) },
     spec(
       {
         sigmaOf: { name, method: SIGMA_METHOD },

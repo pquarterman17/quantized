@@ -48,7 +48,7 @@ export function regenerateStep(step: PipelineStep): PipelineStep {
       return {
         ...step,
         label: `Add column ${String(p.name ?? "")}`,
-        code: `qz.addColumn(${lit(p.name)}, ${lit(p.expr)}${p.propagate ? ", { errors: true }" : ""})`,
+        code: `qz.addColumn(${lit(p.name)}, ${lit(p.expr)})`,
       };
     case "correction":
       return {

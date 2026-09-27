@@ -4,6 +4,8 @@
 // plot" cluster. All state lives in the parent (Worksheet); this is a thin
 // props-driven view so the worksheet stays under the size budget.
 
+import { useState } from "react";
+
 import type { BlockOpsApi } from "./useWorksheetBlockOps";
 
 // JMP_GAP J11 formula language v2 quick reference — the hover tooltip on the
@@ -24,10 +26,9 @@ export interface WorksheetToolbarProps {
   colName: string;
   setFormula: (v: string) => void;
   setColName: (v: string) => void;
-  /** P2.5: also derive + bind a propagated-uncertainty column. */
-  propagate: boolean;
-  setPropagate: (v: boolean) => void;
-  onAddColumn: () => void;
+  /** P2.5: `errors` = also derive + bind a propagated-uncertainty column
+   *  (the "± errors" toggle, local to this bar). */
+  onAddColumn: (errors: boolean) => void;
   showStats: boolean;
   onToggleStats: () => void;
   onCopy: () => void;
@@ -61,8 +62,6 @@ export default function WorksheetToolbar({
   colName,
   setFormula,
   setColName,
-  propagate,
-  setPropagate,
   onAddColumn,
   showStats,
   onToggleStats,
@@ -82,6 +81,7 @@ export default function WorksheetToolbar({
   onClearColSelection,
   plotLinked,
 }: WorksheetToolbarProps) {
+  const [propagate, setPropagate] = useState(false);
   return (
     <div
       style={{
@@ -102,7 +102,7 @@ export default function WorksheetToolbar({
         title={FORMULA_HELP}
         value={formula}
         onChange={(e) => setFormula(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && formula.trim() && onAddColumn()}
+        onKeyDown={(e) => e.key === "Enter" && formula.trim() && onAddColumn(propagate)}
         style={{ width: 200 }}
       />
       <input
@@ -116,11 +116,11 @@ export default function WorksheetToolbar({
         className={propagate ? "qz-btn qz-active" : "qz-btn"}
         aria-pressed={propagate}
         onClick={() => setPropagate(!propagate)}
-        title="Also add a bound σ column (first-order, uncorrelated)"
+        title="Also add a bound σ column (first-order)"
       >
         ± errors
       </button>
-      <button className="qz-btn" disabled={!formula.trim()} onClick={onAddColumn}>
+      <button className="qz-btn" disabled={!formula.trim()} onClick={() => onAddColumn(propagate)}>
         Add column
       </button>
       <button

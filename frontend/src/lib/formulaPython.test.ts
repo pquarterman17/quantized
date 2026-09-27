@@ -51,7 +51,7 @@ describe("tokenizer positions", () => {
     expect(tokenize("A **  np.sqrt(B)").map((t) => [t.v, t.p])).toEqual([
       ["A", 0],
       ["**", 2],
-      ["sqrt", 6],
+      ["sqrt", 9], // the name after the np. prefix
       ["(", 13],
       ["B", 14],
       [")", 15],
@@ -90,12 +90,14 @@ describe("fit() / fitval() evaluation (snapshots only)", () => {
     expect(() => ev('fitval("Gaussian", 1)', {}, rowCtx([missing]))).toThrow("this dataset has no saved fit");
     expect(() => ev('fit("Gaussian", "B")', {}, rowCtx([gauss]))).toThrow('has no parameter "B"');
     expect(() => ev('fit("Gaussian", "p9")', {}, rowCtx([gauss]))).toThrow('has no parameter "p9"');
-    expect(() => ev('fitval("Linear", 1)', {}, rowCtx([{ model: "Linear", paramNames: [], params: [1, 2] }]))).toThrow("no model formula");
+    expect(() => ev('fitval("Linear", 1)', {}, rowCtx([{ model: "Linear", paramNames: [], params: [1, 2] }]))).toThrow("unexpected end"); // a snapshot without a model formula (only a hand-edited file)
   });
   it("parses only the documented shapes", () => {
     expect(() => compileFormula("fit(Gaussian, A)")).toThrow(/text in quotes/);
     expect(() => compileFormula('fit("Gaussian")')).toThrow(/expected "\."/);
-    expect(() => compileFormula('fit("Gaussian").')).toThrow(/bad number/); // "." then no name
+    expect(() => compileFormula('fit("Gaussian").')).toThrow(/parameter name/);
+    expect(() => compileFormula('fit("Gaussian").(A)')).toThrow(/parameter name/);
+    expect(ev('fit("Gaussian") . A', {}, rowCtx([gauss]))).toBe(2); // spaces allowed around the member dot
     expect(() => compileFormula('"text" + 1')).toThrow(/unexpected token/);
     expect(referencedColumns('fitval("Gaussian", B) * A').letters).toEqual(["B", "A"]);
   });
@@ -115,5 +117,11 @@ describe("column removal rewrites keep text arguments quoted", () => {
     expect(forcedErrors).toEqual({});
     expect(formulas[0].expr).toBe('fitval ( "Gauss \'x\'" , B ) + fit ( "M" , "p0" )');
     expect(compileFormula(formulas[0].expr)).toBeTypeOf("function");
+  });
+  it("keeps the .member form working after the rewrite spaces it out (review finding)", () => {
+    const { formulas, forcedErrors } = remapSurvivingFormulas([{ name: "g", expr: 'fit("Gaussian").A + C' }], 1);
+    expect(forcedErrors).toEqual({});
+    expect(formulas[0].expr).toBe('fit ( "Gaussian" ) . A + B');
+    expect(compileFormula(formulas[0].expr)({ B: 1 }, rowCtx([gauss]))).toBe(3);
   });
 });

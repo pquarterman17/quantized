@@ -1074,6 +1074,7 @@ export const useApp = create<AppState>((set, get) => ({
         gadgetCursorResult: null,
       };
     });
+    refreshFitRefsLater(get().activeId ?? ""); // P2.5: the clone has no saved fit of its own
   },
   // Reorder the library by swapping a dataset with its neighbor (dir -1 = up,
   // +1 = down). No-op at the ends or for an unknown id. Order drives the list and

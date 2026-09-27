@@ -157,6 +157,6 @@ describe("propagated σ", () => {
     const d = ds();
     d.data = { ...d.data, labels: [...d.data.labels.slice(0, 4), "σ(P)"] };
     const r = deriveColumns(d, { name: "P", expr: "A * 2", propagate: true });
-    expect(r.ok && r.columns[1].name).toBe("σ(P) 2");
+    expect(r.ok && r.columns[1].name).toBe("σ(P) (2)");
   });
 });

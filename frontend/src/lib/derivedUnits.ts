@@ -239,6 +239,9 @@ export function deriveUnit(root: Node, env: UnitEnv): UnitResult {
   }
 
   function u(n: Node): U {
+    // A subtree that reads no column (sqrt(2), 10**3, exp(1)) is a plain
+    // number, exactly like a literal: it adopts the other side's unit in a sum.
+    if (isConstant(n)) return { t: "lit" };
     switch (n.k) {
       case "num":
       case "const":

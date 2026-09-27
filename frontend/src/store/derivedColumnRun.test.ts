@@ -10,7 +10,7 @@ import { makeStep } from "../lib/pipeline";
 import type { Dataset, FitSpec } from "../lib/types";
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
 import { executeSteps } from "../components/workshops/pipeline/executeSteps";
-import { addDerivedColumn } from "./derivedColumnRun";
+import { addDerivedColumn, refreshFitRefsFor } from "./derivedColumnRun";
 import { useApp } from "./useApp";
 
 vi.mock("../lib/api", async (orig) => ({
@@ -149,6 +149,78 @@ describe("fitted values follow the dataset's saved fit", () => {
 
     useApp.getState().setFitSpec("d", null);
     await vi.waitFor(() => expect(state().formulaErrors?.res).toMatch(/this dataset has no saved fit/));
+  });
+});
+
+describe("review round: edits, copies, refresh side effects", () => {
+  const lin: FitSpec = { model: "Linear", params: [2, 1], exitFlag: 1 };
+
+  it("an expr edit keeps the fitted-value snapshot, so fit() still resolves", async () => {
+    useApp.setState({ datasets: [ds("d", { fitSpec: lin })] });
+    await addDerivedColumn("d", { name: "k", expr: 'fit("Linear", "m") * 2', propagate: false });
+    useApp.getState().updateFormula("d", 0, { expr: 'fit("Linear", "m") * 3' });
+    expect(state().formulaErrors).toBeUndefined();
+    expect(col(state(), 5)).toEqual([6, 6, 6]);
+  });
+  it("a typed unit stops being automatic, so a later expr edit keeps it", async () => {
+    await addDerivedColumn("d", { name: "P", expr: "A * A", propagate: false });
+    useApp.getState().updateFormula("d", 0, { unit: "W" });
+    expect(state().formulas![0].derived?.unitAuto).toBeUndefined();
+    useApp.getState().updateFormula("d", 0, { expr: "A * A * 2" });
+    expect(state().formulas![0].unit).toBe("W");
+  });
+  it("a duplicated dataset has no saved fit, so its fit() column says so", async () => {
+    useApp.setState({ datasets: [ds("d", { fitSpec: lin })] });
+    await addDerivedColumn("d", { name: "k", expr: 'fit("Linear", "m") * A', propagate: false });
+    await useApp.getState().duplicateDataset("d");
+    const cloneId = useApp.getState().activeId!;
+    await vi.waitFor(() => expect(useApp.getState().datasets.find((x) => x.id === cloneId)?.formulaErrors?.k).toMatch(/no saved fit/));
+    expect(state().formulaErrors).toBeUndefined(); // the source is untouched
+  });
+  it("a refresh that changes nothing writes nothing; one that does keeps other columns' specific errors", async () => {
+    useApp.setState({ datasets: [ds("d", { fitSpec: lin })] });
+    await addDerivedColumn("d", { name: "k", expr: 'fit("Linear", "m") * A', propagate: false });
+    const before = useApp.getState().datasets;
+    refreshFitRefsFor("d");
+    expect(useApp.getState().datasets).toBe(before);
+    useApp.getState().addFormula("d", "J", "A * 1"); // column G
+    useApp.getState().addFormula("d", "B2", "G * 2");
+    useApp.getState().removeFormula("d", 1); // B2 now "references removed column G"
+    expect(state().formulaErrors?.B2).toMatch(/references removed column G/);
+    useApp.getState().setFitSpec("d", { ...lin, params: [5, 0] });
+    await vi.waitFor(() => expect(state().formulas![0].derived?.fits?.[0].params).toEqual([5, 0]));
+    expect(col(state(), 5)).toEqual([10, 20, 30]); // k was recomputed…
+    expect(state().formulaErrors?.B2).toMatch(/references removed column G/); // …and B2 kept its reason
+  });
+  it("a refresh that changes values marks what is downstream stale — not the dataset's own fit", async () => {
+    useApp.setState({ recalcMode: "manual", staleDatasets: [], staleFits: [], datasets: [ds("d", { fitSpec: lin }), ds("w", { derivedFrom: { datasetId: "d", pipeline: "copy" } })] });
+    await addDerivedColumn("d", { name: "k", expr: 'fit("Linear", "m") * A', propagate: false });
+    useApp.setState({ staleDatasets: [], staleFits: [] });
+    useApp.getState().setFitSpec("d", { ...lin, params: [5, 0] });
+    await vi.waitFor(() => expect(useApp.getState().staleDatasets).toEqual(["w"]));
+    expect(useApp.getState().staleFits).not.toContain("d");
+  });
+});
+
+describe("unit contradictions: refused once, added on a second ask", () => {
+  it("the same formula submitted again is added with no unit, and the step replays that choice", async () => {
+    const first = await addDerivedColumn("d", { name: "S", expr: "A + C", propagate: false });
+    expect(first).toMatchObject({ ok: false, error: /units differ .* \(or press Add again to add it without a unit\)/ });
+    const second = await addDerivedColumn("d", { name: "S", expr: "A + C", propagate: false });
+    expect(second).toMatchObject({ ok: true, message: expect.stringMatching(/added WITHOUT a unit, as asked/) });
+    expect(state().formulas![0].unit).toBeUndefined();
+    const step = useApp.getState().macroSteps.at(-1)!;
+    expect(step.params).toMatchObject({ allowUnitMismatch: true });
+    useApp.setState({ datasets: [...useApp.getState().datasets, ds("o")] });
+    const res = await executeSteps([makeStep("expression", step.label, step.code, step.params)], "o");
+    expect(Object.values(res.log)[0]).toEqual({ status: "ok" });
+    const refused = await executeSteps([makeStep("expression", step.label, step.code, { ...step.params, allowUnitMismatch: false })], "o");
+    expect(Object.values(refused.log)[0]).toMatchObject({ status: "failed" });
+  });
+  it("a different formula in between resets the second-ask", async () => {
+    await addDerivedColumn("d", { name: "S", expr: "A + C", propagate: false });
+    await addDerivedColumn("d", { name: "T", expr: "A * 2", propagate: false });
+    expect(await addDerivedColumn("d", { name: "S", expr: "A + C", propagate: false })).toMatchObject({ ok: false });
   });
 });
 

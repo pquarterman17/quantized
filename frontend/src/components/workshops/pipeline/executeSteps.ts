@@ -113,7 +113,12 @@ export async function executeSteps(
             // P2.5: re-derive on THIS target — its units, its fit, its bound
             // errors — exactly as the ƒx bar did when it was recorded.
             const { addDerivedColumn } = await import("../../../store/derivedColumnRun");
-            const r = await addDerivedColumn(target, { name, expr, propagate: step.params.propagate === true });
+            const r = await addDerivedColumn(target, {
+              name,
+              expr,
+              propagate: step.params.propagate === true,
+              allowUnitMismatch: step.params.allowUnitMismatch === true,
+            });
             if (!r.ok) throw new Error(r.error);
             log[step.id] = { status: "ok" };
             break;

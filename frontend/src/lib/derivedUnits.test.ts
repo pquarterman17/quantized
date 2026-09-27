@@ -57,6 +57,11 @@ describe("sums, comparisons and branches need one unit", () => {
     expect(unitOf("where(A > 0, A, B)", { A: "K", B: "s" }).error).toMatch(/branches/);
     expect(unitOf("max(A, B)", { A: "K", B: "s" }).error).toMatch(/units differ/);
   });
+  it("a constant sub-expression is a plain number too (review finding)", () => {
+    for (const e of ["A + sqrt(2)", "A + 10**3", "A + 2^3", "A + exp(1)", "A * sign(-1) + pi"]) {
+      expect(unitOf(e, { A: "V" }), e).toEqual({ unit: "V", dimensionless: false, warnings: [] });
+    }
+  });
   it("accepts equal units, and a literal takes the column's unit", () => {
     expect(unitOf("A - B", { A: "Oe", B: "Oe" }).unit).toBe("Oe");
     expect(unitOf("A + 273.15", { A: "K" }).unit).toBe("K");
