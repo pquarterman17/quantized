@@ -357,6 +357,7 @@ export default function PlotLegend({
         <ContextMenu
           x={menu.x}
           y={menu.y}
+          help={{ label: "plot series", query: "plot" }}
           onClose={() => setMenu(null)}
           items={((): ContextMenuItem[] => {
             const isHidden = hiddenChannels.includes(menu.channel);

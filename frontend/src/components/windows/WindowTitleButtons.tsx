@@ -85,7 +85,7 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
     <>
       <span ref={anchorRef} style={{ display: "none" }} />
       {titleMenu && (
-        <ContextMenu x={titleMenu.x} y={titleMenu.y} items={titleMenuItems} onClose={() => setTitleMenu(null)} />
+        <ContextMenu x={titleMenu.x} y={titleMenu.y} items={titleMenuItems} help={{ label: "plot windows", query: "window" }} onClose={() => setTitleMenu(null)} />
       )}
       {/* Item 14's rebind gesture is drag-only for a snapshot/panel window
           too (both kinds silently ignore a drop — "frozen means frozen" /
@@ -122,6 +122,7 @@ export default function WindowTitleButtons({ win }: { win: PlotWindow }) {
         <ContextMenu
           x={rebindMenu.x}
           y={rebindMenu.y}
+          help={{ label: "window data", query: "window" }}
           onClose={() => setRebindMenu(null)}
           items={datasets.map((d) => ({
             label: d.name,

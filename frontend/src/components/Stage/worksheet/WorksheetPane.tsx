@@ -242,6 +242,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         <ContextMenu
           x={menu.x}
           y={menu.y}
+          help={{ label: "worksheets", query: "worksheet" }}
           onClose={() => setMenu(null)}
           items={
             menu.kind === "col"

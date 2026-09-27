@@ -1,9 +1,35 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
+import { useHelp } from "../../store/help";
 
 describe("ContextMenu", () => {
+  beforeEach(() => {
+    useHelp.setState({ open: false, section: "search", query: "", whatIsThis: false });
+  });
+
+  it("adds one keyboard-reachable contextual Help footer and seeds Help search", async () => {
+    const user = userEvent.setup();
+    const onClose = vi.fn();
+    render(
+      <ContextMenu
+        x={0}
+        y={0}
+        items={[{ label: "Rename", run: vi.fn() }]}
+        help={{ label: "datasets", query: "dataset" }}
+        onClose={onClose}
+      />,
+    );
+
+    const help = screen.getByRole("menuitem", { name: "? Help with datasets…" });
+    expect(screen.getByRole("separator")).toBeInTheDocument();
+    await user.click(help);
+
+    expect(onClose).toHaveBeenCalledOnce();
+    expect(useHelp.getState()).toMatchObject({ open: true, section: "search", query: "dataset" });
+  });
   const items: ContextMenuItem[] = [
     { label: "Rename", run: vi.fn() },
     { separator: true },

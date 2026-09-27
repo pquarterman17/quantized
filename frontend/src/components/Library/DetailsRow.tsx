@@ -230,7 +230,7 @@ export default function DetailsRow({
       onKeyDown={onKeyDown}
       {...dnd.rowProps}
     >
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} help={{ label: "Library items", query: "library" }} onClose={() => setMenu(null)} />}
       <td className="qzk-details-name" style={{ paddingLeft: indent } as CSSProperties}>
         {dnd.handleProps ? (
           <span

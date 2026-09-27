@@ -5,8 +5,7 @@
 // the menubar popup tokens (`.qzk-menu-pop` / `.qzk-menu-item`). This is the
 // parity surface for the MATLAB GUI's six uicontextmenus.
 //
-// Item variants (all backward-compatible — a flat `{label,run}`/`{separator}`
-// list still renders exactly as before):
+// Item variants (all backward-compatible):
 //   { separator }            — a divider rule
 //   { header }               — a non-interactive section label
 //   { swatches }             — a compact horizontal colour-swatch row
@@ -22,7 +21,7 @@
 // scale flyouts opened "way off" and closed before the pointer could reach
 // them. Row-anchoring is immune; a layout effect only FLIPS the side / shifts
 // vertically when the flyout would overflow the viewport.
-// Stacking: root 2100 / flyout 2101, above InteractionHints (1200) and .qz-tip (2000, platform.css); see ContextMenu.test.tsx's stacking test.
+// Stacking is pinned by ContextMenu.test.tsx.
 // GUI_INTERACTION #8: keyboard-complete — `role="menu"`/`menuitem`/
 // `menuitemcheckbox` + `aria-disabled`; ArrowUp/Down cycle (wrapping),
 // Home/End jump, a letter type-ahead-jumps; ArrowRight opens a submenu +
@@ -39,12 +38,11 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { edgeFocusableIndex, nextFocusableIndex, typeaheadIndex } from "../../lib/menuKeyboardNav";
+import { appendContextHelp, type ContextMenuHelp } from "./contextMenuHelp";
 
-/** One swatch in a `{ swatches }` colour row. */
 export interface Swatch {
   key: string;
   title: string;
-  /** CSS colour for the swatch fill (e.g. "var(--series-3)", "#000000"). */
   css: string;
   active?: boolean;
   run: () => void;
@@ -62,6 +60,7 @@ interface Props {
   y: number;
   items: ContextMenuItem[];
   onClose: () => void;
+  help?: ContextMenuHelp;
 }
 
 /** A positioned, self-clamping popup box. Used for the root menu and each
@@ -345,7 +344,7 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef 
   );
 }
 
-export default function ContextMenu({ x, y, items, onClose }: Props) {
+export default function ContextMenu({ x, y, items, onClose, help }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   // Captured once, synchronously, before the menu steals focus — GUI_INTERACTION
@@ -390,9 +389,10 @@ export default function ContextMenu({ x, y, items, onClose }: Props) {
     };
   }, [onClose, prevFocus]);
 
+  const visibleItems = appendContextHelp(items, help);
   return createPortal(
     <PopupBox x={x} y={y} boxRef={rootRef}>
-      <MenuList items={items} onClose={onClose} menuRef={menuRef} />
+      <MenuList items={visibleItems} onClose={onClose} menuRef={menuRef} />
     </PopupBox>,
     document.body,
   );
