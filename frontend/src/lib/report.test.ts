@@ -9,6 +9,7 @@ import {
   type ReportEntry,
   type ReportSheet,
 } from "./report";
+import { encodePersistedCells } from "./nonFiniteCells";
 
 const SHEET: ReportSheet = {
   title: "Curve fit",
@@ -103,6 +104,112 @@ describe("sanitizeReports", () => {
     };
     const out = sanitizeReports([entry({ report: withSpec })], new Set());
     expect(out[0].report).toBe(withSpec);
+  });
+
+  it("decodes non-finite cells inside a persisted report figure spec", () => {
+    const report = entry({
+      report: {
+        title: "Figure",
+        sections: [{
+          title: "Figures",
+          blocks: [{
+            type: "figure", name: "f",
+            spec: {
+              dataset: {
+                time: [0, Number.NaN], values: [[Infinity, -Infinity, -0]],
+                labels: ["y"], units: [""], metadata: {},
+              },
+            },
+          }],
+        }],
+      },
+    });
+    const wire = JSON.parse(JSON.stringify([report], encodePersistedCells)) as unknown[];
+    const out = sanitizeReports(wire, new Set(["ds-1"]));
+    const block = out[0].report.sections[0].blocks[0];
+    if (block.type !== "figure") throw new Error("expected figure block");
+    const dataset = block.spec?.dataset as { time: number[]; values: number[][] };
+    expect(dataset.time[1]).toBeNaN();
+    expect(dataset.values[0][0]).toBe(Infinity);
+    expect(dataset.values[0][1]).toBe(-Infinity);
+    expect(Object.is(dataset.values[0][2], -0)).toBe(true);
+  });
+
+  // Finding #5 (P3.6 review round 2): the old guard decoded `time`/`values`
+  // only when the WHOLE dataset (including labels/units/metadata) was
+  // well-formed, so a bad label left "NaN"/"Infinity"/… sentinel STRINGS
+  // sitting in the plotted numbers with no warning at all.
+  it("decodes time/values even when labels/units/metadata are malformed, and warns naming the report and figure", () => {
+    const warnings: string[] = [];
+    const report = entry({
+      id: "rep-bad",
+      name: "Odd figure",
+      report: {
+        title: "Figure",
+        sections: [{
+          title: "Figures",
+          blocks: [{
+            type: "figure", name: "f1",
+            spec: {
+              dataset: {
+                // Encoded exactly like a real .dwk would (sentinel strings for
+                // the non-finite cells), but `labels` is malformed (a number,
+                // not a string) — the part that used to block ANY decoding.
+                time: [0, "NaN"], values: [[1, "-Infinity"]],
+                labels: [1], units: [""], metadata: {},
+              },
+            },
+          }],
+        }],
+      },
+    });
+    const out = sanitizeReports([report], new Set(["ds-1"]), warnings);
+    const block = out[0].report.sections[0].blocks[0];
+    if (block.type !== "figure") throw new Error("expected figure block");
+    const dataset = block.spec?.dataset as { time: number[]; values: number[][] };
+    // time/values decoded despite the malformed labels field.
+    expect(dataset.time[1]).toBeNaN();
+    expect(dataset.values[0][1]).toBe(-Infinity);
+    expect(warnings).toEqual(['report "Odd figure": figure "f1" has a malformed embedded dataset']);
+  });
+
+  it("leaves an undecodable cell in time/values untouched (never partially decoded), with no warning when nothing else decoded", () => {
+    // `null`/an unrecognized string is the SAME ambiguous case
+    // `lib/nonFiniteCells.ts` has always refused to guess at (ANY report
+    // figure's `spec.dataset` is opaque data, not necessarily ours) — so
+    // when NOTHING in the dataset was a real sentinel needing a fix, this
+    // stays silent exactly as before this finding, matching
+    // `sanitizeReports`'s other "round-trips a spec-carrying figure block
+    // unchanged" pin (`lib/workspace.test.ts`) whose fixture also carries a
+    // `null` cell.
+    const warnings: string[] = [];
+    const report = entry({
+      id: "rep-bad2",
+      name: "Broken cells",
+      report: {
+        title: "Figure",
+        sections: [{
+          title: "Figures",
+          blocks: [{
+            type: "figure", name: "f2",
+            spec: {
+              // Finding #10: a REAL sentinel ("NaN") precedes the
+              // undecodable cell in the SAME row, so a decode that mutates
+              // as it walks (rather than discarding the whole row on
+              // failure) would leak a partially-decoded array here.
+              dataset: { time: [0, 1], values: [["NaN", "not-a-sentinel"]], labels: ["y"], units: [""], metadata: {} },
+            },
+          }],
+        }],
+      },
+    });
+    const out = sanitizeReports([report], new Set(), warnings);
+    const block = out[0].report.sections[0].blocks[0];
+    if (block.type !== "figure") throw new Error("expected figure block");
+    // The whole row is left EXACTLY as it was — the leading "NaN" is never
+    // decoded on its own once a later cell in the same row fails.
+    expect((block.spec?.dataset as { values: unknown[][] }).values).toEqual([["NaN", "not-a-sentinel"]]);
+    expect(warnings).toEqual([]);
   });
 
   it("a report dropped as unreadable gets ONE 'dropped' warning, never a strip warning", () => {

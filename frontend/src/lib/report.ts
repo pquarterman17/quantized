@@ -4,6 +4,8 @@
 // store holds ReportEntry wrappers, and the viewer renders it. Pure (no React /
 // store imports) so the sanitizers unit-test standalone, mirroring lib/dataset.
 
+import { decodeWireRow } from "./nonFiniteCells";
+
 /** One fitted-parameter row (rendered as value ± error [unit]). */
 export interface ReportParam {
   name: string;
@@ -163,6 +165,89 @@ function stripBadFigureSpecs(report: unknown, warn: (block: string) => void): un
   return changed ? { ...report, sections } : report;
 }
 
+/** Decode BUG-017's persisted numeric-cell sentinels inside an embedded
+ *  figure spec's dataset. `workspaceSerialize.ts`'s `encodePersistedCells`
+ *  replacer walks the WHOLE `.dwk` document on save, so a report figure
+ *  block's detached `spec.dataset` gets the same NaN/±Infinity/-0 -> string
+ *  sentinel treatment as any other DataStruct; this is the matching decode
+ *  on reopen. `spec` stays opaque otherwise — only its `dataset` sub-object
+ *  is inspected, and only when it looks like one at all (has a `dataset`
+ *  key); a spec with none is left alone, no warning.
+ *
+ *  Finding #5 (P3.6 review round 2): `time` and `values` are decoded
+ *  INDEPENDENTLY of `labels`/`units`/`metadata` now — the old code gated the
+ *  whole decode on the WHOLE dataset's shape being valid, so a bad label or
+ *  unit left "NaN"/"Infinity"/… sentinel STRINGS sitting in `time`/`values`
+ *  with no warning at all (silently wrong plotted numbers). A malformed cell
+ *  in `time`/`values` itself is still left as-is either way (never partially
+ *  decoded — see `decodeWireRow`): a cell this module has never been able to
+ *  interpret (a `null`, or anything else outside the WireCell contract) is
+ *  exactly the ambiguous case `lib/nonFiniteCells.ts`'s own header says this
+ *  layer never guesses at, so it is treated the SAME as before this fix —
+ *  opaque, untouched, no warning — UNLESS at least one cell WAS a real
+ *  sentinel string that got decoded (`changed` below): only THAT combination
+ *  (something genuinely non-finite got fixed, but the dataset around it is
+ *  still not a fully well-formed `DataStruct`) is the bug this finding
+ *  targets, and only then does `warn` (naming this block) fire — nothing
+ *  changes for a spec whose `dataset` field never carried a sentinel in the
+ *  first place, matching this function's long-standing "opaque unless
+ *  confidently ours" contract. Returns `block` itself when nothing needed
+ *  decoding, preserving the identity contract `stripBadFigureSpecs`/
+ *  `sanitizeReports` rely on. */
+function decodeFigureSpec(block: ReportFigureBlock, warn: (block: string) => void): ReportFigureBlock {
+  const spec = block.spec;
+  const raw = spec?.dataset as Record<string, unknown> | undefined;
+  if (!spec || !raw) return block;
+
+  const time = decodeWireRow(raw.time);
+  let valuesOk = Array.isArray(raw.values);
+  let valuesChanged = false;
+  const values = valuesOk
+    ? (raw.values as unknown[]).map((row) => {
+        const r = decodeWireRow(row);
+        if (!r.ok) valuesOk = false;
+        if (r.changed) valuesChanged = true;
+        return r.value;
+      })
+    : raw.values;
+
+  const changed = time.changed || valuesChanged;
+  const ok =
+    time.ok && valuesOk &&
+    Array.isArray(raw.labels) && raw.labels.every((v) => typeof v === "string") &&
+    Array.isArray(raw.units) && raw.units.every((v) => typeof v === "string") &&
+    typeof raw.metadata === "object" && raw.metadata !== null;
+  if (changed && !ok) warn(block.name);
+
+  if (!changed) return block;
+  return { ...block, spec: { ...spec, dataset: { ...raw, time: time.value, values } } };
+}
+
+/** Apply {@link decodeFigureSpec} to every figure block in `report`, naming
+ *  `reportName` and the figure in `warnings` (the loader's migrationWarnings
+ *  — the same sink `sanitizeReports` already uses for `stripBadFigureSpecs`)
+ *  whenever one comes back malformed. Returns `report` itself when nothing
+ *  changed, preserving the identity contract `stripBadFigureSpecs` already
+ *  relies on (a report with no work to do round-trips through
+ *  `sanitizeReports` as the SAME object). */
+function decodeReportFigureSpecs(report: ReportSheet, reportName: string, warnings?: string[]): ReportSheet {
+  let changed = false;
+  const sections = report.sections.map((section) => {
+    let sectionChanged = false;
+    const blocks = section.blocks.map((block) => {
+      if (block.type !== "figure" || block.spec === undefined) return block;
+      const decoded = decodeFigureSpec(block, (name) =>
+        warnings?.push(`report "${reportName}": figure "${name}" has a malformed embedded dataset`),
+      );
+      if (decoded !== block) sectionChanged = true;
+      return decoded;
+    });
+    if (sectionChanged) changed = true;
+    return sectionChanged ? { ...section, blocks } : section;
+  });
+  return changed ? { ...report, sections } : report;
+}
+
 /** Validate persisted report entries from a .dwk (drops malformed ones; clamps
  *  the dataset back-reference to ids that survived load, like Origin figures).
  *  A malformed figure `spec` is stripped, not fatal — see
@@ -194,7 +279,7 @@ export function sanitizeReports(
     }
     const datasetId =
       typeof o.datasetId === "string" && dsIds.has(o.datasetId) ? o.datasetId : null;
-    out.push({ id: o.id, name: o.name, datasetId, report });
+    out.push({ id: o.id, name: o.name, datasetId, report: decodeReportFigureSpecs(report, o.name, warnings) });
   }
   return out;
 }
