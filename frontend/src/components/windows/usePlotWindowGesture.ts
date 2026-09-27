@@ -15,6 +15,8 @@ export const MIN_PLOT_WINDOW_W = 240;
 export const MIN_PLOT_WINDOW_H = 160;
 const TITLE_MIN_VISIBLE = 80;
 const TITLEBAR_H = 28;
+// shell.css: 6px resize padding plus the frame's 1px border above the title.
+const TITLE_TOP_INSET = 7;
 
 export interface WindowBounds { width: number; height: number }
 
@@ -23,7 +25,7 @@ export function clampPlotWindowPosition(x: number, y: number, bounds: WindowBoun
   if (!bounds) return { x: Math.max(0, x), y: Math.max(0, y) };
   return {
     x: Math.min(Math.max(0, x), Math.max(0, bounds.width - TITLE_MIN_VISIBLE)),
-    y: Math.min(Math.max(0, y), Math.max(0, bounds.height - TITLEBAR_H)),
+    y: Math.min(Math.max(0, y), Math.max(0, bounds.height - TITLEBAR_H - TITLE_TOP_INSET)),
   };
 }
 

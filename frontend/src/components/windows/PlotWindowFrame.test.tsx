@@ -140,7 +140,7 @@ describe("PlotWindowFrame", () => {
     fireEvent.pointerUp(window);
     const g = geomOf("w1");
     expect(g.x).toBe(100);
-    expect(g.y).toBe(92);
+    expect(g.y).toBe(85);
     expect(g.x + g.w).toBe(580);
     expect(g.y + g.h).toBe(440);
   });
@@ -173,7 +173,7 @@ describe("PlotWindowFrame", () => {
     fireEvent.pointerDown(container.querySelector(".qzk-plotwin-titlebar")!, { button: 0 });
     rerender(<PlotWindowFrame {...props} bounds={{ width: 150, height: 100 }}><div /></PlotWindowFrame>);
     fireEvent.pointerUp(window);
-    expect(geomOf("w1")).toMatchObject({ x: 70, y: 72 });
+    expect(geomOf("w1")).toMatchObject({ x: 70, y: 65 });
     expect(container.querySelector<HTMLElement>(".qzk-plotwin")!.style.left).toBe("70px");
   });
 

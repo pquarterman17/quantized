@@ -110,7 +110,7 @@ export default function PlotWindowFrame({
 
   const maximized = win.winState === "maximized";
   const style: React.CSSProperties = maximized
-    ? { position: "absolute", inset: 0 }
+    ? { position: "absolute", inset: 0, padding: 0 }
     : {
         position: "absolute",
         left: win.geometry.x,
