@@ -111,9 +111,15 @@ def _is_submodule(package: str, name: str) -> bool:
     load: a regular or namespace subpackage (a directory), a source, a
     sourceless ``.pyc``, or an extension module (``name.so``, ABI-tagged
     ``name.cpython-*.so``, ``name.pyd`` -- this platform's suffixes)."""
+    wanted = {name, *(f"{name}{suf}" for suf in _SUFFIXES)}
     for d in _package_dirs(package):
-        if (d / name).is_dir() or any((d / f"{name}{suf}").is_file() for suf in _SUFFIXES):
-            return True
+        # Compare listed names exactly: on a case-insensitive filesystem
+        # (Windows, default macOS) ``Path("docx/Document.py").is_file()`` is
+        # True for ``docx/document.py``, which would misread the attribute
+        # import ``from docx import Document`` as a submodule import.
+        for entry in d.iterdir():
+            if entry.name in wanted and (entry.is_dir() if entry.name == name else entry.is_file()):
+                return True
     return False
 
 
@@ -336,7 +342,8 @@ def test_module_exists_resolves_real_layouts(tmp_path: Path) -> None:
     (pkg / "nspkg").mkdir(parents=True)  # namespace subpackage: no __init__
     (pkg / "__init__.py").write_text("", encoding="utf-8")
     (pkg / "sourceless.pyc").write_bytes(b"")
-    (pkg / "plain.so").write_bytes(b"")
+    # The platform's untagged extension suffix (".so" on POSIX, ".pyd" on Windows).
+    (pkg / f"plain{min(EXTENSION_SUFFIXES, key=len)}").write_bytes(b"")
     (pkg / f"tagged{EXTENSION_SUFFIXES[0]}").write_bytes(b"")
     sys.path.insert(0, str(tmp_path))
     try:
