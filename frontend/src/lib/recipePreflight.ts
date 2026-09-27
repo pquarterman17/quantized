@@ -25,14 +25,19 @@
 // but an apply keeps only the derived dataset, not a fit result).
 //
 // THE WORKING COPY (`conformData`) is the target's rows with the bound columns
-// at the recorded positions, then every target column not bound, in order.
-// Units and names stay the TARGET's own (a rebinding is recorded in the
-// output's provenance, never written over the user's column); a blank column
-// takes the expected name and unit. Channel-keyed tables (`cat_levels`,
+// at the recorded positions, then every target column not bound, in order —
+// UNLESS the recipe's own in-place steps append a column of their own
+// (`addFormula`, `promote`), in which case those extra target columns are
+// dropped instead (finding #1): an appended column always lands after EVERY
+// base column present at that instant, so keeping them would push the
+// appended column past the index a later recorded step addresses. Units and
+// names stay the TARGET's own (a rebinding is recorded in the output's
+// provenance, never written over the user's column); a blank column takes
+// the expected name and unit. Channel-keyed tables (`cat_levels`,
 // `level_order`) move with their columns; Origin's per-column name list is
 // dropped when the order changed, since it is positional.
 
-import { derivesOutput, hasMetadata, inputSegment, editsInPlace, type ExpectedColumn, type RecipeExpectations } from "./recipeExpect";
+import { addedColumnNames, derivesOutput, hasMetadata, inputSegment, editsInPlace, type ExpectedColumn, type RecipeExpectations } from "./recipeExpect";
 import type { ErrorBinding } from "./errorRoles";
 import type { PipelineStep } from "./pipeline";
 import type { ColumnFilter, DataStruct, Dataset } from "./types";
@@ -207,14 +212,32 @@ export interface Conformed {
   indexOf: (old: number) => number | null;
 }
 
-/** The working copy's data (module doc). */
-export function conformData(src: DataStruct, columns: readonly ExpectedColumn[], bindings: readonly Binding[]): Conformed {
+/** The working copy's data (module doc). `steps`: the recipe's own steps
+ *  (finding #1) — when its in-place steps (`addFormula`, `promote`) append
+ *  their own columns, each one lands after EVERY base column the dataset
+ *  holds at that instant, not at some remembered index. Keeping the target's
+ *  own extra columns in the working copy would inflate that base-column
+ *  count and shift the appended column past the index a LATER recorded step
+ *  addresses (e.g. a stack recorded as `channels: [1, 2]` where 2 is the
+ *  recipe's own appended column) — so those extra columns are dropped
+ *  instead: nothing recorded reads them, and they never survive into a
+ *  recipe that derives a new dataset anyway. Omitted (or when the recipe
+ *  appends nothing), the target's extra columns still follow the recorded
+ *  layout unchanged, as before. */
+export function conformData(
+  src: DataStruct,
+  columns: readonly ExpectedColumn[],
+  bindings: readonly Binding[],
+  steps: readonly PipelineStep[] = [],
+): Conformed {
   const order: (number | null)[] = columns.map((_, i) => {
     const b = bound(bindings[i], src);
     return typeof b === "number" ? b : null;
   });
   const used = new Set(order);
-  for (let j = 0; j < src.labels.length; j++) if (!used.has(j)) order.push(j);
+  if (addedColumnNames(steps).length === 0) {
+    for (let j = 0; j < src.labels.length; j++) if (!used.has(j)) order.push(j);
+  }
   const first = new Map<number, number>();
   order.forEach((j, i) => j !== null && !first.has(j) && first.set(j, i));
   const identity = order.length === src.labels.length && order.every((j, i) => j === i);

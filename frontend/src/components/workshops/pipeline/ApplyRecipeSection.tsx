@@ -66,7 +66,18 @@ function PickPreflight({
   );
 }
 
-export default function ApplyRecipeSection({ recipe, onClose }: { recipe: AnalysisTemplate; onClose: () => void }) {
+export default function ApplyRecipeSection({
+  recipe,
+  onClose,
+  disabled = false,
+}: {
+  recipe: AnalysisTemplate;
+  onClose: () => void;
+  /** Finding #4: true while a file batch (or another apply) is running
+   *  elsewhere — the SAME store-wide flag both set — so this section's own
+   *  Apply button stays disabled even if it was opened before that started. */
+  disabled?: boolean;
+}) {
   const a = useApplyRecipe(recipe);
   const columns = recipe.expects?.columns ?? [];
   const steps = runnableSteps(recipe.steps);
@@ -103,7 +114,7 @@ export default function ApplyRecipeSection({ recipe, onClose }: { recipe: Analys
         </div>
       )}
       <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center" }}>
-        <Button variant="primary" size="sm" disabled={a.running || a.ready === 0} onClick={() => void a.apply()}>
+        <Button variant="primary" size="sm" disabled={a.running || a.ready === 0 || disabled} onClick={() => void a.apply()}>
           {a.running ? "Applying…" : `Apply to ${a.ready} dataset${a.ready === 1 ? "" : "s"}`}
         </Button>
         {a.picks.length > a.ready && (

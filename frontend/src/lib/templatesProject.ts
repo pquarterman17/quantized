@@ -23,13 +23,19 @@
 // template. Adding to the library is not undoable (the library is not
 // project state), exactly like saving a template from the Pipeline workshop.
 //
-// UNREADABLE RECORDS (a newer build's version, a damaged entry) are reported
-// as a migration warning and NOT kept. Unlike fit models there is no carry:
-// the local template slot itself does not keep unreadable records either
-// (`saveTemplate` rewrites it from the readable ones), so a carry would only
-// move the loss one save later. Deferred, named in the plan.
+// UNREADABLE RECORDS (a newer build's version, a damaged entry) in the FILE
+// are reported as a migration warning and NOT kept — unlike fit models there
+// is no carry, so a project's own unreadable template is genuinely dropped;
+// deferred, named in the plan. An unreadable record already sitting in the
+// LOCAL slot is a different matter (finding #6): opening a project rewrites
+// the slot to merge its templates in (`appendTemplates`), and that rewrite
+// preserves any such record untouched, exactly like `lib/fitmodels.ts`'s
+// `appendCustomModels` — an open must never silently destroy what a save
+// from the Pipeline workshop (`saveTemplate`/`deleteTemplate`, which DO
+// rewrite from the readable list only — a deliberate user action, not a
+// side effect of opening someone else's file) would also lose.
 
-import { loadTemplates, parseTemplate, saveTemplates, type AnalysisTemplate } from "./template";
+import { appendTemplates, loadTemplates, parseTemplate, type AnalysisTemplate } from "./template";
 import { toast } from "../store/toasts";
 
 /** The file's `analysisTemplates` field → the templates this build reads.
@@ -60,13 +66,25 @@ export function projectTemplatesForSave(library = true): AnalysisTemplate[] {
   return library ? loadTemplates().map((t) => ({ ...t, steps: t.steps.map((s) => ({ ...s, id: "" })) })) : [];
 }
 
-/** A template's DEFINITION (rule 1): everything but its name and revision. */
-function definitionKey(t: AnalysisTemplate): string {
+/** A template's DEFINITION (rule 1): everything but its name and revision —
+ *  and, within `expects` (finding #9), everything but `example`: which
+ *  dataset the expectations happened to be read FROM is display-only
+ *  (lib/recipeExpect.ts's own doc), never part of what the recipe DOES.
+ *  Including it made two saves of the very same recipe, read off different
+ *  example datasets (or one re-saved after its example was renamed), compare
+ *  as different definitions — a same-named recipe every open then added
+ *  again as a spurious "(from project)" duplicate.
+ *
+ *  Exported for `useTemplates.ts`'s `importFile` (finding #8), which needs
+ *  the SAME "same recipe" test to decide whether an import over an existing
+ *  name may keep the local revision or must bump past both. */
+export function definitionKey(t: AnalysisTemplate): string {
+  const expects = t.expects ? { columns: t.expects.columns, metadata: t.expects.metadata } : null;
   return JSON.stringify([
     t.steps.map((s) => [s.kind, s.label, s.code, s.params, s.enabled]),
     t.outputs,
     t.description ?? "",
-    t.expects ?? null,
+    expects,
   ]);
 }
 
@@ -112,9 +130,12 @@ export function mergeProjectTemplates(incoming: readonly AnalysisTemplate[]): Te
     held.add(key);
   }
   if (!toWrite.length) return result;
-  saveTemplates([...local, ...toWrite]);
+  // `appendTemplates` (finding #6), not `saveTemplates([...local, ...toWrite])`
+  // — the latter rewrites the slot from `local` (loadTemplates()'s READABLE
+  // list), silently dropping any raw record this build can't parse (a newer
+  // build's version, a damaged entry) that was sitting in the slot.
+  const back = new Map(appendTemplates(toWrite).map((t) => [t.name, definitionKey(t)]));
   // Read back: a refused write must not be reported as added.
-  const back = new Map(loadTemplates().map((t) => [t.name, definitionKey(t)]));
   const lost = new Set(toWrite.filter((t) => back.get(t.name) !== definitionKey(t)).map((t) => t.name));
   if (!lost.size) return result;
   return {

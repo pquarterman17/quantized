@@ -115,4 +115,29 @@ describe("the merge rule", () => {
     expect(warnings).toEqual([expect.stringContaining("1 saved analysis template")]);
     expect(splitProjectTemplates(undefined, warnings)).toEqual([]);
   });
+
+  // Finding #6: opening a project merges its templates into the local
+  // library — that write must not silently drop a raw local record this
+  // build cannot parse (a newer build's version, say).
+  it("preserves a local record this build cannot parse when a project open rewrites the slot", () => {
+    localStorage.setItem("qz.analysisTemplates", JSON.stringify([{ version: 99, name: "future-template" }]));
+    const r = mergeProjectTemplates([recipe("Other")]);
+    expect(r).toEqual({ added: ["Other"], renamed: [], unstored: [] });
+    const raw = JSON.parse(localStorage.getItem("qz.analysisTemplates")!) as { name: string }[];
+    expect(raw.map((x) => x.name)).toEqual(expect.arrayContaining(["future-template", "Other"]));
+    // Unreadable, so it never shows up through the validated view either.
+    expect(loadTemplates().map((t) => t.name)).toEqual(["Other"]);
+  });
+
+  // Finding #9: `expects.example` names the dataset the expectations were
+  // READ FROM (display only) — it must not make two saves of the same
+  // recipe look like different definitions.
+  it("does not treat a different expects.example as a different definition", () => {
+    saveTemplate(recipe("Stack M"));
+    const sameDefinitionOtherExample: AnalysisTemplate = {
+      ...recipe("Stack M"),
+      expects: { ...recipe("Stack M").expects!, example: "some-other-dataset.dat" },
+    };
+    expect(mergeProjectTemplates([sameDefinitionOtherExample])).toEqual({ added: [], renamed: [], unstored: [] });
+  });
 });

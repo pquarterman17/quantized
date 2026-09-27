@@ -137,6 +137,21 @@ describe("conformData — the working copy", () => {
     expect(c.data.cat_levels).toEqual({ 3: ["lo", "hi"] });
   });
 
+  it("drops the target's extra columns when the recipe's own steps append a column (finding #1)", () => {
+    const expr = makeStep("expression", "Add M2", "", { name: "M2", expr: "B*2" });
+    const c = conformData(src, COLS, [1, 0], [expr, STACK]);
+    // Only the recorded [T, M] columns survive — "Extra" is dropped so a
+    // later step's recorded index (e.g. a stack of [1, 2]) still means what
+    // it meant when M2 was appended right after them.
+    expect(c.data.labels).toEqual(["Temp", "Moment"]);
+    expect(c.data.values).toEqual([[2, 1], [5, 4]]);
+  });
+
+  it("keeps the target's extra columns when nothing recorded appends a column", () => {
+    const c = conformData(src, COLS, [1, 0], [STACK]);
+    expect(c.data.labels).toEqual(["Temp", "Moment", "Extra"]);
+  });
+
   it("the identity keeps the layout (and the Origin name list)", () => {
     const c = conformData(src, [{ name: "Moment", unit: "emu", required: true }], [0]);
     expect(c.data.labels).toEqual(src.labels);

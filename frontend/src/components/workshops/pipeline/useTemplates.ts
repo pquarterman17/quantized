@@ -26,6 +26,7 @@ import {
   type BatchRow,
 } from "../../../lib/template";
 import { deriveExpectations } from "../../../lib/recipeExpect";
+import { definitionKey } from "../../../lib/templatesProject";
 import { recordUse } from "../../../lib/recipeIndex";
 import { toast } from "../../../store/toasts";
 import { nextDatasetId, useApp } from "../../../store/useApp";
@@ -134,8 +135,23 @@ export function useTemplates(): TemplatesState {
   const importFile = useCallback(async (file: File): Promise<string | null> => {
     try {
       const t = parseTemplate(await file.text());
-      setTemplates(saveTemplate(t));
-      toast(`template "${t.name}" imported`);
+      // Finding #8: importing over an existing name must never move its
+      // revision BACKWARDS or leave it repeating an already-used one — both
+      // of which a bare "upsert with the file's own revision" can do (an
+      // older export re-imported, or two machines re-saving the same recipe
+      // to different revisions before syncing). An IDENTICAL definition
+      // keeps the local revision (nothing to bump for); a DIFFERENT one
+      // bumps past whichever of the two was ahead, so the next re-save is
+      // unambiguously the newest.
+      const prior = loadTemplates().find((x) => x.name === t.name);
+      const revision = !prior
+        ? t.revision
+        : definitionKey(prior) === definitionKey(t)
+          ? prior.revision
+          : Math.max(prior.revision ?? 1, t.revision ?? 1) + 1;
+      const imported = revision !== undefined ? { ...t, revision } : t;
+      setTemplates(saveTemplate(imported));
+      toast(`template "${t.name}" imported${prior ? ` (revision ${imported.revision ?? 1})` : ""}`);
       return null;
     } catch (e) {
       return e instanceof Error ? e.message : "import failed";

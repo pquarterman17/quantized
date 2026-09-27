@@ -17,10 +17,16 @@
 //     columns were rebound, or when a step would edit the dataset in place —
 //     the source dataset is never edited;
 //   - the dataset itself otherwise (its first step derives a new dataset).
-// The dataset the run ends on is the OUTPUT. It gets `metadata.transform_recipe`:
-// the recipe's name and revision, the input, the column bindings, when. A run
-// with a failed step, or one that derived nothing, is ROLLED BACK — every
-// dataset it created is removed — and reported, never half-kept.
+// EVERY dataset the run actually derived (a split's children, not just the
+// one later steps continue on) gets `metadata.transform_recipe`: the recipe's
+// name and revision, the input, the column bindings, when. A run with a
+// failed step, or one that derived nothing — including a step that never ran
+// at all (disabled, or skipped because an earlier one was), which otherwise
+// reports an untouched working copy as a successful output (finding #5) — is
+// ROLLED BACK: exactly the datasets THIS run created (the working copy, plus
+// `executeSteps`'s own `created` list — finding #3), never a before/after
+// diff of the whole store, which would also delete a dataset an unrelated
+// concurrent import created while this run's steps awaited the backend.
 //
 // ONE UNDO STEP PER APPLY, however many datasets and steps. The steps run
 // through store actions that each record their own history entry and do not
@@ -50,7 +56,6 @@ import {
 } from "../../../lib/recipePreflight";
 import { excludedSet } from "../../../lib/rowstate";
 import { extractOutputs, type AnalysisTemplate, type BatchRow } from "../../../lib/template";
-import { HISTORY_DEPTH } from "../../../store/history";
 import { snapshotOf } from "../../../store/historySnapshot";
 import { removeDatasetsPatch } from "../../../store/removeDatasets";
 import { nextDatasetId, useApp } from "../../../store/useApp";
@@ -129,28 +134,33 @@ export interface RecipeProvenance {
 
 /** Run `fn` as ONE undo entry labelled `label` (module doc). Entries `fn`
  *  pushed are replaced by one holding the state from before it; nothing is
- *  pushed when `fn` pushed nothing. */
+ *  pushed when `fn` pushed nothing.
+ *
+ *  Finding #2: the pre-apply top entry is found by its `seq` (store/
+ *  history.ts), not by object identity. Identity breaks the moment anything
+ *  rewrites that entry IN PLACE (in the same array slot) rather than
+ *  replacing it — `endHistoryRun`/`undo` closing a coalescing run, or
+ *  `scrubDatasetsFromHistory` pruning a permanently-deleted dataset out of
+ *  every snapshot, both of which spread the original entry into a new
+ *  object. An identity lookup then reads that rewritten entry as GONE, and
+ *  used to fall through to the HISTORY_DEPTH-eviction branch even though
+ *  nothing was actually evicted — wiping the whole stack down to this one
+ *  apply's entry. `seq` survives every such spread untouched, so only a
+ *  REAL eviction (the entry truly fell off the back at HISTORY_DEPTH) still
+ *  takes that branch. */
 export async function asOneUndoStep<T>(label: string, fn: () => Promise<T>): Promise<T> {
   const h0 = useApp.getState().history;
-  const last = h0[h0.length - 1];
+  const lastSeq = h0[h0.length - 1]?.seq;
   const snapshot = snapshotOf(useApp.getState());
   try {
     return await fn();
   } finally {
-    useApp.setState((s) => {
-      // Entries only append (oldest evicted at HISTORY_DEPTH), so everything
-      // after the entry that was on top is the apply's. That entry is gone
-      // only when evicted — then every entry is newer — or when something
-      // rewrote the stack (a permanent delete scrubs every snapshot); then
-      // the entries are left as they are: several undo steps, nothing lost.
-      let k = last ? s.history.lastIndexOf(last) : -1;
-      if (last && k < 0) {
-        if (s.history.length < HISTORY_DEPTH) return {};
-        k = -1;
-      }
-      if (k === s.history.length - 1) return {};
-      return { history: [...s.history.slice(0, k + 1), { label, snapshot }].slice(-HISTORY_DEPTH), future: [] };
-    });
+    // `foldHistorySince` (store/history.ts) does the collapsing, keyed by
+    // `seq` rather than the pre-apply entry's OBJECT — see that field's own
+    // doc for why identity breaks the moment something rewrites the entry
+    // in place (`closeRun`, `scrubDatasetsFromHistory`) instead of evicting
+    // it (finding #2).
+    useApp.getState().foldHistorySince(lastSeq, label, snapshot);
   }
 }
 
@@ -192,11 +202,10 @@ async function applyOne(recipe: AnalysisTemplate, plan: ApplyPlan, ackUnits: boo
     return { ...base, status: "refused", note: pf.issues.filter((i) => i.blocking).map((i) => i.text).join("; ") };
   }
   const columns = recipe.expects?.columns ?? [];
-  const existing = new Set(s().datasets.map((d) => d.id));
   const active = s().activeId;
   let start = ds.id;
   if (needsWorkingCopy(recipe.steps, plan.bindings)) {
-    const c = conformData(ds.data, columns, plan.bindings);
+    const c = conformData(ds.data, columns, plan.bindings, recipe.steps);
     const filter = conformFilter(ds.filter, c);
     const errorRoles = conformErrorRoles(ds.errorRoles, c);
     // Same rows, so the row exclusions carry over as they are.
@@ -214,18 +223,43 @@ async function applyOne(recipe: AnalysisTemplate, plan: ApplyPlan, ackUnits: boo
   const run = await executeSteps(recipe.steps, start);
   const failed = Object.values(run.log).filter((l) => l.status === "failed");
   const output = run.target;
-  if (failed.length || output === ds.id) {
-    const created = s().datasets.filter((d) => !existing.has(d.id)).map((d) => d.id);
+  // Finding #3: exactly what THIS run created — the working copy (if one was
+  // made) plus every dataset `executeSteps` reports (`run.created`, every
+  // transform output, not just `output`) — never a before/after diff of the
+  // whole store, which would also sweep up a dataset a concurrent import
+  // created while this run's steps awaited the backend.
+  const createdByRun = [...(start !== ds.id ? [start] : []), ...run.created];
+  // Finding #5: "no step ran" is a failure too — a disabled step (or one
+  // `blockedBy` an earlier disabled/failed transform) can leave `target`
+  // sitting on the untouched working copy, which must not be reported as a
+  // successful, provenanced output. `output === ds.id` alone doesn't catch
+  // that: a working copy's id is never `ds.id`, so it stays wrongly outside
+  // this check. Guarded by `ranSomething` so a LEGITIMATE in-place-only
+  // recipe (e.g. one lone expression step, which never moves `target` off
+  // the working copy either) is still reported as the success it is.
+  const ranSomething = Object.values(run.log).some((l) => l.status === "ok" || l.status === "warn");
+  if (failed.length || output === ds.id || (output === start && !ranSomething)) {
     // The bare removal patch, not the `removeDatasets` action: its trash
     // capture would keep the rollback's leftovers, and its permanent form
     // rewrites every history entry, which `asOneUndoStep` tells apart by
-    // identity. The undo entry this apply makes predates them anyway.
-    if (created.length) useApp.setState((st) => removeDatasetsPatch(st, created));
+    // `seq` (finding #2), never identity — but this call predates either
+    // entry anyway.
+    if (createdByRun.length) useApp.setState((st) => removeDatasetsPatch(st, createdByRun));
     // An output made itself active; hand the view back to what it showed.
     if (active && active !== s().activeId && s().datasets.some((d) => d.id === active)) s().setActive(active);
     const why = failed.length ? failed.map((l) => l.note ?? "a step failed").join("; ") : "no step derived a dataset";
     return { ...base, status: "failed", note: `${why} — nothing kept` };
   }
+  // Finding #7: every output of the run's FINAL step gets provenance, not
+  // just `output` (`run.target`) — a split's children 2..N are just as much
+  // that step's result as its first child, which is all `run.lastOutputs`
+  // ever holds (finding #7's own fix in executeSteps.ts: replaced, never
+  // accumulated, so an earlier step's now-superseded intermediate output in
+  // a chain — e.g. a stack a later transpose consumed — is never stamped
+  // alongside the dataset that actually is the run's result). When nothing
+  // was derived (the in-place-only case, `output === start`), the working
+  // copy itself is the sole result.
+  const outputs = run.lastOutputs.length ? run.lastOutputs : [output];
   const prov: RecipeProvenance = {
     recipe: recipe.name,
     revision: recipe.revision ?? 1,
@@ -237,12 +271,15 @@ async function applyOne(recipe: AnalysisTemplate, plan: ApplyPlan, ackUnits: boo
     steps: runnableSteps(recipe.steps).length,
     appliedAt: new Date().toISOString(),
   };
+  const stamp = new Set(outputs);
   useApp.setState((st) => ({
     datasets: st.datasets.map((d) =>
-      d.id === output ? { ...d, data: { ...d.data, metadata: { ...d.data.metadata, transform_recipe: prov } } } : d,
+      stamp.has(d.id) ? { ...d, data: { ...d.data, metadata: { ...d.data.metadata, transform_recipe: prov } } } : d,
     ),
   }));
+  const outNames = outputs.map((id) => s().datasets.find((d) => d.id === id)?.name ?? id);
   const outName = s().datasets.find((d) => d.id === output)?.name ?? output;
   const warned = Object.values(run.log).filter((l) => l.status === "warn").length;
-  return { ...base, status: "ok", outputId: output, outputName: outName, note: `created “${outName}”${warned ? ` (${warned} step warning${warned === 1 ? "" : "s"})` : ""}` };
+  const created = outNames.map((n) => `“${n}”`).join(", ");
+  return { ...base, status: "ok", outputId: output, outputName: outName, note: `created ${created}${warned ? ` (${warned} step warning${warned === 1 ? "" : "s"})` : ""}` };
 }

@@ -123,8 +123,13 @@ export function inputColumnRefs(steps: readonly PipelineStep[]): { all: boolean;
   return { all: false, cols };
 }
 
-/** The names of the columns the recipe's own in-place steps append, in order. */
-function addedColumnNames(steps: readonly PipelineStep[]): string[] {
+/** The names of the columns the recipe's own in-place steps append, in order.
+ *  Exported for lib/recipePreflight.ts's `conformData` (finding #1): an
+ *  in-place step (`addFormula`, `promote`) always lands its new column after
+ *  EVERY base column the dataset holds at that moment, so a working copy that
+ *  also carries the target's own extra columns would shift that landing past
+ *  the index a later recorded step addresses. */
+export function addedColumnNames(steps: readonly PipelineStep[]): string[] {
   return inputSegment(steps).flatMap((s) =>
     s.kind === "expression" || (s.kind === "transform" && s.params.op === "promote") ? [String(s.params.name ?? "")] : [],
   );

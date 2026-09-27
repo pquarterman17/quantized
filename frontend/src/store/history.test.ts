@@ -72,7 +72,7 @@ describe("history slice mechanics", () => {
   it("recordHistory pushes a labeled snapshot and clears redo", () => {
     useApp.getState().recordHistory("seed");
     const snapshot = useApp.getState().history[0].snapshot;
-    useApp.setState({ history: [], future: [{ label: "stale", snapshot }] });
+    useApp.setState({ history: [], future: [{ label: "stale", snapshot, seq: 0 }] });
     useApp.getState().recordHistory("test action");
     const { history, future } = useApp.getState();
     expect(history).toHaveLength(1);

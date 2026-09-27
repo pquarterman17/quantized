@@ -30,6 +30,12 @@ export default function TemplatesSection() {
   const steps = useApp((s) => s.macroSteps);
   const datasets = useApp((s) => s.datasets);
   const activeId = useApp((s) => s.activeId);
+  // Finding #4: Apply and Batch both toggle this SAME store-wide flag while
+  // they run (`applyRecipe`/`runBatch`), so it doubles as the "is either one
+  // busy" signal — reading it here, rather than only `t.batch` (batch's own
+  // local progress, blind to an apply in flight), is what actually makes
+  // them mutually exclusive in both directions.
+  const pipelineRunning = useApp((s) => s.pipelineRunning);
   // `undefined` = follow the recording's input; "" = no example (save without
   // an expected input); an id = that dataset.
   const [exampleChoice, setExampleChoice] = useState<string | undefined>(undefined);
@@ -127,10 +133,10 @@ export default function TemplatesSection() {
           <Button size="sm" disabled={!picked} onClick={() => t.load(picked)}>
             Load
           </Button>
-          <Button size="sm" disabled={!picked || !!t.batch} onClick={() => setApplying((a) => !a)}>
+          <Button size="sm" disabled={!picked || pipelineRunning} onClick={() => setApplying((a) => !a)}>
             Apply…
           </Button>
-          <Button size="sm" disabled={!picked || !!t.batch} onClick={() => fileRef.current?.click()}>
+          <Button size="sm" disabled={!picked || pipelineRunning} onClick={() => fileRef.current?.click()}>
             Batch…
           </Button>
           <Button size="sm" disabled={!picked} onClick={() => t.exportFile(picked)}>
@@ -154,7 +160,7 @@ export default function TemplatesSection() {
             hidden
             onChange={(e) => {
               const files = Array.from(e.target.files ?? []);
-              if (files.length && picked) void t.runBatch(picked, files);
+              if (files.length && picked && !pipelineRunning) void t.runBatch(picked, files);
               e.target.value = "";
             }}
           />
@@ -169,7 +175,12 @@ export default function TemplatesSection() {
       {recipe && applying && (
         // Keyed by revision too: a re-save changes the expected columns, and
         // bindings chosen against the old list must not carry over.
-        <ApplyRecipeSection key={`${recipe.name}#${recipe.revision ?? 0}`} recipe={recipe} onClose={() => setApplying(false)} />
+        <ApplyRecipeSection
+          key={`${recipe.name}#${recipe.revision ?? 0}`}
+          recipe={recipe}
+          onClose={() => setApplying(false)}
+          disabled={pipelineRunning}
+        />
       )}
 
       {t.batch && (

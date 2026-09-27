@@ -14,6 +14,7 @@
 
 import { makeStep, STEP_KINDS, type PipelineStep, type StepKind } from "./pipeline";
 import { sanitizeExpectations, type RecipeExpectations } from "./recipeExpect";
+import { TEMPLATES_KEY } from "./templateKey";
 import type { CalcResult, DataStruct } from "./types";
 
 export interface AnalysisTemplate {
@@ -113,7 +114,10 @@ export function parseTemplate(text: string): AnalysisTemplate {
 }
 
 // ── Persistence (localStorage, like peak recipes) ──────────────────────────
-const KEY = "qz.analysisTemplates";
+// Finding #10: the key lives in lib/templateKey.ts, a tiny eager-safe module
+// shared with lib/contextActions.ts (which needs the same key but can't
+// import this whole module — see that file's own comment).
+const KEY = TEMPLATES_KEY;
 
 export function loadTemplates(): AnalysisTemplate[] {
   try {
@@ -159,6 +163,41 @@ export function deleteTemplate(name: string): AnalysisTemplate[] {
     /* ignore */
   }
   return list;
+}
+
+/** The raw stored list, untouched — every entry, readable or not, in storage
+ *  order. `appendTemplates`'s own read; not for general use (every other
+ *  reader wants `loadTemplates`'s validated list). */
+function readRawTemplates(): unknown[] {
+  try {
+    const raw = localStorage.getItem(KEY);
+    if (!raw) return [];
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Append `records` in ONE read + ONE write, preserving any raw entry
+ *  already in the slot that this build cannot parse — a newer build's
+ *  version, or a damaged record (finding #6; mirrors lib/fitmodels.ts's
+ *  `appendCustomModels`). A `.dwk` open must not silently drop such a
+ *  record just because it rewrites the slot to merge the project's templates
+ *  in: `saveTemplates([...loadTemplates(), ...records])` would, since
+ *  `loadTemplates()` only ever returns what THIS build could read. Returns
+ *  the new readable list, AS RE-READ from storage, so a write storage
+ *  refused (quota, blocked) is visible to the caller rather than reported as
+ *  done. */
+export function appendTemplates(records: readonly AnalysisTemplate[]): AnalysisTemplate[] {
+  if (records.length > 0) {
+    try {
+      localStorage.setItem(KEY, JSON.stringify([...readRawTemplates(), ...records]));
+    } catch {
+      /* storage unavailable — stays session-local */
+    }
+  }
+  return loadTemplates();
 }
 
 // ── Batch summary sheet (#3) ────────────────────────────────────────────────
