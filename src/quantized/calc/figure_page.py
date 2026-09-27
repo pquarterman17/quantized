@@ -132,7 +132,7 @@ class PagePanel:
     y2_step: float | None = None
     # F4.4 follow-up (2026-08-24): a faceted panel's RESOLVED small-multiples
     # data -- the same reshaped panel-dict list `calc.figure_facets.
-    # render_facets_figure` takes (`routes.export_figures._facet_panels`
+    # render_facets_figure` takes (`routes.export_figures_facets._facet_panels`
     # builds it from the wire `FigureFacet` list, shared by both the
     # standalone `/figure` facet branch and `routes.export_page`). When set,
     # the panel is drawn as a REAL VECTOR sub-grid of matplotlib Axes inside

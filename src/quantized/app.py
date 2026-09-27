@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.requests import HTTPConnection
 
 from quantized import __version__
+from quantized.heavy_import import HeavyImportTimeout
 from quantized.io.workbook_transfer_store import cleanup_transfer_dir
 from quantized.jobs import jobs
 from quantized.plugins import load_plugins
@@ -78,7 +79,7 @@ from quantized.routes import (
     workbook_transfer,
     xray,
 )
-from quantized.routes._errors import validation_error_handler
+from quantized.routes._errors import heavy_import_timeout_handler, validation_error_handler
 from quantized.security import dev_origins_from_env, host_allowed, origin_allowed
 
 __all__ = ["create_app", "app"]
@@ -183,6 +184,7 @@ def create_app(*, dev_origins: Collection[str] | None = None) -> FastAPI:
     application = FastAPI(title="quantized", version=__version__, lifespan=_app_lifespan)
     application.state.dev_origins = allowed_dev
     application.add_exception_handler(RequestValidationError, validation_error_handler)
+    application.add_exception_handler(HeavyImportTimeout, heavy_import_timeout_handler)
     # CORS read access for the Vite dev origin in --dev only (empty otherwise:
     # the served SPA and the desktop shells are same-origin and need none).
     application.add_middleware(

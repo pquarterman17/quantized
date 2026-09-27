@@ -17,11 +17,16 @@ Rules checked, per function-level ``import``/``from ... import``:
    ``periodictable.formula``, which ``heavy_imports`` must know to wait for).
 2. Or its ``(path, module)`` pair is on :data:`ALLOWLIST`, with a reason.
 
-Plus: a ``with heavy_imports(...)`` body holds only import statements (keeps
-the lock scope to imports, and the lock-ordering argument in the helper's
-module doc true); ``heavy_imports`` is never used at module scope (a module
-body waiting on the lock can deadlock against CPython's per-module import
-locks); raw ``importlib.import_module``/``__import__`` calls go through
+Plus, with the helper recognised under ANY spelling the file's imports allow
+(``heavy_imports``, ``from ... import heavy_imports as hi``,
+``quantized.heavy_import.heavy_imports``, ``hmod.heavy_imports`` ...): a
+``with heavy_imports(...)`` body holds only import statements (keeps the lock
+scope to imports, and the lock-ordering argument in the helper's module doc
+true), its only keyword is ``while_waiting``; nothing evaluated at module
+scope calls ``heavy_imports``/``heavy_import`` or any function that
+(transitively, as far as ``import_scan`` can resolve calls) uses them -- a
+module body waiting on the lock can deadlock against CPython's per-module
+import locks; raw ``importlib.import_module``/``__import__`` calls go through
 ``heavy_import`` instead; and every allowlist entry still matches a real site.
 """
 
@@ -30,12 +35,23 @@ from __future__ import annotations
 import ast
 import functools
 import sys
+import tomllib
 from dataclasses import dataclass
-from importlib.util import find_spec
+from importlib.machinery import (
+    BYTECODE_SUFFIXES,
+    EXTENSION_SUFFIXES,
+    SOURCE_SUFFIXES,
+    PathFinder,
+)
 from pathlib import Path
 
-SRC = Path(__file__).resolve().parents[1] / "src" / "quantized"
+import import_scan
+from import_scan import SRC, Index, ModuleInfo
+
 HELPER = "heavy_import.py"
+GUARD = "quantized.heavy_import.heavy_imports"
+HELPER_SEEDS = frozenset({GUARD, "quantized.heavy_import.heavy_import"})
+PYPROJECT = SRC.parents[1] / "pyproject.toml"
 
 #: ``(path relative to src/quantized, imported module) -> reason``. Only for
 #: code that provably never runs on a request or job thread. Add an entry
@@ -45,9 +61,28 @@ ALLOWLIST: dict[tuple[str, str], str] = {
     ("server_launch.py", "webview"): "launcher, main thread, before the server starts",
     ("server_launch.py", "uvicorn"): "launcher, main thread, before the server starts",
     ("server_launch.py", "quantized.app"): "launcher, main thread, before the server starts",
-    ("server_launch.py", "quantized.desktop_bridge"): "launcher, main thread, pre-server",
-    ("server_launch.py", "quantized.desktop_consent"): "launcher shutdown path, main thread",
+    ("server_launch.py", "quantized.desktop_bridge"): (
+        "launcher, main thread, imported before the server thread starts"
+    ),
+    ("server_launch.py", "quantized.desktop_consent"): (
+        "launcher, main thread, imported before the server thread starts"
+    ),
     ("server_launch.py", "quantized.security"): "`qz --dev` launcher, main thread, pre-server",
+}
+
+#: Optional-extra top-level packages that may legitimately be absent from the
+#: environment running this test (so their submodules cannot be verified on
+#: disk) -> the ``pyproject.toml`` extra that installs them. Any OTHER top-level
+#: name that is not importable is reported as a typo.
+OPTIONAL_TOPS: dict[str, str] = {
+    "webview": "desktop",
+    "win32com": "origin-com",
+    "docx": "office",
+    "pptx": "office",
+    "lifelines": "stats",
+    "statsmodels": "stats",
+    "pandas": "stats",  # lifelines' / statsmodels' own dependency
+    "bumps": "bumps",
 }
 
 
@@ -59,70 +94,47 @@ class _Site:
     covered: bool
 
 
-def _module_name(path: Path) -> str:
-    rel = path.relative_to(SRC.parent).with_suffix("")
-    parts = list(rel.parts)
-    if parts[-1] == "__init__":
-        parts.pop()
-    return ".".join(parts)
-
-
-def _resolve_from(node: ast.ImportFrom, path: Path) -> str:
-    if not node.level:
-        return node.module or ""
-    package = _module_name(path).split(".")
-    if path.name != "__init__.py":
-        package.pop()
-    base = package[: len(package) - (node.level - 1)]
-    return ".".join([*base, node.module] if node.module else base)
-
-
 def _package_dirs(module: str) -> list[Path]:
-    """Directories of package ``module`` on disk, without importing it."""
+    """Directories of package ``module`` on disk, without importing it (a
+    ``sys.modules`` entry -- real, mocked or ``None`` -- is ignored)."""
     top, *rest = module.split(".")
-    spec = find_spec(top) if top not in sys.modules else sys.modules[top].__spec__
+    spec = PathFinder.find_spec(top)
     roots = list(spec.submodule_search_locations or []) if spec else []
     return [d for d in (Path(r).joinpath(*rest) for r in roots) if d.is_dir()]
 
 
+_SUFFIXES = (*SOURCE_SUFFIXES, *BYTECODE_SUFFIXES, *EXTENSION_SUFFIXES)
+
+
 def _is_submodule(package: str, name: str) -> bool:
+    """``package.name`` exists on disk as anything the import system would
+    load: a regular or namespace subpackage (a directory), a source, a
+    sourceless ``.pyc``, or an extension module (``name.so``, ABI-tagged
+    ``name.cpython-*.so``, ``name.pyd`` -- this platform's suffixes)."""
     for d in _package_dirs(package):
-        if (d / f"{name}.py").exists() or (d / name / "__init__.py").exists():
-            return True
-        if any(d.glob(f"{name}.*.so")) or any(d.glob(f"{name}.*.pyd")):
+        if (d / name).is_dir() or any((d / f"{name}{suf}").is_file() for suf in _SUFFIXES):
             return True
     return False
 
 
 def _module_exists(module: str) -> bool:
-    """False only when ``module``'s top-level package is installed but the
-    module itself is not on disk (an uninstalled optional dep can't be checked)."""
+    top, _, _ = module.partition(".")
+    if PathFinder.find_spec(top) is None:
+        return top in sys.stdlib_module_names or top in OPTIONAL_TOPS
     parent, _, leaf = module.rpartition(".")
-    if not parent:
-        return True  # a top-level name: missing means "optional, not installed"
-    if not _package_dirs(module.split(".")[0]):
-        return True
-    return _is_submodule(parent, leaf)
+    return not parent or _is_submodule(parent, leaf)
 
 
 def _is_stdlib(module: str) -> bool:
     return module.split(".")[0] in sys.stdlib_module_names
 
 
-def _guard_args(item: ast.withitem) -> list[str] | None:
-    """The literal module names of a ``heavy_imports(...)`` with-item, else None."""
-    call = item.context_expr
-    if not (isinstance(call, ast.Call) and isinstance(call.func, ast.Name)):
-        return None
-    if call.func.id != "heavy_imports":
-        return None
-    return [a.value for a in call.args if isinstance(a, ast.Constant) and isinstance(a.value, str)]
-
-
 class _Visitor(ast.NodeVisitor):
-    def __init__(self, path: Path) -> None:
-        self.path = path
-        self.rel = path.relative_to(SRC).as_posix()
+    def __init__(self, info: ModuleInfo, index: Index) -> None:
+        self.info = info
+        self.index = index
+        self.path = info.path
+        self.rel = info.path.relative_to(SRC).as_posix()
         self.depth = 0
         self.guards: list[set[str]] = []
         self.sites: list[_Site] = []
@@ -130,6 +142,12 @@ class _Visitor(ast.NodeVisitor):
 
     def _where(self, node: ast.AST) -> str:
         return f"{self.rel}:{getattr(node, 'lineno', '?')}"
+
+    def _guard_call(self, item: ast.withitem) -> ast.Call | None:
+        call = item.context_expr
+        if isinstance(call, ast.Call) and self.index.resolve(call.func, self.info) == GUARD:
+            return call
+        return None
 
     def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         self.depth += 1
@@ -149,14 +167,21 @@ class _Visitor(ast.NodeVisitor):
         names: set[str] = set()
         guarded = False
         for item in node.items:
-            args = _guard_args(item)
-            if args is None:
+            call = self._guard_call(item)
+            if call is None:
                 continue
             guarded = True
-            call = item.context_expr
-            assert isinstance(call, ast.Call)
-            if not args or len(args) != len(call.args) or call.keywords:
+            args = [
+                a.value
+                for a in call.args
+                if isinstance(a, ast.Constant) and isinstance(a.value, str)
+            ]
+            if not args or len(args) != len(call.args):
                 self.problems.append(f"{self._where(node)}: heavy_imports() needs literal names")
+            if any(k.arg != "while_waiting" for k in call.keywords):
+                self.problems.append(
+                    f"{self._where(node)}: heavy_imports()'s only keyword is while_waiting"
+                )
             names.update(args)
             self.problems += [
                 f"{self._where(node)}: {a!r} is not a module (typo? its fast path never fires)"
@@ -165,8 +190,6 @@ class _Visitor(ast.NodeVisitor):
         if not guarded:
             self.generic_visit(node)
             return
-        if not self.depth:
-            self.problems.append(f"{self._where(node)}: heavy_imports() at module scope")
         for stmt in node.body:
             if not isinstance(stmt, ast.Import | ast.ImportFrom):
                 self.problems.append(
@@ -183,16 +206,14 @@ class _Visitor(ast.NodeVisitor):
         covered = set().union(*self.guards) if self.guards else set()
         for module in needed:
             if not _is_stdlib(module):
-                self.sites.append(
-                    _Site(self.rel, node.lineno, module, module in covered)
-                )
+                self.sites.append(_Site(self.rel, node.lineno, module, module in covered))
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
             self._record(node, [alias.name])
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
-        module = _resolve_from(node, self.path)
+        module = import_scan.resolve_from(node, self.path)
         needed = [module]
         if not _is_stdlib(module):
             needed += [
@@ -213,20 +234,39 @@ class _Visitor(ast.NodeVisitor):
         self.generic_visit(node)
 
 
-def _scan_source(source: str, path: Path) -> tuple[list[_Site], list[str]]:
-    visitor = _Visitor(path)
-    visitor.visit(ast.parse(source, filename=str(path)))
+def _helper_users(index: Index) -> frozenset[str]:
+    return import_scan.reaching(index, HELPER_SEEDS) | HELPER_SEEDS
+
+
+def _scan_info(
+    info: ModuleInfo, index: Index, users: frozenset[str],
+) -> tuple[list[_Site], list[str]]:
+    visitor = _Visitor(info, index)
+    visitor.visit(info.tree)
+    rel = info.path.relative_to(SRC).as_posix()
+    visitor.problems += [
+        f"{rel}:{line}: module-scope call into {target} (uses quantized.heavy_import)"
+        for line, target in import_scan.module_scope_calls(index, info, users)
+    ]
     return visitor.sites, visitor.problems
+
+
+def _scan_source(source: str, path: Path) -> tuple[list[_Site], list[str]]:
+    info = import_scan.build_info(source, path)
+    index = import_scan.index_with(info)
+    return _scan_info(info, index, _helper_users(index))
 
 
 @functools.cache
 def _scan() -> tuple[list[_Site], list[str]]:
+    index = import_scan.index_with()
+    users = _helper_users(index)
     sites: list[_Site] = []
     problems: list[str] = []
-    for path in sorted(SRC.rglob("*.py")):
-        if path.relative_to(SRC).as_posix() == HELPER:
+    for info in import_scan.src_infos():
+        if info.path.relative_to(SRC).as_posix() == HELPER:
             continue  # the helper itself (stdlib-only; its own internals)
-        found, issues = _scan_source(path.read_text(encoding="utf-8"), path)
+        found, issues = _scan_info(info, index, users)
         sites += found
         problems += issues
     return sites, problems
@@ -254,13 +294,22 @@ def test_allowlist_entries_still_match_a_real_unguarded_site() -> None:
     assert not stale, f"stale ALLOWLIST entries (remove them): {stale}"
 
 
+def test_optional_tops_name_real_extras() -> None:
+    extras = tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))["project"][
+        "optional-dependencies"
+    ]
+    assert set(OPTIONAL_TOPS.values()) <= set(extras), sorted(extras)
+
+
 def test_guard_scan_sees_the_known_routed_sites() -> None:
     """Tripwire against the scanner silently finding nothing (a moved ``src``
-    root, a visitor that stopped descending): these guarded sites exist."""
+    root, a visitor that stopped descending, a resolver that stopped seeing
+    the helper): these guarded sites and helper users exist."""
     sites, _ = _scan()
     covered = {(s.path, s.module) for s in sites if s.covered}
     for expected in [
         ("routes/export_figures_aux.py", "quantized.calc.figure_map"),
+        ("routes/export_figures_facets.py", "quantized.calc.figure_facets"),
         ("calc/figure_facets.py", "quantized.calc.figure_statplots"),
         ("calc/stats_survival.py", "lifelines"),
         ("calc/stats_glm.py", "statsmodels.api"),
@@ -268,6 +317,34 @@ def test_guard_scan_sees_the_known_routed_sites() -> None:
         ("io/netcdf.py", "scipy.io"),
     ]:
         assert expected in covered, (expected, sorted(covered))
+    users = _helper_users(import_scan.index_with())
+    assert {
+        "quantized.calc.fit_bumps.bumps_available",  # direct
+        "quantized.calc.fit_bumps.fit_bumps",  # via _import_bumps
+        "quantized.calc.dream_seed.seeded_dream",  # heavy_import(), the function form
+    } <= users
+
+
+def test_module_exists_resolves_real_layouts(tmp_path: Path) -> None:
+    assert _module_exists("scipy.io") and _module_exists("json")
+    assert not _module_exists("scipy.not_a_module")
+    assert not _module_exists("qz_no_such_top_level_package")  # a typo'd top-level
+    assert _module_exists("win32com.client")  # optional extra: unverifiable, accepted
+    # Every on-disk layout the import system loads, checked against a real
+    # package on a temporary sys.path entry.
+    pkg = tmp_path / "qz_guard_layouts"
+    (pkg / "nspkg").mkdir(parents=True)  # namespace subpackage: no __init__
+    (pkg / "__init__.py").write_text("", encoding="utf-8")
+    (pkg / "sourceless.pyc").write_bytes(b"")
+    (pkg / "plain.so").write_bytes(b"")
+    (pkg / f"tagged{EXTENSION_SUFFIXES[0]}").write_bytes(b"")
+    sys.path.insert(0, str(tmp_path))
+    try:
+        for leaf in ("nspkg", "sourceless", "plain", "tagged"):
+            assert _module_exists(f"qz_guard_layouts.{leaf}"), leaf
+        assert not _module_exists("qz_guard_layouts.absent")
+    finally:
+        sys.path.remove(str(tmp_path))
 
 
 def test_guard_flags_each_kind_of_bypass() -> None:
@@ -276,15 +353,32 @@ def test_guard_flags_each_kind_of_bypass() -> None:
     path = SRC / "calc" / "_synthetic_guard_probe.py"
     source = """
 from quantized.heavy_import import heavy_imports
+from quantized.heavy_import import heavy_imports as hi_alias
+import quantized.heavy_import
+import quantized.heavy_import as hmod
 import importlib
+from quantized.calc.fit_bumps import bumps_available
+from quantized.calc import fit_bumps
 
-with heavy_imports("lifelines"):
+with heavy_imports("lifelines"):  # L10
     import lifelines
+
+bumps_available()  # L13
+_AVAILABLE = fit_bumps.bumps_available()  # L14
+hmod.heavy_import("lifelines")  # L15
+
+class Probe:
+    FLAG = bumps_available()  # L18: a class body runs at import
 
 def ok():
     with heavy_imports("lifelines", "scipy.io", "scipy"):
         import lifelines
         from scipy import io
+
+def ok_attribute_form():
+    with quantized.heavy_import.heavy_imports("scipy.io", "scipy", while_waiting=print):
+        from scipy import io
+    bumps_available()  # inside a function: fine
 
 def bypass():
     import statsmodels.api
@@ -294,17 +388,25 @@ def wrong_name():
         import lifelines
 
 def submodule_unnamed():
-    with heavy_imports("scipy"):
+    with hmod.heavy_imports("scipy"):
         from scipy import io
 
 def not_a_module():
     with heavy_imports("periodictable.formula"):
         from periodictable import formula
 
+def typo_top_level():
+    with heavy_imports("lifelinez"):
+        import lifelines
+
 def body_not_only_imports():
-    with heavy_imports("lifelines"):
+    with hi_alias("lifelines"):  # aliased: same body rule
         import lifelines
         lifelines.KaplanMeierFitter()
+
+def bad_keyword():
+    with heavy_imports("lifelines", timeout=1):
+        import lifelines
 
 def dynamic():
     importlib.import_module("h5py")
@@ -321,8 +423,14 @@ def stdlib_is_exempt():
         "lifelines", "periodictable", "quantized.calc.processing", "scipy.io", "statsmodels.api",
     ], unguarded
     joined = "\n".join(problems)
-    assert "module scope" in joined
+    scope = sorted(
+        int(p.split(":")[1]) for p in problems if "module-scope call" in p
+    )
+    assert scope == [10, 13, 14, 15, 18], (scope, joined)
     assert "may only hold imports" in joined
+    assert "only keyword is while_waiting" in joined
     assert "dynamic import" in joined
     assert "'periodictable.formula' is not a module" in joined
+    assert "'lifelinez' is not a module" in joined
     assert not any(s.module == "json" for s in sites)
+    assert not any(f":{n}:" in p for n in (26, 27, 28) for p in problems), joined  # attr form ok

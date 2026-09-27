@@ -285,7 +285,7 @@ def _render_impl(
     # explicit style on any series" and still ramps). Facets render through
     # a completely separate module (`calc.figure_facets`) that never reaches
     # `series_styles` at all -- this flag is a documented no-op there (see
-    # `routes.export_figures._render_facets_bytes`, which does not forward
+    # `routes.export_figures_facets._render_facets_bytes`, which does not forward
     # it) rather than silently doing nothing while looking wired.
     greyscale: bool = False,
     overrides: Mapping[str, Any] | None = None,

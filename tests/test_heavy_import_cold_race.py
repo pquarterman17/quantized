@@ -8,7 +8,9 @@ pytest process), started the way the app starts -- ``import quantized.app``
 
 - every ``with heavy_imports(...)`` block in ``src/quantized``, executed
   verbatim (lifted out of the source by AST, so a new routed site joins the
-  race automatically) -- the export routes' renderer imports, the renderers'
+  race automatically) with its own module's ``__name__``/``__package__`` (so
+  a relative import resolves as it does in place; a ``while_waiting=``
+  keyword is dropped, it names a local) -- the export routes' renderer imports, the renderers'
   own lazy cross-imports, and each optional library's import; blocks whose
   library is not installed here are left out;
 - real calls through the call paths that reach them: Kaplan-Meier and the
@@ -55,8 +57,23 @@ def _guard_names(node):
     for item in node.items:
         call = item.context_expr
         if isinstance(call, ast.Call) and getattr(call.func, "id", None) == "heavy_imports":
+            # ``while_waiting=<a local of the enclosing function>`` cannot be
+            # evaluated out of context; the race does not need it.
+            call.keywords = []
             return [a.value for a in call.args]
     return None
+
+
+def _module_globals(path):
+    # The globals the block would see in its own module: __name__ and
+    # __package__ make its relative imports resolve as they do there.
+    parts = list(path.relative_to(SRC.parent).with_suffix("").parts)
+    is_package = parts[-1] == "__init__"
+    if is_package:
+        parts.pop()
+    name = ".".join(parts)
+    package = name if is_package else name.rpartition(".")[0]
+    return {"__name__": name, "__package__": package, "heavy_imports": heavy_imports}
 
 
 tasks = {}
@@ -69,7 +86,7 @@ for path in sorted(SRC.rglob("*.py")):
         if names and all(find_spec(n.split(".")[0]) for n in names):
             code = compile(ast.Module(body=[node], type_ignores=[]), str(path), "exec")
             where = f"{path.relative_to(SRC).as_posix()}:{node.lineno}"
-            tasks[where] = lambda code=code: exec(code, {"heavy_imports": heavy_imports})
+            tasks[where] = lambda code=code, g=_module_globals(path): exec(code, dict(g))
 
 
 def _km():

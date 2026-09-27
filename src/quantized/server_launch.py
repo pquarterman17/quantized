@@ -189,6 +189,14 @@ def _run_desktop(
 
     from quantized.app import app
 
+    # MAIN_PLAN #31's native file-dialog bridge and C1's exit revocation, both
+    # imported HERE -- main thread, before the server thread below starts
+    # serving -- rather than at their use sites after it: a function-level
+    # import once requests are being served would race request threads'
+    # first imports (BUG-032; tests/test_heavy_import_guard.py's ALLOWLIST).
+    from quantized.desktop_bridge import DesktopApi
+    from quantized.desktop_consent import clear_dir_grants
+
     # Bind up front so a taken port is a clean branch, not a crashed server
     # thread: reuse our own healthy instance (point the window at it), or
     # refuse a foreign app instead of hanging 30 s on a dead window.
@@ -218,8 +226,6 @@ def _run_desktop(
         # window.pywebview.api so a GUI import can carry a REAL path (and so a
         # re-import needs no second picker). Browser mode has no
         # window.pywebview and degrades to the file picker, unchanged.
-        from quantized.desktop_bridge import DesktopApi
-
         api = DesktopApi()
         win = webview.create_window(
             title,
@@ -243,8 +249,6 @@ def _run_desktop(
         # that dies with this process anyway, but the module's own contract
         # names app exit explicitly, so make it an actual call site rather
         # than an implicit consequence of the process ending).
-        from quantized.desktop_consent import clear_dir_grants
-
         clear_dir_grants()
         if server is not None:
             server.should_exit = True
