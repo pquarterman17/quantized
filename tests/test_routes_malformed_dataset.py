@@ -150,6 +150,12 @@ CASES = [
         lambda ds: {"dataset": ds, "smoothing": {"method": "moving", "window": 2}},
         GOOD_DATASET,
     ),
+    (
+        "/api/sims/compare",
+        lambda ds: {"profiles": [{"name": "a", "dataset": ds}], "species": ["a"]},
+        GOOD_DATASET,
+    ),
+    ("/api/sims/region", lambda ds: {"dataset": ds, "lo": 0.0, "hi": 1.0}, GOOD_DATASET),
     ("/api/rsm/analyze", lambda ds: {"dataset": ds, "n_peaks": 1}, RSM_GOOD),
     ("/api/rsm/linecut", lambda ds: {"dataset": ds, "direction": "h", "value": 10.0}, RSM_GOOD),
     (

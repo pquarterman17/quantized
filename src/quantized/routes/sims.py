@@ -1,11 +1,17 @@
-"""Thin SIMS depth-profile processing route (audit P2.3). Wraps
-``calc.sims_process``.
+"""Thin SIMS depth-profile routes (audit P2.3). Wrap ``calc.sims_process``,
+``calc.sims_compare`` and ``calc.sims_region``.
 
 ``POST /api/sims/process`` applies the chosen stages -- depth calibration,
 background, reference normalization, smoothing -- to one posted dataset and
 returns the derived dataset, the per-stage provenance and the plain-language
 warnings the workshop previews before anything is created. Validate, call the
 pure function, serialize: every formula and refusal lives in ``calc/``.
+
+``POST /api/sims/compare`` lays several profiles' chosen species side by side
+in one derived comparison table (row blocks, nothing interpolated), and
+``POST /api/sims/region`` measures each species over a depth region (dose,
+peak, mean, junction depth) and returns the same result as a provenance-
+stamped CSV.
 """
 
 from __future__ import annotations
@@ -15,6 +21,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field
 
+from quantized.calc.sims_compare import compare_profiles
 from quantized.calc.sims_process import (
     BackgroundSpec,
     CalibrationSpec,
@@ -22,6 +29,7 @@ from quantized.calc.sims_process import (
     SmoothingSpec,
     process_sims,
 )
+from quantized.calc.sims_region import region_measures, region_summary_csv
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._payload import DataStructResponse, datastruct_payload
@@ -115,3 +123,97 @@ def process(req: SimsProcessRequest) -> Response:
             "stages": res.stages,
         }
     )
+
+
+class SimsProfileIn(BaseModel):
+    #: The profile's display name (labels its traces; recorded in provenance).
+    name: str
+    dataset: dict[str, Any]
+
+
+class SimsCompareRequest(BaseModel):
+    profiles: list[SimsProfileIn] = Field(min_length=1)
+    #: Species (column names) to compare; each profile contributes those it has.
+    species: list[str] = Field(min_length=1)
+
+
+class SimsCompareResponse(BaseModel):
+    dataset: dict[str, Any]
+    warnings: list[SimsWarning]
+    traces: list[dict[str, Any]]
+
+
+@router.post("/compare", response_model=SimsCompareResponse, response_class=DataStructResponse)
+def compare(req: SimsCompareRequest) -> Response:
+    """Several profiles' species in one comparison table (row blocks)."""
+    try:
+        profiles = [(p.name, DataStruct.from_dict(p.dataset)) for p in req.profiles]
+        res = compare_profiles(profiles, req.species)
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return DataStructResponse(
+        {"dataset": datastruct_payload(res.data), "warnings": res.warnings, "traces": res.traces}
+    )
+
+
+class SimsRegionRequest(BaseModel):
+    dataset: dict[str, Any]
+    #: The dataset's display name, written into the CSV's provenance lines.
+    dataset_name: str = ""
+    lo: float
+    hi: float
+    #: Column indices to measure; null = every non-categorical column.
+    columns: list[int] | None = None
+    threshold_mode: Literal["fraction", "absolute"] = "fraction"
+    #: A fraction of each species' peak (0..1, exclusive), or an absolute value.
+    threshold: float = 0.5
+
+
+class SimsCrossing(BaseModel):
+    depth: float
+    direction: Literal["rising", "falling"]
+
+
+class SimsRegionSpecies(BaseModel):
+    name: str
+    unit: str
+    points: int
+    blank: int
+    integral: float | None
+    integral_unit: str
+    integral_kind: Literal["areal-dose", "raw"]
+    integrated_from: float | None
+    integrated_to: float | None
+    peak: float | None
+    peak_depth: float | None
+    mean: float | None
+    threshold: float | None
+    crossings: list[SimsCrossing]
+    junction_depth: float | None
+    junction_direction: Literal["rising", "falling"] | None
+
+
+class SimsRegionResponse(BaseModel):
+    region: list[float]
+    x_name: str
+    x_unit: str
+    rows_in_region: int
+    method: dict[str, Any]
+    species: list[SimsRegionSpecies]
+    warnings: list[SimsWarning]
+    #: The same measures as CSV, with ``#`` provenance lines first.
+    csv: str
+
+
+@router.post("/region", response_model=SimsRegionResponse)
+def region(req: SimsRegionRequest) -> dict[str, Any]:
+    """Dose, peak, mean and junction depth per species over one region."""
+    try:
+        data = DataStruct.from_dict(req.dataset)
+        res = region_measures(
+            data, lo=req.lo, hi=req.hi, columns=req.columns,
+            threshold_mode=req.threshold_mode, threshold=req.threshold,
+        )
+    except CALC_ERRORS as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {**res, "csv": region_summary_csv(res, dataset=req.dataset_name)}

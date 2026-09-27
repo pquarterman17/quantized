@@ -3278,6 +3278,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sims/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare
+         * @description Several profiles' species in one comparison table (row blocks).
+         */
+        post: operations["compare_api_sims_compare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sims/process": {
         parameters: {
             query?: never;
@@ -3292,6 +3312,26 @@ export interface paths {
          * @description Calibrate / correct a SIMS profile; warnings say what that did.
          */
         post: operations["process_api_sims_process_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/sims/region": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Region
+         * @description Dose, peak, mean and junction depth per species over one region.
+         */
+        post: operations["region_api_sims_region_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6710,6 +6750,11 @@ export interface components {
             group_col?: number | null;
             /** Height In */
             height_in?: number | null;
+            /**
+             * Log Offsets
+             * @description Per-plotted-series offset in whole DECADES, aligned to `y_keys` (audit P2.3): series i is drawn at y * 10**k_i -- a rigid shift of k_i decades on a log y axis, where an additive stagger means nothing -- and its legend name gains ' ×10^k' before the unit, exactly as the canvas shows it (`frontend/src/lib/logOffset.ts`). `dataset` keeps the true values. A non-integer, non-finite or |k| > 30 entry is no offset. UNUSED on the `group_col` and `facets` branches, which the client never sends it for (the canvas does not offset those either). See `calc.plot_log_offsets.apply_log_offsets`.
+             */
+            log_offsets?: number[] | null;
             /** Overrides */
             overrides?: {
                 [key: string]: unknown;
@@ -9060,6 +9105,36 @@ export interface components {
             /** Total Time */
             total_time?: number | null;
         };
+        /** SimsCompareRequest */
+        SimsCompareRequest: {
+            /** Profiles */
+            profiles: components["schemas"]["SimsProfileIn"][];
+            /** Species */
+            species: string[];
+        };
+        /** SimsCompareResponse */
+        SimsCompareResponse: {
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /** Traces */
+            traces: {
+                [key: string]: unknown;
+            }[];
+            /** Warnings */
+            warnings: components["schemas"]["SimsWarning"][];
+        };
+        /** SimsCrossing */
+        SimsCrossing: {
+            /** Depth */
+            depth: number;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "rising" | "falling";
+        };
         /** SimsNormalization */
         SimsNormalization: {
             /** Reference */
@@ -9095,6 +9170,103 @@ export interface components {
             }[];
             /** Warnings */
             warnings: components["schemas"]["SimsWarning"][];
+        };
+        /** SimsProfileIn */
+        SimsProfileIn: {
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /** Name */
+            name: string;
+        };
+        /** SimsRegionRequest */
+        SimsRegionRequest: {
+            /** Columns */
+            columns?: number[] | null;
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /**
+             * Dataset Name
+             * @default
+             */
+            dataset_name?: string;
+            /** Hi */
+            hi: number;
+            /** Lo */
+            lo: number;
+            /**
+             * Threshold
+             * @default 0.5
+             */
+            threshold?: number;
+            /**
+             * Threshold Mode
+             * @default fraction
+             * @enum {string}
+             */
+            threshold_mode?: "fraction" | "absolute";
+        };
+        /** SimsRegionResponse */
+        SimsRegionResponse: {
+            /** Csv */
+            csv: string;
+            /** Method */
+            method: {
+                [key: string]: unknown;
+            };
+            /** Region */
+            region: number[];
+            /** Rows In Region */
+            rows_in_region: number;
+            /** Species */
+            species: components["schemas"]["SimsRegionSpecies"][];
+            /** Warnings */
+            warnings: components["schemas"]["SimsWarning"][];
+            /** X Name */
+            x_name: string;
+            /** X Unit */
+            x_unit: string;
+        };
+        /** SimsRegionSpecies */
+        SimsRegionSpecies: {
+            /** Blank */
+            blank: number;
+            /** Crossings */
+            crossings: components["schemas"]["SimsCrossing"][];
+            /** Integral */
+            integral: number | null;
+            /**
+             * Integral Kind
+             * @enum {string}
+             */
+            integral_kind: "areal-dose" | "raw";
+            /** Integral Unit */
+            integral_unit: string;
+            /** Integrated From */
+            integrated_from: number | null;
+            /** Integrated To */
+            integrated_to: number | null;
+            /** Junction Depth */
+            junction_depth: number | null;
+            /** Junction Direction */
+            junction_direction: ("rising" | "falling") | null;
+            /** Mean */
+            mean: number | null;
+            /** Name */
+            name: string;
+            /** Peak */
+            peak: number | null;
+            /** Peak Depth */
+            peak_depth: number | null;
+            /** Points */
+            points: number;
+            /** Threshold */
+            threshold: number | null;
+            /** Unit */
+            unit: string;
         };
         /** SimsSmoothing */
         SimsSmoothing: {
@@ -15005,6 +15177,39 @@ export interface operations {
             };
         };
     };
+    compare_api_sims_compare_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimsCompareRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimsCompareResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     process_api_sims_process_post: {
         parameters: {
             query?: never;
@@ -15025,6 +15230,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SimsProcessResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    region_api_sims_region_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimsRegionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimsRegionResponse"];
                 };
             };
             /** @description Validation Error */

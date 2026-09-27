@@ -85,3 +85,81 @@ def test_out_of_range_reference_is_refused_with_its_own_message_not_backgrounds(
     detail = res.json()["detail"]
     assert "normalization reference" in detail
     assert "leave unchanged" not in detail
+
+
+# ── /api/sims/compare and /api/sims/region (audit P2.3, boxes 3-4) ─────────
+
+DEPTH: dict[str, Any] = {
+    "time": [0.0, 10.0, 20.0, 30.0, 40.0],
+    "values": [[1e18, 5e22], [3e18, 5e22], [5e18, 5e22], [3e18, 5e22], [1e18, 5e22]],
+    "labels": ["B", "Si"],
+    "units": ["atoms/cm3", "atoms/cm3"],
+    "metadata": {"x_column_name": "Depth", "x_column_unit": "nm"},
+}
+
+
+def test_compare_returns_the_block_table_with_blanks_as_null() -> None:
+    other = {**DEPTH, "time": [0.0, 100.0], "values": [[1.0, 2.0], [3.0, 4.0]],
+             "metadata": {"x_column_unit": "A"}}
+    res = client.post("/api/sims/compare", json={
+        "profiles": [{"name": "a.csv", "dataset": DEPTH}, {"name": "b.csv", "dataset": other}],
+        "species": ["B"],
+    })
+    assert res.status_code == 200, res.text
+    body = res.json()
+    assert body["dataset"]["labels"] == ["B — a", "B — b"]
+    assert body["dataset"]["time"] == pytest.approx([0, 10, 20, 30, 40, 0, 10])
+    assert body["dataset"]["values"][5] == [None, 1.0]
+    assert [t["rows"] for t in body["traces"]] == [[0, 5], [5, 7]]
+    assert [w["code"] for w in body["warnings"]] == ["x-converted"]
+
+
+def test_compare_refusals_are_422() -> None:
+    for body in (
+        {"profiles": [], "species": ["B"]},
+        {"profiles": [{"name": "a", "dataset": DEPTH}], "species": []},
+        {"profiles": [{"name": "a", "dataset": DEPTH}], "species": ["P"]},
+    ):
+        res = client.post("/api/sims/compare", json=body)
+        assert res.status_code == 422, body
+
+
+def test_region_returns_measures_and_csv() -> None:
+    res = client.post("/api/sims/region", json={
+        "dataset": DEPTH, "dataset_name": "implant.csv", "lo": 0, "hi": 40, "columns": [0],
+    })
+    assert res.status_code == 200, res.text
+    body = res.json()
+    (b,) = body["species"]
+    assert b["integral"] == pytest.approx(1.2e13) and b["integral_unit"] == "atoms/cm^2"
+    assert b["junction_depth"] == pytest.approx(7.5)
+    assert b["crossings"][1] == {"depth": pytest.approx(32.5), "direction": "falling"}
+    assert body["csv"].startswith("# SIMS region measures\n# dataset: implant.csv\n")
+
+
+def test_region_refusals_are_422() -> None:
+    for body in (
+        {"dataset": DEPTH, "lo": 100, "hi": 200},
+        {"dataset": DEPTH, "lo": 0, "hi": 40, "threshold": 2},
+        {"dataset": DEPTH, "lo": 0, "hi": 40, "columns": [9]},
+        {"dataset": DEPTH, "lo": 0, "hi": 40, "threshold_mode": "median"},
+    ):
+        res = client.post("/api/sims/region", json=body)
+        assert res.status_code == 422, body
+
+
+def test_region_result_emits_a_report_sheet() -> None:
+    region = client.post("/api/sims/region", json={"dataset": DEPTH, "lo": 0, "hi": 40}).json()
+    res = client.post("/api/report/emit", json={
+        "kind": "sims_region", "result": region, "title": "SIMS region — implant",
+        "source_refs": [{"kind": "dataset", "id": "d1", "name": "implant.csv"}],
+    })
+    assert res.status_code == 200, res.text
+    report = res.json()["report"]
+    assert report["title"] == "SIMS region — implant"
+    table = report["sections"][0]["blocks"][0]
+    assert table["columns"][:3] == ["Species", "Unit", "Integral"]
+    assert [r[0] for r in table["rows"]] == ["B", "Si"]
+    texts = " ".join(b["text"] for b in report["sections"][0]["blocks"][1:])
+    assert "Depth 0 to 40 nm" in texts and "50% of each species' peak" in texts
+    assert report["source_refs"] == [{"kind": "dataset", "id": "d1", "name": "implant.csv"}]

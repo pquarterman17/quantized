@@ -140,6 +140,19 @@ WATERFALL_OFFSETS_DOC = (
 )
 
 
+LOG_OFFSETS_DOC = (
+    "Per-plotted-series offset in whole DECADES, aligned to `y_keys` (audit "
+    "P2.3): series i is drawn at y * 10**k_i -- a rigid shift of k_i decades "
+    "on a log y axis, where an additive stagger means nothing -- and its "
+    "legend name gains ' ×10^k' before the unit, exactly as the canvas shows "
+    "it (`frontend/src/lib/logOffset.ts`). `dataset` keeps the true values. "
+    "A non-integer, non-finite or |k| > 30 entry is no offset. UNUSED on the "
+    "`group_col` and `facets` branches, which the client never sends it for "
+    "(the canvas does not offset those either). See "
+    "`calc.plot_log_offsets.apply_log_offsets`."
+)
+
+
 class FigureFacetSeries(BaseModel):
     label: str
     y: list[float | None]

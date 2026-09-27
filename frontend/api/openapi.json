@@ -3995,6 +3995,21 @@
             ],
             "title": "Height In"
           },
+          "log_offsets": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-plotted-series offset in whole DECADES, aligned to `y_keys` (audit P2.3): series i is drawn at y * 10**k_i -- a rigid shift of k_i decades on a log y axis, where an additive stagger means nothing -- and its legend name gains ' \u00d710^k' before the unit, exactly as the canvas shows it (`frontend/src/lib/logOffset.ts`). `dataset` keeps the true values. A non-integer, non-finite or |k| > 30 entry is no offset. UNUSED on the `group_col` and `facets` branches, which the client never sends it for (the canvas does not offset those either). See `calc.plot_log_offsets.apply_log_offsets`.",
+            "title": "Log Offsets"
+          },
           "overrides": {
             "anyOf": [
               {
@@ -10088,6 +10103,85 @@
         "title": "SimsCalibration",
         "type": "object"
       },
+      "SimsCompareRequest": {
+        "properties": {
+          "profiles": {
+            "items": {
+              "$ref": "#/components/schemas/SimsProfileIn"
+            },
+            "minItems": 1,
+            "title": "Profiles",
+            "type": "array"
+          },
+          "species": {
+            "items": {
+              "type": "string"
+            },
+            "minItems": 1,
+            "title": "Species",
+            "type": "array"
+          }
+        },
+        "required": [
+          "profiles",
+          "species"
+        ],
+        "title": "SimsCompareRequest",
+        "type": "object"
+      },
+      "SimsCompareResponse": {
+        "properties": {
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "traces": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Traces",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SimsWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dataset",
+          "warnings",
+          "traces"
+        ],
+        "title": "SimsCompareResponse",
+        "type": "object"
+      },
+      "SimsCrossing": {
+        "properties": {
+          "depth": {
+            "title": "Depth",
+            "type": "number"
+          },
+          "direction": {
+            "enum": [
+              "rising",
+              "falling"
+            ],
+            "title": "Direction",
+            "type": "string"
+          }
+        },
+        "required": [
+          "depth",
+          "direction"
+        ],
+        "title": "SimsCrossing",
+        "type": "object"
+      },
       "SimsNormalization": {
         "properties": {
           "reference": {
@@ -10211,6 +10305,302 @@
           "stages"
         ],
         "title": "SimsProcessResponse",
+        "type": "object"
+      },
+      "SimsProfileIn": {
+        "properties": {
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "dataset"
+        ],
+        "title": "SimsProfileIn",
+        "type": "object"
+      },
+      "SimsRegionRequest": {
+        "properties": {
+          "columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Columns"
+          },
+          "dataset": {
+            "additionalProperties": true,
+            "title": "Dataset",
+            "type": "object"
+          },
+          "dataset_name": {
+            "default": "",
+            "title": "Dataset Name",
+            "type": "string"
+          },
+          "hi": {
+            "title": "Hi",
+            "type": "number"
+          },
+          "lo": {
+            "title": "Lo",
+            "type": "number"
+          },
+          "threshold": {
+            "default": 0.5,
+            "title": "Threshold",
+            "type": "number"
+          },
+          "threshold_mode": {
+            "default": "fraction",
+            "enum": [
+              "fraction",
+              "absolute"
+            ],
+            "title": "Threshold Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "dataset",
+          "lo",
+          "hi"
+        ],
+        "title": "SimsRegionRequest",
+        "type": "object"
+      },
+      "SimsRegionResponse": {
+        "properties": {
+          "csv": {
+            "title": "Csv",
+            "type": "string"
+          },
+          "method": {
+            "additionalProperties": true,
+            "title": "Method",
+            "type": "object"
+          },
+          "region": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Region",
+            "type": "array"
+          },
+          "rows_in_region": {
+            "title": "Rows In Region",
+            "type": "integer"
+          },
+          "species": {
+            "items": {
+              "$ref": "#/components/schemas/SimsRegionSpecies"
+            },
+            "title": "Species",
+            "type": "array"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/SimsWarning"
+            },
+            "title": "Warnings",
+            "type": "array"
+          },
+          "x_name": {
+            "title": "X Name",
+            "type": "string"
+          },
+          "x_unit": {
+            "title": "X Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "region",
+          "x_name",
+          "x_unit",
+          "rows_in_region",
+          "method",
+          "species",
+          "warnings",
+          "csv"
+        ],
+        "title": "SimsRegionResponse",
+        "type": "object"
+      },
+      "SimsRegionSpecies": {
+        "properties": {
+          "blank": {
+            "title": "Blank",
+            "type": "integer"
+          },
+          "crossings": {
+            "items": {
+              "$ref": "#/components/schemas/SimsCrossing"
+            },
+            "title": "Crossings",
+            "type": "array"
+          },
+          "integral": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Integral"
+          },
+          "integral_kind": {
+            "enum": [
+              "areal-dose",
+              "raw"
+            ],
+            "title": "Integral Kind",
+            "type": "string"
+          },
+          "integral_unit": {
+            "title": "Integral Unit",
+            "type": "string"
+          },
+          "integrated_from": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Integrated From"
+          },
+          "integrated_to": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Integrated To"
+          },
+          "junction_depth": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Junction Depth"
+          },
+          "junction_direction": {
+            "anyOf": [
+              {
+                "enum": [
+                  "rising",
+                  "falling"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Junction Direction"
+          },
+          "mean": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "peak": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peak"
+          },
+          "peak_depth": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peak Depth"
+          },
+          "points": {
+            "title": "Points",
+            "type": "integer"
+          },
+          "threshold": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Threshold"
+          },
+          "unit": {
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "unit",
+          "points",
+          "blank",
+          "integral",
+          "integral_unit",
+          "integral_kind",
+          "integrated_from",
+          "integrated_to",
+          "peak",
+          "peak_depth",
+          "mean",
+          "threshold",
+          "crossings",
+          "junction_depth",
+          "junction_direction"
+        ],
+        "title": "SimsRegionSpecies",
         "type": "object"
       },
       "SimsSmoothing": {
@@ -18363,6 +18753,48 @@
         ]
       }
     },
+    "/api/sims/compare": {
+      "post": {
+        "description": "Several profiles' species in one comparison table (row blocks).",
+        "operationId": "compare_api_sims_compare_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimsCompareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimsCompareResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Compare",
+        "tags": [
+          "sims"
+        ]
+      }
+    },
     "/api/sims/process": {
       "post": {
         "description": "Calibrate / correct a SIMS profile; warnings say what that did.",
@@ -18400,6 +18832,48 @@
           }
         },
         "summary": "Process",
+        "tags": [
+          "sims"
+        ]
+      }
+    },
+    "/api/sims/region": {
+      "post": {
+        "description": "Dose, peak, mean and junction depth per species over one region.",
+        "operationId": "region_api_sims_region_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SimsRegionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SimsRegionResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Region",
         "tags": [
           "sims"
         ]

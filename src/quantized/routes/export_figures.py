@@ -37,6 +37,7 @@ from quantized.routes.export_figures_labels import (
     solo_axis_label,
 )
 from quantized.routes.export_figures_schema import (
+    LOG_OFFSETS_DOC,
     SERIES_STYLES_DOC,
     WATERFALL_OFFSETS_DOC,
     FigureFacet,
@@ -181,6 +182,7 @@ class FigureRequest(BaseModel):
     waterfall_offsets: list[float] | None = Field(
         default=None, description=WATERFALL_OFFSETS_DOC
     )
+    log_offsets: list[float] | None = Field(default=None, description=LOG_OFFSETS_DOC)
     # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
     # limits / margins / grid / annotations — validated in calc.
     overrides: dict[str, Any] | None = None
@@ -222,6 +224,7 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
     never assigns a grouped series to the secondary axis, so there's no
     sound semantic to invent for the combination)."""
     from quantized.calc.figure_group_styles import expand_grouped_series_styles
+    from quantized.calc.plot_log_offsets import apply_log_offsets
     from quantized.calc.plotting import (
         PlotState,
         apply_waterfall_offsets,
@@ -275,17 +278,18 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
         y_log=req.y_log,
     )
     plot = build_series(ds, state)
+    plot_series = apply_log_offsets(plot.series, req.log_offsets)  # P2.3 decade offsets
     # BUG-014: the per-series legend override (`series_styles[i].legend`) is
     # used VERBATIM where present, so a renamed series exports with exactly
     # the text the screen shows instead of the channel's unit being appended
     # to it a second time. A solo axis title reads the SAME resolved name --
     # `uplotOpts.buildOpts`' `soloLabel` reads the resolved legend too.
-    names = series_names(plot.series, series_legends(req.series_styles, len(plot.series)))
+    names = series_names(plot_series, series_legends(req.series_styles, len(plot_series)))
     x_label = derived_axis_label(req.x_label, plot.x_label, plot.x_unit)
-    y_label = solo_axis_label(req.y_label, names, plot.series, 0)
-    y2_label = solo_axis_label(req.y2_label, names, plot.series, 1)
+    y_label = solo_axis_label(req.y_label, names, plot_series, 0)
+    y2_label = solo_axis_label(req.y2_label, names, plot_series, 1)
     series: list[tuple[str, Any]] = apply_waterfall_offsets(
-        [(name, s.values) for name, s in zip(names, plot.series, strict=True)],
+        [(name, s.values) for name, s in zip(names, plot_series, strict=True)],
         req.waterfall_offsets,
     )
     styles = resolve_style_channels(ds, req.y_keys, req.series_styles)

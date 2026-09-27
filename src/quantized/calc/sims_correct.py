@@ -40,7 +40,7 @@ from numpy.typing import NDArray
 from ._warn import warn as _warn
 from .processing import smooth_data
 
-__all__ = ["normalize_to_reference", "smooth_profiles", "subtract_background"]
+__all__ = ["normalize_to_reference", "region_mask", "smooth_profiles", "subtract_background"]
 
 
 def _name(labels: Sequence[str], c: int) -> str:
@@ -49,6 +49,17 @@ def _name(labels: Sequence[str], c: int) -> str:
 
 def _plural(n: int, one: str, many: str | None = None) -> str:
     return f"{n} {one if n == 1 else (many or one + 's')}"
+
+
+def region_mask(x: NDArray[np.float64], lo: float, hi: float) -> NDArray[np.bool_]:
+    """Rows with ``lo <= x <= hi`` (limits in either order), INCLUSIVE with a
+    1e-9 relative tolerance: a limit typed from the displayed depth (400) must
+    catch a computed 400.00000000000006. The one region rule every SIMS stage
+    and measure shares (background here, ``calc.sims_region``'s measures)."""
+    a, b = (lo, hi) if lo <= hi else (hi, lo)
+    xv = np.asarray(x, dtype=float)
+    tol = 1e-9 * max(abs(a), abs(b), b - a)
+    return np.asarray((xv >= a - tol) & (xv <= b + tol), dtype=bool)
 
 
 def subtract_background(
@@ -68,12 +79,8 @@ def subtract_background(
     if bad_skip:
         raise ValueError(f"column {bad_skip[0]} to leave unchanged is out of range")
     a, b = (lo, hi) if lo <= hi else (hi, lo)
-    xv = np.asarray(x, dtype=float)
     mat = np.array(values, dtype=float, copy=True)
-    # Inclusive, with a 1e-9 relative tolerance: a limit typed from the
-    # displayed depth (400) must catch a computed 400.00000000000006.
-    tol = 1e-9 * max(abs(a), abs(b), b - a)
-    in_region = (xv >= a - tol) & (xv <= b + tol)
+    in_region = region_mask(x, a, b)
     if not bool(np.any(in_region)):
         raise ValueError(f"no rows lie in the background region {a:.6g} .. {b:.6g}")
     levels: dict[str, float | None] = {}
