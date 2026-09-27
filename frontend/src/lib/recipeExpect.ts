@@ -209,7 +209,9 @@ function needsTimeUnitX(steps: readonly PipelineStep[]): boolean {
  *  the index a later recorded step addresses. */
 export function addedColumnNames(steps: readonly PipelineStep[]): string[] {
   return inputSegment(steps).flatMap((s) =>
-    s.kind === "expression" || (s.kind === "transform" && s.params.op === "promote") ? [String(s.params.name ?? "")] : [],
+    s.kind === "expression" || (s.kind === "transform" && s.params.op === "promote")
+      ? [String(s.params.name ?? ""), ...(typeof s.params.sigmaName === "string" ? [s.params.sigmaName] : [])] // P2.5 σ column
+      : [],
   );
 }
 

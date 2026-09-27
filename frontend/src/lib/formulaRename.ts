@@ -54,7 +54,9 @@ export function shiftLetter(letter: string, removedCol: number): { letter: strin
   return { letter: idx > removedCol ? channelLetter(idx - 1) : letter, removed: false };
 }
 
-const serializeTok = (t: Tok): string => (t.t === "num" ? String(t.v) : t.v);
+// A quoted token has no escapes, so it can never hold both quote kinds.
+const serializeTok = (t: Tok): string =>
+  t.t === "num" ? String(t.v) : t.t === "str" ? (t.v.includes("\"") ? `'${t.v}'` : `"${t.v}"`) : t.v;
 
 /** Rewrite `expr`'s column-letter references for a single-column removal.
  *  See module header for the two `ok: false` cases (direct reference to the

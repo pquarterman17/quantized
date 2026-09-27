@@ -4,6 +4,8 @@
 // plot" cluster. All state lives in the parent (Worksheet); this is a thin
 // props-driven view so the worksheet stays under the size budget.
 
+import { useState } from "react";
+
 import type { BlockOpsApi } from "./useWorksheetBlockOps";
 
 // JMP_GAP J11 formula language v2 quick reference — the hover tooltip on the
@@ -11,9 +13,9 @@ import type { BlockOpsApi } from "./useWorksheetBlockOps";
 // header (the authoritative doc, since it can't drift from the parser);
 // this is the compact user-facing cheat sheet.
 const FORMULA_HELP = [
-  "Operators: + - * / % ^   Comparisons: < <= > >= == !=   Logic: and or not",
-  "Functions: sin cos tan exp log ln log10 sqrt abs pow min max",
-  "if(cond, a, b) — NaN cond -> NaN",
+  "Operators: + - * / // % ^ **   Comparisons: < <= > >= == !=   Logic: and or not",
+  "Functions: sin cos tan asin acos atan atan2 sinh cosh tanh exp log log10 log2 sqrt abs sign floor ceil hypot pow min max",
+  "if(cond, a, b) or where — NaN cond -> NaN · fit(\"Model\", \"A\") fitval(\"Model\", x)",
   "Aggregates (scalar, same value every row): mean(A) sd(A) min(A) max(A) median(A) sum(A) count(A)",
   "Row: row() is 1-based · lag(A, k) — NaN past the edge · diff(A) = A - lag(A, 1)",
   "Variables: x and the channel letters A, B, C, …",
@@ -24,7 +26,12 @@ export interface WorksheetToolbarProps {
   colName: string;
   setFormula: (v: string) => void;
   setColName: (v: string) => void;
-  onAddColumn: () => void;
+  /** P2.5: `errors` = also derive + bind a propagated-uncertainty column
+   *  (the "± errors" toggle, local to this bar). */
+  onAddColumn: (errors: boolean) => void;
+  /** #6: an add is in flight — disable submit and ignore Enter, so a rapid
+   *  repeat doesn't add the same column twice before the box clears. */
+  addColumnPending: boolean;
   showStats: boolean;
   onToggleStats: () => void;
   onCopy: () => void;
@@ -59,6 +66,7 @@ export default function WorksheetToolbar({
   setFormula,
   setColName,
   onAddColumn,
+  addColumnPending,
   showStats,
   onToggleStats,
   onCopy,
@@ -77,6 +85,7 @@ export default function WorksheetToolbar({
   onClearColSelection,
   plotLinked,
 }: WorksheetToolbarProps) {
+  const [propagate, setPropagate] = useState(false);
   return (
     <div
       style={{
@@ -97,7 +106,7 @@ export default function WorksheetToolbar({
         title={FORMULA_HELP}
         value={formula}
         onChange={(e) => setFormula(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && formula.trim() && onAddColumn()}
+        onKeyDown={(e) => e.key === "Enter" && formula.trim() && !addColumnPending && onAddColumn(propagate)}
         style={{ width: 200 }}
       />
       <input
@@ -107,7 +116,15 @@ export default function WorksheetToolbar({
         onChange={(e) => setColName(e.target.value)}
         style={{ width: 120 }}
       />
-      <button className="qz-btn" disabled={!formula.trim()} onClick={onAddColumn}>
+      <button
+        className={propagate ? "qz-btn qz-active" : "qz-btn"}
+        aria-pressed={propagate}
+        onClick={() => setPropagate(!propagate)}
+        title="Also add a bound σ column (first-order)"
+      >
+        ± errors
+      </button>
+      <button className="qz-btn" disabled={!formula.trim() || addColumnPending} onClick={() => onAddColumn(propagate)}>
         Add column
       </button>
       <button
