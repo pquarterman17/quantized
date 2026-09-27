@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     import socket as _socket
+    from collections.abc import Callable
 
 __all__ = ["_open_when_healthy", "_resolve_port", "_run_desktop", "_run_dev"]
 
@@ -189,39 +190,46 @@ def _run_desktop(
 
     from quantized.app import app
 
-    # MAIN_PLAN #31's native file-dialog bridge and C1's exit revocation, both
-    # imported HERE -- main thread, before the server thread below starts
-    # serving -- rather than at their use sites after it: a function-level
-    # import once requests are being served would race request threads'
-    # first imports (BUG-032; tests/test_heavy_import_guard.py's ALLOWLIST).
-    from quantized.desktop_bridge import DesktopApi
-    from quantized.desktop_consent import clear_dir_grants
-
-    # Bind up front so a taken port is a clean branch, not a crashed server
-    # thread: reuse our own healthy instance (point the window at it), or
-    # refuse a foreign app instead of hanging 30 s on a dead window.
-    sock = _bind(host, port)
     server: uvicorn.Server | None = None
     t: threading.Thread | None = None
-    if sock is None:
-        if not _health_ok(host, port):
-            print(f"[qz] port {port} is in use by another app - close it and retry")
-            return
-    else:
-        server = uvicorn.Server(
-            uvicorn.Config(app, host=host, port=port, log_level="warning")
-        )
-        s = sock  # bound socket handed to uvicorn — closes the bind race
-        t = threading.Thread(target=lambda: server.run(sockets=[s]), daemon=True)
-        t.start()
-
-    # Wait for the server to answer before pointing the window at it, else
-    # the webview shows a connection-refused page and never retries.
-    deadline = time.monotonic() + 30.0
-    while time.monotonic() < deadline and not _health_ok(host, port):
-        time.sleep(0.25)
-
+    revoke_grants: Callable[[], None] | None = None
     try:
+        # MAIN_PLAN #31's native file-dialog bridge and C1's exit revocation,
+        # both imported HERE -- main thread, before the server thread below
+        # starts serving -- rather than at their use sites after it: a
+        # function-level import once requests are being served would race
+        # request threads' first imports (BUG-032;
+        # tests/test_heavy_import_guard.py's ALLOWLIST). Inside the try, so a
+        # failing import prints the hint and goes through the cleanup below
+        # rather than crashing the launcher.
+        from quantized.desktop_bridge import DesktopApi
+        from quantized.desktop_consent import clear_dir_grants
+
+        revoke_grants = clear_dir_grants
+
+        # Bind up front so a taken port is a clean branch, not a crashed
+        # server thread: reuse our own healthy instance (point the window at
+        # it), or refuse a foreign app instead of hanging 30 s on a dead
+        # window.
+        sock = _bind(host, port)
+        if sock is None:
+            if not _health_ok(host, port):
+                print(f"[qz] port {port} is in use by another app - close it and retry")
+                return
+        else:
+            server = uvicorn.Server(
+                uvicorn.Config(app, host=host, port=port, log_level="warning")
+            )
+            s = sock  # bound socket handed to uvicorn — closes the bind race
+            t = threading.Thread(target=lambda: server.run(sockets=[s]), daemon=True)
+            t.start()
+
+        # Wait for the server to answer before pointing the window at it,
+        # else the webview shows a connection-refused page and never retries.
+        deadline = time.monotonic() + 30.0
+        while time.monotonic() < deadline and not _health_ok(host, port):
+            time.sleep(0.25)
+
         # MAIN_PLAN #31: expose the native file-dialog bridge at
         # window.pywebview.api so a GUI import can carry a REAL path (and so a
         # re-import needs no second picker). Browser mode has no
@@ -249,7 +257,8 @@ def _run_desktop(
         # that dies with this process anyway, but the module's own contract
         # names app exit explicitly, so make it an actual call site rather
         # than an implicit consequence of the process ending).
-        clear_dir_grants()
+        if revoke_grants is not None:
+            revoke_grants()
         if server is not None:
             server.should_exit = True
         if t is not None:

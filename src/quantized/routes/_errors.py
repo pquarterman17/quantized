@@ -43,7 +43,6 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from quantized.calc.render_lock import RenderLockTimeout
-from quantized.heavy_import import HeavyImportTimeout
 
 _T = TypeVar("_T")
 
@@ -85,28 +84,20 @@ CALC_ERRORS_IO: tuple[type[BaseException], ...] = (*CALC_ERRORS, OSError)
 #: retry" 503 (see :func:`raise_calc_error`). A starred unpack directly in an
 #: ``except`` clause isn't mypy-checkable (see ``CALC_ERRORS_IO``'s own note
 #: above), hence this named tuple rather than ``except (RenderLockTimeout,
-#: *CALC_ERRORS))`` inline at each call site. ``HeavyImportTimeout``
-#: (``quantized.heavy_import``: a first import stuck behind another thread's
-#: import past its bounded wait) is the same "busy, retry" 503 and rides along.
-CALC_ERRORS_WITH_LOCK: tuple[type[BaseException], ...] = (
-    RenderLockTimeout,
-    HeavyImportTimeout,
-    *CALC_ERRORS,
-)
-_BUSY_ERRORS = (RenderLockTimeout, HeavyImportTimeout)
+#: *CALC_ERRORS))`` inline at each call site.
+CALC_ERRORS_WITH_LOCK: tuple[type[BaseException], ...] = (RenderLockTimeout, *CALC_ERRORS)
 
 
 def raise_calc_error(exc: BaseException) -> NoReturn:
     """Map a ``CALC_ERRORS_WITH_LOCK`` exception to its HTTP status and raise.
 
-    ``RenderLockTimeout`` / ``HeavyImportTimeout`` -> 503 (busy/stuck render
-    or first import, retryable); every other
+    ``RenderLockTimeout`` -> 503 (busy/stuck render, retryable); every other
     ``CALC_ERRORS`` member -> 422 (bad input), matching :func:`call_calc`'s
     long-standing mapping. Pair with ``except CALC_ERRORS_WITH_LOCK as exc:``
     at a call site that does more than call one ``calc/`` function (so
     ``call_calc`` itself doesn't fit) but still wants this same mapping.
     """
-    if isinstance(exc, _BUSY_ERRORS):
+    if isinstance(exc, RenderLockTimeout):
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -129,14 +120,6 @@ def _json_safe(value: Any) -> Any:
     if isinstance(value, dict):
         return {k: _json_safe(v) for k, v in value.items()}
     return value
-
-
-async def heavy_import_timeout_handler(request: Request, exc: Exception) -> JSONResponse:
-    """``HeavyImportTimeout`` raised anywhere in a route (a guarded lazy import
-    outside any ``CALC_ERRORS_WITH_LOCK`` block) -> the same 503 + message
-    :func:`raise_calc_error` gives, never an opaque 500."""
-    assert isinstance(exc, HeavyImportTimeout)
-    return JSONResponse(status_code=503, content={"detail": str(exc)})
 
 
 async def validation_error_handler(request: Request, exc: Exception) -> JSONResponse:

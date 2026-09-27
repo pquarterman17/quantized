@@ -189,3 +189,74 @@ def test_concurrent_cold_first_imports_through_heavy_imports_all_succeed() -> No
     assert {"call:_km", "call:_glm"} <= results.keys(), sorted(results)
     failures = {k: v for k, v in results.items() if v != "OK"}
     assert not failures, f"{len(failures)}/{len(results)} racing imports failed: {failures}"
+
+
+_SHARED_MATPLOTLIB_SCRIPT = r"""
+import json
+import sys
+import threading
+from importlib.util import find_spec
+
+import quantized.app  # noqa: F401 - the state right after startup
+from quantized.heavy_import import heavy_import
+
+assert "matplotlib" not in sys.modules, "startup must not import matplotlib"
+NAMES = [n for n in json.loads(sys.argv[1]) if find_spec(n.split(".")[0])]
+barrier = threading.Barrier(len(NAMES))
+results = {}
+
+
+def worker(name):
+    try:
+        barrier.wait(timeout=60.0)
+    except threading.BrokenBarrierError:
+        results[name] = "BARRIER"
+        return
+    try:
+        heavy_import(name)
+        results[name] = "OK"
+    except BaseException as exc:  # noqa: BLE001 - deliberately unfiltered
+        results[name] = f"{type(exc).__name__}: {exc}"
+
+
+threads = [threading.Thread(target=worker, args=(n,), daemon=True) for n in NAMES]
+for t in threads:
+    t.start()
+for t in threads:
+    t.join(timeout=150.0)
+for n in NAMES:
+    results.setdefault(n, "HUNG")
+print("RESULTS " + json.dumps(results))
+"""
+
+#: Two ``quantized`` renderers and two matplotlib submodules that all reach
+#: a half-built ``matplotlib`` on a cold process, plus two unrelated
+#: libraries. Unguarded (``importlib.import_module``), this failed 6/6 runs
+#: when measured (BUG-032).
+SHARED_MATPLOTLIB = [
+    "quantized.calc.figure_map",
+    "quantized.calc.figure_corner",
+    "matplotlib.mathtext",
+    "matplotlib.transforms",
+    "periodictable",
+    "lifelines",
+]
+
+
+def test_six_threads_sharing_a_cold_matplotlib_all_succeed() -> None:
+    import matplotlib.font_manager  # noqa: F401 - font cache built here, see above
+
+    proc = subprocess.run(
+        [sys.executable, "-c", _SHARED_MATPLOTLIB_SCRIPT, json.dumps(SHARED_MATPLOTLIB)],
+        capture_output=True,
+        text=True,
+        timeout=240,
+    )
+    lines = [ln for ln in proc.stdout.splitlines() if ln.startswith("RESULTS ")]
+    assert proc.returncode == 0 and lines, (
+        f"race subprocess crashed (exit {proc.returncode}):\n{proc.stdout}\n{proc.stderr}"
+    )
+    results: dict[str, str] = json.loads(lines[-1].removeprefix("RESULTS "))
+    assert {"quantized.calc.figure_map", "matplotlib.mathtext"} <= results.keys(), results
+    failures = {k: v for k, v in results.items() if v != "OK"}
+    assert not failures, f"{len(failures)}/{len(results)} racing imports failed: {failures}"

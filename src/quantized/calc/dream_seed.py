@@ -79,7 +79,7 @@ def seeded_dream(
     every quarter second; it may raise (``DreamCancelled``, or the job
     runner's cancellation) to give up, so a queued run stays cancellable --
     including while a first import of the bumps modules waits on another
-    thread's import (``heavy_import``'s bounded, sliced wait).
+    thread's first import (``heavy_import``'s sliced wait).
     """
     mods: list[Any] = [
         heavy_import(name, while_waiting=while_waiting) for name in DREAM_RNG_MODULES
