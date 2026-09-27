@@ -6,6 +6,73 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-09-27
+
+A **minor** release: the 87 merges since `v0.26.1` add a Report workflow with
+real embedded figures, live derived expressions with error propagation,
+saved transformation recipes, SIMS depth-profile calibration and comparison,
+persisted statistics marks, model-fit peaks, a first-plot Home onboarding
+flow and contextual Help — alongside a window-drag/resize performance pass
+and a batch of concurrency and data-integrity fixes.
+
+### Report
+
+- **Send figure to report**: any plot can be sent straight into a report,
+  with block controls and export warnings surfaced inline.
+- Reports now embed the actual rendered figure — not a placeholder — in
+  Word, PowerPoint, HTML and LaTeX export, and the Library's **Add to
+  Report** action carries source references and non-finite values through
+  intact.
+- Peaks "→ Report" carries model-fit errors and the fit objective with it.
+
+### Derived data and transforms
+
+- **Derived expressions**: Python-like formulas with units, fitted values,
+  and error propagation through the expression.
+- **Saved transformation recipes**, with live previews for append / join /
+  reshape / split / resample-and-align onto a common grid, metadata cleanup,
+  and promotion of transform outputs to factors.
+
+### Fitting, peaks and reflectivity
+
+- Fit models now ride the `.dwk` workspace file, so a saved fit survives
+  reopening the workspace.
+- Peak Analyzer gained a fit step on a mixed-shape peak model engine, a v2
+  recipe with direct-add and "Fit this range", and a batch-recipe fit with
+  an uncertainty/diagnostic table; fitted peak edits and model-fit errors are
+  now durable and publish to the peak table.
+- Reflectivity workshop: a full fit mode (engine + `/api/reflectivity/fit`),
+  durable fits with history/restore/curves/report, and a DREAM posterior fit.
+- Pawley whole-pattern refinement is exposed in the UI.
+
+### Statistics
+
+- Box/strip/variability plots persist raw-point, jitter, summary, error-bar
+  and label marks with export parity, and the summary table links back to
+  its selected groups.
+- Point jitter and selection are now keyed to original rows.
+
+### SIMS
+
+- Depth-profile **calibration, background, normalization and smoothing**,
+  plus log comparison, decade offsets and region measures.
+
+### Onboarding, Help and Calculator
+
+- A first-plot **Home** onboarding workflow walks a new user through their
+  first plot.
+- Contextual **Help** on major object menus.
+- Calculator: atomic bond angles, copy precision, photon quick picks, unit
+  converter parity, and strict XY pairing.
+
+### Performance
+
+- Floating-window drags and resizes are isolated from the rest of the UI,
+  keep resize targets reachable at the canvas edges, and no longer show a
+  gutter when maximized (the window title is preserved in full).
+- Bundle diet: preload pruning, lazy dialog bodies, and taking React/
+  React-DOM 19.3.0.
+
 ### Fixed
 
 - Corrections now preserve bound uncertainty columns: additive operations leave
@@ -21,6 +88,18 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
   different experiment folders coexist and show compact folder context.
 - Long-path test fixtures now distinguish unsupported Windows host policy from
   product failures.
+- Cold first imports of heavy modules are serialized behind per-package locks
+  with bounded waits, closing a startup race (BUG-032).
+- The export render lock is now bounded and `savefig` calls are de-duplicated,
+  closing a concurrent-export race.
+- A lazy dialog body now takes focus in the task that paints it, instead of
+  racing the paint (BUG-031).
+- The local API now admits only the app's own origin (BUG-030); an open modal
+  gates the app's global keyboard shortcuts (R15).
+
+### Under the hood
+
+- e2e coverage extended to Firefox and WebKit for the dialog/modality specs.
 
 ## [0.26.0] - 2026-09-18
 
