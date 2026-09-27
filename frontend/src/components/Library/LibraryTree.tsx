@@ -388,6 +388,7 @@ export default function LibraryTree({ rows, onFilterTag, panelRef }: Props) {
           x={artifactMenu.x}
           y={artifactMenu.y}
           items={buildArtifactMenu(artifactMenu.node)}
+          help={{ label: "saved items", query: "graph window" }}
           onClose={() => setArtifactMenu(null)}
         />
       )}

@@ -262,6 +262,7 @@ export default function SlotGrid({
                 x={menu.x}
                 y={menu.y}
                 items={buildPanelMenuItems(slot, status, actionsFor(i))}
+                help={{ label: "page panels", query: "multi-panel" }}
                 onClose={() => setMenu(null)}
               />
             )}

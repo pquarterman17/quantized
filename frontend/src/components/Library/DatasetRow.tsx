@@ -306,7 +306,7 @@ export default function DatasetRow({
       onDoubleClick={treeMode ? open : undefined}
       onContextMenu={onContextMenu}
     >
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} onClose={() => setMenu(null)} />}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} help={{ label: "datasets", query: "dataset" }} onClose={() => setMenu(null)} />}
       {treeMode ? (
         <>
           <div className="qzk-ds-compact-row">

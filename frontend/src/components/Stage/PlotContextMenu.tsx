@@ -251,5 +251,5 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [x, y]);
 
-  return <ContextMenu x={x} y={y} items={items} onClose={onClose} />;
+  return <ContextMenu x={x} y={y} items={items} help={{ label: "plots", query: "plot" }} onClose={onClose} />;
 }

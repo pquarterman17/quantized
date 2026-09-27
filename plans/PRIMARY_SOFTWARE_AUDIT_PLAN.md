@@ -4783,7 +4783,33 @@ covers a much smaller subset and guards focus on Analyze.
   `WORKSHOP_HELP` entry stops matching a real command. Ran
   `npx vitest run src/lib/helpContent.test.ts src/lib/workshopHelp.test.ts
   src/components/overlays/HelpDialog.test.tsx` — 81 passed.
-- [ ] Small contextual `?` links on complex workshops/property groups.
+- [x] Small contextual `?` links on complex workshops/property groups and
+  major right-click object menus. **Completed 2026-09-26:** workshop and
+  Inspector links were already present; dataset, workbook, folder, Library
+  item, plot/series, worksheet, window, axis-label, annotation, and shape
+  menus now add one compact Help footer that opens the existing searchable
+  Help dialog on a relevant topic. A coverage ratchet protects every major
+  host, and every seeded query is tested against the real Help index so a
+  contextual link cannot quietly land on an empty result. Small chooser
+  flyouts (for example colour/shape palettes) deliberately remain uncluttered.
+  **Review round 1 (2026-09-27) — narrowed and hardened:** the ratchet listed
+  the hosts that HAD a footer, so three object menus without one (figure-page
+  panel, figure-builder element, Recipe Library row "⋯") went unnoticed. It
+  now enumerates every `<ContextMenu>` in `src/`: the figure-page and
+  figure-builder menus gained footers, and exactly two hosts are exempt with
+  written reasons — PlotToolbar's chooser flyouts, and the Recipe row menu,
+  which sits inside a workshop whose title-bar `?` already covers it. "Non-empty" was also too weak: `folder` landed only on
+  "Save workspace"/"Remove all", `annotation` and `draw` topped out on fuzzy
+  title noise ("Tables > Join", "Graph Builder"), `library` on the unrelated
+  Recipe Library, and `window` on "Reset window positions".
+  `contextMenuHelp.test.ts` now pins the FIRST topic each query lands on.
+  The footer also returns focus to the right-clicked object when Help
+  closes, and its label no longer starts with a `?` glyph (type-ahead `H`
+  reaches it; screen readers stop announcing "question mark").
+  **Still open — a content gap, not a wiring one:** Help has no Library
+  topic. Folder, workbook, and Library-item menus land on "Toggle library
+  panel", the closest real entry; a Library/folder/workbook topic would
+  make those three footers genuinely useful.
 - [ ] Progressive disclosure; tooltips remain one sentence.
 - [x] Audit stale capability wording. **Audited 2026-09-13** against the
   three most recent capability changes: P3.3's dash/marker cycle (this
@@ -4827,7 +4853,7 @@ covers a much smaller subset and guards focus on Analyze.
 - [x] Edit, View, Analyze, and Help commands use the shared description
   contract; the separate 17-item Analyze help catalog was deleted
   (2026-07-25).
-- [~] Extend the same source to Inspector cards, context actions, and
+- [x] Extend the same source to Inspector cards, context actions, and
   workshops, then add contextual `?` links. **Narrowed 2026-09-12 — the
   WORKSHOPS half is shipped, checked separately from context actions
   rather than assumed together:** `lib/workshopHelp.ts`'s `WORKSHOP_HELP`
@@ -4843,7 +4869,11 @@ covers a much smaller subset and guards focus on Analyze.
   `components/ContextMenu.tsx`) nor `lib/contextActions.ts` carries a help
   affordance of any kind. That is what keeps this box `[~]` rather than
   `[x]`; see the (separate, narrower) fix below, which only closed the
-  *search-coverage* half for registry commands, not this UI gap.
+  *search-coverage* half for registry commands, not this UI gap. **Closed
+  2026-09-26:** the remaining context-action UI gap now uses the shared
+  `ContextMenu` Help-footer contract rather than adding per-action buttons;
+  this keeps the fast right-click path compact while preserving mouse and
+  keyboard access to the same searchable Help topics.
 - [x] Channels, Error columns, Corrections, Series style, and Axes Inspector
   cards have compact `?` actions that open Help with a relevant search already
   applied (2026-07-25).

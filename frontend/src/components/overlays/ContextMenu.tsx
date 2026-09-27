@@ -6,7 +6,7 @@
 // parity surface for the MATLAB GUI's six uicontextmenus.
 //
 // Item variants (all backward-compatible — a flat `{label,run}`/`{separator}`
-// list still renders exactly as before):
+// list still renders exactly as before; types live in ./contextMenuTypes):
 //   { separator }            — a divider rule
 //   { header }               — a non-interactive section label
 //   { swatches }             — a compact horizontal colour-swatch row
@@ -39,29 +39,18 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { edgeFocusableIndex, nextFocusableIndex, typeaheadIndex } from "../../lib/menuKeyboardNav";
+import { appendContextHelp, type ContextMenuHelp } from "./contextMenuHelp";
+import type { ContextMenuItem } from "./contextMenuTypes";
 
-/** One swatch in a `{ swatches }` colour row. */
-export interface Swatch {
-  key: string;
-  title: string;
-  /** CSS colour for the swatch fill (e.g. "var(--series-3)", "#000000"). */
-  css: string;
-  active?: boolean;
-  run: () => void;
-}
-
-export type ContextMenuItem =
-  | { separator: true }
-  | { header: string }
-  | { swatches: Swatch[] }
-  | { label: string; submenu: ContextMenuItem[]; disabled?: boolean }
-  | { label: string; run: () => void; disabled?: boolean; danger?: boolean; checked?: boolean; title?: string }; // title: disabled-reason tooltip (L0.36)
+export type { ContextMenuItem, Swatch } from "./contextMenuTypes";
 
 interface Props {
   x: number;
   y: number;
   items: ContextMenuItem[];
   onClose: () => void;
+  /** Optional one-line Help footer (see ./contextMenuHelp). */
+  help?: ContextMenuHelp;
 }
 
 /** A positioned, self-clamping popup box. Used for the root menu and each
@@ -345,7 +334,7 @@ function MenuList({ items, onClose, autoFocusFirst = false, onCollapse, menuRef 
   );
 }
 
-export default function ContextMenu({ x, y, items, onClose }: Props) {
+export default function ContextMenu({ x, y, items, onClose, help }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   // Captured once, synchronously, before the menu steals focus — GUI_INTERACTION
@@ -390,9 +379,12 @@ export default function ContextMenu({ x, y, items, onClose }: Props) {
     };
   }, [onClose, prevFocus]);
 
+  // The Help footer hands focus back to `prevFocus` before Help opens, so
+  // closing Help lands on the object the menu was opened from.
+  const visibleItems = appendContextHelp(items, help, prevFocus);
   return createPortal(
     <PopupBox x={x} y={y} boxRef={rootRef}>
-      <MenuList items={items} onClose={onClose} menuRef={menuRef} />
+      <MenuList items={visibleItems} onClose={onClose} menuRef={menuRef} />
     </PopupBox>,
     document.body,
   );

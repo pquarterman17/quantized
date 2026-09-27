@@ -352,7 +352,7 @@ export default function LibraryWorkspace({ onClose }: Props) {
           ))}
         </div>
       )}
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} onClose={() => setMenu(null)} />}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menu.items} help={{ label: "Library items", query: "library panel" }} onClose={() => setMenu(null)} />}
     </section>
   );
 }

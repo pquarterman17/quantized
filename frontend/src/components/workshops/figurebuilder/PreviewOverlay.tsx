@@ -351,6 +351,7 @@ export default function PreviewOverlay({
           x={menu.x}
           y={menu.y}
           items={menuItems(menu.id, menu.panel)}
+          help={{ label: "figure elements", query: "publication" }}
           onClose={() => setMenu(null)}
         />
       )}
