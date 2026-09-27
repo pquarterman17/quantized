@@ -42,6 +42,7 @@ from numpy.typing import NDArray
 
 from ..datastruct import DataStruct
 from ..x_units import x_unit_of
+from ._warn import warn as _warn
 from .resample import _colon, resample_data
 
 __all__ = ["MAX_GRID_POINTS", "AlignResult", "align_resample", "x_unit_of"]
@@ -64,12 +65,6 @@ class AlignResult:
     #: Rows in / rows out.
     rows_in: int = 0
     rows_out: int = 0
-
-
-def _warn(code: str, text: str, **extra: Any) -> dict[str, Any]:
-    out: dict[str, Any] = {"code": code, "text": text}
-    out.update({k: v for k, v in extra.items() if v is not None})
-    return out
 
 
 def _n(count: int, one: str, many: str | None = None) -> str:

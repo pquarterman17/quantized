@@ -145,6 +145,11 @@ CASES = [
         lambda ds: {"dataset": ds, "mode": "n_points", "n_points": 5},
         GOOD_DATASET,
     ),
+    (
+        "/api/sims/process",
+        lambda ds: {"dataset": ds, "smoothing": {"method": "moving", "window": 2}},
+        GOOD_DATASET,
+    ),
     ("/api/rsm/analyze", lambda ds: {"dataset": ds, "n_peaks": 1}, RSM_GOOD),
     ("/api/rsm/linecut", lambda ds: {"dataset": ds, "direction": "h", "value": 10.0}, RSM_GOOD),
     (

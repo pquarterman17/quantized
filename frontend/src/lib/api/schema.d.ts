@@ -3278,6 +3278,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/sims/process": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Process
+         * @description Calibrate / correct a SIMS profile; warnings say what that did.
+         */
+        post: operations["process_api_sims_process_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/sld/formula": {
         parameters: {
             query?: never;
@@ -8999,6 +9019,116 @@ export interface components {
             x: number[];
             /** Y */
             y: number[];
+        };
+        /** SimsBackground */
+        SimsBackground: {
+            /** Hi */
+            hi: number;
+            /** Keep */
+            keep?: number[];
+            /** Lo */
+            lo: number;
+        };
+        /** SimsCalibration */
+        SimsCalibration: {
+            /** Crater Depth */
+            crater_depth?: number | null;
+            /**
+             * Crater Unit
+             * @default nm
+             */
+            crater_unit?: string;
+            /**
+             * Depth Unit
+             * @default nm
+             */
+            depth_unit?: string;
+            /**
+             * Method
+             * @enum {string}
+             */
+            method: "rate" | "crater";
+            /**
+             * Rate Unit
+             * @default nm/s
+             */
+            rate_unit?: string;
+            /** Sputter Rate */
+            sputter_rate?: number | null;
+            /** Time Unit */
+            time_unit?: string | null;
+            /** Total Time */
+            total_time?: number | null;
+        };
+        /** SimsNormalization */
+        SimsNormalization: {
+            /** Reference */
+            reference: number;
+            /** Rsf */
+            rsf?: (number | null)[] | null;
+            /**
+             * Rsf Unit
+             * @default
+             */
+            rsf_unit?: string;
+        };
+        /** SimsProcessRequest */
+        SimsProcessRequest: {
+            background?: components["schemas"]["SimsBackground"] | null;
+            calibration?: components["schemas"]["SimsCalibration"] | null;
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            normalization?: components["schemas"]["SimsNormalization"] | null;
+            smoothing?: components["schemas"]["SimsSmoothing"] | null;
+        };
+        /** SimsProcessResponse */
+        SimsProcessResponse: {
+            /** Dataset */
+            dataset: {
+                [key: string]: unknown;
+            };
+            /** Stages */
+            stages: {
+                [key: string]: unknown;
+            }[];
+            /** Warnings */
+            warnings: components["schemas"]["SimsWarning"][];
+        };
+        /** SimsSmoothing */
+        SimsSmoothing: {
+            /**
+             * Method
+             * @default moving
+             * @enum {string}
+             */
+            method?: "moving" | "gaussian" | "savitzky-golay";
+            /**
+             * Poly Order
+             * @default 2
+             */
+            poly_order?: number;
+            /**
+             * Window
+             * @default 2
+             */
+            window?: number;
+        };
+        /** SimsWarning */
+        SimsWarning: {
+            /** Code */
+            code: string;
+            /** Columns */
+            columns?: string[] | null;
+            /** Confirm */
+            confirm?: boolean | null;
+            /** Count */
+            count?: number | null;
+            /** Info */
+            info?: boolean | null;
+            /** Text */
+            text: string;
         };
         /**
          * SimulateRequest
@@ -14862,6 +14992,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    process_api_sims_process_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SimsProcessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SimsProcessResponse"];
                 };
             };
             /** @description Validation Error */

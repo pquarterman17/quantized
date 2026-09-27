@@ -23,6 +23,7 @@ import numpy as np
 from quantized.datastruct import DataStruct
 from quantized.io import _delimited_layout as layout
 from quantized.io.base import read_head
+from quantized.time_units import TIME_UNIT_CANON
 
 __all__ = ["import_sims", "is_sims_file"]
 
@@ -253,6 +254,40 @@ def _detect_depth_unit(col_headers: Sequence[str], header_meta: Sequence[str]) -
     return "nm"
 
 
+#: The header NAME (with any unit stripped) must be time-like -- "time",
+#: bare "t", or "sputter time" (any amount of whitespace), case-insensitive.
+#: Without this, any first header ending in a recognized time unit's
+#: parenthesized/bracketed spelling -- "Cycle (s)", "Scan(s)" -- was read as
+#: a raw sputter-TIME axis just because "(s)" parses as seconds; a depth
+#: profile whose header happens to end in "(s)" for an unrelated reason (a
+#: cycle count, a scan number) must NOT be mislabelled "Time".
+_TIME_NAME_RE = re.compile(r"^\s*(?:t|time|sputter\s+time)\s*$", re.IGNORECASE)
+
+
+def _detect_time_axis(x_header: str) -> str | None:
+    """The x axis's time unit when its header names sputter TIME, else None.
+
+    Not in MATLAB's ``importSIMS`` (which only reads depth-axis profiles and
+    labels any x "Depth" in nm): a quantized extension so a raw time-axis
+    export reaches depth calibration labelled as what it is. ``"Time (s)"`` /
+    ``"Sputter time [min]"`` / ``"t (s)"`` give their unit; a bare ``"Time"``
+    gives ``""`` (unit unknown -- calibration then asks for it rather than
+    guessing seconds). The header NAME itself must be time-like -- a unit
+    alone is not enough, so ``"Cycle (s)"`` or ``"Scan(s)"`` are never
+    mistaken for a time axis just because seconds happens to parse.
+    """
+    h = x_header.strip()
+    unit = ""
+    m = _PAREN_RE.match(h) or _BRACK_RE.match(h)
+    if m:
+        h, unit = m.group(1).strip(), m.group(2).strip()
+    if not _TIME_NAME_RE.match(h):
+        return None
+    if not unit:
+        return ""
+    return TIME_UNIT_CANON.get(unit.lower())
+
+
 def _read_text_tokens(path: Path) -> list[list[str]]:
     raw_lines = _read_raw_lines(path.read_text(encoding="latin-1"))
     if not raw_lines:
@@ -357,10 +392,16 @@ def import_sims(
     else:
         resolved_unit = _detect_depth_unit(col_headers, header_meta)
 
+    x_name = "Depth"
+    time_axis = _detect_time_axis(col_headers[0]) if depth_unit == "auto" else None
+    if time_axis is not None:
+        # A raw sputter-TIME profile (P2.3): never label its x as a depth in nm.
+        x_name, resolved_unit = "Time", time_axis
+
     metadata: dict[str, Any] = {
         "source": str(path),
         "parser_name": "import_sims",
-        "x_column_name": "Depth",
+        "x_column_name": x_name,
         "x_column_unit": resolved_unit,
         "is_paired_layout": is_paired,
     }

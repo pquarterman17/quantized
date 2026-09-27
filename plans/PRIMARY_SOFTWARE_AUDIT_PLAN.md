@@ -3214,11 +3214,84 @@ summary without leaving Quantized.
 
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5.
 
-- [ ] Depth/time calibration with units/provenance.
-- [ ] Normalization, baseline/smoothing into derived data.
-- [ ] Log comparison, vertical offsets, and saved recipe.
-- [ ] Region measures and summary export.
+- [x] Depth/time calibration with units/provenance. (slice 1, 2026-09-27)
+- [x] Normalization, baseline/smoothing into derived data. (slice 1,
+  2026-09-27)
+- [ ] Log comparison, vertical offsets, and saved recipe. Open: the
+  processing step records and replays (below), but no comparison or
+  offset view was built; a `sims` step inside a P2.5 transformation recipe
+  was not exercised.
+- [ ] Region measures and summary export. Open: not started.
 - [ ] Validate on owner data before expanding.
+
+**Progress 2026-09-27 (slice 1, boxes 1-2):** no MATLAB reference
+exists for any of this (`quantized_matlab`'s `importSIMS` only reads
+depth-axis profiles), so the formulas are the textbook ones, documented in
+the module headers and tested against hand-computed values, not a golden
+freeze. Backend: `calc/sims_depth.py` (sputter time -> depth at a constant
+rate, entered directly or from a crater depth over the total sputter time;
+the total defaults to the last time point and says so; an explicit
+length/time unit table where `A` is Angstrom; a blank or non-time x unit is
+refused unless the user states the time unit, which is then recorded as a
+confirm-level warning), `calc/sims_correct.py` (per-species region-mean
+background with a keep-list, the normalization reference always kept;
+`C = RSF * I / I_ref`, a plain ratio without an RSF, reference kept raw;
+smoothing through the golden `processing.smooth_data` applied per finite
+run so a blank is never smeared, with a non-uniform-grid note),
+`calc/sims_process.py` (fixed stage order, every stage's parameters and
+derived values appended to `metadata.sims_processing`, x name/unit
+rewritten), `POST /api/sims/process`. `io/sims.py` now labels a raw
+"Time (s)" export as Time in s instead of Depth in nm (a quantized
+extension). Frontend: lazy Analyze > "SIMS depth profile..." workshop
+(`components/workshops/sims`, state in `store/simsDialog.ts`, zero
+`useApp.ts` lines) previews the log-y result and every warning live; Create
+runs one recorded `sims` transform through `lib/transformRun` — one undo
+entry, a replayable pipeline step, `.dwk` persistence (tested), the
+Library's derived mark via `metadata.sims_source`. The reference, RSFs and
+kept columns are recorded BY NAME, so a replay onto a file with reordered
+columns divides by the right species, and one without that column is
+refused by name. The e2e journey (`sims-depth-profile.spec.ts`) caught a
+real bug before merge: depth computed via metres gave 400.00000000000006 nm,
+silently dropping a point from a background region typed as "400 to 500";
+calibration is now exact in matching units and the region is inclusive to a
+1e-9 relative tolerance. Eager bundle +0.6 kB (the menu entry, the dialog
+store and the lazy import's deps map). Not done: multi-layer (per-layer
+rate) calibration, depth-axis rescaling of an already-calibrated profile,
+batch processing of several profiles at once, and anything in boxes 3-5.
+
+**Progress 2026-09-27 (slice 1 review fixes):** a code review of
+the slice 1 landing found ten issues, all fixed with a failing-first test
+each. Frontend: the workshop's confirm-level `unit-override` warning now
+gates Create exactly like resample's unit-mismatch checkbox (never a plain
+OK); a stated calibration time-unit override is recorded as the accepted
+(recorded, stated) x-unit pair and applied on replay ONLY for that exact
+pair — a target already off that unit is refused by the backend's own
+recorded-unit check instead of being silently double-calibrated;
+`DerivedWorksheetMark` no longer mis-marks a resample (or any later
+transform) of a SIMS output as itself the direct SIMS output — it now
+checks `worksheet_transform === "sims"`, not merely the presence of a
+leaked-forward `sims_source`; `lib/recipeExpect.ts` declares a sims step's
+BY-NAME reference/RSF/keep columns and its need for an already-time-unit x,
+so preflight refuses a target missing one of them instead of failing
+mid-replay; the workshop resets the background region and the time-unit
+override on a dataset switch, and re-seeds the background's guessed `keep`
+default when the reference changes (never clobbering a user's own edit).
+Backend: a categorical column (a promoted factor) now passes through every
+stage unchanged, like a `keep` column — refused only when it IS the
+normalization reference or an RSF target, by name; the raw-time-axis
+detector now requires the header NAME to be time-like ("time"/"t"/"sputter
+time") in addition to a recognized time unit, so "Cycle (s)"/"Scan(s)" stay
+depth axes; `calibrate_depth` compares a stated time-unit override against
+the recorded one by TIME FACTOR, not spelling ("sec" vs "s" no longer
+warns), and a whitespace-only override correctly reports `time_unit_source:
+"recorded"`; an out-of-range normalization reference is now validated
+up front with its own message, instead of first being swept into
+`subtract_background`'s "column to leave unchanged" refusal when a
+background stage also runs; the duplicated `_warn` helper (three copies)
+and the duplicated time-unit spelling table (`io.sims` / `calc.sims_depth`)
+each now have one source (`calc/_warn.py`, `quantized/time_units.py` —
+pure, same precedent as `quantized/x_units.py`). No behavior change to the
+golden depth-axis parity cases or the e2e journey.
 
 ### P2.4 — Peak Analyzer refinement
 

@@ -48,6 +48,9 @@ export interface RecipeExpectations {
   metadata: MetaPath[];
   /** The dataset the expectations were read from (display only). */
   example?: string;
+  /** A sims step calibrates WITHOUT a stated time-unit override, so the
+   *  target's OWN recorded x unit must already be a time unit (finding 6). */
+  needsTimeUnitX?: boolean;
 }
 
 /** Ops that edit their dataset in place (lib/metadataRun.ts's IN_PLACE_OPS —
@@ -88,8 +91,35 @@ export function letterIndex(name: string): number | null {
 const ints = (v: unknown): number[] =>
   (Array.isArray(v) ? v : [v]).filter((x): x is number => typeof x === "number" && Number.isInteger(x));
 
-/** The input columns the steps read: `all`, or the channel indices. */
-export function inputColumnRefs(steps: readonly PipelineStep[]): { all: boolean; cols: Set<number> } {
+/** The name-referenced columns a sims step (`lib/transformSims.ts`) reads:
+ *  the normalization reference + RSF target names and the background's
+ *  `keep` names — the same names `simsRequest`'s `columnIndex` resolves,
+ *  refusing by name on replay when one is missing (2026-09 review finding
+ *  6). Declaring them here (resolved to the EXAMPLE's positions by the
+ *  caller, which alone knows its labels) is what lets preflight catch a
+ *  target missing one of them BEFORE a replay, instead of failing mid-run. */
+function simsColumnNames(step: PipelineStep): string[] {
+  const p = step.params;
+  const names: string[] = [];
+  const bg = p.background as { keep?: unknown } | undefined;
+  if (Array.isArray(bg?.keep)) names.push(...bg.keep.filter((n): n is string => typeof n === "string"));
+  const norm = p.normalization as { reference?: unknown; rsf?: unknown } | undefined;
+  if (typeof norm?.reference === "string") names.push(norm.reference);
+  if (norm?.rsf && typeof norm.rsf === "object" && !Array.isArray(norm.rsf)) {
+    names.push(...Object.keys(norm.rsf as Record<string, unknown>));
+  }
+  return names;
+}
+
+/** The input columns the steps read: `all`, or the channel indices.
+ *  `labels`: the recording EXAMPLE's column names, needed only to resolve a
+ *  sims step's BY-NAME references (background keep / normalization
+ *  reference / RSF targets) into positions — every other op already
+ *  addresses columns by position. */
+export function inputColumnRefs(
+  steps: readonly PipelineStep[],
+  labels: readonly string[] = [],
+): { all: boolean; cols: Set<number> } {
   const cols = new Set<number>();
   const add = (v: unknown) => ints(v).forEach((c) => c >= 0 && cols.add(c));
   for (const s of inputSegment(steps)) {
@@ -116,11 +146,55 @@ export function inputColumnRefs(steps: readonly PipelineStep[]): { all: boolean;
         case "unstack": add([p.key, p.category, p.value]); break;
         case "join": add(p.leftKey); break; // a text key is a sidecar name, not a channel
         case "split": add(p.col); break;
-        default: break; // resample reads every channel but needs none of them
+        // resample reads every channel but needs none of them.
+        case "sims":
+          for (const name of simsColumnNames(s)) {
+            const i = labels.indexOf(name);
+            if (i >= 0) cols.add(i);
+          }
+          break;
+        default: break;
       }
     }
   }
   return { all: false, cols };
+}
+
+//: The header text detected recorded time units the parser writes
+// canonically — kept in sync BY EYE with `quantized.time_units` (a Python
+// module this pure TS leaf cannot import); a recorded x unit that isn't one
+// of these is treated as "not yet a time unit" for `needsTimeUnitX` below.
+const KNOWN_TIME_UNITS = new Set(["s", "ms", "min", "h"]);
+
+/** A dataset's recorded x unit ("" when unknown) — the same 3-key fallback
+ *  as `lib/transformResample.ts`'s `xUnitOf`, duplicated (not imported) so
+ *  this leaf module stays free of that workshop's API/store import chain. */
+function recordedXUnit(d: Dataset): string {
+  for (const key of ["xUnit", "x_column_unit", "xColumnUnit"]) {
+    const raw = d.data.metadata?.[key];
+    if (typeof raw === "string" && raw.trim()) return raw.trim();
+  }
+  return "";
+}
+
+/** Whether `d`'s recorded x unit is already a recognized time unit — a sims
+ *  calibration step recorded WITHOUT a stated override needs this to be
+ *  true on the dataset it runs on (`calc.sims_depth.calibrate_depth`
+ *  refuses otherwise). Exported for `lib/recipePreflight.ts`. */
+export function hasTimeUnitX(d: Dataset): boolean {
+  return KNOWN_TIME_UNITS.has(recordedXUnit(d));
+}
+
+/** True when the recipe's sims step calibrates WITHOUT a stated time-unit
+ *  override — the target's OWN recorded x unit must then already be a time
+ *  unit, or the run fails mid-replay with `calibrate_depth`'s refusal
+ *  (2026-09 review finding 6: declared here so preflight catches it first). */
+function needsTimeUnitX(steps: readonly PipelineStep[]): boolean {
+  return inputSegment(steps).some((s) => {
+    if (s.kind !== "transform" || s.params.op !== "sims") return false;
+    const cal = s.params.calibration as { timeUnit?: unknown } | undefined;
+    return Boolean(cal) && !(typeof cal?.timeUnit === "string" && cal.timeUnit.trim());
+  });
 }
 
 /** The names of the columns the recipe's own in-place steps append, in order.
@@ -161,7 +235,7 @@ export function deriveExpectations(steps: readonly PipelineStep[], example: Data
   const tail = formulas.slice(formulas.length - added.length);
   const own = added.length > 0 && tail.length === added.length && tail.every((n, i) => n === added[i]);
   const width = d.labels.length - (own ? added.length : 0);
-  const refs = inputColumnRefs(steps);
+  const refs = inputColumnRefs(steps, d.labels);
   const inRange = [...refs.cols].filter((c) => c < width);
   const last = refs.all ? width - 1 : inRange.length ? Math.max(...inRange) : -1;
   const columns = d.labels.slice(0, last + 1).map((name, i) => ({
@@ -169,7 +243,12 @@ export function deriveExpectations(steps: readonly PipelineStep[], example: Data
     unit: d.units[i] ?? "",
     required: refs.all || refs.cols.has(i),
   }));
-  return { columns, metadata: metadataRefs(steps), example: example.name };
+  return {
+    columns,
+    metadata: metadataRefs(steps),
+    example: example.name,
+    ...(needsTimeUnitX(steps) ? { needsTimeUnitX: true } : {}),
+  };
 }
 
 /** Validate an expectations block read from storage, a file or a `.dwk`
@@ -189,7 +268,12 @@ export function sanitizeExpectations(v: unknown): RecipeExpectations | undefined
     if (!Array.isArray(p) || !p.length || !p.every((k) => typeof k === "string")) return undefined;
     metadata.push([...(p as string[])]);
   }
-  return { columns, metadata, ...(typeof o.example === "string" ? { example: o.example } : {}) };
+  return {
+    columns,
+    metadata,
+    ...(typeof o.example === "string" ? { example: o.example } : {}),
+    ...(o.needsTimeUnitX === true ? { needsTimeUnitX: true } : {}),
+  };
 }
 
 /** "M (emu), T (K)" — the required columns, for a one-line summary. */
