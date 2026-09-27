@@ -7,6 +7,7 @@ import { renameLibraryNode } from "../../lib/libraryRename";
 import { askParams } from "../overlays/ParamDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
+import { sendEditableFigureToReport } from "../../commands/plotCommands";
 import { buildMenuItems, runContextAction, type ContextAction, type MenuEntry } from "../../lib/contextActions";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
@@ -82,6 +83,21 @@ const artifactActions: MenuEntry<ArtifactTarget>[] = [
     // stays open under P1.3").
     disabledReason: () => "save a Quick Plot template from the Quick Figure Builder instead",
     run: () => {},
+  },
+  {
+    id: "artifact.addToReport",
+    label: "Add to Report…",
+    hidden: (target) => target.node.kind !== "editable-figure",
+    run: (target) => {
+      // Finding #9 (P3.6 review round 2): routed through the Plot menu's own
+      // `commands/plotCommands.ts` helper — the SAME `runLazy` + `.then(onRun,
+      // onLoadFailure)` shape (a pendingOps busy entry for the chunk fetch, a
+      // danger toast, not a silent no-op, if it fails to load, and none of
+      // lib/sendFigureToReport.ts's figure-spec/export machinery on the eager
+      // bundle for a menu entry most sessions never open) now lives in ONE
+      // place instead of being duplicated verbatim here.
+      void sendEditableFigureToReport(useApp.getState, target.node.entityId);
+    },
   },
   {
     id: "artifact.revealSource",

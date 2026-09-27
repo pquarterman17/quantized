@@ -179,7 +179,13 @@ describe("runSendFigureToReportCommand — the spec IS the Export figure… spec
 
 describe("runSendFigureToReportCommand — targets, undo, failure", () => {
   it("a new report: named after the dataset, a Figures section, captioned, opened, ONE undo step", async () => {
-    vi.mocked(askParams).mockResolvedValueOnce(sendParams({ caption: "  Fig. 1  " }));
+    vi.mocked(askParams).mockImplementationOnce(async (_title, fields) => {
+      // The dialog's own "New report name" field defaults to the SAME
+      // "<stem> figures" convention the report ends up named — an empty
+      // answer (finding #8: ONE dialog, no second modal) keeps it.
+      expect(fields.find((f) => f.key === "newReportName")?.default).toBe("scan figures");
+      return sendParams({ caption: "  Fig. 1  " });
+    });
     await runSendFigureToReportCommand(useApp.getState);
     const s = useApp.getState();
     const entry = s.reports[0];
@@ -191,6 +197,12 @@ describe("runSendFigureToReportCommand — targets, undo, failure", () => {
     expect(s.history.map((h) => h.label)).toEqual([SEND_UNDO_LABEL]);
     s.undo();
     expect(useApp.getState().reports).toEqual([]);
+  });
+
+  it("a new report: a typed name overrides the '<stem> figures' default", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams({ newReportName: "  Hall sweep results  " }));
+    await runSendFigureToReportCommand(useApp.getState);
+    expect(useApp.getState().reports[0].name).toBe("Hall sweep results");
   });
 
   it("an existing report: appended to a new Figures section after its analysis sections, one undo step", async () => {
@@ -258,8 +270,33 @@ describe("runSendFigureToReportCommand — targets, undo, failure", () => {
 
   it("a target deleted before the send lands fails loudly and records nothing", () => {
     const block: ReportFigureBlock = { type: "figure", name: "scan", spec: { dataset: {} } };
-    expect(() => addFigureToReport(useApp.getState, "rep-gone", block, "scan", DS)).toThrow(/deleted/);
+    // targetId is non-null here, so `newReportName` ("unused") is never read.
+    expect(() => addFigureToReport(useApp.getState, "rep-gone", block, "scan", DS, "unused")).toThrow(/deleted/);
     expect(useApp.getState().history).toEqual([]);
+  });
+
+  // Finding #3 (P3.6 review round 2): the no-active-dataset check happens
+  // BEFORE any dialog opens.
+  it("no active dataset: fails before any dialog opens", async () => {
+    useApp.setState({ datasets: [], activeId: null });
+    await runSendFigureToReportCommand(useApp.getState);
+    expect(askParams).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toBe("no dataset to send");
+    expect(useToasts.getState().toasts.some((t) => t.kind === "danger" && t.msg === "no dataset to send")).toBe(true);
+  });
+
+  // Finding #4 (P3.6 review round 2): the plot path strips the dataset's
+  // filename extension for its figure/report-name stem exactly like the
+  // Library path now does (lib/exportActive.ts's shared `stemFromName`) —
+  // pinned here on the plot side; `store/reportFigureConnection.test.ts`
+  // pins the Library side of the same claim.
+  it("strips the dataset filename's extension for the figure name and default report name ('scan.dat' -> 'scan')", async () => {
+    vi.mocked(askParams).mockImplementationOnce(async (_title, fields) => {
+      expect(fields.find((f) => f.key === "newReportName")?.default).toBe("scan figures");
+      return sendParams();
+    });
+    await runSendFigureToReportCommand(useApp.getState);
+    expect(figureBlocks(useApp.getState().reports[0].id)[0].name).toBe("scan");
   });
 
   it("the deleted-target race surfaces as a failed-send toast through exportActive", async () => {

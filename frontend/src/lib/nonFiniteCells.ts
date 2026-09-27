@@ -102,6 +102,36 @@ export function isWireCellArray(v: unknown): v is WireCell[] {
   return Array.isArray(v) && v.every((cell) => decodeCell(cell) !== undefined);
 }
 
+/** Check-and-decode `v` in a SINGLE pass over its cells, rather than the
+ *  two-pass {@link isWireCellArray} + {@link decodeCells} composition above
+ *  (kept separately for its existing callers, e.g. `lib/report.ts`'s
+ *  P3.6 report-figure-spec decode, which walks a report figure's embedded
+ *  `time`/`values` rows independently of its `labels`/`units`/`metadata` and
+ *  needs to know per-row whether THAT row decoded cleanly). Bails out the
+ *  MOMENT a cell fails to decode, returning `v` itself UNCHANGED (`ok:
+ *  false`, `changed: false`) — never a partially-decoded array — since a
+ *  cell this contract cannot interpret (a `null`, or any other string) is
+ *  the same ambiguous case this module's header says it never guesses at;
+ *  decoding only the cells before the bad one would silently commit to a
+ *  guess about the rest. `value` is `v` itself when nothing needed
+ *  decoding, so an already-clean row round-trips with no new allocation. */
+export function decodeWireRow(v: unknown): { value: unknown; changed: boolean; ok: boolean } {
+  if (!Array.isArray(v)) return { value: v, changed: false, ok: false };
+  const out: number[] = [];
+  let changed = false;
+  for (const cell of v) {
+    if (typeof cell === "number") {
+      out.push(cell);
+      continue;
+    }
+    const decoded = decodeCell(cell);
+    if (decoded === undefined) return { value: v, changed: false, ok: false };
+    out.push(decoded);
+    changed = true;
+  }
+  return { value: changed ? out : v, changed, ok: true };
+}
+
 /** Encode one numeric row. Returns `row` ITSELF when every cell is a finite,
  *  non-negative-zero number — property 2 in the module header. */
 export function encodeCells(row: readonly number[]): readonly WireCell[] {
