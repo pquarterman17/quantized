@@ -93,6 +93,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
         <span className="qzk-ds-icon" aria-hidden="true" title={LIBRARY_NODE_LABEL["origin-figure"]}>
           {LIBRARY_NODE_GLYPH["origin-figure"]}
         </span>
+        <span className="qzk-origin-kind" title="Recovered Origin graph">Graph</span>
         <span className="qzk-fig-name">{figureLabel(entry)}</span>
         <span className="qzk-fig-meta">
           {entry.stem}{fidelity ? ` · ${fidelity.status === "exact" ? "=" : "≈"}` : ""}

@@ -42,7 +42,6 @@
 // onRowClick (records L0.6's remembered workbook child on open).
 
 import { useState } from "react";
-
 import { buildDatasetRowMenu, removeDatasetConfirmed } from "./datasetRowMenu";
 import DatasetRowPreview from "./DatasetRowPreview";
 import { DatasetRowControls, DatasetRowName } from "./DatasetRowParts";
@@ -203,6 +202,7 @@ export default function DatasetRow({
 
   const nameProps = {
     dataset: d,
+    compactOriginName: treeMode,
     rename,
     onChange: setRename,
     onCommit: commitRename,

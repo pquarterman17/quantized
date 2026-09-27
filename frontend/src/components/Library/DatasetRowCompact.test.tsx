@@ -72,8 +72,76 @@ describe("DatasetRow — Tree (treeMode) compact worksheet row (UX-001)", () => 
   });
 
   it("carries an explicit, tooltipped Worksheet type glyph", () => {
-    render(<DatasetRow dataset={ds} {...baseProps} treeMode />);
+    const { container } = render(<DatasetRow dataset={ds} {...baseProps} treeMode />);
     expect(screen.getByTitle("Worksheet")).toBeInTheDocument();
+    expect(container.querySelector(".qzk-origin-kind")).toBeNull();
+  });
+
+  it("only shortens an untouched importer-generated Origin name in Tree view", () => {
+    const origin: Dataset = {
+      ...ds,
+      name: "Moke:Book4 — 30 nm MnN",
+      data: { ...ds.data, metadata: { origin_book: "Book4", origin_book_long: "30 nm MnN" } },
+      source: { kind: "path", path: "C:\\data\\Moke.opju" },
+    };
+    const first = render(<DatasetRow dataset={origin} {...baseProps} treeMode />);
+    expect(first.container.querySelector(".qzk-ds-name")).toHaveTextContent("Book4 — 30 nm MnN");
+    expect(first.container.querySelector(".qzk-ds-name")).not.toHaveTextContent("Moke:");
+    expect(first.container.querySelector(".qzk-ds-name")).toHaveAttribute(
+      "title",
+      "Moke:Book4 — 30 nm MnN — double-click to rename",
+    );
+    first.unmount();
+
+    const renamed = { ...origin, name: "My review copy" };
+    const second = render(<DatasetRow dataset={renamed} {...baseProps} treeMode />);
+    expect(screen.getByText("My review copy")).toBeInTheDocument();
+    second.unmount();
+
+    const sourceLess = { ...origin, source: undefined };
+    const third = render(<DatasetRow dataset={sourceLess} {...baseProps} treeMode />);
+    expect(screen.getByText("Moke:Book4 — 30 nm MnN")).toBeInTheDocument();
+    third.unmount();
+
+    render(<DatasetRow dataset={origin} {...baseProps} />);
+    expect(screen.getByText("Moke:Book4 — 30 nm MnN")).toBeInTheDocument();
+  });
+
+  it("keeps the FULL name as the accessible name when Tree view shortens the visible label", () => {
+    // The visible text and the accessible name must not silently diverge: a
+    // screen reader reading the shortened `.qzk-ds-name` span's content would
+    // otherwise announce "Book4 — 30 nm MnN" and drop the file-stem context
+    // that a sighted user still gets from the tooltip. `aria-label` must
+    // carry the untruncated name whenever the display text is shortened, and
+    // must be absent (not merely redundant) for an ordinary, unshortened row.
+    const origin: Dataset = {
+      ...ds,
+      name: "Moke:Book4 — 30 nm MnN",
+      data: { ...ds.data, metadata: { origin_book: "Book4", origin_book_long: "30 nm MnN" } },
+      source: { kind: "path", path: "C:\\data\\Moke.opju" },
+    };
+    const shortened = render(<DatasetRow dataset={origin} {...baseProps} treeMode />);
+    expect(shortened.container.querySelector(".qzk-ds-name")).toHaveAttribute(
+      "aria-label",
+      "Moke:Book4 — 30 nm MnN",
+    );
+    shortened.unmount();
+
+    const unshortened = render(<DatasetRow dataset={ds} {...baseProps} treeMode />);
+    expect(unshortened.container.querySelector(".qzk-ds-name")).not.toHaveAttribute("aria-label");
+  });
+
+  it("double-clicking a shortened row's name still opens the rename input pre-filled with the FULL name", () => {
+    const origin: Dataset = {
+      ...ds,
+      name: "Moke:Book4 — 30 nm MnN",
+      data: { ...ds.data, metadata: { origin_book: "Book4", origin_book_long: "30 nm MnN" } },
+      source: { kind: "path", path: "C:\\data\\Moke.opju" },
+    };
+    render(<DatasetRow dataset={origin} {...baseProps} treeMode />);
+    const name = screen.getByText("Book4 — 30 nm MnN");
+    fireEvent.doubleClick(name);
+    expect(screen.getByDisplayValue("Moke:Book4 — 30 nm MnN")).toBeInTheDocument();
   });
 
   it("shows concise rows/channels meta text on the one line", () => {

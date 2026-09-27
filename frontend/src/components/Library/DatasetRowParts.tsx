@@ -19,6 +19,7 @@
 import { DATASET_DND } from "./dnd";
 import DerivedWorksheetMark from "./DerivedWorksheetMark";
 import RecomputedMark from "./RecomputedMark";
+import { isOriginBookDataset } from "../../lib/grouping";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 
@@ -98,6 +99,9 @@ export function DatasetRowControls({ dataset: d, stale, onRecalc, sheetNumber, o
 
 interface NameProps {
   dataset: Dataset;
+  /** Tree-only: hide the redundant project prefix from an untouched
+   *  importer-generated Origin worksheet name. */
+  compactOriginName?: boolean;
   /** null = not editing; "" is a valid in-progress empty draft. */
   rename: string | null;
   onChange: (value: string) => void;
@@ -106,7 +110,7 @@ interface NameProps {
   onStart: () => void;
 }
 
-export function DatasetRowName({ dataset: d, rename, onChange, onCommit, onCancel, onStart }: NameProps) {
+export function DatasetRowName({ dataset: d, compactOriginName = false, rename, onChange, onCommit, onCancel, onStart }: NameProps) {
   if (rename != null) {
     return (
       <input
@@ -123,16 +127,38 @@ export function DatasetRowName({ dataset: d, rename, onChange, onCommit, onCance
       />
     );
   }
+  const meta = d.data.metadata as Record<string, unknown> | undefined;
+  const short = typeof meta?.origin_book === "string" ? meta.origin_book : "";
+  const long = typeof meta?.origin_book_long === "string" ? meta.origin_book_long : "";
+  const importedLabel = long && long !== short ? `${short} — ${long}` : short;
+  const sourceBase = d.source?.path.split(/[\\/]/).pop() ?? "";
+  const sourceStem = sourceBase.replace(/\.[^.]+$/, "");
+  const generatedName = sourceStem && importedLabel ? `${sourceStem}:${importedLabel}` : "";
+  const displayName = compactOriginName && generatedName && d.name === generatedName
+    ? importedLabel
+    : d.name;
+  // The visible label may be shortened (Tree-only), but the ACCESSIBLE name
+  // must not be: a plain <span>'s name-from-content would otherwise expose
+  // the shortened text to screen readers, silently dropping the file-stem
+  // context that sighted users still get from the tooltip. `aria-label`
+  // outranks name-from-content and `title` in accname computation, so only
+  // set it (to the full stored name) when the visible text is actually
+  // shortened — the common case needs no override.
+  const nameAriaLabel = displayName !== d.name ? d.name : undefined;
   return (
-    <span
-      className="qzk-ds-name"
-      title={`${d.name} — double-click to rename`}
-      onDoubleClick={(e) => {
-        e.stopPropagation();
-        onStart();
-      }}
-    >
-      {d.name}
-    </span>
+    <>
+      {isOriginBookDataset(d) && <span className="qzk-origin-kind" title="Origin worksheet">Sheet</span>}
+      <span
+        className="qzk-ds-name"
+        title={`${d.name} — double-click to rename`}
+        aria-label={nameAriaLabel}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          onStart();
+        }}
+      >
+        {displayName}
+      </span>
+    </>
   );
 }
