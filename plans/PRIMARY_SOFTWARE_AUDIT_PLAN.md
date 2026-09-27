@@ -4719,6 +4719,24 @@ covers a much smaller subset and guards focus on Analyze.
   host, and every seeded query is tested against the real Help index so a
   contextual link cannot quietly land on an empty result. Small chooser
   flyouts (for example colour/shape palettes) deliberately remain uncluttered.
+  **Review round 1 (2026-09-27) — narrowed and hardened:** the ratchet listed
+  the hosts that HAD a footer, so three object menus without one (figure-page
+  panel, figure-builder element, Recipe Library row "⋯") went unnoticed. It
+  now enumerates every `<ContextMenu>` in `src/`: the figure-page and
+  figure-builder menus gained footers, and exactly two hosts are exempt with
+  written reasons — PlotToolbar's chooser flyouts, and the Recipe row menu,
+  which sits inside a workshop whose title-bar `?` already covers it. "Non-empty" was also too weak: `folder` landed only on
+  "Save workspace"/"Remove all", `annotation` and `draw` topped out on fuzzy
+  title noise ("Tables > Join", "Graph Builder"), `library` on the unrelated
+  Recipe Library, and `window` on "Reset window positions".
+  `contextMenuHelp.test.ts` now pins the FIRST topic each query lands on.
+  The footer also returns focus to the right-clicked object when Help
+  closes, and its label no longer starts with a `?` glyph (type-ahead `H`
+  reaches it; screen readers stop announcing "question mark").
+  **Still open — a content gap, not a wiring one:** Help has no Library
+  topic. Folder, workbook, and Library-item menus land on "Toggle library
+  panel", the closest real entry; a Library/folder/workbook topic would
+  make those three footers genuinely useful.
 - [ ] Progressive disclosure; tooltips remain one sentence.
 - [x] Audit stale capability wording. **Audited 2026-09-13** against the
   three most recent capability changes: P3.3's dash/marker cycle (this

@@ -87,7 +87,7 @@ export default function WorkbookRow({ node, depth, expanded, hasChildren }: Prop
         setMenu({ x: e.clientX, y: e.clientY });
       }}
     >
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} help={{ label: "workbooks", query: "library" }} onClose={() => setMenu(null)} />}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} help={{ label: "workbooks", query: "library panel" }} onClose={() => setMenu(null)} />}
       {/* Dedicated drag handle (mirrors FolderRow/DatasetRow) — the ONLY
        *  draggable element, so a drag only ever starts here. */}
       <span

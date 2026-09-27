@@ -60,7 +60,7 @@ export default function PlotStageMenus(p: PlotStageMenusProps) {
           x={p.annotationMenu.x}
           y={p.annotationMenu.y}
           items={p.annotationMenu.items}
-          help={{ label: "annotations", query: "annotation" }}
+          help={{ label: "annotations", query: "text box" }}
           onClose={p.onCloseAnnotationMenu}
         />
       )}
@@ -69,12 +69,12 @@ export default function PlotStageMenus(p: PlotStageMenusProps) {
           x={p.axisLabelMenu.x}
           y={p.axisLabelMenu.y}
           items={p.axisLabelMenu.items}
-          help={{ label: "axis labels", query: "axis" }}
+          help={{ label: "axis labels", query: "text formatting" }}
           onClose={p.onCloseAxisLabelMenu}
         />
       )}
       {p.shapeMenu && (
-        <ContextMenu x={p.shapeMenu.x} y={p.shapeMenu.y} items={p.shapeMenu.items} help={{ label: "shapes", query: "draw" }} onClose={p.onCloseShapeMenu} />
+        <ContextMenu x={p.shapeMenu.x} y={p.shapeMenu.y} items={p.shapeMenu.items} help={{ label: "shapes", query: "draw a" }} onClose={p.onCloseShapeMenu} />
       )}
       <SelectionMiniToolbar />
     </>

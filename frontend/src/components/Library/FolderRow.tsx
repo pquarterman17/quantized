@@ -225,7 +225,7 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
         }
       }}
     >
-      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} help={{ label: "folders", query: "folder" }} onClose={() => setMenu(null)} />}
+      {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems} help={{ label: "folders", query: "library panel" }} onClose={() => setMenu(null)} />}
       {/* Floating drop-outcome label (sub-item 3) — one cheap absolutely-
        *  positioned element, updated on every dragover while THIS row is the
        *  one being hovered; `pointer-events: none` (shell.css) so it never
