@@ -6,6 +6,7 @@
 // (no React / store / fetch).
 
 import { compileFormula } from "./formula";
+import { channelIndexOf } from "./formulaRename";
 import { lit } from "./macro";
 
 /** Step kinds. Runnable kinds re-execute against the active dataset;
@@ -48,7 +49,10 @@ export function regenerateStep(step: PipelineStep): PipelineStep {
       return {
         ...step,
         label: `Add column ${String(p.name ?? "")}`,
-        code: `qz.addColumn(${lit(p.name)}, ${lit(p.expr)})`,
+        // Finding 5: keep the `{ errors: true }` propagate flag on a
+        // regenerate, the same template store/derivedColumnRun.ts records —
+        // dropping it silently un-derived the σ column on the next re-run.
+        code: `qz.addColumn(${lit(p.name)}, ${lit(p.expr)}${p.propagate ? ", { errors: true }" : ""})`,
       };
     case "correction":
       return {
@@ -82,28 +86,33 @@ export function pipelineToScript(steps: readonly PipelineStep[]): string {
   return lines.join("\n") + "\n";
 }
 
-/** Author-time validation for an expression step (#7): compile the formula
- *  (no eval — recursive-descent parser) and check its column references
- *  against the dataset's channel letters. Returns null when valid, else the
- *  error message to surface inline. */
+/** Author-time validation for an expression step (#7 / review finding 5):
+ *  compile the formula (no eval — recursive-descent parser) and check its
+ *  column references against the dataset's channel letters, both from the
+ *  SAME parse pass (formula.ts's `onRef` hook — the same mechanism
+ *  `referencedColumns` uses, inlined here so a real parse error keeps its
+ *  own message instead of `referencedColumns`' generic "invalid"). Returns
+ *  null when valid, else the error message to surface inline.
+ *
+ *  Deliberately never evaluates: the old version probed with a fabricated
+ *  `{x:1, A:1, B:1, …}` row context, which has no fit snapshot and no
+ *  aggregate/column window — so it rejected every `fit()`/`fitval()` and
+ *  every aggregate (`mean(A)`, …) expression outright, regardless of
+ *  whether the dataset actually has a usable fit. A syntax + reference
+ *  check can't be fooled that way because it never runs the formula. */
 export function validateExpression(expr: string, channelCount: number): string | null {
-  let fn;
+  const refs: string[] = [];
   try {
-    fn = compileFormula(expr);
+    compileFormula(expr, (name) => refs.push(name));
   } catch (e) {
     return e instanceof Error ? e.message : "parse error";
   }
-  // Probe with a representative row context: x plus A.. for each channel.
-  const ctx: Record<string, number> = { x: 1 };
-  for (let i = 0; i < channelCount; i++) {
-    ctx[String.fromCharCode(65 + (i % 26))] = 1;
+  for (const name of refs) {
+    if (name === "x") continue;
+    const idx = channelIndexOf(name);
+    if (idx === null || idx >= channelCount) return `unknown variable "${name}"`;
   }
-  try {
-    const v = fn(ctx);
-    return Number.isFinite(v) || Number.isNaN(v) ? null : "expression must yield a number";
-  } catch (e) {
-    return e instanceof Error ? e.message : "evaluation error";
-  }
+  return null;
 }
 
 /** The editable fields per runnable kind (schema-driven param form, #6).

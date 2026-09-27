@@ -17,11 +17,15 @@
 // existing `DataStruct` value can ever satisfy structurally. The ONLY way
 // to produce one is `asAlreadyComputed`, an explicit, named, deliberately
 // unchecked assertion — call it exclusively where the caller can actually
-// vouch for the provenance. Today that's two call sites, both of which only
-// ever receive a Dataset's OWN `.data` (never a bare/fresh base table):
-// store/useApp.ts's `recompute` helper (the full, every-row path), and
-// store/cellEdit.ts's `recomputeAfterCellEdit` (the row-local incremental
-// fast path, lib/formulaIncremental.ts's `computeFormulasIncremental`).
+// vouch for the provenance: every call site only ever receives a Dataset's
+// OWN `.data` (never a bare/fresh base table), e.g. store/useApp.ts's
+// `recompute` helper (the full, every-row path), store/cellEdit.ts's
+// `recomputeAfterCellEdit` (the row-local incremental fast path,
+// lib/formulaIncremental.ts's `computeFormulasIncremental`), and — the same
+// provenance, re-resolving a fitted-value snapshot rather than a cell edit —
+// lib/derivedFitRefs.ts's `refreshFitRefs` and lib/workspaceComputedColumns.
+// ts's `reresolveDerivedFitsOnLoad` (review finding 10, a .dwk's OWN loaded
+// `data`, already carrying its formulas' computed columns).
 //
 // A caller with base-only data should reach for `recomputeFromBase` below
 // (or `applyFormulas` directly, if it doesn't need the per-column error

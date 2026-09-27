@@ -126,7 +126,7 @@ export function computeFormulasIncremental(
         // Row-local formulas never read `ex.columns` (only lag/diff/
         // aggregates do, and those are excluded by compileIfRowLocal) — an
         // empty object is safe and skips building a per-row column snapshot.
-        v = fns[i](ctx, { row, rowCount: prevFull.time.length, columns: {} });
+        v = fns[i](ctx, { row, rowCount: prevFull.time.length, columns: {}, fits: formulas[i].derived?.fits });
       } catch (e) {
         if (!errors[formulas[i].name]) {
           errors[formulas[i].name] = e instanceof Error ? e.message : "formula evaluation failed";

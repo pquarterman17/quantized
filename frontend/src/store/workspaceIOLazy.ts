@@ -19,6 +19,7 @@
 // reachable from the entry chunk; `src/architecture.test.ts`'s SEAMS list is
 // the guard.
 
+import { onDemand } from "../lib/onDemand";
 import { workspaceCodec } from "../lib/workspaceCodecLazy";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
@@ -26,15 +27,11 @@ import type { AppState } from "./useApp";
 type SliceGet = () => AppState;
 type WorkspaceIO = typeof import("./workspaceIO");
 
-let inflight: Promise<WorkspaceIO> | null = null;
+const loader = onDemand<WorkspaceIO>(() => import("./workspaceIO"));
 
 /** The save module, fetched once per session. */
 export function workspaceIOCore(): Promise<WorkspaceIO> {
-  inflight ??= import("./workspaceIO").catch((e: unknown) => {
-    inflight = null; // not cached on failure: the next Save retries
-    throw e;
-  });
-  return inflight;
+  return loader.core();
 }
 
 function saveLoadFailed(get: SliceGet): (e: unknown) => void {
@@ -65,5 +62,5 @@ export function warmSaveModules(): Promise<void> {
 
 /** Test-only: forget the cached promise (cold path / `vi.doMock`). */
 export function resetWorkspaceIOCoreForTests(): void {
-  inflight = null;
+  loader.resetForTests();
 }

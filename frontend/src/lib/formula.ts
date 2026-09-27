@@ -11,10 +11,17 @@
 //   not    := 'not' not | cmp                          // *NEW*, unary, right-assoc
 //   cmp    := expr [('<'|'<='|'>'|'>='|'=='|'!=') expr]  // *NEW*, non-chaining
 //   expr   := term (('+' | '-') term)*
-//   term   := power (('*' | '/' | '%') power)*
+//   term   := power (('*' | '/' | '//' | '%') power)*   // '//' P2.5
 //   power  := unary ('^' power)?            // right-associative
-//   unary  := ('-' | '+') unary | atom
+//   unary  := ('-' | '+') unary | pypow
+//   pypow  := atom ('**' unary)?            // P2.5, Python's rule
 //   atom   := number | name ['(' args ')'] | '(' or ')'
+//
+// P2.5 (2026-09-27) Python-like syntax — tokenizer additions are documented
+// in formulaTokenize.ts (`**`, `//`, `np.` prefixes, "text", `.member`);
+// `where(c, a, b)` is `if`; fitted-value references `fit("Model", "p")` /
+// `fit("Model").p` / `fitval("Model", x)` are formulaFitRefs.ts. Tokenizer
+// errors end in "(column N)"; the ƒx bar adds it to parse errors too.
 //
 // A parenthesized group and every function argument parse the FULL `or`
 // grammar (so `if(A > 0 and B < 5, sin(x), 0)` is legal), not just `expr` —
@@ -92,7 +99,10 @@
 // median/sum/count) has no elementwise form and always requires a single
 // bare column argument.
 
+import { tryParseFitRef } from "./formulaFitRefs";
+import { CONSTS, FUNCS } from "./formulaFuncs";
 import { tryParseRowAwareCall, type ParserOps } from "./formulaRowFns";
+import { tokenize } from "./formulaTokenize";
 import { applyAnd, applyCompare, applyNot, applyOr, COMPARE_OPS, type FormulaFn, type Tok } from "./formulaTypes";
 import { baseColumns, carryComputedLevelOrder, type StrippableData } from "./formulaInputs";
 import { computeRecodeAppend } from "./recode";
@@ -101,67 +111,7 @@ import type { ComputedColumn, DataStruct } from "./types";
 export type { FormulaFn, FormulaRowContext } from "./formulaTypes";
 export { computeAggregate, AGGREGATE_NAMES, type AggregateName } from "./formulaAggregates";
 
-const FUNCS: Record<string, (...a: number[]) => number> = {
-  sin: Math.sin,
-  cos: Math.cos,
-  tan: Math.tan,
-  exp: Math.exp,
-  log: Math.log,
-  ln: Math.log,
-  log10: Math.log10,
-  sqrt: Math.sqrt,
-  abs: Math.abs,
-  min: Math.min,
-  max: Math.max,
-  pow: Math.pow,
-};
-const CONSTS: Record<string, number> = { pi: Math.PI, e: Math.E };
-
-export function tokenize(src: string): Tok[] {
-  const toks: Tok[] = [];
-  let i = 0;
-  while (i < src.length) {
-    const c = src[i];
-    if (c === " " || c === "\t") {
-      i++;
-    } else if ((c >= "0" && c <= "9") || c === ".") {
-      let j = i + 1;
-      while (j < src.length && /[0-9.eE+-]/.test(src[j])) {
-        // allow exponent sign only right after e/E
-        if ((src[j] === "+" || src[j] === "-") && !/[eE]/.test(src[j - 1])) break;
-        j++;
-      }
-      const num = Number(src.slice(i, j));
-      if (!Number.isFinite(num)) throw new Error(`bad number "${src.slice(i, j)}"`);
-      toks.push({ t: "num", v: num });
-      i = j;
-    } else if (/[a-zA-Z_]/.test(c)) {
-      let j = i + 1;
-      while (j < src.length && /[a-zA-Z0-9_]/.test(src[j])) j++;
-      toks.push({ t: "name", v: src.slice(i, j) });
-      i = j;
-    } else if (c === "<" || c === ">" || c === "=" || c === "!") {
-      // Comparison operators: <= >= == != are two-char; < and > also stand
-      // alone. A lone "=" or "!" is not a valid token (no assignment, and
-      // "not" — not "!" — is the logical-negation spelling; see header).
-      if (src[i + 1] === "=") {
-        toks.push({ t: "op", v: c + "=" });
-        i += 2;
-      } else if (c === "<" || c === ">") {
-        toks.push({ t: "op", v: c });
-        i++;
-      } else {
-        throw new Error(`unexpected character "${c}"`);
-      }
-    } else if ("+-*/%^(),".includes(c)) {
-      toks.push({ t: "op", v: c });
-      i++;
-    } else {
-      throw new Error(`unexpected character "${c}"`);
-    }
-  }
-  return toks;
-}
+export { tokenize };
 
 /** Compile an expression to a per-row evaluator. Throws on a parse error.
  *  `onRef`, when given, is called once (at PARSE time, not per row/eval) for
@@ -236,13 +186,15 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
   }
   function parseTerm(): FormulaFn {
     let left = parsePower();
-    for (let t = peek(); t && t.t === "op" && "*/%".includes(t.v); t = peek()) {
+    for (let t = peek(); t && t.t === "op" && ["*", "/", "%", "//"].includes(t.v); t = peek()) {
       eat();
       const right = parsePower();
       const op = t.v;
       const l = left;
+      // `//` is Python floor division; `%` keeps its JS meaning (the sign of
+      // the dividend), which differs from Python for negative operands.
       left = (c, ex) =>
-        op === "*" ? l(c, ex) * right(c, ex) : op === "/" ? l(c, ex) / right(c, ex) : l(c, ex) % right(c, ex);
+        op === "*" ? l(c, ex) * right(c, ex) : op === "/" ? l(c, ex) / right(c, ex) : op === "//" ? Math.floor(l(c, ex) / right(c, ex)) : l(c, ex) % right(c, ex);
     }
     return left;
   }
@@ -263,7 +215,21 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
       const operand = parseUnary();
       return t.v === "-" ? (c, ex) => -operand(c, ex) : operand;
     }
-    return parseAtom();
+    return parsePyPow();
+  }
+  // Python `**` (P2.5): binds tighter than a unary sign on its left and looser
+  // on its right — `-A**2` is -(A**2), `2**-1` is 0.5, right-associative —
+  // the same rule as the P2.7 fit equations. `^` keeps its original, looser
+  // place above (`-A^2` is (-A)^2), so no existing formula changes meaning.
+  function parsePyPow(): FormulaFn {
+    const base = parseAtom();
+    const t = peek();
+    if (t && t.t === "op" && t.v === "**") {
+      eat();
+      const exp = parseUnary();
+      return (c, ex) => base(c, ex) ** exp(c, ex);
+    }
+    return base;
   }
 
   // Bridges this closure's private token-stream ops to formulaRowFns.ts's
@@ -286,7 +252,7 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
         eat(); // consume "("
         return parseCall(t.v);
       }
-      if (t.v in CONSTS) {
+      if (Object.hasOwn(CONSTS, t.v)) {
         const k = CONSTS[t.v];
         return () => k;
       }
@@ -305,10 +271,10 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
    *  name and open-paren: try the row-aware special forms first, then fall
    *  back to the plain FUNCS table. */
   function parseCall(fname: string): FormulaFn {
-    const special = tryParseRowAwareCall(fname, rowFnOps, CONSTS);
+    const special = tryParseRowAwareCall(fname, rowFnOps, CONSTS) ?? tryParseFitRef(fname, rowFnOps, compileFormula);
     if (special && "fn" in special) return special.fn;
 
-    const fn = FUNCS[fname];
+    const fn = Object.hasOwn(FUNCS, fname) ? FUNCS[fname] : undefined;
     if (!fn) throw new Error(`unknown function "${fname}"`);
     const args: FormulaFn[] = [];
     if (!(peek()?.t === "op" && peek()?.v === ")")) {
@@ -322,6 +288,8 @@ export function compileFormula(src: string, onRef?: (name: string, tokenIndex: n
     return (c, ex) => fn(...args.map((a) => a(c, ex)));
   }
 
+  // Parse errors here are unpositioned (bytes: this is eager); the authoring
+  // path adds the column from the lazy tree parser (lib/derivedColumn.ts).
   const fn = parseOr();
   if (pos !== toks.length) throw new Error("trailing characters in expression");
   return fn;
@@ -416,6 +384,11 @@ function computeFormulas(
         fn = null;
         errors[f.name] = e instanceof Error ? e.message : "formula failed to compile";
       }
+      // P2.5 (lib/formulaTypes.ts DerivedSpec): a σ whose value column no
+      // longer links back to it — edited, renamed or removed — is an error.
+      const of = f.derived?.sigmaOf;
+      if (fn && of && formulas.find((g) => g.name === of.name)?.derived?.sigma !== f.name)
+        [fn, errors[f.name]] = [null, `stale σ: "${of.name}" was edited or removed`];
       // One column-array snapshot per formula (not per row): captures `x` plus
       // every channel as of just before THIS formula's own column is appended
       // — exactly what the per-row scalar ctx below also reflects.
@@ -432,7 +405,7 @@ function computeFormulas(
             ctx[channelLetter(c)] = values[r]?.[c];
           });
           try {
-            v = fn(ctx, { row: r, rowCount, columns: colSnapshot });
+            v = fn(ctx, { row: r, rowCount, columns: colSnapshot, fits: f.derived?.fits });
           } catch (e) {
             v = Number.NaN;
             // First failing row wins (later rows' errors are usually the same

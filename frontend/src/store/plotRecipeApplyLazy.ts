@@ -24,31 +24,27 @@
 // always done from these call sites (it is an unguarded `Promise.all` of two
 // dynamic imports), so this seam adds no new failure MODE — and, exactly like
 // that one, the rejection happens before anything has mutated, so the project
-// is provably untouched. Neither cached slot survives a rejection: this
-// module's own `inflight` is dropped in its `.catch` below, and
-// `plotRecipeApply.ts`'s `_recipeLibs` is dropped the same way in
-// `recipeLibs()`'s `.catch`, so the next gesture refetches both; a RESOLVED
-// promise IS cached, which is why each slot is cached at all — to keep
-// concurrent callers on one fetch.
+// is provably untouched. Neither cached slot survives a rejection: `../lib/
+// onDemand.ts`'s loader below (default `retryOnFailure: true`) drops its slot
+// on a failed load, and `plotRecipeApply.ts`'s `_recipeLibs` is dropped the
+// same way in `recipeLibs()`'s `.catch`, so the next gesture refetches both; a
+// RESOLVED promise IS cached, which is why each slot is cached at all — to
+// keep concurrent callers on one fetch.
 //
 // NOTE: `store/plotRecipeApply.ts` must stay free of static importers that are
 // reachable from the entry chunk, or the bundler folds it straight back in.
 // `src/architecture.test.ts`'s SEAMS list is the guard.
 
+import { onDemand } from "../lib/onDemand";
+
 type ApplyCore = typeof import("./plotRecipeApply");
 type RecipeLibs = Awaited<ReturnType<ApplyCore["recipeLibs"]>>;
 
-let inflight: Promise<ApplyCore> | null = null;
+const loader = onDemand<ApplyCore>(() => import("./plotRecipeApply"));
 
 /** The plot-recipe apply/matching module, fetched once per session. */
 export function applyCore(): Promise<ApplyCore> {
-  inflight ??= import("./plotRecipeApply").catch((e: unknown) => {
-    // Not cached on failure: drop the slot so the next gesture retries rather
-    // than replaying one transient fetch failure for the rest of the session.
-    inflight = null;
-    throw e;
-  });
-  return inflight;
+  return loader.core();
 }
 
 /** The apply module AND the capture/match libraries it loads through its own
@@ -67,5 +63,5 @@ export async function applyCoreWithLibs(): Promise<ApplyCore & RecipeLibs> {
  *  (deferred) path, or a freshly `vi.doMock`ed module. Production code never
  *  calls this (same shape as `resetOriginApplyLibsForTests`). */
 export function resetApplyCoreForTests(): void {
-  inflight = null;
+  loader.resetForTests();
 }

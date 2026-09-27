@@ -19,6 +19,7 @@ import type { FrozenPlotBundle } from "../lib/plotsnapshot";
 import { defaultPlotView, type PlotWindow } from "../lib/plotview";
 import { initialQuickFigureMapping } from "../lib/quickFigureMappingActions";
 import type { Dataset, DataStruct } from "../lib/types";
+import { useImportBatch } from "./importBatch";
 import { loadOriginApplyLibs } from "./originApplyLibs";
 import type { LoadedWorkspace } from "../lib/workspace";
 import { useApp } from "./useApp";
@@ -2084,6 +2085,32 @@ describe("useApp importFilesAppended (gap #47 — multi-file append import)", ()
     await useApp.getState().importFilesAppended([fakeFile("a.dat"), fakeFile("b.dat")]);
 
     // mismatch falls back to importFiles: N separate datasets, never a dead import.
+    const ds = useApp.getState().datasets;
+    expect(ds).toHaveLength(2);
+    expect(ds.map((d) => d.name)).toEqual(["a.dat", "b.dat"]);
+  });
+
+  // Review finding 5: "import-append" (commands/fileCommands.ts) holds the
+  // double-import guard for the WHOLE call to importFilesAppended, including
+  // this degrade-to-N-datasets fallback — without bypassGuard, the fallback's
+  // own importFiles call always refused itself (the guard it was born under),
+  // silently dropping every file instead of importing them separately.
+  it("degrades to separate imports even while the double-import guard is held (the real 'import-append' call shape)", async () => {
+    const narrow: DataStruct = { time: [1], values: [[1]], labels: ["m"], units: ["emu"], metadata: {} };
+    const wide: DataStruct = {
+      time: [2],
+      values: [[2, 3]],
+      labels: ["m", "T"],
+      units: ["emu", "K"],
+      metadata: {},
+    };
+    vi.mocked(uploadFile).mockImplementation(async (file: File) =>
+      file.name === "a.dat" ? narrow : wide,
+    );
+
+    useImportBatch.setState({ running: true }); // what fileCommands.ts's "import-append" holds for this whole call
+    await useApp.getState().importFilesAppended([fakeFile("a.dat"), fakeFile("b.dat")]);
+
     const ds = useApp.getState().datasets;
     expect(ds).toHaveLength(2);
     expect(ds.map((d) => d.name)).toEqual(["a.dat", "b.dat"]);

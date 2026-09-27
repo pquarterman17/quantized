@@ -22,6 +22,7 @@
 // reachable from the entry chunk; `src/architecture.test.ts`'s SEAMS list is
 // the guard (the `import type` below erases).
 
+import { onDemand } from "../lib/onDemand";
 import type { ReimportSlice } from "./reimport";
 import { toast } from "./toasts";
 
@@ -32,15 +33,11 @@ type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState
 type SliceGet = () => AppState;
 type ReimportCore = typeof import("./reimport");
 
-let inflight: Promise<ReimportCore> | null = null;
+const loader = onDemand<ReimportCore>(() => import("./reimport"));
 
 /** The re-import module, fetched once per session. */
 export function reimportCore(): Promise<ReimportCore> {
-  inflight ??= import("./reimport").catch((e: unknown) => {
-    inflight = null; // not cached on failure: the next gesture retries
-    throw e;
-  });
-  return inflight;
+  return loader.core();
 }
 
 export function createReimportSlice(set: SliceSet, get: SliceGet): ReimportSlice {
@@ -60,5 +57,5 @@ export function createReimportSlice(set: SliceSet, get: SliceGet): ReimportSlice
 
 /** Test-only: forget the cached promise (cold path / `vi.doMock`). */
 export function resetReimportCoreForTests(): void {
-  inflight = null;
+  loader.resetForTests();
 }

@@ -24,7 +24,7 @@ import {
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "../lib/originTemplate";
 import { snapshotView } from "../lib/plotview";
 import type { Action } from "../store/commands";
-import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importDatasets";
+import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importBatch";
 import { withOp } from "../store/pendingOps";
 import { toast } from "../store/toasts";
 import { nextDatasetId } from "../store/useApp";

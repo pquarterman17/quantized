@@ -149,6 +149,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         setFormula={view.setFormula}
         setColName={view.setColName}
         onAddColumn={view.addColumn}
+        addColumnPending={view.addColumnPending}
         showStats={view.showStats}
         onToggleStats={() => view.setShowStats((v) => !v)}
         onCopy={view.copyRows}

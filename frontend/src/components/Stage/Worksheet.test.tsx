@@ -327,26 +327,86 @@ describe("Worksheet global-filter greying (#53 residual, item 7b)", () => {
 });
 
 describe("Worksheet computed columns (recompute)", () => {
-  const addColumn = (expr: string, name?: string) => {
+  // P2.5: adding a column goes through the lazy derived-expression path, so
+  // wait on the STATE (the new formula) rather than on any call.
+  const addColumn = async (expr: string, name?: string) => {
+    const before = useApp.getState().datasets[0].formulas?.length ?? 0;
     fireEvent.change(screen.getByPlaceholderText("2*A + sqrt(B)"), { target: { value: expr } });
     if (name) fireEvent.change(screen.getByPlaceholderText("column name"), { target: { value: name } });
     fireEvent.click(screen.getByRole("button", { name: /Add column/ }));
+    await waitFor(() => expect(useApp.getState().datasets[0].formulas?.length ?? 0).toBe(before + 1));
   };
+  // A + B needs A and B in the same unit now (P2.5); the refusal itself is
+  // covered below.
+  beforeEach(() => {
+    useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data: { ...data, units: ["V", "V"] } }] });
+  });
 
-  it("adds a live computed column to the active dataset (in place, no new dataset)", () => {
+  it("derives the new column's unit and refuses mismatched units with the reason (P2.5)", async () => {
     render(<Worksheet />);
-    addColumn("A + B", "S");
+    await addColumn("A * B", "P");
+    expect(useApp.getState().datasets[0].formulas?.[0]).toMatchObject({ name: "P", unit: "V²", derived: { unitAuto: true } });
+    useApp.setState({ datasets: [{ id: "d1", name: "scan.dat", data }] }); // u1, u2
+    fireEvent.change(screen.getByPlaceholderText("2*A + sqrt(B)"), { target: { value: "A + B" } });
+    fireEvent.click(screen.getByRole("button", { name: /Add column/ }));
+    expect(await screen.findByText(/units differ/)).toBeInTheDocument();
+    expect(useApp.getState().datasets[0].formulas).toBeUndefined();
+  });
+
+  it("± errors adds a bound σ column (first-order, uncorrelated) in one undo step (P2.5)", async () => {
+    useApp.setState({
+      datasets: [
+        {
+          id: "d1",
+          name: "scan.dat",
+          data: { ...data, labels: ["A", "dA"], units: ["V", "V"] },
+          errorRoles: [{ channel: 1, target: 0, axis: "y", side: "both" }],
+        },
+      ],
+    });
+    render(<Worksheet />);
+    fireEvent.click(screen.getByRole("button", { name: "± errors" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "± errors" })).toHaveAttribute("aria-pressed", "true"));
+    fireEvent.change(screen.getByPlaceholderText("2*A + sqrt(B)"), { target: { value: "A**2" } });
+    fireEvent.change(screen.getByPlaceholderText("column name"), { target: { value: "Q" } });
+    fireEvent.click(screen.getByRole("button", { name: /Add column/ }));
+    await waitFor(() => expect(useApp.getState().datasets[0].formulas).toHaveLength(2));
+    const d = useApp.getState().datasets[0];
+    expect(d.formulas![1]).toMatchObject({ name: "σ(Q)", expr: "abs(2 * A * B)", unit: "V²" });
+    expect(d.errorRoles).toContainEqual({ channel: 3, target: 2, axis: "y", side: "both" });
+    expect(d.data.values[0][3]).toBeCloseTo(2 * 10 * 20, 12); // |2A|·σA
+    useApp.getState().undo();
+    expect(useApp.getState().datasets[0].formulas).toBeUndefined();
+  });
+
+  it("two rapid Enters add only ONE column, not two (review finding 6)", async () => {
+    render(<Worksheet />);
+    const input = screen.getByPlaceholderText("2*A + sqrt(B)");
+    fireEvent.change(input, { target: { value: "A + B" } });
+    fireEvent.change(screen.getByPlaceholderText("column name"), { target: { value: "S" } });
+    // Both fire before the first (async) add settles — the in-flight guard,
+    // not React re-rendering between them, must be what stops the second.
+    fireEvent.keyDown(input, { key: "Enter" });
+    fireEvent.keyDown(input, { key: "Enter" });
+    await waitFor(() => expect(useApp.getState().datasets[0].formulas?.length ?? 0).toBeGreaterThan(0));
+    expect(useApp.getState().datasets[0].formulas).toHaveLength(1);
+  });
+
+  it("adds a live computed column to the active dataset (in place, no new dataset)", async () => {
+    render(<Worksheet />);
+    await addColumn("A + B", "S");
     expect(useApp.getState().datasets).toHaveLength(1); // in place, not a new dataset
     const d = useApp.getState().datasets[0];
     // LIBRARY_WORKBOOK_UX_PLAN PR K (K1/K2): addFormula now captures `deps`.
-    expect(d.formulas).toEqual([{ name: "S", expr: "A + B", deps: ["A", "B"] }]);
+    // P2.5: the unit is derived from the operands (V + V).
+    expect(d.formulas).toEqual([{ name: "S", expr: "A + B", deps: ["A", "B"], unit: "V", derived: { unitAuto: true } }]);
     expect(d.data.values[0][2]).toBe(30); // 10 + 20
     expect(screen.getByText("30.0000")).toBeInTheDocument();
   });
 
-  it("recomputes the column when a base cell is edited", () => {
+  it("recomputes the column when a base cell is edited", async () => {
     render(<Worksheet />);
-    addColumn("A + B", "S");
+    await addColumn("A + B", "S");
     fireEvent.doubleClick(screen.getByText("10.0000")); // base A row 0
     const input = screen.getByDisplayValue("10");
     fireEvent.change(input, { target: { value: "100" } });
@@ -355,9 +415,9 @@ describe("Worksheet computed columns (recompute)", () => {
     expect(screen.getByText("120.0000")).toBeInTheDocument();
   });
 
-  it("removes a computed column via its header ×", () => {
+  it("removes a computed column via its header ×", async () => {
     render(<Worksheet />);
-    addColumn("A + B", "S");
+    await addColumn("A + B", "S");
     fireEvent.click(screen.getByRole("button", { name: "remove computed column" }));
     expect(useApp.getState().datasets[0].formulas).toBeUndefined();
     expect(useApp.getState().datasets[0].data.labels).toEqual(["A", "B"]);

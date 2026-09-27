@@ -74,7 +74,7 @@ export function tryParseRowAwareCall(
   ops: ParserOps,
   consts: Record<string, number>,
 ): { fn: FormulaFn } | { elementwiseFallback: true } | undefined {
-  if (fname === "if") {
+  if (fname === "if" || fname === "where") { // `where` = numpy's spelling (P2.5)
     const cond = ops.parseExpr();
     ops.expectOp(",");
     const whenTrue = ops.parseExpr();

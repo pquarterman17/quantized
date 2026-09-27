@@ -56,7 +56,7 @@ function nextLabelGroupId(): string {
  *  silently ride the import's ONE undo entry: a single Ctrl+Z would revert
  *  the import AND delete every label. Same pre-flight-check + toast shape as
  *  `commands/fileCommands.ts`'s `rejectIfImportRunning` (`isImportRunning`,
- *  store/importDatasets.ts) — a cooperative, not a hard, lock: it narrows
+ *  store/importBatch.ts) — a cooperative, not a hard, lock: it narrows
  *  the window rather than eliminating it (see the two call sites below). */
 function rejectIfHistoryBatchRunning(): boolean {
   if (!useApp.getState().historySuppressed) return false;

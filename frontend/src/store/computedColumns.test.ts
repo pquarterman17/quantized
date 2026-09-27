@@ -203,6 +203,24 @@ describe("updateFormula (K4)", () => {
     expect(updated.formulaErrors).toBeUndefined();
   });
 
+  it("editing a plain formula to introduce fitval() eventually resolves against the saved fit (review finding 4)", async () => {
+    const gauss: FitSpec = { model: "Gaussian", params: [1, 0, 1], exitFlag: 1 };
+    const ds = dsWithFormulas("a", [{ name: "bad", expr: "A * 2", deps: ["A"] }]);
+    useApp.setState({ datasets: [{ ...ds, fitSpec: gauss }] });
+    const ok = useApp.getState().updateFormula("a", 0, { expr: 'A - fitval("Gaussian", x)' });
+    expect(ok).toBe(true);
+    // No snapshot existed before this edit (the old formula had none) — the
+    // finding 4 bug is that a refresh only ever re-snapped an EXISTING
+    // snapshot, so this could never resolve at all. The lazy refresh this
+    // edit now schedules resolves it fresh against the CURRENT saved fit.
+    await vi.waitFor(() => expect(useApp.getState().datasets[0].formulas![0].derived?.fits?.length).toBeGreaterThan(0));
+    const d = useApp.getState().datasets[0];
+    expect(d.formulaErrors).toBeUndefined();
+    const x = d.data.time; // fitval("Gaussian", x) at params [1,0,1] = exp(-x^2/2); A = [1,2,3]
+    const expected = x.map((xv, i) => (i + 1) - Math.exp(-(xv ** 2) / 2));
+    d.data.values.forEach((row, i) => expect(row[1]).toBeCloseTo(expected[i], 10));
+  });
+
   it("legacy columns without `deps` degrade — cycle detection still works via re-derived deps", () => {
     const ds = baseDs("a", {
       data: { time: [0, 1], values: [[2, 3], [4, 5]], labels: ["A", "B", "C"], units: ["", "", ""], metadata: {} },

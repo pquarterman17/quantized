@@ -25,7 +25,6 @@
 // line, so it's the chokepoint for the batch-overlay offer — see
 // `batchOverlayOffer` below.
 
-import { create } from "zustand";
 import { plural } from "../lib/plural";
 
 import { importFile, uploadFile } from "../lib/api";
@@ -43,45 +42,20 @@ import {
   type Dataset,
 } from "../lib/types";
 import { deriveWorkbooks } from "../lib/workbooks";
+import { ALREADY_RUNNING_MSG, useImportBatch } from "./importBatch";
 import { presentBatchOutcome } from "./importBatchOffers";
 import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from "./importErrorRoles";
 import { resolveImportTargetFolderId } from "./importTargetFolder";
-import { beginOp, endOp, updateOp } from "./pendingOps";
+import { beginOp, endOp, updateOp, type OpId } from "./pendingOps";
 import { toast } from "./toasts";
 import { nextDatasetId, nextFolderId } from "./idSeq";
 import type { AppState } from "./useApp";
 import { nextWorkbookId } from "./workbookIds";
 
-// Double-import guard (P3.4 slice 1, 2026-07-26 audit gap #1): the single
-// source of truth for "is a batch import running right now". A standalone
-// store for the same reason pendingOps/toasts/commands are — session-only UI
-// state that must never touch useApp.ts's zero-headroom size ratchet.
-//
-// `runImport` below is the primary writer (importFiles/importPaths both
-// route through it). `commands/fileCommands.ts`'s "import-append" command
-// also sets/clears it around its own call: that flow's implementation
-// (`importFilesAppended`) lives in useApp.ts, which this slice deliberately
-// never touches, so the guard is applied at the command layer for that one
-// entry point instead of inside the action itself. Every OTHER import entry
-// point (⌘O, the command palette, the Library toolbar button, drag-drop, the
-// Recent-files list) calls `importFiles`/`importPaths` directly or through
-// `lib/importEntry.ts`'s `chooseAndImport`, so guarding those two actions
-// covers all of them from one chokepoint.
-interface ImportBatchState {
-  running: boolean;
-}
-export const useImportBatch = create<ImportBatchState>(() => ({ running: false }));
-
-/** True while an import batch is in flight. */
-export function isImportRunning(): boolean {
-  return useImportBatch.getState().running;
-}
-
-/** Shared with commands/fileCommands.ts's pre-flight guard (its own copy of
- *  this check for "import"/"import-append", so those two commands don't even
- *  pop a file dialog while a batch is running) — imported, not retyped, so
- *  the two guard messages can't drift apart. */
-export const ALREADY_RUNNING_MSG = "an import is already running — cancel it first";
+// Double-import guard: its state lives in ./importBatch (eager — the command
+// layer reads it synchronously) since bundle headroom slice 10, which made
+// this module load on first import. Import it from there directly — the
+// guard names are no longer re-exported from here.
 
 /** Where one imported payload came from — the only thing the two entry points
  *  disagree about. */
@@ -101,12 +75,30 @@ interface ImportOrigin {
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
+/** Knobs `runImport` accepts ONLY from `importDatasetsLazy.ts`'s cold path and
+ *  `importFilesAppended`'s fallback — never an ordinary import entry point.
+ *  Folded into `ImportFilesOptions`/`ImportPathsOptions` below rather than
+ *  kept as separate parameters, since both already flow down to `runImport`. */
+interface InternalRunOptions {
+  /** Skip the initial refuse-check AND skip (re)claiming the guard, because
+   *  the caller already holds it — the lazy wrapper's own synchronous
+   *  cold-path claim (closing a race `fileCommands.ts`'s
+   *  `rejectIfImportRunning` could otherwise win); or `importFilesAppended`'s
+   *  fallback, called while "import-append" already holds it. Cleared
+   *  normally in the `finally` below either way — ownership fully transfers. */
+  bypassGuard?: boolean;
+  /** Continue this existing pendingOps entry (the lazy wrapper's own "loading
+   *  the importer…" op) instead of registering a new one — ONE continuous
+   *  StatusBar entry across the chunk fetch and the imports that follow. */
+  existingOpId?: OpId;
+}
+
 /** R6 F1/F2 (POST_SPRINT_INDEPENDENT_REVIEW.md code-review round): options
  *  for a batched, self-reporting caller — today only
  *  `store/relink.ts`'s `importChangedAsNewVersion`. Every ordinary caller
  *  (⌘O, drag-drop, the command palette, Recent files, …) omits this entirely
  *  and gets today's unchanged behavior. */
-export interface ImportPathsOptions {
+export interface ImportPathsOptions extends InternalRunOptions {
   /** Forward an enclosing `withHistoryBatch`'s token so every dataset this
    *  call creates folds into that batch's ONE undo entry instead of each
    *  recording its own. */
@@ -127,9 +119,12 @@ export interface ImportPathsOptions {
   presentOutcome?: boolean;
 }
 
+/** Internal-only; see `InternalRunOptions`'s doc. */
+export type ImportFilesOptions = InternalRunOptions;
+
 export interface ImportSlice extends ErrorRolesActions {
   /** Returns the created dataset ids (empty when nothing landed). */
-  importFiles: (files: File[]) => Promise<string[]>;
+  importFiles: (files: File[], opts?: ImportFilesOptions) => Promise<string[]>;
   /** Import real filesystem paths (native desktop dialog, MAIN_PLAN #31). Each
    *  dataset carries `source.path`, so re-import needs no second picker.
    *  Returns the created dataset ids (empty when nothing landed) — the
@@ -362,7 +357,9 @@ async function runImport<T>(
   load: (item: T, signal: AbortSignal) => Promise<{ data: DataStruct; origin: ImportOrigin }>,
   historyToken?: HistoryBatchToken,
   presentOutcome = true,
+  internal: InternalRunOptions = {},
 ): Promise<string[]> {
+  const { bypassGuard = false, existingOpId } = internal;
   // DEFECT B fallout (Sol audit P1-6, 2026-08-21): `importFiles`/`importPaths`
   // are called directly (no length guard) by several `openFilePicker` sites
   // — lib/importEntry.ts, useGlobalShortcuts.ts, lib/reopenRecent.ts (x3) —
@@ -373,7 +370,8 @@ async function runImport<T>(
   // future caller the same way; a silent no-op matches every other
   // openFilePicker cancel path in this codebase (no status/toast change).
   if (items.length === 0) return [];
-  if (useImportBatch.getState().running) {
+  // bypassGuard: the caller already holds the guard — see InternalRunOptions.
+  if (!bypassGuard && useImportBatch.getState().running) {
     get().setStatus(ALREADY_RUNNING_MSG);
     toast(ALREADY_RUNNING_MSG, "danger");
     return [];
@@ -384,8 +382,10 @@ async function runImport<T>(
     items.length > 1
       ? `Importing ${i + 1}/${items.length}: ${describe(items[i])}…`
       : `Importing ${describe(items[0])}…`;
-  const opId = beginOp(label(0), () => controller.abort());
-  useImportBatch.setState({ running: true });
+  // existingOpId: continue the lazy wrapper's own op instead of a second one.
+  const opId = existingOpId ?? beginOp(label(0), () => controller.abort());
+  if (existingOpId !== undefined) updateOp(existingOpId, label(0), () => controller.abort());
+  if (!bypassGuard) useImportBatch.setState({ running: true });
   // L0.46: resolved ONCE per batch — librarySelection doesn't change mid-batch.
   const targetFolderId = resolveImportTargetFolderId(get);
 
@@ -464,11 +464,11 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
     // roles (it infers them at import), and splitting the seed from the edit
     // is how the two drift into different ideas of what a binding means.
     ...createErrorRolesActions(set, get),
-    importFiles: (files) =>
+    importFiles: (files, opts) =>
       runImport(set, get, files, (f) => f.name, async (file, signal) => ({
         data: await uploadFile(file, signal),
         origin: { name: file.name, size: file.size },
-      })),
+      }), undefined, true, { bypassGuard: opts?.bypassGuard, existingOpId: opts?.existingOpId }),
 
     importPaths: (paths, opts) =>
       runImport(set, get, paths, pathBasename, async (path, signal) => {
@@ -494,6 +494,6 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
             : { kind: "path", path };
         // The path is what makes this import re-importable without a picker.
         return { data, origin: { name: pathBasename(path), size: probe?.size ?? 0, source } };
-      }, opts?.historyToken, opts?.presentOutcome ?? true),
+      }, opts?.historyToken, opts?.presentOutcome ?? true, { bypassGuard: opts?.bypassGuard, existingOpId: opts?.existingOpId }),
   };
 }

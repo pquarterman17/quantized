@@ -6,6 +6,7 @@ import { childFolders, createFolder as treeCreateFolder } from "../lib/foldertre
 import { lit } from "../lib/macro";
 import { nextStageTab } from "../lib/stagetab";
 import type { Dataset } from "../lib/types";
+import { refreshFitRefs } from "../lib/derivedFitRefs";
 import { toast } from "./toasts";
 import { nextDatasetId, nextFolderId } from "./idSeq";
 import type { SliceGet, SliceSet } from "./split";
@@ -71,7 +72,9 @@ export async function runSplit(
     // truthy, so this carries an explicit empty array too, unlike a
     // `?.length` guard which would collapse it to "not carried".
     if (src.errorRoles) child.errorRoles = [...src.errorRoles];
-    return child;
+    // P2.5: a child has no saved fit of its own, so its copied fit() columns
+    // must say so rather than keep showing the source's fitted values.
+    return refreshFitRefs(child);
   });
   const firstChild = children[0];
 

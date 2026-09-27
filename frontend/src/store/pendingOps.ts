@@ -80,10 +80,17 @@ export function beginOp(label: string, cancel?: () => void): OpId {
 
 /** Update a still-running op's label in place. Safe to call with an id
  *  that's already gone — same tolerance as `endOp`, since a caller racing
- *  its own completion against a label tick shouldn't need to guard it. */
-export function updateOp(id: OpId, label: string): void {
+ *  its own completion against a label tick shouldn't need to guard it.
+ *  Optionally REPLACES the op's `cancel` too (bundle headroom slice 10's
+ *  lazy import seam: a cold caller begins the op against ITS OWN
+ *  cancel-the-chunk-load callback, then the real action takes the op over
+ *  and rebinds `cancel` to abort the actual work instead — one continuous
+ *  entry, never two). Omitting `cancel` (the default, `undefined`) leaves
+ *  whatever the op already has untouched — there is no way to CLEAR it back
+ *  to none through this function, which no caller has needed so far. */
+export function updateOp(id: OpId, label: string, cancel?: () => void): void {
   usePendingOps.setState((s) => ({
-    ops: s.ops.map((o) => (o.id === id ? { ...o, label } : o)),
+    ops: s.ops.map((o) => (o.id === id ? { ...o, label, ...(cancel ? { cancel } : {}) } : o)),
   }));
 }
 

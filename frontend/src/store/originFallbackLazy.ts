@@ -21,6 +21,7 @@
 // reachable from the entry chunk; `src/architecture.test.ts`'s SEAMS list is
 // the guard (the `import type` below erases).
 
+import { onDemand } from "../lib/onDemand";
 import type { OriginFallbackSlice } from "./originFallback";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
@@ -31,15 +32,11 @@ type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState
 type SliceGet = () => AppState;
 type OriginFallbackCore = typeof import("./originFallback");
 
-let inflight: Promise<OriginFallbackCore> | null = null;
+const loader = onDemand<OriginFallbackCore>(() => import("./originFallback"));
 
 /** The Origin fallback module, fetched once per session. */
 export function originFallbackCore(): Promise<OriginFallbackCore> {
-  inflight ??= import("./originFallback").catch((e: unknown) => {
-    inflight = null; // not cached on failure: the next gesture retries
-    throw e;
-  });
-  return inflight;
+  return loader.core();
 }
 
 function loadFailed(what: string): (e: unknown) => void {
@@ -65,5 +62,5 @@ export function createOriginFallbackSlice(set: SliceSet, get: SliceGet): OriginF
 
 /** Test-only: forget the cached promise (cold path / `vi.doMock`). */
 export function resetOriginFallbackCoreForTests(): void {
-  inflight = null;
+  loader.resetForTests();
 }

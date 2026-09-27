@@ -50,7 +50,7 @@ import { createDatasetMetaSlice, type DatasetMetaSlice } from "./datasetMeta";
 import { createDataIntakeSlice, type DataIntakeSlice } from "./dataIntake";
 import { createRowStateSlice, type RowStateSlice } from "./rowState";
 import { deleteFolderWithTrash } from "./folderDelete";
-import { createImportSlice, type ImportSlice } from "./importDatasets";
+import { createImportSlice, type ImportSlice } from "./importDatasetsLazy";
 import { createWorkbookActionsSlice, type WorkbookActionsSlice } from "./workbookActions";
 import { createWorkbookCombineSlice, type WorkbookCombineSlice } from "./workbookCombine";
 import { createWorkbookSeparateSlice, type WorkbookSeparateSlice } from "./workbookSeparate";
@@ -61,7 +61,7 @@ import { removeDatasetsWithTrash } from "./removeDatasets";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createProjectSlice, type ProjectSlice } from "./project";
 import { createTrashSlice, type TrashSlice } from "./trash";
-import { createComputedColumnsSlice, type ComputedColumnsSlice } from "./computedColumns";
+import { createComputedColumnsSlice, refreshFitRefsLater, type ComputedColumnsSlice } from "./computedColumns";
 import { createDerivedWorksheetsSlice, type DerivedWorksheetsSlice } from "./derivedWorksheets";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
 import { createFigureLifecycleSlice, type FigureLifecycleSlice } from "./figureLifecycle";
@@ -155,6 +155,7 @@ export { nextDatasetId, nextFolderId } from "./idSeq";
 // or re-schedule (the loop would otherwise feed itself).
 let _recalcTimer: ReturnType<typeof setTimeout> | null = null;
 let _recalcInProgress = false;
+let _recalcPending = false; // #3: request mid-pass -> follow-up pass, not a no-op
 
 // (the quick-fit debounce timer moved to store/gadget.ts with the slice.)
 
@@ -895,9 +896,9 @@ export const useApp = create<AppState>((set, get) => ({
         failReason = e instanceof Error ? e.message : "append failed (column-count mismatch)";
       }
     }
-    // Degrade to N separate datasets rather than a dead import.
+    // Degrade to N separate datasets rather than a dead import (bypassGuard: "import-append" already holds it).
     toast(`${failReason} — importing separately instead`, failReason.startsWith("append cancelled") ? "info" : "danger");
-    await get().importFiles(files);
+    await get().importFiles(files, { bypassGuard: true });
   },
 
   // Body lives in ./workspaceIO, fetched on the first save by
@@ -1074,6 +1075,7 @@ export const useApp = create<AppState>((set, get) => ({
         gadgetCursorResult: null,
       };
     });
+    refreshFitRefsLater(get().activeId ?? "", get); // P2.5: the clone has no saved fit of its own
   },
   // Reorder the library by swapping a dataset with its neighbor (dir -1 = up,
   // +1 = down). No-op at the ends or for an unknown id. Order drives the list and
@@ -1283,25 +1285,23 @@ export const useApp = create<AppState>((set, get) => ({
     }
   },
   recalcNow: async () => {
-    if (_recalcInProgress) return;
+    // #3: a request that arrives mid-pass (refreshFitRefsFor's own call,
+    // reached from inside recomputeStaleFits below) sets the pending flag
+    // for a follow-up pass below, rather than the silent no-op it used to be.
+    if (_recalcInProgress) return void (_recalcPending = true);
     _recalcInProgress = true;
     try {
-      // Datasets first (corrections/derived-worksheet pipelines — they
-      // change the data fits consume), then fits. Both halves — dependency-
-      // order sorting and "only a genuine success clears the stale mark" —
-      // live in recalcDatasets.ts's own doc.
       await recomputeStaleDatasets(set, get);
       await recomputeStaleFits(set, get);
     } finally {
       _recalcInProgress = false;
+      if (_recalcPending) void ((_recalcPending = false), get().recalcNow());
     }
   },
-  setFitSpec: (id, spec) =>
-    set((s) => ({
-      datasets: s.datasets.map((d) =>
-        d.id === id ? { ...d, fitSpec: spec ?? undefined } : d,
-      ),
-    })),
+  setFitSpec: (id, spec) => {
+    set((s) => ({ datasets: s.datasets.map((d) => (d.id === id ? { ...d, fitSpec: spec ?? undefined } : d)) }));
+    refreshFitRefsLater(id, get); // P2.5: fit() columns follow the fit
+  },
   setDataFilterOpen: (dataFilterOpen) => set({ dataFilterOpen }),
   setFigureBuilderOpen: (figureBuilderOpen) => set({ figureBuilderOpen }),
   setFigurePageOpen: (figurePageOpen) => set({ figurePageOpen }),

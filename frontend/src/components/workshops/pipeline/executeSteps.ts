@@ -109,6 +109,20 @@ export async function executeSteps(
         case "expression": {
           const name = String(step.params.name ?? "");
           const expr = String(step.params.expr ?? "");
+          if (step.params.derived === true) {
+            // P2.5: re-derive on THIS target — its units, its fit, its bound
+            // errors — exactly as the ƒx bar did when it was recorded.
+            const { addDerivedColumn } = await import("../../../store/derivedColumnRun");
+            const r = await addDerivedColumn(target, {
+              name,
+              expr,
+              propagate: step.params.propagate === true,
+              allowUnitMismatch: step.params.allowUnitMismatch === true,
+            });
+            if (!r.ok) throw new Error(r.error);
+            log[step.id] = { status: "ok" };
+            break;
+          }
           const err = validateExpression(
             expr,
             store().datasets.find((d) => d.id === target)?.data.labels.length ?? 0,
