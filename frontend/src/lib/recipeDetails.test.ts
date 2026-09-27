@@ -227,6 +227,24 @@ describe("recipeDetails — kind-specific content a user deliberately opened may
     ]);
   });
 
+  it("shows a transformation recipe's description, revision and expected input (P2.5 box 4)", () => {
+    seedNameKeyed();
+    saveTemplate({
+      version: 1,
+      name: "Analysis",
+      steps: [makeStep("transform", "Stack", "", { op: "stack", channels: [0] })],
+      outputs: [],
+      description: "stack M",
+      revision: 3,
+      expects: { columns: [{ name: "M", unit: "emu", required: true }], metadata: [] },
+    });
+    const sources = buildSources();
+    const details = recipeDetails(rowFor("analysis", sources), sources)!;
+    expect(fieldValue(details, "Description")).toBe("stack M");
+    expect(fieldValue(details, "Revision")).toBe("3");
+    expect(fieldValue(details, "Expects")).toBe("columns M (emu)");
+  });
+
   it("shows peak recipe range/baseline/find/model/report fields", () => {
     seedNameKeyed();
     const sources = buildSources();

@@ -41,6 +41,8 @@ import { parseOriginFidelity, parseOriginFigures, stringsIn } from "./workspaceO
 import { parseWorkspaceDataset } from "./workspaceDatasetParse";
 import { splitProjectFitModels } from "./fitModelsProject";
 import type { CustomFitModel } from "./fitmodels";
+import type { AnalysisTemplate } from "./template";
+import { splitProjectTemplates } from "./templatesProject";
 import type { Dataset, FolderNode } from "./types";
 
 export const WORKSPACE_FORMAT = "quantized-workspace";
@@ -61,7 +63,8 @@ export const WORKSPACE_FORMAT = "quantized-workspace";
 // workshops/reflectivity/reflFitRecord.ts's `decodeRecord`, where an unknown version is skipped).
 // Additive-optional TOP-LEVEL `customFitModels` (P2.7 follow-up, lib/fitModelsProject.ts): the
 // saved fit models, written only when there are any; an older build never reads the key (this
-// parser picks its fields by name), so no bump.
+// parser picks its fields by name), so no bump. Likewise TOP-LEVEL `analysisTemplates` (P2.5
+// box 4, lib/templatesProject.ts): the saved analysis templates / transformation recipes.
 export const WORKSPACE_VERSION = 4;
 // v5 (P2.5, PR #431 review): written ONLY when the pipeline holds a `transform` step; every other
 // save stays v4, so ordinary files still open in older builds. The reason is an older reader's
@@ -214,6 +217,10 @@ export interface LoadedWorkspace {
    *  only for the hand-built fixtures, like `mapViews`. */
   projectFitModels?: CustomFitModel[];
   fitModelCarry?: unknown[];
+  /** P2.5 box 4: the file's readable saved templates, merged into the local
+   *  library by the store's load/append (`adoptProjectTemplates`), never
+   *  serialized from here — lib/templatesProject.ts. */
+  projectTemplates?: AnalysisTemplate[];
 }
 
 
@@ -438,6 +445,7 @@ export function parseWorkspace(
     recipeSourcesComplete,
     projectFitModels: fitModels.models,
     fitModelCarry: fitModels.carry,
+    projectTemplates: splitProjectTemplates(o.analysisTemplates, migrationWarnings),
   };
 }
 
@@ -456,3 +464,4 @@ export * from "./workspaceSerialize";
 // The store's load/append reach the fit-model merge through this (already
 // loaded) codec rather than a chunk of their own — lib/fitModelsProject.ts.
 export { adoptProjectFitModels, autosaveRestoreFitModels } from "./fitModelsProject";
+export { adoptProjectTemplates } from "./templatesProject";

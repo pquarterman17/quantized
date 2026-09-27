@@ -25,6 +25,8 @@ import {
   type AnalysisTemplate,
   type BatchRow,
 } from "../../../lib/template";
+import { deriveExpectations } from "../../../lib/recipeExpect";
+import { definitionKey } from "../../../lib/templatesProject";
 import { recordUse } from "../../../lib/recipeIndex";
 import { toast } from "../../../store/toasts";
 import { nextDatasetId, useApp } from "../../../store/useApp";
@@ -36,10 +38,19 @@ export interface BatchProgress {
   failures: string[];
 }
 
+/** P2.5 box 4: what makes a saved template a transformation recipe. */
+export interface SaveRecipeOptions {
+  /** Blank keeps a re-saved recipe's description. */
+  description?: string;
+  /** The dataset the expected input is read from (usually the recording's);
+   *  null = explicitly none; absent or not loaded = keep a re-saved recipe's. */
+  exampleId?: string | null;
+}
+
 export interface TemplatesState {
   templates: AnalysisTemplate[];
   batch: BatchProgress | null;
-  saveCurrent: (name: string) => Promise<string | null>;
+  saveCurrent: (name: string, recipe?: SaveRecipeOptions) => Promise<string | null>;
   load: (name: string) => void;
   remove: (name: string) => void;
   exportFile: (name: string) => void;
@@ -69,12 +80,28 @@ export function useTemplates(): TemplatesState {
   const addDataset = useApp((s) => s.addDataset);
   const setPipelineRunning = useApp((s) => s.setPipelineRunning);
 
-  const saveCurrent = useCallback(async (name: string): Promise<string | null> => {
+  const saveCurrent = useCallback(async (name: string, recipe: SaveRecipeOptions = {}): Promise<string | null> => {
     const steps = useApp.getState().macroSteps;
     if (steps.length === 0) return "no steps to save";
     const outputs = await deriveOutputs(steps);
-    setTemplates(saveTemplate(toTemplate(name, steps, outputs)));
-    toast(`template "${name}" saved`);
+    // P2.5 box 4: a re-save under the same name is the next revision, and the
+    // expected input is read off the example dataset (lib/recipeExpect.ts).
+    // A blank description keeps the saved one; so does the expected input
+    // when no example is available — only an explicit "no example" (null)
+    // drops it.
+    const prior = loadTemplates().find((t) => t.name === name);
+    const example = useApp.getState().datasets.find((d) => d.id === recipe.exampleId);
+    const expects = example ? deriveExpectations(steps, example) : recipe.exampleId === null ? undefined : prior?.expects;
+    setTemplates(
+      saveTemplate(
+        toTemplate(name, steps, outputs, {
+          description: recipe.description?.trim() ? recipe.description : prior?.description,
+          revision: prior ? (prior.revision ?? 1) + 1 : 1,
+          ...(expects ? { expects } : {}),
+        }),
+      ),
+    );
+    toast(`template "${name}" saved${prior ? ` (revision ${(prior.revision ?? 1) + 1})` : ""}`);
     return null;
   }, []);
 
@@ -108,8 +135,23 @@ export function useTemplates(): TemplatesState {
   const importFile = useCallback(async (file: File): Promise<string | null> => {
     try {
       const t = parseTemplate(await file.text());
-      setTemplates(saveTemplate(t));
-      toast(`template "${t.name}" imported`);
+      // Finding #8: importing over an existing name must never move its
+      // revision BACKWARDS or leave it repeating an already-used one — both
+      // of which a bare "upsert with the file's own revision" can do (an
+      // older export re-imported, or two machines re-saving the same recipe
+      // to different revisions before syncing). An IDENTICAL definition
+      // keeps the local revision (nothing to bump for); a DIFFERENT one
+      // bumps past whichever of the two was ahead, so the next re-save is
+      // unambiguously the newest.
+      const prior = loadTemplates().find((x) => x.name === t.name);
+      const revision = !prior
+        ? t.revision
+        : definitionKey(prior) === definitionKey(t)
+          ? prior.revision
+          : Math.max(prior.revision ?? 1, t.revision ?? 1) + 1;
+      const imported = revision !== undefined ? { ...t, revision } : t;
+      setTemplates(saveTemplate(imported));
+      toast(`template "${t.name}" imported${prior ? ` (revision ${imported.revision ?? 1})` : ""}`);
       return null;
     } catch (e) {
       return e instanceof Error ? e.message : "import failed";

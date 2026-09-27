@@ -31,11 +31,26 @@ import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { plotInNewWindow } from "./plotInNewWindow";
 import { plotSelectedTogether } from "./plotSelectedTogether";
 import type { PlotMenuContext, MenuSeries } from "./plotMenu";
-import { loadTemplates } from "./template";
+import { TEMPLATES_KEY } from "./templateKey";
 import type { Dataset, FolderNode } from "./types";
 import type { Action as PaletteAction } from "../store/commands";
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
+
+/** Whether any analysis template is saved, WITHOUT importing lib/template.ts,
+ *  whose parser (and P2.5's transformation-recipe fields) stays in the lazy
+ *  chunk. It counts stored records, not readable ones; `runTemplateOnFolder`
+ *  re-reads them and does nothing when none parse (bundle-size ratchet).
+ *  The key itself comes from lib/templateKey.ts (finding #10), not a
+ *  duplicated literal — that module is template.ts's own source for it. */
+function hasSavedTemplates(): boolean {
+  try {
+    const v: unknown = JSON.parse(localStorage.getItem(TEMPLATES_KEY) ?? "[]");
+    return Array.isArray(v) && v.length > 0;
+  } catch {
+    return false;
+  }
+}
 
 // ── generic engine ──────────────────────────────────────────────────────
 
@@ -387,7 +402,7 @@ export const folderBulkActions: ContextAction<FolderActionTarget>[] = [
   {
     id: "folder.runTemplate",
     label: "Run analysis template on folder…",
-    hidden: (t) => t.count === 0 || loadTemplates().length === 0,
+    hidden: (t) => t.count === 0 || !hasSavedTemplates(),
     run: (t) => void folderOps().then((m) => m.runTemplateOnFolder(t.folder)),
   },
 ];

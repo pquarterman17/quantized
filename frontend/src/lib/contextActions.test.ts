@@ -124,3 +124,36 @@ describe("isContextMenuKeyEvent", () => {
     expect(isContextMenuKeyEvent({ key: "Enter", shiftKey: false })).toBe(false);
   });
 });
+
+// Finding #10: `hasSavedTemplates` (behind `folder.runTemplate`'s `hidden`
+// gate) must read the SAME storage key lib/template.ts actually writes to —
+// exercised through the real `saveTemplate`, not a hardcoded duplicate that
+// could silently drift from it.
+describe("folder.runTemplate (finding #10 — shares lib/template.ts's storage key)", () => {
+  const folderTarget = (count: number) => ({
+    folder: { id: "f1", name: "Folder", parentId: null, order: 0 },
+    count,
+    onRename: vi.fn(),
+    onExpand: vi.fn(),
+  });
+
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("is hidden with no saved templates, shown once one is saved under lib/template.ts's own key", async () => {
+    const { folderBulkActions } = await import("./contextActions");
+    const { TEMPLATES_KEY } = await import("./templateKey");
+    const { saveTemplate, toTemplate } = await import("./template");
+    const { makeStep } = await import("./pipeline");
+    const runTemplate = folderBulkActions.find((a) => a.id === "folder.runTemplate")!;
+
+    expect(runTemplate.hidden?.(folderTarget(3))).toBe(true);
+
+    saveTemplate(toTemplate("t", [makeStep("transform", "Stack", "", { op: "stack", channels: [0] })], []));
+    expect(localStorage.getItem(TEMPLATES_KEY)).not.toBeNull(); // proves it wrote under the SHARED key
+    expect(runTemplate.hidden?.(folderTarget(3))).toBe(false);
+
+    expect(runTemplate.hidden?.(folderTarget(0))).toBe(true); // still hidden for an empty folder
+  });
+});

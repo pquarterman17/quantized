@@ -540,7 +540,7 @@ describe("plot-view settings — cluster-wide invariants", () => {
   });
 
   it("recording an edit clears the redo stack (recordHistory's contract)", () => {
-    useApp.setState({ future: [{ label: "stale", snapshot: {} as never }] });
+    useApp.setState({ future: [{ label: "stale", snapshot: {} as never, seq: 0 }] });
     useApp.getState().setShowGrid(true);
     expect(useApp.getState().future).toEqual([]);
   });
