@@ -20,17 +20,12 @@ from __future__ import annotations
 from io import BytesIO
 from typing import Any
 
-import matplotlib
+import numpy as np
+from numpy.typing import ArrayLike, NDArray
 
-matplotlib.use("Agg")  # headless
-matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
-
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-from numpy.typing import ArrayLike, NDArray  # noqa: E402
-
-from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_styles import figure_style  # noqa: E402
+from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_styles import figure_style
 
 __all__ = ["render_ternary_figure"]
 
@@ -132,21 +127,19 @@ def render_ternary_figure(
         "ytick.direction": st.tick_dir,
     }
 
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
-        fig, ax = plt.subplots(figsize=_FIGURE_SIZE_IN)
-        try:
-            _draw_ternary_scatter(
-                ax, normalized, labels=labels, values=vals,
-                marker_size=marker_size, style=st,
-            )
-            if title:
-                fig.suptitle(title, fontsize=st.title_font_size)
-            fig.tight_layout()
-            buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=resolved_dpi)
-            return buf.getvalue()
-        finally:
-            plt.close(fig)
+    with render_scope(rc):
+        fig = new_figure(figsize=_FIGURE_SIZE_IN)
+        ax = fig.subplots()
+        _draw_ternary_scatter(
+            ax, normalized, labels=labels, values=vals,
+            marker_size=marker_size, style=st,
+        )
+        if title:
+            fig.suptitle(title, fontsize=st.title_font_size)
+        fig.tight_layout()
+        buf = BytesIO()
+        fig.savefig(buf, format=fmt, dpi=resolved_dpi)
+        return buf.getvalue()
 
 
 def _barycentric_to_cartesian(a: float, b: float, c: float) -> tuple[float, float]:

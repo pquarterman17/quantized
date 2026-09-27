@@ -13,17 +13,12 @@ from __future__ import annotations
 from io import BytesIO
 from typing import Any
 
-import matplotlib
+import numpy as np
 
-matplotlib.use("Agg")  # headless
-matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
-
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-
-from quantized.calc.figure_group_notes import add_caveat, mark_empty_slots  # noqa: E402
-from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_styles import figure_style  # noqa: E402
+from quantized.calc.figure_group_notes import add_caveat, mark_empty_slots
+from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_styles import figure_style
 
 __all__ = ["render_categorical_figure"]
 
@@ -206,29 +201,27 @@ def render_categorical_figure(
         "axes.titlesize": st.title_font_size,
     }
 
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
-        fig, ax = plt.subplots(figsize=figsize)
-        try:
-            _draw_categorical_bars(ax, groups, series, vals, errs, stacked, cnts)
-            layout_rect = add_caveat(fig, caveat)
-            if title:
-                ax.set_title(title)
-            if x_label:
-                ax.set_xlabel(x_label)
-            if y_label:
-                ax.set_ylabel(y_label)
-            if not st.box_on:
-                ax.spines["top"].set_visible(False)
-                ax.spines["right"].set_visible(False)
-            if n_series > 1:
-                ax.legend(  # type: ignore[call-overload]
-                    frameon=st.legend_box, fontsize=st.legend_font_size, loc=st.legend_location,
-                )
-            if st.grid_alpha > 0:
-                ax.grid(True, alpha=st.grid_alpha, axis="y")
-            fig.tight_layout(rect=layout_rect)  # None = the default layout
-            buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=dpi)
-            return buf.getvalue()
-        finally:
-            plt.close(fig)
+    with render_scope(rc):
+        fig = new_figure(figsize=figsize)
+        ax = fig.subplots()
+        _draw_categorical_bars(ax, groups, series, vals, errs, stacked, cnts)
+        layout_rect = add_caveat(fig, caveat)
+        if title:
+            ax.set_title(title)
+        if x_label:
+            ax.set_xlabel(x_label)
+        if y_label:
+            ax.set_ylabel(y_label)
+        if not st.box_on:
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+        if n_series > 1:
+            ax.legend(  # type: ignore[call-overload]
+                frameon=st.legend_box, fontsize=st.legend_font_size, loc=st.legend_location,
+            )
+        if st.grid_alpha > 0:
+            ax.grid(True, alpha=st.grid_alpha, axis="y")
+        fig.tight_layout(rect=layout_rect)  # None = the default layout
+        buf = BytesIO()
+        fig.savefig(buf, format=fmt, dpi=dpi)
+        return buf.getvalue()

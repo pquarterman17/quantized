@@ -28,19 +28,14 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Any
 
-import matplotlib
+import numpy as np
 
-matplotlib.use("Agg")  # headless (defensive -- figure_facets already sets this)
-matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
-
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-
-from quantized.calc.figure_facets import draw_facet_grid  # noqa: E402
-from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_overrides import _validate_overrides  # noqa: E402
-from quantized.calc.figure_scale import resolve_axis_scale  # noqa: E402
-from quantized.calc.figure_styles import figure_style  # noqa: E402
+from quantized.calc.figure_facets import draw_facet_grid
+from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_overrides import _validate_overrides
+from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_scale import resolve_axis_scale
+from quantized.calc.figure_styles import figure_style
 
 __all__ = ["render_facets_figure_map"]
 
@@ -89,14 +84,14 @@ def _facet_grid(
     below (savefig + pixel geometry) -- factored out verbatim from
     ``render_facets_figure`` (FU-facet-hitmap) so the two ALWAYS build the
     identical figure; nothing here changes what either public function
-    renders. Yields once, with the rc-context/figure still open (matching
+    renders. Yields once, with the render scope/figure still open (matching
     ``figure_hitmap.collect_map``'s own pattern of drawing and harvesting
-    BEFORE ``savefig``, inside the same ``matplotlib.rc_context`` -- text
+    BEFORE ``savefig``, inside the same ``render_scope`` -- text
     created by ``fig.suptitle``/``supxlabel``/``supylabel`` without an
     explicit ``fontsize`` resolves ``rcParams`` at DRAW time, so harvesting
     or saving after this context exits would silently drop the style's font
-    size); closes the figure on the way out either way, panels-empty
-    raising included.
+    size); the scope and its render lock are released on the way out either
+    way, panels-empty raising included.
     """
     if not panels:
         raise ValueError("panels must be non-empty")
@@ -127,31 +122,27 @@ def _facet_grid(
     resolved_x_scale = resolve_axis_scale(x_scale, x_log)
     resolved_y_scale = resolve_axis_scale(y_scale, y_log)
 
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
-        fig, axes_grid = plt.subplots(
-            rows, cols, figsize=figsize, sharex=True, sharey=False, squeeze=False,
+    with render_scope(rc):
+        fig = new_figure(figsize=figsize)
+        axes_grid = fig.subplots(rows, cols, sharex=True, sharey=False, squeeze=False)
+        flat = [ax for row in axes_grid for ax in row]
+        panel_artists = draw_facet_grid(
+            flat, panels, st=st,
+            resolved_x_scale=resolved_x_scale, resolved_y_scale=resolved_y_scale,
+            x_fmt=x_fmt, y_fmt=y_fmt, overrides=ov,
         )
-        try:
-            flat = [ax for row in axes_grid for ax in row]
-            panel_artists = draw_facet_grid(
-                flat, panels, st=st,
-                resolved_x_scale=resolved_x_scale, resolved_y_scale=resolved_y_scale,
-                x_fmt=x_fmt, y_fmt=y_fmt, overrides=ov,
-            )
 
-            # J2: capture the real Text artists `fig.suptitle`/`supxlabel`/
-            # `supylabel` return -- `render_facets_figure_map` harvests them
-            # as real hit targets (`collect_facet_map`'s own doc).
-            title_artist = fig.suptitle(title) if title else None
-            xlabel_artist = fig.supxlabel(x_label) if x_label else None
-            ylabel_artist = fig.supylabel(y_label) if y_label else None
-            fig.tight_layout()
-            yield _BuiltFacetGrid(
-                fig=fig, axes=flat[:n], panel_artists=panel_artists,
-                title_artist=title_artist, xlabel_artist=xlabel_artist, ylabel_artist=ylabel_artist,
-            )
-        finally:
-            plt.close(fig)
+        # J2: capture the real Text artists `fig.suptitle`/`supxlabel`/
+        # `supylabel` return -- `render_facets_figure_map` harvests them
+        # as real hit targets (`collect_facet_map`'s own doc).
+        title_artist = fig.suptitle(title) if title else None
+        xlabel_artist = fig.supxlabel(x_label) if x_label else None
+        ylabel_artist = fig.supylabel(y_label) if y_label else None
+        fig.tight_layout()
+        yield _BuiltFacetGrid(
+            fig=fig, axes=flat[:n], panel_artists=panel_artists,
+            title_artist=title_artist, xlabel_artist=xlabel_artist, ylabel_artist=ylabel_artist,
+        )
 
 
 def render_facets_figure_map(

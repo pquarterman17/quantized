@@ -15,18 +15,14 @@ from collections.abc import Sequence
 from io import BytesIO
 from typing import Any, Literal
 
-import matplotlib
+import numpy as np
+from matplotlib.artist import setp
+from matplotlib.ticker import MaxNLocator
+from numpy.typing import ArrayLike, NDArray
 
-matplotlib.use("Agg")  # headless
-matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
-
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-from matplotlib.ticker import MaxNLocator  # noqa: E402
-from numpy.typing import ArrayLike, NDArray  # noqa: E402
-
-from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_styles import figure_style  # noqa: E402
+from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_styles import figure_style
 
 __all__ = [
     "render_correlation_heatmap_figure",
@@ -98,39 +94,37 @@ def render_correlation_heatmap_figure(
     rc["xtick.labelsize"] = tick_fs
     rc["ytick.labelsize"] = tick_fs
 
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
-        fig, ax = plt.subplots(figsize=figsize)
-        try:
-            # pcolormesh (not imshow) so the cells export as vector <path>
-            # rects rather than an embedded raster <image> -- a small
-            # correlation grid belongs as editable vector in a publication SVG.
-            # Edges at arange(n+1)-0.5 put cell centres on the integers the
-            # ticks and value annotations below already use; invert_yaxis
-            # restores imshow's origin="upper" (row 0 at the top).
-            edges = np.arange(n + 1, dtype=float) - 0.5
-            im = ax.pcolormesh(edges, edges, rmat, cmap="RdBu_r", vmin=-1.0, vmax=1.0)
-            ax.set_aspect("equal")
-            ax.invert_yaxis()
-            ax.set_xticks(range(n))
-            ax.set_yticks(range(n))
-            ax.set_xticklabels(names, rotation=45, ha="right")
-            ax.set_yticklabels(names)
-            for i in range(n):
-                for j in range(n):
-                    v = rmat[i, j]
-                    if not np.isfinite(v):
-                        continue
-                    ink = "white" if abs(v) > 0.55 else "black"
-                    ax.text(j, i, f"{v:.2f}", ha="center", va="center", fontsize=tick_fs, color=ink)
-            cbar = fig.colorbar(im, ax=ax, shrink=0.85, label="r")
-            if cbar.solids is not None:
-                cbar.solids.set_rasterized(False)  # vector colorbar swatch in SVG
-            if title:
-                ax.set_title(title)
-            fig.tight_layout()
-            return _savefig(fig, fmt, resolved_dpi)
-        finally:
-            plt.close(fig)
+    with render_scope(rc):
+        fig = new_figure(figsize=figsize)
+        ax = fig.subplots()
+        # pcolormesh (not imshow) so the cells export as vector <path>
+        # rects rather than an embedded raster <image> -- a small
+        # correlation grid belongs as editable vector in a publication SVG.
+        # Edges at arange(n+1)-0.5 put cell centres on the integers the
+        # ticks and value annotations below already use; invert_yaxis
+        # restores imshow's origin="upper" (row 0 at the top).
+        edges = np.arange(n + 1, dtype=float) - 0.5
+        im = ax.pcolormesh(edges, edges, rmat, cmap="RdBu_r", vmin=-1.0, vmax=1.0)
+        ax.set_aspect("equal")
+        ax.invert_yaxis()
+        ax.set_xticks(range(n))
+        ax.set_yticks(range(n))
+        ax.set_xticklabels(names, rotation=45, ha="right")
+        ax.set_yticklabels(names)
+        for i in range(n):
+            for j in range(n):
+                v = rmat[i, j]
+                if not np.isfinite(v):
+                    continue
+                ink = "white" if abs(v) > 0.55 else "black"
+                ax.text(j, i, f"{v:.2f}", ha="center", va="center", fontsize=tick_fs, color=ink)
+        cbar = fig.colorbar(im, ax=ax, shrink=0.85, label="r")
+        if cbar.solids is not None:
+            cbar.solids.set_rasterized(False)  # vector colorbar swatch in SVG
+        if title:
+            ax.set_title(title)
+        fig.tight_layout()
+        return _savefig(fig, fmt, resolved_dpi)
 
 
 # ── SPLOM ─────────────────────────────────────────────────────────────────────
@@ -182,42 +176,40 @@ def render_splom_figure(
     rc["xtick.labelsize"] = tick_fs
     rc["ytick.labelsize"] = tick_fs
 
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
-        fig, axes = plt.subplots(n, n, figsize=figsize, squeeze=False)
-        try:
-            for i in range(n):
-                for j in range(n):
-                    ax = axes[i][j]
-                    if i == j:
-                        edges = _bin_edges(cols[i][np.isfinite(cols[i])], bins)
-                        ax.hist(cols[i], bins=edges, color="0.6", edgecolor="white", linewidth=0.4)
-                        ax.set_yticks([])
-                    else:
-                        xv, yv = cols[j], cols[i]
-                        mask = np.isfinite(xv) & np.isfinite(yv)
-                        ax.scatter(xv[mask], yv[mask], s=6, color="0.25", alpha=0.55, linewidths=0)
-                    ax.xaxis.set_major_locator(MaxNLocator(nbins=3, prune="both"))
-                    if i != n - 1:
-                        ax.tick_params(labelbottom=False)
-                    else:
-                        ax.set_xlabel(names[j])
-                        plt.setp(ax.get_xticklabels(), rotation=45, ha="right")
-                    if j != 0 or i == j:
-                        ax.tick_params(labelleft=False)
-                    else:
-                        ax.yaxis.set_major_locator(MaxNLocator(nbins=3, prune="both"))
-                        ax.set_ylabel(names[i])
-                    if not st.box_on:
-                        ax.spines["top"].set_visible(False)
-                        ax.spines["right"].set_visible(False)
-            if title:
-                fig.suptitle(title, fontsize=st.title_font_size)
-                fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.96))
-            else:
-                fig.tight_layout()
-            return _savefig(fig, fmt, resolved_dpi)
-        finally:
-            plt.close(fig)
+    with render_scope(rc):
+        fig = new_figure(figsize=figsize)
+        axes = fig.subplots(n, n, squeeze=False)
+        for i in range(n):
+            for j in range(n):
+                ax = axes[i][j]
+                if i == j:
+                    edges = _bin_edges(cols[i][np.isfinite(cols[i])], bins)
+                    ax.hist(cols[i], bins=edges, color="0.6", edgecolor="white", linewidth=0.4)
+                    ax.set_yticks([])
+                else:
+                    xv, yv = cols[j], cols[i]
+                    mask = np.isfinite(xv) & np.isfinite(yv)
+                    ax.scatter(xv[mask], yv[mask], s=6, color="0.25", alpha=0.55, linewidths=0)
+                ax.xaxis.set_major_locator(MaxNLocator(nbins=3, prune="both"))
+                if i != n - 1:
+                    ax.tick_params(labelbottom=False)
+                else:
+                    ax.set_xlabel(names[j])
+                    setp(ax.get_xticklabels(), rotation=45, ha="right")
+                if j != 0 or i == j:
+                    ax.tick_params(labelleft=False)
+                else:
+                    ax.yaxis.set_major_locator(MaxNLocator(nbins=3, prune="both"))
+                    ax.set_ylabel(names[i])
+                if not st.box_on:
+                    ax.spines["top"].set_visible(False)
+                    ax.spines["right"].set_visible(False)
+        if title:
+            fig.suptitle(title, fontsize=st.title_font_size)
+            fig.tight_layout(rect=(0.0, 0.0, 1.0, 0.96))
+        else:
+            fig.tight_layout()
+        return _savefig(fig, fmt, resolved_dpi)
 
 
 # ── PCA scores / loadings / biplot ───────────────────────────────────────────
@@ -279,46 +271,44 @@ def render_pca_figure(
         vec_scale = 1.0
     vx, vy = vx * vec_scale, vy * vec_scale
 
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
-        fig, ax = plt.subplots(figsize=figsize)
-        try:
-            if has_points:
-                finite = pts[np.all(np.isfinite(pts), axis=1)]
-                ax.scatter(
-                    finite[:, 0], finite[:, 1], s=14, color="0.25", alpha=0.65,
-                    linewidths=0, zorder=3,
+    with render_scope(rc):
+        fig = new_figure(figsize=figsize)
+        ax = fig.subplots()
+        if has_points:
+            finite = pts[np.all(np.isfinite(pts), axis=1)]
+            ax.scatter(
+                finite[:, 0], finite[:, 1], s=14, color="0.25", alpha=0.65,
+                linewidths=0, zorder=3,
+            )
+        if has_vectors:
+            for k, v in enumerate(vecs):
+                x1, y1 = float(vx[k]), float(vy[k])
+                if not (np.isfinite(x1) and np.isfinite(y1)):
+                    continue
+                ax.annotate(
+                    "", xy=(x1, y1), xytext=(0, 0),
+                    arrowprops={"arrowstyle": "-|>", "color": "firebrick", "lw": 1.4},
+                    zorder=4,
                 )
-            if has_vectors:
-                for k, v in enumerate(vecs):
-                    x1, y1 = float(vx[k]), float(vy[k])
-                    if not (np.isfinite(x1) and np.isfinite(y1)):
-                        continue
-                    ax.annotate(
-                        "", xy=(x1, y1), xytext=(0, 0),
-                        arrowprops={"arrowstyle": "-|>", "color": "firebrick", "lw": 1.4},
-                        zorder=4,
-                    )
-                    ax.annotate(
-                        safe_mathtext_label(str(v.get("label", ""))), xy=(x1, y1),
-                        xytext=(4 if x1 >= 0 else -4, 0), textcoords="offset points",
-                        ha="left" if x1 >= 0 else "right", va="center", fontsize=st.font_size * 0.8,
-                        color="firebrick", zorder=4,
-                    )
-            ax.axhline(0, color="0.6", linewidth=0.8, zorder=1)
-            ax.axvline(0, color="0.6", linewidth=0.8, zorder=1)
-            if x_label:
-                ax.set_xlabel(x_label)
-            if y_label:
-                ax.set_ylabel(y_label)
-            if title:
-                ax.set_title(title)
-            if not st.box_on:
-                ax.spines["top"].set_visible(False)
-                ax.spines["right"].set_visible(False)
-            fig.tight_layout()
-            return _savefig(fig, fmt, resolved_dpi)
-        finally:
-            plt.close(fig)
+                ax.annotate(
+                    safe_mathtext_label(str(v.get("label", ""))), xy=(x1, y1),
+                    xytext=(4 if x1 >= 0 else -4, 0), textcoords="offset points",
+                    ha="left" if x1 >= 0 else "right", va="center", fontsize=st.font_size * 0.8,
+                    color="firebrick", zorder=4,
+                )
+        ax.axhline(0, color="0.6", linewidth=0.8, zorder=1)
+        ax.axvline(0, color="0.6", linewidth=0.8, zorder=1)
+        if x_label:
+            ax.set_xlabel(x_label)
+        if y_label:
+            ax.set_ylabel(y_label)
+        if title:
+            ax.set_title(title)
+        if not st.box_on:
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
+        fig.tight_layout()
+        return _savefig(fig, fmt, resolved_dpi)
 
 
 def render_pca_scree_figure(
@@ -349,26 +339,24 @@ def render_pca_scree_figure(
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
     x = np.arange(1, k + 1)
 
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
-        fig, ax = plt.subplots(figsize=figsize)
-        try:
-            ax.bar(x, exp, color="0.6", edgecolor="white", linewidth=0.5, label="% explained")
-            ax2 = ax.twinx()
-            ax2.plot(
-                x, cum, color="firebrick", marker="o", markersize=3, linewidth=1.25,
-                label="cumulative %",
-            )
-            ax2.set_ylim(0, max(100.0, float(np.nanmax(cum)) if cum.size else 100.0))
-            ax.set_xticks(x)
-            ax.set_xticklabels([f"PC{i}" for i in x])
-            ax.set_xlabel("component")
-            ax.set_ylabel("% explained")
-            ax2.set_ylabel("cumulative %")
-            if title:
-                ax.set_title(title)
-            if not st.box_on:
-                ax.spines["top"].set_visible(False)
-            fig.tight_layout()
-            return _savefig(fig, fmt, resolved_dpi)
-        finally:
-            plt.close(fig)
+    with render_scope(rc):
+        fig = new_figure(figsize=figsize)
+        ax = fig.subplots()
+        ax.bar(x, exp, color="0.6", edgecolor="white", linewidth=0.5, label="% explained")
+        ax2 = ax.twinx()
+        ax2.plot(
+            x, cum, color="firebrick", marker="o", markersize=3, linewidth=1.25,
+            label="cumulative %",
+        )
+        ax2.set_ylim(0, max(100.0, float(np.nanmax(cum)) if cum.size else 100.0))
+        ax.set_xticks(x)
+        ax.set_xticklabels([f"PC{i}" for i in x])
+        ax.set_xlabel("component")
+        ax.set_ylabel("% explained")
+        ax2.set_ylabel("cumulative %")
+        if title:
+            ax.set_title(title)
+        if not st.box_on:
+            ax.spines["top"].set_visible(False)
+        fig.tight_layout()
+        return _savefig(fig, fmt, resolved_dpi)

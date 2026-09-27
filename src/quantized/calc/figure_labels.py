@@ -152,8 +152,15 @@ def safe_mathtext_label(label: str) -> str:
         return label
     if not _uses_only_supported_commands(label):
         return _UNESCAPED_DOLLAR.sub(r"\\$", label)
+    # The trial parse runs on matplotlib's ONE shared mathtext parser, which is
+    # not thread-safe: an unlocked concurrent parse could fail spuriously here
+    # (silently de-mathing a valid label) or corrupt a render's own parse.
+    # Lazy import keeps this module's matplotlib import lazy (see module doc).
+    from quantized.calc.figure_render import RENDER_LOCK
+
     try:
-        _parser().parse(label)
+        with RENDER_LOCK:
+            _parser().parse(label)
     except Exception:  # ANY parse failure means "render literal", never raise
         return _UNESCAPED_DOLLAR.sub(r"\\$", label)
     return label

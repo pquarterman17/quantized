@@ -49,31 +49,26 @@ from dataclasses import dataclass
 from io import BytesIO
 from typing import Any
 
-import matplotlib
+import numpy as np
+from numpy.typing import ArrayLike
 
-matplotlib.use("Agg")  # headless: render to a buffer, never to a display
-matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
-
-import matplotlib.pyplot as plt  # noqa: E402  (must follow matplotlib.use)
-import numpy as np  # noqa: E402
-from numpy.typing import ArrayLike  # noqa: E402
-
-from quantized.calc import figure_page_layout as fpl  # noqa: E402
-from quantized.calc.figure import draw_series_axes, style_rc  # noqa: E402
-from quantized.calc.figure_greyscale import apply_greyscale  # noqa: E402
-from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_page_facets import (  # noqa: E402
+from quantized.calc import figure_page_layout as fpl
+from quantized.calc.figure import draw_series_axes, style_rc
+from quantized.calc.figure_greyscale import apply_greyscale
+from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_page_facets import (
     begin_grid_cell_fallback,
     draw_facet_panel_cell,
     finish_grid_cell_fallback,
 )
-from quantized.calc.figure_page_panel_labels import (  # noqa: E402
+from quantized.calc.figure_page_panel_labels import (
     _LABEL_TEMPLATES,
     _place_label,
     panel_label,
 )
-from quantized.calc.figure_page_validate import _validate_page, _validate_page_rects  # noqa: E402
-from quantized.calc.figure_styles import FigureStyle, figure_style  # noqa: E402
+from quantized.calc.figure_page_validate import _validate_page, _validate_page_rects
+from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_styles import FigureStyle, figure_style
 
 __all__ = ["PagePanel", "panel_label", "render_figure_page"]
 
@@ -270,7 +265,7 @@ def render_figure_page(
         ordered = sorted(panels, key=lambda p: (p.row, p.col))
     # (matplotlib's RcParams Literal-key type is impractical with the dynamic
     # font.<generic> key -- same targeted ignore as calc.figure.)
-    with matplotlib.rc_context(style_rc(st, {})):  # type: ignore[arg-type]
+    with render_scope(style_rc(st, {})):
         fig = _build_page_figure(
             ordered,
             free_placement=free_placement,
@@ -288,12 +283,9 @@ def render_figure_page(
             align_labels=align_labels,
             resize_mode=resize_mode,
         )
-        try:
-            buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=resolved_dpi)
-            return buf.getvalue()
-        finally:
-            plt.close(fig)
+        buf = BytesIO()
+        fig.savefig(buf, format=fmt, dpi=resolved_dpi)
+        return buf.getvalue()
 
 
 def _build_page_figure(
@@ -314,17 +306,17 @@ def _build_page_figure(
     align_labels: bool = False,
     resize_mode: str = "constrained",
 ) -> Any:
-    """Build (but do not save or close) the composed page figure, in
+    """Build (but do not save) the composed page figure, in
     ``ordered`` placement order. Split out of ``render_figure_page`` so a
     test can inspect ``ax.get_position()`` directly -- the free-placement
     y-flip is otherwise only observable via rendered image bytes. Must run
-    inside the caller's ``matplotlib.rc_context(style_rc(st, {}))``. F3.5
+    inside the caller's ``render_scope(style_rc(st, {}))``. F3.5
     kwargs: see ``render_figure_page``'s doc -- free placement always
     ignores ``resize_mode``/gaps but still honors ``link_x``/``link_y``."""
     engine, spacing = (
         (None, {}) if free_placement else fpl.layout_engine_kwargs(resize_mode, row_gap, col_gap)
     )
-    fig = plt.figure(figsize=(w, h), layout=engine)
+    fig = new_figure(figsize=(w, h), layout=engine)
     gs = None if free_placement else fig.add_gridspec(rows, cols, **spacing)
     # A faceted panel's sub-grid has its OWN internal x-sharing (see
     # calc.figure_page_facets) and the cell-frame axes standing in for it

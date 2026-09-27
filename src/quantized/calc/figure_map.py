@@ -18,18 +18,14 @@ from io import BytesIO
 from typing import Any
 
 import matplotlib
+import matplotlib.tri as mtri
+import numpy as np
+from mpl_toolkits.mplot3d import Axes3D  # noqa: F401  (registers the 3d projection)
+from numpy.typing import ArrayLike, NDArray
 
-matplotlib.use("Agg")  # headless
-matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
-
-import matplotlib.pyplot as plt  # noqa: E402
-import matplotlib.tri as mtri  # noqa: E402
-import numpy as np  # noqa: E402
-from mpl_toolkits.mplot3d import Axes3D  # noqa: E402,F401  (registers the 3d projection)
-from numpy.typing import ArrayLike, NDArray  # noqa: E402
-
-from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_styles import figure_style  # noqa: E402
+from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_styles import figure_style
 
 __all__ = ["MAP_KINDS", "render_map_figure"]
 
@@ -186,33 +182,31 @@ def render_map_figure(
         "ytick.right": st.box_on,
     }
 
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
+    with render_scope(rc):
         if kind in _3D_KINDS:
-            fig = plt.figure(figsize=figsize)
+            fig = new_figure(figsize=figsize)
             ax = fig.add_subplot(projection="3d")
         else:
-            fig, ax = plt.subplots(figsize=figsize)
-        try:
-            mappable = _draw(
-                ax, kind, x, y, z, z_min, z_max, cmap, levels, level_scale,
-                label_contours, view_elev, view_azim, contour_source=contour_source,
-            )
-            if title:
-                ax.set_title(title)
-            if x_label:
-                ax.set_xlabel(x_label)
-            if y_label:
-                ax.set_ylabel(y_label)
-            if kind in _3D_KINDS and z_label:
-                ax.set_zlabel(z_label)
-            if colorbar and mappable is not None:
-                fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
-            fig.tight_layout()
-            buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=resolved_dpi)
-            return buf.getvalue()
-        finally:
-            plt.close(fig)
+            fig = new_figure(figsize=figsize)
+            ax = fig.subplots()
+        mappable = _draw(
+            ax, kind, x, y, z, z_min, z_max, cmap, levels, level_scale,
+            label_contours, view_elev, view_azim, contour_source=contour_source,
+        )
+        if title:
+            ax.set_title(title)
+        if x_label:
+            ax.set_xlabel(x_label)
+        if y_label:
+            ax.set_ylabel(y_label)
+        if kind in _3D_KINDS and z_label:
+            ax.set_zlabel(z_label)
+        if colorbar and mappable is not None:
+            fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
+        fig.tight_layout()
+        buf = BytesIO()
+        fig.savefig(buf, format=fmt, dpi=resolved_dpi)
+        return buf.getvalue()
 
 
 def _draw(

@@ -12,17 +12,12 @@ from __future__ import annotations
 from io import BytesIO
 from typing import Any
 
-import matplotlib
+import numpy as np
+from numpy.typing import ArrayLike
 
-matplotlib.use("Agg")  # headless
-matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
-
-import matplotlib.pyplot as plt  # noqa: E402
-import numpy as np  # noqa: E402
-from numpy.typing import ArrayLike  # noqa: E402
-
-from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_styles import figure_style  # noqa: E402
+from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_render import new_figure, render_scope
+from quantized.calc.figure_styles import figure_style
 
 __all__ = ["render_field_figure"]
 
@@ -104,35 +99,33 @@ def render_field_figure(
     # Build a meshgrid for proper vector field plotting
     xx, yy = np.meshgrid(x_arr, y_arr, indexing="xy")
 
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
-        fig, ax = plt.subplots(figsize=_FIGURE_SIZE_IN)
-        try:
-            if kind == "quiver":
-                # Quiver: arrows at grid points, colored by magnitude
-                magnitude = np.sqrt(u_arr**2 + v_arr**2)
-                q = ax.quiver(xx, yy, u_arr, v_arr, magnitude, cmap="viridis")
-                fig.colorbar(q, ax=ax, label="Magnitude")
-            else:  # streamline
-                # Streamline: field lines following the vector field
-                speed = np.sqrt(u_arr**2 + v_arr**2)
-                strm = ax.streamplot(
-                    x_arr, y_arr, u_arr, v_arr,
-                    color=speed, cmap="viridis", density=1.5, linewidth=1.0,
-                )
-                fig.colorbar(strm.lines, ax=ax, label="Speed")
+    with render_scope(rc):
+        fig = new_figure(figsize=_FIGURE_SIZE_IN)
+        ax = fig.subplots()
+        if kind == "quiver":
+            # Quiver: arrows at grid points, colored by magnitude
+            magnitude = np.sqrt(u_arr**2 + v_arr**2)
+            q = ax.quiver(xx, yy, u_arr, v_arr, magnitude, cmap="viridis")
+            fig.colorbar(q, ax=ax, label="Magnitude")
+        else:  # streamline
+            # Streamline: field lines following the vector field
+            speed = np.sqrt(u_arr**2 + v_arr**2)
+            strm = ax.streamplot(
+                x_arr, y_arr, u_arr, v_arr,
+                color=speed, cmap="viridis", density=1.5, linewidth=1.0,
+            )
+            fig.colorbar(strm.lines, ax=ax, label="Speed")
 
-            ax.set_xlabel(x_label)
-            ax.set_ylabel(y_label)
-            if title:
-                ax.set_title(title, fontsize=st.title_font_size)
+        ax.set_xlabel(x_label)
+        ax.set_ylabel(y_label)
+        if title:
+            ax.set_title(title, fontsize=st.title_font_size)
 
-            if not st.box_on:
-                ax.spines["top"].set_visible(False)
-                ax.spines["right"].set_visible(False)
+        if not st.box_on:
+            ax.spines["top"].set_visible(False)
+            ax.spines["right"].set_visible(False)
 
-            fig.tight_layout()
-            buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=resolved_dpi)
-            return buf.getvalue()
-        finally:
-            plt.close(fig)
+        fig.tight_layout()
+        buf = BytesIO()
+        fig.savefig(buf, format=fmt, dpi=resolved_dpi)
+        return buf.getvalue()

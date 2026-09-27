@@ -287,14 +287,21 @@ LONG_CAVEAT = (
 
 
 def _render_capturing(monkeypatch: pytest.MonkeyPatch, render: Any) -> Any:
-    """Run a renderer and keep the figure it would have closed."""
-    from quantized.calc import figure_facets
+    """Run a renderer and keep the figure it saved (the renderers build
+    pyplot-free ``Figure`` objects, so capture at ``savefig``)."""
+    import matplotlib.figure
 
     kept: list[Any] = []
-    monkeypatch.setattr(figure_facets.plt, "close", kept.append)
+    real_savefig = matplotlib.figure.Figure.savefig
+
+    def capturing_savefig(self: Any, *a: Any, **kw: Any) -> None:
+        kept.append(self)
+        real_savefig(self, *a, **kw)
+
+    monkeypatch.setattr(matplotlib.figure.Figure, "savefig", capturing_savefig)
     render()
-    monkeypatch.undo()  # the real plt.close again, for the caller's cleanup
-    assert kept, "renderer did not close a figure"
+    monkeypatch.undo()  # the real savefig again, for the caller's cleanup
+    assert kept, "renderer did not save a figure"
     return kept[0]
 
 
