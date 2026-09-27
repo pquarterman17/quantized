@@ -157,7 +157,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     // height we pass, so reserve room for it (matches the .u-title CSS height) to
     // keep the x-axis inside the overflow-hidden host.
     const titleH = args.title?.trim() ? 24 : 0;
-    const h = (host.clientHeight || 400) - titleH;
+    const h = Math.max(1, (host.clientHeight || 400) - titleH);
     plotRef.current?.destroy();
     // Read the LATEST committed lims through the ref (see its declaration
     // above), never `args.xLim`/`yLim`/`y2Lim` directly: this is what lets
@@ -252,11 +252,19 @@ export default function PlotViewport(props: PlotViewportProps) {
     plotRef.current = plot;
     const unregister = syncKey ? registerSyncPlot(syncKey, plot) : null;
 
+    let lastWidth = w;
+    let lastHeight = h;
     const ro = new ResizeObserver(() => {
-      plotRef.current?.setSize({
-        width: host.clientWidth || w,
-        height: (host.clientHeight || 400) - titleH,
-      });
+      const width = host.clientWidth || w;
+      const height = Math.max(1, (host.clientHeight || 400) - titleH);
+      // Chromium can deliver duplicate observations while a parent flex/grid
+      // layout settles. uPlot's setSize performs canvas allocation and a full
+      // redraw, so an equality guard is much cheaper than asking it to prove
+      // that an unchanged box is unchanged.
+      if (width === lastWidth && height === lastHeight) return;
+      lastWidth = width;
+      lastHeight = height;
+      plotRef.current?.setSize({ width, height });
     });
     ro.observe(host);
     return () => {

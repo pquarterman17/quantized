@@ -47,6 +47,38 @@ function snapDelta(edges: readonly number[], lines: readonly number[], threshold
   return best;
 }
 
+export type ResizeEdges = { n?: boolean; e?: boolean; s?: boolean; w?: boolean };
+
+/** Snap whichever edges a native-style resize handle is moving. Unlike the
+ * legacy bottom-right helper below, this also supports north/west handles by
+ * moving the origin while keeping the opposite edge anchored. Minimum-size
+ * enforcement belongs to the gesture layer, before and after this helper. */
+export function snapResizeGeometry(
+  proposed: WindowGeometry,
+  moving: ResizeEdges,
+  bounds: { width: number; height: number } | undefined,
+  siblings: readonly WindowGeometry[],
+  threshold: number = SNAP_THRESHOLD,
+): WindowGeometry {
+  const lines = collectSnapLines(bounds, siblings);
+  let { x, y, w, h } = proposed;
+  if (moving.w) {
+    const delta = snapDelta([x], lines.v, threshold);
+    x += delta;
+    w -= delta;
+  } else if (moving.e) {
+    w += snapDelta([x + w], lines.v, threshold);
+  }
+  if (moving.n) {
+    const delta = snapDelta([y], lines.h, threshold);
+    y += delta;
+    h -= delta;
+  } else if (moving.s) {
+    h += snapDelta([y + h], lines.h, threshold);
+  }
+  return { x, y, w, h };
+}
+
 /** Snap a MOVE gesture's proposed geometry: either vertical edge (left OR
  *  right) may pull `x`, either horizontal edge (top OR bottom) may pull `y`
  *  — the two axes snap independently. Returns the snapped position only (a
@@ -66,19 +98,14 @@ export function snapMovePosition(
   };
 }
 
-/** Snap a RESIZE gesture's proposed geometry: only the MOVING edges — the
- *  right (`x+w`) and bottom (`y+h`), matching the frame's single bottom-right
- *  grip — may pull `w`/`h`; the anchored left/top edges never snap. Returns
- *  the snapped size only (a resize never changes position). */
+/** Compatibility wrapper retained for the original bottom-right geometry
+ * regression suite; all production gestures use snapResizeGeometry. */
 export function snapResizeSize(
   proposed: WindowGeometry,
   bounds: { width: number; height: number } | undefined,
   siblings: readonly WindowGeometry[],
   threshold: number = SNAP_THRESHOLD,
 ): { w: number; h: number } {
-  const lines = collectSnapLines(bounds, siblings);
-  return {
-    w: proposed.w + snapDelta([proposed.x + proposed.w], lines.v, threshold),
-    h: proposed.h + snapDelta([proposed.y + proposed.h], lines.h, threshold),
-  };
+  const { w, h } = snapResizeGeometry(proposed, { e: true, s: true }, bounds, siblings, threshold);
+  return { w, h };
 }

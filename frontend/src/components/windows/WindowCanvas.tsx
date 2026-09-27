@@ -72,10 +72,12 @@ export default function WindowCanvas() {
   const pendingHydration = useWindowHydration((s) => s.pending);
 
   const hostRef = useRef<HTMLDivElement>(null);
+  const boundsRef = useRef<{ width: number; height: number } | null>(null);
   const [bounds, setBounds] = useState<{ width: number; height: number } | undefined>(undefined);
   // Item 14: a Library dataset drag hovering the EMPTY canvas background
   // (drops on a frame stop propagation, so this never double-lights).
   const [dropping, setDropping] = useState(false);
+  const hasFrameHost = !(plotWindows.length === 1 && plotWindows[0].winState === "maximized");
 
   // Track the frames host's own size (never the window's, and never
   // including the winstrip below it) so PlotWindowFrame can keep every title
@@ -88,16 +90,24 @@ export default function WindowCanvas() {
     const ro = new ResizeObserver(([entry]) => {
       const box = entry?.contentRect;
       if (box) {
-        setBounds({ width: box.width, height: box.height });
-        setPlotCanvasBounds({ width: box.width, height: box.height });
+        const next = { width: Math.round(box.width), height: Math.round(box.height) };
+        const previous = boundsRef.current;
+        // ResizeObserver may repeat an unchanged box (notably while panels
+        // animate or the desktop webview settles). Avoid a redundant React
+        // render and global-store broadcast to every window subscriber.
+        if (previous?.width === next.width && previous.height === next.height) return;
+        boundsRef.current = next;
+        setBounds(next);
+        setPlotCanvasBounds(next);
       }
     });
     ro.observe(host);
     return () => {
       ro.disconnect();
+      boundsRef.current = null;
       setPlotCanvasBounds(null);
     };
-  }, [setPlotCanvasBounds]);
+  }, [setPlotCanvasBounds, hasFrameHost]);
 
   // ORIGIN_FILE_DECODE_PLAN #38: every VISIBLE window's bound dataset gets
   // its full data fetched (if it's still a lazy Origin book) — covers the

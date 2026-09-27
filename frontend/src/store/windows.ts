@@ -273,6 +273,7 @@ export interface WindowsSlice {
   duplicateWindow: (id: string) => string | null;
   moveWindow: (id: string, x: number, y: number) => void;
   resizeWindow: (id: string, w: number, h: number) => void;
+  setWindowGeometry: (id: string, geometry: Partial<PlotWindow["geometry"]>) => void;
   raiseWindow: (id: string) => void;
   // The Plot tab's live canvas size (item 6) — written by WindowCanvas's own
   // ResizeObserver; read by tileWindows/cascadeWindows so their layout math
@@ -604,18 +605,16 @@ export function createWindowsSlice(set: SliceSet, get: SliceGet): WindowsSlice {
       set({ plotWindows: [...s.plotWindows, dup] });
       return newId;
     },
-    moveWindow: (id, x, y) =>
-      set((s) => ({
-        plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, geometry: { ...w.geometry, x, y } } : w)),
-      })),
-    resizeWindow: (id, w, h) =>
-      set((s) => ({
-        plotWindows: s.plotWindows.map((win) =>
-          win.id === id
-            ? { ...win, geometry: { ...win.geometry, w: Math.max(1, w), h: Math.max(1, h) } }
-            : win,
-        ),
-      })),
+    setWindowGeometry: (id, geometry) => set((s) => ({
+      plotWindows: s.plotWindows.map((win) => win.id === id ? {
+        ...win, geometry: {
+          ...win.geometry, ...geometry,
+          w: Math.max(1, geometry.w ?? win.geometry.w), h: Math.max(1, geometry.h ?? win.geometry.h),
+        },
+      } : win),
+    })),
+    moveWindow: (id, x, y) => get().setWindowGeometry(id, { x, y }),
+    resizeWindow: (id, w, h) => get().setWindowGeometry(id, { w, h }),
     raiseWindow: (id) =>
       set((s) => ({
         plotWindows: s.plotWindows.map((w) => (w.id === id ? { ...w, z: maxZ(s.plotWindows) + 1 } : w)),
