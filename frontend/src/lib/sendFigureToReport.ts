@@ -23,18 +23,28 @@
 // itself — shared deliberately so this dialog's style list and greyscale
 // field cannot drift from "Export figure…"'s.
 import { askParams } from "../store/paramDialog";
-import type { ReportEntry, ReportFigureBlock } from "./report";
+import type { ReportEntry, ReportFigureBlock, ReportSheet } from "./report";
 import { exportActive, type StoreGet } from "./exportActive";
 import { FIGURE_STYLES, GREYSCALE_FIELD } from "./exportFigureCommand";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import type { FigureRenderOpts } from "./figureSpec";
-import { appendFigureBlock, figureBlockFromSpec, newFigureReport } from "./reportBlocks";
+import {
+  appendFigureBlock,
+  estimateJsonBytes,
+  figureBlockFromSpec,
+  largeSpecNotice,
+  newFigureReport,
+  uniqueFigureName,
+} from "./reportBlocks";
+import { TOAST_ACTION_TTL, toast } from "../store/toasts";
 
 /** The "make a new report" choice in the Report picker. */
 export const NEW_REPORT = "New report";
-/** The raster resolution the spec asks for — the Export dialog's own default.
- *  (Word/PowerPoint always embed the backend's 300-DPI render; this matters
- *  for an HTML export of a PNG-embedded figure.) */
+/** The spec's `dpi` — the Export dialog's own default, sent so the spec
+ *  matches what "Export figure…" would post. The report renderer does NOT
+ *  use it: `routes.report_figures.render_spec` rasterises every report PNG
+ *  (Word/PowerPoint, and HTML's raster/fallback) at its own `OFFICE_DPI`
+ *  (300), and an SVG has no DPI. */
 export const REPORT_FIGURE_DPI = 300;
 /** The one undo label every send records. */
 export const SEND_UNDO_LABEL = "send figure to report";
@@ -57,8 +67,11 @@ export function reportChoices(reports: readonly ReportEntry[]): string[] {
 }
 
 /** Put `block` into report `targetId`, or into a new report when `null`, as
- *  one undo step, and open the viewer on it. Throws (surfaced by
- *  `exportActive` as a failed send) when the target was deleted meanwhile. */
+ *  one undo step, and open the viewer on it. The block is renamed to
+ *  `stem`, `stem-2`, … — unique among the target's figures, decided against
+ *  its LIVE sheet — so export warnings and LaTeX file stems tell figures
+ *  apart. Throws (surfaced by `exportActive` as a failed send) when the
+ *  target was deleted meanwhile. */
 export function addFigureToReport(
   s: StoreGet,
   targetId: string | null,
@@ -72,10 +85,12 @@ export function addFigureToReport(
     // `addReport` itself records no history (none of the report-library
     // actions do); the send is still one user gesture, so it is one undo step.
     st.recordHistory(SEND_UNDO_LABEL);
-    st.addReport(name, newFigureReport(name, block), datasetId);
+    st.addReport(name, newFigureReport(name, { ...block, name: stem }), datasetId);
     return;
   }
-  if (!st.updateReportSheet(targetId, (sheet) => appendFigureBlock(sheet, block), SEND_UNDO_LABEL)) {
+  const append = (sheet: ReportSheet) =>
+    appendFigureBlock(sheet, { ...block, name: uniqueFigureName(sheet, stem) });
+  if (!st.updateReportSheet(targetId, append, SEND_UNDO_LABEL)) {
     throw new Error("that report was deleted before the figure was added");
   }
   st.setOpenReport(targetId);
@@ -148,6 +163,10 @@ export async function runSendFigureToReportCommand(s: StoreGet): Promise<void> {
       };
       const block = figureBlockFromSpec(buildStageFigureSpec(s, ds, stem, opts), stem, caption);
       addFigureToReport(s, targetId, block, stem, ds.id);
+      // Estimated by walking the spec, never by serializing it (see
+      // estimateJsonBytes): a heads-up, not a refusal — the copy is the point.
+      const notice = largeSpecNotice(estimateJsonBytes(block.spec));
+      if (notice) toast(notice, "info", { ttlMs: TOAST_ACTION_TTL });
     },
     { verb: "send", past: "sent to report:" },
   );

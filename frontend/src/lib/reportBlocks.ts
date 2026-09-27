@@ -9,23 +9,88 @@
 import type { FigureSpec } from "./api/figures";
 import type { ReportFigureBlock, ReportSheet } from "./report";
 
+// Stable, NON-persisted identity for a block, for React keys and focus
+// targeting in the viewer. Every edit above keeps untouched blocks as the
+// same objects (a move swaps references, a remove filters), and undo/redo
+// restore the very objects a snapshot held, so object identity IS block
+// identity for as long as the block exists — no id field in the schema.
+const blockKeys = new WeakMap<object, string>();
+let blockKeySeq = 0;
+
+/** This block's stable key (minted on first sight, never saved). */
+export function reportBlockKey(block: object): string {
+  let key = blockKeys.get(block);
+  if (key === undefined) {
+    key = `blk-${++blockKeySeq}`;
+    blockKeys.set(block, key);
+  }
+  return key;
+}
+
 /** The section a sent figure lands in (created on first use). */
 export const FIGURES_SECTION = "Figures";
 
-/** A spec-carrying figure block. `spec` is stored as a detached, JSON-clean
- *  copy — exactly the bytes `/api/export/figure` would receive (NaN -> null
- *  as `JSON.stringify` sends it), and immune to anything later done to the
- *  objects the live spec shared with the store. Mirrors the backend's own
- *  `calc.report.figure_block` (`json.loads(json.dumps(spec))`). */
+/** A spec-carrying figure block. `spec` is stored as a DETACHED copy, immune
+ *  to anything later done to the objects the live spec shared with the store
+ *  (the same copy semantics as the backend's `calc.report.figure_block`).
+ *  `structuredClone`, not a JSON round-trip: one copy instead of a full
+ *  serialized string plus a re-parsed copy at peak. It keeps NaN/undefined
+ *  in memory; they serialize exactly as the export wire does (NaN -> null,
+ *  undefined dropped) whenever the block is exported or saved. */
 export function figureBlockFromSpec(spec: FigureSpec, name: string, caption: string): ReportFigureBlock {
   const block: ReportFigureBlock = {
     type: "figure",
     name,
-    spec: JSON.parse(JSON.stringify(spec)) as Record<string, unknown>,
+    spec: structuredClone(spec) as unknown as Record<string, unknown>,
   };
   const c = caption.trim();
   if (c) block.caption = c;
   return block;
+}
+
+/** `stem`, or `stem-2`, `stem-3`, … — the first not already a figure name in
+ *  `sheet`, so each figure's export warning (which names it) and LaTeX file
+ *  stem tell sent figures apart. */
+export function uniqueFigureName(sheet: ReportSheet | null, stem: string): string {
+  const taken = new Set<string>();
+  for (const sec of sheet?.sections ?? []) {
+    for (const b of sec.blocks) if (b.type === "figure") taken.add(b.name);
+  }
+  let name = stem;
+  for (let n = 2; taken.has(name); n++) name = `${stem}-${n}`;
+  return name;
+}
+
+/** Above this ESTIMATED serialized size a sent spec earns a heads-up toast:
+ *  the report, every `.dwk` save/autosave and every report export carry it. */
+export const LARGE_SPEC_BYTES = 5_000_000;
+/** Estimated JSON bytes per number — a typical measured double ("12.3456789,"). */
+export const BYTES_PER_NUMBER = 12;
+
+/** A cheap estimate of `v`'s JSON size (numbers x BYTES_PER_NUMBER, strings
+ *  by length), walked without serializing — so checking a large spec never
+ *  allocates the string the clone above was chosen to avoid. */
+export function estimateJsonBytes(v: unknown): number {
+  if (typeof v === "number" || typeof v === "boolean" || v === null) return BYTES_PER_NUMBER;
+  if (typeof v === "string") return v.length + 2;
+  if (Array.isArray(v)) {
+    let n = 2;
+    for (const x of v) n += estimateJsonBytes(x);
+    return n;
+  }
+  if (typeof v === "object" && v !== null) {
+    let n = 2;
+    for (const [k, x] of Object.entries(v)) n += k.length + 3 + estimateJsonBytes(x);
+    return n;
+  }
+  return 0;
+}
+
+/** The info-toast text for a large sent spec, or `null` at/under the limit. */
+export function largeSpecNotice(bytes: number): string | null {
+  if (bytes <= LARGE_SPEC_BYTES) return null;
+  const mb = (bytes / 1_000_000).toFixed(1);
+  return `this figure carries ~${mb} MB of plotted data — the report and the saved .dwk grow by about that much`;
 }
 
 /** A new one-section report holding `block`. `created` matches the backend

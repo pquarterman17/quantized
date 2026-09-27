@@ -9,21 +9,27 @@
 // as a rendered-figure card (ReportBlockView.tsx), and an export's warnings —
 // a figure that could not be rendered or embedded, the per-report figure cap,
 // a vector that fell back to raster — are surfaced: a toast when the export
-// finishes, plus the list kept under the export row until the next export.
+// finishes, plus the list kept under the export row. The list is tied to the
+// exact sheet object that was exported: any change to the sheet (a move, a
+// remove, a new figure, undo/redo) hides it — LaTeX's figure file stems depend
+// on document order, so even a move can make it wrong; an undo that restores
+// the very sheet exported shows it again, correctly — and a response that
+// lands after such a change is dropped (the toast still fires: that file WAS
+// saved with those problems). Blocks are keyed by a stable per-object key,
+// and after a keyboard move/remove focus stays on the moved block or lands on
+// a neighbour's move control — never on another block's Remove.
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
-import { reportExport, type ReportExportResult } from "../../../lib/api/reportExport";
+import { reportExport, type ExportFormat, type ReportExportResult } from "../../../lib/api/reportExport";
 import type { ReportSheet } from "../../../lib/report";
-import { moveReportBlock, removeReportBlock } from "../../../lib/reportBlocks";
+import { moveReportBlock, removeReportBlock, reportBlockKey } from "../../../lib/reportBlocks";
 import { TOAST_ACTION_TTL, toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button } from "../../primitives";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { EditableBlock } from "./ReportBlockView";
-
-type ExportFormat = "html" | "latex" | "docx" | "pptx";
 
 const EXPORTS: { format: ExportFormat; label: string }[] = [
   { format: "html", label: "HTML" },
@@ -43,16 +49,37 @@ export function reportWarningToast(label: string, res: ReportExportResult): stri
   return `${head}: ${res.warnings[0]}${n > 1 ? ` (+${n - 1} more)` : ""}`;
 }
 
+/** Where focus goes once a block edit has re-rendered: a block's move
+ *  control (`prefer` first, the other one if that is disabled at an edge),
+ *  else the section's header. Never a Remove button. */
+type FocusIntent = { section: number; key?: string; prefer: "up" | "down" };
+
+function focusAfterEdit(root: HTMLElement, intent: FocusIntent): void {
+  const block = intent.key ? root.querySelector(`[data-block-key="${intent.key}"]`) : null;
+  const ctl = (c: string) => block?.querySelector<HTMLButtonElement>(`[data-ctl="${c}"]`);
+  const other = intent.prefer === "up" ? "down" : "up";
+  const target = [ctl(intent.prefer), ctl(other)].find((b) => b && !b.disabled);
+  (target ?? root.querySelector<HTMLElement>(`[data-section-head="${intent.section}"]`))?.focus();
+}
+
 function SheetView({
   sheet,
   onMove,
   onRemove,
 }: {
   sheet: ReportSheet;
-  onMove: (si: number, bi: number, delta: -1 | 1) => void;
-  onRemove: (si: number, bi: number) => void;
+  onMove: (si: number, bi: number, delta: -1 | 1) => boolean;
+  onRemove: (si: number, bi: number) => boolean;
 }) {
   const [collapsed, setCollapsed] = useState<ReadonlySet<number>>(new Set());
+  const rootRef = useRef<HTMLDivElement>(null);
+  const focusNext = useRef<FocusIntent | null>(null);
+  // Runs after the store update an edit caused has committed (no deps).
+  useLayoutEffect(() => {
+    const intent = focusNext.current;
+    focusNext.current = null;
+    if (intent && rootRef.current) focusAfterEdit(rootRef.current, intent);
+  });
   const toggle = (i: number) =>
     setCollapsed((c) => {
       const next = new Set(c);
@@ -60,28 +87,49 @@ function SheetView({
       else next.add(i);
       return next;
     });
+  const move = (i: number, j: number, key: string, delta: -1 | 1) => {
+    if (onMove(i, j, delta)) focusNext.current = { section: i, key, prefer: delta < 0 ? "up" : "down" };
+  };
+  const remove = (i: number, j: number) => {
+    const blocks = sheet.sections[i].blocks;
+    const neighbour = blocks[j + 1] ?? blocks[j - 1];
+    if (onRemove(i, j)) {
+      focusNext.current = { section: i, key: neighbour ? reportBlockKey(neighbour) : undefined, prefer: "up" };
+    }
+  };
   return (
-    <>
-      {sheet.sections.map((sec, i) => (
-        <div key={i} className="qzk-report-section">
-          <button className="qzk-group-head" onClick={() => toggle(i)}>
-            <span className="qzk-group-caret">{collapsed.has(i) ? "▸" : "▾"}</span>
-            <span className="qzk-group-name">{sec.title}</span>
-          </button>
-          {!collapsed.has(i) &&
-            sec.blocks.map((b, j) => (
-              <EditableBlock
-                key={j}
-                block={b}
-                index={j}
-                count={sec.blocks.length}
-                onMove={(delta) => onMove(i, j, delta)}
-                onRemove={() => onRemove(i, j)}
-              />
-            ))}
-        </div>
-      ))}
-    </>
+    <div ref={rootRef}>
+      {sheet.sections.map((sec, i) => {
+        const seen = new Set<string>();
+        return (
+          <div key={i} className="qzk-report-section">
+            <button className="qzk-group-head" data-section-head={i} onClick={() => toggle(i)}>
+              <span className="qzk-group-caret">{collapsed.has(i) ? "▸" : "▾"}</span>
+              <span className="qzk-group-name">{sec.title}</span>
+            </button>
+            {!collapsed.has(i) &&
+              sec.blocks.map((b, j) => {
+                // The same object twice in one section (no edit produces it,
+                // but a hand-built sheet could) must not share a React key.
+                let key = reportBlockKey(b);
+                if (seen.has(key)) key = `${key}@${j}`;
+                seen.add(key);
+                return (
+                  <EditableBlock
+                    key={key}
+                    blockKey={key}
+                    block={b}
+                    index={j}
+                    count={sec.blocks.length}
+                    onMove={(delta) => move(i, j, key, delta)}
+                    onRemove={() => remove(i, j)}
+                  />
+                );
+              })}
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -97,11 +145,19 @@ export default function ReportPanel() {
   // smallest fix — the running button's own label switches to "Exporting
   // X…", the rest stay disabled exactly as before.
   const [runningFormat, setRunningFormat] = useState<ExportFormat | null>(null);
-  // The last export's warnings, tagged with the report they belong to so
-  // switching reports never shows another report's list.
+  // The last export's warnings, tagged with the exact sheet OBJECT exported:
+  // shown only while the open sheet is still that object (a different report,
+  // or any edit to this one, has a different identity — see the header).
   const [lastWarnings, setLastWarnings] = useState<
-    { reportId: string; label: string; res: ReportExportResult } | null
+    { sheet: ReportSheet; label: string; res: ReportExportResult } | null
   >(null);
+  // The sheet on screen as of the last commit — the generation an in-flight
+  // export's response is checked against (kept current in an effect).
+  const liveSheet = useRef<ReportSheet | null>(null);
+  const openSheet = reports.find((r) => r.id === openReportId)?.report ?? null;
+  useLayoutEffect(() => {
+    liveSheet.current = openSheet;
+  });
 
   const entry = reports.find((r) => r.id === openReportId);
   if (!entry) return null;
@@ -111,10 +167,12 @@ export default function ReportPanel() {
     // A new export supersedes the last one's list, whatever it ends in — a
     // failed export must not leave the previous warnings looking current.
     setLastWarnings(null);
+    const exported = entry.report;
     try {
-      const res = await reportExport(entry.report, format, entry.name);
+      const res = await reportExport(exported, format, entry.name);
       if (res.warningCount > 0) {
-        setLastWarnings({ reportId: entry.id, label, res });
+        // Stale (the sheet changed while this export ran): drop the list.
+        if (liveSheet.current === exported) setLastWarnings({ sheet: exported, label, res });
         // "info", not "danger": the file WAS saved (see notifyMigrationWarnings
         // in store/toasts.ts for the same call on a partial success) — with
         // the longer lifetime, and the list stays in the panel below.
@@ -134,17 +192,14 @@ export default function ReportPanel() {
   // to the store's CURRENT sheet (not this render's `entry`), so two quick
   // clicks can never apply the second edit to a stale copy and drop the first.
   const onMove = (si: number, bi: number, delta: -1 | 1) =>
-    void updateReportSheet(entry.id, (sheet) => moveReportBlock(sheet, si, bi, delta), "move report block");
+    updateReportSheet(entry.id, (sheet) => moveReportBlock(sheet, si, bi, delta), "move report block");
   const onRemove = (si: number, bi: number) => {
-    if (updateReportSheet(entry.id, (sheet) => removeReportBlock(sheet, si, bi), "remove report block")) {
-      // The list names figures by name + section, which a removal can make
-      // point at nothing; a move within a section cannot, so it keeps it.
-      setLastWarnings(null);
-      toast("removed the block — Undo restores it");
-    }
+    const done = updateReportSheet(entry.id, (sheet) => removeReportBlock(sheet, si, bi), "remove report block");
+    if (done) toast("removed the block — Undo restores it");
+    return done;
   };
 
-  const warnings = lastWarnings?.reportId === entry.id ? lastWarnings : null;
+  const warnings = lastWarnings?.sheet === entry.report ? lastWarnings : null;
 
   return (
     <ToolWindow id="report" title={entry.name} width={460} onClose={() => setOpenReport(null)}>
