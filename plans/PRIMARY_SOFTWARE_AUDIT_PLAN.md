@@ -8710,6 +8710,41 @@ was not raised.
   is sound because `api.py` is not one of the guard's `PURE_LAYERS`
   (`io`/`calc`/`plugins`/`portable`) -- only those may never import
   `fastapi`/`pydantic`/`quantized.routes`. Left honestly as future work.
+- [x] ~~Frontend producer + warnings surface for spec-carrying report
+  figures.~~ DONE 2026-09-27, closing the "NOT done" frontend half above.
+  "Send figure to report…" (Plot menu ▸ Build & export, ⌘K, and the plot
+  context menu's "Send to report…"; lazy `lib/sendFigureToReport.ts`) asks
+  for a target report (the open one by default, or a new "<stem> figures"
+  report), caption, SVG/PNG, style and greyscale, then builds the spec with
+  `lib/figureSpecStage.buildStageFigureSpec` -- the ONE builder "Export
+  figure…"/"Copy figure" use -- through `exportActive` (full data for a lazy
+  book, #38) and appends `{type:'figure', name, caption, spec}` to the
+  report's last "Figures" section (created if absent) as ONE undo step (new
+  store action `updateReportSheet(id, edit, label)`, an updater applied to
+  the live sheet; the only report action that records history). Parity is
+  tested end to end: both real commands run against the same store and the
+  block's spec deep-equals the export's wire body, on the canonical-document
+  (grouped window) route and the live-view fallback route
+  (`lib/sendFigureToReport.test.ts`). The viewer (lazy `ReportPanel`, blocks
+  in `ReportBlockView.tsx`) shows a spec block as a rendered-figure card
+  (caption, indicator badge, vector-vs-raster note) and gives every block
+  move-up/down/remove controls, each one undo step. `reportExport` (moved to
+  lazy `lib/api/reportExport.ts`) now returns the decoded
+  `X-Report-Warnings`/`X-Report-Warning-Count`; a warned export toasts one
+  summary line (first warning + "(+N more)", `info` + the long TTL, the
+  `notifyMigrationWarnings` shape) and keeps the full list under the export
+  row until the next export. Persistence: `spec` rides the existing `.dwk`
+  `reports` round-trip unchanged; `sanitizeReports` strips a non-object
+  `spec` (the block survives as reference-only, the report is kept) and
+  names it in `migrationWarnings`. Tests: `lib/reportBlocks.test.ts`,
+  `lib/report.test.ts`, `lib/workspace.test.ts`, `lib/api/reportExport.
+  test.ts`, `store/reportFigureBlocks.test.ts`, `ReportPanel.test.tsx`,
+  `lib/plotMenu.test.ts`. `exportActive` gained a "send" verb (busy label, failure/cancel wording). Eager bundle 839.0 -> 840.4 kB (budget 846.1).
+  NOT done: the block is a SNAPSHOT (the spec carries its own copy of the
+  plotted data, so a large dataset makes a large report/.dwk, and later
+  plot edits do not update it -- no re-send/refresh action yet); no in-panel
+  thumbnail of the figure (it is only rendered on export); blocks move only
+  within their section.
 - [ ] Consider EMF only if Windows Office tests show material benefit.
 - [ ] Editable embedded figures remain a future goal, not release blocker.
 

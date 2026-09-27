@@ -546,6 +546,16 @@ body {
 .qzk-report-text { margin: 6px 0 0; color: var(--text-dim); font-size: var(--font-size-sm); }
 .qzk-report-tablewrap { margin-top: 6px; max-height: 260px; overflow-y: auto; }
 .qzk-report-caption { margin-top: 3px; color: var(--text-faint); font-size: var(--type-nano); }
+/* P3.6: per-block move/remove controls + the rendered-figure block + the last export's warnings. */
+.qzk-report-block { display: flex; gap: 4px; align-items: flex-start; }
+.qzk-report-block-body { flex: 1; min-width: 0; }
+.qzk-report-block-ctl { display: flex; margin-top: 4px; }
+.qzk-report-block-ctl .qz-icon-btn { width: 20px; height: 20px; font-size: 11px; }
+.qzk-report-block-ctl .qz-icon-btn:disabled { opacity: 0.35; }
+.qzk-report-figure { margin-top: 6px; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-1); }
+.qzk-report-figure .qzk-report-text { margin: 4px 0 0; color: var(--text); }
+.qzk-report-warnings { margin: 10px 0 0; padding: 6px 8px; border: 1px solid var(--border-soft); border-left: 3px solid var(--warn); border-radius: var(--radius-sm); color: var(--text-dim); font-size: var(--font-size-sm); }
+.qzk-report-warnings ul { margin: 4px 0 0; padding-left: 16px; }
 
 /* Book-families bulk-manage (item 17): one row per multi-book Origin import. */
 .qzk-fam-row { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); }

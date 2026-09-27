@@ -360,7 +360,7 @@ export function parseWorkspace(
   const originFigures = parseOriginFigures(o.originFigures, dsIds);
   const originFidelity = parseOriginFidelity(o.originFidelity, dsIds);
   const smartFolders = sanitizeSmartFolders(o.smartFolders);
-  const reports = sanitizeReports(o.reports, dsIds);
+  const reports = sanitizeReports(o.reports, dsIds, migrationWarnings);
   const macroSteps = sanitizeSteps(o.pipeline);
   const recalcMode: RecalcMode =
     o.recalcMode === "manual" || o.recalcMode === "off" ? o.recalcMode : "auto";

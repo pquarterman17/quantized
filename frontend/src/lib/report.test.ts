@@ -94,6 +94,38 @@ describe("sanitizeReports", () => {
     expect(out).toHaveLength(1);
     expect(out[0].id).toBe("rep-1");
   });
+
+  // P3.6 migration guard: `spec` postdates persisted reports.
+  it("keeps a valid figure spec, returning the SAME sheet object when nothing is stripped", () => {
+    const withSpec: ReportSheet = {
+      title: "F",
+      sections: [{ title: "Figures", blocks: [{ type: "figure", name: "s", spec: { fmt: "svg" } }] }],
+    };
+    const out = sanitizeReports([entry({ report: withSpec })], new Set());
+    expect(out[0].report).toBe(withSpec);
+  });
+
+  it("strips a null/array/scalar spec without mutating the input, with or without a warnings sink", () => {
+    const raw = {
+      title: "F",
+      sections: [
+        { title: "A", blocks: [{ type: "text", text: "kept as is" }] },
+        { title: "B", blocks: [{ type: "figure", name: "n", spec: null }, { type: "figure", name: "a", spec: [] }] },
+      ],
+    };
+    const frozen = JSON.stringify(raw);
+    const warnings: string[] = [];
+    const out = sanitizeReports([{ id: "r", name: "Figs", datasetId: null, report: raw }], new Set(), warnings);
+    expect(out[0].report.sections[1].blocks).toEqual([
+      { type: "figure", name: "n" },
+      { type: "figure", name: "a" },
+    ]);
+    expect(out[0].report.sections[0]).toBe(raw.sections[0]);
+    expect(JSON.stringify(raw)).toBe(frozen);
+    expect(warnings).toHaveLength(2);
+    // no sink: still strips, never throws
+    expect(sanitizeReports([{ id: "r", name: "Figs", datasetId: null, report: raw }], new Set())[0].report.sections[1].blocks[0]).toEqual({ type: "figure", name: "n" });
+  });
 });
 
 describe("pruneReportRefs", () => {
