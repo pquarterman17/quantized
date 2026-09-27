@@ -167,7 +167,8 @@ function stripBadFigureSpecs(report: unknown, warn: (block: string) => void): un
  *  the dataset back-reference to ids that survived load, like Origin figures).
  *  A malformed figure `spec` is stripped, not fatal — see
  *  `stripBadFigureSpecs`; `warnings` (the loader's migrationWarnings) names
- *  each one so the user is told a figure lost its embedded render. */
+ *  each one so the user is told a figure lost its embedded render, and names
+ *  each well-identified entry (string id + name) whose sheet was dropped. */
 export function sanitizeReports(
   v: unknown,
   dsIds: ReadonlySet<string>,
@@ -179,11 +180,18 @@ export function sanitizeReports(
     if (typeof e !== "object" || e === null) continue;
     const o = e as Record<string, unknown>;
     if (typeof o.id !== "string" || typeof o.name !== "string") continue;
-    const reportName = o.name;
-    const report = stripBadFigureSpecs(o.report, (block) =>
-      warnings?.push(`report "${reportName}": figure "${block}" had an unreadable render spec and is now a reference only`),
-    );
-    if (!isReportSheet(report)) continue;
+    // Strip warnings are held until the report is known to SURVIVE: a report
+    // dropped below gets one "dropped" warning instead, never a claim that
+    // one of its figures "is now a reference only" in a report that is gone.
+    const stripped: string[] = [];
+    const report = stripBadFigureSpecs(o.report, (block) => stripped.push(block));
+    if (!isReportSheet(report)) {
+      warnings?.push(`report "${o.name}" could not be read and was dropped`);
+      continue;
+    }
+    for (const block of stripped) {
+      warnings?.push(`report "${o.name}": figure "${block}" had an unreadable render spec and is now a reference only`);
+    }
     const datasetId =
       typeof o.datasetId === "string" && dsIds.has(o.datasetId) ? o.datasetId : null;
     out.push({ id: o.id, name: o.name, datasetId, report });

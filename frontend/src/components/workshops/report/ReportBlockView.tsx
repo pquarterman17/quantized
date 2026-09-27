@@ -109,15 +109,19 @@ export function BlockView({ block }: { block: ReportBlock }) {
 }
 
 /** A block plus its move/remove controls. `index`/`count` are the block's
- *  position within its section (moves never cross sections). */
+ *  position within its section (moves never cross sections). `blockKey`
+ *  (lib/reportBlocks.reportBlockKey) and each control's `data-ctl` are what
+ *  the viewer's focus restore targets after a move or remove. */
 export function EditableBlock({
   block,
+  blockKey,
   index,
   count,
   onMove,
   onRemove,
 }: {
   block: ReportBlock;
+  blockKey: string;
   index: number;
   count: number;
   onMove: (delta: -1 | 1) => void;
@@ -125,23 +129,30 @@ export function EditableBlock({
 }) {
   const what = block.type === "figure" ? "figure" : "block";
   return (
-    <div className="qzk-report-block">
+    <div className="qzk-report-block" data-block-key={blockKey}>
       <div className="qzk-report-block-body">
         <BlockView block={block} />
       </div>
       <div className="qzk-report-block-ctl">
-        <IconButton aria-label={`Move ${what} up`} title="Move up" disabled={index === 0} onClick={() => onMove(-1)}>
+        <IconButton
+          aria-label={`Move ${what} up`}
+          title="Move up"
+          data-ctl="up"
+          disabled={index === 0}
+          onClick={() => onMove(-1)}
+        >
           ↑
         </IconButton>
         <IconButton
           aria-label={`Move ${what} down`}
           title="Move down"
+          data-ctl="down"
           disabled={index === count - 1}
           onClick={() => onMove(1)}
         >
           ↓
         </IconButton>
-        <IconButton aria-label={`Remove ${what}`} title="Remove (Undo restores it)" onClick={onRemove}>
+        <IconButton aria-label={`Remove ${what}`} title="Remove (Undo restores it)" data-ctl="remove" onClick={onRemove}>
           ✕
         </IconButton>
       </div>

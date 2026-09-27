@@ -123,6 +123,9 @@ beforeEach(() => {
   });
 });
 
+/** A spec as the wire/.dwk sees it. */
+const wire = (v: unknown) => JSON.parse(JSON.stringify(v)) as unknown;
+
 /** Run the REAL "Export figure…" with the same choices the send made, and
  *  return its wire body as it would be serialized. */
 async function exportBodyFor(fmt: string, style: string, greyscale: boolean) {
@@ -143,13 +146,16 @@ describe("runSendFigureToReportCommand — the spec IS the Export figure… spec
     const s = useApp.getState();
     expect(s.reports).toHaveLength(1);
     const [block] = figureBlocks(s.reports[0].id);
-    expect(block.spec).toEqual(await exportBodyFor("svg", "aps", true));
+    // Compared AS SENT: the block keeps a structured clone (NaN stays NaN in
+    // memory), so both sides go through the same JSON the wire and .dwk use.
+    expect(wire(block.spec)).toEqual(await exportBodyFor("svg", "aps", true));
     // spot-check the choices really reached the spec, so the equality above
     // is not two empty specs agreeing
     expect(block.spec).toMatchObject({ fmt: "svg", style: "aps", greyscale: true, title: "Hall sweep" });
-    // detached, JSON-clean snapshot: NaN became null exactly as the wire sends it
-    const values = (block.spec?.dataset as { values: (number | null)[][] }).values;
-    expect(values[1][1]).toBeNull();
+    // detached snapshot: not the store's own data arrays
+    const values = (block.spec?.dataset as { values: number[][] }).values;
+    expect(values).not.toBe(useApp.getState().datasets[0].data.values);
+    expect(Number.isNaN(values[1][1])).toBe(true);
   });
 
   it("canonical-document route (focused grouped window): block.spec equals the export body", async () => {
@@ -167,7 +173,7 @@ describe("runSendFigureToReportCommand — the spec IS the Export figure… spec
     const [block] = figureBlocks(useApp.getState().reports[0].id);
     const body = await exportBodyFor("png", "default", false);
     expect(body.group_col).toBe(1); // the document route really ran
-    expect(block.spec).toEqual(body);
+    expect(wire(block.spec)).toEqual(body);
   });
 });
 
@@ -203,6 +209,44 @@ describe("runSendFigureToReportCommand — targets, undo, failure", () => {
     expect(s.history).toHaveLength(1);
     s.undo();
     expect(useApp.getState().reports.find((r) => r.id === "rep-a")).toEqual(existing("rep-a", "Fit A"));
+  });
+
+  it("names each figure uniquely within the target report (scan, scan-2, scan-3)", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams());
+    await runSendFigureToReportCommand(useApp.getState);
+    const id = useApp.getState().reports[0].id;
+    for (let k = 0; k < 2; k++) {
+      vi.mocked(askParams).mockResolvedValueOnce(sendParams({ target: "scan figures" }));
+      await runSendFigureToReportCommand(useApp.getState);
+    }
+    expect(useApp.getState().reports).toHaveLength(1);
+    expect(figureBlocks(id).map((b) => b.name)).toEqual(["scan", "scan-2", "scan-3"]);
+  });
+
+  it("an info toast warns when the sent spec is large; a small one says nothing", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams());
+    await runSendFigureToReportCommand(useApp.getState);
+    expect(useToasts.getState().toasts.some((t) => /MB of plotted data/.test(t.msg))).toBe(false);
+    // ~6.5 MB estimated: 180k rows x (time + 2 channels) numbers x 12 B.
+    const rows = 180_000;
+    const time = Array.from({ length: rows }, (_, i) => i);
+    useApp.setState({
+      datasets: [
+        {
+          id: DS,
+          name: "scan.dat",
+          data: { time, values: time.map((t) => [t, 2 * t]), labels: ["A", "B"], units: ["u", "v"], metadata: {} },
+        },
+      ],
+      xLim: null,
+      yScale: "linear",
+    });
+    useToasts.setState({ toasts: [] });
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams());
+    await runSendFigureToReportCommand(useApp.getState);
+    const notice = useToasts.getState().toasts.find((t) => /MB of plotted data/.test(t.msg));
+    expect(notice?.kind).toBe("info");
+    expect(notice?.msg).toMatch(/report and the saved \.dwk grow/);
   });
 
   it("cancelling the dialog changes nothing", async () => {

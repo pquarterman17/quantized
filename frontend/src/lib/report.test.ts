@@ -105,6 +105,17 @@ describe("sanitizeReports", () => {
     expect(out[0].report).toBe(withSpec);
   });
 
+  it("a report dropped as unreadable gets ONE 'dropped' warning, never a strip warning", () => {
+    const warnings: string[] = [];
+    const bad = {
+      title: 7, // fails isReportSheet
+      sections: [{ title: "F", blocks: [{ type: "figure", name: "n", spec: null }] }],
+    };
+    const out = sanitizeReports([{ id: "r", name: "Broken", datasetId: null, report: bad }], new Set(), warnings);
+    expect(out).toEqual([]);
+    expect(warnings).toEqual(['report "Broken" could not be read and was dropped']);
+  });
+
   it("strips a null/array/scalar spec without mutating the input, with or without a warnings sink", () => {
     const raw = {
       title: "F",

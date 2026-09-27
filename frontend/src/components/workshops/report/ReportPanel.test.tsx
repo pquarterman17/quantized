@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { act } from "react";
 import { beforeEach, describe, expect, it , vi } from "vitest";
 
@@ -186,6 +187,42 @@ describe("ReportPanel", () => {
       expect(screen.queryByTestId("report-export-warnings")).not.toBeInTheDocument();
     });
 
+    it("ANY sheet change hides the list — a move (LaTeX stems follow order), a send, undo/redo", async () => {
+      vi.mocked(reportExport).mockResolvedValueOnce({ warnings: ["w"], warningCount: 1 });
+      render(<ReportPanel />);
+      fireEvent.click(screen.getByRole("button", { name: "LaTeX" }));
+      await screen.findByTestId("report-export-warnings");
+      fireEvent.click(screen.getAllByRole("button", { name: "Move block down" })[0]);
+      expect(screen.queryByTestId("report-export-warnings")).not.toBeInTheDocument();
+      // Undo restores the very sheet object that was exported: the list is
+      // accurate for it again. Redo moves away from it: hidden again.
+      act(() => useApp.getState().undo());
+      expect(screen.getByTestId("report-export-warnings")).toBeInTheDocument();
+      act(() => useApp.getState().redo());
+      expect(screen.queryByTestId("report-export-warnings")).not.toBeInTheDocument();
+    });
+
+    it("drops a response that lands after the sheet changed (stale export)", async () => {
+      let resolve!: () => void;
+      vi.mocked(reportExport).mockReturnValueOnce(
+        new Promise((r) => (resolve = () => r({ warnings: ["stale"], warningCount: 1 }))),
+      );
+      render(<ReportPanel />);
+      fireEvent.click(screen.getByRole("button", { name: "Word" }));
+      await screen.findByRole("button", { name: "Exporting Word…" });
+      fireEvent.click(screen.getAllByRole("button", { name: "Remove block" })[0]);
+      await act(async () => {
+        resolve();
+        await Promise.resolve();
+      });
+      await screen.findByRole("button", { name: "Word" }); // export finished
+      expect(screen.queryByTestId("report-export-warnings")).not.toBeInTheDocument();
+      // Undoing the remove brings back the exported sheet — still nothing:
+      // the stale response was dropped, not merely hidden.
+      act(() => useApp.getState().undo());
+      expect(screen.queryByTestId("report-export-warnings")).not.toBeInTheDocument();
+    });
+
     it("reportWarningToast singularizes and handles a count with no readable text", () => {
       expect(reportWarningToast("PPT", { warnings: ["only"], warningCount: 1 })).toBe(
         "PPT export finished with 1 warning: only",
@@ -247,6 +284,61 @@ describe("ReportPanel", () => {
       expect(useApp.getState().history.map((h) => h.label)).toEqual(["move report block"]);
       useApp.getState().undo();
       expect(names()).toEqual(["scan", "raw", "text"]);
+    });
+
+    // Stable keys + focus restore: repeated Enter keeps acting on the SAME
+    // block, and a remove never leaves focus on another block's Remove.
+    it("keyboard: repeated Enter on Move down keeps moving the same block, then falls back to Move up at the edge", async () => {
+      const user = userEvent.setup();
+      render(<ReportPanel />);
+      screen.getAllByRole("button", { name: /Move (figure|block) down/ })[0].focus();
+      await user.keyboard("{Enter}");
+      expect(names()).toEqual(["raw", "scan", "text"]);
+      await user.keyboard("{Enter}");
+      expect(names()).toEqual(["raw", "text", "scan"]);
+      // "scan" is now last: its Move down is disabled, focus is on its Move up.
+      const focused = document.activeElement as HTMLElement;
+      expect(focused.getAttribute("aria-label")).toBe("Move figure up");
+      expect(focused.closest("[data-block-key]")).toHaveTextContent("Hall sweep");
+      await user.keyboard("{Enter}");
+      expect(names()).toEqual(["raw", "scan", "text"]);
+      expect((document.activeElement as HTMLElement).closest("[data-block-key]")).toHaveTextContent("Hall sweep");
+    });
+
+    it("a moved block keeps its own DOM node (stable per-block keys, not index keys)", () => {
+      render(<ReportPanel />);
+      const cardOf = (text: string) => screen.getByText(text).closest("[data-block-key]");
+      const scanBefore = cardOf("Hall sweep");
+      const rawBefore = cardOf("raw");
+      fireEvent.click(screen.getAllByRole("button", { name: "Move figure down" })[0]);
+      expect(names()).toEqual(["raw", "scan", "text"]);
+      expect(cardOf("Hall sweep")).toBe(scanBefore);
+      expect(cardOf("raw")).toBe(rawBefore);
+    });
+
+    it("keyboard: Enter on Remove focuses a neighbour's move control, so a second Enter deletes nothing", async () => {
+      const user = userEvent.setup();
+      render(<ReportPanel />);
+      screen.getAllByRole("button", { name: "Remove figure" })[0].focus();
+      await user.keyboard("{Enter}");
+      expect(names()).toEqual(["raw", "text"]);
+      const focused = document.activeElement as HTMLElement;
+      expect(focused.getAttribute("data-ctl")).not.toBe("remove");
+      expect(focused.closest("[data-block-key]")).toHaveTextContent("raw");
+      await user.keyboard("{Enter}");
+      expect(names()).toEqual(["text", "raw"]); // it moved "raw"; removed nothing
+    });
+
+    it("keyboard: removing the last block of a section focuses the section header", async () => {
+      const user = userEvent.setup();
+      useApp.setState({
+        reports: [{ ...FIG, report: { ...FIG.report, sections: [{ title: "Figures", blocks: [FIG.report.sections[0].blocks[0]] }] } }],
+      });
+      render(<ReportPanel />);
+      screen.getByRole("button", { name: "Remove figure" }).focus();
+      await user.keyboard("{Enter}");
+      expect(names()).toEqual([]);
+      expect(document.activeElement).toBe(screen.getByRole("button", { name: /Figures/ }));
     });
 
     it("removes a block as one undo step (undo brings it back)", () => {

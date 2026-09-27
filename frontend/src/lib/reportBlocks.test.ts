@@ -7,12 +7,18 @@ import { describe, expect, it } from "vitest";
 import type { FigureSpec } from "./api/figures";
 import type { ReportFigureBlock, ReportSheet } from "./report";
 import {
+  BYTES_PER_NUMBER,
   FIGURES_SECTION,
+  LARGE_SPEC_BYTES,
   appendFigureBlock,
+  estimateJsonBytes,
   figureBlockFromSpec,
+  largeSpecNotice,
   moveReportBlock,
   newFigureReport,
   removeReportBlock,
+  reportBlockKey,
+  uniqueFigureName,
 } from "./reportBlocks";
 
 const fig = (name: string): ReportFigureBlock => ({ type: "figure", name, spec: { fmt: "svg" } });
@@ -27,19 +33,20 @@ const sheet = (): ReportSheet => ({
 });
 
 describe("figureBlockFromSpec", () => {
-  it("stores a detached JSON-clean spec copy and trims/omits the caption", () => {
+  it("stores a detached copy (serializing like the wire) and trims/omits the caption", () => {
     const spec = {
       dataset: { time: [0, 1], values: [[Number.NaN, 2]], labels: ["A"], units: [""], metadata: {} },
       fmt: "svg",
       x_key: undefined,
     } as unknown as FigureSpec;
     const block = figureBlockFromSpec(spec, "scan", "  Fig. 1 ");
-    expect(block).toEqual({
+    expect(JSON.parse(JSON.stringify(block))).toEqual({
       type: "figure",
       name: "scan",
       caption: "Fig. 1",
       spec: { dataset: { time: [0, 1], values: [[null, 2]], labels: ["A"], units: [""], metadata: {} }, fmt: "svg" },
     });
+    expect(block.spec?.dataset).not.toBe(spec.dataset);
     (spec.dataset.time as number[])[0] = 99;
     expect((block.spec?.dataset as { time: number[] }).time[0]).toBe(0);
     expect(figureBlockFromSpec(spec, "scan", "   ")).not.toHaveProperty("caption");
@@ -105,5 +112,43 @@ describe("moveReportBlock / removeReportBlock", () => {
     const emptied = removeReportBlock(sheet(), 1, 0);
     expect(emptied?.sections[1]).toEqual({ title: FIGURES_SECTION, blocks: [] });
     expect(removeReportBlock(sheet(), 2, 0)).toBeNull();
+  });
+});
+
+describe("uniqueFigureName", () => {
+  it("returns the stem when free, else the first free -N suffix, across all sections", () => {
+    expect(uniqueFigureName(null, "scan")).toBe("scan");
+    const s = sheet(); // has figure "one" in the Figures section
+    expect(uniqueFigureName(s, "two")).toBe("two");
+    expect(uniqueFigureName(s, "one")).toBe("one-2");
+    s.sections[0].blocks.push(fig("one-2"));
+    expect(uniqueFigureName(s, "one")).toBe("one-3");
+  });
+});
+
+describe("reportBlockKey", () => {
+  it("is stable per block object, distinct across objects, and survives a move", () => {
+    const s = sheet();
+    const keys = s.sections[0].blocks.map(reportBlockKey);
+    expect(new Set(keys).size).toBe(3);
+    const moved = moveReportBlock(s, 0, 0, 1);
+    expect(moved?.sections[0].blocks.map(reportBlockKey)).toEqual([keys[1], keys[0], keys[2]]);
+    expect(reportBlockKey({ ...s.sections[0].blocks[0] })).not.toBe(keys[0]);
+  });
+});
+
+describe("large-spec notice", () => {
+  it("estimates numbers at BYTES_PER_NUMBER and strings by length, without serializing", () => {
+    expect(estimateJsonBytes([1, 2, 3])).toBe(2 + 3 * BYTES_PER_NUMBER);
+    expect(estimateJsonBytes({ ab: "xyz" })).toBe(2 + 2 + 3 + 5);
+  });
+
+  it("is silent at the threshold and speaks just above it", () => {
+    expect(largeSpecNotice(LARGE_SPEC_BYTES)).toBeNull();
+    expect(largeSpecNotice(LARGE_SPEC_BYTES + 1)).toMatch(/~5\.0 MB of plotted data/);
+    // A spec whose numbers alone cross the line trips it.
+    const n = Math.ceil(LARGE_SPEC_BYTES / BYTES_PER_NUMBER) + 1;
+    expect(largeSpecNotice(estimateJsonBytes({ dataset: { time: new Array<number>(n).fill(1) } }))).not.toBeNull();
+    expect(largeSpecNotice(estimateJsonBytes({ dataset: { time: new Array<number>(1000).fill(1) } }))).toBeNull();
   });
 });

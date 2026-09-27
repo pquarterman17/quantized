@@ -40,7 +40,7 @@ vi.mock("../../../lib/api/reflectivity", async () => {
   };
 });
 
-vi.mock("../../../lib/api/report", () => ({ reportEmit: vi.fn(), reportExport: vi.fn() }));
+vi.mock("../../../lib/api/report", () => ({ reportEmit: vi.fn() }));
 
 function useBoth() {
   const refl = useReflectivity();

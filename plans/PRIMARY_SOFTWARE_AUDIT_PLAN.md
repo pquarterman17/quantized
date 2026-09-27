@@ -8745,6 +8745,29 @@ was not raised.
   plot edits do not update it -- no re-send/refresh action yet); no in-panel
   thumbnail of the figure (it is only rendered on export); blocks move only
   within their section.
+
+  **Review round (2026-09-27), 9 findings, all fixed; each behavioral fix
+  sabotage-verified (reverted -> its test fails -> restored):** (1) blocks
+  are keyed by a stable, non-persisted per-object key
+  (`reportBlocks.reportBlockKey`, a WeakMap -- edits keep untouched blocks
+  as the same objects and undo restores them), and after a move focus stays
+  on the moved block's control (the other direction when the preferred one
+  is disabled at an edge), after a remove on a neighbour's move control or
+  the section header -- never another block's Remove (keyboard tests with
+  user-event). (2)+(3) the warnings list is tied to the exact sheet object
+  exported: ANY sheet change (move -- LaTeX stems follow order --, remove,
+  send, undo/redo) hides it, and a response landing after such a change is
+  dropped (its toast still fires; that file was saved). (4) sent figures are
+  named uniquely within the target (`run12`, `run12-2`, ...), decided against
+  the live sheet. (5) the `REPORT_FIGURE_DPI` doc now says the report
+  renderer ignores it (`OFFICE_DPI`). (6) the spec copy is one
+  `structuredClone` (no JSON string + re-parse peak), and a spec estimated
+  (by walking it, never serializing) above 5 MB gets an info toast that the
+  report and .dwk grow. (7) `sanitizeReports` only emits a figure-strip
+  warning for a report that survives; a dropped report gets one "dropped"
+  warning. (8) `ExportFormat` is exported once from `lib/api/reportExport.ts`.
+  (9) two reflectivity tests no longer mock the moved `reportExport`.
+  Eager bundle after the round: 840.5 kB (budget 846.1).
 - [ ] Consider EMF only if Windows Office tests show material benefit.
 - [ ] Editable embedded figures remain a future goal, not release blocker.
 

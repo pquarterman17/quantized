@@ -30,11 +30,14 @@ export function parseReportWarnings(h: Headers): ReportExportResult {
   return { warnings, warningCount: Math.max(warnings.length, Number.isFinite(n) ? n : 0) };
 }
 
+/** The formats `/api/report/export` renders (`routes.report_export._EXT`). */
+export type ExportFormat = "html" | "latex" | "docx" | "pptx";
+
 /** Render a report sheet server-side and download it (.html/.tex/.docx/.pptx);
  *  resolves with the export's warnings once the file is saved. */
 export async function reportExport(
   report: ReportSheet,
-  format: "html" | "latex" | "docx" | "pptx",
+  format: ExportFormat,
   filename: string,
 ): Promise<ReportExportResult> {
   return parseReportWarnings(
