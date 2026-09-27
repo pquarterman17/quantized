@@ -104,10 +104,13 @@ export function useSims(): SimsState {
     setError(null);
     const next = datasets.find((d) => d.id === id);
     const nextSource = next ? simsSource(next) : undefined;
-    // Keep the stages; re-guess the reference only when the new dataset lacks it.
-    setFormState((f) =>
-      nextSource?.labels.includes(f.reference) ? f : { ...f, reference: guessReference(nextSource), rsf: {} },
-    );
+    // Keep the stages; re-guess the reference (and the background's kept
+    // matrix column) only when the new dataset lacks the current one.
+    setFormState((f) => {
+      if (nextSource?.labels.includes(f.reference)) return f;
+      const reference = guessReference(nextSource);
+      return { ...f, reference, rsf: {}, bgKeep: reference ? [reference] : [] };
+    });
   }
 
   async function create(): Promise<void> {

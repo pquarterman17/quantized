@@ -63,6 +63,8 @@ class CalibrationSpec:
 class BackgroundSpec:
     lo: float
     hi: float
+    #: Columns left unchanged (e.g. the matrix signal, which is not a floor).
+    keep: tuple[int, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -150,7 +152,9 @@ def process_sims(
         meta.pop("x_column_long", None)
 
     if background is not None:
-        skip = [normalization.reference] if normalization is not None else []
+        skip = list(background.keep)
+        if normalization is not None:
+            skip.append(normalization.reference)
         values, prov, w = subtract_background(
             x, values, lo=background.lo, hi=background.hi, labels=labels, skip=skip
         )

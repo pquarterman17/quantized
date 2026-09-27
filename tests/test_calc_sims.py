@@ -43,6 +43,7 @@ def test_rate_calibration_is_rate_times_time() -> None:
     np.testing.assert_allclose(depth, [0.0, 5.0, 10.0, 15.0, 20.0])
     assert prov["sputter_rate_nm_per_s"] == pytest.approx(0.5)
     assert prov["depth_unit"] == "nm" and prov["time_unit"] == "s"
+    assert prov["time_unit_source"] == "recorded"
     assert ws == []
 
 
@@ -96,7 +97,7 @@ def test_stated_time_unit_overrides_the_recorded_one_with_a_confirm_warning() ->
     )
     np.testing.assert_allclose(depth, T)
     assert ws[0]["code"] == "unit-override" and ws[0]["confirm"] is True
-    assert prov["time_unit"] == "s"
+    assert prov["time_unit"] == "s" and prov["time_unit_source"] == "stated"
 
 
 @pytest.mark.parametrize(
@@ -151,6 +152,23 @@ def test_background_ignores_blanks_and_reports_a_species_with_none_in_region() -
 def test_background_refuses_an_empty_region() -> None:
     with pytest.raises(ValueError, match="no rows"):
         subtract_background(T, np.ones((5, 1)), lo=100.0, hi=200.0, labels=["B"])
+    with pytest.raises(ValueError, match="out of range"):
+        subtract_background(T, np.ones((5, 1)), lo=0.0, hi=20.0, labels=["B"], skip=[3])
+
+
+def test_process_background_leaves_kept_columns_and_the_reference_alone() -> None:
+    # Without normalization, the matrix signal is kept only when asked --
+    # its region mean is the matrix level, not a floor.
+    res = process_sims(_profile(), background=BackgroundSpec(lo=30.0, hi=40.0, keep=(1,)))
+    np.testing.assert_allclose(res.data.values[:, 1], _profile().values[:, 1])
+    np.testing.assert_allclose(res.data.values[:, 0], [47.0, 17.0, 7.0, -1.0, 1.0])
+    assert res.stages[0]["unchanged"] == ["Si"]
+    both = process_sims(
+        _profile(),
+        background=BackgroundSpec(lo=30.0, hi=40.0, keep=(1,)),
+        normalization=NormalizationSpec(reference=1),
+    )
+    assert both.stages[0]["unchanged"] == ["Si"]  # listed once
 
 
 # ── normalization ───────────────────────────────────────────────────────────

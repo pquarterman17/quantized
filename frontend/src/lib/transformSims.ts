@@ -52,8 +52,9 @@ export interface SimsCalibration {
 export interface SimsParams {
   op: "sims";
   calibration?: SimsCalibration;
-  /** Region (x after calibration) whose per-species mean is subtracted. */
-  background?: { lo: number; hi: number };
+  /** Region (x after calibration) whose per-species mean is subtracted;
+   *  `keep` names columns left unchanged (the matrix signal is not a floor). */
+  background?: { lo: number; hi: number; keep?: string[] };
   /** Reference species by column NAME; RSFs by column name (absent = ratio). */
   normalization?: { reference: string; rsf?: Record<string, number>; rsfUnit?: string };
   smoothing?: { method: SimsSmoothMethod; window: number; polyOrder: number };
@@ -124,7 +125,10 @@ export function simsRequest(p: SimsParams, source: DataStruct): SimsProcessReque
       time_unit: c.timeUnit ?? null,
     };
   }
-  if (p.background) body.background = { lo: p.background.lo, hi: p.background.hi };
+  if (p.background) {
+    const keep = (p.background.keep ?? []).map((name) => columnIndex(source.labels, name));
+    body.background = { lo: p.background.lo, hi: p.background.hi, keep };
+  }
   const n = p.normalization;
   if (n) {
     const reference = columnIndex(source.labels, n.reference);
@@ -202,6 +206,12 @@ export function simsParamsOf(raw: Record<string, unknown>): SimsParams {
   if (bg) {
     if (!finite(bg.lo) || !finite(bg.hi)) throw new Error('sims "background" needs numbers "lo" and "hi"');
     p.background = { lo: bg.lo, hi: bg.hi };
+    if (bg.keep !== undefined) {
+      if (!Array.isArray(bg.keep) || !bg.keep.every((k) => typeof k === "string" && k)) {
+        throw new Error('sims "keep" must list column names');
+      }
+      p.background.keep = bg.keep as string[];
+    }
   }
   const norm = obj("normalization");
   if (norm) {

@@ -9993,6 +9993,13 @@
             "title": "Hi",
             "type": "number"
           },
+          "keep": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Keep",
+            "type": "array"
+          },
           "lo": {
             "title": "Lo",
             "type": "number"

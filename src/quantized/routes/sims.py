@@ -45,6 +45,8 @@ class SimsCalibration(BaseModel):
 class SimsBackground(BaseModel):
     lo: float
     hi: float
+    #: Column indices left unchanged (the normalization reference always is).
+    keep: list[int] = Field(default_factory=list)
 
 
 class SimsNormalization(BaseModel):
@@ -94,7 +96,9 @@ def process(req: SimsProcessRequest) -> Response:
             calibration=None if cal is None else CalibrationSpec(**cal.model_dump()),
             background=None
             if req.background is None
-            else BackgroundSpec(lo=req.background.lo, hi=req.background.hi),
+            else BackgroundSpec(
+                lo=req.background.lo, hi=req.background.hi, keep=tuple(req.background.keep)
+            ),
             normalization=None
             if req.normalization is None
             else NormalizationSpec(**req.normalization.model_dump()),

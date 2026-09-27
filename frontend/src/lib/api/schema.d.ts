@@ -9024,6 +9024,8 @@ export interface components {
         SimsBackground: {
             /** Hi */
             hi: number;
+            /** Keep */
+            keep?: number[];
             /** Lo */
             lo: number;
         };

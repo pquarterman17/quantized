@@ -189,6 +189,7 @@ def calibrate_depth(
         "stage": "calibration",
         "method": method,
         "time_unit": unit,
+        "time_unit_source": "stated" if time_unit else "recorded",
         "depth_unit": canonical_length(depth_unit),
         "assumes": "constant sputter rate; depth measured from t = 0",
     }

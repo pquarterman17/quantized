@@ -33,6 +33,14 @@ describe("simsForm", () => {
     expect(formToParams(form({ smoothOn: true, smoothMethod: "savitzky-golay", window: "1", polyOrder: "3" }), labels)).toMatch(/below the window width \(3\)/);
   });
 
+  it("keeps the likely matrix out of the background by default; an empty keep-list is omitted", () => {
+    expect(defaultForm(data).bgKeep).toEqual(["Si"]);
+    expect(formToParams(form({ bgOn: true, bgLo: "0", bgHi: "1", bgKeep: ["O"] }), labels)).toEqual({
+      op: "sims",
+      background: { lo: 0, hi: 1 },
+    });
+  });
+
   it("builds the recorded params; blank RSFs and the reference's own RSF are left out", () => {
     const p = formToParams(
       form({
@@ -54,7 +62,7 @@ describe("simsForm", () => {
     expect(p).toEqual({
       op: "sims",
       calibration: { method: "crater", craterDepth: 1.5, craterUnit: "um", totalTime: 600, depthUnit: "nm", timeUnit: "s" },
-      background: { lo: 1400, hi: 1500 },
+      background: { lo: 1400, hi: 1500, keep: ["Si"] },
       normalization: { reference: "Si", rsf: { B: 2e21 }, rsfUnit: "atoms/cm3" },
       smoothing: { method: "moving", window: 3, polyOrder: 2 },
     });

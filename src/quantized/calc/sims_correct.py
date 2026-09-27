@@ -67,6 +67,9 @@ def subtract_background(
     (values, provenance, warnings). ``skip`` columns pass through unchanged."""
     if not (math.isfinite(lo) and math.isfinite(hi)):
         raise ValueError("the background region needs finite limits")
+    bad_skip = [c for c in skip if not 0 <= c < np.shape(values)[1]]
+    if bad_skip:
+        raise ValueError(f"column {bad_skip[0]} to leave unchanged is out of range")
     a, b = (lo, hi) if lo <= hi else (hi, lo)
     xv = np.asarray(x, dtype=float)
     mat = np.array(values, dtype=float, copy=True)
@@ -96,7 +99,13 @@ def subtract_background(
                 columns=empty,
             )
         )
-    prov = {"stage": "background", "mode": "region-mean", "region": [a, b], "levels": levels}
+    prov = {
+        "stage": "background",
+        "mode": "region-mean",
+        "region": [a, b],
+        "levels": levels,
+        "unchanged": [_name(labels, c) for c in sorted(set(skip))],
+    }
     return mat, prov, warnings
 
 

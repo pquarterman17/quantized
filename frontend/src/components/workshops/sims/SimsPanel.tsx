@@ -12,6 +12,7 @@ import { Button, Select } from "../../primitives";
 import { Checkbox } from "../../primitives/Checkbox";
 import { NumberField } from "../../primitives/NumberField";
 import { SIMS_LENGTH_UNITS, SIMS_SMOOTH_METHODS, SIMS_TIME_UNITS, type SimsSmoothMethod } from "../../../lib/transformSims";
+import { xExtent } from "../../../lib/plotDecimate";
 import { useSimsDialog } from "../../../store/simsDialog";
 import SimsPreviewPlot from "./SimsPreviewPlot";
 import { useSims, type SimsState } from "./useSims";
@@ -20,6 +21,9 @@ const gap = { marginTop: 8 };
 const row = { display: "flex", gap: 6, alignItems: "center", marginTop: 4 } as const;
 const faint = { color: "var(--text-faint)" } as const;
 const opts = (xs: readonly string[]) => xs.map((v) => ({ value: v, label: v }));
+/** Length units: recorded as nm / A / um (the parser's spellings), shown as symbols. */
+const LENGTH_LABEL: Record<string, string> = { nm: "nm", A: "Å", um: "µm" };
+const lengthOpts = SIMS_LENGTH_UNITS.map((v) => ({ value: v, label: LENGTH_LABEL[v] ?? v }));
 const fmt = (v: number): string => String(Number(v.toPrecision(5)));
 
 function Calibration({ r }: { r: SimsState }) {
@@ -48,7 +52,7 @@ function Calibration({ r }: { r: SimsState }) {
       {f.calMethod === "rate" ? (
         <div style={row}>
           <NumberField aria-label="Sputter rate" value={f.sputterRate} onChange={(v) => r.setForm({ sputterRate: v })} width={80} />
-          <Select aria-label="Rate length unit" options={opts(SIMS_LENGTH_UNITS)} value={f.rateLen} onChange={(e) => r.setForm({ rateLen: e.target.value })} />
+          <Select aria-label="Rate length unit" options={lengthOpts} value={f.rateLen} onChange={(e) => r.setForm({ rateLen: e.target.value })} />
           <span className="qzk-ds-meta">/</span>
           <Select aria-label="Rate time unit" options={opts(SIMS_TIME_UNITS)} value={f.rateTime} onChange={(e) => r.setForm({ rateTime: e.target.value })} />
         </div>
@@ -56,7 +60,7 @@ function Calibration({ r }: { r: SimsState }) {
         <>
           <div style={row}>
             <NumberField aria-label="Crater depth" value={f.craterDepth} onChange={(v) => r.setForm({ craterDepth: v })} width={80} />
-            <Select aria-label="Crater depth unit" options={opts(SIMS_LENGTH_UNITS)} value={f.craterUnit} onChange={(e) => r.setForm({ craterUnit: e.target.value })} />
+            <Select aria-label="Crater depth unit" options={lengthOpts} value={f.craterUnit} onChange={(e) => r.setForm({ craterUnit: e.target.value })} />
           </div>
           <div style={row}>
             <NumberField
@@ -72,7 +76,7 @@ function Calibration({ r }: { r: SimsState }) {
       )}
       <div style={row}>
         <span className="qzk-ds-meta">depth in</span>
-        <Select aria-label="Depth unit" options={opts(SIMS_LENGTH_UNITS)} value={f.depthUnit} onChange={(e) => r.setForm({ depthUnit: e.target.value })} />
+        <Select aria-label="Depth unit" options={lengthOpts} value={f.depthUnit} onChange={(e) => r.setForm({ depthUnit: e.target.value })} />
       </div>
       <div className="qzk-ds-meta" style={{ ...faint, marginTop: 4 }}>
         Constant sputter rate; depth = rate × time from the start of sputtering.
@@ -90,9 +94,21 @@ function Background({ r }: { r: SimsState }) {
         <span className="qzk-ds-meta">to</span>
         <NumberField aria-label="Background to" value={r.form.bgHi} onChange={(v) => r.setForm({ bgHi: v })} width={70} unit={unit || undefined} />
       </div>
+      <label className="qzk-field-lbl" style={{ marginTop: 6 }}>Leave unchanged</label>
+      <div role="group" aria-label="Leave unchanged" style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+        {r.labels.map((l) => (
+          <Checkbox
+            key={l}
+            checked={r.form.bgKeep.includes(l)}
+            onChange={(on) => r.setForm({ bgKeep: on ? [...r.form.bgKeep, l] : r.form.bgKeep.filter((k) => k !== l) })}
+          >
+            {l}
+          </Checkbox>
+        ))}
+      </div>
       <div className="qzk-ds-meta" style={{ ...faint, marginTop: 4 }}>
-        Each species' mean in this region is subtracted{r.form.calOn ? " (region in depth, after calibration)" : ""}. The
-        reference species is left alone.
+        Each other species' mean in this region is subtracted{r.form.calOn ? " (region in depth, after calibration)" : ""}.
+        The normalization reference is always left alone.
       </div>
     </div>
   );
@@ -155,14 +171,15 @@ function Preview({ r }: { r: SimsState }) {
   }
   const res = r.result;
   if (!res) return null;
-  const xs = res.data.time.filter((v) => Number.isFinite(v));
+  // One O(n) scan — never Math.min(...xs), which overflows the stack on a long profile.
+  const range = xExtent(res.data.time);
   const unit = String(res.data.metadata?.x_column_unit ?? "");
   return (
     <div style={gap} aria-label="SIMS preview" role="group">
       <SimsPreviewPlot data={res.data} />
-      {xs.length > 0 && (
+      {range && (
         <div className="qzk-ds-meta" style={{ marginTop: 4 }}>
-          {String(res.data.metadata?.x_column_name ?? "x")}: {fmt(Math.min(...xs))} … {fmt(Math.max(...xs))} {unit}
+          {String(res.data.metadata?.x_column_name ?? "x")}: {fmt(range[0])} … {fmt(range[1])} {unit}
         </div>
       )}
       {r.previewOnly && (

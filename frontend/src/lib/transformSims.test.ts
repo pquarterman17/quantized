@@ -64,14 +64,14 @@ describe("simsRequest", () => {
       {
         op: "sims",
         calibration: { method: "crater", craterDepth: 1.2, craterUnit: "um", depthUnit: "nm" },
-        background: { lo: 900, hi: 1200 },
+        background: { lo: 900, hi: 1200, keep: ["B"] },
         normalization: { reference: "Si", rsf: { B: 3e22 }, rsfUnit: "atoms/cm3" },
         smoothing: { method: "savitzky-golay", window: 3, polyOrder: 2 },
       },
       swapped,
     );
     expect(body.calibration).toMatchObject({ method: "crater", crater_depth: 1.2, crater_unit: "um", total_time: null, time_unit: null });
-    expect(body.background).toEqual({ lo: 900, hi: 1200 });
+    expect(body.background).toEqual({ lo: 900, hi: 1200, keep: [1] });
     expect(body.normalization).toEqual({ reference: 0, rsf: [null, 3e22], rsf_unit: "atoms/cm3" });
     expect(body.smoothing).toEqual({ method: "savitzky-golay", window: 3, poly_order: 2 });
   });
@@ -79,6 +79,7 @@ describe("simsRequest", () => {
   it("refuses a reference or RSF column the dataset does not have, or has twice", () => {
     expect(() => simsRequest({ op: "sims", normalization: { reference: "O" } }, profile)).toThrow('no column "O"');
     expect(() => simsRequest({ op: "sims", normalization: { reference: "Si", rsf: { P: 1 } } }, profile)).toThrow('no column "P"');
+    expect(() => simsRequest({ op: "sims", background: { lo: 0, hi: 1, keep: ["O"] } }, profile)).toThrow('no column "O"');
     const dup = { ...profile, labels: ["Si", "Si"] };
     expect(() => simsRequest(NORM, dup)).toThrow('2 columns named "Si"');
   });
@@ -89,7 +90,7 @@ describe("simsParamsOf (replay validation)", () => {
     const p: SimsParams = {
       op: "sims",
       calibration: { method: "rate", sputterRate: 0.8, rateUnit: "nm/s", depthUnit: "um", timeUnit: "min" },
-      background: { lo: 1, hi: 2 },
+      background: { lo: 1, hi: 2, keep: ["Si"] },
       normalization: { reference: "Si", rsf: { B: 2e21 }, rsfUnit: "atoms/cm3" },
       smoothing: { method: "moving", window: 2, polyOrder: 2 },
     };
@@ -108,6 +109,7 @@ describe("simsParamsOf (replay validation)", () => {
     [{ smoothing: { method: "median", window: 2 } }, 'unknown SIMS smoothing "median"'],
     [{ smoothing: { method: "moving", window: 0 } }, "integer ≥ 1"],
     [{ background: "all" }, "must be an object"],
+    [{ background: { lo: 1, hi: 2, keep: [3] } }, "list column names"],
   ])("refuses %j", (raw, msg) => {
     expect(() => simsParamsOf({ op: "sims", ...raw })).toThrow(msg);
   });

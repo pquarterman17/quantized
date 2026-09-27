@@ -21,6 +21,8 @@ export interface SimsForm {
   bgOn: boolean;
   bgLo: string;
   bgHi: string;
+  /** Columns the background leaves unchanged (default: the likely matrix). */
+  bgKeep: string[];
   normOn: boolean;
   reference: string;
   /** Column name -> RSF text ("" = plain ratio for that column). */
@@ -66,6 +68,7 @@ export function defaultForm(data?: DataStruct): SimsForm {
     bgOn: false,
     bgLo: "",
     bgHi: "",
+    bgKeep: data ? [guessReference(data)].filter(Boolean) : [],
     normOn: false,
     reference: guessReference(data),
     rsf: {},
@@ -110,7 +113,8 @@ export function formToParams(f: SimsForm, labels: readonly string[]): SimsParams
     const lo = num(f.bgLo);
     const hi = num(f.bgHi);
     if (lo === null || hi === null) return "Enter both limits of the background region.";
-    p.background = { lo, hi };
+    const keep = f.bgKeep.filter((name) => labels.includes(name));
+    p.background = { lo, hi, ...(keep.length ? { keep } : {}) };
   }
   if (f.normOn) {
     if (!f.reference || !labels.includes(f.reference)) return "Pick the reference (matrix) species.";
