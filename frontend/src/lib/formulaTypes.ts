@@ -18,11 +18,50 @@ export interface FormulaRowContext {
   /** Full column arrays — `x` plus every channel letter, same row order as
    *  the scalar `ctx` values passed alongside this. */
   columns: Record<string, number[]>;
+  /** P2.5: the fitted values this column was resolved against
+   *  (`ComputedColumn.derived.fits`) — what `fit()` / `fitval()` read. */
+  fits?: readonly FitRefSnapshot[];
 }
 
 export type FormulaFn = (ctx: Record<string, number>, rowCtx?: FormulaRowContext) => number;
 
-export type Tok = { t: "num"; v: number } | { t: "name"; v: string } | { t: "op"; v: string };
+/** `p` = 0-based start offset in the source (positioned syntax errors). */
+export type Tok = ({ t: "num"; v: number } | { t: "name"; v: string } | { t: "op"; v: string } | { t: "str"; v: string }) & {
+  p?: number;
+};
+
+/** P2.5 fitted-value use: one saved fit a computed column reads, SNAPSHOTTED
+ *  onto the column so recompute stays a pure function of (data, formulas).
+ *  Kept current by `lib/derivedFitRefs.refreshFitRefs`, scheduled a tick after
+ *  the dataset's fit changes; `missing` says why it cannot be used now (no fit, a
+ *  different model, not converged), and evaluation then refuses. Only the
+ *  dataset's OWN saved fit (`Dataset.fitSpec`) can be referenced. */
+export interface FitRefSnapshot {
+  model: string;
+  paramNames: string[];
+  params: number[];
+  /** The model in formula language over `x` and `p0..pn` (fitval() only). */
+  expr?: string;
+  missing?: string;
+}
+
+/** P2.5 derived-expression provenance on a computed column (lib/derivedColumn.ts). */
+export interface DerivedSpec {
+  /** `unit` was derived from the operand units, not typed by the user. */
+  unitAuto?: boolean;
+  /** What was assumed at derivation (unknown operand units, exact inputs, …). */
+  notes?: string[];
+  fits?: FitRefSnapshot[];
+  /** The propagated-uncertainty LINK, held on both ends: the value column
+   *  names its σ column (`sigma`), the σ column names its value column
+   *  (`sigmaOf`). Editing the value column's formula drops its `derived`
+   *  (store/computedColumns.updateFormula), and removing or renaming either
+   *  end breaks the pair — every one of those makes the σ column an error
+   *  (lib/formula.ts), never a σ silently mismatched to its values. A removal
+   *  that merely shifts column letters keeps the pair. */
+  sigma?: string;
+  sigmaOf?: { name: string; method: "first-order, uncorrelated" };
+}
 
 export const COMPARE_OPS: ReadonlySet<string> = new Set(["<", "<=", ">", ">=", "==", "!="]);
 

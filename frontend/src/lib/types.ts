@@ -3,7 +3,7 @@
 // The error-role model lives in ./errorRoles (it owns the inference too);
 // imported type-only, so there is no runtime cycle with this contract file.
 import type { ErrorBinding } from "./errorRoles";
-
+import type { DerivedSpec } from "./formulaTypes";
 import type { ColormapName } from "./colormap";
 import type { DatasetSource } from "./datasetSource";
 import type { PeakTable } from "./peakTable";
@@ -345,11 +345,11 @@ export interface ComputedColumn {
   unit?: string;
   /** PR K: referenced columns (formula.referencedColumns) — feeds recalc's col→col edges; legacy columns re-derive. */
   deps?: string[];
-  /** J2 Recode workshop: set only for a recode-produced column, mutually
-   *  exclusive with a real `expr` (formula.computeFormulas branches on this
-   *  field instead of compiling `expr` when present) — see lib/recode.ts. */
+  /** J2 Recode workshop: set only for a recode-produced column, mutually exclusive with a real
+   *  `expr` (formula.computeFormulas branches on this field instead of compiling it) — lib/recode.ts. */
   recode?: RecodeSpec;
   factor?: FactorSpec; // P2.5: a metadata field promoted to a per-row factor (lib/metadataFactor.ts)
+  derived?: DerivedSpec; // P2.5: derived unit / fitted values / propagated σ (lib/derivedColumn.ts)
 }
 
 /** One column's non-destructive filter predicate (#53). `col` is -1 for x, 0..

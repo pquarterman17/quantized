@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-26 (latest): **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-27 (latest): **P2.5 derived expressions** — Python-like worksheet formulas (`**`, `//`, `np.` functions, `where`, positioned errors), a derived unit for every new column (mismatched sums refused), `fit()`/`fitval()` over the dataset's saved fit (snapshotted, re-resolved when the fit changes), and an optional first-order, uncorrelated σ column bound as the new column's error; P2.5 box 2 ticked, so P2.5 is complete (see P2.5). Previous: 2026-09-26: **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -3655,8 +3655,135 @@ messy metadata. Begin only from Gate A examples; much pipeline logic exists.
       (pre-existing behaviour, kept so existing outputs and replays do not
       change).
     - Aligning N datasets (resample) still makes N undo entries.
-- [ ] Python-like derived expressions, units, fitted-value use, defined error
-  propagation.
+- [x] Python-like derived expressions, units, fitted-value use, defined error
+  propagation. (2026-09-27.) Every new worksheet column (the ƒx bar and the
+  header menu's "New computed column…") now goes through one lazy
+  derived-expression path (`store/derivedColumnRun.ts` over the pure
+  `lib/derivedColumn.ts`), which either adds the column(s) or refuses with the
+  reason. Zero `useApp.ts` lines (it is 3 lines shorter).
+  - **Python-like syntax** (the eager evaluator, `lib/formula.ts` +
+    `lib/formulaTokenize.ts` + `lib/formulaFuncs.ts`; never `eval`). Added:
+    `**` with Python's rule (`-A**2` is `-(A**2)`, `2**-1` is 0.5,
+    right-associative), `//` floor division, `np.` / `numpy.` / `math.`
+    prefixes, `asin acos atan atan2 arcsin arccos arctan sinh cosh tanh log2
+    sign floor ceil hypot`, and `where(c, a, b)` (= `if`). Everything added
+    was a syntax error before, so no saved formula changes meaning. Syntax
+    errors on the authoring path name their column ("unknown function "sqr"
+    (column 5)"): the tokenizer does it directly, and the lazy tree parser
+    (same grammar) adds it to the evaluator's parse errors.
+    - **Kept as it was, deliberately:** `^` stays looser than a unary sign
+      (`-A^2` is `(-A)^2`), unlike the P2.7 fit equations' `^`; `%` keeps the
+      JS sign rule (`-7 % 3` is -1; Python gives 2); no `round` (JS, numpy
+      and MATLAB disagree on halves).
+    - The tree parser (`lib/derivedExprAst.ts`) is held to the evaluator by a
+      parity test: `print(parse(e))` evaluates exactly like `e` over a corpus
+      plus 300 generated expressions (a printer precedence bug was
+      sabotage-checked to fail it).
+  - **Units** (`lib/derivedUnits.ts`, a small explicit algebra over unit
+    TEXT). `* / ** sqrt pow` combine exponents ("emu/g", "V·A", "m/s²",
+    "J/(mol·K)", "K^0.5"). `+ - % comparisons if/where min max hypot atan2`
+    need one unit: a mismatch REFUSES the column, naming both units ("no
+    conversion is done; convert one first"). Transcendental functions return
+    a dimensionless result and warn about a dimensioned argument; trig flags
+    `deg`. The derived unit is stored as the column's unit (`derived.unitAuto`).
+    - **Stated limits, each one said, never guessed:** no conversion and no
+      prefix algebra (`mA` and `A` are different symbols; `mA·A` stays
+      unsimplified). A column with no unit is UNKNOWN, not dimensionless: a
+      sum assumes the other side's unit and SAYS so; a product with it is
+      unknown. A numeric literal adopts the other operand's unit in a sum
+      (`T + 273.15`). An ambiguous unit text ("J/mol K", "a.u.") is one
+      opaque symbol. Scaling °C/°F is flagged. Fitted parameters carry no
+      recorded unit.
+  - **Fitted-value use** (`lib/formulaFitRefs.ts`, eager evaluation;
+    `lib/derivedFitRefs.ts`, lazy resolution). `fit("Gaussian", "μ")`,
+    `fit("Gaussian").A` (identifier names) and `fit("Model", "p2")` read a
+    parameter of the dataset's OWN saved fit (`Dataset.fitSpec`);
+    `fitval("Gaussian", x)` evaluates the fitted model. The values are
+    SNAPSHOTTED onto the column (`derived.fits`), so recompute stays a pure
+    function of (data, formulas). A missing fit, a different model, a
+    non-converged fit (`exitFlag <= 0`) or an unknown parameter refuses at
+    authoring. Afterwards the snapshot is re-resolved whenever the fit changes
+    (`setFitSpec`, the recalc graph's refit, removing the fit's column, split
+    children), scheduled lazily so it lands a tick later. The column follows
+    the new fit, or becomes an explicit error saying why ("the saved fit is
+    "Lorentzian""); it never keeps showing an old fit's numbers.
+    - `fitval()` evaluates the backend's closed-form models, transcribed into
+      the formula language (`lib/derivedFitModels.ts`: 22 models) and
+      checked against `calc.fit_models.evaluate` to 1e-12 relative
+      (`lib/__fixtures__/derivedFitModels.json`). Pseudo-Voigt, the
+      helper-based magnetic/thermal models and plugins can be referenced by
+      `p`-index but `fitval()` refuses them.
+    - A fitval column's unit is the fit's Y column's unit.
+  - **Defined error propagation** (`lib/derivedPropagate.ts`). "± errors" on
+    the ƒx bar (or the dialog) adds a second column `σ(name)`,
+    σ_f² = Σ (∂f/∂xᵢ · σᵢ)²: first-order (linear), inputs uncorrelated. The
+    σᵢ are the inputs' bound SYMMETRIC error columns (the P1.6 roles; the
+    label-guessed roles are made explicit first so none is lost). The
+    partials are taken symbolically, so the σ column is an ordinary readable
+    formula (`sqrt((C * B)**2 + (A * D)**2)`) that recomputes, undoes,
+    records and round-trips like any other. It is bound as the value
+    column's symmetric Y error, and every bound window is synced like an
+    Inspector edit.
+    - The same input used twice IS handled (σ(A·A) = |2A|σ_A).
+    - Inputs without an error are exact, and that is said. Fitted parameters
+      are exact (their standard errors are not stored with the fit).
+    - Two inputs that share an upstream column are named as correlated: the
+      σ ignores that, and says so.
+    - `if`/`where` conditions are exact.
+    - **Refused** (with the reason): an input with an error reaching `%`,
+      `//`, floor/ceil/sign/min/max, a comparison used as a value, or a
+      row-coupled form (lag/diff/aggregates); an asymmetric (+/−) pair; two
+      symmetric bindings; no input with an error at all.
+    - A row where a partial is infinite or undefined (log or sqrt at 0,
+      `a/b` at `b = 0`) is Inf/NaN there — the linearization does not exist.
+    - **The σ link is held on both ends** (`derived.sigma` on the value
+      column, `derived.sigmaOf` on the σ). Editing the value column's formula
+      (which drops its `derived`), or renaming or removing either end, makes
+      the σ column an error ("stale σ: …"), never a σ silently mismatched to
+      its values; a new column taking the old name does not revive it. A
+      removal that only shifts letters keeps the pair.
+  - **Undo / provenance / replay / .dwk:** one undo entry per add (value + σ +
+    binding). One recorded `expression` step (`derived: true`, `propagate`,
+    `sigmaName`) that a replay RE-DERIVES against its own target's units,
+    fit and error roles; `addedColumnNames` counts the σ for preflight.
+    `derived` rides the .dwk and is re-typed on load
+    (`workspaceComputedColumns.sanitizeDerived`).
+  - **Tests:** `formulaPython.test.ts`, `derivedExprAst.test.ts` (parity +
+    generated), `derivedUnits.test.ts`, `derivedPropagate.test.ts` (the
+    textbook closed forms for a±b, ab, a/b, aⁿ, aᵇ, log, sqrt, exp, sin, atan2,
+    hypot, and through a fitted Gaussian vs a numeric slope),
+    `derivedFitModels.test.ts`, `derivedColumn.test.ts`,
+    `store/derivedColumnRun.test.ts` (one undo step, binding, recorded step,
+    cell-edit recompute, removal/edit/rename staleness, the fit following
+    `setFitSpec`, .dwk round-trip + malformed input, recipe replay onto a
+    dataset with other units and bindings), and `Worksheet.test.tsx` (unit
+    derived and a refusal shown, "± errors" end to end with undo).
+  - **Eager bundle:** 843.0 → 845.9 kB (866,242 B against the 866,358 B
+    budget, npm ci-fresh, .vite wiped), pin unchanged. Eager: the grammar
+    additions, the fit-reference evaluator, the σ-link check, the ƒx toggle.
+    Lazy: the tree parser, unit algebra, symbolic differentiation, the model
+    table, fit resolution/refresh and the commit (one dynamic import). Three
+    measured cuts funded it: parse-error columns moved to the lazy path, fit
+    re-resolution made lazy, and a two-sided σ link replaced an eager
+    letter-remap. Headroom left is ~0.1 kB.
+  - **Not done:**
+    - Fitted values come only from the dataset's OWN `fitSpec`. There are no
+      cross-dataset references, and the durable peak table, reflectivity
+      fits and custom-equation fits (which write no `fitSpec`) cannot be
+      referenced.
+    - A replayed recipe's `fit` step does not write `fitSpec`
+      (pre-existing), so a replayed `fit()` column needs the target to
+      already hold a saved fit.
+    - The pipeline panel's add-expression validation
+      (`lib/pipeline.validateExpression`) still probes without row context,
+      so it flags `fit()` / aggregate formulas it cannot evaluate there.
+    - Fit-reference refresh lands a tick after the fit changes (a lazy
+      import), not in the same state update.
+    - No per-column unit override on the ƒx bar (an operand unit is fixed in
+      the Inspector). The derived unit is a snapshot: it is dropped when the
+      expr is edited, not re-derived when an operand's unit changes later.
+    - No correlated (covariance) propagation and no Monte Carlo option in the
+      worksheet; `calc/errors.py`'s `errorProp` has both, backend-side.
 - [x] Metadata cleanup/promotion to factors. (2026-09-26.) Data > "Metadata →
   factors…" and the Library row menu ("Metadata → factors…", on the selection
   when the row is in it) open one lazy workshop

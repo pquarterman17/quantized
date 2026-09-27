@@ -148,6 +148,8 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         colName={view.colName}
         setFormula={view.setFormula}
         setColName={view.setColName}
+        propagate={view.propagate}
+        setPropagate={view.setPropagate}
         onAddColumn={view.addColumn}
         showStats={view.showStats}
         onToggleStats={() => view.setShowStats((v) => !v)}

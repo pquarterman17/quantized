@@ -61,7 +61,7 @@ import { removeDatasetsWithTrash } from "./removeDatasets";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createProjectSlice, type ProjectSlice } from "./project";
 import { createTrashSlice, type TrashSlice } from "./trash";
-import { createComputedColumnsSlice, type ComputedColumnsSlice } from "./computedColumns";
+import { createComputedColumnsSlice, refreshFitRefsLater, type ComputedColumnsSlice } from "./computedColumns";
 import { createDerivedWorksheetsSlice, type DerivedWorksheetsSlice } from "./derivedWorksheets";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
 import { createFigureLifecycleSlice, type FigureLifecycleSlice } from "./figureLifecycle";
@@ -1296,12 +1296,10 @@ export const useApp = create<AppState>((set, get) => ({
       _recalcInProgress = false;
     }
   },
-  setFitSpec: (id, spec) =>
-    set((s) => ({
-      datasets: s.datasets.map((d) =>
-        d.id === id ? { ...d, fitSpec: spec ?? undefined } : d,
-      ),
-    })),
+  setFitSpec: (id, spec) => {
+    set((s) => ({ datasets: s.datasets.map((d) => (d.id === id ? { ...d, fitSpec: spec ?? undefined } : d)) }));
+    refreshFitRefsLater(id); // P2.5: fit() columns follow the fit
+  },
   setDataFilterOpen: (dataFilterOpen) => set({ dataFilterOpen }),
   setFigureBuilderOpen: (figureBuilderOpen) => set({ figureBuilderOpen }),
   setFigurePageOpen: (figurePageOpen) => set({ figurePageOpen }),

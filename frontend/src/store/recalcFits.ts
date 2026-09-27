@@ -15,6 +15,7 @@ import { dropGapRows, restoreGapRows } from "../lib/api/finitePairs";
 import { boundsFromWire } from "../lib/fitBoundsWire";
 import { fitDataForSpec, stampRecompute } from "../lib/fitselection";
 import { activeRowIndices, droppedRows, expandToFull } from "../lib/rowstate";
+import { refreshFitRefsLater } from "./computedColumns";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -68,6 +69,7 @@ export async function recomputeStaleFits(set: SliceSet, get: SliceGet): Promise<
           d2.id === id && d2.fitSpec ? { ...d2, fitSpec: stampRecompute(d2.fitSpec, r) } : d2,
         ),
       }));
+      refreshFitRefsLater(id); // P2.5: fit() columns follow the refit
     } catch (e) {
       get().setStatus(
         `recalc fit failed: ${e instanceof Error ? e.message : "error"}`,

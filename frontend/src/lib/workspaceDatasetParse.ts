@@ -23,7 +23,7 @@ import { sanitizeFilter } from "./datafilter";
 import { sanitizeBindings } from "./errorRoles";
 import { baseColumns } from "./formula";
 import { sanitizePeakTable } from "./peakTable";
-import { applyComputedColumnsExtras } from "./workspaceComputedColumns";
+import { applyComputedColumnsExtras, sanitizeDerived } from "./workspaceComputedColumns";
 import { sanitizeExcluded } from "./rowstate";
 import type {
   BookSource,
@@ -168,7 +168,12 @@ export function parseWorkspaceDataset(d: unknown, i: number, projectDir?: string
         typeof (f as Record<string, unknown>).name === "string" &&
         typeof (f as Record<string, unknown>).expr === "string",
     );
-    if (formulas.length) ds.formulas = formulas;
+    // P2.5: `derived` is re-typed (sanitizeDerived), never trusted as read.
+    if (formulas.length)
+      ds.formulas = formulas.map(({ derived, ...f }) => {
+        const d = sanitizeDerived(derived);
+        return d ? { ...f, derived: d } : f;
+      });
   }
   // SILENT_STATE_CORRUPTION_PLAN #6 version-skew: `ds.formulas` is final as
   // of this point (the block above), so `Dataset.raw`'s always-base-only

@@ -39,7 +39,7 @@ import { useEffect, useMemo, useState } from "react";
 import { statsDescriptive } from "../../../lib/api/statsDescriptive";
 import { copyText, tableToTSV } from "../../../lib/clipboard";
 import { useEscapeSurface } from "../../../lib/escapeStack";
-import { channelLetter, compileFormula } from "../../../lib/formula";
+import { channelLetter } from "../../../lib/formula";
 import type { TextColumn } from "../../../lib/columnmeta";
 import { textColumnRowCount, worksheetTextColumns } from "./textColumns";
 import { autofitColWidth, clampColWidth } from "../../../lib/gridwindow";
@@ -113,6 +113,8 @@ export interface WorksheetView {
   setFormula: (v: string) => void;
   colName: string;
   setColName: (v: string) => void;
+  propagate: boolean;
+  setPropagate: (v: boolean) => void;
   addColumn: () => void;
   promptColumn: () => Promise<void>;
   err: string | null;
@@ -172,7 +174,6 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   const addDataset = useApp((s) => s.addDataset);
   const setStatus = useApp((s) => s.setStatus);
   const setCellValue = useApp((s) => s.setCellValue);
-  const addFormula = useApp((s) => s.addFormula);
   const removeFormula = useApp((s) => s.removeFormula);
   const activeId = useApp((s) => s.activeId);
   const xKey = useApp((s) => s.xKey);
@@ -215,6 +216,7 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   const [sort, setSort] = useState<{ col: number; dir: 1 | -1 } | null>(null);
   const [formula, setFormula] = useState("");
   const [colName, setColName] = useState("");
+  const [propagate, setPropagate] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [showStats, setShowStats] = useState(false);
   const [colStats, setColStats] = useState<(CalcResult | null)[] | null>(null);
@@ -445,6 +447,17 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     apply(ds);
   }
 
+  // P2.5: every new column goes through the lazy derived-expression path
+  // (store/derivedColumnRun.ts): unit derived from the operands, fitted values
+  // resolved, optional propagated σ bound as its error — or refused, with why.
+  async function commitColumn(name: string, expr: string, errors: boolean): Promise<boolean> {
+    const { addDerivedColumn } = await import("../../../store/derivedColumnRun");
+    const r = await addDerivedColumn(ds.id, { name, expr, propagate: errors });
+    if (r.ok) setStatus(r.message);
+    else setErr(r.error);
+    return r.ok;
+  }
+
   async function promptColumn() {
     const p = await askParams("New computed column", [
       { key: "name", label: "Column name", type: "text", default: "" },
@@ -454,32 +467,21 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
         type: "text",
         default: "",
       },
+      { key: "errors", label: "± errors (bound σ column)", type: "boolean", default: false },
     ]);
-    if (!p) return;
-    const expr = String(p.expr).trim();
-    if (!expr) return;
-    try {
-      compileFormula(expr);
-      const name = String(p.name).trim() || expr;
-      addFormula(ds.id, name, expr);
-      setStatus(`added column "${name}"`);
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "formula error");
-    }
+    const expr = p ? String(p.expr).trim() : "";
+    if (!p || !expr) return;
+    setErr(null);
+    await commitColumn(String(p.name), expr, p.errors === true);
   }
 
   function addColumn() {
     setErr(null);
-    try {
-      compileFormula(formula); // validate — throws on a bad expression
-      const name = colName.trim() || formula.trim();
-      addFormula(ds.id, name, formula);
-      setStatus(`added column "${name}"`);
+    void commitColumn(colName, formula, propagate).then((ok) => {
+      if (!ok) return;
       setFormula("");
       setColName("");
-    } catch (e) {
-      setErr(e instanceof Error ? e.message : "formula error");
-    }
+    });
   }
 
   const toggleSort = (col: number) =>
@@ -581,6 +583,8 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     setFormula,
     colName,
     setColName,
+    propagate,
+    setPropagate,
     addColumn,
     promptColumn,
     err,

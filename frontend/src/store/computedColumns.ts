@@ -92,6 +92,11 @@ function withRecomputedFormulasAnd(
   return { data: recomputed.data, formulaErrors: { ...(recomputed.formulaErrors ?? {}), ...forced } };
 }
 
+/** P2.5 fitted-value use: after `id`'s saved fit changed, re-resolve its
+ *  columns' `fit()`/`fitval()` values (store/derivedColumnRun, lazy — so it
+ *  lands a tick later; a no-op for a dataset without such columns). */
+export const refreshFitRefsLater = (id: string): void => void import("./derivedColumnRun").then((m) => m.refreshFitRefsFor(id));
+
 export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): ComputedColumnsSlice {
   return {
     addFormula: (id, name, expr) => {
@@ -137,7 +142,11 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
       }
       const name = patch.name?.trim() || current.name;
       const expr = patch.expr ?? current.expr;
-      const unit = patch.unit ?? current.unit;
+      // P2.5: an auto-derived unit and the `derived` record (σ link, fitted
+      // values, notes) describe the OLD formula, so an expr edit drops them —
+      // which also unlinks a σ derived from this column (lib/formula.ts).
+      const edited = expr !== current.expr;
+      const unit = patch.unit ?? (edited && current.derived?.unitAuto ? undefined : current.unit);
       const deps = referencedColumns(expr).letters;
       const target = formulaLetter(ds.data.labels.length, ds.formulas!.length, index);
       for (const dep of deps) {
@@ -157,7 +166,9 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
           const base = baseColumns(d.data, d.formulas.length);
           const formulas = d.formulas.map((f, i): ComputedColumn =>
             // A metadata factor (P2.5) stays one while only its name/unit change.
-            i === index ? { name, expr, ...(unit ? { unit } : {}), deps, ...(f.factor && expr === f.expr ? { factor: f.factor } : {}) } : f,
+            i === index
+              ? { name, expr, ...(unit ? { unit } : {}), deps, ...(f.factor && !edited ? { factor: f.factor } : {}), ...(f.derived && !edited ? { derived: f.derived } : {}) }
+              : f,
           );
           return { ...d, formulas, ...withRecomputedFormulas(base, formulas) };
         }),
@@ -252,6 +263,7 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
         };
       });
       get().touchDataset(id); // recalc graph (#1): data changed
+      refreshFitRefsLater(id); // P2.5: removing the fit's own column drops the fit (remapFitSpec)
     },
   };
 }

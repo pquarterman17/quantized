@@ -7,7 +7,8 @@
 // anything stale or hand-edited on load" for these two; workspace.ts just
 // calls the two functions below (one call site each).
 
-import type { Dataset } from "./types";
+import type { FitRefSnapshot } from "./formulaTypes";
+import type { ComputedColumn, Dataset } from "./types";
 
 /** The `formulaErrors`/`derivedFrom` slice of a serialized dataset entry —
  *  spread into `serializeWorkspace`'s per-dataset object alongside every
@@ -37,4 +38,37 @@ export function applyComputedColumnsExtras(ds: Dataset, dd: Record<string, unkno
   if (df && typeof df === "object" && typeof df.datasetId === "string" && typeof df.pipeline === "string") {
     ds.derivedFrom = { datasetId: df.datasetId, pipeline: df.pipeline };
   }
+}
+
+const strings = (v: unknown): string[] | undefined =>
+  Array.isArray(v) && v.every((s) => typeof s === "string") ? (v as string[]) : undefined;
+
+/** P2.5: a computed column's `derived` record (lib/formulaTypes.ts
+ *  DerivedSpec) as read back from a .dwk — every field re-typed, anything
+ *  malformed dropped, so a hand-edited file cannot feed the evaluator a
+ *  non-array `params` or a σ link without its formula. A dropped fit snapshot
+ *  makes the column error ("not resolved"); a dropped σ link leaves a plain
+ *  formula. Never throws. */
+export function sanitizeDerived(raw: unknown): ComputedColumn["derived"] {
+  if (!raw || typeof raw !== "object") return undefined;
+  const r = raw as Record<string, unknown>;
+  const out: NonNullable<ComputedColumn["derived"]> = {};
+  if (r.unitAuto === true) out.unitAuto = true;
+  const notes = strings(r.notes);
+  if (notes?.length) out.notes = notes;
+  if (Array.isArray(r.fits)) {
+    const fits = r.fits.flatMap((f): FitRefSnapshot[] => {
+      const s = (f && typeof f === "object" ? f : {}) as Record<string, unknown>;
+      const names = strings(s.paramNames);
+      const params = Array.isArray(s.params) && s.params.every((p) => typeof p === "number") ? (s.params as number[]) : undefined;
+      if (typeof s.model !== "string" || !names || !params) return [];
+      const opt = (k: "expr" | "missing") => (typeof s[k] === "string" ? { [k]: s[k] as string } : {});
+      return [{ model: s.model, paramNames: names, params, ...opt("expr"), ...opt("missing") }];
+    });
+    if (fits.length) out.fits = fits;
+  }
+  const so = r.sigmaOf as Record<string, unknown> | undefined;
+  if (so && typeof so === "object" && typeof so.name === "string") out.sigmaOf = { name: so.name, method: "first-order, uncorrelated" };
+  if (typeof r.sigma === "string") out.sigma = r.sigma;
+  return Object.keys(out).length ? out : undefined;
 }

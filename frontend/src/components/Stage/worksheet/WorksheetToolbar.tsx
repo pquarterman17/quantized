@@ -11,9 +11,9 @@ import type { BlockOpsApi } from "./useWorksheetBlockOps";
 // header (the authoritative doc, since it can't drift from the parser);
 // this is the compact user-facing cheat sheet.
 const FORMULA_HELP = [
-  "Operators: + - * / % ^   Comparisons: < <= > >= == !=   Logic: and or not",
-  "Functions: sin cos tan exp log ln log10 sqrt abs pow min max",
-  "if(cond, a, b) — NaN cond -> NaN",
+  "Operators: + - * / // % ^ **   Comparisons: < <= > >= == !=   Logic: and or not",
+  "Functions: sin cos tan asin acos atan atan2 sinh cosh tanh exp log log10 log2 sqrt abs sign floor ceil hypot pow min max",
+  "if(cond, a, b) or where — NaN cond -> NaN · fit(\"Model\", \"A\") fitval(\"Model\", x)",
   "Aggregates (scalar, same value every row): mean(A) sd(A) min(A) max(A) median(A) sum(A) count(A)",
   "Row: row() is 1-based · lag(A, k) — NaN past the edge · diff(A) = A - lag(A, 1)",
   "Variables: x and the channel letters A, B, C, …",
@@ -24,6 +24,9 @@ export interface WorksheetToolbarProps {
   colName: string;
   setFormula: (v: string) => void;
   setColName: (v: string) => void;
+  /** P2.5: also derive + bind a propagated-uncertainty column. */
+  propagate: boolean;
+  setPropagate: (v: boolean) => void;
   onAddColumn: () => void;
   showStats: boolean;
   onToggleStats: () => void;
@@ -58,6 +61,8 @@ export default function WorksheetToolbar({
   colName,
   setFormula,
   setColName,
+  propagate,
+  setPropagate,
   onAddColumn,
   showStats,
   onToggleStats,
@@ -107,6 +112,14 @@ export default function WorksheetToolbar({
         onChange={(e) => setColName(e.target.value)}
         style={{ width: 120 }}
       />
+      <button
+        className={propagate ? "qz-btn qz-active" : "qz-btn"}
+        aria-pressed={propagate}
+        onClick={() => setPropagate(!propagate)}
+        title="Also add a bound σ column (first-order, uncorrelated)"
+      >
+        ± errors
+      </button>
       <button className="qz-btn" disabled={!formula.trim()} onClick={onAddColumn}>
         Add column
       </button>
