@@ -73,6 +73,19 @@ describe("inputColumnRefs — only the steps that read the INPUT", () => {
   it("an expression that does not compile requires everything (cannot tell)", () => {
     expect(inputColumnRefs([expr("d", "A +")]).all).toBe(true);
   });
+
+  it("a sims step resolves its BY-NAME reference/RSF/keep columns against the given labels (finding 6)", () => {
+    const sims = transform({
+      op: "sims",
+      background: { lo: 0, hi: 1, keep: ["T"] },
+      normalization: { reference: "R", rsf: { M: 1 } },
+    });
+    // Without labels there is nothing to resolve names against.
+    expect(inputColumnRefs([sims]).cols.size).toBe(0);
+    expect([...inputColumnRefs([sims], ["T", "M", "R"]).cols].sort()).toEqual([0, 1, 2]);
+    // A name absent from the given labels resolves to nothing (not -1).
+    expect([...inputColumnRefs([sims], ["T"]).cols]).toEqual([0]);
+  });
 });
 
 describe("deriveExpectations", () => {
@@ -95,6 +108,24 @@ describe("deriveExpectations", () => {
     };
     const e = deriveExpectations([expr("d", "B * 2"), transform({ op: "stack", channels: [0, 4] })], withOwn);
     expect(e.columns.map((c) => [c.name, c.required])).toEqual([["T", true], ["M", true]]);
+  });
+
+  it("declares a sims step's named reference column as required, and flags a missing time-unit x (finding 6)", () => {
+    const simsStep = transform({ op: "sims", calibration: { method: "rate" }, normalization: { reference: "R" } });
+    const e = deriveExpectations([simsStep], EXAMPLE);
+    expect(e.columns).toEqual([
+      { name: "T", unit: "K", required: false },
+      { name: "M", unit: "emu", required: false },
+      { name: "R", unit: "ohm", required: true },
+    ]);
+    // calibration has no STATED time-unit override -> the target's own x
+    // must already be a time unit, or the run fails mid-replay.
+    expect(e.needsTimeUnitX).toBe(true);
+  });
+
+  it("a stated calibration time-unit override needs no time-unit x", () => {
+    const simsStep = transform({ op: "sims", calibration: { method: "rate", timeUnit: "s" }, normalization: { reference: "R" } });
+    expect(deriveExpectations([simsStep], EXAMPLE).needsTimeUnitX).toBeUndefined();
   });
 
   it("a whole-table op lists every column as required; a promote step lists its metadata path", () => {

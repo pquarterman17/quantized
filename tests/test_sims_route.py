@@ -66,3 +66,22 @@ def test_refusals_are_422_with_the_reason() -> None:
     assert (
         client.post(URL, json={"dataset": PROFILE, "smoothing": {"window": 0}}).status_code == 422
     )
+
+
+def test_out_of_range_reference_is_refused_with_its_own_message_not_backgrounds() -> None:
+    # 2026-09 review finding 9: with a background stage ALSO running, an
+    # out-of-range normalization reference used to be swept into that
+    # stage's own `skip` list and refused with ITS "column to leave
+    # unchanged" wording -- misleading, since the problem is the reference.
+    res = client.post(
+        URL,
+        json={
+            "dataset": PROFILE,
+            "background": {"lo": 0, "hi": 10},
+            "normalization": {"reference": 5},
+        },
+    )
+    assert res.status_code == 422
+    detail = res.json()["detail"]
+    assert "normalization reference" in detail
+    assert "leave unchanged" not in detail

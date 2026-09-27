@@ -37,7 +37,7 @@
 // `level_order`) move with their columns; Origin's per-column name list is
 // dropped when the order changed, since it is positional.
 
-import { addedColumnNames, derivesOutput, hasMetadata, inputSegment, editsInPlace, type ExpectedColumn, type RecipeExpectations } from "./recipeExpect";
+import { addedColumnNames, derivesOutput, hasMetadata, hasTimeUnitX, inputSegment, editsInPlace, type ExpectedColumn, type RecipeExpectations } from "./recipeExpect";
 import type { ErrorBinding } from "./errorRoles";
 import type { PipelineStep } from "./pipeline";
 import type { ColumnFilter, DataStruct, Dataset } from "./types";
@@ -57,7 +57,8 @@ export type PreflightKind =
   | "fit-not-kept"
   | "recorded-input"
   | "blank-column"
-  | "corrections";
+  | "corrections"
+  | "not-time-unit";
 
 export interface PreflightIssue {
   kind: PreflightKind;
@@ -177,6 +178,12 @@ export function preflightRecipe(
   });
   for (const path of recipe.expects?.metadata ?? []) {
     if (!hasMetadata(ds, path)) push("missing-metadata", `no metadata “${path.join(" › ")}”`, true);
+  }
+  if (recipe.expects?.needsTimeUnitX && !hasTimeUnitX(ds)) {
+    // A sims step calibrates without a stated override (finding 6): the
+    // target's OWN recorded x unit must already be a time unit, or
+    // `calc.sims_depth.calibrate_depth` refuses it mid-replay.
+    push("not-time-unit", "x is not recorded as a time unit — the recipe calibrates sputter time to depth (state a time-unit override, or pick a target whose x is already s/ms/min/h)", true);
   }
   for (const { step, ref, isInput } of externalRefs(recipe.steps)) {
     if (!workspaceIds.has(ref.id)) {

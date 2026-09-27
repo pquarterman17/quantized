@@ -37,15 +37,10 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from ._warn import warn as _warn
 from .processing import smooth_data
 
 __all__ = ["normalize_to_reference", "smooth_profiles", "subtract_background"]
-
-
-def _warn(code: str, text: str, **extra: Any) -> dict[str, Any]:
-    out: dict[str, Any] = {"code": code, "text": text}
-    out.update({k: v for k, v in extra.items() if v is not None})
-    return out
 
 
 def _name(labels: Sequence[str], c: int) -> str:
@@ -122,10 +117,13 @@ def normalize_to_reference(
     units: Sequence[str],
     rsf: Sequence[float | None] | None = None,
     rsf_unit: str = "",
+    skip: Sequence[int] = (),
 ) -> tuple[NDArray[np.float64], list[str], dict[str, Any], list[dict[str, Any]]]:
     """``C_i = RSF_i * I_i / I_ref``. Returns (values, units, provenance, warnings).
 
     ``rsf[i]`` = None (or no ``rsf``) keeps the plain ratio for species ``i``.
+    ``skip`` columns (e.g. a categorical column that is not itself the
+    reference or an RSF target) pass through unchanged, like the reference.
     """
     mat = np.asarray(values, dtype=float)
     n_cols = mat.shape[1]
@@ -140,7 +138,7 @@ def normalize_to_reference(
     new_units = [units[c] if c < len(units) else "" for c in range(n_cols)]
     used: dict[str, float | None] = {}
     for c in range(n_cols):
-        if c == ref:
+        if c == ref or c in skip:
             continue
         factor = rsf[c] if rsf is not None else None
         if factor is not None and (not math.isfinite(factor) or factor <= 0):
@@ -193,13 +191,18 @@ def smooth_profiles(
     method: str,
     window: int,
     poly_order: int = 2,
+    skip: Sequence[int] = (),
 ) -> tuple[NDArray[np.float64], dict[str, Any], list[dict[str, Any]]]:
-    """Smooth each column's finite runs separately. ``window`` is the half-width."""
+    """Smooth each column's finite runs separately. ``window`` is the half-width.
+
+    ``skip`` columns (e.g. categorical) pass through unchanged."""
     if window < 1:
         raise ValueError("the smoothing half-width must be at least 1 point")
     mat = np.asarray(values, dtype=float)
     out = mat.copy()
     for c in range(mat.shape[1]):
+        if c in skip:
+            continue
         col = mat[:, c]
         for start, stop in _finite_runs(np.isfinite(col)):
             seg = col[start:stop]

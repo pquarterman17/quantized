@@ -3259,6 +3259,40 @@ store and the lazy import's deps map). Not done: multi-layer (per-layer
 rate) calibration, depth-axis rescaling of an already-calibrated profile,
 batch processing of several profiles at once, and anything in boxes 3-5.
 
+**Progress 2026-09-27 (slice 1 review fixes; Sonnet 5):** a code review of
+the slice 1 landing found ten issues, all fixed with a failing-first test
+each. Frontend: the workshop's confirm-level `unit-override` warning now
+gates Create exactly like resample's unit-mismatch checkbox (never a plain
+OK); a stated calibration time-unit override is recorded as the accepted
+(recorded, stated) x-unit pair and applied on replay ONLY for that exact
+pair — a target already off that unit is refused by the backend's own
+recorded-unit check instead of being silently double-calibrated;
+`DerivedWorksheetMark` no longer mis-marks a resample (or any later
+transform) of a SIMS output as itself the direct SIMS output — it now
+checks `worksheet_transform === "sims"`, not merely the presence of a
+leaked-forward `sims_source`; `lib/recipeExpect.ts` declares a sims step's
+BY-NAME reference/RSF/keep columns and its need for an already-time-unit x,
+so preflight refuses a target missing one of them instead of failing
+mid-replay; the workshop resets the background region and the time-unit
+override on a dataset switch, and re-seeds the background's guessed `keep`
+default when the reference changes (never clobbering a user's own edit).
+Backend: a categorical column (a promoted factor) now passes through every
+stage unchanged, like a `keep` column — refused only when it IS the
+normalization reference or an RSF target, by name; the raw-time-axis
+detector now requires the header NAME to be time-like ("time"/"t"/"sputter
+time") in addition to a recognized time unit, so "Cycle (s)"/"Scan(s)" stay
+depth axes; `calibrate_depth` compares a stated time-unit override against
+the recorded one by TIME FACTOR, not spelling ("sec" vs "s" no longer
+warns), and a whitespace-only override correctly reports `time_unit_source:
+"recorded"`; an out-of-range normalization reference is now validated
+up front with its own message, instead of first being swept into
+`subtract_background`'s "column to leave unchanged" refusal when a
+background stage also runs; the duplicated `_warn` helper (three copies)
+and the duplicated time-unit spelling table (`io.sims` / `calc.sims_depth`)
+each now have one source (`calc/_warn.py`, `quantized/time_units.py` —
+pure, same precedent as `quantized/x_units.py`). No behavior change to the
+golden depth-axis parity cases or the e2e journey.
+
 ### P2.4 — Peak Analyzer refinement
 
 **Goal:** Origin-like convenience plus reproducibility.

@@ -112,6 +112,29 @@ def test_stated_time_unit_overrides_the_recorded_one_with_a_confirm_warning() ->
     assert prov["time_unit"] == "s" and prov["time_unit_source"] == "stated"
 
 
+def test_stated_time_unit_compares_by_factor_not_spelling() -> None:
+    # "sec" recorded, "s" stated -- the SAME unit, just spelled differently:
+    # comparing the literal strings would falsely report an override.
+    _, prov, ws = calibrate_depth(T, x_unit="sec", time_unit="s", method="rate", sputter_rate=1.0)
+    assert ws == []
+    assert prov["time_unit"] == "s" and prov["time_unit_source"] == "stated"
+    # A genuinely different unit (minutes recorded, seconds stated) still warns.
+    _, prov2, ws2 = calibrate_depth(T, x_unit="min", time_unit="s", method="rate", sputter_rate=1.0)
+    assert ws2[0]["code"] == "unit-override"
+    assert prov2["time_unit_source"] == "stated"
+
+
+def test_whitespace_only_stated_time_unit_is_not_a_stated_override() -> None:
+    # A blank/whitespace `time_unit` is not a stated override -- it must use
+    # (and report) the RECORDED unit, not silently claim "stated".
+    depth, prov, ws = calibrate_depth(
+        T, x_unit="s", time_unit="   ", method="rate", sputter_rate=0.5
+    )
+    np.testing.assert_allclose(depth, [0.0, 5.0, 10.0, 15.0, 20.0])
+    assert ws == []
+    assert prov["time_unit"] == "s" and prov["time_unit_source"] == "recorded"
+
+
 @pytest.mark.parametrize(
     "kwargs",
     [
@@ -283,12 +306,59 @@ def test_process_chains_stages_in_order_with_provenance() -> None:
     assert _codes(res.warnings) == ["non-positive"]  # B(60 nm) = -1 after background
 
 
-def test_process_refuses_nothing_to_do_and_categorical_input() -> None:
+def test_out_of_range_reference_is_validated_before_background_runs() -> None:
+    # Finding 9: with background ALSO requested, the reference must not be
+    # refused via background's own "column to leave unchanged" message.
+    with pytest.raises(ValueError, match="normalization reference") as exc:
+        process_sims(
+            _profile(),
+            background=BackgroundSpec(lo=0.0, hi=10.0),
+            normalization=NormalizationSpec(reference=5),
+        )
+    assert "leave unchanged" not in str(exc.value)
+
+
+def test_process_refuses_nothing_to_do() -> None:
     with pytest.raises(ValueError, match="at least one"):
         process_sims(_profile())
-    cat = DataStruct.create([0, 1], [[0.0], [1.0]], labels=["phase"], cat_levels={0: ("a", "b")})
-    with pytest.raises(ValueError, match="categorical"):
-        process_sims(cat, smoothing=SmoothingSpec())
+
+
+def test_categorical_columns_pass_through_the_stages_unchanged() -> None:
+    # A promoted factor column (2026-09 review finding 5) carries no SIMS
+    # signal: background/normalization/smoothing must skip it, like a `keep`
+    # column, and its level table must survive into the output.
+    cat = DataStruct.create(
+        [0.0, 1.0, 2.0],
+        [[10.0, 0.0], [8.0, 1.0], [12.0, 0.0]],
+        labels=["B", "phase"],
+        units=["c/s", ""],
+        cat_levels={1: ("melt", "solid")},
+    )
+    res = process_sims(
+        cat,
+        background=BackgroundSpec(lo=0.0, hi=2.0),
+        smoothing=SmoothingSpec(window=1),
+    )
+    np.testing.assert_allclose(res.data.values[:, 1], [0.0, 1.0, 0.0])  # untouched level codes
+    assert res.data.cat_levels == {1: ("melt", "solid")}
+    assert res.stages[0]["unchanged"] == ["phase"]  # background's own report
+
+
+def test_categorical_reference_or_rsf_target_is_refused() -> None:
+    cat = DataStruct.create(
+        [0.0, 1.0],
+        [[10.0, 0.0], [20.0, 1.0]],
+        labels=["B", "phase"],
+        cat_levels={1: ("melt", "solid")},
+    )
+    with pytest.raises(ValueError, match="categorical") as exc:
+        process_sims(cat, normalization=NormalizationSpec(reference=1))
+    assert "reference" in str(exc.value)
+    with pytest.raises(ValueError, match="categorical") as exc2:
+        process_sims(
+            cat, normalization=NormalizationSpec(reference=0, rsf=[None, 2.0], rsf_unit="x")
+        )
+    assert "RSF" in str(exc2.value)
 
 
 def test_process_leaves_the_source_unchanged() -> None:
@@ -308,7 +378,14 @@ def test_process_leaves_the_source_unchanged() -> None:
         ("Time (s)", "Time", "s"),
         ("Sputter time [min]", "Time", "min"),
         ("Time", "Time", ""),
+        ("t (s)", "Time", "s"),
         ("Depth (nm)", "Depth", "nm"),
+        # A header ending in a recognized time unit's spelling, but whose
+        # NAME is not time-like, must stay a depth axis (2026-09 review
+        # finding 3): "Cycle (s)"/"Scan(s)" are cycle/scan COUNTS, not time,
+        # even though "(s)" alone parses as seconds.
+        ("Cycle (s)", "Depth", "nm"),
+        ("Scan(s)", "Depth", "nm"),
     ],
 )
 def test_import_sims_labels_a_time_axis(tmp_path: Path, header: str, name: str, unit: str) -> None:

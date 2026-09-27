@@ -85,6 +85,41 @@ describe("simsRequest", () => {
   });
 });
 
+describe("simsRequest — time-unit override replay safety (finding 2)", () => {
+  const withOverride: SimsParams = {
+    op: "sims",
+    calibration: { method: "rate", sputterRate: 1, depthUnit: "nm", timeUnit: "s" },
+  };
+
+  it("the preview always forwards a stated override so its confirm warning can show", () => {
+    expect(simsRequest(withOverride, profile, { preview: true }).calibration?.time_unit).toBe("s");
+  });
+
+  it("commit forwards it only for the EXACT (recorded, stated) pair it was accepted for", () => {
+    const blankX: DataStruct = { ...profile, metadata: {} }; // recorded x unit "" at accept time
+    const accepted: SimsParams = {
+      op: "sims",
+      calibration: { ...withOverride.calibration!, acceptedTimeUnit: ["", "s"] },
+    };
+    expect(simsRequest(accepted, blankX).calibration?.time_unit).toBe("s");
+    // A replay onto a file already calibrated to depth ("nm") is NOT the
+    // accepted pair -- dropped, so the backend's own recorded-unit check
+    // decides (never silently double-calibrated).
+    const nmFile: DataStruct = { ...profile, metadata: { x_column_unit: "nm" } };
+    expect(simsRequest(accepted, nmFile).calibration?.time_unit).toBeNull();
+  });
+
+  it("a target whose x is already a time unit needs no override -- dropped, not thrown", () => {
+    const secondsFile: DataStruct = { ...profile, metadata: { x_column_unit: "s" } };
+    expect(simsRequest(withOverride, secondsFile).calibration?.time_unit).toBeNull();
+  });
+
+  it("without preview or an accepted pair, an unstated calibration sends no override", () => {
+    const noOverride: SimsParams = { op: "sims", calibration: { method: "rate", sputterRate: 1, depthUnit: "nm" } };
+    expect(simsRequest(noOverride, profile).calibration?.time_unit).toBeNull();
+  });
+});
+
 describe("simsParamsOf (replay validation)", () => {
   it("round-trips a full recipe", () => {
     const p: SimsParams = {
@@ -96,6 +131,20 @@ describe("simsParamsOf (replay validation)", () => {
     };
     expect(simsParamsOf(JSON.parse(JSON.stringify(p)) as Record<string, unknown>)).toEqual(p);
     expect(transformParamsOf(JSON.parse(JSON.stringify(p)) as Record<string, unknown>)).toEqual(p);
+  });
+
+  it("round-trips an accepted time-unit pair; rejects a malformed one", () => {
+    const p: SimsParams = {
+      op: "sims",
+      calibration: { method: "rate", sputterRate: 1, rateUnit: "nm/s", depthUnit: "nm", timeUnit: "s", acceptedTimeUnit: ["", "s"] },
+    };
+    expect(simsParamsOf(JSON.parse(JSON.stringify(p)) as Record<string, unknown>)).toEqual(p);
+    expect(() =>
+      simsParamsOf({ op: "sims", calibration: { method: "rate", sputterRate: 1, depthUnit: "nm", acceptedTimeUnit: true } }),
+    ).toThrow("acceptedTimeUnit");
+    expect(() =>
+      simsParamsOf({ op: "sims", calibration: { method: "rate", sputterRate: 1, depthUnit: "nm", acceptedTimeUnit: ["s"] } }),
+    ).toThrow("acceptedTimeUnit");
   });
 
   it.each([

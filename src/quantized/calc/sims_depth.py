@@ -38,6 +38,9 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from ..time_units import TIME_UNITS
+from ._warn import warn as _warn
+
 __all__ = [
     "LENGTH_UNITS",
     "TIME_UNITS",
@@ -63,25 +66,6 @@ LENGTH_UNITS: dict[str, float] = {
     "Å": 1e-10,
     "ang": 1e-10,
     "angstrom": 1e-10,
-}
-
-#: Time unit -> seconds.
-TIME_UNITS: dict[str, float] = {
-    "s": 1.0,
-    "sec": 1.0,
-    "secs": 1.0,
-    "second": 1.0,
-    "seconds": 1.0,
-    "ms": 1e-3,
-    "min": 60.0,
-    "mins": 60.0,
-    "minute": 60.0,
-    "minutes": 60.0,
-    "h": 3600.0,
-    "hr": 3600.0,
-    "hrs": 3600.0,
-    "hour": 3600.0,
-    "hours": 3600.0,
 }
 
 #: The canonical spelling written back into metadata for each length unit.
@@ -134,21 +118,21 @@ def canonical_length(unit: str) -> str:
     return _LENGTH_CANON.get(u, _LENGTH_CANON.get(u.lower(), u))
 
 
-def _warn(code: str, text: str, **extra: Any) -> dict[str, Any]:
-    out: dict[str, Any] = {"code": code, "text": text}
-    out.update({k: v for k, v in extra.items() if v is not None})
-    return out
-
-
 def _g(v: float) -> str:
     return f"{v:.6g}"
 
 
 def _resolve_time_unit(recorded: str, stated: str | None) -> tuple[str, list[dict[str, Any]]]:
-    """The time unit x is in, plus the report of how it was decided."""
+    """The time unit x is in, plus the report of how it was decided.
+
+    ``recorded`` and ``stated`` are compared by TIME FACTOR, not spelling:
+    ``"sec"`` recorded against a stated ``"s"`` is the same unit and must not
+    warn (a literal string compare would report a spurious override for
+    every merely differently-spelled but equal unit)."""
     if stated:
-        time_factor(stated)  # validate
-        if recorded and recorded != stated:
+        stated_factor = time_factor(stated)  # validate
+        recorded_factor = _lookup(TIME_UNITS, recorded) if recorded else None
+        if recorded and recorded_factor != stated_factor:
             text = (
                 f"x is recorded in {recorded!r} but was calibrated as time in {stated!r}, "
                 "as you stated"
@@ -187,7 +171,12 @@ def calibrate_depth(
     """
     if method not in ("rate", "crater"):
         raise ValueError(f"calibration method must be 'rate' or 'crater', got {method!r}")
-    unit, warnings = _resolve_time_unit(x_unit.strip(), time_unit.strip() if time_unit else None)
+    # A whitespace-only `time_unit` is not a stated override -- stripped to
+    # "" here ONCE, so both the resolution below and `time_unit_source`
+    # agree on whether anything was actually stated (a bare `if time_unit`
+    # on the unstripped value would call "   " a stated override).
+    stated_unit = time_unit.strip() if time_unit else None
+    unit, warnings = _resolve_time_unit(x_unit.strip(), stated_unit or None)
     # Arithmetic stays in x's OWN time unit and the output length unit, with
     # exact power-of-ten length ratios, so a 500 nm crater over 50 s is exactly
     # 10 nm/s and t = 40 s is exactly 400 nm -- not 400.00000000000006, which
@@ -202,7 +191,7 @@ def calibrate_depth(
         "stage": "calibration",
         "method": method,
         "time_unit": unit,
-        "time_unit_source": "stated" if time_unit else "recorded",
+        "time_unit_source": "stated" if stated_unit else "recorded",
         "depth_unit": canonical_length(depth_unit),
         "assumes": "constant sputter rate; depth measured from t = 0",
     }

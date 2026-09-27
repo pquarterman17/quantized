@@ -106,6 +106,34 @@ describe("preflightRecipe", () => {
   it("a stale binding (the target lost columns) reads as unbound", () => {
     expect(preflightRecipe(RECIPE, ds(data(["T"], ["K"])), [0, 5], IDS, false).issues[0].kind).toBe("missing-column");
   });
+
+  it("catches a sims step's target missing its named reference column, instead of failing mid-replay (finding 6)", () => {
+    const simsStep = makeStep("transform", "sims", "", { op: "sims", calibration: { method: "rate", timeUnit: "s" }, normalization: { reference: "Si" } });
+    const expects: RecipeExpectations = {
+      columns: [{ name: "B", unit: "c/s", required: false }, { name: "Si", unit: "c/s", required: true }],
+      metadata: [],
+    };
+    const target = ds(data(["B"], ["c/s"])); // no "Si" column at all
+    const bindings = defaultBindings(expects.columns, target.data);
+    const pf = preflightRecipe({ steps: [simsStep], expects }, target, bindings, IDS, false);
+    expect(pf.blocked).toBe(true);
+    expect(pf.issues).toContainEqual(expect.objectContaining({ kind: "missing-column", blocking: true, text: expect.stringContaining("“Si”") }));
+  });
+
+  it("refuses a sims calibration (no stated override) onto a target whose x is not a time unit", () => {
+    const simsStep = makeStep("transform", "sims", "", { op: "sims", calibration: { method: "rate" }, normalization: { reference: "Si" } });
+    const expects: RecipeExpectations = {
+      columns: [{ name: "B", unit: "c/s", required: false }, { name: "Si", unit: "c/s", required: true }],
+      metadata: [],
+      needsTimeUnitX: true,
+    };
+    const timeTarget = ds(data(["B", "Si"], ["c/s", "c/s"], { x_column_unit: "s" }));
+    expect(preflightRecipe({ steps: [simsStep], expects }, timeTarget, [0, 1], IDS, false).issues.map((i) => i.kind)).not.toContain("not-time-unit");
+    const depthTarget = ds(data(["B", "Si"], ["c/s", "c/s"], { x_column_unit: "nm" }));
+    const pf = preflightRecipe({ steps: [simsStep], expects }, depthTarget, [0, 1], IDS, false);
+    expect(pf.blocked).toBe(true);
+    expect(pf.issues).toContainEqual(expect.objectContaining({ kind: "not-time-unit", blocking: true }));
+  });
 });
 
 describe("conformData — the working copy", () => {

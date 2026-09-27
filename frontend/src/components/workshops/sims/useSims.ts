@@ -8,11 +8,11 @@
 
 import { useMemo, useState } from "react";
 
-import { useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
+import { useAckForKey, useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
 import { xUnitOf } from "../../../lib/transformResample";
 import { runTransform } from "../../../lib/transformRun";
-import { computeSims, simsSource, type SimsComputed } from "../../../lib/transformSims";
-import type { TransformWarning } from "../../../lib/transformWarnings";
+import { computeSims, simsSource, type SimsComputed, type SimsParams } from "../../../lib/transformSims";
+import { needsConfirm, type TransformWarning } from "../../../lib/transformWarnings";
 import type { DataStruct } from "../../../lib/types";
 import { useSimsDialog } from "../../../store/simsDialog";
 import { toast } from "../../../store/toasts";
@@ -40,6 +40,10 @@ export interface SimsState {
   xName: string;
   form: SimsForm;
   setForm: (patch: Partial<SimsForm>) => void;
+  /** Change the normalization reference, swapping the background's guessed
+   *  `keep` default for it too — but only while `bgKeep` is still exactly
+   *  that untouched default (finding 7); a user edit is never overwritten. */
+  setReference: (name: string) => void;
   setRsf: (name: string, text: string) => void;
   formError: string | null;
   result: SimsComputed | undefined;
@@ -48,6 +52,11 @@ export interface SimsState {
   warnings: TransformWarning[];
   /** A still-loading book: the preview is on its downsampled rows. */
   previewOnly: boolean;
+  /** A confirm-level warning (calibration's `unit-override`) is present and
+   *  not yet acknowledged for this exact preview — Create stays disabled. */
+  blockedByUnits: boolean;
+  unitsAcknowledged: boolean;
+  setUnitsAcknowledged: (ok: boolean) => void;
   canCreate: boolean;
   busy: boolean;
   error: string | null;
@@ -84,7 +93,7 @@ export function useSims(): SimsState {
     const { parsed, dataset, source } = inputs.current;
     if (typeof parsed === "string" || !dataset || !source) return undefined;
     const ctrl = new AbortController();
-    computeSims(parsed, { id: dataset.id, name: dataset.name, data: source }, { signal: ctrl.signal }).then(
+    computeSims(parsed, { id: dataset.id, name: dataset.name, data: source }, { preview: true, signal: ctrl.signal }).then(
       (result) => { if (!ctrl.signal.aborted) setPreview({ key, result }); },
       (e: unknown) => { if (!ctrl.signal.aborted) setPreview({ key, error: message(e, "SIMS processing failed") }); },
     );
@@ -93,10 +102,28 @@ export function useSims(): SimsState {
 
   const fresh = preview.key === key && key !== "";
   const result = fresh ? preview.result : undefined;
+  const warnings = result?.warnings ?? [];
+  // Finding 1: a confirm-level warning (calibration's `unit-override`) must
+  // never pass on a plain OK — mirrors useResample.ts's `unitsAcknowledged`,
+  // re-armed whenever `key` changes (a different form or dataset).
+  const { acknowledged: unitsAcknowledged, setAcknowledged: setUnitsAcknowledged } = useAckForKey(key);
+  const blockedByUnits = needsConfirm(warnings) && !unitsAcknowledged;
 
   function setForm(patch: Partial<SimsForm>): void {
     setError(null);
     setFormState((f) => ({ ...f, ...patch }));
+  }
+
+  /** Finding 7: change the reference and, only while `bgKeep` is still
+   *  exactly the untouched guessed default (`[oldReference]`), swap that
+   *  default for the new one — a user who added or removed entries keeps
+   *  their own choice. */
+  function setReference(name: string): void {
+    setError(null);
+    setFormState((f) => {
+      const wasGuessDefault = f.bgKeep.length === 1 && f.bgKeep[0] === f.reference;
+      return { ...f, reference: name, bgKeep: wasGuessDefault ? (name ? [name] : []) : f.bgKeep };
+    });
   }
 
   function setDatasetId(id: string): void {
@@ -104,21 +131,32 @@ export function useSims(): SimsState {
     setError(null);
     const next = datasets.find((d) => d.id === id);
     const nextSource = next ? simsSource(next) : undefined;
-    // Keep the stages; re-guess the reference (and the background's kept
-    // matrix column) only when the new dataset lacks the current one.
+    // Keep the stages (on/off); re-guess the reference (and its background
+    // `keep` default) only when the new dataset lacks the current one — but
+    // the calibration time-unit override and the background region are
+    // specific to the PREVIOUS dataset's x unit/range and must never leak
+    // onto a different profile regardless of whether the reference still
+    // resolves (finding 7): reset them on every dataset switch.
     setFormState((f) => {
-      if (nextSource?.labels.includes(f.reference)) return f;
+      if (nextSource?.labels.includes(f.reference)) return { ...f, bgLo: "", bgHi: "", timeUnit: "" };
       const reference = guessReference(nextSource);
-      return { ...f, reference, rsf: {}, bgKeep: reference ? [reference] : [] };
+      return { ...f, reference, rsf: {}, bgKeep: reference ? [reference] : [], bgLo: "", bgHi: "", timeUnit: "" };
     });
   }
 
   async function create(): Promise<void> {
-    if (typeof parsed === "string" || !dataset || !result) return;
+    if (typeof parsed === "string" || !dataset || !source || !result || blockedByUnits) return;
     setBusy(true);
     setError(null);
     try {
-      const out = await runTransform(useApp.getState, parsed, dataset.id);
+      // A stated calibration time-unit override is recorded as the exact
+      // (recorded, stated) pair just accepted (finding 2) — never a blanket
+      // flag a future replay would apply unconditionally.
+      const toRun: SimsParams =
+        parsed.calibration?.timeUnit
+          ? { ...parsed, calibration: { ...parsed.calibration, acceptedTimeUnit: [xUnitOf(source), parsed.calibration.timeUnit] } }
+          : parsed;
+      const out = await runTransform(useApp.getState, toRun, dataset.id);
       if (out) {
         toast(`created ${out.name}`, "ok");
         close();
@@ -140,6 +178,7 @@ export function useSims(): SimsState {
     xName: String(source?.metadata?.x_column_name ?? "") || "x",
     form,
     setForm,
+    setReference,
     setRsf: (name, text) => {
       setError(null);
       setFormState((f) => ({ ...f, rsf: { ...f.rsf, [name]: text } }));
@@ -148,9 +187,12 @@ export function useSims(): SimsState {
     result,
     previewError: fresh ? (preview.error ?? null) : null,
     loading: key !== "" && !fresh,
-    warnings: result?.warnings ?? [],
+    warnings,
     previewOnly: Boolean(dataset?.pending),
-    canCreate: Boolean(result) && !busy,
+    blockedByUnits,
+    unitsAcknowledged,
+    setUnitsAcknowledged,
+    canCreate: Boolean(result) && !busy && !blockedByUnits,
     busy,
     error,
     create,

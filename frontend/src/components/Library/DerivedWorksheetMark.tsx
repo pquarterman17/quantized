@@ -25,9 +25,19 @@ export function derivedSource(d: Dataset): { datasetId: string; pipeline: string
   const id = Array.isArray(fit?.sourceIds) ? fit.sourceIds[0] : undefined;
   if (typeof id === "string") return { datasetId: id, pipeline: `reflectivity fit #${String(fit?.seq ?? "?")}` };
   // P2.3: a SIMS-processed profile (lib/transformSims.ts) — same reasoning
-  // as the fit curve: provenance only, never the recalc graph.
+  // as the fit curve: provenance only, never the recalc graph. `sims_source`
+  // is carried in `metadata`, which every later transform (resample, stack,
+  // ...) spreads forward from its own input — so a sims -> resample chain's
+  // OUTPUT would otherwise still read `sims_source` and get mis-marked as
+  // itself the direct SIMS output of the ORIGINAL raw profile (2026-09
+  // review finding 4). `worksheet_transform` is always overwritten to the
+  // op that most recently produced THIS dataset (`lib/transformWarnings.ts`'s
+  // `stampWarnings`, run on every commit) — checking it here is how the mark
+  // reads the provenance as being for THIS dataset, not merely present.
   const sims = d.data.metadata?.sims_source as { id?: unknown } | undefined;
-  return typeof sims?.id === "string" ? { datasetId: sims.id, pipeline: "SIMS processing" } : null;
+  return typeof sims?.id === "string" && d.data.metadata?.worksheet_transform === "sims"
+    ? { datasetId: sims.id, pipeline: "SIMS processing" }
+    : null;
 }
 
 export default function DerivedWorksheetMark({ dataset: d }: { dataset: Dataset }) {

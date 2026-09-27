@@ -17,6 +17,17 @@
 // would otherwise divide by the wrong species silently. A replay onto a
 // dataset without that column is refused, naming it.
 //
+// A stated calibration TIME-UNIT override (review finding 2) is likewise
+// never a blanket flag: it is recorded as the exact (recorded -> stated) x
+// unit pair it was accepted for (`acceptedTimeUnit`, mirroring resample's
+// `acceptedXUnits`). On replay it is applied only when the target's CURRENT
+// recorded x unit matches that recorded half of the pair exactly; otherwise
+// it is dropped -- silently when the target's x is already a time unit (no
+// override is needed there), or refused by the backend's own recorded-unit
+// check otherwise. Without this, a template recorded once with an override
+// would replay it unconditionally onto every future file, double-calibrating
+// one whose x is already correctly in depth (e.g. already "nm").
+//
 // Provenance: the backend appends every stage (with the sputter rate actually
 // used and each background level) to `metadata.sims_processing`; this module
 // adds `sims_source` (the input's id + name), which the Library's derived
@@ -24,6 +35,7 @@
 
 import { processSims, type SimsProcessRequest, type SimsWarningWire } from "./api/sims";
 import { analysisData } from "./rowstate";
+import { xUnitOf } from "./transformResample";
 import type { TransformWarning, TransformWarningCode } from "./transformWarnings";
 import type { DataStruct, Dataset } from "./types";
 
@@ -47,6 +59,9 @@ export interface SimsCalibration {
   depthUnit: string;
   /** The time unit x is in, stated by the user; absent = the recorded unit. */
   timeUnit?: string;
+  /** The [recorded, stated] x-unit pair `timeUnit` was explicitly accepted
+   *  for (module doc). Only THAT exact pair is let through on replay. */
+  acceptedTimeUnit?: [string, string];
 }
 
 export interface SimsParams {
@@ -99,8 +114,22 @@ function columnIndex(labels: readonly string[], name: string): number {
   return hits[0];
 }
 
-/** The request body for `p` over `source`. */
-export function simsRequest(p: SimsParams, source: DataStruct): SimsProcessRequest {
+/** The time-unit override `simsRequest` actually sends for `c` over `source`
+ *  (module doc): `opts.preview` always forwards a stated override so the
+ *  backend's confirm warning can be shown; otherwise ONLY the exact
+ *  (recorded, stated) pair `acceptedTimeUnit` names is forwarded — any other
+ *  target drops the override (safe when its x is already a time unit; the
+ *  backend's own recorded-unit check refuses it, by name, when it is not). */
+function resolvedTimeUnit(c: SimsCalibration, source: DataStruct, preview: boolean): string | null {
+  if (!c.timeUnit) return null;
+  if (preview) return c.timeUnit;
+  const recorded = xUnitOf(source);
+  const accepted = c.acceptedTimeUnit;
+  return accepted && accepted[0] === recorded && accepted[1] === c.timeUnit ? c.timeUnit : null;
+}
+
+/** The request body for `p` over `source`. `preview`: see `resolvedTimeUnit`. */
+export function simsRequest(p: SimsParams, source: DataStruct, opts: { preview?: boolean } = {}): SimsProcessRequest {
   const body: SimsProcessRequest = {
     dataset: {
       time: source.time,
@@ -122,7 +151,7 @@ export function simsRequest(p: SimsParams, source: DataStruct): SimsProcessReque
       crater_unit: c.craterUnit ?? "nm",
       total_time: c.totalTime ?? null,
       depth_unit: c.depthUnit,
-      time_unit: c.timeUnit ?? null,
+      time_unit: resolvedTimeUnit(c, source, opts.preview ?? false),
     };
   }
   if (p.background) {
@@ -155,13 +184,17 @@ function toWarning(w: SimsWarningWire): TransformWarning {
   return out;
 }
 
-/** Process `source` per `p`. Throws the backend's message on a refused input. */
+/** Process `source` per `p`. Throws the backend's message on a refused input.
+ *  `opts.preview`: see `resolvedTimeUnit` — the live workshop preview passes
+ *  `true` so a stated time-unit override's confirm warning always shows;
+ *  commit/replay (the default) apply it only when accepted for this exact
+ *  source. */
 export async function computeSims(
   p: SimsParams,
   source: { id: string; name: string; data: DataStruct },
-  opts: { signal?: AbortSignal } = {},
+  opts: { preview?: boolean; signal?: AbortSignal } = {},
 ): Promise<SimsComputed> {
-  const res = await processSims(simsRequest(p, source.data), opts.signal);
+  const res = await processSims(simsRequest(p, source.data, { preview: opts.preview }), opts.signal);
   return {
     data: { ...res.dataset, metadata: { ...res.dataset.metadata, sims_source: { id: source.id, name: source.name } } },
     name: simsOutputName(source.name),
@@ -201,6 +234,13 @@ export function simsParamsOf(raw: Record<string, unknown>): SimsParams {
       if (total !== undefined) p.calibration.totalTime = total;
     }
     if (typeof cal.timeUnit === "string" && cal.timeUnit.trim()) p.calibration.timeUnit = cal.timeUnit.trim();
+    const acc = cal.acceptedTimeUnit;
+    if (acc !== undefined) {
+      if (!Array.isArray(acc) || acc.length !== 2 || typeof acc[0] !== "string" || typeof acc[1] !== "string" || !acc[1]) {
+        throw new Error('sims "acceptedTimeUnit" must be two unit names');
+      }
+      p.calibration.acceptedTimeUnit = [acc[0], acc[1]];
+    }
   }
   const bg = obj("background");
   if (bg) {

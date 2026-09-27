@@ -124,7 +124,7 @@ function Normalization({ r }: { r: SimsState }) {
           aria-label="Reference species"
           options={r.labels.map((l) => ({ value: l, label: l }))}
           value={f.reference}
-          onChange={(e) => r.setForm({ reference: e.target.value })}
+          onChange={(e) => r.setReference(e.target.value)}
         />
       </div>
       <label className="qzk-field-lbl" style={{ marginTop: 6 }}>RSF per species (blank = plain ratio)</label>
@@ -239,6 +239,13 @@ function SimsWorkshop() {
             <Smoothing r={r} />
           </Stage>
           <Preview r={r} />
+          {(r.blockedByUnits || r.unitsAcknowledged) && (
+            <div style={{ marginTop: 6 }}>
+              <Checkbox checked={r.unitsAcknowledged} onChange={r.setUnitsAcknowledged}>
+                Calibrate despite the stated x unit override
+              </Checkbox>
+            </div>
+          )}
           <Button
             variant="primary"
             size="sm"

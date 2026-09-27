@@ -23,6 +23,7 @@ import numpy as np
 from quantized.datastruct import DataStruct
 from quantized.io import _delimited_layout as layout
 from quantized.io.base import read_head
+from quantized.time_units import TIME_UNIT_CANON
 
 __all__ = ["import_sims", "is_sims_file"]
 
@@ -253,12 +254,14 @@ def _detect_depth_unit(col_headers: Sequence[str], header_meta: Sequence[str]) -
     return "nm"
 
 
-_TIME_UNIT_CANON = {
-    "s": "s", "sec": "s", "secs": "s", "second": "s", "seconds": "s", "ms": "ms",
-    "min": "min", "mins": "min", "minute": "min", "minutes": "min",
-    "h": "h", "hr": "h", "hrs": "h", "hour": "h", "hours": "h",
-}
-_TIME_WORD_RE = re.compile(r"\btime\b", re.IGNORECASE)
+#: The header NAME (with any unit stripped) must be time-like -- "time",
+#: bare "t", or "sputter time" (any amount of whitespace), case-insensitive.
+#: Without this, any first header ending in a recognized time unit's
+#: parenthesized/bracketed spelling -- "Cycle (s)", "Scan(s)" -- was read as
+#: a raw sputter-TIME axis just because "(s)" parses as seconds; a depth
+#: profile whose header happens to end in "(s)" for an unrelated reason (a
+#: cycle count, a scan number) must NOT be mislabelled "Time".
+_TIME_NAME_RE = re.compile(r"^\s*(?:t|time|sputter\s+time)\s*$", re.IGNORECASE)
 
 
 def _detect_time_axis(x_header: str) -> str | None:
@@ -269,19 +272,20 @@ def _detect_time_axis(x_header: str) -> str | None:
     export reaches depth calibration labelled as what it is. ``"Time (s)"`` /
     ``"Sputter time [min]"`` / ``"t (s)"`` give their unit; a bare ``"Time"``
     gives ``""`` (unit unknown -- calibration then asks for it rather than
-    guessing seconds).
+    guessing seconds). The header NAME itself must be time-like -- a unit
+    alone is not enough, so ``"Cycle (s)"`` or ``"Scan(s)"`` are never
+    mistaken for a time axis just because seconds happens to parse.
     """
     h = x_header.strip()
     unit = ""
     m = _PAREN_RE.match(h) or _BRACK_RE.match(h)
     if m:
         h, unit = m.group(1).strip(), m.group(2).strip()
-    canon = _TIME_UNIT_CANON.get(unit.lower())
-    if canon is not None:
-        return canon
-    if not unit and _TIME_WORD_RE.search(h):
+    if not _TIME_NAME_RE.match(h):
+        return None
+    if not unit:
         return ""
-    return None
+    return TIME_UNIT_CANON.get(unit.lower())
 
 
 def _read_text_tokens(path: Path) -> list[list[str]]:

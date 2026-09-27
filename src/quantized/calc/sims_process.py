@@ -24,6 +24,7 @@ rewritten so every x-unit reader (``quantized.x_units``) sees the depth unit.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -88,8 +89,13 @@ class SimsResult:
     stages: list[dict[str, Any]] = field(default_factory=list)
 
 
-def _log_axis_warning(values: np.ndarray) -> dict[str, Any] | None:
-    finite = values[np.isfinite(values)]
+def _log_axis_warning(values: np.ndarray, skip: Sequence[int] = ()) -> dict[str, Any] | None:
+    """``skip`` columns (categorical level codes, which legitimately start at
+    0) are excluded -- their codes are not a SIMS signal and would otherwise
+    spuriously trip this "won't show on a log axis" notice every time."""
+    cols = [c for c in range(values.shape[1]) if c not in skip]
+    signal = values[:, cols] if cols else values[:, :0]
+    finite = signal[np.isfinite(signal)]
     n = int(np.count_nonzero(finite <= 0))
     if not n:
         return None
@@ -114,11 +120,47 @@ def process_sims(
         raise ValueError("choose at least one processing step")
     if data.n_channels == 0 or data.n_points == 0:
         raise ValueError("the dataset has no values to process")
-    if data.cat_levels:
-        cats = ", ".join(data.labels[i] for i in sorted(data.cat_levels))
-        raise ValueError(f"categorical columns cannot be processed as SIMS signals: {cats}")
     if smoothing is not None and smoothing.method not in SMOOTH_METHODS:
         raise ValueError(f"smoothing method must be one of {', '.join(SMOOTH_METHODS)}")
+
+    n_cols = data.n_channels
+    # Categorical columns (a promoted factor) pass through UNCHANGED, like a
+    # background `keep` column -- they carry no SIMS signal to correct. Only
+    # a categorical column actually asked to BE the normalization reference
+    # or an RSF target is refused, by name, up front (review finding 5):
+    # dividing by or rescaling a column of level codes is not meaningful.
+    cats = set(data.cat_levels or {})
+
+    def _colname(i: int) -> str:
+        return data.labels[i] if i < len(data.labels) and data.labels[i] else f"column {i + 1}"
+
+    if normalization is not None:
+        ref = normalization.reference
+        # Range-checked here too (not just left to `normalize_to_reference`):
+        # when a background stage also runs, an out-of-range reference gets
+        # folded into ITS `skip` list first and would otherwise surface as
+        # that stage's "column to leave unchanged" message -- correct for a
+        # `keep` column, misleading for the normalization reference (finding 9).
+        if not 0 <= ref < n_cols:
+            raise ValueError(
+                f"the normalization reference column {ref} is out of range (0..{n_cols - 1})"
+            )
+        if normalization.rsf is not None and len(normalization.rsf) != n_cols:
+            raise ValueError(
+                f"{len(normalization.rsf)} RSF values given for {n_cols} columns"
+            )
+        if ref in cats:
+            raise ValueError(
+                f"the reference column {_colname(ref)!r} is categorical and cannot be "
+                "used as a SIMS reference"
+            )
+        if normalization.rsf is not None:
+            bad_rsf = [i for i, v in enumerate(normalization.rsf) if v is not None and i in cats]
+            if bad_rsf:
+                names = ", ".join(_colname(i) for i in bad_rsf)
+                raise ValueError(
+                    f"RSF target column(s) {names} are categorical and cannot be normalized"
+                )
 
     x = np.asarray(data.time, dtype=float)
     values = np.asarray(data.values, dtype=float).reshape(data.n_points, data.n_channels)
@@ -152,11 +194,11 @@ def process_sims(
         meta.pop("x_column_long", None)
 
     if background is not None:
-        skip = list(background.keep)
+        skip = set(background.keep) | cats
         if normalization is not None:
-            skip.append(normalization.reference)
+            skip.add(normalization.reference)
         values, prov, w = subtract_background(
-            x, values, lo=background.lo, hi=background.hi, labels=labels, skip=skip
+            x, values, lo=background.lo, hi=background.hi, labels=labels, skip=sorted(skip)
         )
         stages.append(prov)
         warnings += w
@@ -164,7 +206,8 @@ def process_sims(
     if normalization is not None:
         n = normalization
         values, units, prov, w = normalize_to_reference(
-            values, n.reference, labels=labels, units=units, rsf=n.rsf, rsf_unit=n.rsf_unit
+            values, n.reference, labels=labels, units=units, rsf=n.rsf, rsf_unit=n.rsf_unit,
+            skip=sorted(cats),
         )
         stages.append(prov)
         warnings += w
@@ -172,12 +215,12 @@ def process_sims(
     if smoothing is not None:
         s = smoothing
         values, prov, w = smooth_profiles(
-            x, values, method=s.method, window=s.window, poly_order=s.poly_order
+            x, values, method=s.method, window=s.window, poly_order=s.poly_order, skip=sorted(cats)
         )
         stages.append(prov)
         warnings += w
 
-    log_warn = _log_axis_warning(values)
+    log_warn = _log_axis_warning(values, skip=sorted(cats))
     if log_warn is not None:
         warnings.append(log_warn)
 
@@ -189,5 +232,10 @@ def process_sims(
         labels=labels,
         units=units,
         metadata=meta,
+        # A categorical column (e.g. a promoted factor) passed through the
+        # stages above unchanged (review finding 5) -- its level table must
+        # travel with it, or the output would silently stop being categorical.
+        cat_levels=data.cat_levels,
+        level_order=data.level_order,
     )
     return SimsResult(data=out, warnings=warnings, stages=stages)
