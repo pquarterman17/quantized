@@ -5,7 +5,8 @@
 // the menubar popup tokens (`.qzk-menu-pop` / `.qzk-menu-item`). This is the
 // parity surface for the MATLAB GUI's six uicontextmenus.
 //
-// Item variants (all backward-compatible):
+// Item variants (all backward-compatible — a flat `{label,run}`/`{separator}`
+// list still renders exactly as before; types live in ./contextMenuTypes):
 //   { separator }            — a divider rule
 //   { header }               — a non-interactive section label
 //   { swatches }             — a compact horizontal colour-swatch row
@@ -21,7 +22,7 @@
 // scale flyouts opened "way off" and closed before the pointer could reach
 // them. Row-anchoring is immune; a layout effect only FLIPS the side / shifts
 // vertically when the flyout would overflow the viewport.
-// Stacking is pinned by ContextMenu.test.tsx.
+// Stacking: root 2100 / flyout 2101, above InteractionHints (1200) and .qz-tip (2000, platform.css); see ContextMenu.test.tsx's stacking test.
 // GUI_INTERACTION #8: keyboard-complete — `role="menu"`/`menuitem`/
 // `menuitemcheckbox` + `aria-disabled`; ArrowUp/Down cycle (wrapping),
 // Home/End jump, a letter type-ahead-jumps; ArrowRight opens a submenu +
@@ -39,27 +40,16 @@ import { createPortal } from "react-dom";
 
 import { edgeFocusableIndex, nextFocusableIndex, typeaheadIndex } from "../../lib/menuKeyboardNav";
 import { appendContextHelp, type ContextMenuHelp } from "./contextMenuHelp";
+import type { ContextMenuItem } from "./contextMenuTypes";
 
-export interface Swatch {
-  key: string;
-  title: string;
-  css: string;
-  active?: boolean;
-  run: () => void;
-}
-
-export type ContextMenuItem =
-  | { separator: true }
-  | { header: string }
-  | { swatches: Swatch[] }
-  | { label: string; submenu: ContextMenuItem[]; disabled?: boolean }
-  | { label: string; run: () => void; disabled?: boolean; danger?: boolean; checked?: boolean; title?: string }; // title: disabled-reason tooltip (L0.36)
+export type { ContextMenuItem, Swatch } from "./contextMenuTypes";
 
 interface Props {
   x: number;
   y: number;
   items: ContextMenuItem[];
   onClose: () => void;
+  /** Optional one-line Help footer (see ./contextMenuHelp). */
   help?: ContextMenuHelp;
 }
 
@@ -389,7 +379,9 @@ export default function ContextMenu({ x, y, items, onClose, help }: Props) {
     };
   }, [onClose, prevFocus]);
 
-  const visibleItems = appendContextHelp(items, help);
+  // The Help footer hands focus back to `prevFocus` before Help opens, so
+  // closing Help lands on the object the menu was opened from.
+  const visibleItems = appendContextHelp(items, help, prevFocus);
   return createPortal(
     <PopupBox x={x} y={y} boxRef={rootRef}>
       <MenuList items={visibleItems} onClose={onClose} menuRef={menuRef} />

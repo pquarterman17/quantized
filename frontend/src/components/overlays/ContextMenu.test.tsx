@@ -1,8 +1,10 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import ContextMenu, { type ContextMenuItem } from "./ContextMenu";
+import HelpDialog from "./HelpDialog";
 import { useHelp } from "../../store/help";
 
 describe("ContextMenu", () => {
@@ -10,9 +12,11 @@ describe("ContextMenu", () => {
     useHelp.setState({ open: false, section: "search", query: "", whatIsThis: false });
   });
 
-  it("adds one keyboard-reachable contextual Help footer and seeds Help search", async () => {
+  it("adds one contextual Help footer that closes the menu BEFORE seeding Help search", async () => {
     const user = userEvent.setup();
-    const onClose = vi.fn();
+    // Record Help's state at the moment the menu is told to close.
+    const helpOpenAtClose: boolean[] = [];
+    const onClose = vi.fn(() => helpOpenAtClose.push(useHelp.getState().open));
     render(
       <ContextMenu
         x={0}
@@ -23,13 +27,71 @@ describe("ContextMenu", () => {
       />,
     );
 
-    const help = screen.getByRole("menuitem", { name: "? Help with datasets…" });
-    expect(screen.getByRole("separator")).toBeInTheDocument();
+    const help = screen.getByRole("menuitem", { name: "Help with datasets…" });
+    expect(screen.getAllByRole("separator")).toHaveLength(1);
     await user.click(help);
 
-    expect(onClose).toHaveBeenCalledOnce();
+    expect(helpOpenAtClose).toEqual([false]);
     expect(useHelp.getState()).toMatchObject({ open: true, section: "search", query: "dataset" });
   });
+
+  it("the Help footer is keyboard-reachable: End, type-ahead H, and Enter", async () => {
+    const user = userEvent.setup();
+    render(
+      <ContextMenu
+        x={0}
+        y={0}
+        items={[{ label: "Rename", run: vi.fn() }, { label: "Remove", run: vi.fn() }]}
+        help={{ label: "datasets", query: "dataset" }}
+        onClose={vi.fn()}
+      />,
+    );
+    const menu = screen.getByRole("menu");
+    const help = screen.getByRole("menuitem", { name: "Help with datasets…" });
+
+    fireEvent.keyDown(menu, { key: "End" });
+    expect(help).toHaveFocus();
+    fireEvent.keyDown(menu, { key: "Home" });
+    // Type-ahead matches a label's FIRST character — a leading "?" glyph
+    // made the footer unreachable this way.
+    fireEvent.keyDown(menu, { key: "h" });
+    expect(help).toHaveFocus();
+    await user.keyboard("{Enter}");
+    expect(useHelp.getState()).toMatchObject({ open: true, query: "dataset" });
+  });
+
+  it("closing Help returns focus to the element the menu was opened from", async () => {
+    const user = userEvent.setup();
+    function Host() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>Dataset row</button>
+          {open && (
+            <ContextMenu
+              x={0}
+              y={0}
+              items={[{ label: "Rename", run: vi.fn() }]}
+              help={{ label: "datasets", query: "dataset" }}
+              onClose={() => setOpen(false)}
+            />
+          )}
+          <HelpDialog />
+        </>
+      );
+    }
+    render(<Host />);
+    const opener = screen.getByRole("button", { name: "Dataset row" });
+
+    await user.click(opener);
+    await user.click(screen.getByRole("menuitem", { name: "Help with datasets…" }));
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await user.click(await screen.findByRole("button", { name: "Close" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
   const items: ContextMenuItem[] = [
     { label: "Rename", run: vi.fn() },
     { separator: true },
