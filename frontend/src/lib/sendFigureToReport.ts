@@ -226,7 +226,21 @@ export function addFigureToReport(
   st.setStatus(`figure added to report "${s().reports.find((r) => r.id === targetId)?.name ?? ""}"`);
 }
 
+// One active-plot send per store, including the dialog and lazy data resolve.
+// Guard the shared command so menu, palette, and context-menu callers agree.
+const sendingPlots = new WeakSet<StoreGet>();
+
 export async function runSendFigureToReportCommand(s: StoreGet): Promise<void> {
+  if (sendingPlots.has(s)) return;
+  sendingPlots.add(s);
+  try {
+    await sendActivePlot(s);
+  } finally {
+    sendingPlots.delete(s);
+  }
+}
+
+async function sendActivePlot(s: StoreGet): Promise<void> {
   // Finding #3 (P3.6 review round 2): checked BEFORE any dialog opens, not
   // after the user has already answered target/caption/style/etc — asking
   // those questions only to then discover there is nothing to send wastes

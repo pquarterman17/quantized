@@ -22,6 +22,7 @@ import {
 } from "./sendFigureToReport";
 import { useToasts } from "../store/toasts";
 import { useApp } from "../store/useApp";
+import { usePendingOps } from "../store/pendingOps";
 
 vi.mock("./api/figures", () => ({ exportFigure: vi.fn().mockResolvedValue(undefined) }));
 // ONE mock fn behind both import paths: "Export figure…" asks through the
@@ -319,6 +320,68 @@ describe("runSendFigureToReportCommand — targets, undo, failure", () => {
     expect(
       useToasts.getState().toasts.some((t) => t.kind === "danger" && /^send failed: .*deleted/.test(t.msg)),
     ).toBe(true);
+  });
+});
+
+describe("active-plot send single flight", () => {
+  it("ignores a second activation during the dialog, then permits an intentional repeat", async () => {
+    let answer!: (value: ReturnType<typeof sendParams>) => void;
+    ask.mockReturnValueOnce(new Promise((resolve) => { answer = resolve; }));
+    const first = runSendFigureToReportCommand(useApp.getState);
+    await runSendFigureToReportCommand(useApp.getState);
+    expect(ask).toHaveBeenCalledTimes(1);
+    answer(sendParams());
+    await first;
+    expect(useApp.getState().reports).toHaveLength(1);
+    expect(useApp.getState().history).toHaveLength(1);
+    ask.mockResolvedValueOnce(sendParams());
+    await runSendFigureToReportCommand(useApp.getState);
+    expect(useApp.getState().reports).toHaveLength(2);
+  });
+
+  it.each(["cancel", "reject"])("releases the guard after dialog %s", async (outcome) => {
+    if (outcome === "cancel") ask.mockResolvedValueOnce(null);
+    else ask.mockRejectedValueOnce(new Error("dialog failed"));
+    const first = runSendFigureToReportCommand(useApp.getState);
+    if (outcome === "reject") await expect(first).rejects.toThrow("dialog failed");
+    else await first;
+    expect(useApp.getState().reports).toHaveLength(0);
+    ask.mockResolvedValueOnce(sendParams());
+    await runSendFigureToReportCommand(useApp.getState);
+    expect(useApp.getState().reports).toHaveLength(1);
+  });
+
+  it.each(["success", "cancel", "failure"])("guards lazy loading and allows retry after %s", async (outcome) => {
+    const realResolve = useApp.getState().resolveDataset;
+    const dataset = useApp.getState().datasets[0];
+    let finish!: (value: typeof dataset) => void;
+    let fail!: (error: Error) => void;
+    let entered!: () => void;
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const loading = new Promise<typeof dataset>((resolve, reject) => { finish = resolve; fail = reject; });
+    useApp.setState({ resolveDataset: () => { entered(); return loading; } });
+    ask.mockResolvedValueOnce(sendParams());
+    try {
+      const first = runSendFigureToReportCommand(useApp.getState);
+      await started;
+      await runSendFigureToReportCommand(useApp.getState);
+      expect(ask).toHaveBeenCalledTimes(1);
+      if (outcome === "cancel") {
+        const op = usePendingOps.getState().ops.find((o) => o.label.startsWith("Sending "));
+        expect(op?.cancel).toBeTypeOf("function");
+        op!.cancel!();
+      }
+      if (outcome === "failure") fail(new Error("load failed"));
+      else finish(dataset);
+      await first;
+      expect(useApp.getState().reports).toHaveLength(outcome === "success" ? 1 : 0);
+      expect(usePendingOps.getState().ops).toHaveLength(0);
+    } finally {
+      useApp.setState({ resolveDataset: realResolve });
+    }
+    ask.mockResolvedValueOnce(sendParams());
+    await runSendFigureToReportCommand(useApp.getState);
+    expect(useApp.getState().reports).toHaveLength(outcome === "success" ? 2 : 1);
   });
 });
 
