@@ -10,14 +10,17 @@ import { defaultPlotView } from "../../lib/plotview";
 import { useApp } from "../../store/useApp";
 
 vi.mock("../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
+const { runSendEditableFigureToReport } = vi.hoisted(() => ({ runSendEditableFigureToReport: vi.fn() }));
+vi.mock("../../lib/sendFigureToReport", () => ({ runSendEditableFigureToReport }));
 
 type ActionItem = Extract<ContextMenuItem, { run: () => void }>;
 const action = (items: ContextMenuItem[], label: string): ActionItem =>
   items.find((item): item is ActionItem => "label" in item && item.label === label && "run" in item)!;
 
 beforeEach(() => {
-  useApp.setState({ pages: [], reports: [], editableFigures: [], figureDocs: [], history: [] });
+  useApp.setState({ pages: [], reports: [], editableFigures: [], figureDocs: [], history: [], status: "" });
   vi.mocked(askConfirm).mockReset();
+  runSendEditableFigureToReport.mockReset();
 });
 
 describe("artifact lifecycle context actions — PR E-b2", () => {
@@ -97,6 +100,37 @@ describe("artifact lifecycle context actions — PR E-b2", () => {
     expect(action(items, "Duplicate").disabled).toBe(true);
     expect(action(items, "Delete").disabled).toBe(true);
     expect(action(items, "Delete").title).toBe("recovered Origin figures are managed by their source import");
+  });
+});
+
+describe("artifact.addToReport — ported from PR #454", () => {
+  const editableNode = {
+    key: "editable-figure:fig1", entityId: "fig1", kind: "editable-figure", name: "Moment sweep",
+    parentKey: null, depth: 0, children: [],
+    source: { datasetIds: [], missingDatasetIds: [], usedPlacementFallback: false },
+    entity: { id: "fig1", name: "Moment sweep" },
+  } as unknown as Extract<ArtifactNode, { kind: "editable-figure" }>;
+
+  it("is available only for canonical editable figures", () => {
+    expect(action(buildArtifactMenu(editableNode), "Add to Report…")).toBeDefined();
+
+    const report = {
+      ...editableNode, key: "report:r1", entityId: "r1", kind: "report", name: "Report",
+      entity: { id: "r1", name: "Report" },
+    } as unknown as Extract<ArtifactNode, { kind: "report" }>;
+    expect(buildArtifactMenu(report).some((i) => "label" in i && i.label === "Add to Report…")).toBe(false);
+  });
+
+  it("loads lib/sendFigureToReport lazily (runLazy) and runs it against the clicked figure's id", async () => {
+    // Wait on STATE the mock itself writes, not on the mock call directly
+    // (architecture.test.ts's weak-wait ratchet) — the dynamic `import()`
+    // resolves across a real module-load tick, not just a microtask.
+    runSendEditableFigureToReport.mockClear().mockImplementation(async (getState: typeof useApp.getState, id: string) => {
+      getState().setStatus(`ran for ${id}`);
+    });
+    action(buildArtifactMenu(editableNode), "Add to Report…").run();
+    await vi.waitFor(() => expect(useApp.getState().status).toBe("ran for fig1"));
+    expect(runSendEditableFigureToReport).toHaveBeenCalledWith(useApp.getState, "fig1");
   });
 });
 

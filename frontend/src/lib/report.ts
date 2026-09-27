@@ -4,6 +4,8 @@
 // store holds ReportEntry wrappers, and the viewer renders it. Pure (no React /
 // store imports) so the sanitizers unit-test standalone, mirroring lib/dataset.
 
+import { decodeDataStruct, isWireCellArray, type WireDataStruct } from "./nonFiniteCells";
+
 /** One fitted-parameter row (rendered as value ± error [unit]). */
 export interface ReportParam {
   name: string;
@@ -163,6 +165,51 @@ function stripBadFigureSpecs(report: unknown, warn: (block: string) => void): un
   return changed ? { ...report, sections } : report;
 }
 
+/** Decode BUG-017's persisted numeric-cell sentinels inside an embedded
+ *  figure spec's dataset. `workspaceSerialize.ts`'s `encodePersistedCells`
+ *  replacer walks the WHOLE `.dwk` document on save, so a report figure
+ *  block's detached `spec.dataset` gets the same NaN/±Infinity/-0 -> string
+ *  sentinel treatment as any other DataStruct; this is the matching decode
+ *  on reopen. `spec` stays opaque otherwise — only its `dataset` sub-object
+ *  is inspected, and only when it looks like a serialized DataStruct.
+ *  Returns `block` itself when there is nothing to decode, so a report with
+ *  no non-finite cells reopens byte-identical (no unnecessary object churn
+ *  for `stripBadFigureSpecs`/`sanitizeReports`'s own identity contract). */
+function decodeFigureSpec(block: ReportFigureBlock): ReportFigureBlock {
+  const spec = block.spec;
+  const raw = spec?.dataset as Record<string, unknown> | undefined;
+  if (
+    !spec || !raw ||
+    !isWireCellArray(raw.time) ||
+    !Array.isArray(raw.values) || !raw.values.every(isWireCellArray) ||
+    !Array.isArray(raw.labels) || !raw.labels.every((value) => typeof value === "string") ||
+    !Array.isArray(raw.units) || !raw.units.every((value) => typeof value === "string") ||
+    typeof raw.metadata !== "object" || raw.metadata === null
+  ) return block;
+  const dataset = decodeDataStruct(raw as unknown as WireDataStruct);
+  return Object.is(dataset, raw) ? block : { ...block, spec: { ...spec, dataset } };
+}
+
+/** Apply {@link decodeFigureSpec} to every figure block in `report`. Returns
+ *  `report` itself when nothing changed, preserving the identity contract
+ *  `stripBadFigureSpecs` already relies on (a report with no work to do
+ *  round-trips through `sanitizeReports` as the SAME object). */
+function decodeReportFigureSpecs(report: ReportSheet): ReportSheet {
+  let changed = false;
+  const sections = report.sections.map((section) => {
+    let sectionChanged = false;
+    const blocks = section.blocks.map((block) => {
+      if (block.type !== "figure" || block.spec === undefined) return block;
+      const decoded = decodeFigureSpec(block);
+      if (decoded !== block) sectionChanged = true;
+      return decoded;
+    });
+    if (sectionChanged) changed = true;
+    return sectionChanged ? { ...section, blocks } : section;
+  });
+  return changed ? { ...report, sections } : report;
+}
+
 /** Validate persisted report entries from a .dwk (drops malformed ones; clamps
  *  the dataset back-reference to ids that survived load, like Origin figures).
  *  A malformed figure `spec` is stripped, not fatal — see
@@ -194,7 +241,7 @@ export function sanitizeReports(
     }
     const datasetId =
       typeof o.datasetId === "string" && dsIds.has(o.datasetId) ? o.datasetId : null;
-    out.push({ id: o.id, name: o.name, datasetId, report });
+    out.push({ id: o.id, name: o.name, datasetId, report: decodeReportFigureSpecs(report) });
   }
   return out;
 }

@@ -5,7 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { FigureSpec } from "./api/figures";
-import type { ReportFigureBlock, ReportSheet } from "./report";
+import type { ReportFigureBlock, ReportSheet, ReportSourceRef } from "./report";
 import {
   BYTES_PER_NUMBER,
   FIGURES_SECTION,
@@ -19,6 +19,7 @@ import {
   removeReportBlock,
   reportBlockKey,
   uniqueFigureName,
+  withSourceRefs,
 } from "./reportBlocks";
 
 const fig = (name: string): ReportFigureBlock => ({ type: "figure", name, spec: { fmt: "svg" } });
@@ -134,6 +135,30 @@ describe("reportBlockKey", () => {
     const moved = moveReportBlock(s, 0, 0, 1);
     expect(moved?.sections[0].blocks.map(reportBlockKey)).toEqual([keys[1], keys[0], keys[2]]);
     expect(reportBlockKey({ ...s.sections[0].blocks[0] })).not.toBe(keys[0]);
+  });
+});
+
+describe("withSourceRefs", () => {
+  const figRef: ReportSourceRef = { kind: "figure", id: "f1", name: "Sweep" };
+  const dsRef: ReportSourceRef = { kind: "dataset", id: "d1", name: "scan.dat" };
+
+  it("merges new refs onto an empty source_refs", () => {
+    const before = sheet();
+    const after = withSourceRefs(before, [figRef, dsRef]);
+    expect(after.source_refs).toEqual([figRef, dsRef]);
+    expect(before.source_refs).toBeUndefined(); // input untouched
+  });
+
+  it("dedupes by kind+id against what the sheet already carries, keeping order", () => {
+    const before: ReportSheet = { ...sheet(), source_refs: [figRef] };
+    const after = withSourceRefs(before, [figRef, dsRef]);
+    expect(after.source_refs).toEqual([figRef, dsRef]);
+  });
+
+  it("returns the SAME sheet object when every ref is already present", () => {
+    const before: ReportSheet = { ...sheet(), source_refs: [figRef, dsRef] };
+    expect(withSourceRefs(before, [figRef])).toBe(before);
+    expect(withSourceRefs(before, [])).toBe(before);
   });
 });
 

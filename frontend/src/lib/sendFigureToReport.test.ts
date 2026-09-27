@@ -141,7 +141,7 @@ async function exportBodyFor(fmt: string, style: string, greyscale: boolean) {
 
 describe("runSendFigureToReportCommand — the spec IS the Export figure… spec", () => {
   it("live-view route (no focused document): block.spec equals the export body", async () => {
-    vi.mocked(askParams).mockResolvedValueOnce(sendParams());
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams()).mockResolvedValueOnce({});
     await runSendFigureToReportCommand(useApp.getState);
     const s = useApp.getState();
     expect(s.reports).toHaveLength(1);
@@ -168,7 +168,9 @@ describe("runSendFigureToReportCommand — the spec IS the Export figure… spec
       groupKey: 1,
     });
     useApp.setState({ plotWindows: [win({ document })], focusedWindowId: "w1" });
-    vi.mocked(askParams).mockResolvedValueOnce(sendParams({ fmt: "png", style: "default", greyscale: false }));
+    vi.mocked(askParams)
+      .mockResolvedValueOnce(sendParams({ fmt: "png", style: "default", greyscale: false }))
+      .mockResolvedValueOnce({});
     await runSendFigureToReportCommand(useApp.getState);
     const [block] = figureBlocks(useApp.getState().reports[0].id);
     const body = await exportBodyFor("png", "default", false);
@@ -179,7 +181,14 @@ describe("runSendFigureToReportCommand — the spec IS the Export figure… spec
 
 describe("runSendFigureToReportCommand — targets, undo, failure", () => {
   it("a new report: named after the dataset, a Figures section, captioned, opened, ONE undo step", async () => {
-    vi.mocked(askParams).mockResolvedValueOnce(sendParams({ caption: "  Fig. 1  " }));
+    vi.mocked(askParams)
+      .mockImplementationOnce(async () => sendParams({ caption: "  Fig. 1  " }))
+      .mockImplementationOnce(async (_title, fields) => {
+        // The name prompt defaults to the SAME "<stem> figures" convention
+        // the report ends up named — an empty answer keeps it.
+        expect(fields.find((f) => f.key === "name")?.default).toBe("scan figures");
+        return {};
+      });
     await runSendFigureToReportCommand(useApp.getState);
     const s = useApp.getState();
     const entry = s.reports[0];
@@ -191,6 +200,21 @@ describe("runSendFigureToReportCommand — targets, undo, failure", () => {
     expect(s.history.map((h) => h.label)).toEqual([SEND_UNDO_LABEL]);
     s.undo();
     expect(useApp.getState().reports).toEqual([]);
+  });
+
+  it("a new report: a typed name overrides the '<stem> figures' default", async () => {
+    vi.mocked(askParams)
+      .mockResolvedValueOnce(sendParams())
+      .mockResolvedValueOnce({ name: "  Hall sweep results  " });
+    await runSendFigureToReportCommand(useApp.getState);
+    expect(useApp.getState().reports[0].name).toBe("Hall sweep results");
+  });
+
+  it("cancelling the new-report name prompt leaves reports and history unchanged", async () => {
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams()).mockResolvedValueOnce(null);
+    await runSendFigureToReportCommand(useApp.getState);
+    expect(useApp.getState().reports).toEqual([]);
+    expect(useApp.getState().history).toEqual([]);
   });
 
   it("an existing report: appended to a new Figures section after its analysis sections, one undo step", async () => {
@@ -212,7 +236,7 @@ describe("runSendFigureToReportCommand — targets, undo, failure", () => {
   });
 
   it("names each figure uniquely within the target report (scan, scan-2, scan-3)", async () => {
-    vi.mocked(askParams).mockResolvedValueOnce(sendParams());
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams()).mockResolvedValueOnce({});
     await runSendFigureToReportCommand(useApp.getState);
     const id = useApp.getState().reports[0].id;
     for (let k = 0; k < 2; k++) {
@@ -224,7 +248,7 @@ describe("runSendFigureToReportCommand — targets, undo, failure", () => {
   });
 
   it("an info toast warns when the sent spec is large; a small one says nothing", async () => {
-    vi.mocked(askParams).mockResolvedValueOnce(sendParams());
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams()).mockResolvedValueOnce({});
     await runSendFigureToReportCommand(useApp.getState);
     expect(useToasts.getState().toasts.some((t) => /MB of plotted data/.test(t.msg))).toBe(false);
     // ~6.5 MB estimated: 180k rows x (time + 2 channels) numbers x 12 B.
@@ -242,7 +266,7 @@ describe("runSendFigureToReportCommand — targets, undo, failure", () => {
       yScale: "linear",
     });
     useToasts.setState({ toasts: [] });
-    vi.mocked(askParams).mockResolvedValueOnce(sendParams());
+    vi.mocked(askParams).mockResolvedValueOnce(sendParams()).mockResolvedValueOnce({});
     await runSendFigureToReportCommand(useApp.getState);
     const notice = useToasts.getState().toasts.find((t) => /MB of plotted data/.test(t.msg));
     expect(notice?.kind).toBe("info");

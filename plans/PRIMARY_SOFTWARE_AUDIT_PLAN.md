@@ -8768,6 +8768,15 @@ was not raised.
   warning. (8) `ExportFormat` is exported once from `lib/api/reportExport.ts`.
   (9) two reflectivity tests no longer mock the moved `reportExport`.
   Eager bundle after the round: 840.5 kB (budget 846.1).
+  **Port note (2026-09-27):** the Library "Add to Report…" action for a
+  saved editable figure (`runSendEditableFigureToReport`, `lib/
+  sendFigureToReport.ts`), report `source_refs` (`withSourceRefs`, `lib/
+  reportBlocks.ts`, called from both send paths), and the `.dwk` non-finite-
+  cell decode for a reopened report figure spec (`decodeReportFigureSpecs`,
+  `lib/report.ts`) were ported from a parallel PR (#454,
+  `sol/report-figure-connection`) onto this PR's lazy design; #454's own
+  eager store action/command/Plot-menu entry were not ported (superseded by
+  this design's lazy module + last-"Figures"-section placement).
 - [ ] Consider EMF only if Windows Office tests show material benefit.
 - [ ] Editable embedded figures remain a future goal, not release blocker.
 
