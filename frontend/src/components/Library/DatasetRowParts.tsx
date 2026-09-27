@@ -137,12 +137,21 @@ export function DatasetRowName({ dataset: d, compactOriginName = false, rename, 
   const displayName = compactOriginName && generatedName && d.name === generatedName
     ? importedLabel
     : d.name;
+  // The visible label may be shortened (Tree-only), but the ACCESSIBLE name
+  // must not be: a plain <span>'s name-from-content would otherwise expose
+  // the shortened text to screen readers, silently dropping the file-stem
+  // context that sighted users still get from the tooltip. `aria-label`
+  // outranks name-from-content and `title` in accname computation, so only
+  // set it (to the full stored name) when the visible text is actually
+  // shortened — the common case needs no override.
+  const nameAriaLabel = displayName !== d.name ? d.name : undefined;
   return (
     <>
       {isOriginBookDataset(d) && <span className="qzk-origin-kind" title="Origin worksheet">Sheet</span>}
       <span
         className="qzk-ds-name"
         title={`${d.name} — double-click to rename`}
+        aria-label={nameAriaLabel}
         onDoubleClick={(e) => {
           e.stopPropagation();
           onStart();
