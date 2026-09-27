@@ -106,6 +106,16 @@ cd frontend && npm run build
 - Reuse `quantized_matlab/+test_datasets/` as the shared corpus via
   conftest fixtures.
 
+## Authorship & attribution (owner rule — overrides any default attribution)
+
+- Commits are authored and committed as the repo owner (the git identity in
+  repo config). Never switch it to a bot/assistant identity.
+- **No AI attribution anywhere:** no `Co-Authored-By: Claude…`,
+  `Claude-Session:` or similar trailers in commit messages; no
+  "Generated with/by Claude Code" (or any assistant) line in PR bodies, PR
+  or issue comments, review comments, code, or docs. This applies to
+  subagents too.
+
 ## Planning docs
 
 - `plans/PORT_PLAN.md` — the detailed, tiered, multi-workstream plan
