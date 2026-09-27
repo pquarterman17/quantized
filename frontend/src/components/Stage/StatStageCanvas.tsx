@@ -14,7 +14,7 @@ import { useEffect, useRef, type MouseEvent } from "react";
 
 import type { Accent, Theme } from "../../store/useApp";
 import { draw, type StatDrawData } from "./statRender";
-import { slotIndexAt } from "./statRenderSelection";
+import { clickedSlotAt } from "./statRenderSelection";
 
 export interface StatStageCanvasProps {
   data: StatDrawData | null;
@@ -46,9 +46,19 @@ export default function StatStageCanvas({ data, theme, accent, slotCount = 0, on
 
   function onClick(e: MouseEvent<HTMLDivElement>) {
     const host = hostRef.current;
-    if (!host || !onSlotClick || slotCount <= 0) return;
+    if (!host || !onSlotClick || slotCount <= 0 || !data) return;
     const box = host.getBoundingClientRect();
-    const i = slotIndexAt(host.clientWidth || 600, host.clientHeight || 400, e.clientX - box.left, e.clientY - box.top, slotCount);
+    // P2.6 review finding 10: only a click on the slot's own drawn content
+    // (its box/violin/bar body, whisker span, or tick label) selects — a
+    // click on blank background between/around the glyphs does nothing.
+    const i = clickedSlotAt(
+      data,
+      host.clientWidth || 600,
+      host.clientHeight || 400,
+      e.clientX - box.left,
+      e.clientY - box.top,
+      slotCount,
+    );
     if (i !== null) onSlotClick(i, e);
   }
 

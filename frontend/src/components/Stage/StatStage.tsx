@@ -72,8 +72,10 @@ export default function StatStage() {
   // P2.6 box 4: the per-group summary table, linked both ways to the app's
   // row selection (useStatGroupSelection). The plot half of the link is on
   // whenever the plot is categorical; the table is opt-in (session-local).
-  const sel = useStatGroupSelection(active, st.axes, hideEmptyLevels);
   const [showSummary, setShowSummary] = useState(false);
+  // P2.6 review finding 6: only compute the table's per-group stats while
+  // it's actually open — the plot half of the link needs only rows/keys.
+  const sel = useStatGroupSelection(active, st.axes, hideEmptyLevels, showSummary);
   const dockOpen = categorical && showSummary;
   const [exporting, setExporting] = useState(false);
 

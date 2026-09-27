@@ -40,6 +40,10 @@ import type { AxisSlot } from "../../lib/groupAxis";
 import type { SlotMark, StatSelectionMarks } from "./statRenderSelection";
 import type { LevelAxes } from "./statStageLevels";
 
+/** A facet panel's ORIGINAL rows for one flat slot key (`LevelAxes.
+ *  panelRows.get(panel)`), or the whole-plot `row.rows` when not scoped. */
+export type PanelScope = ReadonlyMap<string, readonly number[]>;
+
 export interface SummaryStats {
   mean: number;
   sd: number;
@@ -59,7 +63,9 @@ export interface SummaryRow {
   nonFinite: number;
   excluded: number;
   absent: boolean;
-  /** One per `GroupSummary.valueLabels` entry. */
+  /** One per `GroupSummary.valueLabels` entry, or `[]` when `buildGroupSummary`
+   *  was asked to skip them (the table is closed — P2.6 review finding 6):
+   *  the plot link only ever reads `.rows`/`.key`/`.n`, never this. */
   stats: SummaryStats[];
 }
 
@@ -85,8 +91,12 @@ export function describe(xs: readonly number[]): SummaryStats {
   return { mean, sd, median, min: v[0], max: v[n - 1] };
 }
 
-/** The table for `axes` (the stage's whole-plot axis) over `active`. */
-export function buildGroupSummary(active: Dataset, axes: LevelAxes): GroupSummary {
+/** The table for `axes` (the stage's whole-plot axis) over `active`.
+ *  `computeStats` (default true) gates the mean/SD/median/min/max pass — the
+ *  plot link (`selectionMarks`/`applyGesture`/`decorate*`) only ever reads
+ *  `.rows`/`.key`/`.n`/`.label`, so a caller whose table is closed can skip
+ *  the sort-and-reduce per group entirely (P2.6 review finding 6). */
+export function buildGroupSummary(active: Dataset, axes: LevelAxes, computeStats = true): GroupSummary {
   const data = active.data;
   const perChannel = axes.flat.slots.every((s) => s.key?.startsWith("ch:"));
   const statCols = perChannel ? [null] : [...axes.valueCols];
@@ -95,10 +105,12 @@ export function buildGroupSummary(active: Dataset, axes: LevelAxes): GroupSummar
   const rows = axes.flat.slots.map((s: AxisSlot, i): SummaryRow => {
     const behind = axes.flatRows[i] ?? [];
     const key = s.key ?? `slot:${i}`;
-    const stats = statCols.map((c) => {
-      const values = col(c ?? Number(key.slice(3)));
-      return describe(behind.map((r) => values[r]));
-    });
+    // The per-channel fallback's column for slot i is `fallbackCols[i]`
+    // (review finding 8) — `axes.fallbackCols` is already index-aligned with
+    // `axes.flat.slots`, so this never re-parses the `ch:<col>` key text.
+    const stats = computeStats
+      ? statCols.map((c) => describe(behind.map((r) => col(c ?? axes.fallbackCols[i])[r])))
+      : [];
     return {
       key, label: s.label, rows: behind, n: s.n, nonFinite: s.nonFinite, excluded: s.excluded, absent: s.absent, stats,
     };
@@ -115,10 +127,24 @@ export function visibleSummaryRows(summary: GroupSummary, hideEmpty: boolean): S
 
 // ── Selection state ────────────────────────────────────────────────────────
 
-/** A local pick: the keys the last table/plot gesture named, and the row
- *  selection object that gesture left behind (see the module header). */
-export interface GroupPick {
+/** The keys a live pick names, and which facet panel (or the flat table / a
+ *  non-faceted plot, `null`) the picking gesture happened in. An EMPTY
+ *  slot's picked mark is scoped to this panel (P2.6 review finding 1): the
+ *  same key picked in one facet panel must never paint as selected — on the
+ *  table, on another panel, or on a non-faceted plot — because an empty
+ *  slot's `rows` is always `[]` there too, so without the panel check the
+ *  fallback below could not tell "picked here" from "picked somewhere else". */
+export interface PickedKeys {
   keys: ReadonlySet<string>;
+  panel: string | null;
+}
+
+export const NO_PICK: PickedKeys = { keys: new Set(), panel: null };
+
+/** A local pick: the keys the last table/plot gesture named, which panel it
+ *  happened in, and the row selection object that gesture left behind (see
+ *  the module header). */
+export interface GroupPick extends PickedKeys {
   basis: unknown;
   summary: GroupSummary;
 }
@@ -127,20 +153,25 @@ export function isPickLive(pick: GroupPick | null, selection: unknown, summary: 
   return pick != null && pick.basis === selection && pick.summary === summary;
 }
 
-/** `row`'s rows inside `scope` (a facet panel), or all of them. */
-function scoped(row: SummaryRow, scope?: (r: number) => boolean): readonly number[] {
-  return scope ? row.rows.filter(scope) : row.rows;
+/** `row`'s rows inside `scope` (a facet panel's precomputed row list for
+ *  this slot key, `LevelAxes.panelRows.get(panel)`), or all of them. */
+function scoped(row: SummaryRow, scope?: PanelScope | null): readonly number[] {
+  return scope ? scope.get(row.key) ?? [] : row.rows;
 }
 
-/** 2 = every row selected (or an empty group picked), 1 = some, 0 = none. */
+/** 2 = every row selected (or an empty group picked IN `panel`), 1 = some,
+ *  0 = none. `panel` is the context being marked (the flat table / a
+ *  non-faceted plot: `null`; a facet panel: its label) — an empty slot only
+ *  reads as picked when `picked.panel` matches it (review finding 1). */
 export function markOf(
   row: SummaryRow,
   selected: ReadonlySet<number>,
-  picked: ReadonlySet<string>,
-  scope?: (r: number) => boolean,
+  picked: PickedKeys,
+  panel: string | null = null,
+  scope?: PanelScope | null,
 ): SlotMark {
   const rows = scoped(row, scope);
-  if (!rows.length) return picked.has(row.key) ? 2 : 0;
+  if (!rows.length) return picked.keys.has(row.key) && picked.panel === panel ? 2 : 0;
   let k = 0;
   for (const r of rows) if (selected.has(r)) k++;
   return k === rows.length ? 2 : k > 0 ? 1 : 0;
@@ -168,16 +199,18 @@ export interface Gesture {
 }
 
 /** One click / keypress on the group `key` (a row of `visible`, the table's
- *  order). `current` is the live row selection; `picked` the live pick.
- *  Returns null for a key not in `visible` (a stale gesture). */
+ *  order), in `panel` (the flat table / a non-faceted plot: `null`; a facet
+ *  panel: its label). `current` is the live row selection; `picked` the live
+ *  pick. Returns null for a key not in `visible` (a stale gesture). */
 export function applyGesture(
   visible: readonly SummaryRow[],
   key: string,
   mods: GestureMods,
   anchor: string | null,
   current: readonly number[],
-  picked: ReadonlySet<string>,
-  scope?: (r: number) => boolean,
+  picked: PickedKeys,
+  panel: string | null = null,
+  scope?: PanelScope | null,
 ): Gesture | null {
   const at = visible.findIndex((r) => r.key === key);
   if (at < 0) return null;
@@ -189,9 +222,12 @@ export function applyGesture(
   }
   if (!mods.toggle) return { rows: [...scoped(row, scope)], keys: [key] };
   const sel = new Set(current);
-  const keys = new Set(picked);
+  // Toggling starts (or continues) a pick scoped to THIS `panel` — keys a
+  // previous gesture picked in a DIFFERENT panel do not carry over (review
+  // finding 1: those must stay scoped to where they were picked).
+  const keys = new Set(picked.panel === panel ? picked.keys : []);
   const theirs = scoped(row, scope);
-  if (markOf(row, sel, picked, scope) === 2) {
+  if (markOf(row, sel, picked, panel, scope) === 2) {
     const drop = new Set(theirs);
     keys.delete(key);
     return { rows: current.filter((r) => !drop.has(r)), keys: [...keys] };
@@ -202,37 +238,53 @@ export function applyGesture(
 
 // ── Plot marks ─────────────────────────────────────────────────────────────
 
+/** Original row -> the analysis-view position it prunes to (see
+ *  `activeRowIndices`), or `null` when nothing is dropped — an identity map,
+ *  since every analysis position then equals its original row (the cheap
+ *  path `toAnalysisRows` takes without allocating one). Cache this by
+ *  dataset identity (`lib/rowstate.rowStateIdentity`): it used to be rebuilt
+ *  from scratch on every selection change (P2.6 review finding 4). */
+export function analysisPositions(active: Dataset): Map<number, number> | null {
+  const drop = droppedRows(active);
+  if (!drop.size) return null;
+  const kept = activeRowIndices(active.data.time.length, drop);
+  return new Map(kept.map((r, i) => [r, i] as const));
+}
+
 /** Original rows -> the analysis-view positions a draw's points count in
  *  (`IndexedPoint.rowIndex` is an index into `analysisData`, which PRUNES
  *  excluded / filtered rows — so it is NOT the original row once anything is
- *  dropped). Rows not in the analysis view are left out. */
-export function toAnalysisRows(active: Dataset, rows: readonly number[]): Set<number> {
+ *  dropped). `positions` is `analysisPositions(active)`; rows not in the
+ *  analysis view are left out. */
+export function toAnalysisRows(rows: readonly number[], positions: Map<number, number> | null): Set<number> {
   const out = new Set<number>();
-  if (!rows.length) return out;
-  const kept = activeRowIndices(active.data.time.length, droppedRows(active));
-  const pos = new Map(kept.map((r, i) => [r, i] as const));
   for (const r of rows) {
-    const p = pos.get(r);
-    if (p !== undefined) out.add(p);
+    if (!positions) out.add(r);
+    else {
+      const p = positions.get(r);
+      if (p !== undefined) out.add(p);
+    }
   }
   return out;
 }
 
 /** The marks for one draw whose drawn slots are `drawSlots` (keyed), or null
  *  when the draw is not keyed (closed-up fallback: no reliable mapping) or
- *  nothing on it is selected. */
+ *  nothing on it is selected. `panel` is the context being marked (see
+ *  `markOf`). */
 export function selectionMarks(
   drawSlots: readonly AxisSlot[] | null | undefined,
   byKey: ReadonlyMap<string, SummaryRow>,
   selected: ReadonlySet<number>,
-  picked: ReadonlySet<string>,
+  picked: PickedKeys,
   points: ReadonlySet<number>,
-  scope?: (r: number) => boolean,
+  panel: string | null = null,
+  scope?: PanelScope | null,
 ): StatSelectionMarks | null {
   if (!drawSlots?.length || drawSlots.some((s) => s.key == null)) return null;
   const slots = drawSlots.map((s) => {
     const row = byKey.get(s.key as string);
-    return row ? markOf(row, selected, picked, scope) : 0;
+    return row ? markOf(row, selected, picked, panel, scope) : 0;
   });
   return slots.some((m) => m > 0) || points.size ? { slots, points } : null;
 }

@@ -3938,6 +3938,39 @@ violin, bar, strip, or summary plots.
   (click-a-slot only); the table is not exported with the figure; Fit Y by X's
   oneway table and Tabulate are not linked; background (unfocused) stat
   windows show no marks (the selection is the active dataset's); no e2e spec.
+  **Review round 2 (independent review, 10 findings, all fixed with a
+  sabotage-verified test each):** an empty slot's local pick is now scoped to
+  the PANEL it was picked in (`GroupPick`/`PickedKeys` carry it) — the same
+  key an empty level shares with every facet panel no longer paints as
+  selected in a panel that never made that pick, and `markOf`/`applyGesture`/
+  `selectionMarks` all take that panel as an explicit context. The Shift-range
+  anchor resets whenever the summary's identity changes (dataset / groupCol /
+  mode), not just when the local pick drops, so a stale key from a previous
+  axis can never seed a range on a new one. The table's Escape now claims the
+  key only when it has a live selection or pick of its own (`hasSelection`) —
+  otherwise it declines, matching the escapeStack invariant, and can never
+  clear a selection belonging to another dataset. Performance: the original-
+  row -> analysis-position map (`analysisPositions`) is memoized by dataset
+  identity instead of rebuilt on every selection change, and each facet
+  panel's rows are split ONCE from `flatRows` in `levelAxes`
+  (`LevelAxes.panelRows`) rather than re-derived from the facet column per
+  gesture/render. The table's mean/SD/median/min/max pass only runs while the
+  table is open (`buildGroupSummary`'s `computeStats`); the plot link needs
+  only rows/keys. Facet panels now ring their OWN selected points too, mapped
+  through a slice-local point index (`LevelAxes.panelPointIndex`, built from
+  `FacetSlice.rows`) rather than the flat analysis-view position — dead
+  ahead of production wiring, since faceted box/strip draws don't carry
+  points yet (JMP_GAP J5 residual), but the selection link is now correct for
+  when they do. A plot click now only selects on the slot's own drawn content
+  (box/violin/bar body, whisker/error-bar span, or its tick label) —
+  `statRenderSelection.clickedSlotAt` — not on blank background between or
+  around the glyphs. Cleanup: the per-channel fallback reads its slot's
+  column from `LevelAxes.fallbackCols` (index-aligned) instead of re-parsing
+  the `ch:<col>` key text, and `useStatGroupSelection` now calls the exported
+  `isPickLive` instead of re-implementing it inline. `lib/facet.FacetSlice`
+  gained a `rows` field (the analysis-view row behind each slice-local
+  position) to make the point-index mapping possible; no existing consumer
+  reads less than it did. Eager bundle unchanged: 841.9 kB.
 - [ ] ANOVA/post-hoc, PCA, regression/correlation, GLM, survival, and ROC stay
   lower priority until demand is shown. **Demand shown 2026-07-28**: the
   owner directed a full JMP replacement; the JMP-side platform work now

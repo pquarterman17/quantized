@@ -6,12 +6,24 @@
 
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import type { ComponentType } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { statsBox } from "../../lib/api";
 import type { DataStruct, Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import { useGlobalShortcuts } from "../../useGlobalShortcuts";
 import StatStage from "./StatStage";
+
+// P2.6 review finding 9: the real global Delete/Backspace fallback
+// (`useGlobalShortcuts`), mounted alongside the stage — without it, the
+// "Delete is consumed" assertion below is vacuous: nothing in the tree would
+// ever delete a dataset even if `StatSummaryTable`'s own Delete branch were
+// removed, so `datasets` staying at length 2 would prove nothing.
+function GlobalHarness() {
+  useGlobalShortcuts();
+  return <StatStage />;
+}
 
 vi.mock("../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/api")>()),
@@ -52,11 +64,12 @@ beforeEach(() => {
   useApp.setState({
     theme: "dark", accent: "violet", datasets: [DS, OTHER], activeId: "ds", selection: null,
     yKeys: [1], xKey: null, seriesOrder: null, statStageSeed: null, statHideEmptyLevels: false,
+    confirmRemove: false, // Delete would remove immediately if it fell through to useGlobalShortcuts
   });
 });
 
-async function openTable() {
-  render(<StatStage />);
+async function openTable(Component: ComponentType = StatStage) {
+  render(<Component />);
   await userEvent.click(screen.getByRole("checkbox", { name: /summary/ }));
   const grid = await screen.findByRole("grid", { name: "Group summary" });
   const row = (label: string) => within(grid).getByText(label).closest("tr") as HTMLTableRowElement;
@@ -116,7 +129,7 @@ describe("StatStage summary table — table -> selection", () => {
   });
 
   it("keyboard: arrows move, Enter picks, Shift+Arrow extends, Escape clears, Delete is consumed", async () => {
-    const { row } = await openTable();
+    const { row } = await openTable(GlobalHarness);
     const user = userEvent.setup();
     row("grp = A").focus();
     await user.keyboard("{ArrowDown}");
@@ -134,6 +147,26 @@ describe("StatStage summary table — table -> selection", () => {
     await user.keyboard("{Escape}");
     await waitFor(() => expect(sel()).toBeNull());
     expect(row("grp = D").getAttribute("aria-selected")).toBe("false");
+  });
+
+  it("Escape declines (does not claim the key) when this table has nothing of its own to clear (review finding 3)", async () => {
+    const { row } = await openTable();
+    // Nothing selected on THIS dataset, and no local pick.
+    const esc = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    row("grp = A").dispatchEvent(esc);
+    expect(esc.defaultPrevented).toBe(false);
+  });
+
+  it("Escape never wipes a selection that belongs to a DIFFERENT dataset (review finding 3)", async () => {
+    const { row } = await openTable();
+    // A row selection on "other" — not the dataset behind this table ("ds").
+    act(() => useApp.setState({ selection: { datasetId: "other", rows: [0] } }));
+    const esc = new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true });
+    row("grp = A").dispatchEvent(esc);
+    // Declined (nothing of THIS table's to clear)…
+    expect(esc.defaultPrevented).toBe(false);
+    // …and the other dataset's selection is untouched.
+    expect(sel()).toEqual({ datasetId: "other", rows: [0] });
   });
 });
 
@@ -162,15 +195,22 @@ describe("StatStage summary table — selection -> table, and the plot", () => {
     const { row } = await openTable();
     const host = await screen.findByTestId("stat-canvas-host");
     // jsdom lays out 0x0: the canvas falls back to 600x400, whose plot rect
-    // spans x 60..580 — four slots, D is the last (x ~ 515).
-    fireEvent.click(host, { clientX: 515, clientY: 200 });
+    // spans x 60..580, y 20..352 — four slots, D is the last (x ~ 515). Click
+    // in the tick-label band (y > 352): it always counts as that slot's
+    // content (P2.6 review finding 10), unlike an arbitrary mid-plot y, which
+    // may now miss the box glyph's own drawn extent entirely.
+    fireEvent.click(host, { clientX: 515, clientY: 370 });
     await waitFor(() => expect(row("grp = D").getAttribute("aria-selected")).toBe("true"));
     expect(sel()?.rows).toEqual([5, 6]);
-    // Ctrl-click on slot A adds it.
-    fireEvent.click(host, { clientX: 100, clientY: 200, ctrlKey: true });
+    // Ctrl-click on slot A's tick label adds it.
+    fireEvent.click(host, { clientX: 100, clientY: 370, ctrlKey: true });
     await waitFor(() => expect(sel()?.rows).toEqual([0, 1, 2, 5, 6]));
-    // Outside the plot: nothing.
-    fireEvent.click(host, { clientX: 10, clientY: 200 });
+    // Outside the plot entirely: nothing.
+    fireEvent.click(host, { clientX: 10, clientY: 370 });
+    expect(sel()?.rows).toEqual([0, 1, 2, 5, 6]);
+    // Blank background well ABOVE the tick-label band, off every box's own
+    // drawn extent: nothing (the click-on-background half of the fix).
+    fireEvent.click(host, { clientX: 515, clientY: 24 });
     expect(sel()?.rows).toEqual([0, 1, 2, 5, 6]);
   });
 });

@@ -54,6 +54,13 @@ export default function StatSummaryTable({ sel, valueLabels }: Props) {
       return;
     }
     if (e.key === "Escape") {
+      // Only claim Escape when THIS table has something of its own to clear
+      // (a live row selection for the dataset behind it, or a local
+      // empty-level pick) — otherwise the escapeStack invariant (only a
+      // present surface claims the key) breaks, and `clear()` would risk
+      // wiping a selection that belongs to a different dataset entirely
+      // (P2.6 review finding 3).
+      if (!sel.hasSelection) return;
       e.preventDefault();
       sel.clear();
       return;
