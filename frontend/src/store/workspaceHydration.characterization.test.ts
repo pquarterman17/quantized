@@ -231,7 +231,7 @@ function poison(): void {
     statMode: true,
     statHideEmptyLevels: true,
     statShowGroupN: false,
-    statMarks: { points: "none", labelRotation: 90 },
+    statMarks: { box: { points: "none", labelRotation: 90 } },
     xFmt: { mode: "fixed", digits: 9 },
     yFmt: { mode: "fixed", digits: 9 },
     y2Fmt: { mode: "fixed", digits: 9 },

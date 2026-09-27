@@ -416,9 +416,21 @@ describe("connectMeansBreaks — the interaction line must not cross a nested bo
       box("lot = 0 / wafer = 1"),
       box("lot = 1 / wafer = 0"),
       box("lot = 1 / wafer = 1"),
-    ]);
+    ], "wafer");
     // index 0 always starts a segment; index 2 is the first box of lot 1.
     expect(breaks).toEqual([true, false, true, false]);
+  });
+
+  // Review finding 4: nesting is the caller's STRUCTURAL signal
+  // (`nestLabel`), never read off the label text — the very same labels
+  // above, with no nest column active, must never break mid-run.
+  it("never breaks on a nested-LOOKING label when no nest column is active", () => {
+    expect(connectMeansBreaks([
+      box("lot = 0 / wafer = 0"),
+      box("lot = 0 / wafer = 1"),
+      box("lot = 1 / wafer = 0"),
+      box("lot = 1 / wafer = 1"),
+    ])).toEqual([true, false, false, false]);
   });
 
   it("leaves a SINGLE-factor plot as one unbroken line", () => {
@@ -435,7 +447,7 @@ describe("connectMeansBreaks — the interaction line must not cross a nested bo
     // contiguously, so a repeat would mean the order was already wrong. What is
     // pinned here is that the rule compares NEIGHBOURS, which is what makes it
     // a segmenting rule rather than a grouping one.
-    expect(connectMeansBreaks([box("a = 0 / b = 0"), box("a = 0 / b = 1")])).toEqual([
+    expect(connectMeansBreaks([box("a = 0 / b = 0"), box("a = 0 / b = 1")], "b")).toEqual([
       true, false,
     ]);
   });

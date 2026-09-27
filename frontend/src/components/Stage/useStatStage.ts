@@ -49,10 +49,11 @@ import {
   resolveGroupsIndexed,
   type IndexedGroupSpec,
 } from "../../lib/statstage";
+import type { StatMarksByMode, StatMarksMode } from "../../lib/plotviewSanitize";
 import type { StatMarks } from "../../lib/statMarks";
 import { exportStatStage } from "./statStageExport";
 import { applyLevels, levelAxes } from "./statStageLevels";
-import { needsPoints, stageMarks, withMarks } from "./statStageMarks";
+import { needsPoints, stageMarks, withMarks, withNestLabel } from "./statStageMarks";
 import {
   computeBarData,
   computeBoxDraw,
@@ -127,10 +128,24 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   // when the caller passes them (focused stage + background windows), else
   // hook-local (a bare hook in a test). Display-only: they re-fetch nothing;
   // the only compute they reach is WHICH raw points to resolve (`needsPoints`).
-  const [localMarks, setLocalMarks] = useState<StatMarks>({});
-  const marks = params.marks ?? localMarks;
-  const patchMarks = (patch: StatMarks, label?: string) =>
-    params.onMarksChange ? params.onMarksChange(patch, label) : setLocalMarks((m) => ({ ...m, ...patch }));
+  //
+  // Review finding 6: stored and patched PER MODE (`StatMarksByMode`), never
+  // as one flat object every mode read from alike — a choice made in one
+  // mode (strip's `points: "none"`, say) must never read as another mode's
+  // DEFAULT (box's fliers going dark too) purely because the two shared the
+  // same stored fields. `marksMode` is null outside the four modes marks
+  // apply to at all (qq/histogram); the hook still holds a slot for them in
+  // `localMarks` so a mode switch never drops what was already set for one.
+  const marksMode: StatMarksMode | null =
+    mode === "box" || mode === "violin" || mode === "strip" || mode === "bar" ? mode : null;
+  const [localMarks, setLocalMarks] = useState<StatMarksByMode>({});
+  const marksByMode = params.marks ?? localMarks;
+  const marks = marksMode ? marksByMode[marksMode] ?? null : null;
+  const patchMarks = (patch: StatMarks, label?: string) => {
+    if (!marksMode) return;
+    if (params.onMarksChange) params.onMarksChange(marksMode, patch, label);
+    else setLocalMarks((m) => ({ ...m, [marksMode]: { ...m[marksMode], ...patch } }));
+  };
   const grouped = effectiveGroupCol != null;
   const rm = useMemo(() => stageMarks(mode, marks, grouped), [mode, marks, grouped]);
   const wantPoints = needsPoints(mode, rm);
@@ -175,6 +190,10 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     effectiveGroupCol != null
       ? [labelOf(effectiveGroupCol), labelOf(nestCol)].filter((l) => l != null).join(" / ")
       : "channel";
+  // Review finding 4: the STRUCTURAL "is this axis nested" signal, stamped
+  // on every draw (`nestLabel`) so a two-tier axis is never inferred from a
+  // label's own text (`lib/statMarks.nestedTiers`'s doc).
+  const nestLabel = nestCol != null ? labelOf(nestCol) : null;
 
   // Bar mode (gap #20): a category x series matrix, not a 1-D group list —
   // when a categorical column is picked, every PLOTTED channel becomes its
@@ -260,7 +279,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         };
       }
       setBusy(true);
-      void computeFacetGroupDraws(slices ?? [], mode, effectiveGroupCol, valueCol, plotted, valueLabel, groupLabel, nestCol)
+      void computeFacetGroupDraws(
+        slices ?? [], mode, effectiveGroupCol, valueCol, plotted, valueLabel, groupLabel, nestCol, nestLabel,
+      )
         .then(finishFacets)
         .finally(() => !cancelled && setBusy(false));
       return () => {
@@ -289,15 +310,15 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         void computeBoxDraw(finiteGroups, valueLabel, groupLabel, pts)
           .then(({ draw, degraded }) => {
             if (cancelled) return;
-            setDrawData(draw);
+            setDrawData(withNestLabel(draw, nestLabel));
             if (degraded) setNote("backend unavailable — computed locally");
           })
           .finally(() => !cancelled && setBusy(false));
       } else if (mode === "strip") {
-        void computeStripDraw(finiteGroups, finiteIndexedGroups, valueLabel, groupLabel, false)
+        void computeStripDraw(finiteGroups, finiteIndexedGroups, valueLabel, groupLabel)
           .then(({ draw, degraded }) => {
             if (cancelled) return;
-            setDrawData(draw);
+            setDrawData(withNestLabel(draw, nestLabel));
             if (degraded) setNote("backend unavailable — computed locally");
           })
           .finally(() => !cancelled && setBusy(false));
@@ -308,7 +329,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         void computeViolinDraw(finiteGroups, valueLabel, groupLabel)
           .then((draw) => {
             if (cancelled) return;
-            setDrawData(pts && (draw.mode === "violin" || draw.mode === "box") ? { ...draw, points: pts } : draw);
+            const withPoints = pts && (draw.mode === "violin" || draw.mode === "box") ? { ...draw, points: pts } : draw;
+            setDrawData(withNestLabel(withPoints, nestLabel));
             if (draw.mode === "box") setNote("violin (KDE) unavailable — showing box plot");
           })
           .finally(() => !cancelled && setBusy(false));
@@ -376,6 +398,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     effectiveFacetCol,
     effectiveGroupCol,
     nestCol,
+    nestLabel,
     plotted,
     barValueChannels,
     barLabels,
@@ -431,12 +454,6 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setBarStack,
     marks: rm,
     setMarks: patchMarks,
-    showPoints: rm.points === "all",
-    setShowPoints: (on: boolean) => patchMarks({ points: on ? "all" : "outliers" }, "toggle points"),
-    showMeanCI: rm.summary === "mean",
-    setShowMeanCI: (on: boolean) => patchMarks({ summary: on ? "mean" : "none" }, "toggle mean marker"),
-    showConnectMeans: rm.connectMeans,
-    setShowConnectMeans: (on: boolean) => patchMarks({ connectMeans: on }, "toggle connect means"),
     facetCol: effectiveFacetCol,
     setFacetCol,
     busy,

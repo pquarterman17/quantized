@@ -40,12 +40,37 @@ import {
 } from "../../lib/api/figures";
 import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
-import { axisStyleWire, errorHalfWidth, type ResolvedStatMarks } from "../../lib/statMarks";
+import { axisStyleWire, errorHalfWidth, nestedTiers, type ResolvedStatMarks } from "../../lib/statMarks";
 import type { GroupSpec } from "../../lib/statschooser";
 import { finiteOf, type IndexedGroupSpec, type StatMode } from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
+import { boxValueDomain, drawMarks, stripValueDomain } from "./statDrawMarks";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
+
+/** Review finding 2: the canvas's box/strip value domain (`statDrawMarks.
+ *  boxValueDomain`/`stripValueDomain`) always spans every raw datum
+ *  (fliers, hidden points) so toggling a mark never rescales the plot --
+ *  but matplotlib autoscales to whatever it actually drew, which is a
+ *  NARROWER range whenever a mark is hidden (`points: "none"`, say). Rather
+ *  than change either side's domain rule, send the canvas's own range as an
+ *  explicit y-limit so the export matches it exactly (`ax.set_ylim`, see
+ *  `figure_statplots.render_statplot_figure`'s `y_domain`). Violin has no
+ *  such divergence (its domain is the KDE curve's own extent, never the
+ *  points') so this is box/strip only. */
+export function canvasYDomain(draw: StatDrawData | null, m: ResolvedStatMarks | null): [number, number] | null {
+  if (!draw) return null;
+  if (draw.mode === "box") return boxValueDomain(draw.boxes, m ?? drawMarks(draw));
+  if (draw.mode === "strip") return stripValueDomain(draw);
+  return null;
+}
+
+/** Review finding 4: `draw.nestLabel` when `draw` carries one (box/violin/
+ *  strip/bar all share `CategoryAxisMarks`), else null — never guessed from
+ *  the draw's labels. */
+function nestLabelOf(draw: StatDrawData | null): string | null {
+  return draw && "nestLabel" in draw ? draw.nestLabel ?? null : null;
+}
 
 export function buildExportSpec(
   mode: StatMode,
@@ -198,9 +223,16 @@ function barWire(d: BarChartData, showN: boolean, m: ResolvedStatMarks | null = 
   };
 }
 
-/** The label options on the wire for these tick labels (null: none set). */
-function axisWire(m: ResolvedStatMarks | null | undefined, labels: readonly string[]) {
-  return m ? axisStyleWire(m, labels) : null;
+/** The label options on the wire for these tick labels (null: none set).
+ *  `nestLabel` (review finding 4) is the STRUCTURAL "is this axis nested"
+ *  signal (`StatDrawData.nestLabel`) — null for bar/facet call sites that
+ *  never nest. */
+function axisWire(
+  m: ResolvedStatMarks | null | undefined,
+  labels: readonly string[],
+  nestLabel: string | null | undefined = null,
+) {
+  return m ? axisStyleWire(m, labels, nestLabel) : null;
 }
 
 /** Rebuilds a `facets[]` wire payload from `drawFacets` and renders one
@@ -249,19 +281,34 @@ export async function exportFacetedFigure(
     return;
   }
   if (mode !== "box" && mode !== "violin") return;
+  // Review finding 4: every panel shares the SAME nest column (a single
+  // `useStatStage` compute, stamped uniformly by `computeFacetGroupDraws`),
+  // so its `nestLabel` is read once, off the first panel, for the SHARED
+  // `tiered` flag below; each panel's own [outer, inner] PAIRS still come
+  // from ITS OWN labels (`StatplotFacetSpec.tiers`'s doc — a panel's pairs
+  // are not the flattened cross-panel list a shared field would carry).
+  const nestLabel = nestLabelOf(drawFacets[0]?.draw ?? null);
   const facets: StatplotFacetSpec[] = [];
   for (const f of drawFacets) {
     if (!f.rawGroups || f.rawGroups.length === 0) continue;
     const slots = f.draw.mode === "box" || f.draw.mode === "violin" ? f.draw.slots : null;
     const axis = onAxis(slots, f.rawGroups.map((g) => g.values), []);
+    const labels = axis ? axis.labels : f.rawGroups.map((g) => g.label);
     facets.push({
       label: f.label,
       kind: f.draw.mode === "violin" ? "violin" : "box",
       data: axis ? axis.values : f.rawGroups.map((g) => g.values),
-      labels: axis ? axis.labels : f.rawGroups.map((g) => g.label),
+      labels,
+      // Review finding 2: this panel's OWN canvas domain, under its OWN
+      // facet-adjusted marks (`statStageMarks.facetMarks`, already stamped
+      // on `f.draw.marks`) — each panel autoscales independently, on screen
+      // and in the export alike.
+      y_domain: canvasYDomain(f.draw, null),
+      tiers: nestedTiers(labels, nestLabel)?.pairs ?? null,
     });
   }
   if (!facets.length) return;
+  const style = axisWire(m, facets.flatMap((f) => f.labels ?? []), nestLabel);
   const spec: StatplotFigureSpec = {
     kind: mode,
     data: facets[0].data,
@@ -275,7 +322,11 @@ export async function exportFacetedFigure(
     show_n: showN,
     caveat,
     ...(m ? { summary: m.summary, error_bars: m.errorBars, points: m.points } : {}),
-    axis_style: axisWire(m, facets.flatMap((f) => f.labels ?? [])),
+    // `tiered` (whether nesting is active) is shared; `tiers` itself is
+    // NOT — dropped here so it can never be applied, uniformly and wrongly,
+    // to every panel's own different label set (each panel's pairs ride
+    // its own `StatplotFacetSpec.tiers` above instead).
+    axis_style: style ? { rotation: style.rotation, wrap: style.wrap, tiered: style.tiered } : null,
   };
   await exportStatplotFigure(spec);
 }
@@ -351,7 +402,11 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
     }
     spec.show_n = showN;
     spec.caveat = caveat;
-    spec.axis_style = axisWire(m, spec.labels ?? []);
+    spec.axis_style = axisWire(m, spec.labels ?? [], nestLabelOf(draw));
+    // Review finding 2: send the canvas's own y-domain so matplotlib's
+    // autoscale-to-drawn-artists can never disagree with it (points/fliers
+    // hidden by the current marks would otherwise narrow the export's range).
+    spec.y_domain = canvasYDomain(draw, m);
   }
   await exportStatplotFigure(spec);
 }

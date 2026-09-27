@@ -4,10 +4,12 @@
 // Recorded against a call-logging context (jsdom has no raster), asserting the
 // TEXT and GEOMETRY the renderer emits.
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { AxisSlot } from "../../lib/groupAxis";
+import { resolveStatMarks } from "../../lib/statMarks";
 import { boxStatsClient } from "../../lib/statstage";
+import * as statDrawMarks from "./statDrawMarks";
 import type { StatDrawData } from "./statRender";
 import { drawBar } from "./statRenderBar";
 import { drawBoxesWithMarks, drawStrip } from "./statRenderBox";
@@ -96,7 +98,7 @@ describe("box / strip with an empty slot", () => {
 
   it("connect-means lifts the pen across the empty slot", () => {
     const { ctx, calls } = recorder();
-    drawBoxesWithMarks(ctx, RECT, boxDraw({ connectMeans: true }), "#000", "#888");
+    drawBoxesWithMarks(ctx, RECT, boxDraw({ marks: resolveStatMarks("box", { connectMeans: true }) }), "#000", "#888");
     const dashed = calls.findIndex((c) => c.fn === "setLineDash" && (c.args[0] as number[]).length > 0);
     const after = calls.slice(dashed).filter((c) => c.fn === "moveTo" || c.fn === "lineTo").map((c) => c.fn);
     expect(after).toEqual(["moveTo", "moveTo"]);
@@ -106,13 +108,19 @@ describe("box / strip with an empty slot", () => {
     const { ctx, calls } = recorder();
     // The empty level B hidden: two visible slots, the second marked gapBefore.
     const hidden = [slot("g = A", 0, 3), { ...slot("g = C", 1, 2), gapBefore: true }];
-    drawBoxesWithMarks(ctx, RECT, boxDraw({ connectMeans: true, slots: hidden }), "#000", "#888");
+    drawBoxesWithMarks(
+      ctx, RECT, boxDraw({ marks: resolveStatMarks("box", { connectMeans: true }), slots: hidden }), "#000", "#888",
+    );
     const dashed = calls.findIndex((c) => c.fn === "setLineDash" && (c.args[0] as number[]).length > 0);
     const after = calls.slice(dashed).filter((c) => c.fn === "moveTo" || c.fn === "lineTo").map((c) => c.fn);
     expect(after).toEqual(["moveTo", "moveTo"]);
     // ... and draws ONE segment when nothing was hidden between them.
     const { ctx: ctx2, calls: calls2 } = recorder();
-    drawBoxesWithMarks(ctx2, RECT, boxDraw({ connectMeans: true, slots: [hidden[0], slot("g = C", 1, 2)] }), "#000", "#888");
+    drawBoxesWithMarks(
+      ctx2, RECT,
+      boxDraw({ marks: resolveStatMarks("box", { connectMeans: true }), slots: [hidden[0], slot("g = C", 1, 2)] }),
+      "#000", "#888",
+    );
     const d2 = calls2.findIndex((c) => c.fn === "setLineDash" && (c.args[0] as number[]).length > 0);
     expect(calls2.slice(d2).filter((c) => c.fn === "moveTo" || c.fn === "lineTo").map((c) => c.fn)).toEqual([
       "moveTo", "lineTo",
@@ -128,7 +136,7 @@ describe("box / strip with an empty slot", () => {
         { label: "g = A", points: [{ value: 1, rowIndex: 0 }] },
         { label: "g = C", points: [{ value: 4, rowIndex: 3 }] },
       ],
-      valueLabel: "y", groupLabel: "g", showMeanCI: false, connectMeans: false, slots: AXIS,
+      valueLabel: "y", groupLabel: "g", slots: AXIS,
     };
     drawStrip(ctx, RECT, d, "#000", "#888");
     expect(texts().filter((s) => s.startsWith("g = "))).toEqual(["g = A", "g = B", "g = C"]);
@@ -167,5 +175,27 @@ describe("bar with missing data", () => {
     const { ctx, calls } = recorder();
     drawBar(ctx, RECT, bar({ stacked: true }), "#000", "#888");
     expect(calls.filter((c) => c.fn === "fillRect")).toHaveLength(1);
+  });
+
+  // Review finding 10: `drawBar` used to call `drawMarks(d)` once per
+  // group/series (via `barDomainCandidates`'s and its own `barErrorHalf`
+  // calls) instead of once for the whole paint.
+  it("resolves drawMarks exactly ONCE for a multi-group, multi-series paint", () => {
+    const spy = vi.spyOn(statDrawMarks, "drawMarks");
+    const { ctx } = recorder();
+    const many = bar({
+      data: {
+        seriesLabels: ["y1", "y2", "y3"],
+        groups: [
+          { label: "A", series: [{ mean: 1, sem: 0.1, n: 3 }, { mean: 2, sem: 0.2, n: 4 }, { mean: 3, sem: 0.3, n: 5 }] },
+          { label: "B", series: [{ mean: 4, sem: 0.4, n: 6 }, { mean: 5, sem: 0.5, n: 7 }, { mean: 6, sem: 0.6, n: 8 }] },
+          { label: "C", series: [{ mean: 7, sem: 0.7, n: 9 }, { mean: 8, sem: 0.8, n: 10 }, { mean: 9, sem: 0.9, n: 11 }] },
+        ],
+      },
+      marks: resolveStatMarks("bar", { errorBars: "sd" }),
+    });
+    drawBar(ctx, RECT, many, "#000", "#888");
+    expect(spy).toHaveBeenCalledTimes(1);
+    spy.mockRestore();
   });
 });

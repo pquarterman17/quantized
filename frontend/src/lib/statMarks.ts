@@ -142,33 +142,61 @@ export interface TierRun {
   last: number;
 }
 
-/** A nested axis split into tiers — `inner[i]` is label i's second half and
- *  `runs` the consecutive equal outer halves — or null unless EVERY label is
- *  nested. The twin of `calc.figure_category_axis.nested_tiers`. */
-export function nestedTiers(labels: readonly string[]): { inner: string[]; runs: TierRun[] } | null {
-  if (!labels.length) return null;
+/** A nested axis's [outer, inner] pair, and its split into tiers — `inner`
+ *  and `runs` (the consecutive equal outer halves) — or null.
+ *
+ *  Review finding 4: whether an axis IS nested is a STRUCTURAL fact (a nest
+ *  column is active — the caller's `nestLabel`, `null` outside box/violin/
+ *  strip with a second factor picked), never something read off the label
+ *  TEXT. Sniffing for `NESTED_LABEL_SEP` in the string, as this used to,
+ *  misreads a FLAT category value that happens to contain " / " (e.g.
+ *  "Co / Pt") as a nested tick. `nestLabel` is the nest column's own display
+ *  name, which also fixes the split ITSELF: a genuinely nested label is cut
+ *  at ITS marker (`" / {nestLabel} = "`), not the first `NESTED_LABEL_SEP`
+ *  in the string — so a NESTED outer level whose own text contains " / "
+ *  (e.g. an alloy composition) groups correctly instead of being split
+ *  inside its own name. The twin of `calc.figure_category_axis.
+ *  nested_tiers`, which takes the pairs straight off the wire's
+ *  `axis_style.tiers` rather than re-deriving them. */
+export function nestedTiers(
+  labels: readonly string[],
+  nestLabel: string | null | undefined,
+): { pairs: [string, string][]; inner: string[]; runs: TierRun[] } | null {
+  if (!nestLabel || !labels.length) return null;
+  const marker = `${NESTED_LABEL_SEP}${nestLabel} = `;
+  const pairs: [string, string][] = [];
   const inner: string[] = [];
   const runs: TierRun[] = [];
   for (let i = 0; i < labels.length; i++) {
-    const cut = labels[i].indexOf(NESTED_LABEL_SEP);
+    const cut = labels[i].lastIndexOf(marker);
     if (cut < 0) return null;
     const outer = labels[i].slice(0, cut);
-    inner.push(labels[i].slice(cut + NESTED_LABEL_SEP.length));
+    const inr = labels[i].slice(cut + NESTED_LABEL_SEP.length);
+    pairs.push([outer, inr]);
+    inner.push(inr);
     const prev = runs[runs.length - 1];
     if (prev && prev.label === outer) prev.last = i;
     else runs.push({ label: outer, first: i, last: i });
   }
-  return { inner, runs };
+  return { pairs, inner, runs };
 }
 
-/** The export's `axis_style` for these marks and labels: `tiered` exactly
- *  when the screen draws tiers (every label nested). Null when nothing is
- *  set, so an untouched plot posts the request it always did. */
+/** The export's `axis_style` for these marks, labels and nest column:
+ *  `tiered` exactly when `nestLabel` says the axis IS nested (never sniffed
+ *  off the label text — see `nestedTiers`), and `tiers` carries the actual
+ *  [outer, inner] pairs so the backend never re-splits the composite string
+ *  either. Null when nothing is set, so an untouched plot posts the request
+ *  it always did. */
 export function axisStyleWire(
   r: ResolvedStatMarks,
   labels: readonly string[],
-): { rotation: 0 | 45 | 90; wrap: number | null; tiered: boolean } | null {
-  const tiered = nestedTiers(labels) !== null;
+  nestLabel: string | null | undefined,
+): { rotation: 0 | 45 | 90; wrap: number | null; tiered: boolean; tiers?: [string, string][] } | null {
+  const tiers = nestedTiers(labels, nestLabel);
+  const tiered = tiers !== null;
   if (!tiered && !r.labelWrap && r.labelRotation === 0) return null;
-  return { rotation: r.labelRotation, wrap: r.labelWrap ? LABEL_WRAP_WIDTH : null, tiered };
+  return {
+    rotation: r.labelRotation, wrap: r.labelWrap ? LABEL_WRAP_WIDTH : null, tiered,
+    ...(tiers ? { tiers: tiers.pairs } : {}),
+  };
 }

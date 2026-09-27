@@ -53,12 +53,6 @@ function makeState(overrides: Partial<StatStageState> = {}): StatStageState {
     setFit: vi.fn(),
     barStack: false,
     setBarStack: vi.fn(),
-    showPoints: false,
-    setShowPoints: vi.fn(),
-    showMeanCI: false,
-    setShowMeanCI: vi.fn(),
-    showConnectMeans: false,
-    setShowConnectMeans: vi.fn(),
     marks: resolveStatMarks(overrides.mode ?? "box", {}),
     setMarks: vi.fn(),
     facetCol: null,
@@ -293,7 +287,7 @@ describe("StatStage — facet grid (GUI_INTERACTION #11)", () => {
   });
 });
 
-const STRIP_DRAW: StatDrawData = { mode: "strip", boxes: [], points: [], valueLabel: "y", groupLabel: "grp", showMeanCI: false, connectMeans: false };
+const STRIP_DRAW: StatDrawData = { mode: "strip", boxes: [], points: [], valueLabel: "y", groupLabel: "grp" };
 const control = (name: string) => screen.queryByRole("combobox", { name });
 
 describe("StatStage — categorical marks controls (JMP_GAP J5, P2.6 box 1)", () => {

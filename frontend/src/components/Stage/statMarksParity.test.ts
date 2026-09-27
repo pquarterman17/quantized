@@ -12,7 +12,7 @@ import { statsBox, statsViolin } from "../../lib/api";
 import { exportCategoricalFigure, exportStatplotFigure } from "../../lib/api/figures";
 import { errorHalfWidth } from "../../lib/statMarks";
 import type { DataStruct, Dataset } from "../../lib/types";
-import { barErrorHalf } from "./statDrawMarks";
+import { barErrorHalf, boxValueDomain, stripValueDomain } from "./statDrawMarks";
 import { categoryAxisLayout } from "./statRenderAxes";
 import { useStatStage } from "./useStatStage";
 
@@ -117,6 +117,47 @@ describe("categorical marks — the canvas and the export carry the same options
     expect(spec.point_row_indices).toEqual(draw.points?.map((g) => g.points.map((p) => p.rowIndex)));
   });
 
+  it.each(["none", "outliers"] as const)(
+    "review finding 2: box's exported y-domain matches the canvas's own domain, points=%s",
+    async (points) => {
+      const { result } = renderHook(() => useStatStage(params()));
+      act(() => result.current.setValueCol(2));
+      act(() => result.current.setMarks({ points }));
+      await waitFor(() => {
+        const d = result.current.draw;
+        expect(d?.mode === "box" && d.marks?.points).toBe(points);
+      });
+      const draw = result.current.draw;
+      if (draw?.mode !== "box") throw new Error("expected a box draw");
+      const spec = await exported(result);
+      // Before the fix, the export carried no `y_domain` at all and
+      // matplotlib autoscaled to only the artists it drew (no fliers when
+      // points="none") — a NARROWER range than the canvas's own domain
+      // (`boxValueDomain`, which always spans every raw datum so toggling a
+      // mark never rescales the interactive plot). Sending the canvas's
+      // domain makes the two agree exactly regardless of what got drawn.
+      expect(spec.y_domain).toEqual(boxValueDomain(draw.boxes, draw.marks!));
+    },
+  );
+
+  it.each(["none", "outliers"] as const)(
+    "review finding 2: strip's exported y-domain matches the canvas's own domain, points=%s",
+    async (points) => {
+      const { result } = renderHook(() => useStatStage(params()));
+      act(() => result.current.setMode("strip"));
+      act(() => result.current.setValueCol(2));
+      act(() => result.current.setMarks({ points }));
+      await waitFor(() => {
+        const d = result.current.draw;
+        expect(d?.mode === "strip" && d.marks?.points).toBe(points);
+      });
+      const draw = result.current.draw;
+      if (draw?.mode !== "strip") throw new Error("expected a strip draw");
+      const spec = await exported(result);
+      expect(spec.y_domain).toEqual(stripValueDomain(draw));
+    },
+  );
+
   it("nested: the two-tier axis on screen is the tiered axis in the export", async () => {
     const { result } = renderHook(() => useStatStage(params()));
     act(() => result.current.setValueCol(2));
@@ -125,10 +166,18 @@ describe("categorical marks — the canvas and the export carry the same options
     const draw = result.current.draw;
     if (draw?.mode !== "box") throw new Error("expected a box draw");
     const labels = draw.slots?.map((s) => s.label) ?? draw.boxes.map((b) => b.label);
-    expect(categoryAxisLayout(labels).tiers?.map((r) => r.label)).toEqual(["lot = L1", "lot = L2"]);
+    // Review finding 4: `nestLabel` is the STRUCTURAL signal — never inferred
+    // from the label text — so it rides the draw itself now.
+    expect(draw.nestLabel).toBe("wafer");
+    expect(categoryAxisLayout(labels, { nestLabel: draw.nestLabel }).tiers?.map((r) => r.label)).toEqual([
+      "lot = L1", "lot = L2",
+    ]);
     const spec = await exported(result);
     expect(spec.labels).toEqual(labels);
-    expect(spec.axis_style).toEqual({ rotation: 0, wrap: null, tiered: true });
+    expect(spec.axis_style).toEqual({
+      rotation: 0, wrap: null, tiered: true,
+      tiers: labels.map((l) => [l.slice(0, l.indexOf(" / ")), l.slice(l.indexOf(" / ") + 3)]),
+    });
   });
 
   it("bar: the exported error half-widths are the ones the canvas draws, per kind", async () => {

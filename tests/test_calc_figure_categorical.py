@@ -99,3 +99,49 @@ def test_named_styles_render() -> None:
 def test_explicit_size_overrides_style() -> None:
     out = render_categorical_figure(GROUPS, SERIES, VALUES, fmt="pdf", width_in=8.0, height_in=5.0)
     assert out[:4] == b"%PDF"
+
+
+def test_x_title_lands_below_the_outer_tier_not_the_inner_ticks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P2.6 review finding 5: `_draw_categorical_bars` returns the outer-tier
+    axis whenever `axis_style` draws a two-tier nested layout -- discarding
+    it and setting the x title on the plain inner `ax` puts the title ON TOP
+    OF (a smaller y-in-points offset than) the second tier's own row instead
+    of clearing it, exactly the collision `figure_statplots.py`'s flat path
+    already avoids with `(outer or ax).set_xlabel`. Reads the Axes back (via
+    a patched `savefig_bytes`) to compare the title's actual y position
+    against the outer tier's, rather than just checking the render
+    doesn't crash."""
+    from quantized.calc import figure_categorical
+
+    captured: dict[str, object] = {}
+
+    def fake_savefig(fig: object, fmt: str, **kwargs: object) -> bytes:
+        captured["fig"] = fig
+        return b""
+
+    monkeypatch.setattr(figure_categorical, "savefig_bytes", fake_savefig)
+    nested_groups = ["lot = 1 / w = a", "lot = 1 / w = b", "lot = 2 / w = a", "lot = 2 / w = b"]
+    figure_categorical.render_categorical_figure(
+        nested_groups, SERIES, [[1.0, 2.0]] * 4, x_label="lot / w",
+        axis_style={"tiered": True},
+    )
+    fig = captured["fig"]
+    ax = fig.axes[0]  # type: ignore[attr-defined]
+    # `_draw_categorical_bars` drew a two-tier axis: matplotlib parents the
+    # outer tier's `secondary_xaxis` on `ax` as a CHILD axes (it never joins
+    # `fig.axes` itself) -- the title is on whichever axes actually carries
+    # the text (never `ax` itself, once this is fixed).
+    candidates = [ax, *ax.child_axes]
+    titled = [a for a in candidates if a.xaxis.get_label().get_text() == "lot / w"]
+    assert len(titled) == 1
+    title_ax = titled[0]
+    assert title_ax is not ax
+    title = title_ax.xaxis.get_label()
+    outer_ticklabels = [t for t in title_ax.get_xticklabels(minor=True) if t.get_text()]
+    assert outer_ticklabels  # the outer tier's own "lot = 1" / "lot = 2" labels
+    fig.canvas.draw()
+    title_y = title.get_window_extent().y0
+    tier_y = min(t.get_window_extent().y0 for t in outer_ticklabels)
+    assert title_y < tier_y  # strictly below (smaller y = lower on a standard canvas)

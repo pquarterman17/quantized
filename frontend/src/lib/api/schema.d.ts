@@ -5743,11 +5743,21 @@ export interface components {
         };
         /**
          * CategoryAxisStyle
-         * @description P2.6 box 1: how the category tick labels are set -- the SAME three
-         *     options the Canvas stage reads (``statRenderAxes.ts``). ``wrap`` is the
-         *     line width in characters (``calc.figure_category_axis.wrap_label``);
+         * @description P2.6 box 1: how the category tick labels are set -- the SAME options
+         *     the Canvas stage reads (``statRenderAxes.ts``). ``wrap`` is the line
+         *     width in characters (``calc.figure_category_axis.wrap_label``);
          *     ``tiered`` draws a nested axis in two tiers with separators. Defaults =
          *     the axis before these options.
+         *
+         *     ``tiers`` (P2.6 review finding 4) is the request's OWN [outer, inner]
+         *     pair per label (`lib/statMarks.nestedTiers`, split at the nest column's
+         *     own marker rather than the first ``" / "`` in the composite string) --
+         *     when given, ``calc.figure_category_axis.style_category_axis`` uses these
+         *     pairs directly instead of re-splitting the label text itself, so an
+         *     outer level whose own text contains ``" / "`` groups correctly. Only
+         *     meaningful on the FLAT (non-faceted) request's top-level ``axis_style``
+         *     -- a faceted request's per-panel pairs ride ``StatplotFacet.tiers``
+         *     instead (a nested axis's pairs are per-panel data).
          */
         CategoryAxisStyle: {
             /**
@@ -5761,6 +5771,11 @@ export interface components {
              * @default false
              */
             tiered?: boolean;
+            /** Tiers */
+            tiers?: [
+                string,
+                string
+            ][] | null;
             /** Wrap */
             wrap?: number | null;
         };
@@ -9513,6 +9528,16 @@ export interface components {
             label: string;
             /** Labels */
             labels?: string[] | null;
+            /** Tiers */
+            tiers?: [
+                string,
+                string
+            ][] | null;
+            /** Y Domain */
+            y_domain?: [
+                number,
+                number
+            ] | null;
         };
         /** StatplotFigureRequest */
         StatplotFigureRequest: {
@@ -9598,6 +9623,11 @@ export interface components {
              * @default
              */
             x_label?: string;
+            /** Y Domain */
+            y_domain?: [
+                number,
+                number
+            ] | null;
             /**
              * Y Label
              * @default

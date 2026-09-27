@@ -87,12 +87,19 @@ def resolve_marks(
 ) -> StatMarks:
     """Resolve a request's mark fields for ``kind`` (box / strip / violin).
 
-    Every new field ``None`` reproduces the pre-P2.6 behaviour exactly: box
-    fliers always on, a jittered scatter of every point when ``show_points``
-    (strip: always), ``show_mean_ci`` as mean +/- 95% CI, and otherwise box's
-    own mean triangle. (One deliberate change for every request: a group of a
-    single value gets its mean marker with NO error bar, where it used to get
-    a zero-length one with caps -- the screen never drew that stub.)"""
+    Every new field ``None`` (a LEGACY request) reproduces the pre-P2.6
+    behaviour for the two flags that existed then, ``show_points`` and
+    ``show_mean_ci``: box fliers always on, a jittered scatter of every
+    point for box/strip alike when ``show_points`` (default off for both --
+    review finding 3: strip's scatter was gated by the SAME flag box's was,
+    never unconditional; only an explicit `points`-set request draws
+    strip's NEW always-on scatter, which has no legacy flag of its own),
+    ``show_mean_ci`` as mean +/- 95% CI, and otherwise box's own mean
+    triangle. One narrow, DELIBERATE divergence survives even for a legacy
+    request (documented in ``plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md``'s P2.6
+    note, not claimed as "exact"): a group of a single value now gets its
+    mean marker with NO error bar, where it used to get a zero-length one
+    with caps -- the screen never drew that stub."""
     if points is not None and points not in POINTS_MODES:
         raise ValueError(f"points must be one of {POINTS_MODES}")
     if summary is not None and summary not in SUMMARY_MARKS:
@@ -102,7 +109,15 @@ def resolve_marks(
     legacy_points = points is None
     if legacy_points:
         if kind == "strip":
-            points = "all"
+            # Review finding 3: pre-P2.6, strip's scatter WAS gated by
+            # `show_points` (the box/strip toggle) like box's -- it did not
+            # always scatter. A legacy request (every new field `None`) must
+            # reproduce that, or `show_points=False` (its own default)
+            # silently starts drawing points a pre-P2.6 caller never asked
+            # for. The NEW-style always-on strip scatter (no toggle for it)
+            # is a `points`-set request (`points="all"`/`"outliers"`), never
+            # this legacy branch.
+            points = "all" if show_points else "none"
         elif kind == "box":
             points = "all" if show_points else "outliers"
         else:
@@ -137,20 +152,30 @@ def scatter_points(
     ticks: list[int],
     row_indices: list[list[int]],
     marks: StatMarks,
+    box_stats: list[dict[str, Any]] | None = None,
 ) -> None:
     """The jittered raw-point overlay: ``marks.scatter`` values of each group
     (``"outliers"``: only those outside ``box_stats``' Tukey whiskers -- the
     rule the box's fliers use, and the screen's), offset horizontally by the
-    SAME deterministic ``(row_index, category)`` hash the screen uses."""
+    SAME deterministic ``(row_index, category)`` hash the screen uses.
+
+    ``box_stats`` (P2.6 review finding 10, optional, parallel to ``groups``):
+    each group's ALREADY-COMPUTED ``calc.statplots.box_stats`` -- reused
+    here (for the Tukey whiskers) rather than recomputed, when the caller
+    also needs it for :func:`overlay_summary` / the connect-means line on
+    the SAME groups (``_draw_statplot`` computes it once and shares it
+    across all three). ``None`` (default) falls back to computing it here,
+    byte-identical to before this fix."""
     if marks.scatter is None:
         return
     spread = marks.half_width * marks.jitter_width
-    for g, lab, tick, idx in zip(groups, labels, ticks, row_indices, strict=True):
+    stats = box_stats if box_stats is not None else [None] * len(groups)
+    for g, lab, tick, idx, cached in zip(groups, labels, ticks, row_indices, stats, strict=True):
         if g.size == 0:
             continue
         keep = np.ones(g.size, dtype=bool)
         if marks.scatter == "outliers":
-            b = _box_stats(g)
+            b = cached if cached is not None else _box_stats(g)
             keep = (g < b["whislo"]) | (g > b["whishi"])
         if not keep.any():
             continue
@@ -158,15 +183,26 @@ def scatter_points(
         ax.scatter(xs, g[keep], s=10, color="0.25", alpha=0.6, zorder=4, linewidths=0)
 
 
-def overlay_summary(ax: Any, groups: list[np.ndarray], ticks: list[int], marks: StatMarks) -> None:
+def overlay_summary(
+    ax: Any,
+    groups: list[np.ndarray],
+    ticks: list[int],
+    marks: StatMarks,
+    box_stats: list[dict[str, Any]] | None = None,
+) -> None:
     """The summary marker per group -- a diamond at the mean or a square at
     the median -- with the mean's error bar (``marks.error_bars``) when it
     has one. Every number is ``box_stats``' (the SAME the interactive stage's
-    ``/api/statplots/box`` returns), never a second computation."""
+    ``/api/statplots/box`` returns), never a second computation.
+
+    ``box_stats`` (P2.6 review finding 10): see :func:`scatter_points`'s own
+    doc -- the SAME optional pre-computed, parallel list, reused instead of
+    recomputed when given."""
     if marks.summary == "none":
         return
-    for g, tick in zip(groups, ticks, strict=True):
-        b = _box_stats(g)
+    stats = box_stats if box_stats is not None else [None] * len(groups)
+    for g, tick, cached in zip(groups, ticks, stats, strict=True):
+        b = cached if cached is not None else _box_stats(g)
         if marks.summary == "median":
             ax.plot([tick], [b["median"]], marker="s", color="black", markersize=5, zorder=5)
             continue

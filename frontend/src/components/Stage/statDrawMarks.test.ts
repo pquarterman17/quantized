@@ -65,10 +65,7 @@ function boxDraw(m: ResolvedStatMarks): Extract<StatDrawData, { mode: "box" }> {
   return { mode: "box", boxes: [BOX], points: POINTS, valueLabel: "y", groupLabel: "g", marks: m };
 }
 function stripDraw(m: ResolvedStatMarks): Extract<StatDrawData, { mode: "strip" }> {
-  return {
-    mode: "strip", boxes: [BOX], points: POINTS, valueLabel: "y", groupLabel: "g", showMeanCI: false,
-    connectMeans: false, marks: m,
-  };
+  return { mode: "strip", boxes: [BOX], points: POINTS, valueLabel: "y", groupLabel: "g", marks: m };
 }
 
 describe("raw-point visibility on the canvas", () => {
@@ -155,13 +152,19 @@ describe("bar error bars follow the chosen kind (screen, hit-test and export sha
   });
 });
 
-describe("drawMarks — legacy draws keep their old meaning", () => {
-  it("maps showMeanCI / points / connectMeans", () => {
-    const legacy: StatDrawData = {
-      mode: "box", boxes: [BOX], points: POINTS, valueLabel: "y", groupLabel: "g", showMeanCI: true, connectMeans: true,
-    };
-    expect(drawMarks(legacy)).toMatchObject({
-      points: "all", summary: "mean", errorBars: "ci95", connectMeans: true, legacyFliers: true, jitterWidth: 0.7,
-    });
+describe("drawMarks — a draw with no `marks` at all falls back to the mode's own plain defaults", () => {
+  // Review finding 9: the legacy `showMeanCI`/`connectMeans` flags this used
+  // to sniff for are gone from the type entirely — every draw that wants
+  // non-default behaviour sets `marks` (`lib/statMarks.resolveStatMarks`)
+  // directly now, which every OTHER describe block in this file already
+  // does. This is the one remaining case: a bare draw with `marks` absent.
+  it("box: outliers, no summary, ci95 — exactly resolveStatMarks('box', null)", () => {
+    const bare: StatDrawData = { mode: "box", boxes: [BOX], points: POINTS, valueLabel: "y", groupLabel: "g" };
+    expect(drawMarks(bare)).toEqual({ ...resolveStatMarks("box", null), legacyFliers: false });
+  });
+
+  it("strip: every point, no summary — exactly resolveStatMarks('strip', null)", () => {
+    const bare: StatDrawData = { mode: "strip", boxes: [BOX], points: POINTS, valueLabel: "y", groupLabel: "g" };
+    expect(drawMarks(bare)).toEqual({ ...resolveStatMarks("strip", null), legacyFliers: false });
   });
 });

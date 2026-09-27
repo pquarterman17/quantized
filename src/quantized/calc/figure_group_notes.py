@@ -53,6 +53,14 @@ _MUTED = "0.45"
 # The footnote band reserved at the bottom of the figure, as a figure
 # fraction, when a caveat is present (``tight_layout(rect=...)``).
 CAVEAT_BAND = 0.06
+# P2.6 review finding 5: extra figure-fraction room a TIERED faceted grid's
+# second tier (outer-level row, drawn per panel by
+# `figure_category_axis.style_category_axis`'s `outer.secondary_xaxis`)
+# needs below the ticks, so the shared figure-level `supxlabel` -- unlike the
+# flat path's `(outer or ax).set_xlabel`, there is no single outer axis to
+# attach a faceted grid's x title to -- clears every panel's own second tier
+# instead of sitting on top of it.
+TIER_BAND = 0.05
 
 
 def mark_empty_slots(ax: Any, ticks: Sequence[float], empty: Sequence[bool]) -> None:
@@ -78,32 +86,53 @@ def annotate_top_counts(ax: Any, ticks: Sequence[float], counts: Sequence[int]) 
     sec.tick_params(length=0, labelsize="small", colors=_MUTED)
 
 
-def add_caveat(fig: Any, caveat: str | None) -> tuple[float, float, float, float] | None:
+def add_caveat(
+    fig: Any, caveat: str | None, tiered: bool = False,
+) -> tuple[float, float, float, float] | None:
     """Place ``caveat`` as a one-line italic footnote at the bottom-left of
     ``fig`` and return the ``tight_layout`` rect that keeps the axes clear of
     it (``None`` = no caveat, lay out as before -- byte-identical output).
     De-mathed like every other label (``safe_mathtext_label``): it is a
-    free-form API field, and an unbalanced ``$`` must not fail the export."""
+    free-form API field, and an unbalanced ``$`` must not fail the export.
+
+    ``tiered`` (P2.6 review finding 5, faceted grids only): ``True`` when at
+    least one panel drew a two-tier nested axis (its own outer-level row,
+    below the ticks) -- reserves :data:`TIER_BAND` more room so the caveat
+    (and, via :func:`supxlabel_above_caveat`, the shared x title) cannot sit
+    on top of it. Every FLAT caller (single panel) leaves this off: a flat
+    plot's x title instead moves onto the outer axis directly
+    (``(outer or ax).set_xlabel``, `figure_statplots.py` /
+    `figure_categorical.py`), which needs no extra band here."""
+    band = CAVEAT_BAND + (TIER_BAND if tiered else 0.0)
     if not caveat:
-        return None
+        return (0.0, band, 1.0, 1.0) if tiered else None
     fig.text(
         0.01, 0.01, safe_mathtext_label(caveat), ha="left", va="bottom", fontsize="small",
         style="italic",
     )
-    return (0.0, CAVEAT_BAND, 1.0, 1.0)
+    return (0.0, band, 1.0, 1.0)
 
 
-def supxlabel_above_caveat(fig: Any, x_label: str, caveat: str | None) -> None:
+def supxlabel_above_caveat(
+    fig: Any, x_label: str, caveat: str | None, tiered: bool = False,
+) -> None:
     """A figure-level x title (the faceted grids' ``supxlabel``) that clears
     the caveat footnote. ``supxlabel`` sits at figure y=0.01 by default -- the
     footnote's own baseline -- so with a caveat it is lifted to the top of the
     reserved band instead (the axes are laid out above it by the
     ``tight_layout(rect=...)`` ``add_caveat`` returns). Review round 2: the two
-    overprinted in every faceted export that carried a caveat."""
+    overprinted in every faceted export that carried a caveat.
+
+    ``tiered`` (P2.6 review finding 5): ``True`` lifts it a further
+    :data:`TIER_BAND` -- a faceted grid has no single outer axis the way a
+    flat plot's ``(outer or ax).set_xlabel`` fix does, so at least one
+    panel's own two-tier nested axis needs the shared title pushed clear of
+    EVERY panel's second tier instead."""
     if not x_label:
         return
-    if caveat:
-        fig.supxlabel(x_label, y=CAVEAT_BAND, va="bottom")
+    band = CAVEAT_BAND + (TIER_BAND if tiered else 0.0)
+    if caveat or tiered:
+        fig.supxlabel(x_label, y=band, va="bottom")
     else:
         fig.supxlabel(x_label)
 
@@ -114,7 +143,10 @@ def _outer(label: str) -> str | None:
 
 
 def connect_segments(
-    labels: Sequence[str], empty: Sequence[bool], breaks: Sequence[bool] | None = None,
+    labels: Sequence[str],
+    empty: Sequence[bool],
+    breaks: Sequence[bool] | None = None,
+    tiers: Sequence[Sequence[str]] | None = None,
 ) -> list[list[int]]:
     """Slot indices of each connect-means polyline segment, in axis order.
 
@@ -126,7 +158,14 @@ def connect_segments(
     kept; the caller simply draws nothing for them. ``breaks[i]`` (optional,
     parallel to ``labels``) forces a new segment AT slot ``i``: a HIDDEN empty
     level sat just before it, so the line must still lift there (the screen's
-    ``AxisSlot.gapBefore``)."""
+    ``AxisSlot.gapBefore``).
+
+    ``tiers`` (P2.6 review finding 4, optional, parallel to ``labels``): the
+    request's own ``[outer, inner]`` pairs (``axis_style.tiers``) -- when
+    given, the outer factor is read straight off ``tiers[i][0]`` instead of
+    re-splitting ``label`` on the first ``" / "`` (:func:`_outer`), so an
+    outer level whose own text contains ``" / "`` (e.g. an alloy composition)
+    still breaks at the right boundary instead of inside its own name."""
     segments: list[list[int]] = []
     current: list[int] = []
     prev_outer: str | None = None
@@ -137,7 +176,7 @@ def connect_segments(
             current = []
             prev_outer = None
             continue
-        outer = _outer(label)
+        outer = str(tiers[i][0]) if tiers is not None and i < len(tiers) else _outer(label)
         forced = breaks is not None and i < len(breaks) and bool(breaks[i])
         nested = outer is not None and prev_outer is not None and outer != prev_outer
         if current and (forced or nested):

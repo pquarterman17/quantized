@@ -18,6 +18,7 @@ import type { GroupSpec } from "../../lib/statschooser";
 import { groupBoxStatsClient, resolveGroups, type BoxStat, type IndexedGroupSpec } from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
 import type { StatDrawData } from "./statRender";
+import { withNestLabel } from "./statStageMarks";
 
 /** One faceted small-multiple: a facet-column level's label + its own
  *  already-computed draw (GUI_INTERACTION #11). See this module's doc for
@@ -106,22 +107,20 @@ export function boxesFromWire(boxes: readonly BoxStatWire[]): BoxStat[] {
  *  with whatever else needs the raw values (GUI_INTERACTION #12 slice 4b's
  *  faceted export, which needs the SAME raw groups this draw was computed
  *  from — matplotlib recomputes its own stats, never reusing these numbers).
- *  `points`/`showMeanCI` (JMP_GAP J5 #1/#2) ride through to BOTH the
- *  success and the client-fallback branch identically — the marks are a
- *  screen-only overlay, independent of whether the box stats themselves
- *  came from the backend or the offline fallback. `connectMeans` (JMP_GAP
- *  J5 residual) rides through the same way — it only ever reads
- *  `boxes[i].mean`, already present in both the backend and client-fallback
- *  box stats. `degraded` in the return lets the caller decide whether to
- *  surface a "computed locally" note (the flat path does; the faceted path
- *  doesn't have a per-slice note affordance). */
+ *  `points` (JMP_GAP J5 #1) rides through to BOTH the success and the
+ *  client-fallback branch identically — it is a screen-only overlay,
+ *  independent of whether the box stats themselves came from the backend or
+ *  the offline fallback (the mean-CI marker / connect-means line — JMP_GAP
+ *  J5 #2 / residual — are P2.6 box 1 marks, stamped on afterward by
+ *  `statStageMarks.withMarks`, review finding 9: this function no longer
+ *  takes or sets them at all). `degraded` in the return lets the caller
+ *  decide whether to surface a "computed locally" note (the flat path
+ *  does; the faceted path doesn't have a per-slice note affordance). */
 export async function computeBoxDraw(
   finiteGroups: GroupSpec[],
   valueLabel: string,
   groupLabel: string,
   points: IndexedGroupSpec[] | null = null,
-  showMeanCI = false,
-  connectMeans = false,
 ): Promise<{ draw: StatDrawData; degraded: boolean }> {
   try {
     const r = await statsBox(
@@ -129,15 +128,12 @@ export async function computeBoxDraw(
       finiteGroups.map((g) => g.label),
     );
     return {
-      draw: { mode: "box", boxes: boxesFromWire(r.boxes), valueLabel, groupLabel, points, showMeanCI, connectMeans },
+      draw: { mode: "box", boxes: boxesFromWire(r.boxes), valueLabel, groupLabel, points },
       degraded: false,
     };
   } catch {
     return {
-      draw: {
-        mode: "box", boxes: groupBoxStatsClient(finiteGroups), valueLabel, groupLabel, points, showMeanCI,
-        connectMeans,
-      },
+      draw: { mode: "box", boxes: groupBoxStatsClient(finiteGroups), valueLabel, groupLabel, points },
       degraded: true,
     };
   }
@@ -152,8 +148,6 @@ export async function computeStripDraw(
   points: IndexedGroupSpec[],
   valueLabel: string,
   groupLabel: string,
-  showMeanCI: boolean,
-  connectMeans = false,
 ): Promise<{ draw: StatDrawData; degraded: boolean }> {
   try {
     const r = await statsBox(
@@ -161,15 +155,12 @@ export async function computeStripDraw(
       finiteGroups.map((g) => g.label),
     );
     return {
-      draw: { mode: "strip", boxes: boxesFromWire(r.boxes), points, valueLabel, groupLabel, showMeanCI, connectMeans },
+      draw: { mode: "strip", boxes: boxesFromWire(r.boxes), points, valueLabel, groupLabel },
       degraded: false,
     };
   } catch {
     return {
-      draw: {
-        mode: "strip", boxes: groupBoxStatsClient(finiteGroups), points, valueLabel, groupLabel, showMeanCI,
-        connectMeans,
-      },
+      draw: { mode: "strip", boxes: groupBoxStatsClient(finiteGroups), points, valueLabel, groupLabel },
       degraded: true,
     };
   }
@@ -235,7 +226,8 @@ export function computeFacetBarDraws(
  *  takes down the others); slices with no finite groups drop. Faceted box
  *  marks aren't wired yet (JMP_GAP J5 residual — points/mean-CI stay
  *  flat-panel only for now): the box branch's draw always carries
- *  `points: null, showMeanCI: false`. */
+ *  `points: null` (its facet-adjusted marks, `statStageMarks.facetMarks`,
+ *  are stamped on afterward — never mean-CI/connect-means in a panel). */
 export async function computeFacetGroupDraws(
   slices: readonly { label: string; data: DataStruct }[],
   mode: "box" | "violin",
@@ -249,6 +241,11 @@ export async function computeFacetGroupDraws(
    *  collapsed the nesting would disagree with its own axis label, which names
    *  both factors. */
   group2Col: number | null = null,
+  /** Review finding 4: the nest column's OWN display name (`useStatStage`'s
+   *  `nestLabel`), stamped on each panel's draw so its two-tier axis is
+   *  read the same structural way the flat plot's is — never sniffed off
+   *  the panel's own composite label text. Null outside a nested plot. */
+  nestLabel: string | null = null,
 ): Promise<FacetDraw[]> {
   const rs = await Promise.all(
     slices.map(async (s): Promise<FacetDraw | null> => {
@@ -264,7 +261,7 @@ export async function computeFacetGroupDraws(
       // this draw was computed from so exportFigure can rebuild a faithful
       // per-facet request without a second resolveGroups pass.
       const rawGroups = finiteGroups.map((g) => ({ label: g.label, values: g.values }));
-      return { label: s.label, draw, rawGroups };
+      return { label: s.label, draw: withNestLabel(draw, nestLabel), rawGroups };
     }),
   );
   return rs.filter((f): f is FacetDraw => f !== null);

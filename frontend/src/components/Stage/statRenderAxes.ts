@@ -23,13 +23,17 @@
 // margin is sized from, so the layout, the painter and the click hit-test
 // (`statRenderSelection`) cannot disagree about where the plot ends.
 
-import { nestedTiers, wrapLabel, type TierRun } from "../../lib/statMarks";
+import { LABEL_WRAP_WIDTH, MAX_WRAP_LINES, nestedTiers, wrapLabel, type TierRun } from "../../lib/statMarks";
 import type { Rect } from "./statRender";
 
 /** Label options, as the draw carries them (absent = none). */
 export interface CategoryAxisStyle {
   rotation?: 0 | 45 | 90;
   wrap?: boolean;
+  /** Review finding 4: the nest column's display name when the axis IS
+   *  structurally nested (`StatDrawData.nestLabel`), null/absent otherwise
+   *  — never inferred from the label text itself. */
+  nestLabel?: string | null;
 }
 
 const LINE = 11; // px per 10px label line
@@ -52,21 +56,97 @@ export interface CategoryAxisLayout {
   captionY: number;
   /** The bottom margin the plot rect needs, px. */
   bottom: number;
+  /** Review finding 7: the rotation ACTUALLY used — `style.rotation` unless
+   *  capping (`maxBottom`) dropped it to fit. The painter reads THIS, never
+   *  `style.rotation` directly, so a degraded layout's `depth`/`captionY`
+   *  and its own rotated-text drawing can never disagree about which
+   *  rotation the numbers above describe. */
+  rotation: 0 | 45 | 90;
 }
 
-/** The whole axis's geometry for these labels and options — pure. */
-export function categoryAxisLayout(labels: readonly string[], style: CategoryAxisStyle = {}): CategoryAxisLayout {
-  const tiered = nestedTiers(labels);
-  const texts = tiered ? tiered.inner : labels;
-  const lines = texts.map((t) => (style.wrap ? wrapLabel(t) : [truncateLabel(t)]));
+/** One geometry attempt at (`wrap`, `maxLines`, `rotation`) — the pure inner
+ *  half of `categoryAxisLayout`'s degrade ladder below. */
+function buildLayout(
+  texts: readonly string[],
+  wrap: boolean,
+  maxLines: number,
+  rot: 0 | 45 | 90,
+  tiered: boolean,
+): Omit<CategoryAxisLayout, "tiers"> {
+  const lines = texts.map((t) => (wrap ? wrapLabel(t, LABEL_WRAP_WIDTH, maxLines) : [truncateLabel(t)]));
   const nLines = Math.max(1, ...lines.map((l) => l.length));
   const longest = Math.max(0, ...lines.flat().map((l) => Array.from(l).length));
-  const rot = style.rotation ?? 0;
   const theta = (rot * Math.PI) / 180;
   const depth =
     rot === 0 ? nLines * LINE : Math.ceil(longest * CHAR_W * Math.sin(theta) + nLines * LINE * Math.cos(theta));
   const captionY = TOP + depth + (tiered ? TIER : 0) + CAPTION;
-  return { lines, tiers: tiered?.runs ?? null, depth, captionY, bottom: Math.max(48, captionY + 18) };
+  return { lines, depth, captionY, bottom: Math.max(48, captionY + 18), rotation: rot };
+}
+
+function computeCategoryAxisLayout(
+  labels: readonly string[], style: CategoryAxisStyle, maxBottom: number | undefined,
+): CategoryAxisLayout {
+  const tiered = nestedTiers(labels, style.nestLabel);
+  const texts = tiered ? tiered.inner : labels;
+  const wrap = style.wrap ?? false;
+  const rot = style.rotation ?? 0;
+  let built = buildLayout(texts, wrap, MAX_WRAP_LINES, rot, tiered != null);
+  if (maxBottom != null && built.bottom > maxBottom) {
+    const attempts: [boolean, number, 0 | 45 | 90][] = wrap
+      ? [[wrap, 2, rot], [wrap, 1, rot], [false, 1, rot], [false, 1, 0]]
+      : [[wrap, 1, 0]];
+    for (const [w2, ml, r2] of attempts) {
+      built = buildLayout(texts, w2, ml, r2, tiered != null);
+      if (built.bottom <= maxBottom) break;
+    }
+    // Still over (an extreme canvas): clamp outright so the painter and the
+    // hit-test/`plotRect` cap agree on ONE number even though the text
+    // itself may then sit tight against the canvas edge.
+    if (built.bottom > maxBottom) {
+      const bottom = Math.max(48, maxBottom);
+      const shrink = bottom - built.bottom;
+      built = {
+        ...built, bottom, depth: Math.max(0, built.depth + shrink), captionY: Math.max(0, built.captionY + shrink),
+      };
+    }
+  }
+  return { ...built, tiers: tiered?.runs ?? null };
+}
+
+// Review finding 10: a size-1 memo keyed on the layout's own inputs. Every
+// click/hover hit-test (`statRenderSelection.ts`, via `statRender.plotRect`)
+// asks for the SAME draw's layout over and over between renders — without
+// this, each one re-wrapped/re-measured every label from scratch. A real
+// render always passes the CURRENT draw's inputs first (paint happens before
+// any click can), so the common case (repeated clicks, no re-render between
+// them) is a single string-key compare, not a re-layout; a genuinely new
+// draw/size still invalidates and recomputes exactly once, byte-identical.
+let lastLayoutKey: string | null = null;
+let lastLayoutResult: CategoryAxisLayout | null = null;
+
+/** The whole axis's geometry for these labels and options — pure (memoized
+ *  by its own inputs; see the module note above).
+ *
+ *  Review finding 7: `maxBottom` (the plot rect's own cap, `h * 0.45`) is
+ *  optional so every EXISTING caller (canvas paint, hit-test, and every
+ *  test that predates the cap) keeps its byte-identical layout; `plotRect`
+ *  passes it, which makes ITS capped margin and THIS layout's `depth` /
+ *  `captionY` / `bottom` the SAME numbers by construction — no second
+ *  `Math.min` anywhere else can drift from it. When the natural layout
+ *  would not fit, wrapping is shortened and then rotation dropped (in that
+ *  order — rotation is usually the larger depth driver) before finally
+ *  clamping outright, so a pathologically short canvas still gets a
+ *  consistent (if tight) number rather than an uncapped one nothing else
+ *  agrees with. */
+export function categoryAxisLayout(
+  labels: readonly string[], style: CategoryAxisStyle = {}, maxBottom?: number,
+): CategoryAxisLayout {
+  const key = JSON.stringify([labels, style.rotation, style.wrap, style.nestLabel, maxBottom]);
+  if (key === lastLayoutKey && lastLayoutResult) return lastLayoutResult;
+  const result = computeCategoryAxisLayout(labels, style, maxBottom);
+  lastLayoutKey = key;
+  lastLayoutResult = result;
+  return result;
 }
 
 export function drawCategoryAxis(
@@ -79,9 +159,12 @@ export function drawCategoryAxis(
   muted: string,
   style: CategoryAxisStyle = {},
 ) {
-  const layout = categoryAxisLayout(labels, style);
+  // Review finding 7: `rect.maxBottom` (set by `plotRect`) — the SAME cap,
+  // so a degraded layout here is the IDENTICAL one the rect's own margin
+  // was sized from, never an uncapped one that overruns the canvas.
+  const layout = categoryAxisLayout(labels, style, rect.maxBottom);
   const base = rect.y + rect.h + TOP;
-  const rot = style.rotation ?? 0;
+  const rot = layout.rotation; // NOT style.rotation -- capping may have dropped it
   ctx.font = "10px 'JetBrains Mono', monospace";
   ctx.fillStyle = muted;
   slots.forEach((s, i) => {

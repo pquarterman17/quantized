@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import type { BoxStat } from "../../lib/statstage";
 import { seriesStat, type BarChartData } from "../../lib/barlayout";
-import { draw, drawCategoryAxis, fmt, type StatDrawData, type ViolinGroup } from "./statRender";
+import { resolveStatMarks, type ResolvedStatMarks } from "../../lib/statMarks";
+import { boxValueDomain } from "./statDrawMarks";
+import { draw, drawCategoryAxis, fmt, plotRect, type StatDrawData, type ViolinGroup } from "./statRender";
 import { categoryAxisLayout } from "./statRenderAxes";
-import { boxValueDomain, drawConnectMeansLine } from "./statRenderBox";
+import { drawConnectMeansLine } from "./statRenderBox";
 
 describe("fmt", () => {
   it("trims to <=4 significant figures", () => {
@@ -75,22 +77,28 @@ describe("boxValueDomain", () => {
     whislo: 0, whishi: 1, mean: 0.5, sem: 0.5,
     ciLo: -5.85, ciHi: 6.85, n: 2, fliers: [],
   };
+  // Review finding 9: migrated off the removed `statRenderBox.boxValueDomain`
+  // legacy wrapper (`(boxes, showMeanCI: boolean)`) onto the real, marks-API
+  // one (`statDrawMarks.boxValueDomain`, `(boxes, ResolvedStatMarks)`) --
+  // `withCI`/`withoutCI` reproduce exactly what the wrapper used to build.
+  const withCI: ResolvedStatMarks = resolveStatMarks("box", { summary: "mean", errorBars: "ci95" });
+  const withoutCI: ResolvedStatMarks = resolveStatMarks("box", { summary: "none" });
 
   it("spans the mean-CI extents when the marker is shown", () => {
-    const [lo, hi] = boxValueDomain([smallN], true);
+    const [lo, hi] = boxValueDomain([smallN], withCI);
     expect(lo).toBeLessThanOrEqual(-5.85);
     expect(hi).toBeGreaterThanOrEqual(6.85);
   });
 
   it("ignores CI extents when the marker is off (whiskers + fliers only)", () => {
-    const [lo, hi] = boxValueDomain([smallN], false);
+    const [lo, hi] = boxValueDomain([smallN], withoutCI);
     expect(lo).toBeGreaterThan(-1);
     expect(hi).toBeLessThan(2);
   });
 
   it("stays finite when CI bounds are undefined (n<2 backend payload)", () => {
     const noCI: BoxStat = { ...smallN, ciLo: undefined, ciHi: undefined, n: 1 };
-    const [lo, hi] = boxValueDomain([noCI], true);
+    const [lo, hi] = boxValueDomain([noCI], withCI);
     expect(Number.isFinite(lo)).toBe(true);
     expect(Number.isFinite(hi)).toBe(true);
   });
@@ -125,7 +133,7 @@ describe("boxValueDomain", () => {
           { label: "A", points: [{ value: 4, rowIndex: 0 }, { value: 7, rowIndex: 1 }] },
           { label: "B", points: [{ value: 3, rowIndex: 2 }] },
         ],
-        showMeanCI: true,
+        marks: resolveStatMarks("box", { summary: "mean" }),
       }),
     ).toBe(true);
   });
@@ -149,8 +157,6 @@ describe("boxValueDomain", () => {
         ],
         valueLabel: "value",
         groupLabel: "group",
-        showMeanCI: false,
-        connectMeans: false,
       }),
     ).toBe(true);
   });
@@ -163,8 +169,7 @@ describe("boxValueDomain", () => {
         points: [{ label: "A", points: [{ value: 4, rowIndex: 0 }, { value: 7, rowIndex: 1 }] }],
         valueLabel: "value",
         groupLabel: "group",
-        showMeanCI: true,
-        connectMeans: false,
+        marks: resolveStatMarks("strip", { summary: "mean" }),
       }),
     ).toBe(true);
   });
@@ -176,8 +181,7 @@ describe("boxValueDomain", () => {
         boxes: [BOX_A, BOX_B],
         valueLabel: "value",
         groupLabel: "group",
-        showMeanCI: false,
-        connectMeans: true,
+        marks: resolveStatMarks("box", { connectMeans: true }),
       }),
     ).toBe(true);
   });
@@ -193,8 +197,7 @@ describe("boxValueDomain", () => {
         ],
         valueLabel: "value",
         groupLabel: "group",
-        showMeanCI: false,
-        connectMeans: true,
+        marks: resolveStatMarks("strip", { connectMeans: true }),
       }),
     ).toBe(true);
   });
@@ -203,10 +206,7 @@ describe("boxValueDomain", () => {
     const host = document.createElement("div");
     const canvas = document.createElement("canvas");
     expect(() =>
-      draw(canvas, host, {
-        mode: "strip", boxes: [], points: [], valueLabel: "v", groupLabel: "g", showMeanCI: false,
-        connectMeans: false,
-      }),
+      draw(canvas, host, { mode: "strip", boxes: [], points: [], valueLabel: "v", groupLabel: "g" }),
     ).not.toThrow();
   });
 
@@ -345,7 +345,7 @@ describe("drawCategoryAxis — NESTED tick labels (Group R review finding 1; two
     drawCategoryAxis(
       ctx, RECT, SLOTS4,
       ["lot = 0 / wafer = 0", "lot = 0 / wafer = 1", "lot = 1 / wafer = 0", "lot = 1 / wafer = 1"],
-      "lot / wafer", "#000", "#888",
+      "lot / wafer", "#000", "#888", { nestLabel: "wafer" },
     );
     const body = texts.filter((t) => t.text !== "lot / wafer");
     expect(body.map((t) => t.text)).toEqual([
@@ -358,7 +358,7 @@ describe("drawCategoryAxis — NESTED tick labels (Group R review finding 1; two
     // One separator, between wafer 1 of lot 0 and wafer 0 of lot 1.
     expect(seps).toEqual([200]);
     const caption = texts.find((t) => t.text === "lot / wafer");
-    expect(caption?.y).toBe(RECT.h + categoryAxisLayout(["a = 0 / b = 0"]).captionY);
+    expect(caption?.y).toBe(RECT.h + categoryAxisLayout(["a = 0 / b = 0"], { nestLabel: "b" }).captionY);
     expect(caption!.y).toBeGreaterThan(body[4].y);
   });
 
@@ -375,7 +375,7 @@ describe("drawCategoryAxis — NESTED tick labels (Group R review finding 1; two
     drawCategoryAxis(
       ctx, RECT, SLOTS,
       ["wafer = 7 / deposition_chamber = 0", "wafer = 7 / deposition_chamber = 1"],
-      "x", "#000", "#888",
+      "x", "#000", "#888", { nestLabel: "deposition_chamber" },
     );
     expect(texts[0].text).toBe("deposition_ch…");
     expect(texts[2].text).toBe("wafer = 7");
@@ -402,13 +402,74 @@ describe("drawCategoryAxis — NESTED tick labels (Group R review finding 1; two
   it("the layout's depth, caption and bottom margin grow with the label options", () => {
     const flat = categoryAxisLayout(["a", "b"]);
     expect([flat.depth, flat.captionY, flat.bottom]).toEqual([11, 30, 48]);
-    const tiered = categoryAxisLayout(["a = 1 / b = 1", "a = 1 / b = 2"]);
+    const tiered = categoryAxisLayout(["a = 1 / b = 1", "a = 1 / b = 2"], { nestLabel: "b" });
     expect(tiered.captionY).toBe(44);
     expect(tiered.tiers).toEqual([{ label: "a = 1", first: 0, last: 1 }]);
     const upright = categoryAxisLayout(["abcdefghij"], { rotation: 90 });
     expect(upright.depth).toBe(60); // 10 chars x 6 px, turned on end
     expect(upright.bottom).toBe(6 + 60 + 13 + 18);
     expect(categoryAxisLayout(["one two three"], { wrap: true }).depth).toBe(22);
+  });
+
+  // Review finding 10: a click hit-test re-asks for the SAME draw's layout
+  // repeatedly between renders (`statRenderSelection.ts`, via `plotRect`) --
+  // it must not re-wrap/re-measure every label from scratch each time.
+  it("memoizes the layout by its own inputs — repeat calls with the SAME inputs return the cached object", () => {
+    const labelsA = ["Anneal temperature 450 C", "B"];
+    const first = categoryAxisLayout(labelsA, { wrap: true, rotation: 45 });
+    const second = categoryAxisLayout(labelsA, { wrap: true, rotation: 45 });
+    expect(second).toBe(first); // same reference: a cache hit, not a recompute
+    // A DIFFERENT (but content-equal) array still hits — the key is content,
+    // not the array's own identity (a caller like `groups.map(g => g.label)`
+    // builds a fresh array every time).
+    const third = categoryAxisLayout([...labelsA], { wrap: true, rotation: 45 });
+    expect(third).toBe(first);
+    // Genuinely different inputs invalidate and recompute.
+    const changed = categoryAxisLayout(["different", "labels"], { wrap: true, rotation: 45 });
+    expect(changed).not.toBe(first);
+    expect(changed.lines).not.toEqual(first.lines);
+  });
+
+  // Review finding 7.
+  describe("plotRect's cap and drawCategoryAxis's own layout agree, for draw AND hit-test", () => {
+    const LONG_LABELS = [
+      "Anneal temperature under vacuum 450 C", "Anneal temperature under vacuum 500 C",
+    ];
+    const STYLE = { wrap: true, rotation: 90 as const };
+
+    it("plotRect's margin is EXACTLY categoryAxisLayout's own bottom for the SAME cap", () => {
+      const h = 140; // short canvas: h * 0.45 = 63, well under the natural depth
+      const box: StatDrawData = { mode: "box", boxes: [BOX_A, BOX_B], valueLabel: "v", groupLabel: "g" };
+      const rect = plotRect(400, h, box);
+      expect(rect.maxBottom).toBeCloseTo(Math.max(48, h * 0.45), 9);
+      const usedBottom = h - rect.y - rect.h;
+      const layout = categoryAxisLayout(["g = A", "g = B"], {}, rect.maxBottom);
+      expect(usedBottom).toBe(layout.bottom);
+      // Capped, so smaller than the labels would have gotten uncapped.
+      expect(usedBottom).toBeLessThan(categoryAxisLayout(["g = A", "g = B"]).bottom + 1000);
+      expect(usedBottom).toBeLessThanOrEqual(rect.maxBottom as number);
+    });
+
+    it("drawCategoryAxis, fed the capped rect, draws EVERYTHING within the canvas — nothing below h", () => {
+      const h = 90; // very short: forces the degrade ladder (wrap lines, then rotation)
+      const rect = { x: 0, y: 0, w: 400, h: h - 48, maxBottom: Math.max(48, h * 0.45) };
+      const { ctx, texts, seps } = recordingCtx();
+      drawCategoryAxis(ctx, rect, SLOTS, LONG_LABELS, "caption", "#000", "#888", STYLE);
+      const allY = [...texts.map((t) => t.y), ...seps];
+      for (const y of allY) expect(y).toBeLessThanOrEqual(rect.y + rect.h + (rect.maxBottom as number) + 18);
+      // The degraded layout's OWN rotation is what got drawn (never the
+      // requested 90 if capping dropped it) -- checked structurally: every
+      // tick's rotation state matches `categoryAxisLayout`'s reported one.
+      const layout = categoryAxisLayout(LONG_LABELS, STYLE, rect.maxBottom);
+      const ticks = texts.filter((t) => t.text !== "caption");
+      const rotSeen = new Set(ticks.map((t) => t.rot));
+      expect(rotSeen).toEqual(new Set([layout.rotation === 0 ? 0 : -layout.rotation]));
+    });
+
+    it("uncapped (a tall canvas), the layout is unchanged from before this fix", () => {
+      const layout = categoryAxisLayout(LONG_LABELS, STYLE, 10000);
+      expect(layout).toEqual(categoryAxisLayout(LONG_LABELS, STYLE));
+    });
   });
 });
 
@@ -444,7 +505,7 @@ describe("drawConnectMeansLine — segmented at the nested boundary (review find
     drawConnectMeansLine(ctx, [
       mk("lot = 0 / wafer = 0", 1), mk("lot = 0 / wafer = 1", 2),
       mk("lot = 1 / wafer = 0", 3), mk("lot = 1 / wafer = 1", 4),
-    ], SLOTS4, RECT, vy, "#000");
+    ], SLOTS4, RECT, vy, "#000", [], "wafer");
     // Two segments: a move starts each lot, and NO line is drawn across the
     // lot 0 -> lot 1 step (slot 2, x=240).
     expect(ops).toEqual(["move@40", "line@120", "move@240", "line@360"]);

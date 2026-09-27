@@ -76,6 +76,7 @@ def render_statplot_figure(
     connect_breaks: list[bool] | None = None,
     marks: dict[str, Any] | None = None,
     axis_style: dict[str, Any] | None = None,
+    y_domain: tuple[float, float] | list[float] | None = None,
 ) -> bytes:
     """Render a statistical plot to image bytes.
 
@@ -123,6 +124,17 @@ def render_statplot_figure(
     (``rotation``, ``wrap``, ``tiered``); a two-tier nested axis carries the
     x title under its outer tier. Both ``None`` = the output before them.
 
+    ``y_domain`` (P2.6 review finding 2): an explicit ``(lo, hi)`` y-axis
+    range, applied with ``ax.set_ylim`` after every group/mark artist is
+    drawn. The canvas's own value-axis domain (``Stage/statDrawMarks.
+    boxValueDomain``/``stripValueDomain``) deliberately spans every raw
+    datum -- fliers, hidden points -- so toggling a mark never rescales the
+    interactive plot; matplotlib's own autoscale instead fits only what it
+    actually drew, which is narrower whenever a mark is hidden. Sending the
+    canvas's range here makes the export match it exactly rather than
+    reconciling two different autoscale rules. ``None`` (default) = today's
+    autoscale-to-drawn-artists behaviour, byte-identical.
+
     ``dpi`` defaults to the style preset's calibrated resolution when not
     given (``None``), same as ``calc.figure``'s ``resolved_dpi`` convention;
     the preset's box-tick convention (``xtick.top``/``ytick.right`` mirrored
@@ -157,6 +169,12 @@ def render_statplot_figure(
         title = safe_mathtext_label(title)
         x_label = safe_mathtext_label(x_label)
         y_label = safe_mathtext_label(y_label)
+        # Review finding 8: the RAW labels ride alongside the sanitized ones
+        # -- `_draw_statplot` needs sanitized text for its own direct ticklabel
+        # uses (boxplot/violinplot/strip, and the "any empty" fallback), but
+        # `style_category_axis`'s WRAP must measure the raw text (escaping
+        # changes character counts) and is given `raw_labels` for that.
+        raw_labels = [str(g) for g in labels] if labels else None
         labels = [safe_mathtext_label(str(g)) for g in labels] if labels else labels
         fig = new_figure(figsize=figsize)
         ax = fig.subplots()
@@ -165,7 +183,10 @@ def render_statplot_figure(
             show_points=show_points, point_row_indices=point_row_indices,
             show_mean_ci=show_mean_ci, show_connect_means=show_connect_means,
             show_n=show_n, connect_breaks=connect_breaks, marks=marks, axis_style=axis_style,
+            raw_labels=raw_labels,
         )
+        if y_domain is not None:
+            ax.set_ylim(float(y_domain[0]), float(y_domain[1]))
         layout_rect = add_caveat(fig, caveat)
         if title:
             ax.set_title(title)
@@ -214,6 +235,8 @@ def _clean_groups_with_indices(
 def _draw_connect_means_line(
     ax: Any, groups: list[np.ndarray], ticks: list[int], labels: list[str],
     breaks: list[bool] | None = None,
+    tiers: list[tuple[str, str]] | None = None,
+    box_stats: list[dict[str, Any] | None] | None = None,
 ) -> None:
     """Connect-group-means line (JMP_GAP J5 residual): a dashed line through
     each group's mean, in on-screen category order -- the "interaction plot"
@@ -221,12 +244,24 @@ def _draw_connect_means_line(
     SAME ``box_stats`` mean the summary marker uses, never a second/
     independent computation. Broken into segments exactly where the screen
     breaks it (``figure_group_notes.connect_segments``): at an empty slot and
-    at a nested outer-factor boundary."""
+    at a nested outer-factor boundary. ``tiers`` (P2.6 review finding 4) is
+    the request's own ``axis_style.tiers`` -- when given, the outer-factor
+    boundary is read straight off its pairs rather than re-split from
+    ``labels``, so an outer level whose own text contains ``" / "`` breaks
+    correctly too.
+
+    ``box_stats`` (P2.6 review finding 10, optional, parallel to ``groups``,
+    ``None`` entries for empty slots): the ALREADY-COMPUTED stats
+    ``_draw_statplot`` shares with :func:`figure_stat_marks.overlay_summary`
+    -- reused for the mean here instead of a third recomputation over the
+    SAME groups. ``None`` (default) falls back to computing it here,
+    byte-identical to before this fix."""
     empty = [g.size == 0 for g in groups]
-    for seg in connect_segments(labels, empty, breaks):
+    stats = box_stats if box_stats is not None else [None] * len(groups)
+    for seg in connect_segments(labels, empty, breaks, tiers):
         if len(seg) < 2:
             continue
-        means = [_box_stats(groups[i])["mean"] for i in seg]
+        means = [(stats[i] or _box_stats(groups[i]))["mean"] for i in seg]
         ax.plot(
             [ticks[i] for i in seg], means, color="black", linewidth=1.25, linestyle="--",
             zorder=5,
@@ -251,9 +286,16 @@ def _draw_statplot(
     connect_breaks: list[bool] | None = None,
     marks: dict[str, Any] | None = None,
     axis_style: dict[str, Any] | None = None,
+    raw_labels: list[str] | None = None,
 ) -> Any | None:
     """Draw one panel. Returns the outer-tier axis of a two-tier nested
-    category axis (the x title goes on it), else ``None``."""
+    category axis (the x title goes on it), else ``None``.
+
+    ``raw_labels`` (P2.6 review finding 8): ``labels`` before the caller's
+    own ``safe_mathtext_label`` escaping, threaded through to
+    ``style_category_axis``'s wrap (see its own doc) -- unused everywhere
+    else in this function, which still ticklabels boxplot/violinplot/strip
+    from the sanitized ``labels`` as before."""
     if kind in _GROUPED:
         if not isinstance(data, list) or not data:
             raise ValueError(f"{kind} needs a non-empty list of groups")
@@ -304,15 +346,34 @@ def _draw_statplot(
             ax.set_xticklabels(cat_labels)
         if kind == "strip" or any(empty):
             ax.set_xlim(0.5, len(all_groups) + 0.5)
-        scatter_points(ax, groups, filled_labels, ticks, row_indices, mk)
+        # Review finding 10: `box_stats` (quantiles/whiskers/mean/sem/CI) is
+        # the SAME expensive-ish per-group computation all three of these
+        # want -- computed ONCE here and shared, rather than once each,
+        # whenever at least one of them actually needs it (an outliers
+        # scatter reads the Tukey whiskers; a summary marker or the
+        # connect-means line reads the mean). A violin with no points/
+        # summary needs none of this, so it stays skipped entirely.
+        connect_wanted = kind in ("box", "strip") and show_connect_means and len(groups) > 1
+        need_stats = mk.scatter == "outliers" or mk.summary != "none" or connect_wanted
+        box_stats_cache = [_box_stats(g) for g in groups] if need_stats and groups else None
+        scatter_points(ax, groups, filled_labels, ticks, row_indices, mk, box_stats_cache)
         if kind in ("box", "strip"):
-            overlay_summary(ax, groups, ticks, mk)
-        if kind in ("box", "strip") and show_connect_means and len(groups) > 1:
-            _draw_connect_means_line(ax, all_groups, all_ticks, cat_labels, connect_breaks)
+            overlay_summary(ax, groups, ticks, mk, box_stats_cache)
+        if connect_wanted:
+            axis_tiers = (axis_style or {}).get("tiers")
+            all_stats: list[dict[str, Any] | None] = [None] * len(all_groups)
+            if box_stats_cache is not None:
+                for i, gi in enumerate(filled):
+                    all_stats[gi] = box_stats_cache[i]
+            _draw_connect_means_line(
+                ax, all_groups, all_ticks, cat_labels, connect_breaks, axis_tiers, all_stats,
+            )
         mark_empty_slots(ax, all_ticks, empty)
         if show_n:
             annotate_top_counts(ax, all_ticks, [g.size for g in all_groups])
-        return style_category_axis(ax, all_ticks, cat_labels, **(axis_style or {}))
+        return style_category_axis(
+            ax, all_ticks, cat_labels, raw_labels=raw_labels or cat_labels, **(axis_style or {}),
+        )
 
     sample = np.asarray(data, dtype=float).ravel()
     if kind in ("qq", "probability"):

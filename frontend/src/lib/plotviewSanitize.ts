@@ -52,6 +52,62 @@ export function sanitizeStatMarks(v: unknown): StatMarks {
   return out as StatMarks;
 }
 
+/** Review finding 6: the categorical modes `statMarks` can carry a
+ *  per-mode choice for — every mode a Stat Stage draw can be, MINUS qq/
+ *  histogram, which take no marks at all (`statStageMarks.stamp`'s own
+ *  narrowing). */
+export type StatMarksMode = "box" | "violin" | "strip" | "bar";
+const STAT_MARKS_MODES: readonly StatMarksMode[] = ["box", "violin", "strip", "bar"];
+
+/** P2.6 box 1 (review finding 6): `PlotView.statMarks`'s ACTUAL persisted
+ *  shape — one sparse `StatMarks` per mode, never one shared object. A
+ *  single flat object let a choice in one mode silently become another
+ *  mode's default (box's CI error bars leaking into bar's SE default,
+ *  strip's `points: "none"` hiding box's fliers) purely because the two
+ *  modes' resolvers both read the SAME stored fields. */
+export type StatMarksByMode = { [K in StatMarksMode]?: StatMarks };
+
+/** Every flat `StatMarks` field name, for detecting the PRE-migration shape
+ *  below (a mode key never collides with one of these: `"box"`/`"violin"`/
+ *  `"strip"`/`"bar"` are not `StatMarks` fields, and no `StatMarks` field
+ *  names a mode). */
+const FLAT_MARK_KEYS = [...Object.keys(STAT_MARK_VALUES), "jitterWidth"];
+
+/** A persisted `PlotView.statMarks`, old (flat, pre-P2.6-review-finding-6)
+ *  or new (per-mode) shape alike -- never throws.
+ *
+ *  MIGRATION (documented, per the review's own two options — "the mode
+ *  active when saved" is not this one): `useStatStagePicks`'s `mode` is
+ *  plain component state, never itself persisted on `PlotView` / `.dwk` —
+ *  there is no durable record of which mode a flat `statMarks` was last
+ *  edited under, so that option is not available here. The safe fallback
+ *  the review names instead — "to all only where safe" — is what this
+ *  does: a legacy flat object is applied to EVERY mode's bucket. That is
+ *  deliberately the ONE-TIME choice, not a general rule: before this fix,
+ *  the single flat object already affected every mode identically (that
+ *  read IS the bug), so broadcasting it once at migration is the only
+ *  choice that changes nothing about how an already-saved plot looks the
+ *  moment it is loaded under the new shape. Every edit FROM THEN ON goes
+ *  through `setStatMarks(mode, patch)`, which never touches another mode's
+ *  bucket again — the isolation this finding asks for holds for every
+ *  write after migration, and the migration itself does not (need to)
+ *  reproduce it. */
+export function sanitizeStatMarksByMode(v: unknown): StatMarksByMode {
+  if (typeof v !== "object" || v === null) return {};
+  const o = v as Record<string, unknown>;
+  const hasModeKey = STAT_MARKS_MODES.some((m) => m in o);
+  const hasFlatKey = FLAT_MARK_KEYS.some((k) => k in o);
+  if (!hasModeKey && hasFlatKey) {
+    const flat = sanitizeStatMarks(o);
+    const out: StatMarksByMode = {};
+    for (const m of STAT_MARKS_MODES) out[m] = { ...flat };
+    return out;
+  }
+  const out: StatMarksByMode = {};
+  for (const m of STAT_MARKS_MODES) if (m in o) out[m] = sanitizeStatMarks(o[m]);
+  return out;
+}
+
 /** The PlotView fields that are plain booleans. `satisfies` pins every name
  *  to a real PlotView key; `boolViewFields`' return type pins each to boolean. */
 const BOOL_VIEW_KEYS = [

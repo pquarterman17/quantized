@@ -25,7 +25,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { statsBox } from "../../lib/api";
 import { exportCategoricalFigure, exportStatplotFigure } from "../../lib/api/figures";
+import type { AxisSlot, GroupAxis } from "../../lib/groupAxis";
+import { deterministicJitter } from "../../lib/jitter";
 import type { DataStruct, Dataset } from "../../lib/types";
+import type { StatDrawData } from "./statRender";
+import { decorateDraw } from "./statStageLevels";
 import { useStatStage } from "./useStatStage";
 
 vi.mock("../../lib/api", async (importOriginal) => ({
@@ -69,8 +73,7 @@ describe("Stat Stage missing levels — screen and export describe the same axis
     const { result } = renderHook(() =>
       useStatStage({ active: DS, yKeys: null, xKey: null, seriesOrder: null, seed: null, onSeedConsumed: () => {} }),
     );
-    act(() => result.current.setShowPoints(true));
-    act(() => result.current.setShowMeanCI(true));
+    act(() => result.current.setMarks({ points: "all", summary: "mean" }));
     await waitFor(() => {
       const d = result.current.draw;
       expect(d?.mode === "box" && d.points != null && d.slots != null).toBe(true);
@@ -201,7 +204,7 @@ describe("Stat Stage missing levels — review round 2", () => {
     // Level order A, C, B, D, E: C (declared, no rows) sits BETWEEN A and B.
     const ordered: Dataset = { ...DS, data: { ...DATA, level_order: { 0: [0, 2, 1, 3, 4] } } };
     const { result } = renderHook(() => useStatStage(params(ordered, { hideEmptyLevels: true })));
-    act(() => result.current.setShowConnectMeans(true));
+    act(() => result.current.setMarks({ connectMeans: true }));
     await waitFor(() => {
       const d = result.current.draw;
       expect(d?.mode === "box" && d.marks?.connectMeans && d.slots != null).toBe(true);
@@ -274,5 +277,54 @@ describe("Stat Stage missing levels — review round 2", () => {
     });
     const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0];
     expect(spec.labels).toEqual(draw.slots.map((s) => s.label));
+  });
+});
+
+describe("review finding 1: violin's raw-point groups are relabeled like box/strip", () => {
+  const slot = (label: string, n: number): AxisSlot => (
+    { label, group: null, n, nonFinite: 0, excluded: 0, absent: false }
+  );
+  const axis: GroupAxis = { slots: [slot("grp = Alpha", 2), slot("grp = Beta", 2)], hiddenAbsent: 0, unassigned: 0 };
+  const draw: StatDrawData = {
+    mode: "violin",
+    violins: [
+      { label: "A", x: [0, 1], density: [1, 1], quartiles: [0, 0.5, 1], n: 2 },
+      { label: "B", x: [0, 1], density: [1, 1], quartiles: [0, 0.5, 1], n: 2 },
+    ],
+    points: [
+      { label: "A", points: [{ value: 1, rowIndex: 0 }, { value: 1.2, rowIndex: 1 }] },
+      { label: "B", points: [{ value: 5, rowIndex: 2 }, { value: 5.5, rowIndex: 3 }] },
+    ],
+    valueLabel: "y",
+    groupLabel: "grp",
+  };
+
+  it("relabels violin.points to the slot labels, same as violins itself", () => {
+    const { draw: decorated, aligned } = decorateDraw(draw, axis, false, true);
+    expect(aligned).not.toBeNull();
+    if (decorated.mode !== "violin") throw new Error("expected a violin draw");
+    // The group glyphs (`violins`) got the axis's ONE label resolution...
+    expect(decorated.violins.map((v) => v.label)).toEqual(["grp = Alpha", "grp = Beta"]);
+    // ...and BEFORE this fix, `points` kept the raw pre-axis label ("A"/"B"),
+    // so the canvas's jitter (`deterministicJitter(rowIndex, group.label)`,
+    // statRenderBox.ts) hashed a different category string than the export's
+    // `calc.statplots.deterministic_jitter(row, slotLabel)` — the points would
+    // land at a different x offset on screen than in the exported figure.
+    expect(decorated.points?.map((p) => p.label)).toEqual(decorated.violins.map((v) => v.label));
+  });
+
+  it("so the jitter hash a raw point gets on screen is the one the export computes for the same slot", () => {
+    const { draw: decorated } = decorateDraw(draw, axis, false, true);
+    if (decorated.mode !== "violin" || !decorated.points) throw new Error("expected relabeled violin points");
+    decorated.points.forEach((group, i) => {
+      const slotLabel = decorated.violins[i].label;
+      group.points.forEach((p) => {
+        // The canvas overlay (statRenderBox.ts drawIndexedPoints) hashes
+        // `(p.rowIndex, group.label)` — this must be the SAME string the
+        // export sends for this slot, or the two disagree on where the
+        // point sits.
+        expect(deterministicJitter(p.rowIndex, group.label)).toBe(deterministicJitter(p.rowIndex, slotLabel));
+      });
+    });
   });
 });

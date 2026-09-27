@@ -1435,7 +1435,7 @@
         "type": "object"
       },
       "CategoryAxisStyle": {
-        "description": "P2.6 box 1: how the category tick labels are set -- the SAME three\noptions the Canvas stage reads (``statRenderAxes.ts``). ``wrap`` is the\nline width in characters (``calc.figure_category_axis.wrap_label``);\n``tiered`` draws a nested axis in two tiers with separators. Defaults =\nthe axis before these options.",
+        "description": "P2.6 box 1: how the category tick labels are set -- the SAME options\nthe Canvas stage reads (``statRenderAxes.ts``). ``wrap`` is the line\nwidth in characters (``calc.figure_category_axis.wrap_label``);\n``tiered`` draws a nested axis in two tiers with separators. Defaults =\nthe axis before these options.\n\n``tiers`` (P2.6 review finding 4) is the request's OWN [outer, inner]\npair per label (`lib/statMarks.nestedTiers`, split at the nest column's\nown marker rather than the first ``\" / \"`` in the composite string) --\nwhen given, ``calc.figure_category_axis.style_category_axis`` uses these\npairs directly instead of re-splitting the label text itself, so an\nouter level whose own text contains ``\" / \"`` groups correctly. Only\nmeaningful on the FLAT (non-faceted) request's top-level ``axis_style``\n-- a faceted request's per-panel pairs ride ``StatplotFacet.tiers``\ninstead (a nested axis's pairs are per-panel data).",
         "properties": {
           "rotation": {
             "default": 0,
@@ -1451,6 +1451,30 @@
             "default": false,
             "title": "Tiered",
             "type": "boolean"
+          },
+          "tiers": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiers"
           },
           "wrap": {
             "anyOf": [
@@ -11161,6 +11185,51 @@
               }
             ],
             "title": "Labels"
+          },
+          "tiers": {
+            "anyOf": [
+              {
+                "items": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tiers"
+          },
+          "y_domain": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Domain"
           }
         },
         "required": [
@@ -11421,6 +11490,27 @@
             "default": "",
             "title": "X Label",
             "type": "string"
+          },
+          "y_domain": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Domain"
           },
           "y_label": {
             "default": "",

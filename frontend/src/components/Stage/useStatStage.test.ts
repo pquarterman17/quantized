@@ -103,7 +103,7 @@ describe("useStatStage — point jitter is keyed by the ORIGINAL row (stable und
         initialProps: baseParams(),
       });
       act(() => result.current.setMode(mode));
-      act(() => result.current.setShowPoints(true));
+      act(() => result.current.setMarks({ points: "all" }));
       await waitFor(() => expect(firstGroupSize(result.current.draw)).toBe(6));
       const before = offsets(result.current.draw);
 
@@ -139,21 +139,21 @@ describe("useStatStage — box/strip marks (JMP_GAP J5 #1/#2/#3)", () => {
     ],
   };
 
-  it("box mode with showPoints=false: points is null (default off)", async () => {
+  it("box mode with marks.points left at its default (outliers): points is null", async () => {
     vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
     const { result } = renderHook(() => useStatStage(baseParams()));
     await waitFor(() => expect(result.current.draw).not.toBeNull());
     expect(result.current.draw?.mode).toBe("box");
     if (result.current.draw?.mode === "box") {
       expect(result.current.draw.points).toBeNull();
-      expect(result.current.draw.showMeanCI).toBe(false);
+      expect(result.current.draw.marks?.summary).toBe("none");
     }
   });
 
-  it("box mode with showPoints=true: points carries each group's ORIGINAL row indices", async () => {
+  it("box mode with marks.points set to \"all\": points carries each group's ORIGINAL row indices", async () => {
     vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
     const { result } = renderHook(() => useStatStage(baseParams()));
-    act(() => result.current.setShowPoints(true));
+    act(() => result.current.setMarks({ points: "all" }));
     await waitFor(() => {
       const d = result.current.draw;
       expect(d?.mode === "box" && d.points).toBeTruthy();
@@ -169,10 +169,10 @@ describe("useStatStage — box/strip marks (JMP_GAP J5 #1/#2/#3)", () => {
     }
   });
 
-  it("box mode with showMeanCI=true carries the flag through to the draw", async () => {
+  it("box mode with marks.summary set to \"mean\" carries it through to the draw", async () => {
     vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
     const { result } = renderHook(() => useStatStage(baseParams()));
-    act(() => result.current.setShowMeanCI(true));
+    act(() => result.current.setMarks({ summary: "mean" }));
     await waitFor(() => {
       const d = result.current.draw;
       expect(d?.mode === "box" && d.marks?.summary === "mean").toBe(true);
@@ -211,11 +211,11 @@ describe("useStatStage — box/strip marks (JMP_GAP J5 #1/#2/#3)", () => {
     }
   });
 
-  it("exportFigure (box, showPoints+showMeanCI on) sends show_points/point_row_indices/show_mean_ci", async () => {
+  it("exportFigure (box, points=\"all\"+summary=\"mean\") sends show_points/point_row_indices/show_mean_ci", async () => {
     vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
     const { result } = renderHook(() => useStatStage(baseParams()));
-    act(() => result.current.setShowPoints(true));
-    act(() => result.current.setShowMeanCI(true));
+    act(() => result.current.setMarks({ points: "all" }));
+    act(() => result.current.setMarks({ summary: "mean" }));
     await waitFor(() => expect(result.current.draw).not.toBeNull());
 
     await act(async () => {
@@ -276,7 +276,7 @@ describe("useStatStage — connect-means line (JMP_GAP J5 residual)", () => {
     ],
   };
 
-  it("box mode with showConnectMeans=false: connectMeans is false on the draw (default off)", async () => {
+  it("box mode with marks.connectMeans left at its default (false): connectMeans is false on the draw", async () => {
     vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
     const { result } = renderHook(() => useStatStage(baseParams()));
     await waitFor(() => expect(result.current.draw).not.toBeNull());
@@ -284,11 +284,11 @@ describe("useStatStage — connect-means line (JMP_GAP J5 residual)", () => {
     expect(d?.mode === "box" && d.marks?.connectMeans).toBe(false);
   });
 
-  it("box mode with a group column active + showConnectMeans=true carries the flag through", async () => {
+  it("box mode with a group column active + marks.connectMeans=true carries the flag through", async () => {
     vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
     const { result } = renderHook(() => useStatStage(baseParams()));
     expect(result.current.groupCol).toBe(0); // default categorical column auto-picked
-    act(() => result.current.setShowConnectMeans(true));
+    act(() => result.current.setMarks({ connectMeans: true }));
     await waitFor(() => {
       const d = result.current.draw;
       expect(d?.mode === "box" && d.marks?.connectMeans).toBe(true);
@@ -298,18 +298,18 @@ describe("useStatStage — connect-means line (JMP_GAP J5 residual)", () => {
   it("forces connectMeans off under the per-plotted-channel fallback (groupCol null), even if toggled on", async () => {
     vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
     const { result } = renderHook(() => useStatStage(baseParams()));
-    act(() => result.current.setShowConnectMeans(true));
+    act(() => result.current.setMarks({ connectMeans: true }));
     act(() => result.current.setGroupCol(null));
     await waitFor(() => expect(result.current.draw).not.toBeNull());
     const d = result.current.draw;
     expect(d?.mode === "box" && d.marks?.connectMeans).toBe(false);
   });
 
-  it("strip mode with a group column active + showConnectMeans=true carries the flag through", async () => {
+  it("strip mode with a group column active + marks.connectMeans=true carries the flag through", async () => {
     vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
     const { result } = renderHook(() => useStatStage(baseParams()));
     act(() => result.current.setMode("strip"));
-    act(() => result.current.setShowConnectMeans(true));
+    act(() => result.current.setMarks({ connectMeans: true }));
     await waitFor(() => {
       const d = result.current.draw;
       expect(d?.mode === "strip" && d.marks?.connectMeans).toBe(true);
@@ -319,7 +319,7 @@ describe("useStatStage — connect-means line (JMP_GAP J5 residual)", () => {
   it("exportFigure sends show_connect_means only when a group column is active", async () => {
     vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
     const { result } = renderHook(() => useStatStage(baseParams()));
-    act(() => result.current.setShowConnectMeans(true));
+    act(() => result.current.setMarks({ connectMeans: true }));
     await waitFor(() => expect(result.current.draw).not.toBeNull());
 
     await act(async () => {
@@ -333,7 +333,7 @@ describe("useStatStage — connect-means line (JMP_GAP J5 residual)", () => {
   it("exportFigure omits show_connect_means (false) under the per-plotted-channel fallback", async () => {
     vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
     const { result } = renderHook(() => useStatStage(baseParams()));
-    act(() => result.current.setShowConnectMeans(true));
+    act(() => result.current.setMarks({ connectMeans: true }));
     act(() => result.current.setGroupCol(null));
     await waitFor(() => expect(result.current.draw).not.toBeNull());
 

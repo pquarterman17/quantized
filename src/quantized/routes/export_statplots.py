@@ -45,15 +45,26 @@ router = APIRouter(prefix="/api/export", tags=["export"])
 
 
 class CategoryAxisStyle(BaseModel):
-    """P2.6 box 1: how the category tick labels are set -- the SAME three
-    options the Canvas stage reads (``statRenderAxes.ts``). ``wrap`` is the
-    line width in characters (``calc.figure_category_axis.wrap_label``);
+    """P2.6 box 1: how the category tick labels are set -- the SAME options
+    the Canvas stage reads (``statRenderAxes.ts``). ``wrap`` is the line
+    width in characters (``calc.figure_category_axis.wrap_label``);
     ``tiered`` draws a nested axis in two tiers with separators. Defaults =
-    the axis before these options."""
+    the axis before these options.
+
+    ``tiers`` (P2.6 review finding 4) is the request's OWN [outer, inner]
+    pair per label (`lib/statMarks.nestedTiers`, split at the nest column's
+    own marker rather than the first ``" / "`` in the composite string) --
+    when given, ``calc.figure_category_axis.style_category_axis`` uses these
+    pairs directly instead of re-splitting the label text itself, so an
+    outer level whose own text contains ``" / "`` groups correctly. Only
+    meaningful on the FLAT (non-faceted) request's top-level ``axis_style``
+    -- a faceted request's per-panel pairs ride ``StatplotFacet.tiers``
+    instead (a nested axis's pairs are per-panel data)."""
 
     rotation: Literal[0, 45, 90] = 0
     wrap: int | None = Field(default=None, ge=4, le=60)
     tiered: bool = False
+    tiers: list[tuple[str, str]] | None = None
 
 
 def _axis_style(style: CategoryAxisStyle | None) -> dict[str, Any] | None:
@@ -73,6 +84,15 @@ class StatplotFacet(BaseModel):
     kind: str | None = None
     data: list[list[float]]
     labels: list[str] | None = None
+    # P2.6 review finding 2: this panel's own canvas y-domain (box only —
+    # see StatplotFigureRequest.y_domain's doc). None = today's
+    # autoscale-to-drawn-artists behaviour.
+    y_domain: tuple[float, float] | None = None
+    # P2.6 review finding 4: this panel's OWN [outer, inner] pairs, one per
+    # `labels` entry -- never the request's SHARED top-level
+    # `axis_style.tiers` (see CategoryAxisStyle.tiers's doc). None = no
+    # tiering for this panel beyond the shared `axis_style.tiered` gate.
+    tiers: list[tuple[str, str]] | None = None
 
 
 class StatplotFigureRequest(BaseModel):
@@ -131,6 +151,13 @@ class StatplotFigureRequest(BaseModel):
     summary: Literal["none", "mean", "median"] | None = None
     error_bars: Literal["none", "sd", "se", "ci95"] | None = None
     axis_style: CategoryAxisStyle | None = None
+    # P2.6 review finding 2: an explicit y-axis range (the canvas's own
+    # box/strip value domain, `Stage/statStageExport.canvasYDomain`),
+    # applied with `ax.set_ylim` after drawing so matplotlib's own
+    # autoscale-to-drawn-artists can never disagree with the screen's
+    # domain (which deliberately spans hidden fliers/points so toggling a
+    # mark never rescales the plot). None = today's autoscale behaviour.
+    y_domain: tuple[float, float] | None = None
 
     def marks(self) -> dict[str, Any] | None:
         fields = {
@@ -157,7 +184,10 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 from quantized.calc.figure_facets import render_stat_facets_figure  # lazy
 
             panels: list[dict[str, Any]] = [
-                {"label": f.label, "kind": f.kind, "data": f.data, "labels": f.labels}
+                {
+                    "label": f.label, "kind": f.kind, "data": f.data, "labels": f.labels,
+                    "y_domain": f.y_domain, "tiers": f.tiers,
+                }
                 for f in req.facets
             ]
             img = render_stat_facets_figure(
@@ -179,7 +209,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 show_points=req.show_points, point_row_indices=req.point_row_indices,
                 show_mean_ci=req.show_mean_ci, show_connect_means=req.show_connect_means,
                 show_n=req.show_n, caveat=req.caveat, connect_breaks=req.connect_breaks,
-                marks=req.marks(), axis_style=_axis_style(req.axis_style),
+                marks=req.marks(), axis_style=_axis_style(req.axis_style), y_domain=req.y_domain,
             )
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)

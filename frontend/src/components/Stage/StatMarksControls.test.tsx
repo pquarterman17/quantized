@@ -55,12 +55,12 @@ describe("StatMarksControls on the real stage", () => {
   it("a choice persists on the plot and undo takes it back", async () => {
     render(<StatStage />);
     await userEvent.selectOptions(combo("summary marker"), "mean");
-    await waitFor(() => expect(useApp.getState().statMarks).toEqual({ summary: "mean" }));
+    await waitFor(() => expect(useApp.getState().statMarks.box).toEqual({ summary: "mean" }));
     // Error bars come alive with the mean marker.
     await waitFor(() => expect(combo("error bars")).toBeEnabled());
     await userEvent.selectOptions(combo("error bars"), "sd");
     await waitFor(() => expect(combo("error bars")).toHaveValue("sd"));
-    expect(useApp.getState().statMarks).toEqual({ summary: "mean", errorBars: "sd" });
+    expect(useApp.getState().statMarks.box).toEqual({ summary: "mean", errorBars: "sd" });
     act(() => useApp.getState().undo());
     await waitFor(() => expect(combo("error bars")).toHaveValue("ci95"));
     act(() => useApp.getState().undo());
@@ -79,13 +79,13 @@ describe("StatMarksControls on the real stage", () => {
     // jsdom does not open a native <select> on arrow keys; a focused select's
     // change is what the browser emits for them.
     await userEvent.selectOptions(points, "none");
-    await waitFor(() => expect(useApp.getState().statMarks.points).toBe("none"));
+    await waitFor(() => expect(useApp.getState().statMarks.box?.points).toBe("none"));
     // Onward to the wrap checkbox; Space toggles it.
     const wrap = screen.getByRole("checkbox", { name: /wrap/ });
     for (let i = 0; i < 20 && document.activeElement !== wrap; i++) await userEvent.tab();
     expect(wrap).toHaveFocus();
     await userEvent.keyboard(" ");
-    await waitFor(() => expect(useApp.getState().statMarks.labelWrap).toBe(true));
+    await waitFor(() => expect(useApp.getState().statMarks.box?.labelWrap).toBe(true));
   });
 
   it("choosing every point brings in the jitter control", async () => {
@@ -95,7 +95,7 @@ describe("StatMarksControls on the real stage", () => {
     const jitter = await screen.findByRole("combobox", { name: "jitter width" });
     expect(jitter).toHaveValue("0.7");
     await userEvent.selectOptions(jitter, "off");
-    await waitFor(() => expect(useApp.getState().statMarks).toEqual({ points: "all", jitter: false }));
+    await waitFor(() => expect(useApp.getState().statMarks.box).toEqual({ points: "all", jitter: false }));
     await waitFor(() => expect(combo("jitter width")).toHaveValue("off"));
   });
 });

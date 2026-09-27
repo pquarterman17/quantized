@@ -340,12 +340,23 @@ export function connectMeansSeries(boxes: readonly BoxStat[]): number[] {
   return boxes.map((b) => b.mean);
 }
 
-/** The outer factor of a NESTED tick label, or null when the label is not
- *  nested. `null` for every single-factor label is the load-bearing part: it is
- *  what keeps `connectMeansBreaks` from segmenting an ordinary interaction
- *  plot, where consecutive labels differ by design. */
-function nestedOuterLabel(label: string): string | null {
-  const i = label.indexOf(NESTED_LABEL_SEP);
+/** The outer factor of a NESTED tick label, or null when `nestLabel` says
+ *  the axis is not structurally nested. `null` for every label outside a
+ *  nested plot is the load-bearing part: it is what keeps
+ *  `connectMeansBreaks` from segmenting an ordinary interaction plot, where
+ *  consecutive labels differ by design.
+ *
+ *  Review finding 4: nesting is never read off the label TEXT (a flat
+ *  category value like "Co / Pt" must not be misread as nested), and the
+ *  split itself is cut at `nestLabel`'s OWN marker (`" / {nestLabel} = "`)
+ *  rather than the first `NESTED_LABEL_SEP` in the string, so a nested outer
+ *  level whose own text contains " / " groups correctly too — the twin of
+ *  `lib/statMarks.nestedTiers` (kept local, not imported, to avoid a cycle:
+ *  `statMarks.ts` already imports `BoxStat`/`StatMode` from this module). */
+function nestedOuterLabel(label: string, nestLabel: string | null | undefined): string | null {
+  if (!nestLabel) return null;
+  const marker = `${NESTED_LABEL_SEP}${nestLabel} = `;
+  const i = label.lastIndexOf(marker);
   return i < 0 ? null : label.slice(0, i);
 }
 
@@ -364,11 +375,14 @@ function nestedOuterLabel(label: string): string | null {
  *
  *  Non-nested labels yield `null` on both sides of every comparison, so a
  *  single-factor plot gets exactly one segment — unchanged. */
-export function connectMeansBreaks(boxes: readonly BoxStat[]): boolean[] {
+export function connectMeansBreaks(
+  boxes: readonly BoxStat[],
+  nestLabel: string | null | undefined = null,
+): boolean[] {
   return boxes.map((b, i) => {
     if (i === 0) return true;
-    const cur = nestedOuterLabel(b.label);
-    const prev = nestedOuterLabel(boxes[i - 1].label);
+    const cur = nestedOuterLabel(b.label, nestLabel);
+    const prev = nestedOuterLabel(boxes[i - 1].label, nestLabel);
     return cur !== null && prev !== null && cur !== prev;
   });
 }

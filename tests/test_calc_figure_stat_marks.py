@@ -31,6 +31,7 @@ from matplotlib.figure import Figure
 from quantized.app import app
 from quantized.calc.figure_category_axis import nested_tiers, style_category_axis, wrap_label
 from quantized.calc.figure_facets import _facet_marks
+from quantized.calc.figure_group_notes import connect_segments
 from quantized.calc.figure_stat_marks import SLOT_WIDTH, resolve_marks
 from quantized.calc.figure_statplots import _draw_statplot
 from quantized.calc.figure_styles import figure_style
@@ -209,12 +210,40 @@ def test_legacy_requests_resolve_to_the_old_marks() -> None:
     )
     assert (old_box.half_width, old_box.jitter_width, old_box.box_width) == (0.25, 0.7, None)
     assert resolve_marks("box").box_showmeans is True
-    assert resolve_marks("strip").scatter == "all"
+    # Review finding 3: pre-P2.6, strip's scatter was gated by `show_points`
+    # (default off) exactly like box's -- it never scattered unconditionally.
+    assert resolve_marks("strip").scatter is None
+    assert resolve_marks("strip", show_points=True).scatter == "all"
     assert resolve_marks("violin", show_points=True, show_mean_ci=True).scatter is None
     with pytest.raises(ValueError):
         resolve_marks("box", points="some")
     with pytest.raises(ValueError):
         resolve_marks("box", jitter_width=1.5)
+
+
+@pytest.mark.parametrize("show_points", [True, False])
+@pytest.mark.parametrize("kind", ["box", "strip"])
+def test_legacy_show_points_reproduces_pre_p2_6_scatter_for_box_and_strip(
+    kind: str, show_points: bool,
+) -> None:
+    """Review finding 3, artist-equality vs pre-change behaviour: a LEGACY
+    request (every new field ``None``) scattered box/strip points under the
+    SAME gate, ``show_points`` -- ``figure_statplots.py`` at ``b3e39ec1^``
+    read ``if kind in ("box", "strip") and show_points: _scatter_jittered_
+    points(...)`` for BOTH kinds alike, never an unconditional strip scatter.
+    Before this fix, ``kind="strip", show_points=False`` (the request's own
+    DEFAULT) drew every point anyway -- this is the case that broke "a legacy
+    request reproduces the pre-P2.6 render"."""
+    ax, _ = _draw(kind, None, show_points=show_points)
+    xy = _scatter_xy(ax)
+    if show_points:
+        assert len(xy) == sum(len(g) for g in _GROUPS)
+    else:
+        assert len(xy) == 0
+    # Box's OTHER legacy behaviour (fliers always on, mirroring boxplot's own
+    # un-set `showfliers` default) is untouched by this fix either way.
+    if kind == "box":
+        assert _flier_values(ax) == [12.0]
 
 
 # ── category axis ────────────────────────────────────────────────────────────
@@ -234,6 +263,48 @@ def test_rotation_and_wrap_set_the_tick_labels() -> None:
         style_category_axis(ax, [0, 1], ["x", "y"], rotation=30)
 
 
+# Review finding 8: wrap on the RAW label (before `safe_mathtext_label`
+# escaping changes its character count) and never split a raw `$...$` span
+# across two lines, sanitizing only once the lines are already decided.
+
+
+def test_wrap_measures_the_raw_label_not_the_already_escaped_one() -> None:
+    """`raw_labels` (9 chars: "abcdefgh ij") wraps to ["abcdefgh", "ij"] at
+    width 8; the ALREADY-escaped `labels` string here is 2 chars LONGER
+    ("abcdefghXX ij") purely to prove which one governs the split -- were
+    the escaped string measured instead (the pre-fix bug), the first word
+    alone (10 chars) would overflow width 8 and hard-split differently."""
+    fig = Figure()
+    ax = fig.subplots()
+    ax.set_xticks([0])
+    style_category_axis(ax, [0], ["abcdefghXX ij"], wrap=8, raw_labels=["abcdefgh ij"])
+    assert ax.get_xticklabels()[0].get_text() == "abcdefgh\nij"
+
+
+def test_wrap_never_splits_a_raw_math_span_across_two_lines() -> None:
+    # Naive word-splitting (`"x $a b$ y".split(" ")` -> "x","$a","b$","y")
+    # packs to ["x $a", "b$ y"] at width 6 -- the split lands INSIDE the
+    # math span. Preserving the span as one token instead keeps it whole.
+    from quantized.calc.figure_category_axis import _wrap_label_axis
+
+    assert _wrap_label_axis("x $a b$ y", 6) == ["x", "$a b$", "y"]
+
+
+def test_style_category_axis_sanitizes_wrapped_math_lines_once_after_the_split() -> None:
+    # An out-of-subset command (`\hat`, explicitly rejected -- figure_labels.py's
+    # own doc names it) makes `safe_mathtext_label` escape every `$` to `\$` --
+    # applied AFTER the split (per line), not before it, so the wrap itself
+    # always measured/split the true raw text.
+    fig = Figure()
+    ax = fig.subplots()
+    ax.set_xticks([0])
+    label = r"heat $\hat{x}$ done"
+    style_category_axis(ax, [0], [label], wrap=40, raw_labels=[label])
+    text = ax.get_xticklabels()[0].get_text()
+    assert r"\$\hat{x}\$" in text  # sanitized (escaped) in the final display
+    assert r"$\hat{x}$" not in text  # not the raw, unescaped math
+
+
 def test_tiered_nested_axis_labels_each_outer_level_once_with_separators() -> None:
     labels = ["lot = 1 / w = a", "lot = 1 / w = b", "lot = 2 / w = a", "lot = 2 / w = b"]
     fig = Figure()
@@ -251,6 +322,69 @@ def test_tiered_is_inert_on_a_flat_axis() -> None:
     ax, outer = _draw("box", None, axis_style={"tiered": True})
     assert outer is None
     assert [t.get_text() for t in ax.get_xticklabels()] == _LABELS
+
+
+# Review finding 4: whether an axis IS nested is decided by the CALLER's
+# `tiered` (a structural fact from the frontend's nest column, never sniffed
+# off the label text here) -- these two pin the explicit `tiers` path, which
+# groups a nested outer level correctly even when its OWN text contains the
+# separator, something no re-split of the label string alone could do.
+
+
+def test_explicit_tiers_bypass_the_label_split_entirely() -> None:
+    # A flat plot's category value happens to contain " / " (e.g. "Co / Pt")
+    # -- `tiered` stays False (the caller never claims nesting), so this is
+    # NOT split into tiers no matter what `nested_tiers` would have made of
+    # the string: `style_category_axis` returns None (untouched, exactly the
+    # "every option off" case) and leaves the tick labels boxplot itself set.
+    fig = Figure()
+    ax = fig.subplots()
+    ax.boxplot([[1.0, 2.0]] * 2, tick_labels=["Co / Pt", "Fe / Ni"])
+    assert style_category_axis(ax, [1, 2], ["Co / Pt", "Fe / Ni"]) is None
+    assert [t.get_text() for t in ax.get_xticklabels()] == ["Co / Pt", "Fe / Ni"]
+
+
+def test_explicit_tiers_group_a_nested_outer_level_containing_the_separator() -> None:
+    # outer = "alloy = Co / Pt" (the level's OWN text, an alloy composition),
+    # inner = "wafer = A"/"wafer = B". Re-splitting the composite string at
+    # the first " / " would cut inside "Co / Pt"; the explicit pairs need no
+    # split at all.
+    labels = [
+        "alloy = Co / Pt / wafer = A", "alloy = Co / Pt / wafer = B", "alloy = Fe / wafer = A",
+    ]
+    tiers = [
+        ("alloy = Co / Pt", "wafer = A"),
+        ("alloy = Co / Pt", "wafer = B"),
+        ("alloy = Fe", "wafer = A"),
+    ]
+    fig = Figure()
+    ax = fig.subplots()
+    ax.boxplot([[1.0, 2.0]] * 3)
+    outer = style_category_axis(ax, [1, 2, 3], labels, tiered=True, tiers=tiers)
+    assert outer is not None
+    assert [t.get_text() for t in ax.get_xticklabels()] == ["wafer = A", "wafer = B", "wafer = A"]
+    outer_labels = [t.get_text() for t in outer.get_xticklabels(minor=True)]
+    assert outer_labels == ["alloy = Co / Pt", "alloy = Fe"]
+    assert list(outer.get_xticks(minor=True)) == [1.5, 3.0]
+    assert list(outer.get_xticks()) == [2.5]  # one separator, between the two alloys
+    # nested_tiers's own string split, by contrast, mis-splits (proving the
+    # explicit-pairs path is doing genuinely different work, not a no-op).
+    wrong = nested_tiers(labels)
+    assert wrong is not None
+    assert wrong[0] != ["wafer = A", "wafer = B", "wafer = A"]
+
+
+def test_connect_segments_break_at_the_explicit_outer_boundary_too() -> None:
+    # Same mis-split hazard for the connect-means line's break rule (review
+    # finding 4's "update the connect-means logic" half): two DIFFERENT
+    # alloys ("Co / Pt" vs "Co / Ni") whose composite labels nonetheless
+    # share the same text up to the first " / " -- the naive split reads
+    # both as outer "alloy = Co" (no break); the true pairs correctly break.
+    labels = ["alloy = Co / Pt / wafer = A", "alloy = Co / Ni / wafer = A"]
+    tiers = [("alloy = Co / Pt", "wafer = A"), ("alloy = Co / Ni", "wafer = A")]
+    empty = [False, False]
+    assert connect_segments(labels, empty, tiers=tiers) == [[0], [1]]
+    assert connect_segments(labels, empty) == [[0, 1]]  # the bug: no break
 
 
 # ── route ────────────────────────────────────────────────────────────────────
@@ -320,3 +454,133 @@ def test_faceted_route_draws_the_summary_in_every_panel() -> None:
     }
     svg = _svg("/api/export/statplot-figure", body)
     assert "p1" in svg and "p2" in svg
+
+
+# ── review finding 2: explicit y_domain matches the canvas's own domain ─────
+# The canvas's box/strip value domain (Stage/statDrawMarks.boxValueDomain /
+# stripValueDomain) deliberately spans every raw datum (fliers, hidden
+# points) so toggling a mark never rescales the interactive plot; left to
+# its own devices matplotlib instead autoscales to only the artists it
+# drew, which is NARROWER whenever a mark is hidden. `y_domain` overrides
+# that autoscale with an explicit `ax.set_ylim` so the two can never
+# disagree -- these tests read the Axes back (via a patched `savefig_bytes`)
+# rather than just checking the render doesn't crash.
+
+
+def test_explicit_y_domain_overrides_autoscale_to_drawn_artists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from quantized.calc import figure_statplots
+
+    captured: dict[str, Any] = {}
+
+    def fake_savefig(fig: Figure, fmt: str, **kwargs: Any) -> bytes:
+        captured["ax"] = fig.axes[0]
+        return b""
+
+    monkeypatch.setattr(figure_statplots, "savefig_bytes", fake_savefig)
+    # points="none": no fliers drawn, so an UNGUIDED autoscale would sit
+    # tight around the whiskers alone -- well inside (-2, 50).
+    figure_statplots.render_statplot_figure(
+        "box", [list(g) for g in _GROUPS], labels=list(_LABELS),
+        marks={"points": "none", "summary": "none"}, y_domain=(-2.0, 50.0),
+    )
+    lo, hi = captured["ax"].get_ylim()
+    assert (lo, hi) == pytest.approx((-2.0, 50.0))
+
+
+def test_no_y_domain_keeps_todays_autoscale_to_drawn_artists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from quantized.calc import figure_statplots
+
+    captured: dict[str, Any] = {}
+
+    def fake_savefig(fig: Figure, fmt: str, **kwargs: Any) -> bytes:
+        captured["ax"] = fig.axes[0]
+        return b""
+
+    monkeypatch.setattr(figure_statplots, "savefig_bytes", fake_savefig)
+    figure_statplots.render_statplot_figure(
+        "box", [list(g) for g in _GROUPS], labels=list(_LABELS),
+        marks={"points": "none", "summary": "none"},
+    )
+    lo, hi = captured["ax"].get_ylim()
+    # The 12.0 flier is hidden (points="none"), so autoscale never reaches it.
+    assert hi < 12.0
+
+
+def test_facet_panel_y_domain_overrides_that_panels_own_autoscale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from quantized.calc import figure_facets
+
+    captured: dict[str, Any] = {}
+
+    def fake_savefig(fig: Figure, fmt: str, **kwargs: Any) -> bytes:
+        captured["axes"] = list(fig.axes)
+        return b""
+
+    monkeypatch.setattr(figure_facets, "savefig_bytes", fake_savefig)
+    figure_facets.render_stat_facets_figure(
+        [
+            {"label": "p1", "data": [[1.0, 2.0, 3.0], [4.0, 5.0, 30.0]], "labels": ["A", "B"],
+             "y_domain": (-1.0, 40.0)},
+            {"label": "p2", "data": [[1.0, 2.0], [4.0, 5.0]], "labels": ["A", "B"]},
+        ],
+        default_kind="box", marks={"points": "none"},
+    )
+    p1, p2 = captured["axes"][0], captured["axes"][1]
+    assert p1.get_ylim() == pytest.approx((-1.0, 40.0))
+    # p2 carries no y_domain -- independent per-panel autoscale, unchanged.
+    assert p2.get_ylim()[1] < 40.0
+
+
+# ── review finding 10: box_stats computed once per group, shared ──────────
+
+
+def test_box_stats_computed_once_per_group_shared_across_scatter_summary_connect_means(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``points="outliers"`` reads the Tukey whiskers, ``summary="mean"``
+    and ``show_connect_means=True`` both read the mean -- all three over
+    the SAME groups. Before this fix, ``box_stats`` was recomputed once per
+    consumer (up to 3x per group); it must now run exactly once per group.
+
+    ``box_stats`` is imported under its own local alias (``_box_stats``) in
+    BOTH ``figure_statplots.py`` (the connect-means line) and
+    ``figure_stat_marks.py`` (scatter/summary) -- patching only one module's
+    alias would silently miss calls the other makes, so both are patched
+    (and counted separately) here."""
+    import quantized.calc.figure_stat_marks as fsm
+    import quantized.calc.figure_statplots as fs
+
+    calls: list[int] = []
+    real_box_stats = fs._box_stats
+    assert fsm._box_stats is real_box_stats  # same underlying function, two aliases
+
+    def counting(g: Any) -> Any:
+        calls.append(len(g))
+        return real_box_stats(g)
+
+    monkeypatch.setattr(fs, "_box_stats", counting)
+    monkeypatch.setattr(fsm, "_box_stats", counting)
+    _draw(
+        "box", {"points": "outliers", "summary": "mean", "error_bars": "se"},
+        show_connect_means=True,
+    )
+    assert len(calls) == len(_GROUPS)  # once per group, not up to 3x
+
+
+def test_box_stats_skipped_entirely_when_nothing_needs_it(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A violin with no points and no summary reads no box_stats at all --
+    the shared cache must not become a NEW unconditional computation."""
+    import quantized.calc.figure_stat_marks as fsm
+    import quantized.calc.figure_statplots as fs
+
+    calls: list[int] = []
+    counting = lambda g: calls.append(len(g)) or {}  # noqa: E731
+    monkeypatch.setattr(fs, "_box_stats", counting)
+    monkeypatch.setattr(fsm, "_box_stats", counting)
+    _draw("violin", {"points": "none", "summary": "none"})
+    assert calls == []

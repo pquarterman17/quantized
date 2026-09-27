@@ -6,14 +6,17 @@
 // of each domain rule), and the plot rect's bottom margin.
 //
 // A draw built by the stage carries `marks` (`lib/statMarks.resolveStatMarks`
-// over the persisted `PlotView.statMarks`). A draw without them — one built
-// before P2.6 box 1, or by a test — keeps its old meaning through the legacy
-// flags (`points`, `showMeanCI`, `connectMeans`): mean +/- 95% CI, box fliers,
-// and box points on top of them when `points` is set.
+// over the persisted `PlotView.statMarks`), which is ALWAYS the case in
+// production (`statStageMarks.withMarks` stamps it on every non-qq/histogram
+// draw unconditionally). A draw without one — a test that builds a minimal
+// `StatDrawData` by hand — falls back to the mode's own plain defaults
+// (review finding 9: the pre-P2.6-box-1 legacy flags `showMeanCI`/
+// `connectMeans` this used to sniff for are gone from the type entirely;
+// every test that needs non-default behaviour sets `marks` directly now).
 
 import type { BarSeriesStat } from "../../lib/barlayout";
 import { stackedTotal } from "../../lib/barlayout";
-import { defaultJitterWidth, errorBounds, errorHalfWidth, type ResolvedStatMarks } from "../../lib/statMarks";
+import { resolveStatMarks, errorBounds, errorHalfWidth, type ResolvedStatMarks } from "../../lib/statMarks";
 import { finiteDomain, type BoxStat } from "../../lib/statstage";
 import type { StatDrawData } from "./statRender";
 import type { CategoryAxisStyle } from "./statRenderAxes";
@@ -21,8 +24,10 @@ import { slotPlan } from "./statRenderSlots";
 
 type Categorical = Extract<StatDrawData, { mode: "box" | "strip" | "violin" | "bar" }>;
 
-/** Box's legacy "points" overlay also kept the fliers; new draws never do
- *  both (a flier is one of the points). */
+/** `legacyFliers` is always false now (review finding 9) — kept on the type
+ *  rather than removed so every existing `DrawMarks` consumer (comparisons,
+ *  destructuring) stays byte-identical; a later pass can drop the field
+ *  itself once nothing reads it. */
 export interface DrawMarks extends ResolvedStatMarks {
   legacyFliers: boolean;
 }
@@ -30,24 +35,14 @@ export interface DrawMarks extends ResolvedStatMarks {
 /** The marks `d` is drawn with. */
 export function drawMarks(d: Categorical): DrawMarks {
   if (d.marks) return { ...d.marks, legacyFliers: false };
-  const legacy = "showMeanCI" in d && d.showMeanCI === true;
-  const hasPoints = "points" in d && d.points != null;
-  return {
-    points: d.mode === "strip" || (d.mode !== "bar" && hasPoints) ? "all" : d.mode === "box" ? "outliers" : "none",
-    jitterWidth: defaultJitterWidth(d.mode),
-    summary: legacy ? "mean" : "none",
-    errorBars: d.mode === "bar" ? "se" : "ci95",
-    connectMeans: "connectMeans" in d && d.connectMeans === true,
-    labelRotation: 0,
-    labelWrap: false,
-    legacyFliers: d.mode === "box" && hasPoints,
-  };
+  return { ...resolveStatMarks(d.mode, null), legacyFliers: false };
 }
 
 /** The category-axis label options `d` is drawn with. */
 export function axisStyleOf(d: StatDrawData | null): CategoryAxisStyle {
-  if (!d || !("marks" in d) || !d.marks) return {};
-  return { rotation: d.marks.labelRotation, wrap: d.marks.labelWrap };
+  const nestLabel = d && "nestLabel" in d ? d.nestLabel : null;
+  if (!d || !("marks" in d) || !d.marks) return { nestLabel };
+  return { rotation: d.marks.labelRotation, wrap: d.marks.labelWrap, nestLabel };
 }
 
 /** The tick labels `d` draws, one per AXIS slot (empty slots included). */
@@ -88,27 +83,39 @@ export function stripValueDomain(d: Extract<StatDrawData, { mode: "strip" }>): [
   return finiteDomain([...d.points.map((g) => g.points.map((p) => p.value)), d.boxes.flatMap((b) => summaryExtents(b, m))]);
 }
 
-/** A bar's error-bar half-width under `d`'s error-bar kind (NaN: none). */
-export function barErrorHalf(d: Extract<StatDrawData, { mode: "bar" }>, s: BarSeriesStat): number {
-  return errorHalfWidth(drawMarks(d).errorBars, s.sem, s.n);
+/** A bar's error-bar half-width under `d`'s error-bar kind (NaN: none).
+ *  Review finding 10: takes the ALREADY-resolved marks (`m`) when the
+ *  caller has one (a loop over many groups/series shares ONE `drawMarks(d)`
+ *  rather than re-deriving it — cheap on its own, but re-allocated once per
+ *  series/group otherwise); omitted, it resolves `d`'s own, byte-identical
+ *  to before this fix. */
+export function barErrorHalf(
+  d: Extract<StatDrawData, { mode: "bar" }>, s: BarSeriesStat, m: DrawMarks = drawMarks(d),
+): number {
+  return errorHalfWidth(m.errorBars, s.sem, s.n);
 }
 
 /** Every extent bar mode draws (bar tops/bottoms, error whiskers, 0) — the
- *  candidates `barValueDomain` spans. */
-export function barDomainCandidates(d: Extract<StatDrawData, { mode: "bar" }>): number[] {
+ *  candidates `barValueDomain` spans. Review finding 10: resolves `d`'s
+ *  marks ONCE (or takes the caller's own, e.g. `statRenderBar.drawBar`'s,
+ *  so the two never re-derive it separately) and shares it across every
+ *  group/series' `barErrorHalf`, rather than once per call. */
+export function barDomainCandidates(
+  d: Extract<StatDrawData, { mode: "bar" }>, m: DrawMarks = drawMarks(d),
+): number[] {
   const out: number[] = [0];
   for (const g of d.data.groups) {
     if (d.stacked) {
       const total = stackedTotal(g.series);
       out.push(total);
       const last = g.series[g.series.length - 1];
-      const half = last ? barErrorHalf(d, last) : NaN;
+      const half = last ? barErrorHalf(d, last, m) : NaN;
       if (Number.isFinite(half)) out.push(total + half, total - half);
     } else {
       for (const s of g.series) {
         if (!Number.isFinite(s.mean)) continue;
         out.push(s.mean);
-        const half = barErrorHalf(d, s);
+        const half = barErrorHalf(d, s, m);
         if (Number.isFinite(half)) out.push(s.mean + half, s.mean - half);
       }
     }

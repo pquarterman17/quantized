@@ -34,6 +34,17 @@ function stamp(d: StatDrawData, r: ResolvedStatMarks): StatDrawData {
   return { ...d, marks: r };
 }
 
+/** Review finding 4: stamps the STRUCTURAL nesting signal (`CategoryAxisMarks
+ *  .nestLabel`) onto a draw, the same narrowing `stamp` above uses (qq/
+ *  histogram carry no `CategoryAxisMarks` at all, so the union spread would
+ *  otherwise not type-check). `useStatStage`/`useStatStageCompute` call this
+ *  right after computing a box/violin/strip draw — never inferred from the
+ *  draw's own label text (`lib/statMarks.nestedTiers`'s doc). */
+export function withNestLabel(d: StatDrawData, nestLabel: string | null): StatDrawData {
+  if (d.mode === "qq" || d.mode === "histogram") return d;
+  return { ...d, nestLabel };
+}
+
 /** Facet panels carry no raw points (JMP_GAP J5 residual), so a panel shows
  *  what it CAN: a box its fliers (for "all" or "outliers"), a violin none.
  *  The export applies the same rule (`calc.figure_facets._facet_marks`). No

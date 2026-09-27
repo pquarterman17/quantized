@@ -16,7 +16,7 @@ import { groupedBarSlots, stackedSegments, stackedTotal } from "../../lib/barlay
 import { barCountAnchor } from "../../lib/groupAxis";
 import { barValueDomain, categorySlots } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
-import { axisStyleOf, barDomainCandidates, barErrorHalf } from "./statDrawMarks";
+import { axisStyleOf, barDomainCandidates, barErrorHalf, drawMarks } from "./statDrawMarks";
 import { drawValueAxis, type Rect, type StatDrawData } from "./statRender";
 import { drawCategoryAxis } from "./statRenderAxes";
 import { drawCountLabel, drawEmptySlotMarkers } from "./statRenderSlots";
@@ -54,10 +54,13 @@ export function drawBar(
   const groups = d.data.groups;
   if (!groups.length) return;
   const nSeries = d.data.seriesLabels.length;
+  // Review finding 10: resolved ONCE and shared with every `barErrorHalf`
+  // call below, rather than once per group/series.
+  const m = drawMarks(d);
 
   // Domain candidates: every drawn extent (bar top/bottom ± error), always
   // including 0 (barValueDomain's job) — shared with the click hit-test.
-  const domain = barValueDomain(barDomainCandidates(d));
+  const domain = barValueDomain(barDomainCandidates(d, m));
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
   const slots = categorySlots(groups.length);
   drawCategoryAxis(ctx, rect, slots, groups.map((g) => g.label), d.groupLabel, ink, muted, axisStyleOf(d));
@@ -89,7 +92,7 @@ export function drawBar(
         ctx.strokeRect(cx - hw, yTop, hw * 2, Math.max(1, yBot - yTop));
       });
       const last = g.series[g.series.length - 1];
-      const half = last ? barErrorHalf(d, last) : NaN;
+      const half = last ? barErrorHalf(d, last, m) : NaN;
       if (Number.isFinite(half)) {
         const top = stackedTotal(g.series);
         drawWhisker(ctx, cx, vy(top + half), vy(top - half), hw * 0.5, ink);
@@ -100,7 +103,7 @@ export function drawBar(
         const sub = subSlots[si];
         const barCx = cx + sub.offset * catFullW;
         const hw = sub.halfWidth * catFullW;
-        const half = barErrorHalf(d, s);
+        const half = barErrorHalf(d, s, m);
         if (showN) drawCountLabel(ctx, barCx, vy(barCountAnchor(s.mean, half)), s.n, muted);
         if (!Number.isFinite(s.mean)) return;
         const color = seriesColor(si);

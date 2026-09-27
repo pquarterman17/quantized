@@ -4317,10 +4317,46 @@ violin, bar, strip, or summary plots.
   extrema lines — pre-existing); in-stage level RENAME (use Recode); the
   figure does not state which error bar it shows (no legend / footnote);
   single-line labels still truncate at 14 chars on screen (not in the export)
-  unless "wrap" is on; the nested / tier split is textual (`" / "`) on both
-  sides, as connect-means already was; rotated-label depth is estimated from
-  character counts (both sides), not measured; the Graph Builder preview
-  ignores the marks; no e2e spec.
+  unless "wrap" is on; rotated-label depth is estimated from character counts
+  (both sides), not measured; the Graph Builder preview ignores the marks; no
+  e2e spec.
+  **Review round (2026-09-27, 10 findings fixed, each sabotage-verified):**
+  a violin's jittered `points` groups now relabel alongside its `violins`
+  when levels are hidden/reordered, so the canvas and the export jitter hash
+  the same category strings (previously only `violins` was relabelled — a
+  silent screen/export mismatch on any relabelled violin). The canvas'
+  y-domain (fed to the export as an explicit `y_domain`) now matches what it
+  actually draws instead of including hidden fliers/points the export never
+  scales to. A legacy (pre-marks) strip request now maps `show_points=False`
+  to no scatter, matching pre-P2.6 behaviour exactly; the one deliberate
+  divergence (legacy `show_points=True` implying "outliers" would have
+  double-drawn — it now means "all") is spelled out in the docstring rather
+  than claimed identical. The nested/tiered axis split is now STRUCTURAL:
+  `StatDrawData.nestLabel` (set only when a nest column is active) drives it
+  on screen, and an explicit `axis_style.tiers` pairs list crosses the wire to
+  the export — neither side sniffs `" / "` in label text any more, so an
+  outer-level VALUE that happens to contain that separator can no longer
+  mis-split the axis or misgroup a connect-means line. The bar path (flat and
+  faceted) keeps the outer-tier axis and puts the x title below the outer
+  tier instead of colliding with it. `statMarks` is now stored per-mode
+  (`{box?, violin?, strip?, bar?}` on `PlotView`) rather than one shared
+  object, so choosing e.g. box's error bar no longer changes strip's default;
+  a `.dwk` opened from before this change migrates by broadcasting its one
+  flat object into all four buckets. The plot rect's bottom-margin cap and the
+  category-axis painter/hit-test now share one capped layout (never draw past
+  a margin the rect didn't reserve). Export label wrapping now operates on the
+  RAW label and never breaks inside a `$...$` math span, sanitizing each
+  wrapped line afterward (previously wrapping ran after math-escaping, which
+  could split a span and shift char counts vs the canvas's own wrap). Removed
+  dead legacy surface: `statRenderBox.boxValueDomain`, `useStatStage`'s
+  `showPoints`/`setShowPoints`/`showMeanCI`/`setShowConnectMeans` shorthands,
+  and the `showMeanCI`/`connectMeans` params of `computeBoxDraw`/
+  `computeStripDraw` — everything now goes through the resolved-marks object.
+  Perf: the backend computes each group's `box_stats` once per render and
+  reuses it across scatter/summary/connect-means (was recomputed per use);
+  the frontend resolves `drawMarks` once per paint (was once per group/
+  series) and memoizes `categoryAxisLayout` by its own inputs (was re-wrapped
+  every hit-test).
 - [x] Missing levels and unbalanced groups are explicit. (2026-09-26)
   **Survey (before):** every categorical path closed the axis up silently.
   `categoryLevels` never saw a level declared in `cat_levels` that no row

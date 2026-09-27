@@ -23,7 +23,7 @@ import {
 import { seriesColor } from "../../lib/uplotOpts";
 import {
   axisStyleOf,
-  boxValueDomain as marksBoxDomain,
+  boxValueDomain,
   drawMarks,
   stripValueDomain,
   summaryErrorBounds,
@@ -151,12 +151,16 @@ export function drawConnectMeansLine(
    *  box i — the line lifts there too (`SlotPlan.gaps`; export:
    *  `calc.figure_group_notes.connect_segments`). */
   gaps: readonly boolean[] = [],
+  /** Review finding 4: the STRUCTURAL nesting signal (`StatDrawData.
+   *  nestLabel`) `connectMeansBreaks` needs — never read off `boxes[i].
+   *  label`'s own text. */
+  nestLabel: string | null | undefined = null,
 ) {
   const means = connectMeansSeries(boxes);
   // Review finding 2: under NESTED grouping the line must not run across an
   // outer-factor boundary — see `connectMeansBreaks` for why that reading is
   // wrong. Non-nested plots get exactly one segment, as before.
-  const breaks = connectMeansBreaks(boxes).map((b, i) => b || gaps[i] === true);
+  const breaks = connectMeansBreaks(boxes, nestLabel).map((b, i) => b || gaps[i] === true);
   ctx.save();
   ctx.strokeStyle = ink;
   ctx.lineWidth = 1.5;
@@ -199,19 +203,6 @@ function drawGroupAxis(
 
 // ── Box (+ optional points / mean-CI overlays) ──────────────────────────────
 
-/** Box mode's value domain for `boxes` with (or without) the mean +/- 95%
- *  CI marker — kept for its callers; the rule itself (whiskers + fliers +
- *  the summary marker's reach) is `statDrawMarks.boxValueDomain`. */
-export function boxValueDomain(
-  boxes: readonly BoxStat[],
-  showMeanCI: boolean | undefined,
-): [number, number] {
-  return marksBoxDomain(boxes, {
-    points: "outliers", jitterWidth: 0, summary: showMeanCI ? "mean" : "none", errorBars: "ci95",
-    connectMeans: false, labelRotation: 0, labelWrap: false,
-  });
-}
-
 export function drawBoxesWithMarks(
   ctx: CanvasRenderingContext2D,
   rect: Rect,
@@ -221,7 +212,7 @@ export function drawBoxesWithMarks(
 ) {
   if (!d.boxes.length) return;
   const m = drawMarks(d);
-  const domain = marksBoxDomain(d.boxes, m);
+  const domain = boxValueDomain(d.boxes, m);
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
   const plan = drawGroupAxis(ctx, rect, d, d.boxes.map((b) => b.label), d.boxes.map((b) => b.n), ink, muted);
   const slots = plan.groupSlot.map((i) => plan.slots[i]);
@@ -286,7 +277,7 @@ export function drawBoxesWithMarks(
 
   // Connect-means line last (JMP_GAP J5 residual) so it draws on top of
   // every box glyph.
-  if (m.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, plan.gaps);
+  if (m.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, plan.gaps, d.nestLabel);
 }
 
 // ── Strip (points-only, JMP_GAP J5 #3) ──────────────────────────────────────
@@ -322,5 +313,5 @@ export function drawStrip(
 
   // Connect-means line last (JMP_GAP J5 residual) so it draws on top of the
   // jittered points.
-  if (m.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, plan.gaps);
+  if (m.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, plan.gaps, d.nestLabel);
 }

@@ -92,8 +92,10 @@ describe("wrapLabel — the shared fixture (export parity)", () => {
 });
 
 describe("nestedTiers", () => {
-  it("splits inner labels and maximal consecutive outer runs", () => {
-    expect(nestedTiers(["lot = 1 / w = a", "lot = 1 / w = b", "lot = 2 / w = a", "lot = 1 / w = c"])).toEqual({
+  it("splits inner labels and maximal consecutive outer runs, given the nest column's name", () => {
+    const labels = ["lot = 1 / w = a", "lot = 1 / w = b", "lot = 2 / w = a", "lot = 1 / w = c"];
+    expect(nestedTiers(labels, "w")).toEqual({
+      pairs: [["lot = 1", "w = a"], ["lot = 1", "w = b"], ["lot = 2", "w = a"], ["lot = 1", "w = c"]],
       inner: ["w = a", "w = b", "w = a", "w = c"],
       runs: [
         { label: "lot = 1", first: 0, last: 1 },
@@ -101,8 +103,37 @@ describe("nestedTiers", () => {
         { label: "lot = 1", first: 3, last: 3 },
       ],
     });
-    expect(nestedTiers(["A", "lot = 1 / w = a"])).toBeNull();
-    expect(nestedTiers([])).toBeNull();
+    expect(nestedTiers(["A", "lot = 1 / w = a"], "w")).toBeNull();
+    expect(nestedTiers([], "w")).toBeNull();
+  });
+
+  // Review finding 4.
+  it("never treats a FLAT label as nested, no matter what it contains (no nest column active)", () => {
+    expect(nestedTiers(["Co / Pt", "Fe / Ni"], null)).toBeNull();
+    expect(nestedTiers(["Co / Pt", "Fe / Ni"], undefined)).toBeNull();
+    // Even with an active nest column, a label that never reaches ITS
+    // marker (a stale/foreign label) is refused rather than mis-split.
+    expect(nestedTiers(["Co / Pt", "Fe / Ni"], "wafer")).toBeNull();
+  });
+
+  it("groups a NESTED outer level whose own text contains \" / \" correctly", () => {
+    // outer = "alloy = Co / Pt" (the level itself, an alloy composition),
+    // inner = "wafer = A"/"wafer = B" — the naive first-" / "-occurrence
+    // split would cut inside "Co / Pt" and misread "Pt / wafer = A" as the
+    // inner half; splitting at the nest column's OWN marker does not.
+    const labels = ["alloy = Co / Pt / wafer = A", "alloy = Co / Pt / wafer = B", "alloy = Fe / wafer = A"];
+    expect(nestedTiers(labels, "wafer")).toEqual({
+      pairs: [
+        ["alloy = Co / Pt", "wafer = A"],
+        ["alloy = Co / Pt", "wafer = B"],
+        ["alloy = Fe", "wafer = A"],
+      ],
+      inner: ["wafer = A", "wafer = B", "wafer = A"],
+      runs: [
+        { label: "alloy = Co / Pt", first: 0, last: 1 },
+        { label: "alloy = Fe", first: 2, last: 2 },
+      ],
+    });
   });
 });
 
@@ -127,12 +158,22 @@ describe("resolveStatMarks — per-mode defaults", () => {
 describe("axisStyleWire", () => {
   const r = resolveStatMarks("box", {});
   it("is null for an untouched flat axis, so the request is unchanged", () => {
-    expect(axisStyleWire(r, ["a", "b"])).toBeNull();
+    expect(axisStyleWire(r, ["a", "b"], null)).toBeNull();
   });
-  it("carries tiers exactly when the screen draws them, and the options", () => {
-    expect(axisStyleWire(r, ["a = 1 / b = 1"])).toEqual({ rotation: 0, wrap: null, tiered: true });
-    expect(axisStyleWire({ ...r, labelRotation: 90, labelWrap: true }, ["a"])).toEqual({
+  it("carries tiers (the pairs, not just the bool) exactly when nestLabel says the axis IS nested", () => {
+    expect(axisStyleWire(r, ["a = 1 / b = 1"], "b")).toEqual({
+      rotation: 0, wrap: null, tiered: true, tiers: [["a = 1", "b = 1"]],
+    });
+    expect(axisStyleWire({ ...r, labelRotation: 90, labelWrap: true }, ["a"], null)).toEqual({
       rotation: 90, wrap: 12, tiered: false,
+    });
+  });
+  // Review finding 4: a flat category value containing " / " (no nest
+  // column active) must never be sent as tiered.
+  it("stays single-tier for a flat label that happens to contain \" / \"", () => {
+    expect(axisStyleWire(r, ["Co / Pt", "Fe / Ni"], null)).toBeNull();
+    expect(axisStyleWire({ ...r, labelRotation: 45 }, ["Co / Pt"], null)).toEqual({
+      rotation: 45, wrap: null, tiered: false,
     });
   });
 });

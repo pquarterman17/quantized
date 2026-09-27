@@ -149,9 +149,13 @@ function slotContentPixelRange(data: StatDrawData, rect: Rect, slotIndex: number
       const groups = data.data.groups;
       const g = groups[slotIndex];
       if (!g || g.series.every((s) => s.n === 0)) return null; // an empty slot
-      const domain = barValueDomain(barDomainCandidates(data));
+      // Review finding 10: resolved ONCE, shared with barDomainCandidates
+      // and every series' half-width below (a click hit-test, but the same
+      // "don't re-derive per series" rule the painter follows).
+      const barMarks = drawMarks(data);
+      const domain = barValueDomain(barDomainCandidates(data, barMarks));
       const halfOf = (s: (typeof g.series)[number]) => {
-        const h = barErrorHalf(data, s);
+        const h = barErrorHalf(data, s, barMarks);
         return Number.isFinite(h) ? h : 0;
       };
       if (data.stacked) {
