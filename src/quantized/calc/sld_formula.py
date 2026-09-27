@@ -19,6 +19,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from quantized.heavy_import import heavy_imports
+
 #: Thermal-neutron wavelength (2200 m/s) — the NCNR calculator default (Å).
 NEUTRON_WAVELENGTH = 1.798
 #: Cu Kα — the conventional laboratory X-ray wavelength (Å).
@@ -78,8 +80,9 @@ def sld_from_formula(
     # Deferred: periodictable measures ~0.03 s to import, so this buys no
     # meaningful startup speedup — it's deferred to keep this optional
     # feature's dependency out of create_app() startup at all.
-    import periodictable as pt
-    from periodictable import formula as _formula
+    with heavy_imports("periodictable"):
+        import periodictable as pt
+        from periodictable import formula as _formula
 
     if not compound.strip():
         raise ValueError("formula is empty")

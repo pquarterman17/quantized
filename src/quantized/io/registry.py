@@ -15,6 +15,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from quantized.datastruct import DataStruct
+from quantized.heavy_import import heavy_imports
 from quantized.io.bruker_brml import import_bruker_brml
 from quantized.io.bruker_raw import import_bruker_raw, is_bruker_raw
 from quantized.io.delimited import import_csv
@@ -81,7 +82,8 @@ def _import_excel_lazy(path: Path) -> DataStruct:
     """Deferred ``import_excel`` — ``openpyxl`` (~0.2 s import, measured) loads only when
     an ``.xlsx``/``.xlsm`` file is actually parsed, not at registry import time
     (which runs at every app startup)."""
-    from quantized.io.excel import import_excel
+    with heavy_imports("quantized.io.excel"):
+        from quantized.io.excel import import_excel
 
     return import_excel(path)
 

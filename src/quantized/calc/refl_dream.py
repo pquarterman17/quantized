@@ -72,6 +72,7 @@ from quantized.calc.dream_seed import DreamCancelled, seed_reproducible, seeded_
 from quantized.calc.refl_dream_bands import PERCENTILES, posterior_bands
 from quantized.calc.refl_fit import channel_model, channel_residuals
 from quantized.calc.refl_model import ReflChannel, ReflParams, validate_model
+from quantized.heavy_import import heavy_imports
 
 __all__ = [
     "MIN_CHAINS", "MIN_KEPT_GENERATIONS", "PERCENTILES", "RHAT_FLAG", "plan_sampling",
@@ -282,9 +283,18 @@ def sample_reflectivity(
     a model ``fit_reflectivity`` would refuse, nothing free to sample, a
     centre outside the bounds, bad settings, or a missing bumps install.
     """
+    def waiting() -> None:
+        # Queued behind another thread's bumps import or another DREAM run:
+        # still cancellable.
+        if progress_callback is not None:
+            progress_callback(0.0)
+        if abort_check is not None and abort_check():
+            raise DreamCancelled("cancelled while waiting for another DREAM run")
+
     try:
-        from bumps.dream.core import Dream
-        from bumps.dream.gelman import gelman
+        with heavy_imports("bumps.dream.core", "bumps.dream.gelman", while_waiting=waiting):
+            from bumps.dream.core import Dream
+            from bumps.dream.gelman import gelman
     except ImportError as exc:
         raise ValueError(_INSTALL_HINT) from exc
     s = _Setup(parameters, channels, centre, weighting, samples, burn, pop, thin, band_draws)
@@ -311,13 +321,6 @@ def sample_reflectivity(
         if progress_callback is not None:
             progress_callback(min(0.94, 0.95 * state.generation / (total_gens + 1)))
         return True
-
-    def waiting() -> None:
-        # Queued behind another DREAM run: still cancellable.
-        if progress_callback is not None:
-            progress_callback(0.0)
-        if abort_check is not None and abort_check():
-            raise DreamCancelled("cancelled while waiting for another DREAM run")
 
     state: Any = None
     with seeded_dream(seed, while_waiting=waiting) as stream:

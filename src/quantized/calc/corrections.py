@@ -19,6 +19,8 @@ from typing import Any
 
 import numpy as np
 
+from quantized.heavy_import import heavy_imports
+
 from ..cat_levels import surviving_level_order
 from ..datastruct import DataStruct
 from ..row_sidecars import slice_row_sidecars
@@ -66,7 +68,8 @@ def _interp_zero_fill(
     """interp1(bgx, bgy, xnew, method, 0): interpolate with 0 outside the range."""
     if method == "linear":
         return np.asarray(np.interp(xnew, bgx, bgy, left=0.0, right=0.0), dtype=float)
-    from scipy.interpolate import CubicSpline, PchipInterpolator
+    with heavy_imports("scipy.interpolate"):
+        from scipy.interpolate import CubicSpline, PchipInterpolator
 
     order = np.argsort(bgx)
     bx, by = bgx[order], bgy[order]

@@ -44,6 +44,7 @@ from collections.abc import Sequence
 from typing import Any
 
 from quantized.datastruct import DataStruct
+from quantized.heavy_import import heavy_imports
 
 __all__ = ["com_available", "send_to_origin"]
 
@@ -64,7 +65,8 @@ def com_available() -> bool:
     if os.environ.get(_FLAG_ENV) != "1":
         return False
     try:
-        import win32com.client  # noqa: F401  (lazy: optional Windows-only dep)
+        with heavy_imports("win32com.client"):
+            import win32com.client  # noqa: F401  (lazy: optional Windows-only dep)
     except ImportError:
         return False
     return True
@@ -139,7 +141,8 @@ def send_to_origin(
             + _UNAVAILABLE_HINT
         )
 
-    import win32com.client as win32  # lazy: optional Windows-only dep
+    with heavy_imports("win32com.client"):
+        import win32com.client as win32  # lazy: optional Windows-only dep
 
     try:
         app = win32.gencache.EnsureDispatch("Origin.ApplicationSI")

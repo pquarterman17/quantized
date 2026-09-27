@@ -13,7 +13,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from .processing import derivative
+from .processing import derivative, smooth_data
 
 __all__ = [
     "convert_mag_units",
@@ -459,6 +459,4 @@ def _nanmean_abs(v: NDArray[np.float64]) -> float:
 
 def smooth_data_savgol(m: NDArray[np.float64], window: int) -> NDArray[np.float64]:
     """Savitzky-Golay presmooth used by the (default-off) PreSmooth path."""
-    from .processing import smooth_data
-
     return smooth_data(m, method="savitzky-golay", window=window)

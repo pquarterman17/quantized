@@ -42,6 +42,7 @@ from functools import lru_cache
 from typing import Any
 
 from quantized.calc.render_lock import RenderLockTimeout, acquire_render_lock
+from quantized.heavy_import import heavy_imports
 
 __all__ = ["safe_mathtext_label", "series_display_name", "SUPPORTED_MATHTEXT_COMMANDS"]
 
@@ -125,7 +126,8 @@ def _uses_only_supported_commands(label: str) -> bool:
 @lru_cache(maxsize=1)
 def _parser() -> Any:
     """The mathtext trial parser (cached -- construction is not free)."""
-    from matplotlib.mathtext import MathTextParser
+    with heavy_imports("matplotlib.mathtext"):
+        from matplotlib.mathtext import MathTextParser
 
     return MathTextParser("agg")
 

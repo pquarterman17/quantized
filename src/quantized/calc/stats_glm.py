@@ -13,6 +13,8 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from quantized.heavy_import import heavy_imports
+
 __all__ = ["logistic_regression", "poisson_regression"]
 
 _EPS = float(np.finfo(float).tiny)
@@ -21,7 +23,8 @@ _EPS = float(np.finfo(float).tiny)
 def _check_statsmodels() -> None:
     """Raise a clear error if statsmodels is not installed."""
     try:
-        import statsmodels  # noqa: F401
+        with heavy_imports("statsmodels"):
+            import statsmodels  # noqa: F401
     except ImportError as exc:
         raise RuntimeError(
             "GLM methods require statsmodels. Install with: pip install quantized[stats]"
@@ -86,7 +89,8 @@ def logistic_regression(
     (Newton-Raphson IRLS).
     """
     _check_statsmodels()
-    import statsmodels.api as sm
+    with heavy_imports("statsmodels.api"):
+        import statsmodels.api as sm
 
     xmat0 = _as_matrix(predictors)
     yv = np.asarray(y, dtype=float).ravel()
@@ -178,7 +182,8 @@ def poisson_regression(
     (Fisher scoring / IRLS).
     """
     _check_statsmodels()
-    import statsmodels.api as sm
+    with heavy_imports("statsmodels.api"):
+        import statsmodels.api as sm
 
     xmat0 = _as_matrix(predictors)
     yv = np.asarray(y, dtype=float).ravel()

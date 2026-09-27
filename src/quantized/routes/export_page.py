@@ -17,6 +17,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
+from quantized.heavy_import import heavy_imports
 from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
 from quantized.routes._export_common import (
     _DPI_MAX,
@@ -25,11 +26,8 @@ from quantized.routes._export_common import (
     _attachment,
     _safe_name,
 )
-from quantized.routes.export_figures import (
-    FigureRequest,
-    _facet_panels,
-    _figure_series,
-)
+from quantized.routes.export_figures import FigureRequest, _figure_series
+from quantized.routes.export_figures_facets import _facet_panels
 from quantized.routes.export_figures_schema import _tick_fmt
 
 router = APIRouter(prefix="/api/export", tags=["export"])
@@ -118,8 +116,9 @@ def export_figure_page(req: FigurePageRequest) -> Response:
         )
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
     # Lazy import: matplotlib is heavy — only pay it when a page is exported.
-    from quantized.calc.figure_overrides import _validate_overrides
-    from quantized.calc.figure_page import PagePanel, render_figure_page
+    with heavy_imports("quantized.calc.figure_overrides", "quantized.calc.figure_page"):
+        from quantized.calc.figure_overrides import _validate_overrides
+        from quantized.calc.figure_page import PagePanel, render_figure_page
 
     try:
         panels = []
