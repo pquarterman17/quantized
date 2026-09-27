@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.requests import HTTPConnection
 
 from quantized import __version__
+from quantized.calc.figure_preload import preload_renderer_modules
 from quantized.io.workbook_transfer_store import cleanup_transfer_dir
 from quantized.jobs import jobs
 from quantized.plugins import load_plugins
@@ -164,6 +165,19 @@ async def _app_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
         cleanup_transfer_dir()
     except OSError:
         logging.getLogger(__name__).warning("transfer-package cleanup failed", exc_info=True)
+    # Startup: import every calc/figure*.py renderer module (and the
+    # matplotlib submodules they pull in) ONCE, single-threaded, before this
+    # coroutine yields -- i.e. before the ASGI server accepts its first
+    # connection, so no request-handling thread exists yet to race a lazy
+    # `from quantized.calc.figure_map import ...` (etc.) against this.
+    # ``calc.figure_preload``'s module doc has the 2026-09-27 cold-process
+    # concurrent-import bug this closes. Off the event loop (~1s of import
+    # work -- matplotlib's Agg backend is not cheap) via ``asyncio.to_thread``,
+    # but still awaited here, so startup genuinely does not complete -- and no
+    # request is served -- until it is done. Deliberately not caught: if
+    # matplotlib itself cannot import, every export route is broken anyway,
+    # and failing loudly at startup beats failing at the first export request.
+    await asyncio.to_thread(preload_renderer_modules)
     yield
     # Shutdown: terminate the job executor with pending cancellation
     jobs._pool.shutdown(wait=False, cancel_futures=True)
