@@ -50,12 +50,37 @@ export interface FacetSlice {
   data: DataStruct;
   /** `rows[j]` is the row index into the `data` ARGUMENT passed to
    *  `facetSlices` that slice-local position j came from — ascending, the
-   *  same order as `data.time`/`data.values`. Exists so a consumer that
-   *  reads a point's `rowIndex` INTO this slice (an `IndexedGroupSpec` built
-   *  from `s.data`, e.g. a faceted strip/box-points overlay) can map it back
-   *  to the row it was resolved from (P2.6 review finding 7 — the selection
-   *  link's per-panel point rings). */
+   *  same order as `data.time`/`data.values`. Exists so an `IndexedGroupSpec`
+   *  built from `s.data` (e.g. a faceted strip/box-points overlay) can carry
+   *  ORIGINAL dataset rows: pass `rows` — composed with
+   *  `rowstate.analysisRowIds` when `data` is the analysis view — as
+   *  `statstage.resolveGroupsIndexed`'s `rowIds`, so its jitter and the
+   *  selection link's point rings match the flat panel's (P2.6 review
+   *  finding 7). */
   rows: readonly number[];
+}
+
+/** A facet slice's points' ORIGINAL dataset rows: `slice.rows[j]` composed
+ *  with `rowIds` (`lib/rowstate.analysisRowIds`/`analysisView(ds).rowIds`),
+ *  the SAME composition every faceted `IndexedGroupSpec` must use if it is
+ *  ever built (`slice.rows` maps a slice-local position back to its row in
+ *  the `data` `facetSlices` was called on; `rowIds` then maps THAT back to
+ *  the true original row, when `data` was itself the analysis view). Pass
+ *  `rowIds` as `null` when `data` IS the dataset (nothing dropped) — the
+ *  same "identity means no drop" convention `resolveGroupsIndexed` uses, so
+ *  the result is exactly `slice.rows` unchanged.
+ *
+ *  The ONE production entry point for this composition: `lib/statstage.
+ *  resolveGroupsIndexed`'s `rowIds` argument, wherever a caller resolves
+ *  points PER FACET SLICE rather than for the flat dataset — so a faceted
+ *  box/strip "show points" overlay (not wired on any mode as of this
+ *  writing; `useStatStageCompute.computeFacetGroupDraws` never sets
+ *  `points`) cannot reinvent its own row math and drift from the flat
+ *  panel's. Until that lands, this has no production caller either — it
+ *  exists so the recipe lives in ONE place instead of being duplicated
+ *  inline wherever a test needs it. */
+export function facetSliceRowIds(slice: FacetSlice, rowIds: readonly number[] | null): number[] {
+  return rowIds ? slice.rows.map((r) => rowIds[r] ?? r) : [...slice.rows];
 }
 
 /** Split `data` into one row-sliced `DataStruct` per distinct level of

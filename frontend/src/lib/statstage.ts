@@ -200,21 +200,34 @@ export function resolveGroups(
  *  ORIGINAL dataset row index (for the deterministic jitter hash), not just
  *  its value. Mirrors `resolveGroups`' own branch logic exactly (same
  *  partition, same fallback, same order), so a group's points line up 1:1
- *  with its `BoxStat` sibling from `resolveGroups`/`groupBoxStatsClient`. */
+ *  with its `BoxStat` sibling from `resolveGroups`/`groupBoxStatsClient`.
+ *
+ *  `rowIds[i]` is the ORIGINAL dataset row behind `data` row i — pass
+ *  `lib/rowstate.analysisRowIds` (or `analysisView(ds).rowIds`) when `data` is
+ *  the analysis view. REQUIRED, not defaulted: `null` must be passed
+ *  explicitly to mean "nothing is dropped, `data` IS the dataset" (a
+ *  formerly-optional trailing param silently fell back to view positions
+ *  whenever a caller forgot it — the exact bug this parameter exists to
+ *  prevent). Without the real mapping a point would carry its position in
+ *  the pruned view, so excluding or filtering out one row would shift the
+ *  jitter of every later point (and a figure export with it). Threaded
+ *  straight into the partition builders below (`groupsByCategoryIndexed` &c.)
+ *  so `rowIndex` is set once at construction, never remapped in a second
+ *  pass over already-built groups. */
 export function resolveGroupsIndexed(
   data: DataStruct,
   groupCol: number | null,
   valueCol: number,
   plotted: readonly number[],
-  group2Col: number | null = null,
+  group2Col: number | null,
+  rowIds: readonly number[] | null,
 ): IndexedGroupSpec[] {
   if (groupCol != null) {
     return group2Col != null && group2Col !== groupCol
-      ? groupsByNestedCategoryIndexed(data, valueCol, groupCol, group2Col)
-      : groupsByCategoryIndexed(data, valueCol, groupCol);
+      ? groupsByNestedCategoryIndexed(data, valueCol, groupCol, group2Col, rowIds)
+      : groupsByCategoryIndexed(data, valueCol, groupCol, rowIds);
   }
-  const cols = plotted.length ? plotted : [valueCol];
-  return groupsFromColumnsIndexed(data, cols);
+  return groupsFromColumnsIndexed(data, plotted.length ? plotted : [valueCol], rowIds);
 }
 
 // ── Client-side box stats (offline fallback) ────────────────────────────────

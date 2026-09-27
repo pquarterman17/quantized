@@ -111,14 +111,38 @@ export function filteredOutSet(ds: Dataset | null | undefined): Set<number> {
   return filteredOutRows(applicableFilter(ds), ds.data);
 }
 
+/** `analysisData(ds)` and `analysisRowIds(ds)` together, from ONE
+ *  `droppedRows` pass — the pairing a consumer that needs both (Stage/
+ *  useStatStage's box/strip jitter) used to get by calling `analysisData`
+ *  and `analysisRowIds` separately, each re-deriving the SAME exclusion ∪
+ *  filter Set from scratch. `data` is `analysisData(ds)`'s exact result;
+ *  `rowIds` is `analysisRowIds(ds)`'s (null exactly when nothing is
+ *  dropped, i.e. the view IS the dataset). Both of those stay as thin
+ *  wrappers over this so every caller — old or new — reads the one pass. */
+export function analysisView(
+  ds: Dataset | null | undefined,
+): { data: DataStruct | null; rowIds: number[] | null } {
+  if (!ds) return { data: null, rowIds: null };
+  const drop = droppedRows(ds);
+  if (drop.size === 0) return { data: ds.data, rowIds: null };
+  return { data: pruneExcluded(ds.data, drop), rowIds: activeRowIndices(ds.data.time.length, drop) };
+}
+
 /** The dataset's analysis view: its DataStruct with both manually-excluded rows
  *  (#50) AND filter-failed rows (#53) pruned. Fit / stat / tabulate consumers
  *  read rows through this so exclusion AND the local filter are honored
  *  everywhere. Returns the SAME data reference when neither is active. */
 export function analysisData(ds: Dataset | null | undefined): DataStruct | null {
-  if (!ds) return null;
-  const drop = droppedRows(ds);
-  return drop.size === 0 ? ds.data : pruneExcluded(ds.data, drop);
+  return analysisView(ds).data;
+}
+
+/** The ORIGINAL dataset row behind each row of `analysisData(ds)`, in order,
+ *  or null when nothing is dropped (the analysis view IS the dataset, so the
+ *  map is the identity). Lets a consumer that walks the analysis view report
+ *  original rows — e.g. the box/strip points' jitter key, which must not move
+ *  when an unrelated row is excluded or filtered out. */
+export function analysisRowIds(ds: Dataset | null | undefined): number[] | null {
+  return analysisView(ds).rowIds;
 }
 
 /** `data` after `liveDataset`'s row-drop state (manual exclusion + the local

@@ -21,6 +21,7 @@ import {
   durableComposition,
   facetCompositionFromBinding,
   facetPayloads,
+  facetSliceRowIds,
   facetSlices,
   sharedXDomain,
   sharedYDomain,
@@ -29,7 +30,8 @@ import {
   type FacetPanel,
 } from "./facet";
 import { defaultDenseChannels, type PlotPayload } from "./plotdata";
-import { analysisData } from "./rowstate";
+import { analysisData, analysisRowIds } from "./rowstate";
+import { resolveGroupsIndexed } from "./statstage";
 import type { DataStruct, Dataset } from "./types";
 
 describe("facetPayloads", () => {
@@ -175,6 +177,75 @@ describe("facetSlices", () => {
     // which is what this asserts. Nothing may rely on the old aliasing; the
     // codebase is copy-on-write throughout.
     expect(slices[0].data.metadata).toEqual(ds.metadata);
+  });
+});
+
+// P2.6 review finding 2: the "compose FacetSlice.rows with the analysis
+// view's rowIds" recipe used to be duplicated inline in two test files
+// (Stage/useStatGroupSelection.test.ts, lib/statstage.test.ts) with no
+// production helper backing it. `facetSliceRowIds` is that helper.
+describe("facetSliceRowIds — a facet slice's points' ORIGINAL dataset rows", () => {
+  // grp = i % 3 (facet), val = i (unique) — row 4 will be excluded below.
+  const rows = Array.from({ length: 9 }, (_, i) => [i % 3, i]);
+  const base: Dataset = {
+    id: "d", name: "d",
+    data: { time: rows.map((_, i) => i), values: rows, labels: ["grp", "val"], units: ["", ""], metadata: {} },
+  };
+  const excluded: Dataset = { ...base, excludedRows: [4] };
+
+  it("is the identity (a copy of slice.rows) when rowIds is null — nothing dropped", () => {
+    const slice = facetSlices(base.data, 0)[1]; // grp = 1: rows 1, 4, 7
+    expect(facetSliceRowIds(slice, null)).toEqual([1, 4, 7]);
+  });
+
+  it("maps each slice-local position through rowIds to the TRUE original row", () => {
+    const view = analysisData(excluded)!; // row 4 dropped -> positions shift
+    const ids = analysisRowIds(excluded);
+    const slices = facetSlices(view, 0);
+    // grp = 1 in the view now holds only original rows 1, 7 (4 was excluded).
+    const grp1 = slices.find((s) => s.label === "1")!;
+    expect(facetSliceRowIds(grp1, ids)).toEqual([1, 7]);
+  });
+
+  it("is the ONE recipe a faceted IndexedGroupSpec must use — feeding resolveGroupsIndexed's rowIds", () => {
+    // The contract finding 2 asks for: a facet slice's points, if resolved,
+    // carry the SAME original rows the flat (unfaceted) resolve would for
+    // those same rows — not their slice-local position.
+    const view = analysisData(excluded)!;
+    const ids = analysisRowIds(excluded);
+    const flat = resolveGroupsIndexed(view, 0, 1, [1], null, ids);
+    const slice = facetSlices(view, 0).find((s) => s.label === "1")!;
+    const faceted = resolveGroupsIndexed(slice.data, null, 1, [1], null, facetSliceRowIds(slice, ids));
+    const flatRowsForGrp1 = flat.find((g) => g.label.endsWith("1"))!.points.map((p) => p.rowIndex);
+    expect(faceted[0].points.map((p) => p.rowIndex)).toEqual(flatRowsForGrp1);
+  });
+});
+
+// P2.6 review finding 2 (enforcement): the facet box/violin compute path does
+// not build indexed ("show points") groups yet at all
+// (`useStatStageCompute.computeFacetGroupDraws` hardcodes `points: null`).
+// The day it does, it MUST compose `FacetSlice.rows` with the analysis
+// view's `rowIds` through `facetSliceRowIds` — never slice-local positions —
+// so this greps the source for `resolveGroupsIndexed(` (the only builder that
+// can attach real row indices) and, the moment one shows up there, demands
+// `facetSliceRowIds` appear in the same file. Sabotage-verifiable: wiring
+// `resolveGroupsIndexed(s.data, ...)` into `computeFacetGroupDraws` without
+// `facetSliceRowIds` fails this test.
+describe("faceted points, if ever wired, must go through facetSliceRowIds", () => {
+  it("useStatStageCompute.ts names facetSliceRowIds wherever it calls resolveGroupsIndexed", () => {
+    const path = join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../components/Stage/useStatStageCompute.ts",
+    );
+    const src = readFileSync(path, "utf8");
+    if (src.includes("resolveGroupsIndexed(")) {
+      expect(src).toContain("facetSliceRowIds");
+    } else {
+      // Not wired yet — the guard above is dormant, not vacuous: this branch
+      // documents WHY (JMP_GAP J5 residual, see useStatStageCompute.ts's own
+      // header) rather than silently passing for an unrelated reason.
+      expect(src).toContain("points: null");
+    }
   });
 });
 

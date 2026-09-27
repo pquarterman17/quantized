@@ -109,6 +109,52 @@ describe("variability honours the level order on BOTH factors (Group O-2)", () =
   });
 });
 
+// Review finding 1: `VariabilityCell.rowIds` (index-aligned with `values`)
+// is the jitter key `VariabilityChart.tsx` reads, so it must survive exactly
+// the same exclusion/reshuffle scenario the box/strip fix (lib/jitter.ts,
+// lib/statstage.resolveGroupsIndexed) already covers.
+describe("buildNestedLevels rowIds — the ORIGINAL dataset row behind each cell value", () => {
+  it("defaults to the identity (rowIds[i] === i) when no mapping is given", () => {
+    const levels = buildNestedLevels(DATA, 2, 0, 1);
+    // Cell (A=0, B=0) is rows 0,1,2 of DATA (values 2,4,6).
+    expect(levels[0].cells[0].rowIds).toEqual([0, 1, 2]);
+  });
+
+  it("maps every cell's values back to their TRUE original row when given the analysis view's rowIds", () => {
+    // Row 4 (A=0, B=1, value 6) is dropped from the analysis view — every row
+    // after it shifts down by one position in `view`. Without the mapping, a
+    // consumer keying by position would report row 4's neighbour (row 5) as
+    // if it were row 4.
+    const view: DataStruct = {
+      ...DATA,
+      time: DATA.time.filter((_, i) => i !== 4),
+      values: DATA.values.filter((_, i) => i !== 4),
+    };
+    const rowIds = DATA.time.filter((_, i) => i !== 4); // = [0,1,2,3,5,6,...,17]
+    const levels = buildNestedLevels(view, 2, 0, 1, rowIds);
+    // Cell (A=0, B=1) in `view` now holds only original rows 3 and 5
+    // (value 4 at row 3, value 8 at row 5 — row 4's value 6 is gone).
+    const cell = levels[0].cells[1];
+    expect(cell.values).toEqual([4, 8]);
+    expect(cell.rowIds).toEqual([3, 5]);
+  });
+
+  it("excluding an UNRELATED row leaves every other cell's rowIds (and hence jitter key) unchanged", () => {
+    // Row 4 sits in cell (A=0, B=1) — every OTHER cell's rows are untouched by
+    // its removal, and this pins that: cell (A=1, B=0)'s rowIds must be
+    // EXACTLY what they were before, not shifted down by one.
+    const before = buildNestedLevels(DATA, 2, 0, 1).find((l) => l.aLabel === "1")!.cells[0].rowIds;
+    const view: DataStruct = {
+      ...DATA,
+      time: DATA.time.filter((_, i) => i !== 4),
+      values: DATA.values.filter((_, i) => i !== 4),
+    };
+    const rowIds = DATA.time.filter((_, i) => i !== 4);
+    const after = buildNestedLevels(view, 2, 0, 1, rowIds).find((l) => l.aLabel === "1")!.cells[0].rowIds;
+    expect(after).toEqual(before);
+  });
+});
+
 describe("the nestedLevels extraction is behaviour-preserving where it could not be", () => {
   it("response = the x column, with time SHORTER than values", () => {
     // `buildNestedLevels` bounds rows by min(A, B, RESPONSE); the extracted

@@ -179,10 +179,12 @@ function nestedLabel(
 
 // ── Indexed groups (box/strip "show points" jitter, JMP_GAP J5 #1) ─────────
 // Same partitions as `groupsFromColumns`/`groupsByCategory` above, but each
-// value keeps its ORIGINAL dataset row index alongside it -- the jittered
-// point overlay hashes `(rowIndex, category)` (lib/jitter.ts), not a point's
-// position within the filtered group, so excluding a row (#50) never
-// reshuffles its still-visible neighbours.
+// value keeps its row index INTO `data` alongside it -- the jittered point
+// overlay hashes `(rowIndex, category)` (lib/jitter.ts), not a point's
+// position within its group. When `data` is a pruned analysis view, that
+// index is NOT yet the original dataset row: `lib/statstage.
+// resolveGroupsIndexed`'s `rowIds` maps it back, so excluding a row (#50)
+// never reshuffles its still-visible neighbours.
 
 export interface IndexedPoint {
   value: number;
@@ -194,16 +196,20 @@ export interface IndexedGroupSpec {
   points: IndexedPoint[];
 }
 
-/** Columns mode, index-preserving counterpart to `groupsFromColumns`. */
+/** Columns mode, index-preserving counterpart to `groupsFromColumns`.
+ *  `rowIds[i]` (when given) is the ORIGINAL dataset row behind `data` row i —
+ *  set on `rowIndex` at construction so a caller never needs a second pass
+ *  over the built groups to remap it (`lib/statstage.resolveGroupsIndexed`). */
 export function groupsFromColumnsIndexed(
   data: DataStruct,
   cols: readonly number[],
+  rowIds: readonly number[] | null = null,
 ): IndexedGroupSpec[] {
   return cols.map((c) => {
     const vs = colValues(data, c);
     const points: IndexedPoint[] = [];
     for (let i = 0; i < vs.length; i++) {
-      if (Number.isFinite(vs[i])) points.push({ value: vs[i], rowIndex: i });
+      if (Number.isFinite(vs[i])) points.push({ value: vs[i], rowIndex: rowIds?.[i] ?? i });
     }
     return { label: columnDisplayName(data, c), points };
   });
@@ -226,8 +232,9 @@ export function groupsByNestedCategoryIndexed(
   valueCol: number,
   factorACol: number,
   factorBCol: number,
+  rowIds: readonly number[] | null = null,
 ): IndexedGroupSpec[] {
-  return nestedCells(data, valueCol, factorACol, factorBCol);
+  return nestedCells(data, valueCol, factorACol, factorBCol, rowIds);
 }
 
 /** The ONE nested walk: one cell per (factor-A, factor-B) pair that has finite
@@ -243,6 +250,7 @@ function nestedCells(
   valueCol: number,
   factorACol: number,
   factorBCol: number,
+  rowIds: readonly number[] | null = null,
 ): IndexedGroupSpec[] {
   const a = colValues(data, factorACol);
   const b = colValues(data, factorBCol);
@@ -254,7 +262,7 @@ function nestedCells(
       const points: IndexedPoint[] = [];
       for (let r = 0; r < n; r++) {
         if (a[r] === lvl.aCode && b[r] === lvl.bCodes[bi] && Number.isFinite(val[r])) {
-          points.push({ value: val[r], rowIndex: r });
+          points.push({ value: val[r], rowIndex: rowIds?.[r] ?? r });
         }
       }
       if (points.length > 0) {
@@ -273,6 +281,7 @@ export function groupsByCategoryIndexed(
   data: DataStruct,
   valueCol: number,
   byCol: number,
+  rowIds: readonly number[] | null = null,
 ): IndexedGroupSpec[] {
   const by = colValues(data, byCol);
   const val = colValues(data, valueCol);
@@ -280,7 +289,7 @@ export function groupsByCategoryIndexed(
   const n = Math.min(by.length, val.length);
   for (let i = 0; i < n; i++) {
     if (!Number.isFinite(by[i]) || !Number.isFinite(val[i])) continue;
-    const point: IndexedPoint = { value: val[i], rowIndex: i };
+    const point: IndexedPoint = { value: val[i], rowIndex: rowIds?.[i] ?? i };
     const bucket = parts.get(by[i]);
     if (bucket) bucket.push(point);
     else parts.set(by[i], [point]);

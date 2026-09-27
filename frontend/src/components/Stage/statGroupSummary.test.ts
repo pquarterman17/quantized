@@ -4,11 +4,10 @@
 import { describe, expect, it } from "vitest";
 
 import { countGroupAxis, planGroupAxis } from "../../lib/groupAxis";
-import { analysisData, droppedRows } from "../../lib/rowstate";
+import { analysisData, analysisRowIds, droppedRows } from "../../lib/rowstate";
 import { resolveGroupsIndexed } from "../../lib/statstage";
 import type { DataStruct, Dataset } from "../../lib/types";
 import {
-  analysisPositions,
   applyGesture,
   buildGroupSummary,
   describe as describeStats,
@@ -16,7 +15,6 @@ import {
   NO_PICK,
   selectedCount,
   selectionMarks,
-  toAnalysisRows,
   visibleSummaryRows,
   type PickedKeys,
 } from "./statGroupSummary";
@@ -241,10 +239,22 @@ describe("marks", () => {
     const axes = axesFor();
     const byKey = new Map(s.rows.map((r) => [r.key, r] as const));
     const drawn = axes.flat.slots.filter((x) => x.n > 0); // hide-empty order
-    const m = selectionMarks(drawn, byKey, new Set([6, 7]), NO_PICK, new Set());
+    const m = selectionMarks(drawn, byKey, new Set([6, 7]), NO_PICK);
     expect(m?.slots).toEqual([0, 0, 2]);
-    expect(selectionMarks(drawn.map((x) => ({ ...x, key: undefined })), byKey, new Set([6]), NO_PICK, new Set())).toBeNull();
-    expect(selectionMarks(drawn, byKey, new Set(), NO_PICK, new Set())).toBeNull();
+    expect(m?.ringPoints).toBe(true);
+    expect(selectionMarks(drawn.map((x) => ({ ...x, key: undefined })), byKey, new Set([6]), NO_PICK)).toBeNull();
+    expect(selectionMarks(drawn, byKey, new Set(), NO_PICK)).toBeNull();
+  });
+
+  it("selectionMarks returns null (not a copy of an unrelated selection) when nothing here is marked (review finding 4)", () => {
+    // Row 4 is EXCLUDED (see DS below) — no slot's rows include it — so a
+    // selection naming ONLY row 4 must mark nothing, even though the
+    // selection itself is non-empty. Before the fix this still returned a
+    // non-null `{slots, points}` whenever `selected.size > 0`.
+    const axes = axesFor();
+    const byKey = new Map(s.rows.map((r) => [r.key, r] as const));
+    const drawn = axes.flat.slots.filter((x) => x.n > 0);
+    expect(selectionMarks(drawn, byKey, new Set([4]), NO_PICK)).toBeNull();
   });
 
   it("selectionMarks never paints an empty slot picked in another panel (review finding 1, end to end)", () => {
@@ -255,30 +265,29 @@ describe("marks", () => {
     // Panel f1's own draw carries C's slot too (an axis is shared across
     // panels) — it must read as unmarked, even though the SAME key is
     // "picked" globally.
-    expect(selectionMarks(allSlots, byKey, new Set(), pickedInF0, new Set(), "f1")).toBeNull();
+    expect(selectionMarks(allSlots, byKey, new Set(), pickedInF0, "f1")).toBeNull();
     // Panel f0 itself DOES read it as picked.
     const ci = allSlots.findIndex((sl) => sl.key === "2"); // C, the empty level
-    expect(selectionMarks(allSlots, byKey, new Set(), pickedInF0, new Set(), "f0")?.slots[ci]).toBe(2);
+    expect(selectionMarks(allSlots, byKey, new Set(), pickedInF0, "f0")?.slots[ci]).toBe(2);
   });
 });
 
-describe("analysisPositions / toAnalysisRows", () => {
-  it("maps original rows to the analysis-view positions the points' rowIndex counts in", () => {
-    // Row 4 is excluded, so original 6 is analysis position 5; 4 has none.
-    expect([...toAnalysisRows([0, 4, 6], analysisPositions(DS))]).toEqual([0, 5]);
-    // …and that IS the rowIndex the strip/box points carry for row 6.
-    const groups = resolveGroupsIndexed(analysisData(DS)!, 0, 1, [1], null);
-    const d = groups.find((g) => g.label.endsWith("D"))!;
-    expect(d.points.map((p) => p.rowIndex)).toEqual([5, 6]);
+describe("points and summary rows share ONE index space (original rows)", () => {
+  it("every group's points carry exactly the ORIGINAL rows its summary row lists — no translation needed", () => {
+    // Row 4 is excluded, so the analysis view shifts rows 5.. down by one;
+    // the points must still report 6 and 7 for D, not their view positions.
+    const groups = resolveGroupsIndexed(analysisData(DS)!, 0, 1, [1], null, analysisRowIds(DS));
+    const summary = buildGroupSummary(DS, axesFor());
+    const filled = summary.rows.filter((r) => r.n > 0);
+    expect(groups.map((g) => g.points.map((p) => p.rowIndex))).toEqual(filled.map((r) => [...r.rows]));
+    expect(groups.find((g) => g.label.endsWith("D"))!.points.map((p) => p.rowIndex)).toEqual([6, 7]);
   });
 
-  it("analysisPositions is the identity (null) once nothing is dropped — the cheap path (review finding 4)", () => {
-    const noExclusions: Dataset = { ...DS, excludedRows: [] };
-    expect(analysisPositions(noExclusions)).toBeNull();
-    // toAnalysisRows then passes rows through untouched.
-    expect([...toAnalysisRows([0, 4, 6], analysisPositions(noExclusions))]).toEqual([0, 4, 6]);
-    // With something dropped, it's a real map — same answer as above.
-    expect(analysisPositions(DS)).not.toBeNull();
-    expect([...toAnalysisRows([0, 4, 6], analysisPositions(DS))]).toEqual([0, 5]);
+  it("nested cells carry original rows too", () => {
+    const groups = resolveGroupsIndexed(analysisData(DS)!, 0, 1, [1], 2, analysisRowIds(DS));
+    const summary = buildGroupSummary(DS, axesFor({ group2Col: 2 }));
+    expect(groups.map((g) => g.points.map((p) => p.rowIndex))).toEqual(
+      summary.rows.filter((r) => r.n > 0).map((r) => [...r.rows]),
+    );
   });
 });

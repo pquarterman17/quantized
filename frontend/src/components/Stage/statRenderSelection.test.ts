@@ -96,7 +96,10 @@ describe("selected points", () => {
       groupLabel: "g",
       showMeanCI: false,
       connectMeans: false,
-      selection: { slots: [1, 2], points: new Set([1, 2]) },
+      selection: { slots: [1, 2], ringPoints: true },
+      // The renderer reads the live selection DIRECTLY (review finding 7),
+      // not a copy carried inside `selection`.
+      selectedRows: new Set([1, 2]),
     }, "ink", "muted");
     expect(rings).toEqual([3.5, 3.5]);
   });
@@ -125,7 +128,7 @@ describe("drawSlotSelection", () => {
       },
     } as unknown as CanvasRenderingContext2D;
     const rect = { x: 0, y: 0, w: 300, h: 100 };
-    drawSlotSelection(ctx, rect, { slots: [2, 0, 1], points: new Set() }, "accent");
+    drawSlotSelection(ctx, rect, { slots: [2, 0, 1], ringPoints: false }, "accent");
     expect(fills.map((f) => f.x)).toEqual([0, 200]);
     expect(fills[0].alpha).toBeGreaterThan(fills[1].alpha);
     expect(dashes).toEqual([[], [4, 3]]);

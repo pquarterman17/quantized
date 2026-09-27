@@ -40,7 +40,7 @@ import { statsHistogram, statsQQ } from "../../lib/api";
 import { type BarChartData } from "../../lib/barlayout";
 import { facetSlices } from "../../lib/facet";
 import { effectiveChannels } from "../../lib/plotdata";
-import { analysisData } from "../../lib/rowstate";
+import { analysisView } from "../../lib/rowstate";
 import type { GroupSpec } from "../../lib/statschooser";
 import {
   categoricalChannels,
@@ -77,7 +77,13 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const hideEmpty = params.hideEmptyLevels ?? false;
   const showN = params.showGroupN ?? true;
 
-  const data = useMemo(() => analysisData(active), [active]);
+  // ONE `droppedRows` pass for both: `data` (every mode reads it) and
+  // `rowIds`, the original dataset row behind each `data` row (null: nothing
+  // dropped) — used only by the indexed-groups memo below, when box/strip
+  // points are actually drawn. Two separate `analysisData`/`analysisRowIds`
+  // calls used to re-derive the same exclusion ∪ filter Set twice per
+  // `active` change regardless of mode; this computes it once.
+  const { data, rowIds } = useMemo(() => analysisView(active), [active]);
 
   const columns = useMemo<StatColumn[]>(
     () => (active ? active.data.labels.map((lab, i) => ({ index: i, label: lab })) : []),
@@ -143,16 +149,18 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   }, [data, mode, effectiveGroupCol, valueCol, plotted, nestCol]);
 
   // Indexed groups (JMP_GAP J5 #1/#3): raw finite values + their ORIGINAL
-  // dataset row index, for the jittered points overlay -- only resolved when
-  // actually needed (box's "show points" toggle, or strip mode which always
-  // shows points) so an ordinary box/violin render skips this extra pass.
+  // dataset row index (`rowIds` maps the analysis view back, so a point's
+  // jitter, on screen and in export, never moves when another row is
+  // dropped), for the jittered points overlay -- only resolved when actually
+  // needed (box's "show points" toggle, or strip mode which always shows
+  // points) so an ordinary box/violin render skips this extra pass.
   const indexedGroups = useMemo<IndexedGroupSpec[]>(() => {
     if (!data) return [];
     if (mode === "strip" || (mode === "box" && showPoints)) {
-      return resolveGroupsIndexed(data, effectiveGroupCol, valueCol, plotted, nestCol);
+      return resolveGroupsIndexed(data, effectiveGroupCol, valueCol, plotted, nestCol, rowIds);
     }
     return [];
-  }, [data, mode, showPoints, effectiveGroupCol, valueCol, plotted, nestCol]);
+  }, [data, rowIds, mode, showPoints, effectiveGroupCol, valueCol, plotted, nestCol]);
 
   const valueLabel = columns.find((c) => c.index === valueCol)?.label ?? (valueCol < 0 ? "x" : "value");
   const labelOf = (i: number | null): string | null =>

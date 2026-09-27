@@ -55,6 +55,12 @@ export interface CategoryAxisMarks {
   showN?: boolean;
   /** P2.6 box 4: the linked row selection, painted over the plot. */
   selection?: StatSelectionMarks | null;
+  /** Selected ORIGINAL dataset rows (the same index space `IndexedPoint.
+   *  rowIndex` counts in), present only when `selection?.ringPoints` — the
+   *  box/strip point renderer (`statRenderBox.drawJitteredPoints`) reads
+   *  this DIRECTLY to decide which points get a ring, rather than through a
+   *  copy carried inside `StatSelectionMarks` (P2.6 review finding 7). */
+  selectedRows?: ReadonlySet<number> | null;
 }
 
 export type StatDrawData =
@@ -109,6 +115,7 @@ export type StatDrawData =
        *  otherwise) — read only by the selection link, for the slot keys. */
       slots?: AxisSlot[] | null;
       selection?: StatSelectionMarks | null;
+      selectedRows?: ReadonlySet<number> | null;
     }
   | {
       /** Points-only categorical plot (JMP_GAP J5 #3): same category slots

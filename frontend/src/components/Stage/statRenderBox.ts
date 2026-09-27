@@ -43,8 +43,9 @@ function drawJitteredPoints(
   vy: (v: number) => number,
   color: string,
   jitterFrac = 0.7,
-  /** P2.6 box 4: rows of the linked selection (the points' own `rowIndex`
-   *  space) — drawn opaque with an accent ring, after the rest. */
+  /** P2.6 box 4: rows of the linked selection (original dataset rows, the
+   *  points' own `rowIndex` space) — drawn opaque with an accent ring, after
+   *  the rest. */
   selected?: ReadonlySet<number> | null,
 ) {
   ctx.fillStyle = color;
@@ -254,7 +255,7 @@ export function drawBoxesWithMarks(
     }
 
     const pointsGroup = d.points?.[i];
-    if (pointsGroup) drawJitteredPoints(ctx, pointsGroup, cx, hw, vy, color, 0.7, d.selection?.points);
+    if (pointsGroup) drawJitteredPoints(ctx, pointsGroup, cx, hw, vy, color, 0.7, d.selectedRows);
     if (d.showMeanCI) drawMeanCIMarker(ctx, cx, b, vy, ink);
   });
 
@@ -292,7 +293,7 @@ export function drawStrip(
     const hw = slot.halfWidth * rect.w;
     const color = seriesColor(i);
 
-    drawJitteredPoints(ctx, g, cx, hw, vy, color, 0.85, d.selection?.points);
+    drawJitteredPoints(ctx, g, cx, hw, vy, color, 0.85, d.selectedRows);
     const b = d.boxes[i];
     if (d.showMeanCI && b) drawMeanCIMarker(ctx, cx, b, vy, ink);
   });

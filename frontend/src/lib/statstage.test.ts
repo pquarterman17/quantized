@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 
+import { facetSliceRowIds, facetSlices } from "./facet";
+import { deterministicJitter } from "./jitter";
+import { analysisData, analysisRowIds } from "./rowstate";
 import type { DataStruct, Dataset } from "./types";
 import {
   barValueDomain,
@@ -235,7 +238,7 @@ describe("resolveGroups — NESTED second factor (Group R)", () => {
     // category slots the box stats produced, so a mismatch silently scatters
     // one cell's points over another cell's box.
     const plain = resolveGroups(ds.data, 0, 1, [1], 2);
-    const indexed = resolveGroupsIndexed(ds.data, 0, 1, [1], 2);
+    const indexed = resolveGroupsIndexed(ds.data, 0, 1, [1], 2, null);
     expect(indexed.map((g) => g.label)).toEqual(plain.map((g) => g.label));
     expect(indexed.map((g) => g.points.map((pt) => pt.value))).toEqual(
       plain.map((g) => g.values),
@@ -299,13 +302,13 @@ describe("resolveGroupsIndexed (JMP_GAP J5 #1/#3 — points overlay / strip mode
 
   it("mirrors resolveGroups' partition (same labels, same order, same counts)", () => {
     const plain = resolveGroups(ds.data, 0, 1, [1, 2]);
-    const indexed = resolveGroupsIndexed(ds.data, 0, 1, [1, 2]);
+    const indexed = resolveGroupsIndexed(ds.data, 0, 1, [1, 2], null, null);
     expect(indexed.map((g) => g.label)).toEqual(plain.map((g) => g.label));
     expect(indexed.map((g) => g.points.length)).toEqual(plain.map((g) => g.values.length));
   });
 
   it("carries each point's ORIGINAL dataset row index alongside its value", () => {
-    const indexed = resolveGroupsIndexed(ds.data, 0, 1, [1, 2]);
+    const indexed = resolveGroupsIndexed(ds.data, 0, 1, [1, 2], null, null);
     // level 0 = rows 0,3,6,9,12 (i%3===0); values are i*1.1.
     expect(indexed[0].points.map((p) => p.rowIndex)).toEqual([0, 3, 6, 9, 12]);
     const values = indexed[0].points.map((p) => p.value);
@@ -313,10 +316,63 @@ describe("resolveGroupsIndexed (JMP_GAP J5 #1/#3 — points overlay / strip mode
   });
 
   it("falls back to one indexed group per plotted channel when groupCol is null", () => {
-    const indexed = resolveGroupsIndexed(ds.data, null, 1, [1, 2]);
+    const indexed = resolveGroupsIndexed(ds.data, null, 1, [1, 2], null, null);
     expect(indexed.map((g) => g.label)).toEqual(["valA", "valB"]);
     expect(indexed[0].points).toHaveLength(15);
     expect(indexed[0].points[0]).toEqual({ value: 0, rowIndex: 0 });
+  });
+});
+
+describe("resolveGroupsIndexed rowIds — jitter keyed by ORIGINAL row, stable under exclusion", () => {
+  // group = i % 3, value = i (unique), facet = i % 2.
+  const base = makeDataset(["group", "val", "fac"], Array.from({ length: 18 }, (_, i) => [i % 3, i, i % 2]));
+  const excluded: Dataset = { ...base, excludedRows: [4] };
+
+  /** value -> [original row, jitter offset] for every point in `groups`. */
+  function placed(groups: ReturnType<typeof resolveGroupsIndexed>) {
+    return new Map(
+      groups.flatMap((g) => g.points.map((p) => [p.value, [p.rowIndex, deterministicJitter(p.rowIndex, g.label)]] as const)),
+    );
+  }
+
+  it.each([
+    ["grouped", 0 as number | null],
+    ["per-channel fallback", null],
+  ])("%s: excluding row 4 moves NO other point", (_name, groupCol) => {
+    const before = placed(resolveGroupsIndexed(analysisData(base)!, groupCol, 1, [1], null, analysisRowIds(base)));
+    const after = placed(resolveGroupsIndexed(analysisData(excluded)!, groupCol, 1, [1], null, analysisRowIds(excluded)));
+    expect(after.has(4)).toBe(false);
+    expect(after.size).toBe(before.size - 1);
+    for (const [value, at] of after) expect(at).toEqual(before.get(value));
+    // Every point's row IS its original row (value = row index here).
+    for (const [value, [row]] of after) expect(row).toBe(value);
+  });
+
+  it("faceted panels: each slice's points (FacetSlice.rows through the view's row ids) keep their original rows", () => {
+    const perPanel = (ds: Dataset) => {
+      const ids = analysisRowIds(ds);
+      return facetSlices(analysisData(ds)!, 2).map((sl) =>
+        placed(resolveGroupsIndexed(sl.data, 0, 1, [1], null, facetSliceRowIds(sl, ids))),
+      );
+    };
+    const before = perPanel(base);
+    const after = perPanel(excluded);
+    expect(after).toHaveLength(2);
+    after.forEach((panel, i) => {
+      for (const [value, at] of panel) {
+        expect(at).toEqual(before[i].get(value));
+        expect(at[0]).toBe(value);
+      }
+    });
+    expect(after[0].has(4)).toBe(false); // row 4 sat in the fac = 0 panel
+    expect(after[0].size).toBe(before[0].size - 1);
+    expect(after[1].size).toBe(before[1].size);
+  });
+
+  it("without rowIds a point carries its position in `data` (the pre-fix behaviour, for contrast)", () => {
+    const view = resolveGroupsIndexed(analysisData(excluded)!, null, 1, [1], null, null);
+    // Row 5 is the 5th row of the pruned view (index 4), not original row 5.
+    expect(view[0].points.find((p) => p.value === 5)?.rowIndex).toBe(4);
   });
 });
 

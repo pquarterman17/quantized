@@ -33,7 +33,6 @@
 // slots and two codes that happen to share a label all leave it intact.
 
 import { columnOf } from "../../lib/categorical";
-import { activeRowIndices, droppedRows } from "../../lib/rowstate";
 import { columnDisplayName } from "../../lib/statschooser";
 import type { Dataset } from "../../lib/types";
 import type { AxisSlot } from "../../lib/groupAxis";
@@ -238,46 +237,27 @@ export function applyGesture(
 
 // ── Plot marks ─────────────────────────────────────────────────────────────
 
-/** Original row -> the analysis-view position it prunes to (see
- *  `activeRowIndices`), or `null` when nothing is dropped — an identity map,
- *  since every analysis position then equals its original row (the cheap
- *  path `toAnalysisRows` takes without allocating one). Cache this by
- *  dataset identity (`lib/rowstate.rowStateIdentity`): it used to be rebuilt
- *  from scratch on every selection change (P2.6 review finding 4). */
-export function analysisPositions(active: Dataset): Map<number, number> | null {
-  const drop = droppedRows(active);
-  if (!drop.size) return null;
-  const kept = activeRowIndices(active.data.time.length, drop);
-  return new Map(kept.map((r, i) => [r, i] as const));
-}
-
-/** Original rows -> the analysis-view positions a draw's points count in
- *  (`IndexedPoint.rowIndex` is an index into `analysisData`, which PRUNES
- *  excluded / filtered rows — so it is NOT the original row once anything is
- *  dropped). `positions` is `analysisPositions(active)`; rows not in the
- *  analysis view are left out. */
-export function toAnalysisRows(rows: readonly number[], positions: Map<number, number> | null): Set<number> {
-  const out = new Set<number>();
-  for (const r of rows) {
-    if (!positions) out.add(r);
-    else {
-      const p = positions.get(r);
-      if (p !== undefined) out.add(p);
-    }
-  }
-  return out;
-}
-
 /** The marks for one draw whose drawn slots are `drawSlots` (keyed), or null
  *  when the draw is not keyed (closed-up fallback: no reliable mapping) or
- *  nothing on it is selected. `panel` is the context being marked (see
- *  `markOf`). */
+ *  NOTHING on it is actually marked (P2.6 review finding 4). `panel` is the
+ *  context being marked (see `markOf`).
+ *
+ *  Returning null only when `slots` has some non-zero mark (never merely
+ *  "the app has a selection somewhere") is the fix for finding 4: a slot's
+ *  mark is computed from exactly the rows its points are (`markOf` reads
+ *  `row.rows`, the same universe `IndexedPoint.rowIndex` counts in), so
+ *  "some slot marked" and "some drawn point selected" are the SAME fact —
+ *  there is no third case where a point should ring but every slot reads 0.
+ *  Before this fix, a selection anywhere else in the dataset (a different
+ *  group, a different facet panel, an excluded/filtered row) still forced a
+ *  non-null result, so `withMarks` always produced a NEW draw object even
+ *  when nothing on THIS draw was marked — spurious repaints on every
+ *  unrelated selection change. */
 export function selectionMarks(
   drawSlots: readonly AxisSlot[] | null | undefined,
   byKey: ReadonlyMap<string, SummaryRow>,
   selected: ReadonlySet<number>,
   picked: PickedKeys,
-  points: ReadonlySet<number>,
   panel: string | null = null,
   scope?: PanelScope | null,
 ): StatSelectionMarks | null {
@@ -286,5 +266,6 @@ export function selectionMarks(
     const row = byKey.get(s.key as string);
     return row ? markOf(row, selected, picked, panel, scope) : 0;
   });
-  return slots.some((m) => m > 0) || points.size ? { slots, points } : null;
+  const marked = slots.some((m) => m > 0);
+  return marked ? { slots, ringPoints: marked } : null;
 }
