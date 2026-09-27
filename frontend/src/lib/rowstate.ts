@@ -121,6 +121,17 @@ export function analysisData(ds: Dataset | null | undefined): DataStruct | null 
   return drop.size === 0 ? ds.data : pruneExcluded(ds.data, drop);
 }
 
+/** The ORIGINAL dataset row behind each row of `analysisData(ds)`, in order,
+ *  or null when nothing is dropped (the analysis view IS the dataset, so the
+ *  map is the identity). Lets a consumer that walks the analysis view report
+ *  original rows — e.g. the box/strip points' jitter key, which must not move
+ *  when an unrelated row is excluded or filtered out. */
+export function analysisRowIds(ds: Dataset | null | undefined): number[] | null {
+  if (!ds) return null;
+  const drop = droppedRows(ds);
+  return drop.size === 0 ? null : activeRowIndices(ds.data.time.length, drop);
+}
+
 /** `data` after `liveDataset`'s row-drop state (manual exclusion + the local
  *  Data Filter) is applied, or `data` UNCHANGED when there is no live dataset
  *  bound (a frozen/document-only export). The one substitution every export

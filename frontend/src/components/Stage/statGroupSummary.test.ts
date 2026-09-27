@@ -4,11 +4,10 @@
 import { describe, expect, it } from "vitest";
 
 import { countGroupAxis, planGroupAxis } from "../../lib/groupAxis";
-import { analysisData, droppedRows } from "../../lib/rowstate";
+import { analysisData, analysisRowIds, droppedRows } from "../../lib/rowstate";
 import { resolveGroupsIndexed } from "../../lib/statstage";
 import type { DataStruct, Dataset } from "../../lib/types";
 import {
-  analysisPositions,
   applyGesture,
   buildGroupSummary,
   describe as describeStats,
@@ -16,7 +15,6 @@ import {
   NO_PICK,
   selectedCount,
   selectionMarks,
-  toAnalysisRows,
   visibleSummaryRows,
   type PickedKeys,
 } from "./statGroupSummary";
@@ -262,23 +260,22 @@ describe("marks", () => {
   });
 });
 
-describe("analysisPositions / toAnalysisRows", () => {
-  it("maps original rows to the analysis-view positions the points' rowIndex counts in", () => {
-    // Row 4 is excluded, so original 6 is analysis position 5; 4 has none.
-    expect([...toAnalysisRows([0, 4, 6], analysisPositions(DS))]).toEqual([0, 5]);
-    // …and that IS the rowIndex the strip/box points carry for row 6.
-    const groups = resolveGroupsIndexed(analysisData(DS)!, 0, 1, [1], null);
-    const d = groups.find((g) => g.label.endsWith("D"))!;
-    expect(d.points.map((p) => p.rowIndex)).toEqual([5, 6]);
+describe("points and summary rows share ONE index space (original rows)", () => {
+  it("every group's points carry exactly the ORIGINAL rows its summary row lists — no translation needed", () => {
+    // Row 4 is excluded, so the analysis view shifts rows 5.. down by one;
+    // the points must still report 6 and 7 for D, not their view positions.
+    const groups = resolveGroupsIndexed(analysisData(DS)!, 0, 1, [1], null, analysisRowIds(DS));
+    const summary = buildGroupSummary(DS, axesFor());
+    const filled = summary.rows.filter((r) => r.n > 0);
+    expect(groups.map((g) => g.points.map((p) => p.rowIndex))).toEqual(filled.map((r) => [...r.rows]));
+    expect(groups.find((g) => g.label.endsWith("D"))!.points.map((p) => p.rowIndex)).toEqual([6, 7]);
   });
 
-  it("analysisPositions is the identity (null) once nothing is dropped — the cheap path (review finding 4)", () => {
-    const noExclusions: Dataset = { ...DS, excludedRows: [] };
-    expect(analysisPositions(noExclusions)).toBeNull();
-    // toAnalysisRows then passes rows through untouched.
-    expect([...toAnalysisRows([0, 4, 6], analysisPositions(noExclusions))]).toEqual([0, 4, 6]);
-    // With something dropped, it's a real map — same answer as above.
-    expect(analysisPositions(DS)).not.toBeNull();
-    expect([...toAnalysisRows([0, 4, 6], analysisPositions(DS))]).toEqual([0, 5]);
+  it("nested cells carry original rows too", () => {
+    const groups = resolveGroupsIndexed(analysisData(DS)!, 0, 1, [1], 2, analysisRowIds(DS));
+    const summary = buildGroupSummary(DS, axesFor({ group2Col: 2 }));
+    expect(groups.map((g) => g.points.map((p) => p.rowIndex))).toEqual(
+      summary.rows.filter((r) => r.n > 0).map((r) => [...r.rows]),
+    );
   });
 });

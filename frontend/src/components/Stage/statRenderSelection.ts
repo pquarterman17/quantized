@@ -23,8 +23,8 @@ export type SlotMark = 0 | 1 | 2;
 export interface StatSelectionMarks {
   /** One per DRAWN category slot, in draw order. */
   slots: readonly SlotMark[];
-  /** Selected rows in the draw's point index space (the analysis view the
-   *  points' `rowIndex` counts in — NOT original dataset rows). */
+  /** Selected ORIGINAL dataset rows — the same index space the points'
+   *  `rowIndex` counts in, so a point is ringed iff its row is selected. */
   points: ReadonlySet<number>;
 }
 

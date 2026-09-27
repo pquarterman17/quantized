@@ -179,10 +179,12 @@ function nestedLabel(
 
 // ── Indexed groups (box/strip "show points" jitter, JMP_GAP J5 #1) ─────────
 // Same partitions as `groupsFromColumns`/`groupsByCategory` above, but each
-// value keeps its ORIGINAL dataset row index alongside it -- the jittered
-// point overlay hashes `(rowIndex, category)` (lib/jitter.ts), not a point's
-// position within the filtered group, so excluding a row (#50) never
-// reshuffles its still-visible neighbours.
+// value keeps its row index INTO `data` alongside it -- the jittered point
+// overlay hashes `(rowIndex, category)` (lib/jitter.ts), not a point's
+// position within its group. When `data` is a pruned analysis view, that
+// index is NOT yet the original dataset row: `lib/statstage.
+// resolveGroupsIndexed`'s `rowIds` maps it back, so excluding a row (#50)
+// never reshuffles its still-visible neighbours.
 
 export interface IndexedPoint {
   value: number;

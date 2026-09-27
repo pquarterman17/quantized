@@ -33,7 +33,6 @@
 // slots and two codes that happen to share a label all leave it intact.
 
 import { columnOf } from "../../lib/categorical";
-import { activeRowIndices, droppedRows } from "../../lib/rowstate";
 import { columnDisplayName } from "../../lib/statschooser";
 import type { Dataset } from "../../lib/types";
 import type { AxisSlot } from "../../lib/groupAxis";
@@ -237,36 +236,6 @@ export function applyGesture(
 }
 
 // ── Plot marks ─────────────────────────────────────────────────────────────
-
-/** Original row -> the analysis-view position it prunes to (see
- *  `activeRowIndices`), or `null` when nothing is dropped — an identity map,
- *  since every analysis position then equals its original row (the cheap
- *  path `toAnalysisRows` takes without allocating one). Cache this by
- *  dataset identity (`lib/rowstate.rowStateIdentity`): it used to be rebuilt
- *  from scratch on every selection change (P2.6 review finding 4). */
-export function analysisPositions(active: Dataset): Map<number, number> | null {
-  const drop = droppedRows(active);
-  if (!drop.size) return null;
-  const kept = activeRowIndices(active.data.time.length, drop);
-  return new Map(kept.map((r, i) => [r, i] as const));
-}
-
-/** Original rows -> the analysis-view positions a draw's points count in
- *  (`IndexedPoint.rowIndex` is an index into `analysisData`, which PRUNES
- *  excluded / filtered rows — so it is NOT the original row once anything is
- *  dropped). `positions` is `analysisPositions(active)`; rows not in the
- *  analysis view are left out. */
-export function toAnalysisRows(rows: readonly number[], positions: Map<number, number> | null): Set<number> {
-  const out = new Set<number>();
-  for (const r of rows) {
-    if (!positions) out.add(r);
-    else {
-      const p = positions.get(r);
-      if (p !== undefined) out.add(p);
-    }
-  }
-  return out;
-}
 
 /** The marks for one draw whose drawn slots are `drawSlots` (keyed), or null
  *  when the draw is not keyed (closed-up fallback: no reliable mapping) or

@@ -43,8 +43,9 @@ function drawJitteredPoints(
   vy: (v: number) => number,
   color: string,
   jitterFrac = 0.7,
-  /** P2.6 box 4: rows of the linked selection (the points' own `rowIndex`
-   *  space) — drawn opaque with an accent ring, after the rest. */
+  /** P2.6 box 4: rows of the linked selection (original dataset rows, the
+   *  points' own `rowIndex` space) — drawn opaque with an accent ring, after
+   *  the rest. */
   selected?: ReadonlySet<number> | null,
 ) {
   ctx.fillStyle = color;

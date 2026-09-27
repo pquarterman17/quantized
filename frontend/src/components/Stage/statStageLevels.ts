@@ -36,7 +36,7 @@ import {
   type GroupAxis,
   type GroupNotice,
 } from "../../lib/groupAxis";
-import { activeRowIndices, droppedRows } from "../../lib/rowstate";
+import { droppedRows } from "../../lib/rowstate";
 import type { StatMode } from "../../lib/statstage";
 import type { DataStruct, Dataset } from "../../lib/types";
 import type { StatDrawData } from "./statRender";
@@ -97,11 +97,6 @@ export interface LevelAxes {
    *  `panelScope` is a lookup rather than a per-gesture facet-column walk.
    *  Null when not faceted. */
   panelRows: Map<string, Map<string, readonly number[]>> | null;
-  /** Per facet panel label, ORIGINAL row -> the slice-local point index a
-   *  faceted box/strip draw's `IndexedPoint.rowIndex` would carry for it
-   *  (P2.6 review finding 7) — built from `FacetSlice.rows` (the analysis-
-   *  view row behind each slice-local position). Null when not faceted. */
-  panelPointIndex: Map<string, Map<number, number>> | null;
 }
 
 export function levelAxes(p: LevelsInput): LevelAxes | null {
@@ -118,7 +113,7 @@ export function levelAxes(p: LevelsInput): LevelAxes | null {
   const flat = countGroupAxis(plan, full, dropped, valueCols, flatRows);
   const rows = { flatRows, valueCols, fallbackCols: plan.fallbackCols, facetCol: p.facetCol };
   if (p.facetCol == null || !p.slices) {
-    return { flat, panels: null, facetGone: [], facetCodeOf: null, panelRows: null, panelPointIndex: null, ...rows };
+    return { flat, panels: null, facetGone: [], facetCodeOf: null, panelRows: null, ...rows };
   }
   const none = new Set<number>();
   const panels = new Map(p.slices.map((s) => [s.label, countGroupAxis(plan, s.data, none, valueCols)] as const));
@@ -143,22 +138,7 @@ export function levelAxes(p: LevelsInput): LevelAxes | null {
       return [label, bySlot] as const;
     }),
   );
-  // P2.6 review finding 7: original row -> slice-local point index, per
-  // panel — `slice.rows[j]` is the ANALYSIS-view row behind slice-local
-  // position j, and `kept[analysisPos]` is that analysis position's ORIGINAL
-  // row (the same mapping `analysisPositions` builds the other way).
-  const kept = activeRowIndices(full.time.length, dropped);
-  const panelPointIndex = new Map(
-    p.slices.map((s) => {
-      const bySliceLocal = new Map<number, number>();
-      s.rows.forEach((analysisPos, j) => {
-        const orig = kept[analysisPos];
-        if (orig !== undefined) bySliceLocal.set(orig, j);
-      });
-      return [s.label, bySliceLocal] as const;
-    }),
-  );
-  return { flat, panels, facetGone, facetCodeOf, panelRows, panelPointIndex, ...rows };
+  return { flat, panels, facetGone, facetCodeOf, panelRows, ...rows };
 }
 
 const hasData = (g: BarGroup) => g.series.some((s) => s.n > 0);

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportCategoricalFigure, exportStatplotFigure } from "../../lib/api/figures";
 import { statsBox, statsViolin } from "../../lib/api";
+import { deterministicJitter } from "../../lib/jitter";
 import type { DataStruct, Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
 import type { StatDrawData } from "./statRender";
@@ -78,6 +79,54 @@ beforeEach(() => {
   vi.mocked(statsViolin).mockImplementation(() => new Promise(() => {}));
   vi.mocked(exportStatplotFigure).mockResolvedValue(undefined);
   vi.mocked(exportCategoricalFigure).mockResolvedValue(undefined);
+});
+
+describe("useStatStage — point jitter is keyed by the ORIGINAL row (stable under exclusion)", () => {
+  // value -> { row, jitter } for every drawn point (DATA's y values are unique).
+  function offsets(d: StatDrawData | null) {
+    if (d?.mode !== "box" && d?.mode !== "strip") throw new Error("expected a box/strip draw");
+    return new Map(
+      (d.points ?? []).flatMap((g) =>
+        g.points.map((p) => [p.value, { row: p.rowIndex, jitter: deterministicJitter(p.rowIndex, g.label) }] as const),
+      ),
+    );
+  }
+  const firstGroupSize = (d: StatDrawData | null) =>
+    (d?.mode === "box" || d?.mode === "strip") && d.points ? d.points[0].points.length : -1;
+
+  it.each(["box", "strip"] as const)(
+    "%s: excluding row 1 leaves every other point's row and jitter unchanged, on screen and in the export",
+    async (mode) => {
+      vi.mocked(statsBox).mockRejectedValue(new Error("offline"));
+      const { result, rerender } = renderHook((p: UseStatStageParams) => useStatStage(p), {
+        initialProps: baseParams(),
+      });
+      act(() => result.current.setMode(mode));
+      act(() => result.current.setShowPoints(true));
+      await waitFor(() => expect(firstGroupSize(result.current.draw)).toBe(6));
+      const before = offsets(result.current.draw);
+
+      // Row 1 (grp 0, y = 12) excluded: every LATER row shifts down one place
+      // in the analysis view — the points must not shift with it.
+      rerender(baseParams({ active: { ...DS, excludedRows: [1] } }));
+      await waitFor(() => expect(firstGroupSize(result.current.draw)).toBe(5));
+      const after = offsets(result.current.draw);
+      expect(after.has(12)).toBe(false);
+      expect(after.size).toBe(before.size - 1);
+      for (const [value, o] of after) expect(o).toEqual(before.get(value));
+
+      // The export sends the same ORIGINAL rows, so the backend's jitter
+      // (the same hash, `calc.statplots.deterministic_jitter`) agrees too.
+      await act(async () => {
+        await result.current.exportFigure("svg");
+      });
+      const spec = vi.mocked(exportStatplotFigure).mock.calls[0][0];
+      expect(spec.point_row_indices).toEqual([
+        [0, 2, 6, 7, 8],
+        [3, 4, 5, 9, 10, 11],
+      ]);
+    },
+  );
 });
 
 describe("useStatStage — box/strip marks (JMP_GAP J5 #1/#2/#3)", () => {

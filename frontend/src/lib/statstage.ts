@@ -200,21 +200,31 @@ export function resolveGroups(
  *  ORIGINAL dataset row index (for the deterministic jitter hash), not just
  *  its value. Mirrors `resolveGroups`' own branch logic exactly (same
  *  partition, same fallback, same order), so a group's points line up 1:1
- *  with its `BoxStat` sibling from `resolveGroups`/`groupBoxStatsClient`. */
+ *  with its `BoxStat` sibling from `resolveGroups`/`groupBoxStatsClient`.
+ *
+ *  `rowIds[i]` is the ORIGINAL dataset row behind `data` row i — pass
+ *  `lib/rowstate.analysisRowIds` when `data` is the analysis view (null, the
+ *  default, means `data` IS the dataset). Without it a point would carry its
+ *  position in the pruned view, so excluding or filtering out one row would
+ *  shift the jitter of every later point (and a figure export with it). */
 export function resolveGroupsIndexed(
   data: DataStruct,
   groupCol: number | null,
   valueCol: number,
   plotted: readonly number[],
   group2Col: number | null = null,
+  rowIds: readonly number[] | null = null,
 ): IndexedGroupSpec[] {
+  let groups: IndexedGroupSpec[];
   if (groupCol != null) {
-    return group2Col != null && group2Col !== groupCol
+    groups = group2Col != null && group2Col !== groupCol
       ? groupsByNestedCategoryIndexed(data, valueCol, groupCol, group2Col)
       : groupsByCategoryIndexed(data, valueCol, groupCol);
+  } else {
+    groups = groupsFromColumnsIndexed(data, plotted.length ? plotted : [valueCol]);
   }
-  const cols = plotted.length ? plotted : [valueCol];
-  return groupsFromColumnsIndexed(data, cols);
+  if (!rowIds) return groups;
+  return groups.map((g) => ({ ...g, points: g.points.map((p) => ({ value: p.value, rowIndex: rowIds[p.rowIndex] })) }));
 }
 
 // ── Client-side box stats (offline fallback) ────────────────────────────────

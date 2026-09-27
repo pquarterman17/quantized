@@ -15,18 +15,15 @@
 
 import { useCallback, useMemo, useRef, useState } from "react";
 
-import { rowStateIdentity } from "../../lib/rowstate";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import {
-  analysisPositions,
   applyGesture,
   buildGroupSummary,
   isPickLive,
   NO_PICK,
   selectedCount,
   selectionMarks,
-  toAnalysisRows,
   visibleSummaryRows,
   type GestureMods,
   type GroupPick,
@@ -40,20 +37,6 @@ import type { LevelAxes } from "./statStageLevels";
 import type { FacetDraw } from "./useStatStageCompute";
 
 const NO_ROWS: readonly number[] = [];
-
-/** `rows` mapped through `index` (a slice-local point index — see
- *  `LevelAxes.panelPointIndex`); rows with no entry are left out. Distinct
- *  from `statGroupSummary.toAnalysisRows`, whose `null` means "identity" —
- *  a facet panel's point space is never the identity map. */
-function pointsIn(rows: readonly number[], index: ReadonlyMap<number, number> | undefined): Set<number> {
-  const out = new Set<number>();
-  if (!index) return out;
-  for (const r of rows) {
-    const p = index.get(r);
-    if (p !== undefined) out.add(p);
-  }
-  return out;
-}
 
 export interface StatGroupSelection {
   summary: GroupSummary | null;
@@ -77,6 +60,13 @@ export interface StatGroupSelection {
    *  table's Escape must claim the key only when this is true, and must
    *  never wipe a selection belonging to another dataset). */
   hasSelection: boolean;
+}
+
+const NO_POINTS: ReadonlySet<number> = new Set();
+
+/** Whether `draw` paints a jittered raw-point overlay (box "points" / strip). */
+function hasPointsOf(draw: StatDrawData): boolean {
+  return (draw.mode === "box" && !!draw.points) || draw.mode === "strip";
 }
 
 function withMarks(draw: StatDrawData, marks: ReturnType<typeof selectionMarks>): StatDrawData {
@@ -124,18 +114,6 @@ export function useStatGroupSelection(
     anchor.current = null;
   }
   const picked: PickedKeys = pickLive ? (pick as GroupPick) : NO_PICK;
-
-  const [rsExcluded, rsFilter, rsData] = rowStateIdentity(active);
-  // P2.6 review finding 4: the original-row -> analysis-position map is
-  // expensive (a full `activeRowIndices` walk + a Map build) and used to be
-  // rebuilt on every selection change; cache it by dataset identity instead.
-  // The three `rowStateIdentity` fields are the cache key, not read in the
-  // factory — `analysisPositions` re-derives them itself from `active`.
-  const positions = useMemo(
-    () => (active ? analysisPositions(active) : null),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- rsExcluded/rsFilter/rsData are the identity key, deliberately unread
-    [active, rsExcluded, rsFilter, rsData],
-  );
 
   const counts = useMemo(() => visible.map((r) => selectedCount(r, selected)), [visible, selected]);
   const countOf = useMemo(() => new Map(visible.map((r, i) => [r.key, counts[i]] as const)), [visible, counts]);
@@ -186,12 +164,14 @@ export function useStatGroupSelection(
   const decorate = useCallback(
     (draw: StatDrawData | null): StatDrawData | null => {
       if (!draw || !hasSelection || !active) return draw;
-      const hasPoints = (draw.mode === "box" && draw.points) || draw.mode === "strip";
-      const points = hasPoints ? toAnalysisRows(liveRows, positions) : new Set<number>();
+      // Points carry ORIGINAL dataset rows (`IndexedPoint.rowIndex`, via
+      // `resolveGroupsIndexed`'s `rowIds`), the selection's own index space —
+      // so the rings are the selection itself, no translation.
+      const points = hasPointsOf(draw) ? selected : NO_POINTS;
       const slots = "slots" in draw ? draw.slots : null;
       return withMarks(draw, selectionMarks(slots, byKey, selected, picked, points, null));
     },
-    [hasSelection, active, liveRows, positions, byKey, selected, picked],
+    [hasSelection, active, byKey, selected, picked],
   );
 
   const decorateFacets = useCallback(
@@ -201,16 +181,15 @@ export function useStatGroupSelection(
         const scope = panelScope(f.label);
         const slots = "slots" in f.draw ? f.draw.slots : null;
         if (!scope) return f;
-        // P2.6 review finding 7: ring this panel's own selected points too —
-        // a faceted box/strip draw's `IndexedPoint.rowIndex` is a SLICE-LOCAL
-        // position (`LevelAxes.panelPointIndex`), not the flat analysis-view
-        // position `toAnalysisRows` maps to.
-        const hasPoints = (f.draw.mode === "box" && f.draw.points) || f.draw.mode === "strip";
-        const points = hasPoints ? pointsIn(liveRows, axes?.panelPointIndex?.get(f.label)) : new Set<number>();
+        // P2.6 review finding 7: ring this panel's own selected points too.
+        // Its points carry ORIGINAL rows like the flat draw's (a facet
+        // slice's `FacetSlice.rows` composed with `analysisRowIds`), and hold
+        // only this panel's rows — so the whole selection rings exactly them.
+        const points = hasPointsOf(f.draw) ? selected : NO_POINTS;
         return { ...f, draw: withMarks(f.draw, selectionMarks(slots, byKey, selected, picked, points, f.label, scope)) };
       });
     },
-    [hasSelection, panelScope, byKey, selected, picked, axes, liveRows],
+    [hasSelection, panelScope, byKey, selected, picked],
   );
 
   return { summary, visible, counts, isSelected, select, clear, decorate, decorateFacets, hasSelection };

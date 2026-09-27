@@ -50,11 +50,13 @@ export interface FacetSlice {
   data: DataStruct;
   /** `rows[j]` is the row index into the `data` ARGUMENT passed to
    *  `facetSlices` that slice-local position j came from — ascending, the
-   *  same order as `data.time`/`data.values`. Exists so a consumer that
-   *  reads a point's `rowIndex` INTO this slice (an `IndexedGroupSpec` built
-   *  from `s.data`, e.g. a faceted strip/box-points overlay) can map it back
-   *  to the row it was resolved from (P2.6 review finding 7 — the selection
-   *  link's per-panel point rings). */
+   *  same order as `data.time`/`data.values`. Exists so an `IndexedGroupSpec`
+   *  built from `s.data` (e.g. a faceted strip/box-points overlay) can carry
+   *  ORIGINAL dataset rows: pass `rows` — composed with
+   *  `rowstate.analysisRowIds` when `data` is the analysis view — as
+   *  `statstage.resolveGroupsIndexed`'s `rowIds`, so its jitter and the
+   *  selection link's point rings match the flat panel's (P2.6 review
+   *  finding 7). */
   rows: readonly number[];
 }
 

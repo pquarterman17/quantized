@@ -1,27 +1,23 @@
 // useStatGroupSelection — the plot half of the summary-table <-> selection
 // link (PRIMARY_SOFTWARE_AUDIT_PLAN P2.6 box 4): the marks put on the flat
-// draw (bands by slot KEY, rings on points in the analysis-view index space)
-// and on facet panels (scoped to each panel's rows), and a panel-scoped pick.
+// draw (bands by slot KEY, rings on points by ORIGINAL row — the selection's
+// own index space) and on facet panels (scoped to each panel's rows), and a
+// panel-scoped pick.
 
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as categorical from "../../lib/categorical";
 import { facetSlices } from "../../lib/facet";
-import { analysisData } from "../../lib/rowstate";
+import { analysisData, analysisRowIds } from "../../lib/rowstate";
 import { boxStatsClient, resolveGroupsIndexed } from "../../lib/statstage";
 import type { DataStruct, Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
-import * as statGroupSummary from "./statGroupSummary";
 import type { StatDrawData } from "./statRender";
 import { decorateDraw, levelAxes, type LevelAxes } from "./statStageLevels";
 import { useStatGroupSelection } from "./useStatGroupSelection";
 import type { FacetDraw } from "./useStatStageCompute";
 
-vi.mock("./statGroupSummary", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("./statGroupSummary")>();
-  return { ...actual, analysisPositions: vi.fn(actual.analysisPositions) };
-});
 vi.mock("../../lib/categorical", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../../lib/categorical")>();
   return { ...actual, columnOf: vi.fn(actual.columnOf) };
@@ -45,6 +41,7 @@ const DATA: DataStruct = {
 };
 const DS: Dataset = { id: "ds", name: "ds", data: DATA, excludedRows: [1] };
 const VIEW = analysisData(DS)!;
+const ROW_IDS = analysisRowIds(DS);
 
 beforeEach(() => {
   useApp.setState({ datasets: [DS], activeId: "ds", selection: null });
@@ -55,7 +52,7 @@ function flatSetup() {
     active: DS, data: VIEW, mode: "box", groupCol: 0, group2Col: null, valueCol: 1, plotted: [1],
     barValueChannels: [1], facetCol: null, slices: null,
   })!;
-  const points = resolveGroupsIndexed(VIEW, 0, 1, [1], null);
+  const points = resolveGroupsIndexed(VIEW, 0, 1, [1], null, ROW_IDS);
   const raw: StatDrawData = {
     mode: "box",
     boxes: points.map((g) => boxStatsClient(g.points.map((p) => p.value), 1.5, g.label)),
@@ -67,7 +64,7 @@ function flatSetup() {
 }
 
 describe("decorate — flat", () => {
-  it("bands every slot by key and rings the selected points in their own index space", () => {
+  it("bands every slot by key and rings the selected points by their ORIGINAL rows", () => {
     const { axes, draw } = flatSetup();
     const { result } = renderHook(() => useStatGroupSelection(DS, axes, false));
     expect(result.current.decorate(draw)).toBe(draw); // nothing selected: untouched
@@ -75,8 +72,13 @@ describe("decorate — flat", () => {
     const d = result.current.decorate(draw);
     const marks = d && "selection" in d ? d.selection : null;
     expect(marks?.slots).toEqual([2, 1, 0]); // A all (row 1 excluded), B some, C empty
-    // Original rows 0, 2, 5 are analysis positions 0, 1, 4 (row 1 is pruned).
-    expect([...(marks?.points ?? [])].sort()).toEqual([0, 1, 4]);
+    // Rings are keyed by ORIGINAL row — the points carry 0, 2, 5 themselves
+    // even though row 1 is pruned (they used to carry view positions 0, 1, 4).
+    expect([...(marks?.points ?? [])].sort()).toEqual([0, 2, 5]);
+    const ringed = (d?.mode === "box" ? d.points ?? [] : []).flatMap((g) =>
+      g.points.filter((p) => marks?.points.has(p.rowIndex)).map((p) => p.value),
+    );
+    expect(ringed.sort()).toEqual([1, 3, 6]); // y of rows 0, 2, 5
   });
 
   it("a selection on ANOTHER dataset marks nothing here", () => {
@@ -128,18 +130,23 @@ describe("facets — marks and picks are scoped to the panel", () => {
     expect(result.current.counts).toEqual([0, 2, 0]);
   });
 
-  it("rings this panel's own selected points (slice-local indices), not the flat analysis-view ones (review finding 7)", () => {
+  it("rings this panel's own selected points by ORIGINAL row (review finding 7)", () => {
     // Box facets never carry points in production today (JMP_GAP J5
     // residual — `computeFacetGroupDraws` hardcodes `points: null`), but the
     // selection link must still map them correctly for when they are: build
-    // one by hand, the same way `facetSetup` builds its points-less ones.
+    // one by hand, with original rows (`FacetSlice.rows` through the
+    // analysis view's row ids), the same way `facetSetup` builds its
+    // points-less ones.
     const slices = facetSlices(VIEW, 2);
     const axes = levelAxes({
       active: DS, data: VIEW, mode: "box", groupCol: 0, group2Col: null, valueCol: 1, plotted: [1],
       barValueChannels: [1], facetCol: 2, slices,
     })!;
     const f1 = slices[1]; // fac=1: original rows 2 (grp A), 4, 5 (grp B)
-    const groups = resolveGroupsIndexed(f1.data, 0, 1, [1], null);
+    const ids = f1.rows.map((r) => ROW_IDS?.[r] ?? r);
+    expect(ids).toEqual([2, 4, 5]);
+    const groups = resolveGroupsIndexed(f1.data, 0, 1, [1], null, ids);
+    expect(groups.map((g) => g.points.map((p) => p.rowIndex))).toEqual([[2], [4, 5]]);
     const raw: StatDrawData = {
       mode: "box",
       boxes: groups.map((g) => boxStatsClient(g.points.map((p) => p.value), 1.5, g.label)),
@@ -149,16 +156,14 @@ describe("facets — marks and picks are scoped to the panel", () => {
     };
     const facetDraw: FacetDraw = { label: f1.label, draw: decorateDraw(raw, axes.panels!.get(f1.label)!, true, true).draw };
     const { result } = renderHook(() => useStatGroupSelection(DS, axes, false));
-    // Row 5 is in panel f1 (grp B); its slice-local point index there
-    // (`axes.panelPointIndex`) is what this facet draw's `rowIndex` actually
-    // counts in — NOT its flat analysis-view position (4).
     act(() => useApp.getState().setRowSelection([5]));
-    const localIndex = axes.panelPointIndex?.get(f1.label)?.get(5);
-    expect(localIndex).toBe(2); // slice-local: A, B, B — row 5 is the second B
     const out = result.current.decorateFacets([facetDraw])!;
     const d = out[0].draw;
     const points = "selection" in d ? d.selection?.points : undefined;
-    expect([...(points ?? [])]).toEqual([localIndex]);
+    expect([...(points ?? [])]).toEqual([5]);
+    // Exactly one drawn point is ringed: row 5 (y = 6), in group B.
+    const ringed = groups.flatMap((g) => g.points.filter((p) => points?.has(p.rowIndex)).map((p) => p.value));
+    expect(ringed).toEqual([6]);
   });
 });
 
@@ -190,20 +195,7 @@ describe("anchor reset on axis/summary identity change (review finding 2)", () =
   });
 });
 
-describe("memoization (review findings 4 and 5)", () => {
-  it("caches the analysis-position map by dataset identity across selection changes", () => {
-    const { axes, draw } = flatSetup();
-    vi.mocked(statGroupSummary.analysisPositions).mockClear();
-    const { result } = renderHook(() => useStatGroupSelection(DS, axes, false));
-    expect(statGroupSummary.analysisPositions).toHaveBeenCalledTimes(1); // mount
-    act(() => useApp.getState().setRowSelection([0]));
-    result.current.decorate(draw);
-    act(() => useApp.getState().setRowSelection([2]));
-    result.current.decorate(draw);
-    // Same `active` identity throughout — no extra work per selection change.
-    expect(statGroupSummary.analysisPositions).toHaveBeenCalledTimes(1);
-  });
-
+describe("memoization (review finding 5)", () => {
   it("never re-derives a facet panel's rows from the facet column per gesture", () => {
     const { axes, facets } = facetSetup();
     const { result } = renderHook(() => useStatGroupSelection(DS, axes, false));

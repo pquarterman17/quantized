@@ -4402,6 +4402,34 @@ violin, bar, strip, or summary plots.
   gained a `rows` field (the analysis-view row behind each slice-local
   position) to make the point-index mapping possible; no existing consumer
   reads less than it did. Eager bundle unchanged: 841.9 kB.
+  **Fixed 2026-09-27 — box/strip point jitter keyed by the filtered-view
+  position (the bug the survey above found).** Root cause: the stage resolves
+  its indexed groups from `analysisData(active)`, which PRUNES excluded /
+  filtered rows, and `groupsByCategoryIndexed` & co. record each point's index
+  into whatever `data` they are handed — so `IndexedPoint.rowIndex` was the
+  pruned-view position, not the original row every comment promised. The
+  jitter hash (`lib/jitter.ts`) and the export's `point_row_indices` both read
+  it, so interactive and export AGREED with each other, but excluding (or
+  filtering out) one row shifted the jitter of every later point in both, and
+  a figure changed shape over an unrelated row. Fix: `lib/rowstate.
+  analysisRowIds` (original row behind each analysis-view row; null =
+  identity) and a trailing `rowIds` on `lib/statstage.resolveGroupsIndexed`
+  that maps the points back, used by `useStatStage` — so points, their jitter
+  and the export's `point_row_indices` are all original rows. The backend
+  (`calc.statplots.deterministic_jitter`, `calc/figure_statplots.py`) is
+  unchanged: it already hashed whatever indices it was sent. The selection
+  link's translation layer is now the identity and is gone
+  (`statGroupSummary.analysisPositions`/`toAnalysisRows`,
+  `LevelAxes.panelPointIndex`, `useStatGroupSelection`'s `pointsIn`): the
+  rings are the selection itself. `FacetSlice.rows` stays as the input a
+  future faceted points overlay composes with `analysisRowIds`. Tests:
+  excluding row k leaves every other point's row + jitter unchanged on the
+  draw and in the export payload (box and strip, `useStatStage.test.ts`),
+  grouped / fallback / per-facet-slice (`statstage.test.ts`); points and
+  summary rows share one index space (`statGroupSummary.test.ts`); rings land
+  on the right points flat and faceted (`useStatGroupSelection.test.ts`). The
+  committed wire fixture (`statplot_levels_export.json`) is unchanged — its
+  excluded rows are the last two. Eager bundle 858,141 -> 858,336 B (+195).
 - [ ] ANOVA/post-hoc, PCA, regression/correlation, GLM, survival, and ROC stay
   lower priority until demand is shown. **Demand shown 2026-07-28**: the
   owner directed a full JMP replacement; the JMP-side platform work now

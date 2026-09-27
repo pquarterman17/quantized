@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   activeRowIndices,
   analysisData,
+  analysisRowIds,
   droppedRows,
   excludedSet,
   expandToFull,
@@ -173,6 +174,28 @@ describe("analysisData (exclusion + filter chokepoint)", () => {
     )!;
     // filter keeps rows 2,3 (value ≥30); exclusion drops 3 → only row 2 remains
     expect(out.time).toEqual([2]);
+  });
+});
+
+describe("analysisRowIds (the original row behind each analysis-view row)", () => {
+  const mk = (over: Partial<Dataset>): Dataset => ({ id: "d", name: "d", data: DATA, ...over });
+
+  it("is null (identity) when nothing is dropped", () => {
+    expect(analysisRowIds(mk({}))).toBeNull();
+    expect(analysisRowIds(null)).toBeNull();
+  });
+
+  it("maps every analysisData row back to its original row, under exclusion AND the filter", () => {
+    for (const over of [
+      { excludedRows: [0, 2] },
+      { filter: [{ col: 0, kind: "range" as const, min: 30 }] },
+      { excludedRows: [3], filter: [{ col: 0, kind: "range" as const, min: 20 }] },
+    ]) {
+      const ds = mk(over);
+      const ids = analysisRowIds(ds)!;
+      // time[i] === i in DATA, so the view's own time column names its rows.
+      expect(ids).toEqual(analysisData(ds)!.time);
+    }
   });
 });
 
