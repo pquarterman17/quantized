@@ -28,6 +28,7 @@ import { seriesColor } from "../../lib/uplotOpts";
 import { drawBar } from "./statRenderBar";
 import { drawBoxesWithMarks, drawStrip } from "./statRenderBox";
 import { drawEmptySlotMarkers, drawSlotCounts, slotPlan } from "./statRenderSlots";
+import { drawSlotSelection, type StatSelectionMarks } from "./statRenderSelection";
 
 const MARGIN = { left: 60, right: 20, top: 20, bottom: 48 };
 
@@ -52,6 +53,8 @@ export type BoxPointsGroup = IndexedGroupSpec;
 export interface CategoryAxisMarks {
   slots?: AxisSlot[] | null;
   showN?: boolean;
+  /** P2.6 box 4: the linked row selection, painted over the plot. */
+  selection?: StatSelectionMarks | null;
 }
 
 export type StatDrawData =
@@ -102,6 +105,10 @@ export type StatDrawData =
       /** Gates the per-bar `n=` captions (absent = shown). An empty category
        *  is a group whose every series has n=0 (`lib/groupAxis.padBarData`). */
       showN?: boolean;
+      /** One per drawn category when threaded onto the axis (null/absent
+       *  otherwise) — read only by the selection link, for the slot keys. */
+      slots?: AxisSlot[] | null;
+      selection?: StatSelectionMarks | null;
     }
   | {
       /** Points-only categorical plot (JMP_GAP J5 #3): same category slots
@@ -120,7 +127,7 @@ export type StatDrawData =
 
 export type Rect = { x: number; y: number; w: number; h: number };
 
-function cssVar(name: string, fallback: string): string {
+export function cssVar(name: string, fallback: string): string {
   if (typeof getComputedStyle !== "function") return fallback;
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
@@ -133,7 +140,7 @@ export function fmt(v: number): string {
   return Number(v.toPrecision(4)).toString();
 }
 
-function plotRect(w: number, h: number): Rect {
+export function plotRect(w: number, h: number): Rect {
   return {
     x: MARGIN.left,
     y: MARGIN.top,
@@ -167,6 +174,7 @@ export function draw(canvas: HTMLCanvasElement, host: HTMLElement, data: StatDra
   else if (data.mode === "qq") drawQQ(ctx, rect, data, ink, muted);
   else if (data.mode === "bar") drawBar(ctx, rect, data, ink, muted);
   else drawHistogram(ctx, rect, data, ink, muted);
+  if ("selection" in data && data.selection) drawSlotSelection(ctx, rect, data.selection, cssVar("--accent", ink));
 }
 
 // ── Shared axes (also used by statRenderBox.ts / statRenderBar.ts) ──────────

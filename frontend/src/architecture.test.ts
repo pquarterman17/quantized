@@ -828,6 +828,10 @@ const TS_MODULE_PINS: Record<string, number> = {
   // channel-keyed renames per panel with no derivation to guard. Part of the
   // saving went back into the stack leg's payload/channel snapshot (N4).
   "/components/Stage/useMultiPanelStage.ts": 753,
+  // useStatStage.ts GRADUATED 2026-09-27 (pin was 546; P2.6 box 4): its
+  // public types (params + the returned state) moved to
+  // components/Stage/useStatStageTypes.ts, re-exported unchanged, which put
+  // the hook at 444 lines. History of the pin, kept for the record:
   // 704 -> 569 (2026-09-11, Group R), in TWO extractions, because the file had
   // exactly zero headroom against this pin and the feature needed room:
   //   * the column PICKS — mode/groupCol/group2Col/valueCol/facetCol, the
@@ -844,7 +848,6 @@ const TS_MODULE_PINS: Record<string, number> = {
   //     statStageExport.exportStatStage and the Q-Q/histogram response mapping
   //     to useStatStageCompute (qqDraw/histogramDraw), funding the level wiring
   //     (keyed draws, shared facet slices, the two persisted display options).
-  "/components/Stage/useStatStage.ts": 546,
   // useCalculators.ts GRADUATED 2026-08-15 (pin was 681): the DIRACULATOR_AUDIT
   // P3 split moved each shared-state domain to its own bounded hook
   // (useUnitsCalc / useXrayCalc / useCrystalCalc / useSldCalc, all under the

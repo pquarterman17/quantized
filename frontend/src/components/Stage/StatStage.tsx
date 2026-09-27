@@ -21,7 +21,9 @@ import { useActiveDataset, useApp } from "../../store/useApp";
 import { Checkbox } from "../primitives/Checkbox";
 import { SegmentedControl } from "../primitives/SegmentedControl";
 import { Button, Select } from "../primitives";
-import StatStageCanvas from "./StatStageCanvas";
+import StatStagePlot from "./StatStagePlot";
+import StatSummaryTable from "./StatSummaryTable";
+import { useStatGroupSelection } from "./useStatGroupSelection";
 import { BIN_RULES, DISTRIBUTIONS, useStatStage } from "./useStatStage";
 
 const MODE_OPTIONS: { value: StatMode; label: string }[] = [
@@ -34,6 +36,9 @@ const MODE_OPTIONS: { value: StatMode; label: string }[] = [
   { value: "histogram", label: "Histogram" },
   { value: "bar", label: "Bar" },
 ];
+
+/** The summary table's dock width, px (P2.6 box 4). */
+const DOCK_WIDTH = 340;
 
 const BAR_STACK_OPTIONS: { value: "grouped" | "stacked"; label: string }[] = [
   { value: "grouped", label: "Grouped" },
@@ -64,6 +69,12 @@ export default function StatStage() {
     showGroupN,
   });
   const categorical = st.mode === "box" || st.mode === "violin" || st.mode === "bar" || st.mode === "strip";
+  // P2.6 box 4: the per-group summary table, linked both ways to the app's
+  // row selection (useStatGroupSelection). The plot half of the link is on
+  // whenever the plot is categorical; the table is opt-in (session-local).
+  const sel = useStatGroupSelection(active, st.axes, hideEmptyLevels);
+  const [showSummary, setShowSummary] = useState(false);
+  const dockOpen = categorical && showSummary;
   const [exporting, setExporting] = useState(false);
 
   async function onExport() {
@@ -139,36 +150,22 @@ export default function StatStage() {
 
   return (
     <div className="qzk-stage">
-      {st.drawFacets ? (
+      <StatStagePlot
+        draw={st.draw}
+        drawFacets={st.drawFacets}
+        theme={theme}
+        accent={accent}
+        sel={categorical ? sel : null}
+        right={dockOpen ? DOCK_WIDTH + 8 : 0}
+      />
+      {dockOpen && sel.summary && (
         <div
-          style={{
-            position: "absolute",
-            inset: 8,
-            display: "grid",
-            gap: 8,
-            gridTemplateColumns: `repeat(${Math.ceil(Math.sqrt(st.drawFacets.length))}, 1fr)`,
-          }}
+          className="qzk-glass"
+          data-testid="stat-summary-dock"
+          style={{ position: "absolute", top: 56, right: 8, bottom: 44, width: DOCK_WIDTH, overflow: "auto", padding: 4 }}
         >
-          {st.drawFacets.map((f) => (
-            <div key={f.label} style={{ position: "relative", display: "flex", flexDirection: "column" }}>
-              <div
-                style={{
-                  fontSize: 10,
-                  fontFamily: "'JetBrains Mono', monospace",
-                  color: "var(--text-dim)",
-                  padding: "0 2px 2px",
-                }}
-              >
-                {f.label}
-              </div>
-              <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
-                <StatStageCanvas data={f.draw} theme={theme} accent={accent} />
-              </div>
-            </div>
-          ))}
+          <StatSummaryTable sel={sel} valueLabels={sel.summary.valueLabels} />
         </div>
-      ) : (
-        <StatStageCanvas data={st.draw} theme={theme} accent={accent} />
       )}
 
       <div
@@ -278,6 +275,11 @@ export default function StatStage() {
         {categorical && (
           <Checkbox checked={showGroupN} onChange={setStatShowGroupN} title="Annotate each group's n above the plot">
             n
+          </Checkbox>
+        )}
+        {categorical && (
+          <Checkbox checked={showSummary} onChange={setShowSummary} title="Per-group summary table, linked to the row selection">
+            summary
           </Checkbox>
         )}
 

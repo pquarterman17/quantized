@@ -21,6 +21,7 @@ import {
 } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
 import {
+  cssVar,
   drawCategoryAxis,
   drawValueAxis,
   type BoxPointsGroup,
@@ -42,17 +43,29 @@ function drawJitteredPoints(
   vy: (v: number) => number,
   color: string,
   jitterFrac = 0.7,
+  /** P2.6 box 4: rows of the linked selection (the points' own `rowIndex`
+   *  space) — drawn opaque with an accent ring, after the rest. */
+  selected?: ReadonlySet<number> | null,
 ) {
   ctx.fillStyle = color;
   ctx.globalAlpha = 0.55;
+  const at = (p: { rowIndex: number }) => cx + deterministicJitter(p.rowIndex, group.label) * halfWidth * jitterFrac;
   for (const p of group.points) {
-    const j = deterministicJitter(p.rowIndex, group.label);
-    const px = cx + j * halfWidth * jitterFrac;
     ctx.beginPath();
-    ctx.arc(px, vy(p.value), 2, 0, 2 * Math.PI);
+    ctx.arc(at(p), vy(p.value), 2, 0, 2 * Math.PI);
     ctx.fill();
   }
   ctx.globalAlpha = 1;
+  if (!selected?.size) return;
+  ctx.strokeStyle = cssVar("--accent", color);
+  ctx.lineWidth = 1.5;
+  for (const p of group.points) {
+    if (!selected.has(p.rowIndex)) continue;
+    ctx.beginPath();
+    ctx.arc(at(p), vy(p.value), 3.5, 0, 2 * Math.PI);
+    ctx.fill();
+    ctx.stroke();
+  }
 }
 
 /** Mean +/- 95% CI marker (JMP_GAP J5 #2): a diamond at the mean with a
@@ -241,7 +254,7 @@ export function drawBoxesWithMarks(
     }
 
     const pointsGroup = d.points?.[i];
-    if (pointsGroup) drawJitteredPoints(ctx, pointsGroup, cx, hw, vy, color);
+    if (pointsGroup) drawJitteredPoints(ctx, pointsGroup, cx, hw, vy, color, 0.7, d.selection?.points);
     if (d.showMeanCI) drawMeanCIMarker(ctx, cx, b, vy, ink);
   });
 
@@ -279,7 +292,7 @@ export function drawStrip(
     const hw = slot.halfWidth * rect.w;
     const color = seriesColor(i);
 
-    drawJitteredPoints(ctx, g, cx, hw, vy, color, 0.85);
+    drawJitteredPoints(ctx, g, cx, hw, vy, color, 0.85, d.selection?.points);
     const b = d.boxes[i];
     if (d.showMeanCI && b) drawMeanCIMarker(ctx, cx, b, vy, ink);
   });
