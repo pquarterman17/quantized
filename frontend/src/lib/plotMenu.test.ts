@@ -273,6 +273,19 @@ describe("buildPlotMenu — Copy figure (vector) follows ctx.copyFigureSvg", () 
   });
 });
 
+// P3.6: "Send to report…" appears only when the caller wires it (the Stage
+// context menu does), and dispatches ctx.sendToReport.
+describe("buildPlotMenu — Send to report… follows ctx.sendToReport", () => {
+  it("is absent without the callback and dispatches it when present", () => {
+    expect(find(buildPlotMenu(makeCtx()), "Send to report…")).toBeUndefined();
+    const sendToReport = vi.fn();
+    const item = find(buildPlotMenu(makeCtx({ sendToReport })), "Send to report…");
+    expect(item).toBeTruthy();
+    if (item && "run" in item) item.run();
+    expect(sendToReport).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe("buildPlotMenu — Peak Fitting ▸ Fit this range (audit P2.4)", () => {
   const fitItem = (items: ContextMenuItem[]) => {
     const it = submenuOf(items, "Peak Fitting").find((i) => label(i) === "Fit this range");

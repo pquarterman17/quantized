@@ -30,6 +30,10 @@ export const GREYSCALE_FIELD: ParamField = {
   hint: "Export only — the on-screen plot stays coloured; forces a grey ramp plus dash/marker cycling",
 };
 
+/** The publication style presets the dialog offers — exported so "Send
+ *  figure to report…" (lib/sendFigureToReport.ts) offers the SAME list. */
+export const FIGURE_STYLES = ["default", "aps", "nature", "thesis", "report", "web", "presentation", "poster"];
+
 export async function runExportFigureCommand(s: StoreGet): Promise<void> {
   const params = await askParams("Export figure", [
     {
@@ -45,7 +49,7 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
       label: "Style",
       type: "select",
       default: "default",
-      options: ["default", "aps", "nature", "thesis", "report", "web", "presentation", "poster"],
+      options: FIGURE_STYLES,
       hint: "Publication preset: sets font, size, line width, grid",
     },
     {

@@ -15,6 +15,7 @@ import { axisZoneAt, type AxisZone, nearestIndex, pickNearestSeries } from "../.
 import { buildPlotMenu, type LegendCorner, type MenuSeries } from "../../lib/plotMenu";
 import { plotRangeSelection } from "../../lib/plotRangeSelection";
 import type { MarkerShape } from "../../lib/types";
+import { sendFigureToReport } from "../../commands/plotCommands";
 import { requestPeakFitRange } from "../../store/peakFitRange";
 import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
@@ -237,6 +238,10 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
       resetView: actions.resetView,
       copyFigure: actions.copyFigure,
       copyFigureSvg: actions.copyFigureSvg,
+      // P3.6: the SAME lazy path as the Plot-menu command (runLazy busy
+      // indicator + load-failure toast); the command and the figure-spec
+      // builder behind it stay off the eager path.
+      sendToReport: () => void sendFigureToReport(useApp.getState),
       copyImage: actions.snapshot,
       savePng: actions.savePng,
       copyData: actions.copyData,

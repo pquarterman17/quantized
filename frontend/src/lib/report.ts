@@ -34,6 +34,13 @@ export interface ReportFigureBlock {
   name: string;
   image?: { mime: string; data: string };
   caption?: string;
+  /** P3.6: the exact `POST /api/export/figure` body for this figure (built by
+   *  `lib/figureSpecStage.buildStageFigureSpec`, the SAME builder "Export
+   *  figure…" uses). `/api/report/export` renders it through that route's own
+   *  renderer and embeds the result; a block without it is a reference-only
+   *  figure (`[figure: …]`). Opaque here on purpose — the backend validates
+   *  it, and a bad one degrades to a named placeholder + export warning. */
+  spec?: Record<string, unknown>;
 }
 export type ReportBlock =
   | ReportTextBlock
@@ -127,19 +134,67 @@ export function isReportSheet(v: unknown): v is ReportSheet {
   });
 }
 
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null && !Array.isArray(v);
+
+/** P3.6 migration guard: a figure block's `spec` (added after reports first
+ *  persisted) must be a plain object. A malformed one is DROPPED — the block
+ *  survives as a reference-only figure and `warn` names it — rather than
+ *  failing `isReportSheet` and losing the whole report. Returns `report`
+ *  itself (same identity) when nothing needed stripping; never mutates it. */
+function stripBadFigureSpecs(report: unknown, warn: (block: string) => void): unknown {
+  if (!isPlainObject(report) || !Array.isArray(report.sections)) return report;
+  let changed = false;
+  const sections = report.sections.map((sec: unknown) => {
+    if (!isPlainObject(sec) || !Array.isArray(sec.blocks)) return sec;
+    let secChanged = false;
+    const blocks = sec.blocks.map((b: unknown) => {
+      if (!isPlainObject(b) || b.type !== "figure" || !("spec" in b) || isPlainObject(b.spec)) return b;
+      secChanged = true;
+      warn(typeof b.name === "string" ? b.name : "?");
+      const rest: Record<string, unknown> = { ...b };
+      delete rest.spec;
+      return rest;
+    });
+    if (!secChanged) return sec;
+    changed = true;
+    return { ...sec, blocks };
+  });
+  return changed ? { ...report, sections } : report;
+}
+
 /** Validate persisted report entries from a .dwk (drops malformed ones; clamps
- *  the dataset back-reference to ids that survived load, like Origin figures). */
-export function sanitizeReports(v: unknown, dsIds: ReadonlySet<string>): ReportEntry[] {
+ *  the dataset back-reference to ids that survived load, like Origin figures).
+ *  A malformed figure `spec` is stripped, not fatal — see
+ *  `stripBadFigureSpecs`; `warnings` (the loader's migrationWarnings) names
+ *  each one so the user is told a figure lost its embedded render, and names
+ *  each well-identified entry (string id + name) whose sheet was dropped. */
+export function sanitizeReports(
+  v: unknown,
+  dsIds: ReadonlySet<string>,
+  warnings?: string[],
+): ReportEntry[] {
   if (!Array.isArray(v)) return [];
   const out: ReportEntry[] = [];
   for (const e of v) {
     if (typeof e !== "object" || e === null) continue;
     const o = e as Record<string, unknown>;
     if (typeof o.id !== "string" || typeof o.name !== "string") continue;
-    if (!isReportSheet(o.report)) continue;
+    // Strip warnings are held until the report is known to SURVIVE: a report
+    // dropped below gets one "dropped" warning instead, never a claim that
+    // one of its figures "is now a reference only" in a report that is gone.
+    const stripped: string[] = [];
+    const report = stripBadFigureSpecs(o.report, (block) => stripped.push(block));
+    if (!isReportSheet(report)) {
+      warnings?.push(`report "${o.name}" could not be read and was dropped`);
+      continue;
+    }
+    for (const block of stripped) {
+      warnings?.push(`report "${o.name}": figure "${block}" had an unreadable render spec and is now a reference only`);
+    }
     const datasetId =
       typeof o.datasetId === "string" && dsIds.has(o.datasetId) ? o.datasetId : null;
-    out.push({ id: o.id, name: o.name, datasetId, report: o.report });
+    out.push({ id: o.id, name: o.name, datasetId, report });
   }
   return out;
 }

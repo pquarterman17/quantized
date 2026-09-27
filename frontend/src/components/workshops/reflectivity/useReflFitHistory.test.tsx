@@ -21,7 +21,7 @@ vi.mock("../../../lib/api/reflectivity", () => ({
   reflSldProfile: vi.fn(),
   reflFit: vi.fn(),
 }));
-vi.mock("../../../lib/api/report", () => ({ reportEmit: vi.fn(), reportExport: vi.fn() }));
+vi.mock("../../../lib/api/report", () => ({ reportEmit: vi.fn() }));
 
 function useBoth() {
   const refl = useReflectivity();

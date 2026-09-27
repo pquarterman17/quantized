@@ -721,6 +721,58 @@ describe("workspace report persistence (#36)", () => {
     delete doc.reports;
     expect(parseWorkspace(JSON.stringify(doc)).reports).toEqual([]);
   });
+
+  // P3.6: a figure block sent from a plot carries its `/api/export/figure`
+  // spec; it must survive .dwk save/reopen byte-for-byte, and a corrupted one
+  // must cost only that spec (with a migration warning), never the report.
+  const specBlock = {
+    type: "figure" as const,
+    name: "scan",
+    caption: "Fig. 1",
+    spec: {
+      dataset: { time: [0, 1], values: [[1, null]], labels: ["A"], units: ["u"], metadata: {} },
+      y_keys: [0],
+      fmt: "svg",
+      style: "aps",
+      overrides: { legend: { show: true, loc: "upper right" } },
+    },
+  };
+
+  it("round-trips a spec-carrying figure block unchanged", () => {
+    const datasets = [makeDataset("a", "first")];
+    const entry = repEntry({
+      report: { title: "Figures", sections: [{ title: "Figures", blocks: [specBlock] }] },
+    });
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, reports: [entry] }));
+    expect(loaded.reports[0]).toEqual(entry);
+    expect(loaded.migrationWarnings).toEqual([]);
+  });
+
+  it("strips a malformed figure spec (keeping the block and report) and says so", () => {
+    const datasets = [makeDataset("a", "first")];
+    const doc = JSON.parse(serializeWorkspace({ datasets }));
+    doc.reports = [
+      {
+        id: "rep-9",
+        name: "Figs",
+        datasetId: null,
+        report: {
+          title: "Figs",
+          sections: [{ title: "Figures", blocks: [{ ...specBlock, spec: "not-a-spec" }, specBlock, { ...specBlock, name: "arr", spec: [1] }] }],
+        },
+      },
+    ];
+    const loaded = parseWorkspace(JSON.stringify(doc));
+    const blocks = loaded.reports[0].report.sections[0].blocks;
+    expect(blocks).toHaveLength(3);
+    expect(blocks[0]).toEqual({ type: "figure", name: "scan", caption: "Fig. 1" });
+    expect(blocks[1]).toEqual(specBlock);
+    expect(blocks[2]).not.toHaveProperty("spec");
+    expect(loaded.migrationWarnings.filter((w) => /render spec/.test(w))).toEqual([
+      'report "Figs": figure "scan" had an unreadable render spec and is now a reference only',
+      'report "Figs": figure "arr" had an unreadable render spec and is now a reference only',
+    ]);
+  });
 });
 
 describe("workspace pending lazy-book reference (ORIGIN_FILE_DECODE_PLAN #38)", () => {

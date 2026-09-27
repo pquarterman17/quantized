@@ -35,11 +35,12 @@ import type { useApp } from "../store/useApp";
 export type StoreGet = typeof useApp.getState;
 
 /** N5 (2026-09-13 round-2 review): every caller in the repo passes exactly
- *  one of these two verbs — narrowed from a bare `string` so a third one
- *  (e.g. a future "save"/"move") is a compile error here, at the one place
- *  that decides wording, instead of a silent runtime fallback nobody
- *  reviews. */
-export type ExportActiveVerb = "export" | "copy";
+ *  one of these verbs — narrowed from a bare `string` so a new one (e.g. a
+ *  future "save"/"move") is a compile error here, at the one place that
+ *  decides wording, instead of a silent runtime fallback nobody reviews.
+ *  "send" joined for P3.6's "Send figure to report…" (lib/sendFigureToReport.ts):
+ *  a store-only result, so it takes the ordinary (non-"copy") cancel path. */
+export type ExportActiveVerb = "export" | "copy" | "send";
 
 /** Wording for the status/toast messages. Defaults describe an export; "Copy
  *  figure" (MAIN #35) passes copy wording so it routes through this SAME lazy-
@@ -52,11 +53,10 @@ export interface ExportActiveLabels {
   past?: string;
 }
 
-/** verb -> its pendingOps-label gerund. A closed, two-entry map now that
- *  `verb` is a union type — no naive `${capitalize(verb)}ing` fallback to
- *  keep honest for an unlisted verb, since there is no longer any way to
- *  reach one. */
-const GERUND: Record<ExportActiveVerb, string> = { export: "Exporting", copy: "Copying" };
+/** verb -> its pendingOps-label gerund. A closed map now that `verb` is a
+ *  union type — no naive `${capitalize(verb)}ing` fallback to keep honest
+ *  for an unlisted verb, since there is no longer any way to reach one. */
+const GERUND: Record<ExportActiveVerb, string> = { export: "Exporting", copy: "Copying", send: "Sending" };
 function gerund(verb: ExportActiveVerb): string {
   return GERUND[verb];
 }
@@ -127,8 +127,10 @@ export async function exportActive(
       // resolved — the write is DONE, not "maybe still racing". Reporting
       // "copy cancelled" at that point would be a lie: the figure is
       // already sitting on the user's clipboard. Report what actually
-      // happened instead of the generic cancelled status.
-      if (verb === "copy") {
+      // happened instead of the generic cancelled status. A "send" (P3.6)
+      // is the same: its `fn` writes the store synchronously, so once it
+      // resolved the figure IS in the report (and Undo, not Cancel, removes it).
+      if (verb === "copy" || verb === "send") {
         const msg = `${past} ${stem} — cancel arrived too late to stop it`;
         s().setStatus(msg);
         toast(msg, "ok");
