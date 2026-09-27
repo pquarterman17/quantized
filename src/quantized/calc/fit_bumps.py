@@ -28,6 +28,8 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from quantized.heavy_import import heavy_imports
+
 from .dream_seed import DreamCancelled, seeded_dream
 from .fit_models import FIT_MODELS, evaluate
 
@@ -55,18 +57,25 @@ _INSTALL_HINT = (
 def bumps_available() -> bool:
     """True when the optional bumps dependency is importable."""
     try:
-        import bumps  # noqa: F401
+        with heavy_imports("bumps"):
+            import bumps  # noqa: F401
     except ImportError:
         return False
     return True
 
 
-def _import_bumps() -> tuple[Any, Any, Any, Any]:
-    """Guarded import -> (Curve, FitProblem, FITTERS, FitDriver)."""
+def _import_bumps(
+    while_waiting: Callable[[], None] | None = None,
+) -> tuple[Any, Any, Any, Any]:
+    """Guarded import -> (Curve, FitProblem, FITTERS, FitDriver).
+    ``while_waiting`` keeps a job cancellable while the import waits."""
     try:
-        from bumps.curve import Curve
-        from bumps.fitproblem import FitProblem
-        from bumps.fitters import FITTERS, FitDriver
+        with heavy_imports(
+            "bumps.curve", "bumps.fitproblem", "bumps.fitters", while_waiting=while_waiting,
+        ):
+            from bumps.curve import Curve
+            from bumps.fitproblem import FitProblem
+            from bumps.fitters import FITTERS, FitDriver
     except ImportError as exc:
         raise ValueError(_INSTALL_HINT) from exc
     return Curve, FitProblem, FITTERS, FitDriver
@@ -175,7 +184,13 @@ def fit_bumps(
     Raises ``ValueError`` for a missing bumps install, unknown model/engine,
     or malformed inputs — the route layer maps that to HTTP 422.
     """
-    Curve, FitProblem, FITTERS, FitDriver = _import_bumps()
+    def waiting() -> None:  # queued behind an import or another DREAM run: cancellable
+        if progress_callback is not None:
+            progress_callback(0.0)
+        if abort_check is not None and abort_check():
+            raise DreamCancelled("cancelled while waiting for another DREAM run")
+
+    Curve, FitProblem, FITTERS, FitDriver = _import_bumps(waiting)
 
     if engine not in BUMPS_ENGINES:
         raise ValueError(f"unknown bumps engine: {engine} (choose from {', '.join(BUMPS_ENGINES)})")
@@ -227,12 +242,6 @@ def fit_bumps(
     if engine == "dream":
         # Unseeded, but exclusive: a seeded reflectivity DREAM run in another
         # job must not draw from, or be drawn from by, this one (calc.dream_seed).
-        def waiting() -> None:  # queued behind another DREAM run: still cancellable
-            if progress_callback is not None:
-                progress_callback(0.0)
-            if abort_check is not None and abort_check():
-                raise DreamCancelled("cancelled while waiting for another DREAM run")
-
         with seeded_dream(None, while_waiting=waiting):
             x_best, _fx = driver.fit()
     else:

@@ -10,6 +10,9 @@ a route belongs here only if it takes a ``dataset`` + channel picks:
   categorical bar chart, i.e. the StatStage export half, which takes
   pre-aggregated arrays instead.
 
+The facet (F4.4 small-multiples) branch helpers of the two routes here live
+in ``routes.export_figures_facets`` (same ceiling).
+
 Output formats: PDF/SVG/PNG/TIFF. No formatting logic here — renderers own
 it. Filenames are sanitized before reaching the Content-Disposition header.
 """
@@ -21,7 +24,18 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field, field_validator
 
+from quantized.calc.figure_group_styles import expand_grouped_series_styles
+from quantized.calc.plot_log_offsets import apply_log_offsets, scale_error_spans
+from quantized.calc.plotting import (
+    PlotState,
+    apply_waterfall_offsets,
+    build_grouped_series,
+    build_series,
+    resolve_style_channels,
+    validate_y2_subset,
+)
 from quantized.datastruct import DataStruct
+from quantized.heavy_import import heavy_imports
 from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
 from quantized.routes._export_common import (
     _DPI_MAX,
@@ -30,6 +44,7 @@ from quantized.routes._export_common import (
     _attachment,
     _safe_name,
 )
+from quantized.routes.export_figures_facets import _render_facets_bytes, _render_facets_map
 from quantized.routes.export_figures_labels import (
     apply_offset_disclosure_to_renames,
     derived_axis_label,
@@ -193,9 +208,7 @@ class FigureRequest(BaseModel):
     # The rule and why this one key is a 422 rather than a graceful degrade
     # live with the list itself, in `export_figures_schema`. Declared on this
     # model, so the page route inherits it through `PagePanelSpec.figure`.
-    _no_document_keys = field_validator("series_styles")(
-        reject_document_only_style_keys
-    )
+    _no_document_keys = field_validator("series_styles")(reject_document_only_style_keys)
 
 
 def _figure_series(req: FigureRequest) -> _ResolvedFigure:
@@ -223,17 +236,6 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
     exclusive with ``req.y2_keys`` (raises ``ValueError`` -- ``buildXY``
     never assigns a grouped series to the secondary axis, so there's no
     sound semantic to invent for the combination)."""
-    from quantized.calc.figure_group_styles import expand_grouped_series_styles
-    from quantized.calc.plot_log_offsets import apply_log_offsets, scale_error_spans
-    from quantized.calc.plotting import (
-        PlotState,
-        apply_waterfall_offsets,
-        build_grouped_series,
-        build_series,
-        resolve_style_channels,
-        validate_y2_subset,
-    )
-
     ds = DataStruct.from_dict(req.dataset)
 
     if req.group_col is not None:
@@ -300,64 +302,6 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
     return _ResolvedFigure(plot.x, series, x_label, y_label, styles, y2_mask, y2_label, spans)
 
 
-def _facet_panels(req: FigureRequest) -> list[dict[str, Any]]:
-    """Reshape ``req.facets`` into ``calc.figure_facets``' panel-dict shape
-    (``{"label": str, "x": [...], "series": [{"label": str, "y": [...]}]}``)
-    -- the ONE reshape, shared by ``_render_facets_bytes`` (the standalone
-    ``/figure``/``/figure-hitmap`` facet branches) and ``routes.export_page``
-    (a faceted page panel -- F4.4 follow-up, a real vector sub-grid instead
-    of the earlier pre-rendered raster embed), so the two routes can never
-    drift on how a facet-bound panel's wire payload turns into the
-    renderer's input. Kept here (not calc/) because it moves ``req.facets``'
-    pydantic model instances into plain dicts -- exactly the route-layer job
-    the calc/routes split reserves for routes/."""
-    assert req.facets
-    return [
-        {
-            "label": f.label,
-            "x": f.x,
-            "series": [{"label": s.label, "y": s.y} for s in f.series],
-        }
-        for f in req.facets
-    ]
-
-
-def _render_facets_bytes(req: FigureRequest, *, dpi: int, fmt: str | None = None) -> bytes:
-    """Render ``req.facets`` to image bytes -- the standalone facet-branch
-    renderer used by ``export_figure``/``export_figure_hitmap`` (R2, fix
-    round 3). Derives axis labels via ``_figure_series`` (C4 --
-    ``resolved.x_label``/``resolved.y_label`` already apply the "explicit
-    override, else derive from the dataset" rule), and forwards scale/tick-
-    format/transparent/overrides the SAME way the flat branch does
-    (C1/C3/R3). ``fmt`` overrides ``req.fmt`` when given -- ``export_figure_
-    hitmap`` forces ``fmt="png"`` (the preview render is always a raster
-    PNG). (``title``/``style`` override params were dropped in fix round 3,
-    W2 -- dead since ``routes.export_page`` stopped calling this function
-    at all in fix round 1, and neither remaining caller ever passed them.)"""
-    from quantized.calc.figure_facets import render_facets_figure
-
-    resolved = _figure_series(req)
-    return render_facets_figure(
-        _facet_panels(req),
-        x_log=req.x_log,
-        y_log=req.y_log,
-        x_scale=req.x_scale,
-        y_scale=req.y_scale,
-        title=req.title,
-        x_label=resolved.x_label,
-        y_label=resolved.y_label,
-        fmt=fmt or req.fmt,
-        style=req.style,
-        width_in=req.width_in,
-        height_in=req.height_in,
-        dpi=dpi,
-        transparent=req.transparent,
-        x_fmt=_tick_fmt(req.x_fmt),
-        y_fmt=_tick_fmt(req.y_fmt),
-        overrides=req.overrides,
-    )
-
-
 @router.post("/figure")
 def export_figure(req: FigureRequest) -> Response:
     """Render the dataset (selected channels + log scales) to a publication
@@ -372,9 +316,10 @@ def export_figure(req: FigureRequest) -> Response:
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
     try:
         if req.facets:
-            data = _render_facets_bytes(req, dpi=dpi)
+            data = _render_facets_bytes(req, _figure_series(req), dpi=dpi)
         else:
-            from quantized.calc.figure import render_figure
+            with heavy_imports("quantized.calc.figure"):
+                from quantized.calc.figure import render_figure
 
             resolved = _figure_series(req)
             data = render_figure(
@@ -448,27 +393,9 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
 
     try:
         if req.facets:
-            from quantized.calc.figure_facets_map import render_facets_figure_map
-
-            resolved = _figure_series(req)
-            return render_facets_figure_map(
-                _facet_panels(req),
-                x_log=req.x_log,
-                y_log=req.y_log,
-                x_scale=req.x_scale,
-                y_scale=req.y_scale,
-                title=req.title,
-                x_label=resolved.x_label,
-                y_label=resolved.y_label,
-                style=req.style,
-                width_in=req.width_in,
-                height_in=req.height_in,
-                dpi=dpi,
-                x_fmt=_tick_fmt(req.x_fmt),
-                y_fmt=_tick_fmt(req.y_fmt),
-                overrides=req.overrides,
-            )
-        from quantized.calc.figure import render_figure_map
+            return _render_facets_map(req, _figure_series(req), dpi=dpi)
+        with heavy_imports("quantized.calc.figure"):
+            from quantized.calc.figure import render_figure_map
 
         resolved = _figure_series(req)
         return render_figure_map(

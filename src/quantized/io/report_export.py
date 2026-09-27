@@ -26,6 +26,8 @@ import math
 from collections.abc import Mapping
 from typing import Any
 
+from quantized.heavy_import import heavy_imports
+
 # Raster image MIME types Office can embed (SVG/other -> placeholder text).
 _EMBEDDABLE_IMAGE_MIMES = ("image/png", "image/jpeg", "image/jpg", "image/gif", "image/bmp")
 
@@ -232,7 +234,8 @@ def to_html(report: Mapping[str, Any]) -> str:
 # ── Word / PowerPoint (guarded optional deps) ─────────────────────────────
 def _to_docx(report: Mapping[str, Any]) -> bytes:
     try:
-        from docx import Document  # python-docx (MIT)
+        with heavy_imports("docx"):
+            from docx import Document  # python-docx (MIT)
     except ImportError as exc:  # pragma: no cover - exercised only without the dep
         raise ReportExportError(
             "Word export needs 'python-docx' (pip install quantized[office])"
@@ -262,7 +265,8 @@ def _to_docx(report: Mapping[str, Any]) -> bytes:
             elif btype == "figure":
                 raster = _decode_raster(block.get("image"))
                 if raster is not None:
-                    from docx.shared import Inches
+                    with heavy_imports("docx.shared"):
+                        from docx.shared import Inches
                     doc.add_picture(_io.BytesIO(raster), width=Inches(6))
                     if block.get("caption"):
                         doc.add_paragraph().add_run(str(block["caption"])).italic = True
@@ -275,8 +279,9 @@ def _to_docx(report: Mapping[str, Any]) -> bytes:
 
 def _to_pptx(report: Mapping[str, Any]) -> bytes:
     try:
-        from pptx import Presentation  # python-pptx (MIT)
-        from pptx.util import Inches, Pt
+        with heavy_imports("pptx", "pptx.util"):
+            from pptx import Presentation  # python-pptx (MIT)
+            from pptx.util import Inches, Pt
     except ImportError as exc:  # pragma: no cover - exercised only without the dep
         raise ReportExportError(
             "PowerPoint export needs 'python-pptx' (pip install quantized[office])"

@@ -25,6 +25,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc._clipfit import _iterative_clip_fit
+from quantized.heavy_import import heavy_imports
 
 __all__ = [
     "anchor_baseline",
@@ -85,11 +86,13 @@ def anchor_baseline(
     if method == "linear":
         base = np.interp(xv, ax, ay, left=ay[0], right=ay[-1])
     elif method == "pchip":
-        from scipy.interpolate import PchipInterpolator
+        with heavy_imports("scipy.interpolate"):
+            from scipy.interpolate import PchipInterpolator
 
         base = PchipInterpolator(ax, ay, extrapolate=False)(xv)
     elif method == "spline":
-        from scipy.interpolate import make_interp_spline
+        with heavy_imports("scipy.interpolate"):
+            from scipy.interpolate import make_interp_spline
 
         k = min(3, ax.size - 1)
         spl = make_interp_spline(ax, ay, k=k)

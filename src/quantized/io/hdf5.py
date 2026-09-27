@@ -36,6 +36,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.heavy_import import heavy_imports
 from quantized.io import _hdf5_layout as layout
 
 __all__ = ["write_hdf5"]
@@ -153,7 +154,8 @@ def _validate_path(out: Path, *, overwrite: bool) -> None:
 def _import_h5py() -> Any:
     """Lazily import ``h5py`` with an actionable error message."""
     try:
-        import h5py  # noqa: PLC0415
+        with heavy_imports("h5py"):
+            import h5py  # noqa: PLC0415
     except ImportError as exc:  # pragma: no cover - exercised only without h5py
         raise ImportError(
             "h5py is required for HDF5 export. Install it with: uv add h5py"

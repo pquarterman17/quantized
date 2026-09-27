@@ -24,6 +24,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.heavy_import import heavy_imports
 
 __all__ = ["import_netcdf", "is_netcdf"]
 
@@ -57,7 +58,8 @@ def _as_str(value: Any) -> str:
 
 
 def _read_netcdf3(path: Path) -> _NcData:
-    from scipy.io import netcdf_file  # noqa: PLC0415
+    with heavy_imports("scipy.io"):
+        from scipy.io import netcdf_file  # noqa: PLC0415
 
     f = netcdf_file(str(path), "r", mmap=False)
     try:
@@ -75,7 +77,8 @@ def _read_netcdf3(path: Path) -> _NcData:
 
 
 def _read_netcdf4(path: Path) -> _NcData:
-    import h5py  # noqa: PLC0415
+    with heavy_imports("h5py"):
+        import h5py  # noqa: PLC0415
 
     variables: dict[str, _Var] = {}
     with h5py.File(path, "r") as h:

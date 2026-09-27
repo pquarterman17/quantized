@@ -14,6 +14,8 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from quantized.heavy_import import heavy_imports
+
 #: Search-box cap (integer lattice-shift candidates per neighbour). With the
 #: tight per-axis bound below this is essentially never approached by a
 #: physically sane cell; it exists only to fail fast on a genuinely
@@ -74,7 +76,8 @@ def _direct_basis(
     # replaces a local copy of the triclinic volume radicand + its own
     # threshold/message with the one `crystallography.cell_volume` uses (PR
     # review finding: duplicated cell-volume radicand and validation).
-    from quantized.calc.crystallography import _cell_volume_radicand
+    with heavy_imports("quantized.calc.crystallography"):
+        from quantized.calc.crystallography import _cell_volume_radicand
 
     gamma_r = math.radians(gamma)
     cos_alpha, cos_beta, cos_gamma, volume_factor_sq = _cell_volume_radicand(alpha, beta, gamma)

@@ -392,6 +392,25 @@ def test_run_desktop_revokes_relink_directory_grants_on_exit(
     clear.assert_called_once()
 
 
+def test_run_desktop_bridge_import_failure_prints_hint_and_starts_nothing(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """BUG-032: the desktop bridge is imported before the server thread starts,
+    but still inside the launcher's try -- a failing import prints the hint
+    and returns instead of crashing ``qz --desktop`` with a traceback."""
+    monkeypatch.setattr(server_launch, "_WEB_DIR", tmp_path)
+    webview = MagicMock()
+    monkeypatch.setitem(sys.modules, "webview", webview)
+    monkeypatch.setitem(sys.modules, "quantized.desktop_bridge", None)  # import fails
+    bind = MagicMock(return_value=None)
+    monkeypatch.setattr(server_launch, "_bind", bind)
+    server_launch._run_desktop("127.0.0.1", 8000)
+    out = capsys.readouterr().out
+    assert "quantized[desktop]" in out and "desktop_bridge" in out
+    bind.assert_not_called()  # failed before binding / starting the server
+    webview.create_window.assert_not_called()
+
+
 def test_run_desktop_attaches_the_window_to_the_bridge(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
