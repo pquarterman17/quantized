@@ -103,6 +103,19 @@ test.describe("Window arrange, tile, cascade, maximize/restore, and close", () =
     );
     expect(focusedWinId).toBeTruthy();
 
+    // Resize gutters must not overlap title controls or the content box
+    // (where native worksheet scrollbars live on Windows/WebView2).
+    const frame = page.locator(".qzk-plotwin.focused");
+    const overlaps = await frame.evaluate((element) => {
+      const protectedBoxes = [element.querySelector(".qzk-plotwin-titlebar")!, element.querySelector(".qzk-plotwin-body")!]
+        .map((node) => node.getBoundingClientRect());
+      return [...element.querySelectorAll("[data-resize-edge]")].filter((handle) => {
+        const r = handle.getBoundingClientRect();
+        return protectedBoxes.some((b) => r.left < b.right && r.right > b.left && r.top < b.bottom && r.bottom > b.top);
+      }).map((handle) => handle.getAttribute("data-resize-edge"));
+    });
+    expect(overlaps).toEqual([]);
+
     await focusedTitlebar.dblclick({ position: { x: 3, y: 14 } });
     await expect
       .poll(async () => (await readWindows(page)).find((w) => w.id === focusedWinId)?.winState)

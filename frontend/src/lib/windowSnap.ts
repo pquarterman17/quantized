@@ -98,19 +98,14 @@ export function snapMovePosition(
   };
 }
 
-/** Snap a RESIZE gesture's proposed geometry: only the MOVING edges — the
- *  right (`x+w`) and bottom (`y+h`), matching the frame's single bottom-right
- *  grip — may pull `w`/`h`; the anchored left/top edges never snap. Returns
- *  the snapped size only (a resize never changes position). */
+/** Compatibility wrapper retained for the original bottom-right geometry
+ * regression suite; all production gestures use snapResizeGeometry. */
 export function snapResizeSize(
   proposed: WindowGeometry,
   bounds: { width: number; height: number } | undefined,
   siblings: readonly WindowGeometry[],
   threshold: number = SNAP_THRESHOLD,
 ): { w: number; h: number } {
-  const lines = collectSnapLines(bounds, siblings);
-  return {
-    w: proposed.w + snapDelta([proposed.x + proposed.w], lines.v, threshold),
-    h: proposed.h + snapDelta([proposed.y + proposed.h], lines.h, threshold),
-  };
+  const { w, h } = snapResizeGeometry(proposed, { e: true, s: true }, bounds, siblings, threshold);
+  return { w, h };
 }

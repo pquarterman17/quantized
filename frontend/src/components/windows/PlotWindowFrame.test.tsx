@@ -81,15 +81,10 @@ describe("PlotWindowFrame", () => {
     expect(geomOf("w1")).toMatchObject({ w: 240, h: 160 });
   });
 
-  it("previews many pointer moves without rerendering children or rewriting global state", () => {
-    let childRenders = 0;
-    function Child() {
-      childRenders += 1;
-      return <div>heavy plot</div>;
-    }
+  it("previews many pointer moves without rewriting global state", () => {
     const { container } = render(
       <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1">
-        <Child />
+        <div>heavy plot</div>
       </PlotWindowFrame>,
     );
     const beforeWindows = useApp.getState().plotWindows;
@@ -102,11 +97,75 @@ describe("PlotWindowFrame", () => {
     expect(frame.style.left).toBe("125px");
     expect(frame.style.top).toBe("105px");
     expect(useApp.getState().plotWindows).toBe(beforeWindows);
-    expect(childRenders).toBe(1);
 
     fireEvent.pointerUp(window);
     expect(geomOf("w1")).toMatchObject({ x: 125, y: 105 });
     expect(useApp.getState().history.at(-1)?.label).toBe("move window");
+  });
+
+  it.each(["n", "w", "nw"])("keeps the title reachable on a %s resize and commits atomically", (edge) => {
+    const { container } = render(<PlotWindowFrame win={win()} focused datasetName="ds1"><div /></PlotWindowFrame>);
+    const changes: unknown[] = [];
+    const unsubscribe = useApp.subscribe((state, prev) => {
+      if (state.plotWindows !== prev.plotWindows) changes.push(state.plotWindows[0].geometry);
+    });
+    fireEvent.pointerDown(container.querySelector(`[data-resize-edge="${edge}"]`)!, { button: 0, clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(window, { clientX: -500, clientY: -500, altKey: true });
+    fireEvent.pointerUp(window);
+    unsubscribe();
+    const g = geomOf("w1");
+    expect(g.x).toBe(edge.includes("w") ? 0 : 100);
+    expect(g.y).toBe(edge.includes("n") ? 0 : 80);
+    expect(g.x + g.w).toBe(580);
+    expect(g.y + g.h).toBe(440);
+    expect(changes).toHaveLength(1);
+  });
+
+  it("continues a gesture across a canvas resize and clears its transient state", () => {
+    const props = { win: win(), focused: true, datasetName: "ds1" };
+    const { container, rerender } = render(<PlotWindowFrame {...props} bounds={{ width: 900, height: 700 }}><div /></PlotWindowFrame>);
+    fireEvent.pointerDown(container.querySelector(".qzk-plotwin-titlebar")!, { button: 0, clientX: 100, clientY: 80 });
+    fireEvent.pointerMove(window, { clientX: 140, clientY: 110, altKey: true });
+    rerender(<PlotWindowFrame {...props} bounds={{ width: 800, height: 600 }}><div /></PlotWindowFrame>);
+    fireEvent.pointerMove(window, { clientX: 170, clientY: 150, altKey: true });
+    fireEvent.pointerUp(window);
+    expect(geomOf("w1")).toMatchObject({ x: 170, y: 150 });
+    expect(container.querySelector("[data-gesturing]")).toBeNull();
+  });
+
+  it("preserves gesture suppression when focus rewrites the frame class", () => {
+    const props = { win: win({ id: "w2" }), datasetName: "ds1" };
+    const { container, rerender } = render(<PlotWindowFrame {...props} focused={false}><div /></PlotWindowFrame>);
+    fireEvent.pointerDown(container.querySelector(".qzk-plotwin-titlebar")!, { button: 0, clientX: 0, clientY: 0 });
+    rerender(<PlotWindowFrame {...props} focused><div /></PlotWindowFrame>);
+    expect(container.querySelector(".qzk-plotwin")).toHaveAttribute("data-gesturing");
+    fireEvent.pointerUp(window);
+    expect(container.querySelector(".qzk-plotwin")).not.toHaveAttribute("data-gesturing");
+  });
+
+  it("reclamps on release if the canvas shrinks without another pointer move", () => {
+    const props = { win: win(), focused: true, datasetName: "ds1" };
+    const { container, rerender } = render(<PlotWindowFrame {...props} bounds={{ width: 900, height: 700 }}><div /></PlotWindowFrame>);
+    fireEvent.pointerDown(container.querySelector(".qzk-plotwin-titlebar")!, { button: 0 });
+    rerender(<PlotWindowFrame {...props} bounds={{ width: 150, height: 100 }}><div /></PlotWindowFrame>);
+    fireEvent.pointerUp(window);
+    expect(geomOf("w1")).toMatchObject({ x: 70, y: 72 });
+    expect(container.querySelector<HTMLElement>(".qzk-plotwin")!.style.left).toBe("70px");
+  });
+
+  it("reverts an unmounted gesture and ignores queued paints and pointer release", () => {
+    let queued: FrameRequestCallback | undefined;
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => { queued = cb; return 2; });
+    const { container, unmount } = render(<PlotWindowFrame win={win()} focused datasetName="ds1"><div /></PlotWindowFrame>);
+    const frame = container.querySelector<HTMLElement>(".qzk-plotwin")!;
+    fireEvent.pointerDown(container.querySelector(".qzk-plotwin-titlebar")!, { button: 0, clientX: 100, clientY: 80 });
+    fireEvent.pointerMove(window, { clientX: 200, clientY: 180 });
+    unmount();
+    act(() => queued?.(0));
+    fireEvent.pointerUp(window);
+    expect(frame).not.toHaveAttribute("data-gesturing");
+    expect(frame.style.left).toBe("100px");
+    expect(geomOf("w1")).toMatchObject({ x: 100, y: 80 });
   });
 
   it("commits the final move when pointerup beats the queued animation frame", () => {

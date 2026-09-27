@@ -4,7 +4,7 @@
 // keeps sibling plots and the focused PlotStage out of React's render path
 // while a window is moving or resizing.
 
-import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useRef } from "react";
+import { type PointerEvent as ReactPointerEvent, useCallback, useEffect, useLayoutEffect, useRef } from "react";
 
 import { type PlotWindow, type WindowGeometry } from "../../lib/plotview";
 import { snapMovePosition, snapResizeGeometry, type ResizeEdges } from "../../lib/windowSnap";
@@ -44,8 +44,9 @@ type PendingGeometry = WindowGeometry;
 const END_GESTURE_EVENTS = ["pointerup", "pointercancel", "blur"] as const;
 
 export function usePlotWindowGesture(win: PlotWindow, bounds: WindowBounds | undefined) {
-  const moveWindow = useWindowsStore((s) => s.moveWindow);
-  const resizeWindow = useWindowsStore((s) => s.resizeWindow);
+  const setWindowGeometry = useWindowsStore((s) => s.setWindowGeometry);
+  const boundsRef = useRef(bounds);
+  useLayoutEffect(() => { boundsRef.current = bounds; }, [bounds]);
   const frameRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<DragState | null>(null);
   const pendingRef = useRef<PendingGeometry | null>(null);
@@ -78,6 +79,7 @@ export function usePlotWindowGesture(win: PlotWindow, bounds: WindowBounds | und
   const onPointerMove = useCallback((e: PointerEvent) => {
     const drag = dragRef.current;
     if (!drag) return;
+    const bounds = boundsRef.current;
     const dx = e.clientX - drag.startX;
     const dy = e.clientY - drag.startY;
     if (drag.mode === "move") {
@@ -115,39 +117,62 @@ export function usePlotWindowGesture(win: PlotWindow, bounds: WindowBounds | und
         geometry.h = MIN_PLOT_WINDOW_H;
       }
     }
+    // Keep north/west reachable, preserving the anchored opposite edge.
+    const position = clampPlotWindowPosition(geometry.x, geometry.y, bounds);
+    if (moving.w) geometry.w = Math.max(MIN_PLOT_WINDOW_W, right - position.x);
+    if (moving.n) geometry.h = Math.max(MIN_PLOT_WINDOW_H, bottom - position.y);
+    geometry.x = position.x;
+    geometry.y = position.y;
+    if (bounds && moving.e) geometry.w = Math.max(MIN_PLOT_WINDOW_W, Math.min(geometry.w, bounds.width - geometry.x));
+    if (bounds && moving.s) geometry.h = Math.max(MIN_PLOT_WINDOW_H, Math.min(geometry.h, bounds.height - geometry.y));
     schedulePreview(geometry);
-  }, [bounds, schedulePreview]);
+  }, [schedulePreview]);
 
   const finishGesture = useCallback(() => {
     if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
-    // Pointerup can arrive before the queued paint. Apply the final preview
-    // first, then commit that exact pair to the store once.
-    preview();
+    // Pointerup can beat the queued paint or follow a canvas resize. Clamp
+    // before painting so the committed geometry and DOM always agree.
     const drag = dragRef.current;
-    const pending = pendingRef.current;
+    const pending = pendingRef.current ?? (drag ? {
+      x: drag.origX, y: drag.origY, w: drag.origW, h: drag.origH,
+    } : null);
     if (drag && pending) {
+      Object.assign(pending, clampPlotWindowPosition(pending.x, pending.y, boundsRef.current));
+      pendingRef.current = pending;
+      preview();
       const changed = pending.x !== drag.origX || pending.y !== drag.origY
         || pending.w !== drag.origW || pending.h !== drag.origH;
       if (changed) {
         useApp.getState().recordHistory(drag.mode === "move" ? "move window" : "resize window");
-        if (pending.x !== drag.origX || pending.y !== drag.origY) moveWindow(win.id, pending.x, pending.y);
-        if (pending.w !== drag.origW || pending.h !== drag.origH) resizeWindow(win.id, pending.w, pending.h);
+        setWindowGeometry(win.id, pending);
       }
     }
-    frameRef.current?.classList.remove("gesturing");
+    frameRef.current?.removeAttribute("data-gesturing");
     dragRef.current = null;
     pendingRef.current = null;
     previewScheduledRef.current = false;
     rafIdRef.current = null;
     window.removeEventListener("pointermove", onPointerMove);
     END_GESTURE_EVENTS.forEach((event) => window.removeEventListener(event, finishGesture));
-  }, [moveWindow, onPointerMove, preview, resizeWindow, win.id]);
+  }, [setWindowGeometry, onPointerMove, preview, win.id]);
 
-  useEffect(() => () => {
-    if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
-    previewScheduledRef.current = false;
-    window.removeEventListener("pointermove", onPointerMove);
-    END_GESTURE_EVENTS.forEach((event) => window.removeEventListener(event, finishGesture));
+  useEffect(() => {
+    const frame = frameRef.current;
+    return () => {
+      if (rafIdRef.current !== null) cancelAnimationFrame(rafIdRef.current);
+      const drag = dragRef.current;
+      if (frame && drag) Object.assign(frame.style, {
+        left: `${drag.origX}px`, top: `${drag.origY}px`,
+        width: `${drag.origW}px`, height: `${drag.origH}px`,
+      });
+      frame?.removeAttribute("data-gesturing");
+      dragRef.current = null;
+      pendingRef.current = null;
+      rafIdRef.current = null;
+      previewScheduledRef.current = false;
+      window.removeEventListener("pointermove", onPointerMove);
+      END_GESTURE_EVENTS.forEach((event) => window.removeEventListener(event, finishGesture));
+    };
   }, [finishGesture, onPointerMove]);
 
   const beginDrag = (mode: DragMode) => (e: ReactPointerEvent) => {
@@ -166,7 +191,7 @@ export function usePlotWindowGesture(win: PlotWindow, bounds: WindowBounds | und
         .map((candidate) => candidate.geometry),
     };
     pendingRef.current = null;
-    frameRef.current?.classList.add("gesturing");
+    frameRef.current?.setAttribute("data-gesturing", "");
     window.addEventListener("pointermove", onPointerMove);
     END_GESTURE_EVENTS.forEach((event) => window.addEventListener(event, finishGesture));
   };

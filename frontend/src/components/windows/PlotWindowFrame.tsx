@@ -93,7 +93,7 @@ export default function PlotWindowFrame({
   // this window's position so its title bar stays reachable (a browser-
   // window shrink can otherwise strand a window's grab handle off-canvas).
   useEffect(() => {
-    if (!bounds || win.winState === "maximized") return;
+    if (!bounds || win.winState === "maximized" || frameRef.current?.hasAttribute("data-gesturing")) return;
     const clamped = clampPlotWindowPosition(win.geometry.x, win.geometry.y, bounds);
     if (clamped.x !== win.geometry.x || clamped.y !== win.geometry.y) {
       moveWindow(win.id, clamped.x, clamped.y);
