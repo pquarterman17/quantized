@@ -302,6 +302,53 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
     return _ResolvedFigure(plot.x, series, x_label, y_label, styles, y2_mask, y2_label, spans)
 
 
+def render_figure_request(req: FigureRequest, *, fmt: str, dpi: int) -> bytes:
+    """Render ``req`` to ``fmt`` bytes at ``dpi`` (clamped) -- the ONE body of
+    ``/figure``, shared with the report exporter (``routes.report_figures``,
+    PRIMARY_SOFTWARE_AUDIT_PLAN P3.6) so a figure embedded in a Word/PowerPoint
+    /HTML report is byte-for-byte the figure this route exports for the same
+    request. ``fmt`` overrides ``req.fmt`` (the report path needs a PNG and an
+    SVG of one spec). Raises the ``CALC_ERRORS_WITH_LOCK`` family; the caller
+    maps them (``/figure`` -> 422/503, the report -> a named placeholder)."""
+    dpi = max(_DPI_MIN, min(_DPI_MAX, dpi))
+    if req.facets:
+        return _render_facets_bytes(req, _figure_series(req), dpi=dpi, fmt=fmt)
+    with heavy_imports("quantized.calc.figure"):
+        from quantized.calc.figure import render_figure
+
+    resolved = _figure_series(req)
+    return render_figure(
+        resolved.x,
+        resolved.series,
+        title=req.title,
+        x_label=resolved.x_label,
+        y_label=resolved.y_label,
+        x_log=req.x_log,
+        y_log=req.y_log,
+        x_scale=req.x_scale,
+        y_scale=req.y_scale,
+        fmt=fmt,
+        style=req.style,
+        series_styles=resolved.styles,
+        error_spans=resolved.error_spans,
+        width_in=req.width_in,
+        height_in=req.height_in,
+        dpi=dpi,
+        transparent=req.transparent,
+        greyscale=req.greyscale,
+        overrides=req.overrides,
+        x_fmt=_tick_fmt(req.x_fmt),
+        y_fmt=_tick_fmt(req.y_fmt),
+        x_step=req.x_step,
+        y_step=req.y_step,
+        y2_mask=resolved.y2_mask,
+        y2_label=resolved.y2_label,
+        y2_scale=req.y2_scale,
+        y2_fmt=_tick_fmt(req.y2_fmt),
+        y2_step=req.y2_step,
+    )
+
+
 @router.post("/figure")
 def export_figure(req: FigureRequest) -> Response:
     """Render the dataset (selected channels + log scales) to a publication
@@ -313,45 +360,8 @@ def export_figure(req: FigureRequest) -> Response:
         raise HTTPException(
             status_code=422, detail=f"fmt must be one of {sorted(_FIGURE_MIME)}"
         )
-    dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
     try:
-        if req.facets:
-            data = _render_facets_bytes(req, _figure_series(req), dpi=dpi)
-        else:
-            with heavy_imports("quantized.calc.figure"):
-                from quantized.calc.figure import render_figure
-
-            resolved = _figure_series(req)
-            data = render_figure(
-                resolved.x,
-                resolved.series,
-                title=req.title,
-                x_label=resolved.x_label,
-                y_label=resolved.y_label,
-                x_log=req.x_log,
-                y_log=req.y_log,
-                x_scale=req.x_scale,
-                y_scale=req.y_scale,
-                fmt=req.fmt,
-                style=req.style,
-                series_styles=resolved.styles,
-                error_spans=resolved.error_spans,
-                width_in=req.width_in,
-                height_in=req.height_in,
-                dpi=dpi,
-                transparent=req.transparent,
-                greyscale=req.greyscale,
-                overrides=req.overrides,
-                x_fmt=_tick_fmt(req.x_fmt),
-                y_fmt=_tick_fmt(req.y_fmt),
-                x_step=req.x_step,
-                y_step=req.y_step,
-                y2_mask=resolved.y2_mask,
-                y2_label=resolved.y2_label,
-                y2_scale=req.y2_scale,
-                y2_fmt=_tick_fmt(req.y2_fmt),
-                y2_step=req.y2_step,
-            )
+        data = render_figure_request(req, fmt=req.fmt, dpi=req.dpi)
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)
     return Response(

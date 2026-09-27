@@ -6,10 +6,18 @@ never re-shapes results itself). ``/export`` validates a posted report and
 streams the rendered LaTeX / HTML / Word / PowerPoint file back as an
 attachment. Missing optional office libraries surface as 501; unknown
 formats/kinds as 422.
+
+Figure blocks carrying a ``spec`` (a ``/api/export/figure`` request body) are
+rendered first by ``routes.report_figures`` through the app's own figure
+exporter (PRIMARY_SOFTWARE_AUDIT_PLAN P3.6). A figure that cannot be rendered
+or embedded never fails the export: the document carries a named placeholder
+and the response lists it in the ``X-Report-Warnings`` header (a JSON array of
+strings, ASCII-escaped; ``X-Report-Warning-Count`` holds the full count).
 """
 
 from __future__ import annotations
 
+import json
 import re
 from datetime import UTC, datetime
 from typing import Any
@@ -19,12 +27,21 @@ from pydantic import BaseModel
 
 from quantized.calc import report_emit, report_emit_peaks, report_emit_sims
 from quantized.calc.report import ReportSheet, validate_report
-from quantized.io.report_export import ReportExportError, render_report
+from quantized.io.report_export import (
+    ReportExportError,
+    figure_target,
+    render_report,
+    require_office_library,
+)
 from quantized.routes._errors import CALC_ERRORS, call_calc
+from quantized.routes.report_figures import render_report_figures
 
 router = APIRouter(prefix="/api/report", tags=["report"])
 
 _EXT = {"latex": ".tex", "html": ".html", "docx": ".docx", "pptx": ".pptx"}
+# Bound the warnings header (proxies cap header sizes): the first few messages,
+# each truncated; the count header always carries the true total.
+_MAX_WARNINGS, _MAX_WARNING_CHARS = 20, 300
 
 
 def _safe_name(name: str, ext: str) -> str:
@@ -108,15 +125,25 @@ def export_report(req: ReportExportRequest) -> Response:
         validate_report(req.report)
     except CALC_ERRORS as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    warnings: list[str] = []
     try:
-        data, mime, _is_text = render_report(req.report, req.format)
+        # Office library check FIRST (P3.6-R5): a docx/pptx export without
+        # the optional library installed 501s immediately, before rendering
+        # a single figure -- not after paying for every figure spec in the
+        # report just to fail at the very end.
+        require_office_library(req.format)
+        figures = render_report_figures(req.report, figure_target(req.format))
+        data, mime, _is_text = render_report(
+            req.report, req.format, figures=figures, warnings=warnings
+        )
     except ReportExportError as exc:
         # unknown format -> 422; a missing optional office lib -> 501
         code = 501 if "needs" in str(exc) else 422
         raise HTTPException(status_code=code, detail=str(exc)) from exc
     filename = _safe_name(req.filename, _EXT.get(req.format, ""))
-    return Response(
-        content=data,
-        media_type=mime,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    if warnings:
+        shown = [w[:_MAX_WARNING_CHARS] for w in warnings[:_MAX_WARNINGS]]
+        headers["X-Report-Warnings"] = json.dumps(shown, ensure_ascii=True)
+        headers["X-Report-Warning-Count"] = str(len(warnings))
+    return Response(content=data, media_type=mime, headers=headers)
