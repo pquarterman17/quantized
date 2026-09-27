@@ -3224,7 +3224,7 @@ summary without leaving Quantized.
 - [ ] Region measures and summary export. Open: not started.
 - [ ] Validate on owner data before expanding.
 
-**Progress 2026-09-27 (slice 1, boxes 1-2; Opus 5.5):** no MATLAB reference
+**Progress 2026-09-27 (slice 1, boxes 1-2):** no MATLAB reference
 exists for any of this (`quantized_matlab`'s `importSIMS` only reads
 depth-axis profiles), so the formulas are the textbook ones, documented in
 the module headers and tested against hand-computed values, not a golden
@@ -3259,7 +3259,7 @@ store and the lazy import's deps map). Not done: multi-layer (per-layer
 rate) calibration, depth-axis rescaling of an already-calibrated profile,
 batch processing of several profiles at once, and anything in boxes 3-5.
 
-**Progress 2026-09-27 (slice 1 review fixes; Sonnet 5):** a code review of
+**Progress 2026-09-27 (slice 1 review fixes):** a code review of
 the slice 1 landing found ten issues, all fixed with a failing-first test
 each. Frontend: the workshop's confirm-level `unit-override` warning now
 gates Create exactly like resample's unit-mismatch checkbox (never a plain
