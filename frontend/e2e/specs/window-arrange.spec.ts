@@ -116,6 +116,36 @@ test.describe("Window arrange, tile, cascade, maximize/restore, and close", () =
     });
     expect(overlaps).toEqual([]);
 
+    // Cascade must not extend resize targets over the visible close control
+    // of a lower window. Check the actual browser hit target.
+    const closeHits = await page.locator(".qzk-plotwin-close").evaluateAll((buttons) => buttons.map((button) => {
+      const r = button.getBoundingClientRect();
+      return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === button;
+    }));
+    expect(closeHits.every(Boolean)).toBe(true);
+
+    // Snap the focused window to bottom-right, then use its real SE grip.
+    await page.evaluate(() => {
+      const store = (window as unknown as { __qz: { useApp: { getState: () => {
+        focusedWindowId: string; plotCanvasBounds: { width: number; height: number };
+        setWindowGeometry: (id: string, g: { x: number; y: number; w: number; h: number }) => void;
+      } } } }).__qz.useApp.getState();
+      const { width, height } = store.plotCanvasBounds;
+      store.setWindowGeometry(store.focusedWindowId, { x: width - 360, y: height - 260, w: 360, h: 260 });
+    });
+    const grip = frame.locator('[data-resize-edge="se"]');
+    await expect(grip).toBeVisible();
+    expect(await grip.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === el;
+    })).toBe(true);
+    const gripBox = (await grip.boundingBox())!;
+    await page.mouse.move(gripBox.x + gripBox.width / 2, gripBox.y + gripBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(gripBox.x - 40, gripBox.y - 40, { steps: 5 });
+    await page.mouse.up();
+    await expect.poll(async () => (await readWindows(page)).find((w) => w.id === focusedWinId)!.geometry.w).toBeLessThan(360);
+
     await focusedTitlebar.dblclick({ position: { x: 3, y: 14 } });
     await expect
       .poll(async () => (await readWindows(page)).find((w) => w.id === focusedWinId)?.winState)

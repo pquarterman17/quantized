@@ -121,6 +121,30 @@ describe("PlotWindowFrame", () => {
     expect(changes).toHaveLength(1);
   });
 
+  it("caps a southeast resize at the canvas edges", () => {
+    const { container } = render(<PlotWindowFrame win={win()} focused datasetName="ds1" bounds={{ width: 800, height: 600 }}><div /></PlotWindowFrame>);
+    fireEvent.pointerDown(container.querySelector('[data-resize-edge="se"]')!, { button: 0, clientX: 0, clientY: 0 });
+    fireEvent.pointerMove(window, { clientX: 2000, clientY: 2000, altKey: true });
+    fireEvent.pointerUp(window);
+    const g = geomOf("w1");
+    expect(g.x + g.w).toBe(800);
+    expect(g.y + g.h).toBe(600);
+  });
+
+  it("retains the opposite corner if bounds shrink before northwest release", () => {
+    const props = { win: win(), focused: true, datasetName: "ds1" };
+    const { container, rerender } = render(<PlotWindowFrame {...props} bounds={{ width: 900, height: 700 }}><div /></PlotWindowFrame>);
+    fireEvent.pointerDown(container.querySelector('[data-resize-edge="nw"]')!, { button: 0, clientX: 100, clientY: 80 });
+    fireEvent.pointerMove(window, { clientX: 140, clientY: 110, altKey: true });
+    rerender(<PlotWindowFrame {...props} bounds={{ width: 180, height: 120 }}><div /></PlotWindowFrame>);
+    fireEvent.pointerUp(window);
+    const g = geomOf("w1");
+    expect(g.x).toBe(100);
+    expect(g.y).toBe(92);
+    expect(g.x + g.w).toBe(580);
+    expect(g.y + g.h).toBe(440);
+  });
+
   it("continues a gesture across a canvas resize and clears its transient state", () => {
     const props = { win: win(), focused: true, datasetName: "ds1" };
     const { container, rerender } = render(<PlotWindowFrame {...props} bounds={{ width: 900, height: 700 }}><div /></PlotWindowFrame>);

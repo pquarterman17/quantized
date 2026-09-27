@@ -137,7 +137,13 @@ export function usePlotWindowGesture(win: PlotWindow, bounds: WindowBounds | und
       x: drag.origX, y: drag.origY, w: drag.origW, h: drag.origH,
     } : null);
     if (drag && pending) {
+      const right = pending.x + pending.w;
+      const bottom = pending.y + pending.h;
       Object.assign(pending, clampPlotWindowPosition(pending.x, pending.y, boundsRef.current));
+      if (drag.mode !== "move") {
+        if (drag.mode.includes("w")) pending.w = Math.max(MIN_PLOT_WINDOW_W, right - pending.x);
+        if (drag.mode.includes("n")) pending.h = Math.max(MIN_PLOT_WINDOW_H, bottom - pending.y);
+      }
       pendingRef.current = pending;
       preview();
       const changed = pending.x !== drag.origX || pending.y !== drag.origY

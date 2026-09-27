@@ -77,6 +77,7 @@ export default function WindowCanvas() {
   // Item 14: a Library dataset drag hovering the EMPTY canvas background
   // (drops on a frame stop propagation, so this never double-lights).
   const [dropping, setDropping] = useState(false);
+  const hasFrameHost = !(plotWindows.length === 1 && plotWindows[0].winState === "maximized");
 
   // Track the frames host's own size (never the window's, and never
   // including the winstrip below it) so PlotWindowFrame can keep every title
@@ -106,7 +107,7 @@ export default function WindowCanvas() {
       boundsRef.current = null;
       setPlotCanvasBounds(null);
     };
-  }, [setPlotCanvasBounds]);
+  }, [setPlotCanvasBounds, hasFrameHost]);
 
   // ORIGIN_FILE_DECODE_PLAN #38: every VISIBLE window's bound dataset gets
   // its full data fetched (if it's still a lazy Origin book) — covers the
