@@ -30,6 +30,7 @@
 // an offset the export would drop or the reverse. Multi-panel cells
 // (`lib/multipanel.ts`) do not read series styles' offsets either.
 
+import type { ErrorSpan } from "./errorbars";
 import type { PlotPayload } from "./plotdata";
 import { overlayModesMatchTheCanvas, type CycleView } from "./seriesStyleCycle";
 import type { SeriesStyle } from "./types";
@@ -81,6 +82,74 @@ export function applyLogOffsets(
     i < ks.length && ks[i] ? { ...s, label: s.label + logOffsetSuffix(ks[i]) } : s,
   );
   return { ...payload, data: data as unknown as PlotPayload["data"], series };
+}
+
+/** Finding 3: `buildErrorColumns`' magnitude map is built from the RAW
+ *  dataset, independent of `applyLogOffsets` above — an offset series' whisker
+ *  would otherwise stay at the true (unscaled) magnitude while the point it
+ *  brackets is drawn at `y · 10^k`, understating the uncertainty on an offset
+ *  trace by exactly the offset's own factor. `cols` is keyed like
+ *  `buildErrorColumns` returns it (uPlot data-column index, 1-based); `channels`
+ *  is the SAME `plotted` list `applyLogOffsets` takes, so column `p+1`'s offset
+ *  is `channels[p]`'s. Returns `cols` itself when nothing is offset. */
+export function scaleErrorColumns(
+  cols: Map<number, (number | null)[]>,
+  channels: readonly number[],
+  styles: Record<number, SeriesStyle>,
+  applies: boolean,
+): Map<number, (number | null)[]> {
+  if (!applies || cols.size === 0) return cols;
+  let changed = false;
+  const out = new Map<number, (number | null)[]>();
+  cols.forEach((col, dataCol) => {
+    const p = dataCol - 1;
+    const k = p >= 0 && p < channels.length ? logOffsetDecades(styles[channels[p]]?.logOffset) : 0;
+    if (!k) {
+      out.set(dataCol, col);
+      return;
+    }
+    changed = true;
+    const f = 10 ** k;
+    out.set(dataCol, col.map((v) => (v == null ? v : v * f)));
+  });
+  return changed ? out : cols;
+}
+
+/** The same scaling as {@link scaleErrorColumns}, for `buildErrorSpans`' richer
+ *  `{axis, plus, minus}` map: only the Y half of a span is scaled (an offset
+ *  moves a series vertically, never sideways, so an X span is untouched). */
+export function scaleErrorSpans(
+  spans: Map<number, ErrorSpan[]>,
+  channels: readonly number[],
+  styles: Record<number, SeriesStyle>,
+  applies: boolean,
+): Map<number, ErrorSpan[]> {
+  if (!applies || spans.size === 0) return spans;
+  let changed = false;
+  const out = new Map<number, ErrorSpan[]>();
+  spans.forEach((list, dataCol) => {
+    const p = dataCol - 1;
+    const k = p >= 0 && p < channels.length ? logOffsetDecades(styles[channels[p]]?.logOffset) : 0;
+    if (!k) {
+      out.set(dataCol, list);
+      return;
+    }
+    changed = true;
+    const f = 10 ** k;
+    out.set(
+      dataCol,
+      list.map((s) =>
+        s.axis === "y"
+          ? {
+              ...s,
+              plus: s.plus.map((v) => (v == null ? v : v * f)),
+              minus: s.minus.map((v) => (v == null ? v : v * f)),
+            }
+          : s,
+      ),
+    );
+  });
+  return changed ? out : spans;
 }
 
 /** The `log_offsets` half of a `FigureSpec` — one entry per `plotted`

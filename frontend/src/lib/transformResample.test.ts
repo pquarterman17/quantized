@@ -2,9 +2,10 @@
 // backend for (preview vs commit), and how a saved (user-editable) step is
 // validated before replay.
 
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
+  computeResample,
   gridText,
   resampleParamsOf,
   resampleRequest,
@@ -13,7 +14,11 @@ import {
   type ResampleParams,
 } from "./transformResample";
 import { transformParamsOf, transformStepText } from "./transformRun";
-import type { DataStruct } from "./types";
+import type { DataStruct, Dataset } from "./types";
+import { parseWorkspace, serializeWorkspace } from "./workspace";
+
+vi.mock("./api/resample", () => ({ resampleDataset: vi.fn() }));
+const { resampleDataset } = await import("./api/resample");
 
 const src: DataStruct = { time: [0, 1, 2], values: [[1], [2], [3]], labels: ["M"], units: ["emu"], metadata: { x_column_unit: "K" } };
 const other: DataStruct = { time: [0.5, Number.NaN, 1.5], values: [[0], [0], [0]], labels: ["G"], units: [""], metadata: { x_column_unit: "Oe" } };
@@ -91,5 +96,33 @@ describe("recorded resample params", () => {
     expect(label).toBe("Resample a.dat onto 0:1:5 (linear)");
     expect(code).toContain('qz.transform("resample"');
     expect(transformStepText(match, "a.dat").code).toContain('with: "grid.dat"');
+  });
+});
+
+describe("computeResample — an out-of-range NaN fill survives a .dwk round trip", () => {
+  it("the resampled dataset's null cells reopen as NaN, not a refusal", async () => {
+    // The backend's own doc (lib/api/resample.ts's ResampleResult): "a blank
+    // value arrives as JSON null" -- the `outOfRange: "nan"` fill for a grid
+    // point outside the source's range. Stand in for that wire response.
+    vi.mocked(resampleDataset).mockResolvedValue({
+      dataset: {
+        time: [0, 1, 2],
+        values: [[1], [null as unknown as number], [3]],
+        labels: ["M"], units: ["emu"], metadata: { x_column_unit: "K" },
+      },
+      warnings: [],
+      source_range: [0, 2],
+      rows_in: 3,
+      rows_out: 3,
+    });
+    const r = await computeResample(
+      { ...base, mode: "step", step: 1 },
+      { name: "a.dat", data: src },
+      null,
+    );
+    const ds: Dataset = { id: "d1", name: r.name, data: r.data };
+    const reopened = parseWorkspace(serializeWorkspace({ datasets: [ds] }));
+    const back = reopened.datasets[0];
+    expect(Number.isNaN(back.data.values[1][0])).toBe(true);
   });
 });

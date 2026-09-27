@@ -45,6 +45,7 @@ __all__ = [
     "LENGTH_UNITS",
     "TIME_UNITS",
     "calibrate_depth",
+    "is_length_unit",
     "length_factor",
     "length_ratio",
     "rate_factor",
@@ -86,6 +87,20 @@ def length_factor(unit: str) -> float:
     if f is None:
         raise ValueError(f"unknown length unit {unit!r} (use nm, um, A, cm, mm or m)")
     return f
+
+
+def is_length_unit(unit: str) -> bool:
+    """Whether ``unit`` is one of `LENGTH_UNITS`' spellings -- never ``""``/
+    blank, which is "no unit", not "unitless length". Shared by
+    ``calc.sims_compare`` (x-unit compatibility across profiles) and
+    ``calc.sims_region`` (whether an integral over x can be an areal dose)."""
+    if not unit.strip():
+        return False
+    try:
+        length_factor(unit)
+    except ValueError:
+        return False
+    return True
 
 
 def time_factor(unit: str) -> float:

@@ -59,8 +59,8 @@ function Results({ r }: { r: SimsRegionState }) {
       <div className="qzk-ds-meta" style={{ ...faint, marginTop: 4 }}>
         {res.rows_in_region} rows in {res.x_name} {fmtNum(res.region[0])} … {fmtNum(res.region[1])}{du} (inclusive).
         Integral: trapezoid over the samples inside the region, not extrapolated to its edges; an areal dose only when
-        the values are a volume concentration and x is a depth. Mean: point average. Junction: first threshold crossing,
-        interpolated between samples.
+        the values are a volume concentration and x is a depth. Mean: point average. Junction: first falling threshold
+        crossing at or beyond the species' own peak depth (metallurgical-junction convention), interpolated between samples.
       </div>
       <TransformWarningList warnings={res.warnings as TransformWarning[]} />
       <div style={{ ...row, marginTop: 10 }}>
@@ -73,8 +73,8 @@ function Results({ r }: { r: SimsRegionState }) {
   );
 }
 
-export default function SimsRegionView() {
-  const r = useSimsRegion();
+export default function SimsRegionView({ active }: { active: boolean }) {
+  const r = useSimsRegion(active);
   const f = r.form;
   return (
     <div>

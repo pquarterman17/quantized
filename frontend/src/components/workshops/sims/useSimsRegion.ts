@@ -14,7 +14,7 @@ import { saveBlob } from "../../../lib/download";
 import { xExtent } from "../../../lib/plotDecimate";
 import { useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
 import { xUnitOf } from "../../../lib/transformResample";
-import { simsSource } from "../../../lib/transformSims";
+import { simsSource, simsWireDataset, speciesOf } from "../../../lib/transformSims";
 import { useSimsDialog } from "../../../store/simsDialog";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
@@ -93,7 +93,7 @@ interface Preview {
   error?: string;
 }
 
-export function useSimsRegion(): SimsRegionState {
+export function useSimsRegion(active: boolean): SimsRegionState {
   const seed = useSimsDialog((s) => s.seed);
   const datasets = useApp((s) => s.datasets);
   const addReport = useApp((s) => s.addReport);
@@ -102,19 +102,17 @@ export function useSimsRegion(): SimsRegionState {
   );
   const dataset = datasets.find((d) => d.id === datasetId);
   const source = useMemo(() => (dataset ? simsSource(dataset) : undefined), [dataset]);
-  const labels = useMemo(() => {
-    const cats = new Set(Object.keys(source?.cat_levels ?? {}).map(Number));
-    return (source?.labels ?? []).filter((_, i) => !cats.has(i));
-  }, [source]);
+  const labels = useMemo(() => (source ? speciesOf(source) : []), [source]);
   const [form, setFormState] = useState<RegionForm>(() => defaultForm(labels, source?.time));
   const [preview, setPreview] = useState<Preview>({ key: "" });
   const [busy, setBusy] = useState(false);
 
   // Indices into the SOURCE's own labels (categorical columns never picked).
   const parsed = useMemo(() => regionRequest(form, source?.labels ?? []), [form, source]);
+  // Finding 9: no preview fires while this tab is mounted-but-hidden.
   const key = useMemo(
-    () => (typeof parsed === "string" || !dataset ? "" : JSON.stringify([parsed, dataset.id, tokenOf(dataset)])),
-    [parsed, dataset],
+    () => (!active || typeof parsed === "string" || !dataset ? "" : JSON.stringify([parsed, dataset.id, tokenOf(dataset)])),
+    [active, parsed, dataset],
   );
   const inputs = useLatestRef({ parsed, dataset, source });
   useDebouncedPreview(key, REGION_DELAY_MS, () => {
@@ -122,10 +120,7 @@ export function useSimsRegion(): SimsRegionState {
     if (typeof parsed === "string" || !dataset || !source) return undefined;
     const ctrl = new AbortController();
     const body = {
-      dataset: {
-        time: source.time, values: source.values, labels: source.labels, units: source.units,
-        metadata: source.metadata, cat_levels: source.cat_levels, level_order: source.level_order,
-      },
+      dataset: simsWireDataset(source),
       // The CSV's provenance line: measured on the ANALYSIS rows, and says so
       // when exclusions or a row filter left some out.
       dataset_name: leftOut(dataset.data.time.length, source.time.length, dataset.name),
@@ -147,10 +142,9 @@ export function useSimsRegion(): SimsRegionState {
     setId(id);
     const next = datasets.find((d) => d.id === id);
     const src = next ? simsSource(next) : undefined;
-    const cats = new Set(Object.keys(src?.cat_levels ?? {}).map(Number));
     // The region and species belong to the previous profile's depth range
     // and columns: re-seed both, keep the threshold rule.
-    setFormState((f) => ({ ...defaultForm((src?.labels ?? []).filter((_, i) => !cats.has(i)), src?.time), mode: f.mode, threshold: f.threshold }));
+    setFormState((f) => ({ ...defaultForm(src ? speciesOf(src) : [], src?.time), mode: f.mode, threshold: f.threshold }));
   }
 
   function exportCsv(): void {

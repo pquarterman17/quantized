@@ -12,9 +12,11 @@ from quantized.calc.plot_log_offsets import (
     apply_log_offsets,
     log_offset_decades,
     log_offset_suffix,
+    scale_error_spans,
 )
 from quantized.calc.plotting import PlotSeries
 from quantized.calc.sims_compare import compare_profiles
+from quantized.calc.sims_depth import is_length_unit
 from quantized.datastruct import DataStruct
 
 
@@ -116,6 +118,19 @@ def test_same_non_length_unit_is_copied_as_is() -> None:
     assert res.data.metadata["x_column_unit"] == "s"
 
 
+# ── finding 10 dedupe: one `is_length_unit`, shared by sims_compare's x-unit
+# compatibility check and sims_region's areal-dose eligibility ────────────
+
+
+@pytest.mark.parametrize(
+    ("unit", "want"),
+    [("nm", True), ("A", True), ("Å", True), ("um", True), ("cm", True),
+     ("s", False), ("min", False), ("", False), ("   ", False), ("atoms/cm3", False)],
+)
+def test_is_length_unit(unit: str, want: bool) -> None:
+    assert is_length_unit(unit) is want
+
+
 # ── decade offsets ─────────────────────────────────────────────────────────
 
 
@@ -141,3 +156,29 @@ def test_suffix_text() -> None:
     assert (log_offset_suffix(0), log_offset_suffix(2), log_offset_suffix(-1)) == (
         "", " ×10^2", " ×10^-1",
     )
+
+
+# ── finding 3: error spans scale with the same decade offsets ──────────────
+
+
+def test_scale_error_spans_scales_only_the_y_half_by_the_same_10_power_k() -> None:
+    spans: list[dict[str, object] | None] = [
+        {"y": {"plus": [1.0, 2.0], "minus": [0.5, None]}},
+        None,
+        {"x": {"plus": [5.0], "minus": [5.0]}, "y": {"plus": [4.0], "minus": [4.0]}},
+    ]
+    out = scale_error_spans(spans, [2, 0, -1])
+    assert out is not None
+    assert out[0] == {"y": {"plus": [100.0, 200.0], "minus": [50.0, None]}}
+    assert out[1] is None  # untouched
+    ch2 = out[2]
+    assert ch2 is not None
+    assert ch2["x"] == {"plus": [5.0], "minus": [5.0]}  # X untouched by a Y-only offset
+    assert ch2["y"] == {"plus": [0.4], "minus": [0.4]}
+
+
+def test_scale_error_spans_is_a_no_op_with_no_offsets_or_no_spans() -> None:
+    spans = [{"y": {"plus": [1.0], "minus": [1.0]}}]
+    assert scale_error_spans(spans, None) is spans
+    assert scale_error_spans(spans, [0]) is spans
+    assert scale_error_spans(None, [2]) is None

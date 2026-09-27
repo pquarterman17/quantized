@@ -132,7 +132,10 @@ def test_region_returns_measures_and_csv() -> None:
     body = res.json()
     (b,) = body["species"]
     assert b["integral"] == pytest.approx(1.2e13) and b["integral_unit"] == "atoms/cm^2"
-    assert b["junction_depth"] == pytest.approx(7.5)
+    # The junction is the falling crossing beyond the peak (20 nm), not the
+    # shallower leading (rising) edge -- see sims_region's junction doc.
+    assert b["junction_depth"] == pytest.approx(32.5)
+    assert b["junction_direction"] == "falling"
     assert b["crossings"][1] == {"depth": pytest.approx(32.5), "direction": "falling"}
     assert body["csv"].startswith("# SIMS region measures\n# dataset: implant.csv\n")
 

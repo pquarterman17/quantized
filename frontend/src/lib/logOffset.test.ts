@@ -3,8 +3,17 @@
 
 import { describe, expect, it } from "vitest";
 
+import type { ErrorSpan } from "./errorbars";
 import { buildFigureSpec } from "./figureSpec";
-import { applyLogOffsets, logOffsetDecades, logOffsetSuffix, logOffsetWire, logOffsetsApply } from "./logOffset";
+import {
+  applyLogOffsets,
+  logOffsetDecades,
+  logOffsetSuffix,
+  logOffsetWire,
+  logOffsetsApply,
+  scaleErrorColumns,
+  scaleErrorSpans,
+} from "./logOffset";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import { defaultPlotView, type PlotView, type PlotWindow } from "./plotview";
 import type { Dataset, DataStruct, SeriesStyle } from "./types";
@@ -75,6 +84,46 @@ describe("applyLogOffsets (the canvas half)", () => {
     expect(logOffsetsApply(0, null)).toBe(true);
     expect(logOffsetsApply(0.2, null)).toBe(false);
     expect(logOffsetsApply(0, 1)).toBe(false);
+  });
+});
+
+describe("scaleErrorColumns / scaleErrorSpans (finding 3: bars scale with the offset)", () => {
+  // channels = [0, 1, 2]; STYLES offsets channel 0 by 2 decades, channel 1
+  // not at all, channel 2 by -1. `cols`' keys are uPlot data columns
+  // (p + 1), so column 1 is channel 0's own error, column 2 is channel 1's.
+  const cols = new Map<number, (number | null)[]>([
+    [1, [0.1, 0.2, null]], // channel 0: logOffset 2 -> ×100
+    [2, [1, 2, 3]], // channel 1: no offset -> unchanged
+  ]);
+
+  it("scales each column's magnitudes by its OWN channel's offset, leaving an un-offset column alone", () => {
+    const out = scaleErrorColumns(cols, [0, 1, 2], STYLES, true);
+    expect(out.get(1)).toEqual([10, 20, null]);
+    expect(out.get(2)).toEqual([1, 2, 3]);
+  });
+
+  it("is the SAME map when nothing is offset or the view refuses offsets", () => {
+    expect(scaleErrorColumns(cols, [0, 1, 2], {}, true)).toBe(cols);
+    expect(scaleErrorColumns(cols, [0, 1, 2], STYLES, false)).toBe(cols);
+    expect(scaleErrorColumns(new Map(), [0, 1, 2], STYLES, true)).toEqual(new Map());
+  });
+
+  it("scales only the Y half of an error span, leaving X spans untouched", () => {
+    const spans = new Map<number, ErrorSpan[]>([
+      [1, [{ axis: "y", plus: [1, 2], minus: [1, 2] }]], // channel 0
+      [3, [{ axis: "x", plus: [5], minus: [5] }, { axis: "y", plus: [null, 4], minus: [null, 4] }]], // channel 2
+    ]);
+    const out = scaleErrorSpans(spans, [0, 1, 2], STYLES, true);
+    expect(out.get(1)).toEqual([{ axis: "y", plus: [1e2, 2e2], minus: [1e2, 2e2] }]); // channel 0: logOffset 2
+    const ch2 = out.get(3)!;
+    expect(ch2[0]).toEqual({ axis: "x", plus: [5], minus: [5] }); // X untouched
+    expect(ch2[1]).toEqual({ axis: "y", plus: [null, 0.4], minus: [null, 0.4] }); // channel 2: logOffset -1
+  });
+
+  it("is the SAME map when nothing is offset or the view refuses offsets", () => {
+    const spans = new Map<number, ErrorSpan[]>([[1, [{ axis: "y", plus: [1], minus: [1] }]]]);
+    expect(scaleErrorSpans(spans, [0, 1, 2], {}, true)).toBe(spans);
+    expect(scaleErrorSpans(spans, [0, 1, 2], STYLES, false)).toBe(spans);
   });
 });
 

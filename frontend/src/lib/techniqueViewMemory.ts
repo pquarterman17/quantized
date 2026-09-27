@@ -90,6 +90,29 @@ function referencedChannels(view: LiveViewSource): number[] {
   return out;
 }
 
+/** Strip `logOffset` from every style entry (finding 5): it is per-plot,
+ *  per-DATASET decade-offset state (`lib/logOffset.ts`'s comparison-plot
+ *  stagger), not a technique-level view preference like colour or marker.
+ *  Left in, a SIMS Compare profile A's stagger on channel 0 would replay
+ *  onto profile B's same-named channel the moment the workshop switches to
+ *  it (`applyTechniqueMemory`'s by-label re-key doesn't know the two
+ *  profiles' offsets are unrelated) -- exactly the kind of leak the rest of
+ *  this module goes out of its way to avoid for axis limits and the y2
+ *  family. Other style fields (colour, width, line, marker, …) are
+ *  untouched and still remembered. */
+function stripLogOffset(styles: Record<number, SeriesStyle>): Record<number, SeriesStyle> {
+  const out: Record<number, SeriesStyle> = {};
+  for (const [ch, style] of Object.entries(styles)) {
+    if (style && "logOffset" in style) {
+      const { logOffset: _drop, ...rest } = style;
+      out[Number(ch)] = rest;
+    } else {
+      out[Number(ch)] = style;
+    }
+  }
+  return out;
+}
+
 /** Project a capture source down to EXACTLY the nine fields this module
  *  stores (BUG-019). Every call site hands in something much wider than
  *  `LiveViewSource` -- structural typing accepts them, which is the whole
@@ -119,7 +142,7 @@ function projectLiveView(v: LiveViewSource): LiveViewSource {
     yKeys: v.yKeys,
     yScale: v.yScale,
     xScale: v.xScale,
-    seriesStyles: v.seriesStyles,
+    seriesStyles: stripLogOffset(v.seriesStyles),
     seriesLabels: v.seriesLabels,
     seriesOrder: v.seriesOrder,
     errKeys: v.errKeys,
@@ -246,7 +269,10 @@ function sanitizeEntry(v: unknown): TechniqueViewMemory | null {
     yKeys: Array.isArray(o.yKeys) ? numArray(o.yKeys) : null,
     yScale: isAxisScale(o.yScale) ? o.yScale : "linear",
     xScale: isAxisScale(o.xScale) ? o.xScale : "linear",
-    seriesStyles: styleRecord(o.seriesStyles),
+    // Finding 5, belt-and-suspenders: a hand-edited or pre-fix `.dwk` could
+    // still carry a `logOffset` in a technique memory entry -- strip it on
+    // the read boundary too, not just at capture.
+    seriesStyles: stripLogOffset(styleRecord(o.seriesStyles)),
     seriesLabels: numKeyedRecord(o.seriesLabels, isString),
     seriesOrder: Array.isArray(o.seriesOrder) ? numArray(o.seriesOrder) : null,
     errKeys: numKeyedRecord(o.errKeys, isFiniteNumber),

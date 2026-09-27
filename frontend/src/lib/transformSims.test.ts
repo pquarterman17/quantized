@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { SimsProcessRequest, SimsProcessResult } from "./api/sims";
 import { runTransform, transformParamsOf, transformStepText } from "./transformRun";
-import { computeSims, simsParamsOf, simsRequest, type SimsParams } from "./transformSims";
+import { computeSims, simsParamsOf, simsRequest, simsWireDataset, speciesOf, type SimsParams } from "./transformSims";
 import type { DataStruct } from "./types";
 import { parseWorkspace, serializeWorkspace } from "./workspace";
 import { useApp } from "../store/useApp";
@@ -55,6 +55,22 @@ beforeEach(() => {
     selectedIds: ["p1"],
     macroRecording: true,
     macroSteps: [],
+  });
+});
+
+describe("simsWireDataset / speciesOf (finding 10 dedupe)", () => {
+  it("projects exactly the wire fields, dropping anything else on the DataStruct", () => {
+    const withExtra = { ...profile, fitSpec: { model: "linear" } } as unknown as DataStruct;
+    expect(simsWireDataset(withExtra)).toEqual({
+      time: profile.time, values: profile.values, labels: profile.labels, units: profile.units,
+      metadata: profile.metadata, cat_levels: undefined, level_order: undefined,
+    });
+  });
+
+  it("keeps every non-categorical column, in order", () => {
+    const withCat = { ...profile, labels: ["B", "Si", "grp"], cat_levels: { 2: ["a", "b"] } };
+    expect(speciesOf(withCat)).toEqual(["B", "Si"]);
+    expect(speciesOf(profile)).toEqual(["B", "Si"]); // no cat_levels at all
   });
 });
 

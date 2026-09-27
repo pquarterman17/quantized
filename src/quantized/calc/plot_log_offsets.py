@@ -19,14 +19,21 @@ malformed hint.
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import replace
+from typing import Any
 
 import numpy as np
 
 from .plotting import PlotSeries
 
-__all__ = ["MAX_DECADES", "apply_log_offsets", "log_offset_decades", "log_offset_suffix"]
+__all__ = [
+    "MAX_DECADES",
+    "apply_log_offsets",
+    "log_offset_decades",
+    "log_offset_suffix",
+    "scale_error_spans",
+]
 
 MAX_DECADES = 30
 
@@ -62,3 +69,43 @@ def apply_log_offsets(
         values = np.asarray(np.asarray(s.values, dtype=float) * (10.0**k), dtype=float)
         out.append(replace(s, label=s.label + log_offset_suffix(k), values=values))
     return out
+
+
+def _scale_mags(raw: Any, f: float) -> Any:
+    """Scale a plain list of magnitudes by ``f``; anything else (missing,
+    malformed) passes through untouched -- ``figure_errorbars.apply_error_bars``
+    is the one place these are actually interpreted, and it already degrades
+    a malformed entry rather than raising."""
+    if not isinstance(raw, (list, tuple)):
+        return raw
+    return [v * f if isinstance(v, (int, float)) and math.isfinite(v) else v for v in raw]
+
+
+def scale_error_spans(
+    spans: Sequence[Mapping[str, Any] | None] | None,
+    decades: Sequence[object] | None,
+) -> Sequence[Mapping[str, Any] | None] | None:
+    """Scale each series' Y error span by ``10**k`` alongside ``apply_log_
+    offsets`` -- the SAME ``decades`` list, aligned to ``y_keys``, exactly
+    like the values they bracket (MAIN_PLAN #36 review finding 3). X spans
+    are left alone: a decade offset shifts a series vertically, never
+    sideways, so an uncertainty in x means the same thing either way."""
+    if not spans or not decades:
+        return spans
+    out: list[Mapping[str, Any] | None] = []
+    changed = False
+    for i, span in enumerate(spans):
+        k = log_offset_decades(decades[i]) if i < len(decades) else 0
+        if not k or not isinstance(span, Mapping) or not isinstance(span.get("y"), Mapping):
+            out.append(span)
+            continue
+        changed = True
+        f = 10.0**k
+        y = span["y"]
+        scaled_y = dict(y)
+        if "plus" in y:
+            scaled_y["plus"] = _scale_mags(y.get("plus"), f)
+        if "minus" in y:
+            scaled_y["minus"] = _scale_mags(y.get("minus"), f)
+        out.append({**span, "y": scaled_y})
+    return out if changed else spans

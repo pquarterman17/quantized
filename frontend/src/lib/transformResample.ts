@@ -23,6 +23,7 @@
 // the transform runner import this.
 
 import { resampleDataset, type ResampleRequest, type ResampleWarningWire } from "./api/resample";
+import { blanksToNaN } from "./blankCells";
 import { analysisData } from "./rowstate";
 import type { DatasetRef } from "./transformRun";
 import type { TransformWarning, TransformWarningCode } from "./transformWarnings";
@@ -175,8 +176,11 @@ export async function computeResample(
   const res = await resampleDataset(resampleRequest(p, source.data, match?.data ?? null, opts.preview), opts.signal);
   const provenance: Record<string, unknown> = { resample_of: source.name, resample_grid: gridText(p) };
   if (p.mode === "match" && match) provenance.aligned_to = match.name;
+  // Blanks (an out-of-range grid point under `outOfRange: "nan"`) arrive as
+  // JSON null; stored as NaN so the `.dwk` reopens (lib/blankCells.ts, the
+  // same fix `lib/transformSims.ts`/`transformSimsCompare.ts` apply).
   return {
-    data: { ...res.dataset, metadata: { ...res.dataset.metadata, ...provenance } },
+    data: blanksToNaN({ ...res.dataset, metadata: { ...res.dataset.metadata, ...provenance } }),
     name: resampleOutputName(p, source.name),
     warnings: res.warnings.map(toWarning),
     rowsIn: res.rows_in,

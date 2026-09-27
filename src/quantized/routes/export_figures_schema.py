@@ -28,6 +28,7 @@ returns but never names the type, so this moves no call site either.
 
 from __future__ import annotations
 
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -197,7 +198,15 @@ class _ResolvedFigure:
     (``y_keys``) order. ``y2_mask[i]`` is ``True`` when ``series[i]`` is one of
     ``req.y2_keys`` (see ``calc.plotting.PlotState.y2_keys``) -- all-``False``
     (the default, ``req.y2_keys`` absent) means "no secondary axis", the pre-y2
-    shape."""
+    shape.
+
+    ``error_spans`` is ``req.error_spans`` scaled by ``req.log_offsets`` (P2.3
+    review finding 3, ``calc.plot_log_offsets.scale_error_spans``) on the flat
+    (non-grouped) path -- log offsets are refused together with a group split
+    (see ``_figure_series``' own doc), so the grouped branch forwards
+    ``req.error_spans`` unscaled. Callers read THIS field for the render, never
+    ``req.error_spans`` directly, so a PDF/SVG/PNG export can never disagree
+    with the canvas about how large an offset series' whiskers are."""
 
     x: Any
     series: list[tuple[str, Any]]
@@ -206,6 +215,7 @@ class _ResolvedFigure:
     styles: list[dict[str, Any] | None] | None
     y2_mask: list[bool]
     y2_label: str
+    error_spans: Sequence[Mapping[str, Any] | None] | None = None
 
 
 def _tick_fmt(spec: TickFormatSpec | None) -> dict[str, Any] | None:

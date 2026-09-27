@@ -59,19 +59,61 @@ def test_full_region_dose_peak_mean_and_junctions_by_hand() -> None:
     assert b["peak"] == 5e18 and b["peak_depth"] == 20.0
     assert b["mean"] == pytest.approx(13e18 / 5)  # (1+3+5+3+1)/5
     # 50% of peak = 2.5e18. Rising: 0 + (2.5-1)/(3-1)*10 = 7.5 nm;
-    # falling: 30 + (2.5-3)/(1-3)*10 = 32.5 nm. The junction is the first.
+    # falling: 30 + (2.5-3)/(1-3)*10 = 32.5 nm. Both crossings are listed, but
+    # the junction (metallurgical-junction convention) is the first FALLING
+    # one at or beyond the peak (20 nm): 32.5 nm, not the leading (rising)
+    # edge at 7.5 nm.
     assert b["threshold"] == pytest.approx(2.5e18)
     assert [(c["depth"], c["direction"]) for c in b["crossings"]] == [
         pytest.approx((7.5, "rising")), pytest.approx((32.5, "falling")),
     ]
-    assert b["junction_depth"] == pytest.approx(7.5)
-    assert b["junction_direction"] == "rising"
+    assert b["junction_depth"] == pytest.approx(32.5)
+    assert b["junction_direction"] == "falling"
     # A flat matrix signal never crosses half its own peak.
     si = _sp(res, "Si")
     assert si["crossings"] == [] and si["junction_depth"] is None
     assert si["integral"] == pytest.approx(5e22 * 40 * 1e-7)  # 2e17 atoms/cm2
     assert [w["code"] for w in res["warnings"]] == ["no-crossing"]
     assert res["rows_in_region"] == 5
+
+
+def test_junction_is_the_deepest_leading_edge_falling_crossing_not_the_first() -> None:
+    # Sabotage-verify 1: a buried implant, Gaussian in depth, peaking at 60 nm
+    # with a 1e15 background floor -- B = 1e19*exp(-((x-60)/25)^2) + 1e15 over
+    # 0..300 nm. At 50% of its own peak the profile crosses TWICE: a rising
+    # (leading, surface-side) edge at x = 60 - 25*sqrt(-ln(0.5)) ~= 39.18 nm,
+    # and a falling (trailing) edge at x = 60 + 25*sqrt(-ln(0.5)) ~= 80.82 nm
+    # -- solving exp(-((x-60)/25)^2) = 0.5 (the 1e15 floor is negligible next
+    # to the 1e19 peak, so the closed form is accurate to ~1e-4 relative).
+    # The junction (metallurgical-junction convention) is the falling one,
+    # beyond the peak -- NOT the shallower, first-seen rising crossing.
+    x = np.linspace(0.0, 300.0, 301)
+    b = 1e19 * np.exp(-(((x - 60.0) / 25.0) ** 2)) + 1e15
+    res = region_measures(_ds(x=list(x), cols={"B": list(b)}, units=["atoms/cm3"]), lo=0, hi=300)
+    sp = _sp(res, "B")
+    assert sp["peak_depth"] == pytest.approx(60.0, abs=1.0)
+    assert [c["direction"] for c in sp["crossings"]] == ["rising", "falling"]
+    rising, falling = sp["crossings"]
+    assert rising["depth"] == pytest.approx(39.18, abs=0.1)
+    assert falling["depth"] == pytest.approx(80.82, abs=0.1)
+    assert sp["junction_depth"] == pytest.approx(80.82, abs=0.1)
+    assert sp["junction_direction"] == "falling"
+
+
+def test_junction_on_a_surface_peaked_profile_is_its_only_falling_crossing() -> None:
+    # A profile peaking AT the region's shallow edge (no leading/rising edge
+    # to exclude): decaying monotonically from 1e19 at the surface to a 1e15
+    # floor. Its one crossing is a falling one at/after the peak (depth 0),
+    # so the junction rule changes nothing here -- documented by the module
+    # doc's "surface-peaked" case.
+    x = np.linspace(0.0, 200.0, 201)
+    b = 1e19 * np.exp(-x / 30.0) + 1e15
+    res = region_measures(_ds(x=list(x), cols={"B": list(b)}, units=["atoms/cm3"]), lo=0, hi=200)
+    sp = _sp(res, "B")
+    assert sp["peak_depth"] == pytest.approx(0.0)
+    assert [c["direction"] for c in sp["crossings"]] == ["falling"]
+    assert sp["junction_depth"] == pytest.approx(sp["crossings"][0]["depth"])
+    assert sp["junction_direction"] == "falling"
 
 
 def test_sub_region_is_inclusive_with_the_shared_tolerance() -> None:
@@ -125,7 +167,7 @@ def test_unsorted_depth_gives_the_same_answer() -> None:
     fwd = region_measures(_ds(), lo=0, hi=40)
     rev = region_measures(_ds(x=X[::-1], cols={"B": B[::-1], "Si": SI}), lo=0, hi=40)
     assert _sp(rev, "B")["integral"] == pytest.approx(_sp(fwd, "B")["integral"])
-    assert _sp(rev, "B")["junction_depth"] == pytest.approx(7.5)
+    assert _sp(rev, "B")["junction_depth"] == pytest.approx(32.5)
 
 
 def test_raw_integral_when_units_do_not_make_a_dose() -> None:
@@ -243,6 +285,7 @@ def test_summary_csv_carries_provenance_and_one_row_per_species() -> None:
     assert [r["species"] for r in rows] == ["B", "Si"]
     assert float(rows[0]["integral"]) == pytest.approx(1.2e13)
     assert rows[0]["integral unit"] == "atoms/cm^2"
-    assert float(rows[0]["junction depth (nm)"]) == pytest.approx(7.5)
+    assert float(rows[0]["junction depth (nm)"]) == pytest.approx(32.5)
+    assert rows[0]["junction direction"] == "falling"
     assert rows[0]["all crossings (nm)"] == "7.5 rising; 32.5 falling"
     assert rows[1]["junction depth (nm)"] == ""

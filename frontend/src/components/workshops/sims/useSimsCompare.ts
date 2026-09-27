@@ -9,10 +9,11 @@
 
 import { useMemo, useState } from "react";
 
+import { MAX_DECADES } from "../../../lib/logOffset";
 import { useDebouncedPreview, useLatestRef, tokenOf } from "../../../lib/previewKey";
 import { runTransform } from "../../../lib/transformRun";
 import { computeSimsCompare, staggerComparison, type SimsCompareComputed, type SimsCompareParams } from "../../../lib/transformSimsCompare";
-import { simsSource } from "../../../lib/transformSims";
+import { simsSource, speciesOf } from "../../../lib/transformSims";
 import type { TransformWarning } from "../../../lib/transformWarnings";
 import type { Dataset } from "../../../lib/types";
 import { useSimsDialog } from "../../../store/simsDialog";
@@ -56,12 +57,9 @@ export interface SimsCompareState {
 
 const message = (e: unknown, fallback: string): string => (e instanceof Error ? e.message : fallback);
 
-/** The species columns a profile offers (categorical columns are not signals). */
-function speciesOf(d: Dataset): string[] {
-  const src = simsSource(d);
-  const cats = new Set(Object.keys(src.cat_levels ?? {}).map(Number));
-  return src.labels.filter((_, i) => !cats.has(i));
-}
+/** The species columns a profile offers (finding 10 dedupe: `speciesOf` --
+ *  the non-categorical column filter -- now lives once, in lib/transformSims). */
+const datasetSpecies = (d: Dataset): string[] => speciesOf(simsSource(d));
 
 /** Parse the stagger text: "" or a whole number within ±MAX_STAGGER. */
 export function parseStagger(text: string): number | null {
@@ -74,7 +72,7 @@ export function parseStagger(text: string): number | null {
 /** The first-seen order of every species across `picked`, with counts. */
 export function speciesOptionsOf(picked: readonly Dataset[]): SpeciesOption[] {
   const counts = new Map<string, number>();
-  for (const d of picked) for (const s of new Set(speciesOf(d))) counts.set(s, (counts.get(s) ?? 0) + 1);
+  for (const d of picked) for (const s of new Set(datasetSpecies(d))) counts.set(s, (counts.get(s) ?? 0) + 1);
   return [...counts].map(([name, count]) => ({ name, count }));
 }
 
@@ -91,7 +89,7 @@ interface Preview {
   error?: string;
 }
 
-export function useSimsCompare(): SimsCompareState {
+export function useSimsCompare(active: boolean): SimsCompareState {
   const seed = useSimsDialog((s) => s.seed);
   const datasets = useApp((s) => s.datasets);
   const selectedIds = useApp((s) => s.selectedIds);
@@ -118,13 +116,27 @@ export function useSimsCompare(): SimsCompareState {
     [speciesOptions, species],
   );
   const staggerDecades = parseStagger(stagger);
+  // Finding 2: the resulting table has one column per (profile, species)
+  // pair actually present -- the SAME count `offsets` below indexes into --
+  // computed from the picked species' own counts rather than
+  // `chosen.length * pickedDs.length`, which overcounts a species missing
+  // from some profiles. Trace n-1 (the last, largest offset) is drawn at
+  // n-1 decades; that must never exceed what `logOffset`/`log_offset_decades`
+  // actually honours (`MAX_DECADES`), or the committed plot silently zeroes
+  // it while this preview -- which applies the raw, unclamped stagger --
+  // kept drawing it offset.
+  const traceCount = speciesOptions.reduce((n, o) => (chosen.includes(o.name) ? n + o.count : n), 0);
+  const maxSpan = traceCount > 1 ? (traceCount - 1) * Math.abs(staggerDecades ?? 0) : 0;
   const formError = !pickedDs.length
     ? "Pick at least one profile."
     : !chosen.length
       ? "Pick at least one species."
       : staggerDecades === null
         ? `The stagger must be a whole number of decades between −${MAX_STAGGER} and ${MAX_STAGGER}.`
-        : null;
+        : maxSpan > MAX_DECADES
+          ? `${traceCount} traces × ${Math.abs(staggerDecades)} decades would span ${maxSpan} decades, over the ` +
+            `±${MAX_DECADES}-decade limit; use ${Math.floor(MAX_DECADES / (traceCount - 1))} or fewer.`
+          : null;
   const params = useMemo<SimsCompareParams | null>(
     () =>
       pickedDs.length && chosen.length
@@ -132,9 +144,11 @@ export function useSimsCompare(): SimsCompareState {
         : null,
     [pickedDs, chosen],
   );
+  // Finding 9: no preview fires while this tab is mounted-but-hidden (its
+  // form still keeps its half-filled state -- see SimsPanel.tsx's `pane`).
   const key = useMemo(
-    () => (params ? JSON.stringify([params, pickedDs.map((d) => [d.id, tokenOf(d)])]) : ""),
-    [params, pickedDs],
+    () => (active && params ? JSON.stringify([params, pickedDs.map((d) => [d.id, tokenOf(d)])]) : ""),
+    [active, params, pickedDs],
   );
   const inputs = useLatestRef({ params, pickedDs });
   useDebouncedPreview(key, COMPARE_DELAY_MS, () => {

@@ -3357,9 +3357,12 @@ Compare, Region; a tab mounts on first visit and keeps its form).
     volume concentration and x is a length. Otherwise it is a labelled raw
     integral in the product of the units.
   - Peak and its (shallowest) depth; the point mean (not depth-weighted).
-  - Every threshold crossing and the junction depth: the first crossing,
-    linearly interpolated, for an absolute threshold or a fraction (default
-    50 %) of each species' own peak.
+  - Every threshold crossing, linearly interpolated, for an absolute
+    threshold or a fraction (default 50 %) of each species' own peak. The
+    junction depth is the metallurgical-junction convention: the first
+    FALLING crossing at or beyond the species' own peak depth (moving away
+    from the peak into the substrate) — not simply the first, shallowest
+    crossing, which for a buried implant is its leading (rising) edge.
 
   The Region tab measures live on the analysis rows (the CSV says so when
   rows were excluded). Export CSV writes the backend's provenance-stamped
@@ -3382,14 +3385,59 @@ Compare, Region; a tab mounts on first visit and keeps its form).
   - No per-trace unit conversion (mixed units are only warned).
   - Region: one region at a time, no batch over profiles, and no
     depth-weighted mean.
-  - Resample and dataset-math outputs probably have the same null-blank
-    `.dwk` bug fixed here for SIMS: their routes write blanks as null the
-    same way, and neither frontend compute converts them. That is read from
-    the code, not reproduced end to end, and not fixed in this slice.
   - Observed once in e2e and not investigated: two figure renders at the
     same moment on the live server (the publication preview's hit-map, plus
     a direct `/api/export/figure`) failed with "pop from empty list". The
     same body succeeds alone.
+
+**Progress 2026-09-27 (slice 2 review fixes):** a review of the slice 2
+landing found ten issues, all fixed with a failing-first test each.
+- **Junction convention** (behaviour change): the junction is now the
+  metallurgical-junction convention stated above, not simply the first
+  crossing — a buried implant's junction used to report its shallow leading
+  (rising) edge instead of the depth beyond the peak where the species
+  falls back through the threshold. Verified against the stated analytic
+  Gaussian profile and a surface-peaked one.
+- **Decade offsets, consistency:** the Compare tab's stagger form now
+  refuses a span that would exceed the `±30`-decade limit
+  `logOffsetDecades`/`log_offset_decades` actually honour, so the preview
+  and the committed plot can no longer disagree on a large stagger over many
+  traces. Error bars/spans built from the raw dataset (canvas and export)
+  now scale by the same `10^k` as the series they bracket. A fit/baseline/
+  peak/deriv overlay (no channel of its own; every producer fits the first
+  VISIBLE plotted channel) scales by that channel's offset too, applied
+  before `composeDisplayPayload`. A RENAMED legend now carries the same
+  " ×10^k" disclosure the auto-derived label already did, on both canvas and
+  export. `staggerComparison`'s `yScale: "log"` write now records the same
+  macro step `setYScale` would, without a second undo entry. Per-technique
+  view memory (`techniqueViewMemory.ts`) no longer captures `logOffset` —
+  it is per-plot/per-dataset, not a technique preference, and was leaking a
+  profile's stagger onto a same-named channel of the next.
+- **Performance:** `usePlotPayload`'s `displayPayload` memo (the one that
+  walks the full row array) is now keyed on the derived per-channel offsets
+  vector instead of the whole `seriesStyles` map, so a colour/marker-only
+  edit no longer recomposes it.
+- **Hidden-tab previews:** each workshop tab's live-preview hook now takes
+  an `active` flag (gated by which tab is visible); a tab kept mounted
+  (hidden) to preserve its half-filled form no longer keeps POSTing full
+  datasets in the background.
+- **Dedupe:** the wire-dataset projection (`{time, values, labels, units,
+  metadata, cat_levels, level_order}`) and the non-categorical species
+  filter each now live once (`lib/transformSims.ts`'s `simsWireDataset`/
+  `speciesOf`), used by the Compare/Region hooks and the compute helpers
+  instead of three near-identical copies. The backend's length-unit check
+  (`calc.sims_compare`'s x-unit compatibility, `calc.sims_region`'s
+  areal-dose eligibility) is now one `calc.sims_depth.is_length_unit`.
+- **Blank-cell `.dwk` bug, confirmed and fixed beyond SIMS:** the null-blank
+  reopen bug this slice fixed for SIMS was reproduced (failing-first test)
+  for Resample (`computeResample`, an out-of-range `outOfRange: "nan"` fill)
+  and Dataset math (`runTransform`'s `algebra` case, e.g. a divide by zero) —
+  both routes serialize a non-finite cell as JSON null exactly like SIMS
+  did, and neither frontend compute converted it back. Both now apply the
+  same `lib/blankCells.ts` conversion at their wire boundary.
+- `routes/export_figures.py` gained a small helper module split
+  (`export_figures_labels.py`'s `apply_offset_disclosure_to_renames`) to
+  stay at the 500-line ceiling after the fixes above.
 
 ### P2.4 — Peak Analyzer refinement
 

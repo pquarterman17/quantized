@@ -82,5 +82,71 @@ def test_the_legend_states_the_offset_like_the_canvas() -> None:
     assert "B (atoms/cm3)" in text and "B ×10" not in text
 
 
+def test_a_renamed_legend_still_states_the_offset() -> None:
+    # P2.3 review finding 6: `series_display_name` uses a legend rename
+    # verbatim, so the offset disclosure `apply_log_offsets` appends to the
+    # AUTO-derived label never reached a renamed one -- hiding the offset on
+    # exactly the series a user cared enough about to rename.
+    body = _payload([0, 3], fmt="svg")
+    body["series_styles"] = [None, {"legend": "Renamed P"}]
+    res = client.post("/api/export/figure", json=body)
+    assert res.status_code == 200, res.text
+    svg = res.content.decode()
+    legend = re.search(r'<g id="legend_1">(.*?)</svg>', svg, re.S)
+    assert legend is not None
+    text = legend.group(1)
+    assert "Renamed P ×10^3" in text
+    assert "B (atoms/cm3)" in text and "B ×10" not in text
+
+
 def test_absent_or_zero_offsets_render_as_before() -> None:
     assert _log_span(_payload([0, 0]), 1) == pytest.approx(_log_span(_payload(None), 1))
+
+
+def test_error_spans_scale_with_the_offset_at_the_shared_figure_series_seam() -> None:
+    # P2.3 review finding 3 (export half): `_figure_series` is the ONE seam
+    # every figure-export route shares (`export_figures.FigureRequest` ->
+    # `_figure_series` -> the renderer) -- assert directly on its resolved
+    # output rather than re-deriving pixel geometry from an SVG, since that
+    # is exactly where the fix lives (`calc.plot_log_offsets.scale_error_spans`).
+    from quantized.routes.export_figures import FigureRequest, _figure_series
+
+    req = FigureRequest(
+        dataset={
+            "time": [0.0, 1.0],
+            "values": [[1.0, 2.0], [2.0, 4.0]],
+            "labels": ["B", "P"],
+            "units": ["atoms/cm3", "atoms/cm3"],
+            "metadata": {},
+        },
+        y_keys=[0, 1],
+        log_offsets=[2, 0],
+        error_spans=[{"y": {"plus": [0.1, 0.2], "minus": [0.1, 0.2]}}, None],
+    )
+    resolved = _figure_series(req)
+    assert resolved.error_spans == [
+        {"y": {"plus": [10.0, 20.0], "minus": [10.0, 20.0]}},  # B: ×10^2, same as its series
+        None,
+    ]
+
+
+def test_error_spans_are_forwarded_unscaled_on_the_grouped_branch() -> None:
+    # log_offsets are refused together with group_col on the canvas, so
+    # nothing scales error_spans there either -- forwarded verbatim.
+    from quantized.routes.export_figures import FigureRequest, _figure_series
+
+    req = FigureRequest(
+        dataset={
+            "time": [0.0, 1.0],
+            "values": [[1.0, 0.0], [2.0, 1.0]],
+            "labels": ["y", "grp"],
+            "units": ["c/s", ""],
+            "metadata": {},
+            "cat_levels": {1: ["a", "b"]},
+        },
+        y_keys=[0],
+        group_col=1,
+        error_spans=[{"y": {"plus": [0.1], "minus": [0.1]}}],
+    )
+    resolved = _figure_series(req)
+    assert resolved.error_spans == [{"y": {"plus": [0.1], "minus": [0.1]}}]

@@ -72,7 +72,13 @@ test.describe("SIMS compare + region (P2.3 slice 2)", () => {
     expect(s.activeId).toBe(made.id);
     expect(s.yScale).toBe("log");
     expect(s.seriesStyles).toEqual({ 0: { logOffset: 0 }, 1: { logOffset: 1 } });
-    expect(s.macroSteps.map((m) => [m.kind, m.params.op, m.params.species])).toEqual([["transform", "simscompare", ["B"]]]);
+    // finding 7 (review fix): the stagger's raw `yScale: "log"` write now
+    // also records the SAME macro step `setYScale("log")` would, right after
+    // the `simscompare` transform step, so a replay switches the axis too.
+    expect(s.macroSteps.map((m) => [m.kind, m.params.op, m.params.species])).toEqual([
+      ["transform", "simscompare", ["B"]],
+      ["ui", undefined, undefined],
+    ]);
 
     // The canvas legend states the offset (suffix before the unit).
     await expect(page.locator(".qzk-stage")).toContainText("B — sampleB ×10^1 (atoms/cm3)");
@@ -102,7 +108,10 @@ test.describe("SIMS compare + region (P2.3 slice 2)", () => {
     const measures = panel.getByRole("group", { name: "Region measures" });
     // (1+3)/2*10 + (3+5)/2*10 + (5+3)/2*10 + (3+1)/2*10 = 120e18 atoms/cm3·nm = 1.2e13 atoms/cm2
     await expect(measures).toContainText("1.200e+13 atoms/cm^2");
-    await expect(measures).toContainText("7.5");
+    // The junction (metallurgical-junction convention) is the falling
+    // crossing beyond the peak (20 nm): 32.5 nm, not the shallower leading
+    // (rising) edge at 7.5 nm -- see calc.sims_region's junction doc.
+    await expect(measures).toContainText("32.5");
     const download = page.waitForEvent("download");
     await panel.getByRole("button", { name: "Export CSV" }).click();
     const csv = await readFile((await (await download).path())!, "utf8");
