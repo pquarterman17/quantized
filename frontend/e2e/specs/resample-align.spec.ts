@@ -58,7 +58,9 @@ test.describe("Resample / align workshop (P2.5)", () => {
     const after = await store(page);
     const out = after.datasets.find((d) => d.name === "linear-ramp (resampled)")!;
     expect(out.data.time).toEqual([-5, 0, 5, 10, 15, 20, 25]);
-    expect(out.data.values.map((r) => r[0])).toEqual([null, 0, 5, 10, 15, 20, null]);
+    // Out-of-range cells are blanks, stored as NaN (not the wire's JSON null) so the
+    // result survives a .dwk save/reopen (lib/blankCells.ts).
+    expect(out.data.values.map((r) => r[0])).toEqual([NaN, 0, 5, 10, 15, 20, NaN]);
     expect(out.data.metadata).toMatchObject({
       worksheet_transform: "resample",
       resample_of: "linear-ramp.csv",
