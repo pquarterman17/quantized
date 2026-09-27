@@ -30,7 +30,9 @@ BEFORE the matplotlib trial parse below ever runs. Keep
 ``sqrt`` handling.
 
 Pure layer: string in -> string out. matplotlib is imported lazily (same
-convention as the figure modules -- the heavy import is paid only on export).
+convention as the figure modules -- the heavy import is paid only on export);
+``RENDER_LOCK`` (needed for the trial parse below) is NOT lazy -- it lives in
+the matplotlib-free ``calc.render_lock``, so importing it here costs nothing.
 """
 
 from __future__ import annotations
@@ -38,6 +40,8 @@ from __future__ import annotations
 import re
 from functools import lru_cache
 from typing import Any
+
+from quantized.calc.render_lock import RenderLockTimeout, acquire_render_lock
 
 __all__ = ["safe_mathtext_label", "series_display_name", "SUPPORTED_MATHTEXT_COMMANDS"]
 
@@ -152,8 +156,21 @@ def safe_mathtext_label(label: str) -> str:
         return label
     if not _uses_only_supported_commands(label):
         return _UNESCAPED_DOLLAR.sub(r"\\$", label)
+    # The trial parse runs on matplotlib's ONE shared mathtext parser, which is
+    # not thread-safe: an unlocked concurrent parse could fail spuriously here
+    # (silently de-mathing a valid label) or corrupt a render's own parse.
+    # Bounded acquire (never blocks forever): every caller already inside a
+    # render_scope reacquires immediately (RLock re-entrant, effectively
+    # free); a standalone caller pays the same timeout/RenderLockTimeout
+    # contract as a full render.
     try:
-        _parser().parse(label)
+        with acquire_render_lock():
+            _parser().parse(label)
+    except RenderLockTimeout:
+        # NOT a parse failure -- the lock itself is stuck/contended. Let it
+        # propagate (-> HTTP 503 at the route), never silently de-math a
+        # label just because the render lock is busy.
+        raise
     except Exception:  # ANY parse failure means "render literal", never raise
         return _UNESCAPED_DOLLAR.sub(r"\\$", label)
     return label

@@ -11,30 +11,24 @@ only (the heavy import is lazy at the route boundary).
 from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
-from io import BytesIO
 from typing import Any
 
-import matplotlib
+import numpy as np
+from numpy.typing import ArrayLike, NDArray
 
-matplotlib.use("Agg")  # headless: render to a buffer, never to a display
-matplotlib.rcParams["svg.fonttype"] = "none"  # editable SVG <text>, not glyph outlines
-
-import matplotlib.pyplot as plt  # noqa: E402  (must follow matplotlib.use)
-import numpy as np  # noqa: E402
-from numpy.typing import ArrayLike, NDArray  # noqa: E402
-
-from quantized.calc.figure_colorscatter import (  # noqa: E402
+from quantized.calc.figure_colorscatter import (
     draw_color_scatter as _draw_color_scatter,
 )
-from quantized.calc.figure_greyscale import apply_greyscale  # noqa: E402
-from quantized.calc.figure_hitmap import collect_map as _collect_map_impl  # noqa: E402
-from quantized.calc.figure_labels import safe_mathtext_label  # noqa: E402
-from quantized.calc.figure_overrides import _apply_overrides, _validate_overrides  # noqa: E402
-from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale  # noqa: E402
-from quantized.calc.figure_styles import FigureStyle, figure_style  # noqa: E402
-from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps  # noqa: E402
+from quantized.calc.figure_greyscale import apply_greyscale
+from quantized.calc.figure_hitmap import collect_map as _collect_map_impl
+from quantized.calc.figure_labels import safe_mathtext_label
+from quantized.calc.figure_overrides import _apply_overrides, _validate_overrides
+from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
+from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
+from quantized.calc.figure_styles import FigureStyle, figure_style
+from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
 
-from .figure_errorbars import apply_error_bars  # noqa: E402
+from .figure_errorbars import apply_error_bars
 
 __all__ = ["draw_series_axes", "render_figure", "style_rc"]
 
@@ -123,7 +117,7 @@ def _apply_fill(
 def style_rc(st: FigureStyle, ov: Mapping[str, Any]) -> dict[str, Any]:
     """The rc-param dict a preset (+ optional font/tick overrides) resolves to.
 
-    Scoped to one render via ``matplotlib.rc_context`` by the callers (the
+    Scoped to one render via ``figure_render.render_scope`` by the callers (the
     single-figure renderer below and the page composer in ``figure_page``).
     The named font is given a generic fallback so matplotlib stays silent when
     Helvetica/Arial/Times aren't installed on the host.
@@ -192,8 +186,8 @@ def draw_series_axes(
     The single per-axes rendering body, shared by the single-figure renderer
     (``_render_impl``) and the multi-panel page composer
     (``figure_page.render_figure_page``) so a panel on a page looks exactly
-    like its single-figure export. Callers own the figure lifecycle (rc
-    context, layout, savefig, close) and must have sanitized every
+    like its single-figure export. Callers own the figure lifecycle (render
+    scope, layout, savefig) and must have sanitized every
     user-supplied string through ``safe_mathtext_label`` already.
 
     ``x_scale``/``y_scale`` (MAIN #12: "linear"/"log"/"reciprocal") are the
@@ -347,16 +341,6 @@ def _render_impl(
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
-    # Rich-text labels (GOTO #5): valid $...$ mathtext passes through to
-    # matplotlib untouched; INVALID mathtext is de-mathed here so it renders
-    # literally instead of raising inside savefig (an export must never 500).
-    # Sanitizing at entry also covers the figure_break branch below, which
-    # receives these same strings.
-    title = safe_mathtext_label(title)
-    x_label = safe_mathtext_label(x_label)
-    y_label = safe_mathtext_label(y_label)
-    y2_label = safe_mathtext_label(y2_label)
-    series = [(safe_mathtext_label(label), y) for label, y in series]
     if greyscale:
         series_styles = apply_greyscale(series_styles, len(series))
     st = figure_style(style)
@@ -368,9 +352,8 @@ def _render_impl(
         raise ValueError("y2_mask must have the same length as series")
     has_y2 = any(y2_mask_list)
 
-    # rc_context scopes typography to this render (see style_rc). (matplotlib's
-    # RcParams Literal-key type is impractical with the dynamic font.<generic>
-    # key, hence the targeted ignore at the context below.)
+    # render_scope scopes typography to this render (see style_rc) and holds
+    # the process-wide render lock (see calc.figure_render).
     rc = style_rc(st, ov)
     figsize = (width_in or st.fig_width_in, height_in or st.fig_height_in)
 
@@ -378,7 +361,20 @@ def _render_impl(
     x_breaks = ov.get("x_breaks")
     if has_y2 and x_breaks:
         raise ValueError("y2_keys is not supported together with x_breaks")
-    with matplotlib.rc_context(rc):  # type: ignore[arg-type]
+    with render_scope(rc):
+        # Rich-text labels (GOTO #5): valid $...$ mathtext passes through to
+        # matplotlib untouched; INVALID mathtext is de-mathed here so it
+        # renders literally instead of raising inside savefig (an export
+        # must never 500). Inside render_scope (not before it, review fix):
+        # every safe_mathtext_label trial-parse below reacquires the SAME
+        # re-entrant RENDER_LOCK this scope already holds -- one real
+        # acquire per render, not one per label. Sanitizing here also covers
+        # the figure_break branch below, which receives these same strings.
+        title = safe_mathtext_label(title)
+        x_label = safe_mathtext_label(x_label)
+        y_label = safe_mathtext_label(y_label)
+        y2_label = safe_mathtext_label(y2_label)
+        series = [(safe_mathtext_label(label), y) for label, y in series]
         # Manual axis breaks (gap #21): a distinct, twinned-panel rendering
         # path — not compatible with the hit-map collector (collect_map is
         # figure-hitmap's single-axes pixel harvesting) or the full
@@ -415,61 +411,57 @@ def _render_impl(
                     x_step=x_step,
                     y_step=y_step,
                 )
-        fig, ax = plt.subplots(figsize=figsize)
-        try:
-            if has_y2:
-                # Lazy import: mirrors figure_break's own lazy import above —
-                # keeps this module's own top-level import list light, and
-                # the twinx orchestration out of the 500-line ceiling here.
-                from quantized.calc.figure_y2 import render_with_secondary_axis
+        fig = new_figure(figsize=figsize)
+        ax = fig.subplots()
+        if has_y2:
+            # Lazy import: mirrors figure_break's own lazy import above —
+            # keeps this module's own top-level import list light, and
+            # the twinx orchestration out of the 500-line ceiling here.
+            from quantized.calc.figure_y2 import render_with_secondary_axis
 
-                artists = render_with_secondary_axis(
-                    fig, ax, xv, series, series_styles, y2_mask_list,
-                    st=st, ov=ov, x_log=x_log, y_log=y_log,
-                    x_scale=x_scale, y_scale=y_scale,
-                    title=title, x_label=x_label, y_label=y_label,
-                    x_fmt=x_fmt, y_fmt=y_fmt, x_step=x_step, y_step=y_step,
-                    y2_label=y2_label, y2_scale=y2_scale,
-                    y2_fmt=y2_fmt, y2_step=y2_step,
-                )
-            else:
-                artists = draw_series_axes(
-                    fig,
-                    ax,
-                    xv,
-                    series,
-                    st=st,
-                    ov=ov,
-                    x_log=x_log,
-                    y_log=y_log,
-                    x_scale=x_scale,
-                    y_scale=y_scale,
-                    title=title,
-                    x_label=x_label,
-                    y_label=y_label,
-                    series_styles=series_styles,
-                    error_spans=error_spans,
-                    x_fmt=x_fmt,
-                    y_fmt=y_fmt,
-                    x_step=x_step,
-                    y_step=y_step,
-                )
-            if not ov.get("margins"):
-                fig.tight_layout()
-            if collect_map:
-                return _collect_map_impl(
-                    fig,
-                    ax,
-                    series_artists=artists,
-                    dpi=resolved_dpi,
-                    x_scale=resolve_axis_scale(x_scale, x_log),
-                    y_scale=resolve_axis_scale(y_scale, y_log),
-                )
-            buf = BytesIO()
-            fig.savefig(buf, format=fmt, dpi=resolved_dpi, transparent=transparent)
-            return buf.getvalue()
-        finally:
-            plt.close(fig)
+            artists = render_with_secondary_axis(
+                fig, ax, xv, series, series_styles, y2_mask_list,
+                st=st, ov=ov, x_log=x_log, y_log=y_log,
+                x_scale=x_scale, y_scale=y_scale,
+                title=title, x_label=x_label, y_label=y_label,
+                x_fmt=x_fmt, y_fmt=y_fmt, x_step=x_step, y_step=y_step,
+                y2_label=y2_label, y2_scale=y2_scale,
+                y2_fmt=y2_fmt, y2_step=y2_step,
+            )
+        else:
+            artists = draw_series_axes(
+                fig,
+                ax,
+                xv,
+                series,
+                st=st,
+                ov=ov,
+                x_log=x_log,
+                y_log=y_log,
+                x_scale=x_scale,
+                y_scale=y_scale,
+                title=title,
+                x_label=x_label,
+                y_label=y_label,
+                series_styles=series_styles,
+                error_spans=error_spans,
+                x_fmt=x_fmt,
+                y_fmt=y_fmt,
+                x_step=x_step,
+                y_step=y_step,
+            )
+        if not ov.get("margins"):
+            fig.tight_layout()
+        if collect_map:
+            return _collect_map_impl(
+                fig,
+                ax,
+                series_artists=artists,
+                dpi=resolved_dpi,
+                x_scale=resolve_axis_scale(x_scale, x_log),
+                y_scale=resolve_axis_scale(y_scale, y_log),
+            )
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi, transparent=transparent)
 
 
 def render_figure(

@@ -22,7 +22,7 @@ from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel, Field, field_validator
 
 from quantized.datastruct import DataStruct
-from quantized.routes._errors import CALC_ERRORS
+from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
 from quantized.routes._export_common import (
     _DPI_MAX,
     _DPI_MIN,
@@ -404,8 +404,8 @@ def export_figure(req: FigureRequest) -> Response:
                 y2_fmt=_tick_fmt(req.y2_fmt),
                 y2_step=req.y2_step,
             )
-    except CALC_ERRORS as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except CALC_ERRORS_WITH_LOCK as exc:
+        raise_calc_error(exc)
     return Response(
         content=data,
         media_type=_FIGURE_MIME[req.fmt],
@@ -493,5 +493,5 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
             y2_fmt=_tick_fmt(req.y2_fmt),
             y2_step=req.y2_step,
         )
-    except CALC_ERRORS as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except CALC_ERRORS_WITH_LOCK as exc:
+        raise_calc_error(exc)

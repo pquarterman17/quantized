@@ -184,12 +184,11 @@ def _rect_panel(rect: tuple[float, float, float, float], **kw: Any) -> PagePanel
 def test_free_placement_axes_at_flipped_page_positions() -> None:
     # page_rect (0.1, 0.2, 0.3, 0.4) top-left origin -> matplotlib add_axes
     # bottom-left origin: bottom = 1 - y - h = 1 - 0.2 - 0.4 = 0.4.
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     panels = [_rect_panel((0.1, 0.2, 0.3, 0.4)), _rect_panel((0.5, 0.5, 0.4, 0.3))]
     st = figure_style("default")
-    fig = _build_page_figure(
+    fig = _build_page_figure_helper(
         panels, free_placement=True, w=6.0, h=6.0, rows=1, cols=1,
         st=st, label_format="(a)", label_pos="nw",
     )
@@ -303,12 +302,11 @@ def _facet_subs(fig: Any, n: int) -> list[Any]:
 
 
 def test_facet_panel_renders_real_vector_sub_axes_not_an_image() -> None:
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     panels = [_facet_panel(0, 0), _panel(0, 1)]
     st = figure_style("default")
-    fig = _build_page_figure(
+    fig = _build_page_figure_helper(
         panels, free_placement=False, w=8.0, h=4.0, rows=1, cols=2,
         st=st, label_format="(a)", label_pos="nw",
     )
@@ -330,12 +328,11 @@ def test_facet_panel_renders_real_vector_sub_axes_not_an_image() -> None:
 
 
 def test_facet_sub_axes_share_x_with_each_other_but_not_sibling_panel() -> None:
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     panels = [_facet_panel(0, 0), _panel(0, 1)]
     st = figure_style("default")
-    fig = _build_page_figure(
+    fig = _build_page_figure_helper(
         panels, free_placement=False, w=8.0, h=4.0, rows=1, cols=2,
         st=st, label_format="(a)", label_pos="nw",
     )
@@ -364,14 +361,13 @@ def test_facet_panel_first_in_placement_order_does_not_break_flat_siblings_link_
     # unconditionally on index 0 -- which was itself the disqualified
     # facet panel. The two ordinary (flat) siblings must still share x with
     # each other (anchored on the first NON-facet panel instead).
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     facet = _facet_panel(0, 0)
     flat1 = _panel(0, 1)
     flat2 = _panel(0, 2)
     st = figure_style("default")
-    fig = _build_page_figure(
+    fig = _build_page_figure_helper(
         [facet, flat1, flat2], free_placement=False, w=9.0, h=3.0, rows=1, cols=3,
         st=st, label_format="(a)", label_pos="nw", link_x=True,
     )
@@ -391,12 +387,11 @@ def test_facet_panel_first_in_placement_order_does_not_break_flat_siblings_link_
 
 
 def test_facet_panel_x_lim_override_applies_to_every_sub_panel() -> None:
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     panel = _facet_panel(0, 0, overrides={"x_lim": [0.5, 1.5]})
     st = figure_style("default")
-    fig = _build_page_figure(
+    fig = _build_page_figure_helper(
         [panel], free_placement=False, w=4.0, h=4.0, rows=1, cols=1,
         st=st, label_format="(a)", label_pos="nw",
     )
@@ -412,12 +407,11 @@ def test_facet_panel_x_lim_override_applies_to_every_sub_panel() -> None:
 
 
 def test_facet_panel_grid_override_applies_to_every_sub_panel() -> None:
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     panel = _facet_panel(0, 0, overrides={"grid": True})
     st = figure_style("aps")  # aps preset has grid off by default
-    fig = _build_page_figure(
+    fig = _build_page_figure_helper(
         [panel], free_placement=False, w=4.0, h=4.0, rows=1, cols=1,
         st=st, label_format="(a)", label_pos="nw",
     )
@@ -433,14 +427,13 @@ def test_facet_panel_grid_override_applies_to_every_sub_panel() -> None:
 
 
 def test_facet_panel_free_placement_axes_within_rect_bounds() -> None:
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     # page_rect (0.1, 0.1, 0.6, 0.6) top-left origin -> bottom-left bounds
     # x in [0.1, 0.7], y in [1 - 0.1 - 0.6, 1 - 0.1] = [0.3, 0.9].
     panel = _facet_panel(0, 0, page_rect=(0.1, 0.1, 0.6, 0.6))
     st = figure_style("default")
-    fig = _build_page_figure(
+    fig = _build_page_figure_helper(
         [panel], free_placement=True, w=6.0, h=6.0, rows=1, cols=1,
         st=st, label_format="(a)", label_pos="nw",
     )
@@ -463,12 +456,11 @@ def test_facet_panel_grid_placement_axis_labels_use_subfigure_supxlabel() -> Non
     # 2) -- x_label/y_label place via its OWN supxlabel/supylabel (a cell-
     # scoped equivalent of the whole-page fig.supxlabel/supylabel), not
     # per-axes set_xlabel/set_ylabel calls.
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     panel = _facet_panel(0, 0, n=3, x_label="Time (s)", y_label="Signal (V)")
     st = figure_style("default")
-    fig = _build_page_figure(
+    fig = _build_page_figure_helper(
         [panel], free_placement=False, w=6.0, h=6.0, rows=1, cols=1,
         st=st, label_format="(a)", label_pos="nw",
     )
@@ -494,7 +486,6 @@ def test_facet_panel_free_placement_axis_labels_placed_on_bottom_row_and_first_c
     # 3 facets -> _grid_shape(3) == (2, 2): level0 (r0,c0), level1 (r0,c1),
     # level2 (r1,c0); (r1,c1) hidden. Per-column bottom-most VISIBLE row:
     # col0 -> level2 (r1); col1 -> level1 (r0, since (r1,c1) is hidden).
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     panel = _facet_panel(
@@ -502,7 +493,7 @@ def test_facet_panel_free_placement_axis_labels_placed_on_bottom_row_and_first_c
         page_rect=(0.05, 0.05, 0.9, 0.9),
     )
     st = figure_style("default")
-    fig = _build_page_figure(
+    fig = _build_page_figure_helper(
         [panel], free_placement=True, w=6.0, h=6.0, rows=1, cols=1,
         st=st, label_format="(a)", label_pos="nw",
     )
@@ -566,9 +557,13 @@ def _figure_style_default() -> Any:
 
 
 def _build_page_figure_helper(*args: Any, **kw: Any) -> Any:
+    """Call ``_build_page_figure`` inside a ``render_scope`` -- it calls
+    ``new_figure``, which now asserts the render lock is held (review fix)."""
     from quantized.calc.figure_page import _build_page_figure
+    from quantized.calc.figure_render import render_scope
 
-    return _build_page_figure(*args, **kw)
+    with render_scope():
+        return _build_page_figure(*args, **kw)
 
 
 @pytest.mark.parametrize("resize_mode", ["none", "tight"])
@@ -1066,12 +1061,11 @@ def test_no_y2_mask_is_byte_identical_to_omitting_it() -> None:
 
 
 def test_panel_with_y2_mask_renders_a_real_twinx_axes() -> None:
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     panels = [_y2_panel(0, 0, [False, True])]
     st = figure_style("default")
-    fig = _build_page_figure(
+    fig = _build_page_figure_helper(
         panels, free_placement=False, w=6.0, h=4.0, rows=1, cols=1,
         st=st, label_format="(a)", label_pos="nw",
     )
@@ -1110,14 +1104,13 @@ def test_y2_mask_length_mismatch_raises() -> None:
 
 
 def test_y2_label_scale_and_step_apply_to_the_secondary_axis() -> None:
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     panels = [
         _y2_panel(0, 0, [False, True], y2_label="secondary (units)", y2_scale="log")
     ]
     st = figure_style("default")
-    fig = _build_page_figure(
+    fig = _build_page_figure_helper(
         panels, free_placement=False, w=6.0, h=4.0, rows=1, cols=1,
         st=st, label_format="(a)", label_pos="nw",
     )
@@ -1132,12 +1125,11 @@ def test_y2_label_scale_and_step_apply_to_the_secondary_axis() -> None:
 
 
 def test_y2_lim_override_fixes_the_secondary_axis_range() -> None:
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     panels = [_y2_panel(0, 0, [False, True], overrides={"y2_lim": [1.0, 10.0]})]
     st = figure_style("default")
-    fig = _build_page_figure(
+    fig = _build_page_figure_helper(
         panels, free_placement=False, w=6.0, h=4.0, rows=1, cols=1,
         st=st, label_format="(a)", label_pos="nw",
     )
@@ -1203,7 +1195,6 @@ def test_link_x_shares_x_limits_across_panels() -> None:
     # Two panels with genuinely different x data ranges: unlinked, each
     # autoscales independently (different xlim); linked, matplotlib's shared
     # -axis autoscale unions them onto ONE xlim for both.
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     x1 = np.linspace(0.0, 5.0, 30)
@@ -1214,7 +1205,7 @@ def test_link_x_shares_x_limits_across_panels() -> None:
     ]
     st = figure_style("default")
 
-    unlinked = _build_page_figure(
+    unlinked = _build_page_figure_helper(
         panels, free_placement=False, w=8.0, h=4.0, rows=1, cols=2,
         st=st, label_format="(a)", label_pos="nw",
     )
@@ -1225,7 +1216,7 @@ def test_link_x_shares_x_limits_across_panels() -> None:
 
         plt.close(unlinked)
 
-    linked = _build_page_figure(
+    linked = _build_page_figure_helper(
         panels, free_placement=False, w=8.0, h=4.0, rows=1, cols=2,
         st=st, label_format="(a)", label_pos="nw", link_x=True,
     )
@@ -1238,7 +1229,6 @@ def test_link_x_shares_x_limits_across_panels() -> None:
 
 
 def test_link_y_shares_y_limits_across_panels() -> None:
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     x = np.linspace(0.0, 5.0, 30)
@@ -1247,7 +1237,7 @@ def test_link_y_shares_y_limits_across_panels() -> None:
         PagePanel(x=x, series=[("y", 50.0 * np.sin(x))], row=0, col=1),
     ]
     st = figure_style("default")
-    fig = _build_page_figure(
+    fig = _build_page_figure_helper(
         panels, free_placement=False, w=8.0, h=4.0, rows=1, cols=2,
         st=st, label_format="(a)", label_pos="nw", link_y=True,
     )
@@ -1282,7 +1272,6 @@ def test_free_placement_ignores_gap_and_resize_mode_but_honors_link() -> None:
     # Free placement never uses a gridspec -- row_gap/col_gap/resize_mode
     # must not raise or change anything observable there, but link_x/link_y
     # (matplotlib sharex/sharey, works on any two axes) still applies.
-    from quantized.calc.figure_page import _build_page_figure
     from quantized.calc.figure_styles import figure_style
 
     x1 = np.linspace(0.0, 5.0, 30)
@@ -1292,7 +1281,7 @@ def test_free_placement_ignores_gap_and_resize_mode_but_honors_link() -> None:
         PagePanel(x=x2, series=[("y", np.cos(x2))], row=0, col=0, page_rect=(0.55, 0.55, 0.4, 0.4)),
     ]
     st = figure_style("default")
-    fig = _build_page_figure(
+    fig = _build_page_figure_helper(
         panels, free_placement=True, w=6.0, h=6.0, rows=1, cols=1,
         st=st, label_format="(a)", label_pos="nw",
         row_gap=0.9, col_gap=0.9, resize_mode="tight", link_x=True,

@@ -31,7 +31,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, Response
 from pydantic import BaseModel
 
-from quantized.routes._errors import CALC_ERRORS
+from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
 from quantized.routes._export_common import (
     _DPI_MAX,
     _DPI_MIN,
@@ -143,8 +143,8 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 show_mean_ci=req.show_mean_ci, show_connect_means=req.show_connect_means,
                 show_n=req.show_n, caveat=req.caveat, connect_breaks=req.connect_breaks,
             )
-    except CALC_ERRORS as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except CALC_ERRORS_WITH_LOCK as exc:
+        raise_calc_error(exc)
     return Response(
         content=img,
         media_type=_FIGURE_MIME[req.fmt],
@@ -231,8 +231,8 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
                 fmt=req.fmt, style=req.style, title=req.title, x_label=req.x_label,
                 y_label=req.y_label, dpi=dpi, counts=req.counts, caveat=req.caveat,
             )
-    except CALC_ERRORS as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except CALC_ERRORS_WITH_LOCK as exc:
+        raise_calc_error(exc)
     return Response(
         content=img,
         media_type=_FIGURE_MIME[req.fmt],
