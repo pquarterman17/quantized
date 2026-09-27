@@ -45,7 +45,7 @@ from quantized.io.report_figures import (
     png_size_in,
 )
 
-__all__ = ["OfficeLibraryMissing", "to_docx", "to_pptx"]
+__all__ = ["OfficeLibraryMissing", "check_office_library", "to_docx", "to_pptx"]
 
 _A_NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 _R_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -58,6 +58,33 @@ _FALLBACK_SIZE_IN = (6.0, 4.5)  # only if a render's PNG header is unreadable
 
 class OfficeLibraryMissing(ImportError):
     """python-docx / python-pptx is not installed (the ``office`` extra)."""
+
+
+def check_office_library(fmt: str) -> None:
+    """Raise :class:`OfficeLibraryMissing` if ``fmt``'s optional library
+    (``python-docx``/``python-pptx``) is not installed; a no-op for anything
+    else. Callable standalone -- BEFORE rendering a single figure
+    (``routes.report_export.export_report`` via ``io.report_export.
+    require_office_library``, P3.6-R5) -- so a missing library is a fast
+    501, not one paid for after every figure in the report already rendered.
+    ``to_docx``/``to_pptx`` also call this first, so they still raise the
+    same error when used directly (e.g. from a script)."""
+    if fmt == "docx":
+        try:
+            with heavy_imports("docx"):
+                import docx  # noqa: F401
+        except ImportError as exc:
+            raise OfficeLibraryMissing(
+                "Word export needs 'python-docx' (pip install quantized[office])"
+            ) from exc
+    elif fmt == "pptx":
+        try:
+            with heavy_imports("pptx"):
+                import pptx  # noqa: F401
+        except ImportError as exc:
+            raise OfficeLibraryMissing(
+                "PowerPoint export needs 'python-pptx' (pip install quantized[office])"
+            ) from exc
 
 
 def _svg_ext_xml(rid: str) -> str:
@@ -91,9 +118,15 @@ def _plan(
     figures: Mapping[FigureKey, RenderedFigure] | None,
     warnings: list[str] | None,
 ) -> FigurePlan:
-    plan = plan_figure(block, (figures or {}).get(key), "office")
+    rendered = (figures or {}).get(key)
+    plan = plan_figure(block, rendered, "office")
     if plan.kind == "render" and plan.png is None:
-        plan = FigurePlan("placeholder", reason="no raster (PNG) was rendered for Office")
+        # P3.6-R9: name the SPECIFIC render failure when one is known (an SVG
+        # rendered fine but the raster half of the same spec didn't), rather
+        # than a generic message that discards it.
+        reason = (rendered.png_error if rendered is not None and rendered.png_error
+                  else "no raster (PNG) was rendered for Office")
+        plan = FigurePlan("placeholder", reason=reason)
     if warnings is not None:
         if plan.kind == "placeholder":
             warnings.append(figure_warning(block, key[0], f"not embedded: {plan.reason}"))
@@ -105,6 +138,18 @@ def _plan(
 def _natural_size(plan: FigurePlan) -> tuple[float, float]:
     assert plan.png is not None
     return png_size_in(plan.png, plan.dpi) or _FALLBACK_SIZE_IN
+
+
+def _bad_image_placeholder(
+    block: Mapping[str, Any], exc: BaseException, section_index: int, warnings: list[str] | None
+) -> str:
+    """The placeholder text for a caller-supplied ``image`` that decoded from
+    base64 fine but the embedding library then rejected as not a real image
+    (P3.6-R2) -- also appends the matching warning."""
+    reason = f"the attached image data is not a valid image ({type(exc).__name__})"
+    if warnings is not None:
+        warnings.append(figure_warning(block, section_index, f"not embedded: {reason}"))
+    return placeholder_text(block, reason)
 
 
 # ── Word ──────────────────────────────────────────────────────────────────
@@ -121,10 +166,28 @@ def _docx_attach_svg(doc: Any, shape: Any, svg: bytes) -> None:
     _append_svg_ext(shape._inline.graphic.graphicData.pic.blipFill.blip, rid, parse_xml)
 
 
-def _docx_figure(doc: Any, block: Mapping[str, Any], plan: FigurePlan, inches: Any) -> None:
+def _docx_figure(
+    doc: Any, block: Mapping[str, Any], plan: FigurePlan, inches: Any,
+    *, section_index: int, warnings: list[str] | None,
+) -> None:
     if plan.kind == "image":  # a caller-supplied raster: pre-P3.6 layout kept
         assert plan.raster is not None
-        shape = doc.add_picture(_io.BytesIO(plan.raster), width=inches(6))
+        with heavy_imports("docx.image.exceptions"):
+            from docx.image.exceptions import (
+                InvalidImageStreamError,
+                UnexpectedEndOfFileError,
+                UnrecognizedImageError,
+            )
+        try:
+            shape = doc.add_picture(_io.BytesIO(plan.raster), width=inches(6))
+        except (InvalidImageStreamError, UnexpectedEndOfFileError,
+                UnrecognizedImageError, OSError, ValueError) as exc:
+            # P3.6-R2: base64 that decodes fine but isn't a real image (a
+            # garbage/corrupt attachment) must not crash the whole export --
+            # ONE figure becomes a named placeholder, same as any other
+            # not-embeddable figure.
+            doc.add_paragraph(_bad_image_placeholder(block, exc, section_index, warnings))
+            return
         _set_alt(shape._inline.docPr, block)
         if block.get("caption"):
             doc.add_paragraph().add_run(str(block["caption"])).italic = True
@@ -154,14 +217,10 @@ def to_docx(
     warnings: list[str] | None = None,
 ) -> bytes:
     """The report as a Word document (``figures`` keyed ``(section, block)``)."""
-    try:
-        with heavy_imports("docx", "docx.shared"):
-            from docx import Document  # python-docx (MIT)
-            from docx.shared import Inches
-    except ImportError as exc:  # pragma: no cover - exercised only without the dep
-        raise OfficeLibraryMissing(
-            "Word export needs 'python-docx' (pip install quantized[office])"
-        ) from exc
+    check_office_library("docx")
+    with heavy_imports("docx", "docx.shared"):
+        from docx import Document  # python-docx (MIT)
+        from docx.shared import Inches
 
     doc = Document()
     doc.add_heading(str(report.get("title", "Report")), level=0)
@@ -185,7 +244,8 @@ def to_docx(
                     for j, c in enumerate(row):
                         cells[j].text = str(c)
             elif btype == "figure":
-                _docx_figure(doc, block, _plan(block, (si, bi), figures, warnings), Inches)
+                _docx_figure(doc, block, _plan(block, (si, bi), figures, warnings), Inches,
+                            section_index=si, warnings=warnings)
     buf = _io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
@@ -237,13 +297,24 @@ class _Deck:
         self.top += advance
         return tb
 
-    def figure(self, block: Mapping[str, Any], plan: FigurePlan, section_title: str) -> None:
+    def figure(
+        self, block: Mapping[str, Any], plan: FigurePlan, section_title: str,
+        *, section_index: int, warnings: list[str] | None,
+    ) -> None:
         inches = self.inches
         if plan.kind == "image":  # a caller-supplied raster: pre-P3.6 layout kept
             assert plan.raster is not None
-            pic = self.slide.shapes.add_picture(
-                _io.BytesIO(plan.raster), inches(0.5), inches(self.top), width=inches(6)
-            )
+            with heavy_imports("PIL"):
+                from PIL import UnidentifiedImageError
+            try:
+                pic = self.slide.shapes.add_picture(
+                    _io.BytesIO(plan.raster), inches(0.5), inches(self.top), width=inches(6)
+                )
+            except (UnidentifiedImageError, OSError, ValueError) as exc:
+                # P3.6-R2: same rationale as _docx_figure's twin catch.
+                self.textbox(_bad_image_placeholder(block, exc, section_index, warnings),
+                            0.5, 0.6)
+                return
             _set_alt(pic._element.nvPicPr.cNvPr, block)
             self.top += 4.0
             return
@@ -281,14 +352,10 @@ def to_pptx(
 ) -> bytes:
     """The report as a slide deck: a title slide, then one slide per section
     (a figure that no longer fits continues on a "(cont.)" slide)."""
-    try:
-        with heavy_imports("pptx", "pptx.util"):
-            from pptx import Presentation  # python-pptx (MIT)
-            from pptx.util import Inches, Pt
-    except ImportError as exc:  # pragma: no cover - exercised only without the dep
-        raise OfficeLibraryMissing(
-            "PowerPoint export needs 'python-pptx' (pip install quantized[office])"
-        ) from exc
+    check_office_library("pptx")
+    with heavy_imports("pptx", "pptx.util"):
+        from pptx import Presentation  # python-pptx (MIT)
+        from pptx.util import Inches, Pt
 
     prs = Presentation()
     first = prs.slides.add_slide(prs.slide_layouts[5])
@@ -317,7 +384,7 @@ def to_pptx(
                 deck.top += height + 0.3
             elif btype == "figure":
                 plan = _plan(block, (si, bi), figures, warnings)
-                deck.figure(block, plan, sec_title)
+                deck.figure(block, plan, sec_title, section_index=si, warnings=warnings)
     buf = _io.BytesIO()
     prs.save(buf)
     return buf.getvalue()

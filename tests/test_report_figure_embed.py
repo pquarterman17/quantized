@@ -22,6 +22,7 @@ Word/PowerPoint tests skip cleanly when python-docx / python-pptx (the
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import io
 import json
@@ -41,6 +42,7 @@ from quantized.datastruct import DataStruct
 from quantized.io.report_export import render_report, to_html, to_latex
 from quantized.io.report_figures import (
     RenderedFigure,
+    figure_file_stems,
     fit_size,
     html_inline_svg,
     plan_figure,
@@ -48,6 +50,13 @@ from quantized.io.report_figures import (
 )
 
 _EMU = 914400
+# A real, minimal (2x2) PNG -- "QUJD" (base64 of "ABC") decodes fine but is
+# not a real image, so it exercises fix 2's placeholder path instead of
+# actually embedding; tests that need a genuinely embeddable raster use this.
+_TINY_PNG_B64 = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGP8"
+    "z8DAwMDAxMDAwMDAAAANHQEDasKb6QAAAABJRU5ErkJggg=="
+)
 
 
 def _dataset() -> dict[str, Any]:
@@ -271,7 +280,7 @@ def test_latex_includes_the_exported_file_and_warns(client: TestClient) -> None:
                    "latex")
     tex = resp.text
     assert r"% Requires \usepackage{graphicx} (figures)" in tex
-    assert (r"\IfFileExists{fig-Fig-1.pdf}{\includegraphics[width=4in]{fig-Fig-1.pdf}}"
+    assert (r"\IfFileExists{fig-Fig-1.pdf}{\includegraphics[width=4.00in]{fig-Fig-1.pdf}}"
             in tex)
     assert r"\caption{A \& B}" in tex
     assert "fig-Fig-1.pdf" in _warnings(resp)[0]
@@ -356,3 +365,342 @@ def test_malformed_dataset_in_a_spec_is_a_placeholder_not_a_500(
     resp = _export(client, _report(figure_block("mangled", spec=bad)), fmt)
     (warn,) = _warnings(resp)
     assert warn.startswith("figure 'mangled' (section 1): not embedded: render failed (")
+
+
+# ── P3.6 review round: fix 1 -- HTML injection via an attached image ───────
+def test_html_image_mime_injection_is_rejected() -> None:
+    """An unvalidated ``mime``/``data`` pasted into ``<img src="...">`` is an
+    HTML-injection vector -- the mime here would break out of the attribute
+    and inject an ``onerror`` handler if pasted in raw."""
+    block = figure_block("evil", image={"mime": 'image/png" onerror="alert(1)', "data": "QUJD"})
+    warnings: list[str] = []
+    html = to_html(_report(block), warnings=warnings)
+    assert "<img" not in html  # no <img> tag was ever built from the mime/data
+    assert '" onerror="' not in html  # the raw (unescaped) breakout sequence
+    assert "[figure: evil — not embedded: image type" in html
+    assert warnings and "not embeddable in HTML" in warnings[0]
+
+
+def test_html_image_non_base64_data_is_rejected() -> None:
+    """``data`` that isn't base64 at all (e.g. a script-tag payload) must
+    never reach the data-URI ``src`` attribute either."""
+    block = figure_block("evil2", image={"mime": "image/png",
+                                         "data": '"><script>alert(1)</script>'})
+    html = to_html(_report(block))
+    assert "<script>" not in html
+    assert "[figure: evil2 — not embedded: the attached image data is not valid base64" in html
+
+
+def test_html_valid_image_still_embeds(client: TestClient) -> None:
+    """The fix must not break the legitimate case: a real PNG mime + real
+    base64 data still embeds exactly as before."""
+    resp = _export(client, _report(figure_block("ok", image={"mime": "image/png",
+                                                             "data": "QUJD"})), "html")
+    assert 'src="data:image/png;base64,QUJD"' in resp.text
+    assert "x-report-warnings" not in resp.headers
+
+
+# ── fix 2 -- a bad attached image must not crash Office export ────────────
+def test_docx_bad_attached_image_becomes_placeholder_not_a_crash() -> None:
+    docx = pytest.importorskip("docx")
+    garbage = base64.b64encode(b"not a real image, just long enough garbage bytes").decode()
+    report = _report(figure_block("bad-img", image={"mime": "image/png", "data": garbage}))
+    warnings: list[str] = []
+    data, _mime, _txt = render_report(report, "docx", warnings=warnings)  # must not raise
+    doc = docx.Document(io.BytesIO(data))
+    assert len(doc.inline_shapes) == 0
+    text = "\n".join(p.text for p in doc.paragraphs)
+    assert "[figure: bad-img — not embedded: the attached image data is not a valid image" in text
+    assert len(warnings) == 1 and "not a valid image" in warnings[0]
+
+
+def test_pptx_bad_attached_image_becomes_placeholder_not_a_crash() -> None:
+    pptx = pytest.importorskip("pptx")
+    garbage = base64.b64encode(b"not a real image, just long enough garbage bytes").decode()
+    report = _report(figure_block("bad-img", image={"mime": "image/png", "data": garbage}))
+    warnings: list[str] = []
+    data, _mime, _txt = render_report(report, "pptx", warnings=warnings)  # must not raise
+    prs = pptx.Presentation(io.BytesIO(data))
+    pics = [s for sl in prs.slides for s in sl.shapes if s.shape_type == 13]
+    assert len(pics) == 0
+    texts = [s.text_frame.text for sl in prs.slides for s in sl.shapes if s.has_text_frame]
+    assert any("not a valid image" in t for t in texts)
+    assert len(warnings) == 1 and "not a valid image" in warnings[0]
+
+
+# ── fix 3 -- a failed/un-rendered spec falls back to an attached image ────
+def test_html_falls_back_to_image_when_spec_render_fails(client: TestClient) -> None:
+    block = figure_block("f", spec=_spec(y_keys=[9]), image={"mime": "image/png", "data": "QUJD"})
+    resp = _export(client, _report(block), "html")
+    assert 'src="data:image/png;base64,QUJD"' in resp.text
+    (warn,) = _warnings(resp)
+    assert "spec failed to render" in warn and "render failed (" in warn
+
+
+def test_bare_render_report_falls_back_to_image_when_spec_is_present() -> None:
+    block = figure_block("f", spec=_spec(), image={"mime": "image/png", "data": "QUJD"})
+    warnings: list[str] = []
+    html = to_html(_report(block), warnings=warnings)
+    assert 'src="data:image/png;base64,QUJD"' in html
+    assert warnings and "spec was not rendered" in warnings[0]
+
+
+def test_docx_falls_back_to_image_when_spec_render_fails() -> None:
+    docx = pytest.importorskip("docx")
+    block = figure_block("f", spec=_spec(y_keys=[9]),
+                         image={"mime": "image/png", "data": _TINY_PNG_B64})
+    # _report() prepends a text block, so the figure lands at block index 1.
+    figures = {(0, 1): RenderedFigure(error="render failed (boom)")}
+    warnings: list[str] = []
+    data, _mime, _txt = render_report(_report(block), "docx", figures=figures,
+                                       warnings=warnings)
+    doc = docx.Document(io.BytesIO(data))
+    assert len(doc.inline_shapes) == 1  # the attached image, not a placeholder
+    assert warnings and "spec failed to render" in warnings[0]
+
+
+# ── fix 4 -- a reference-only figure block keeps its caption ──────────────
+def test_reference_only_figure_block_keeps_its_caption_in_html() -> None:
+    # The EXACT shape frontend/src/lib/report.ts's ReportFigureBlock builds
+    # (and what ReportPanel emits today): no spec, no image.
+    block = {"type": "figure", "name": "fig1", "caption": "My caption"}
+    warnings: list[str] = []
+    html = to_html(_report(block), warnings=warnings)
+    assert "<figure>[figure: My caption]</figure>" in html
+    assert "not embedded" not in html
+    assert not warnings  # never new noise on a reference this every report already had
+
+
+def test_reference_only_figure_block_falls_back_to_name_with_no_caption() -> None:
+    block = {"type": "figure", "name": "fig2"}
+    html = to_html(_report(block))
+    assert "<figure>[figure: fig2]</figure>" in html
+
+
+def test_plan_figure_marks_a_true_reference_as_reference_only() -> None:
+    plan = plan_figure({"type": "figure", "name": "h"}, None, "html")
+    assert plan.kind == "placeholder" and plan.reference_only is True
+    # a REAL failure (an unusable image) is not reference_only
+    bad = plan_figure({"type": "figure", "name": "g",
+                       "image": {"mime": "image/svg+xml", "data": "x"}}, None, "office")
+    assert bad.kind == "placeholder" and bad.reference_only is False
+
+
+# ── fix 5 -- per-report resource limits ────────────────────────────────────
+def test_report_figure_count_is_capped(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    import quantized.routes.report_figures as rf
+
+    monkeypatch.setattr(rf, "MAX_FIGURES_PER_REPORT", 2)
+    blocks = [figure_block(f"f{i}", spec=_spec(fmt="png")) for i in range(4)]
+    resp = _export(client, _report(*blocks), "html")
+    html = resp.text
+    assert html.count('<img src="data:image/png') == 2  # only the cap's worth rendered
+    assert html.count("render budget per export") == 2
+    warns = _warnings(resp)
+    assert sum("render budget per export" in w for w in warns) == 2
+
+
+def test_render_spec_rejects_an_absurd_size_without_rendering() -> None:
+    from quantized.routes.report_figures import MAX_FIGURE_PIXELS, render_spec
+
+    spec = _spec(fmt="png", width_in=1000.0, height_in=1000.0)
+    rendered = render_spec(spec, "office")
+    assert rendered.png is None and rendered.svg is None
+    assert rendered.error is not None
+    assert f"{MAX_FIGURE_PIXELS // 1_000_000} Mpx" in rendered.error
+
+
+def test_render_spec_clamps_width_to_the_sane_range() -> None:
+    from quantized.routes.report_figures import render_spec
+
+    # 25x1in is well under the 40 Mpx budget (2.25 Mpx) -- only the
+    # width_in > 20in sane-range clamp should act here, not the budget reject.
+    spec = _spec(fmt="png", width_in=25.0, height_in=1.0)
+    rendered = render_spec(spec, "office")
+    assert rendered.error is None and rendered.png is not None
+    assert png_size_in(rendered.png, rendered.dpi) == (20.0, 1.0)  # clamped from 25
+
+
+def test_office_library_is_checked_before_any_figure_renders(
+    monkeypatch: pytest.MonkeyPatch, client: TestClient
+) -> None:
+    """A docx/pptx export with the library missing must 501 WITHOUT ever
+    calling into figure rendering (P3.6-R5) -- proven by making a render call
+    raise if it is ever reached. Patches the names as IMPORTED into the
+    calling modules (``routes.report_export``/``io.report_export``), not the
+    defining modules' own attributes -- ``from x import y`` binds a separate
+    reference, so patching ``x.y`` alone would not be observed by the caller
+    and the test would pass regardless of the real call order."""
+    import quantized.io.report_export as report_export_io
+    import quantized.routes.report_export as report_export_route
+    from quantized.io.report_office import OfficeLibraryMissing
+
+    def _boom(*_a: Any, **_kw: Any) -> Any:
+        raise AssertionError("a figure was rendered before the library check ran")
+
+    def _missing(fmt: str) -> None:
+        raise OfficeLibraryMissing("Word export needs 'python-docx'")
+
+    monkeypatch.setattr(report_export_route, "render_report_figures", _boom)
+    monkeypatch.setattr(report_export_io, "check_office_library", _missing)
+    resp = client.post("/api/report/export",
+                       json={"report": _report(figure_block("f", spec=_spec())), "format": "docx"})
+    assert resp.status_code == 501
+
+
+def test_render_lock_is_not_held_across_figures(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Each figure's render takes ``RENDER_LOCK`` on its own -- the report
+    loop must never wrap several figures in one hold (P3.6-R5)."""
+    import quantized.routes.report_figures as rf
+    from quantized.calc.render_lock import acquire_render_lock, render_lock_is_held
+
+    seen_held_at_entry = []
+
+    def _fake_render_figure_request(req: Any, *, fmt: str, dpi: int) -> bytes:
+        seen_held_at_entry.append(render_lock_is_held())
+        with acquire_render_lock():  # simulate the real render's own lock use
+            return b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR" + struct.pack(">II", 10, 10)
+
+    monkeypatch.setattr(rf, "render_figure_request", _fake_render_figure_request)
+    report = _report(figure_block("a", spec=_spec(fmt="png")),
+                     figure_block("b", spec=_spec(fmt="png")))
+    rf.render_report_figures(report, "office")
+    # Neither figure's render observed the lock ALREADY held on entry -- if
+    # the outer loop wrapped the whole report in one acquire, the second
+    # figure's render would see it held before taking it itself.
+    assert seen_held_at_entry == [False, False]
+    assert not render_lock_is_held()  # released after the whole call too
+
+
+# ── fix 6 -- no invalid-escape-sequence warning from any src/ module ──────
+def test_no_src_module_emits_an_escape_sequence_warning() -> None:
+    """``python -W error::SyntaxWarning -m compileall -q src`` is the CI-
+    matching check; this is the version-portable equivalent (Python 3.11
+    still classifies an invalid escape sequence as a DeprecationWarning, only
+    3.12+ promotes it to SyntaxWarning -- see docs/testing.md-style notes in
+    CLAUDE.md). ``report_export.py``'s module docstring had a literal
+    ``\\includegraphics`` inside a non-raw string."""
+    import pathlib
+    import py_compile
+    import warnings
+
+    src_root = pathlib.Path(__file__).resolve().parents[1] / "src" / "quantized"
+    offenders = []
+    for path in sorted(src_root.rglob("*.py")):
+        with warnings.catch_warnings(record=True) as rec:
+            warnings.simplefilter("always")
+            py_compile.compile(str(path), doraise=True)
+        for w in rec:
+            if "escape sequence" in str(w.message):
+                offenders.append(f"{path.relative_to(src_root)}: {w.message}")
+    assert not offenders, "\n".join(offenders)
+
+
+# ── fix 7 -- unique LaTeX companion-file stems per report ─────────────────
+def test_latex_figure_stems_are_deduped_across_a_report() -> None:
+    report = _report(
+        figure_block("Wave", spec=_spec()),
+        figure_block("Wave", spec=_spec()),  # same sanitized name -> collision
+        figure_block("Wave!!", spec=_spec()),  # sanitizes to the same "Wave" too
+    )
+    stems = figure_file_stems(report)
+    # _report() prepends a text block, so the figures land at indices 1..3.
+    values = [stems[(0, i)] for i in range(1, 4)]
+    assert values == ["fig-Wave", "fig-Wave-2", "fig-Wave-3"]
+    assert len(set(values)) == 3  # never collide on the same companion file
+
+
+def test_latex_figure_stem_falls_back_for_non_ascii_names() -> None:
+    report = _report(
+        figure_block("図１", spec=_spec()),  # no ASCII letters/digits/dashes survive
+        figure_block("図２", spec=_spec()),
+    )
+    stems = figure_file_stems(report)
+    assert stems[(0, 1)] == "figure-1" and stems[(0, 2)] == "figure-2"
+
+
+def test_latex_export_uses_deduped_stems(client: TestClient) -> None:
+    report = _report(figure_block("Wave", spec=_spec()), figure_block("Wave", spec=_spec()))
+    resp = _export(client, report, "latex")
+    tex = resp.text
+    assert "fig-Wave.pdf" in tex and "fig-Wave-2.pdf" in tex
+    warns = _warnings(resp)
+    assert any("fig-Wave.pdf" in w for w in warns) and any("fig-Wave-2.pdf" in w for w in warns)
+
+
+# ── fix 8 -- LaTeX width is validated + clamped + fixed-point ─────────────
+def test_latex_width_is_finite_and_clamped() -> None:
+    huge = _report(figure_block("huge", spec=_spec(width_in=1000.0)))
+    tex = to_latex(huge)
+    assert r"width=20.00in" in tex  # clamped to FIGURE_WIDTH_IN_RANGE's 20in cap
+
+    non_finite = _report(figure_block("bad", spec={**_spec(), "width_in": float("nan")}))
+    tex2 = to_latex(non_finite)
+    assert r"width=\linewidth" in tex2  # never a literal "nan" reaching the .tex
+    assert "nanin" not in tex2
+
+
+# ── fix 9 -- a downgrade inside a renderer must still warn ────────────────
+def test_html_svg_with_no_svg_element_warns_on_downgrade() -> None:
+    """A render that HAS svg bytes but no ``<svg`` element (and no PNG to
+    fall back to) downgrades to a placeholder INSIDE ``_html_figure`` --
+    that downgrade must still be reported as a warning, not silently lost."""
+    report = _report(figure_block("f", spec=_spec()))
+    # _report() prepends a text block, so the figure lands at block index 1.
+    figures = {(0, 1): RenderedFigure(svg=b"not an svg at all", png=None,
+                                      vector_requested=True)}
+    warnings: list[str] = []
+    html = to_html(report, figures=figures, warnings=warnings)
+    assert "[figure: f — not embedded: the rendered SVG holds no &lt;svg&gt; element]" in html
+    assert warnings and "no <svg> element" in warnings[0]
+
+
+def test_office_reports_the_specific_png_failure_reason() -> None:
+    """When an SVG half of a spec rendered but the PNG half specifically
+    failed, Office's placeholder/warning must name THAT reason, not the
+    generic 'no raster was rendered' message."""
+    docx = pytest.importorskip("docx")
+    report = _report(figure_block("f", spec=_spec()))
+    # _report() prepends a text block, so the figure lands at block index 1.
+    figures = {(0, 1): RenderedFigure(svg=b"<svg></svg>", png=None, vector_requested=True,
+                                      png_error="ValueError: boom-png-reason")}
+    warnings: list[str] = []
+    data, _mime, _txt = render_report(report, "docx", figures=figures, warnings=warnings)
+    doc = docx.Document(io.BytesIO(data))
+    text = "\n".join(p.text for p in doc.paragraphs)
+    assert "boom-png-reason" in text
+    assert warnings and "boom-png-reason" in warnings[0]
+
+
+# ── fix 10 -- narrowed exception handling + a scripting-API bridge ────────
+def test_unexpected_exception_in_a_figure_render_propagates() -> None:
+    """A programming bug (an exception outside CALC_ERRORS_WITH_LOCK) inside
+    the figure exporter must propagate, not vanish into a silent placeholder
+    -- only a bad-but-well-typed spec degrades."""
+    import quantized.routes.report_figures as rf
+
+    def _boom(req: Any, *, fmt: str, dpi: int) -> bytes:
+        raise AttributeError("not a real report-input failure -- a bug")
+
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(rf, "render_figure_request", _boom)
+        with pytest.raises(AttributeError, match="not a real report-input failure"):
+            rf.render_spec(_spec(), "office")
+
+
+def test_api_render_report_can_embed_spec_figures() -> None:
+    """``quantized.api.render_report(..., render_figures=True)`` is the
+    scripting-API bridge to the SAME figure exporter the server uses (P3.6-R10):
+    a script-built report embeds a real figure, not just a placeholder."""
+    import quantized.api as qz
+
+    report = _report(figure_block("f", spec=_spec()))
+    data, _mime, _is_text = qz.render_report(report, "html", render_figures=True)
+    html = data.decode()
+    assert "<svg" in html
+    # the default (render_figures=False) stays byte-identical to before
+    data2, _mime2, _ = qz.render_report(report, "html")
+    assert "<svg" not in data2.decode()
+    assert "its figure spec was not rendered" in data2.decode()

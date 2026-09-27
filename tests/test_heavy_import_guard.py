@@ -79,6 +79,7 @@ OPTIONAL_TOPS: dict[str, str] = {
     "win32com": "origin-com",
     "docx": "office",
     "pptx": "office",
+    "PIL": "office",  # python-pptx's own dependency (io.report_office's bad-image catch)
     "lifelines": "stats",
     "statsmodels": "stats",
     "pandas": "stats",  # lifelines' / statsmodels' own dependency

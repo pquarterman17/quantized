@@ -32,6 +32,9 @@ is heavier than ``import quantized``; the FastAPI server never imports it.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+from typing import Any
+
 # ── Data contract + file loading ──────────────────────────────────────────
 from quantized.calc.backgrounds import (
     anchor_baseline,
@@ -123,13 +126,47 @@ from quantized.calc.stats_tests import (
     wilcoxon_signed_rank,
 )
 from quantized.datastruct import DataStruct
+from quantized.heavy_import import heavy_imports
 from quantized.io.registry import import_auto as load
-from quantized.io.report_export import (
-    format_value_error,
-    render_report,
-    to_html,
-    to_latex,
-)
+from quantized.io.report_export import figure_target, format_value_error, to_html, to_latex
+from quantized.io.report_export import render_report as _render_report_io
+
+
+def render_report(
+    report: Mapping[str, Any],
+    fmt: str,
+    *,
+    render_figures: bool = False,
+    warnings: list[str] | None = None,
+) -> tuple[bytes, str, bool]:
+    """Render ``report`` to ``fmt`` (see ``io.report_export.render_report``).
+
+    ``render_figures=True`` additionally renders every figure block's
+    ``spec`` first, through the SAME exporter ``/api/export/figure`` and the
+    server's own report route use (``routes.report_figures``) — so a report
+    built and rendered entirely from a script embeds real figures too, not
+    just the placeholder text ``io.report_export.render_report`` alone can
+    produce for a spec-bearing block (PRIMARY_SOFTWARE_AUDIT_PLAN P3.6 review,
+    finding 10: the pure ``io``/``calc`` layers may never import ``routes``,
+    so spec rendering lives there — this wrapper is ``api.py``'s own bridge to
+    it, paid for only by scripts that ask for it; the plan note on that
+    finding documents why the deeper move — a calc-level ``render_figure_spec``
+    shared by the route and this wrapper — is future work, not done here).
+    Default ``False`` keeps this byte-identical to the plain export.
+    """
+    figures = None
+    if render_figures:
+        # Local import: quantized.routes pulls in fastapi/pydantic, a cost
+        # this module's own docstring already promises to defer (matplotlib
+        # there, the web stack here) -- paid only by a caller that asks. Goes
+        # through heavy_imports like every other lazy quantized.* import
+        # (BUG-032 guard).
+        with heavy_imports("quantized.routes.report_figures"):
+            from quantized.routes.report_figures import render_report_figures
+
+        figures = render_report_figures(dict(report), figure_target(fmt))
+    return _render_report_io(report, fmt, figures=figures, warnings=warnings)
+
 
 __all__ = [
     # data + I/O

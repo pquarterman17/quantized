@@ -27,7 +27,12 @@ from pydantic import BaseModel
 
 from quantized.calc import report_emit, report_emit_peaks, report_emit_sims
 from quantized.calc.report import ReportSheet, validate_report
-from quantized.io.report_export import ReportExportError, figure_target, render_report
+from quantized.io.report_export import (
+    ReportExportError,
+    figure_target,
+    render_report,
+    require_office_library,
+)
 from quantized.routes._errors import CALC_ERRORS, call_calc
 from quantized.routes.report_figures import render_report_figures
 
@@ -122,6 +127,11 @@ def export_report(req: ReportExportRequest) -> Response:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     warnings: list[str] = []
     try:
+        # Office library check FIRST (P3.6-R5): a docx/pptx export without
+        # the optional library installed 501s immediately, before rendering
+        # a single figure -- not after paying for every figure spec in the
+        # report just to fail at the very end.
+        require_office_library(req.format)
         figures = render_report_figures(req.report, figure_target(req.format))
         data, mime, _is_text = render_report(
             req.report, req.format, figures=figures, warnings=warnings

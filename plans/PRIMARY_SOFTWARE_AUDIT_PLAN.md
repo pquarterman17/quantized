@@ -8554,6 +8554,60 @@ was not raised.
   was checked structurally (parts, relationships, content types, extents),
   not opened in Office or LibreOffice; EMF and editable embedded figures
   remain the two boxes below.
+
+  **Review round (2026-09-27), all fixed + tested (`tests/test_report_figure_
+  embed.py`):** (1) an attached image's `mime`/`data` reached `<img src="...">`
+  unescaped/unvalidated (HTML injection) -- both are now checked against a
+  strict allowlist/base64 format before use, invalid -> named placeholder +
+  warning (`io.report_figures._validate_html_image`). (2) a valid-base64,
+  not-really-an-image attachment crashed Office export
+  (`UnrecognizedImageError`/`PIL.UnidentifiedImageError`) -- caught per
+  figure, named placeholder + warning, export never fails on one bad image.
+  (3) a block with both a failed/un-rendered `spec` and a usable `image` now
+  falls back to the image (captioned with the spec failure) instead of a
+  placeholder, in every renderer and via a bare `render_report` call too
+  (`io.report_figures.plan_figure`/`_image_fallback`). (4) a reference-only
+  figure block (`{type:'figure', name, caption}`, what `ReportPanel` builds
+  today) keeps the pre-P3.6 `[figure: <caption>]` HTML instead of a new "not
+  embedded" message (`FigurePlan.reference_only`). (5) resource limits: at
+  most `MAX_FIGURES_PER_REPORT` (50) figures actually render per export (the
+  rest -> placeholder + warning); `width_in`/`height_in` are clamped to
+  `FIGURE_WIDTH_IN_RANGE` (0.5-20in); an as-requested raster over
+  `MAX_FIGURE_PIXELS` (40 Mpx) is rejected outright, before either the PNG or
+  SVG render is attempted; the optional Office library is checked BEFORE any
+  figure renders (a missing-library 501 no longer pays for the report's
+  figures first); `RENDER_LOCK` is confirmed taken per-figure, never held
+  across the report's render loop (all in `routes.report_figures`). (6) the
+  module docstring's literal `\includegraphics` inside a non-raw string
+  (an invalid-escape-sequence warning) is now a raw docstring; a repo-wide
+  scan (`test_no_src_module_emits_an_escape_sequence_warning`) guards every
+  `src/` module the same way. (7) `figure_file_stem` collisions (two figures
+  sanitizing to the same name, or both falling back for non-ASCII) are now
+  deduped with `-2`/`-3` suffixes across the whole report
+  (`io.report_figures.figure_file_stems`); the stem's charset was already a
+  subset of `routes._export_common._safe_name`'s. (8) the LaTeX
+  `\includegraphics` width now validates `width_in` is finite, clamps to the
+  same `FIGURE_WIDTH_IN_RANGE`, and formats fixed-point (`{:.2f}in`) instead
+  of `%g` (which could emit `nanin`/scientific notation). (9) `RenderedFigure`
+  gained `png_error` (alongside `svg_error`) so Office reports the SPECIFIC
+  half-render failure instead of a generic message; an in-`_html_figure`
+  downgrade (an SVG render with no `<svg>` element) now always reaches
+  `to_html`'s warnings list. (10) `routes.report_figures._try_render` narrowed
+  its broad `except Exception` to `CALC_ERRORS_WITH_LOCK` (an unexpected
+  exception now propagates instead of vanishing into a silent placeholder);
+  `quantized.api.render_report` gained a `render_figures=True` option that
+  renders spec figures through the same exporter the server uses, so a
+  script-built report can embed real figures too -- this is the practical
+  bridge, not the full architecture move: the finding also asked for a pure
+  `calc`-level `render_figure_spec` shared by `/api/export/figure` and the
+  report path, which would let the pure `io`/`calc` layers embed figures
+  without reaching into `routes` at all. That deeper move touches
+  `routes.export_figures`'s pydantic `FigureRequest` (also used by
+  `PagePanelSpec.figure`, facets, and the hitmap route) and was judged too
+  large/risky for this review round; `api.py` bridging into `routes` instead
+  is sound because `api.py` is not one of the guard's `PURE_LAYERS`
+  (`io`/`calc`/`plugins`/`portable`) -- only those may never import
+  `fastapi`/`pydantic`/`quantized.routes`. Left honestly as future work.
 - [ ] Consider EMF only if Windows Office tests show material benefit.
 - [ ] Editable embedded figures remain a future goal, not release blocker.
 

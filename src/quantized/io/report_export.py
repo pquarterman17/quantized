@@ -1,4 +1,4 @@
-"""Render a :class:`~quantized.calc.report.ReportSheet` to office / markup files.
+r"""Render a :class:`~quantized.calc.report.ReportSheet` to office / markup files.
 
 ORIGIN_GAP_PLAN #37 (docx/pptx) + #38 (LaTeX) + #39 (HTML). Every renderer
 walks the SAME report schema (title -> sections -> typed blocks) with no
@@ -28,22 +28,29 @@ from __future__ import annotations
 
 import base64 as _base64
 import html as _html
+import math
 from collections.abc import Mapping
 from typing import Any, Literal
 
 from quantized.io.report_blocks import format_value_error, params_rows, table_rows
 from quantized.io.report_figures import (
+    FIGURE_WIDTH_IN_RANGE,
     FigureKey,
     FigurePlan,
     RenderedFigure,
     figure_alt_text,
-    figure_file_stem,
+    figure_file_stems,
     figure_warning,
     html_inline_svg,
     placeholder_text,
     plan_figure,
 )
-from quantized.io.report_office import OfficeLibraryMissing, to_docx, to_pptx
+from quantized.io.report_office import (
+    OfficeLibraryMissing,
+    check_office_library,
+    to_docx,
+    to_pptx,
+)
 
 __all__ = [
     "FORMATS",
@@ -52,6 +59,7 @@ __all__ = [
     "figure_target",
     "format_value_error",
     "render_report",
+    "require_office_library",
     "to_html",
     "to_latex",
 ]
@@ -103,9 +111,9 @@ def _latex_table(header: list[str], rows: list[list[str]], caption: str | None) 
     return out
 
 
-def _latex_figure_file(block: Mapping[str, Any]) -> str:
-    """The companion file a LaTeX figure expects: ``fig-<name>.pdf`` (vector,
-    the app's default export) unless the block's spec/image is raster."""
+def _latex_figure_file(block: Mapping[str, Any], stem: str) -> str:
+    """The companion file a LaTeX figure expects: ``<stem>.pdf`` (vector, the
+    app's default export) unless the block's spec/image is raster."""
     spec = block.get("spec")
     image = block.get("image")
     ext = "pdf"
@@ -114,18 +122,30 @@ def _latex_figure_file(block: Mapping[str, Any]) -> str:
     elif not isinstance(spec, Mapping) and isinstance(image, Mapping):
         ext = {"image/png": "png", "image/jpeg": "jpg", "image/jpg": "jpg"}.get(
             str(image.get("mime")), "pdf")
-    return f"{figure_file_stem(block)}.{ext}"
+    return f"{stem}.{ext}"
 
 
-def _latex_figure(block: Mapping[str, Any]) -> list[str]:
+def _latex_figure_width(spec: Any) -> str:
+    """``\\includegraphics`` width for ``spec``'s ``width_in`` -- finite and
+    clamped to :data:`FIGURE_WIDTH_IN_RANGE` (P3.6-R5/R8: a non-finite or
+    absurd request must not reach raw into the .tex), formatted fixed-point
+    (never ``%g``'s scientific notation on an extreme value); ``\\linewidth``
+    with no usable ``width_in``."""
+    width_in = spec.get("width_in") if isinstance(spec, Mapping) else None
+    if (isinstance(width_in, (int, float)) and not isinstance(width_in, bool)
+            and math.isfinite(width_in) and width_in > 0):
+        lo, hi = FIGURE_WIDTH_IN_RANGE
+        clamped = max(lo, min(hi, float(width_in)))
+        return f"{clamped:.2f}in"
+    return r"\linewidth"
+
+
+def _latex_figure(block: Mapping[str, Any], stem: str) -> list[str]:
     """A ``figure`` float that includes the figure's exported file when it sits
     beside the .tex, and compiles to a boxed note naming the file when not
     (the .tex is a single text file -- it cannot carry the image itself)."""
-    fname = _latex_figure_file(block)
-    spec = block.get("spec")
-    width_in = spec.get("width_in") if isinstance(spec, Mapping) else None
-    width = (f"{float(width_in):g}in" if isinstance(width_in, (int, float))
-             and not isinstance(width_in, bool) and width_in > 0 else r"\linewidth")
+    fname = _latex_figure_file(block, stem)
+    width = _latex_figure_width(block.get("spec"))
     name = _latex_escape(str(block.get("name", "")))
     caption = _latex_escape(str(block.get("caption") or block.get("name", "")))
     return [
@@ -142,15 +162,19 @@ def _latex_figure(block: Mapping[str, Any]) -> list[str]:
 def to_latex(report: Mapping[str, Any], *, warnings: list[str] | None = None) -> str:
     """Booktabs LaTeX for the report's tables (params + stats), text as prose,
     and a ``figure`` float per figure block (see :func:`_latex_figure`; each
-    one also appends a warning naming the file the .tex expects)."""
+    one also appends a warning naming the file the .tex expects). Every
+    figure gets a unique companion-file stem (:func:`~quantized.io.
+    report_figures.figure_file_stems`, P3.6-R7) computed once up front, so two
+    figures that sanitize to the same name never overwrite each other's file."""
     has_figures = any(b.get("type") == "figure"
                       for sec in report.get("sections", []) for b in sec.get("blocks", []))
+    stems = figure_file_stems(report)
     lines = [rf"% Report: {_latex_escape(str(report.get('title', '')))}",
              r"% Requires \usepackage{booktabs}",
              *([r"% Requires \usepackage{graphicx} (figures)"] if has_figures else []), ""]
     for si, sec in enumerate(report.get("sections", [])):
         lines.append(rf"\subsection*{{{_latex_escape(str(sec.get('title', '')))}}}")
-        for block in sec.get("blocks", []):
+        for bi, block in enumerate(sec.get("blocks", [])):
             btype = block.get("type")
             if btype == "text":
                 lines.append(_latex_escape(block["text"]) + "\n")
@@ -161,11 +185,12 @@ def to_latex(report: Mapping[str, Any], *, warnings: list[str] | None = None) ->
                 header, rows = table_rows(block)
                 lines += _latex_table(header, rows, block.get("caption"))
             elif btype == "figure":
-                lines += _latex_figure(block)
+                stem = stems[(si, bi)]
+                lines += _latex_figure(block, stem)
                 if warnings is not None:
                     warnings.append(figure_warning(block, si, (
                         "the .tex export does not bundle image files -- export the figure "
-                        f"as {_latex_figure_file(block)} beside the .tex")))
+                        f"as {_latex_figure_file(block, stem)} beside the .tex")))
         lines.append("")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -194,15 +219,29 @@ def _html_table(header: list[str], rows: list[list[str]], caption: str | None) -
     return "".join(parts)
 
 
-def _html_figure(block: Mapping[str, Any], plan: FigurePlan) -> str:
+def _html_figure(block: Mapping[str, Any], plan: FigurePlan) -> tuple[str, str | None]:
+    """The figure's HTML markup, plus a warning message (``None`` if none is
+    owed) -- returned together so the ONE place that decides the final
+    outcome (including the in-function "render produced no usable art"
+    downgrade below) is also the one place that reports it: a downgrade
+    computed only here used to never reach ``to_html``'s warnings list
+    (P3.6-R9)."""
     cap = str(block.get("caption") or block.get("name", ""))
     alt = _html.escape(figure_alt_text(block))
-    if plan.kind == "image" and plan.image is not None:  # pre-P3.6 markup kept
+    if plan.kind == "image" and plan.image is not None:
+        # ``plan.image`` was already validated (mime allowlist + strict
+        # base64 -- see io.report_figures._validate_html_image) before it
+        # ever reached here; escaping it too is belt-and-suspenders, not the
+        # only thing standing between a hostile mime/data and this attribute
+        # (P3.6-R1).
         img = plan.image
-        src = f"data:{img['mime']};base64,{img['data']}"
-        return (f'<figure><img src="{src}" alt="{_html.escape(cap)}"'
+        mime = _html.escape(str(img["mime"]), quote=True)
+        data = _html.escape(str(img["data"]), quote=True)
+        src = f"data:{mime};base64,{data}"
+        html = (f'<figure><img src="{src}" alt="{_html.escape(cap)}"'
                 f' style="max-width:100%"><figcaption>'
                 f"{_html.escape(cap)}</figcaption></figure>")
+        return html, plan.note
     if plan.kind == "render":
         art = html_inline_svg(plan.svg, alt) if plan.svg is not None else None
         if art is None and plan.png is not None:
@@ -210,9 +249,20 @@ def _html_figure(block: Mapping[str, Any], plan: FigurePlan) -> str:
             art = f'<img src="data:image/png;base64,{b64}" alt="{alt}" style="max-width:100%">'
         if art is not None:
             text = f"{cap} ({plan.note})" if plan.note else cap
-            return f"<figure>{art}<figcaption>{_html.escape(text)}</figcaption></figure>"
-        plan = FigurePlan("placeholder", reason="the rendered SVG holds no <svg> element")
-    return f"<figure>{_html.escape(placeholder_text(block, plan.reason or ''))}</figure>"
+            html = f"<figure>{art}<figcaption>{_html.escape(text)}</figcaption></figure>"
+            return html, plan.note
+        reason = "the rendered SVG holds no <svg> element"
+        html = f"<figure>{_html.escape(placeholder_text(block, reason))}</figure>"
+        return html, f"not embedded: {reason}"
+    # kind == "placeholder"
+    if plan.reference_only:
+        # Pre-P3.6 markup kept: a pure figure-doc reference never had a
+        # render/image to fail, so its caption is shown plainly, not wrapped
+        # in a "not embedded: <reason>" message that implies something broke
+        # (P3.6-R4 -- existing reports must not lose this caption text).
+        return f"<figure>[figure: {_html.escape(cap)}]</figure>", None
+    html = f"<figure>{_html.escape(placeholder_text(block, plan.reason or ''))}</figure>"
+    return html, f"not embedded: {plan.reason}"
 
 
 def to_html(
@@ -244,11 +294,10 @@ def to_html(
                 body.append(_html_table(header, rows, block.get("caption")))
             elif btype == "figure":
                 plan = plan_figure(block, (figures or {}).get((si, bi)), "html")
-                if warnings is not None and plan.kind == "placeholder":
-                    warnings.append(figure_warning(block, si, f"not embedded: {plan.reason}"))
-                elif warnings is not None and plan.note:
-                    warnings.append(figure_warning(block, si, plan.note))
-                body.append(_html_figure(block, plan))
+                html, note = _html_figure(block, plan)
+                if warnings is not None and note:
+                    warnings.append(figure_warning(block, si, note))
+                body.append(html)
     return (f"<!doctype html><html><head><meta charset='utf-8'><title>{title}</title>"
             f"<style>{_HTML_CSS}</style></head><body>{''.join(body)}</body></html>")
 
@@ -298,3 +347,21 @@ def figure_target(fmt: str) -> Literal["office", "html"] | None:
     if fmt in ("docx", "pptx"):
         return "office"
     return "html" if fmt == "html" else None
+
+
+def require_office_library(fmt: str) -> None:
+    """Raise :class:`ReportExportError` NOW if ``fmt``'s optional Office
+    library isn't installed; a no-op for ``latex``/``html``/anything else.
+
+    Callers (``routes.report_export.export_report``) run this BEFORE
+    rendering a single figure (P3.6-R5): the library check used to happen
+    only inside :func:`render_report`, after every figure spec in the report
+    had already been rendered by ``routes.report_figures`` -- a docx/pptx
+    request against a server without the ``office`` extra paid the full
+    figure-render cost of every export just to 501 at the end.
+    """
+    if fmt in ("docx", "pptx"):
+        try:
+            check_office_library(fmt)
+        except OfficeLibraryMissing as exc:
+            raise ReportExportError(str(exc)) from exc
