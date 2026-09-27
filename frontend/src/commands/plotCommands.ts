@@ -167,6 +167,30 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       run: () => openPageSetup(s),
     },
     {
+      id: "add-figure-to-report",
+      group: "Plot",
+      section: "Build & export",
+      label: "Add figure to report…",
+      description: "Place a fixed snapshot of the focused plot into a new or existing report.",
+      keywords: "word powerpoint office report figure snapshot",
+      run: () => {
+        const state = s();
+        const windowId = state.focusedWindowId;
+        const window = windowId ? state.plotWindows.find((candidate) => candidate.id === windowId) : null;
+        if (!windowId || !window?.document) {
+          toast("save or open an editable figure in the focused plot window first", "danger");
+          return;
+        }
+        void runLazy("Loading reports…", () => import("./addFigureToReport")).then(
+          (module) => module.promptAddFigureToReport(
+            { kind: "window", windowId },
+            window.document!.name,
+          ),
+          onLoadFailure,
+        );
+      },
+    },
+    {
       id: "statMode",
       group: "Plot",
       section: "Display",

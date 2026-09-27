@@ -92,7 +92,7 @@ function BlockView({ block }: { block: ReportBlock }) {
         </figure>
       ) : (
         <p className="qzk-report-text" style={{ color: "var(--text-faint)" }}>
-          ▦ figure: {block.caption ?? block.name}
+          ▦ figure: {block.caption ?? block.name}{block.spec ? " · rendered when exported" : ""}
         </p>
       );
   }

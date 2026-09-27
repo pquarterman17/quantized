@@ -9,6 +9,7 @@ import {
   type ReportEntry,
   type ReportSheet,
 } from "./report";
+import { encodePersistedCells } from "./nonFiniteCells";
 
 const SHEET: ReportSheet = {
   title: "Curve fit",
@@ -72,6 +73,15 @@ describe("isReportSheet", () => {
       }),
     ).toBe(false);
   });
+
+  it("accepts an object figure spec and rejects array/null impostors", () => {
+    const withSpec = (spec: unknown) => ({
+      title: "x", sections: [{ title: "Figures", blocks: [{ type: "figure", name: "f", spec }] }],
+    });
+    expect(isReportSheet(withSpec({ dataset: { time: [1], values: [[2]], labels: ["y"], units: [""] } }))).toBe(true);
+    expect(isReportSheet(withSpec([]))).toBe(false);
+    expect(isReportSheet(withSpec(null))).toBe(false);
+  });
 });
 
 describe("sanitizeReports", () => {
@@ -93,6 +103,34 @@ describe("sanitizeReports", () => {
     );
     expect(out).toHaveLength(1);
     expect(out[0].id).toBe("rep-1");
+  });
+
+  it("decodes non-finite cells inside a persisted report figure spec", () => {
+    const report = entry({
+      report: {
+        title: "Figure",
+        sections: [{
+          title: "Figures",
+          blocks: [{
+            type: "figure", name: "f",
+            spec: {
+              dataset: {
+                time: [0, Number.NaN], values: [[Infinity, -Infinity, -0]],
+                labels: ["y"], units: [""], metadata: {},
+              },
+            },
+          }],
+        }],
+      },
+    });
+    const wire = JSON.parse(JSON.stringify([report], encodePersistedCells));
+    const out = sanitizeReports(wire, new Set(["ds-1"]));
+    const block = out[0].report.sections[0].blocks[0];
+    if (block.type !== "figure") throw new Error("expected figure block");
+    expect(block.spec?.dataset.time[1]).toBeNaN();
+    expect(block.spec?.dataset.values[0][0]).toBe(Infinity);
+    expect(block.spec?.dataset.values[0][1]).toBe(-Infinity);
+    expect(Object.is(block.spec?.dataset.values[0][2], -0)).toBe(true);
   });
 });
 

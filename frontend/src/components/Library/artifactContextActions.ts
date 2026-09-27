@@ -7,6 +7,7 @@ import { renameLibraryNode } from "../../lib/libraryRename";
 import { askParams } from "../overlays/ParamDialog";
 import type { ContextMenuItem } from "../overlays/ContextMenu";
 import { useApp } from "../../store/useApp";
+import { toast } from "../../store/toasts";
 import { buildMenuItems, runContextAction, type ContextAction, type MenuEntry } from "../../lib/contextActions";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
@@ -82,6 +83,20 @@ const artifactActions: MenuEntry<ArtifactTarget>[] = [
     // stays open under P1.3").
     disabledReason: () => "save a Quick Plot template from the Quick Figure Builder instead",
     run: () => {},
+  },
+  {
+    id: "artifact.addToReport",
+    label: "Add to Report…",
+    hidden: (target) => target.node.kind !== "editable-figure",
+    run: (target) => {
+      void import("../../commands/addFigureToReport").then(
+        ({ promptAddFigureToReport }) => promptAddFigureToReport(
+          { kind: "library", figureId: target.node.entityId },
+          target.node.name,
+        ),
+        () => toast("Could not load Add to Report; reload the app and try again", "danger"),
+      );
+    },
   },
   {
     id: "artifact.revealSource",

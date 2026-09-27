@@ -55,7 +55,9 @@
 // useApp.ts, and pass BYTE-UNCHANGED against this module.
 
 import { docRenderable, type FigureDoc } from "../lib/figuredoc";
+import type { FigureDocument } from "../lib/figureDocument";
 import { lit } from "../lib/macro";
+import { onDemand } from "../lib/onDemand";
 import { dedupeWindowTitle, displayedWindowTitle } from "../lib/plotview";
 import type { ReportEntry, ReportSheet } from "../lib/report";
 import { plotIntentStageTab } from "../lib/stagetab";
@@ -64,10 +66,31 @@ import { toast } from "./toasts";
 import { removeFigureDocWithTrash, removeReportWithTrash } from "./trash";
 import type { AppState } from "./useApp";
 import { withWindowDocumentErrors } from "./windowDocuments";
+import { liveWindowDocument } from "./liveWindowDocument";
+
+// Figure export code is intentionally outside the eager application bundle.
+// Adding a figure to a report is occasional work, so load the canonical spec
+// builder only when the user requests it.
+const figureSpecModule = onDemand(() => import("../lib/figureSpec"), { retryOnFailure: false });
+
+export type FigureReportSource =
+  | { kind: "library"; figureId: string }
+  | { kind: "window"; windowId: string };
+
+export type FigureReportDestination =
+  | { kind: "existing"; reportId: string }
+  | { kind: "new"; name: string };
 
 export interface ReportsFigureDocsSlice {
   // Report sheets (#36): add opens the viewer on the new report.
   addReport: (name: string, report: ReportSheet, datasetId?: string | null) => void;
+  /** Snapshot an editable figure into a new or existing report. One user
+   *  gesture, one undo entry; later figure edits never rewrite the block. */
+  addFigureToReport: (
+    source: FigureReportSource,
+    destination: FigureReportDestination,
+    caption?: string,
+  ) => Promise<boolean>;
   removeReport: (id: string) => void;
   renameReport: (id: string, name: string) => void;
   setOpenReport: (id: string | null) => void;
@@ -92,6 +115,15 @@ type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState
 type SliceGet = () => AppState;
 
 export function createReportsFigureDocsSlice(set: SliceSet, get: SliceGet): ReportsFigureDocsSlice {
+  const resolveFigure = (source: FigureReportSource): FigureDocument | null => {
+    const state = get();
+    if (source.kind === "library") {
+      return state.editableFigures.find((figure) => figure.id === source.figureId) ?? null;
+    }
+    const window = state.plotWindows.find((candidate) => candidate.id === source.windowId);
+    return window ? liveWindowDocument(state, window) : null;
+  };
+
   return {
     // Report sheets (#36). Adding opens the viewer on the new report so the
     // producing workshop's "→ Report" lands somewhere visible immediately.
@@ -109,6 +141,106 @@ export function createReportsFigureDocsSlice(set: SliceSet, get: SliceGet): Repo
           status: `report "${name}" created`,
         };
       }),
+    addFigureToReport: async (source, destination, caption) => {
+      let buildFigureSpecFromDocument: typeof import("../lib/figureSpec").buildFigureSpecFromDocument;
+      try {
+        ({ buildFigureSpecFromDocument } = await figureSpecModule.core());
+      } catch {
+        const message = "Add to Report unavailable: figure rendering tools could not load; reload the app and try again";
+        toast(message, "danger");
+        set({ status: message });
+        return false;
+      }
+      // Re-read state after the async chunk load. The source or destination
+      // may have been removed while the browser was fetching it.
+      const state = get();
+      const document = resolveFigure(source);
+      if (!document) {
+        const message = "Add to Report unavailable: the editable figure is no longer available";
+        toast(message, "danger");
+        set({ status: message });
+        return false;
+      }
+      const dataset = document.bindings.datasetId
+        ? state.datasets.find((candidate) => candidate.id === document.bindings.datasetId)
+        : undefined;
+      let spec;
+      try {
+        // structuredClone is load-bearing: the request contains the data to
+        // render. Keeping live array references would let a later in-place
+        // edit silently alter a report that was already composed.
+        spec = structuredClone(buildFigureSpecFromDocument(document, dataset, document.name));
+      } catch (error) {
+        const reason = error instanceof Error ? error.message : "the figure could not be rendered";
+        const message = `Add to Report unavailable: ${reason}`;
+        toast(message, "danger");
+        set({ status: message });
+        return false;
+      }
+      const cleanCaption = caption?.trim();
+      const block = {
+        type: "figure" as const,
+        name: document.name,
+        ...(cleanCaption ? { caption: cleanCaption } : {}),
+        spec,
+      };
+      const figureRef = { kind: "figure", id: document.id, name: document.name };
+      const datasetRef = dataset ? { kind: "dataset", id: dataset.id, name: dataset.name } : null;
+      const withRefs = (report: ReportSheet): ReportSheet => {
+        const refs = [...(report.source_refs ?? [])];
+        for (const ref of [figureRef, datasetRef]) {
+          if (ref && !refs.some((existing) => existing.kind === ref.kind && existing.id === ref.id)) refs.push(ref);
+        }
+        return { ...report, source_refs: refs };
+      };
+      const appendBlock = (report: ReportSheet): ReportSheet => {
+        const base = withRefs(report);
+        const index = base.sections.findIndex((section) => section.title === "Figures");
+        if (index < 0) return { ...base, sections: [...base.sections, { title: "Figures", blocks: [block] }] };
+        return {
+          ...base,
+          sections: base.sections.map((section, i) => i === index
+            ? { ...section, blocks: [...section.blocks, block] }
+            : section),
+        };
+      };
+
+      if (destination.kind === "existing") {
+        const report = state.reports.find((entry) => entry.id === destination.reportId);
+        if (!report) {
+          const message = "Add to Report unavailable: the selected report no longer exists";
+          toast(message, "danger");
+          set({ status: message });
+          return false;
+        }
+        state.recordHistory("Add figure to report");
+        set((current) => ({
+          reports: current.reports.map((entry) => entry.id === report.id
+            ? { ...entry, report: appendBlock(entry.report) }
+            : entry),
+          openReportId: report.id,
+          status: `added "${document.name}" to report "${report.name}"`,
+        }));
+        return true;
+      }
+
+      const name = destination.name.trim();
+      if (!name) {
+        const message = "Add to Report unavailable: enter a report name";
+        toast(message, "danger");
+        set({ status: message });
+        return false;
+      }
+      state.recordHistory("Add figure to report");
+      const id = nextReportId();
+      const report = appendBlock({ title: name, sections: [], created: new Date().toISOString() });
+      set((current) => ({
+        reports: [...current.reports, { id, name, datasetId: dataset?.id ?? null, report }],
+        openReportId: id,
+        status: `created report "${name}" with "${document.name}"`,
+      }));
+      return true;
+    },
     removeReport: (id) => removeReportWithTrash(get, set, id),
     renameReport: (id, name) =>
       set((s) => ({

@@ -4,6 +4,9 @@
 // store holds ReportEntry wrappers, and the viewer renders it. Pure (no React /
 // store imports) so the sanitizers unit-test standalone, mirroring lib/dataset.
 
+import type { FigureSpec } from "./api/figures";
+import { decodeDataStruct, isWireCellArray, type WireDataStruct } from "./nonFiniteCells";
+
 /** One fitted-parameter row (rendered as value ± error [unit]). */
 export interface ReportParam {
   name: string;
@@ -34,6 +37,10 @@ export interface ReportFigureBlock {
   name: string;
   image?: { mime: string; data: string };
   caption?: string;
+  /** Detached `/api/export/figure` request. Report export re-renders this
+   *  snapshot through the canonical figure renderer; it is deliberately not
+   *  a live pointer to an editable figure that may change later. */
+  spec?: FigureSpec;
 }
 export type ReportBlock =
   | ReportTextBlock
@@ -70,6 +77,42 @@ export interface ReportEntry {
   report: ReportSheet;
 }
 
+/** Decode BUG-017's persisted numeric-cell sentinels inside an embedded
+ * figure request. Dataset parsing normally owns this boundary, but report
+ * specs carry their own detached DataStruct and therefore need the same
+ * treatment here on workspace reopen. A malformed spec remains present so
+ * the report exporter can show its named placeholder/warning. */
+function decodeFigureSpec(block: ReportFigureBlock): ReportFigureBlock {
+  const spec = block.spec as unknown as Record<string, unknown> | undefined;
+  const raw = spec?.dataset as Record<string, unknown> | undefined;
+  if (
+    !spec || !raw ||
+    !isWireCellArray(raw.time) ||
+    !Array.isArray(raw.values) || !raw.values.every(isWireCellArray) ||
+    !Array.isArray(raw.labels) || !raw.labels.every((value) => typeof value === "string") ||
+    !Array.isArray(raw.units) || !raw.units.every((value) => typeof value === "string") ||
+    typeof raw.metadata !== "object" || raw.metadata === null
+  ) return block;
+  const dataset = decodeDataStruct(raw as unknown as WireDataStruct);
+  return Object.is(dataset, raw) ? block : { ...block, spec: { ...block.spec!, dataset } };
+}
+
+function decodeReportFigureSpecs(report: ReportSheet): ReportSheet {
+  let changed = false;
+  const sections = report.sections.map((section) => {
+    let sectionChanged = false;
+    const blocks = section.blocks.map((block) => {
+      if (block.type !== "figure" || block.spec === undefined) return block;
+      const decoded = decodeFigureSpec(block);
+      if (decoded !== block) sectionChanged = true;
+      return decoded;
+    });
+    if (sectionChanged) changed = true;
+    return sectionChanged ? { ...section, blocks } : section;
+  });
+  return changed ? { ...report, sections } : report;
+}
+
 // ── Structural validation (mirrors calc/report.validate_report) ────────────
 const isCell = (v: unknown): v is ReportCell =>
   v === null || typeof v === "string" || typeof v === "number";
@@ -104,7 +147,10 @@ function isBlock(v: unknown): v is ReportBlock {
         )
       );
     case "figure":
-      return typeof b.name === "string";
+      return (
+        typeof b.name === "string" &&
+        (b.spec === undefined || (typeof b.spec === "object" && b.spec !== null && !Array.isArray(b.spec)))
+      );
     default:
       return false;
   }
@@ -139,7 +185,7 @@ export function sanitizeReports(v: unknown, dsIds: ReadonlySet<string>): ReportE
     if (!isReportSheet(o.report)) continue;
     const datasetId =
       typeof o.datasetId === "string" && dsIds.has(o.datasetId) ? o.datasetId : null;
-    out.push({ id: o.id, name: o.name, datasetId, report: o.report });
+    out.push({ id: o.id, name: o.name, datasetId, report: decodeReportFigureSpecs(o.report) });
   }
   return out;
 }

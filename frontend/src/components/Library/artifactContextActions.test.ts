@@ -125,3 +125,21 @@ describe("artifact.saveAsTemplate — PR H5c honest disabled stub", () => {
     expect(items.some((i) => "label" in i && i.label === "Save as Template…")).toBe(false);
   });
 });
+
+describe("artifact.addToReport", () => {
+  it("is available only for canonical editable figures", () => {
+    const editable = {
+      key: "editable-figure:fig1", entityId: "fig1", kind: "editable-figure", name: "Moment sweep",
+      parentKey: null, depth: 0, children: [],
+      source: { datasetIds: [], missingDatasetIds: [], usedPlacementFallback: false },
+      entity: { id: "fig1", name: "Moment sweep" },
+    } as unknown as Extract<ArtifactNode, { kind: "editable-figure" }>;
+    expect(action(buildArtifactMenu(editable), "Add to Report…")).toBeDefined();
+
+    const report = {
+      ...editable, key: "report:r1", entityId: "r1", kind: "report", name: "Report",
+      entity: { id: "r1", name: "Report" },
+    } as unknown as Extract<ArtifactNode, { kind: "report" }>;
+    expect(buildArtifactMenu(report).some((item) => "label" in item && item.label === "Add to Report…")).toBe(false);
+  });
+});
