@@ -17,7 +17,7 @@ import { useEffect, useMemo, useState } from "react";
 import { reportEmit, statsNestedAnova, statsVarianceComponents, statsVariabilitySummary, type NestedAnovaResponse, type VarianceComponentsResponse, type VariabilitySummaryResponse } from "../../../lib/api";
 import { fmtNum } from "../../../lib/format";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
-import { analysisData } from "../../../lib/rowstate";
+import { analysisView } from "../../../lib/rowstate";
 import type { ModelingType } from "../../../lib/types";
 import { buildNestedLevels, toWireGroups, type VariabilityFactorLevel } from "../../../lib/variability";
 import { toast } from "../../../store/toasts";
@@ -101,7 +101,10 @@ export function useVariability(): VariabilityState {
   const setStatus = useApp((s) => s.setStatus);
   const [reportBusy, setReportBusy] = useState(false);
 
-  const data = useMemo(() => analysisData(active), [active]);
+  // ONE `droppedRows` pass for both — the analysis view AND the original-row
+  // map its jittered points need (`lib/variability.buildNestedLevels`'s
+  // `rowIds`, review finding 1).
+  const { data, rowIds } = useMemo(() => analysisView(active), [active]);
 
   const columns = useMemo<VariabilityColumn[]>(() => {
     if (!active) return [];
@@ -138,8 +141,8 @@ export function useVariability(): VariabilityState {
 
   const levels = useMemo(() => {
     if (!data) return [];
-    return buildNestedLevels(data, responseCol, factorACol, factorBCol);
-  }, [data, responseCol, factorACol, factorBCol]);
+    return buildNestedLevels(data, responseCol, factorACol, factorBCol, rowIds);
+  }, [data, rowIds, responseCol, factorACol, factorBCol]);
 
   const tooFewLevels = levels.length < 2;
 

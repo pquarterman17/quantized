@@ -23,9 +23,16 @@ export type SlotMark = 0 | 1 | 2;
 export interface StatSelectionMarks {
   /** One per DRAWN category slot, in draw order. */
   slots: readonly SlotMark[];
-  /** Selected ORIGINAL dataset rows — the same index space the points'
-   *  `rowIndex` counts in, so a point is ringed iff its row is selected. */
-  points: ReadonlySet<number>;
+  /** Whether this draw's raw-point overlay (box "points" / strip) has any
+   *  point to ring — true exactly when `slots` has some non-zero mark
+   *  (P2.6 review finding 4: a slot's mark is computed from the SAME rows
+   *  its points are, so "some slot marked" and "some point selected" are one
+   *  fact, not two). The renderer (`statRenderBox.drawJitteredPoints`) does
+   *  NOT read the selected-rows Set through this field — it checks the live
+   *  selection directly, via `CategoryAxisMarks.selectedRows` alongside this
+   *  object, so a `StatSelectionMarks` never has to carry its own copy of a
+   *  Set that is always either the whole selection or empty. */
+  ringPoints: boolean;
 }
 
 /** A translucent accent band over every slot holding selected rows, with a

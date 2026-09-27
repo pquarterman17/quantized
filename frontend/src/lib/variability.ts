@@ -18,6 +18,15 @@ export interface VariabilityCell {
   bIndex: number;
   bLabel: string;
   values: number[];
+  /** `rowIds[i]` is the ORIGINAL dataset row behind `values[i]` — index-
+   *  aligned with `values`. The chart's jittered-point overlay
+   *  (`VariabilityChart.tsx`) keys `deterministicJitter` on this, never on a
+   *  point's position within `values`, so excluding/filtering an UNRELATED
+   *  row (which shifts every later row's position in the analysis view,
+   *  `lib/rowstate.analysisData`) never reshuffles a still-visible point's
+   *  jitter — the same box/strip fix (lib/jitter.ts, lib/statstage.
+   *  resolveGroupsIndexed), applied here. */
+  rowIds: number[];
 }
 
 export interface VariabilityFactorLevel {
@@ -49,6 +58,11 @@ export function buildNestedLevels(
   responseCol: number,
   factorACol: number,
   factorBCol: number,
+  /** `rowIds[r]` is the ORIGINAL dataset row behind `data` row `r` — pass
+   *  `lib/rowstate.analysisRowIds`/`analysisView(ds).rowIds` when `data` is
+   *  the analysis view. `null` (the default) means `data` IS the dataset
+   *  (nothing dropped), so `rowIds[r] ?? r` degrades to the identity. */
+  rowIds: readonly number[] | null = null,
 ): VariabilityFactorLevel[] {
   const av = columnOf(data, factorACol);
   const bv = columnOf(data, factorBCol);
@@ -85,10 +99,14 @@ export function buildNestedLevels(
     for (let bi = 0; bi < lvl.bCodes.length; bi++) {
       const b = lvl.bCodes[bi];
       const values: number[] = [];
+      const ids: number[] = [];
       for (let r = 0; r < n; r++) {
-        if (av[r] === lvl.aCode && bv[r] === b && Number.isFinite(rv[r])) values.push(rv[r]);
+        if (av[r] === lvl.aCode && bv[r] === b && Number.isFinite(rv[r])) {
+          values.push(rv[r]);
+          ids.push(rowIds?.[r] ?? r);
+        }
       }
-      if (values.length > 0) cells.push({ bIndex: cells.length, bLabel: lvl.bLabels[bi], values });
+      if (values.length > 0) cells.push({ bIndex: cells.length, bLabel: lvl.bLabels[bi], values, rowIds: ids });
     }
     if (cells.length > 0) result.push({ aIndex: result.length, aLabel: lvl.aLabel, cells });
   }

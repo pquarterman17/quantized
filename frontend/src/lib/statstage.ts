@@ -203,28 +203,31 @@ export function resolveGroups(
  *  with its `BoxStat` sibling from `resolveGroups`/`groupBoxStatsClient`.
  *
  *  `rowIds[i]` is the ORIGINAL dataset row behind `data` row i — pass
- *  `lib/rowstate.analysisRowIds` when `data` is the analysis view (null, the
- *  default, means `data` IS the dataset). Without it a point would carry its
- *  position in the pruned view, so excluding or filtering out one row would
- *  shift the jitter of every later point (and a figure export with it). */
+ *  `lib/rowstate.analysisRowIds` (or `analysisView(ds).rowIds`) when `data` is
+ *  the analysis view. REQUIRED, not defaulted: `null` must be passed
+ *  explicitly to mean "nothing is dropped, `data` IS the dataset" (a
+ *  formerly-optional trailing param silently fell back to view positions
+ *  whenever a caller forgot it — the exact bug this parameter exists to
+ *  prevent). Without the real mapping a point would carry its position in
+ *  the pruned view, so excluding or filtering out one row would shift the
+ *  jitter of every later point (and a figure export with it). Threaded
+ *  straight into the partition builders below (`groupsByCategoryIndexed` &c.)
+ *  so `rowIndex` is set once at construction, never remapped in a second
+ *  pass over already-built groups. */
 export function resolveGroupsIndexed(
   data: DataStruct,
   groupCol: number | null,
   valueCol: number,
   plotted: readonly number[],
-  group2Col: number | null = null,
-  rowIds: readonly number[] | null = null,
+  group2Col: number | null,
+  rowIds: readonly number[] | null,
 ): IndexedGroupSpec[] {
-  let groups: IndexedGroupSpec[];
   if (groupCol != null) {
-    groups = group2Col != null && group2Col !== groupCol
-      ? groupsByNestedCategoryIndexed(data, valueCol, groupCol, group2Col)
-      : groupsByCategoryIndexed(data, valueCol, groupCol);
-  } else {
-    groups = groupsFromColumnsIndexed(data, plotted.length ? plotted : [valueCol]);
+    return group2Col != null && group2Col !== groupCol
+      ? groupsByNestedCategoryIndexed(data, valueCol, groupCol, group2Col, rowIds)
+      : groupsByCategoryIndexed(data, valueCol, groupCol, rowIds);
   }
-  if (!rowIds) return groups;
-  return groups.map((g) => ({ ...g, points: g.points.map((p) => ({ value: p.value, rowIndex: rowIds[p.rowIndex] })) }));
+  return groupsFromColumnsIndexed(data, plotted.length ? plotted : [valueCol], rowIds);
 }
 
 // ── Client-side box stats (offline fallback) ────────────────────────────────

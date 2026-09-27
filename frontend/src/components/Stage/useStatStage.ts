@@ -40,7 +40,7 @@ import { statsHistogram, statsQQ } from "../../lib/api";
 import { type BarChartData } from "../../lib/barlayout";
 import { facetSlices } from "../../lib/facet";
 import { effectiveChannels } from "../../lib/plotdata";
-import { analysisData, analysisRowIds } from "../../lib/rowstate";
+import { analysisView } from "../../lib/rowstate";
 import type { GroupSpec } from "../../lib/statschooser";
 import {
   categoricalChannels,
@@ -77,9 +77,13 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const hideEmpty = params.hideEmptyLevels ?? false;
   const showN = params.showGroupN ?? true;
 
-  const data = useMemo(() => analysisData(active), [active]);
-  // The original dataset row behind each `data` row (null: nothing dropped).
-  const rowIds = useMemo(() => analysisRowIds(active), [active]);
+  // ONE `droppedRows` pass for both: `data` (every mode reads it) and
+  // `rowIds`, the original dataset row behind each `data` row (null: nothing
+  // dropped) — used only by the indexed-groups memo below, when box/strip
+  // points are actually drawn. Two separate `analysisData`/`analysisRowIds`
+  // calls used to re-derive the same exclusion ∪ filter Set twice per
+  // `active` change regardless of mode; this computes it once.
+  const { data, rowIds } = useMemo(() => analysisView(active), [active]);
 
   const columns = useMemo<StatColumn[]>(
     () => (active ? active.data.labels.map((lab, i) => ({ index: i, label: lab })) : []),

@@ -8,7 +8,7 @@ import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import * as categorical from "../../lib/categorical";
-import { facetSlices } from "../../lib/facet";
+import { facetSliceRowIds, facetSlices } from "../../lib/facet";
 import { analysisData, analysisRowIds } from "../../lib/rowstate";
 import { boxStatsClient, resolveGroupsIndexed } from "../../lib/statstage";
 import type { DataStruct, Dataset } from "../../lib/types";
@@ -72,11 +72,15 @@ describe("decorate — flat", () => {
     const d = result.current.decorate(draw);
     const marks = d && "selection" in d ? d.selection : null;
     expect(marks?.slots).toEqual([2, 1, 0]); // A all (row 1 excluded), B some, C empty
-    // Rings are keyed by ORIGINAL row — the points carry 0, 2, 5 themselves
-    // even though row 1 is pruned (they used to carry view positions 0, 1, 4).
-    expect([...(marks?.points ?? [])].sort()).toEqual([0, 2, 5]);
+    expect(marks?.ringPoints).toBe(true);
+    // Rings are keyed by ORIGINAL row — the renderer reads the live
+    // selection directly (`selectedRows`), not a copy inside `selection`
+    // (review finding 7). The points carry 0, 2, 5 themselves even though
+    // row 1 is pruned (they used to carry view positions 0, 1, 4).
+    const selectedRows = d && "selectedRows" in d ? d.selectedRows : null;
+    expect([...(selectedRows ?? [])].sort()).toEqual([0, 2, 5]);
     const ringed = (d?.mode === "box" ? d.points ?? [] : []).flatMap((g) =>
-      g.points.filter((p) => marks?.points.has(p.rowIndex)).map((p) => p.value),
+      g.points.filter((p) => selectedRows?.has(p.rowIndex)).map((p) => p.value),
     );
     expect(ringed.sort()).toEqual([1, 3, 6]); // y of rows 0, 2, 5
   });
@@ -88,6 +92,21 @@ describe("decorate — flat", () => {
     expect(result.current.decorate(draw)).toBe(draw);
     expect(result.current.counts).toEqual([0, 0, 0]);
   });
+
+  it("a non-empty selection that touches NOTHING drawn here leaves the draw untouched (review finding 4)", () => {
+    // Row 1 is EXCLUDED — it belongs to no slot's rows (A's are [0, 2], not
+    // [0, 1, 2]) — so selecting it makes `hasSelection` true on THIS dataset
+    // without marking any slot. Before the fix, `selectionMarks` still
+    // returned a non-null result whenever the selection was non-empty
+    // anywhere, so `decorate` always produced a NEW draw object here —
+    // a spurious repaint on a selection this plot has nothing to do with.
+    const { axes, draw } = flatSetup();
+    const { result } = renderHook(() => useStatGroupSelection(DS, axes, false));
+    act(() => useApp.getState().setRowSelection([1]));
+    expect(useApp.getState().selection?.rows).toEqual([1]);
+    expect(result.current.hasSelection).toBe(true);
+    expect(result.current.decorate(draw)).toBe(draw); // same object: nothing to mark
+  });
 });
 
 function facetSetup() {
@@ -97,7 +116,7 @@ function facetSetup() {
     barValueChannels: [1], facetCol: 2, slices,
   })!;
   const facets: FacetDraw[] = slices.map((s) => {
-    const groups = resolveGroupsIndexed(s.data, 0, 1, [1], null);
+    const groups = resolveGroupsIndexed(s.data, 0, 1, [1], null, null);
     const raw: StatDrawData = {
       mode: "box",
       boxes: groups.map((g) => boxStatsClient(g.points.map((p) => p.value), 1.5, g.label)),
@@ -143,7 +162,7 @@ describe("facets — marks and picks are scoped to the panel", () => {
       barValueChannels: [1], facetCol: 2, slices,
     })!;
     const f1 = slices[1]; // fac=1: original rows 2 (grp A), 4, 5 (grp B)
-    const ids = f1.rows.map((r) => ROW_IDS?.[r] ?? r);
+    const ids = facetSliceRowIds(f1, ROW_IDS);
     expect(ids).toEqual([2, 4, 5]);
     const groups = resolveGroupsIndexed(f1.data, 0, 1, [1], null, ids);
     expect(groups.map((g) => g.points.map((p) => p.rowIndex))).toEqual([[2], [4, 5]]);
@@ -159,7 +178,10 @@ describe("facets — marks and picks are scoped to the panel", () => {
     act(() => useApp.getState().setRowSelection([5]));
     const out = result.current.decorateFacets([facetDraw])!;
     const d = out[0].draw;
-    const points = "selection" in d ? d.selection?.points : undefined;
+    expect("selection" in d ? d.selection?.ringPoints : undefined).toBe(true);
+    // The renderer reads the live selection directly (`selectedRows`), not a
+    // copy inside `selection` (review finding 7).
+    const points = "selectedRows" in d ? d.selectedRows : undefined;
     expect([...(points ?? [])]).toEqual([5]);
     // Exactly one drawn point is ringed: row 5 (y = 6), in group B.
     const ringed = groups.flatMap((g) => g.points.filter((p) => points?.has(p.rowIndex)).map((p) => p.value));

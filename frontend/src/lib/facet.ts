@@ -60,6 +60,29 @@ export interface FacetSlice {
   rows: readonly number[];
 }
 
+/** A facet slice's points' ORIGINAL dataset rows: `slice.rows[j]` composed
+ *  with `rowIds` (`lib/rowstate.analysisRowIds`/`analysisView(ds).rowIds`),
+ *  the SAME composition every faceted `IndexedGroupSpec` must use if it is
+ *  ever built (`slice.rows` maps a slice-local position back to its row in
+ *  the `data` `facetSlices` was called on; `rowIds` then maps THAT back to
+ *  the true original row, when `data` was itself the analysis view). Pass
+ *  `rowIds` as `null` when `data` IS the dataset (nothing dropped) — the
+ *  same "identity means no drop" convention `resolveGroupsIndexed` uses, so
+ *  the result is exactly `slice.rows` unchanged.
+ *
+ *  The ONE production entry point for this composition: `lib/statstage.
+ *  resolveGroupsIndexed`'s `rowIds` argument, wherever a caller resolves
+ *  points PER FACET SLICE rather than for the flat dataset — so a faceted
+ *  box/strip "show points" overlay (not wired on any mode as of this
+ *  writing; `useStatStageCompute.computeFacetGroupDraws` never sets
+ *  `points`) cannot reinvent its own row math and drift from the flat
+ *  panel's. Until that lands, this has no production caller either — it
+ *  exists so the recipe lives in ONE place instead of being duplicated
+ *  inline wherever a test needs it. */
+export function facetSliceRowIds(slice: FacetSlice, rowIds: readonly number[] | null): number[] {
+  return rowIds ? slice.rows.map((r) => rowIds[r] ?? r) : [...slice.rows];
+}
+
 /** Split `data` into one row-sliced `DataStruct` per distinct level of
  *  `facetCol` (ascending) — the shared row-slicing idiom every faceted mark
  *  builds on: the xy family via `facetPayloads` below, box/violin/bar via

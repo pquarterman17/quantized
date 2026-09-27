@@ -27,6 +27,9 @@ interface PlacedCell {
   bLabel: string;
   x: number;
   values: number[];
+  /** Index-aligned with `values` — each point's ORIGINAL dataset row
+   *  (`VariabilityCell.rowIds`), the jitter key (review finding 1). */
+  rowIds: number[];
   mean: number;
 }
 
@@ -56,7 +59,9 @@ export default function VariabilityChart({
     for (const cell of lvl.cells) {
       const s = cellByKey.get(`${lvl.aIndex}:${cell.bIndex}`);
       const mean = s?.mean ?? cell.values.reduce((a, b) => a + b, 0) / cell.values.length;
-      placedCells.push({ aIndex: lvl.aIndex, bIndex: cell.bIndex, bLabel: cell.bLabel, x, values: cell.values, mean });
+      placedCells.push({
+        aIndex: lvl.aIndex, bIndex: cell.bIndex, bLabel: cell.bLabel, x, values: cell.values, rowIds: cell.rowIds, mean,
+      });
       x += CELL_W;
     }
     const x1 = x - CELL_W;
@@ -115,13 +120,19 @@ export default function VariabilityChart({
           );
         })}
 
-        {/* Points per cell (deterministic jitter, never Math.random) */}
+        {/* Points per cell (deterministic jitter, never Math.random). Keyed
+            by each point's ORIGINAL dataset row (`VariabilityCell.rowIds`),
+            never by its position within `values` — excluding/filtering an
+            UNRELATED row shifts every later row's position in the analysis
+            view (`lib/rowstate.analysisData`), and a position-keyed jitter
+            would reshuffle every still-visible point in the same cell along
+            with it (review finding 1). */}
         {placedCells.map((c) => (
           <g key={`${c.aIndex}:${c.bIndex}`}>
             {c.values.map((v, i) => (
               <circle
-                key={i}
-                cx={c.x + deterministicJitter(i, `${c.aIndex}:${c.bIndex}`) * (CELL_W / 2 - 5)}
+                key={c.rowIds[i]}
+                cx={c.x + deterministicJitter(c.rowIds[i], `${c.aIndex}:${c.bIndex}`) * (CELL_W / 2 - 5)}
                 cy={sy(v)}
                 r={2}
                 fill="var(--text-faint)"

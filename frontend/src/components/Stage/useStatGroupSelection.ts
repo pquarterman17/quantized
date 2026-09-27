@@ -62,16 +62,23 @@ export interface StatGroupSelection {
   hasSelection: boolean;
 }
 
-const NO_POINTS: ReadonlySet<number> = new Set();
-
 /** Whether `draw` paints a jittered raw-point overlay (box "points" / strip). */
 function hasPointsOf(draw: StatDrawData): boolean {
   return (draw.mode === "box" && !!draw.points) || draw.mode === "strip";
 }
 
-function withMarks(draw: StatDrawData, marks: ReturnType<typeof selectionMarks>): StatDrawData {
+/** Attaches the slot marks AND (P2.6 review finding 7) the raw selected-rows
+ *  Set the box/strip point renderer checks DIRECTLY (`statRenderBox.
+ *  drawJitteredPoints` reads `selectedRows`, never a copy riding inside
+ *  `StatSelectionMarks`) — only when `marks` is non-null, so a draw with
+ *  nothing marked on it (P2.6 review finding 4) stays the SAME object. */
+function withMarks(
+  draw: StatDrawData,
+  marks: ReturnType<typeof selectionMarks>,
+  selectedRows: ReadonlySet<number> | null,
+): StatDrawData {
   if (draw.mode === "qq" || draw.mode === "histogram") return draw;
-  return marks ? { ...draw, selection: marks } : draw;
+  return marks ? { ...draw, selection: marks, selectedRows: marks.ringPoints ? selectedRows : null } : draw;
 }
 
 export function useStatGroupSelection(
@@ -166,10 +173,12 @@ export function useStatGroupSelection(
       if (!draw || !hasSelection || !active) return draw;
       // Points carry ORIGINAL dataset rows (`IndexedPoint.rowIndex`, via
       // `resolveGroupsIndexed`'s `rowIds`), the selection's own index space —
-      // so the rings are the selection itself, no translation.
-      const points = hasPointsOf(draw) ? selected : NO_POINTS;
+      // so the rings are the selection itself, no translation. The renderer
+      // reads `selected` DIRECTLY (`withMarks` attaches it as `selectedRows`
+      // only when something is actually marked); `selectionMarks` itself no
+      // longer takes a `points` argument (P2.6 review finding 4/7).
       const slots = "slots" in draw ? draw.slots : null;
-      return withMarks(draw, selectionMarks(slots, byKey, selected, picked, points, null));
+      return withMarks(draw, selectionMarks(slots, byKey, selected, picked), hasPointsOf(draw) ? selected : null);
     },
     [hasSelection, active, byKey, selected, picked],
   );
@@ -183,10 +192,11 @@ export function useStatGroupSelection(
         if (!scope) return f;
         // P2.6 review finding 7: ring this panel's own selected points too.
         // Its points carry ORIGINAL rows like the flat draw's (a facet
-        // slice's `FacetSlice.rows` composed with `analysisRowIds`), and hold
-        // only this panel's rows — so the whole selection rings exactly them.
-        const points = hasPointsOf(f.draw) ? selected : NO_POINTS;
-        return { ...f, draw: withMarks(f.draw, selectionMarks(slots, byKey, selected, picked, points, f.label, scope)) };
+        // slice's `FacetSlice.rows` composed with `analysisRowIds`, via
+        // `lib/facet.facetSliceRowIds`), and hold only this panel's rows —
+        // so the whole selection rings exactly them.
+        const marks = selectionMarks(slots, byKey, selected, picked, f.label, scope);
+        return { ...f, draw: withMarks(f.draw, marks, hasPointsOf(f.draw) ? selected : null) };
       });
     },
     [hasSelection, panelScope, byKey, selected, picked],

@@ -239,14 +239,25 @@ export function applyGesture(
 
 /** The marks for one draw whose drawn slots are `drawSlots` (keyed), or null
  *  when the draw is not keyed (closed-up fallback: no reliable mapping) or
- *  nothing on it is selected. `panel` is the context being marked (see
- *  `markOf`). */
+ *  NOTHING on it is actually marked (P2.6 review finding 4). `panel` is the
+ *  context being marked (see `markOf`).
+ *
+ *  Returning null only when `slots` has some non-zero mark (never merely
+ *  "the app has a selection somewhere") is the fix for finding 4: a slot's
+ *  mark is computed from exactly the rows its points are (`markOf` reads
+ *  `row.rows`, the same universe `IndexedPoint.rowIndex` counts in), so
+ *  "some slot marked" and "some drawn point selected" are the SAME fact —
+ *  there is no third case where a point should ring but every slot reads 0.
+ *  Before this fix, a selection anywhere else in the dataset (a different
+ *  group, a different facet panel, an excluded/filtered row) still forced a
+ *  non-null result, so `withMarks` always produced a NEW draw object even
+ *  when nothing on THIS draw was marked — spurious repaints on every
+ *  unrelated selection change. */
 export function selectionMarks(
   drawSlots: readonly AxisSlot[] | null | undefined,
   byKey: ReadonlyMap<string, SummaryRow>,
   selected: ReadonlySet<number>,
   picked: PickedKeys,
-  points: ReadonlySet<number>,
   panel: string | null = null,
   scope?: PanelScope | null,
 ): StatSelectionMarks | null {
@@ -255,5 +266,6 @@ export function selectionMarks(
     const row = byKey.get(s.key as string);
     return row ? markOf(row, selected, picked, panel, scope) : 0;
   });
-  return slots.some((m) => m > 0) || points.size ? { slots, points } : null;
+  const marked = slots.some((m) => m > 0);
+  return marked ? { slots, ringPoints: marked } : null;
 }

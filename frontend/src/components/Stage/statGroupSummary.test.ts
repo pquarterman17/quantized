@@ -239,10 +239,22 @@ describe("marks", () => {
     const axes = axesFor();
     const byKey = new Map(s.rows.map((r) => [r.key, r] as const));
     const drawn = axes.flat.slots.filter((x) => x.n > 0); // hide-empty order
-    const m = selectionMarks(drawn, byKey, new Set([6, 7]), NO_PICK, new Set());
+    const m = selectionMarks(drawn, byKey, new Set([6, 7]), NO_PICK);
     expect(m?.slots).toEqual([0, 0, 2]);
-    expect(selectionMarks(drawn.map((x) => ({ ...x, key: undefined })), byKey, new Set([6]), NO_PICK, new Set())).toBeNull();
-    expect(selectionMarks(drawn, byKey, new Set(), NO_PICK, new Set())).toBeNull();
+    expect(m?.ringPoints).toBe(true);
+    expect(selectionMarks(drawn.map((x) => ({ ...x, key: undefined })), byKey, new Set([6]), NO_PICK)).toBeNull();
+    expect(selectionMarks(drawn, byKey, new Set(), NO_PICK)).toBeNull();
+  });
+
+  it("selectionMarks returns null (not a copy of an unrelated selection) when nothing here is marked (review finding 4)", () => {
+    // Row 4 is EXCLUDED (see DS below) — no slot's rows include it — so a
+    // selection naming ONLY row 4 must mark nothing, even though the
+    // selection itself is non-empty. Before the fix this still returned a
+    // non-null `{slots, points}` whenever `selected.size > 0`.
+    const axes = axesFor();
+    const byKey = new Map(s.rows.map((r) => [r.key, r] as const));
+    const drawn = axes.flat.slots.filter((x) => x.n > 0);
+    expect(selectionMarks(drawn, byKey, new Set([4]), NO_PICK)).toBeNull();
   });
 
   it("selectionMarks never paints an empty slot picked in another panel (review finding 1, end to end)", () => {
@@ -253,10 +265,10 @@ describe("marks", () => {
     // Panel f1's own draw carries C's slot too (an axis is shared across
     // panels) — it must read as unmarked, even though the SAME key is
     // "picked" globally.
-    expect(selectionMarks(allSlots, byKey, new Set(), pickedInF0, new Set(), "f1")).toBeNull();
+    expect(selectionMarks(allSlots, byKey, new Set(), pickedInF0, "f1")).toBeNull();
     // Panel f0 itself DOES read it as picked.
     const ci = allSlots.findIndex((sl) => sl.key === "2"); // C, the empty level
-    expect(selectionMarks(allSlots, byKey, new Set(), pickedInF0, new Set(), "f0")?.slots[ci]).toBe(2);
+    expect(selectionMarks(allSlots, byKey, new Set(), pickedInF0, "f0")?.slots[ci]).toBe(2);
   });
 });
 
