@@ -56,7 +56,7 @@ import { restorePatch, snapshotOf, type HistorySnapshot } from "./historySnapsho
 /** Bounded stack depth — oldest entries evicted first (both directions, for
  *  symmetry; redo can never exceed how many entries were ever undone from a
  *  present history, so this is a defensive cap, not a load-bearing one). */
-const HISTORY_DEPTH = 50;
+export const HISTORY_DEPTH = 50;
 
 export interface HistoryEntry {
   /** Shown by the Edit menu / ⌘K as "Undo <label>" / "Redo <label>". */
@@ -68,6 +68,17 @@ export interface HistoryEntry {
    *  per event. Absent on every ordinary `recordHistory` entry, which is what
    *  makes an unrelated edit landing in between break the run. */
   coalesceKey?: string;
+  /** A monotonic id, assigned once when the entry is first pushed and never
+   *  reassigned (finding #2). Every rewrite of an entry already in the stack
+   *  — `closeRun` stripping its `coalesceKey`, `scrubDatasetsFromHistory`
+   *  pruning a permanently-deleted dataset out of its snapshot — spreads the
+   *  original entry (`{ ...e, ... }`), which carries `seq` along untouched.
+   *  That is what lets a caller find "the entry that was on top before I
+   *  started" (`asOneUndoStep`) by VALUE rather than by object identity: an
+   *  identity check reads a same-slot rewrite as "gone" and, worse, reads a
+   *  genuine HISTORY_DEPTH eviction the same way, either of which used to
+   *  wipe or drop the caller's own undo entry. */
+  seq: number;
 }
 
 /** R6 (POST_SPRINT_INDEPENDENT_REVIEW.md): the opaque handle `withHistoryBatch`
@@ -198,6 +209,18 @@ export interface HistorySlice {
    *  `fn` under the OUTER batch's token — the outer batch owns the one
    *  entry; nesting never creates a second undo step. */
   withHistoryBatch: <T>(label: string, fn: (token: HistoryBatchToken) => Promise<T>) => Promise<T>;
+  /** Collapse every entry AFTER the one whose `seq` is `sinceSeq` into ONE
+   *  entry holding `snapshot`, under `label` (finding #2's `asOneUndoStep`,
+   *  the sole caller — see its own doc for why `seq`, not identity). `sinceSeq
+   *  === undefined` means "before anything was ever recorded": every current
+   *  entry is newer, so the whole stack collapses into the one entry. A
+   *  `sinceSeq` that names no current entry AND the stack is not yet at
+   *  HISTORY_DEPTH is read as "nothing to fold" (nothing was pushed, so
+   *  there's nothing to collapse) and this is a no-op; otherwise (a real
+   *  HISTORY_DEPTH eviction, or the named entry sits right on top already)
+   *  it folds from the top of the stack, same as the plain "nothing to fold"
+   *  case when the named entry IS already on top. */
+  foldHistorySince: (sinceSeq: number | undefined, label: string, snapshot: HistorySnapshot) => void;
   /** No-op on an empty stack (callers that want a "nothing to undo" toast
    *  check `history.length` themselves — see components/history). */
   undo: () => void;
@@ -269,6 +292,12 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
   // of `withHistoryBatch` must keep this same invariant — zero real awaits
   // after its last fold — or this limitation is live again for it.
   let batchPreSnapshot: HistorySnapshot | null = null;
+  // Monotonic id source for `HistoryEntry.seq` (finding #2) — never reset,
+  // never reused; see that field's own doc for why identity can't do this
+  // job. A closure counter, not a store field: nothing renders it, and it
+  // must survive every rewrite of the entries around it.
+  let nextSeq = 0;
+  const seq = (): number => ++nextSeq;
 
   return {
     history: [],
@@ -298,7 +327,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
       // while some other batch is suppressed: this is what stops that
       // batch from silently absorbing it (R6).
       set((s) => ({
-        history: [...s.history, { label, snapshot: snapshotOf(s) }].slice(-HISTORY_DEPTH),
+        history: [...s.history, { label, snapshot: snapshotOf(s), seq: seq() }].slice(-HISTORY_DEPTH),
         future: [],
       }));
     },
@@ -314,7 +343,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
         // it and only invalidate redo.
         if (open) return { future: [] };
         return {
-          history: [...s.history, { label, snapshot: snapshotOf(s), coalesceKey: key }].slice(-HISTORY_DEPTH),
+          history: [...s.history, { label, snapshot: snapshotOf(s), coalesceKey: key, seq: seq() }].slice(-HISTORY_DEPTH),
           future: [],
         };
       }),
@@ -350,11 +379,21 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
           // correlation across the two closures, so the null check reads
           // as a second guard rather than a real possibility.
           ...(had && preSnapshot
-            ? { history: [...s.history, { label, snapshot: preSnapshot }].slice(-HISTORY_DEPTH), future: [] }
+            ? { history: [...s.history, { label, snapshot: preSnapshot, seq: seq() }].slice(-HISTORY_DEPTH), future: [] }
             : {}),
         }));
       }
     },
+    foldHistorySince: (sinceSeq, label, snapshot) =>
+      set((s) => {
+        let k = sinceSeq !== undefined ? s.history.findIndex((e) => e.seq === sinceSeq) : -1;
+        if (sinceSeq !== undefined && k < 0) {
+          if (s.history.length < HISTORY_DEPTH) return {};
+          k = -1;
+        }
+        if (k === s.history.length - 1) return {};
+        return { history: [...s.history.slice(0, k + 1), { label, snapshot, seq: seq() }].slice(-HISTORY_DEPTH), future: [] };
+      }),
     undo: () =>
       set((s) => {
         const top = s.history[s.history.length - 1];
@@ -370,7 +409,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
         if (under?.coalesceKey) rest[rest.length - 1] = closeRun(under);
         return {
           history: rest,
-          future: [...s.future, { label: top.label, snapshot: snapshotOf(s) }].slice(-HISTORY_DEPTH),
+          future: [...s.future, { label: top.label, snapshot: snapshotOf(s), seq: seq() }].slice(-HISTORY_DEPTH),
           status: `Undid ${top.label}`,
           ...restorePatch(s, top.snapshot),
         };
@@ -381,7 +420,7 @@ export function createHistorySlice(set: SliceSet, get: SliceGet): HistorySlice {
         if (!top) return {};
         return {
           future: s.future.slice(0, -1),
-          history: [...s.history, { label: top.label, snapshot: snapshotOf(s) }].slice(-HISTORY_DEPTH),
+          history: [...s.history, { label: top.label, snapshot: snapshotOf(s), seq: seq() }].slice(-HISTORY_DEPTH),
           status: `Redid ${top.label}`,
           ...restorePatch(s, top.snapshot),
         };

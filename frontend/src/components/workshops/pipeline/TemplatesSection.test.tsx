@@ -1,9 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import TemplatesSection from "./TemplatesSection";
 import { makeStep } from "../../../lib/pipeline";
-import { saveTemplate, toTemplate } from "../../../lib/template";
+import { loadTemplates, saveTemplate, serializeTemplate, toTemplate, type AnalysisTemplate } from "../../../lib/template";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 
@@ -131,5 +131,47 @@ describe("TemplatesSection", () => {
     // and the good files' datasets carry the expression column
     const a = s.datasets.find((d) => d.name === "a.dat")!;
     expect(a.data.labels).toContain("d");
+  });
+
+  // Finding #4: Apply and Batch both toggle the SAME `pipelineRunning` flag
+  // while they run — either one already in flight must disable the other.
+  it("disables Apply and Batch while the other is running", () => {
+    saveTemplate(TEMPLATE);
+    render(<TemplatesSection />);
+    fireEvent.change(screen.getByRole("combobox"), { target: { value: "linear flow" } });
+    expect(screen.getByRole("button", { name: "Apply…" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Batch…" })).not.toBeDisabled();
+
+    act(() => useApp.setState({ pipelineRunning: true }));
+    expect(screen.getByRole("button", { name: "Apply…" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Batch…" })).toBeDisabled();
+
+    act(() => useApp.setState({ pipelineRunning: false }));
+    expect(screen.getByRole("button", { name: "Apply…" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "Batch…" })).not.toBeDisabled();
+  });
+
+  // Finding #8: importing over an existing name must never move its
+  // revision backwards or leave it repeating.
+  it("import: keeps the local revision when identical, bumps past both when the definition differs", async () => {
+    const local = { ...TEMPLATE, revision: 3 };
+    saveTemplate(local);
+    render(<TemplatesSection />);
+    const importInput = document.querySelector('input[type="file"][accept=".json"]') as HTMLInputElement;
+
+    // Same definition, a LOWER file revision: the local one is kept, not overwritten.
+    const identicalFile = new File([serializeTemplate({ ...local, revision: 1 })], "same.json", { type: "application/json" });
+    fireEvent.change(importInput, { target: { files: [identicalFile] } });
+    await waitFor(() => expect(loadTemplates().find((t) => t.name === local.name)?.revision).toBe(3));
+
+    // A genuinely different definition (an extra step), file revision behind local: bump past BOTH.
+    const different: AnalysisTemplate = {
+      ...local,
+      revision: 2,
+      steps: [...local.steps, makeStep("expression", "extra", "", { name: "extra", expr: "A" })],
+    };
+    const differentFile = new File([serializeTemplate(different)], "different.json", { type: "application/json" });
+    fireEvent.change(importInput, { target: { files: [differentFile] } });
+    await waitFor(() => expect(loadTemplates().find((t) => t.name === local.name)?.revision).toBe(4)); // max(3, 2) + 1
   });
 });

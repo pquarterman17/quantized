@@ -32,6 +32,7 @@ import {
   type RecipeKind,
   type RecipeOperation,
 } from "./recipeLibrary";
+import { expectationsText } from "./recipeExpect";
 import type { RecipeSourceInput } from "./recipeSources";
 import { loadTemplates, type AnalysisTemplate } from "./template";
 
@@ -170,6 +171,10 @@ function quickPlotDetails(row: RecipeDescriptor, t: RecipeSourceInput["quickPlot
 
 function analysisDetails(row: RecipeDescriptor, t: AnalysisTemplate): RecipeDetails {
   const fields = commonFields(row, null, undefined);
+  // P2.5 box 4: a transformation recipe's own fields, when it has them.
+  if (t.description) fields.push({ label: "Description", value: t.description });
+  if (t.revision) fields.push({ label: "Revision", value: String(t.revision), mono: true });
+  if (t.expects) fields.push({ label: "Expects", value: expectationsText(t.expects) });
   fields.push(actionsField(row.kind));
   const steps = t.steps.map((s) => `${s.kind}: ${s.label}`);
   return { fields, sections: [{ title: "Steps", items: steps }, { title: "Outputs", items: [...t.outputs] }] };

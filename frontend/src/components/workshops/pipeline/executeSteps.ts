@@ -29,6 +29,23 @@ export interface ExecuteResult {
   fitTargets: string[];
   /** The dataset the run ended on (`targetId` unless a transform ran). */
   target: string;
+  /** EVERY dataset a `transform` step created during this run, across every
+   *  step, cumulative — for finding #3 (runTemplate.ts): a caller that needs
+   *  to roll back exactly what THIS run created reads this instead of
+   *  diffing the store's dataset list against a before/after snapshot, which
+   *  would also catch an unrelated dataset a concurrent import created while
+   *  this run awaited the backend. */
+  created: string[];
+  /** The outputs of the LAST `transform` step that actually ran — REPLACED,
+   *  not accumulated, each time one runs, so a chain (stack, then transpose)
+   *  reports only transpose's own output, never stack's now-superseded
+   *  intermediate one. For finding #7: a caller stamping provenance wants
+   *  every output the run's FINAL step produced (a split's children are
+   *  siblings, equally final), not every dataset any step ever created —
+   *  `created` above would also catch a chain's intermediate steps' outputs,
+   *  which nothing should be reading any more once a later step consumed
+   *  them. Empty when no transform step ran at all. */
+  lastOutputs: string[];
 }
 
 /** Run `steps` against dataset `targetId`. A failing step logs `failed` and
@@ -42,6 +59,8 @@ export async function executeSteps(
   const log: Record<string, StepLogEntry> = {};
   const fits: CalcResult[] = [];
   const fitTargets: string[] = [];
+  const created: string[] = [];
+  let lastOutputs: string[] = [];
   const store = () => useApp.getState();
 
   // #38 deferred edge: a still-pending (preview-only) target must resolve to
@@ -57,7 +76,7 @@ export async function executeSteps(
     const note = `couldn't load full data — ${e instanceof Error ? e.message : "error"}`;
     for (const step of steps) log[step.id] = { status: "failed", note };
     onProgress?.({ ...log });
-    return { log, fits, fitTargets, target: targetId };
+    return { log, fits, fitTargets, target: targetId, created, lastOutputs };
   }
 
   // The dataset each step acts on. A `transform` step (P2.5) derives a new
@@ -161,6 +180,18 @@ export async function executeSteps(
           const { replayTransform } = await import("../../../lib/transformReplay");
           const out = await replayTransform(store, step.params, target, produced);
           target = out.id;
+          // Finding #3: EVERY dataset any step created, cumulative (a
+          // split's children, not just the one `target` continues on) — an
+          // in-place op (promote/metaclean) reports `outputs: []`, so it
+          // contributes nothing here, matching "no new dataset" for those.
+          created.push(...out.outputs.map((o) => o.id));
+          // Finding #7: REPLACED (not accumulated) — the outputs of THIS
+          // step, so a later step's own outputs supersede an earlier step's
+          // now-intermediate ones (a chain's stack → transpose must not
+          // leave stack's output looking "final" too). An in-place op
+          // creates nothing new; `target` itself (unchanged by this step)
+          // is still the run's current output.
+          lastOutputs = out.outputs.length ? out.outputs.map((o) => o.id) : [target];
           const n = out.warnings.length;
           log[step.id] = {
             // Finding #4: a metaclean replay whose rules were all refused
@@ -186,5 +217,5 @@ export async function executeSteps(
     }
     onProgress?.({ ...log });
   }
-  return { log, fits, fitTargets, target };
+  return { log, fits, fitTargets, target, created, lastOutputs };
 }
