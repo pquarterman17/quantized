@@ -1,7 +1,7 @@
 // importPaths (MAIN_PLAN #31): the path entry point that gives a dataset a real
 // `source.path`, which is what lets re-import skip the picker.
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { importFile, uploadFile } from "../lib/api";
 import { probeSource } from "../lib/desktopBridge";
@@ -12,6 +12,7 @@ import type { Technique } from "../lib/types";
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
 import { usePendingOps } from "./pendingOps";
 import { isImportRunning, pathBasename, useImportBatch } from "./importDatasets";
+import { importCore } from "./importDatasetsLazy";
 import { useToasts } from "./toasts";
 import { useApp } from "./useApp";
 import { plotWindowView } from "./windowDocuments";
@@ -42,6 +43,16 @@ const payload = (technique?: Technique) => ({
 function toastMsgs(): string[] {
   return useToasts.getState().toasts.map((t) => t.msg);
 }
+
+// Bundle headroom slice 10: `useApp`'s import actions reach this module
+// through `store/importDatasetsLazy.ts`. Several tests below assert what an
+// import does SYNCHRONOUSLY with its call (the pendingOps entry, the guard),
+// which holds from the second import of a session on; warm the module once so
+// every test here sees that steady state. The cold first-import path has its
+// own coverage in `importDatasetsLazy.test.ts`.
+beforeAll(async () => {
+  await importCore();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

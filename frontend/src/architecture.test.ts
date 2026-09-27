@@ -2876,6 +2876,18 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/store/originFallbackLazy.ts",
       call: 'import("./originFallback")',
     },
+    // ── SLICE 10 (2026-09-27, plans/BUNDLE_HEADROOM.md) ───────────────────
+    // The import slice (`importFiles`/`importPaths`), composed into
+    // `useApp.ts` through `store/importDatasetsLazy.ts`. Both actions were
+    // already async (each fetches its payload before touching the store); the
+    // synchronous error-role edits and the double-import guard
+    // (`store/importBatch.ts`) stay eager. The modules only it reached are in
+    // DRAGGED_OUT below.
+    {
+      module: "/store/importDatasets.ts",
+      loader: "/store/importDatasetsLazy.ts",
+      call: 'import("./importDatasets")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -3181,6 +3193,18 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/recipeExpect.ts",
     "/lib/recipePreflight.ts",
     "/lib/templatesProject.ts",
+    // SLICE 10 (2026-09-27): what the import-slice seam took with it. Replayed
+    // over the build's own module graph: 397 -> 392 eager modules (these six
+    // and the SEAMS module out, `store/importDatasetsLazy.ts` and
+    // `store/importBatch.ts` in). `lib/workbooks.ts` and `lib/datasetSource.ts`
+    // are also reached statically by the lazy `.dwk` codec and trash restore,
+    // so only reachability can hold them.
+    "/lib/workbooks.ts",
+    "/lib/originFolders.ts",
+    "/lib/datasetSource.ts",
+    "/lib/bundlePath.ts",
+    "/store/importBatchOffers.ts",
+    "/store/importTargetFolder.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

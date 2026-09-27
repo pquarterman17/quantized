@@ -25,7 +25,6 @@
 // line, so it's the chokepoint for the batch-overlay offer — see
 // `batchOverlayOffer` below.
 
-import { create } from "zustand";
 import { plural } from "../lib/plural";
 
 import { importFile, uploadFile } from "../lib/api";
@@ -43,6 +42,7 @@ import {
   type Dataset,
 } from "../lib/types";
 import { deriveWorkbooks } from "../lib/workbooks";
+import { ALREADY_RUNNING_MSG, useImportBatch } from "./importBatch";
 import { presentBatchOutcome } from "./importBatchOffers";
 import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from "./importErrorRoles";
 import { resolveImportTargetFolderId } from "./importTargetFolder";
@@ -52,36 +52,11 @@ import { nextDatasetId, nextFolderId } from "./idSeq";
 import type { AppState } from "./useApp";
 import { nextWorkbookId } from "./workbookIds";
 
-// Double-import guard (P3.4 slice 1, 2026-07-26 audit gap #1): the single
-// source of truth for "is a batch import running right now". A standalone
-// store for the same reason pendingOps/toasts/commands are — session-only UI
-// state that must never touch useApp.ts's zero-headroom size ratchet.
-//
-// `runImport` below is the primary writer (importFiles/importPaths both
-// route through it). `commands/fileCommands.ts`'s "import-append" command
-// also sets/clears it around its own call: that flow's implementation
-// (`importFilesAppended`) lives in useApp.ts, which this slice deliberately
-// never touches, so the guard is applied at the command layer for that one
-// entry point instead of inside the action itself. Every OTHER import entry
-// point (⌘O, the command palette, the Library toolbar button, drag-drop, the
-// Recent-files list) calls `importFiles`/`importPaths` directly or through
-// `lib/importEntry.ts`'s `chooseAndImport`, so guarding those two actions
-// covers all of them from one chokepoint.
-interface ImportBatchState {
-  running: boolean;
-}
-export const useImportBatch = create<ImportBatchState>(() => ({ running: false }));
-
-/** True while an import batch is in flight. */
-export function isImportRunning(): boolean {
-  return useImportBatch.getState().running;
-}
-
-/** Shared with commands/fileCommands.ts's pre-flight guard (its own copy of
- *  this check for "import"/"import-append", so those two commands don't even
- *  pop a file dialog while a batch is running) — imported, not retyped, so
- *  the two guard messages can't drift apart. */
-export const ALREADY_RUNNING_MSG = "an import is already running — cancel it first";
+// Double-import guard: its state lives in ./importBatch (eager — the
+// command layer reads it synchronously) since bundle headroom slice 10, which
+// made this module load on first import. Re-exported so existing importers of
+// these names keep working.
+export { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "./importBatch";
 
 /** Where one imported payload came from — the only thing the two entry points
  *  disagree about. */

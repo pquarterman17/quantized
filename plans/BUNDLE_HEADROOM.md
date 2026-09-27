@@ -1,6 +1,16 @@
 # Bundle headroom campaign
 
-**Current state (2026-09-25, after slice 9):** react/react-dom **19.3.0**
+**Current state (2026-09-27, after slice 10):** one async-only seam, the
+import slice (`store/importDatasets.ts` + six modules only it reached), taken
+to fund the queued P2.5 derived-expressions work (~+2.9 kB of formula-parser
+code that must be eager). Measured **854,258 B** eager against main
+`3f43b99c`'s **866,002 B** (**−11,744 B**). The pin is NOT moved by this
+slice (the brief forbade touching `check-bundle-size.mjs`): it stays
+**866,358 B**, so **12,100 B** of headroom is left for P2.5 to spend, and the
+forced `SLACK` floor (826,358 B) is nowhere near. Whoever lands P2.5 should
+ratchet the pin down to `measured + 1,024` afterwards (rule 3). See "Slice 10".
+
+**Previous state (2026-09-25, after slice 9):** react/react-dom **19.3.0**
 taken (Dependabot #412), funded by five lazy seams rather than a raise.
 Measured **865,334 B** eager against main `69e0741a`'s **867,524 B**
 (**−2,190 B** net; React alone was **+29,277 B**, the seams **−31,467 B**),
@@ -19,7 +29,7 @@ finding is not a seam: most of the "chunk-boundary tax" slices 3–5 kept
 measuring was Vite's preload lists naming already-loaded chunks, and removing
 them (build-time, runtime-neutral) recovered 10.7 kB by itself. See "Slice 8".
 
-**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4, 5, 6, 8 and 9
+**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4, 5, 6, 8, 9 and 10
 executed; slice 7 built and reverted, never on main** (slice 5 deliberately small — see its ruling on `PlotLegend`; slice
 6 ratchets the pin DOWN, the first slice authorized to) (see their sections
 below); slice 2 is partially done. Slice 5 is no longer the
@@ -1601,6 +1611,142 @@ already awaits the action itself.
 edits are synchronous and would need a split), `store/recode.ts` (needs the
 store split slice 8 noted), and moving `lib/autosave.ts` itself (its
 `autosaveHealth()` is read synchronously). Not needed for the target.
+
+### Slice 10 — the import slice, one async-only seam, headroom for P2.5 — **DONE (2026-09-27)**
+
+**Measured net eager delta −11,744 B — pin NOT moved (866,358 B)**
+
+Brief: main sat at 866,002 B against the 866,358 B pin (356 B of headroom),
+and the queued P2.5 derived-expressions PR adds ~2.9 kB of formula-parser
+code (`lib/formula*.ts`) that is on the first-paint path and cannot be
+deferred. Target: free ≥ 3.5 kB without touching `check-bundle-size.mjs` or
+any file P2.5 edits. Exact bytes out of `dist/index.html` (entry +
+`modulepreload`), `npm ci`, `node_modules/.vite` wiped before EVERY build,
+reproduced by a second identical build:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| main `3f43b99c` (separate worktree, own `npm ci`) | 866,002 | — |
+| + import-slice seam | 854,258 | **−11,744** |
+
+(The first cut, without the synchronous-after-load path described below,
+measured 854,249 B; that path costs 9 B.)
+
+#### How it was found
+
+The slice-9 dominator analysis, rebuilt as a scratch script: a Vite config
+that dumps `getModuleInfo` static edges at `buildEnd`, the committed
+attribution core (`scripts/eagerAttribution.mjs`) over a `--sourcemap` build,
+and for every eager module the attributed bytes that stop being reachable
+from `main.tsx` when that module's incoming static edges are cut. Ranked, the
+largest subtree behind a gesture that is already async was
+`store/importDatasets.ts`: **13,545 B exclusive across 9 modules**. Slice 9
+had listed it at 7.1 kB and set it aside because "its guard store and
+error-role edits are synchronous and would need a split"; the subtree has
+since grown, and the split turned out to be small.
+
+**The "`ConfirmDialog` is 150 kB" claim, checked.** The build prints a
+~147 kB eager chunk named `ConfirmDialog-*.js`. That is Rolldown naming a
+SHARED chunk after one of its modules. Attributed from its sourcemap, it is
+91 modules / 143,074 B: the store core (`store/useApp.ts` 11,804 B,
+`lib/uplotOverlays.ts` 11,064 B, `store/gadget.ts`, `store/cellEdit.ts`,
+`store/plotRecipes.ts`, …). `ConfirmDialog.tsx` itself is **1,122 B** of it
+(plus `store/confirmDialog.ts` 407 B and `usePendingDialogGuard.ts` 365 B):
+the thin gate slice 8 left, whose body is already lazy. Nothing to recover
+there; the chunk's name is not its content.
+
+#### The seam
+
+- `store/importBatch.ts` (new, eager): the double-import guard
+  (`useImportBatch`, `isImportRunning`, `ALREADY_RUNNING_MSG`), moved out of
+  `importDatasets.ts` because `commands/fileCommands.ts` reads it
+  synchronously in its pre-flight check. `importDatasets.ts` re-exports the
+  three names, so no test import changed.
+- `store/importDatasetsLazy.ts` (new, eager): composes an identically-typed
+  `ImportSlice` into `useApp.ts` (one import path changed). The error-role
+  EDIT actions (`store/importErrorRoles.ts`, 608 B, synchronous) stay eager
+  and are spread in directly; `importFiles` / `importPaths` fetch the real
+  module on first use.
+- Dragged out with it (build graph 397 → 392 eager modules):
+  `lib/workbooks.ts`, `lib/originFolders.ts`, `lib/datasetSource.ts`,
+  `lib/bundlePath.ts`, `store/importBatchOffers.ts`,
+  `store/importTargetFolder.ts`.
+
+Three details keep the behaviour identical after the first import:
+
+1. **Only the first import of a session waits.** The loader keeps the
+   resolved module and, once it is in, calls straight through on the
+   caller's own tick — so the batch's pendingOps entry and the guard are set
+   synchronously with the call, exactly as before (eight existing
+   `importDatasets.test.ts` cases assert that, and go red without it).
+2. **An empty batch never fetches** — a canceled picker settles with `[]`
+   and stays the silent no-op `runImport` made it.
+3. **Two imports started inside the cold window still cannot both run.**
+   Their continuations run in call order and the first sets the guard
+   synchronously before the second checks it (tested).
+
+**History batches.** `store/relink.ts`'s `importChangedAsNewVersion` wraps
+`importPaths` in `withHistoryBatch`. The chunk fetch is an `await` BEFORE the
+first fold, which that design already handles (it captures its pre-batch
+snapshot lazily at the first fold); the invariant it depends on — no real
+await AFTER the last fold — is untouched.
+
+#### Why it qualifies under the `PlotLegend` ruling, and what it costs
+
+Nothing on first paint, hydration or an autosave restore imports a file
+(restore goes through the `.dwk` codec, not this slice). Every entry point —
+⌘O, the Library button, drag-drop, Recent files, the command palette, relink's
+"import as new version" — is a user gesture that is followed by a network
+upload/parse. **Measured in Chromium** (built SPA, local `qz`, the
+`import-drop` journey's fixture, 6 runs each, drop → dataset row visible):
+main **820–852 ms** (one outlier at 354 ms), branch **826–847 ms**; the
+import chunk is requested 16–25 ms after the drop and was absent from every
+startup's requests. The ~830 ms first-drop time is the same on both trees
+(the second drop of a session takes 35–54 ms on both), so the seam is not
+visible in it. Nothing renders differently: there is no component seam here,
+so no fallback, focus or Escape path changed.
+
+**Failure contract.** A chunk that will not load settles the action with
+`[]` (never rejects — the real action never did either), sets the status line
+and raises a danger toast "import failed — couldn't load the importer: … —
+nothing was imported (N files skipped)", before anything was uploaded or
+written. The rejection is not cached; the next gesture refetches.
+
+#### Guards and sabotage
+
+`architecture.test.ts`: `store/importDatasets.ts` is a `SEAMS` entry (its
+only non-test importer is now the loader); the six modules above are
+`DRAGGED_OUT`. Behaviour: `store/importDatasetsLazy.test.ts` (7 cases: cold
+delegation with arguments and options, the synchronous warm path, the
+cold-window double import, the empty batch, the failure contract, retry).
+`importDatasets.test.ts` warms the module in a `beforeAll`, since it asserts
+the steady state.
+
+| sabotage | result |
+|---|---|
+| `useApp.ts` imports `./importDatasets` statically | RED — both `SEAMS` arms |
+| loader caches a rejected load | RED — the retry case |
+| empty batch goes through the loader | RED — the empty-batch case |
+| no synchronous path once loaded | RED — 8 `importDatasets.test.ts` cases |
+
+#### Candidates considered and not taken
+
+- **`store/workbookTransfer.ts`** (4,158 B exclusive) — already a wrapper over
+  a lazy core; Copy starts its clipboard write before the core loads on
+  purpose (user-activation window), so deferring the wrapper would break it.
+- **`store/recode.ts`** (3,934 B) — still needs the store split slice 8 noted,
+  and one of its importers is under `components/Stage/worksheet/`, which the
+  in-flight P2.5 work owns.
+- **`useWorkspaceAutosave.ts`, `store/history.ts`, `store/cellEdit.ts`,
+  `store/gadget.ts`** — synchronous on the startup or edit path.
+- **`ContextMenu`, `CommandPalette`, `PlotToolbar`, `PlotLegend`, window
+  chrome** — disqualified by earlier rulings; not rebuilt.
+
+Found in passing, not changed here: the "Import & append as one dataset…"
+command sets the import guard itself before calling `importFilesAppended`,
+whose degrade-to-separate-imports fallback calls `importFiles` — which then
+finds the guard set and refuses with "an import is already running". The
+fallback cannot run from that command. Pre-existing; untouched by this seam.
 
 ## What this does NOT change
 

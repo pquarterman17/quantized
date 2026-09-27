@@ -50,7 +50,7 @@ import { createDatasetMetaSlice, type DatasetMetaSlice } from "./datasetMeta";
 import { createDataIntakeSlice, type DataIntakeSlice } from "./dataIntake";
 import { createRowStateSlice, type RowStateSlice } from "./rowState";
 import { deleteFolderWithTrash } from "./folderDelete";
-import { createImportSlice, type ImportSlice } from "./importDatasets";
+import { createImportSlice, type ImportSlice } from "./importDatasetsLazy";
 import { createWorkbookActionsSlice, type WorkbookActionsSlice } from "./workbookActions";
 import { createWorkbookCombineSlice, type WorkbookCombineSlice } from "./workbookCombine";
 import { createWorkbookSeparateSlice, type WorkbookSeparateSlice } from "./workbookSeparate";
