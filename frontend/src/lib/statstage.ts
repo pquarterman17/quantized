@@ -246,6 +246,9 @@ export interface BoxStat {
    *  wire back-compat with a payload that predates JMP_GAP J5 #2; the client
    *  fallback (`boxStatsClient`) always sets it. */
   sem?: number;
+  /** Sample standard deviation (ddof=1; NaN when n<2) — the SD error bar
+   *  (P2.6 box 1, `lib/statMarks.errorBounds`). Optional like `sem`. */
+  sd?: number;
   /** Mean +/- 95% t-based CI bounds (JMP_GAP J5 #2): `mean -/+
    *  t(0.975, n-1)*sem`. Equal to `mean` when n<2. */
   ciLo?: number;
@@ -305,16 +308,18 @@ export function boxStatsClient(
   // ci_lo/ci_hi exactly (ddof=1 sample std, t(0.975, n-1) critical value) so
   // the offline fallback shows the SAME marker the backend would.
   let sem = NaN;
+  let sd = NaN;
   let ciLo = mean;
   let ciHi = mean;
   if (v.length >= 2) {
     const variance = v.reduce((acc, x) => acc + (x - mean) ** 2, 0) / (v.length - 1);
-    sem = Math.sqrt(variance) / Math.sqrt(v.length);
+    sd = Math.sqrt(variance);
+    sem = sd / Math.sqrt(v.length);
     const tCrit = tCritical95(v.length - 1);
     ciLo = mean - tCrit * sem;
     ciHi = mean + tCrit * sem;
   }
-  return { label, q1, median, q3, iqr, whislo, whishi, mean, sem, ciLo, ciHi, n: v.length, fliers };
+  return { label, q1, median, q3, iqr, whislo, whishi, mean, sd, sem, ciLo, ciHi, n: v.length, fliers };
 }
 
 /** `boxStatsClient` for each group — the Box-mode offline payload. */
@@ -335,12 +340,23 @@ export function connectMeansSeries(boxes: readonly BoxStat[]): number[] {
   return boxes.map((b) => b.mean);
 }
 
-/** The outer factor of a NESTED tick label, or null when the label is not
- *  nested. `null` for every single-factor label is the load-bearing part: it is
- *  what keeps `connectMeansBreaks` from segmenting an ordinary interaction
- *  plot, where consecutive labels differ by design. */
-function nestedOuterLabel(label: string): string | null {
-  const i = label.indexOf(NESTED_LABEL_SEP);
+/** The outer factor of a NESTED tick label, or null when `nestLabel` says
+ *  the axis is not structurally nested. `null` for every label outside a
+ *  nested plot is the load-bearing part: it is what keeps
+ *  `connectMeansBreaks` from segmenting an ordinary interaction plot, where
+ *  consecutive labels differ by design.
+ *
+ *  Review finding 4: nesting is never read off the label TEXT (a flat
+ *  category value like "Co / Pt" must not be misread as nested), and the
+ *  split itself is cut at `nestLabel`'s OWN marker (`" / {nestLabel} = "`)
+ *  rather than the first `NESTED_LABEL_SEP` in the string, so a nested outer
+ *  level whose own text contains " / " groups correctly too — the twin of
+ *  `lib/statMarks.nestedTiers` (kept local, not imported, to avoid a cycle:
+ *  `statMarks.ts` already imports `BoxStat`/`StatMode` from this module). */
+function nestedOuterLabel(label: string, nestLabel: string | null | undefined): string | null {
+  if (!nestLabel) return null;
+  const marker = `${NESTED_LABEL_SEP}${nestLabel} = `;
+  const i = label.lastIndexOf(marker);
   return i < 0 ? null : label.slice(0, i);
 }
 
@@ -359,11 +375,14 @@ function nestedOuterLabel(label: string): string | null {
  *
  *  Non-nested labels yield `null` on both sides of every comparison, so a
  *  single-factor plot gets exactly one segment — unchanged. */
-export function connectMeansBreaks(boxes: readonly BoxStat[]): boolean[] {
+export function connectMeansBreaks(
+  boxes: readonly BoxStat[],
+  nestLabel: string | null | undefined = null,
+): boolean[] {
   return boxes.map((b, i) => {
     if (i === 0) return true;
-    const cur = nestedOuterLabel(b.label);
-    const prev = nestedOuterLabel(boxes[i - 1].label);
+    const cur = nestedOuterLabel(b.label, nestLabel);
+    const prev = nestedOuterLabel(boxes[i - 1].label, nestLabel);
     return cur !== null && prev !== null && cur !== prev;
   });
 }

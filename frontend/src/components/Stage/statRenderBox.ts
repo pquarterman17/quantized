@@ -12,14 +12,22 @@
 // spot on screen and in the exported figure.
 
 import { deterministicJitter } from "../../lib/jitter";
+import { isOutlier, type ResolvedStatMarks, type StatPointsMode } from "../../lib/statMarks";
 import {
+  boxStatsClient,
   connectMeansBreaks,
   connectMeansSeries,
-  finiteDomain,
   type BoxStat,
   type CategorySlot,
 } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
+import {
+  axisStyleOf,
+  boxValueDomain,
+  drawMarks,
+  stripValueDomain,
+  summaryErrorBounds,
+} from "./statDrawMarks";
 import {
   cssVar,
   drawCategoryAxis,
@@ -34,8 +42,12 @@ import { drawEmptySlotMarkers, drawSlotCounts, slotPlan, type SlotPlan } from ".
  *  point's horizontal offset is `deterministicJitter(rowIndex, category) *
  *  halfWidth * jitterFrac` -- pure/deterministic, so re-rendering (or
  *  excluding a DIFFERENT row elsewhere, #50) never reshuffles a still-
- *  visible point. */
-function drawJitteredPoints(
+ *  visible point. `jitterFrac` 0 puts every point on the centre line.
+ *  `which` (P2.6 box 1): "outliers" draws only the values outside the Tukey
+ *  whiskers — `fences` when given (the backend's box stats), else the
+ *  group's own (`boxStatsClient`, the same algorithm); the export's
+ *  `calc.figure_stat_marks.scatter_points` applies the same rule. */
+export function drawJitteredPoints(
   ctx: CanvasRenderingContext2D,
   group: BoxPointsGroup,
   cx: number,
@@ -47,11 +59,16 @@ function drawJitteredPoints(
    *  points' own `rowIndex` space) — drawn opaque with an accent ring, after
    *  the rest. */
   selected?: ReadonlySet<number> | null,
+  which: StatPointsMode = "all",
+  fences?: Pick<BoxStat, "whislo" | "whishi">,
 ) {
+  if (which === "none" || !group.points.length) return;
+  const f = which === "outliers" ? (fences ?? boxStatsClient(group.points.map((p) => p.value))) : null;
+  const shown = f ? group.points.filter((p) => isOutlier(p.value, f)) : group.points;
   ctx.fillStyle = color;
   ctx.globalAlpha = 0.55;
   const at = (p: { rowIndex: number }) => cx + deterministicJitter(p.rowIndex, group.label) * halfWidth * jitterFrac;
-  for (const p of group.points) {
+  for (const p of shown) {
     ctx.beginPath();
     ctx.arc(at(p), vy(p.value), 2, 0, 2 * Math.PI);
     ctx.fill();
@@ -60,7 +77,7 @@ function drawJitteredPoints(
   if (!selected?.size) return;
   ctx.strokeStyle = cssVar("--accent", color);
   ctx.lineWidth = 1.5;
-  for (const p of group.points) {
+  for (const p of shown) {
     if (!selected.has(p.rowIndex)) continue;
     ctx.beginPath();
     ctx.arc(at(p), vy(p.value), 3.5, 0, 2 * Math.PI);
@@ -69,40 +86,44 @@ function drawJitteredPoints(
   }
 }
 
-/** Mean +/- 95% CI marker (JMP_GAP J5 #2): a diamond at the mean with a
- *  vertical CI whisker + caps (mirrors the box glyph's own whisker/cap
- *  drawing), always in `ink` so it reads against any series color. Skips
- *  the whisker (but still draws the diamond) when the CI is undefined
- *  (n<2 -- `ciLo`/`ciHi` both fall back to the mean itself, so drawing them
- *  would just be a zero-length line; still guard on finiteness directly). */
-function drawMeanCIMarker(
+/** The summary marker (JMP_GAP J5 #2, generalised by P2.6 box 1): a diamond
+ *  at the mean with its error bar (SD / SE / 95% CI, `statDrawMarks.
+ *  summaryErrorBounds` — none below n=2) or a square at the median, always
+ *  in `ink` so it reads against any series color. The export draws the same
+ *  glyphs from the same box stats (`calc.figure_stat_marks.overlay_summary`). */
+function drawSummaryMarker(
   ctx: CanvasRenderingContext2D,
   cx: number,
   b: BoxStat,
   vy: (v: number) => number,
   ink: string,
+  m: ResolvedStatMarks,
 ) {
-  if (!Number.isFinite(b.mean)) return;
-  const ciLo = b.ciLo;
-  const ciHi = b.ciHi;
-  if (Number.isFinite(ciLo) && Number.isFinite(ciHi) && ciLo !== ciHi) {
+  if (m.summary === "none") return;
+  const centre = m.summary === "mean" ? b.mean : b.median;
+  if (!Number.isFinite(centre)) return;
+  ctx.fillStyle = ink;
+  const my = vy(centre);
+  if (m.summary === "median") {
+    ctx.fillRect(cx - 3.5, my - 3.5, 7, 7);
+    return;
+  }
+  const bounds = summaryErrorBounds(b, m);
+  if (bounds && bounds[0] !== bounds[1]) {
+    const [lo, hi] = bounds;
     ctx.strokeStyle = ink;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(cx, vy(ciLo as number));
-    ctx.lineTo(cx, vy(ciHi as number));
-    ctx.stroke();
+    ctx.moveTo(cx, vy(lo));
+    ctx.lineTo(cx, vy(hi));
     const capW = 4;
-    ctx.beginPath();
-    ctx.moveTo(cx - capW, vy(ciLo as number));
-    ctx.lineTo(cx + capW, vy(ciLo as number));
-    ctx.moveTo(cx - capW, vy(ciHi as number));
-    ctx.lineTo(cx + capW, vy(ciHi as number));
+    ctx.moveTo(cx - capW, vy(lo));
+    ctx.lineTo(cx + capW, vy(lo));
+    ctx.moveTo(cx - capW, vy(hi));
+    ctx.lineTo(cx + capW, vy(hi));
     ctx.stroke();
   }
   const r = 4;
-  const my = vy(b.mean);
-  ctx.fillStyle = ink;
   ctx.beginPath();
   ctx.moveTo(cx, my - r);
   ctx.lineTo(cx + r, my);
@@ -130,12 +151,16 @@ export function drawConnectMeansLine(
    *  box i — the line lifts there too (`SlotPlan.gaps`; export:
    *  `calc.figure_group_notes.connect_segments`). */
   gaps: readonly boolean[] = [],
+  /** Review finding 4: the STRUCTURAL nesting signal (`StatDrawData.
+   *  nestLabel`) `connectMeansBreaks` needs — never read off `boxes[i].
+   *  label`'s own text. */
+  nestLabel: string | null | undefined = null,
 ) {
   const means = connectMeansSeries(boxes);
   // Review finding 2: under NESTED grouping the line must not run across an
   // outer-factor boundary — see `connectMeansBreaks` for why that reading is
   // wrong. Non-nested plots get exactly one segment, as before.
-  const breaks = connectMeansBreaks(boxes).map((b, i) => b || gaps[i] === true);
+  const breaks = connectMeansBreaks(boxes, nestLabel).map((b, i) => b || gaps[i] === true);
   ctx.save();
   ctx.strokeStyle = ink;
   ctx.lineWidth = 1.5;
@@ -170,30 +195,13 @@ function drawGroupAxis(
   muted: string,
 ): SlotPlan {
   const plan = slotPlan(d.slots, labels);
-  drawCategoryAxis(ctx, rect, plan.slots, plan.labels, d.groupLabel, ink, muted);
+  drawCategoryAxis(ctx, rect, plan.slots, plan.labels, d.groupLabel, ink, muted, axisStyleOf(d));
   drawEmptySlotMarkers(ctx, rect, plan.slots, plan.empty, muted);
   if (d.showN !== false) drawSlotCounts(ctx, rect, plan, groupN, muted);
   return plan;
 }
 
 // ── Box (+ optional points / mean-CI overlays) ──────────────────────────────
-
-/** Value domain for box mode: whiskers union fliers spans every raw data
- *  point (Tukey's own definition), so the points overlay never needs its own
- *  domain contribution. The mean-CI marker is NOT a data point, though: at
- *  small n the t-based interval extends far past the whiskers
- *  (t(0.975,1)=12.7) and nothing clips the canvas to the plot rect -- so
- *  fold the CI extents in when the marker is shown, exactly as drawStrip
- *  does. Exported pure so the jsdom suite can pin it (raster tests can't). */
-export function boxValueDomain(
-  boxes: readonly BoxStat[],
-  showMeanCI: boolean | undefined,
-): [number, number] {
-  const ciExtents = showMeanCI
-    ? boxes.flatMap((b) => [b.ciLo, b.ciHi]).filter((v): v is number => Number.isFinite(v))
-    : [];
-  return finiteDomain([...boxes.map((b) => [b.whislo, b.whishi, ...b.fliers]), ciExtents]);
-}
 
 export function drawBoxesWithMarks(
   ctx: CanvasRenderingContext2D,
@@ -203,7 +211,8 @@ export function drawBoxesWithMarks(
   muted: string,
 ) {
   if (!d.boxes.length) return;
-  const domain = boxValueDomain(d.boxes, d.showMeanCI);
+  const m = drawMarks(d);
+  const domain = boxValueDomain(d.boxes, m);
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
   const plan = drawGroupAxis(ctx, rect, d, d.boxes.map((b) => b.label), d.boxes.map((b) => b.n), ink, muted);
   const slots = plan.groupSlot.map((i) => plan.slots[i]);
@@ -247,21 +256,28 @@ export function drawBoxesWithMarks(
     ctx.lineWidth = 2;
     ctx.stroke();
 
-    ctx.fillStyle = color;
-    for (const f of b.fliers) {
-      ctx.beginPath();
-      ctx.arc(cx, vy(f), 2.5, 0, 2 * Math.PI);
-      ctx.fill();
+    // Fliers ARE the "outliers" points (P2.6 box 1): drawn at the centre
+    // line, as matplotlib's boxplot does. "all" draws every point jittered
+    // instead (a flier is one of them), "none" neither.
+    if (m.points === "outliers" || m.legacyFliers) {
+      ctx.fillStyle = color;
+      for (const f of b.fliers) {
+        ctx.beginPath();
+        ctx.arc(cx, vy(f), 2.5, 0, 2 * Math.PI);
+        ctx.fill();
+      }
     }
 
     const pointsGroup = d.points?.[i];
-    if (pointsGroup) drawJitteredPoints(ctx, pointsGroup, cx, hw, vy, color, 0.7, d.selectedRows);
-    if (d.showMeanCI) drawMeanCIMarker(ctx, cx, b, vy, ink);
+    if (pointsGroup && m.points === "all") {
+      drawJitteredPoints(ctx, pointsGroup, cx, hw, vy, color, m.jitterWidth, d.selectedRows);
+    }
+    drawSummaryMarker(ctx, cx, b, vy, ink, m);
   });
 
   // Connect-means line last (JMP_GAP J5 residual) so it draws on top of
   // every box glyph.
-  if (d.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, plan.gaps);
+  if (m.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, plan.gaps, d.nestLabel);
 }
 
 // ── Strip (points-only, JMP_GAP J5 #3) ──────────────────────────────────────
@@ -274,11 +290,8 @@ export function drawStrip(
   muted: string,
 ) {
   if (!d.points.length) return;
-  const valueLists = d.points.map((g) => g.points.map((p) => p.value));
-  const ciExtents = d.showMeanCI
-    ? d.boxes.flatMap((b) => [b.ciLo, b.ciHi]).filter((v): v is number => Number.isFinite(v))
-    : [];
-  const domain = finiteDomain([...valueLists, ciExtents]);
+  const m = drawMarks(d);
+  const domain = stripValueDomain(d);
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
   const plan = drawGroupAxis(
     ctx, rect, d, d.points.map((g) => g.label), d.points.map((g) => g.points.length), ink, muted,
@@ -293,12 +306,12 @@ export function drawStrip(
     const hw = slot.halfWidth * rect.w;
     const color = seriesColor(i);
 
-    drawJitteredPoints(ctx, g, cx, hw, vy, color, 0.85, d.selectedRows);
     const b = d.boxes[i];
-    if (d.showMeanCI && b) drawMeanCIMarker(ctx, cx, b, vy, ink);
+    drawJitteredPoints(ctx, g, cx, hw, vy, color, m.jitterWidth, d.selectedRows, m.points, b);
+    if (b) drawSummaryMarker(ctx, cx, b, vy, ink, m);
   });
 
   // Connect-means line last (JMP_GAP J5 residual) so it draws on top of the
   // jittered points.
-  if (d.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, plan.gaps);
+  if (m.connectMeans) drawConnectMeansLine(ctx, d.boxes, slots, rect, vy, ink, plan.gaps, d.nestLabel);
 }

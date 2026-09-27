@@ -64,6 +64,7 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   statMode: canonical("plot.statMode"),
   statHideEmptyLevels: canonical("plot.stat.hideEmptyLevels"),
   statShowGroupN: canonical("plot.stat.showGroupN"),
+  statMarks: canonical("plot.stat.marks"),
   xLim: canonical("axes.x.limits"),
   yLim: canonical("axes.y.limits"),
   xStep: canonical("axes.x.step"),

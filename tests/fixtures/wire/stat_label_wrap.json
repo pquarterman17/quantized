@@ -1,0 +1,93 @@
+{
+  "_comment": "P2.6 box 1: category-label wrapping shared by calc.figure_category_axis.wrap_label and frontend lib/statMarks.wrapLabel (greedy word wrap to width code points, over-long words hard-split, at most 3 lines, the last ellipsized when text is left over).",
+  "cases": [
+    {
+      "text": "lot = 12",
+      "width": 12,
+      "lines": [
+        "lot = 12"
+      ]
+    },
+    {
+      "text": "Anneal temperature 450 C",
+      "width": 12,
+      "lines": [
+        "Anneal",
+        "temperature",
+        "450 C"
+      ]
+    },
+    {
+      "text": "supercalifragilistic",
+      "width": 8,
+      "lines": [
+        "supercal",
+        "ifragili",
+        "stic"
+      ]
+    },
+    {
+      "text": "a b c",
+      "width": 12,
+      "lines": [
+        "a b c"
+      ]
+    },
+    {
+      "text": "",
+      "width": 12,
+      "lines": [
+        ""
+      ]
+    },
+    {
+      "text": "  double  space ",
+      "width": 6,
+      "lines": [
+        "double",
+        "space"
+      ]
+    },
+    {
+      "text": "one two three four five six seven eight",
+      "width": 6,
+      "lines": [
+        "one",
+        "two",
+        "three…"
+      ]
+    },
+    {
+      "text": "Ångström wafer β",
+      "width": 8,
+      "lines": [
+        "Ångström",
+        "wafer β"
+      ]
+    },
+    {
+      "text": "exactlytwelve",
+      "width": 12,
+      "lines": [
+        "exactlytwelv",
+        "e"
+      ]
+    },
+    {
+      "text": "abcdefghijkl mnop",
+      "width": 12,
+      "lines": [
+        "abcdefghijkl",
+        "mnop"
+      ]
+    },
+    {
+      "text": "𝛼𝛽𝛾𝛿 x",
+      "width": 3,
+      "lines": [
+        "𝛼𝛽𝛾",
+        "𝛿 x"
+      ]
+    }
+  ]
+}

@@ -16,11 +16,13 @@ import { groupedBarSlots, stackedSegments, stackedTotal } from "../../lib/barlay
 import { barCountAnchor } from "../../lib/groupAxis";
 import { barValueDomain, categorySlots } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
+import { axisStyleOf, barDomainCandidates, barErrorHalf, drawMarks } from "./statDrawMarks";
 import { drawValueAxis, type Rect, type StatDrawData } from "./statRender";
 import { drawCategoryAxis } from "./statRenderAxes";
 import { drawCountLabel, drawEmptySlotMarkers } from "./statRenderSlots";
 
-/** A vertical error-bar whisker (± SEM) with end caps, matching box mode's
+/** A vertical error-bar whisker (± the draw's error-bar kind — SEM by
+ *  default, or SD / 95% t-CI, P2.6 box 1) with end caps, matching box mode's
  *  whisker/cap drawing. */
 function drawWhisker(
   ctx: CanvasRenderingContext2D,
@@ -52,29 +54,16 @@ export function drawBar(
   const groups = d.data.groups;
   if (!groups.length) return;
   const nSeries = d.data.seriesLabels.length;
+  // Review finding 10: resolved ONCE and shared with every `barErrorHalf`
+  // call below, rather than once per group/series.
+  const m = drawMarks(d);
 
   // Domain candidates: every drawn extent (bar top/bottom ± error), always
-  // including 0 (barValueDomain's job).
-  const candidates: number[] = [0];
-  groups.forEach((g) => {
-    if (d.stacked) {
-      candidates.push(stackedTotal(g.series));
-      const last = g.series[g.series.length - 1];
-      if (last && Number.isFinite(last.sem)) {
-        candidates.push(stackedTotal(g.series) + last.sem, stackedTotal(g.series) - last.sem);
-      }
-    } else {
-      g.series.forEach((s) => {
-        if (!Number.isFinite(s.mean)) return;
-        candidates.push(s.mean);
-        if (Number.isFinite(s.sem)) candidates.push(s.mean + s.sem, s.mean - s.sem);
-      });
-    }
-  });
-  const domain = barValueDomain(candidates);
+  // including 0 (barValueDomain's job) — shared with the click hit-test.
+  const domain = barValueDomain(barDomainCandidates(d, m));
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
   const slots = categorySlots(groups.length);
-  drawCategoryAxis(ctx, rect, slots, groups.map((g) => g.label), d.groupLabel, ink, muted);
+  drawCategoryAxis(ctx, rect, slots, groups.map((g) => g.label), d.groupLabel, ink, muted, axisStyleOf(d));
   const empty = groups.flatMap((g, i) => (g.series.every((s) => s.n === 0) ? [i] : []));
   drawEmptySlotMarkers(ctx, rect, slots, empty, muted);
   const showN = d.showN !== false;
@@ -103,9 +92,10 @@ export function drawBar(
         ctx.strokeRect(cx - hw, yTop, hw * 2, Math.max(1, yBot - yTop));
       });
       const last = g.series[g.series.length - 1];
-      if (last && Number.isFinite(last.sem)) {
+      const half = last ? barErrorHalf(d, last, m) : NaN;
+      if (Number.isFinite(half)) {
         const top = stackedTotal(g.series);
-        drawWhisker(ctx, cx, vy(top + last.sem), vy(top - last.sem), hw * 0.5, ink);
+        drawWhisker(ctx, cx, vy(top + half), vy(top - half), hw * 0.5, ink);
       }
     } else {
       const subSlots = groupedBarSlots(nSeries);
@@ -113,7 +103,8 @@ export function drawBar(
         const sub = subSlots[si];
         const barCx = cx + sub.offset * catFullW;
         const hw = sub.halfWidth * catFullW;
-        if (showN) drawCountLabel(ctx, barCx, vy(barCountAnchor(s.mean, s.sem)), s.n, muted);
+        const half = barErrorHalf(d, s, m);
+        if (showN) drawCountLabel(ctx, barCx, vy(barCountAnchor(s.mean, half)), s.n, muted);
         if (!Number.isFinite(s.mean)) return;
         const color = seriesColor(si);
         const yTop = vy(Math.max(s.mean, 0));
@@ -125,8 +116,8 @@ export function drawBar(
         ctx.strokeStyle = color;
         ctx.lineWidth = 1;
         ctx.strokeRect(barCx - hw, yTop, hw * 2, Math.max(1, yBot - yTop));
-        if (Number.isFinite(s.sem)) {
-          drawWhisker(ctx, barCx, vy(s.mean + s.sem), vy(s.mean - s.sem), hw * 0.6, ink);
+        if (Number.isFinite(half)) {
+          drawWhisker(ctx, barCx, vy(s.mean + half), vy(s.mean - half), hw * 0.6, ink);
         }
       });
     }

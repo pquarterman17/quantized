@@ -16,11 +16,12 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 
 import type { StatMode } from "../../lib/statstage";
-import { setStatHideEmptyLevels, setStatShowGroupN } from "../../store/statLevelOptions";
+import { setStatHideEmptyLevels, setStatMarks, setStatShowGroupN } from "../../store/statLevelOptions";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { Checkbox } from "../primitives/Checkbox";
 import { SegmentedControl } from "../primitives/SegmentedControl";
 import { Button, Select } from "../primitives";
+import StatMarksControls from "./StatMarksControls";
 import StatStagePlot from "./StatStagePlot";
 import StatSummaryTable from "./StatSummaryTable";
 import { useStatGroupSelection } from "./useStatGroupSelection";
@@ -58,6 +59,7 @@ export default function StatStage() {
   // P2.6 box 2: persisted with the plot (PlotView), so they ride the .dwk.
   const hideEmptyLevels = useApp((s) => s.statHideEmptyLevels);
   const showGroupN = useApp((s) => s.statShowGroupN);
+  const marks = useApp((s) => s.statMarks); // P2.6 box 1, persisted likewise
   const st = useStatStage({
     active,
     yKeys,
@@ -67,6 +69,8 @@ export default function StatStage() {
     onSeedConsumed: clearStatStageSeed,
     hideEmptyLevels,
     showGroupN,
+    marks,
+    onMarksChange: setStatMarks,
   });
   const categorical = st.mode === "box" || st.mode === "violin" || st.mode === "bar" || st.mode === "strip";
   // P2.6 box 4: the per-group summary table, linked both ways to the app's
@@ -245,26 +249,10 @@ export default function StatStage() {
           </Picker>
         )}
 
-        {/* Box/Strip marks (JMP_GAP J5 #1/#2): raw-point jitter overlay +
-            mean +/- 95% CI marker. Strip is points-only by definition, so it
-            only gets the mean-CI toggle. */}
-        {st.mode === "box" && (
-          <Checkbox checked={st.showPoints} onChange={st.setShowPoints}>
-            points
-          </Checkbox>
-        )}
-        {(st.mode === "box" || st.mode === "strip") && (
-          <Checkbox checked={st.showMeanCI} onChange={st.setShowMeanCI}>
-            mean ± CI
-          </Checkbox>
-        )}
-        {/* Connect-means "interaction plot" line (JMP_GAP J5 residual): only
-            meaningful once a categorical "group by" column picks the
-            categories -- hidden under the per-plotted-channel fallback. */}
-        {(st.mode === "box" || st.mode === "strip") && st.groupCol != null && (
-          <Checkbox checked={st.showConnectMeans} onChange={st.setShowConnectMeans}>
-            connect means
-          </Checkbox>
+        {/* P2.6 box 1: raw points, jitter, summary marker, error bars,
+            connect-means and label options -- persisted on the PlotView. */}
+        {categorical && (
+          <StatMarksControls mode={st.mode} marks={st.marks} setMarks={st.setMarks} grouped={st.groupCol != null} />
         )}
 
         {/* P2.6 box 2: an empty level keeps its slot (n=0) unless hidden;

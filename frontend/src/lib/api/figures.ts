@@ -256,6 +256,16 @@ export interface StatplotFacetSpec {
   kind?: "box" | "violin";
   data: number[][];
   labels?: string[] | null;
+  /** Review finding 2: this panel's own canvas y-domain (box only — see
+   *  `StatplotFigureSpec.y_domain`'s doc), each panel autoscaling
+   *  independently as it already does on screen. */
+  y_domain?: [number, number] | null;
+  /** Review finding 4: this panel's OWN [outer, inner] pairs, one per
+   *  `labels` entry — a nested axis's pairs are per-panel data (each
+   *  panel's own composite labels), so they never ride the request's
+   *  SHARED top-level `axis_style.tiers` (which has no single panel's
+   *  labels to describe). Null/absent outside a nested plot. */
+  tiers?: [string, string][] | null;
 }
 
 /** A statistical-plot export request (StatStage's "Export figure" button):
@@ -297,9 +307,36 @@ export interface StatplotFigureSpec {
   // `caveat` (lib/groupAxis.balanceCaveat) becomes a figure footnote.
   show_n?: boolean;
   caveat?: string | null;
+  // P2.6 box 1 (calc.figure_stat_marks / calc.figure_category_axis): raw
+  // points, jitter width, summary marker, error bars, label options.
+  points?: "all" | "outliers" | "none" | null;
+  jitter_width?: number | null;
+  summary?: "none" | "mean" | "median" | null;
+  error_bars?: "none" | "sd" | "se" | "ci95" | null;
+  axis_style?: CategoryAxisStyleWire | null;
   /** Per group: the connect-means line lifts BEFORE it (a hidden empty level
    *  sat there). Absent = only empty groups and nested boundaries break it. */
   connect_breaks?: boolean[] | null;
+  /** Review finding 2 (P2.6 review): the canvas's own value-axis range
+   *  (`Stage/statStageExport.canvasYDomain`) for `kind: "box"` / `"strip"`.
+   *  The canvas's domain intentionally spans every raw datum (fliers, hidden
+   *  points) so toggling a mark never rescales the plot; matplotlib instead
+   *  autoscales to whatever it actually drew, which narrows whenever a mark
+   *  is hidden (e.g. `points: "none"`). Sending the canvas's exact range as
+   *  an explicit y-limit (`ax.set_ylim`) makes the two agree exactly rather
+   *  than reconciling two different autoscale rules. `null`/absent = no
+   *  forced limit (today's autoscale-to-drawn-artists behaviour); violin has
+   *  no such divergence (its domain is the KDE curve's own extent). */
+  y_domain?: [number, number] | null;
+}
+
+/** P2.6 box 1: the category-axis label options (routes/export_statplots.
+ *  CategoryAxisStyle) — rotation, wrap width in characters, two-tier nested
+ *  axis. Built by `lib/statMarks.axisStyleWire` from the screen's options. */
+export interface CategoryAxisStyleWire {
+  rotation: 0 | 45 | 90;
+  wrap: number | null;
+  tiered: boolean;
 }
 
 /** Render a statistical plot (box/violin/Q-Q/histogram) server-side
@@ -336,9 +373,10 @@ export interface CategoricalFigureSpec {
   groups: string[]; // category tick labels, in axis order
   series: string[]; // series (legend) labels, in stack/cluster order
   values: (number | null)[][]; // [group][series] bar height (mean); null = no data (P2.6 box 2)
-  errors: (number | null)[][]; // [group][series] SEM (null = no whisker)
+  errors: (number | null)[][]; // [group][series] error half-width: SEM, or SD / 95% CI (P2.6 box 1); null = no whisker
   counts?: number[][] | null; // P2.6 box 2: [group][series] n labels (grouped bars)
   caveat?: string | null; // P2.6 box 2: lib/groupAxis.balanceCaveat, as a footnote
+  axis_style?: CategoryAxisStyleWire | null; // P2.6 box 1: label rotation / wrap
   stacked?: boolean;
   fmt?: string;
   style?: string;

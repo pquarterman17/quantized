@@ -94,8 +94,6 @@ describe("selected points", () => {
       points,
       valueLabel: "y",
       groupLabel: "g",
-      showMeanCI: false,
-      connectMeans: false,
       selection: { slots: [1, 2], ringPoints: true },
       // The renderer reads the live selection DIRECTLY (review finding 7),
       // not a copy carried inside `selection`.

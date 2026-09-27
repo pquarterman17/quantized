@@ -74,6 +74,7 @@ export function BackgroundStatWindow({ dataset, view }: BackgroundModeProps) {
     onSeedConsumed: noSeedConsumed,
     hideEmptyLevels: view.statHideEmptyLevels,
     showGroupN: view.statShowGroupN,
+    marks: view.statMarks,
   });
   return (
     <>

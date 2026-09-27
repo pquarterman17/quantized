@@ -5,6 +5,8 @@
 // here, so its importers are unchanged.
 
 import type { GroupNotice } from "../../lib/groupAxis";
+import type { StatMarksByMode, StatMarksMode } from "../../lib/plotviewSanitize";
+import type { ResolvedStatMarks, StatMarks } from "../../lib/statMarks";
 import type { StatMode } from "../../lib/statstage";
 import type { Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
@@ -35,6 +37,15 @@ export interface UseStatStageParams {
    *  `statShowGroupN` (defaults false / true: see `lib/plotview`). */
   hideEmptyLevels?: boolean;
   showGroupN?: boolean;
+  /** P2.6 box 1 — the window's persisted `PlotView.statMarks` (review
+   *  finding 6: per-mode, `lib/plotviewSanitize.StatMarksByMode` — the hook
+   *  reads out its OWN current mode's bucket, `marksByMode?.[mode]`, never
+   *  the whole object, so one mode's choice can never read as another's
+   *  default), and the writer that merges a patch into the CURRENT mode's
+   *  bucket only (one undo entry). Both absent = the hook keeps the marks
+   *  itself (not persisted). */
+  marks?: StatMarksByMode | null;
+  onMarksChange?: (mode: StatMarksMode, patch: StatMarks, label?: string) => void;
 }
 
 export interface StatStageState {
@@ -67,21 +78,14 @@ export interface StatStageState {
    *  stacked (true, one bar per category). */
   barStack: boolean;
   setBarStack: (s: boolean) => void;
-  /** Box mode only (JMP_GAP J5 #1): overlay each group's raw finite values,
-   *  jittered horizontally. Strip mode (#3) always shows points regardless
-   *  of this toggle -- it has no other glyph. */
-  showPoints: boolean;
-  setShowPoints: (s: boolean) => void;
-  /** Box/Strip (JMP_GAP J5 #2): overlay a mean +/- 95% CI diamond+whisker
-   *  marker per group/category. */
-  showMeanCI: boolean;
-  setShowMeanCI: (s: boolean) => void;
-  /** Box/Strip (JMP_GAP J5 residual): connect each group's mean with a
-   *  dashed line, in on-screen category order — the "interaction plot"
-   *  read. Only meaningful once a categorical "group by" column is picked
-   *  (`groupCol != null`); the toolbar hides the toggle otherwise. */
-  showConnectMeans: boolean;
-  setShowConnectMeans: (s: boolean) => void;
+  /** P2.6 box 1: the resolved marks this stage draws with (and exports),
+   *  and the patch writer (persisted + undoable when the caller wired
+   *  `onMarksChange`). Review finding 9: the four legacy boolean shorthands
+   *  that used to sit here (`showPoints`/`showMeanCI`/`showConnectMeans` +
+   *  their setters) are gone — every caller reads/writes `marks` directly
+   *  (`StatMarksControls.tsx`'s own convention already did). */
+  marks: ResolvedStatMarks;
+  setMarks: (patch: StatMarks, label?: string) => void;
   /** Box/Violin/Bar "facet by" column (GUI_INTERACTION #11) — null = no
    *  facet (the ordinary single-panel draw). Internal picker state, not a
    *  hook param: background windows never seed or set one (see the module

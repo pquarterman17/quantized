@@ -16,7 +16,7 @@ import {
 import { isOriginBookDataset } from "../lib/grouping";
 import type { SmartFolder } from "../lib/smartfolders";
 import type { WorkbookNode } from "../lib/workbooks";
-import { snapshotView } from "../lib/plotview";
+import { snapshotView, type PlotView } from "../lib/plotview";
 import { nextStageTab, type StageTab } from "../lib/stagetab";
 // The MDI window-management slice (MAIN_PLAN #2): state + actions live in
 // ./windows and are composed into THIS store instance below; the shared
@@ -359,7 +359,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   composition: Composition | null;
   insetMode: boolean; // show a magnifier inset over the plot
   polarMode: boolean; // render the active series in polar (angle vs radius)
-  statMode: boolean; statHideEmptyLevels: boolean; statShowGroupN: boolean; // Statistics stage (gap #16) + its P2.6 options
+  statMode: boolean; statHideEmptyLevels: boolean; statShowGroupN: boolean; statMarks: PlotView["statMarks"]; // Statistics stage (gap #16) + its P2.6 options
   xLim: [number, number] | null; // explicit X range (null = autoscale)
   yLim: [number, number] | null; // explicit Y range (null = autoscale)
   // Origin's decoded major-tick increment for a FIXED log axis (plot-fidelity
@@ -722,7 +722,7 @@ export const useApp = create<AppState>((set, get) => ({
   composition: null,
   insetMode: false,
   polarMode: false,
-  statMode: false, statHideEmptyLevels: false, statShowGroupN: true,
+  statMode: false, statHideEmptyLevels: false, statShowGroupN: true, statMarks: {},
   xLim: null,
   yLim: null,
   xStep: null,

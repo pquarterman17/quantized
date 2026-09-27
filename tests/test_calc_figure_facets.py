@@ -334,6 +334,44 @@ def test_stat_facets_dpi_none_uses_style_preset() -> None:
     assert len(large) > len(small)
 
 
+def test_stat_facets_tiered_panel_pushes_the_shared_x_title_below_its_tier(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P2.6 review finding 5 ("facet supxlabel likewise"): a faceted grid has
+    no single outer axis a tiered panel's title can move onto (the flat
+    path's `(outer or ax).set_xlabel` fix) -- the SHARED `fig.supxlabel`
+    needs the extra `TIER_BAND` room instead whenever at least one panel
+    drew a two-tier nested axis, or it sits on top of that panel's own
+    outer-level row."""
+    import quantized.calc.figure_facets as ff
+
+    captured: dict[str, object] = {}
+
+    def fake_savefig(fig: object, fmt: str, **kwargs: object) -> bytes:
+        captured["fig"] = fig
+        return b""
+
+    monkeypatch.setattr(ff, "savefig_bytes", fake_savefig)
+    nested_labels = ["lot = 1 / w = a", "lot = 1 / w = b", "lot = 2 / w = a", "lot = 2 / w = b"]
+    panels = [{
+        "label": "p1",
+        "data": [_GROUP_A, _GROUP_B, _GROUP_A, _GROUP_B],
+        "labels": nested_labels,
+    }]
+    render_stat_facets_figure(
+        panels, default_kind="box", x_label="lot / w", axis_style={"tiered": True},
+    )
+    tiered_y = captured["fig"].texts[-1].get_position()[1]  # type: ignore[attr-defined]
+
+    captured.clear()
+    flat_panels = [{"label": "p1", "data": [_GROUP_A, _GROUP_B]}]
+    render_stat_facets_figure(flat_panels, default_kind="box", x_label="x")
+    flat_y = captured["fig"].texts[-1].get_position()[1]  # type: ignore[attr-defined]
+    # The tiered grid's shared title sits HIGHER (further from the figure's
+    # bottom edge) than the flat grid's, clearing the extra tier band.
+    assert tiered_y > flat_y
+
+
 # ── render_categorical_facets_figure (GUI_INTERACTION #12 slice 4b: bar) ────
 
 

@@ -9,7 +9,7 @@ import { defaultPlotView, sanitizePlotView } from "../lib/plotview";
 import type { DataStruct } from "../lib/types";
 import { parseWorkspace } from "../lib/workspace";
 import { serializeWorkspace } from "../lib/workspaceSerialize";
-import { setStatHideEmptyLevels, setStatShowGroupN } from "./statLevelOptions";
+import { setStatHideEmptyLevels, setStatMarks, setStatShowGroupN } from "./statLevelOptions";
 import { useApp } from "./useApp";
 
 const raw: DataStruct = {
@@ -31,6 +31,7 @@ beforeEach(() => {
     activeId: "d1",
     statHideEmptyLevels: false,
     statShowGroupN: true,
+    statMarks: {},
     history: [],
     future: [],
   });
@@ -72,5 +73,101 @@ describe("Stat Stage level options (PlotView)", () => {
     // A file written before these fields existed opens with the defaults.
     const old = sanitizePlotView({ statMode: true });
     expect(old).toMatchObject({ statMode: true, statHideEmptyLevels: false, statShowGroupN: true });
+  });
+});
+
+describe("Stat Stage categorical marks (PlotView.statMarks, P2.6 box 1)", () => {
+  it("default: nothing set, every mode draws its defaults", () => {
+    expect(defaultPlotView().statMarks).toEqual({});
+  });
+
+  it("each edit merges one patch, under its mode's OWN bucket, and is one undo entry", () => {
+    setStatMarks("box", { points: "all", jitterWidth: 0.5 });
+    setStatMarks("box", { summary: "mean", errorBars: "sd" });
+    expect(useApp.getState().statMarks).toEqual({
+      box: { points: "all", jitterWidth: 0.5, summary: "mean", errorBars: "sd" },
+    });
+    expect(useApp.getState().history).toHaveLength(2);
+    useApp.getState().undo();
+    expect(useApp.getState().statMarks).toEqual({ box: { points: "all", jitterWidth: 0.5 } });
+    useApp.getState().redo();
+    expect(useApp.getState().statMarks.box?.errorBars).toBe("sd");
+  });
+
+  it("survives a real .dwk save and reopen", () => {
+    useApp.getState().setStatMode(true);
+    const marks = {
+      points: "none", jitter: false, jitterWidth: 0.25, summary: "median", errorBars: "ci95",
+      connectMeans: true, labelRotation: 90, labelWrap: true,
+    } as const;
+    setStatMarks("strip", marks);
+    const s = useApp.getState();
+    const text = serializeWorkspace({ ...s, plotWindows: s.windowsForSave() });
+    useApp.setState({ statMarks: {} });
+    useApp.getState().loadWorkspace(parseWorkspace(text));
+    expect(useApp.getState().statMarks).toEqual({ strip: marks });
+  });
+
+  // Review finding 6.
+  describe("mode isolation — a choice in one mode never becomes another mode's default", () => {
+    it("strip's points: none never darkens box's own fliers", () => {
+      setStatMarks("box", { points: "outliers" });
+      setStatMarks("strip", { points: "none" });
+      expect(useApp.getState().statMarks.box).toEqual({ points: "outliers" });
+      expect(useApp.getState().statMarks.strip).toEqual({ points: "none" });
+    });
+
+    it("box's CI error bars never leak into bar's SE default", () => {
+      setStatMarks("box", { errorBars: "ci95" });
+      expect(useApp.getState().statMarks.bar).toBeUndefined(); // bar keeps its OWN default (se)
+      setStatMarks("bar", { errorBars: "sd" });
+      expect(useApp.getState().statMarks.box?.errorBars).toBe("ci95"); // unaffected by bar's own edit
+      expect(useApp.getState().statMarks.bar?.errorBars).toBe("sd");
+    });
+
+    it("each mode's edit is its own undo entry, and undo restores only that mode's bucket", () => {
+      setStatMarks("box", { points: "all" });
+      setStatMarks("violin", { points: "outliers" });
+      useApp.getState().undo();
+      expect(useApp.getState().statMarks.violin).toBeUndefined();
+      expect(useApp.getState().statMarks.box).toEqual({ points: "all" }); // box's edit stands
+    });
+  });
+
+  // Review finding 6: `.dwk` migration from the pre-review flat shape.
+  describe("migration from the flat (pre-review) statMarks shape", () => {
+    it("a legacy flat object is applied to EVERY mode's bucket (documented in sanitizeStatMarksByMode)", () => {
+      const legacy = { points: "all", summary: "mean", errorBars: "sd" };
+      const v = sanitizePlotView({ statMarks: legacy });
+      expect(v.statMarks.box).toEqual(legacy);
+      expect(v.statMarks.violin).toEqual(legacy);
+      expect(v.statMarks.strip).toEqual(legacy);
+      expect(v.statMarks.bar).toEqual(legacy);
+      // Four independent copies, not the same reference re-merged four
+      // times — writing into one bucket later must not touch the others.
+      useApp.setState({ statMarks: v.statMarks });
+      setStatMarks("box", { points: "none" });
+      expect(useApp.getState().statMarks.bar?.points).toBe("all");
+    });
+
+    it("the NEW per-mode shape passes through untouched (no double-migration)", () => {
+      const v = sanitizePlotView({
+        statMarks: { box: { points: "outliers" }, bar: { errorBars: "sd" } },
+      });
+      expect(v.statMarks).toEqual({ box: { points: "outliers" }, bar: { errorBars: "sd" } });
+    });
+
+    it("an empty / absent statMarks stays empty (not migrated into four empty buckets)", () => {
+      expect(sanitizePlotView({}).statMarks).toEqual({});
+      expect(sanitizePlotView({ statMarks: {} }).statMarks).toEqual({});
+    });
+
+    it("junk drops field by field, exactly as the flat sanitizer always did, per mode", () => {
+      const v = sanitizePlotView({
+        statMarks: { box: { points: "sideways", summary: "mean" }, bar: "not an object" },
+      });
+      expect(v.statMarks.box).toEqual({ summary: "mean" });
+      expect(v.statMarks.bar).toEqual({});
+    });
   });
 });

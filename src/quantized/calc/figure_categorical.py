@@ -14,6 +14,7 @@ from typing import Any
 
 import numpy as np
 
+from quantized.calc.figure_category_axis import style_category_axis
 from quantized.calc.figure_group_notes import add_caveat, mark_empty_slots
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
@@ -32,7 +33,9 @@ def _draw_categorical_bars(
     errs: Any | None,
     stacked: bool,
     counts: Any | None = None,
-) -> None:
+    axis_style: dict[str, Any] | None = None,
+    raw_groups: list[str] | None = None,
+) -> Any | None:
     """Draw one grouped/stacked bar panel into `ax` — shared by the flat
     single-panel path below and `figure_facets.render_categorical_facets_figure`
     (GUI_INTERACTION #12 slice 4b), so a faceted panel matches the flat
@@ -44,7 +47,15 @@ def _draw_categorical_bars(
     whose every series is NaN keeps its tick with an ``n=0`` marker.
     ``counts`` (``[group][series]`` sample sizes, optional) adds an ``n=K``
     label over each GROUPED bar, where the screen draws its own; stacked
-    bars carry none, on screen or here."""
+    bars carry none, on screen or here.
+
+    ``axis_style`` (P2.6 box 1): label rotation / wrapping, as
+    ``calc.figure_category_axis.style_category_axis`` takes them; returns
+    that function's outer-tier axis (always ``None`` for bars, which are
+    never nested). ``raw_groups`` (P2.6 review finding 8): ``groups`` before
+    the caller's own ``safe_mathtext_label`` escaping, for that function's
+    wrap (its own doc); ``groups`` itself still ticks `ax` directly, above,
+    exactly as before."""
     n_groups, n_series = len(groups), len(series)
     x = np.arange(n_groups, dtype=float)
     if stacked:
@@ -75,6 +86,9 @@ def _draw_categorical_bars(
         # data would fall outside the axes; pin every category slot in view.
         ax.set_xlim(-0.5, n_groups - 0.5)
     mark_empty_slots(ax, list(x), [bool(np.all(~np.isfinite(vals[g]))) for g in range(n_groups)])
+    return style_category_axis(
+        ax, list(x), groups, raw_labels=raw_groups or groups, **(axis_style or {}),
+    )
 
 
 def _label_bar_counts(
@@ -148,6 +162,7 @@ def render_categorical_figure(
     stacked: bool = False,
     counts: list[list[int]] | None = None,
     caveat: str | None = None,
+    axis_style: dict[str, Any] | None = None,
     title: str = "",
     x_label: str = "",
     y_label: str = "",
@@ -202,16 +217,29 @@ def render_categorical_figure(
         title = safe_mathtext_label(title)
         x_label = safe_mathtext_label(x_label)
         y_label = safe_mathtext_label(y_label)
+        # Review finding 8: the raw category labels ride alongside the
+        # sanitized ones, threaded to `style_category_axis`'s wrap (its own
+        # doc) via `_draw_categorical_bars`.
+        raw_groups = [str(g) for g in groups]
         groups = [safe_mathtext_label(str(g)) for g in groups]
         series = [safe_mathtext_label(str(s)) for s in series]
         fig = new_figure(figsize=figsize)
         ax = fig.subplots()
-        _draw_categorical_bars(ax, groups, series, vals, errs, stacked, cnts)
+        outer = _draw_categorical_bars(
+            ax, groups, series, vals, errs, stacked, cnts, axis_style, raw_groups,
+        )
         layout_rect = add_caveat(fig, caveat)
         if title:
             ax.set_title(title)
         if x_label:
-            ax.set_xlabel(x_label)
+            # Review finding 5: `_draw_categorical_bars` returns the outer-tier
+            # axis whenever `axis_style` draws one (bars are never nested
+            # TODAY, but the helper is shared with a faceted panel and takes
+            # the same `axis_style` a nested box/violin plot would) -- the x
+            # title belongs on IT, or it collides with the second tier
+            # (`figure_statplots.render_statplot_figure` does the same
+            # `(outer or ax).set_xlabel` already).
+            (outer or ax).set_xlabel(x_label)
         if y_label:
             ax.set_ylabel(y_label)
         if not st.box_on:
