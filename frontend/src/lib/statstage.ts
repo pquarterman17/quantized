@@ -246,6 +246,9 @@ export interface BoxStat {
    *  wire back-compat with a payload that predates JMP_GAP J5 #2; the client
    *  fallback (`boxStatsClient`) always sets it. */
   sem?: number;
+  /** Sample standard deviation (ddof=1; NaN when n<2) — the SD error bar
+   *  (P2.6 box 1, `lib/statMarks.errorBounds`). Optional like `sem`. */
+  sd?: number;
   /** Mean +/- 95% t-based CI bounds (JMP_GAP J5 #2): `mean -/+
    *  t(0.975, n-1)*sem`. Equal to `mean` when n<2. */
   ciLo?: number;
@@ -305,16 +308,18 @@ export function boxStatsClient(
   // ci_lo/ci_hi exactly (ddof=1 sample std, t(0.975, n-1) critical value) so
   // the offline fallback shows the SAME marker the backend would.
   let sem = NaN;
+  let sd = NaN;
   let ciLo = mean;
   let ciHi = mean;
   if (v.length >= 2) {
     const variance = v.reduce((acc, x) => acc + (x - mean) ** 2, 0) / (v.length - 1);
-    sem = Math.sqrt(variance) / Math.sqrt(v.length);
+    sd = Math.sqrt(variance);
+    sem = sd / Math.sqrt(v.length);
     const tCrit = tCritical95(v.length - 1);
     ciLo = mean - tCrit * sem;
     ciHi = mean + tCrit * sem;
   }
-  return { label, q1, median, q3, iqr, whislo, whishi, mean, sem, ciLo, ciHi, n: v.length, fliers };
+  return { label, q1, median, q3, iqr, whislo, whishi, mean, sd, sem, ciLo, ciHi, n: v.length, fliers };
 }
 
 /** `boxStatsClient` for each group — the Box-mode offline payload. */

@@ -204,7 +204,7 @@ describe("Stat Stage missing levels — review round 2", () => {
     act(() => result.current.setShowConnectMeans(true));
     await waitFor(() => {
       const d = result.current.draw;
-      expect(d?.mode === "box" && d.connectMeans && d.slots != null).toBe(true);
+      expect(d?.mode === "box" && d.marks?.connectMeans && d.slots != null).toBe(true);
     });
     const draw = result.current.draw;
     if (draw?.mode !== "box" || !draw.slots) throw new Error("expected a slotted box draw");

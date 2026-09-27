@@ -15,6 +15,43 @@
 import type { PlotView } from "./plotview";
 import type { RegionShade } from "./types";
 
+/** P2.6 box 1 — the Stat Stage's categorical-plot marks, persisted SPARSE on
+ *  `PlotView.statMarks` (absent = the mode's default; `lib/statMarks.
+ *  resolveStatMarks` owns the defaults and the meaning of every field). */
+export type StatPointsMode = "all" | "outliers" | "none";
+export type StatSummaryMark = "none" | "mean" | "median";
+export type StatErrorBars = "none" | "sd" | "se" | "ci95";
+export interface StatMarks {
+  points?: StatPointsMode;
+  jitter?: boolean;
+  /** Fraction of the glyph half-width, (0, 1]. */
+  jitterWidth?: number;
+  summary?: StatSummaryMark;
+  errorBars?: StatErrorBars;
+  connectMeans?: boolean;
+  labelRotation?: 0 | 45 | 90;
+  labelWrap?: boolean;
+}
+
+const STAT_MARK_VALUES: Record<string, readonly unknown[]> = {
+  points: ["all", "outliers", "none"], jitter: [true, false], summary: ["none", "mean", "median"],
+  errorBars: ["none", "sd", "se", "ci95"], connectMeans: [true, false], labelRotation: [0, 45, 90],
+  labelWrap: [true, false],
+};
+
+/** A persisted `statMarks`, keeping only well-formed fields (an unknown or
+ *  out-of-range value falls back to the mode default by being dropped).
+ *  Never throws. */
+export function sanitizeStatMarks(v: unknown): StatMarks {
+  const out: Record<string, unknown> = {};
+  if (typeof v === "object" && v !== null) {
+    const o = v as Record<string, unknown>;
+    for (const k in STAT_MARK_VALUES) if (STAT_MARK_VALUES[k].includes(o[k])) out[k] = o[k];
+    if (typeof o.jitterWidth === "number" && o.jitterWidth > 0 && o.jitterWidth <= 1) out.jitterWidth = o.jitterWidth;
+  }
+  return out as StatMarks;
+}
+
 /** The PlotView fields that are plain booleans. `satisfies` pins every name
  *  to a real PlotView key; `boolViewFields`' return type pins each to boolean. */
 const BOOL_VIEW_KEYS = [

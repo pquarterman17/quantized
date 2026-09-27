@@ -297,9 +297,25 @@ export interface StatplotFigureSpec {
   // `caveat` (lib/groupAxis.balanceCaveat) becomes a figure footnote.
   show_n?: boolean;
   caveat?: string | null;
+  // P2.6 box 1 (calc.figure_stat_marks / calc.figure_category_axis): raw
+  // points, jitter width, summary marker, error bars, label options.
+  points?: "all" | "outliers" | "none" | null;
+  jitter_width?: number | null;
+  summary?: "none" | "mean" | "median" | null;
+  error_bars?: "none" | "sd" | "se" | "ci95" | null;
+  axis_style?: CategoryAxisStyleWire | null;
   /** Per group: the connect-means line lifts BEFORE it (a hidden empty level
    *  sat there). Absent = only empty groups and nested boundaries break it. */
   connect_breaks?: boolean[] | null;
+}
+
+/** P2.6 box 1: the category-axis label options (routes/export_statplots.
+ *  CategoryAxisStyle) — rotation, wrap width in characters, two-tier nested
+ *  axis. Built by `lib/statMarks.axisStyleWire` from the screen's options. */
+export interface CategoryAxisStyleWire {
+  rotation: 0 | 45 | 90;
+  wrap: number | null;
+  tiered: boolean;
 }
 
 /** Render a statistical plot (box/violin/Q-Q/histogram) server-side
@@ -336,9 +352,10 @@ export interface CategoricalFigureSpec {
   groups: string[]; // category tick labels, in axis order
   series: string[]; // series (legend) labels, in stack/cluster order
   values: (number | null)[][]; // [group][series] bar height (mean); null = no data (P2.6 box 2)
-  errors: (number | null)[][]; // [group][series] SEM (null = no whisker)
+  errors: (number | null)[][]; // [group][series] error half-width: SEM, or SD / 95% CI (P2.6 box 1); null = no whisker
   counts?: number[][] | null; // P2.6 box 2: [group][series] n labels (grouped bars)
   caveat?: string | null; // P2.6 box 2: lib/groupAxis.balanceCaveat, as a footnote
+  axis_style?: CategoryAxisStyleWire | null; // P2.6 box 1: label rotation / wrap
   stacked?: boolean;
   fmt?: string;
   style?: string;

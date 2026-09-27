@@ -4255,6 +4255,72 @@ violin, bar, strip, or summary plots.
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5. **Dependencies:** P1.4-P1.5.
 
 - [ ] Nested grouping/order/labels/jitter/summary/errors/raw-point visibility.
+  **Progress 2026-09-27 (not ticked — see "Not done").**
+  **Survey (before):** nested grouping (#351 compute + "then by" picker) and
+  level order (`LevelOrderPanel`, `DataStruct.level_order`) existed; level
+  RENAME exists only as a derived column (Recode workshop). Raw points: box
+  had a session-local "points" toggle (fliers AND points drawn, so an outlier
+  appeared twice), strip always all, violin/bar none; no "outliers only" or
+  "none". Jitter: fixed width (box 0.7, strip 0.85 on screen; the export used
+  0.7 for both, relative to a different box width). Summary: only mean +/-
+  95% CI, session-local; the export additionally drew matplotlib's own mean
+  triangle whenever the CI marker was off (the screen never did). Error bars:
+  95% t-CI on the mean marker, SEM on bars, nothing else. Labels: nested
+  labels stacked on two lines per tick (the outer level repeated under every
+  box), a 14-char truncation, no rotation / wrap. **A real parity bug:** the
+  backend box stats arrive snake_case (`ci_lo`/`ci_hi`) and were passed
+  straight to the renderer, which reads `ciLo`/`ciHi` — so with the backend
+  up the screen's mean marker had NO CI whisker while the export drew one.
+  **Now:** one sparse, persisted option set `PlotView.statMarks` (rides window
+  snapshots, undo, `.dwk`; sanitized field by field on load,
+  `lib/plotviewSanitize.sanitizeStatMarks`), resolved per mode by
+  `lib/statMarks.resolveStatMarks` and stamped on every categorical draw
+  (`components/Stage/statStageMarks.withMarks`); the export reads the SAME
+  resolved object back (`statStageExport`), and the backend twins are
+  `calc/figure_stat_marks.py` + `calc/figure_category_axis.py`. Controls:
+  `StatMarksControls.tsx` (native selects / checkboxes, one undo entry each):
+  * raw points all / outliers / none (box: outliers = its fliers, "all" no
+    longer double-draws them; strip; violin now too);
+  * jitter off or 25-100% of the glyph half-width (a new-style export also
+    draws boxes/violins at the screen's 0.6-pitch width, so a point sits at
+    the same place relative to its box in both);
+  * summary marker none / mean (diamond) / median (square), box + strip;
+  * error bars none / SD / SE / 95% CI about the MEAN — SD n-1, SE = SD/sqrt(n),
+    CI = mean +/- t(0.975, n-1)*SE, none below n=2 — on the mean marker and on
+    bars (whose default stays SE). Backend `calc.statplots.error_bar_bounds`
+    (+ `box_stats` now returns `sd`), frontend `lib/statMarks.errorBounds` /
+    `errorHalfWidth`, both pinned to the hand-computed shared fixture
+    `tests/fixtures/wire/stat_error_bars.json` (1e-12; t-CI 1e-9 client);
+  * nested axis in TWO TIERS on screen and in the export: inner level per
+    tick, each outer level once under its run, a separator between runs (the
+    export puts the x title under the outer tier);
+  * label rotation 0 / 45 / 90 and wrapping (12 chars, 3 lines, shared
+    fixture `stat_label_wrap.json`); the plot's bottom margin (and the click
+    hit-test) are sized from the same axis layout.
+  Faceted panels carry the summary / error bars / label options; a panel has
+  no row indices, so it shows its fliers instead of jittered points and no
+  connect line — the same rule on both sides (`facetMarks` /
+  `figure_facets._facet_marks`). Toggling a mark never re-fetches box stats.
+  Tests: `lib/statMarks.test.ts`, `statDrawMarks.test.ts` (canvas calls per
+  option, domain / hit-test), `statMarksParity.test.ts` (real hook: draw vs
+  export request, per option, flat / nested / bar / violin / faceted),
+  `StatMarksControls.test.tsx` (real stage + store, undo, tab order),
+  `store/statLevelOptions.test.ts` (undo/redo, real `.dwk` round-trip);
+  backend `tests/test_calc_figure_stat_marks.py` (matplotlib artists read back
+  per option, the shared fixtures, route validation). Wire fixture
+  `statplot_levels_export.json` gained the new fields. Eager bundle 858,336 ->
+  858,810 B (+474, the sanitizer and the field); all UI in the lazy stage chunk.
+  **Not done:** jittered points in FACET panels (no per-slice row indices —
+  the JMP_GAP J5 residual) and faceted strip; raw points / median summary on
+  BAR; violin has points but no summary / error-bar marker, and its inner
+  glyph still differs (screen: quartile bar + median dot; export: mean +
+  extrema lines — pre-existing); in-stage level RENAME (use Recode); the
+  figure does not state which error bar it shows (no legend / footnote);
+  single-line labels still truncate at 14 chars on screen (not in the export)
+  unless "wrap" is on; the nested / tier split is textual (`" / "`) on both
+  sides, as connect-means already was; rotated-label depth is estimated from
+  character counts (both sides), not measured; the Graph Builder preview
+  ignores the marks; no e2e spec.
 - [x] Missing levels and unbalanced groups are explicit. (2026-09-26)
   **Survey (before):** every categorical path closed the axis up silently.
   `categoryLevels` never saw a level declared in `cat_levels` that no row

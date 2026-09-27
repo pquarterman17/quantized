@@ -1278,6 +1278,16 @@
       },
       "CategoricalFigureRequest": {
         "properties": {
+          "axis_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoryAxisStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "caveat": {
             "anyOf": [
               {
@@ -1422,6 +1432,41 @@
           "values"
         ],
         "title": "CategoricalFigureRequest",
+        "type": "object"
+      },
+      "CategoryAxisStyle": {
+        "description": "P2.6 box 1: how the category tick labels are set -- the SAME three\noptions the Canvas stage reads (``statRenderAxes.ts``). ``wrap`` is the\nline width in characters (``calc.figure_category_axis.wrap_label``);\n``tiered`` draws a nested axis in two tiers with separators. Defaults =\nthe axis before these options.",
+        "properties": {
+          "rotation": {
+            "default": 0,
+            "enum": [
+              0,
+              45,
+              90
+            ],
+            "title": "Rotation",
+            "type": "integer"
+          },
+          "tiered": {
+            "default": false,
+            "title": "Tiered",
+            "type": "boolean"
+          },
+          "wrap": {
+            "anyOf": [
+              {
+                "maximum": 60.0,
+                "minimum": 4.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wrap"
+          }
+        },
+        "title": "CategoryAxisStyle",
         "type": "object"
       },
       "CellRequest": {
@@ -11127,6 +11172,16 @@
       },
       "StatplotFigureRequest": {
         "properties": {
+          "axis_style": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoryAxisStyle"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "bins": {
             "anyOf": [
               {
@@ -11200,6 +11255,23 @@
             ],
             "title": "Dpi"
           },
+          "error_bars": {
+            "anyOf": [
+              {
+                "enum": [
+                  "none",
+                  "sd",
+                  "se",
+                  "ci95"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Bars"
+          },
           "facets": {
             "anyOf": [
               {
@@ -11234,6 +11306,19 @@
             "default": "pdf",
             "title": "Fmt",
             "type": "string"
+          },
+          "jitter_width": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jitter Width"
           },
           "kind": {
             "title": "Kind",
@@ -11270,6 +11355,22 @@
             ],
             "title": "Point Row Indices"
           },
+          "points": {
+            "anyOf": [
+              {
+                "enum": [
+                  "all",
+                  "outliers",
+                  "none"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points"
+          },
           "show_connect_means": {
             "default": false,
             "title": "Show Connect Means",
@@ -11294,6 +11395,22 @@
             "default": "default",
             "title": "Style",
             "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "enum": [
+                  "none",
+                  "mean",
+                  "median"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
           },
           "title": {
             "default": "",

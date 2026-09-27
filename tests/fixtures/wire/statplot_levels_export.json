@@ -62,5 +62,10 @@
   "show_mean_ci": true,
   "show_connect_means": false,
   "show_n": true,
-  "caveat": "Caveat: n < 3 in 1 group; unbalanced groups (n 2-12) - summaries and intervals are unreliable"
+  "caveat": "Caveat: n < 3 in 1 group; unbalanced groups (n 2-12) - summaries and intervals are unreliable",
+  "points": "all",
+  "jitter_width": 0.7,
+  "summary": "mean",
+  "error_bars": "ci95",
+  "axis_style": null
 }

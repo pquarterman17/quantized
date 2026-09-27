@@ -12,9 +12,10 @@
 // already has everything exportFigure needs, mean/SEM per category/series).
 
 import { statsBox, statsHistogram, statsQQ, statsViolin } from "../../lib/api";
+import type { BoxStatWire } from "../../lib/api/stats";
 import { buildBarMatrix, seriesStat, type BarChartData } from "../../lib/barlayout";
 import type { GroupSpec } from "../../lib/statschooser";
-import { groupBoxStatsClient, resolveGroups, type IndexedGroupSpec } from "../../lib/statstage";
+import { groupBoxStatsClient, resolveGroups, type BoxStat, type IndexedGroupSpec } from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
 import type { StatDrawData } from "./statRender";
 
@@ -84,6 +85,20 @@ export function computeBarData(
   };
 }
 
+/** The backend's box stats as the renderer reads them (P2.6 box 1). The wire
+ *  is snake_case (`ci_lo` / `ci_hi`) and JSON has no NaN (an n<2 group's
+ *  `sem` / `sd` arrive as null); passing the wire object straight through
+ *  left `ciLo` / `ciHi` undefined, so with the backend up the screen's mean
+ *  marker had NO CI whisker while the export (which recomputes) drew one. */
+export function boxesFromWire(boxes: readonly BoxStatWire[]): BoxStat[] {
+  const num = (v: number | null | undefined) => (typeof v === "number" ? v : NaN);
+  return boxes.map((b) => ({
+    label: b.label, q1: b.q1, median: b.median, q3: b.q3, iqr: b.iqr, whislo: b.whislo, whishi: b.whishi,
+    mean: b.mean, n: b.n, fliers: b.fliers, sem: num(b.sem), sd: num(b.sd),
+    ciLo: b.ci_lo === undefined ? undefined : num(b.ci_lo), ciHi: b.ci_hi === undefined ? undefined : num(b.ci_hi),
+  }));
+}
+
 /** Box mode's draw for an already-resolved finite-groups list (flat OR one
  *  facet slice): the backend's exact box stats, degrading to the
  *  client-side fallback on failure. Takes `finiteGroups` directly (rather
@@ -114,7 +129,7 @@ export async function computeBoxDraw(
       finiteGroups.map((g) => g.label),
     );
     return {
-      draw: { mode: "box", boxes: r.boxes, valueLabel, groupLabel, points, showMeanCI, connectMeans },
+      draw: { mode: "box", boxes: boxesFromWire(r.boxes), valueLabel, groupLabel, points, showMeanCI, connectMeans },
       degraded: false,
     };
   } catch {
@@ -146,7 +161,7 @@ export async function computeStripDraw(
       finiteGroups.map((g) => g.label),
     );
     return {
-      draw: { mode: "strip", boxes: r.boxes, points, valueLabel, groupLabel, showMeanCI, connectMeans },
+      draw: { mode: "strip", boxes: boxesFromWire(r.boxes), points, valueLabel, groupLabel, showMeanCI, connectMeans },
       degraded: false,
     };
   } catch {

@@ -9,7 +9,7 @@ import { defaultPlotView, sanitizePlotView } from "../lib/plotview";
 import type { DataStruct } from "../lib/types";
 import { parseWorkspace } from "../lib/workspace";
 import { serializeWorkspace } from "../lib/workspaceSerialize";
-import { setStatHideEmptyLevels, setStatShowGroupN } from "./statLevelOptions";
+import { setStatHideEmptyLevels, setStatMarks, setStatShowGroupN } from "./statLevelOptions";
 import { useApp } from "./useApp";
 
 const raw: DataStruct = {
@@ -31,6 +31,7 @@ beforeEach(() => {
     activeId: "d1",
     statHideEmptyLevels: false,
     statShowGroupN: true,
+    statMarks: {},
     history: [],
     future: [],
   });
@@ -72,5 +73,36 @@ describe("Stat Stage level options (PlotView)", () => {
     // A file written before these fields existed opens with the defaults.
     const old = sanitizePlotView({ statMode: true });
     expect(old).toMatchObject({ statMode: true, statHideEmptyLevels: false, statShowGroupN: true });
+  });
+});
+
+describe("Stat Stage categorical marks (PlotView.statMarks, P2.6 box 1)", () => {
+  it("default: nothing set, every mode draws its defaults", () => {
+    expect(defaultPlotView().statMarks).toEqual({});
+  });
+
+  it("each edit merges one patch and is one undo entry", () => {
+    setStatMarks({ points: "all", jitterWidth: 0.5 });
+    setStatMarks({ summary: "mean", errorBars: "sd" });
+    expect(useApp.getState().statMarks).toEqual({ points: "all", jitterWidth: 0.5, summary: "mean", errorBars: "sd" });
+    expect(useApp.getState().history).toHaveLength(2);
+    useApp.getState().undo();
+    expect(useApp.getState().statMarks).toEqual({ points: "all", jitterWidth: 0.5 });
+    useApp.getState().redo();
+    expect(useApp.getState().statMarks.errorBars).toBe("sd");
+  });
+
+  it("survives a real .dwk save and reopen", () => {
+    useApp.getState().setStatMode(true);
+    const marks = {
+      points: "none", jitter: false, jitterWidth: 0.25, summary: "median", errorBars: "ci95",
+      connectMeans: true, labelRotation: 90, labelWrap: true,
+    } as const;
+    setStatMarks(marks);
+    const s = useApp.getState();
+    const text = serializeWorkspace({ ...s, plotWindows: s.windowsForSave() });
+    useApp.setState({ statMarks: {} });
+    useApp.getState().loadWorkspace(parseWorkspace(text));
+    expect(useApp.getState().statMarks).toEqual(marks);
   });
 });

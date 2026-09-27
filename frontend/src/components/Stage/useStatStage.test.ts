@@ -8,6 +8,7 @@ import type { DataStruct, Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
 import type { StatDrawData } from "./statRender";
 import { useStatStage, type UseStatStageParams } from "./useStatStage";
+import { boxesFromWire } from "./useStatStageCompute";
 
 vi.mock("../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../lib/api")>()),
@@ -174,7 +175,7 @@ describe("useStatStage — box/strip marks (JMP_GAP J5 #1/#2/#3)", () => {
     act(() => result.current.setShowMeanCI(true));
     await waitFor(() => {
       const d = result.current.draw;
-      expect(d?.mode === "box" && d.showMeanCI).toBe(true);
+      expect(d?.mode === "box" && d.marks?.summary === "mean").toBe(true);
     });
   });
 
@@ -187,7 +188,10 @@ describe("useStatStage — box/strip marks (JMP_GAP J5 #1/#2/#3)", () => {
     if (d?.mode === "strip") {
       expect(d.points).toHaveLength(2);
       expect(d.points[0].points.map((p) => p.rowIndex)).toEqual([0, 1, 2, 6, 7, 8]);
-      expect(d.boxes).toEqual(BOX_RESPONSE.boxes);
+      // The wire's snake_case CI bounds reach the renderer as ciLo / ciHi
+      // (P2.6 box 1: passed straight through, the marker lost its whisker).
+      expect(d.boxes).toEqual(boxesFromWire(BOX_RESPONSE.boxes));
+      expect(d.boxes.map((b) => [b.ciLo, b.ciHi])).toEqual([[10, 114], [30, 134]]);
     } else {
       throw new Error("expected a strip draw");
     }
@@ -277,7 +281,7 @@ describe("useStatStage — connect-means line (JMP_GAP J5 residual)", () => {
     const { result } = renderHook(() => useStatStage(baseParams()));
     await waitFor(() => expect(result.current.draw).not.toBeNull());
     const d = result.current.draw;
-    expect(d?.mode === "box" && d.connectMeans).toBe(false);
+    expect(d?.mode === "box" && d.marks?.connectMeans).toBe(false);
   });
 
   it("box mode with a group column active + showConnectMeans=true carries the flag through", async () => {
@@ -287,7 +291,7 @@ describe("useStatStage — connect-means line (JMP_GAP J5 residual)", () => {
     act(() => result.current.setShowConnectMeans(true));
     await waitFor(() => {
       const d = result.current.draw;
-      expect(d?.mode === "box" && d.connectMeans).toBe(true);
+      expect(d?.mode === "box" && d.marks?.connectMeans).toBe(true);
     });
   });
 
@@ -298,7 +302,7 @@ describe("useStatStage — connect-means line (JMP_GAP J5 residual)", () => {
     act(() => result.current.setGroupCol(null));
     await waitFor(() => expect(result.current.draw).not.toBeNull());
     const d = result.current.draw;
-    expect(d?.mode === "box" && d.connectMeans).toBe(false);
+    expect(d?.mode === "box" && d.marks?.connectMeans).toBe(false);
   });
 
   it("strip mode with a group column active + showConnectMeans=true carries the flag through", async () => {
@@ -308,7 +312,7 @@ describe("useStatStage — connect-means line (JMP_GAP J5 residual)", () => {
     act(() => result.current.setShowConnectMeans(true));
     await waitFor(() => {
       const d = result.current.draw;
-      expect(d?.mode === "strip" && d.connectMeans).toBe(true);
+      expect(d?.mode === "strip" && d.marks?.connectMeans).toBe(true);
     });
   });
 

@@ -15,6 +15,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike
 
+from quantized.calc.figure_category_axis import style_category_axis
 from quantized.calc.figure_group_notes import (
     add_caveat,
     annotate_top_counts,
@@ -23,9 +24,9 @@ from quantized.calc.figure_group_notes import (
 )
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
+from quantized.calc.figure_stat_marks import overlay_summary, resolve_marks, scatter_points
 from quantized.calc.figure_styles import figure_style
 from quantized.calc.statplots import box_stats as _box_stats
-from quantized.calc.statplots import deterministic_jitter as _jitter
 from quantized.calc.statplots import histogram as _histogram
 from quantized.calc.statplots import qq_plot as _qq_plot
 
@@ -37,7 +38,6 @@ _FORMATS = ("pdf", "svg", "png", "tiff")
 # points, optionally overlaid with a mean+-95% CI marker (#2).
 STATPLOT_KINDS = ("box", "violin", "qq", "probability", "histogram", "strip")
 _GROUPED = ("box", "violin", "strip")
-_BOX_WIDTH = 0.5  # matplotlib boxplot's own default box width, data units
 
 
 def _clean_groups(groups: list[ArrayLike]) -> list[np.ndarray]:
@@ -74,6 +74,8 @@ def render_statplot_figure(
     show_n: bool = False,
     caveat: str | None = None,
     connect_breaks: list[bool] | None = None,
+    marks: dict[str, Any] | None = None,
+    axis_style: dict[str, Any] | None = None,
 ) -> bytes:
     """Render a statistical plot to image bytes.
 
@@ -113,6 +115,14 @@ def render_statplot_figure(
     ``connect_breaks`` (parallel to ``data``) lifts the connect-means line
     before a group whose HIDDEN empty level preceded it.
 
+    ``marks`` (P2.6 box 1, ``box``/``strip``/``violin``): the raw-point,
+    jitter, summary-marker and error-bar options -- keyword arguments of
+    ``calc.figure_stat_marks.resolve_marks`` (``points``, ``jitter_width``,
+    ``summary``, ``error_bars``). ``axis_style``: the category-axis options,
+    keyword arguments of ``calc.figure_category_axis.style_category_axis``
+    (``rotation``, ``wrap``, ``tiered``); a two-tier nested axis carries the
+    x title under its outer tier. Both ``None`` = the output before them.
+
     ``dpi`` defaults to the style preset's calibrated resolution when not
     given (``None``), same as ``calc.figure``'s ``resolved_dpi`` convention;
     the preset's box-tick convention (``xtick.top``/``ytick.right`` mirrored
@@ -150,17 +160,17 @@ def render_statplot_figure(
         labels = [safe_mathtext_label(str(g)) for g in labels] if labels else labels
         fig = new_figure(figsize=figsize)
         ax = fig.subplots()
-        _draw_statplot(
+        outer = _draw_statplot(
             ax, kind, data, labels, dist, bins, fit, st,
             show_points=show_points, point_row_indices=point_row_indices,
             show_mean_ci=show_mean_ci, show_connect_means=show_connect_means,
-            show_n=show_n, connect_breaks=connect_breaks,
+            show_n=show_n, connect_breaks=connect_breaks, marks=marks, axis_style=axis_style,
         )
         layout_rect = add_caveat(fig, caveat)
         if title:
             ax.set_title(title)
         if x_label:
-            ax.set_xlabel(x_label)
+            (outer or ax).set_xlabel(x_label)
         if y_label:
             ax.set_ylabel(y_label)
         if not st.box_on:
@@ -201,40 +211,6 @@ def _clean_groups_with_indices(
     return groups, idxs
 
 
-def _scatter_jittered_points(
-    ax: Any,
-    groups: list[np.ndarray],
-    labels: list[str],
-    ticks: list[int],
-    row_indices: list[list[int]],
-    *,
-    width: float = _BOX_WIDTH,
-) -> None:
-    """Raw-point overlay (JMP_GAP J5 #1): each group's finite values,
-    jittered horizontally by ``deterministic_jitter(row_index, label)`` --
-    the SAME hash `statRenderBox.ts` uses on screen, so a point sits in the
-    same relative spot in both places."""
-    for g, lab, tick, idx in zip(groups, labels, ticks, row_indices, strict=True):
-        offsets = [_jitter(i, lab) * (width / 2) * 0.7 for i in idx]
-        xs = [tick + off for off in offsets]
-        ax.scatter(xs, g, s=10, color="0.25", alpha=0.6, zorder=4, linewidths=0)
-
-
-def _overlay_mean_ci(ax: Any, groups: list[np.ndarray], ticks: list[int]) -> None:
-    """Mean +/- 95% CI marker (JMP_GAP J5 #2): a diamond at the group mean
-    with a t-based CI whisker, computed by the SAME ``box_stats`` the
-    interactive stage's ``/api/statplots/box`` reads (its ``sem``/``ci_lo``/
-    ``ci_hi`` fields) -- never a fresh/independent stats computation."""
-    for g, tick in zip(groups, ticks, strict=True):
-        b = _box_stats(g)
-        mean, lo, hi = b["mean"], b["ci_lo"], b["ci_hi"]
-        yerr = [[mean - lo], [hi - mean]] if np.isfinite(lo) and np.isfinite(hi) else None
-        ax.errorbar(
-            [tick], [mean], yerr=yerr, fmt="D", color="black",
-            markersize=6, capsize=4, linewidth=1.5, zorder=5,
-        )
-
-
 def _draw_connect_means_line(
     ax: Any, groups: list[np.ndarray], ticks: list[int], labels: list[str],
     breaks: list[bool] | None = None,
@@ -242,7 +218,7 @@ def _draw_connect_means_line(
     """Connect-group-means line (JMP_GAP J5 residual): a dashed line through
     each group's mean, in on-screen category order -- the "interaction plot"
     read for a box/strip plot grouped by a categorical column. Reads the
-    SAME ``box_stats`` mean ``_overlay_mean_ci`` uses, never a second/
+    SAME ``box_stats`` mean the summary marker uses, never a second/
     independent computation. Broken into segments exactly where the screen
     breaks it (``figure_group_notes.connect_segments``): at an empty slot and
     at a nested outer-factor boundary."""
@@ -273,7 +249,11 @@ def _draw_statplot(
     show_connect_means: bool = False,
     show_n: bool = False,
     connect_breaks: list[bool] | None = None,
-) -> None:
+    marks: dict[str, Any] | None = None,
+    axis_style: dict[str, Any] | None = None,
+) -> Any | None:
+    """Draw one panel. Returns the outer-tier axis of a two-tier nested
+    category axis (the x title goes on it), else ``None``."""
     if kind in _GROUPED:
         if not isinstance(data, list) or not data:
             raise ValueError(f"{kind} needs a non-empty list of groups")
@@ -289,43 +269,50 @@ def _draw_statplot(
         ticks = [all_ticks[i] for i in filled]
         row_indices = [all_idx[i] for i in filled]
         filled_labels = [cat_labels[i] for i in filled]
+        mk = resolve_marks(
+            kind, show_points=show_points, show_mean_ci=show_mean_ci, **(marks or {}),
+        )
         if kind == "box":
-            # A caller-provided mean+-CI marker replaces boxplot's own tiny
-            # mean-triangle (showmeans) -- one mean glyph on screen, not two.
+            # A caller-provided summary marker replaces boxplot's own tiny
+            # mean-triangle (showmeans) -- one mean glyph, not two.
+            box_kw: dict[str, Any] = {"showmeans": mk.box_showmeans, "showfliers": mk.fliers}
+            if mk.box_width is not None:
+                box_kw["widths"] = mk.box_width
             if any(empty):
                 # boxplot sizes boxes from the spread of the positions it is
                 # GIVEN (clip(0.15*ptp, 0.15, 0.5)); pass the width the full
                 # axis would get, so where the empty slots fall cannot change
                 # every box's width.
-                width = float(np.clip(0.15 * (len(all_ticks) - 1), 0.15, 0.5))
-                ax.boxplot(
-                    groups, positions=ticks, widths=width, showmeans=not show_mean_ci,
-                )
+                box_kw.setdefault("widths", float(np.clip(0.15 * (len(all_ticks) - 1), 0.15, 0.5)))
+                ax.boxplot(groups, positions=ticks, **box_kw)
                 ax.set_xticks(all_ticks)
                 ax.set_xticklabels(labels or [str(t) for t in all_ticks])
             else:
-                ax.boxplot(groups, tick_labels=labels, showmeans=not show_mean_ci)
+                ax.boxplot(groups, tick_labels=labels, **box_kw)
         elif kind == "violin":
-            parts = ax.violinplot(groups, positions=ticks, showmeans=True, showextrema=True)
+            # A new-style request draws the screen's glyph width (the points'
+            # jitter is scaled to it); matplotlib's own default is 0.5.
+            ax.violinplot(
+                groups, positions=ticks, widths=mk.box_width or 0.5, showmeans=True,
+                showextrema=True,
+            )
             if labels or any(empty):
                 ax.set_xticks(all_ticks)
                 ax.set_xticklabels(labels or [str(t) for t in all_ticks])
-            del parts
         else:  # strip (JMP_GAP J5 #3): points-only, no box/violin glyph
             ax.set_xticks(all_ticks)
             ax.set_xticklabels(cat_labels)
         if kind == "strip" or any(empty):
             ax.set_xlim(0.5, len(all_groups) + 0.5)
-        if kind in ("box", "strip") and show_points:
-            _scatter_jittered_points(ax, groups, filled_labels, ticks, row_indices)
-        if kind in ("box", "strip") and show_mean_ci:
-            _overlay_mean_ci(ax, groups, ticks)
+        scatter_points(ax, groups, filled_labels, ticks, row_indices, mk)
+        if kind in ("box", "strip"):
+            overlay_summary(ax, groups, ticks, mk)
         if kind in ("box", "strip") and show_connect_means and len(groups) > 1:
             _draw_connect_means_line(ax, all_groups, all_ticks, cat_labels, connect_breaks)
         mark_empty_slots(ax, all_ticks, empty)
         if show_n:
             annotate_top_counts(ax, all_ticks, [g.size for g in all_groups])
-        return
+        return style_category_axis(ax, all_ticks, cat_labels, **(axis_style or {}))
 
     sample = np.asarray(data, dtype=float).ravel()
     if kind in ("qq", "probability"):
@@ -337,7 +324,7 @@ def _draw_statplot(
         ax.plot(theo, line, color="0.4", linewidth=st.line_width)
         ax.set_xlabel(ax.get_xlabel() or f"Theoretical quantiles ({dist})")
         ax.set_ylabel(ax.get_ylabel() or "Sample quantiles")
-        return
+        return None
 
     # histogram
     h = _histogram(sample, bins=bins, density=fit is not None, fit=fit)
@@ -346,3 +333,4 @@ def _draw_statplot(
             color="0.6", edgecolor="white", linewidth=0.5)
     if fit is not None and "fit" in h:
         ax.plot(h["fit"]["x"], h["fit"]["pdf"], color="0.1", linewidth=st.line_width)
+    return None

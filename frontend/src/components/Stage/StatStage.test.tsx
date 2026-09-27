@@ -7,8 +7,10 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { resolveStatMarks } from "../../lib/statMarks";
 import { useApp } from "../../store/useApp";
 import StatStage from "./StatStage";
+import type { StatDrawData } from "./statRender";
 import type { StatStageState } from "./useStatStage";
 
 const { stateRef } = vi.hoisted(() => ({ stateRef: { current: null as StatStageState | null } }));
@@ -57,6 +59,8 @@ function makeState(overrides: Partial<StatStageState> = {}): StatStageState {
     setShowMeanCI: vi.fn(),
     showConnectMeans: false,
     setShowConnectMeans: vi.fn(),
+    marks: resolveStatMarks(overrides.mode ?? "box", {}),
+    setMarks: vi.fn(),
     facetCol: null,
     setFacetCol: vi.fn(),
     busy: false,
@@ -289,71 +293,100 @@ describe("StatStage — facet grid (GUI_INTERACTION #11)", () => {
   });
 });
 
-describe("StatStage — box/strip marks (JMP_GAP J5 #1/#2/#3)", () => {
+const STRIP_DRAW: StatDrawData = { mode: "strip", boxes: [], points: [], valueLabel: "y", groupLabel: "grp", showMeanCI: false, connectMeans: false };
+const control = (name: string) => screen.queryByRole("combobox", { name });
+
+describe("StatStage — categorical marks controls (JMP_GAP J5, P2.6 box 1)", () => {
   it("offers Strip as a mode option", () => {
     stateRef.current = makeState({ mode: "box" });
     render(<StatStage />);
     expect(screen.getByRole("tab", { name: "Strip" })).toBeInTheDocument();
   });
 
-  it("box mode shows both the points and mean±CI checkboxes", () => {
+  it("box: points, summary and error bars; jitter only once every point is shown", () => {
     stateRef.current = makeState({ mode: "box" });
+    const { unmount } = render(<StatStage />);
+    expect(control("raw points")).toHaveValue("outliers");
+    expect(control("summary marker")).toHaveValue("none");
+    // Error bars are about the mean: inert until the mean marker is on.
+    expect(control("error bars")).toBeDisabled();
+    expect(control("jitter width")).toBeNull(); // box outliers are its fliers, on the centre line
+    unmount();
+    stateRef.current = makeState({ mode: "box", marks: resolveStatMarks("box", { points: "all", summary: "mean" }) });
     render(<StatStage />);
-    expect(screen.getByText("points")).toBeInTheDocument();
-    expect(screen.getByText("mean ± CI")).toBeInTheDocument();
+    expect(control("jitter width")).toHaveValue("0.7");
+    expect(control("error bars")).toBeEnabled();
+    expect(control("error bars")).toHaveValue("ci95");
   });
 
-  it("strip mode shows only the mean±CI checkbox (points are implicit)", () => {
-    stateRef.current = makeState({
-      mode: "strip",
-      draw: { mode: "strip", boxes: [], points: [], valueLabel: "y", groupLabel: "grp", showMeanCI: false, connectMeans: false },
-    });
+  it("strip: every point by default, jittered; violin: points + jitter, no summary", () => {
+    stateRef.current = makeState({ mode: "strip", draw: STRIP_DRAW });
+    const { unmount } = render(<StatStage />);
+    expect(control("raw points")).toHaveValue("all");
+    expect(control("jitter width")).toHaveValue("0.85");
+    expect(control("summary marker")).toBeInTheDocument();
+    unmount();
+    stateRef.current = makeState({ mode: "violin", draw: null, marks: resolveStatMarks("violin", { points: "all" }) });
     render(<StatStage />);
-    expect(screen.queryByText("points")).not.toBeInTheDocument();
-    expect(screen.getByText("mean ± CI")).toBeInTheDocument();
+    expect(control("raw points")).toHaveValue("all");
+    expect(control("jitter width")).toBeInTheDocument();
+    expect(control("summary marker")).toBeNull();
+    expect(control("error bars")).toBeNull();
   });
 
-  it("violin/qq/histogram/bar show neither box/strip checkbox", () => {
-    for (const mode of ["violin", "qq", "histogram", "bar"] as const) {
+  it("bar: error bars only (SE by default); qq/histogram: none of it", () => {
+    stateRef.current = makeState({ mode: "bar", draw: null, marks: resolveStatMarks("bar", {}) });
+    const { unmount } = render(<StatStage />);
+    expect(control("error bars")).toHaveValue("se");
+    expect(control("error bars")).toBeEnabled();
+    expect(control("raw points")).toBeNull();
+    expect(control("label rotation")).toBeInTheDocument();
+    unmount();
+    for (const mode of ["qq", "histogram"] as const) {
       stateRef.current = makeState({ mode, draw: null });
-      const { unmount } = render(<StatStage />);
-      expect(screen.queryByText("points")).not.toBeInTheDocument();
-      expect(screen.queryByText("mean ± CI")).not.toBeInTheDocument();
-      unmount();
+      const { unmount: u } = render(<StatStage />);
+      expect(screen.queryByTestId("stat-marks-controls")).toBeNull();
+      u();
     }
   });
 
-  it("toggling the points checkbox calls setShowPoints", () => {
-    const setShowPoints = vi.fn();
-    stateRef.current = makeState({ mode: "box", setShowPoints });
+  it("each control writes one patch through setMarks", async () => {
+    const setMarks = vi.fn();
+    stateRef.current = makeState({ mode: "box", setMarks, marks: resolveStatMarks("box", { summary: "mean" }) });
     render(<StatStage />);
-    screen.getByText("points").click();
-    expect(setShowPoints).toHaveBeenCalledWith(true);
+    await userEvent.selectOptions(control("raw points") as HTMLElement, "none");
+    await userEvent.selectOptions(control("summary marker") as HTMLElement, "median");
+    await userEvent.selectOptions(control("error bars") as HTMLElement, "sd");
+    await userEvent.selectOptions(control("label rotation") as HTMLElement, "45");
+    await userEvent.click(screen.getByRole("checkbox", { name: /wrap/ }));
+    expect(setMarks.mock.calls.map((c) => c[0])).toEqual([
+      { points: "none" }, { summary: "median" }, { errorBars: "sd" }, { labelRotation: 45 }, { labelWrap: true },
+    ]);
+  });
+
+  it("jitter: off, or a width preset", async () => {
+    const setMarks = vi.fn();
+    stateRef.current = makeState({ mode: "strip", draw: STRIP_DRAW, setMarks, marks: resolveStatMarks("strip", {}) });
+    render(<StatStage />);
+    await userEvent.selectOptions(control("jitter width") as HTMLElement, "off");
+    await userEvent.selectOptions(control("jitter width") as HTMLElement, "0.5");
+    expect(setMarks.mock.calls.map((c) => c[0])).toEqual([{ jitter: false }, { jitter: true, jitterWidth: 0.5 }]);
   });
 
   it("strip mode hides the facet-by picker (JMP_GAP J5 residual: no faceted strip yet)", () => {
-    stateRef.current = makeState({
-      mode: "strip",
-      draw: { mode: "strip", boxes: [], points: [], valueLabel: "y", groupLabel: "grp", showMeanCI: false, connectMeans: false },
-    });
+    stateRef.current = makeState({ mode: "strip", draw: STRIP_DRAW });
     render(<StatStage />);
     expect(screen.queryByRole("combobox", { name: "facet by" })).not.toBeInTheDocument();
   });
 });
 
 describe("StatStage — connect-means line (JMP_GAP J5 residual)", () => {
-  it("box mode with a group column active shows the connect-means checkbox", () => {
+  it("box / strip with a group column active show the connect-means checkbox", () => {
     stateRef.current = makeState({ mode: "box", groupCol: 0 });
-    render(<StatStage />);
+    const { unmount } = render(<StatStage />);
     expect(screen.getByText("connect means")).toBeInTheDocument();
-  });
-
-  it("strip mode with a group column active shows the connect-means checkbox", () => {
-    stateRef.current = makeState({
-      mode: "strip",
-      groupCol: 0,
-      draw: { mode: "strip", boxes: [], points: [], valueLabel: "y", groupLabel: "grp", showMeanCI: false, connectMeans: false },
-    });
+    unmount();
+    stateRef.current = makeState({ mode: "strip", groupCol: 0, draw: STRIP_DRAW });
     render(<StatStage />);
     expect(screen.getByText("connect means")).toBeInTheDocument();
   });
@@ -373,12 +406,12 @@ describe("StatStage — connect-means line (JMP_GAP J5 residual)", () => {
     }
   });
 
-  it("toggling the connect-means checkbox calls setShowConnectMeans", () => {
-    const setShowConnectMeans = vi.fn();
-    stateRef.current = makeState({ mode: "box", groupCol: 0, setShowConnectMeans });
+  it("toggling the connect-means checkbox patches the marks", () => {
+    const setMarks = vi.fn();
+    stateRef.current = makeState({ mode: "box", groupCol: 0, setMarks });
     render(<StatStage />);
     screen.getByText("connect means").click();
-    expect(setShowConnectMeans).toHaveBeenCalledWith(true);
+    expect(setMarks).toHaveBeenCalledWith({ connectMeans: true }, "toggle connect means");
   });
 });
 

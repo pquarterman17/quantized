@@ -15,8 +15,10 @@
 
 import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
+import type { ResolvedStatMarks } from "../../lib/statMarks";
 import { niceTicks } from "../../lib/ticks";
-import { drawCategoryAxis } from "./statRenderAxes";
+import { axisLabelsOf, axisStyleOf } from "./statDrawMarks";
+import { categoryAxisLayout, drawCategoryAxis } from "./statRenderAxes";
 import {
   finiteDomain,
   violinOutline,
@@ -26,7 +28,7 @@ import {
 } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
 import { drawBar } from "./statRenderBar";
-import { drawBoxesWithMarks, drawStrip } from "./statRenderBox";
+import { drawBoxesWithMarks, drawJitteredPoints, drawStrip } from "./statRenderBox";
 import { drawEmptySlotMarkers, drawSlotCounts, slotPlan } from "./statRenderSlots";
 import { drawSlotSelection, type StatSelectionMarks } from "./statRenderSelection";
 
@@ -61,6 +63,10 @@ export interface CategoryAxisMarks {
    *  this DIRECTLY to decide which points get a ring, rather than through a
    *  copy carried inside `StatSelectionMarks` (P2.6 review finding 7). */
   selectedRows?: ReadonlySet<number> | null;
+  /** P2.6 box 1: points / jitter / summary / error bars / label options
+   *  (`lib/statMarks.resolveStatMarks`). Absent = the legacy flags below
+   *  (`statDrawMarks.drawMarks`). */
+  marks?: ResolvedStatMarks | null;
 }
 
 export type StatDrawData =
@@ -82,7 +88,15 @@ export type StatDrawData =
        *  — reads `boxes[i].mean` via `lib/statstage.connectMeansSeries`. */
       connectMeans?: boolean;
     } & CategoryAxisMarks
-  | ({ mode: "violin"; violins: ViolinGroup[]; valueLabel: string; groupLabel: string } & CategoryAxisMarks)
+  | ({
+      mode: "violin";
+      violins: ViolinGroup[];
+      valueLabel: string;
+      groupLabel: string;
+      /** P2.6 box 1: each group's raw points (index-aligned with `violins`)
+       *  when the marks show any. */
+      points?: BoxPointsGroup[] | null;
+    } & CategoryAxisMarks)
   | {
       mode: "qq";
       theo: number[];
@@ -116,6 +130,8 @@ export type StatDrawData =
       slots?: AxisSlot[] | null;
       selection?: StatSelectionMarks | null;
       selectedRows?: ReadonlySet<number> | null;
+      /** P2.6 box 1: the error-bar kind and label options. */
+      marks?: ResolvedStatMarks | null;
     }
   | {
       /** Points-only categorical plot (JMP_GAP J5 #3): same category slots
@@ -147,12 +163,20 @@ export function fmt(v: number): string {
   return Number(v.toPrecision(4)).toString();
 }
 
-export function plotRect(w: number, h: number): Rect {
+/** The plot area of a `w` x `h` canvas. A categorical `data` sizes the bottom
+ *  margin from its category axis (wrapped / rotated / two-tier labels need
+ *  more than one line — `statRenderAxes.categoryAxisLayout`); pass the SAME
+ *  draw the painter got so a click maps onto what was painted. */
+export function plotRect(w: number, h: number, data: StatDrawData | null = null): Rect {
+  const labels = axisLabelsOf(data);
+  const bottom = labels.length
+    ? Math.min(Math.max(MARGIN.bottom, h * 0.45), categoryAxisLayout(labels, axisStyleOf(data)).bottom)
+    : MARGIN.bottom;
   return {
     x: MARGIN.left,
     y: MARGIN.top,
     w: Math.max(1, w - MARGIN.left - MARGIN.right),
-    h: Math.max(1, h - MARGIN.top - MARGIN.bottom),
+    h: Math.max(1, h - MARGIN.top - bottom),
   };
 }
 
@@ -170,7 +194,7 @@ export function draw(canvas: HTMLCanvasElement, host: HTMLElement, data: StatDra
 
   const ink = cssVar("--text", "#e6e6e6");
   const muted = cssVar("--text-dim", "#9aa");
-  const rect = plotRect(W, H);
+  const rect = plotRect(W, H, data);
   ctx.strokeStyle = muted;
   ctx.lineWidth = 1;
   ctx.strokeRect(rect.x + 0.5, rect.y + 0.5, rect.w, rect.h);
@@ -257,7 +281,7 @@ function drawViolins(
   const domain = finiteDomain(d.violins.map((v) => [v.x[0] ?? 0, v.x[v.x.length - 1] ?? 0]));
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
   const plan = slotPlan(d.slots, d.violins.map((v) => v.label));
-  drawCategoryAxis(ctx, rect, plan.slots, plan.labels, d.groupLabel, ink, muted);
+  drawCategoryAxis(ctx, rect, plan.slots, plan.labels, d.groupLabel, ink, muted, axisStyleOf(d));
   drawEmptySlotMarkers(ctx, rect, plan.slots, plan.empty, muted);
   if (d.showN !== false) drawSlotCounts(ctx, rect, plan, d.violins.map((v) => v.n), muted);
 
@@ -304,6 +328,12 @@ function drawViolins(
     ctx.beginPath();
     ctx.arc(cx, vy(med), 2, 0, 2 * Math.PI);
     ctx.fill();
+
+    // P2.6 box 1: raw points over the violin (all / outliers only).
+    const pts = d.points?.[i];
+    if (pts && d.marks && d.marks.points !== "none") {
+      drawJitteredPoints(ctx, pts, cx, hw, vy, color, d.marks.jitterWidth, d.selectedRows, d.marks.points);
+    }
   });
 }
 

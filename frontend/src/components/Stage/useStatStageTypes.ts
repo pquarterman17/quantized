@@ -5,6 +5,7 @@
 // here, so its importers are unchanged.
 
 import type { GroupNotice } from "../../lib/groupAxis";
+import type { ResolvedStatMarks, StatMarks } from "../../lib/statMarks";
 import type { StatMode } from "../../lib/statstage";
 import type { Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
@@ -35,6 +36,11 @@ export interface UseStatStageParams {
    *  `statShowGroupN` (defaults false / true: see `lib/plotview`). */
   hideEmptyLevels?: boolean;
   showGroupN?: boolean;
+  /** P2.6 box 1 — the window's persisted `PlotView.statMarks`, and the
+   *  writer that merges a patch into it (one undo entry). Both absent = the
+   *  hook keeps the marks itself (not persisted). */
+  marks?: StatMarks | null;
+  onMarksChange?: (patch: StatMarks, label?: string) => void;
 }
 
 export interface StatStageState {
@@ -67,9 +73,13 @@ export interface StatStageState {
    *  stacked (true, one bar per category). */
   barStack: boolean;
   setBarStack: (s: boolean) => void;
-  /** Box mode only (JMP_GAP J5 #1): overlay each group's raw finite values,
-   *  jittered horizontally. Strip mode (#3) always shows points regardless
-   *  of this toggle -- it has no other glyph. */
+  /** P2.6 box 1: the resolved marks this stage draws with (and exports),
+   *  and the patch writer (persisted + undoable when the caller wired
+   *  `onMarksChange`). The four toggles below are shorthands over them. */
+  marks: ResolvedStatMarks;
+  setMarks: (patch: StatMarks, label?: string) => void;
+  /** Box: every raw point, jittered (`marks.points === "all"`); off = the
+   *  box's own outliers. (JMP_GAP J5 #1.) */
   showPoints: boolean;
   setShowPoints: (s: boolean) => void;
   /** Box/Strip (JMP_GAP J5 #2): overlay a mean +/- 95% CI diamond+whisker

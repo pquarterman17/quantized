@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { BoxStat } from "../../lib/statstage";
 import { seriesStat, type BarChartData } from "../../lib/barlayout";
 import { draw, drawCategoryAxis, fmt, type StatDrawData, type ViolinGroup } from "./statRender";
+import { categoryAxisLayout } from "./statRenderAxes";
 import { boxValueDomain, drawConnectMeansLine } from "./statRenderBox";
 
 describe("fmt", () => {
@@ -289,72 +290,125 @@ describe("boxValueDomain", () => {
 });
 
 
-describe("drawCategoryAxis — NESTED tick labels (Group R, review finding 1)", () => {
-  // The gap that let the defect through: every Group R test asserted on the
-  // DATA layer (which cells, which order, which label strings), and nothing
-  // asserted what those strings look like once they reach the canvas. They
-  // reached it through a 14-character truncation that cut
-  // `lot = 0 / wafer = 0` down to `lot = 0 / waf…` — so a two-lot/two-wafer
-  // plot painted four boxes under two distinct ticks, and the second factor,
-  // the whole point of the feature, was invisible.
+describe("drawCategoryAxis — NESTED tick labels (Group R review finding 1; two tiers, P2.6 box 1)", () => {
+  // The gap that let the Group R defect through: every test asserted on the
+  // DATA layer, and nothing asserted what the label strings look like once
+  // they reach the canvas — a 14-character truncation cut `lot = 0 / wafer = 0`
+  // to `lot = 0 / waf…`, and the second factor was invisible. P2.6 box 1 draws
+  // the nested axis in TWO TIERS (the export's `style_category_axis`): inner
+  // level per tick, each outer level ONCE under its run, separators between.
 
-  /** Records every `fillText(text, x, y)` the renderer issues. */
+  /** Records every `fillText` (with the rotation in force) and separator. */
   function recordingCtx() {
-    const texts: { text: string; x: number; y: number }[] = [];
+    const texts: { text: string; x: number; y: number; rot: number; align: string }[] = [];
+    const seps: number[] = [];
+    let rot = 0;
+    let tx = 0;
+    let ty = 0;
     const ctx = {
       font: "",
       fillStyle: "",
+      strokeStyle: "",
+      lineWidth: 0,
       textAlign: "" as CanvasTextAlign,
       textBaseline: "" as CanvasTextBaseline,
-      fillText: (text: string, x: number, y: number) => texts.push({ text, x, y }),
+      save: () => {},
+      restore: () => {
+        rot = 0;
+        tx = 0;
+        ty = 0;
+      },
+      translate: (x: number, y: number) => {
+        tx = x;
+        ty = y;
+      },
+      rotate: (a: number) => {
+        rot = Math.round((a * 180) / Math.PI);
+      },
+      beginPath: () => {},
+      stroke: () => {},
+      lineTo: () => {},
+      moveTo: (x: number) => seps.push(Math.round(x)),
+      fillText(this: { textAlign: string }, text: string, x: number, y: number) {
+        texts.push({ text, x: x + tx, y: y + ty, rot, align: this.textAlign });
+      },
     } as unknown as CanvasRenderingContext2D;
-    return { ctx, texts };
+    return { ctx, texts, seps };
   }
 
   const RECT = { x: 0, y: 0, w: 400, h: 200 };
   const SLOTS = [{ cx: 0.25 }, { cx: 0.75 }];
+  const SLOTS4 = [{ cx: 0.125 }, { cx: 0.375 }, { cx: 0.625 }, { cx: 0.875 }];
 
-  it("stacks each half on its own line, so BOTH factors survive", () => {
-    const { ctx, texts } = recordingCtx();
+  it("draws the inner level per tick and each outer level ONCE, with a separator between runs", () => {
+    const { ctx, texts, seps } = recordingCtx();
     drawCategoryAxis(
-      ctx, RECT, SLOTS,
-      ["lot = 0 / wafer = 0", "lot = 0 / wafer = 1"],
+      ctx, RECT, SLOTS4,
+      ["lot = 0 / wafer = 0", "lot = 0 / wafer = 1", "lot = 1 / wafer = 0", "lot = 1 / wafer = 1"],
       "lot / wafer", "#000", "#888",
     );
-    const ticks = texts.filter((t) => t.text !== "lot / wafer");
-    expect(ticks.map((t) => t.text)).toEqual([
-      "lot = 0", "wafer = 0",
-      "lot = 0", "wafer = 1",
+    const body = texts.filter((t) => t.text !== "lot / wafer");
+    expect(body.map((t) => t.text)).toEqual([
+      "wafer = 0", "wafer = 1", "wafer = 0", "wafer = 1", "lot = 0", "lot = 1",
     ]);
-    // The distinguishing half is present and DISTINCT per slot — the exact
-    // property the truncation destroyed.
-    expect(new Set(ticks.map((t) => t.text)).size).toBe(3);
-    // Second line sits below the first, and above the caption at +30.
-    expect(ticks[1].y).toBeGreaterThan(ticks[0].y);
-    expect(ticks[1].y).toBeLessThan(RECT.y + RECT.h + 30);
+    // Each outer label is centred under its run; the inner ones sit above it.
+    expect(body[4].x).toBe(100);
+    expect(body[5].x).toBe(300);
+    expect(body[4].y).toBeGreaterThan(body[0].y);
+    // One separator, between wafer 1 of lot 0 and wafer 0 of lot 1.
+    expect(seps).toEqual([200]);
+    const caption = texts.find((t) => t.text === "lot / wafer");
+    expect(caption?.y).toBe(RECT.h + categoryAxisLayout(["a = 0 / b = 0"]).captionY);
+    expect(caption!.y).toBeGreaterThan(body[4].y);
   });
 
   it("leaves a SINGLE-factor label on one line, exactly as before", () => {
-    const { ctx, texts } = recordingCtx();
+    const { ctx, texts, seps } = recordingCtx();
     drawCategoryAxis(ctx, RECT, SLOTS, ["lot = 0", "lot = 1"], "lot", "#000", "#888");
-    expect(texts.filter((t) => t.text !== "lot").map((t) => t.text)).toEqual([
-      "lot = 0", "lot = 1",
-    ]);
+    expect(texts.filter((t) => t.text !== "lot").map((t) => t.text)).toEqual(["lot = 0", "lot = 1"]);
+    expect(seps).toEqual([]);
+    expect(texts.find((t) => t.text === "lot")?.y).toBe(RECT.h + 30); // the caption never moved
   });
 
-  it("still truncates a half that is genuinely too long, per line", () => {
-    // The budget is not abolished — it now applies to each half, so a long
-    // column name eats only its own line instead of erasing the other factor.
+  it("still truncates an inner level that is genuinely too long", () => {
     const { ctx, texts } = recordingCtx();
     drawCategoryAxis(
       ctx, RECT, SLOTS,
-      ["deposition_chamber = 0 / wafer = 7", "deposition_chamber = 1 / wafer = 8"],
+      ["wafer = 7 / deposition_chamber = 0", "wafer = 7 / deposition_chamber = 1"],
       "x", "#000", "#888",
     );
+    expect(texts[0].text).toBe("deposition_ch…");
+    expect(texts[2].text).toBe("wafer = 7");
+  });
+
+  it("wraps a long label onto lines (the export's wrap_label), instead of truncating", () => {
+    const { ctx, texts } = recordingCtx();
+    drawCategoryAxis(ctx, RECT, SLOTS, ["Anneal temperature 450 C", "B"], "x", "#000", "#888", { wrap: true });
+    const first = texts.filter((t) => t.x === 100 && t.text !== "x");
+    expect(first.map((t) => t.text)).toEqual(["Anneal", "temperature", "450 C"]);
+    expect(first[1].y - first[0].y).toBe(11);
+  });
+
+  it("rotates labels about their END on the tick (matplotlib ha=right)", () => {
+    const { ctx, texts } = recordingCtx();
+    drawCategoryAxis(ctx, RECT, SLOTS, ["alpha", "beta"], "x", "#000", "#888", { rotation: 45 });
     const ticks = texts.filter((t) => t.text !== "x");
-    expect(ticks[0].text).toBe("deposition_ch…");
-    expect(ticks[1].text).toBe("wafer = 7");
-    expect(ticks[3].text).toBe("wafer = 8");
+    expect(ticks.map((t) => [t.text, t.rot, t.align, t.x])).toEqual([
+      ["alpha", -45, "right", 100],
+      ["beta", -45, "right", 300],
+    ]);
+  });
+
+  it("the layout's depth, caption and bottom margin grow with the label options", () => {
+    const flat = categoryAxisLayout(["a", "b"]);
+    expect([flat.depth, flat.captionY, flat.bottom]).toEqual([11, 30, 48]);
+    const tiered = categoryAxisLayout(["a = 1 / b = 1", "a = 1 / b = 2"]);
+    expect(tiered.captionY).toBe(44);
+    expect(tiered.tiers).toEqual([{ label: "a = 1", first: 0, last: 1 }]);
+    const upright = categoryAxisLayout(["abcdefghij"], { rotation: 90 });
+    expect(upright.depth).toBe(60); // 10 chars x 6 px, turned on end
+    expect(upright.bottom).toBe(6 + 60 + 13 + 18);
+    expect(categoryAxisLayout(["one two three"], { wrap: true }).depth).toBe(22);
   });
 });
 

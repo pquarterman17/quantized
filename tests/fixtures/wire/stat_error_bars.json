@@ -1,0 +1,111 @@
+{
+  "_comment": "P2.6 box 1: error-bar conventions shared by calc.statplots.error_bar_bounds and frontend lib/statMarks.errorBounds. Hand-computed closed forms: sd = sqrt(sum (x-mean)^2 / (n-1)); se = sd/sqrt(n); ci95 = mean -/+ t(0.975, n-1)*se (Student t critical values from standard tables); n < 2 has no error bar (null).",
+  "cases": [
+    {
+      "name": "eight values",
+      "values": [
+        2,
+        4,
+        4,
+        4,
+        5,
+        5,
+        7,
+        9
+      ],
+      "n": 8,
+      "mean": 5.0,
+      "median": 4.5,
+      "sd": 2.138089935299395,
+      "se": 0.7559289460184544,
+      "t975": 2.364624251592784,
+      "bounds": {
+        "sd": [
+          2.861910064700605,
+          7.138089935299395
+        ],
+        "se": [
+          4.244071053981545,
+          5.755928946018455
+        ],
+        "ci95": [
+          3.21251208176379,
+          6.787487918236209
+        ]
+      }
+    },
+    {
+      "name": "two values",
+      "values": [
+        1.5,
+        2.5
+      ],
+      "n": 2,
+      "mean": 2.0,
+      "median": 2.0,
+      "sd": 0.7071067811865476,
+      "se": 0.5,
+      "t975": 12.706204736174694,
+      "bounds": {
+        "sd": [
+          1.2928932188134525,
+          2.7071067811865475
+        ],
+        "se": [
+          1.5,
+          2.5
+        ],
+        "ci95": [
+          -4.353102368087347,
+          8.353102368087347
+        ]
+      }
+    },
+    {
+      "name": "one value",
+      "values": [
+        3.0
+      ],
+      "n": 1,
+      "mean": 3.0,
+      "median": 3.0,
+      "sd": null,
+      "se": null,
+      "bounds": {
+        "sd": null,
+        "se": null,
+        "ci95": null
+      }
+    },
+    {
+      "name": "five values",
+      "values": [
+        10,
+        12,
+        23,
+        23,
+        16
+      ],
+      "n": 5,
+      "mean": 16.8,
+      "median": 16.0,
+      "sd": 6.058052492344384,
+      "se": 2.7092434368288134,
+      "t975": 2.7764451051977934,
+      "bounds": {
+        "sd": [
+          10.741947507655617,
+          22.858052492344385
+        ],
+        "se": [
+          14.090756563171187,
+          19.509243436828815
+        ],
+        "ci95": [
+          9.277934321027395,
+          24.322065678972606
+        ]
+      }
+    }
+  ]
+}

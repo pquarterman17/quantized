@@ -1912,6 +1912,7 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   statMode: "display toggle, not channel-indexed",
   statHideEmptyLevels: "display toggle (P2.6 box 2), not channel-indexed",
   statShowGroupN: "display toggle (P2.6 box 2), not channel-indexed",
+  statMarks: "display options (P2.6 box 1: points/jitter/summary/error bars/labels), not channel-indexed",
   xLim: "x-axis range [min, max], not a column index",
   yLim: "y-axis range [min, max], not a column index",
   xStep: "x-axis tick step, not a column index",

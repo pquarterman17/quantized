@@ -40,6 +40,7 @@ import {
 } from "../../lib/api/figures";
 import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
+import { axisStyleWire, errorHalfWidth, type ResolvedStatMarks } from "../../lib/statMarks";
 import type { GroupSpec } from "../../lib/statschooser";
 import { finiteOf, type IndexedGroupSpec, type StatMode } from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
@@ -61,6 +62,10 @@ export function buildExportSpec(
   pointRowIndices: number[][] | null = null,
   showMeanCI = false,
   showConnectMeans = false,
+  /** P2.6 box 1: the resolved marks the screen draws with. When given they
+   *  are posted as `points` / `jitter_width` / `summary` / `error_bars`
+   *  (and connect-means), superseding the legacy flags above. */
+  marks: ResolvedStatMarks | null = null,
 ): StatplotFigureSpec | null {
   if (mode === "box" || mode === "violin" || mode === "strip") {
     const finiteGroups = groups.filter((g) => g.values.length > 0);
@@ -70,7 +75,7 @@ export function buildExportSpec(
     // points overlay is always on (no toggle for it -- it's the whole plot),
     // so `show_points` is forced true there regardless of the (box-only)
     // `showPoints` toggle state.
-    const marks =
+    const legacy =
       mode === "violin"
         ? {}
         : {
@@ -79,6 +84,7 @@ export function buildExportSpec(
             show_mean_ci: showMeanCI,
             show_connect_means: showConnectMeans,
           };
+    const wire = marks ? marksWire(mode, marks, pointRowIndices) : legacy;
     return {
       kind: mode,
       data: finiteGroups.map((g) => g.values),
@@ -88,7 +94,7 @@ export function buildExportSpec(
       x_label: groupLabel,
       y_label: valueLabel,
       filename: `${mode}_${valueLabel}`,
-      ...marks,
+      ...wire,
     };
   }
   const values = finiteOf(data, valueCol);
@@ -119,6 +125,19 @@ export function buildExportSpec(
   };
 }
 
+/** The marks as the export request carries them (P2.6 box 1) — the SAME
+ *  resolved object the canvas draws with. Violin takes the points only (its
+ *  summary is its inner quartile glyph); summary / error bars / connect-means
+ *  are box / strip marks. */
+function marksWire(mode: StatMode, m: ResolvedStatMarks, rows: number[][] | null) {
+  const pts = { points: m.points, jitter_width: m.jitterWidth, point_row_indices: rows };
+  if (mode === "violin") return pts;
+  return {
+    ...pts, show_points: m.points === "all", summary: m.summary, error_bars: m.errorBars,
+    show_mean_ci: m.summary === "mean", show_connect_means: m.connectMeans,
+  };
+}
+
 /** Everything `exportFacetedFigure` used to close over as a method on the
  *  hook. Passed explicitly so the whole export path can live out here.
  *  (Review finding 4: this said "and be loaded on demand", which the same
@@ -135,6 +154,8 @@ export interface FacetedExportInputs {
    *  caveat, exactly as the screen shows them. */
   showN?: boolean;
   caveat?: string | null;
+  /** P2.6 box 1: the marks the screen draws with (null: legacy request). */
+  marks?: ResolvedStatMarks | null;
 }
 
 /** Restate raw groups on the draw's axis (P2.6 box 2): one entry per AXIS
@@ -161,15 +182,25 @@ export function onAxis<T>(
 }
 
 /** A bar matrix on the wire: NaN means become null (JSON has no NaN; the
- *  route draws no bar for them), and `counts` rides only when n is shown. */
-function barWire(d: BarChartData, showN: boolean) {
+ *  route draws no bar for them), and `counts` rides only when n is shown.
+ *  `errors` are the half-widths of the error-bar kind on screen (P2.6 box 1:
+ *  `lib/statMarks.errorHalfWidth`, SEM unless the marks pick SD / 95% CI /
+ *  none) — the export draws exactly the whiskers the canvas does. */
+function barWire(d: BarChartData, showN: boolean, m: ResolvedStatMarks | null = null) {
+  const kind = m?.errorBars ?? "se";
+  const half = (s: { sem: number; n: number }) => errorHalfWidth(kind, s.sem, s.n);
   return {
     groups: d.groups.map((g) => g.label),
     series: d.seriesLabels,
     values: d.groups.map((g) => g.series.map((s) => (Number.isFinite(s.mean) ? s.mean : null))),
-    errors: d.groups.map((g) => g.series.map((s) => (Number.isFinite(s.sem) ? s.sem : null))),
+    errors: d.groups.map((g) => g.series.map((s) => (Number.isFinite(half(s)) ? half(s) : null))),
     counts: showN ? d.groups.map((g) => g.series.map((s) => s.n)) : null,
   };
+}
+
+/** The label options on the wire for these tick labels (null: none set). */
+function axisWire(m: ResolvedStatMarks | null | undefined, labels: readonly string[]) {
+  return m ? axisStyleWire(m, labels) : null;
 }
 
 /** Rebuilds a `facets[]` wire payload from `drawFacets` and renders one
@@ -189,13 +220,14 @@ export async function exportFacetedFigure(
   const { drawFacets, mode, barStack, groupLabel, barValueLabel, valueLabel } = o;
   const showN = o.showN ?? false;
   const caveat = o.caveat ?? null;
+  const m = o.marks ?? null;
   if (!drawFacets || drawFacets.length === 0) return;
   if (mode === "bar") {
     const facets: CategoricalFacetSpec[] = [];
     for (const f of drawFacets) {
       const draw = f.draw;
       if (draw.mode !== "bar") continue;
-      facets.push({ label: f.label, ...barWire(draw.data, showN && !barStack) });
+      facets.push({ label: f.label, ...barWire(draw.data, showN && !barStack, m) });
     }
     if (!facets.length) return;
     const spec: CategoricalFigureSpec = {
@@ -211,6 +243,7 @@ export async function exportFacetedFigure(
       filename: `bar_${barValueLabel}_faceted`,
       facets,
       caveat,
+      axis_style: axisWire(m, facets.flatMap((f) => f.groups)),
     };
     await exportCategoricalFigure(spec);
     return;
@@ -241,6 +274,8 @@ export async function exportFacetedFigure(
     facets,
     show_n: showN,
     caveat,
+    ...(m ? { summary: m.summary, error_bars: m.errorBars, points: m.points } : {}),
+    axis_style: axisWire(m, facets.flatMap((f) => f.labels ?? [])),
   };
   await exportStatplotFigure(spec);
 }
@@ -258,9 +293,6 @@ export interface StatStageExportInputs extends FacetedExportInputs {
   dist: string;
   bins: string;
   fit: string | null;
-  showPoints: boolean;
-  showMeanCI: boolean;
-  connectMeans: boolean;
 }
 
 export async function exportStatStage(fmt: string, o: StatStageExportInputs): Promise<void> {
@@ -276,7 +308,8 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
   if (mode === "bar") {
     if (!draw || draw.mode !== "bar" || draw.data.groups.length === 0) return;
     await exportCategoricalFigure({
-      ...barWire(draw.data, showN && !o.barStack),
+      ...barWire(draw.data, showN && !o.barStack, o.marks ?? null),
+      axis_style: axisWire(o.marks, draw.data.groups.map((g) => g.label)),
       stacked: o.barStack,
       caveat,
       fmt,
@@ -292,14 +325,17 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
   // `point_row_indices` (parallel to the values `buildExportSpec` sends)
   // so the export scatters points in the SAME relative spot the screen
   // does (identical deterministic-jitter hash, both sides).
+  // Whatever raw points the stage resolved for its marks (`statStageMarks.
+  // needsPoints`) are exactly the ones the export needs.
+  const m = o.marks ?? null;
   let pointRowIndices: number[][] | null = null;
-  if (mode === "strip" || (mode === "box" && o.showPoints)) {
+  if (o.indexedGroups.length && m && m.points !== "none") {
     const finiteIndexed = o.indexedGroups.filter((g) => g.points.length > 0);
     pointRowIndices = finiteIndexed.map((g) => g.points.map((p) => p.rowIndex));
   }
   const spec = buildExportSpec(
     mode, o.data, o.groups, o.valueCol, o.valueLabel, o.groupLabel, o.dist, o.bins, o.fit, fmt,
-    o.showPoints, pointRowIndices, o.showMeanCI, o.connectMeans,
+    m?.points === "all", pointRowIndices, m?.summary === "mean", m?.connectMeans ?? false, m,
   );
   if (!spec) return;
   if (mode === "box" || mode === "violin" || mode === "strip") {
@@ -311,10 +347,11 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
       if (pointRowIndices) spec.point_row_indices = onAxis(slots, pointRowIndices, [])?.values ?? null;
       // Only when a HIDDEN empty level must break the line (visible empties
       // travel as `[]` groups and break it on their own).
-      if (o.connectMeans && axis.breaks.some(Boolean)) spec.connect_breaks = axis.breaks;
+      if (m?.connectMeans && axis.breaks.some(Boolean)) spec.connect_breaks = axis.breaks;
     }
     spec.show_n = showN;
     spec.caveat = caveat;
+    spec.axis_style = axisWire(m, spec.labels ?? []);
   }
   await exportStatplotFigure(spec);
 }

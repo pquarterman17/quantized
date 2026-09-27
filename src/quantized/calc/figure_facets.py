@@ -236,6 +236,16 @@ def render_facets_figure(
         return savefig_bytes(built.fig, fmt, dpi=dpi, transparent=transparent)
 
 
+def _facet_marks(marks: dict[str, Any] | None, kind: str) -> dict[str, Any] | None:
+    """A facet panel carries no row indices, so no jittered points (P2.6 box
+    1): a box panel shows its fliers for ``points`` "all" or "outliers", a
+    violin panel none -- the screen's ``statStageMarks.facetMarks``."""
+    if not marks or "points" not in marks:
+        return marks
+    shown = kind == "box" and marks["points"] != "none"
+    return {**marks, "points": "outliers" if shown else "none"}
+
+
 def render_stat_facets_figure(
     panels: list[dict[str, Any]],
     *,
@@ -253,6 +263,8 @@ def render_stat_facets_figure(
     dpi: int | None = None,
     show_n: bool = False,
     caveat: str | None = None,
+    marks: dict[str, Any] | None = None,
+    axis_style: dict[str, Any] | None = None,
 ) -> bytes:
     """Faceted box/violin export (GUI_INTERACTION #12 slice 4b, StatStage's
     "facet by" grid). Each ``panels[i]`` is ``{"label": str, "kind": "box" |
@@ -269,7 +281,10 @@ def render_stat_facets_figure(
     Reuses ``figure_statplots._draw_statplot`` for each panel so a single
     facet renders byte-identically to that module's flat single-panel path --
     including P2.6 box 2's empty slots, ``show_n`` counts and ``caveat``
-    footnote (``calc.figure_group_notes``).
+    footnote (``calc.figure_group_notes``) and P2.6 box 1's ``marks``
+    (summary marker / error bars / fliers -- faceted panels carry no row
+    indices, so no jittered points) and ``axis_style`` (label rotation /
+    wrapping / two-tier nested axis), applied to every panel alike.
     """
     with heavy_imports("quantized.calc.figure_group_notes", "quantized.calc.figure_statplots"):
         from quantized.calc.figure_group_notes import add_caveat, supxlabel_above_caveat
@@ -321,7 +336,10 @@ def render_stat_facets_figure(
             prepared.append((label, kind, data, flabels))
         fig, axes = _new_grid_figure(n, figsize)
         for ax, (label, kind, data, flabels) in zip(axes, prepared, strict=True):
-            _draw_statplot(ax, kind, data, flabels, dist, bins, fit, st, show_n=show_n)
+            _draw_statplot(
+                ax, kind, data, flabels, dist, bins, fit, st, show_n=show_n,
+                marks=_facet_marks(marks, kind), axis_style=axis_style,
+            )
             ax.set_title(label, fontsize=st.font_size)
             if not st.box_on:
                 ax.spines["top"].set_visible(False)
@@ -348,6 +366,7 @@ def render_categorical_facets_figure(
     height_in: float | None = None,
     dpi: int = 200,
     caveat: str | None = None,
+    axis_style: dict[str, Any] | None = None,
 ) -> bytes:
     """Faceted grouped/stacked bar export (GUI_INTERACTION #12 slice 4b,
     StatStage's bar-mode "facet by" grid). Each ``panels[i]`` is
@@ -421,7 +440,7 @@ def render_categorical_facets_figure(
             prepared.append((label, groups, series, vals, errs, cnts))
         fig, axes = _new_grid_figure(n, figsize)
         for ax, (label, groups, series, vals, errs, cnts) in zip(axes, prepared, strict=True):
-            _draw_categorical_bars(ax, groups, series, vals, errs, stacked, cnts)
+            _draw_categorical_bars(ax, groups, series, vals, errs, stacked, cnts, axis_style)
             ax.set_title(label, fontsize=st.font_size)
             if not st.box_on:
                 ax.spines["top"].set_visible(False)
