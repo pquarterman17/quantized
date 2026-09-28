@@ -3175,10 +3175,48 @@ a plan edit.
   targeted + 838-file/13,590-test full suite green, `tsc -b --force` clean,
   lint clean, two findings sabotage-verified (an unguarded automatic-
   suggestion leak, a rendered Delete button on a built-in row). Kept lazy:
-  `lib/builtinPlotRecipes.ts` is reached only from the already-lazy Recipe
-  Manager panel chunk (`architecture.test.ts`'s eager-reachability walk
-  passes); final `npm run build` bundle-size gate: 843.8 kB eager (846.1 kB
-  budget, unedited), 2.3 kB under.
+  `lib/builtinPlotRecipes.ts` is reached from TWO already-lazy edges --
+  the Recipe Manager panel chunk, and (since P2.1 landed) `store/
+  plotRecipeApply.ts`'s own `isBuiltinPlotRecipeId` import, itself a lazy
+  SEAM loaded via `store/plotRecipeApplyLazy.ts` -- so neither drags it into
+  the entry chunk (`architecture.test.ts`'s eager-reachability walk passes);
+  final `npm run build` bundle-size gate: 843.8 kB eager (846.1 kB budget,
+  unedited), 2.3 kB under.
+  **2026-09-28 (review round):** nine further findings fixed -- the XRR
+  built-in's labels corrected against the real reflectometry parsers (it now
+  also matches NCNR `.refl`'s "Intensity" and `.pnr`'s "Rpp"/"Rmm"/"Rpm"/
+  "Rmp", renamed "Reflectivity (log R vs Q)", and its description now points
+  lab XRR (tagged `xrd.powder`) at the XRD θ–2θ recipe instead of inventing
+  a lab-2θ reflectivity recipe with no reliable parser signal); the M(H)
+  loop's moment aliases now cover every magnetometry moment label `io/`
+  emits, including MPMS3's "DC Moment Free Ctr"/"DC Moment Fixed Ctr"; a
+  captured/fixed refLine id is re-minted from the SAME counter `addRefLine`
+  uses on apply, closing a same-session id collision; `RecipeManagerPanel.
+  tsx`'s Apply button no longer sticks disabled forever on a rejected lazy-
+  chunk load; `store/plotRecipeApply.ts`'s "recently used" scope is now
+  derived from actual list membership (project or hydrated global) rather
+  than an `isBuiltinPlotRecipeId` prefix skip, so a since-deleted pending
+  recipe records nothing and a user id that happens to start with
+  `"builtin:"` still records correctly; "Copy to Project" now routes through
+  `recipeManagerActions.ts` and flags the copy `noAutoSuggest: true` (a new
+  additive `PlotRecipe` field) so it stays excluded from every automatic-
+  suggestion surface while still applying manually; `builtinVisual()` now
+  builds on `lib/plotRecipeIO.ts`'s own exported `defaultRecipeVisual()`
+  rather than a second hand-duplicated copy. Every behavioral fix above got
+  a new test, and every one of those was sabotage-verified (the fix reverted,
+  the test confirmed red, the fix restored) -- including the two mechanism-
+  level cases a plain revert-and-rerun of the OBVIOUS test would have missed:
+  the id-collision test using the M(H) built-in's own fixed ids stayed GREEN
+  under the un-fixed code (its ids can never collide with an `addRefLine`-
+  minted one regardless), so it was replaced with one capturing a
+  `"ref-1"`-shaped id instead; a code-duplication fix (`builtinVisual()` ->
+  `defaultRecipeVisual()`) produces IDENTICAL values either way, so it is
+  covered by mocking `defaultRecipeVisual()` with a sentinel and checking the
+  built-ins actually reflect it. `npx tsc -b --force` clean, `eslint --max-
+  warnings=0 src` clean, the 13 directly-relevant test files (440 tests)
+  green, `npm run build` (fresh `.vite` cache) green at 843.9 kB eager
+  against the unedited 846.1 kB budget (2.2 kB under). No backend files
+  touched.
 - [ ] Validate on representative owner instruments/phases.
 
 ### P2.2 — XRR/PNR fit-to-data workbench

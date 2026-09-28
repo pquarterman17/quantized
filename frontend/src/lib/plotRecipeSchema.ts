@@ -185,4 +185,18 @@ export interface PlotRecipe {
   signature: RecipeSignatureEntry[];
   mapping: RecipeMapping;
   visual: RecipeVisual;
+  /** Opt-out from every AUTOMATIC suggestion surface (`store/
+   *  plotRecipeApply.ts`'s `resolvedCandidates`, which feeds both
+   *  `matchingPlotRecipes` and the post-import `cleanMatchingPlotRecipe`
+   *  toast) while remaining fully applicable MANUALLY, like any other
+   *  project/global recipe -- unlike `lib/builtinPlotRecipes.ts`'s built-ins,
+   *  which are excluded from those surfaces structurally (never a member of
+   *  either live list), a "Copy to Project" landed COPY of one *is* an
+   *  ordinary list member, so it needs this explicit flag to keep the same
+   *  "built-ins are never offered automatically" promise (code-review
+   *  finding 7). Added additively (no `PLOT_RECIPE_SCHEMA_VERSION` bump,
+   *  same convention as `RecipeVisual.refLines`): absent/`undefined` on an
+   *  older or ordinarily-captured recipe means "eligible", so no migration
+   *  is needed. */
+  noAutoSuggest?: boolean;
 }

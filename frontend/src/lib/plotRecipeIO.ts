@@ -73,16 +73,24 @@ function isRefLineAxis(v: unknown): v is "x" | "y" {
 /** Validate a persisted `refLines` list -- an entry missing a string `id`,
  *  a valid `axis`, or a finite `value` is dropped (nothing sane to fall
  *  back to for one bad entry), same "drop the bad one, keep the rest"
- *  convention `sanitizeShapes`/`sanitizeAnnotations` (`plotview.ts`) use. */
+ *  convention `sanitizeShapes`/`sanitizeAnnotations` (`plotview.ts`) use.
+ *  FINDING 4 (code-review): also drops any entry whose `id` repeats one
+ *  already kept -- a duplicate id makes `removeRefLine`/`updateRefLine`
+ *  (both keyed by id) act on every line sharing it at once instead of the
+ *  one the caller meant, so a corrupt/hand-edited persisted list with a
+ *  collision is defused here rather than reproducing the ambiguity live. */
 function sanitizeRefLines(v: unknown): RefLine[] {
   if (!Array.isArray(v)) return [];
   const out: RefLine[] = [];
+  const seenIds = new Set<string>();
   for (const e of v) {
     if (typeof e !== "object" || e === null) continue;
     const o = e as Record<string, unknown>;
     if (typeof o.id !== "string" || !o.id) continue;
     if (!isRefLineAxis(o.axis)) continue;
     if (typeof o.value !== "number" || !Number.isFinite(o.value)) continue;
+    if (seenIds.has(o.id)) continue;
+    seenIds.add(o.id);
     out.push({ id: o.id, axis: o.axis, value: o.value });
   }
   return out;
@@ -203,7 +211,13 @@ function sanitizeMapping(v: unknown): RecipeMapping | null {
 
 // ── visual (per-field fallback -- never rejects the whole recipe) ────────
 
-function defaultRecipeVisual(): RecipeVisual {
+/** The all-defaults `RecipeVisual` every per-field fallback below reads from,
+ *  and the sanctioned base a built-in Plot Recipe's own visual is built on
+ *  (`lib/builtinPlotRecipes.ts`'s `builtinVisual`, `{ ...defaultRecipeVisual(),
+ *  ...overrides }`) -- exported so that module never hand-duplicates this
+ *  literal (code-review finding 8: the two had drifted into two copies of
+ *  the same object). */
+export function defaultRecipeVisual(): RecipeVisual {
   return {
     mark: "line",
     xScale: "linear",
@@ -352,6 +366,10 @@ function sanitizeRecipeEntry(v: unknown): PlotRecipe | null {
     signature,
     mapping,
     visual: sanitizeVisual(o.visual),
+    // Additive, no schema-version bump (see the field's own doc): absent or
+    // anything but a literal `true` reads as "eligible for auto-suggestion",
+    // same as an older persisted recipe that predates the field entirely.
+    ...(o.noAutoSuggest === true ? { noAutoSuggest: true } : {}),
   };
 }
 

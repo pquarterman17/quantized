@@ -4,6 +4,7 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { BUILTIN_PLOT_RECIPES } from "../../../lib/builtinPlotRecipes";
 import { captureRecipe, type PlotRecipe } from "../../../lib/plotRecipe";
 import { defaultPlotView } from "../../../lib/plotview";
 import { exportRecipeFile } from "../../../lib/plotRecipeStorage";
@@ -13,6 +14,7 @@ import { useApp } from "../../../store/useApp";
 import {
   applyRecipeToDataset,
   combinedRecipeRows,
+  copyBuiltinToProject,
   copyRecipeToOtherScope,
   deleteRecipe,
   duplicateRecipe,
@@ -170,6 +172,46 @@ describe("copyRecipeToOtherScope", () => {
     expect(useApp.getState().plotRecipes).toHaveLength(0);
     expect(useGlobalPlotRecipes.getState().recipes.map((r) => r.id)).toEqual(["g1"]);
     expect(useGlobalPlotRecipes.getState().recipes[0].name).toBe("Original");
+  });
+});
+
+// FINDING 7 (code-review): the built-in copy gesture routes through THIS
+// module (never straight from RecipeManagerPanel.tsx onto the store), flags
+// the copy `noAutoSuggest: true`, and confirms via `status`.
+describe("copyBuiltinToProject", () => {
+  it("lands an independent, fully-editable project recipe flagged noAutoSuggest -- the built-in itself untouched", () => {
+    const xrd = BUILTIN_PLOT_RECIPES.find((r) => r.technique === "xrd.powder")!;
+
+    const id = copyBuiltinToProject(xrd);
+
+    expect(useApp.getState().plotRecipes).toHaveLength(1);
+    const copy = useApp.getState().plotRecipes[0];
+    expect(copy.id).toBe(id);
+    expect(copy.id).not.toBe(xrd.id); // fresh id, never the built-in's own
+    expect(copy.name).toBe(xrd.name);
+    expect(copy.noAutoSuggest).toBe(true);
+    expect(xrd.noAutoSuggest).not.toBe(true); // the source object is untouched
+  });
+
+  it("sets a status confirmation naming the copy (the toast/status line every other recipe action's caller reads)", () => {
+    const xrd = BUILTIN_PLOT_RECIPES.find((r) => r.technique === "xrd.powder")!;
+    useApp.setState({ status: "" });
+
+    copyBuiltinToProject(xrd);
+
+    expect(useApp.getState().status).toContain(xrd.name);
+  });
+
+  it("records ONE undo entry, same as any other copyPlotRecipeIn -- undo removes exactly the tracked copy", () => {
+    const xrd = BUILTIN_PLOT_RECIPES.find((r) => r.technique === "xrd.powder")!;
+    const historyBefore = useApp.getState().history.length;
+
+    copyBuiltinToProject(xrd);
+    expect(useApp.getState().plotRecipes).toHaveLength(1);
+    expect(useApp.getState().history).toHaveLength(historyBefore + 1);
+
+    useApp.getState().undo();
+    expect(useApp.getState().plotRecipes).toHaveLength(0);
   });
 });
 

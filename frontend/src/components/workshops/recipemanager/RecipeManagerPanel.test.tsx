@@ -219,6 +219,35 @@ describe("RecipeManagerPanel — actions", () => {
     expect(useRecipeManager.getState().open).toBe(true); // the panel never closed itself
   });
 
+  // FINDING 5 (code-review, this round): `applyRow` had no catch/finally, so
+  // a REJECTED lazy-chunk apply (the apply path's matcher/capture chunk
+  // failing to fetch) left `applying`/`applyingRef` stuck `true` forever --
+  // every Apply button in the panel stayed disabled for the rest of the
+  // session, with no visible sign of what happened.
+  it("a rejected lazy-chunk apply surfaces the error inline and never leaves Apply stuck disabled", async () => {
+    // Restored in `finally` below -- overriding the store's OWN action
+    // leaks across every later test in this file otherwise (unlike
+    // `plotRecipes`/`status`/etc., `beforeEach` never resets action fields).
+    const realApply = useApp.getState().applyPlotRecipeObject;
+    try {
+      useApp.setState({
+        plotRecipes: [recipe("p1", "Original")],
+        applyPlotRecipeObject: () => Promise.reject(new Error("chunk 404")),
+      });
+      render(<RecipeManagerPanel />);
+      const applyButton = screen.getAllByRole("button", { name: "Apply" })[0]; // the project row, see above
+
+      fireEvent.click(applyButton);
+
+      expect(await screen.findByText(/chunk 404/)).toBeInTheDocument();
+      // Re-enabled -- `finally` resets `applying`/`applyingRef` on EVERY path,
+      // not only the ones the old `.then`-only chain covered.
+      await waitFor(() => expect(applyButton).not.toBeDisabled());
+    } finally {
+      useApp.setState({ applyPlotRecipeObject: realApply });
+    }
+  });
+
   it("surfaces the malformed-import error message inline", async () => {
     render(<RecipeManagerPanel />);
     const input = screen.getByRole("button", { name: "Import to Project…" });
@@ -293,6 +322,10 @@ describe("RecipeManagerPanel — built-in recipes", () => {
     expect(copy.name).toBe(xrd.name); // no project recipe existed yet to dedupe against
     expect(copy.id).not.toBe(xrd.id); // fresh id -- never the built-in's own
     expect(BUILTIN_PLOT_RECIPES).toHaveLength(3); // the source list itself is untouched
+    // FINDING 7 (code-review): flagged out of automatic suggestion, and
+    // confirmed with a status line -- neither existed before this round.
+    expect(copy.noAutoSuggest).toBe(true);
+    expect(useApp.getState().status).toContain(xrd.name);
 
     // The copy landed as an ordinary PROJECT-scope row (found by its scope
     // tag, not by name -- the copy shares the built-in's name, so a

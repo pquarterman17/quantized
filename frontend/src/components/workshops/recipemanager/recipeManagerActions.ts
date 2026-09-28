@@ -117,3 +117,33 @@ export function importRecipeToScope(scope: RecipeScope, text: string): string {
   const recipe = importRecipeFile(text); // throws on malformed
   return scope === "project" ? useApp.getState().copyPlotRecipeIn(recipe) : useGlobalPlotRecipes.getState().copyIn(recipe);
 }
+
+/** "Editing" a built-in Plot Recipe (`lib/builtinPlotRecipes.ts`'s READ-ONLY
+ *  note) lands a normal, fully-editable PROJECT recipe -- the same
+ *  `copyPlotRecipeIn` seam `copyRecipeToOtherScope` above uses, one undo
+ *  step, the built-in itself never touched. Routed through THIS module
+ *  (never called directly on the store from `RecipeManagerPanel.tsx`) per
+ *  THAT file's own header: "all cross-store orchestration lives in
+ *  recipeManagerActions.ts, this file is the thin view."
+ *
+ *  FINDING 7 (code-review): the copy is flagged `noAutoSuggest: true` (a
+ *  new additive `PlotRecipe` field, `lib/plotRecipeSchema.ts`) BEFORE it
+ *  ever reaches the project list. Without this, the copy is an ORDINARY
+ *  project recipe to `store/plotRecipeApply.ts`'s `resolvedCandidates` --
+ *  the moment its technique/labels line up with a freshly imported dataset,
+ *  it would resurface as an automatic suggestion (`matchingPlotRecipes` /
+ *  the post-import toast), silently contradicting "built-ins are never
+ *  offered automatically" (`lib/builtinPlotRecipes.ts`'s own module doc) the
+ *  instant a person did the one thing the panel invites them to do with a
+ *  built-in. The flag excludes it from that ONE surface only -- it still
+ *  applies manually, exactly like any other project recipe, and Rename/
+ *  Duplicate/Delete/Export all work on it normally.
+ *
+ *  Sets `status` as the copy's confirmation -- the same app-wide status
+ *  line every other recipe action's caller (and `StatusBar.tsx`) reads, so
+ *  the gesture isn't silent. */
+export function copyBuiltinToProject(recipe: PlotRecipe): string {
+  const id = useApp.getState().copyPlotRecipeIn({ ...recipe, noAutoSuggest: true });
+  useApp.setState({ status: `copied "${recipe.name}" to Project (won't be auto-suggested)` });
+  return id;
+}

@@ -37,6 +37,7 @@ import { Button, Select } from "../../primitives";
 import {
   applyRecipeToDataset,
   combinedRecipeRows,
+  copyBuiltinToProject,
   copyRecipeToOtherScope,
   deleteRecipe,
   duplicateRecipe,
@@ -121,33 +122,41 @@ export default function RecipeManagerPanel() {
     if (!datasetId || applyingRef.current) return; // finding 2: bail while an apply is already in flight
     applyingRef.current = true;
     setApplying(true);
-    // FINDING 5 (code-review): captured BEFORE the apply -- the manager can
-    // open OVER an already-staged preview+confirm dialog (e.g. via the
-    // palette), and a REFUSED apply never touches `pendingRecipeApplication`
-    // at all, leaving that pre-existing one sitting there. Comparing the
-    // post-apply value against THIS captured snapshot (by identity, not just
-    // truthiness) is what tells "this apply just staged something new" apart
-    // from "there was already one there that isn't mine".
+    setError(null);
+    // FINDING 5 (code-review, prior round): captured BEFORE the apply -- the
+    // manager can open OVER an already-staged preview+confirm dialog (e.g.
+    // via the palette), and a REFUSED apply never touches
+    // `pendingRecipeApplication` at all, leaving that pre-existing one
+    // sitting there. Comparing the post-apply value against THIS captured
+    // snapshot (by identity, not just truthiness) is what tells "this apply
+    // just staged something new" apart from "there was already one there
+    // that isn't mine".
     const pendingBefore = useApp.getState().pendingRecipeApplication;
-    void applyRecipeToDataset(recipe, datasetId).then((ok) => {
-      applyingRef.current = false;
-      setApplying(false);
-      const pendingAfter = useApp.getState().pendingRecipeApplication;
-      // Close on a clean apply OR once a preview+confirm has been staged for
-      // THIS gesture (PlotRecipeApplyDialog takes over from there) -- stay
-      // open on an outright refusal (even with an unrelated pending still
-      // sitting there), so the user can try a different dataset.
-      if (ok || (pendingAfter !== null && pendingAfter !== pendingBefore)) close();
-    });
-  };
-
-  // "Editing" a built-in saves a user copy rather than mutating it in place
-  // (there is no store-side way to mutate one -- see lib/builtinPlotRecipes.ts's
-  // READ-ONLY note): lands a normal, fully-editable PROJECT recipe via the
-  // same `copyPlotRecipeIn` seam the cross-scope copy button below uses, one
-  // undo step, the built-in itself never touched.
-  const copyBuiltinToProject = (recipe: PlotRecipe): void => {
-    useApp.getState().copyPlotRecipeIn(recipe);
+    void applyRecipeToDataset(recipe, datasetId)
+      .then((ok) => {
+        const pendingAfter = useApp.getState().pendingRecipeApplication;
+        // Close on a clean apply OR once a preview+confirm has been staged for
+        // THIS gesture (PlotRecipeApplyDialog takes over from there) -- stay
+        // open on an outright refusal (even with an unrelated pending still
+        // sitting there), so the user can try a different dataset.
+        if (ok || (pendingAfter !== null && pendingAfter !== pendingBefore)) close();
+      })
+      .catch((e: unknown) => {
+        // FINDING 5 (this round, code-review): the apply path lazy-loads its
+        // matcher/capture chunk (`store/plotRecipeApplyLazy.ts`) -- a failed
+        // fetch rejects this promise, and without a `.catch` the click did
+        // nothing visible while the rejection escaped unhandled. Surfaced
+        // through the SAME inline error line `runImport`'s own failure
+        // above uses, rather than a bespoke toast.
+        setError(e instanceof Error ? e.message : "could not apply that plot recipe");
+      })
+      .finally(() => {
+        // Runs on every path -- success, refusal, staged, AND a rejected
+        // chunk load -- so `applying`/`applyingRef` can never get stuck
+        // `true` forever the way a `.then`-only chain left them before.
+        applyingRef.current = false;
+        setApplying(false);
+      });
   };
 
   return (

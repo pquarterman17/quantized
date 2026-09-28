@@ -322,6 +322,68 @@ describe("applyPlotRecipe", () => {
     expect(metaFor({ kind: "plot", scope: "project", id }).useCount).toBe(0);
   });
 
+  // FINDING 6 (code-review): "recently used" scope must come from actual
+  // list membership, never an `isBuiltinPlotRecipeId` id-prefix check. A
+  // recipe deleted from the project list between staging and confirm no
+  // longer lives in EITHER scope -- the old code's ternary (project-or-else-
+  // "global") recorded it as global anyway, a phantom sidecar row for a
+  // recipe that no longer exists there.
+  it("a recipe deleted between staging and confirm records NO 'recently used' entry under either scope", async () => {
+    const id = await saved();
+    const original = useApp.getState().datasets[0];
+    useApp.setState({
+      datasets: [{ ...original, data: { ...original.data, labels: ["totally", "different", "columns"] } }],
+    });
+    const staged = await useApp.getState().applyPlotRecipe(id, "d1");
+    expect(staged).toBe(false);
+    expect(useApp.getState().pendingRecipeApplication).not.toBeNull();
+
+    // Deleted BEFORE the confirm -- `id` now lives in NEITHER scope, even
+    // though `pendingRecipeApplication.recipe` (a captured snapshot) still
+    // carries it.
+    useApp.getState().deletePlotRecipe(id);
+    expect(useApp.getState().plotRecipes.map((r) => r.id)).not.toContain(id);
+
+    const confirmed = await useApp.getState().confirmPendingRecipeApplicationPartial();
+    expect(confirmed).toBe(true); // the deletion doesn't block applying the resolved subset
+
+    // Ordering, not a fixed wait (same idiom as "records NOTHING when the
+    // apply only STAGES" above): a second, definitely-recording apply is
+    // awaited first; both go through the same resolved module in order.
+    useApp.setState({ datasets: [original] });
+    const witness = await saved();
+    await useApp.getState().applyPlotRecipe(witness, "d1");
+    await vi.waitFor(() => expect(metaFor({ kind: "plot", scope: "project", id: witness }).useCount).toBe(1));
+
+    expect(metaFor({ kind: "plot", scope: "project", id }).useCount).toBe(0);
+    expect(metaFor({ kind: "plot", scope: "global", id }).useCount).toBe(0);
+  });
+
+  // FINDING 6 (code-review), the other direction: a genuine user-saved
+  // recipe whose id merely HAPPENS to start with the built-in prefix (e.g.
+  // round-tripped through a hand-edited `.qzrecipe.json`) must still record
+  // normally -- the old `isBuiltinPlotRecipeId` prefix check skipped
+  // recording for ANY id starting with "builtin:", never checking whether
+  // it was actually a member of either list.
+  it("a project recipe whose id starts with 'builtin:' still records its use under project scope", async () => {
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+    const ds = useApp.getState().datasets[0];
+    const recipe = captureRecipe(ds, { ...defaultPlotView(), xKey: 0, yKeys: [1] }, null, {
+      id: "builtin:mine",
+      name: "Mine",
+      appVersion: "0",
+    });
+    useApp.setState({ plotRecipes: [recipe] });
+
+    const ok = await useApp.getState().applyPlotRecipeObject(recipe, "d1");
+    expect(ok).toBe(true);
+
+    await vi.waitFor(() =>
+      expect(metaFor({ kind: "plot", scope: "project", id: "builtin:mine" }).useCount).toBe(1),
+    );
+    expect(metaFor({ kind: "plot", scope: "global", id: "builtin:mine" }).useCount).toBe(0);
+  });
+
   it("clean match: creates a NEW figure via ONE undo entry (undo removes the figure AND the window)", async () => {
     const id = await saved();
     const windowsBefore = useApp.getState().plotWindows.length;
@@ -1158,17 +1220,95 @@ describe("built-in plot recipes (P2.1)", () => {
     expect(useApp.getState().status).toContain("unavailable");
   });
 
-  it("the M(H) loop's zero lines (H=0, M=0) apply verbatim onto the new figure", async () => {
+  it("the M(H) loop's zero lines (H=0, M=0) apply onto the new figure, at fresh (re-minted) ids", async () => {
     useApp.setState({ datasets: [dataset("d1", "magnetometry.mvsh", ["Field", "Moment"])] });
 
     const ok = await useApp.getState().applyPlotRecipeObject(mh, "d1");
 
     expect(ok).toBe(true);
     expect(useApp.getState().yScale).toBe("linear");
-    expect(useApp.getState().refLines).toEqual([
-      { id: "builtin-zero-h", axis: "x", value: 0 },
-      { id: "builtin-zero-m", axis: "y", value: 0 },
+    const lines = useApp.getState().refLines;
+    expect(lines.map((l) => ({ axis: l.axis, value: l.value }))).toEqual([
+      { axis: "x", value: 0 },
+      { axis: "y", value: 0 },
     ]);
+    // FINDING 4 (code-review): the recipe's OWN fixed ids ("builtin-zero-h"/
+    // "builtin-zero-m") are never carried onto the live figure verbatim any
+    // more -- every applied line is re-minted from the SAME counter
+    // `addRefLine` draws from (see the collision test right below for why).
+    expect(lines.map((l) => l.id)).not.toContain("builtin-zero-h");
+    expect(lines.map((l) => l.id)).not.toContain("builtin-zero-m");
+    expect(new Set(lines.map((l) => l.id)).size).toBe(lines.length); // distinct
+  });
+
+  // FINDING 4 (code-review): a captured refLine id must never collide with
+  // an id a later `addRefLine` mints in the SAME session. Before the fix, an
+  // applied recipe's refLines kept their OWN ids verbatim while `addRefLine`
+  // minted from a counter that restarts at 0 every session -- so a recipe
+  // captured (in a PAST session) with a "ref-1"-style id, applied fresh, and
+  // then followed by an "add reference line" click, could mint that exact
+  // id again, and `removeRefLine` (keyed by id) could no longer tell the two
+  // lines apart. `id: "ref-1"` below is deliberately the SAME shape
+  // `addRefLine` itself would produce, not a fixed/distinctive name (a
+  // built-in's "builtin-zero-h" can never collide with "ref-N" regardless of
+  // this fix, so it would not exercise the bug).
+  it("apply a recipe whose captured refLine used id 'ref-1', then add a new one: ids stay distinct, removeRefLine removes exactly one line", async () => {
+    const ds = useApp.getState().datasets[0]; // resetStore()'s default: xrd.powder, an "Intensity" column
+    const capturedRecipe = captureRecipe(
+      ds,
+      { ...defaultPlotView(), xKey: 0, yKeys: [1], refLines: [{ id: "ref-1", axis: "y", value: 5 }] },
+      null,
+      { id: "r-with-ref-1", name: "Captured", appVersion: "0" },
+    );
+
+    const ok = await useApp.getState().applyPlotRecipeObject(capturedRecipe, "d1");
+    expect(ok).toBe(true);
+    const applied = useApp.getState().refLines;
+    expect(applied).toHaveLength(1);
+    // Never the recipe's own captured id verbatim -- re-minted from the SAME
+    // counter `addRefLine` draws from.
+    expect(applied[0].id).not.toBe("ref-1");
+
+    useApp.getState().addRefLine("y", 9);
+    const afterAdd = useApp.getState().refLines;
+    expect(afterAdd).toHaveLength(2);
+    const ids = afterAdd.map((l) => l.id);
+    expect(new Set(ids).size).toBe(2); // every id distinct -- no collision
+
+    const targetId = afterAdd[0].id;
+    useApp.getState().removeRefLine(targetId);
+    const afterRemove = useApp.getState().refLines;
+    expect(afterRemove).toHaveLength(1); // exactly ONE line removed
+    expect(afterRemove.some((l) => l.id === targetId)).toBe(false);
+  });
+
+  // FINDING 4, mechanism-level: proves the re-minting itself, independent of
+  // wherever the shared `_refSeq` counter happens to be (which other tests
+  // in this file also advance) -- two recipes independently captured with
+  // the IDENTICAL id (as if captured in two different past sessions) must
+  // still mint two DIFFERENT ids when applied, and neither may equal the
+  // captured id itself.
+  it("viewFromResolved re-mints every refLine id -- two recipes captured with the SAME id resolve to DIFFERENT applied ids", async () => {
+    const { viewFromResolved } = await import("./plotRecipeApply");
+    const ds = useApp.getState().datasets[0];
+    const recipeWithRefLine = (id: string): PlotRecipe =>
+      captureRecipe(
+        ds,
+        { ...defaultPlotView(), xKey: 0, yKeys: [1], refLines: [{ id: "ref-1", axis: "y", value: 5 }] },
+        null,
+        { id, name: "n", appVersion: "0" },
+      );
+    const { resolveRecipe } = await import("../lib/plotRecipeMatch");
+    const resA = resolveRecipe(recipeWithRefLine("rA"), ds);
+    const resB = resolveRecipe(recipeWithRefLine("rB"), ds);
+    if (!("resolved" in resA) || !("resolved" in resB)) throw new Error("expected both to resolve cleanly");
+
+    const viewA = viewFromResolved(resA.resolved.mapping, resA.resolved.visual);
+    const viewB = viewFromResolved(resB.resolved.mapping, resB.resolved.visual);
+
+    expect(viewA.refLines[0].id).not.toBe("ref-1");
+    expect(viewB.refLines[0].id).not.toBe("ref-1");
+    expect(viewA.refLines[0].id).not.toBe(viewB.refLines[0].id);
   });
 
   it("records NO 'recently used' entry under either scope -- a built-in is a member of neither list (code-review finding)", async () => {
@@ -1192,5 +1332,29 @@ describe("built-in plot recipes (P2.1)", () => {
     const ds = useApp.getState().datasets[0];
     expect(await useApp.getState().matchingPlotRecipes(ds)).toEqual([]);
     expect(await useApp.getState().cleanMatchingPlotRecipe(ds)).toBeNull();
+  });
+
+  // FINDING 7 (code-review): a "Copy to Project" landed copy of a built-in
+  // is an ORDINARY project recipe (unlike the built-in itself, a member of
+  // NEITHER live list) -- without the `noAutoSuggest` flag
+  // `recipeManagerActions.ts`'s `copyBuiltinToProject` sets, it would
+  // resurface as an automatic suggestion the moment its technique/labels
+  // lined up with a freshly imported dataset, contradicting "built-ins are
+  // never offered automatically".
+  it("a Project COPY of a built-in, flagged noAutoSuggest, ALSO stays excluded from automatic suggestion -- but still applies manually", async () => {
+    useApp.getState().copyPlotRecipeIn({ ...xrd, noAutoSuggest: true });
+    expect(useApp.getState().plotRecipes).toHaveLength(1);
+    const ds = useApp.getState().datasets[0]; // a clean match for the XRD built-in's own signature
+
+    expect(await useApp.getState().matchingPlotRecipes(ds)).toEqual([]);
+    expect(await useApp.getState().cleanMatchingPlotRecipe(ds)).toBeNull();
+
+    // The flag excludes it from SUGGESTION only -- a direct manual apply
+    // (never routed through resolvedCandidates) still works.
+    const copy = useApp.getState().plotRecipes[0];
+    const figuresBefore = useApp.getState().editableFigures.length;
+    const ok = await useApp.getState().applyPlotRecipeObject(copy, "d1");
+    expect(ok).toBe(true);
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore + 1);
   });
 });
