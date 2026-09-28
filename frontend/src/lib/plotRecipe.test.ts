@@ -192,6 +192,18 @@ describe("captureRecipe", () => {
     expect(r.visual.decorations.annotations[0].text).toBe("peak");
   });
 
+  // P2.1 (built-in Plot Recipes: the M(H) loop's H=0/M=0 zero lines):
+  // `refLines` is a fixed-axis-position overlay, not a channel binding, so
+  // it captures verbatim exactly like `decorations` above -- same
+  // independent-copy requirement.
+  it("captures refLines verbatim, as an independent copy", () => {
+    const withRefLine = view({ refLines: [{ id: "rl1", axis: "y", value: 0 }] });
+    const r = captureRecipe(ds, withRefLine, null, { id: "r10c", name: "n", appVersion: "0" });
+    expect(r.visual.refLines).toEqual([{ id: "rl1", axis: "y", value: 0 }]);
+    withRefLine.refLines[0].value = 99;
+    expect(r.visual.refLines[0].value).toBe(0); // untouched
+  });
+
   it("captures seriesStyles as independent copies, not shared object references (finding 3)", () => {
     const style = { color: "#ff0000" };
     const styled = view({ xKey: 0, yKeys: [1], seriesStyles: { 1: style } });

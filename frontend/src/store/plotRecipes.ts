@@ -464,7 +464,7 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
       // resolution's resolved subset anyway, dropping whatever didn't match.
       const dropped = resolution.unmatched.length;
       set({ pendingRecipeApplication: null });
-      const applied = applyResolvedRecipe(set, get, pending.recipe, pending.datasetId, resolution.resolved);
+      const applied = await applyResolvedRecipe(set, get, pending.recipe, pending.datasetId, resolution.resolved);
       if (applied && dropped > 0) {
         set({
           status: `applied plot recipe "${pending.recipe.name}" — dropped ${dropped} unmatched field${dropped === 1 ? "" : "s"}`,
