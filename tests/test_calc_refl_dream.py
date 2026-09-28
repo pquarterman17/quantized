@@ -311,39 +311,63 @@ def test_plan_sizes_the_run_it_validates() -> None:
     assert out["convergence"]["n_evaluations"] <= plan["n_evaluations"]
 
 
-def test_a_run_queued_behind_another_waits_cancellably_and_its_budget_starts_late() -> None:
+class QueueClock:
+    """``time.monotonic`` that moves only when the test moves it."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+
+    def monotonic(self) -> float:
+        return self.now
+
+
+def test_a_run_queued_behind_another_waits_cancellably_and_its_budget_starts_late(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The claim is WHERE the budget starts, not how fast this box samples, so
+    # the budget runs on the test's clock: it advances one quarter-second lock
+    # poll per queued wait and stands still once the run holds the sampler. On
+    # the real clock a loaded xdist worker ran this ~0.07 s run past its 0.5 s
+    # budget ('deadline' == 'completed'); stalling each evaluation 5 ms forces
+    # that on every run, and this version passes it.
     import threading
 
+    clock = QueueClock()
+    monkeypatch.setattr(refl_dream, "time", clock)
     params, chans = degenerate()
     held, release = threading.Event(), threading.Event()
 
     def other_run() -> None:
         with dream_seed.seeded_dream(None):
             held.set()
-            release.wait(5)
+            release.wait(60)  # released by the test; the bound only stops a hang
+
+    def progress(_f: float) -> None:
+        if release.is_set():
+            return  # this run holds (or is about to hold) the sampler
+        clock.now += 0.25  # one lock poll spent queued
+        if clock.now >= 1.0:  # queued twice this run's whole budget
+            release.set()
 
     t = threading.Thread(target=other_run)
     t.start()
-    held.wait(5)
-    waits = {"n": 0}
-
-    def progress(_f: float) -> None:
-        waits["n"] += 1
-        if waits["n"] == 4:  # ~1 s queued: longer than this run's whole budget
-            release.set()
-
-    out = sample_reflectivity(params, chans, samples=200, burn=10, pop=5, seed=1,
-                              deadline_s=0.5, band_draws=10, progress_callback=progress)
-    t.join()
+    try:
+        assert held.wait(60)
+        out = sample_reflectivity(params, chans, samples=200, burn=10, pop=5, seed=1,
+                                  deadline_s=0.5, band_draws=10, progress_callback=progress)
+    finally:
+        release.set()
+        t.join()
+    assert clock.now == 1.0  # it really queued past its budget before holding the sampler
     assert out["convergence"]["stopped"] == "completed"  # the wait did not spend the budget
 
     held.clear()
     release.clear()
     t = threading.Thread(target=other_run)
     t.start()
-    held.wait(5)
     try:
-        with pytest.raises(dream_seed.DreamCancelled):
+        assert held.wait(60)
+        with pytest.raises(dream_seed.DreamCancelled, match="while waiting"):
             sample_reflectivity(params, chans, samples=200, seed=1, abort_check=lambda: True)
     finally:
         release.set()

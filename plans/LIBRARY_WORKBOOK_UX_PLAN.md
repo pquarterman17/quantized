@@ -748,7 +748,24 @@ At minimum, the design must account for:
 - [x] Preserved acquisition order and non-monotonic X data. Verified 2026-09-28: `frontend/src/lib/plotdata.ts`'s `buildColumns` (the function both Quick Plot and the Quick Figure Builder render through, per `usePlotPayload.errorRoles.test.ts`'s `fetchPlot` mock) never sorts `ds.time`/`ds.values`; added `frontend/src/lib/plotdata.test.ts`'s "preserves original row order for a non-monotonic (hysteresis-style) X column — never sorts".
 - [x] Explicit column designations override inferred adjacency. Verified 2026-09-28: `frontend/src/lib/quickFigureMappingActions.ts`'s `assignQuickFigureColumn` lets any channel be reassigned to any role, dropping stale bindings; pinned by `quickFigureMapping.test.ts`'s "keeps roles exclusive and drops bindings whose target stops being Y" and related cases.
 - [ ] Header, unit, parser metadata, and adjacency evidence contribute to a
-  confidence result; adjacency alone is insufficient. NOT fully done (checked 2026-09-28): header (label-text), parser-metadata (`dataset.errorRoles` overriding the label guesser), and nearest-preceding-column adjacency all contribute in `error_inference.py`/`quickFigureMappingActions.ts`'s `initialQuickFigureMapping` — but `units` (`DataStruct.units`) is never read by any inference path (`grep -rn "units" src/quantized/io/error_inference.py src/quantized/io/error_label_classify.py src/quantized/io/error_label_candidates.py frontend/src/lib/errorRoles.ts` — no hits outside test fixtures). Leaving unticked until unit evidence is actually wired in or the item is narrowed.
+  confidence result; adjacency alone is insufficient.
+  - [x] Backend (2026-09-28): UNIT evidence added
+    (`io/error_unit_evidence.py`: trivial-spelling normalisation, then
+    match / mismatch / unknown; blank, unitless, a.u., and case-only
+    differences are neutral). `io/error_binding_confidence.py` grades each
+    label-rule pairing without re-targeting it: name+unit-match `high`,
+    name `medium`, adjacency+unit-match `medium`, adjacency alone `low`
+    (`sufficient=False`), and any unit mismatch `blocked` (fail closed).
+    The Import Wizard's backend suggestions drop a mismatched pairing.
+    Label-only inference and both parity fixtures are unchanged. Tests:
+    `tests/test_io_error_unit_evidence.py` and
+    `tests/test_io_error_binding_confidence.py`. The latter includes the
+    whole parity corpus with unknown units, which reproduces every pairing.
+  - [ ] Frontend: mirror the unit gate in `lib/errorRoles.ts`
+    (`inferErrorBindings(data)` has `data.units`) and
+    `lib/importErrorSuggestions.ts`, then have Quick Plot / the Quick Figure
+    Builder consume the confidence grade. Neither shared parity fixture
+    carries units, so neither forces this.
 - [x] The user can override every inferred role before creating the figure. Verified 2026-09-28: `QuickMappingPanel`'s per-column X/Y/error/ignore `<Select>`s feed `assignQuickFigureColumn`; pinned by `QuickFigureBuilderWorkspace.test.tsx`'s "offers keyboard-accessible X, Y, ignore, and targeted error roles" (reassigns an auto-inferred error column to X-error and then to plain Y) and "supports dragging a column into an explicit role zone".
 
 Unknown and ambiguous are different states:
@@ -3716,6 +3733,13 @@ back to the owner. No Library implementation is authorized by this pause.
   `c1adf97`, `914042e`.
 
 ## Change log
+
+- **2026-09-28 — Claude, unit evidence for error pairing:** added the
+  backend half of "Required column-role inference"'s header/unit/metadata/
+  adjacency confidence item. It gets a `[x]` sub-bullet; the parent stays
+  `[ ]` until the frontend mirrors the rule and consumes the grade (see the
+  item). Gate: ruff and mypy --strict clean; 417 targeted tests and
+  `-m golden` (249) green.
 
 - **2026-09-09 — Claude, plans reconciliation:** flipped all six "PR A
   acceptance gates" boxes (above, following PR A1-A4's `[x]` entries) from
