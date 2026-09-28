@@ -5695,6 +5695,8 @@ export interface components {
              * @default 200
              */
             dpi?: number;
+            /** Error Note */
+            error_note?: string | null;
             /** Errors */
             errors?: (number | null)[][] | null;
             /** Facets */
@@ -5711,6 +5713,14 @@ export interface components {
             fmt?: string;
             /** Groups */
             groups: string[];
+            /** Jitter Width */
+            jitter_width?: number | null;
+            /** Points */
+            points?: ("all" | "outliers" | "none") | null;
+            /** Raw */
+            raw?: number[][][] | null;
+            /** Raw Rows */
+            raw_rows?: number[][][] | null;
             /** Series */
             series: string[];
             /**
@@ -5723,6 +5733,8 @@ export interface components {
              * @default default
              */
             style?: string;
+            /** Summary */
+            summary?: ("none" | "mean" | "median") | null;
             /**
              * Title
              * @default
@@ -9562,6 +9574,8 @@ export interface components {
             dpi?: number | null;
             /** Error Bars */
             error_bars?: ("none" | "sd" | "se" | "ci95") | null;
+            /** Error Note */
+            error_note?: string | null;
             /** Facets */
             facets?: components["schemas"]["StatplotFacet"][] | null;
             /**

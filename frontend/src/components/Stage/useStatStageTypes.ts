@@ -99,6 +99,10 @@ export interface StatStageState {
   /** P2.6 box 2: empty levels, small / unbalanced groups and dropped rows
    *  (`lib/groupAxis.groupNotice`), or null when there is nothing to say. */
   groupNotice: GroupNotice | null;
+  /** P2.6 box 1: "Error bars: SD" / "SE of the mean" / "95% CI of the
+   *  mean" while any error bar is drawn (`statErrorNote.figureErrorNote`),
+   *  else null — shown under the plot and exported verbatim as `error_note`. */
+  errorNote: string | null;
   draw: StatDrawData | null;
   /** Small multiples for Box/Violin/Bar (#11) — one draw per facet-column
    *  level, non-null only when `facetCol` is set AND the mode is box/violin/

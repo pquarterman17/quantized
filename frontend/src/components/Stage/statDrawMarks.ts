@@ -18,6 +18,7 @@ import type { BarSeriesStat } from "../../lib/barlayout";
 import { stackedTotal } from "../../lib/barlayout";
 import { resolveStatMarks, errorBounds, errorHalfWidth, type ResolvedStatMarks } from "../../lib/statMarks";
 import { finiteDomain, type BoxStat } from "../../lib/statstage";
+import { barMarkExtents } from "./statBarMarks";
 import type { StatDrawData } from "./statRender";
 import type { CategoryAxisStyle } from "./statRenderAxes";
 import { slotPlan } from "./statRenderSlots";
@@ -83,6 +84,18 @@ export function stripValueDomain(d: Extract<StatDrawData, { mode: "strip" }>): [
   return finiteDomain([...d.points.map((g) => g.points.map((p) => p.value)), d.boxes.flatMap((b) => summaryExtents(b, m))]);
 }
 
+/** Violin mode's value domain: every KDE curve's own extent (points never
+ *  reach past it) plus the summary marker and its error bar (P2.6 box 1) —
+ *  shared by the painter and the click hit-test. */
+export function violinValueDomain(
+  d: Extract<StatDrawData, { mode: "violin" }>, m: ResolvedStatMarks = drawMarks(d),
+): [number, number] {
+  return finiteDomain([
+    ...d.violins.map((v) => [v.x[0] ?? 0, v.x[v.x.length - 1] ?? 0]),
+    (d.boxes ?? []).flatMap((b) => summaryExtents(b, m)),
+  ]);
+}
+
 /** A bar's error-bar half-width under `d`'s error-bar kind (NaN: none).
  *  Review finding 10: takes the ALREADY-resolved marks (`m`) when the
  *  caller has one (a loop over many groups/series shares ONE `drawMarks(d)`
@@ -95,7 +108,8 @@ export function barErrorHalf(
   return errorHalfWidth(m.errorBars, s.sem, s.n);
 }
 
-/** Every extent bar mode draws (bar tops/bottoms, error whiskers, 0) — the
+/** Every extent bar mode draws (bar tops/bottoms, error whiskers, 0, and a
+ *  grouped bar's raw points / median square) — the
  *  candidates `barValueDomain` spans. Review finding 10: resolves `d`'s
  *  marks ONCE (or takes the caller's own, e.g. `statRenderBar.drawBar`'s,
  *  so the two never re-derive it separately) and shares it across every
@@ -113,6 +127,8 @@ export function barDomainCandidates(
       if (Number.isFinite(half)) out.push(total + half, total - half);
     } else {
       for (const s of g.series) {
+        // P2.6 box 1: a grouped bar's points / median square (none stacked).
+        out.push(...barMarkExtents(s, m));
         if (!Number.isFinite(s.mean)) continue;
         out.push(s.mean);
         const half = barErrorHalf(d, s, m);

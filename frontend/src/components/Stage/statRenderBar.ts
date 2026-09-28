@@ -10,15 +10,19 @@
 //     mid-panel exactly like the box family's (`statRenderSlots`), and
 //     `calc.figure_categorical` does the same on export;
 //   * `n=` captions are gated by `showN` and sit above the error whisker
-//     (`lib/groupAxis.barCountAnchor`, the export's rule too).
+//     (`lib/groupAxis.barCountAnchor`, the export's rule too);
+//   * P2.6 box 1: a GROUPED bar can carry its raw points (jittered, in ink so
+//     they read against the bar's fill) and a summary marker — the rules are
+//     `statBarMarks`' and the export draws them identically.
 
-import { groupedBarSlots, stackedSegments, stackedTotal } from "../../lib/barlayout";
+import { groupedBarSlots, stackedSegments, stackedTotal, type BarSeriesStat } from "../../lib/barlayout";
 import { barCountAnchor } from "../../lib/groupAxis";
 import { barValueDomain, categorySlots } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
-import { axisStyleOf, barDomainCandidates, barErrorHalf, drawMarks } from "./statDrawMarks";
+import { axisStyleOf, barDomainCandidates, barErrorHalf, drawMarks, type DrawMarks } from "./statDrawMarks";
 import { drawValueAxis, type Rect, type StatDrawData } from "./statRender";
 import { drawCategoryAxis } from "./statRenderAxes";
+import { drawJitteredPoints, drawSummaryGlyph } from "./statRenderBox";
 import { drawCountLabel, drawEmptySlotMarkers } from "./statRenderSlots";
 
 /** A vertical error-bar whisker (± the draw's error-bar kind — SEM by
@@ -42,6 +46,29 @@ function drawWhisker(
   ctx.moveTo(cx - capHalfWidth, yHi);
   ctx.lineTo(cx + capHalfWidth, yHi);
   ctx.stroke();
+}
+
+/** One grouped bar's P2.6 marks: its raw points ("all" / outliers), the
+ *  box family's deterministic `(row, category)` jitter scaled by the bar's
+ *  half-width, then the summary glyph — a diamond on the bar's mean (its
+ *  whisker is already the error bar) or a square at the cell's median. */
+export function drawBarCellMarks(
+  ctx: CanvasRenderingContext2D,
+  d: Extract<StatDrawData, { mode: "bar" }>,
+  s: BarSeriesStat,
+  label: string,
+  barCx: number,
+  hw: number,
+  vy: (v: number) => number,
+  ink: string,
+  m: DrawMarks,
+) {
+  const raw = s.raw;
+  if (raw && m.points !== "none") {
+    drawJitteredPoints(ctx, { label, points: raw.points }, barCx, hw, vy, ink, m.jitterWidth, d.selectedRows, m.points, raw);
+  }
+  if (m.summary === "mean" && Number.isFinite(s.mean)) drawSummaryGlyph(ctx, barCx, vy(s.mean), "mean", ink);
+  else if (m.summary === "median" && raw) drawSummaryGlyph(ctx, barCx, vy(raw.median), "median", ink);
 }
 
 export function drawBar(
@@ -119,6 +146,7 @@ export function drawBar(
         if (Number.isFinite(half)) {
           drawWhisker(ctx, barCx, vy(s.mean + half), vy(s.mean - half), hw * 0.6, ink);
         }
+        drawBarCellMarks(ctx, d, s, g.label, barCx, hw, vy, ink, m);
       });
     }
   });

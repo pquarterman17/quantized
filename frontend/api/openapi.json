@@ -1321,6 +1321,18 @@
             "title": "Dpi",
             "type": "integer"
           },
+          "error_note": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Note"
+          },
           "errors": {
             "anyOf": [
               {
@@ -1376,6 +1388,75 @@
             "title": "Groups",
             "type": "array"
           },
+          "jitter_width": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jitter Width"
+          },
+          "points": {
+            "anyOf": [
+              {
+                "enum": [
+                  "all",
+                  "outliers",
+                  "none"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points"
+          },
+          "raw": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "items": {
+                      "type": "number"
+                    },
+                    "type": "array"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw"
+          },
+          "raw_rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "items": {
+                      "type": "integer"
+                    },
+                    "type": "array"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Rows"
+          },
           "series": {
             "items": {
               "type": "string"
@@ -1392,6 +1473,22 @@
             "default": "default",
             "title": "Style",
             "type": "string"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "enum": [
+                  "none",
+                  "mean",
+                  "median"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
           },
           "title": {
             "default": "",
@@ -11340,6 +11437,18 @@
               }
             ],
             "title": "Error Bars"
+          },
+          "error_note": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Note"
           },
           "facets": {
             "anyOf": [

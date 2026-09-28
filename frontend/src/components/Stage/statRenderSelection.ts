@@ -12,7 +12,7 @@
 // the box renderer itself (`statRenderBox`), which owns their jitter.
 
 import { stackedTotal } from "../../lib/barlayout";
-import { barValueDomain, finiteDomain } from "../../lib/statstage";
+import { barValueDomain } from "../../lib/statstage";
 import {
   barDomainCandidates,
   barErrorHalf,
@@ -20,7 +20,9 @@ import {
   drawMarks,
   stripValueDomain,
   summaryExtents,
+  violinValueDomain,
 } from "./statDrawMarks";
+import { barMarkExtents } from "./statBarMarks";
 import type { Rect, StatDrawData } from "./statRender";
 import { plotRect } from "./statRender";
 import { slotPlan } from "./statRenderSlots";
@@ -101,7 +103,7 @@ export function slotIndexAt(
  *  label is content) or a mode with no per-slot content of its own (qq,
  *  histogram never reach this: `StatStageCanvas` only passes a `slotCount`
  *  for a categorical draw). Reuses the SAME domain math the renderers do
- *  (`finiteDomain`/`barValueDomain`, `slotPlan`) so a click can never
+ *  (`violinValueDomain`/`barValueDomain`, `slotPlan`) so a click can never
  *  disagree with what was painted (P2.6 review finding 10). */
 function slotContentPixelRange(data: StatDrawData, rect: Rect, slotIndex: number): [number, number] | null {
   const span = (lo: number, hi: number, domain: [number, number]): [number, number] => {
@@ -142,8 +144,10 @@ function slotContentPixelRange(data: StatDrawData, rect: Rect, slotIndex: number
       const lo = v.x[0];
       const hi = v.x[v.x.length - 1];
       if (lo === undefined || hi === undefined) return null;
-      const domain = finiteDomain(data.violins.map((vv) => [vv.x[0] ?? 0, vv.x[vv.x.length - 1] ?? 0]));
-      return span(lo, hi, domain);
+      const m = drawMarks(data);
+      const b = data.boxes?.[gi];
+      const own = [lo, hi, ...(b ? summaryExtents(b, m) : [])];
+      return span(Math.min(...own), Math.max(...own), violinValueDomain(data, m));
     }
     case "bar": {
       const groups = data.data.groups;
@@ -167,6 +171,7 @@ function slotContentPixelRange(data: StatDrawData, rect: Rect, slotIndex: number
       let lo = 0;
       let hi = 0;
       g.series.forEach((s) => {
+        for (const v of barMarkExtents(s, barMarks)) [lo, hi] = [Math.min(lo, v), Math.max(hi, v)];
         if (!Number.isFinite(s.mean)) return;
         lo = Math.min(lo, s.mean - halfOf(s));
         hi = Math.max(hi, s.mean + halfOf(s));

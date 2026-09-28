@@ -4385,15 +4385,17 @@ violin, bar, strip, or summary plots.
   `statplot_levels_export.json` gained the new fields. Eager bundle 858,336 ->
   858,810 B (+474, the sanitizer and the field); all UI in the lazy stage chunk.
   **Not done:** jittered points in FACET panels (no per-slice row indices —
-  the JMP_GAP J5 residual) and faceted strip; raw points / median summary on
-  BAR; violin has points but no summary / error-bar marker, and its inner
-  glyph still differs (screen: quartile bar + median dot; export: mean +
-  extrema lines — pre-existing); in-stage level RENAME (use Recode); the
-  figure does not state which error bar it shows (no legend / footnote);
-  single-line labels still truncate at 14 chars on screen (not in the export)
-  unless "wrap" is on; rotated-label depth is estimated from character counts
-  (both sides), not measured; the Graph Builder preview ignores the marks; no
-  e2e spec.
+  the JMP_GAP J5 residual) and faceted strip; a faceted BAR panel draws no
+  points / summary marker (same residual: its cells carry no raw rows; the
+  faceted bar export takes no marks either, so the two agree); in-stage
+  level RENAME (use Recode); rotated-label depth is estimated from character
+  counts (both sides), not measured; an upright unwrapped label wider than
+  its slot overlaps its neighbour on BOTH sides (wrap / rotation is the
+  remedy); the Graph Builder preview ignores the marks; no e2e spec.
+  (Five former entries — the 14-char screen truncation, the unstated
+  error-bar kind, bar raw points / median, the violin summary + inner-glyph
+  mismatch, and the screen-truncated outer tier — are done; see the two
+  "Done 2026-09-28" blocks below.)
   **Review round (2026-09-27, 10 findings fixed, each sabotage-verified):**
   a violin's jittered `points` groups now relabel alongside its `violins`
   when levels are hidden/reordered, so the canvas and the export jitter hash
@@ -4431,6 +4433,85 @@ violin, bar, strip, or summary plots.
   the frontend resolves `drawMarks` once per paint (was once per group/
   series) and memoizes `categoryAxisLayout` by its own inputs (was re-wrapped
   every hit-test).
+  **Done 2026-09-28 — labels whole on screen; the figure names its error
+  bar.** (1) Category tick labels are no longer cut at 14 characters on
+  screen: with "wrap" off a label is drawn WHOLE on one line, exactly the
+  export's tick label (`statRenderAxes.buildLayout`); two levels sharing a
+  13-character prefix ("lot = Anneal 450 C under vacuum" / "... argon") used
+  to read identically on screen. The only screen-side cut left is the canvas
+  cap: a ROTATED axis too deep for `plotRect`'s 45% bottom-margin cap now
+  keeps its rotation and ellipsizes each label to the characters that fit
+  (ladder: shorter wrap -> cut to fit -> upright) instead of dropping
+  straight to upright. (2) The figure says which error bar it draws: "Error
+  bars: SD" / "SE of the mean" / "95% CI of the mean" (`lib/statMarks.
+  errorBarNote`, ASCII), exactly while at least one bar is DRAWN
+  (`Stage/statErrorNote.figureErrorNote`, the painters' own predicates: the
+  box/strip mean marker, bars incl. stacked's top-segment rule, any facet
+  panel; violin draws none). On screen it is a footnote strip under the whole
+  figure (`StatStagePlot`, focused and background windows, one per facet
+  grid); the SAME string is posted as the export's new `error_note`
+  (statplot + categorical routes, flat + faceted), which `calc.
+  figure_group_notes.footnote_text` stacks above the caveat (`add_caveat` now
+  draws one text per line and grows the band per line; a caveat-only request
+  is the identical single call as before). No new toggle: the error bars'
+  own "none" removes bars and note together. Tests (each sabotage-verified —
+  restoring the 14-char cut, dropping the cap-fit step, not posting
+  `error_note`, the route ignoring it, not growing the band, unwiring the
+  background window): `statErrorNote.test.ts`; `statRender.test.ts` (whole
+  labels at 0/45/90 deg, cap fit); `BackgroundStatNotice.test.tsx`;
+  `statMarksParity.test.ts` (real hook: the screen's note == the export's
+  `error_note` per kind, bar, faceted; drawn tick text == exported labels for
+  the two levels the old cut collapsed); `StatMarksControls.test.tsx` (real
+  stage: note appears, follows the choice, goes with "none");
+  `statLevelsParity.test.ts` + wire fixture `statplot_levels_export.json`
+  (gains `error_note`); backend `tests/test_stat_error_note.py` (all four
+  routes draw it verbatim with/without a caveat; x title / note / caveat
+  stack without overprinting, flat and faceted; 422 over 200 chars) and
+  `test_statplot_levels_parity.py` (the fixture renders it). Eager bundle
+  unchanged: 865,437 B before and after (all new code in the lazy stat
+  chunks).
+  **Done 2026-09-28 (second pass) — bar points / summary, one violin glyph,
+  whole outer tier.** (1) GROUPED bars take raw points (all / outliers =
+  outside the CELL's Tukey whiskers / none; default none) and a summary
+  marker (mean diamond on the bar top — its whisker is already the error
+  bar — / median square), screen and export alike: each (category, series)
+  cell's finite values with their ORIGINAL rows (`Stage/statBarMarks.
+  barCellPoints`, the analysis view mapped back by `rowIds`, only resolved
+  when a point or a median is shown), jittered by the box family's
+  `(row, category)` hash scaled by the BAR's half-width, drawn in ink so they
+  read against the fill; folded into the value domain / hit-test
+  (`barDomainCandidates`), as matplotlib's autoscale folds in the same
+  artists. Export: `CategoricalFigureRequest` gains `points` / `jitter_width`
+  / `summary` / `raw` / `raw_rows` (`calc.figure_stat_marks.
+  overlay_bar_marks`); a request without them is unchanged. STACKED bars
+  draw none (a raw value has no place in a stack; the controls disable, the
+  request omits them, the renderer skips them) and facet panels none
+  (`facetMarks`). (2) VIOLIN: one inner glyph with the BOX's semantics on
+  both sides — thick q1–q3 bar + hollow median dot (`statRender.
+  drawViolins`, `calc.figure_stat_marks.draw_violin_inner`, the same
+  `np.percentile` quartiles); the export's matplotlib mean + extrema lines
+  survive only for a LEGACY request (no mark field). Violin also takes the
+  summary marker + SD / SE / 95% CI error bar (the box glyphs, from each
+  group's box stats — `computeViolinDraw` attaches the client's, the
+  backend's own algorithm; the export uses `box_stats`), flat and faceted,
+  and the error-bar footnote now appears whenever a violin draws one
+  (`statErrorNote.drawsErrorBars`). (3) The nested axis's OUTER-tier label is
+  drawn whole on screen, as the export draws it (was cut to its run's
+  width). Tests (14 sabotages, each caught — export keeps mean/extrema,
+  export/screen skip the violin summary, bar jitter scaled by the wrong
+  width on either side, route drops the bar marks, stacked export draws
+  them, request omits them / posts them for stacked, analysis-view rows
+  instead of original rows, violin note missing, violin request drops the
+  summary, outer tier truncated, bar points out of the domain):
+  `statMarksParity2.test.ts` (real hook: draw vs request, row for row under
+  an exclusion; stacked / unmarked requests unchanged; violin note == export
+  `error_note` per kind), `statViolinBarMarks.test.ts` (canvas calls),
+  `StatStage.test.tsx` (control set incl. stacked-disabled); backend
+  `tests/test_stat_marks_violin_bar.py` (artists read back: glyph positions,
+  error-bar extents per kind, jitter x = centre + hash * half * width,
+  outliers, stacked none, route 200/422 and that the route really draws).
+  openapi.json / schema.d.ts regenerated. Eager bundle 865,437 -> 865,440 B
+  (+3; all new code in the lazy stat chunks).
 - [x] Missing levels and unbalanced groups are explicit. (2026-09-26)
   **Survey (before):** every categorical path closed the axis up silently.
   `categoryLevels` never saw a level declared in `cat_levels` that no row

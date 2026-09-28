@@ -45,6 +45,7 @@ import type { GroupSpec } from "../../lib/statschooser";
 import { finiteOf, type IndexedGroupSpec, type StatMode } from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
 import { boxValueDomain, drawMarks, stripValueDomain } from "./statDrawMarks";
+import { barMarksWire } from "./statBarMarks";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
 
@@ -151,15 +152,16 @@ export function buildExportSpec(
 }
 
 /** The marks as the export request carries them (P2.6 box 1) — the SAME
- *  resolved object the canvas draws with. Violin takes the points only (its
- *  summary is its inner quartile glyph); summary / error bars / connect-means
- *  are box / strip marks. */
+ *  resolved object the canvas draws with. Points, the summary marker and its
+ *  error bars for all three (violin's since P2.6's second pass); the legacy
+ *  flags and connect-means are box / strip only. */
 function marksWire(mode: StatMode, m: ResolvedStatMarks, rows: number[][] | null) {
-  const pts = { points: m.points, jitter_width: m.jitterWidth, point_row_indices: rows };
+  const pts = {
+    points: m.points, jitter_width: m.jitterWidth, point_row_indices: rows, summary: m.summary, error_bars: m.errorBars,
+  };
   if (mode === "violin") return pts;
   return {
-    ...pts, show_points: m.points === "all", summary: m.summary, error_bars: m.errorBars,
-    show_mean_ci: m.summary === "mean", show_connect_means: m.connectMeans,
+    ...pts, show_points: m.points === "all", show_mean_ci: m.summary === "mean", show_connect_means: m.connectMeans,
   };
 }
 
@@ -181,6 +183,15 @@ export interface FacetedExportInputs {
   caveat?: string | null;
   /** P2.6 box 1: the marks the screen draws with (null: legacy request). */
   marks?: ResolvedStatMarks | null;
+  /** P2.6 box 1: the error-bar footnote the screen shows under the plot
+   *  (`statErrorNote.figureErrorNote`), posted verbatim as `error_note`. */
+  errorNote?: string | null;
+}
+
+/** `error_note` on the wire only when there is one, so a request without
+ *  error bars stays the one it always was. */
+function noteWire(note: string | null | undefined): { error_note?: string } {
+  return note ? { error_note: note } : {};
 }
 
 /** Restate raw groups on the draw's axis (P2.6 box 2): one entry per AXIS
@@ -210,8 +221,10 @@ export function onAxis<T>(
  *  route draws no bar for them), and `counts` rides only when n is shown.
  *  `errors` are the half-widths of the error-bar kind on screen (P2.6 box 1:
  *  `lib/statMarks.errorHalfWidth`, SEM unless the marks pick SD / 95% CI /
- *  none) — the export draws exactly the whiskers the canvas does. */
-function barWire(d: BarChartData, showN: boolean, m: ResolvedStatMarks | null = null) {
+ *  none) — the export draws exactly the whiskers the canvas does. The flat
+ *  plot's GROUPED bars also carry their points / summary marker
+ *  (`statBarMarks.barMarksWire`; `marksOn` false for stacked and facets). */
+function barWire(d: BarChartData, showN: boolean, m: ResolvedStatMarks | null = null, marksOn = false) {
   const kind = m?.errorBars ?? "se";
   const half = (s: { sem: number; n: number }) => errorHalfWidth(kind, s.sem, s.n);
   return {
@@ -220,6 +233,7 @@ function barWire(d: BarChartData, showN: boolean, m: ResolvedStatMarks | null = 
     values: d.groups.map((g) => g.series.map((s) => (Number.isFinite(s.mean) ? s.mean : null))),
     errors: d.groups.map((g) => g.series.map((s) => (Number.isFinite(half(s)) ? half(s) : null))),
     counts: showN ? d.groups.map((g) => g.series.map((s) => s.n)) : null,
+    ...barMarksWire(d, m, marksOn),
   };
 }
 
@@ -275,6 +289,7 @@ export async function exportFacetedFigure(
       filename: `bar_${barValueLabel}_faceted`,
       facets,
       caveat,
+      ...noteWire(o.errorNote),
       axis_style: axisWire(m, facets.flatMap((f) => f.groups)),
     };
     await exportCategoricalFigure(spec);
@@ -321,6 +336,7 @@ export async function exportFacetedFigure(
     facets,
     show_n: showN,
     caveat,
+    ...noteWire(o.errorNote),
     ...(m ? { summary: m.summary, error_bars: m.errorBars, points: m.points } : {}),
     // `tiered` (whether nesting is active) is shared; `tiers` itself is
     // NOT — dropped here so it can never be applied, uniformly and wrongly,
@@ -359,10 +375,11 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
   if (mode === "bar") {
     if (!draw || draw.mode !== "bar" || draw.data.groups.length === 0) return;
     await exportCategoricalFigure({
-      ...barWire(draw.data, showN && !o.barStack, o.marks ?? null),
+      ...barWire(draw.data, showN && !o.barStack, o.marks ?? null, !o.barStack),
       axis_style: axisWire(o.marks, draw.data.groups.map((g) => g.label)),
       stacked: o.barStack,
       caveat,
+      ...noteWire(o.errorNote),
       fmt,
       title: `${o.barValueLabel} by ${o.groupLabel}`,
       x_label: o.groupLabel,
@@ -402,6 +419,7 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
     }
     spec.show_n = showN;
     spec.caveat = caveat;
+    if (o.errorNote) spec.error_note = o.errorNote;
     spec.axis_style = axisWire(m, spec.labels ?? [], nestLabelOf(draw));
     // Review finding 2: send the canvas's own y-domain so matplotlib's
     // autoscale-to-drawn-artists can never disagree with it (points/fliers

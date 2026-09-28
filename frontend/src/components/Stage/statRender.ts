@@ -17,7 +17,7 @@ import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
 import type { ResolvedStatMarks } from "../../lib/statMarks";
 import { niceTicks } from "../../lib/ticks";
-import { axisLabelsOf, axisStyleOf } from "./statDrawMarks";
+import { axisLabelsOf, axisStyleOf, drawMarks, violinValueDomain } from "./statDrawMarks";
 import { categoryAxisLayout, drawCategoryAxis } from "./statRenderAxes";
 import {
   finiteDomain,
@@ -28,7 +28,7 @@ import {
 } from "../../lib/statstage";
 import { seriesColor } from "../../lib/uplotOpts";
 import { drawBar } from "./statRenderBar";
-import { drawBoxesWithMarks, drawJitteredPoints, drawStrip } from "./statRenderBox";
+import { drawBoxesWithMarks, drawJitteredPoints, drawStrip, drawSummaryMarker } from "./statRenderBox";
 import { drawEmptySlotMarkers, drawSlotCounts, slotPlan } from "./statRenderSlots";
 import { drawSlotSelection, type StatSelectionMarks } from "./statRenderSelection";
 
@@ -101,6 +101,9 @@ export type StatDrawData =
       /** P2.6 box 1: each group's raw points (index-aligned with `violins`)
        *  when the marks show any. */
       points?: BoxPointsGroup[] | null;
+      /** P2.6 box 1: each group's box stats (index-aligned with `violins`)
+       *  for the summary marker and its error bar. */
+      boxes?: BoxStat[] | null;
     } & CategoryAxisMarks)
   | {
       mode: "qq";
@@ -300,7 +303,8 @@ function drawViolins(
   muted: string,
 ) {
   if (!d.violins.length) return;
-  const domain = finiteDomain(d.violins.map((v) => [v.x[0] ?? 0, v.x[v.x.length - 1] ?? 0]));
+  const m = drawMarks(d);
+  const domain = violinValueDomain(d, m);
   drawValueAxis(ctx, rect, domain, d.valueLabel, ink, muted);
   const plan = slotPlan(d.slots, d.violins.map((v) => v.label));
   drawCategoryAxis(ctx, rect, plan.slots, plan.labels, d.groupLabel, ink, muted, axisStyleOf(d));
@@ -308,6 +312,7 @@ function drawViolins(
   if (d.showN !== false) drawSlotCounts(ctx, rect, plan, d.violins.map((v) => v.n), muted);
 
   const vy = (v: number) => rect.y + rect.h - ((v - domain[0]) / (domain[1] - domain[0])) * rect.h;
+  const hollow = cssVar("--axes-bg", "#fff");
 
   d.violins.forEach((v, i) => {
     const slot = plan.slots[plan.groupSlot[i]];
@@ -337,8 +342,9 @@ function drawViolins(
     ctx.lineWidth = 1.25;
     ctx.stroke();
 
-    // Thin inner quartile reference (seaborn-style): a bar from q1 to q3 + a
-    // median dot, always drawn in ink so it reads against any series color.
+    // The inner glyph has the BOX's semantics (P2.6 box 1), on screen and in
+    // the export (`calc.figure_stat_marks.draw_violin_inner`): a thick ink
+    // bar from q1 to q3 and a hollow dot at the median.
     const [q1, med, q3] = v.quartiles;
     ctx.strokeStyle = ink;
     ctx.lineWidth = 3;
@@ -346,16 +352,21 @@ function drawViolins(
     ctx.moveTo(cx, vy(q1));
     ctx.lineTo(cx, vy(q3));
     ctx.stroke();
-    ctx.fillStyle = ink;
+    ctx.fillStyle = hollow;
+    ctx.lineWidth = 1;
     ctx.beginPath();
-    ctx.arc(cx, vy(med), 2, 0, 2 * Math.PI);
+    ctx.arc(cx, vy(med), 2.5, 0, 2 * Math.PI);
     ctx.fill();
+    ctx.stroke();
 
-    // P2.6 box 1: raw points over the violin (all / outliers only).
+    // P2.6 box 1: raw points over the violin (all / outliers only), then the
+    // summary marker on top, as box / strip draw them.
     const pts = d.points?.[i];
-    if (pts && d.marks && d.marks.points !== "none") {
-      drawJitteredPoints(ctx, pts, cx, hw, vy, color, d.marks.jitterWidth, d.selectedRows, d.marks.points);
+    const b = d.boxes?.[i];
+    if (pts && m.points !== "none") {
+      drawJitteredPoints(ctx, pts, cx, hw, vy, color, m.jitterWidth, d.selectedRows, m.points, b);
     }
+    if (b) drawSummaryMarker(ctx, cx, b, vy, ink, m);
   });
 }
 

@@ -95,6 +95,9 @@ describe("Stat Stage missing levels — screen and export describe the same axis
     expect(spec.show_n).toBe(draw.showN);
     expect(spec.caveat).toBe(result.current.groupNotice?.caveat);
     expect(spec.caveat).not.toBeNull();
+    // P2.6 box 1: the error-bar footnote under the plot, verbatim.
+    expect(spec.error_note).toBe(result.current.errorNote);
+    expect(spec.error_note).toBe("Error bars: 95% CI of the mean");
 
     // (2) The committed wire fixture the backend half renders.
     const fixture = JSON.parse(readFileSync(FIXTURE, "utf-8")) as Record<string, unknown>;

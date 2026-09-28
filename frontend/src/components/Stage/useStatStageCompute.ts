@@ -17,6 +17,7 @@ import { buildBarMatrix, seriesStat, type BarChartData } from "../../lib/barlayo
 import type { GroupSpec } from "../../lib/statschooser";
 import { groupBoxStatsClient, resolveGroups, type BoxStat, type IndexedGroupSpec } from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
+import { barCellPoints, withBarRaw } from "./statBarMarks";
 import type { StatDrawData } from "./statRender";
 import { withNestLabel } from "./statStageMarks";
 
@@ -68,7 +69,10 @@ export function histogramDraw(
 /** Bar mode's category x series matrix for one dataset (flat OR one facet
  *  slice): a picked categorical column groups every plotted channel into its
  *  own clustered/stacked series; with no categorical column, fall back to one
- *  category per plotted channel (mirrors box/violin's own fallback). */
+ *  category per plotted channel (mirrors box/violin's own fallback).
+ *  `raw` (P2.6 box 1, the flat plot only): attach each cell's raw points
+ *  (`statBarMarks.withBarRaw`) — `rowIds` maps the analysis view's rows back
+ *  to the dataset's, as the box family's points do. */
 export function computeBarData(
   data: DataStruct,
   groupCol: number | null,
@@ -77,13 +81,16 @@ export function computeBarData(
   valueCol: number,
   plotted: readonly number[],
   fallbackLabel: string,
+  raw: { rowIds: readonly number[] | null } | null = null,
 ): BarChartData {
-  if (groupCol != null) return buildBarMatrix(data, groupCol, valueChannels, valueLabels);
-  const fallbackGroups = resolveGroups(data, null, valueCol, plotted);
-  return {
-    groups: fallbackGroups.map((g) => ({ label: g.label, series: [seriesStat(g.values)] })),
-    seriesLabels: [fallbackLabel],
-  };
+  const bd: BarChartData =
+    groupCol != null
+      ? buildBarMatrix(data, groupCol, valueChannels, valueLabels)
+      : {
+          groups: resolveGroups(data, null, valueCol, plotted).map((g) => ({ label: g.label, series: [seriesStat(g.values)] })),
+          seriesLabels: [fallbackLabel],
+        };
+  return raw ? withBarRaw(bd, barCellPoints(data, groupCol, valueChannels, valueCol, plotted, raw.rowIds)) : bd;
 }
 
 /** The backend's box stats as the renderer reads them (P2.6 box 1). The wire
@@ -170,7 +177,10 @@ export async function computeStripDraw(
  *  one facet slice): a real KDE per group, degrading to the SAME box stats
  *  `computeBoxDraw` would show for these groups on failure — the "never
  *  fabricate a KDE offline" rule. See `computeBoxDraw`'s doc for why this
- *  takes `finiteGroups` directly. */
+ *  takes `finiteGroups` directly. P2.6 box 1: the draw also carries each
+ *  group's box stats (the client's, the backend's own algorithm) for its
+ *  summary marker and error bar — the export reads `calc.statplots.
+ *  box_stats` over the same values. */
 export async function computeViolinDraw(
   finiteGroups: GroupSpec[],
   valueLabel: string,
@@ -187,6 +197,7 @@ export async function computeViolinDraw(
         quartiles: r.quartiles,
         n: r.n,
       })),
+      boxes: groupBoxStatsClient(finiteGroups),
       valueLabel,
       groupLabel,
     };

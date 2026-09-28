@@ -139,6 +139,11 @@ class StatplotFigureRequest(BaseModel):
     # Defaults off/None -- byte-identical to before.
     show_n: bool = False
     caveat: str | None = None
+    # P2.6 box 1: which error bar the figure draws, verbatim as the screen
+    # words it under the plot (`lib/statMarks.errorBarNote`, e.g. "Error
+    # bars: SE of the mean") -- a footnote line above the caveat
+    # (`calc.figure_group_notes.footnote_text`). None = no line, as before.
+    error_note: str | None = Field(default=None, max_length=200)
     # Per group: lift the connect-means line BEFORE it (a hidden empty level
     # sat there -- the screen's AxisSlot.gapBefore). None = no forced breaks.
     connect_breaks: list[bool] | None = None
@@ -180,8 +185,11 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi)) if req.dpi is not None else None
     try:
         if req.facets:
-            with heavy_imports("quantized.calc.figure_facets"):
+            with heavy_imports(
+                "quantized.calc.figure_facets", "quantized.calc.figure_group_notes",
+            ):
                 from quantized.calc.figure_facets import render_stat_facets_figure  # lazy
+                from quantized.calc.figure_group_notes import footnote_text
 
             panels: list[dict[str, Any]] = [
                 {
@@ -193,11 +201,15 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
             img = render_stat_facets_figure(
                 panels, default_kind=req.kind, dist=req.dist, bins=req.bins, fit=req.fit,
                 title=req.title, x_label=req.x_label, y_label=req.y_label,
-                fmt=req.fmt, style=req.style, dpi=dpi, show_n=req.show_n, caveat=req.caveat,
+                fmt=req.fmt, style=req.style, dpi=dpi, show_n=req.show_n,
+                caveat=footnote_text(req.error_note, req.caveat),
                 marks=req.marks(), axis_style=_axis_style(req.axis_style),
             )
         else:
-            with heavy_imports("quantized.calc.figure_statplots"):
+            with heavy_imports(
+                "quantized.calc.figure_statplots", "quantized.calc.figure_group_notes",
+            ):
+                from quantized.calc.figure_group_notes import footnote_text
                 from quantized.calc.figure_statplots import render_statplot_figure  # lazy
 
             data: Any = req.data
@@ -208,7 +220,8 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 title=req.title, x_label=req.x_label, y_label=req.y_label, dpi=dpi,
                 show_points=req.show_points, point_row_indices=req.point_row_indices,
                 show_mean_ci=req.show_mean_ci, show_connect_means=req.show_connect_means,
-                show_n=req.show_n, caveat=req.caveat, connect_breaks=req.connect_breaks,
+                show_n=req.show_n, caveat=footnote_text(req.error_note, req.caveat),
+                connect_breaks=req.connect_breaks,
                 marks=req.marks(), axis_style=_axis_style(req.axis_style), y_domain=req.y_domain,
             )
     except CALC_ERRORS_WITH_LOCK as exc:
@@ -251,6 +264,7 @@ class CategoricalFigureRequest(BaseModel):
     # grouped bar; `caveat` -> footnote. Defaults off -- byte-identical.
     counts: list[list[int]] | None = None
     caveat: str | None = None
+    error_note: str | None = Field(default=None, max_length=200)  # see StatplotFigureRequest
     stacked: bool = False
     fmt: str = "pdf"
     style: str = "default"
@@ -265,6 +279,25 @@ class CategoricalFigureRequest(BaseModel):
     # the schema but unused in that case.
     facets: list[CategoricalFacet] | None = None
     axis_style: CategoryAxisStyle | None = None  # P2.6 box 1, see StatplotFigureRequest
+    # P2.6 box 1 (calc.figure_stat_marks.overlay_bar_marks), GROUPED bars of
+    # the flat panel only: raw points ("outliers" = beyond the cell's Tukey
+    # whiskers), their jitter (fraction of the BAR's half-width) and a
+    # summary marker. `raw[group][series]` holds each cell's finite values,
+    # `raw_rows` their original row indices (the jitter hash's row). None =
+    # the request before these fields, drawn as before.
+    points: Literal["all", "outliers", "none"] | None = None
+    jitter_width: float | None = Field(default=None, ge=0.0, le=1.0)
+    summary: Literal["none", "mean", "median"] | None = None
+    raw: list[list[list[float]]] | None = None
+    raw_rows: list[list[list[int]]] | None = None
+
+    def bar_marks(self) -> dict[str, Any] | None:
+        fields = {
+            "points": self.points, "jitter_width": self.jitter_width, "summary": self.summary,
+            "raw": self.raw, "raw_rows": self.raw_rows,
+        }
+        out = {k: v for k, v in fields.items() if v is not None}
+        return out or None
 
 
 @router.post("/categorical-figure")
@@ -281,8 +314,11 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
     try:
         if req.facets:
-            with heavy_imports("quantized.calc.figure_facets"):
+            with heavy_imports(
+                "quantized.calc.figure_facets", "quantized.calc.figure_group_notes",
+            ):
                 from quantized.calc.figure_facets import render_categorical_facets_figure  # lazy
+                from quantized.calc.figure_group_notes import footnote_text
 
             panels: list[dict[str, Any]] = [
                 {
@@ -294,17 +330,22 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
             img = render_categorical_facets_figure(
                 panels, stacked=req.stacked, title=req.title, x_label=req.x_label,
                 y_label=req.y_label, fmt=req.fmt, style=req.style, dpi=dpi,
-                caveat=req.caveat, axis_style=_axis_style(req.axis_style),
+                caveat=footnote_text(req.error_note, req.caveat),
+                axis_style=_axis_style(req.axis_style),
             )
         else:
-            with heavy_imports("quantized.calc.figure_categorical"):
+            with heavy_imports(
+                "quantized.calc.figure_categorical", "quantized.calc.figure_group_notes",
+            ):
                 from quantized.calc.figure_categorical import render_categorical_figure  # lazy
+                from quantized.calc.figure_group_notes import footnote_text
 
             img = render_categorical_figure(
                 req.groups, req.series, req.values, req.errors, stacked=req.stacked,
                 fmt=req.fmt, style=req.style, title=req.title, x_label=req.x_label,
-                y_label=req.y_label, dpi=dpi, counts=req.counts, caveat=req.caveat,
-                axis_style=_axis_style(req.axis_style),
+                y_label=req.y_label, dpi=dpi, counts=req.counts,
+                caveat=footnote_text(req.error_note, req.caveat),
+                axis_style=_axis_style(req.axis_style), bar_marks=req.bar_marks(),
             )
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)

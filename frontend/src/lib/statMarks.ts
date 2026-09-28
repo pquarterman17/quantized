@@ -38,7 +38,10 @@ export interface ResolvedStatMarks {
   labelWrap: boolean;
 }
 
-/** Characters per line when category labels wrap (screen and export). */
+/** Characters per line when category labels wrap (screen and export). With
+ *  wrapping off a label is drawn WHOLE on one line on both sides — the screen
+ *  cuts it only when the canvas cannot hold a rotated label at all
+ *  (`Stage/statRenderAxes.categoryAxisLayout`'s cap). */
 export const LABEL_WRAP_WIDTH = 12;
 /** Wrapped labels keep at most this many lines (the last one ellipsized). */
 export const MAX_WRAP_LINES = 3;
@@ -93,6 +96,21 @@ export function errorBounds(b: BoxStat, kind: StatErrorBars): [number, number] |
   const sem = b.sem ?? NaN;
   const half = kind === "sd" && Number.isFinite(b.sd) ? (b.sd as number) : errorHalfWidth(kind, sem, b.n);
   return Number.isFinite(half) ? [b.mean - half, b.mean + half] : null;
+}
+
+const ERROR_BAR_NOTES: Record<Exclude<StatErrorBars, "none">, string> = {
+  sd: "Error bars: SD",
+  se: "Error bars: SE of the mean",
+  ci95: "Error bars: 95% CI of the mean",
+};
+
+/** The footnote naming which error bar a figure draws, or null for "none".
+ *  ONE text: the stage shows it under the plot and posts it verbatim as the
+ *  export's `error_note` (`calc.figure_group_notes.footnote_text` stacks it
+ *  above the caveat), so screen and figure cannot word it differently. ASCII
+ *  only, like `groupAxis.balanceCaveat` — matplotlib typesets it. */
+export function errorBarNote(kind: StatErrorBars): string | null {
+  return kind === "none" ? null : ERROR_BAR_NOTES[kind];
 }
 
 /** Whether a value is outside the group's Tukey whiskers (a box flier). */

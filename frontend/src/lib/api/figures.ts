@@ -307,6 +307,9 @@ export interface StatplotFigureSpec {
   // `caveat` (lib/groupAxis.balanceCaveat) becomes a figure footnote.
   show_n?: boolean;
   caveat?: string | null;
+  // P2.6 box 1: which error bar the figure draws ("Error bars: SE of the
+  // mean", lib/statMarks.errorBarNote) -- a footnote line above the caveat.
+  error_note?: string | null;
   // P2.6 box 1 (calc.figure_stat_marks / calc.figure_category_axis): raw
   // points, jitter width, summary marker, error bars, label options.
   points?: "all" | "outliers" | "none" | null;
@@ -376,6 +379,7 @@ export interface CategoricalFigureSpec {
   errors: (number | null)[][]; // [group][series] error half-width: SEM, or SD / 95% CI (P2.6 box 1); null = no whisker
   counts?: number[][] | null; // P2.6 box 2: [group][series] n labels (grouped bars)
   caveat?: string | null; // P2.6 box 2: lib/groupAxis.balanceCaveat, as a footnote
+  error_note?: string | null; // P2.6 box 1: lib/statMarks.errorBarNote, footnote line above it
   axis_style?: CategoryAxisStyleWire | null; // P2.6 box 1: label rotation / wrap
   stacked?: boolean;
   fmt?: string;
@@ -386,6 +390,14 @@ export interface CategoricalFigureSpec {
   dpi?: number;
   filename?: string;
   facets?: CategoricalFacetSpec[] | null;
+  // P2.6 box 1 (calc.figure_stat_marks.overlay_bar_marks), grouped bars of the
+  // flat panel: raw points / jitter / summary marker; `raw[group][series]` the
+  // cell's finite values, `raw_rows` their original rows (the jitter's hash).
+  points?: "all" | "outliers" | "none" | null;
+  jitter_width?: number | null;
+  summary?: "none" | "mean" | "median" | null;
+  raw?: number[][][] | null;
+  raw_rows?: number[][][] | null;
 }
 
 /** Render a grouped/stacked bar chart server-side (matplotlib) and download

@@ -16,6 +16,7 @@ import { sanitizePlotView } from "./plotview";
 import { sanitizeStatMarks } from "./plotviewSanitize";
 import {
   axisStyleWire,
+  errorBarNote,
   errorBounds,
   errorHalfWidth,
   nestedTiers,
@@ -175,6 +176,16 @@ describe("axisStyleWire", () => {
     expect(axisStyleWire({ ...r, labelRotation: 45 }, ["Co / Pt"], null)).toEqual({
       rotation: 45, wrap: null, tiered: false,
     });
+  });
+});
+
+describe("errorBarNote — the figure says which error bar it shows", () => {
+  it("names each kind, ASCII only (matplotlib typesets it), and nothing for none", () => {
+    expect(errorBarNote("sd")).toBe("Error bars: SD");
+    expect(errorBarNote("se")).toBe("Error bars: SE of the mean");
+    expect(errorBarNote("ci95")).toBe("Error bars: 95% CI of the mean");
+    expect(errorBarNote("none")).toBeNull();
+    for (const k of ["sd", "se", "ci95"] as const) expect(errorBarNote(k)).toMatch(/^[\x20-\x7e]+$/);
   });
 });
 

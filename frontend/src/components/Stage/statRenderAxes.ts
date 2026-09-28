@@ -15,7 +15,13 @@
 //     under every tick, so `lot = 0` repeated under each of its wafers; the
 //     second factor still reaches the screen, now without the repetition.)
 //   * `wrap` breaks a label into lines (`lib/statMarks.wrapLabel`, the
-//     export's `wrap_label` line for line) instead of truncating it;
+//     export's `wrap_label` line for line); with it off a label is drawn
+//     WHOLE on one line, as the export's tick label is. (It used to be cut
+//     at 14 characters on screen only, so two levels sharing their first 13
+//     characters read the same on screen while the figure told them
+//     apart.) The only cut left is
+//     the screen's own canvas cap (`categoryAxisLayout`), which the export —
+//     whose `tight_layout` shrinks the axes instead — never needs;
 //   * `rotation` 45 / 90 turns the labels, anchored at their END on the tick,
 //     as matplotlib's `ha="right"` + `rotation_mode="anchor"` (45) and
 //     centred rotation (90) do.
@@ -42,8 +48,13 @@ const TOP = 6; // tick-label offset below the plot rect
 const TIER = 14; // the outer tier's row
 const CAPTION = 13; // gap from the labels to the axis caption
 
-function truncateLabel(s: string, max = 14): string {
-  return s.length > max ? `${s.slice(0, max - 1)}…` : s;
+/** Fewest characters a label is cut to when fitting a rotated axis under
+ *  the canvas cap; below this the rotation is dropped instead. */
+const MIN_FIT_CHARS = 4;
+
+function truncateLabel(s: string, max: number): string {
+  const cps = Array.from(s);
+  return cps.length > max ? `${cps.slice(0, max - 1).join("")}…` : s;
 }
 
 export interface CategoryAxisLayout {
@@ -65,15 +76,18 @@ export interface CategoryAxisLayout {
 }
 
 /** One geometry attempt at (`wrap`, `maxLines`, `rotation`) — the pure inner
- *  half of `categoryAxisLayout`'s degrade ladder below. */
+ *  half of `categoryAxisLayout`'s degrade ladder below. `fit` (cap only)
+ *  cuts an unwrapped label to that many characters; absent, it is whole. */
 function buildLayout(
   texts: readonly string[],
   wrap: boolean,
   maxLines: number,
   rot: 0 | 45 | 90,
   tiered: boolean,
+  fit?: number,
 ): Omit<CategoryAxisLayout, "tiers"> {
-  const lines = texts.map((t) => (wrap ? wrapLabel(t, LABEL_WRAP_WIDTH, maxLines) : [truncateLabel(t)]));
+  const one = (t: string) => [fit === undefined ? t : truncateLabel(t, fit)];
+  const lines = texts.map((t) => (wrap ? wrapLabel(t, LABEL_WRAP_WIDTH, maxLines) : one(t)));
   const nLines = Math.max(1, ...lines.map((l) => l.length));
   const longest = Math.max(0, ...lines.flat().map((l) => Array.from(l).length));
   const theta = (rot * Math.PI) / 180;
@@ -81,6 +95,18 @@ function buildLayout(
     rot === 0 ? nLines * LINE : Math.ceil(longest * CHAR_W * Math.sin(theta) + nLines * LINE * Math.cos(theta));
   const captionY = TOP + depth + (tiered ? TIER : 0) + CAPTION;
   return { lines, depth, captionY, bottom: Math.max(48, captionY + 18), rotation: rot };
+}
+
+/** The longest single line (in characters) a label rotated by `rot` can
+ *  keep and still fit under `maxBottom` — null when upright (depth does not
+ *  grow with length) or when fewer than `MIN_FIT_CHARS` would fit. */
+function fitChars(maxBottom: number, rot: 0 | 45 | 90, tiered: boolean): number | null {
+  if (rot === 0) return null;
+  const theta = (rot * Math.PI) / 180;
+  // `buildLayout`'s bottom, solved for `longest` (less 1 px for its ceil).
+  const room = maxBottom - 18 - CAPTION - (tiered ? TIER : 0) - TOP - 1 - LINE * Math.cos(theta);
+  const chars = Math.floor(room / (CHAR_W * Math.sin(theta)));
+  return chars >= MIN_FIT_CHARS ? chars : null;
 }
 
 function computeCategoryAxisLayout(
@@ -92,11 +118,16 @@ function computeCategoryAxisLayout(
   const rot = style.rotation ?? 0;
   let built = buildLayout(texts, wrap, MAX_WRAP_LINES, rot, tiered != null);
   if (maxBottom != null && built.bottom > maxBottom) {
-    const attempts: [boolean, number, 0 | 45 | 90][] = wrap
-      ? [[wrap, 2, rot], [wrap, 1, rot], [false, 1, rot], [false, 1, 0]]
-      : [[wrap, 1, 0]];
-    for (const [w2, ml, r2] of attempts) {
-      built = buildLayout(texts, w2, ml, r2, tiered != null);
+    // Shorter wraps first, then ONE line cut to the characters the cap
+    // leaves room for at this rotation, then no rotation (an unwrapped
+    // upright label is one line deep however long it is).
+    type Attempt = [boolean, number, 0 | 45 | 90, number | undefined];
+    const fit = fitChars(maxBottom, rot, tiered != null);
+    const attempts: Attempt[] = wrap ? [[true, 2, rot, undefined], [true, 1, rot, undefined]] : [];
+    if (fit !== null) attempts.push([false, 1, rot, fit]);
+    attempts.push([false, 1, 0, undefined]);
+    for (const [w2, ml, r2, f2] of attempts) {
+      built = buildLayout(texts, w2, ml, r2, tiered != null, f2);
       if (built.bottom <= maxBottom) break;
     }
     // Still over (an extreme canvas): clamp outright so the painter and the
@@ -133,8 +164,10 @@ let lastLayoutResult: CategoryAxisLayout | null = null;
  *  passes it, which makes ITS capped margin and THIS layout's `depth` /
  *  `captionY` / `bottom` the SAME numbers by construction — no second
  *  `Math.min` anywhere else can drift from it. When the natural layout
- *  would not fit, wrapping is shortened and then rotation dropped (in that
- *  order — rotation is usually the larger depth driver) before finally
+ *  would not fit, wrapping is shortened, then a rotated label is cut to the
+ *  characters that fit (the only place the screen shows less text than the
+ *  export), then rotation dropped (in that order — rotation is usually the
+ *  larger depth driver) before finally
  *  clamping outright, so a pathologically short canvas still gets a
  *  consistent (if tight) number rather than an uncapped one nothing else
  *  agrees with. */
@@ -194,7 +227,12 @@ export function drawCategoryAxis(
 }
 
 /** The nested axis's second tier: each outer level once, centred under its
- *  run, and a separator from the axis line down to the tier between runs. */
+ *  run, and a separator from the axis line down to the tier between runs.
+ *  The outer label is drawn WHOLE, as the export's outer tier is
+ *  (`calc.figure_category_axis.style_category_axis`: one unwrapped,
+ *  unrotated minor tick label per run) — it used to be cut to its run's
+ *  width on screen only, so a one-box run of "lot = Anneal 450 C" read
+ *  "lot …" on screen and in full in the figure. */
 function drawOuterTier(
   ctx: CanvasRenderingContext2D,
   rect: Rect,
@@ -218,9 +256,5 @@ function drawOuterTier(
   ctx.fillStyle = muted;
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  const pitch = slots.length ? rect.w / slots.length : rect.w;
-  for (const r of runs) {
-    const span = (r.last - r.first + 1) * pitch;
-    ctx.fillText(truncateLabel(r.label, Math.max(4, Math.floor(span / CHAR_W))), (x(r.first) + x(r.last)) / 2, tierY);
-  }
+  for (const r of runs) ctx.fillText(r.label, (x(r.first) + x(r.last)) / 2, tierY);
 }

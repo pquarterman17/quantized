@@ -24,6 +24,14 @@ as before -- see :func:`resolve_marks` for the one edge case that changed):
   MEAN (``calc.statplots.error_bar_bounds`` holds the conventions: n-1 sample
   SD, SE = SD/sqrt(n), 95% CI via Student t(0.975, n-1)); drawn only with the
   mean marker, and never below n = 2.
+
+P2.6 box 1, second pass: the VIOLIN takes the summary marker and its error
+bar too (the same glyphs as box / strip), and its inner glyph is the BOX's
+semantics on both sides -- a thick bar from q1 to q3 plus a hollow dot at the
+median (:func:`draw_violin_inner`, the screen's ``statRender.drawViolins``);
+matplotlib's own mean + extrema lines are kept only for a LEGACY request (no
+mark field at all). GROUPED bars take raw points and the summary marker
+(:func:`overlay_bar_marks`, the screen's ``statRenderBar.drawBarCellMarks``).
 """
 
 from __future__ import annotations
@@ -42,6 +50,8 @@ __all__ = [
     "SLOT_WIDTH",
     "SUMMARY_MARKS",
     "StatMarks",
+    "draw_violin_inner",
+    "overlay_bar_marks",
     "overlay_summary",
     "resolve_marks",
     "scatter_points",
@@ -73,6 +83,9 @@ class StatMarks:
     box_showmeans: bool
     #: box / violin: explicit glyph width (``None`` = matplotlib's default).
     box_width: float | None
+    #: violin: the box-semantics inner glyph (q1-q3 bar + median dot) instead
+    #: of matplotlib's mean + extrema lines -- any request that sets a mark.
+    violin_quartiles: bool = False
 
 
 def resolve_marks(
@@ -106,6 +119,7 @@ def resolve_marks(
         raise ValueError(f"summary must be one of {SUMMARY_MARKS}")
     if jitter_width is not None and not 0.0 <= float(jitter_width) <= 1.0:
         raise ValueError("jitter_width must be within [0, 1]")
+    new_style = any(v is not None for v in (points, jitter_width, summary, error_bars))
     legacy_points = points is None
     if legacy_points:
         if kind == "strip":
@@ -142,6 +156,7 @@ def resolve_marks(
         error_bars=errors,
         box_showmeans=legacy_summary and not show_mean_ci,
         box_width=SLOT_WIDTH if new_geometry else None,
+        violin_quartiles=new_style,
     )
 
 
@@ -213,3 +228,98 @@ def overlay_summary(
             [tick], [mean], yerr=yerr, fmt="D", color="black",
             markersize=6, capsize=4, linewidth=1.5, zorder=5,
         )
+
+
+def draw_violin_inner(ax: Any, ticks: list[int], box_stats: list[dict[str, Any]]) -> None:
+    """The violin's inner glyph, with the BOX's semantics: a thick black bar
+    from q1 to q3 and a hollow dot at the median -- the screen's
+    ``statRender.drawViolins`` draws the same two marks from the SAME linear-
+    interpolated quartiles (``/api/statplots/violin``'s ``quartiles`` and
+    ``box_stats`` are both ``np.percentile(v, [25, 50, 75])``). Tagged by
+    ``gid`` so a test (or an SVG reader) can find them."""
+    for tick, b in zip(ticks, box_stats, strict=True):
+        ax.plot(
+            [tick, tick], [b["q1"], b["q3"]], color="black", linewidth=3,
+            solid_capstyle="butt", zorder=3, gid="violin-quartiles",
+        )
+        ax.plot(
+            [tick], [b["median"]], marker="o", linestyle="None", markersize=5,
+            markerfacecolor="white", markeredgecolor="black", markeredgewidth=0.8,
+            zorder=3.5, gid="violin-median",
+        )
+
+
+def _bar_cell(
+    raw: list[list[list[float]]] | None, rows: list[list[list[int]]] | None, gi: int, si: int,
+) -> tuple[np.ndarray, list[int]]:
+    """One bar cell's finite raw values and their row indices (a missing or
+    length-mismatched row list degrades to ``0..n-1``, as ``point_row_indices``
+    does for the box family)."""
+    if raw is None:
+        return np.empty(0), []
+    v = np.asarray(raw[gi][si], dtype=float).ravel()
+    mask = np.isfinite(v)
+    r = rows[gi][si] if rows is not None and gi < len(rows) and si < len(rows[gi]) else None
+    if r is not None and len(r) == v.size:
+        return v[mask], [int(x) for x, k in zip(r, mask, strict=True) if k]
+    return v[mask], list(range(int(mask.sum())))
+
+
+def _bar_cell_marks(
+    ax: Any, cx: float, mean: float, vals: np.ndarray, rows: list[int], label: str,
+    points: str, spread: float, summary: str,
+) -> None:
+    """One grouped bar's points and summary marker (:func:`overlay_bar_marks`)."""
+    b = _box_stats(vals) if vals.size and (points == "outliers" or summary == "median") else None
+    if vals.size and points != "none":
+        keep = np.ones(vals.size, dtype=bool)
+        if b is not None and points == "outliers":
+            keep = (vals < b["whislo"]) | (vals > b["whishi"])
+        xs = [cx + _jitter(r, label) * spread for r, k in zip(rows, keep, strict=True) if k]
+        if xs:
+            ax.scatter(xs, vals[keep], s=10, color="0.25", alpha=0.6, zorder=4, linewidths=0)
+    if summary == "mean" and np.isfinite(mean):
+        ax.plot([cx], [mean], marker="D", color="black", markersize=6, zorder=5)
+    elif summary == "median" and b is not None:
+        ax.plot([cx], [b["median"]], marker="s", color="black", markersize=5, zorder=5)
+
+
+def overlay_bar_marks(
+    ax: Any,
+    centers: np.ndarray,
+    half: float,
+    labels: list[str],
+    means: np.ndarray,
+    *,
+    points: str | None = None,
+    jitter_width: float | None = None,
+    summary: str | None = None,
+    raw: list[list[list[float]]] | None = None,
+    raw_rows: list[list[list[int]]] | None = None,
+) -> None:
+    """Raw points and the summary marker over GROUPED bars (P2.6 box 1).
+
+    ``centers[g, s]`` is bar (g, s)'s x centre and ``half`` its half-width
+    (data units); ``raw[g][s]`` / ``raw_rows[g][s]`` its finite values and
+    original row indices. Points: ``"all"``, or ``"outliers"`` (outside the
+    cell's own Tukey whiskers), jittered by the SAME ``(row, category)`` hash
+    as the box family -- ``labels[g]`` is the category -- scaled by the BAR's
+    half-width (the screen's rule: a point sits at the same place relative to
+    its bar). Summary: a diamond at the bar's mean (``means``) or a square at
+    the cell's median; the bar's own whisker is its error bar, so the diamond
+    carries none. The caller draws none of this for stacked bars (neither
+    does the screen: a raw value has no place inside a stack)."""
+    pts, summ = points or "none", summary or "none"
+    if pts not in POINTS_MODES or summ not in SUMMARY_MARKS:
+        raise ValueError(f"points must be one of {POINTS_MODES}, summary one of {SUMMARY_MARKS}")
+    n_groups, n_series = means.shape
+    if raw is not None and (len(raw) != n_groups or any(len(r) != n_series for r in raw)):
+        raise ValueError(f"raw must have shape ({n_groups}, {n_series}, n)")
+    spread = half * (_LEGACY_JITTER if jitter_width is None else float(jitter_width))
+    for gi in range(n_groups):
+        for si in range(n_series):
+            vals, rows = _bar_cell(raw, raw_rows, gi, si)
+            _bar_cell_marks(
+                ax, float(centers[gi, si]), float(means[gi, si]), vals, rows, labels[gi],
+                pts, spread, summ,
+            )
