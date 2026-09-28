@@ -19,7 +19,7 @@ import type { RegionShade } from "./types";
  * useful range while preserving the user's exact size inside it. */
 export function sanitizeLegendSize(v: unknown): [number, number] | null {
   if (!Array.isArray(v) || v.length !== 2) return null;
-  if (!v.every((n) => typeof n === "number" && Number.isFinite(n))) return null;
+  if (!v.every(Number.isFinite)) return null; // Number.isFinite is false for non-numbers too
   return [Math.min(2000, Math.max(96, v[0])), Math.min(2000, Math.max(40, v[1]))];
 }
 
