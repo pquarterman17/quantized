@@ -223,14 +223,14 @@ export default function MapToolbar(props: MapToolbarProps) {
               with its shape. */}
           <button
             className={`qzk-tool-btn${roiMode === "roi" ? " active" : ""}`}
-            title="Integration box — drag on the map to draw one; drag inside to move it, edges/corners to resize. Its own floating bar previews the profile and commits ∫ / Stats"
+            title="Integration box — drag on the map to draw one; drag inside to move it, edges/corners to resize; its own floating bar previews the profile and commits ∫ / Stats"
             onClick={onToggleRoi}
           >
             ▣
           </button>
           <button
             className={`qzk-tool-btn${rulerMode === "ruler" ? " active" : ""}`}
-            title="Angled line cut (ruler) — drag along the cut direction to draw; endpoint handles set length and angle, side handles set width. Radial / transverse-about-a-peak actions live in the RSM panel"
+            title="Angled line cut (ruler) — drag along the cut direction to draw; endpoint handles set length and angle, side handles set width; radial / transverse-about-a-peak actions live in the RSM panel"
             onClick={onToggleRuler}
           >
             ▨
