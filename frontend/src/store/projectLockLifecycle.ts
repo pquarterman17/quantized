@@ -1,11 +1,11 @@
 import { useProjectLock } from "./projectLock";
-import { beginProjectLockOperation } from "./projectLockEpoch";
+import { beginProjectLockOperation, DETACHED_LOCK } from "./projectLockEpoch";
 import { BROWSER_AUTOSAVE_LOCK_PATH } from "./projectLockPaths";
 
 /** Reserve a path as read-only while its asynchronous acquisition begins. */
 export function reserveProjectLock(path: string): number {
   const reservation = beginProjectLockOperation();
-  useProjectLock.setState({ path, status: "held-by-other-live", record: null, openedAsCopy: false, unverifiableHeartbeats: 0 });
+  useProjectLock.setState({ ...DETACHED_LOCK, path, status: "held-by-other-live" });
   return reservation;
 }
 
@@ -24,5 +24,5 @@ export function closeProjectLock(): void {
   if (record !== null && record.instanceId === instanceId) {
     void provider.release(path, record.token ?? "").catch(() => false);
   }
-  useProjectLock.setState({ status: "unlocked", record: null, path: null, openedAsCopy: false, unverifiableHeartbeats: 0 });
+  useProjectLock.setState({ ...DETACHED_LOCK, status: "unlocked" });
 }

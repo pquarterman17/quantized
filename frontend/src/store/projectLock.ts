@@ -98,7 +98,7 @@ import {
   type LockStatus,
 } from "../lib/lockState";
 import { useApp } from "./useApp";
-import { beginProjectLockOperation, isCurrentProjectLockOperation } from "./projectLockEpoch";
+import { beginProjectLockOperation, DETACHED_LOCK, isCurrentProjectLockOperation } from "./projectLockEpoch";
 
 // `createInMemoryLockProvider` lives in its own sibling module
 // (store/inMemoryLockProvider.ts) — extracted under the 500-line
@@ -323,7 +323,7 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
     // path's leftover count must not keep the heartbeat alive against a record that isn't ours).
     const failClosed = (status: LockStatus, record: LockRecord | null): OpenResult => {
       if (!isCurrentProjectLockOperation(myEpoch)) return SUPERSEDED_OPEN;
-      set({ status, record, path, openedAsCopy: false, unverifiableHeartbeats: 0 });
+      set({ ...DETACHED_LOCK, status, record, path });
       return { status, readOnly: isReadOnly(status) };
     };
     let current: LockRecord | null;
@@ -408,7 +408,7 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
       void provider.release(path, record.token ?? "").catch(() => false);
     }
     useApp.getState().setCurrentProject(null);
-    set({ openedAsCopy: true, status: "unlocked", path: null, record: null, unverifiableHeartbeats: 0 });
+    set({ ...DETACHED_LOCK, openedAsCopy: true, status: "unlocked" });
   },
 
   heartbeat: async () => {
@@ -488,7 +488,7 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
     beginProjectLockOperation();
     const { provider, path, record, instanceId } = get();
     if (path === null || record === null || record.instanceId !== instanceId) return;
-    set({ status: "unlocked", record: null, path: null, openedAsCopy: false, unverifiableHeartbeats: 0 });
+    set({ ...DETACHED_LOCK, status: "unlocked" });
     await provider.release(path, record.token ?? "").catch(() => false);
   },
 
