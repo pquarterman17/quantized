@@ -333,6 +333,29 @@ describe("sanitizeView — legendFrameXY (decode #52 — frame anchor)", () => {
   });
 });
 
+describe("sanitizeView — legendSize", () => {
+  it("round-trips valid dimensions and clamps unsafe persisted sizes", () => {
+    const valid = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), legendSize: [240, 120] } })], new Set(["d1"]),
+    );
+    expect(valid[0].view.legendSize).toEqual([240, 120]);
+    const clamped = sanitizePlotWindows(
+      [win({ view: { ...defaultPlotView(), legendSize: [1, 9000] } })], new Set(["d1"]),
+    );
+    expect(clamped[0].view.legendSize).toEqual([96, 2000]);
+  });
+
+  it("falls back to content sizing for malformed dimensions", () => {
+    for (const bad of [null, [100], [100, "80"], [100, Number.NaN]]) {
+      const out = sanitizePlotWindows(
+        [win({ view: { ...defaultPlotView(), legendSize: bad } as unknown as PlotView })],
+        new Set(["d1"]),
+      );
+      expect(out[0].view.legendSize).toBeNull();
+    }
+  });
+});
+
 describe("sanitizeView — legendStatic / legendTitle (decode #52)", () => {
   it("defaults OFF so a non-Origin view behaves exactly as before", () => {
     const v = defaultPlotView();

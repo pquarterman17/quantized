@@ -24,7 +24,7 @@ import {
   type PanelLayout,
 } from "./panelwindow";
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
-import { boolViewFields, sanitizeRegionShades, sanitizeStatMarksByMode, type StatMarksByMode } from "./plotviewSanitize";
+import { boolViewFields, sanitizeLegendSize, sanitizeRegionShades, sanitizeStatMarksByMode, type StatMarksByMode } from "./plotviewSanitize";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
@@ -37,7 +37,6 @@ const VALID_TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "d
 // the type from HERE like every other PlotWindow-adjacent type, not the leaf
 // module.
 export type { PanelLayout };
-
 export type LegendPos = "ne" | "nw" | "se" | "sw";
 
 /** The corner-preset nearest a free legend position (MAIN #18's pointer-mode
@@ -97,6 +96,7 @@ export interface PlotView {
    *  keeps the corner-preset behaviour untouched — an Origin-imported
    *  position stays a `legendPos` corner, never this. */
   legendXY: [number, number] | null;
+  legendSize: [number, number] | null;
   /** Frame-anchored legend position (decode #52): the legend box TOP-LEFT as
    *  FRACTIONS of the plot FRAME (uPlot's plotting area, `u.over`), NOT of the
    *  `.qzk-stage` container `legendXY` uses. Convention: `[fx, fy]` with fx
@@ -197,7 +197,7 @@ export function defaultPlotView(): PlotView {
     showGrid: true,
     showLegend: true,
     legendPos: "ne",
-    legendXY: null,
+    legendXY: null, legendSize: null,
     legendFrameXY: null,
     legendStatic: false,
     legendTitle: null,
@@ -243,7 +243,6 @@ export function defaultPlotView(): PlotView {
     pageSetup: null,
   };
 }
-
 /** The exact PlotView field list — derived from `defaultPlotView()` so there
  *  is exactly ONE place that enumerates the ~35 fields. */
 const VIEW_KEYS = Object.keys(defaultPlotView()) as (keyof PlotView)[];
@@ -687,6 +686,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     statMarks: sanitizeStatMarksByMode(o.statMarks),
     legendPos: LEGEND_POS.includes(o.legendPos as LegendPos) ? (o.legendPos as LegendPos) : fb.legendPos,
     legendXY: legendXYOrNull(o.legendXY),
+    legendSize: sanitizeLegendSize(o.legendSize),
     // Same fraction shape + clamp-not-drop convention as `legendXY` (decode #52).
     legendFrameXY: legendXYOrNull(o.legendFrameXY),
     legendTitle: typeof o.legendTitle === "string" ? o.legendTitle : null,

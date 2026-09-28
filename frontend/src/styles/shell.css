@@ -751,6 +751,24 @@ body {
 .qzk-gadget-chip { flex-wrap: wrap; max-width: min(92vw, 560px); padding: 5px 6px 5px 10px; gap: 6px; }
 .qzk-gadget-chip .qz-select { font-size: var(--font-size-sm); padding: 2px 6px; }
 .qzk-legend { padding: 6px 10px; display: flex; flex-direction: column; gap: 4px; }
+.qzk-legend-content { display: flex; flex: 1; min-width: 0; min-height: 0; flex-direction: column; gap: 4px; overflow: auto; }
+/* Pointer-mode legend sizing: broad invisible edge targets are easy to grab;
+   the accent line/corner appears only on hover so a finished figure remains
+   clean. Eight handles preserve the opposite edge and support every Origin-
+   style edge/corner resize direction. */
+.qzk-legend-resize { position: absolute; z-index: 2; display: block; opacity: 0; transition: opacity 100ms ease; }
+.qzk-legend-resize:hover { opacity: 1; }
+.qzk-legend-resize-n, .qzk-legend-resize-s { left: 8px; right: 8px; height: 7px; border-top: 2px solid var(--accent); cursor: ns-resize; }
+.qzk-legend-resize-n { top: -4px; }
+.qzk-legend-resize-s { bottom: -6px; }
+.qzk-legend-resize-e, .qzk-legend-resize-w { top: 8px; bottom: 8px; width: 7px; border-left: 2px solid var(--accent); cursor: ew-resize; }
+.qzk-legend-resize-e { right: -6px; }
+.qzk-legend-resize-w { left: -4px; }
+.qzk-legend-resize-ne, .qzk-legend-resize-se, .qzk-legend-resize-sw, .qzk-legend-resize-nw { width: 12px; height: 12px; border: 2px solid var(--accent); border-radius: 2px; }
+.qzk-legend-resize-ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.qzk-legend-resize-se { right: -5px; bottom: -5px; cursor: nwse-resize; }
+.qzk-legend-resize-sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+.qzk-legend-resize-nw { top: -5px; left: -5px; cursor: nwse-resize; }
 /* MAIN #18: dragging the legend box in pointer mode (free legendXY position)
    — a "move" affordance on the box background only; per-row items keep their
    own click/rename/drag cursor untouched (the box handler ignores mousedown

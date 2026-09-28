@@ -1,4 +1,4 @@
-import { fireEvent, render } from "@testing-library/react";
+import { fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import LegendSample from "./LegendSample";
@@ -29,6 +29,7 @@ beforeEach(() => {
     y2Keys: null,
     legendPos: "ne",
     legendXY: null,
+    legendSize: null,
     legendFrameXY: null,
     legendStatic: false,
     legendTitle: null,
@@ -143,6 +144,53 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
     const el = container.querySelector(".qzk-legend") as HTMLElement;
     fireEvent.doubleClick(el);
     expect(useApp.getState().legendPos).toBe("sw"); // untouched — nothing to reset
+  });
+});
+
+describe("PlotLegend edge and corner resize", () => {
+  it("shows eight direct-manipulation handles only in pointer mode", async () => {
+    const { container, rerender } = render(
+      <PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />,
+    );
+    await waitFor(() => expect(container.querySelectorAll(".qzk-legend-resize")).toHaveLength(8));
+    useApp.setState({ plotTool: "zoom" });
+    rerender(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    expect(container.querySelectorAll(".qzk-legend-resize")).toHaveLength(0);
+  });
+
+  it("resizes from a corner, preserves the top-left, and commits position plus size once", async () => {
+    const history = vi.spyOn(useApp.getState(), "recordHistory");
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    const legend = container.querySelector(".qzk-legend") as HTMLElement;
+    setParentRect(container, { width: 400, height: 300 });
+    setParentRect(legend, { left: 50, top: 20, width: 120, height: 80 });
+    await waitFor(() => expect(container.querySelector(".qzk-legend-resize-se")).toBeInTheDocument());
+    const handle = container.querySelector(".qzk-legend-resize-se") as HTMLElement;
+    Object.defineProperties(handle, {
+      setPointerCapture: { value: vi.fn() },
+      hasPointerCapture: { value: () => true },
+      releasePointerCapture: { value: vi.fn() },
+    });
+    fireEvent.pointerDown(handle, { pointerId: 7, clientX: 170, clientY: 100, button: 0 });
+    fireEvent.pointerMove(handle, { pointerId: 7, clientX: 220, clientY: 150 });
+    expect(legend.style.width).toBe("170px");
+    expect(legend.style.height).toBe("130px");
+    fireEvent.pointerUp(handle, { pointerId: 7, clientX: 220, clientY: 150 });
+    expect(useApp.getState().legendXY).toEqual([0.125, 20 / 300]);
+    expect(useApp.getState().legendSize).toEqual([170, 130]);
+    expect(history).toHaveBeenCalledTimes(1);
+    expect(history).toHaveBeenCalledWith("resize legend");
+  });
+
+  it("double-clicking a resize handle returns to content-driven sizing", async () => {
+    useApp.setState({ legendSize: [240, 120] });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} />);
+    const legend = container.querySelector(".qzk-legend") as HTMLElement;
+    expect(legend.style.width).toBe("240px");
+    await waitFor(() => expect(container.querySelector(".qzk-legend-resize-e")).toBeInTheDocument());
+    fireEvent.doubleClick(container.querySelector(".qzk-legend-resize-e")!);
+    expect(useApp.getState().legendSize).toBeNull();
+    expect(legend.style.width).toBe("");
   });
 });
 

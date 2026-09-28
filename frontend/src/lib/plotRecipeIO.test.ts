@@ -37,8 +37,14 @@ function goodRecipe(): PlotRecipe {
 
 describe("parseRecipe", () => {
   it("round-trips a serialized recipe unchanged", () => {
-    const r = goodRecipe();
+    const r = captureRecipe(
+      xrdDataset(),
+      view({ xKey: 0, yKeys: [1], errKeys: { 1: 2 }, legendSize: [240, 160] }),
+      null,
+      { id: "r1", name: "XRD standard", appVersion: "0" },
+    );
     expect(parseRecipe(serializeRecipe(r))).toEqual(r);
+    expect(r.visual.legendSize).toEqual([240, 160]);
   });
 
   it("throws a clear message on invalid JSON", () => {
@@ -113,6 +119,15 @@ describe("sanitizeRecipes", () => {
     expect(out.mapping).toEqual(good.mapping); // identity/signature/mapping untouched
     expect(out.visual.legendPos).toBe("ne"); // bad value -> default
     expect(out.visual.mark).toBe("line"); // bad value -> default
+  });
+
+  it("sanitizes saved legend dimensions at the recipe boundary", () => {
+    const good = goodRecipe();
+    const [clamped] = sanitizeRecipes([{ ...good, visual: { ...good.visual, legendSize: [12, 9000] } }]);
+    expect(clamped.visual.legendSize).toEqual([96, 2000]);
+
+    const [malformed] = sanitizeRecipes([{ ...good, visual: { ...good.visual, legendSize: [240, "wide"] } }]);
+    expect(malformed.visual.legendSize).toBeNull();
   });
 
   it("drops a recipe whose mapping references a signature id that doesn't exist (finding 2a)", () => {

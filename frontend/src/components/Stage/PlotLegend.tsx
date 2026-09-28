@@ -4,7 +4,7 @@
 // baseline — index ≥ plotted.length) are display-only: not toggleable, not
 // renameable. Extracted from PlotStage to keep that component lean.
 
-import { useRef, useState } from "react";
+import { useState } from "react";
 
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
@@ -12,14 +12,16 @@ import { colorScaleLegendEntries, type ColorScatterSpec } from "../../lib/colors
 import { colormapCss } from "../../lib/colormap";
 import { resolveDrawColor } from "../../lib/contrastColor";
 import { fmtNum } from "../../lib/format";
+import { lazyRegion } from "../../lib/lazyRegion";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
-import { nearestLegendCorner } from "../../lib/plotview";
-import { frameAnchorStyle } from "../../lib/uplotFrameVars";
 import type { DefaultTrace, SeriesStyle } from "../../lib/types";
 import { RichText } from "../primitives";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import LegendSample from "./LegendSample";
 import { resolveSeriesStyle, type SeriesCycle } from "../../lib/seriesStyleCycle";
+import { useLegendBox } from "./useLegendBox";
+
+const LegendResizeHandles = lazyRegion(() => import("./LegendResizeHandles"), "Legend resize handles");
 
 interface PlotLegendProps {
   series: PlotSeriesSpec[];
@@ -71,17 +73,6 @@ export default function PlotLegend({
   const setSeriesOrder = useApp((s) => s.setSeriesOrder);
   const y2Keys = useApp((s) => s.y2Keys);
   const setY2Keys = useApp((s) => s.setY2Keys);
-  const legendPos = useApp((s) => s.legendPos);
-  const legendXY = useApp((s) => s.legendXY);
-  // Frame-anchored position (decode #52): the box top-left as a fraction of the
-  // plot FRAME, set by an Origin figure apply. Wins over `legendXY`/`legendPos`
-  // and is placed via `frameAnchorStyle` (CSS calc over the published frame
-  // vars — see lib/uplotFrameVars). Dragging the box or resetting clears it
-  // (setLegendXY does so), a one-way degrade back to the container-fraction /
-  // corner flow.
-  const legendFrameXY = useApp((s) => s.legendFrameXY);
-  const setLegendXY = useApp((s) => s.setLegendXY);
-  const setLegendPos = useApp((s) => s.setLegendPos);
   // Static mode (decode #52): an applied Origin figure renders a clean,
   // read-only legend — no reorder arrows, no row click/dblclick/drag/context
   // handlers, hidden channels omitted (not greyed) — plus an optional bold
@@ -90,68 +81,9 @@ export default function PlotLegend({
   const legendStatic = useApp((s) => s.legendStatic);
   const legendTitle = useApp((s) => s.legendTitle);
   const tool = useApp((s) => s.plotTool);
+  const legendBox = useLegendBox(tool);
   const [editing, setEditing] = useState<{ channel: number; value: string } | null>(null);
   const [menu, setMenu] = useState<{ x: number; y: number; channel: number; i: number } | null>(null);
-  const boxRef = useRef<HTMLDivElement>(null);
-  const rafRef = useRef<number | null>(null);
-
-  // MAIN #18: drag the legend BOX (its own background/padding — NOT a series
-  // row, which keeps its existing click/dblclick/rightclick/channel-DnD
-  // behaviour untouched even in pointer mode) to a free position, expressed
-  // as fractions of the `.qzk-stage` container so a window resize keeps it
-  // sane. rAF-throttled store writes (PlotWindowFrame's own drag convention)
-  // since this fires on every mousemove, unlike the canvas gestures above
-  // which use a plugin-local live override instead — this is a plain DOM
-  // element outside the uPlot canvas, so a live store write costs nothing
-  // more than any other React re-render.
-  const dragFraction = (e: { clientX: number; clientY: number }): [number, number] | null => {
-    // `.parentElement`, not `.offsetParent`: PlotStage always renders
-    // PlotLegend as a DIRECT child of the `.qzk-stage` div (the `.qzk-glass`
-    // positioning context) — same element either way here, but jsdom's
-    // `offsetParent` needs real layout (always null without it) while
-    // `parentElement` is plain DOM-tree traversal, so this stays testable.
-    const parent = boxRef.current?.parentElement;
-    if (!parent) return null;
-    const rect = parent.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return null;
-    const fx = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
-    const fy = Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height));
-    return [fx, fy];
-  };
-  const onBoxMouseDown = (e: React.MouseEvent) => {
-    if (tool !== "pointer" || e.button !== 0 || e.target !== e.currentTarget) return;
-    e.preventDefault();
-    let recorded = false;
-    const onMove = (ev: MouseEvent) => {
-      const fxy = dragFraction(ev);
-      if (!fxy) return;
-      if (!recorded) {
-        useApp.getState().recordHistory("move legend");
-        recorded = true;
-      }
-      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = requestAnimationFrame(() => setLegendXY(fxy));
-    };
-    const onUp = () => {
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
-    };
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
-  };
-  const onBoxDoubleClick = (e: React.MouseEvent) => {
-    if (tool !== "pointer" || e.target !== e.currentTarget) return;
-    // Reset a moved legend back to a corner. A free-dragged box (`legendXY`)
-    // snaps to its nearest corner; a frame-anchored box (`legendFrameXY`, decode
-    // #52) has no free fraction to snap from — it just clears the anchor and
-    // falls back to the corner `legendPos` the figure apply already pinned.
-    // Either way `setLegendXY(null)` clears BOTH (the coupled one-way degrade).
-    if (!legendXY && !legendFrameXY) return;
-    if (legendXY) setLegendPos(nearestLegendCorner(legendXY[0], legendXY[1]));
-    else useApp.getState().recordHistory("reset legend position");
-    setLegendXY(null);
-  };
-
   // Toggle a plotted channel between the primary (left) and secondary (right) Y
   // axis — the right-click equivalent of the dual-Y picker in the Channels card.
   const toggleY2 = (channel: number) => {
@@ -187,21 +119,17 @@ export default function PlotLegend({
 
   return (
     <div
-      ref={boxRef}
+      ref={legendBox.boxRef}
       // Precedence (decode #52): frame anchor > free container fraction > corner
       // preset. A frame-anchored or free position drops the corner class.
-      className={`qzk-glass qzk-legend ${legendFrameXY || legendXY ? "" : legendPos}`}
-      style={
-        legendFrameXY
-          ? frameAnchorStyle(legendFrameXY)
-          : legendXY
-            ? { left: `${legendXY[0] * 100}%`, top: `${legendXY[1] * 100}%`, right: "auto", bottom: "auto" }
-            : undefined
-      }
-      onMouseDown={onBoxMouseDown}
-      onDoubleClick={onBoxDoubleClick}
-      title={tool === "pointer" ? "Drag to move · double-click to reset to a corner" : undefined}
+      className={`qzk-glass qzk-legend${legendBox.isSized ? " qzk-legend-sized" : ""} ${legendBox.isFree ? "" : legendBox.legendPos}`}
+      style={legendBox.style}
+      onMouseDown={legendBox.onBoxMouseDown}
+      onDoubleClick={legendBox.onBoxDoubleClick}
+      title={tool === "pointer" ? "Drag to move · drag an edge or corner to resize · double-click to reset position" : undefined}
     >
+      {tool === "pointer" && <LegendResizeHandles boxRef={legendBox.boxRef} />}
+      <div className="qzk-legend-content">
       {/* Decode #52: Origin's bold legend title header, drawn above the
           entries in static mode (rich-text so `\g(q)`→θ etc. render). */}
       {legendStatic && legendTitle ? (
@@ -353,6 +281,7 @@ export default function PlotLegend({
           <span className="qzk-colorbar-lbl">{fmtNum(cs.hi)}</span>
         </div>
       ))}
+      </div>
       {menu && (
         <ContextMenu
           x={menu.x}

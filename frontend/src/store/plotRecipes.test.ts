@@ -951,6 +951,7 @@ describe("recipe-applied figure workflow parity (P1.3)", () => {
       showLegend: true,
       legendTitle: "Scan",
       legendXY: [0.72, 0.18],
+      legendSize: [260, 180],
       seriesLabels: { 1: "Corrected intensity" },
       seriesStyles: { 1: { color: "#336699", width: 2.5 } },
       annotations: [{ id: "peak", x: 20, y: 200, text: "(002)" }],
@@ -977,6 +978,7 @@ describe("recipe-applied figure workflow parity (P1.3)", () => {
     const focused = applied.windowsForSave().find((w) => w.id === applied.focusedWindowId);
     expect(focused?.kind).toBe("plot");
     if (!focused || focused.kind !== "plot" || !focused.document) throw new Error("recipe window has no document");
+    expect(focused.view.legendSize).toEqual([260, 180]);
 
     const stageSpec = buildStageFigureSpec(() => useApp.getState(), target, "d2", render);
 

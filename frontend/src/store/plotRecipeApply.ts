@@ -100,6 +100,7 @@ export function viewFromResolved(mapping: ResolvedRecipeMapping, visual: Resolve
     showLegend: visual.showLegend,
     legendPos: visual.legendPos,
     legendXY: visual.legendXY,
+    legendSize: visual.legendSize,
     legendTitle: visual.legendTitle,
     legendStatic: visual.legendStatic,
     stackMode: visual.stackMode,

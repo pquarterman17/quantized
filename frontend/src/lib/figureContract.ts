@@ -51,6 +51,7 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   showLegend: canonical("legend.visible"),
   legendPos: canonical("legend.presetPosition"),
   legendXY: canonical("legend.plotPosition"),
+  legendSize: canonical("legend.pixelSize"),
   legendFrameXY: canonical("legend.framePosition"),
   legendStatic: canonical("legend.static"),
   legendTitle: canonical("legend.title"),

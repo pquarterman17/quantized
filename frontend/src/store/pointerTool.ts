@@ -52,6 +52,11 @@ export interface PointerToolSlice {
    *  `legendXY` and the corner `legendPos` while set. No dedicated setter —
    *  the apply spreads it directly and `setLegendXY` clears it. */
   legendFrameXY: [number, number] | null;
+  /** User-sized legend box in CSS pixels; null keeps content-driven sizing. */
+  legendSize: [number, number] | null;
+  /** Commit a resize and its top-left position as one undoable edit. */
+  setLegendBounds: (xy: [number, number], size: [number, number]) => void;
+  setLegendSize: (size: [number, number] | null) => void;
   /** Per-axis title drag offsets (CSS px) — a genuine PlotView field like
    *  `legendXY` (snapshot/hydrate/`.dwk` sanitize in lib/plotview.ts). */
   axisLabelOffsets: AxisLabelOffsets;
@@ -94,8 +99,17 @@ export function createPointerToolSlice(set: SliceSet, get: SliceGet): PointerToo
     setRegionPicked: (regionPicked) => set({ regionPicked }),
     legendXY: null,
     legendFrameXY: null,
+    legendSize: null,
     // Clears the frame anchor too (decode #52) — see the interface doc.
     setLegendXY: (legendXY) => set({ legendXY, legendFrameXY: null }),
+    setLegendBounds: (legendXY, legendSize) => {
+      get().recordHistory("resize legend");
+      set({ legendXY, legendFrameXY: null, legendSize });
+    },
+    setLegendSize: (legendSize) => {
+      get().recordHistory(legendSize ? "resize legend" : "fit legend to contents");
+      set({ legendSize });
+    },
     axisLabelOffsets: {},
     setAxisLabelOffset: (axis, offset) => {
       get().recordHistory("move axis title");
