@@ -4,11 +4,11 @@
 // general 500-line ceiling), the same way lib/exportFigureCommand.ts
 // already carries a command's body out of the curated command list.
 
-import { canRelease, type LockRecord } from "../lib/lockState";
+import { canRelease } from "../lib/lockState";
 import { rejectIfImportRunning } from "./importRunningGuard";
 import { plural } from "./plural";
 import { stageWorkspaceRestore } from "../store/windowHydration";
-import { useProjectLock, type LockProvider } from "../store/projectLock";
+import { useProjectLock } from "../store/projectLock";
 import { beginProjectLockOperation, isCurrentProjectLockOperation } from "../store/projectLockEpoch";
 import { closeProjectLock, reserveProjectLock } from "../store/projectLockLifecycle";
 import type { ProjectIdentity } from "../store/project";
@@ -20,27 +20,14 @@ import type { StoreGet } from "./exportActive";
 import { parentDirectory } from "./importEntry";
 import type { LoadedWorkspace } from "./workspace";
 
-/** One commit gate for every action that discards or replaces the live
- * workspace. Check before a picker for fast feedback and again after any
- * confirmation because an import can start while a dialog is open. */
-export function rejectWorkspaceReplacementWhileImporting(): boolean {
-  return rejectIfImportRunning();
-}
-
 /** Snapshot of the lock this instance held BEFORE a project switch —
  *  captured by `reserveLockForSwitch` synchronously, before that function
  *  overwrites `useProjectLock`'s live `path`/`record`, so the async release
  *  step in `registerWithLockStateMachine` still knows what (if anything) to
  *  release even though the live store no longer reflects it. */
 interface PriorLock {
-  path: string | null;
-  record: LockRecord | null;
-  instanceId: string;
-  provider: LockProvider;
-  op: number | null;
-  status: ReturnType<typeof useProjectLock.getState>["status"];
-  openedAsCopy: boolean;
-  unverifiableHeartbeats: number;
+  state: ReturnType<typeof useProjectLock.getState>;
+  op: number;
 }
 
 /** P3 (adversarial review, 2026-08-19) — the SYNCHRONOUS half of PR I2's
@@ -69,10 +56,7 @@ interface PriorLock {
 function reserveLockForSwitch(native: ProjectIdentity | undefined): PriorLock | null {
   if (!native) return null;
   const prev = useProjectLock.getState();
-  const prior: PriorLock = {
-    path: prev.path, record: prev.record, instanceId: prev.instanceId, provider: prev.provider, op: null,
-    status: prev.status, openedAsCopy: prev.openedAsCopy, unverifiableHeartbeats: prev.unverifiableHeartbeats,
-  };
+  const prior: PriorLock = { state: prev, op: 0 };
   if (prev.path === native.path) return prior; // same project — nothing to reserve or release
   prior.op = reserveProjectLock(native.path);
   return prior;
@@ -80,11 +64,12 @@ function reserveLockForSwitch(native: ProjectIdentity | undefined): PriorLock | 
 
 /** Undo a synchronous reservation if workspace hydration rejects. */
 function rollbackLockReservation(prior: PriorLock | null): void {
-  if (prior?.op === null || prior === null || !isCurrentProjectLockOperation(prior.op)) return;
+  if (!prior?.op || !isCurrentProjectLockOperation(prior.op)) return;
   beginProjectLockOperation();
+  const prev = prior.state;
   useProjectLock.setState({
-    path: prior.path, record: prior.record, status: prior.status,
-    openedAsCopy: prior.openedAsCopy, unverifiableHeartbeats: prior.unverifiableHeartbeats,
+    path: prev.path, record: prev.record, status: prev.status,
+    openedAsCopy: prev.openedAsCopy, unverifiableHeartbeats: prev.unverifiableHeartbeats,
   });
 }
 
@@ -107,10 +92,11 @@ function rollbackLockReservation(prior: PriorLock | null): void {
 function registerWithLockStateMachine(native: ProjectIdentity | undefined, prior: PriorLock | null): void {
   if (!native || !prior) return;
   void (async () => {
-    if (prior.path && prior.path !== native.path && canRelease(prior.record, prior.instanceId)) {
-      await prior.provider.release(prior.path, prior.record?.token ?? "").catch(() => false);
+    const prev = prior.state;
+    if (prev.path && prev.path !== native.path && canRelease(prev.record, prev.instanceId)) {
+      await prev.provider.release(prev.path, prev.record?.token ?? "").catch(() => false);
     }
-    if (prior.op !== null && !isCurrentProjectLockOperation(prior.op)) return;
+    if (prior.op && !isCurrentProjectLockOperation(prior.op)) return;
     const result = await useProjectLock.getState().openProject(native.path);
     if (!result.readOnly) return;
     const reason =
@@ -167,7 +153,7 @@ export function recordNativeOpen(native: ProjectIdentity | undefined): void {
  *  dialog can still say no) — see store/project.ts's header on why that
  *  ordering matters. */
 function replaceWorkspaceImpl(s: StoreGet, ws: LoadedWorkspace, native: ProjectIdentity | undefined, skipLayout: boolean): boolean {
-  if (rejectWorkspaceReplacementWhileImporting()) return false;
+  if (rejectIfImportRunning()) return false;
   s().recordHistory(skipLayout ? "open workspace without layout" : "open workspace");
   // C1 (review F4): an open relink panel refers to the OUTGOING project's
   // datasets, and the backend independently revokes its directory grants at

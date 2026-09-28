@@ -12,12 +12,11 @@ import { clearAutosave } from "../lib/autosave";
 import type { StoreGet } from "../lib/exportActive";
 import { createFigureDocument } from "../lib/figureDocument";
 import { chooseAndImport } from "../lib/importEntry";
-import { guardAgainstRunningImport, rejectIfImportRunning } from "../lib/importRunningGuard";
+import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
 import {
   hasWorkspaceContent,
-  rejectWorkspaceReplacementWhileImporting,
   recordNativeOpen,
   replaceConfirmMessage,
   replaceWorkspace,
@@ -244,12 +243,12 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // restore, which must never prompt). P3.4 slice 4: `replaceWorkspace`
       // stages every restored window except the active/linked ones behind a
       // placeholder until its drain turn, instead of mounting all at once.
-      run: guardAgainstRunningImport(openWorkspaceCommand(s, "open", (ws, native) => {
+      run: openWorkspaceCommand(s, "open", (ws, native) => {
         if (!hasWorkspaceContent(s)) return replaceWorkspace(s, ws, native);
         void askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length), "Replace", true).then(
           (ok) => ok && replaceWorkspace(s, ws, native),
         );
-      })),
+      }),
     },
     {
       id: "open-workspace-safe",
@@ -259,7 +258,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       keywords: "safe recovery layout skip windows corrupted crash",
       // Same replace-and-confirm flow as "open-workspace" above, via
       // replaceWorkspaceSafely (skipLayout: true).
-      run: guardAgainstRunningImport(openWorkspaceCommand(s, "open", (ws, native) => {
+      run: openWorkspaceCommand(s, "open", (ws, native) => {
         if (!hasWorkspaceContent(s)) return replaceWorkspaceSafely(s, ws, native);
         const extra = " The saved window layout will be skipped — everything opens in one default window.";
         void askConfirm(
@@ -268,7 +267,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
           "Replace",
           true,
         ).then((ok) => ok && replaceWorkspaceSafely(s, ws, native));
-      })),
+      }),
     },
     {
       id: "append-workspace",
@@ -286,10 +285,10 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // over-record; it just can't share openWorkspaceReplace.ts's
       // `replaceWorkspace` chokepoint (append doesn't call it) so it gets
       // its own push at its own commit point instead.
-      run: guardAgainstRunningImport(openWorkspaceCommand(s, "append", (ws, native) => {
+      run: openWorkspaceCommand(s, "append", (ws, native) => {
         s().appendWorkspace(ws);
         recordNativeOpen(native);
-      })),
+      }),
     },
     {
       id: "clear-autosave",
@@ -318,7 +317,9 @@ export function buildFileCommands(s: StoreGet): Action[] {
           true,
         ).then((ok) => {
           if (!ok) return;
-          if (rejectWorkspaceReplacementWhileImporting()) return;
+          // Re-check at commit time: an import may have started while the
+          // confirmation dialog was open.
+          if (rejectIfImportRunning()) return;
           closeProjectLock();
           s().clearAll();
           toast("removed all datasets", "ok");
