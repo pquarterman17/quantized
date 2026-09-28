@@ -1841,6 +1841,9 @@ identical build:
 | main `726da942` (parent) | 865,437 | — |
 | + `PLOT_MARKS` moved to `lib/plotMarks.ts` | 847,486 | **−17,951** |
 
+Re-measured after rebasing onto main `d7ea72dd` (#462, #466, #468 landed): 848,423 B
+eager, 17,935 B under the pin (same `npm ci` + wiped `.vite` procedure).
+
 #### How it was found
 
 Not a seam this time: a scan for EXPORTS of eager modules that only lazy
