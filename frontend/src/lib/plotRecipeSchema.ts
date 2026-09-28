@@ -18,6 +18,7 @@ import type {
   Annotation,
   AxisFormat,
   AxisScale,
+  RefLine,
   RegionShade,
   SeriesStyle,
   Shape,
@@ -133,6 +134,14 @@ export interface RecipeVisual {
   yFmt: AxisFormat;
   y2Fmt: AxisFormat | null;
   axisBreaks: RecipeAxisBreaks;
+  /** Fixed reference lines (P2.1 built-in recipes: an M(H) loop's H=0/M=0
+   *  zero lines) -- captured/applied VERBATIM, exactly like `decorations`
+   *  below, never re-derived from the target dataset. Added additively
+   *  (no `PLOT_RECIPE_SCHEMA_VERSION` bump): an older persisted recipe
+   *  simply lacks the field and every reader (`plotRecipeIO.ts`'s
+   *  `sanitizeVisual`, `plotRecipeIO.ts`'s `defaultRecipeVisual`) defaults
+   *  it to `[]`, so no migration is needed. */
+  refLines: RefLine[];
   showLegend: boolean;
   legendPos: LegendPos;
   legendXY: [number, number] | null;

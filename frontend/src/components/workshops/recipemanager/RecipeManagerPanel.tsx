@@ -27,6 +27,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { BUILTIN_PLOT_RECIPES } from "../../../lib/builtinPlotRecipes";
+import type { PlotRecipe } from "../../../lib/plotRecipe";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
@@ -108,7 +110,14 @@ export default function RecipeManagerPanel() {
       });
   };
 
-  const applyRow = (row: (typeof rows)[number]): void => {
+  // Takes the bare `PlotRecipe` (not a `RecipeRow`) so the SAME apply
+  // gesture -- and the SAME finding 2/5 guards -- serve the project/global
+  // rows below AND the read-only "Built-in" group's rows, which have no
+  // `RecipeRow`/scope of their own (store/plotRecipeApply.ts's
+  // `applyPlotRecipeObject`, which `applyRecipeToDataset` calls, never
+  // depends on the recipe being a member of either live list -- see its own
+  // doc).
+  const applyRow = (recipe: PlotRecipe): void => {
     if (!datasetId || applyingRef.current) return; // finding 2: bail while an apply is already in flight
     applyingRef.current = true;
     setApplying(true);
@@ -120,7 +129,7 @@ export default function RecipeManagerPanel() {
     // truthiness) is what tells "this apply just staged something new" apart
     // from "there was already one there that isn't mine".
     const pendingBefore = useApp.getState().pendingRecipeApplication;
-    void applyRecipeToDataset(row.recipe, datasetId).then((ok) => {
+    void applyRecipeToDataset(recipe, datasetId).then((ok) => {
       applyingRef.current = false;
       setApplying(false);
       const pendingAfter = useApp.getState().pendingRecipeApplication;
@@ -130,6 +139,15 @@ export default function RecipeManagerPanel() {
       // sitting there), so the user can try a different dataset.
       if (ok || (pendingAfter !== null && pendingAfter !== pendingBefore)) close();
     });
+  };
+
+  // "Editing" a built-in saves a user copy rather than mutating it in place
+  // (there is no store-side way to mutate one -- see lib/builtinPlotRecipes.ts's
+  // READ-ONLY note): lands a normal, fully-editable PROJECT recipe via the
+  // same `copyPlotRecipeIn` seam the cross-scope copy button below uses, one
+  // undo step, the built-in itself never touched.
+  const copyBuiltinToProject = (recipe: PlotRecipe): void => {
+    useApp.getState().copyPlotRecipeIn(recipe);
   };
 
   return (
@@ -206,7 +224,7 @@ export default function RecipeManagerPanel() {
                     {row.recipe.name}
                   </span>
                 )}
-                <Button size="sm" disabled={!datasetId || applying} onClick={() => applyRow(row)}>
+                <Button size="sm" disabled={!datasetId || applying} onClick={() => applyRow(row.recipe)}>
                   Apply
                 </Button>
                 <Button
@@ -239,6 +257,37 @@ export default function RecipeManagerPanel() {
           })}
         </ul>
       )}
+
+      {/* Built-in group (P2.1): a fixed, read-only set of technique-specific
+          recipes shipped with the app -- see lib/builtinPlotRecipes.ts's
+          module doc. Listed here, in the SAME picker every project/global
+          recipe is applied from, but NEVER offered or applied automatically
+          anywhere else (that module's own doc names the exact reason: its
+          list is a member of neither live store `resolvedCandidates`
+          reads). Apply + "Copy to Project" only -- no Rename/Duplicate/
+          Delete/Export, since there is nothing in either store for those to
+          act on; "Copy to Project" is the sanctioned way to edit one. */}
+      <div className="qzk-ds-meta" style={{ marginTop: 12, marginBottom: 4 }}>Built-in</div>
+      <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 4 }}>
+        {BUILTIN_PLOT_RECIPES.map((recipe) => (
+          <li key={recipe.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <span className="qz-shortcut" style={{ width: 52, flexShrink: 0 }}>Built-in</span>
+            <span className="qzk-menu-trunc" style={{ flex: 1 }} title={recipe.description || recipe.name}>
+              {recipe.name}
+            </span>
+            <Button size="sm" disabled={!datasetId || applying} onClick={() => applyRow(recipe)}>
+              Apply
+            </Button>
+            <Button
+              size="sm"
+              title="Built-in recipes are read-only -- copy to Project to edit this one"
+              onClick={() => copyBuiltinToProject(recipe)}
+            >
+              Copy to Project
+            </Button>
+          </li>
+        ))}
+      </ul>
       {error && (
         <div className="qzk-ds-meta" style={{ color: "var(--danger)", marginTop: 8 }}>
           {error}

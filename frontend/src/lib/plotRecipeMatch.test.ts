@@ -431,4 +431,19 @@ describe("resolveRecipe — seriesStyles/seriesOrder/hiddenChannels re-key", () 
     expect(recipe.visual.decorations.annotations[0].text).toBe("peak");
     expect(recipe.visual.seriesStyles.y0).toEqual({ color: "#ff0000" });
   });
+
+  // P2.1: refLines aren't keyed to any signature entry (fixed axis positions,
+  // not a channel binding) so they pass through VERBATIM, exactly like
+  // `decorations` above -- same finding-3 deep-copy requirement applies.
+  it("passes refLines through verbatim, as an independent copy (P2.1)", () => {
+    const ds = xrdDataset();
+    const withRefLine = view({ xKey: 0, yKeys: [1], refLines: [{ id: "rl1", axis: "y", value: 0 }] });
+    const recipe = captureRecipe(ds, withRefLine, null, { id: "r", name: "n", appVersion: "0" });
+    const res = resolveRecipe(recipe, ds);
+    if (!("resolved" in res)) throw new Error(`expected a resolved result, got refusal: ${res.refused}`);
+
+    expect(res.resolved.visual.refLines).toEqual([{ id: "rl1", axis: "y", value: 0 }]);
+    res.resolved.visual.refLines[0].value = 99;
+    expect(recipe.visual.refLines[0].value).toBe(0); // untouched
+  });
 });

@@ -1,8 +1,9 @@
 // P1.3 wave 3, Lane D: the Recipe Manager panel view.
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { BUILTIN_PLOT_RECIPES } from "../../../lib/builtinPlotRecipes";
 import { captureRecipe, type PlotRecipe } from "../../../lib/plotRecipe";
 import { defaultPlotView } from "../../../lib/plotview";
 import type { Dataset } from "../../../lib/types";
@@ -153,7 +154,10 @@ describe("RecipeManagerPanel — actions", () => {
     const figuresBefore = useApp.getState().editableFigures.length;
 
     render(<RecipeManagerPanel />);
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    // The project row renders FIRST (combinedRecipeRows, project before
+    // global, before the separate "Built-in" group below it) -- [0] is
+    // always this test's own "Original" row, never a built-in's.
+    fireEvent.click(screen.getAllByRole("button", { name: "Apply" })[0]);
 
     // STATE, not the call itself -- waits on the real async apply-path
     // (recipeLibs()'s dynamic import) to actually land its figure.
@@ -169,7 +173,7 @@ describe("RecipeManagerPanel — actions", () => {
     const figuresBefore = useApp.getState().editableFigures.length;
 
     render(<RecipeManagerPanel />);
-    const applyButton = screen.getByRole("button", { name: "Apply" });
+    const applyButton = screen.getAllByRole("button", { name: "Apply" })[0]; // this test's row, see above
     fireEvent.click(applyButton);
     fireEvent.click(applyButton); // no await between -- the race
 
@@ -208,7 +212,7 @@ describe("RecipeManagerPanel — actions", () => {
 
     render(<RecipeManagerPanel />);
     fireEvent.change(screen.getByRole("combobox"), { target: { value: "d2" } }); // mismatched technique
-    fireEvent.click(screen.getByRole("button", { name: "Apply" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "Apply" })[0]); // the project row, see above
 
     await waitFor(() => expect(useApp.getState().status).toContain("unavailable"));
     expect(useApp.getState().pendingRecipeApplication).toBe(preExisting); // identity, untouched
@@ -243,5 +247,83 @@ describe("RecipeManagerPanel — actions", () => {
     fireEvent.change(fileInput);
 
     expect(await screen.findByText(/disk read failed/i)).toBeInTheDocument();
+  });
+});
+
+// P2.1 "Technique-specific plot recipe is manually chosen, never
+// auto-overwrites". The panel is the one place a person can reach a
+// built-in -- see lib/builtinPlotRecipes.ts's module doc for why nothing
+// else (import, technique detection, the post-import suggestion toast) can.
+describe("RecipeManagerPanel — built-in recipes", () => {
+  it("lists every built-in recipe, unconditionally, in their own group", () => {
+    render(<RecipeManagerPanel />);
+    // The section header AND each row's own scope tag both read "Built-in" --
+    // at least one of each (header + one tag per recipe below).
+    expect(screen.getAllByText("Built-in").length).toBeGreaterThanOrEqual(1 + BUILTIN_PLOT_RECIPES.length);
+    for (const recipe of BUILTIN_PLOT_RECIPES) {
+      expect(screen.getByText(recipe.name)).toBeInTheDocument();
+    }
+  });
+
+  it("offers Apply and Copy to Project, but never Rename/Duplicate/Delete/Export, on a built-in row", () => {
+    render(<RecipeManagerPanel />);
+    const row = screen.getByText(BUILTIN_PLOT_RECIPES[0].name).closest("li");
+    expect(row).not.toBeNull();
+    const withinRow = within(row as HTMLElement);
+    expect(withinRow.getByRole("button", { name: "Apply" })).toBeInTheDocument();
+    expect(withinRow.getByRole("button", { name: "Copy to Project" })).toBeInTheDocument();
+    // Sabotage-verified (see the task's own self-review pass): rendering a
+    // Delete button here made this assertion fail before the row was fixed
+    // to omit it, confirming the query actually exercises the panel's markup.
+    expect(withinRow.queryByRole("button", { name: "Rename" })).toBeNull();
+    expect(withinRow.queryByRole("button", { name: "Duplicate" })).toBeNull();
+    expect(withinRow.queryByRole("button", { name: "Delete" })).toBeNull();
+    expect(withinRow.queryByRole("button", { name: "Export" })).toBeNull();
+  });
+
+  it("'Copy to Project' on a built-in lands an independent, fully-editable project recipe -- the built-in itself untouched", () => {
+    render(<RecipeManagerPanel />);
+    const xrd = BUILTIN_PLOT_RECIPES.find((r) => r.technique === "xrd.powder");
+    if (!xrd) throw new Error("expected an xrd.powder built-in recipe");
+    const row = screen.getByText(xrd.name).closest("li");
+    fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "Copy to Project" }));
+
+    expect(useApp.getState().plotRecipes).toHaveLength(1);
+    const copy = useApp.getState().plotRecipes[0];
+    expect(copy.name).toBe(xrd.name); // no project recipe existed yet to dedupe against
+    expect(copy.id).not.toBe(xrd.id); // fresh id -- never the built-in's own
+    expect(BUILTIN_PLOT_RECIPES).toHaveLength(3); // the source list itself is untouched
+
+    // The copy landed as an ordinary PROJECT-scope row (found by its scope
+    // tag, not by name -- the copy shares the built-in's name, so a
+    // by-text query would now be ambiguous) -- renamable/deletable like any
+    // other project recipe.
+    const copyRow = screen.getByText("Project").closest("li");
+    expect(copyRow).not.toBeNull();
+    expect(within(copyRow as HTMLElement).getByText(xrd.name)).toBeInTheDocument();
+    fireEvent.click(within(copyRow as HTMLElement).getByRole("button", { name: "Delete" }));
+    expect(useApp.getState().plotRecipes).toHaveLength(0);
+  });
+
+  it("applies a built-in recipe to the selected dataset (one new figure, one undo step)", async () => {
+    useApp.setState({
+      datasets: [dataset("d1")],
+      activeId: "d1",
+    });
+    const xrd = BUILTIN_PLOT_RECIPES.find((r) => r.technique === "xrd.powder");
+    if (!xrd) throw new Error("expected an xrd.powder built-in recipe");
+    const figuresBefore = useApp.getState().editableFigures.length;
+
+    render(<RecipeManagerPanel />);
+    const row = screen.getByText(xrd.name).closest("li");
+    fireEvent.click(within(row as HTMLElement).getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(useApp.getState().editableFigures).toHaveLength(figuresBefore + 1));
+    const applied = useApp.getState().editableFigures[useApp.getState().editableFigures.length - 1];
+    expect(applied.plot.mark).toBe("line");
+
+    // One undo step: undo removes exactly the figure this apply created.
+    useApp.getState().undo();
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore);
   });
 });

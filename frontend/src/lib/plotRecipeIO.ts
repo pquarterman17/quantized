@@ -24,7 +24,7 @@ import { PLOT_MARKS, type PlotMark } from "./plotspec";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import type { SignatureErrorRole } from "./quickPlotTemplates";
 import { isValidTechnique } from "./techniqueDefaults";
-import type { AxisFormat, SeriesStyle, TickMode } from "./types";
+import type { AxisFormat, RefLine, SeriesStyle, TickMode } from "./types";
 import {
   PLOT_RECIPE_SCHEMA_VERSION,
   type PlotRecipe,
@@ -64,6 +64,28 @@ function isRange(v: unknown): v is [number, number] {
     typeof v[0] === "number" && typeof v[1] === "number" &&
     Number.isFinite(v[0]) && Number.isFinite(v[1])
   );
+}
+
+function isRefLineAxis(v: unknown): v is "x" | "y" {
+  return v === "x" || v === "y";
+}
+
+/** Validate a persisted `refLines` list -- an entry missing a string `id`,
+ *  a valid `axis`, or a finite `value` is dropped (nothing sane to fall
+ *  back to for one bad entry), same "drop the bad one, keep the rest"
+ *  convention `sanitizeShapes`/`sanitizeAnnotations` (`plotview.ts`) use. */
+function sanitizeRefLines(v: unknown): RefLine[] {
+  if (!Array.isArray(v)) return [];
+  const out: RefLine[] = [];
+  for (const e of v) {
+    if (typeof e !== "object" || e === null) continue;
+    const o = e as Record<string, unknown>;
+    if (typeof o.id !== "string" || !o.id) continue;
+    if (!isRefLineAxis(o.axis)) continue;
+    if (typeof o.value !== "number" || !Number.isFinite(o.value)) continue;
+    out.push({ id: o.id, axis: o.axis, value: o.value });
+  }
+  return out;
 }
 
 function isAxisFormat(v: unknown): v is AxisFormat {
@@ -194,6 +216,7 @@ function defaultRecipeVisual(): RecipeVisual {
     yFmt: { mode: "auto", digits: 2 },
     y2Fmt: null,
     axisBreaks: { x: [], y: [], y2: [] },
+    refLines: [],
     showLegend: true,
     legendPos: "ne",
     legendXY: null,
@@ -252,6 +275,7 @@ function sanitizeVisual(v: unknown): RecipeVisual {
     yFmt: isAxisFormat(o.yFmt) ? o.yFmt : fb.yFmt,
     y2Fmt: isAxisFormat(o.y2Fmt) ? o.y2Fmt : null,
     axisBreaks: sanitizeAxisBreaks(o.axisBreaks),
+    refLines: sanitizeRefLines(o.refLines),
     showLegend: typeof o.showLegend === "boolean" ? o.showLegend : fb.showLegend,
     legendPos: (LEGEND_POS as readonly string[]).includes(o.legendPos as string) ? (o.legendPos as LegendPos) : fb.legendPos,
     legendXY: legendXYOrNull(o.legendXY),

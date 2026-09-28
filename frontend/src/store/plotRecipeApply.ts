@@ -50,6 +50,7 @@
 // already-eager module from dragging the otherwise boot-lazy global store
 // into the always-loaded graph -- see that module's own doc.
 
+import { isBuiltinPlotRecipeId } from "../lib/builtinPlotRecipes";
 import { errKeysFromBindings } from "../lib/errorRoles";
 import { createFigureDocument } from "../lib/figureDocument";
 import type { PlotRecipe } from "../lib/plotRecipe";
@@ -112,6 +113,7 @@ export function viewFromResolved(mapping: ResolvedRecipeMapping, visual: Resolve
     annotations: visual.decorations.annotations,
     shapes: visual.decorations.shapes,
     regionShades: visual.decorations.regionShades,
+    refLines: visual.refLines,
   };
 }
 
@@ -185,11 +187,24 @@ export function applyResolvedRecipe(
   // bare object from `applyPlotRecipeObject` with no scope attached, so the
   // honest answer is where it lives right now. Project membership wins because
   // that is the list `applyPlotRecipe` searches first.
-  recordRecipeUse({
-    kind: "plot",
-    scope: get().plotRecipes.some((r) => r.id === recipe.id) ? "project" : "global",
-    id: recipe.id,
-  });
+  //
+  // A BUILT-IN (lib/builtinPlotRecipes.ts) is a member of NEITHER live list,
+  // so it is neither "project" nor "global" -- `RecipeRef.scope` (lib/
+  // recipeLibrary.ts) has no third value for it, and there is nothing in
+  // either store's own "recently used" list for a `global:plot:builtin:...`
+  // key to ever match. Recording one under the wrong scope would be dead,
+  // mislabeled bookkeeping (silently pruned later by `recipeIndex.
+  // pruneEntries`, since it can never resolve back to a real recipe) rather
+  // than a fix, so a built-in's use is simply not recorded at all -- see the
+  // Recipe Manager panel's own "Built-in" group, which has no "recently
+  // used" affordance for these rows either.
+  if (!isBuiltinPlotRecipeId(recipe.id)) {
+    recordRecipeUse({
+      kind: "plot",
+      scope: get().plotRecipes.some((r) => r.id === recipe.id) ? "project" : "global",
+      id: recipe.id,
+    });
+  }
   return true;
 }
 

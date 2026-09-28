@@ -11,6 +11,7 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { BUILTIN_PLOT_RECIPES, isBuiltinPlotRecipeId } from "../lib/builtinPlotRecipes";
 import { breakPanelsOf, facetPanelsOf } from "../lib/composition";
 import { durableComposition, facetCompositionFromBinding } from "../lib/facet";
 import { buildFigureSpecFromDocument } from "../lib/figureSpec";
@@ -1070,5 +1071,126 @@ describe("applyPlotRecipe rebuilds a live paneled x-break (BUG-012)", () => {
     const rebuilt = durableComposition(d2, s.facetKey, applied?.plot.axisBreaks.x, s.xKey, s.yKeys);
     expect(breakPanelsOf(rebuilt)).toHaveLength(2);
     expect(breakPanelsOf(rebuilt)?.map((p) => p.xRange)).toEqual([[10, 10], [20, 30]]);
+  });
+});
+
+// PRIMARY_SOFTWARE_AUDIT_PLAN P2.1 "Technique-specific plot recipe is
+// manually chosen, never auto-overwrites". `BUILTIN_PLOT_RECIPES` is a
+// fixed data set on the SAME `PlotRecipe` schema (lib/builtinPlotRecipes.ts)
+// -- it carries the identical apply contract every other test in this file
+// already exercises via `applyPlotRecipeObject` (the seam a bare recipe
+// object, never a member of `state.plotRecipes`, applies through). These
+// tests exist to pin the THREE guarantees the plan box names: manual only
+// (never a candidate for automatic suggestion), never an overwrite (always
+// a new figure, one undo step), and the confirm/partial-apply flow is
+// REUSED rather than duplicated for a built-in's own unmatched fields.
+describe("built-in plot recipes (P2.1)", () => {
+  const xrd = BUILTIN_PLOT_RECIPES.find((r) => r.technique === "xrd.powder")!;
+  const xrr = BUILTIN_PLOT_RECIPES.find((r) => r.technique === "reflectometry")!;
+  const mh = BUILTIN_PLOT_RECIPES.find((r) => r.technique === "magnetometry.mvsh")!;
+
+  it("covers exactly the three named techniques, every id marked built-in", () => {
+    expect(BUILTIN_PLOT_RECIPES).toHaveLength(3);
+    expect(BUILTIN_PLOT_RECIPES.map((r) => r.technique).sort()).toEqual(
+      ["magnetometry.mvsh", "reflectometry", "xrd.powder"].sort(),
+    );
+    for (const r of BUILTIN_PLOT_RECIPES) expect(isBuiltinPlotRecipeId(r.id)).toBe(true);
+    expect(isBuiltinPlotRecipeId("pr-not-a-builtin")).toBe(false);
+  });
+
+  it("never ships pre-loaded into either live recipe list", () => {
+    // resetStore()'s default state — no boot path seeds a builtin into
+    // project or global scope; they exist only as this standalone array.
+    expect(useApp.getState().plotRecipes).toEqual([]);
+    expect(useGlobalPlotRecipes.getState().recipes).toEqual([]);
+  });
+
+  it("a clean apply (XRD, default 'Intensity' dataset) sets the technique's log axis, as ONE new figure / ONE undo step", async () => {
+    // resetStore()'s default dataset is exactly xrd.powder with an
+    // "Intensity" column — no per-test dataset setup needed.
+    const windowsBefore = useApp.getState().plotWindows.length;
+    const figuresBefore = useApp.getState().editableFigures.length;
+    const historyBefore = useApp.getState().history.length;
+
+    const ok = await useApp.getState().applyPlotRecipeObject(xrd, "d1");
+
+    expect(ok).toBe(true);
+    expect(useApp.getState().plotWindows).toHaveLength(windowsBefore + 1);
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore + 1);
+    expect(useApp.getState().history).toHaveLength(historyBefore + 1); // ONE undo entry
+    expect(useApp.getState().yScale).toBe("log"); // lib/techniqueDefaults.ts's own XRD opinion
+    expect(useApp.getState().pendingRecipeApplication).toBeNull();
+
+    useApp.getState().undo();
+    expect(useApp.getState().plotWindows).toHaveLength(windowsBefore);
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore);
+  });
+
+  it("an unmatched Y label stages a pending application -- the SAME preview+confirm flow a saved recipe uses", async () => {
+    useApp.setState({ datasets: [dataset("d1", "reflectometry", ["Q", "Signal"])] }); // no "R"/alias present
+    const figuresBefore = useApp.getState().editableFigures.length;
+
+    const ok = await useApp.getState().applyPlotRecipeObject(xrr, "d1");
+
+    expect(ok).toBe(false);
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore); // zero mutation until confirmed
+    expect(useApp.getState().pendingRecipeApplication?.recipe.id).toBe(xrr.id);
+    expect(useApp.getState().pendingRecipeApplication?.resolution.unmatched.length).toBeGreaterThan(0);
+
+    // The existing "apply anyway" confirm action finishes the gesture --
+    // built-ins get no bespoke confirm path of their own.
+    const confirmed = await useApp.getState().confirmPendingRecipeApplicationPartial();
+    expect(confirmed).toBe(true);
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore + 1);
+    expect(useApp.getState().pendingRecipeApplication).toBeNull();
+  });
+
+  it("refuses for a technique mismatch -- zero mutation, never a silent apply", async () => {
+    // resetStore()'s default dataset is xrd.powder; mh is scoped to
+    // magnetometry.mvsh.
+    const figuresBefore = useApp.getState().editableFigures.length;
+
+    const ok = await useApp.getState().applyPlotRecipeObject(mh, "d1");
+
+    expect(ok).toBe(false);
+    expect(useApp.getState().editableFigures).toHaveLength(figuresBefore);
+    expect(useApp.getState().pendingRecipeApplication).toBeNull();
+    expect(useApp.getState().status).toContain("unavailable");
+  });
+
+  it("the M(H) loop's zero lines (H=0, M=0) apply verbatim onto the new figure", async () => {
+    useApp.setState({ datasets: [dataset("d1", "magnetometry.mvsh", ["Field", "Moment"])] });
+
+    const ok = await useApp.getState().applyPlotRecipeObject(mh, "d1");
+
+    expect(ok).toBe(true);
+    expect(useApp.getState().yScale).toBe("linear");
+    expect(useApp.getState().refLines).toEqual([
+      { id: "builtin-zero-h", axis: "x", value: 0 },
+      { id: "builtin-zero-m", axis: "y", value: 0 },
+    ]);
+  });
+
+  it("records NO 'recently used' entry under either scope -- a built-in is a member of neither list (code-review finding)", async () => {
+    const ok = await useApp.getState().applyPlotRecipeObject(xrd, "d1");
+    expect(ok).toBe(true);
+    // Give the recorder's dynamic import every chance to land before
+    // asserting the negative -- same ordering-not-timing shape
+    // "records NOTHING when the apply only STAGES..." above uses.
+    await vi.waitFor(() => expect(useApp.getState().editableFigures.length).toBeGreaterThan(0));
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(metaFor({ kind: "plot", scope: "project", id: xrd.id }).useCount).toBe(0);
+    expect(metaFor({ kind: "plot", scope: "global", id: xrd.id }).useCount).toBe(0);
+  });
+
+  it("is NEVER offered by the automatic-suggestion surfaces (matchingPlotRecipes / cleanMatchingPlotRecipe)", async () => {
+    // resetStore()'s default dataset would CLEANLY match the XRD built-in
+    // (an "Intensity" column) were it eligible at all -- both project and
+    // global scope are empty, so any non-empty result here could only have
+    // come from the builtin list leaking into a suggestion surface.
+    const ds = useApp.getState().datasets[0];
+    expect(await useApp.getState().matchingPlotRecipes(ds)).toEqual([]);
+    expect(await useApp.getState().cleanMatchingPlotRecipe(ds)).toBeNull();
   });
 });

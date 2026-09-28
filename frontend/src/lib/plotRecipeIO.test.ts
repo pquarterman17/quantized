@@ -156,3 +156,48 @@ describe("sanitizeRecipes", () => {
     expect(sanitizeRecipes([null, undefined, 42, "str", {}, [], { schemaVersion: 1 }])).toEqual([]);
   });
 });
+
+// P2.1: `visual.refLines` was added ADDITIVELY (no PLOT_RECIPE_SCHEMA_VERSION
+// bump -- see plotRecipeSchema.ts's own doc on the field). These pins are
+// what makes that claim true rather than assumed: an OLDER recipe missing
+// the field entirely must still sanitize cleanly to `[]`, never get dropped.
+describe("sanitizeRecipes — refLines (additive field, P2.1)", () => {
+  it("an OLDER persisted recipe with no refLines field at all sanitizes to []  (never dropped, never throws)", () => {
+    const good = goodRecipe();
+    const legacy = { ...good } as Record<string, unknown>;
+    const legacyVisual = { ...(legacy.visual as Record<string, unknown>) };
+    delete legacyVisual.refLines;
+    legacy.visual = legacyVisual;
+
+    const [out] = sanitizeRecipes([legacy]);
+    expect(out).toBeDefined();
+    expect(out.visual.refLines).toEqual([]);
+    expect(() => parseRecipe(JSON.stringify(legacy))).not.toThrow();
+    expect(parseRecipe(JSON.stringify(legacy)).visual.refLines).toEqual([]);
+  });
+
+  it("drops a malformed refLine entry but keeps the well-formed ones alongside it", () => {
+    const good = goodRecipe();
+    const corrupt = {
+      ...good,
+      visual: {
+        ...good.visual,
+        refLines: [
+          { id: "ok", axis: "x", value: 5 },
+          { id: "bad-axis", axis: "z", value: 1 },
+          { id: "bad-value", axis: "y", value: "not a number" },
+          { axis: "y", value: 2 }, // missing id
+        ],
+      },
+    };
+    const [out] = sanitizeRecipes([corrupt]);
+    expect(out.visual.refLines).toEqual([{ id: "ok", axis: "x", value: 5 }]);
+  });
+
+  it("a non-array refLines value degrades to [] rather than dropping the recipe", () => {
+    const good = goodRecipe();
+    const corrupt = { ...good, visual: { ...good.visual, refLines: "not an array" } };
+    const [out] = sanitizeRecipes([corrupt]);
+    expect(out.visual.refLines).toEqual([]);
+  });
+});

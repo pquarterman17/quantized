@@ -3156,7 +3156,29 @@ a plan edit.
   snapshots the whole dataset list: an unrecorded write made after a recorded
   one is rolled back by undoing it (an unrecorded re-fit was lost this way).
   Batch recipe remains open, as does direct manual peak creation.
-- [ ] Technique-specific plot recipe is manually chosen, never auto-overwrites.
+- [x] Technique-specific plot recipe is manually chosen, never auto-overwrites.
+  **2026-09-28:** three built-in Plot Recipes (`lib/builtinPlotRecipes.ts`) on
+  the existing P1.3 `PlotRecipe` schema, no new schema version — XRD θ–2θ (log
+  intensity), XRR (log R vs Q), M(H) loop (linear, H=0/M=0 zero lines via a
+  new additive `visual.refLines` field, ported from `lib/techniqueDefaults.ts`'s
+  own axis-scale table, never invented). Listed in their own read-only
+  "Built-in" group in the Recipe Manager panel (Apply + "Copy to Project"
+  only — no Rename/Duplicate/Delete/Export); applied through the SAME
+  `applyPlotRecipeObject` path as any saved recipe, so it is structurally
+  impossible for an apply to overwrite a live window (always a new figure,
+  one undo step) and the existing unmatched-field preview+confirm dialog is
+  reused verbatim for a built-in's own partial matches. Built-ins are a
+  member of neither the project nor the global recipe store, so they are
+  excluded by construction from every auto-suggestion surface
+  (`resolvedCandidates`/`matchingPlotRecipes`/the post-import toast) —
+  selection is manual-only, never on import or technique detection. 227
+  targeted + 838-file/13,590-test full suite green, `tsc -b --force` clean,
+  lint clean, two findings sabotage-verified (an unguarded automatic-
+  suggestion leak, a rendered Delete button on a built-in row). Kept lazy:
+  `lib/builtinPlotRecipes.ts` is reached only from the already-lazy Recipe
+  Manager panel chunk (`architecture.test.ts`'s eager-reachability walk
+  passes); final `npm run build` bundle-size gate: 843.8 kB eager (846.1 kB
+  budget, unedited), 2.3 kB under.
 - [ ] Validate on representative owner instruments/phases.
 
 ### P2.2 — XRR/PNR fit-to-data workbench
