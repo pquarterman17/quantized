@@ -23,10 +23,13 @@ export function useLegendBox(tool: PlotTool) {
     return [clamp((clientX - rect.left) / rect.width, 0, 1), clamp((clientY - rect.top) / rect.height, 0, 1)];
   };
 
+  // The box background: the box itself or the content wrapper's empty space
+  // (row gaps, and whatever an enlarged box adds), never a row.
+  const isBoxSurface = (e: ReactMouseEvent) =>
+    e.target === e.currentTarget || (e.target as HTMLElement).classList.contains("qzk-legend-content");
+
   const onBoxMouseDown = (e: ReactMouseEvent) => {
-    const target = e.target as HTMLElement;
-    const movableSurface = e.target === e.currentTarget || target.classList.contains("qzk-legend-content");
-    if (tool !== "pointer" || e.button !== 0 || !movableSurface) return;
+    if (tool !== "pointer" || e.button !== 0 || !isBoxSurface(e)) return;
     e.preventDefault();
     let recorded = false;
     const onMove = (ev: MouseEvent) => {
@@ -48,7 +51,7 @@ export function useLegendBox(tool: PlotTool) {
   };
 
   const onBoxDoubleClick = (e: ReactMouseEvent) => {
-    if (tool !== "pointer" || e.target !== e.currentTarget || (!legendXY && !legendFrameXY)) return;
+    if (tool !== "pointer" || !isBoxSurface(e) || (!legendXY && !legendFrameXY)) return;
     if (legendXY) setLegendPos(nearestLegendCorner(legendXY[0], legendXY[1]));
     else useApp.getState().recordHistory("reset legend position");
     setLegendXY(null);

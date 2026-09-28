@@ -149,6 +149,14 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
     expect(useApp.getState().legendPos).toBe("ne");
   });
 
+  it("double-click on the content body's empty space resets like the box background", () => {
+    useApp.setState({ legendXY: [0.9, 0.1], legendPos: "sw" });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    fireEvent.doubleClick(container.querySelector(".qzk-legend-content") as HTMLElement);
+    expect(useApp.getState().legendXY).toBeNull();
+    expect(useApp.getState().legendPos).toBe("ne");
+  });
+
   it("double-click is a no-op when the legend has no free position to reset from", () => {
     useApp.setState({ legendPos: "sw" });
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
