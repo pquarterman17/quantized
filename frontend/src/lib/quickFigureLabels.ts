@@ -17,6 +17,7 @@
 
 import { categoricalLevels, labelForCode } from "./categorical";
 import type { QuickFigureMapping } from "./quickFigureMapping";
+import { seriesXKey } from "./quickFigureSeriesX";
 import { droppedRows } from "./rowstate";
 import type { Annotation, Dataset } from "./types";
 
@@ -40,9 +41,10 @@ export function quickFigurePointLabels(
   const levels = categoricalLevels(dataset.data, labelKey);
   const dropped = droppedRows(dataset);
   for (const yKey of mapping.yKeys) {
+    const xKey = seriesXKey(mapping, yKey); // each series at its OWN X (multi-X sheets)
     for (let r = 0; r < values.length && out.length < limit; r++) {
       const row = values[r];
-      const x = mapping.xKey === null ? time[r] : row[mapping.xKey];
+      const x = xKey === null ? time[r] : row[xKey];
       const y = row[yKey];
       const v = row[labelKey];
       if (dropped.has(r) || !Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(v)) continue;

@@ -29,7 +29,9 @@ import { dedupeWindowTitle } from "../lib/plotview";
 import { quickFigureCommit } from "../lib/quickFigureCommit";
 import { canCreateQuickFigure, type QuickFigureMapping } from "../lib/quickFigureMapping";
 import type { QuickPlotStyle } from "../lib/quickFigurePreview";
+import { quickFigureOverlayDataset } from "../lib/quickFigureSeriesX";
 import { nextFigureId } from "./figureLifecycle";
+import { nextDatasetId } from "./idSeq";
 import type { AppState } from "./useApp";
 import { withPlotWindowDocument } from "./windowDocuments";
 
@@ -68,12 +70,18 @@ export function createQuickFigureCreateSlice(set: SliceSet, get: SliceGet): Quic
       // Minted first so the Label role's annotation group id is unique per figure.
       const id = nextFigureId();
       const pieces = quickFigureCommit(dataset, mapping, style, `quick-labels-${id}`);
+      // Per-series X: the figure binds to a NEW overlay dataset
+      // (lib/quickFigureSeriesX.ts). It joins `datasets` in the SAME set()
+      // as the figure below, after createWindow's snapshot, so the one undo
+      // removes it too; the source worksheet itself is never touched.
+      const overlay = pieces.overlay && quickFigureOverlayDataset(nextDatasetId(), dataset, pieces.overlay);
+      const boundId = overlay?.id ?? dataset.id;
       const name = dedupeWindowTitle(pieces.name, state.editableFigures.map((f) => f.name));
-      const windowId = state.createWindow(dataset.id, pieces.view, name); // the gesture's one recordHistory
+      const windowId = state.createWindow(boundId, pieces.view, name); // the gesture's one recordHistory
       const document = createFigureDocument({
         id,
         name,
-        datasetId: dataset.id,
+        datasetId: boundId,
         view: pieces.view,
         mark: pieces.mark,
         // Bindings-owned: the constructor drops `view.groupKey`, and the
@@ -83,6 +91,7 @@ export function createQuickFigureCreateSlice(set: SliceSet, get: SliceGet): Quic
         errors: pieces.errors,
       });
       set((current) => ({
+        ...(overlay ? { datasets: [...current.datasets, overlay] } : {}),
         editableFigures: [...current.editableFigures, document],
         plotWindows: current.plotWindows.map((w) =>
           w.id === windowId ? withPlotWindowDocument(w, document) : w,

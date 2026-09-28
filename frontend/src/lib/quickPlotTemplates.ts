@@ -129,6 +129,7 @@ export function buildQuickPlotTemplateSignature(dataset: Dataset): QuickPlotTemp
 function referencedChannels(mapping: QuickFigureMapping): number[] {
   const out: number[] = [];
   if (mapping.xKey !== null) out.push(mapping.xKey);
+  for (const x of Object.values(mapping.xKeyByY ?? {})) if (x !== null) out.push(x);
   out.push(...mapping.yKeys);
   if (mapping.groupKey != null) out.push(mapping.groupKey);
   if (mapping.labelKey != null) out.push(mapping.labelKey);
@@ -272,11 +273,19 @@ export function resolveTemplate(template: QuickPlotTemplate, dataset: Dataset): 
 
   const xKey = template.mapping.xKey !== null ? resolve(template.mapping.xKey, "X axis") : null;
   const yKeys: number[] = [];
+  const ownX: Record<number, number | null> = {};
+  const savedOwnX = template.mapping.xKeyByY ?? {};
   template.mapping.yKeys.forEach((ch, i) => {
     const r = resolve(ch, `Y series ${i + 1}`);
     if (r !== null) yKeys.push(r);
     // r === null already pushed its own unmatched entry above -- this loop
     // just also needs the (possibly-empty) resolved value collected.
+    // A series' own X is a mapped column too: refusal-or-nothing, never a
+    // series silently falling back onto the shared X.
+    if (!Object.hasOwn(savedOwnX, ch)) return;
+    const x = savedOwnX[ch];
+    const rx = x === null ? null : resolve(x, `X for Y series ${i + 1}`);
+    if (r !== null && (x === null || rx !== null)) ownX[r] = rx;
   });
   const errorBindings: ErrorBinding[] = [];
   template.mapping.errorBindings.forEach((b) => {
@@ -299,6 +308,7 @@ export function resolveTemplate(template: QuickPlotTemplate, dataset: Dataset): 
     ok: true,
     mapping: {
       xKey,
+      ...(Object.keys(ownX).length > 0 ? { xKeyByY: ownX } : {}),
       yKeys,
       errorBindings,
       // Ignored columns are not part of the mapping's plotted/paired
@@ -334,6 +344,25 @@ function sanitizeErrorBindings(v: unknown): ErrorBinding[] {
   return out;
 }
 
+const isChannel = (v: unknown): v is number => Number.isInteger(v) && (v as number) >= 0;
+
+/** Optional per-Y X overrides (absent on templates saved before multi-X
+ *  support -> null, "none"). A malformed map returns undefined and the WHOLE
+ *  mapping is dropped: degrading it to "no overrides" would silently plot
+ *  every series against the shared X -- confidently wrong, unlike a dropped
+ *  optional group/label role, which merely goes missing. */
+function sanitizeSeriesX(v: unknown): Record<number, number | null> | null | undefined {
+  if (v === undefined) return null;
+  if (typeof v !== "object" || v === null || Array.isArray(v)) return undefined;
+  const out: Record<number, number | null> = {};
+  for (const [k, x] of Object.entries(v as Record<string, unknown>)) {
+    const y = Number(k);
+    if (!isChannel(y) || (x !== null && !isChannel(x))) return undefined;
+    out[y] = x;
+  }
+  return Object.keys(out).length > 0 ? out : null;
+}
+
 function sanitizeMapping(v: unknown): QuickFigureMapping | null {
   if (typeof v !== "object" || v === null) return null;
   const o = v as Record<string, unknown>;
@@ -341,8 +370,11 @@ function sanitizeMapping(v: unknown): QuickFigureMapping | null {
   if (xKey === undefined) return null;
   if (!Array.isArray(o.yKeys) || !o.yKeys.every((x) => typeof x === "number")) return null;
   if (!Array.isArray(o.ignoredKeys) || !o.ignoredKeys.every((x) => typeof x === "number")) return null;
+  const xKeyByY = sanitizeSeriesX(o.xKeyByY);
+  if (xKeyByY === undefined) return null;
   return {
     xKey,
+    ...(xKeyByY ? { xKeyByY } : {}),
     yKeys: o.yKeys as number[],
     errorBindings: sanitizeErrorBindings(o.errorBindings),
     ignoredKeys: o.ignoredKeys as number[],

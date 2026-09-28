@@ -738,14 +738,36 @@ Recommended scopes for a saved template:
 Quick Plot must reason about series groups, not assume one fixed column order.
 At minimum, the design must account for:
 
-- [ ] `X, Y, X, Y, X, Y`: independent XY series.
+- [x] `X, Y, X, Y, X, Y`: independent XY series.
+  2026-09-28 (Quick Figure Builder + Quick Plot templates): optional per-Y
+  `QuickFigureMapping.xKeyByY` override on top of the shared `xKey` (absent
+  = shared X, so pre-existing templates parse unchanged). Inference pairs
+  each Y with its nearest-preceding Origin X-designated column
+  (`opj_curves.py`'s rule; no designation = no pairing, never adjacency).
+  No new PlotView/FigureDocument field: a per-series-X figure binds to a
+  derived segment-concatenated overlay dataset (the `lib/originOverlay.ts`
+  representation), built by `lib/quickFigureSeriesX.ts` for BOTH the preview
+  and the created figure, landed in the same undo unit. X error stays with
+  the shared X only. "Per-series X" panel reassigns any Y's X. Evidence:
+  `lib/quickFigureSeriesX.test.ts`, `store/quickFigureSeriesX.test.ts`
+  (overlay binding, source untouched, one undo, hidden rows, `.dwk`,
+  template save/re-key/refusal, legacy template unchanged, malformed map
+  dropped), `QuickFigureBuilderSeriesX.test.tsx`, and the per-series case in
+  `usePlotPayload.quickFigureParity.test.ts`. Sabotage (every series onto
+  the first X block) fails 11 of those tests.
 - [x] `X, Y1, Y2, Y3`: several Y series sharing one X. Verified 2026-09-28: `frontend/src/lib/quickFigureMappingActions.ts`'s `initialQuickFigureMapping` collects every non-error/non-hidden/non-ignored channel into `QuickFigureMapping.yKeys`; pinned by `frontend/src/lib/quickFigureMapping.test.ts`'s "seeds defensible error inference without plotting the error as Y" (`yKeys: [0, 2]`).
 - [x] `X, Y, Yerr`: symmetric Y error. Verified 2026-09-28: `src/quantized/io/error_inference.py`'s `infer_error_bindings_from_labels` (side `"both"`); pinned by `tests/test_error_inference_parity_fixture.py` (83 passed) via the shared `tests/fixtures/error_labels/parity_corpus.json`.
 - [x] `X, Y, Yerr+, Yerr-`: asymmetric Y error. Verified 2026-09-28: same module's `side: "+"/"-"` + `frontend/src/lib/errorRoles.ts`'s `asymmetricPair`; pinned by `frontend/src/lib/quickFigureMapping.test.ts`'s "asymmetric '+' and '-' halves for the same target coexist" and the parity fixture's "both halves of an asymmetric +/- pair" case.
 - [x] `X, Xerr, Y, Yerr`: uncertainties on both axes. Verified 2026-09-28: `usePlotPayload.errorRoles.test.ts`'s NCNR `.refl` cases render both an x (resolution) and y (uncertainty) whisker simultaneously from one mapping; python-checked directly against `infer_error_bindings_from_labels(["Qz","Xerr","Y","Yerr"])`.
 - [x] Repeated combinations of the structures above. Verified 2026-09-28: the parity fixture's "nearest PRECEDING value column" case (`['R++','err','SA','err']` → two independent bindings) already covers two repeated (Y, Yerr) groups; added `frontend/src/lib/quickFigureMapping.test.ts`'s "repeated (Y, Yerr) groups each bind to their own nearest value column, not just the first" to pin the same shape at the Quick Figure Builder's own mapping layer.
-- [ ] Multiple independent X channels in one worksheet.
-- [x] Preserved acquisition order and non-monotonic X data. Verified 2026-09-28: `frontend/src/lib/plotdata.ts`'s `buildColumns` (the function both Quick Plot and the Quick Figure Builder render through, per `usePlotPayload.errorRoles.test.ts`'s `fetchPlot` mock) never sorts `ds.time`/`ds.values`; added `frontend/src/lib/plotdata.test.ts`'s "preserves original row order for a non-monotonic (hysteresis-style) X column — never sorts".
+- [x] Multiple independent X channels in one worksheet. (2026-09-28, same
+  change as `X, Y, X, Y, X, Y` above: mixed shared-X + per-Y override
+  sheets are covered by the "mixed" case in `lib/quickFigureSeriesX.test.ts`.)
+- [x] Preserved acquisition order and non-monotonic X data. Verified 2026-09-28: `frontend/src/lib/plotdata.ts`'s `buildColumns` (the function both Quick Plot and the Quick Figure Builder render through, per `usePlotPayload.errorRoles.test.ts`'s `fetchPlot` mock) never sorts `ds.time`/`ds.values`; added `frontend/src/lib/plotdata.test.ts`'s "preserves original row order for a non-monotonic (hysteresis-style) X column — never sorts". (2026-09-28, for
+  the per-series-X path: X blocks are concatenated in row order, never
+  sorted; a hysteresis-like X keeps its order in the preview and in the
+  created figure's rendered payload -- `quickFigureSeriesX.test.ts`,
+  `usePlotPayload.quickFigureParity.test.ts`.)
 - [x] Explicit column designations override inferred adjacency. Verified 2026-09-28: `frontend/src/lib/quickFigureMappingActions.ts`'s `assignQuickFigureColumn` lets any channel be reassigned to any role, dropping stale bindings; pinned by `quickFigureMapping.test.ts`'s "keeps roles exclusive and drops bindings whose target stops being Y" and related cases.
 - [ ] Header, unit, parser metadata, and adjacency evidence contribute to a
   confidence result; adjacency alone is insufficient.

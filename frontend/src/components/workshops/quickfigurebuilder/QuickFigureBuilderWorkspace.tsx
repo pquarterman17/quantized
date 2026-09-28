@@ -16,6 +16,7 @@ import {
 } from "../../../lib/quickFigureMappingActions";
 import { useEscapeSurface } from "../../../lib/escapeStack";
 import { quickFigurePreview, type QuickPlotStyle } from "../../../lib/quickFigurePreview";
+import { seriesXKey, usesPerSeriesX } from "../../../lib/quickFigureSeriesX";
 import type { QuickPlotTemplateScope } from "../../../lib/quickPlotTemplates";
 import type { Dataset } from "../../../lib/types";
 import { askParams } from "../../overlays/ParamDialog";
@@ -23,6 +24,7 @@ import { useApp } from "../../../store/useApp";
 import GraphPreview from "../graphbuilder/GraphPreview";
 import QuickMappingPanel from "./QuickMappingPanel";
 import QuickRoleSummary from "./QuickRoleSummary";
+import QuickSeriesXPanel from "./QuickSeriesXPanel";
 
 const SCHEMA_SCOPE_LABEL = "This data type and schema";
 const WORKBOOK_SCOPE_LABEL = "This workbook only";
@@ -55,7 +57,9 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
   const assign = (channel: number, assignment: QuickColumnAssignment): void => {
     setMapping((current) => assignQuickFigureColumn(current, channel, assignment));
   };
-  const xName = axisDisplayName(dataset, mapping);
+  const xName = usesPerSeriesX(mapping)
+    ? `their own X (${new Set(mapping.yKeys.map((y) => seriesXKey(mapping, y))).size} X columns)`
+    : axisDisplayName(dataset, mapping);
   const preview = quickFigurePreview(dataset.data, mapping, style, dataset.channelRoles);
   // G5 review round (P1, FIX 1): `canCreateQuickFigure` (lib/quickFigureMapping.ts)
   // is now the ONE predicate both this button and the store action
@@ -138,6 +142,7 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
             onAssign={assign}
             onUseAcquisitionX={() => setMapping(useAcquisitionAxis)}
           />
+          <QuickSeriesXPanel data={dataset.data} mapping={mapping} onChange={setMapping} />
         </section>
 
         <section className="qzk-quick-builder-card qzk-quick-builder-preview" aria-labelledby="quick-builder-preview">

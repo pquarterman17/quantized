@@ -24,6 +24,7 @@ import type { PlotMark } from "./plotspec";
 import { quickFigurePointLabels } from "./quickFigureLabels";
 import type { QuickFigureMapping } from "./quickFigureMapping";
 import type { QuickPlotStyle } from "./quickFigurePreview";
+import { quickFigureOverlay, type QuickFigureOverlay } from "./quickFigureSeriesX";
 import type { Dataset, SeriesStyle } from "./types";
 
 /** The pieces of `CreateFigureDocumentInput` this converter can determine
@@ -35,6 +36,10 @@ export interface QuickFigureCommitPieces {
   view: PlotView;
   mark: PlotMark;
   errors: ErrorBinding[];
+  /** Per-series X (lib/quickFigureSeriesX.ts): the overlay the figure must
+   *  bind to instead of `dataset` -- `view`/`errors` are keyed to ITS
+   *  channels. null for a shared-X mapping (bind to `dataset` itself). */
+  overlay: QuickFigureOverlay | null;
 }
 
 /** Translate a Quick Figure Builder style into a `PlotMark` + any per-series
@@ -76,17 +81,22 @@ export function quickFigureCommit(
   style: QuickPlotStyle,
   labelGroupId = "quick-figure-labels",
 ): QuickFigureCommitPieces {
+  const overlay = quickFigureOverlay(dataset.data, mapping);
+  const plot = overlay?.mapping ?? mapping;
   const view = defaultPlotView();
-  view.xKey = mapping.xKey;
-  view.yKeys = [...mapping.yKeys];
-  view.groupKey = mapping.groupKey ?? null;
+  view.xKey = plot.xKey;
+  view.yKeys = [...plot.yKeys];
+  view.groupKey = plot.groupKey ?? null;
+  // Data-anchored, so computed from the SOURCE (each series at its own X):
+  // identical coordinates on the overlay, and the source's hidden rows apply.
   view.annotations = quickFigurePointLabels(dataset, mapping, labelGroupId);
-  const { mark, seriesStyles } = markAndSeriesStyles(style, mapping.yKeys, view.seriesStyles);
+  const { mark, seriesStyles } = markAndSeriesStyles(style, plot.yKeys, view.seriesStyles);
   view.seriesStyles = seriesStyles;
   return {
     name: `Quick Figure — ${dataset.name}`,
     view,
     mark,
-    errors: [...mapping.errorBindings],
+    errors: [...plot.errorBindings],
+    overlay,
   };
 }
