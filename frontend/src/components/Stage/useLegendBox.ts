@@ -68,6 +68,6 @@ export function useLegendBox(tool: PlotTool) {
 
   return {
     boxRef, legendPos, isFree: !!legendFrameXY || !!legendXY,
-    isSized: !!legendSize, style, onBoxMouseDown, onBoxDoubleClick,
+    style, onBoxMouseDown, onBoxDoubleClick,
   };
 }

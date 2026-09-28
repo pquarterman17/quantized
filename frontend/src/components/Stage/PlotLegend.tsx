@@ -122,7 +122,7 @@ export default function PlotLegend({
       ref={legendBox.boxRef}
       // Precedence (decode #52): frame anchor > free container fraction > corner
       // preset. A frame-anchored or free position drops the corner class.
-      className={`qzk-glass qzk-legend${legendBox.isSized ? " qzk-legend-sized" : ""} ${legendBox.isFree ? "" : legendBox.legendPos}`}
+      className={`qzk-glass qzk-legend ${legendBox.isFree ? "" : legendBox.legendPos}`}
       style={legendBox.style}
       onMouseDown={legendBox.onBoxMouseDown}
       onDoubleClick={legendBox.onBoxDoubleClick}
