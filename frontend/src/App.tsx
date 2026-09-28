@@ -10,6 +10,7 @@ import Library from "./components/Library/Library";
 import MenuBar from "./components/Shell/MenuBar";
 import StatusBar from "./components/Shell/StatusBar";
 import TitleBar from "./components/Shell/TitleBar";
+import WorkspaceErrorBoundary from "./components/Shell/WorkspaceErrorBoundary";
 import Stage from "./components/Stage/Stage";
 import CommandPalette, { type Action } from "./components/overlays/CommandPalette";
 import { buildAppActions } from "./appCommands";
@@ -58,6 +59,7 @@ export default function App() {
   const setStatus = useApp((s) => s.setStatus);
   const setCmdk = useApp((s) => s.setCmdk);
   const quickFigureBuilderDatasetId = useApp((s) => s.quickFigureBuilderDatasetId);
+  const workspaceResetKey = useApp((s) => `${s.datasets.length}:${s.focusedWindowId}:${s.activeId ?? "empty"}`);
   const [libraryViewMode, setLibraryViewMode] = useState<LibraryViewMode>(loadLibraryViewMode);
   const previousBrowseMode = useRef<Exclude<LibraryViewMode, "tiles">>(
     libraryViewMode === "details" ? "details" : "tree",
@@ -220,17 +222,19 @@ export default function App() {
     <div className="qzk-app" {...appRootFocusProps}>
       <TitleBar />
       <MenuBar actions={actions} onOpenPalette={() => setCmdk(true)} />
-      <div className={mainCls}>
-        <Library viewMode={libraryViewMode} onViewModeChange={changeLibraryViewMode} />
-        {quickFigureBuilderDatasetId ? (
-          <QuickFigureBuilderWorkspace />
-        ) : libraryViewMode === "tiles" ? (
-          <LibraryWorkspace onClose={closeLibraryWorkspace} />
-        ) : (
-          <Stage />
-        )}
-        <Inspector />
-      </div>
+      <WorkspaceErrorBoundary resetKey={workspaceResetKey}>
+        <div className={mainCls}>
+          <Library viewMode={libraryViewMode} onViewModeChange={changeLibraryViewMode} />
+          {quickFigureBuilderDatasetId ? (
+            <QuickFigureBuilderWorkspace />
+          ) : libraryViewMode === "tiles" ? (
+            <LibraryWorkspace onClose={closeLibraryWorkspace} />
+          ) : (
+            <Stage />
+          )}
+          <Inspector />
+        </div>
+      </WorkspaceErrorBoundary>
       <StatusBar />
       <CommandPalette actions={actions} />
       <AppOverlays />

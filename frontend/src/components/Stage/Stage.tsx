@@ -34,6 +34,7 @@ import { useProjectLockCommands } from "../../commands/projectLockCommands";
 import { useWorkbookTransferCommands } from "../../commands/workbookTransferCommands";
 import { useHistoryCommands } from "../history/useHistoryCommands";
 import { useWindowCommands } from "../windows/useWindowCommands";
+import EmptyProjectStage from "./EmptyProjectStage";
 import WindowCanvas from "../windows/WindowCanvas";
 
 const MapStage = lazyRegion(() => import("./MapStage"), "Map");
@@ -69,6 +70,12 @@ export default function Stage() {
   useEffect(() => {
     if (stageTab === "map" && !mappable) setStageTab("plot");
   }, [stageTab, mappable, setStageTab]);
+
+  // A fresh/cleared project keeps the command-registration hooks above
+  // mounted, but does not ask the full plot-window tree to render against an
+  // absent dataset. This is both the useful empty state and the safety seam
+  // for File ▸ Remove all.
+  if (!active) return <EmptyProjectStage />;
 
   return (
     <section className="qzk-stage-cell">

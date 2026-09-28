@@ -36,7 +36,8 @@ describe("Map tab visibility", () => {
   it("is hidden with no dataset at all", () => {
     render(<Stage />);
     expect(screen.queryByText("Map")).not.toBeInTheDocument();
-    expect(screen.getByText("Plot")).toBeInTheDocument();
+    expect(screen.queryByText("Plot")).not.toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "No data loaded" })).toBeInTheDocument();
   });
 
   it("is hidden for an ordinary 1-D dataset (2 channels)", () => {

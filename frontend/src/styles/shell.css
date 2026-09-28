@@ -210,6 +210,11 @@ body {
 .qzk-tile-table-row span { overflow: hidden; padding: 5px 6px; color: var(--text-dim); text-overflow: ellipsis; white-space: nowrap; }
 .qzk-tile-table-row.head span { color: var(--text); font-weight: var(--weight-semibold); }
 .qzk-library-workspace-empty { display: grid; place-items: center; min-height: 240px; border: 1px dashed var(--border); border-radius: var(--radius); color: var(--text-faint); }
+.qzk-empty-project, .qzk-workspace-failure { display: grid; place-items: center; min-width: 0; min-height: 0; text-align: center; color: var(--text-dim); background: var(--surface-0); }
+.qzk-empty-project > div, .qzk-workspace-failure > div { max-width: 440px; padding: 28px; border: 1px dashed var(--border); border-radius: var(--radius); }
+.qzk-empty-project h2, .qzk-workspace-failure h2 { margin: 0 0 8px; color: var(--text); font-size: var(--font-size-lg); }
+.qzk-empty-project p, .qzk-workspace-failure p { margin: 0 0 16px; }
+.qzk-empty-project .qz-btn + .qz-btn { margin-left: 8px; }
 @container (max-width: 520px) {
   .qzk-library-workspace-head { flex-direction: column-reverse; }
   .qzk-library-workspace-summary span:last-child { display: none; }
