@@ -3203,6 +3203,19 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/bundlePath.ts",
     "/store/importBatchOffers.ts",
     "/store/importTargetFolder.ts",
+    // SLICE 11 (2026-09-28): not a seam, an edge. `lib/figureDocument.ts`
+    // (eager) value-imported `PLOT_MARKS` from `lib/plotspec.ts`, the only
+    // eager edge into the plot-spec grammar; the constant now lives in the
+    // leaf `lib/plotMarks.ts`. The grammar and everything only it reached
+    // left the entry chunk (-17,951 B measured). Every one of them is still
+    // imported statically by lazy modules (Graph Builder, the stat stages,
+    // the `.dwk` codec), so only reachability can hold them.
+    "/lib/plotspec.ts",
+    "/lib/plotspec2.ts",
+    "/lib/statstage.ts",
+    "/lib/statschooser.ts",
+    "/lib/tdist.ts",
+    "/lib/nestedLevels.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk
