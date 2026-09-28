@@ -31,7 +31,7 @@ export default function EquationPreview({ equation, suppressed }: Props) {
     <div
       aria-hidden
       data-testid="equation-preview"
-      title="Rendered preview. Edit the equation text above."
+      title="Rendered preview; edit the equation text above."
       style={{
         display: "flex",
         alignItems: "center",
