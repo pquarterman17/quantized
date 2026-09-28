@@ -77,86 +77,91 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
     : `unresolved source "${entry.figure.source_hint || "unknown"}" — no matching imported book`;
   return (
     <div className="qzk-origin-figure-row">
-      <div className="qzk-fig-row">
-      <button
-        className={`qzk-fig-item${selected ? " selected" : ""}`}
-        data-lib-row={`origin-figure:${entry.id}`}
-        disabled={!resolved}
-        title={title}
-        style={depth ? { marginLeft: depth * 14 } : undefined}
-        onClick={() => (treeMode ? select() : openAndRemember())}
-        onDoubleClick={treeMode ? () => openAndRemember() : undefined}
-        onContextMenu={treeMode ? select : undefined}
+      <div
+        className={`qzk-fig-row${treeMode ? " qzk-fig-row-tree" : ""}${selected ? " selected" : ""}${!resolved ? " unresolved" : ""}`}
+        style={treeMode && depth ? { paddingLeft: depth * 14 } : undefined}
       >
-        {/* Node-type glyph (UX-001), from the one shared vocabulary
-         *  (UX-004) every Library view now reads. */}
-        <span className="qzk-ds-icon" aria-hidden="true" title={LIBRARY_NODE_LABEL["origin-figure"]}>
-          {LIBRARY_NODE_GLYPH["origin-figure"]}
-        </span>
-        <span className="qzk-origin-kind" title="Recovered Origin graph">Graph</span>
-        <span className="qzk-fig-name">{figureLabel(entry)}</span>
-        <span className="qzk-fig-meta">
-          {entry.stem}{fidelity ? ` · ${fidelity.status === "exact" ? "=" : "≈"}` : ""}
-        </span>
-      </button>
-      <button
-        className="qz-icon-btn"
-        title="Open in a new graph window"
-        disabled={!resolved}
-        onClick={() => openAndRemember({ newWindow: true })}
-      >
-        ⊞
-      </button>
-      {sourceResolution.sources.map((source) => (
         <button
-          key={source.datasetId}
-          className="qz-icon-btn"
-          title={`Open source workbook ${source.book}; select X/Y/error columns`}
-          onClick={() => void openOriginFigureSource(entry.id, source.datasetId)}
+          className={`qzk-fig-item${selected ? " selected" : ""}`}
+          data-lib-row={`origin-figure:${entry.id}`}
+          disabled={!resolved}
+          title={title}
+          style={!treeMode && depth ? { marginLeft: depth * 14 } : undefined}
+          onClick={() => (treeMode ? select() : openAndRemember())}
+          onDoubleClick={treeMode ? () => openAndRemember() : undefined}
+          onContextMenu={treeMode ? select : undefined}
         >
-          {/* This command NAMES a node kind ("open the source workbook"), so
-           *  it deliberately wears that kind's mark rather than inventing one.
-           *  It used to wear ▦ — which meant Folder in the very same tree
-           *  (UX-004). */}
-          {LIBRARY_NODE_GLYPH.workbook}
+          {/* Node-type glyph (UX-001), from the one shared vocabulary
+           *  (UX-004) every Library view now reads. */}
+          <span className="qzk-ds-icon" aria-hidden="true" title={LIBRARY_NODE_LABEL["origin-figure"]}>
+            {LIBRARY_NODE_GLYPH["origin-figure"]}
+          </span>
+          <span className="qzk-origin-kind" title="Recovered Origin graph">Graph</span>
+          <span className="qzk-fig-name">{figureLabel(entry)}</span>
+          <span className="qzk-fig-meta">
+            {entry.stem}{fidelity ? ` · ${fidelity.status === "exact" ? "=" : "≈"}` : ""}
+          </span>
         </button>
-      ))}
-      <button
-        className="qz-icon-btn"
-        title={sourceResolution.sources.length
-          ? `Remake in Graph Builder${sourceResolution.unresolved.length ? ` (${sourceResolution.unresolved.length} unresolved binding${plural(sourceResolution.unresolved.length)})` : ""}`
-          : `No decoded bindings; Origin hint: ${entry.figure.source_hint || "unknown"}`}
-        disabled={sourceResolution.sources.length === 0}
-        onClick={() => void remakeOriginFigure(entry.id)}
-      >
-        G
-      </button>
-      {savedPreviewSrc && (
-        <button
-          className="qz-icon-btn"
-          title={previewActionLabel}
-          aria-label={previewActionLabel}
-          aria-pressed={showSavedPreview}
-          onClick={() => setShowSavedPreview((shown) => !shown)}
-        >
-          ▣
-        </button>
-      )}
-      {sourceResolution.unresolved.length > 0 && siblingDatasets.length > 0 && (
-        <select
-          className="qz-select"
-          aria-label={`Choose source workbook for ${figureLabel(entry)}`}
-          title={`Unresolved Origin binding: ${sourceResolution.unresolved.map((item) => `${item.book}:${item.x},${item.y}`).join("; ")}`}
-          defaultValue=""
-          onChange={(event) => {
-            if (event.target.value) void openOriginFigureSource(entry.id, event.target.value, { manual: true });
-            event.currentTarget.value = "";
-          }}
-        >
-          <option value="" disabled>Choose source…</option>
-          {siblingDatasets.map((ds) => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
-        </select>
-      )}
+        <div className="qzk-origin-figure-actions" role="toolbar" aria-label="Recovered graph actions">
+          <button
+            className="qz-icon-btn"
+            title="Open in a new graph window"
+            disabled={!resolved}
+            onClick={() => openAndRemember({ newWindow: true })}
+          >
+            ⊞
+          </button>
+          {sourceResolution.sources.map((source) => (
+            <button
+              key={source.datasetId}
+              className="qz-icon-btn"
+              title={`Open source workbook ${source.book}; select X/Y/error columns`}
+              onClick={() => void openOriginFigureSource(entry.id, source.datasetId)}
+            >
+              {/* This command NAMES a node kind ("open the source workbook"), so
+               *  it deliberately wears that kind's mark rather than inventing one.
+               *  It used to wear ▦ — which meant Folder in the very same tree
+               *  (UX-004). */}
+              {LIBRARY_NODE_GLYPH.workbook}
+            </button>
+          ))}
+          <button
+            className="qz-icon-btn"
+            title={sourceResolution.sources.length
+              ? `Remake in Graph Builder${sourceResolution.unresolved.length ? ` (${sourceResolution.unresolved.length} unresolved binding${plural(sourceResolution.unresolved.length)})` : ""}`
+              : `No decoded bindings; Origin hint: ${entry.figure.source_hint || "unknown"}`}
+            disabled={sourceResolution.sources.length === 0}
+            onClick={() => void remakeOriginFigure(entry.id)}
+          >
+            G
+          </button>
+          {savedPreviewSrc && (
+            <button
+              className="qz-icon-btn"
+              title={previewActionLabel}
+              aria-label={previewActionLabel}
+              aria-pressed={showSavedPreview}
+              onClick={() => setShowSavedPreview((shown) => !shown)}
+            >
+              ▣
+            </button>
+          )}
+          {sourceResolution.unresolved.length > 0 && siblingDatasets.length > 0 && (
+            <select
+              className="qz-select"
+              aria-label={`Choose source workbook for ${figureLabel(entry)}`}
+              title={`Unresolved Origin binding: ${sourceResolution.unresolved.map((item) => `${item.book}:${item.x},${item.y}`).join("; ")}`}
+              defaultValue=""
+              onChange={(event) => {
+                if (event.target.value) void openOriginFigureSource(entry.id, event.target.value, { manual: true });
+                event.currentTarget.value = "";
+              }}
+            >
+              <option value="" disabled>Choose source…</option>
+              {siblingDatasets.map((ds) => <option key={ds.id} value={ds.id}>{ds.name}</option>)}
+            </select>
+          )}
+        </div>
       </div>
       {showSavedPreview && savedPreviewSrc && (
         <OriginSavedPreviewWindow

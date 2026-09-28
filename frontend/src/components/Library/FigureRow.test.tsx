@@ -10,6 +10,7 @@ import FigureRow from "./FigureRow";
 import type { OriginFigureEntry } from "../../lib/originFigures";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import { declares, flatRules, readShellCss } from "../../styles/cssRules.testkit";
 
 const entry = (id: string, datasetId: string | null): OriginFigureEntry => ({
   id,
@@ -67,6 +68,35 @@ describe("FigureRow — PR C additions", () => {
     render(<FigureRow entry={entry("g1", "a")} />);
     fireEvent.click(screen.getByRole("button", { name: /MokeGraph/ }));
     expect(useApp.getState().workbookLastChild).toEqual({});
+  });
+
+  it("keeps tree indentation inside the row and groups secondary actions for progressive disclosure", () => {
+    const { container } = render(<FigureRow entry={entry("g1", "a")} depth={2} treeMode />);
+    const row = container.querySelector<HTMLElement>(".qzk-fig-row-tree")!;
+    const item = container.querySelector<HTMLElement>(".qzk-fig-item")!;
+    const actions = container.querySelector<HTMLElement>(".qzk-origin-figure-actions")!;
+    expect(row.style.paddingLeft).toBe("28px");
+    expect(item.style.marginLeft).toBe("");
+    expect(actions).toContainElement(screen.getByTitle("Open in a new graph window"));
+  });
+
+  it("reveals the tree action strip only for the row being used", () => {
+    const rules = flatRules(readShellCss());
+    const resting = rules.find((r) => r.selector === ".qzk-fig-row-tree .qzk-origin-figure-actions");
+    expect(resting).toBeDefined();
+    expect(declares(resting!.body, "position", "absolute")).toBe(true);
+    expect(declares(resting!.body, "visibility", "hidden")).toBe(true);
+    expect(declares(resting!.body, "pointer-events", "none")).toBe(true);
+    const reveal = rules.find((r) => r.selector.includes(".qzk-fig-row-tree:hover .qzk-origin-figure-actions"));
+    expect(reveal).toBeDefined();
+    expect(declares(reveal!.body, "visibility", "visible")).toBe(true);
+    expect(declares(reveal!.body, "pointer-events", "auto")).toBe(true);
+  });
+
+  it("keeps source-recovery controls exposed when the unresolved main button cannot receive focus", () => {
+    const { container } = render(<FigureRow entry={entry("g2", null)} treeMode />);
+    expect(container.querySelector(".qzk-fig-row-tree")).toHaveClass("unresolved");
+    expect(screen.getByRole("toolbar", { name: "Recovered graph actions" })).toBeInTheDocument();
   });
 });
 

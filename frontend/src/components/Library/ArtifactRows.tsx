@@ -107,7 +107,7 @@ export default function ArtifactRow({ node, depth }: Props) {
     <button
       className={`qzk-fig-item${selected ? " selected" : ""}`}
       data-lib-row={node.key}
-      style={depth ? { marginLeft: depth * 14 } : undefined}
+      style={depth ? { paddingLeft: 8 + depth * 14 } : undefined}
       title={openTitle(node)}
       onClick={select}
       onDoubleClick={() => openLibraryNode(node)}

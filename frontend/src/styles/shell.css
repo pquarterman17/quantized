@@ -524,6 +524,47 @@ body {
    button after the first. */
 .qzk-fig-row { display: flex; gap: 4px; align-items: stretch; min-width: 0; }
 .qzk-fig-row > .qz-btn { flex-shrink: 0; }
+.qzk-origin-figure-actions { display: flex; align-items: stretch; gap: 4px; min-width: 0; flex-shrink: 0; }
+.qzk-fig-row-tree { position: relative; width: 100%; min-width: 0; }
+/* Recovered Origin projects can contain dozens of graph rows. Their commands
+   stay available, but a full strip on EVERY resting row turns the narrow tree
+   into a wall of repeated marks and steals most of the graph name. Tree mode
+   overlays one row's strip only while that row is hovered, keyboard-focused,
+   or selected. Flat/search mode keeps its established always-visible actions.
+   Visibility (rather than display:none) lets focusing the row reveal the
+   controls before Tab advances into them. The bounded, scrolling strip also
+   prevents an unusual graph with many decoded source books from widening the
+   Library or reintroducing its horizontal scrollbar. */
+.qzk-fig-row-tree .qzk-origin-figure-actions {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 2px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% - 8px);
+  padding: 2px;
+  overflow-x: auto;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  box-shadow: var(--shadow-sm);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+.qzk-fig-row-tree:hover .qzk-origin-figure-actions,
+.qzk-fig-row-tree:focus-within .qzk-origin-figure-actions,
+.qzk-fig-row-tree.selected .qzk-origin-figure-actions,
+/* A disabled unresolved graph cannot focus/select its main button. Keep its
+   recovery controls visible so keyboard/touch users can still choose a source. */
+.qzk-fig-row-tree.unresolved .qzk-origin-figure-actions {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
 .qzk-fig-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: default; color: var(--text); font-size: var(--font-size-sm); }
 .qzk-fig-item:hover:not(:disabled) { border-color: var(--accent); }
 .qzk-fig-item:disabled { opacity: 0.45; cursor: default; }
