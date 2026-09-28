@@ -14,6 +14,7 @@
 import { flatNorm } from "./errorLabelCandidates";
 import { classifyErrorLabelInLabels } from "./errorLabelClassify";
 import { inferErrorBindingsFromLabels, type ErrorBinding } from "./errorRoles";
+import { compareUnits } from "./errorUnitEvidence";
 import type { ImportColumnRole, ImportPreviewColumn } from "./types";
 
 // ── P1.6: error-role suggestions (item 2) ────────────────────────────────────
@@ -177,7 +178,18 @@ export function suggestErrorBindings(columns: readonly ImportPreviewColumn[]): E
   const yChannels = new Set(
     order.filter((c) => bySourceRole(columns, c.sourceIndex) === "y").map((c) => c.channel),
   );
-  return out.filter((b) => b.target === -1 || yChannels.has(b.target));
+  // UNIT evidence can only REMOVE a suggestion, never add or re-target one: a
+  // pairing whose error unit contradicts its target's (the x column's unit for
+  // an x-axis target) -- `M_err (K)` beside `M (emu)` -- is dropped, FAIL
+  // CLOSED, whichever rule produced it. Blank/unitless units are neutral.
+  // Mirrors step 5 of the Python `suggest_error_bindings_by_channel`.
+  const unitOf = (channel: number): unknown =>
+    channel < 0 ? xLabel?.unit : columns.find((c) => c.index === order[channel].sourceIndex)?.unit;
+  return out.filter(
+    (b) =>
+      (b.target === -1 || yChannels.has(b.target)) &&
+      compareUnits(unitOf(b.channel), unitOf(b.target)) !== "mismatch",
+  );
 }
 
 function bySourceRole(

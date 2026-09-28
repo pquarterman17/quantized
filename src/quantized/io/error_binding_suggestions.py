@@ -88,9 +88,9 @@ CONTRACT (review round 2 -- this is NOT "suggestions are restricted to
     unit (the x column's unit for an x-axis target) -- e.g. ``M_err (K)``
     beside ``M (emu)`` -- is dropped, FAIL CLOSED, whichever rule produced
     it (``error_unit_evidence.compare_units``; blank/unitless units are
-    neutral). Another strictly-more-careful divergence from
-    ``importwizard.ts``, which does not consult units; the shared parity
-    fixture carries blank units only, so it is unaffected.
+    neutral). NOT a divergence: ``importErrorSuggestions.ts`` applies the
+    same gate (``errorUnitEvidence.ts``), and the shared parity fixture's
+    unit-bearing cases pin it in both languages.
 
 Unlike the TypeScript (which works in DataStruct CHANNEL indices over the
 wizard's own ``finalChannelOrder``), the bindings this module hands back to

@@ -27,6 +27,12 @@ case can neither confirm nor refute -- it stays out of the decision.
 Normalisation is SPELLING only, never dimensional analysis: ``mT`` and
 ``T`` are both field units but do not match, for the reason above.
 
+CROSS-LANGUAGE PAIR: ``frontend/src/lib/errorUnitEvidence.ts`` is the
+TypeScript twin. Both read ``tests/fixtures/error_labels/
+unit_evidence_corpus.json`` (``tests/test_error_unit_evidence_parity_fixture.py``
+and ``errorUnitEvidence.test.ts``). Change a rule here and it must change
+there too, with a fixture case that pins it.
+
 Pure ``io`` layer -- no fastapi/pydantic imports.
 """
 
