@@ -81,4 +81,14 @@ describe("preloadVerify (bundle diet slice 8 build gate)", () => {
     const r = await verifyPreloadLists(chunks);
     expect(r.violations).toEqual(["assets/Panel.js -> assets/Deep.js: import() with no recognisable preload list"]);
   });
+
+  it("follows an `export * from` edge as a static import", async () => {
+    // es-module-lexer 3 reports `export * from` as its own record type; losing
+    // it would drop shared.js from Dialog's closure and pass a short list.
+    const chunks = build(["assets/Dialog.js", "assets/dialog.css"]);
+    chunks["assets/Dialog.js"].code = 'export*from"./shared.js";import"./useApp.js";export default 1;';
+    expect((await verifyPreloadLists(chunks)).violations).toEqual([
+      "assets/index.js -> assets/Dialog.js: needs assets/shared.js, not in its preload list",
+    ]);
+  });
 });
