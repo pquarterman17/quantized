@@ -26,14 +26,18 @@
 // MATCHING EXTRACTION (P1.3 wave 3, Lane D code-review round): `recipeLibs`/
 // `resolvedCandidates` (bottom of this file) also moved here, out of
 // plotRecipes.ts, for the SAME reason -- code-review findings 4+6 pushed
-// that file back over the 500-line ceiling. Landing them in this ALREADY
-// eagerly-shared sibling (rather than a brand new file) avoids adding
-// another module-boundary's worth of import/export glue on top of an
-// already razor-thin eager budget (MAIN_PLAN #29) -- `recipeLibs()` is the
-// ONE place `lib/plotRecipe.ts`'s `captureRecipe` / `lib/plotRecipeMatch.ts`'s
+// that file back over the 500-line ceiling. Landing them in this sibling
+// (rather than a brand new file) avoids adding another module-boundary's
+// worth of import/export glue -- `recipeLibs()` is the ONE place
+// `lib/plotRecipe.ts`'s `captureRecipe` / `lib/plotRecipeMatch.ts`'s
 // `resolveRecipe` get loaded from, so plotRecipes.ts's many call sites
 // (save/apply/confirm/confirmPartial) and `resolvedCandidates` below share
 // the exact same cache, never two competing dynamic-import promises.
+// (STALE-DOC FIX, finding 9: this paragraph originally called this module
+// "already eagerly-shared" -- true when it was first split out of the
+// then-eager plotRecipes.ts, false since the 2026-09-18 bundle-diet slice
+// made THIS module itself a lazy SEAM, loaded on demand via
+// `store/plotRecipeApplyLazy.ts` -- see `architecture.test.ts`'s SEAMS list.)
 //
 // `resolvedCandidates` is the shared single-resolve-per-candidate pass
 // FINDING 6 (code-review, perf) introduced: `matchingPlotRecipes` and
@@ -46,9 +50,11 @@
 // (`globalPlotRecipes.ts`'s `hydratedGlobalRecipes()`) recipes are both
 // candidates -- project checked first, so a legacy entry sharing an id
 // across both scopes resolves to the PROJECT copy. `globalPlotRecipes.ts`
-// is dynamically imported (never a static top-level import) to keep this
-// already-eager module from dragging the otherwise boot-lazy global store
-// into the always-loaded graph -- see that module's own doc.
+// is dynamically imported (never a static top-level import) so loading
+// THIS module's own lazy chunk doesn't also drag the otherwise-independent
+// global store's state/persistence machinery along with it on every apply
+// -- only `resolvedCandidates` (and, since the review round, the "recently
+// used" scope lookup in `applyResolvedRecipe` below) actually needs it.
 
 import { errKeysFromBindings } from "../lib/errorRoles";
 import { createFigureDocument } from "../lib/figureDocument";
@@ -64,6 +70,7 @@ import { techniqueOf } from "../lib/techniqueDefaults";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
 import { nextFigureId } from "./figureLifecycle";
+import { nextRefLineId } from "./plotViewSettings";
 import { recordRecipeUse } from "./recordRecipeUse";
 import { withPlotWindowDocument } from "./windowDocuments";
 
@@ -113,6 +120,19 @@ export function viewFromResolved(mapping: ResolvedRecipeMapping, visual: Resolve
     annotations: visual.decorations.annotations,
     shapes: visual.decorations.shapes,
     regionShades: visual.decorations.regionShades,
+    // FINDING 4 (code-review): every incoming refLine is RE-MINTED a fresh id
+    // from `store/plotViewSettings.ts`'s own `nextRefLineId()` -- the SAME
+    // counter `addRefLine` draws from -- rather than keeping whatever id the
+    // recipe happened to capture. A captured project/global recipe's
+    // refLines carry "ref-N" ids minted by a PAST session's `_refSeq`; that
+    // counter restarts at 0 every session, so applying such a recipe and
+    // then clicking "add reference line" in the SAME (fresh) session could
+    // mint the identical "ref-1" a second time -- two lines sharing one id,
+    // which `removeRefLine`/`updateRefLine` (both keyed by id) can no longer
+    // tell apart. Reminting here closes that off structurally: every applied
+    // line and every later `addRefLine` call draw from the one counter, so
+    // two ids can never coincide within a session.
+    refLines: visual.refLines.map((r) => ({ ...r, id: nextRefLineId() })),
   };
 }
 
@@ -123,14 +143,23 @@ export function viewFromResolved(mapping: ResolvedRecipeMapping, visual: Resolve
  *  between resolve and apply -- and, since finding 4's confirm re-resolve
  *  fix, `resolved` here is always freshly computed against the CURRENT
  *  dataset (never a stale stage-time one), so a column removed/reordered/
- *  recoded mid-gesture can't sneak a stale index in. */
-export function applyResolvedRecipe(
+ *  recoded mid-gesture can't sneak a stale index in.
+ *
+ *  Async since the review round (FINDING 6, code-review): the "recently
+ *  used" scope lookup below now needs `globalPlotRecipes.ts`'s hydrated
+ *  list, loaded the same dynamic-import way `resolvedCandidates` already
+ *  does. Every existing caller was already inside an `async` function
+ *  awaiting this file's OWN `recipeLibs()` first (see the module doc), so no
+ *  call site's shape changes except `store/plotRecipes.ts`'s
+ *  `confirmPendingRecipeApplicationPartial`, which reads the returned
+ *  boolean synchronously and now awaits it explicitly. */
+export async function applyResolvedRecipe(
   set: SliceSet,
   get: SliceGet,
   recipe: PlotRecipe,
   datasetId: string,
   resolved: ResolvedRecipeApplication,
-): boolean {
+): Promise<boolean> {
   const state = get();
   const dataset = state.datasets.find((d) => d.id === datasetId);
   if (!dataset) {
@@ -182,15 +211,30 @@ export function applyResolvedRecipe(
   // early `return false` above: staging, refusing, or losing the dataset is
   // not a use.
   //
-  // Scope is derived rather than threaded through: a recipe reaches here as a
-  // bare object from `applyPlotRecipeObject` with no scope attached, so the
-  // honest answer is where it lives right now. Project membership wins because
-  // that is the list `applyPlotRecipe` searches first.
-  recordRecipeUse({
-    kind: "plot",
-    scope: get().plotRecipes.some((r) => r.id === recipe.id) ? "project" : "global",
-    id: recipe.id,
-  });
+  // FINDING 6 (code-review): scope is now decided by ACTUAL LIST MEMBERSHIP,
+  // never an `isBuiltinPlotRecipeId` id-prefix check. The old code skipped
+  // recording only for an id starting with the built-in `"builtin:"` prefix
+  // and otherwise blindly recorded PROJECT-or-GLOBAL by a truthiness check --
+  // two ways that went wrong: (a) a genuine user-saved recipe whose id
+  // happens to start with `"builtin:"` (nothing stops a `.qzrecipe.json`
+  // import from carrying one) was silently skipped even though it lives in
+  // a real list; (b) a project recipe DELETED between staging and this
+  // confirm no longer lives in `state.plotRecipes` at all, yet the old
+  // ternary's `false` branch recorded it as "global" anyway -- a phantom
+  // sidecar row for a recipe that no longer exists in that scope. Checking
+  // BOTH real lists directly (project first, matching `applyPlotRecipe`'s
+  // own lookup order) and recording nothing when the id is in neither closes
+  // both: a built-in (member of neither list, by construction -- see
+  // `lib/builtinPlotRecipes.ts`'s own module doc) still records nothing, but
+  // now because it genuinely isn't anywhere, not because of its id's
+  // spelling.
+  const inProject = get().plotRecipes.some((r) => r.id === recipe.id);
+  const inGlobal = inProject
+    ? false
+    : (await import("./globalPlotRecipes")).hydratedGlobalRecipes().some((r) => r.id === recipe.id);
+  if (inProject || inGlobal) {
+    recordRecipeUse({ kind: "plot", scope: inProject ? "project" : "global", id: recipe.id });
+  }
   return true;
 }
 
@@ -201,14 +245,17 @@ export function applyResolvedRecipe(
  *  imported directly so this module never value-imports `lib/plotRecipeMatch.ts`
  *  itself -- the caller has ALREADY paid its lazy-load cost via
  *  plotRecipes.ts's `recipeLibs()` (see that module's LAZY-LOADED note); a
- *  static import here would silently re-eagerize it. */
-export function resolveApplyOrStage(
+ *  static import here would silently re-eagerize it. Async (Promise<boolean>)
+ *  since `applyResolvedRecipe` itself became async (finding 6) -- every
+ *  caller was already `async` and awaiting this same file's `recipeLibs()`
+ *  first, so no call site's shape changes. */
+export async function resolveApplyOrStage(
   set: SliceSet,
   get: SliceGet,
   recipe: PlotRecipe,
   datasetId: string,
   resolveRecipe: (recipe: PlotRecipe, dataset: Dataset) => RecipeResolution,
-): boolean {
+): Promise<boolean> {
   const state = get();
   const dataset = state.datasets.find((d) => d.id === datasetId);
   if (!dataset) {
@@ -258,7 +305,15 @@ interface RecipeCandidate {
  *  EXACTLY ONCE each -- see the module doc's FINDING 4/6 note. `"generic"`
  *  never matches anything (the recipe module's own stronger-than-memory
  *  rule) -- always `[]`. Refused candidates (technique mismatch / errorRole
- *  guard) are dropped, never counted. */
+ *  guard) are dropped, never counted. A recipe flagged `noAutoSuggest`
+ *  (code-review finding 7 -- a "Copy to Project" of a built-in) is dropped
+ *  here too, BEFORE it is ever resolved: this is the ONE function both
+ *  `matchingPlotRecipes`'s suggestion list and `cleanMatchingPlotRecipe`'s
+ *  post-import toast read from, so excluding it here closes the surface for
+ *  both at once. The flag never affects a DIRECT apply by id/object
+ *  (`applyPlotRecipe`/`applyPlotRecipeObject`, which never call this
+ *  function) -- a flagged copy still applies manually like any other
+ *  project/global recipe. */
 export async function resolvedCandidates(get: SliceGet, dataset: Dataset): Promise<RecipeCandidate[]> {
   const technique = techniqueOf(dataset);
   if (technique === "generic") return [];
@@ -266,7 +321,7 @@ export async function resolvedCandidates(get: SliceGet, dataset: Dataset): Promi
   const seen = new Set<string>();
   const pool: PlotRecipe[] = [];
   for (const recipe of [...get().plotRecipes, ...hydratedGlobalRecipes()]) {
-    if (recipe.technique !== technique || seen.has(recipe.id)) continue;
+    if (recipe.technique !== technique || recipe.noAutoSuggest || seen.has(recipe.id)) continue;
     seen.add(recipe.id);
     pool.push(recipe);
   }

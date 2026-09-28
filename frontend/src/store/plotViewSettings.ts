@@ -61,6 +61,17 @@ import { clearFocusedXBreaks } from "./windowDocuments";
 let _refSeq = 0;
 let _annSeq = 0;
 
+/** Mint the next reference-line id -- the ONE counter both `addRefLine`
+ *  below and `store/plotRecipeApply.ts`'s recipe-apply seed path draw from,
+ *  so an id assigned to an applied recipe's refLine and an id assigned by a
+ *  later `addRefLine` click can never collide (code-review finding 4).
+ *  Exported (rather than kept private to `addRefLine`) for exactly that
+ *  second caller -- see its own comment for why a captured/fixed id must be
+ *  re-minted rather than kept verbatim. */
+export function nextRefLineId(): string {
+  return `ref-${++_refSeq}`;
+}
+
 export interface PlotViewSettingsSlice {
   setYScale: (yScale: AxisScale) => void;
   setXScale: (xScale: AxisScale) => void;
@@ -205,7 +216,7 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
         `qz.setY2Keys(${lit(y2Keys)})`,
       );
     },
-    addRefLine: (axis, value) => { get().recordHistory("add reference line"); set((s) => ({ refLines: [...s.refLines, { id: `ref-${++_refSeq}`, axis, value }] })); },
+    addRefLine: (axis, value) => { get().recordHistory("add reference line"); set((s) => ({ refLines: [...s.refLines, { id: nextRefLineId(), axis, value }] })); },
     removeRefLine: (id) => { get().recordHistory("delete reference line"); set((s) => ({ refLines: s.refLines.filter((r) => r.id !== id) })); },
     // Move a reference line to a new value (drag commit). No-op for an unknown id.
     updateRefLine: (id, value) => { get().recordHistory("move reference line"); set((s) => ({ refLines: s.refLines.map((r) => (r.id === id ? { ...r, value } : r)) })); },

@@ -14,6 +14,7 @@ import type { LoadedWorkspace } from "./workspace";
 import { workspaceCodec } from "./workspaceCodecLazy";
 import { withOp } from "../store/pendingOps";
 import type { ProjectIdentity } from "../store/project";
+import { rejectIfImportRunning } from "./importRunningGuard";
 
 /** Shared Open/Append-workspace flow (the only difference between the
  *  "open-workspace"/"open-workspace-safe"/"append-workspace" File commands
@@ -84,6 +85,10 @@ export function openWorkspaceCommand(
     }, ".dwk,.json");
 
   return () => {
+    // Refuse before either picker or native read starts. Keeping this at the
+    // shared entry point prevents any Open/Append caller from forgetting the
+    // preflight and avoids a second wrapper closure in the eager bundle.
+    if (rejectIfImportRunning()) return;
     if (!hasDesktopShell()) {
       viaPicker();
       return;

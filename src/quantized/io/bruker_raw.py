@@ -32,6 +32,12 @@ The supplementary-header block is variable (0 in some files, 40 in others), so
 ``data_start`` must be computed from the file's own header_len + supp size, not
 a hardcoded 304 — a one-file test would miss this.
 
+``alpha1``/``alpha2`` are decoded into metadata (keys ``alpha1``/``alpha2``,
+read by ``lib/xrdWavelength.ts`` to prefer Ka1 over the Ka1/Ka2 average) only
+when they pass the plausibility + alpha_average-consistency guard below
+(``_plausible_alpha``/``_ALPHA_REL_TOL``); a legacy file with the slots left
+zeroed, or a corrupt one, simply omits them and ``alpha_average`` stands.
+
 Reference: xylib (github.com/wojdyr/xylib), ``bruker_raw.cpp``. Sample files
 ``xylib_BT86.raw`` / ``xylib_Cu3Au.raw`` (LGPL-2.1, attribution) seed the
 parity tests.
@@ -39,6 +45,7 @@ parity tests.
 
 from __future__ import annotations
 
+import math
 import struct
 from pathlib import Path
 from typing import Any
@@ -52,6 +59,28 @@ __all__ = ["import_bruker_raw", "is_bruker_raw"]
 _FILE_HEADER_LEN = 712
 _RANGE_HEADER_LEN = 304
 _MAGIC = b"RAW1.01\x00"
+
+# `alpha1`/`alpha2` (bytes 624/632) are read defensively: on a file old enough
+# to leave them zeroed, or a truncated/otherwise-foreign file that merely
+# passes the magic+size checks, they are garbage, not a measurement. Emit them
+# only when BOTH conditions hold, and fail closed (drop the field, keep
+# `alpha_average` standing) otherwise:
+#   1. each value alone is finite and inside the plausible lab-anode X-ray
+#      window (0.5-2.5 A -- Cr Ka1 2.2897 to Ag Ka1 0.5594, the widest span in
+#      quantized_matlab's anode table);
+#   2. it is consistent with the file's own `alpha_average` at 616 -- Ka1
+#      alone within _ALPHA_REL_TOL of the average (every lab anode line sits
+#      within ~1%: Cu 0.08%, Mo 0.20%, Ag 0.25%, W 0.76%), and, when Ka2 also
+#      passes its own plausibility+ordering check, the standard Ka-weighted
+#      average (2*Ka1 + Ka2)/3 within the same tolerance of the file's
+#      `alpha_average` too.
+_ALPHA_MIN_A = 0.5
+_ALPHA_MAX_A = 2.5
+_ALPHA_REL_TOL = 0.02
+
+
+def _plausible_alpha(value: float) -> bool:
+    return math.isfinite(value) and _ALPHA_MIN_A <= value <= _ALPHA_MAX_A
 
 
 def is_bruker_raw(path: Path) -> bool:
@@ -138,6 +167,7 @@ def import_bruker_raw(
         unit = "counts"
 
     anode = raw[608:612].split(b"\x00", 1)[0].decode("ascii", "replace").strip()
+    alpha_average = float(struct.unpack_from("<d", raw, 616)[0])
     metadata: dict[str, Any] = {
         "source": str(path),
         "parser_name": "import_bruker_raw",
@@ -151,8 +181,25 @@ def import_bruker_raw(
         "time_per_step": time_per_step,
         "range_count": range_cnt,
         "anode_material": anode,
-        "alpha_average": float(struct.unpack_from("<d", raw, 616)[0]),
+        "alpha_average": alpha_average,
     }
+
+    alpha1 = float(struct.unpack_from("<d", raw, 624)[0])
+    if (
+        _plausible_alpha(alpha1)
+        and alpha_average > 0
+        and abs(alpha1 - alpha_average) <= _ALPHA_REL_TOL * alpha_average
+    ):
+        metadata["alpha1"] = alpha1
+        alpha2 = float(struct.unpack_from("<d", raw, 632)[0])
+        weighted_average = (2.0 * alpha1 + alpha2) / 3.0
+        if (
+            _plausible_alpha(alpha2)
+            and alpha2 >= alpha1
+            and abs(weighted_average - alpha_average) <= _ALPHA_REL_TOL * alpha_average
+        ):
+            metadata["alpha2"] = alpha2
+
     return DataStruct.create(
         two_theta, values, labels=["Intensity"], units=[unit], metadata=metadata
     )

@@ -6,8 +6,8 @@
 import { openRecentProject } from "../commands/recentProjectsCommands";
 import { useRecoveryChoice, type RecoveryPrompt } from "../store/recoveryChoice";
 import { useApp } from "../store/useApp";
-import { notifyMigrationWarnings, toast } from "../store/toasts";
-import { stageWorkspaceRestore } from "../store/windowHydration";
+import { toast } from "../store/toasts";
+import { replaceWorkspace } from "./openWorkspaceReplace";
 
 /** "Recover autosaved work" — load the autosave candidate into the live
  *  session and adopt the LAST PROJECT's identity for it (so an immediate
@@ -16,26 +16,21 @@ import { stageWorkspaceRestore } from "../store/windowHydration";
  *  claiming otherwise would be the exact "silently restore over a named
  *  project" the box forbids — this is the opposite, a LOUD recovery the
  *  user must still choose to save. `markProjectDirty()` runs explicitly
- *  AFTER `setCurrentProject`/`loadWorkspace` rather than relying on
+ *  AFTER the shared workspace-replacement path rather than relying on
  *  useWorkspaceAutosave.ts's ambient autosave-relevant subscriber to flip
  *  it as a side effect — this action must be correct on its own regardless
  *  of what else happens to be mounted (see store/project.ts's header for
- *  the general "identity-setters resolve dirty state atomically" rule this
- *  still honors: the two calls below are the explicit, self-contained
- *  version of it). */
+ *  the general "identity-setters resolve dirty state atomically" rule). */
 export function applyRecoverAutosave(prompt: RecoveryPrompt): void {
   const s = useApp.getState;
-  s().setCurrentProject({ name: prompt.lastProject.name, path: prompt.lastProject.path });
-  s().loadWorkspace(prompt.workspace);
+  if (!replaceWorkspace(s, prompt.workspace, { name: prompt.lastProject.name, path: prompt.lastProject.path })) return;
   s().markProjectDirty();
-  stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
   const n = prompt.datasetCount;
   const msg = `recovered ${n} dataset${n === 1 ? "" : "s"} from autosave — newer than "${prompt.lastProject.name}"`;
   // BUG-010: this setStatus overwrites loadWorkspace's own migrationNotice
   // status-line fold — the toast is the only channel that survives it.
   s().setStatus(msg);
   toast(`${msg}. Save to keep it.`, "info");
-  notifyMigrationWarnings(prompt.workspace.migrationWarnings);
   useRecoveryChoice.getState().clearRecovery();
 }
 

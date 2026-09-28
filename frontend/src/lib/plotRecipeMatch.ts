@@ -24,7 +24,7 @@ import type { LegendPos } from "./plotview";
 import type { PlotMark } from "./plotspec";
 import type { SignatureErrorRole } from "./quickPlotTemplates";
 import { techniqueOf } from "./techniqueDefaults";
-import type { AxisFormat, AxisScale, Dataset, SeriesStyle } from "./types";
+import type { AxisFormat, AxisScale, Dataset, RefLine, SeriesStyle } from "./types";
 import type { CompositionKind } from "./composition";
 import {
   classifyErrorRole,
@@ -66,6 +66,7 @@ export interface ResolvedRecipeVisual {
   yFmt: AxisFormat;
   y2Fmt: AxisFormat | null;
   axisBreaks: RecipeAxisBreaks;
+  refLines: RefLine[];
   showLegend: boolean;
   legendPos: LegendPos;
   legendXY: [number, number] | null;
@@ -330,6 +331,9 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset): RecipeResol
       yFmt: recipe.visual.yFmt,
       y2Fmt: recipe.visual.y2Fmt,
       axisBreaks: recipe.visual.axisBreaks,
+      // Deep-copied, same reason as `decorations` below: these are mutable
+      // objects owned by `recipe`.
+      refLines: structuredClone(recipe.visual.refLines),
       showLegend: recipe.visual.showLegend,
       legendPos: recipe.visual.legendPos,
       legendXY: recipe.visual.legendXY,

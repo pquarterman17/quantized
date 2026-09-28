@@ -28,6 +28,30 @@ describe("wavelengthFromMetadata", () => {
     expect(wavelengthFromMetadata({ alpha_average: 1.5418, wavelength_a: 1.5406 })).toBe(1.5406);
   });
 
+  it("reads io/bruker_raw.py's decoded `alpha1` (byte 624)", () => {
+    expect(wavelengthFromMetadata({ alpha1: 1.540598 })).toBe(1.540598);
+  });
+
+  it("prefers Bruker's decoded `alpha1` over its own `alpha_average` — the P2.1 fix", () => {
+    // Bruker RAW's alpha1 (byte 624) is now decoded by io/bruker_raw.py; a
+    // pattern that carries it should prefer Ka1 over the Ka1/Ka2 average,
+    // same as an xrdml file's `wavelength_a`.
+    expect(wavelengthFromMetadata({ alpha_average: 1.5418, alpha1: 1.540598 })).toBe(1.540598);
+  });
+
+  it("falls back to `alpha_average` when a Bruker file's alpha1 didn't decode", () => {
+    // io/bruker_raw.py omits `alpha1` entirely when its guard rejects the
+    // byte-624 value (legacy file, corrupt value) — alpha_average must still
+    // resolve a wavelength for that pattern.
+    expect(wavelengthFromMetadata({ alpha_average: 1.5418 })).toBe(1.5418);
+  });
+
+  it("still prefers an xrdml `wavelength_a` over a Bruker-shaped `alpha1`", () => {
+    expect(wavelengthFromMetadata({ wavelength_a: 1.5406, alpha1: 1.540598, alpha_average: 1.5418 })).toBe(
+      1.5406,
+    );
+  });
+
   it("accepts a numeric string (some headers round-trip as text)", () => {
     expect(wavelengthFromMetadata({ wavelength_a: "1.5406" })).toBe(1.5406);
   });

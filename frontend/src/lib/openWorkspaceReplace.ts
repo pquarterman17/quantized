@@ -4,10 +4,13 @@
 // general 500-line ceiling), the same way lib/exportFigureCommand.ts
 // already carries a command's body out of the curated command list.
 
-import { canRelease, type LockRecord } from "../lib/lockState";
+import { canRelease } from "../lib/lockState";
+import { rejectIfImportRunning } from "./importRunningGuard";
 import { plural } from "./plural";
 import { stageWorkspaceRestore } from "../store/windowHydration";
-import { useProjectLock, type LockProvider } from "../store/projectLock";
+import { useProjectLock } from "../store/projectLock";
+import { beginProjectLockOperation, isCurrentProjectLockOperation } from "../store/projectLockEpoch";
+import { closeProjectLock, reserveProjectLock } from "../store/projectLockLifecycle";
 import type { ProjectIdentity } from "../store/project";
 import { useRecentProjects } from "../store/recentProjects";
 import { useRelink } from "../store/relink";
@@ -23,10 +26,8 @@ import type { LoadedWorkspace } from "./workspace";
  *  step in `registerWithLockStateMachine` still knows what (if anything) to
  *  release even though the live store no longer reflects it. */
 interface PriorLock {
-  path: string | null;
-  record: LockRecord | null;
-  instanceId: string;
-  provider: LockProvider;
+  state: ReturnType<typeof useProjectLock.getState>;
+  op: number;
 }
 
 /** P3 (adversarial review, 2026-08-19) — the SYNCHRONOUS half of PR I2's
@@ -55,10 +56,19 @@ interface PriorLock {
 function reserveLockForSwitch(native: ProjectIdentity | undefined): PriorLock | null {
   if (!native) return null;
   const prev = useProjectLock.getState();
-  const prior: PriorLock = { path: prev.path, record: prev.record, instanceId: prev.instanceId, provider: prev.provider };
+  const prior: PriorLock = { state: prev, op: 0 };
   if (prev.path === native.path) return prior; // same project — nothing to reserve or release
-  useProjectLock.setState({ path: native.path, status: "held-by-other-live", record: null, openedAsCopy: false });
+  prior.op = reserveProjectLock(native.path);
   return prior;
+}
+
+/** Undo a synchronous reservation if workspace hydration rejects. */
+function rollbackLockReservation(prior: PriorLock | null): void {
+  if (!prior?.op || !isCurrentProjectLockOperation(prior.op)) return;
+  beginProjectLockOperation();
+  // The whole captured state: the reservation ran synchronously just before
+  // the throw, so only the fields it changed can differ from the snapshot.
+  useProjectLock.setState(prior.state);
 }
 
 /** PR I2 (L0.47): the ASYNC half — releases the prior project's lock (if
@@ -80,9 +90,11 @@ function reserveLockForSwitch(native: ProjectIdentity | undefined): PriorLock | 
 function registerWithLockStateMachine(native: ProjectIdentity | undefined, prior: PriorLock | null): void {
   if (!native || !prior) return;
   void (async () => {
-    if (prior.path && prior.path !== native.path && canRelease(prior.record, prior.instanceId)) {
-      await prior.provider.release(prior.path, prior.record?.token ?? "").catch(() => false);
+    const prev = prior.state;
+    if (prev.path && prev.path !== native.path && canRelease(prev.record, prev.instanceId)) {
+      await prev.provider.release(prev.path, prev.record?.token ?? "").catch(() => false);
     }
+    if (prior.op && !isCurrentProjectLockOperation(prior.op)) return;
     const result = await useProjectLock.getState().openProject(native.path);
     if (!result.readOnly) return;
     const reason =
@@ -138,8 +150,9 @@ export function recordNativeOpen(native: ProjectIdentity | undefined): void {
  *  in the SAME call as the actual replace, never before it (a confirm
  *  dialog can still say no) — see store/project.ts's header on why that
  *  ordering matters. */
-export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: ProjectIdentity): void {
-  s().recordHistory("open workspace");
+function replaceWorkspaceImpl(s: StoreGet, ws: LoadedWorkspace, native: ProjectIdentity | undefined, skipLayout: boolean): boolean {
+  if (rejectIfImportRunning()) return false;
+  s().recordHistory(skipLayout ? "open workspace without layout" : "open workspace");
   // C1 (review F4): an open relink panel refers to the OUTGOING project's
   // datasets, and the backend independently revokes its directory grants at
   // the native project-open moment (`_read_granted` -> `clear_dir_grants`)
@@ -148,7 +161,14 @@ export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: Proj
   // (see recordNativeOpen's doc) is what every accepted replace passes
   // through; closePanel is idempotent when the panel isn't open.
   useRelink.getState().closePanel();
-  s().loadWorkspace(ws);
+  const priorLock = reserveLockForSwitch(native);
+  try {
+    s().loadWorkspace(ws, skipLayout ? { skipLayout: true } : undefined);
+  } catch (error) {
+    rollbackLockReservation(priorLock);
+    throw error;
+  }
+  if (!native) closeProjectLock();
   // BUG-010 (review): `loadWorkspace`'s own `migrationNotice` status-line
   // fold above is real here (nothing downstream in this function overwrites
   // `status`), but a status line is easy to miss on a big load — every
@@ -158,11 +178,15 @@ export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: Proj
   // P3: reserve the lock machine's `path` at the NEW identity BEFORE
   // `setCurrentProject` flips `useApp.currentProject` — see
   // `reserveLockForSwitch`'s doc for why the ordering itself is the fix.
-  const priorLock = reserveLockForSwitch(native);
   s().setCurrentProject(native ?? null);
   stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
   registerWithLockStateMachine(native, priorLock);
   recordNativeOpen(native); // DEFECT A — see recordNativeOpen's doc
+  return true;
+}
+
+export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: ProjectIdentity): boolean {
+  return replaceWorkspaceImpl(s, ws, native, false);
 }
 
 /** "Open Without Layout…" (PR E2's safe-open) — same replace as
@@ -170,16 +194,8 @@ export function replaceWorkspace(s: StoreGet, ws: LoadedWorkspace, native?: Proj
  *  the incoming plotWindows/focusedWindowId/toolWindowLayout and lands on
  *  the single fresh window every layout-less doc already gets; everything
  *  else restores normally. */
-export function replaceWorkspaceSafely(s: StoreGet, ws: LoadedWorkspace, native?: ProjectIdentity): void {
-  s().recordHistory("open workspace without layout");
-  useRelink.getState().closePanel(); // C1 review F4 — see replaceWorkspace's identical comment
-  s().loadWorkspace(ws, { skipLayout: true });
-  notifyMigrationWarnings(ws.migrationWarnings); // BUG-010 (review) — see replaceWorkspace's identical comment
-  const priorLock = reserveLockForSwitch(native); // P3 — see replaceWorkspace's identical comment
-  s().setCurrentProject(native ?? null);
-  stageWorkspaceRestore(s().plotWindows, s().focusedWindowId);
-  registerWithLockStateMachine(native, priorLock);
-  recordNativeOpen(native); // DEFECT A — see recordNativeOpen's doc
+export function replaceWorkspaceSafely(s: StoreGet, ws: LoadedWorkspace, native?: ProjectIdentity): boolean {
+  return replaceWorkspaceImpl(s, ws, native, true);
 }
 
 /** Whether the CURRENT session holds anything a workspace replace would

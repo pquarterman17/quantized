@@ -20,6 +20,7 @@ import { createPageDocument } from "../lib/pageDocumentActions";
 import { defaultPlotView } from "../lib/plotview";
 import { WORKSPACE_FORMAT } from "../lib/workspace";
 import { useApp } from "../store/useApp";
+import { useImportBatch } from "../store/importBatch";
 import type { DataStruct, Dataset } from "../lib/types";
 
 vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
@@ -65,6 +66,7 @@ function openWorkspace() {
 beforeEach(() => {
   vi.mocked(askConfirm).mockReset();
   vi.mocked(openFilePicker).mockReset();
+  useImportBatch.setState({ running: false });
   useApp.setState({
     datasets: [ds("a"), ds("b")],
     activeId: "a",
@@ -75,6 +77,16 @@ beforeEach(() => {
 });
 
 describe("Open workspace — confirms before replacing the library", () => {
+  it("does not replace the workspace when an import starts while confirmation is open", async () => {
+    vi.mocked(askConfirm).mockImplementation(async () => {
+      useImportBatch.setState({ running: true });
+      return true;
+    });
+    openWorkspace();
+    await pickWorkspaceFile(WS);
+    expect(useApp.getState().datasets.map((d) => d.id)).toEqual(["a", "b"]);
+  });
+
   it("asks before discarding a non-empty library", async () => {
     vi.mocked(askConfirm).mockResolvedValue(false);
     openWorkspace();

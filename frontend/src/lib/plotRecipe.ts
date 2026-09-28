@@ -227,6 +227,7 @@ export function captureRecipe(
         y: (opts.axisBreaks?.y ?? []).map((r): [number, number] => [r[0], r[1]]),
         y2: (opts.axisBreaks?.y2 ?? []).map((r): [number, number] => [r[0], r[1]]),
       },
+      refLines: view.refLines.map((r) => ({ ...r })),
       showLegend: view.showLegend,
       legendPos: view.legendPos,
       legendXY: view.legendXY ? [view.legendXY[0], view.legendXY[1]] : null,

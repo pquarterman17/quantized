@@ -3003,12 +3003,26 @@ than fixed here. NIT 7 (the commit trailer) is this session's standing
 attribution convention, not a code finding, and is not actionable from inside
 a plan edit.
 
-- [ ] Decode Bruker RAW's `alpha1` (byte 624) so `lib/xrdWavelength.ts`'s
+- [x] Decode Bruker RAW's `alpha1` (byte 624) so `lib/xrdWavelength.ts`'s
   documented Kα1-over-average preference can fire for Bruker patterns.
-  `io/bruker_raw.py`'s own header documents the field; the metadata dict emits
-  only `alpha_average` at byte 616, so every Bruker RAW pattern currently
-  adopts the Kα1/Kα2 average as "the wavelength this pattern was measured at".
-  Backend change; needs a golden RAW fixture.
+  `io/bruker_raw.py` now decodes `alpha1` (byte 624) and `alpha2` (byte 632)
+  into metadata alongside `alpha_average` (byte 616), gated by a
+  plausibility guard (finite, 0.5–2.5 Å) AND consistency with the file's own
+  `alpha_average` (Kα1 alone within 2%; Kα2 additionally checked via the
+  standard (2·Kα1+Kα2)/3 weighted-average identity) — a legacy file with the
+  slots left zeroed, or a corrupt one, omits the field and `alpha_average`
+  stands, fail closed. `lib/xrdWavelength.ts` now reads `alpha1` (ordered
+  ahead of `alpha_average`, behind the xrdml `wavelength_a`) so the Kα1
+  preference fires for Bruker patterns too. Verified against the byte layout
+  documented in `io/bruker_raw.py`'s own header (offsets 616/624/632,
+  cross-checked against xylib's `bruker_raw.cpp`); sabotage-verified both the
+  decode and the consistency guard (disabling each made its guarding test
+  fail with the expected assertion, then restored to green). **The fixture
+  is synthetic** (built with the existing `_make_raw` byte-builder in
+  `tests/test_io_bruker_raw.py`, extended with `alpha_average`/`alpha1`/
+  `alpha2` params) — no real-world RAW file with non-zero byte-624/632
+  values has been checked against this decode yet; do that against a real
+  instrument file before fully trusting it on real corpora.
 - [~] Per-peak fit uncertainties. **Filled for the model-fit path; the legacy
   producers still write null.** `calc/peak_multifit.fit_multi_peak` and
   `calc/peak_fit.fit_peak` (the Peaks workshop's "Fit together" / "Fit
@@ -3156,7 +3170,67 @@ a plan edit.
   snapshots the whole dataset list: an unrecorded write made after a recorded
   one is rolled back by undoing it (an unrecorded re-fit was lost this way).
   Batch recipe remains open, as does direct manual peak creation.
-- [ ] Technique-specific plot recipe is manually chosen, never auto-overwrites.
+- [x] Technique-specific plot recipe is manually chosen, never auto-overwrites.
+  **2026-09-28:** three built-in Plot Recipes (`lib/builtinPlotRecipes.ts`) on
+  the existing P1.3 `PlotRecipe` schema, no new schema version — XRD θ–2θ (log
+  intensity), XRR (log R vs Q), M(H) loop (linear, H=0/M=0 zero lines via a
+  new additive `visual.refLines` field, ported from `lib/techniqueDefaults.ts`'s
+  own axis-scale table, never invented). Listed in their own read-only
+  "Built-in" group in the Recipe Manager panel (Apply + "Copy to Project"
+  only — no Rename/Duplicate/Delete/Export); applied through the SAME
+  `applyPlotRecipeObject` path as any saved recipe, so it is structurally
+  impossible for an apply to overwrite a live window (always a new figure,
+  one undo step) and the existing unmatched-field preview+confirm dialog is
+  reused verbatim for a built-in's own partial matches. Built-ins are a
+  member of neither the project nor the global recipe store, so they are
+  excluded by construction from every auto-suggestion surface
+  (`resolvedCandidates`/`matchingPlotRecipes`/the post-import toast) —
+  selection is manual-only, never on import or technique detection. 227
+  targeted + 838-file/13,590-test full suite green, `tsc -b --force` clean,
+  lint clean, two findings sabotage-verified (an unguarded automatic-
+  suggestion leak, a rendered Delete button on a built-in row). Kept lazy:
+  `lib/builtinPlotRecipes.ts` is reached from TWO already-lazy edges --
+  the Recipe Manager panel chunk, and (since P2.1 landed) `store/
+  plotRecipeApply.ts`'s own `isBuiltinPlotRecipeId` import, itself a lazy
+  SEAM loaded via `store/plotRecipeApplyLazy.ts` -- so neither drags it into
+  the entry chunk (`architecture.test.ts`'s eager-reachability walk passes);
+  final `npm run build` bundle-size gate: 843.8 kB eager (846.1 kB budget,
+  unedited), 2.3 kB under.
+  **2026-09-28 (review round):** nine further findings fixed -- the XRR
+  built-in's labels corrected against the real reflectometry parsers (it now
+  also matches NCNR `.refl`'s "Intensity" and `.pnr`'s "Rpp"/"Rmm"/"Rpm"/
+  "Rmp", renamed "Reflectivity (log R vs Q)", and its description now points
+  lab XRR (tagged `xrd.powder`) at the XRD θ–2θ recipe instead of inventing
+  a lab-2θ reflectivity recipe with no reliable parser signal); the M(H)
+  loop's moment aliases now cover every magnetometry moment label `io/`
+  emits, including MPMS3's "DC Moment Free Ctr"/"DC Moment Fixed Ctr"; a
+  captured/fixed refLine id is re-minted from the SAME counter `addRefLine`
+  uses on apply, closing a same-session id collision; `RecipeManagerPanel.
+  tsx`'s Apply button no longer sticks disabled forever on a rejected lazy-
+  chunk load; `store/plotRecipeApply.ts`'s "recently used" scope is now
+  derived from actual list membership (project or hydrated global) rather
+  than an `isBuiltinPlotRecipeId` prefix skip, so a since-deleted pending
+  recipe records nothing and a user id that happens to start with
+  `"builtin:"` still records correctly; "Copy to Project" now routes through
+  `recipeManagerActions.ts` and flags the copy `noAutoSuggest: true` (a new
+  additive `PlotRecipe` field) so it stays excluded from every automatic-
+  suggestion surface while still applying manually; `builtinVisual()` now
+  builds on `lib/plotRecipeIO.ts`'s own exported `defaultRecipeVisual()`
+  rather than a second hand-duplicated copy. Every behavioral fix above got
+  a new test, and every one of those was sabotage-verified (the fix reverted,
+  the test confirmed red, the fix restored) -- including the two mechanism-
+  level cases a plain revert-and-rerun of the OBVIOUS test would have missed:
+  the id-collision test using the M(H) built-in's own fixed ids stayed GREEN
+  under the un-fixed code (its ids can never collide with an `addRefLine`-
+  minted one regardless), so it was replaced with one capturing a
+  `"ref-1"`-shaped id instead; a code-duplication fix (`builtinVisual()` ->
+  `defaultRecipeVisual()`) produces IDENTICAL values either way, so it is
+  covered by mocking `defaultRecipeVisual()` with a sentinel and checking the
+  built-ins actually reflect it. `npx tsc -b --force` clean, `eslint --max-
+  warnings=0 src` clean, the 13 directly-relevant test files (440 tests)
+  green, `npm run build` (fresh `.vite` cache) green at 843.9 kB eager
+  against the unedited 846.1 kB budget (2.2 kB under). No backend files
+  touched.
 - [ ] Validate on representative owner instruments/phases.
 
 ### P2.2 — XRR/PNR fit-to-data workbench
@@ -5380,7 +5454,29 @@ covers a much smaller subset and guards focus on Analyze.
   topic. Folder, workbook, and Library-item menus land on "Toggle library
   panel", the closest real entry; a Library/folder/workbook topic would
   make those three footers genuinely useful.
-- [ ] Progressive disclosure; tooltips remain one sentence.
+- [x] ~~Progressive disclosure; tooltips remain one sentence.~~ SHIPPED
+  2026-09-28: `frontend/src/lib/tooltipSentenceAudit.test.ts`, a script-free
+  vitest audit (no separate node script — the test itself walks
+  `frontend/src` at run time) scanning `title="..."` and `hint: "..."`
+  string literals everywhere, plus `description: "..."` restricted to the
+  command registry (`commands/*.ts`, `store/commands.ts` — the "one-sentence
+  tooltip" this plan's own line ~5401 already names; `helpContent.test.ts`
+  enforced only its MINIMUM length, never a maximum). Flags a terminator
+  (`.`/`!`/`?`) followed by more text — i.e. two-or-more actual sentences —
+  while allowing the semicolon/dash/colon-joined compound-clause style this
+  codebase's tooltips already lean on. Found and fixed 8 real offenders (0
+  now): `commands/analysisCommands.ts` (2 command descriptions),
+  `components/Inspector/ChannelsCard.tsx`, `components/Stage/MapToolbar.tsx`
+  (2), `components/Stage/worksheet/GridHeader.tsx`,
+  `components/workshops/figurebuilder/GroupingPanel.tsx`,
+  `components/workshops/hysteresis/HysteresisPanel.tsx` — each a minimal
+  edit (merge two sentences into one via a semicolon/comma/participle,
+  wording otherwise unchanged). Sabotage-verified: reintroduced a two-
+  sentence `title=` on `ChannelsCard.tsx`, confirmed the guard fails with
+  the exact string named, reverted.
+  No allowlist: the guard scans every source file. An allowlist of files
+  under edit by open PRs was drafted, then dropped on review after the
+  audit found zero offenders in those files with it disabled.
 - [x] Audit stale capability wording. **Audited 2026-09-13** against the
   three most recent capability changes: P3.3's dash/marker cycle (this
   branch's HEAD, `1b60872a`), L1.4 Details parity (LIBRARY_WORKBOOK_UX_PLAN
@@ -9613,7 +9709,28 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   Every version this app still claims to load across the true migration
   boundaries above now has a committed, frozen fixture and a load-path
   test — the box ticks clean.
-- [ ] Document one ownership path per field before deleting adapters.
+- [x] ~~Document one ownership path per field before deleting adapters.~~
+  SHIPPED 2026-09-28 (docs/tests only): `docs/figure_field_ownership.md`,
+  generated from `figureContract.ts`'s own field census (the 56 fields
+  classified `"canonical"` across `PLOT_VIEW_FIELD_CONTRACT` and
+  `FIGURE_DOC_FIELD_CONTRACT` — the only two contracts with an independently
+  persisted field at all) plus a grep of every writer, not from memory. Each
+  field: the real current owner path (`FigureDocument.plot.view.*` or
+  `.bindings.*`, which differs from `figureContract.ts`'s own aspirational
+  nested `mapsTo` — documented explicitly), every Setter/Bulk/Reset/Builder
+  adapter that writes it, and a removable verdict. Two genuine consolidation
+  candidates found and flagged (not fixed here, out of scope for a docs-only
+  item): `errKeys`' legacy `Record<channel,errChannel>` shape duplicating
+  `bindings.errors`, and the Figure Builder draft session's direct
+  `plot.view`/`output` patch duplicating (in spirit) the live-window Bridge.
+  No other field had a second, removable adapter — every Setter/Bulk/Reset
+  writer is an alternative SOURCE of a new value, not a competing
+  destination. `lib/figureFieldOwnershipDoc.test.ts` guards the doc: it reads
+  `FIGURE_FIELD_CONTRACTS` directly and fails if any canonical field's
+  backtick-quoted name is missing from the doc, plus a sabotage-verifiable
+  check that exactly `{FigureDoc, PlotView}` are the contracts with canonical
+  fields today (a third contract gaining one needs its own table, not just
+  a passing grep).
 - [x] ~~Make the e2e job reproducible against the lockfile~~ SHIPPED
   2026-07-25 (PR #87, `034fdb4`): both `ci.yml` and `e2e.yml` now run
   `npm ci` (the class fix — pypi/release already did), landed right after

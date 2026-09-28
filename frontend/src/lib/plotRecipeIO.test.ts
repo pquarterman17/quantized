@@ -171,3 +171,99 @@ describe("sanitizeRecipes", () => {
     expect(sanitizeRecipes([null, undefined, 42, "str", {}, [], { schemaVersion: 1 }])).toEqual([]);
   });
 });
+
+// P2.1: `visual.refLines` was added ADDITIVELY (no PLOT_RECIPE_SCHEMA_VERSION
+// bump -- see plotRecipeSchema.ts's own doc on the field). These pins are
+// what makes that claim true rather than assumed: an OLDER recipe missing
+// the field entirely must still sanitize cleanly to `[]`, never get dropped.
+describe("sanitizeRecipes — refLines (additive field, P2.1)", () => {
+  it("an OLDER persisted recipe with no refLines field at all sanitizes to []  (never dropped, never throws)", () => {
+    const good = goodRecipe();
+    const legacy = { ...good } as Record<string, unknown>;
+    const legacyVisual = { ...(legacy.visual as Record<string, unknown>) };
+    delete legacyVisual.refLines;
+    legacy.visual = legacyVisual;
+
+    const [out] = sanitizeRecipes([legacy]);
+    expect(out).toBeDefined();
+    expect(out.visual.refLines).toEqual([]);
+    expect(() => parseRecipe(JSON.stringify(legacy))).not.toThrow();
+    expect(parseRecipe(JSON.stringify(legacy)).visual.refLines).toEqual([]);
+  });
+
+  it("drops a malformed refLine entry but keeps the well-formed ones alongside it", () => {
+    const good = goodRecipe();
+    const corrupt = {
+      ...good,
+      visual: {
+        ...good.visual,
+        refLines: [
+          { id: "ok", axis: "x", value: 5 },
+          { id: "bad-axis", axis: "z", value: 1 },
+          { id: "bad-value", axis: "y", value: "not a number" },
+          { axis: "y", value: 2 }, // missing id
+        ],
+      },
+    };
+    const [out] = sanitizeRecipes([corrupt]);
+    expect(out.visual.refLines).toEqual([{ id: "ok", axis: "x", value: 5 }]);
+  });
+
+  it("a non-array refLines value degrades to [] rather than dropping the recipe", () => {
+    const good = goodRecipe();
+    const corrupt = { ...good, visual: { ...good.visual, refLines: "not an array" } };
+    const [out] = sanitizeRecipes([corrupt]);
+    expect(out.visual.refLines).toEqual([]);
+  });
+
+  // FINDING 4 (code-review): a duplicate id makes `removeRefLine`/
+  // `updateRefLine` (both keyed by id) act on every line sharing it at once
+  // instead of the one the caller meant -- a hand-edited or otherwise
+  // corrupt persisted list with a collision is defused HERE, at the
+  // untrusted boundary, same "drop the bad one, keep the rest" convention
+  // the other malformed-entry cases above already use.
+  it("drops a later entry that repeats an id already kept, keeping the first occurrence", () => {
+    const good = goodRecipe();
+    const corrupt = {
+      ...good,
+      visual: {
+        ...good.visual,
+        refLines: [
+          { id: "dup", axis: "x", value: 1 },
+          { id: "dup", axis: "y", value: 99 }, // same id, would collide live
+          { id: "ok", axis: "y", value: 2 },
+        ],
+      },
+    };
+    const [out] = sanitizeRecipes([corrupt]);
+    expect(out.visual.refLines).toEqual([
+      { id: "dup", axis: "x", value: 1 },
+      { id: "ok", axis: "y", value: 2 },
+    ]);
+  });
+});
+
+// FINDING 7 (code-review): `noAutoSuggest` is ANOTHER additive field (no
+// PLOT_RECIPE_SCHEMA_VERSION bump), same convention as refLines above --
+// absent on an older/ordinary recipe means "eligible for auto-suggestion".
+describe("sanitizeRecipes / parseRecipe — noAutoSuggest (additive field, finding 7)", () => {
+  it("an ordinary recipe with no noAutoSuggest field at all sanitizes with the field simply absent", () => {
+    const good = goodRecipe();
+    const [out] = sanitizeRecipes([good]);
+    expect(out.noAutoSuggest).toBeUndefined();
+    expect(parseRecipe(JSON.stringify(good)).noAutoSuggest).toBeUndefined();
+  });
+
+  it("a recipe flagged noAutoSuggest: true keeps the flag through both sanitizeRecipes and parseRecipe", () => {
+    const flagged = { ...goodRecipe(), noAutoSuggest: true };
+    const [out] = sanitizeRecipes([flagged]);
+    expect(out.noAutoSuggest).toBe(true);
+    expect(parseRecipe(JSON.stringify(flagged)).noAutoSuggest).toBe(true);
+  });
+
+  it("a non-boolean noAutoSuggest value is dropped, never coerced to true", () => {
+    const corrupt = { ...goodRecipe(), noAutoSuggest: "yes" };
+    const [out] = sanitizeRecipes([corrupt]);
+    expect(out.noAutoSuggest).toBeUndefined();
+  });
+});

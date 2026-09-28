@@ -288,6 +288,14 @@ Practical conventions discovered while porting — follow them to stay green.
   (Vitest 4's `FAIL` line is plain text even under a real pty — measured with
   `script` — so anchored matches work; portability across shells, not ANSI, is
   why the search runs on a saved file.)
+- **A killed vitest run leaks ~80 MB into `$TMPDIR`.** Each run writes its
+  transformed modules to `$TMPDIR/<21-char nanoid>/client/` and removes the
+  directory only on a clean close. Timeouts and killed agents skip that step.
+  On 2026-09-28, about 1,100 leaked directories (~28 GB) filled the disk and
+  stalled six parallel agents. Let runs finish. When disk is low, remove the
+  leaked directories older than 30 minutes:
+  `find /tmp -maxdepth 1 -type d -regextype posix-extended -regex
+  '/tmp/[A-Za-z0-9]{21}' -mmin +30 -exec rm -rf {} +`.
 
 ### Origin graph-recovery safety (2026-07-13 incident)
 - Treat Origin graph recovery as one scientific pipeline: **file bytes ->

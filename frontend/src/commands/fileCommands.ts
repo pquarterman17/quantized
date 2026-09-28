@@ -12,6 +12,7 @@ import { clearAutosave } from "../lib/autosave";
 import type { StoreGet } from "../lib/exportActive";
 import { createFigureDocument } from "../lib/figureDocument";
 import { chooseAndImport } from "../lib/importEntry";
+import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
 import {
@@ -24,7 +25,7 @@ import {
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "../lib/originTemplate";
 import { snapshotView } from "../lib/plotview";
 import type { Action } from "../store/commands";
-import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importBatch";
+import { useImportBatch } from "../store/importBatch";
 import { withOp } from "../store/pendingOps";
 import { toast } from "../store/toasts";
 import { nextDatasetId } from "../store/useApp";
@@ -38,12 +39,6 @@ import { nextDatasetId } from "../store/useApp";
 // needs the guard applied here because `importFilesAppended` lives in
 // useApp.ts (out of bounds for this slice — see importDatasets.ts's own
 // comment on the same guard).
-function rejectIfImportRunning(): boolean {
-  if (!isImportRunning()) return false;
-  toast(ALREADY_RUNNING_MSG, "danger");
-  return true;
-}
-
 /** Wrap a dynamic `import()` in a pendingOp (F5, 2026-09-13 adversarial
  *  review of d6e67fb7's P3.4 export-cancel commit): every `void`-prefixed
  *  export command body below is a bare `void import(...).then((m) =>
@@ -309,23 +304,12 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "File",
       label: "Remove all…",
       description: "Permanently clear every dataset, folder, report, and imported figure from the session.",
+      // Body lives in lazily-imported commands/fileCommandsLazy.ts (bundle-
+      // size ratchet); the import-running refusal stays here so it is instant.
       run: () => {
-        const n = s().datasets.length;
-        if (n === 0) {
-          s().setStatus("library is already empty");
-          return;
-        }
-        void askConfirm(
-          "Remove everything?",
-          `This removes all ${n} dataset${n === 1 ? "" : "s"}, plus every folder and ` +
-            `imported figure. This can't be undone.`,
-          "Remove all",
-          true,
-        ).then((ok) => {
-          if (!ok) return;
-          s().clearAll();
-          toast("removed all datasets", "ok");
-        });
+        if (rejectIfImportRunning()) return;
+        void runLazy("Loading Remove all…", () => import("./fileCommandsLazy"))
+          .then((m) => m.runRemoveAll(s), onLoadFailure);
       },
     },
     {
