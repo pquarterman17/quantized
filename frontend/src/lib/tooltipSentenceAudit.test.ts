@@ -18,7 +18,7 @@
 // FOLLOWED BY MORE TEXT, i.e. two or more actual sentences in one tooltip.
 //
 // Sabotage-verifiable: add `title="One sentence. And then another."` to any
-// non-allowlisted component and this fails.
+// component and this fails.
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, extname, join, relative } from "node:path";
@@ -30,40 +30,6 @@ const SRC_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 
 // Directories that are never source-scanned.
 const SKIP_DIR_NAMES = new Set(["__fixtures__", "node_modules"]);
-
-// ---------------------------------------------------------------------------
-// Explicit, commented allowlist. These paths (files or whole directories,
-// relative to frontend/src) are under active edit by OTHER open PRs at the
-// time this audit was added (2026-09-28) — touching them here would create
-// merge conflicts with unrelated work, so any tooltip issue in them is
-// deliberately left for a later sweep instead of fixed in this change.
-// -----------------------------------------------------------------------
-const ALLOWLIST_PATHS = [
-  "components/Stage/Stage.tsx",
-  // Not present as its own file at the commit this audit was written against
-  // (grepped for "EmptyProjectStage"/"EmptyProject" across frontend/src and
-  // found nothing) — named here anyway so the guard exempts it the moment
-  // the other PR lands it, rather than someone having to remember to add it.
-  "components/EmptyProjectStage.tsx",
-  "components/Stage/EmptyProjectStage.tsx",
-  // "the legend components"
-  "components/Stage/PlotLegend.tsx",
-  "components/Stage/LegendSample.tsx",
-  "components/Stage/SpatialPanelLegend.tsx",
-  // "Library components (components/Library/*)" — the whole directory.
-  "components/Library/",
-  "commands/fileCommands.ts",
-  "store/projectLock.ts",
-  "lib/openWorkspaceReplace.ts",
-  "lib/sendFigureToReport.ts",
-  "components/workshops/recipemanager/RecipeManagerPanel.tsx",
-];
-
-function isAllowlisted(relPath: string): boolean {
-  return ALLOWLIST_PATHS.some((entry) =>
-    entry.endsWith("/") ? relPath.startsWith(entry) : relPath === entry,
-  );
-}
 
 function walk(dir: string, out: string[]): void {
   for (const name of readdirSync(dir)) {
@@ -115,7 +81,6 @@ function scan(): { hits: Hit[]; scanned: number; filesScanned: number } {
   let filesScanned = 0;
   for (const file of files) {
     const relPath = relative(SRC_ROOT, file).split("\\").join("/"); // posix-normalize for Windows CI
-    if (isAllowlisted(relPath)) continue;
     filesScanned++;
     const src = readFileSync(file, "utf8");
     for (const { kind, re, restrictTo } of PATTERNS) {
@@ -144,27 +109,5 @@ describe("tooltip strings stay one sentence (progressive disclosure)", () => {
     const { hits } = scan();
     const report = hits.map((h) => `${h.file} [${h.kind}] ${JSON.stringify(h.text)}`).join("\n");
     expect(hits, `multi-sentence tooltip(s) found:\n${report}`).toEqual([]);
-  });
-
-  it("the allowlist only names paths that exist or are explicitly future-facing", () => {
-    // Keeps the allowlist itself honest: every entry either exists on disk
-    // today, or is one of the two documented "not landed yet" guesses for
-    // EmptyProjectStage (see the comment above ALLOWLIST_PATHS).
-    const files: string[] = [];
-    walk(SRC_ROOT, files);
-    const relPaths = new Set(files.map((f) => relative(SRC_ROOT, f).split("\\").join("/")));
-    const dirPrefixes = ALLOWLIST_PATHS.filter((p) => p.endsWith("/"));
-    const filePaths = ALLOWLIST_PATHS.filter((p) => !p.endsWith("/"));
-    const knownFuture = new Set(["components/EmptyProjectStage.tsx", "components/Stage/EmptyProjectStage.tsx"]);
-    for (const p of filePaths) {
-      if (knownFuture.has(p)) continue;
-      expect(relPaths.has(p), `allowlisted file ${p} does not exist — check it wasn't renamed`).toBe(true);
-    }
-    for (const prefix of dirPrefixes) {
-      expect(
-        [...relPaths].some((p) => p.startsWith(prefix)),
-        `allowlisted directory ${prefix} matches no file — check it wasn't renamed`,
-      ).toBe(true);
-    }
   });
 });

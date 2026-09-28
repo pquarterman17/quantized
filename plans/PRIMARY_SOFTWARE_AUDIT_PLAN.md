@@ -5474,16 +5474,9 @@ covers a much smaller subset and guards focus on Analyze.
   wording otherwise unchanged). Sabotage-verified: reintroduced a two-
   sentence `title=` on `ChannelsCard.tsx`, confirmed the guard fails with
   the exact string named, reverted.
-  **Explicit allowlist (commented in the test), left untouched because other
-  open PRs are mid-edit on them — a later sweep should revisit:**
-  `components/Stage/Stage.tsx`; `EmptyProjectStage` (grepped for it at this
-  commit and found no such file — named by both guessed paths so the guard
-  exempts it the moment that PR lands it); the three legend components
-  (`components/Stage/PlotLegend.tsx`, `LegendSample.tsx`,
-  `SpatialPanelLegend.tsx`); all of `components/Library/*`;
-  `commands/fileCommands.ts`; `store/projectLock.ts`;
-  `lib/openWorkspaceReplace.ts`; `lib/sendFigureToReport.ts`;
-  `components/workshops/recipemanager/RecipeManagerPanel.tsx`.
+  No allowlist: the guard scans every source file. An allowlist of files
+  under edit by open PRs was drafted, then dropped on review after the
+  audit found zero offenders in those files with it disabled.
 - [x] Audit stale capability wording. **Audited 2026-09-13** against the
   three most recent capability changes: P3.3's dash/marker cycle (this
   branch's HEAD, `1b60872a`), L1.4 Details parity (LIBRARY_WORKBOOK_UX_PLAN
