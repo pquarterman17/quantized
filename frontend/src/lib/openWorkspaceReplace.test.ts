@@ -14,6 +14,8 @@ import { replaceWorkspace, replaceWorkspaceSafely } from "./openWorkspaceReplace
 import { toast, useToasts } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import { useProjectLock, type LockProvider } from "../store/projectLock";
+import { BROWSER_AUTOSAVE_LOCK_PATH } from "../store/projectLockPaths";
+import { closeProjectLock } from "../store/projectLockLifecycle";
 import type { LockRecord } from "./lockState";
 import { useRecentProjects } from "../store/recentProjects";
 import { useRelink } from "../store/relink";
@@ -134,6 +136,49 @@ describe("replaceWorkspace — PR I2 lock registration", () => {
     expect(useProjectLock.getState().path).toBeNull();
   });
 
+  it("a browser-picker replacement releases and detaches the previous named project", async () => {
+    const provider = useProjectLock.getState().provider as ReturnType<typeof pathKeyedProvider>;
+    replaceWorkspace(() => useApp.getState(), emptyWorkspace(), { name: "a.dwk", path: "/p/a.dwk" });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(provider.store.has("/p/a.dwk")).toBe(true);
+
+    replaceWorkspace(() => useApp.getState(), emptyWorkspace());
+    await Promise.resolve();
+
+    expect(provider.store.has("/p/a.dwk")).toBe(false);
+    expect(useProjectLock.getState().path).toBeNull();
+  });
+
+  it("a browser-picker replacement preserves the app-lifetime browser autosave lock", () => {
+    const other = withToken({ instanceId: "other-tab", acquiredAt: 1, heartbeatAt: Date.now() });
+    useProjectLock.setState({
+      path: BROWSER_AUTOSAVE_LOCK_PATH, record: other, status: "held-by-other-live",
+    });
+
+    replaceWorkspace(() => useApp.getState(), emptyWorkspace());
+
+    expect(useProjectLock.getState()).toMatchObject({
+      path: BROWSER_AUTOSAVE_LOCK_PATH, record: other, status: "held-by-other-live",
+    });
+    expect(useProjectLock.getState().canWriteNow()).toBe(false);
+  });
+
+  it("restores the prior lock reservation when workspace hydration throws", async () => {
+    const provider = useProjectLock.getState().provider as ReturnType<typeof pathKeyedProvider>;
+    await useProjectLock.getState().openProject("/p/old.dwk");
+    const before = useProjectLock.getState();
+    const state = { ...useApp.getState(), loadWorkspace: () => { throw new Error("hydrate failed"); } };
+
+    expect(() => replaceWorkspace(() => state, emptyWorkspace(), { name: "new.dwk", path: "/p/new.dwk" }))
+      .toThrow("hydrate failed");
+
+    expect(useProjectLock.getState()).toMatchObject({
+      path: before.path, record: before.record, status: before.status,
+    });
+    expect(provider.store.has("/p/old.dwk")).toBe(true);
+    expect(provider.store.has("/p/new.dwk")).toBe(false);
+  });
+
   it("toasts an honest read-only notice when the project is already locked by another live instance", async () => {
     const provider = useProjectLock.getState().provider as ReturnType<typeof pathKeyedProvider>;
     provider.store.set("/p/demo.dwk", withToken({ instanceId: "other", acquiredAt: 1, heartbeatAt: Date.now() }));
@@ -199,6 +244,29 @@ describe("replaceWorkspace — PR I2 lock registration", () => {
 
     expect(store.has("/p/a.dwk")).toBe(false); // still released, not stranded by the placeholder
     expect(store.has("/p/b.dwk")).toBe(true);
+  });
+
+  it("does not acquire the new lock when the project closes during the previous-lock release", async () => {
+    replaceWorkspace(() => useApp.getState(), emptyWorkspace(), { name: "a.dwk", path: "/p/a.dwk" });
+    await new Promise((r) => setTimeout(r, 0));
+    const base = useProjectLock.getState().provider as ReturnType<typeof pathKeyedProvider>;
+    let finishRelease: (() => void) | undefined;
+    useProjectLock.setState({
+      provider: {
+        ...base,
+        release: (path, token) => new Promise<boolean>((resolve) => {
+          finishRelease = () => { void base.release(path, token).then(resolve); };
+        }),
+      },
+    });
+
+    replaceWorkspace(() => useApp.getState(), emptyWorkspace(), { name: "b.dwk", path: "/p/b.dwk" });
+    closeProjectLock();
+    finishRelease?.();
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(base.store.has("/p/b.dwk")).toBe(false);
+    expect(useProjectLock.getState().path).toBeNull();
   });
 });
 

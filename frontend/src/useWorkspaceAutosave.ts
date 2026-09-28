@@ -74,7 +74,6 @@
 //    `autosavePausedReported`'s own doc.
 
 import { useEffect } from "react";
-
 import { autosaveHealth, loadAutosaveGeneration, saveAutosave } from "./lib/autosave";
 import { hasDesktopShell } from "./lib/desktopBridge";
 import { shouldOfferRecoveryChoice, type LastProjectRef } from "./lib/recoveryChoice";
@@ -82,6 +81,7 @@ import { installSessionMarker, priorSessionEnd } from "./lib/sessionMarker";
 import { captureTechniqueView } from "./lib/techniqueViewMemory";
 import { reportAutosaveHealth } from "./store/autosaveStatus";
 import { useProjectLock } from "./store/projectLock";
+import { BROWSER_AUTOSAVE_LOCK_PATH } from "./store/projectLockPaths";
 import { useRecentProjects } from "./store/recentProjects";
 import { useRecoveryChoice } from "./store/recoveryChoice";
 import { notifyMigrationWarnings, toast } from "./store/toasts";
@@ -91,7 +91,7 @@ import { stageWorkspaceRestore } from "./store/windowHydration";
 /** Synthetic, stable "project path" for the shared browser autosave slot —
  *  see this module's header. Exported so App.tsx's install effect and this
  *  module's own debounced-save gate always agree on the exact same key. */
-export const BROWSER_AUTOSAVE_LOCK_PATH = "qz://browser-autosave-session";
+export { BROWSER_AUTOSAVE_LOCK_PATH };
 
 /** Engage the lock state machine for the shared browser autosave slot —
  *  called once by App.tsx's install effect, right after the browser

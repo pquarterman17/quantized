@@ -21,6 +21,8 @@ import {
   type LockCasResult,
   type LockProvider,
 } from "./projectLock";
+import { closeProjectLock, reserveProjectLock } from "./projectLockLifecycle";
+import { BROWSER_AUTOSAVE_LOCK_PATH } from "./projectLockPaths";
 
 let tokenSeq = 0;
 
@@ -96,6 +98,66 @@ function withRefresh(base: LockProvider, refresh: LockProvider["refresh"]): Lock
 const UNVERIFIABLE_RESULT: LockCasResult = { acquired: false, record: null, unverifiable: true };
 
 describe("openProject", () => {
+  it("does not resurrect lock state when the project closes during a slow open", async () => {
+    const base = useProjectLock.getState().provider as ReturnType<typeof fakeProvider>;
+    let finishRead: ((record: LockRecord | null) => void) | undefined;
+    useProjectLock.setState({
+      provider: { ...base, read: () => new Promise<LockRecord | null>((resolve) => { finishRead = resolve; }) },
+    });
+
+    // A named open always reserves its path first (openWorkspaceReplace.ts).
+    reserveProjectLock(PATH);
+    const opening = useProjectLock.getState().openProject(PATH);
+    closeProjectLock();
+    finishRead?.(null);
+    await opening;
+
+    expect(useProjectLock.getState().path).toBeNull();
+    expect(useProjectLock.getState().record).toBeNull();
+    expect(useProjectLock.getState().status).toBe("unlocked");
+  });
+
+  it("closing a workspace never abandons the browser autosave slot's first engagement", async () => {
+    const base = useProjectLock.getState().provider as ReturnType<typeof fakeProvider>;
+    let finishRead: ((record: LockRecord | null) => void) | undefined;
+    useProjectLock.setState({
+      provider: { ...base, read: () => new Promise<LockRecord | null>((resolve) => { finishRead = resolve; }) },
+    });
+
+    const engaging = useProjectLock.getState().openProject(BROWSER_AUTOSAVE_LOCK_PATH);
+    closeProjectLock(); // Remove All / a browser-picker Open, before the slot's read resolves
+    finishRead?.(null);
+    await engaging;
+
+    expect(useProjectLock.getState().path).toBe(BROWSER_AUTOSAVE_LOCK_PATH);
+    expect(useProjectLock.getState().status).toBe("held-by-me");
+  });
+
+  it("releases a provider lock won by an open that became stale before its acquire resolved", async () => {
+    const base = useProjectLock.getState().provider as ReturnType<typeof fakeProvider>;
+    let finishAcquire: ((result: LockCasResult) => void) | undefined;
+    const release = vi.fn(base.release);
+    useProjectLock.setState({
+      provider: {
+        ...base,
+        read: async () => null,
+        tryAcquire: () => new Promise<LockCasResult>((resolve) => { finishAcquire = resolve; }),
+        release,
+      },
+    });
+    reserveProjectLock(PATH);
+    const opening = useProjectLock.getState().openProject(PATH);
+    await Promise.resolve();
+    closeProjectLock();
+    const won = withToken({ instanceId: useProjectLock.getState().instanceId, acquiredAt: Date.now(), heartbeatAt: Date.now() });
+    finishAcquire?.({ acquired: true, record: won });
+    await opening;
+
+    expect(release).toHaveBeenCalledWith(PATH, won.token);
+    expect(useProjectLock.getState().path).toBeNull();
+    expect(useProjectLock.getState().status).toBe("unlocked");
+  });
+
   it("acquires directly on an unlocked project", async () => {
     const result = await useProjectLock.getState().openProject(PATH);
     expect(result).toEqual({ status: "held-by-me", readOnly: false });
@@ -618,6 +680,47 @@ describe("releaseLock", () => {
     useProjectLock.setState({ path: PATH, status: "held-by-other-live", record: other });
     await useProjectLock.getState().releaseLock();
     expect(provider.store.has(PATH)).toBe(true); // untouched
+  });
+
+  it("detaches before a slow provider release resolves, so a newer project is not cleared", async () => {
+    const base = useProjectLock.getState().provider as ReturnType<typeof fakeProvider>;
+    let finishRelease: (() => void) | undefined;
+    useProjectLock.setState({
+      provider: { ...base, release: () => new Promise<boolean>((resolve) => { finishRelease = () => resolve(true); }) },
+    });
+    await useProjectLock.getState().openProject(PATH);
+
+    const releasing = useProjectLock.getState().releaseLock();
+    expect(useProjectLock.getState().path).toBeNull();
+    const newer = withToken({ instanceId: useProjectLock.getState().instanceId, acquiredAt: Date.now(), heartbeatAt: Date.now() });
+    useProjectLock.setState({ path: "/projects/new.dwk", record: newer, status: "held-by-me" });
+    finishRelease?.();
+    await releasing;
+
+    expect(useProjectLock.getState().path).toBe("/projects/new.dwk");
+    expect(useProjectLock.getState().record).toEqual(newer);
+  });
+});
+
+describe("closeProject", () => {
+  it("detaches immediately and releases this instance's own record", async () => {
+    const provider = useProjectLock.getState().provider as ReturnType<typeof fakeProvider>;
+    await useProjectLock.getState().openProject(PATH);
+    closeProjectLock();
+    expect(useProjectLock.getState().path).toBeNull();
+    expect(useProjectLock.getState().record).toBeNull();
+    await Promise.resolve();
+    expect(provider.store.has(PATH)).toBe(false);
+  });
+
+  it("detaches locally without releasing another instance's record", async () => {
+    const provider = useProjectLock.getState().provider as ReturnType<typeof fakeProvider>;
+    const other = withToken({ instanceId: "someone-else", acquiredAt: 1, heartbeatAt: Date.now() });
+    provider.store.set(PATH, other);
+    useProjectLock.setState({ path: PATH, status: "held-by-other-live", record: other });
+    closeProjectLock();
+    expect(useProjectLock.getState().path).toBeNull();
+    expect(provider.store.get(PATH)).toEqual(other);
   });
 });
 

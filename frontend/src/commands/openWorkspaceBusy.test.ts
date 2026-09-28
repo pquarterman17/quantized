@@ -13,6 +13,7 @@ import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { openFilePicker } from "../lib/openFilePicker";
 import { WORKSPACE_FORMAT } from "../lib/workspace";
 import { usePendingOps } from "../store/pendingOps";
+import { useImportBatch } from "../store/importBatch";
 import { useApp } from "../store/useApp";
 
 vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
@@ -49,6 +50,7 @@ beforeEach(() => {
   vi.mocked(askConfirm).mockReset();
   vi.mocked(openFilePicker).mockReset();
   usePendingOps.setState({ ops: [] });
+  useImportBatch.setState({ running: false });
   useApp.setState({ datasets: [], activeId: null, selectedIds: [] });
 });
 
@@ -88,9 +90,21 @@ describe("Open workspace — busy state", () => {
     runCommand("open-workspace");
     expect(usePendingOps.getState().ops).toHaveLength(0);
   });
+
+  it("does not open the picker while an import is running", () => {
+    useImportBatch.setState({ running: true });
+    runCommand("open-workspace");
+    expect(openFilePicker).not.toHaveBeenCalled();
+  });
 });
 
 describe("Append workspace — busy state", () => {
+  it("does not open the picker while an import is running", () => {
+    useImportBatch.setState({ running: true });
+    runCommand("append-workspace");
+    expect(openFilePicker).not.toHaveBeenCalled();
+  });
+
   it("registers a busy op labeled 'Appending workspace…'", async () => {
     const { file, release } = deferredFile(WS);
     runCommand("append-workspace");
