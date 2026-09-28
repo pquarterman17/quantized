@@ -2578,6 +2578,37 @@ describe("the Origin-apply half stays lazily reachable (BUNDLE_HEADROOM slice 1)
   });
 });
 
+// KaTeX (the equation preview, audit P2.7 stretch) is a lazy-only dependency.
+// lib/katexRender.ts is the one module that value-imports it (and its
+// stylesheet), and lib/katexLazy.ts reaches THAT only through a dynamic
+// import(). A value import anywhere else -- or a static import of katexRender
+// -- would fold ~270 kB into whatever chunk hosts it, and from an eager file
+// into the startup bundle. `import type` is erased and allowed.
+describe("KaTeX stays behind its lazy seam (P2.7 stretch)", () => {
+  const valueImport = (spec: string) => new RegExp(`^\\s*import\\s+(?!type\\b)[^;]*?["']${spec}["']`, "m");
+
+  it("only lib/katexRender.ts value-imports katex or its stylesheet", () => {
+    const pattern = valueImport(`katex(/[^"']*)?`);
+    const importers = sources()
+      .filter(([, src]) => pattern.test(src))
+      .map(([p]) => p);
+    expect(importers, "load KaTeX through lib/katexLazy.ts's loadTexRenderer()").toEqual(["./lib/katexRender.ts"]);
+    const render = sources().find(([p]) => p === "./lib/katexRender.ts");
+    expect(render?.[1] ?? "", "the stylesheet loads with the library").toContain('import "katex/dist/katex.min.css";');
+  });
+
+  it("nothing imports katexRender statically; lib/katexLazy.ts imports it dynamically", () => {
+    const pattern = valueImport(`[^"']*/katexRender`);
+    const offenders = sources()
+      .filter(([, src]) => pattern.test(src))
+      .map(([p]) => p);
+    expect(offenders).toEqual([]);
+    const loader = sources().find(([p]) => p === "./lib/katexLazy.ts");
+    expect(loader, "lib/katexLazy.ts not found").toBeDefined();
+    expect(loader?.[1] ?? "").toContain('import("./katexRender")');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // Lazy action seams (bundle diet, 2026-09-14 — 919,781 -> 910,172 B eager).
 //

@@ -4845,13 +4845,47 @@ violin, bar, strip, or summary plots.
     were added after the undo snapshot); a codec failure carries even models
     the library holds (telling which needs the unloadable chunk; the save
     drops them again).
-- [ ] Stretch: pretty LaTeX rendering while Python remains editable source.
+- [x] Stretch: pretty LaTeX rendering while Python remains editable source.
+  **Done 2026-09-28.** A read-only preview under the equation field
+  (`curvefit/EquationPreview.tsx`, mounted by `EquationEditor`) redraws as
+  the user types (`A*exp(-x/tau) + c` -> `y = A\,e^{-x/\tau} + c`); the
+  Python text stays the only editable source (the preview is aria-hidden,
+  nothing is parsed back). `lib/equationLatex.ts` is a pure converter that
+  mirrors `calc/fit_equation_syntax.py` token for token: `**` = `^`
+  right-associative (`2^3^2` -> `2^{3^{2}}`, matching the pinned backend
+  semantics), the two unary-minus encodings, one-argument functions only
+  (a test reads the backend's `FUNCTION_NAMES` and requires the same set),
+  `/` as `\frac` (inline inside exponents), Greek-named parameters as
+  letters, `x_0`/`A0` subscripts, other multi-letter names upright. Anything
+  the backend rejects, or that it cannot draw faithfully (non-ASCII digits,
+  names with characters other than ASCII/Greek letters, digits, `_` and
+  subscript digits), gives null and an empty box; it never throws (fuzz of
+  3,000 generated inputs plus 100k-deep nesting; every non-null output
+  renders under KaTeX `strict: "error"`). The preview is also blank while the
+  validator reports an error. KaTeX 0.18.9 (MIT; its one dependency,
+  commander, MIT; Python license guard `test_no_gpl_in_runtime_deps` still
+  green) is lazy: `lib/katexRender.ts` holds the only value import of katex
+  and its stylesheet, reached solely through `lib/katexLazy.ts`'s
+  `import("./katexRender")` on the `lib/onDemand` seam (no retry on failure,
+  like `importDatasetsLazy`); `architecture.test.ts` pins both halves
+  (sabotage-verified). Measured `npm ci`-fresh, `.vite` wiped: eager JS
+  864,140 -> 864,148 B (+8 B: the shared `ConfirmDialog` chunk exports
+  `onDemand` to one more chunk; budget pin untouched), eager CSS unchanged
+  (86,646 B); the lazy `katexRender` chunk is 259,026 B JS + 29,797 B CSS,
+  plus 59 KaTeX font files (1.07 MB, fetched only as glyphs need them).
+  Known and left: KaTeX's stylesheet lists woff/ttf fallbacks beside woff2,
+  so ~0.8 MB of those files ship in the package though no supported engine
+  fetches them (the app's own fonts are woff2-only); trimming them needs a
+  build transform. Tests: `lib/equationLatex.test.ts` (69),
+  `EquationPreview.test.tsx` (7), `EquationPreview.loadFailure.test.tsx`
+  (2), one real-KaTeX integration test in `EquationEditor.test.tsx`.
 - **Progress 2026-09-25:** slices 1-3 plus a self-review round (identifier
   rule restored to the historical one; a damaged storage slot is moved aside
   rather than overwritten; one description field; the validate response
   type comes from the generated schema; the registry table also refuses a
   held start outside its bounds). Gates green, golden unchanged, eager
-  bundle 845.0 -> 845.1 kB (budget 846.1). Open: the stretch box, saved
+  bundle 845.0 -> 845.1 kB (budget 846.1). Open: the stretch box (done
+  2026-09-28, above), saved
   models in the .dwk (above), and one shared row parser for
   `lib/fitParams` + `lib/equationRows`.
 - **Review round 2 (2026-09-26, coordinator code review, nine findings):**
