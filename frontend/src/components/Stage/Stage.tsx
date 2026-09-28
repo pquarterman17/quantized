@@ -49,9 +49,11 @@ const TABS = [
 export default function Stage() {
   const stageTab = useApp((s) => s.stageTab);
   const setStageTab = useApp((s) => s.setStageTab);
+  // A snapshot window always carries its frozen bundle (sanitizePlotWindows
+  // drops one without), so its kind alone says it can render.
   const hasRenderableContent = useApp((s) =>
     s.datasets.length > 0 ||
-    s.plotWindows.some((w) => w.kind === "snapshot" && w.snapshot !== undefined) ||
+    s.plotWindows.some((w) => w.kind === "snapshot") ||
     s.pages.length > 0 ||
     s.reports.length > 0 ||
     s.originFigures.length > 0 ||
