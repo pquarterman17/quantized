@@ -100,8 +100,6 @@ import {
 import { useApp } from "./useApp";
 import { beginProjectLockOperation, isCurrentProjectLockOperation } from "./projectLockEpoch";
 
-export { beginProjectLockOperation, isCurrentProjectLockOperation };
-
 // `createInMemoryLockProvider` lives in its own sibling module
 // (store/inMemoryLockProvider.ts) — extracted under the 500-line
 // god-module ceiling (F1's post-await re-validation pushed this file
@@ -321,6 +319,8 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
     const myEpoch = beginProjectLockOperation();
     const { provider, instanceId } = get();
     const now = Date.now();
+    // Every non-acquiring outcome: never assume success, and always zero the streak (a PRIOR
+    // path's leftover count must not keep the heartbeat alive against a record that isn't ours).
     const failClosed = (status: LockStatus, record: LockRecord | null): OpenResult => {
       if (!isCurrentProjectLockOperation(myEpoch)) return SUPERSEDED_OPEN;
       set({ status, record, path, openedAsCopy: false, unverifiableHeartbeats: 0 });
@@ -335,7 +335,7 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
     if (!isCurrentProjectLockOperation(myEpoch)) return SUPERSEDED_OPEN;
     const status = classifyLock(current, instanceId, now);
     if (status !== "unlocked" && status !== "held-by-me") {
-      return failClosed(status, current);
+      return failClosed(status, current); // read-only (live OR stale): a stale lock is taken over only via explicit takeOverEditing (L0.47)
     }
     let result: LockCasResult;
     try {
@@ -350,14 +350,14 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
       return SUPERSEDED_OPEN;
     }
     if (!result.acquired) {
-      return failClosed(statusFromRefusal(result, instanceId, Date.now()), result.record);
+      return failClosed(statusFromRefusal(result, instanceId, Date.now()), result.record); // lost the read->acquire race: report what the CAS saw
     }
     set({
       status: "held-by-me",
       record: result.record,
       path,
       openedAsCopy: false,
-      unverifiableHeartbeats: 0,
+      unverifiableHeartbeats: 0, // F3: a fresh acquire starts a clean streak, never a PRIOR path's
       instanceId: result.record?.instanceId ?? instanceId, // identity adoption — see INSTANCE_ID's doc
     });
     return { status: "held-by-me", readOnly: false };
