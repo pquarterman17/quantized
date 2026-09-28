@@ -3003,12 +3003,26 @@ than fixed here. NIT 7 (the commit trailer) is this session's standing
 attribution convention, not a code finding, and is not actionable from inside
 a plan edit.
 
-- [ ] Decode Bruker RAW's `alpha1` (byte 624) so `lib/xrdWavelength.ts`'s
+- [x] Decode Bruker RAW's `alpha1` (byte 624) so `lib/xrdWavelength.ts`'s
   documented Kα1-over-average preference can fire for Bruker patterns.
-  `io/bruker_raw.py`'s own header documents the field; the metadata dict emits
-  only `alpha_average` at byte 616, so every Bruker RAW pattern currently
-  adopts the Kα1/Kα2 average as "the wavelength this pattern was measured at".
-  Backend change; needs a golden RAW fixture.
+  `io/bruker_raw.py` now decodes `alpha1` (byte 624) and `alpha2` (byte 632)
+  into metadata alongside `alpha_average` (byte 616), gated by a
+  plausibility guard (finite, 0.5–2.5 Å) AND consistency with the file's own
+  `alpha_average` (Kα1 alone within 2%; Kα2 additionally checked via the
+  standard (2·Kα1+Kα2)/3 weighted-average identity) — a legacy file with the
+  slots left zeroed, or a corrupt one, omits the field and `alpha_average`
+  stands, fail closed. `lib/xrdWavelength.ts` now reads `alpha1` (ordered
+  ahead of `alpha_average`, behind the xrdml `wavelength_a`) so the Kα1
+  preference fires for Bruker patterns too. Verified against the byte layout
+  documented in `io/bruker_raw.py`'s own header (offsets 616/624/632,
+  cross-checked against xylib's `bruker_raw.cpp`); sabotage-verified both the
+  decode and the consistency guard (disabling each made its guarding test
+  fail with the expected assertion, then restored to green). **The fixture
+  is synthetic** (built with the existing `_make_raw` byte-builder in
+  `tests/test_io_bruker_raw.py`, extended with `alpha_average`/`alpha1`/
+  `alpha2` params) — no real-world RAW file with non-zero byte-624/632
+  values has been checked against this decode yet; do that against a real
+  instrument file before fully trusting it on real corpora.
 - [~] Per-peak fit uncertainties. **Filled for the model-fit path; the legacy
   producers still write null.** `calc/peak_multifit.fit_multi_peak` and
   `calc/peak_fit.fit_peak` (the Peaks workshop's "Fit together" / "Fit
