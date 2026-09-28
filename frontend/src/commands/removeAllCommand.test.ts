@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { createPageDocument } from "../lib/pageDocumentActions";
 import { useImportBatch } from "../store/importBatch";
+import { createInMemoryLockProvider, useProjectLock } from "../store/projectLock";
 import { useApp } from "../store/useApp";
 import { buildFileCommands } from "./fileCommands";
 
@@ -66,6 +67,31 @@ describe("File ▸ Remove all", () => {
     await Promise.resolve();
 
     expect(useApp.getState().datasets).toHaveLength(1);
+  });
+
+  it("releases the project lock, but only once the workspace has actually been cleared", async () => {
+    useProjectLock.setState({ provider: createInMemoryLockProvider(useProjectLock.getState().instanceId), path: null, record: null, status: "unlocked", openedAsCopy: false });
+    await useProjectLock.getState().openProject("/p/loaded.dwk");
+    useApp.setState({
+      datasets: [{ id: "d1", name: "data", data: { time: [], values: [], labels: [], units: [], metadata: {} } }],
+      currentProject: { name: "loaded.dwk", path: "/p/loaded.dwk" },
+    });
+    // A clear that throws must leave the loaded project's lock in place, so
+    // the lock may only be dropped after `clearAll` has returned.
+    const clearAll = useApp.getState().clearAll;
+    let lockDuringClear: string | null | undefined;
+    useApp.setState({ clearAll: () => { lockDuringClear = useProjectLock.getState().path; clearAll(); } });
+    vi.mocked(askConfirm).mockResolvedValue(true);
+    try {
+      runRemoveAll();
+      await Promise.resolve();
+    } finally {
+      useApp.setState({ clearAll });
+    }
+
+    expect(lockDuringClear).toBe("/p/loaded.dwk");
+    expect(useProjectLock.getState().path).toBeNull();
+    expect(useApp.getState().currentProject).toBeNull();
   });
 
   it("undo restores recorded macro steps and technique-specific view memory", async () => {

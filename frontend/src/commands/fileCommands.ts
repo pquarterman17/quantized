@@ -320,8 +320,8 @@ export function buildFileCommands(s: StoreGet): Action[] {
           // Re-check at commit time: an import may have started while the
           // confirmation dialog was open.
           if (rejectIfImportRunning()) return;
-          closeProjectLock();
           s().clearAll();
+          closeProjectLock(); // after the clear: a throwing clear keeps the loaded project's lock
           toast("removed all datasets", "ok");
         });
       },
