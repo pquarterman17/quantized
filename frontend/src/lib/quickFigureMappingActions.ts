@@ -26,6 +26,10 @@ export type QuickColumnAssignment =
   | { role: "x" }
   | { role: "y" }
   | { role: "ignore" }
+  /** Single-slot roles: a label column (per-point text) and a grouping
+   *  column (one series per level). Assigning either to a new column moves it. */
+  | { role: "label" }
+  | { role: "group" }
   | { role: "error"; target: number; axis: "x" | "y"; side: ErrorSide };
 
 const uniqueSorted = (values: readonly number[]): number[] => [...new Set(values)].sort((a, b) => a - b);
@@ -53,6 +57,8 @@ export function initialQuickFigureMapping(dataset: Dataset): QuickFigureMapping 
 export function assignmentFor(mapping: QuickFigureMapping, channel: number): QuickColumnAssignment {
   if (mapping.xKey === channel) return { role: "x" };
   if (mapping.yKeys.includes(channel)) return { role: "y" };
+  if (mapping.groupKey === channel) return { role: "group" };
+  if (mapping.labelKey === channel) return { role: "label" };
   const binding = mapping.errorBindings.find((candidate) => candidate.channel === channel);
   if (binding) return { role: "error", target: binding.target, axis: binding.axis, side: binding.side };
   if (mapping.ignoredKeys.includes(channel)) return { role: "ignore" };
@@ -105,6 +111,11 @@ export function assignQuickFigureColumn(
       (binding) => binding.channel !== channel && binding.target !== channel,
     ),
     ignoredKeys: mapping.ignoredKeys.filter((candidate) => candidate !== channel),
+    // Optional single-slot roles are carried only while set (and not the
+    // channel being reassigned), so a mapping that never uses them keeps
+    // exactly its pre-existing shape (templates, snapshots, equality).
+    ...(mapping.groupKey != null && mapping.groupKey !== channel ? { groupKey: mapping.groupKey } : {}),
+    ...(mapping.labelKey != null && mapping.labelKey !== channel ? { labelKey: mapping.labelKey } : {}),
   };
   const result = ((): QuickFigureMapping => {
     switch (assignment.role) {
@@ -112,6 +123,8 @@ export function assignQuickFigureColumn(
       case "x": return { ...base, xKey: channel };
       case "y": return { ...base, yKeys: uniqueSorted([...base.yKeys, channel]) };
       case "ignore": return { ...base, ignoredKeys: uniqueSorted([...base.ignoredKeys, channel]) };
+      case "group": return { ...base, groupKey: channel };
+      case "label": return { ...base, labelKey: channel };
       case "error":
         return {
           ...base,

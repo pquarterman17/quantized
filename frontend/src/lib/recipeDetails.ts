@@ -155,6 +155,8 @@ function quickPlotDetails(row: RecipeDescriptor, t: RecipeSourceInput["quickPlot
   const referenced = new Set<number>();
   if (t.mapping.xKey !== null) referenced.add(t.mapping.xKey);
   for (const y of t.mapping.yKeys) referenced.add(y);
+  if (t.mapping.groupKey != null) referenced.add(t.mapping.groupKey);
+  if (t.mapping.labelKey != null) referenced.add(t.mapping.labelKey);
   for (const b of t.mapping.errorBindings) {
     referenced.add(b.channel);
     if (b.target >= 0) referenced.add(b.target);

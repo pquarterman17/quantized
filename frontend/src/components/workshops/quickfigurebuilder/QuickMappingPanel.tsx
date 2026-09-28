@@ -20,7 +20,7 @@ function roleValue(assignment: QuickColumnAssignment): string {
 }
 
 function parseRole(value: string): QuickColumnAssignment {
-  if (!value.startsWith("error:")) return { role: value as "unassigned" | "x" | "y" | "ignore" };
+  if (!value.startsWith("error:")) return { role: value as "unassigned" | "x" | "y" | "ignore" | "label" | "group" };
   const [, axis, target, side] = value.split(":");
   return { role: "error", axis: axis as "x" | "y", target: Number(target), side: side as ErrorSide };
 }
@@ -58,6 +58,17 @@ export default function QuickMappingPanel({ data, mapping, onAssign, onUseAcquis
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => assignDropped(event, { role: "ignore" })}
         ><span>Ignore</span><strong>{mapping.ignoredKeys.length || "Drop here"}</strong></div>
+        {(["group", "label"] as const).map((role) => {
+          const key = role === "group" ? mapping.groupKey : mapping.labelKey;
+          return (
+            <div
+              key={role}
+              className={key == null ? "qzk-quick-builder-zone" : "qzk-quick-builder-zone qzk-active"}
+              onDragOver={(event) => event.preventDefault()}
+              onDrop={(event) => assignDropped(event, { role })}
+            ><span>{role === "group" ? "Group by" : "Point labels"}</span><strong>{key == null ? "Drop here" : data.labels[key]}</strong></div>
+          );
+        })}
       </div>
 
       <ul className="qzk-quick-builder-columns">
@@ -78,6 +89,8 @@ export default function QuickMappingPanel({ data, mapping, onAssign, onUseAcquis
                 <option value="unassigned">Unassigned</option>
                 <option value="x">X axis</option>
                 <option value="y">Y series</option>
+                <option value="group">Group by (one series per level)</option>
+                <option value="label">Point labels</option>
                 <option value="ignore">Ignore</option>
                 <option value="error:x:-1:both">X error (±)</option>
                 <option value="error:x:-1:+">X error (+)</option>
@@ -94,7 +107,7 @@ export default function QuickMappingPanel({ data, mapping, onAssign, onUseAcquis
           );
         })}
       </ul>
-      <p className="qzk-quick-builder-help">Drag columns into X, Y, or Ignore, or use each column’s role menu. Error roles always name their target.</p>
+      <p className="qzk-quick-builder-help">Drag columns into X, Y, Group by, Point labels, or Ignore, or use each column’s role menu. Error roles always name their target.</p>
     </>
   );
 }

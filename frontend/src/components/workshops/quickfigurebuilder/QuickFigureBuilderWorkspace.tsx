@@ -5,6 +5,7 @@ import {
   canCreateQuickFigure,
   incompleteErrorNotices,
   mappingReady,
+  pointLabelBlock,
   roleFilteredYKeys,
 } from "../../../lib/quickFigureMapping";
 import {
@@ -21,6 +22,7 @@ import { askParams } from "../../overlays/ParamDialog";
 import { useApp } from "../../../store/useApp";
 import GraphPreview from "../graphbuilder/GraphPreview";
 import QuickMappingPanel from "./QuickMappingPanel";
+import QuickRoleSummary from "./QuickRoleSummary";
 
 const SCHEMA_SCOPE_LABEL = "This data type and schema";
 const WORKBOOK_SCOPE_LABEL = "This workbook only";
@@ -74,20 +76,23 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
   // "N Y series" above and what actually renders unexplained.
   const roleFilteredYChannels = roleFilteredYKeys(dataset, mapping);
   const incompleteErrorNotice = incompleteErrorNotices(dataset, mapping);
-  // FIX 3(a): when BOTH a role-filtered Y channel and an incomplete error
-  // pair are present, both notices render -- the disabled reason/aria must
-  // say so too, not silently report only the higher-priority one.
-  const jointBlock = roleFilteredYChannels.length > 0 && incompleteErrorNotice.length > 0;
+  const labelBlock = pointLabelBlock(dataset, mapping);
+  // FIX 3(a): when several blocking notices render at once (role-filtered Y,
+  // incomplete error pair, Label role), the disabled reason/aria must name
+  // every one, not silently report only the higher-priority gate reason.
+  const also: [reason: string, id: string][] = [];
+  if (roleFilteredYChannels.length > 0 && incompleteErrorNotice.length > 0) {
+    also.push([incompleteErrorNotice[0], "quick-builder-error-warning"]);
+  }
+  if (labelBlock && !gate.ok && gate.reasonId !== "quick-builder-label-warning") {
+    also.push([labelBlock, "quick-builder-label-warning"]);
+  }
   const createDisabledReason = gate.ok
     ? undefined
-    : jointBlock
-      ? `${gate.reason}. Also blocked: ${incompleteErrorNotice[0]}.`
+    : also.length > 0
+      ? `${gate.reason}. Also blocked: ${also.map(([reason]) => reason).join("; ")}.`
       : gate.reason;
-  const createReasonId = gate.ok
-    ? undefined
-    : jointBlock
-      ? "quick-builder-role-warning quick-builder-error-warning"
-      : gate.reasonId;
+  const createReasonId = gate.ok ? undefined : [gate.reasonId, ...also.map(([, id]) => id)].join(" ");
   const createQuickFigureFromMapping = useApp((s) => s.createQuickFigureFromMapping);
   const saveQuickPlotTemplate = useApp((s) => s.saveQuickPlotTemplate);
   // H5a: "Save Quick Plot Template…" is gated on the SAME `canCreateQuickFigure`
@@ -126,7 +131,7 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
         <section className="qzk-quick-builder-card" aria-labelledby="quick-builder-columns">
           <div className="qzk-quick-builder-step">1</div>
           <h2 id="quick-builder-columns">Data columns</h2>
-          <p>Assign the axes and uncertainty columns explicitly.</p>
+          <p>Assign the axes, uncertainty, grouping, and point-label columns explicitly.</p>
           <QuickMappingPanel
             data={dataset.data}
             mapping={mapping}
@@ -153,6 +158,7 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
               {incompleteErrorNotice.map((notice) => <p key={notice}>{notice}.</p>)}
             </div>
           )}
+          {mappingReady(mapping) && <QuickRoleSummary dataset={dataset} mapping={mapping} labelBlock={labelBlock} />}
           <GraphPreview render={preview} />
         </section>
 

@@ -792,8 +792,29 @@ Unknown and ambiguous are different states:
 The focused window should reuse the canonical plot document and editor logic.
 It is a fast mapping and initial-style surface, not an export-only builder.
 
-- [ ] **Left — data roles:** worksheet columns can be assigned by drag/drop or
+- [x] **Left — data roles:** worksheet columns can be assigned by drag/drop or
   menus to X, Y, X error, Y error, label, and grouping roles.
+  2026-09-28: X / Y / X error / Y error / Ignore already existed; added
+  **Group by** and **Point labels** (role menu + drop zones,
+  `QuickMappingPanel.tsx`; exclusive single-slot `groupKey`/`labelKey` on
+  `QuickFigureMapping`, optional so pre-role templates parse unchanged). No
+  new PlotView/FigureDocument field: grouping commits as the existing
+  `FigureBindings.groupKey` (so the created window's Stage splits the legend
+  one entry per level, same `applyGroupSplit` the preview now uses), and
+  labels commit as ordinary data-anchored `view.annotations` sharing one
+  Object Manager `groupId` (the "Label peaks" mechanism,
+  `lib/quickFigureLabels.ts`). Create gate fails closed on a Label role with
+  zero labels or more than 500. Quick Plot templates capture, re-key, and
+  sanitize both roles (refusal-or-nothing). Evidence:
+  `lib/quickFigureRoles.test.ts`, `store/quickFigureRoles.test.ts`
+  (document bindings + window view + live facade + one undo + `.dwk`
+  round trip + template save/`.dwk`/apply),
+  `QuickFigureBuilderRoles.test.tsx`, and the new grouped case in
+  `usePlotPayload.quickFigureParity.test.ts` (created figure's rendered
+  legend == preview's: `R (sample=A)`, `R (sample=B)`). Sabotage: dropping
+  `groupKey` from `createFigureDocument` in `store/quickFigureCreate.ts`
+  fails 6 of those tests. Eager JS +1,280 B (864,140 -> 865,420; budget
+  866,358 unchanged).
 - [x] **Center — live preview:** every accepted mapping/style change is visible
   before creation; Cancel produces no figure or data change. Verified 2026-09-28: `QuickFigureBuilderWorkspace.tsx` recomputes `quickFigurePreview(dataset.data, mapping, style, ...)` from React state on every render (no separate "apply" step); pinned by `QuickFigureBuilderWorkspace.test.tsx`'s "Cancel clears only the transient builder target — no plot, worksheet mutation, or template left behind" and `quickFigurePreview.test.ts`'s mapping-change cases.
 - [ ] **Right — concise setup:** detected series, plot type, color preset,
@@ -3182,8 +3203,20 @@ PR A acceptance gates:
   off turned 4 of them red.
 - [x] Right-click an unknown CSV: Quick Plot is disabled with a short reason;
   Configure Quick Plot remains available. Verified 2026-09-28: `frontend/src/lib/quickPlot.ts:95`'s `quickPlotProfile` returns `CONFIGURE_QUICK_PLOT_REASON` for technique `"generic"`, and `lib/quickPlotActions.ts`'s `datasetQuickPlotActions` gates only `"dataset.quickPlot"` (never `"dataset.configureQuickPlot"`); pinned by `components/Library/datasetRowMenu.test.ts`'s "Quick Plot is disabled with a reason for a generic dataset row" plus the new "Configure Quick Plot… remains enabled on the SAME generic (unknown) dataset row Quick Plot refuses".
-- [ ] Cancel the Quick Figure Builder: no plot, worksheet mutation, or template
-  is left behind.
+- [x] Cancel the Quick Figure Builder: no plot, worksheet mutation, or template
+  is left behind. 2026-09-28: the existing
+  `QuickFigureBuilderWorkspace.test.tsx` "Cancel clears only the transient
+  builder target..." checked only top-level store references (no window
+  count, no undo history, `datasets` by reference only, an always-empty
+  template list). New test in the same file, "Cancel after using every role
+  leaves no window, figure, template, history entry, live-facade change, or
+  in-place dataset edit", assigns X / Y / Y error / Group by / Point labels
+  and a style, then asserts windows, focus, figures, a pre-seeded template
+  list, a deep dataset snapshot, `history`, and the live
+  `groupKey`/`annotations` are all unchanged. Sabotage-verified twice
+  (restored after each): an in-place `dataset.channelRoles` write in the
+  builder's `assign` fails only the new test (the old one still passes); a
+  `recordHistory` call in the Cancel handler fails only the new test.
 - [x] Switch Tree -> Tiles -> Details: selection and active content remain
   stable, with no duplicated Library objects. 2026-09-14: the existing
   `components/Library/Library.test.tsx` "selection remains stable across

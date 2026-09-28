@@ -130,6 +130,8 @@ function referencedChannels(mapping: QuickFigureMapping): number[] {
   const out: number[] = [];
   if (mapping.xKey !== null) out.push(mapping.xKey);
   out.push(...mapping.yKeys);
+  if (mapping.groupKey != null) out.push(mapping.groupKey);
+  if (mapping.labelKey != null) out.push(mapping.labelKey);
   for (const b of mapping.errorBindings) {
     out.push(b.channel);
     if (b.target >= 0) out.push(b.target);
@@ -283,6 +285,11 @@ export function resolveTemplate(template: QuickPlotTemplate, dataset: Dataset): 
     const target = b.target >= 0 ? resolve(b.target, `${role} target`) : b.target; // -1 sentinel passes through
     if (channel !== null && target !== null) errorBindings.push({ channel, target, axis: b.axis, side: b.side });
   });
+  // Grouping / Label roles are mapped columns too: refusal-or-nothing, never
+  // a figure that silently lost its legend split or its point labels.
+  const { groupKey, labelKey } = template.mapping;
+  const group = groupKey != null ? resolve(groupKey, "Group by") : null;
+  const label = labelKey != null ? resolve(labelKey, "Point labels") : null;
 
   if (unmatched.length > 0) {
     return { ok: false, unmatched, reason: `${unmatched.length} column${unmatched.length === 1 ? "" : "s"} no longer match: ${unmatched.join(", ")}` };
@@ -301,6 +308,8 @@ export function resolveTemplate(template: QuickPlotTemplate, dataset: Dataset): 
       ignoredKeys: template.mapping.ignoredKeys
         .map((ch) => resolveChannel(template, currentLabels, currentUnits, ch))
         .filter((ch): ch is number => ch !== null),
+      ...(group !== null ? { groupKey: group } : {}),
+      ...(label !== null ? { labelKey: label } : {}),
     },
   };
 }
@@ -337,6 +346,10 @@ function sanitizeMapping(v: unknown): QuickFigureMapping | null {
     yKeys: o.yKeys as number[],
     errorBindings: sanitizeErrorBindings(o.errorBindings),
     ignoredKeys: o.ignoredKeys as number[],
+    // Optional roles (absent on pre-role templates): kept only when a valid
+    // channel index, so a malformed value degrades to "unassigned".
+    ...(Number.isInteger(o.groupKey) && (o.groupKey as number) >= 0 ? { groupKey: o.groupKey as number } : {}),
+    ...(Number.isInteger(o.labelKey) && (o.labelKey as number) >= 0 ? { labelKey: o.labelKey as number } : {}),
   };
 }
 
