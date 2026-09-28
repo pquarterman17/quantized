@@ -34,12 +34,13 @@ export -- and hog a threadpool token each -- forever.
 Everything else is kept free of global state: figures are built with the
 object-oriented API (``matplotlib.figure.Figure`` + an explicit Agg canvas, via
 ``new_figure``) -- never pyplot, so there is no global figure registry
-(``Gcf``) to register into or ``plt.close`` from -- and the one export-wide rc
-default (``svg.fonttype = "none"``) is applied per render inside the scope
-instead of by mutating the global ``rcParams`` at import time. ``new_figure``
-also asserts (loudly -- ``RuntimeError``, not a silent no-op) that it is only
-ever called from inside a ``render_scope``: the lock is a correctness
-requirement, not a convention a future renderer could accidentally skip.
+(``Gcf``) to register into or ``plt.close`` from -- and the export-wide rc
+defaults (``svg.fonttype = "none"``, ``pdf.fonttype = 42``) are applied per
+render inside the scope instead of by mutating the global ``rcParams`` at
+import time. ``new_figure`` also asserts (loudly -- ``RuntimeError``, not a
+silent no-op) that it is only ever called from inside a ``render_scope``: the
+lock is a correctness requirement, not a convention a future renderer could
+accidentally skip.
 
 matplotlib's own backend selection is left alone (no import-time
 ``matplotlib.use("Agg")``): the OO path here always attaches its own
@@ -91,8 +92,16 @@ P = ParamSpec("P")
 R = TypeVar("R")
 
 # Export-wide rc defaults, applied under every render's own rc (a caller's rc
-# wins on a clash). svg.fonttype "none": editable SVG <text>, not glyph outlines.
-BASE_RC: Mapping[str, Any] = {"svg.fonttype": "none"}
+# wins on a clash). svg.fonttype "none": editable SVG <text>, not glyph
+# outlines. pdf.fonttype 42 is the PDF analogue of that same intent --
+# matplotlib's own default (3) embeds each glyph as a Type 3 "draw procedure"
+# (bespoke per-document, not a real font program), which several PDF/print
+# pipelines (and some journal submission checkers) reject or rasterize; 42
+# wraps the actual TrueType outlines as a real, embedded, selectable font
+# (Type 0 / CIDFontType2) instead (PRIMARY_SOFTWARE_AUDIT_PLAN P3.6 -- found
+# via ``tests/test_export_copy_figure_vector.py``, which pins the embedded
+# subtype and fails under the matplotlib default).
+BASE_RC: Mapping[str, Any] = {"svg.fonttype": "none", "pdf.fonttype": 42}
 
 
 @contextmanager

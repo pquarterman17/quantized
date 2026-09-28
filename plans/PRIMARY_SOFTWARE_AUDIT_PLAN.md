@@ -8720,8 +8720,52 @@ was not raised.
 
 **Models:** GPT-5.6 Terra medium / Claude Sonnet 5.
 
-- [ ] Windows/macOS vector copy and 300-DPI raster fallback.
-- [ ] Expected bounding box, transparency, fonts, and scale.
+- [ ] Windows/macOS vector copy and 300-DPI raster fallback. "Copy figure" /
+  "Copy figure (vector)" (`frontend/src/lib/copyFigureCommand.ts`) have no
+  dedicated backend route -- both POST the same `FigureSpec` to
+  `POST /api/export/figure` (`fmt="png"` @ `COPY_FIGURE_DPI=300` /
+  `fmt="svg"`) and hand the bytes to `navigator.clipboard.write`. The
+  **300-DPI raster fallback is now verified server-side**
+  (`tests/test_export_copy_figure_raster.py`, via the real route + `TestClient`):
+  the PNG's `pHYs` chunk is 11811 px/m (300 DPI), pixel dims are figure
+  inches x dpi exactly, and the transparent-vs-opaque background is correct.
+  What is **NOT and cannot be verified from here** -- an owner/platform
+  check: the actual OS-clipboard paste into Word/PowerPoint (Windows) or
+  Keynote/Pages/Preview (macOS), i.e. whether the pasted bytes this route
+  produces are what those apps actually accept and render from the system
+  clipboard.
+- [x] ~~Expected bounding box, transparency, fonts, and scale.~~ VERIFIED
+  2026-09-28, server-side, against the real `POST /api/export/figure` route
+  (`tests/test_export_copy_figure_raster.py` +
+  `tests/test_export_copy_figure_vector.py`, 22 tests, ~6.5s): **bounding
+  box** -- the default (`tight_layout`) render's ink never touches the
+  canvas edge (no clipped title/axis labels) and stays under a third of the
+  canvas per side; an explicit `overrides.margins` request measurably
+  widens the rendered margin on every side (not just an internal axes-rect
+  number) while still not clipping. **Transparency** -- PNG alpha is 0 at
+  every corner when `transparent=true` and the opaque theme white (255)
+  otherwise; the SAME toggle flips the SVG background patch's `fill` between
+  `none` and `#ffffff` and the PDF background rect's paint operator between
+  `n` (no-op) and `f` (fill). **Fonts** -- SVG text stays real `<text>`
+  (`svg.fonttype: none`); **a real defect was found and fixed here**: PDF
+  export had no `pdf.fonttype` override, so it inherited matplotlib's
+  default Type 3 (bespoke per-document glyph procedures, not a real font --
+  several PDF/print pipelines reject or rasterize it) instead of the
+  intended real embedded font. Fixed in `calc/figure_render.py`'s `BASE_RC`
+  (`pdf.fonttype: 42`), which embeds real TrueType outlines as `Type0`/
+  `CIDFontType2`; sabotage-verified (reverted -> `Type3` reappears and the
+  new test fails -> restored). PDF text also confirmed to still use real
+  `Tj`/`TJ` show operators (decompressed content stream), not paths.
+  **Scale** -- the same figure at 1x/2x DPI and at 1x/2x figure geometry
+  gives exactly-proportional PNG pixel dimensions, SVG viewBox, and PDF
+  MediaBox (sabotage-verified separately: dropping the `dpi` kwarg into
+  `savefig_bytes` was confirmed to break the DPI/pixel-size tests before
+  being reverted). No PDF-parsing library was added -- `pdf.fonttype`/
+  MediaBox/paint-operator checks decompress the PDF's own Flate content
+  streams with stdlib `zlib`, following `test_export_vector_structure.py`'s
+  existing "no PDF library" convention. **NOT covered by these tests**:
+  pixel-exact rendering (deliberately, CI runs ubuntu/windows/mac) and the
+  OS-clipboard paste itself -- see the box above.
 - [x] ~~Office report export embeds the actual rendered figure when SVG is
   requested, not placeholder text.~~ DONE 2026-09-27. A report figure block
   may now carry `spec` (the exact `POST /api/export/figure` body);
