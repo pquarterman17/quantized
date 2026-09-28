@@ -224,6 +224,25 @@ describe("PlotLegend edge and corner resize", () => {
     expect(history).not.toHaveBeenCalled();
   });
 
+  it("once resizing, follows the pointer back inside the start threshold", async () => {
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} />);
+    const legend = container.querySelector(".qzk-legend") as HTMLElement;
+    setParentRect(container, { width: 400, height: 300 });
+    setParentRect(legend, { left: 50, top: 20, width: 120, height: 80 });
+    await waitFor(() => expect(container.querySelector(".qzk-legend-resize-e")).toBeInTheDocument());
+    const handle = container.querySelector(".qzk-legend-resize-e") as HTMLElement;
+    Object.defineProperties(handle, {
+      setPointerCapture: { value: vi.fn() },
+      hasPointerCapture: { value: () => true },
+      releasePointerCapture: { value: vi.fn() },
+    });
+    fireEvent.pointerDown(handle, { pointerId: 10, clientX: 170, clientY: 60, button: 0 });
+    fireEvent.pointerMove(handle, { pointerId: 10, clientX: 220, clientY: 60 });
+    fireEvent.pointerMove(handle, { pointerId: 10, clientX: 172, clientY: 60 });
+    fireEvent.pointerUp(handle, { pointerId: 10, clientX: 172, clientY: 60 });
+    expect(useApp.getState().legendSize).toEqual([122, 80]);
+  });
+
   it("cancels an in-progress preview if pointer capture is lost", async () => {
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} />);
     const legend = container.querySelector(".qzk-legend") as HTMLElement;

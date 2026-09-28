@@ -94,7 +94,9 @@ export default function LegendResizeHandles({ boxRef }: Props) {
     if (!gesture || !box || gesture.pointerId !== e.pointerId) return;
     const dx = e.clientX - gesture.x;
     const dy = e.clientY - gesture.y;
-    if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+    // The threshold only gates the START: once resizing, every move counts,
+    // including one back to within a few px of where the drag began.
+    if (!gesture.latest && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
     const next = resizeLegendRect(
       gesture.start, gesture.edge, dx, dy, gesture.bounds,
     );
