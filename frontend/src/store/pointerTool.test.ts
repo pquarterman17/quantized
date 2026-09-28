@@ -3,7 +3,7 @@
 // (same convention as history.test.ts/reductions' own slice tests) since the
 // factory itself needs `s.annotations` from the main store literal.
 
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 
 import { MAX_ANNOTATION_SIZE, MIN_ANNOTATION_SIZE } from "../lib/uplotOverlays";
 import { useApp } from "./useApp";
@@ -24,18 +24,6 @@ describe("legendXY (MAIN #18 — free legend position)", () => {
     expect(useApp.getState().legendXY).toEqual([0.2, 0.8]);
     useApp.getState().setLegendXY(null);
     expect(useApp.getState().legendXY).toBeNull();
-  });
-});
-
-describe("legend bounds", () => {
-  it("commits position and size atomically and clears an Origin frame anchor", () => {
-    const history = vi.spyOn(useApp.getState(), "recordHistory");
-    useApp.setState({ legendFrameXY: [0.2, 0.3], legendSize: null });
-    useApp.getState().setLegendBounds([0.1, 0.15], [240, 120]);
-    expect(useApp.getState().legendXY).toEqual([0.1, 0.15]);
-    expect(useApp.getState().legendFrameXY).toBeNull();
-    expect(useApp.getState().legendSize).toEqual([240, 120]);
-    expect(history).toHaveBeenCalledWith("resize legend");
   });
 });
 

@@ -1,5 +1,6 @@
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 
+import { commitLegendBounds, fitLegendToContents } from "../../store/legendResize";
 import { useApp } from "../../store/useApp";
 
 export type LegendResizeEdge = "n" | "ne" | "e" | "se" | "s" | "sw" | "w" | "nw";
@@ -48,8 +49,6 @@ interface Gesture {
 interface Props { boxRef: RefObject<HTMLDivElement | null> }
 
 export default function LegendResizeHandles({ boxRef }: Props) {
-  const setLegendBounds = useApp((s) => s.setLegendBounds);
-  const setLegendSize = useApp((s) => s.setLegendSize);
   const legendSize = useApp((s) => s.legendSize);
   const gestureRef = useRef<Gesture | null>(null);
   const previewRafRef = useRef<number | null>(null);
@@ -119,7 +118,7 @@ export default function LegendResizeHandles({ boxRef }: Props) {
     cancelPreview();
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     if (commit && gesture.latest) {
-      setLegendBounds(
+      commitLegendBounds(
         [gesture.latest.left / gesture.bounds.width, gesture.latest.top / gesture.bounds.height],
         [gesture.latest.width, gesture.latest.height],
       );
@@ -137,7 +136,7 @@ export default function LegendResizeHandles({ boxRef }: Props) {
       onPointerUp={(event) => finish(event, true)}
       onPointerCancel={(event) => finish(event, false)}
       onLostPointerCapture={(event) => finish(event, false)}
-      onDoubleClick={() => { if (legendSize) setLegendSize(null); }}
+      onDoubleClick={() => { if (legendSize) fitLegendToContents(); }}
     />
   ));
 }

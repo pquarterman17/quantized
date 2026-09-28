@@ -1,6 +1,21 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
+import { commitLegendBounds } from "../../store/legendResize";
+import { useApp } from "../../store/useApp";
 import { resizeLegendRect } from "./LegendResizeHandles";
+
+describe("commitLegendBounds", () => {
+  it("commits position and size atomically and clears an Origin frame anchor", () => {
+    const history = vi.spyOn(useApp.getState(), "recordHistory");
+    useApp.setState({ legendFrameXY: [0.2, 0.3], legendSize: null });
+    commitLegendBounds([0.1, 0.15], [240, 120]);
+    expect(useApp.getState().legendXY).toEqual([0.1, 0.15]);
+    expect(useApp.getState().legendFrameXY).toBeNull();
+    expect(useApp.getState().legendSize).toEqual([240, 120]);
+    expect(history).toHaveBeenCalledWith("resize legend");
+    history.mockRestore();
+  });
+});
 
 const bounds = { width: 400, height: 300 };
 const start = { left: 50, top: 40, width: 160, height: 100 };
