@@ -557,13 +557,21 @@ body {
 }
 .qzk-fig-row-tree:hover .qzk-origin-figure-actions,
 .qzk-fig-row-tree:focus-within .qzk-origin-figure-actions,
-.qzk-fig-row-tree.selected .qzk-origin-figure-actions,
-/* A disabled unresolved graph cannot focus/select its main button. Keep its
-   recovery controls visible so keyboard/touch users can still choose a source. */
-.qzk-fig-row-tree.unresolved .qzk-origin-figure-actions {
+.qzk-fig-row-tree.selected .qzk-origin-figure-actions {
   opacity: 1;
   visibility: visible;
   pointer-events: auto;
+}
+/* A disabled unresolved graph cannot focus/select its main button. Keep its
+   recovery controls visible so keyboard/touch users can still choose a source. */
+.qzk-fig-row-tree.unresolved .qzk-origin-figure-actions {
+  position: static;
+  align-self: center;
+  max-width: 60%;
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
 }
 .qzk-fig-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: default; color: var(--text); font-size: var(--font-size-sm); }
 .qzk-fig-item:hover:not(:disabled) { border-color: var(--accent); }

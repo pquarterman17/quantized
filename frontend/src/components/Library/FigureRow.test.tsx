@@ -96,7 +96,11 @@ describe("FigureRow — PR C additions", () => {
   it("keeps source-recovery controls exposed when the unresolved main button cannot receive focus", () => {
     const { container } = render(<FigureRow entry={entry("g2", null)} treeMode />);
     expect(container.querySelector(".qzk-fig-row-tree")).toHaveClass("unresolved");
-    expect(screen.getByRole("toolbar", { name: "Recovered graph actions" })).toBeInTheDocument();
+    expect(screen.getByRole("group", { name: "Recovered graph actions" })).toBeInTheDocument();
+    const rules = flatRules(readShellCss());
+    const unresolved = rules.find((r) => r.selector === ".qzk-fig-row-tree.unresolved .qzk-origin-figure-actions");
+    expect(declares(unresolved!.body, "position", "static")).toBe(true);
+    expect(declares(unresolved!.body, "transform", "none")).toBe(true);
   });
 });
 

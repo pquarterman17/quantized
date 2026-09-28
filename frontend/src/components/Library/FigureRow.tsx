@@ -102,10 +102,11 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
             {entry.stem}{fidelity ? ` · ${fidelity.status === "exact" ? "=" : "≈"}` : ""}
           </span>
         </button>
-        <div className="qzk-origin-figure-actions" role="toolbar" aria-label="Recovered graph actions">
+        <div className="qzk-origin-figure-actions" role="group" aria-label="Recovered graph actions">
           <button
             className="qz-icon-btn"
             title="Open in a new graph window"
+            aria-label="Open in a new graph window"
             disabled={!resolved}
             onClick={() => openAndRemember({ newWindow: true })}
           >
@@ -116,6 +117,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
               key={source.datasetId}
               className="qz-icon-btn"
               title={`Open source workbook ${source.book}; select X/Y/error columns`}
+              aria-label={`Open source workbook ${source.book}`}
               onClick={() => void openOriginFigureSource(entry.id, source.datasetId)}
             >
               {/* This command NAMES a node kind ("open the source workbook"), so
@@ -130,6 +132,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
             title={sourceResolution.sources.length
               ? `Remake in Graph Builder${sourceResolution.unresolved.length ? ` (${sourceResolution.unresolved.length} unresolved binding${plural(sourceResolution.unresolved.length)})` : ""}`
               : `No decoded bindings; Origin hint: ${entry.figure.source_hint || "unknown"}`}
+            aria-label="Remake in Graph Builder"
             disabled={sourceResolution.sources.length === 0}
             onClick={() => void remakeOriginFigure(entry.id)}
           >

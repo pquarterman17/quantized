@@ -19,7 +19,7 @@ test("dense recovered Origin graphs stay inside the Library and reveal one actio
           metadata: { origin_book: "PNR" },
         },
       }],
-      originFigures: Array.from({ length: 24 }, (_, index) => ({
+      originFigures: [...Array.from({ length: 24 }, (_, index) => ({
         id: `g${index}`,
         stem: `PNR very long recovered graph ${index}`,
         datasetId: "d1",
@@ -29,7 +29,15 @@ test("dense recovered Origin graphs stay inside the Library and reveal one actio
           x_from: 0, x_to: 1, x_log: false, y_from: 0, y_to: 1, y_log: true,
           n_curves: 4, annotations: [],
         },
-      })),
+      })), {
+        id: "unresolved", stem: "Missing source graph with a readable title",
+        datasetId: null, siblingIds: ["d1"],
+        figure: {
+          name: "Unresolved reflectometry comparison", source_hint: "MissingBook",
+          x_from: 0, x_to: 1, x_log: false, y_from: 0, y_to: 1, y_log: true,
+          n_curves: 1, annotations: [], curves: [{ book: "MissingBook", x: "A", y: "B" }],
+        },
+      }],
       expandedWorkbookIds: ["w1"],
       librarySelection: null,
       selectedIds: [],
@@ -38,7 +46,7 @@ test("dense recovered Origin graphs stay inside the Library and reveal one actio
 
   const library = page.locator(".qzk-library");
   const rows = page.locator(".qzk-fig-row-tree");
-  await expect(rows).toHaveCount(24);
+  await expect(rows).toHaveCount(25);
   expect(await library.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
 
   const actions = page.locator(".qzk-origin-figure-actions");
@@ -51,4 +59,15 @@ test("dense recovered Origin graphs stay inside the Library and reveal one actio
   await expect(actions.first()).toHaveCSS("visibility", "visible");
   await page.keyboard.press("Tab");
   await expect(actions.first().getByTitle("Open in a new graph window")).toBeFocused();
+
+  const unresolved = rows.last();
+  const unresolvedItem = unresolved.locator(".qzk-fig-item");
+  const unresolvedActions = unresolved.locator(".qzk-origin-figure-actions");
+  await expect(unresolvedActions).toHaveCSS("position", "static");
+  await expect(unresolvedActions.getByRole("combobox", { name: /Choose source workbook/ })).toBeVisible();
+  const [itemBox, actionBox] = await Promise.all([unresolvedItem.boundingBox(), unresolvedActions.boundingBox()]);
+  expect(itemBox).not.toBeNull();
+  expect(actionBox).not.toBeNull();
+  expect(itemBox!.width).toBeGreaterThan(20);
+  expect(itemBox!.x + itemBox!.width).toBeLessThanOrEqual(actionBox!.x + 1);
 });
