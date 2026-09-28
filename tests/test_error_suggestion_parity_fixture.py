@@ -23,7 +23,9 @@ Every case in this fixture is DELIBERATELY chosen to be unaffected by the
 Python port's own extra review-round fixes (x-name-axis matching, source/
 target role restrictions) -- those are pinned separately, by dedicated
 Python-only regression tests in ``test_io_error_binding_suggestions.py``,
-never by this shared fixture.
+never by this shared fixture. The same holds for the Python-only unit gate
+(``test_io_error_binding_confidence.py``): every column below is fed a
+blank unit, which that gate treats as neutral.
 """
 
 from __future__ import annotations

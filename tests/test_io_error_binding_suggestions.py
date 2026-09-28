@@ -37,7 +37,7 @@ def test_suggests_an_unambiguous_base_name_pairing() -> None:
 
 def test_does_not_drop_a_rule_1_pairing_whose_base_is_only_provisionally_error_like() -> None:
     # "Serr" (base "y", role) is provisional-only error-like (glued "err",
-    # no sibling "S") -- `_is_name_driven_match` must use the strict,
+    # no sibling "S") -- `is_name_driven_match` must use the strict,
     # evidence-gated classifier so this base is still eligible.
     cols = [
         _col(0, "Serr", "y"),
@@ -236,7 +236,7 @@ def test_a_base_name_match_landing_on_a_categorical_column_is_never_suggested() 
 def _value_error_pairs(n_pairs: int) -> list[dict[str, object]]:
     """``n_pairs`` name-driven (base-match) ``V{i}``/``V{i}_err`` column
     pairs behind one x column -- every error column gets a real rule-1
-    binding, so every one of them exercises `_is_name_driven_match`
+    binding, so every one of them exercises `is_name_driven_match`
     (the call site the O(n^3) blowup lived in)."""
     cols: list[dict[str, object]] = [_col(0, "X", "x")]
     idx = 1
@@ -253,7 +253,7 @@ def test_classification_call_count_stays_linear_not_quadratic_in_column_count(
 ) -> None:
     """Per CLAUDE.md's test-determinism rule: assert the LOAD-INVARIANT
     property (how many times the evidence-gated classifier actually ran),
-    not wall-clock alone. Before the fix, `_is_name_driven_match`
+    not wall-clock alone. Before the fix, `is_name_driven_match`
     re-classified the WHOLE label list on every candidate binding, on top
     of `infer_error_bindings_from_labels` already doing one O(n) pass
     internally -- O(n) bindings * O(n) re-classifications = O(n^2) CALLS

@@ -83,6 +83,14 @@ CONTRACT (review round 2 -- this is NOT "suggestions are restricted to
     but this wizard-seeding layer is free to be strictly MORE careful
     about what it pre-fills than the raw label inference is required to
     be, and now is.
+  - UNIT evidence can only REMOVE a suggestion, never add or re-target
+    one: a suggestion whose error column's unit contradicts its target's
+    unit (the x column's unit for an x-axis target) -- e.g. ``M_err (K)``
+    beside ``M (emu)`` -- is dropped, FAIL CLOSED, whichever rule produced
+    it (``error_unit_evidence.compare_units``; blank/unitless units are
+    neutral). Another strictly-more-careful divergence from
+    ``importwizard.ts``, which does not consult units; the shared parity
+    fixture carries blank units only, so it is unaffected.
 
 Unlike the TypeScript (which works in DataStruct CHANNEL indices over the
 wizard's own ``finalChannelOrder``), the bindings this module hands back to
@@ -107,10 +115,12 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from quantized.io.error_binding_confidence import is_name_driven_match
 from quantized.io.error_inference import ErrorBinding as LabelErrorBinding
 from quantized.io.error_inference import infer_error_bindings_from_labels
 from quantized.io.error_label_candidates import flat_norm
-from quantized.io.error_label_classify import ClassifiedLabel, classify_error_label_in_labels
+from quantized.io.error_label_classify import classify_error_label_in_labels
+from quantized.io.error_unit_evidence import compare_units
 from quantized.io.import_error_bindings import ErrorBinding
 
 __all__ = ["suggest_error_bindings", "suggest_error_bindings_by_channel"]
@@ -125,11 +135,17 @@ class _ChannelInfo:
     channel: int
     source_index: int
     label: str
+    unit: str
 
 
 def _column_index(col: Mapping[str, object]) -> int:
     index = col.get("index")
     return index if isinstance(index, int) else 0
+
+
+def _unit(col: Mapping[str, object]) -> str:
+    unit = col.get("unit")
+    return unit if isinstance(unit, str) else ""
 
 
 def _effective_label(col: Mapping[str, object]) -> str:
@@ -156,7 +172,9 @@ def _final_channel_order(columns: Sequence[Mapping[str, object]]) -> list[_Chann
     categorical = [c for c in columns if c.get("role") == "categorical"]
     ordered = numeric + categorical
     return [
-        _ChannelInfo(channel=i, source_index=_column_index(c), label=_effective_label(c))
+        _ChannelInfo(
+            channel=i, source_index=_column_index(c), label=_effective_label(c), unit=_unit(c)
+        )
         for i, c in enumerate(ordered)
     ]
 
@@ -172,6 +190,11 @@ def _role_channels(columns: Sequence[Mapping[str, object]], role: str) -> set[in
     }
 
 
+def _x_column(columns: Sequence[Mapping[str, object]]) -> Mapping[str, object] | None:
+    """The file's first ``x``-role column, or ``None`` -- see ``_x_label``."""
+    return next((c for c in columns if c.get("role") == "x"), None)
+
+
 def _x_label(columns: Sequence[Mapping[str, object]]) -> str | None:
     """The effective label of the file's ``x``-role column, or ``None`` if
     none is marked -- ``x`` never becomes a channel, so it is absent from
@@ -185,49 +208,8 @@ def _x_label(columns: Sequence[Mapping[str, object]]) -> str | None:
     refuse to suggest anything; ``parse_import`` itself still rejects the
     ambiguous multi-x state at Import time.)
     """
-    for c in columns:
-        if c.get("role") == "x":
-            return _effective_label(c)
-    return None
-
-
-def _is_name_driven_match(
-    classified: Sequence[ClassifiedLabel | None],
-    is_error_label: Sequence[bool],
-    labels: Sequence[str],
-    error_channel: int,
-) -> bool:
-    """True when ``labels[error_channel]`` matched via
-    ``infer_error_bindings_from_labels``' RULE 1 (base-name match, e.g.
-    ``dR`` -> ``R``) or RULE 2 (explicit ``x`` prefix) -- a real
-    NAME-driven signal. False means the binding (if any) can only have
-    come from RULE 3 (nearest preceding column, pure position).
-
-    This re-derives WHICH rule fired without reaching into
-    ``infer_error_bindings_from_labels``'s internals, so it MUST make the
-    same decisions the same way it does -- but takes ``classified``
-    (``classify_error_label_in_labels(labels, i)`` for every ``i``) and
-    ``is_error_label`` (``classified[i] is not None``) as ALREADY COMPUTED
-    by the caller, once, rather than re-deriving them per call: this
-    function used to re-run the evidence-gated classifier over every OTHER
-    label on every call, on top of ``infer_error_bindings_from_labels``
-    already doing the same O(n) classification once internally -- since
-    this runs once per candidate binding (up to O(n) of them), that made
-    ``suggest_error_bindings_by_channel`` cubic in column count
-    (~1ms at 41 columns, ~97s at 401 -- ``preview_import`` runs on every
-    wizard keystroke). Reusing one shared classification pass keeps the
-    whole function at the classifier's own O(n^2), no worse.
-    """
-    info = classified[error_channel]
-    if info is None:
-        return False
-    if info.axis == "x":
-        return True  # rule 2
-    if not info.base:
-        return False
-    return any(
-        not is_error_label[i] and flat_norm(lbl) == info.base for i, lbl in enumerate(labels)
-    )  # rule 1
+    x_col = _x_column(columns)
+    return _effective_label(x_col) if x_col is not None else None
 
 
 def _has_following_candidate(
@@ -278,7 +260,9 @@ def suggest_error_bindings_by_channel(
        become one (not role ``y``, not ``-1``) -- ``infer_error_bindings_
        from_labels`` has no notion of role and its rule-1 base-name match
        can land on a ``categorical`` column's name, which
-       ``valid_error_bindings`` always refuses.
+       ``valid_error_bindings`` always refuses;
+    5. drops any surviving suggestion whose units CONTRADICT (fail closed
+       -- see the module docstring's UNIT evidence paragraph).
 
     Whatever survives: a column whose pairing is genuinely ambiguous, or
     whose only candidate pairing could never validate, is simply ABSENT
@@ -288,7 +272,7 @@ def suggest_error_bindings_by_channel(
     order = _final_channel_order(columns)
     labels = [ci.label for ci in order]
     raw_by_channel = {b.channel: b for b in infer_error_bindings_from_labels(labels)}
-    # One shared classification pass -- see `_is_name_driven_match`'s
+    # One shared classification pass -- see `is_name_driven_match`'s
     # docstring for why this (not a re-classify-per-binding) is what keeps
     # this function from going cubic.
     classified = [classify_error_label_in_labels(labels, i) for i in range(len(labels))]
@@ -309,7 +293,7 @@ def suggest_error_bindings_by_channel(
         info = classified[ci.channel]
         if info is None:
             continue
-        if _is_name_driven_match(classified, is_error_label, labels, ci.channel):
+        if is_name_driven_match(classified, is_error_label, labels, ci.channel):
             b = raw_by_channel.get(ci.channel)
             if b is not None:
                 out.append(b)
@@ -327,7 +311,17 @@ def suggest_error_bindings_by_channel(
     # `-1` (the x axis) -- see the module docstring's `TARGET_NOT_Y_ROLE`
     # paragraph for why `infer_error_bindings_from_labels`'s rule 1 can
     # land a `target` on a `categorical` column despite that.
-    return [b for b in out if b.target == -1 or b.target in y_channels]
+    # Unit evidence can only take a suggestion away (fail closed on a
+    # contradiction), never add or re-target one.
+    x_col = _x_column(columns)
+    x_unit = _unit(x_col) if x_col is not None else ""
+    return [
+        b for b in out
+        if (b.target == -1 or b.target in y_channels)
+        and compare_units(
+            order[b.channel].unit, x_unit if b.target == -1 else order[b.target].unit
+        ) != "mismatch"
+    ]
 
 
 def suggest_error_bindings(columns: Sequence[Mapping[str, object]]) -> list[ErrorBinding]:
