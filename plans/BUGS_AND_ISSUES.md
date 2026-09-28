@@ -172,7 +172,7 @@ The implementation must use the file format's semantics, not merely the exact di
 - [x] Import an NCNR Reductus `.refl` file containing Qz, measured intensity, uncertainty, and resolution.
 - [x] Observe all three value columns drawn as lines on the default log-Y plot.
 - [x] Observe uncertainty and resolution included as ordinary legend series.
-- [ ] Confirm whether manually assigning the two roles in **Error Columns** immediately produces correct X/Y whiskers in the current release.
+- [x] Confirm whether manually assigning the two roles in **Error Columns** immediately produces correct X/Y whiskers in the current release. Verified 2026-09-28: `frontend/src/components/Stage/usePlotPayload.errorRoles.test.ts`'s "NCNR .refl error roles are overridable through the store action ErrorRolesCard calls" describe block (8/8 tests pass) drives the exact `setErrorRoles` call `ErrorRolesCard.tsx`'s `patch` helper makes and confirms the next render draws the override's whiskers.
 - [ ] Check at least one Reductus file variant beyond the repository fixture before broadening name matching.
 
 ### Implementation checklist
