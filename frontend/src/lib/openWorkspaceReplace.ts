@@ -66,11 +66,9 @@ function reserveLockForSwitch(native: ProjectIdentity | undefined): PriorLock | 
 function rollbackLockReservation(prior: PriorLock | null): void {
   if (!prior?.op || !isCurrentProjectLockOperation(prior.op)) return;
   beginProjectLockOperation();
-  const prev = prior.state;
-  useProjectLock.setState({
-    path: prev.path, record: prev.record, status: prev.status,
-    openedAsCopy: prev.openedAsCopy, unverifiableHeartbeats: prev.unverifiableHeartbeats,
-  });
+  // The whole captured state: the reservation ran synchronously just before
+  // the throw, so only the fields it changed can differ from the snapshot.
+  useProjectLock.setState(prior.state);
 }
 
 /** PR I2 (L0.47): the ASYNC half — releases the prior project's lock (if
