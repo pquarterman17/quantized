@@ -863,8 +863,9 @@ describe("worksheet edits leave preview data untouched while full data is pendin
     // comment adjacency: a text-only book is `time: []`, so the bounds check
     // short-circuits EVERY row and `setCellValue`/`setCategoricalCell` fell silent
     // while `setCellBlock` (not reordered) still spoke — two cell editors in one
-    // pane disagreeing. Silence is the harm: `refusePendingEdit` is the only thing
-    // on this path that kicks `ensureBookData`, so the retry never starts either.
+    // pane disagreeing. Silence is the harm: the pending guard (then
+    // `refusePendingEdit`, now `resolvePendingEdit`) is the only thing on this
+    // path that starts the fetch, so the load never starts either.
     const seedTextOnly = () =>
       useApp.setState({
         datasets: [

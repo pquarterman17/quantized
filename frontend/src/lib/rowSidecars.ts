@@ -288,9 +288,10 @@ export function sliceRowSidecars(
  *
  *  A row EDIT does NOT consult this predicate, and the history paragraph above
  *  says why: the `store/cellEdit.ts` copy was removed. `store/pendingEdit.ts`'s
- *  `refusePendingEdit` refuses every edit on a pending dataset (BUG-009), which
- *  is both stronger and a different question — it does not care whether the
- *  preview was sampled — so `cellEdit.ts` neither imports this nor needs to. */
+ *  `resolvePendingEdit` defers every edit on a pending dataset until the full
+ *  book is installed (BUG-009), which is both stronger and a different question
+ *  — it does not care whether the preview was sampled — so `cellEdit.ts`
+ *  neither imports this nor needs to. */
 export function rowsAreSampled(pending: Dataset["pending"]): boolean {
   return pending != null && pending.previewSampled !== false;
 }

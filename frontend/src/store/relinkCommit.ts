@@ -39,6 +39,9 @@ type PendingWrite = {
   probed: { checksum: string | null; size: number | null };
 };
 
+/** A path's final component, whichever separator it uses. */
+const fileName = (path: string): string => path.slice(Math.max(path.lastIndexOf("/"), path.lastIndexOf("\\")) + 1);
+
 export async function commitRelink(
   get: () => RelinkState,
   set: (partial: Partial<RelinkState>) => void,
@@ -231,7 +234,20 @@ export async function commitRelink(
     datasets: state.datasets.map((d) => {
       const source = pending.get(d.id)?.source;
       if (!source || !d.source) return d;
-      return { ...d, source };
+      // BUG-009: a lazy Origin book not yet loaded fetches through its
+      // `pending` reference, not `source`. When that reference names the file
+      // being relinked (`d.source` is `orig` here, re-verified above), move it
+      // with the file, or the book keeps failing against the old path and
+      // relinking cannot revive it. Matched by FILE NAME, not the whole string:
+      // both come from the same import, but the backend records the RESOLVED
+      // path (`routes/parsers.py`'s `import_file` realpaths it) — other
+      // separators on Windows, `/private/tmp` for `/tmp`, symlinked folders —
+      // so exact equality would miss most real machines. Any other reference
+      // (an upload token, a different file name) is left alone: fail closed.
+      const book = d.pending?.kind === "path" && d.pending.path != null && fileName(d.pending.path) === fileName(d.source.path)
+        ? { pending: { ...d.pending, path: source.path } }
+        : {};
+      return { ...d, source, ...book };
     }),
   }));
   toast(`relinked ${n} dataset${plural(n)}${joined}`, "ok");

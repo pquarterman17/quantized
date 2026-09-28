@@ -87,6 +87,14 @@ describe("toast actions (PLOT_WORKFLOW_PLAN #4)", () => {
     vi.advanceTimersByTime(TOAST_ACTION_TTL);
     expect(useToasts.getState().toasts).toHaveLength(0); // gone — the override elapsed
   });
+
+  it("an action toast with NO ttlMs still gets the action TTL (BUG-009's Re-import offer)", () => {
+    toast("reimport?", "danger", { action: { label: "Re-import", onClick: vi.fn() } });
+    vi.advanceTimersByTime(TOAST_TTL + 10);
+    expect(useToasts.getState().toasts).toHaveLength(1);
+    vi.advanceTimersByTime(TOAST_ACTION_TTL - TOAST_TTL);
+    expect(useToasts.getState().toasts).toHaveLength(0);
+  });
 });
 
 // BUG-010 review (F6/F7): the helper's own promises — "ONE toast, never one

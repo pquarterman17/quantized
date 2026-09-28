@@ -823,6 +823,26 @@ describe("workspace pending lazy-book reference (ORIGIN_FILE_DECODE_PLAN #38)", 
     expect(restored.data.metadata?.["source"]).toBe("test"); // the rest of metadata too
   });
 
+  // BUG-009's booked load-path item, closed 2026-09-28 WITHOUT a code change: the
+  // restore clamps `excludedRows` against `data.time.length`, which on a pending
+  // dataset is the PREVIEW's row count. Since PR #388 that is the right space, not
+  // the bug it was booked as: a pending dataset's exclusions stay in preview rows
+  // until `installBookData` maps them through `preview_source_rows` (the mapping
+  // itself is pinned in store/useApp.test.ts). So the clamp keeps every index that
+  // names a preview row and drops one that cannot — even one that WOULD be a valid
+  // row of the full book, because it does not mean that row here.
+  it("clamps a pending dataset's exclusions to its PREVIEW rows — the space they live in until it loads", () => {
+    const ds = makeDataset("a", "lazy book"); // 3 preview rows
+    ds.data = { ...ds.data, metadata: { ...ds.data.metadata, preview_source_rows: [0, 7, 400] } };
+    ds.pending = { kind: "path", path: "/p.opj", bookId: "B2", rows: 500, cols: 2, previewSampled: true };
+    const doc = JSON.parse(ser([ds]));
+    doc.datasets[0].excludedRows = [1, 2, 7]; // 7 < 500 source rows, but no preview row
+    const [restored] = parse(JSON.stringify(doc));
+    expect(restored.excludedRows).toEqual([1, 2]);
+    expect(restored.pending).toEqual(ds.pending);
+    expect(restored.data.metadata?.["preview_source_rows"]).toEqual([0, 7, 400]);
+  });
+
   it("does NOT invent previewSampled for a legacy .dwk that never had it", () => {
     // Absent must stay absent, so `rowsAreSampled`'s `!== false` fails closed
     // rather than a default here quietly deciding the question. Also keeps a legacy

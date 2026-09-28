@@ -14,7 +14,7 @@
 //      columns (the P1.6 error roles); the caller binds it to the first.
 //
 // Pure: a Dataset in, columns out. The store action that commits them
-// (store/derivedColumnRun.commitDerivedColumns) owns undo, the error binding and
+// (store/derivedColumnRun.addDerivedColumn) owns undo, the error binding and
 // the recorded step.
 
 import { columnsRead, parseExpr } from "./derivedExprAst";

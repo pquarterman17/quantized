@@ -935,4 +935,55 @@ describe("BUG-011 residual — a book that goes pending DURING the resolve await
     // spec exercises never touches it, so that check could not fail.)
     expect(useApp.getState().datasets.find((d) => d.id === "book2")?.pending).toBeDefined();
   });
+
+  // BUG-009: a book whose load failed for good refuses EVERY save (a .dwk must be
+  // self-contained), so an unnamed reason was a dead end. The refusal now names
+  // the book that failed with THIS error and offers its recovery.
+  it("a book that cannot load refuses the save by name, and offers Re-import", async () => {
+    const book2 = { ...lazyBook("book2"), source: { kind: "path" as const, path: "/book2.opj" } };
+    useApp.setState({ datasets: [lazyBook("book1"), book2], activeId: "book1", plotWindows: [], focusedWindowId: null });
+    vi.mocked(fetchBookData).mockImplementation((source) =>
+      source.path === "/book2.opj" ? Promise.reject(new Error("source not found")) : Promise.resolve(fullRows),
+    );
+    const realReimport = useApp.getState().reimportDataset;
+    const reimport = vi.fn<(id: string) => Promise<void>>(async () => {});
+    useApp.setState({ reimportDataset: reimport });
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    const status = useApp.getState().status;
+    expect(status).toMatch(/^save failed — "book2\.opj" could not load its full data \(source not found\)\. Nothing was saved\./);
+    expect(status).toMatch(/Re-import it \(or relink it if the file moved\), or remove it, then save again\./);
+    expect(saveBlob).not.toHaveBeenCalled();
+    const shown = useToasts.getState().toasts.at(-1);
+    expect(shown).toMatchObject({ kind: "danger", msg: status, action: { label: "Re-import" } });
+    shown!.action!.onClick();
+    expect(reimport).toHaveBeenCalledWith("book2");
+    useApp.setState({ reimportDataset: realReimport });
+    vi.mocked(fetchBookData).mockReset(); // `clearAllMocks` keeps an implementation
+  });
+
+  it("never blames an OLDER failure on a different, still-loading book — even in the same words", async () => {
+    // book1 failed once earlier and is loading again; book2 fails now, with the
+    // SAME text (a backend blip reads "Failed to fetch" for every book). The
+    // lookup `packProjectContent.ts` uses — the first pending book with ANY
+    // recorded reason — would name book1, and so would matching the text. The
+    // save names the book whose fetch rejected with THIS error object.
+    useApp.setState({ datasets: [lazyBook("book1"), lazyBook("book2")], activeId: "book1", plotWindows: [], focusedWindowId: null });
+    vi.mocked(fetchBookData).mockRejectedValueOnce(new Error("Failed to fetch"));
+    await expect(useApp.getState().resolveDataset("book1")).rejects.toThrow("Failed to fetch");
+    vi.mocked(fetchBookData).mockImplementation((source) =>
+      source.path === "/book2.opj" ? Promise.reject(new Error("Failed to fetch")) : new Promise(() => {}),
+    );
+
+    await useApp.getState().saveWorkspaceToFile();
+
+    const status = useApp.getState().status;
+    expect(status).toMatch(/^save failed — "book2\.opj" could not load its full data \(Failed to fetch\)/);
+    // No recorded source, so Relink cannot help: it is not offered.
+    expect(status).toMatch(/Re-import the file, or remove it, then save again\.$/);
+    expect(status).not.toContain("book1");
+    expect(saveBlob).not.toHaveBeenCalled();
+    vi.mocked(fetchBookData).mockReset(); // `clearAllMocks` keeps an implementation
+  });
 });

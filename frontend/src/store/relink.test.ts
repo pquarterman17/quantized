@@ -453,6 +453,63 @@ describe("commit (box 3: atomic, one undo entry)", () => {
     expect(useApp.getState().datasets[1].source?.path).toBe("/old/data/b.csv");
   });
 
+  // BUG-009: a lazy Origin book not yet loaded fetches through `pending`, not
+  // `source`. Relinking only `source` left that fetch aimed at the old path, so
+  // a moved book kept failing and relinking could not revive it.
+  it("re-points a not-yet-loaded book's fetch with its file — and only that fetch", async () => {
+    const recorded = { checksum: "sha256:a", mtime: 1, size: 1 };
+    useApp.setState({
+      datasets: [
+        // The backend records the RESOLVED path (`import_file` realpaths it),
+        // so the fetch reference rarely equals the recorded source string:
+        // here `/tmp`-style resolution put `/private` in front, and on Windows
+        // the separators differ. Same file name, same import: moved together.
+        baseDataset({
+          id: "a",
+          source: { kind: "path", path: "/old/data/book.opj", ...recorded },
+          pending: { kind: "path", path: "/private/old/data/book.opj", bookId: "Book2", rows: 9, cols: 1 },
+        }),
+        // Its fetch reference names a DIFFERENT file than the one relinked, so
+        // it is left alone: never guess that two files are one book.
+        baseDataset({
+          id: "b",
+          source: { kind: "path", path: "/old/data/b.opj", ...recorded },
+          pending: { kind: "path", path: "C:\\elsewhere\\other.opj", bookId: "Book3", rows: 9, cols: 1 },
+        }),
+        baseDataset({
+          id: "c",
+          source: { kind: "path", path: "/old/data/run.opju", ...recorded },
+          pending: { kind: "path", path: "\\\\srv\\old\\data\\run.opju", bookId: "Book4", rows: 9, cols: 1 },
+        }),
+      ],
+    });
+    const row = (id: string, name: string) => ({
+      datasetId: id,
+      datasetName: name,
+      oldPath: `/old/data/${name}`,
+      candidatePath: `/new/place/${name}`,
+      status: "resolved" as const,
+      changeVerdict: "unchanged" as const,
+      candidateChecksum: "sha256:a",
+      candidateMtime: 1,
+      candidateSize: 1,
+    });
+    useRelink.setState({ preview: [row("a", "book.opj"), row("b", "b.opj"), row("c", "run.opju")] });
+    vi.mocked(desktopBridge.probeSource).mockImplementation(async (path: string) => ({ state: "ok", path, ...recorded }));
+
+    await useRelink.getState().commit();
+
+    const [a, b, c] = useApp.getState().datasets;
+    expect(a.source?.path).toBe("/new/place/book.opj");
+    expect(a.pending).toEqual({ kind: "path", path: "/new/place/book.opj", bookId: "Book2", rows: 9, cols: 1 });
+    expect(b.source?.path).toBe("/new/place/b.opj");
+    expect(b.pending?.path).toBe("C:\\elsewhere\\other.opj");
+    expect(c.pending?.path).toBe("/new/place/run.opju"); // a Windows-separated reference
+    // One undo step takes BOTH halves back.
+    useApp.getState().undo();
+    expect(useApp.getState().datasets[0].pending?.path).toBe("/private/old/data/book.opj");
+  });
+
   // P2 (adversarial review, TOCTOU): a file changed/vanished in the window
   // between Preview and clicking Relink must never write a stale checksum
   // silently — RED-FIRST against the pre-fix commit() (which trusted the

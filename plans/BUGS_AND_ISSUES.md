@@ -2,7 +2,7 @@
 
 **Status:** Active working checklist  
 **Created:** 2026-09-08  
-**Updated:** 2026-09-25 (P3.3 residual R15 closed: an open modal gates the app's window-level shortcuts except `?` and Ctrl/Cmd+,, see the change log; BUG-030 filed and fixed: the local API Origin guard now admits only its own origin, plus the Vite origin in `qz --dev`; earlier that day P3.3 residual R12 closed: `aria-modal` replaced by a per-element `inert` background with the live regions exempt, see the change log; earlier 2026-09-21: BUG-012 facet-plus-break no-op now surfaced and removable in Publication Preview; screen/export break-panel residual and large-column crash fixed; BUG-009 final queued-analysis race fixes merged in PR #398;
+**Updated:** 2026-09-28 (BUG-009's structural box closed: the last refuse-only pending guard, P2.5's derived-column commit, now resolves then applies; one `withResolved` policy under `resolvePendingEdit`; a failed load says what failed and offers Re-import, Relink re-points the book's fetch, Save names the book; the booked `.dwk` exclusion-clamp item closed as correct; earlier 2026-09-25: P3.3 residual R15 closed: an open modal gates the app's window-level shortcuts except `?` and Ctrl/Cmd+,, see the change log; BUG-030 filed and fixed: the local API Origin guard now admits only its own origin, plus the Vite origin in `qz --dev`; earlier that day P3.3 residual R12 closed: `aria-modal` replaced by a per-element `inert` background with the live regions exempt, see the change log; earlier 2026-09-21: BUG-012 facet-plus-break no-op now surfaced and removable in Publication Preview; screen/export break-panel residual and large-column crash fixed; BUG-009 final queued-analysis race fixes merged in PR #398;
 earlier: BUG-024 through BUG-028 merged in PR #385;
 BUG-002 FIXED — declared-source write protection now
 compares filesystem identity as well as canonical path, so hard-link and
@@ -89,7 +89,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-006 | P2 | Row slices, row edits, merge, corrections, pending previews | A row slice carried the `text_columns` sidecar through UNSLICED, so an extracted subset's text cells no longer lined up with its rows | Claude | **10 of 10 code sites fixed, re-verified 2026-09-14 by grepping every call site rather than trusting the count** (see the entry's "Every caller covered" box); `lib/barlayout.ts`'s label path was the last one, shipped 2026-09-12. The deferred end-to-end reproduction test (filter + Extract, at the `planExtract` layer) was added 2026-09-14 — see the entry's Reproduction checklist. Declared closed three times before it actually was, and FOUR review rounds each found defects in the previous round's fix — twice HIGH every round, with a fully green suite every time. The suite had caught essentially none of it; adversarial review, per-branch sabotage and measuring claims caught all of it. Owner's real-data visual confirmation remains open |
 | BUG-007 | P2 | Test hygiene | A `void`-ed async store action in a test made its assertion vacuous AND leaked `set()` into a later test — misdiagnosed by me as a module-init-order hazard | Claude | **FIXED** 2026-09-09; reduction collected, pin lowered |
 | BUG-008 | P2 | Split Dataset | An explicit `cat_levels` level table was invisible to Split, so a few-row categorical column MERGED all its samples into one child dataset (and, at row counts where the shape heuristic agreed, named the children after raw float codes) | Claude | **FIXED** 2026-09-10 after ONE review round that found 2 HIGH — the first cut fixed only the `cat_levels` shape and its chokepoint ratchet was evadable by an aliased import. 22 behaviour tests + a 2-test ratchet, every fix sabotage-verified |
-| BUG-009 | P2 | Pending-dataset contract | Mutating and outward analysis actions now resolve the complete Origin book and resume automatically; stale queued intent is cancelled rather than applied | ChatGPT-Sol | **FIXED 2026-09-21** — PRs #389–394 shipped; PR #398 closed the post-merge queued-replay race and failure-state gaps. CI green on #398; owner real-file acceptance remains open. |
+| BUG-009 | P2 | Pending-dataset contract | Mutating and outward analysis actions now resolve the complete Origin book and resume automatically; stale queued intent is cancelled rather than applied | ChatGPT-Sol | **FIXED 2026-09-21** — PRs #389–394 shipped; PR #398 closed the post-merge queued-replay race and failure-state gaps. **2026-09-28:** last refuse site (derived columns) routed through `withResolved`; failed loads offer Re-import, Relink re-points the fetch, Save names the book. Owner real-file acceptance remains open. |
 | BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal. Adversarial review round (2026-09-13) closed the one real gap the fix missed — File ▸ Open itself never joined the toast channel — plus doc/citation cleanup; see the entry |
 | BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review rounds 2/3 (2026-09-13) closed further regressions, finished the finding #5 fix, and widened the terminal-status fix to every `failed`/`cancelled` transition. Residual closed 2026-09-13: `store/workspaceIO.ts`'s Save/Save As now shares the identical post-await `pending` re-check (see the entry) — every explicit export path (Save, Save As, workbook transfer, Pack Project) now closes finding #2's window. Owner call on abort-vs-partial-pack still open |
 | FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
@@ -1986,7 +1986,7 @@ lose an edit:
   The ratchet's key list is now `data|metadata|cat_levels|formulas|excludedRows|filter`
   with per-ACTION exemptions, so a NEW row-state writer in a NEW slice is caught.
 
-- [ ] **Booked while closing the above:** `lib/workspaceDatasetParse.ts`'s restore
+- [x] **Booked while closing the above:** `lib/workspaceDatasetParse.ts`'s restore
   clamps `excludedRows` with `sanitizeExcluded(..., ds.data.time.length)` where
   `data` is the stored PREVIEW on a pending dataset — the same clamp-against-preview
   shape the guard fixes for `setRowsExcluded`, on the LOAD path, unguarded. Low harm
@@ -2077,6 +2077,21 @@ lose an edit:
   Focused coverage includes sampled, unsorted, prefix, missing, repeated, and
   out-of-range mappings.
 
+  **CLOSED 2026-09-28 — no code change; the clamp is now correct, and a test says
+  so.** Re-read against PR #388's design rather than the booking: a pending
+  dataset's exclusions live in PREVIEW rows until `installBookData` maps them
+  through `preview_source_rows`, so `sanitizeExcluded(..., ds.data.time.length)`
+  on the load path validates them in exactly the space they are in. Deferring the
+  clamp until resolve (the suggested fix) would be wrong, not safer: an index that
+  names no preview row would survive the load and then make `resolvedExcludedRows`
+  drop ALL of the dataset's exclusions at install (it fails closed on any
+  out-of-range entry), where the clamp drops only the bad one. The question the
+  booking left open — should a `.dwk`'s exclusions survive a pending load at all?
+  — is answered by #388 (yes, and they are carried into source rows on arrival).
+  Pinned by `lib/workspace.test.ts`'s "clamps a pending dataset's exclusions to
+  its PREVIEW rows": index 7 is a valid row of the 500-row book but names no row
+  of the 3-row preview, and is dropped; a clamp against `pending.rows` fails it.
+
 - [x] **Also booked:** `setDatasetFilter`/`clearDatasetFilter` record NO history,
   while `clearRowExclusions` does. So building a filter and pressing undo restores a
   snapshot from before the filter change and silently discards it. Pre-existing and
@@ -2092,9 +2107,9 @@ lose an edit:
   event", "is its own undo step, and undoing it gives the filter back",
   "records NOTHING when there is no filter to clear", among others).
 
-### STILL OPEN — the structural fix
+### CLOSED (2026-09-28) — the structural fix
 
-- [ ] **Replace "refuse" with "resolve-then-apply."** The guard refuses; it does not
+- [x] **Replace "refuse" with "resolve-then-apply."** The guard refuses; it does not
   defer. `ensureBookData` never clears `pending` on failure, so a permanently failed
   fetch (moved source, expired upload token) is a permanent lockout: every edit,
   extract, copy and save refused forever, while the status still says "in a moment".
@@ -2171,6 +2186,87 @@ lose an edit:
   Regression tests cover same-ID replacement, stalled active-dataset switch,
   empty groups, and a one-level service failure. Forced TypeScript, lint,
   697 frontend test files locally, and every GitHub CI check passed.
+
+  **CLOSED 2026-09-28 — the last refuse site, one policy, and a way out of a dead
+  book.** The #394 claim above ("no production caller of `refusePendingEdit` …
+  remains") went FALSE on 2026-09-27: P2.5 (`febc3b53`) added
+  `store/derivedColumnRun.commitDerivedColumns` behind `refusePendingEdit` — the
+  exact regression this box predicted for a safe path that is not the default.
+  Measured by restoring `0db9331c`'s own lines in a sabotage run: on a book whose
+  load failed, `addDerivedColumn` REJECTED with the raw fetch error; and (read,
+  not run) `useWorksheetView`'s `void commitColumn(...).then(...)` has no catch,
+  so the ƒx bar add died as an unhandled rejection with no message of its own.
+  What changed:
+  - `store/pendingEdit.withResolved(get, id, action, fn)` is the ONE policy:
+    resolve, then apply on the dataset the store holds when the book lands; on
+    failure `fn` never runs, nothing but the status is written, and the book stays
+    `pending` so the next action retries. `resolvePendingEdit` (every row-state,
+    cell, computed-column, level-order/recode and worksheet extract/copy site) is
+    now its synchronous-action shape, not a second implementation.
+  - `refusePendingEdit` and `pendingStatusMessage` are DELETED, and the
+    `architecture.test.ts` pending-edit ratchet no longer accepts a refusal as a
+    guard (`resolvePendingEdit|withResolved` only). Derived columns resolve through
+    `withResolved`, with the commit INSIDE its callback — a first version kept a
+    separate commit with its own deferring guard, which review found unreachable
+    and, if reached, reporting "failed" while the column landed later.
+  - A failed load is honest and actionable: `Could not finish <action> in "<book>":
+    its full data failed to load (<reason>). Nothing was changed.` plus "Re-import
+    it, or relink it if the file moved." (only where Relink can work: a path fetch
+    with a recorded source) or "Re-import the file to continue.", and a danger
+    toast whose Re-import button runs `reimportDataset` — which re-reads the
+    source, or for a source the desktop shell confirms missing/offline opens
+    Relink. The button re-checks at click that its id still names the same book
+    (ids repeat across project loads). One toast per failed fetch, however many
+    queued actions share it; a view's `ensureBookData` re-kick that fails the same
+    way on the same dataset object stays quiet (views re-kick on every `datasets`
+    change, so a dead book bound to a window used to re-toast on every edit).
+  - "In flight" vs "failed": the loading status says `Loading full data … will
+    continue automatically` on a first load and `Retrying full data … (last
+    attempt failed: <reason>) … will continue if it loads` once `lastBookError`
+    holds a failure. No status promises "in a moment" any more.
+  - Relink is a real recovery now: `store/relinkCommit.ts` re-points a pending
+    book's PATH fetch with its file, matched by file name because the backend
+    records the realpath (`routes/parsers.py` `import_file`), so exact equality
+    missed `/private/tmp`, symlinked folders and Windows separators. Undo takes
+    both halves back. The 2026-09-10 rule "RE-IMPORT, not relink" is retired with
+    the reason it rested on.
+  - Save (`store/workspaceIO.ts`) names the book whose fetch rejected with THIS
+    error — by identity (`lib/bookData.failedWith`), so an older failure of another
+    book in the same words ("Failed to fetch") is never blamed — and offers
+    Re-import; it toasts directly, because the user asked to save. An action toast
+    with no `ttlMs` now defaults to `TOAST_ACTION_TTL` (`store/toasts.ts`).
+  Tests: `store/pendingEdit.test.ts` (resolve-then-apply, failure honesty +
+  offer + click guard, per-fetch toast dedupe, quiet re-kicks, retry wording,
+  capped reasons), `store/derivedColumnRun.test.ts` (full-row apply; failure adds
+  and records nothing), `store/relink.test.ts` (re-point by file name, not a
+  different file, one undo), `store/workspaceIO.test.ts` (named refusal + offer;
+  same-words older failure not blamed), `store/toasts.test.ts`. Existing per-class
+  suites (row state, cell edit, computed columns, level order, recode, worksheet
+  pending actions) exercise the same path unchanged. Sabotage-verified: the
+  pre-fix derived-column shape fails "a failed load adds nothing"; relink without
+  the re-point, or with exact-string matching, fails "re-points a not-yet-loaded
+  book's fetch"; the old "in a moment" failure text fails six tests across three
+  suites; removing either dedupe fails its test (the re-kick test first rejected
+  with ONE shared Error, which the per-fetch dedupe silences by itself — its
+  reopened-project half failed spuriously on that — so it now throws a fresh one
+  per fetch, as the transport does); save's first-recorded-reason lookup, and
+  matching the reason TEXT, each fail "never blames an OLDER failure"; dropping
+  `withResolved` from the
+  ratchet flags `derivedColumnRun.ts`. Checks: forced `tsc -b`, eslint, and the
+  targeted vitest run over store, lib, worksheet and the analysis workshops.
+  Residuals, left open deliberately:
+  - Re-import of a still-pending book compares the fresh rows with the PREVIEW
+    (`lib/reimport.reimportShapeChanged`), so it clears preview-space exclusions
+    and resets bound views instead of mapping them as `installBookData` does. Loud
+    ("changed shape on re-import — row/column selections were cleared"), and
+    exclusions on a pending book only come from pre-#389 documents.
+  - `store/packProjectContent.ts` and `lib/workbookTransfer.ts` still name the
+    first pending book with ANY recorded reason (pinned by pack's own "P4c" test)
+    and offer no Re-import; Save's identity lookup could replace both.
+  - Tabulate, Fit Y by X and Stats Chooser keep their own queued-replay code
+    (#394/#398); their failure text is honest but offers no Re-import.
+  - Views still re-FETCH a dead book on every `datasets` change; only the toast
+    is quieted. A back-off belongs in `lib/bookData`, not here.
 ### CLOSED (2026-09-10) — "in flight" vs "failed, will never arrive"
 
 - [x] `lib/bookData.ts` records why the last fetch for a `pending` book failed
@@ -2184,7 +2280,7 @@ lose an edit:
   **ADVISORY ONLY, and that is pinned by test**: the retry is still kicked (a network
   blip does come back), the refusal is unchanged, and nothing becomes unreachable
   because a failure was recorded. So this closes the LIE, not the lockout — the
-  lockout is the deferral box above, which is still open.
+  lockout is the deferral box above, which is still open. *(Closed 2026-09-28.)*
 
   **MODULE STATE, NOT A `Dataset` FIELD — and the first attempt got that wrong,
   which is the useful part of this entry.** Putting the reason on `Dataset` meant a
@@ -2224,6 +2320,9 @@ lose an edit:
   the failure arm having had none. The status text stopped advising "relink",
   which writes `Dataset.source` only and never clears `pending`, so it could
   not revive the book.
+  *(2026-09-28: no longer true — Relink now re-points a pending book's path
+  fetch with its file, so the failure message offers it again where it can
+  work; see the resolve-then-apply box above.)*
 
 - [x] **A PROVEN test-order defect, and a ratchet for it.** `_bookErrors` is
   module state cleared only by a success, so a guard test's jsdom-rejecting
@@ -2248,6 +2347,10 @@ lose an edit:
   package, name the first genuinely dead book). Their control flow is unchanged —
   each still writes to its own local status/error channel — so this unifies the
   wording only; unifying the GUARDS is the structural half still open above.
+  *(2026-09-28: the guards are unified and `pendingStatusMessage` is deleted with
+  `refusePendingEdit`; the store's loading and failure wording now lives in
+  `withResolved`/`resolvePendingEdit`. `lib/workbookTransfer`'s race-only refusal
+  keeps its own text.)*
 
 ### The invariant, stated once (it never was)
 
@@ -2260,7 +2363,9 @@ save: resolve FIRST, then apply, and surface a genuine failure.
 
 - PR/commit: the round-5 response on the Group P branch (2026-09-10).
 - Owner verification: — (the resolve-then-apply refactor is a design call worth
-  an owner's read before it is built).
+  an owner's read before it is built). 2026-09-28: built; the owner check that
+  remains is a real moved `.opj`/expired upload: open it, see the Re-import
+  offer, relink or re-import, and confirm the book loads and edits resume.
 
 ---
 

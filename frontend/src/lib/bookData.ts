@@ -20,7 +20,7 @@ type DatasetsSetter = (fn: (s: { datasets: Dataset[] }) => { datasets: Dataset[]
  *  serialize. */
 const _bookFetches = new Map<string, Promise<boolean>>();
 
-function sameBookSource(a: BookSource, b: BookSource): boolean {
+export function sameBookSource(a: BookSource, b: BookSource): boolean {
   return a.kind === b.kind && a.path === b.path && a.token === b.token && a.bookId === b.bookId;
 }
 
@@ -54,7 +54,7 @@ const bookRequestKey = (id: string, source: BookSource): string =>
  *  Keyed by dataset id, like `_bookFetches`, but the entry also records WHICH
  *  source failed: ids can repeat across a project load, and a reason recorded
  *  for a different book must not be reported for this one. */
-const _bookErrors = new Map<string, { source: BookSource; message: string }>();
+const _bookErrors = new Map<string, { source: BookSource; message: string; error: unknown }>();
 
 /** Why the last fetch for `id` failed, or null while none has failed (or the
  *  recorded failure belongs to a different book). `source` is the book being
@@ -69,6 +69,16 @@ export function lastBookError(id: string, source: BookSource): string | null {
   const rec = _bookErrors.get(id);
   if (!rec) return null;
   return sameBookSource(rec.source, source) ? rec.message : null;
+}
+
+/** Did the last fetch of `id`'s `source` fail with exactly this rejection? By
+ *  IDENTITY, not message text (BUG-009): two books can fail in the same words
+ *  ("Failed to fetch"), and an older failure of a different book must never be
+ *  named as the cause of this one. The fetch is single-flight, so a rejection
+ *  object belongs to exactly one book. */
+export function failedWith(id: string, source: BookSource, e: unknown): boolean {
+  const rec = _bookErrors.get(id);
+  return rec != null && rec.error === e && sameBookSource(rec.source, source);
 }
 
 /** A backend `detail` can be arbitrarily long — and for a FastAPI 422 it is an
@@ -87,10 +97,11 @@ export function truncateReason(reason: string): string {
  *  recorded failure cannot answer for the next.
  *
  *  CALL THIS in the `beforeEach` of any suite that exercises a pending-dataset
- *  guard. `refusePendingEdit` kicks a REAL fetch, which rejects under jsdom, so
- *  a guard test records a failure that a later test in the same file would
- *  otherwise report — two suites asserting "still loading its full data" got
- *  "the last attempt … failed" instead. Deliberately NOT wired into
+ *  guard. The guard kicks a REAL fetch, which rejects under jsdom, so a guard
+ *  test records a failure that a later test in the same file would otherwise
+ *  report — two suites asserting "still loading its full data" got "the last
+ *  attempt … failed" instead (then `refusePendingEdit`; today the loading
+ *  status of `store/pendingEdit.resolvePendingEdit`). Deliberately NOT wired into
  *  `src/test/setup.ts`: importing this module there resolves `./api` before any
  *  suite's `vi.mock("../lib/api")` applies, which silently un-mocks the fetch
  *  for every test in the repo (measured). */
@@ -149,7 +160,7 @@ export function installBookData(set: DatasetsSetter, id: string, source: BookSou
     .then(undefined, (e: unknown) => {
       // Keep the pending source for retry and record the transport reason for
       // guarded actions. Re-throw so awaited resolve/save operations abort.
-      _bookErrors.set(id, { source, message: e instanceof Error ? e.message : String(e) });
+      _bookErrors.set(id, { source, message: e instanceof Error ? e.message : String(e), error: e });
       throw e;
     })
     .finally(() => {

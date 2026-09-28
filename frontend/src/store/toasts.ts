@@ -29,7 +29,8 @@ export interface Toast {
 
 /** Optional extras beyond message + kind. `ttlMs` overrides the default
  *  auto-dismiss timer — an action toast asks the user to read and decide,
- *  not just glance, so callers offering one should pass `TOAST_ACTION_TTL`. */
+ *  not just glance, so one with an `action` and no `ttlMs` defaults to
+ *  `TOAST_ACTION_TTL` rather than `TOAST_TTL`. */
 export interface ToastOptions {
   action?: ToastAction;
   ttlMs?: number;
@@ -119,7 +120,10 @@ export const useToasts = create<ToastsState>((set, get) => ({
     set((s) => ({
       toasts: [...s.toasts, { id, msg, kind, action: opts?.action }].slice(-MAX),
     }));
-    setTimeout(() => get().dismiss(id), opts?.ttlMs ?? TOAST_TTL);
+    // An action toast lives long enough to act on even when the caller does not
+    // say so (BUG-009's Re-import offer relies on this: importing the constant
+    // there broke the many suites that `vi.mock` this module with `toast` alone).
+    setTimeout(() => get().dismiss(id), opts?.ttlMs ?? (opts?.action ? TOAST_ACTION_TTL : TOAST_TTL));
   },
   dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 }));

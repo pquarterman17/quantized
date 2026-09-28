@@ -24,11 +24,13 @@
 // has no path, never does.
 
 import { CANCELLED, hasDesktopShell, isSaveRefused, LOCK_LOST, pathState, pickSaveDestination, saveErrorStatus, saveProjectTo, type SaveProjectResult } from "../lib/desktopBridge";
+import { failedWith, truncateReason } from "../lib/bookData";
 import { saveBlob } from "../lib/download";
 import { baseName, parentDirectory } from "../lib/importEntry";
 import { canRelease, classifyLock, type LockRecord, type LockStatus } from "../lib/lockState";
 import { captureTechniqueView } from "../lib/techniqueViewMemory";
 import { workspaceCodecOrReport } from "../lib/workspaceCodecLazy";
+import { canRelink, reimportOffer } from "./pendingEdit";
 import { statusFromRefusal, useProjectLock, type LockProvider } from "./projectLock";
 import { useRecentProjects } from "./recentProjects";
 import { toast } from "./toasts";
@@ -69,9 +71,23 @@ async function prepareWorkspaceState(get: SliceGet): Promise<AppState | null> {
     try {
       await get().resolvePendingDatasets();
     } catch (e) {
-      const msg = `save failed — couldn't load full data for every book: ${e instanceof Error ? e.message : "error"}`;
+      // BUG-009: a book whose load failed for good (moved source, expired
+      // upload token) refuses EVERY save — the file must be self-contained — so
+      // an unnamed reason was a dead end. Name the book whose fetch failed with
+      // THIS rejection (by identity, so an older failure of another book with
+      // the same words is never blamed) and offer its recovery. Toasted
+      // directly, not through the per-fetch dedupe: a view may already have
+      // announced the load failure, but the user asked to SAVE and must hear
+      // that the save did not happen.
+      const reason = e instanceof Error ? e.message : String(e);
+      const failed = get().datasets.find((d) => d.pending && failedWith(d.id, d.pending, e));
+      const msg = failed
+        ? `save failed — "${failed.name}" could not load its full data (${truncateReason(reason)}). Nothing was saved. ` +
+          (canRelink(failed) ? "Re-import it (or relink it if the file moved)" : "Re-import the file") +
+          ", or remove it, then save again."
+        : `save failed — couldn't load full data for every book: ${reason}`;
       get().setStatus(msg);
-      toast(msg, "danger");
+      toast(msg, "danger", failed ? reimportOffer(get, failed) : undefined);
       return null;
     }
   }
