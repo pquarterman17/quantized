@@ -10,6 +10,7 @@ import { CANCELLED, openProject, pathState, readProject } from "./desktopBridge"
 import { FIGURE_DOCUMENT_SCHEMA } from "./figureDocument";
 import { WORKSPACE_FORMAT, parseWorkspace } from "./workspace";
 import { useRecoveryChoice, type RecoveryPrompt } from "../store/recoveryChoice";
+import { useImportBatch } from "../store/importBatch";
 import { useApp } from "../store/useApp";
 import { useToasts } from "../store/toasts";
 import {
@@ -56,9 +57,19 @@ beforeEach(() => {
   useToasts.setState({ toasts: [] });
   useApp.setState({ datasets: [], activeId: null, currentProject: null, projectDirty: false });
   useRecoveryChoice.setState({ pending: null });
+  useImportBatch.setState({ running: false });
 });
 
 describe("applyRecoverAutosave", () => {
+  it("leaves recovery available when an active import makes replacement unsafe", () => {
+    const p = prompt();
+    useRecoveryChoice.setState({ pending: p });
+    useImportBatch.setState({ running: true });
+    applyRecoverAutosave(p);
+    expect(useApp.getState().datasets).toEqual([]);
+    expect(useRecoveryChoice.getState().pending).toBe(p);
+  });
+
   it("loads the recovered workspace and adopts the last project's identity, marked dirty", () => {
     applyRecoverAutosave(prompt());
     expect(useApp.getState().datasets.map((d) => d.name)).toEqual(["recovered.dat"]);

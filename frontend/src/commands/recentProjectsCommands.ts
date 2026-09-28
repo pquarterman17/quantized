@@ -31,7 +31,11 @@ import { useEffect } from "react";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { CANCELLED, openProject, pathState, readProject, type OpenProjectResult } from "../lib/desktopBridge";
 import { baseName, parentDirectory } from "../lib/importEntry";
-import { hasWorkspaceContent, replaceConfirmMessage, replaceWorkspace } from "../lib/openWorkspaceReplace";
+import {
+  hasWorkspaceContent,
+  replaceConfirmMessage,
+  replaceWorkspace,
+} from "../lib/openWorkspaceReplace";
 import { currentViewport } from "../lib/parseWorkspaceFile";
 import { workspaceCodec } from "../lib/workspaceCodecLazy";
 import { useCommands, type Action } from "../store/commands";
@@ -138,15 +142,15 @@ export async function openRecentProject(name: string, path: string): Promise<Reo
   }
   const s = useApp.getState;
   const identity = opened.path === path ? { name, path } : { name: baseName(opened.path), path: opened.path };
-  const apply = () => {
+  const apply = (): boolean => {
     // A relocated project supersedes its stale entry; `replaceWorkspace`
     // pushes the new one and records its folder as the working path.
-    if (relocating && opened.path !== path) useRecentProjects.getState().removeRecentProject(path);
-    replaceWorkspace(s, ws, identity);
+    const replaced = replaceWorkspace(s, ws, identity);
+    if (replaced && relocating && opened.path !== path) useRecentProjects.getState().removeRecentProject(path);
+    return replaced;
   };
   if (!hasWorkspaceContent(s)) {
-    apply();
-    return "applied";
+    return apply() ? "applied" : "cancelled";
   }
   const ok = await askConfirm(
     "Replace the current workspace?",
@@ -155,8 +159,7 @@ export async function openRecentProject(name: string, path: string): Promise<Reo
     true,
   );
   if (!ok) return "cancelled";
-  apply();
-  return "applied";
+  return apply() ? "applied" : "cancelled";
 }
 
 /** Publish one "Open recent project…" command per Recent Projects entry,

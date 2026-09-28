@@ -88,7 +88,6 @@
 // filesystem access; both are `lib/browserLockProvider.ts`'s domain.
 
 import { create } from "zustand";
-
 import {
   canRelease,
   canTakeOver,
@@ -99,6 +98,9 @@ import {
   type LockStatus,
 } from "../lib/lockState";
 import { useApp } from "./useApp";
+let _projectEpoch = 0;
+export const beginProjectLockOperation = (): number => ++_projectEpoch;
+export const isCurrentProjectLockOperation = (candidate: number): boolean => candidate === _projectEpoch;
 
 // `createInMemoryLockProvider` lives in its own sibling module
 // (store/inMemoryLockProvider.ts) — extracted under the 500-line
@@ -199,6 +201,7 @@ export interface OpenResult {
   readOnly: boolean;
 }
 
+const SUPERSEDED_OPEN: OpenResult = { status: "unlocked", readOnly: false };
 interface ProjectLockState {
   status: LockStatus;
   record: LockRecord | null;
@@ -315,14 +318,11 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
   setProvider: (provider) => set({ provider }),
 
   openProject: async (path) => {
+    const myEpoch = beginProjectLockOperation();
     const { provider, instanceId } = get();
     const now = Date.now();
-    // Shared by every non-acquiring outcome below (a thrown read, a live/
-    // stale other holder, a thrown acquire, or a lost race) — always resets
-    // `unverifiableHeartbeats` (a leftover streak from a PRIOR path/session
-    // must never keep the heartbeat interval alive against a record/token
-    // that no longer belongs to this attempt) and never assumes success.
     const failClosed = (status: LockStatus, record: LockRecord | null): OpenResult => {
+      if (!isCurrentProjectLockOperation(myEpoch)) return SUPERSEDED_OPEN;
       set({ status, record, path, openedAsCopy: false, unverifiableHeartbeats: 0 });
       return { status, readOnly: isReadOnly(status) };
     };
@@ -332,11 +332,9 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
     } catch {
       return failClosed("held-by-other-live", null);
     }
+    if (!isCurrentProjectLockOperation(myEpoch)) return SUPERSEDED_OPEN;
     const status = classifyLock(current, instanceId, now);
     if (status !== "unlocked" && status !== "held-by-me") {
-      // Read-only (live OR stale) — never auto-acquire; a stale lock is
-      // only ever taken over via the EXPLICIT `takeOverEditing()` below,
-      // L0.47's hard gate.
       return failClosed(status, current);
     }
     let result: LockCasResult;
@@ -345,10 +343,13 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
     } catch {
       return failClosed("held-by-other-live", current);
     }
+    if (!isCurrentProjectLockOperation(myEpoch)) {
+      if (result.acquired && result.record !== null) {
+        void provider.release(path, result.record.token ?? "").catch(() => false);
+      }
+      return SUPERSEDED_OPEN;
+    }
     if (!result.acquired) {
-      // Lost a race between the read above and the provider's own atomic
-      // acquire (another process/tab won it in between) — report the
-      // TRUTH the CAS just observed, never pretend we still won.
       return failClosed(statusFromRefusal(result, instanceId, Date.now()), result.record);
     }
     set({
@@ -356,9 +357,6 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
       record: result.record,
       path,
       openedAsCopy: false,
-      // F3 (code review follow-up): a FRESH acquire always starts a clean
-      // slate — a streak carried over from a PRIOR path/session must never
-      // demote this brand-new one after only one more blip.
       unverifiableHeartbeats: 0,
       instanceId: result.record?.instanceId ?? instanceId, // identity adoption — see INSTANCE_ID's doc
     });
@@ -393,6 +391,7 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
   },
 
   openAsCopy: () => {
+    beginProjectLockOperation();
     // `canRelease` refuses unless `record` actually names THIS instance,
     // so an ordinary "someone else holds it" case is unaffected. When it
     // DOES name us (the unverifiable-demotion recovery path — `heartbeat()`
@@ -486,10 +485,11 @@ export const useProjectLock = create<ProjectLockState>((set, get) => ({
   },
 
   releaseLock: async () => {
+    beginProjectLockOperation();
     const { provider, path, record, instanceId } = get();
     if (path === null || record === null || record.instanceId !== instanceId) return;
+    set({ status: "unlocked", record: null, path: null, openedAsCopy: false, unverifiableHeartbeats: 0 });
     await provider.release(path, record.token ?? "").catch(() => false);
-    set({ status: "unlocked", record: null, unverifiableHeartbeats: 0 });
   },
 
   canWriteNow: () => {

@@ -43,13 +43,15 @@ describe("File ▸ Remove all", () => {
     expect(message).not.toContain("can't be undone");
   });
 
-  it("does not clear the project while an import can still append results", () => {
+  it("does not clear the project while an import can still append results", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "data", data: { time: [], values: [], labels: [], units: [], metadata: {} } }] });
     useImportBatch.setState({ running: true });
+    vi.mocked(askConfirm).mockResolvedValue(true);
 
     runRemoveAll();
+    await Promise.resolve();
 
-    expect(askConfirm).not.toHaveBeenCalled();
+    expect(askConfirm).toHaveBeenCalledOnce();
     expect(useApp.getState().datasets).toHaveLength(1);
   });
 

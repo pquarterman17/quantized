@@ -16,6 +16,7 @@ import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
 import {
   hasWorkspaceContent,
+  rejectWorkspaceReplacementWhileImporting,
   recordNativeOpen,
   replaceConfirmMessage,
   replaceWorkspace,
@@ -26,6 +27,7 @@ import { snapshotView } from "../lib/plotview";
 import type { Action } from "../store/commands";
 import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importBatch";
 import { withOp } from "../store/pendingOps";
+import { closeProjectLock } from "../store/projectLockLifecycle";
 import { toast } from "../store/toasts";
 import { nextDatasetId } from "../store/useApp";
 
@@ -310,12 +312,8 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Remove all…",
       description: "Permanently clear every dataset, folder, report, and imported figure from the session.",
       run: () => {
-        if (rejectIfImportRunning()) return;
         const n = s().datasets.length;
-        if (!hasWorkspaceContent(s)) {
-          s().setStatus("library is already empty");
-          return;
-        }
+        if (!hasWorkspaceContent(s)) { s().setStatus("library is already empty"); return; }
         const subject = n > 0 ? `all ${n} dataset${n === 1 ? "" : "s"}, plus every folder, report, and imported figure` : "every folder, workbook, report, page, and saved figure in this dataset-free session";
         void askConfirm(
           "Remove everything?",
@@ -324,7 +322,8 @@ export function buildFileCommands(s: StoreGet): Action[] {
           true,
         ).then((ok) => {
           if (!ok) return;
-          if (rejectIfImportRunning()) return;
+          if (rejectWorkspaceReplacementWhileImporting()) return;
+          closeProjectLock();
           s().clearAll();
           toast("removed all datasets", "ok");
         });
