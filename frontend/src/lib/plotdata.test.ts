@@ -167,6 +167,32 @@ describe("buildColumns", () => {
     expect(p.series[0].label).toBe("Moment");
   });
 
+  // LIBRARY_WORKBOOK_UX_PLAN "Required column-role inference" — "Preserved
+  // acquisition order and non-monotonic X data": Quick Plot and the Quick
+  // Figure Builder both render through this SAME function (see
+  // `usePlotPayload.errorRoles.test.ts`'s `fetchPlot` mock, which delegates
+  // to this exact `buildColumns`), so a hysteresis-loop-style, non-ascending
+  // X column must come out in its original row order, never sorted —
+  // sorting would silently redraw a loop as a monotonic line.
+  it("preserves original row order for a non-monotonic (hysteresis-style) X column — never sorts", () => {
+    const ds: DataStruct = {
+      time: [0, 1, 2, 3, 4], // ignored once xKey selects channel 0
+      values: [
+        [1, 10],
+        [3, 11],
+        [-2, 12], // acquisition order, deliberately non-ascending
+        [5, 13],
+        [0, 14],
+      ],
+      labels: ["Field", "Moment"],
+      units: ["Oe", "emu"],
+      metadata: {},
+    };
+    const p = buildColumns(ds, null, 0, [1]); // x = the non-monotonic "Field" column
+    expect(p.data[0]).toEqual([1, 3, -2, 5, 0]); // untouched acquisition order, not ascending
+    expect(p.data[1]).toEqual([10, 11, 12, 13, 14]); // Moment stays paired to its own row
+  });
+
   it("uses a value channel as the x-axis when xKey is set (M-vs-H)", () => {
     const ds: DataStruct = {
       time: [0, 1, 2], // time, ignored when xKey is set

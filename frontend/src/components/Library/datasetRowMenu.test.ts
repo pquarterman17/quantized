@@ -58,6 +58,26 @@ describe("buildDatasetRowMenu — Quick Plot ordering (L0.38)", () => {
       "unrecognized data — choose Configure Quick Plot… to assign columns and preview an editable figure",
     );
   });
+
+  // LIBRARY_WORKBOOK_UX_PLAN acceptance scenario: "Right-click an unknown
+  // CSV: Quick Plot is disabled with a short reason; Configure Quick Plot
+  // remains available." The test above pins the disabled half; this pins
+  // the OTHER half on the SAME row — `datasetQuickPlotActions` (lib/
+  // quickPlotActions.ts) gates only "dataset.quickPlot", never
+  // "dataset.configureQuickPlot", so the entry must be present and enabled
+  // even when Quick Plot itself is refused.
+  it("Configure Quick Plot… remains enabled on the SAME generic (unknown) dataset row Quick Plot refuses", () => {
+    const ds = dataset("d1", "generic");
+    const items = buildDatasetRowMenu(ds, false, false, [], false, false, () => {}, () => {});
+    // A `hidden`-gated entry (Quick Plot With…, "Move to …" self-entries,
+    // etc.) is OMITTED from `items` entirely (buildMenuItems), so finding it
+    // here already proves it was never hidden for this row.
+    const configure = items.find((i) => labelOf(i) === "Configure Quick Plot…") as
+      | { disabled?: boolean }
+      | undefined;
+    expect(configure).toBeDefined();
+    expect(configure!.disabled).toBeFalsy();
+  });
 });
 
 // LIBRARY_WORKBOOK_UX_PLAN PR K slice 2 (L0.50): Create Derived Worksheet /

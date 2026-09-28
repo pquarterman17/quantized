@@ -59,7 +59,7 @@ export default function GroupingPanel({
         style={{ maxWidth: 160, minWidth: 0 }}
         value={groupKey === null ? "" : String(groupKey)}
         onChange={(e) => onGroupKey(e.target.value === "" ? null : Number(e.target.value))}
-        title="Split the plotted series into one colored line per level of this column. Drawn as a plain, ungrouped overlay instead — on screen and in export — whenever a secondary Y axis is also bound."
+        title="Split the plotted series into one colored line per level of this column, drawn as a plain, ungrouped overlay instead — on screen and in export — whenever a secondary Y axis is also bound."
         options={options}
       />
       <label className="qzk-field-lbl" style={{ marginTop: 4 }}>facet by</label>

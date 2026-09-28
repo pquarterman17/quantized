@@ -57,6 +57,37 @@ describe("Quick Figure Builder mapping draft", () => {
     const alternate = assignQuickFigureColumn(initialQuickFigureMapping(dataset), 2, { role: "x" });
     expect(useAcquisitionAxis(alternate).xKey).toBeNull();
   });
+
+  // LIBRARY_WORKBOOK_UX_PLAN "Required column-role inference" — "Repeated
+  // combinations of the structures above": a worksheet with TWO independent
+  // (Y, Yerr) groups must bind each error column to its OWN nearest value
+  // column, not collapse onto a single target or leave the second group
+  // unbound. The label-only algorithm this delegates to
+  // (`inferErrorBindingsFromLabels`) already pins this shape in the shared
+  // parity fixture (`tests/fixtures/error_labels/parity_corpus.json`'s
+  // "nearest PRECEDING value column" case); this pins the SAME shape at the
+  // Quick Figure Builder's own mapping layer, which is what the plan item is
+  // actually about.
+  it("repeated (Y, Yerr) groups each bind to their own nearest value column, not just the first", () => {
+    const repeated: Dataset = {
+      id: "d2",
+      name: "repeated.csv",
+      data: {
+        time: [0, 1],
+        values: [[2, 0.1, 4, 0.2], [3, 0.15, 5, 0.25]],
+        labels: ["Signal1", "Signal1_err", "Signal2", "Signal2_err"],
+        units: ["V", "V", "A", "A"],
+        metadata: {},
+      },
+    };
+    const mapping = initialQuickFigureMapping(repeated);
+    expect(mapping.yKeys).toEqual([0, 2]); // both measured columns plotted
+    expect(mapping.errorBindings).toEqual([
+      { channel: 1, target: 0, axis: "y", side: "both" },
+      { channel: 3, target: 2, axis: "y", side: "both" },
+    ]);
+    expect(mappingReady(mapping)).toBe(true);
+  });
 });
 
 // P2 (X-error orphaning): an X-error binding carries target:-1 (the axis

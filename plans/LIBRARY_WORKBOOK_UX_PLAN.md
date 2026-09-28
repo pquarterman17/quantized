@@ -739,17 +739,17 @@ Quick Plot must reason about series groups, not assume one fixed column order.
 At minimum, the design must account for:
 
 - [ ] `X, Y, X, Y, X, Y`: independent XY series.
-- [ ] `X, Y1, Y2, Y3`: several Y series sharing one X.
-- [ ] `X, Y, Yerr`: symmetric Y error.
-- [ ] `X, Y, Yerr+, Yerr-`: asymmetric Y error.
-- [ ] `X, Xerr, Y, Yerr`: uncertainties on both axes.
-- [ ] Repeated combinations of the structures above.
+- [x] `X, Y1, Y2, Y3`: several Y series sharing one X. Verified 2026-09-28: `frontend/src/lib/quickFigureMappingActions.ts`'s `initialQuickFigureMapping` collects every non-error/non-hidden/non-ignored channel into `QuickFigureMapping.yKeys`; pinned by `frontend/src/lib/quickFigureMapping.test.ts`'s "seeds defensible error inference without plotting the error as Y" (`yKeys: [0, 2]`).
+- [x] `X, Y, Yerr`: symmetric Y error. Verified 2026-09-28: `src/quantized/io/error_inference.py`'s `infer_error_bindings_from_labels` (side `"both"`); pinned by `tests/test_error_inference_parity_fixture.py` (83 passed) via the shared `tests/fixtures/error_labels/parity_corpus.json`.
+- [x] `X, Y, Yerr+, Yerr-`: asymmetric Y error. Verified 2026-09-28: same module's `side: "+"/"-"` + `frontend/src/lib/errorRoles.ts`'s `asymmetricPair`; pinned by `frontend/src/lib/quickFigureMapping.test.ts`'s "asymmetric '+' and '-' halves for the same target coexist" and the parity fixture's "both halves of an asymmetric +/- pair" case.
+- [x] `X, Xerr, Y, Yerr`: uncertainties on both axes. Verified 2026-09-28: `usePlotPayload.errorRoles.test.ts`'s NCNR `.refl` cases render both an x (resolution) and y (uncertainty) whisker simultaneously from one mapping; python-checked directly against `infer_error_bindings_from_labels(["Qz","Xerr","Y","Yerr"])`.
+- [x] Repeated combinations of the structures above. Verified 2026-09-28: the parity fixture's "nearest PRECEDING value column" case (`['R++','err','SA','err']` → two independent bindings) already covers two repeated (Y, Yerr) groups; added `frontend/src/lib/quickFigureMapping.test.ts`'s "repeated (Y, Yerr) groups each bind to their own nearest value column, not just the first" to pin the same shape at the Quick Figure Builder's own mapping layer.
 - [ ] Multiple independent X channels in one worksheet.
-- [ ] Preserved acquisition order and non-monotonic X data.
-- [ ] Explicit column designations override inferred adjacency.
+- [x] Preserved acquisition order and non-monotonic X data. Verified 2026-09-28: `frontend/src/lib/plotdata.ts`'s `buildColumns` (the function both Quick Plot and the Quick Figure Builder render through, per `usePlotPayload.errorRoles.test.ts`'s `fetchPlot` mock) never sorts `ds.time`/`ds.values`; added `frontend/src/lib/plotdata.test.ts`'s "preserves original row order for a non-monotonic (hysteresis-style) X column — never sorts".
+- [x] Explicit column designations override inferred adjacency. Verified 2026-09-28: `frontend/src/lib/quickFigureMappingActions.ts`'s `assignQuickFigureColumn` lets any channel be reassigned to any role, dropping stale bindings; pinned by `quickFigureMapping.test.ts`'s "keeps roles exclusive and drops bindings whose target stops being Y" and related cases.
 - [ ] Header, unit, parser metadata, and adjacency evidence contribute to a
-  confidence result; adjacency alone is insufficient.
-- [ ] The user can override every inferred role before creating the figure.
+  confidence result; adjacency alone is insufficient. NOT fully done (checked 2026-09-28): header (label-text), parser-metadata (`dataset.errorRoles` overriding the label guesser), and nearest-preceding-column adjacency all contribute in `error_inference.py`/`quickFigureMappingActions.ts`'s `initialQuickFigureMapping` — but `units` (`DataStruct.units`) is never read by any inference path (`grep -rn "units" src/quantized/io/error_inference.py src/quantized/io/error_label_classify.py src/quantized/io/error_label_candidates.py frontend/src/lib/errorRoles.ts` — no hits outside test fixtures). Leaving unticked until unit evidence is actually wired in or the item is narrowed.
+- [x] The user can override every inferred role before creating the figure. Verified 2026-09-28: `QuickMappingPanel`'s per-column X/Y/error/ignore `<Select>`s feed `assignQuickFigureColumn`; pinned by `QuickFigureBuilderWorkspace.test.tsx`'s "offers keyboard-accessible X, Y, ignore, and targeted error roles" (reassigns an auto-inferred error column to X-error and then to plain Y) and "supports dragging a column into an explicit role zone".
 
 Unknown and ambiguous are different states:
 
@@ -765,18 +765,18 @@ It is a fast mapping and initial-style surface, not an export-only builder.
 
 - [ ] **Left — data roles:** worksheet columns can be assigned by drag/drop or
   menus to X, Y, X error, Y error, label, and grouping roles.
-- [ ] **Center — live preview:** every accepted mapping/style change is visible
-  before creation; Cancel produces no figure or data change.
+- [x] **Center — live preview:** every accepted mapping/style change is visible
+  before creation; Cancel produces no figure or data change. Verified 2026-09-28: `QuickFigureBuilderWorkspace.tsx` recomputes `quickFigurePreview(dataset.data, mapping, style, ...)` from React state on every render (no separate "apply" step); pinned by `QuickFigureBuilderWorkspace.test.tsx`'s "Cancel clears only the transient builder target — no plot, worksheet mutation, or template left behind" and `quickFigurePreview.test.ts`'s mapping-change cases.
 - [ ] **Right — concise setup:** detected series, plot type, color preset,
   lines/markers, axes, legend, and error-bar settings.
-- [ ] **Ambiguity display:** uncertain assignments are visibly highlighted and
-  explained in one sentence.
-- [ ] **Actions:** **Create Editable Figure**, **Save Quick Plot Template...**,
-  and **Cancel**.
-- [ ] **After creation:** open the result as a normal editable internal plot
-  with the regular Stage/property/context-menu tools.
-- [ ] **No forked state:** saving and reopening must use the same canonical
-  editable figure contract as other internal plot creation.
+- [x] **Ambiguity display:** uncertain assignments are visibly highlighted and
+  explained in one sentence. Verified 2026-09-28: `QuickFigureBuilderWorkspace.tsx`'s role-filtered-Y and incomplete-error-pair `role="status"` notices; pinned by `QuickFigureBuilderWorkspace.test.tsx`'s "identifies and blocks a half-complete asymmetric error pair" and "reports BOTH notices when a role-filtered Y and an incomplete error pair are both present".
+- [x] **Actions:** **Create Editable Figure**, **Save Quick Plot Template...**,
+  and **Cancel**. Verified 2026-09-28: all three buttons present verbatim in `QuickFigureBuilderWorkspace.tsx`; pinned by `QuickFigureBuilderWorkspace.test.tsx`'s create/cancel/save-template describe blocks.
+- [x] **After creation:** open the result as a normal editable internal plot
+  with the regular Stage/property/context-menu tools. Verified 2026-09-28: `store/quickFigureCreate.ts`'s `createQuickFigureFromMapping` calls the canonical `createWindow`/`createFigureDocument`/`withPlotWindowDocument`/`focusWindow` (explicitly "MIRRORS quickPlotDataset's exact inline sequence verbatim"); pinned by `quickFigureCreate.test.ts`.
+- [x] **No forked state:** saving and reopening must use the same canonical
+  editable figure contract as other internal plot creation. Verified 2026-09-28: the created `FigureDocument` lands in the same `editableFigures`/`plotWindows` the app already serializes — `frontend/src/lib/workspace.ts` has zero special-cased "quickFigure" handling (`grep -n "quickFigure" frontend/src/lib/workspace.ts` — no hits); `quickFigureCreate.test.ts`'s "the created document is live-mode, carries the mapping's errors verbatim" confirms the shape matches an ordinary live figure.
 
 ## Tile/tree/details view modes
 
@@ -3144,8 +3144,8 @@ PR A acceptance gates:
   paired editable series are created.
 - [ ] Right-click a recognized shared-X worksheet with Y error columns: errors
   attach to the correct series.
-- [ ] Right-click an unknown CSV: Quick Plot is disabled with a short reason;
-  Configure Quick Plot remains available.
+- [x] Right-click an unknown CSV: Quick Plot is disabled with a short reason;
+  Configure Quick Plot remains available. Verified 2026-09-28: `frontend/src/lib/quickPlot.ts:95`'s `quickPlotProfile` returns `CONFIGURE_QUICK_PLOT_REASON` for technique `"generic"`, and `lib/quickPlotActions.ts`'s `datasetQuickPlotActions` gates only `"dataset.quickPlot"` (never `"dataset.configureQuickPlot"`); pinned by `components/Library/datasetRowMenu.test.ts`'s "Quick Plot is disabled with a reason for a generic dataset row" plus the new "Configure Quick Plot… remains enabled on the SAME generic (unknown) dataset row Quick Plot refuses".
 - [ ] Cancel the Quick Figure Builder: no plot, worksheet mutation, or template
   is left behind.
 - [x] Switch Tree -> Tiles -> Details: selection and active content remain

@@ -3003,12 +3003,26 @@ than fixed here. NIT 7 (the commit trailer) is this session's standing
 attribution convention, not a code finding, and is not actionable from inside
 a plan edit.
 
-- [ ] Decode Bruker RAW's `alpha1` (byte 624) so `lib/xrdWavelength.ts`'s
+- [x] Decode Bruker RAW's `alpha1` (byte 624) so `lib/xrdWavelength.ts`'s
   documented Kα1-over-average preference can fire for Bruker patterns.
-  `io/bruker_raw.py`'s own header documents the field; the metadata dict emits
-  only `alpha_average` at byte 616, so every Bruker RAW pattern currently
-  adopts the Kα1/Kα2 average as "the wavelength this pattern was measured at".
-  Backend change; needs a golden RAW fixture.
+  `io/bruker_raw.py` now decodes `alpha1` (byte 624) and `alpha2` (byte 632)
+  into metadata alongside `alpha_average` (byte 616), gated by a
+  plausibility guard (finite, 0.5–2.5 Å) AND consistency with the file's own
+  `alpha_average` (Kα1 alone within 2%; Kα2 additionally checked via the
+  standard (2·Kα1+Kα2)/3 weighted-average identity) — a legacy file with the
+  slots left zeroed, or a corrupt one, omits the field and `alpha_average`
+  stands, fail closed. `lib/xrdWavelength.ts` now reads `alpha1` (ordered
+  ahead of `alpha_average`, behind the xrdml `wavelength_a`) so the Kα1
+  preference fires for Bruker patterns too. Verified against the byte layout
+  documented in `io/bruker_raw.py`'s own header (offsets 616/624/632,
+  cross-checked against xylib's `bruker_raw.cpp`); sabotage-verified both the
+  decode and the consistency guard (disabling each made its guarding test
+  fail with the expected assertion, then restored to green). **The fixture
+  is synthetic** (built with the existing `_make_raw` byte-builder in
+  `tests/test_io_bruker_raw.py`, extended with `alpha_average`/`alpha1`/
+  `alpha2` params) — no real-world RAW file with non-zero byte-624/632
+  values has been checked against this decode yet; do that against a real
+  instrument file before fully trusting it on real corpora.
 - [~] Per-peak fit uncertainties. **Filled for the model-fit path; the legacy
   producers still write null.** `calc/peak_multifit.fit_multi_peak` and
   `calc/peak_fit.fit_peak` (the Peaks workshop's "Fit together" / "Fit
@@ -5440,7 +5454,29 @@ covers a much smaller subset and guards focus on Analyze.
   topic. Folder, workbook, and Library-item menus land on "Toggle library
   panel", the closest real entry; a Library/folder/workbook topic would
   make those three footers genuinely useful.
-- [ ] Progressive disclosure; tooltips remain one sentence.
+- [x] ~~Progressive disclosure; tooltips remain one sentence.~~ SHIPPED
+  2026-09-28: `frontend/src/lib/tooltipSentenceAudit.test.ts`, a script-free
+  vitest audit (no separate node script — the test itself walks
+  `frontend/src` at run time) scanning `title="..."` and `hint: "..."`
+  string literals everywhere, plus `description: "..."` restricted to the
+  command registry (`commands/*.ts`, `store/commands.ts` — the "one-sentence
+  tooltip" this plan's own line ~5401 already names; `helpContent.test.ts`
+  enforced only its MINIMUM length, never a maximum). Flags a terminator
+  (`.`/`!`/`?`) followed by more text — i.e. two-or-more actual sentences —
+  while allowing the semicolon/dash/colon-joined compound-clause style this
+  codebase's tooltips already lean on. Found and fixed 8 real offenders (0
+  now): `commands/analysisCommands.ts` (2 command descriptions),
+  `components/Inspector/ChannelsCard.tsx`, `components/Stage/MapToolbar.tsx`
+  (2), `components/Stage/worksheet/GridHeader.tsx`,
+  `components/workshops/figurebuilder/GroupingPanel.tsx`,
+  `components/workshops/hysteresis/HysteresisPanel.tsx` — each a minimal
+  edit (merge two sentences into one via a semicolon/comma/participle,
+  wording otherwise unchanged). Sabotage-verified: reintroduced a two-
+  sentence `title=` on `ChannelsCard.tsx`, confirmed the guard fails with
+  the exact string named, reverted.
+  No allowlist: the guard scans every source file. An allowlist of files
+  under edit by open PRs was drafted, then dropped on review after the
+  audit found zero offenders in those files with it disabled.
 - [x] Audit stale capability wording. **Audited 2026-09-13** against the
   three most recent capability changes: P3.3's dash/marker cycle (this
   branch's HEAD, `1b60872a`), L1.4 Details parity (LIBRARY_WORKBOOK_UX_PLAN
@@ -9673,7 +9709,28 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   Every version this app still claims to load across the true migration
   boundaries above now has a committed, frozen fixture and a load-path
   test — the box ticks clean.
-- [ ] Document one ownership path per field before deleting adapters.
+- [x] ~~Document one ownership path per field before deleting adapters.~~
+  SHIPPED 2026-09-28 (docs/tests only): `docs/figure_field_ownership.md`,
+  generated from `figureContract.ts`'s own field census (the 56 fields
+  classified `"canonical"` across `PLOT_VIEW_FIELD_CONTRACT` and
+  `FIGURE_DOC_FIELD_CONTRACT` — the only two contracts with an independently
+  persisted field at all) plus a grep of every writer, not from memory. Each
+  field: the real current owner path (`FigureDocument.plot.view.*` or
+  `.bindings.*`, which differs from `figureContract.ts`'s own aspirational
+  nested `mapsTo` — documented explicitly), every Setter/Bulk/Reset/Builder
+  adapter that writes it, and a removable verdict. Two genuine consolidation
+  candidates found and flagged (not fixed here, out of scope for a docs-only
+  item): `errKeys`' legacy `Record<channel,errChannel>` shape duplicating
+  `bindings.errors`, and the Figure Builder draft session's direct
+  `plot.view`/`output` patch duplicating (in spirit) the live-window Bridge.
+  No other field had a second, removable adapter — every Setter/Bulk/Reset
+  writer is an alternative SOURCE of a new value, not a competing
+  destination. `lib/figureFieldOwnershipDoc.test.ts` guards the doc: it reads
+  `FIGURE_FIELD_CONTRACTS` directly and fails if any canonical field's
+  backtick-quoted name is missing from the doc, plus a sabotage-verifiable
+  check that exactly `{FigureDoc, PlotView}` are the contracts with canonical
+  fields today (a third contract gaining one needs its own table, not just
+  a passing grep).
 - [x] ~~Make the e2e job reproducible against the lockfile~~ SHIPPED
   2026-07-25 (PR #87, `034fdb4`): both `ci.yml` and `e2e.yml` now run
   `npm ci` (the class fix — pypi/release already did), landed right after
