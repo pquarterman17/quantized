@@ -33,7 +33,7 @@ finding is not a seam: most of the "chunk-boundary tax" slices 3–5 kept
 measuring was Vite's preload lists naming already-loaded chunks, and removing
 them (build-time, runtime-neutral) recovered 10.7 kB by itself. See "Slice 8".
 
-**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4, 5, 6, 8, 9 and 10
+**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4, 5, 6, 8, 9, 10 and 11
 executed; slice 7 built and reverted, never on main** (slice 5 deliberately small — see its ruling on `PlotLegend`; slice
 6 ratchets the pin DOWN, the first slice authorized to) (see their sections
 below); slice 2 is partially done. Slice 5 is no longer the
@@ -1824,6 +1824,87 @@ instead of importing them separately. Fixed by passing
 (`store/useApp.ts`) — the guard is still held by, and released by,
 "import-append" for the whole gesture; the fallback just no longer trips over
 its own enclosing guard.
+
+### Slice 11 — one import edge: `PLOT_MARKS` out of the plot-spec grammar — **DONE (2026-09-28)**
+
+**Measured net eager delta −17,951 B — pin NOT moved (866,358 B)**
+
+Brief: main `726da942` measured 865,437 B, 921 B under the pin, and the queued
+work (#462, #466, then ~+1.7 kB more) needed more than that. Target: free
+≥ 5,000 B without touching `EAGER_JS_BUDGET` or the files in flight elsewhere.
+Exact bytes out of `dist/index.html` (entry + `modulepreload`), `npm ci`,
+`node_modules/.vite` wiped before EVERY build, reproduced by a second
+identical build:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| main `726da942` (parent) | 865,437 | — |
+| + `PLOT_MARKS` moved to `lib/plotMarks.ts` | 847,486 | **−17,951** |
+
+Re-measured after rebasing onto main `d7ea72dd` (#462, #466, #468 landed): 848,423 B
+eager, 17,935 B under the pin (same `npm ci` + wiped `.vite` procedure).
+
+#### How it was found
+
+Not a seam this time: a scan for EXPORTS of eager modules that only lazy
+modules import (scratch script over the build's own `getModuleInfo` graph +
+each importer's named value imports). A module is placed in one chunk with
+every export any importer uses, so one small eager import can pin a whole
+module — and everything only it reaches — into the entry chunk. The
+dominator pass (slice 9/10's method) then priced it: `lib/figureDocument.ts`
+(eager — window documents, figure lifecycle) value-imported exactly one name
+from `lib/plotspec.ts`, the six-string `PLOT_MARKS` allow-list, and that was
+the ONLY eager edge into the plot-spec grammar. Cutting it drops seven
+modules: `lib/plotspec.ts` 6,876, `lib/plotspec2.ts` 4,778, `lib/statstage.ts`
+2,744, `lib/statschooser.ts` 2,396, `lib/tdist.ts` 1,157,
+`lib/nestedLevels.ts` 267 and `lib/types.ts`'s 118 runtime bytes (18,336 B
+attributed; 400 → 394 eager modules in the build graph, `lib/plotMarks.ts`
+added). The measured −17,951 B is that minus the new leaf and the preload
+table entries the five new lazy chunks cost.
+
+#### The change
+
+`lib/plotMarks.ts` (new, a leaf with no value imports) holds `PLOT_MARKS`;
+`lib/plotspec.ts` imports and re-exports it (its importers are unchanged, its
+line count too) and `lib/figureDocument.ts` imports it from the leaf. No
+function, value or control flow changed. None of the seven modules has
+top-level side effects (checked), so nothing that ran at startup stops
+running.
+
+#### Why it qualifies under the `PlotLegend` ruling, and what it costs
+
+Nothing on first paint evaluates the grammar: every static importer left is
+already lazy — Graph Builder, the stat stages, `plotSpecFigure`, the `.dwk`
+codec, import, Pack Project, plot-recipe apply. Those chunks now name the
+grammar's five chunks (plotspec 12.2 kB, statstage 4.1 kB, statschooser
+2.5 kB, nestedLevels, types; ~19.4 kB) in their preload lists, checked in the
+emitted output, so each first use fetches them IN PARALLEL with the chunk it
+was already fetching — no serial round trip, and no new `Suspense` boundary,
+fallback, focus or Escape path. The one startup-time consumer, the autosave
+restore, starts the codec fetch alongside its IndexedDB read (slice 9) and
+now fetches the grammar in the same batch; those bytes were previously part
+of the eager download, so the restore moves the same bytes, only later and
+in parallel. Not measured in a browser (no Playwright browser in this
+environment); the claim rests on the preload lists above.
+
+#### Guards and sabotage
+
+`architecture.test.ts`: the six `src` modules above are `DRAGGED_OUT` (every
+one is still statically imported by lazy modules, so only reachability can
+hold them; `lib/types.ts` is not listed because the guard's scanner keeps
+inline-`type` imports and sees it as eager). Sabotage — `figureDocument.ts`
+importing `PLOT_MARKS` from `./plotspec` again — reddens the `DRAGGED_OUT`
+arm with all six modules named.
+
+#### Candidates found by the same scan, not taken
+
+Upper bounds, unmeasured; each needs the split, not a seam: `lib/contextActions.ts`
+(5,756 B — the Library row/folder action builders are imported only by lazy
+modules, the eager side uses four names), `lib/figureOverrides.ts` (4,526 B —
+the eager side uses only `sanitizeFigureOverrides`), `lib/report.ts`
+(2,661 B — the eager side uses only `pruneReportRefs`; `sanitizeReports` and
+its validators serve the codec), `lib/foldertree.ts`, `lib/panelLayout.ts`,
+`lib/pipeline.ts`, `lib/desktopBridge.ts` (save-path helpers).
 
 ## What this does NOT change
 

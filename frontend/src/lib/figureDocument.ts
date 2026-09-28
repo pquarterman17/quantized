@@ -9,7 +9,7 @@
 import { errKeysFromBindings, type ErrorBinding } from "./errorRoles";
 import { sanitizeFigureOverrides, type FigureOverrides } from "./figureOverrides";
 import { sanitizeExportSeriesStyles, type ExportSeriesStyle } from "./publicationStyles";
-import { PLOT_MARKS, type PlotMark } from "./plotspec";
+import { PLOT_MARKS, type PlotMark } from "./plotMarks";
 import { sanitizePlotView, snapshotView, type PlotView } from "./plotview";
 import {
   decodeCell,

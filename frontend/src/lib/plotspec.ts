@@ -221,8 +221,8 @@ export interface PlotSpec {
   decor?: DecorBlock;
 }
 
-/** Every mark, in declaration order (also the validation allow-list). */
-export const PLOT_MARKS: readonly PlotMark[] = ["scatter", "line", "step", "box", "violin", "bar"];
+import { PLOT_MARKS } from "./plotMarks"; // the mark allow-list; homed there to keep this grammar off the entry chunk
+export { PLOT_MARKS };
 
 /** Which "shape" a set of zones renders as. `null` = incomplete (no Y). */
 export type MarkFamily = "xy" | "categorical";
