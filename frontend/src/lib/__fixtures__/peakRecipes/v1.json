@@ -1,0 +1,11 @@
+[
+  {
+    "version": 1,
+    "name": "XRD default",
+    "range": { "lo": 10, "hi": 80 },
+    "baseline": { "method": "als", "lam": 100000, "p": 0.01, "radius": 50, "order": 2 },
+    "find": { "snr_threshold": 3, "min_prominence": 0, "max_peaks": 20 },
+    "model": { "shape": "Gaussian", "bgDegree": 1, "linkMode": "None", "constrain": false },
+    "report": { "mode": "fit", "regionWidth": 3 }
+  }
+]

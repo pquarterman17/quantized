@@ -1,0 +1,11 @@
+[
+  {
+    "version": 1,
+    "name": "Exponential decay",
+    "equation": "y = a*exp(-x/t) + c",
+    "params": ["a", "t", "c"],
+    "guesses": [2, 1.5, 0.5],
+    "lower": [0, 0, null],
+    "upper": [null, null, null]
+  }
+]
