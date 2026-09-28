@@ -3,22 +3,31 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { createPageDocument } from "../lib/pageDocumentActions";
 import { useImportBatch } from "../store/importBatch";
+import { usePendingOps } from "../store/pendingOps";
 import { createInMemoryLockProvider, useProjectLock } from "../store/projectLock";
 import { useApp } from "../store/useApp";
 import { buildFileCommands } from "./fileCommands";
 
 vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
-function runRemoveAll(): void {
+/** Run the command, then let its lazy body (commands/fileCommandsLazy.ts)
+ *  load (the "Loading Remove all…" busy op ends) and run up to its first
+ *  real wait. */
+async function runRemoveAll(): Promise<void> {
   const action = buildFileCommands(useApp.getState).find((item) => item.id === "remove-all");
   if (!action) throw new Error("remove-all command missing");
   action.run();
+  await vi.waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
+  await settle();
 }
+
+const settle = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
 describe("File ▸ Remove all", () => {
   beforeEach(() => {
     vi.mocked(askConfirm).mockReset();
     useImportBatch.setState({ running: false });
+    usePendingOps.setState({ ops: [] });
     useApp.setState({
       datasets: [], folders: [], workbooks: [], pages: [], reports: [], figureDocs: [], editableFigures: [],
       macroSteps: [], techniqueViewMemory: {}, history: [], future: [],
@@ -28,17 +37,16 @@ describe("File ▸ Remove all", () => {
   it("does not mistake a dataset-free project with other content for an empty project", async () => {
     useApp.setState({ pages: [createPageDocument({ id: "page-1", name: "Figure page" })] });
     vi.mocked(askConfirm).mockResolvedValue(false);
-    runRemoveAll();
-    await Promise.resolve();
+    await runRemoveAll();
     expect(askConfirm).toHaveBeenCalledOnce();
     expect(vi.mocked(askConfirm).mock.calls[0][1]).toContain("dataset-free session");
     expect(useApp.getState().pages).toHaveLength(1);
   });
 
-  it("describes the real current-session undo behavior", () => {
+  it("describes the real current-session undo behavior", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "data", data: { time: [], values: [], labels: [], units: [], metadata: {} } }] });
     vi.mocked(askConfirm).mockResolvedValue(false);
-    runRemoveAll();
+    await runRemoveAll();
     const message = vi.mocked(askConfirm).mock.calls[0][1];
     expect(message).toContain("undo this during the current session");
     expect(message).not.toContain("can't be undone");
@@ -49,8 +57,7 @@ describe("File ▸ Remove all", () => {
     useImportBatch.setState({ running: true });
     vi.mocked(askConfirm).mockResolvedValue(true);
 
-    runRemoveAll();
-    await Promise.resolve();
+    await runRemoveAll();
 
     expect(askConfirm).not.toHaveBeenCalled();
     expect(useApp.getState().datasets).toHaveLength(1);
@@ -61,10 +68,11 @@ describe("File ▸ Remove all", () => {
     let confirm: ((ok: boolean) => void) | undefined;
     vi.mocked(askConfirm).mockReturnValue(new Promise((resolve) => { confirm = resolve; }));
 
-    runRemoveAll();
+    await runRemoveAll();
+    expect(askConfirm).toHaveBeenCalledOnce();
     useImportBatch.setState({ running: true });
     confirm?.(true);
-    await Promise.resolve();
+    await settle();
 
     expect(useApp.getState().datasets).toHaveLength(1);
   });
@@ -83,8 +91,7 @@ describe("File ▸ Remove all", () => {
     useApp.setState({ clearAll: () => { lockDuringClear = useProjectLock.getState().path; clearAll(); } });
     vi.mocked(askConfirm).mockResolvedValue(true);
     try {
-      runRemoveAll();
-      await Promise.resolve();
+      await runRemoveAll();
     } finally {
       useApp.setState({ clearAll });
     }
@@ -103,8 +110,7 @@ describe("File ▸ Remove all", () => {
     });
     vi.mocked(askConfirm).mockResolvedValue(true);
 
-    runRemoveAll();
-    await Promise.resolve();
+    await runRemoveAll();
     expect(useApp.getState().macroSteps).toEqual([]);
     expect(useApp.getState().techniqueViewMemory).toEqual({});
 

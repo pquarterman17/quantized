@@ -16,6 +16,10 @@
 // the module and its P3.4 growth are lazy-only now, like every other export
 // body in this file.
 //
+// "Remove all…" joined for the same bundle reason: its confirm/clear body runs
+// only after a click. Its imports all live in chunks that are already
+// separate from the entry chunk, so no shared code moves.
+//
 // The actual `lib/api.ts` calls stay imported EAGERLY in fileCommands.ts and
 // are passed in as parameters, rather than re-imported here — api.ts is
 // already reachable synchronously elsewhere (store/useApp.ts's
@@ -32,7 +36,11 @@
 // Origin-graph object literal, resolveDatasets/toast calls) leaves the
 // eager bundle.
 
+import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { exportActive, type StoreGet } from "../lib/exportActive";
+import { rejectIfImportRunning } from "../lib/importRunningGuard";
+import { hasWorkspaceContent } from "../lib/openWorkspaceReplace";
+import { closeProjectLock } from "../store/projectLockLifecycle";
 import { toast } from "../store/toasts";
 import type {
   exportConsolidated,
@@ -143,4 +151,30 @@ export async function runExportConsolidated(
   } catch (e: unknown) {
     s().setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
   }
+}
+
+/** File ▸ Remove all… — confirm, then clear the whole session (undoable). */
+export async function runRemoveAll(s: StoreGet): Promise<void> {
+  const n = s().datasets.length;
+  if (!hasWorkspaceContent(s)) {
+    s().setStatus("library is already empty");
+    return;
+  }
+  const subject =
+    n > 0
+      ? `all ${n} dataset${n === 1 ? "" : "s"}, plus every folder, report, and imported figure`
+      : "every folder, workbook, report, page, and saved figure in this dataset-free session";
+  const ok = await askConfirm(
+    "Remove everything?",
+    `This removes ${subject}. You can undo this during the current session.`,
+    "Remove all",
+    true,
+  );
+  if (!ok) return;
+  // Re-check at commit time: an import may have started while the
+  // confirmation dialog was open.
+  if (rejectIfImportRunning()) return;
+  s().clearAll();
+  closeProjectLock(); // after the clear: a throwing clear keeps the loaded project's lock
+  toast("removed all datasets", "ok");
 }
