@@ -1,0 +1,19 @@
+{
+  "schema": "quantized.page",
+  "version": 1,
+  "id": "page-legacy-1",
+  "name": "Figure Page 1",
+  "rows": 2,
+  "cols": 1,
+  "panels": [
+    { "figureId": "fig-legacy-1", "label": null, "title": null },
+    { "figureId": "fig-legacy-2", "label": "(custom)", "title": "Custom title" }
+  ],
+  "output": {
+    "format": "pdf",
+    "stylePreset": "default",
+    "dpi": 300,
+    "labelFormat": "(a)",
+    "labelPos": "nw"
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "schema": "quantized.figure",
+  "version": 1,
+  "id": "fig-legacy-1",
+  "name": "Magnetization vs field",
+  "bindings": {
+    "datasetId": "run-a",
+    "xKey": null,
+    "yKeys": [0],
+    "y2Keys": [],
+    "groupKey": null,
+    "facetKey": null,
+    "errors": []
+  },
+  "data": { "mode": "live" },
+  "plot": {
+    "mark": "line",
+    "view": {
+      "yScale": "log",
+      "xScale": "linear",
+      "showGrid": true,
+      "showLegend": true,
+      "legendPos": "ne",
+      "plotTitle": "M vs H"
+    },
+    "axisBreaks": { "x": [], "y": [], "y2": [] }
+  },
+  "output": {
+    "format": "pdf",
+    "stylePreset": "default",
+    "dpi": 300,
+    "transparent": false,
+    "filename": null
+  }
+}

@@ -9521,7 +9521,64 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   Today's rendered-bytes coverage is `tests/test_export_vector_structure.py`
   on ONE A8 fixture; the screen canvas has no rendered-output comparison at
   all.
-- [ ] Migration fixtures for supported contract/workspace versions.
+- [x] ~~Migration fixtures for supported contract/workspace versions.~~ SHIPPED
+  2026-09-28. Inventory of every persisted-format version this app still
+  claims to LOAD (via `git log -S` on each version constant + its
+  migrate/sanitize path):
+  - `.dwk` workspace v1-v4 already had committed frozen fixtures + full
+    load-path tests (`lib/__fixtures__/workspace/`,
+    `workspaceMigration.test.ts`, pre-existing P1.2 work); v5
+    (`WORKSPACE_VERSION_TRANSFORM_STEPS`, write-gated on a `transform` step)
+    already had its own round-trip test (`workspace.transformVersion.test.ts`).
+    No change needed here.
+  - Added committed fixtures + real-load-path tests for the four other
+    versioned persisted formats that had a genuine v1->v2 migration but only
+    inline-built test objects, no frozen fixture file:
+    `lib/__fixtures__/{figureDocument,pageDocument,fitModels,peakRecipes}/v1.json`
+    (each with a provenance README, same discipline as the workspace
+    fixtures) + `figureDocumentMigration.test.ts`,
+    `pageDocumentMigration.test.ts`, `fitModelsMigration.test.ts`,
+    `peakRecipesMigration.test.ts` — each loads through the REAL public path
+    (`sanitizeFigureDocument`/`sanitizePageDocument`/
+    `loadCustomModelsChecked`/`loadRecipesChecked`), asserts dataset/style/
+    field survival, asserts the expected (empty) migration warnings, and
+    asserts save-then-reload idempotency.
+  - Added `versionFixtureGuard.test.ts`: a generic guard that fails if any of
+    the five version constants above (`FIGURE_DOCUMENT_VERSION`,
+    `PAGE_DOCUMENT_VERSION`, `CUSTOM_FIT_MODEL_VERSION`,
+    `PEAK_RECIPE_VERSION`, `WORKSPACE_VERSION_TRANSFORM_STEPS`) is bumped
+    without a committed fixture file for every version below it.
+  - Sabotage-verified two of the migrations (each broken, confirmed the new
+    fixture-based test fails, then restored — no trace left in the diff):
+    `figureDocument.ts`'s v1/v2 envelope check (removed the `version !== 1`
+    acceptance — 3 tests failed) and `peakwizard.ts`'s v1 fit-section
+    migration (dropped the `v.version === 1 ? DEFAULT_FIT :` branch — 3
+    tests failed, including a `TypeError` inside `saveRecipe`).
+  - Reviewed and found NOT to need a fixture (only one version has ever been
+    written, so there is no older version to migrate from): `PlotRecipe`
+    (`PLOT_RECIPE_SCHEMA_VERSION = 1`), `WorkbookTransfer`/
+    `WorkbookTransferRef` (v1 only), `PeakTable` (v1 only), the backend
+    portable-bundle manifest (`MANIFEST_VERSION = 1`,
+    `SUPPORTED_MANIFEST_VERSIONS = (1,)`) and the HDF5 `file_schema_version`
+    (`= 1`, `io/_hdf5_layout.py`).
+  - Reviewed and found genuinely exempt for a structural reason, not merely
+    unversioned: report sheets (`lib/report.ts`'s `ReportEntry` carries no
+    version field at all — every field added since has been additive-
+    optional, same convention as `WorkspaceState`'s other additive fields,
+    and is already exercised inside the workspace v1-v4 fixtures) and the
+    diagnostics bundle (`DIAGNOSTICS_SCHEMA_VERSION`, `lib/diagnostics.ts`)
+    which the app only ever WRITES for a person to paste into an issue —
+    never reads back, so there is no load path to migrate.
+  - Reviewed `lib/plotspec.ts`'s `PlotSpec.version` (1 | 2, the Graph
+    Builder's saved-spec schema) and deliberately did NOT add a fixture: its
+    own doc comment is explicit that `version` is "ALWAYS RECOMPUTED … never
+    trust an incoming `version` tag as authoritative," and v1's zones+mark
+    shape is a strict subset of v2 with no field a v2 reader drops — so
+    there is no migration behavior to characterize, unlike the five formats
+    above where an older shape is missing a field the newer one requires.
+  Every version this app still claims to load across the true migration
+  boundaries above now has a committed, frozen fixture and a load-path
+  test — the box ticks clean.
 - [ ] Document one ownership path per field before deleting adapters.
 - [x] ~~Make the e2e job reproducible against the lockfile~~ SHIPPED
   2026-07-25 (PR #87, `034fdb4`): both `ci.yml` and `e2e.yml` now run
@@ -10507,6 +10564,30 @@ work (its BACKLOG row).
   say SHIPPED. Also flipped JMP_GAP_PLAN.md's stale "Worksheet-visible,
   editable type C/O/N" box (already correctly marked `[x]` here under
   P1.6b) — see that plan's own 2026-09-09 change-log entry.
+
+- ~~**Migration fixtures for supported contract/workspace versions**~~
+  (2026-09-28) — inventoried every persisted-format version constant this
+  app still loads. `.dwk` workspace v1-v5 was already fully covered
+  (pre-existing `lib/__fixtures__/workspace/` + `workspaceMigration.test.ts`
+  + `workspace.transformVersion.test.ts`). Added the same frozen-fixture +
+  real-load-path treatment to the four other formats that had a genuine
+  older-version migration but only an inline test object, no committed
+  fixture: `FigureDocument` v1→v2, `PageDocument` v1→v2, `CustomFitModel`
+  v1→v2, `PeakRecipe` v1→v2 — one fixture directory each under
+  `lib/__fixtures__/` (with a provenance README) plus a
+  `*Migration.test.ts` asserting field survival, exact migration warnings,
+  and save/reload idempotency. Added `versionFixtureGuard.test.ts` so a
+  future version bump without its fixture fails immediately. Sabotage-
+  verified two migrations (figureDocument's version-envelope check,
+  peakwizard's v1 fit-section default) by breaking each, confirming the new
+  tests fail, and restoring. Reviewed and confirmed no fixture is needed for
+  every other version constant in the app (`PlotRecipe`, `WorkbookTransfer`/
+  `WorkbookTransferRef`, `PeakTable`, the backend portable-bundle manifest,
+  the HDF5 `file_schema_version` — all still on their original v1; report
+  sheets carry no version field at all; the diagnostics bundle is write-only;
+  `PlotSpec.version` is a derived, non-authoritative tag over a v1 shape
+  that is a strict subset of v2). See the P4.2 box's own note for the full
+  breakdown.
 
 ## Reference baseline
 
