@@ -51,6 +51,7 @@ import {
 } from "../../lib/statstage";
 import type { StatMarksByMode, StatMarksMode } from "../../lib/plotviewSanitize";
 import type { StatMarks } from "../../lib/statMarks";
+import { needsBarRaw } from "./statBarMarks";
 import { figureErrorNote } from "./statErrorNote";
 import { exportStatStage } from "./statStageExport";
 import { applyLevels, levelAxes } from "./statStageLevels";
@@ -214,10 +215,13 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     () => barValueChannels.map((c) => columns.find((col) => col.index === c)?.label ?? `col ${c}`),
     [barValueChannels, columns],
   );
+  // P2.6 box 1: a grouped bar's points / median need each cell's raw rows.
+  const barRaw = mode === "bar" && needsBarRaw(rm);
   const barData = useMemo<BarChartData | null>(() => {
     if (!data || mode !== "bar") return null;
-    return computeBarData(data, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel);
-  }, [data, mode, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel]);
+    const raw = barRaw ? { rowIds } : null;
+    return computeBarData(data, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel, raw);
+  }, [data, rowIds, barRaw, mode, effectiveGroupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel]);
 
   // P2.6 box 2: facet slices computed ONCE, shared by the compute effect and
   // the level axes; and every draw keyed to the grouping inputs it was

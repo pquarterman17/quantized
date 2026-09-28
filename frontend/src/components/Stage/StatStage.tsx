@@ -253,7 +253,9 @@ export default function StatStage() {
         {/* P2.6 box 1: raw points, jitter, summary marker, error bars,
             connect-means and label options -- persisted on the PlotView. */}
         {categorical && (
-          <StatMarksControls mode={st.mode} marks={st.marks} setMarks={st.setMarks} grouped={st.groupCol != null} />
+          <StatMarksControls
+            mode={st.mode} marks={st.marks} setMarks={st.setMarks} grouped={st.groupCol != null} stacked={st.barStack}
+          />
         )}
 
         {/* P2.6 box 2: an empty level keeps its slot (n=0) unless hidden;

@@ -187,6 +187,7 @@ function relabel(draw: StatDrawData, aligned: readonly AxisSlot[]): StatDrawData
         points: draw.points.map((g, i) => ({ ...g, label: at(i, g.label) })) };
     case "violin":
       return { ...draw, violins: draw.violins.map((v, i) => ({ ...v, label: at(i, v.label) })),
+        boxes: draw.boxes?.map((b, i) => ({ ...b, label: at(i, b.label) })) ?? draw.boxes,
         points: draw.points?.map((g, i) => ({ ...g, label: at(i, g.label) })) ?? draw.points };
     default:
       return draw;

@@ -5713,6 +5713,14 @@ export interface components {
             fmt?: string;
             /** Groups */
             groups: string[];
+            /** Jitter Width */
+            jitter_width?: number | null;
+            /** Points */
+            points?: ("all" | "outliers" | "none") | null;
+            /** Raw */
+            raw?: number[][][] | null;
+            /** Raw Rows */
+            raw_rows?: number[][][] | null;
             /** Series */
             series: string[];
             /**
@@ -5725,6 +5733,8 @@ export interface components {
              * @default default
              */
             style?: string;
+            /** Summary */
+            summary?: ("none" | "mean" | "median") | null;
             /**
              * Title
              * @default

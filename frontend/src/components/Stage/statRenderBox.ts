@@ -86,12 +86,35 @@ export function drawJitteredPoints(
   }
 }
 
+/** The summary glyph alone, in `ink`: a diamond (mean) or a 7-px square
+ *  (median) centred on (`cx`, `y`). Shared by the box family's marker below
+ *  and the grouped bars' (`statRenderBar.drawBarCellMarks`), so one glyph
+ *  means one statistic everywhere. */
+export function drawSummaryGlyph(
+  ctx: CanvasRenderingContext2D, cx: number, y: number, kind: "mean" | "median", ink: string,
+) {
+  ctx.fillStyle = ink;
+  if (kind === "median") {
+    ctx.fillRect(cx - 3.5, y - 3.5, 7, 7);
+    return;
+  }
+  const r = 4;
+  ctx.beginPath();
+  ctx.moveTo(cx, y - r);
+  ctx.lineTo(cx + r, y);
+  ctx.lineTo(cx, y + r);
+  ctx.lineTo(cx - r, y);
+  ctx.closePath();
+  ctx.fill();
+}
+
 /** The summary marker (JMP_GAP J5 #2, generalised by P2.6 box 1): a diamond
  *  at the mean with its error bar (SD / SE / 95% CI, `statDrawMarks.
  *  summaryErrorBounds` — none below n=2) or a square at the median, always
  *  in `ink` so it reads against any series color. The export draws the same
- *  glyphs from the same box stats (`calc.figure_stat_marks.overlay_summary`). */
-function drawSummaryMarker(
+ *  glyphs from the same box stats (`calc.figure_stat_marks.overlay_summary`).
+ *  Box, strip and (P2.6 box 1, second pass) violin. */
+export function drawSummaryMarker(
   ctx: CanvasRenderingContext2D,
   cx: number,
   b: BoxStat,
@@ -102,13 +125,7 @@ function drawSummaryMarker(
   if (m.summary === "none") return;
   const centre = m.summary === "mean" ? b.mean : b.median;
   if (!Number.isFinite(centre)) return;
-  ctx.fillStyle = ink;
-  const my = vy(centre);
-  if (m.summary === "median") {
-    ctx.fillRect(cx - 3.5, my - 3.5, 7, 7);
-    return;
-  }
-  const bounds = summaryErrorBounds(b, m);
+  const bounds = m.summary === "mean" ? summaryErrorBounds(b, m) : null;
   if (bounds && bounds[0] !== bounds[1]) {
     const [lo, hi] = bounds;
     ctx.strokeStyle = ink;
@@ -123,14 +140,7 @@ function drawSummaryMarker(
     ctx.lineTo(cx + capW, vy(hi));
     ctx.stroke();
   }
-  const r = 4;
-  ctx.beginPath();
-  ctx.moveTo(cx, my - r);
-  ctx.lineTo(cx + r, my);
-  ctx.lineTo(cx, my + r);
-  ctx.lineTo(cx - r, my);
-  ctx.closePath();
-  ctx.fill();
+  drawSummaryGlyph(ctx, cx, vy(centre), m.summary, ink);
 }
 
 /** Connect-group-means "interaction plot" line (JMP_GAP J5 residual): a

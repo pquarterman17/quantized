@@ -314,7 +314,7 @@ describe("StatStage — categorical marks controls (JMP_GAP J5, P2.6 box 1)", ()
     expect(control("error bars")).toHaveValue("ci95");
   });
 
-  it("strip: every point by default, jittered; violin: points + jitter, no summary", () => {
+  it("strip: every point by default, jittered; violin: points + jitter, summary + error bars", () => {
     stateRef.current = makeState({ mode: "strip", draw: STRIP_DRAW });
     const { unmount } = render(<StatStage />);
     expect(control("raw points")).toHaveValue("all");
@@ -325,18 +325,28 @@ describe("StatStage — categorical marks controls (JMP_GAP J5, P2.6 box 1)", ()
     render(<StatStage />);
     expect(control("raw points")).toHaveValue("all");
     expect(control("jitter width")).toBeInTheDocument();
-    expect(control("summary marker")).toBeNull();
-    expect(control("error bars")).toBeNull();
+    // P2.6 box 1, second pass: violin takes the summary marker; its error
+    // bars come alive with the mean, as box / strip's do.
+    expect(control("summary marker")).toHaveValue("none");
+    expect(control("error bars")).toBeDisabled();
   });
 
-  it("bar: error bars only (SE by default); qq/histogram: none of it", () => {
+  it("bar: error bars (SE by default) + grouped points / summary, off when stacked; qq/histogram: none of it", () => {
     stateRef.current = makeState({ mode: "bar", draw: null, marks: resolveStatMarks("bar", {}) });
     const { unmount } = render(<StatStage />);
     expect(control("error bars")).toHaveValue("se");
     expect(control("error bars")).toBeEnabled();
-    expect(control("raw points")).toBeNull();
+    expect(control("raw points")).toHaveValue("none");
+    expect(control("raw points")).toBeEnabled();
+    expect(control("summary marker")).toBeEnabled();
     expect(control("label rotation")).toBeInTheDocument();
     unmount();
+    stateRef.current = makeState({ mode: "bar", draw: null, barStack: true, marks: resolveStatMarks("bar", {}) });
+    const { unmount: u0 } = render(<StatStage />);
+    expect(control("raw points")).toBeDisabled();
+    expect(control("summary marker")).toBeDisabled();
+    expect(control("error bars")).toBeEnabled();
+    u0();
     for (const mode of ["qq", "histogram"] as const) {
       stateRef.current = makeState({ mode, draw: null });
       const { unmount: u } = render(<StatStage />);

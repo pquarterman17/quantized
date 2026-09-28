@@ -11,6 +11,7 @@
 
 import { categoryLevels, columnOf, isCategoricalChannel, levelLabel } from "./categorical";
 import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "./rowSidecars";
+import type { IndexedPoint } from "./statschooser";
 import type { DataStruct } from "./types";
 
 // ── Category levels + label resolution ──────────────────────────────────────
@@ -208,6 +209,18 @@ export interface BarSeriesStat {
   /** Standard error of the mean; NaN when n < 2 (no error bar drawable). */
   sem: number;
   n: number;
+  /** Stat stage only (P2.6 box 1): the cell's raw points, attached when the
+   *  bar's marks draw points or a median (`Stage/statBarMarks.withBarRaw`). */
+  raw?: BarCellRaw | null;
+}
+
+/** One bar cell's raw finite points (ORIGINAL row indices, the jitter hash's
+ *  row) and its Tukey median / whiskers (`lib/statstage.boxStatsClient`). */
+export interface BarCellRaw {
+  points: IndexedPoint[];
+  median: number;
+  whislo: number;
+  whishi: number;
 }
 
 /** Mean + SEM (sample std-dev / sqrt(n), Bessel-corrected) of the finite

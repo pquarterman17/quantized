@@ -45,6 +45,7 @@ import type { GroupSpec } from "../../lib/statschooser";
 import { finiteOf, type IndexedGroupSpec, type StatMode } from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
 import { boxValueDomain, drawMarks, stripValueDomain } from "./statDrawMarks";
+import { barMarksWire } from "./statBarMarks";
 import type { StatDrawData } from "./statRender";
 import type { FacetDraw } from "./useStatStageCompute";
 
@@ -151,15 +152,16 @@ export function buildExportSpec(
 }
 
 /** The marks as the export request carries them (P2.6 box 1) — the SAME
- *  resolved object the canvas draws with. Violin takes the points only (its
- *  summary is its inner quartile glyph); summary / error bars / connect-means
- *  are box / strip marks. */
+ *  resolved object the canvas draws with. Points, the summary marker and its
+ *  error bars for all three (violin's since P2.6's second pass); the legacy
+ *  flags and connect-means are box / strip only. */
 function marksWire(mode: StatMode, m: ResolvedStatMarks, rows: number[][] | null) {
-  const pts = { points: m.points, jitter_width: m.jitterWidth, point_row_indices: rows };
+  const pts = {
+    points: m.points, jitter_width: m.jitterWidth, point_row_indices: rows, summary: m.summary, error_bars: m.errorBars,
+  };
   if (mode === "violin") return pts;
   return {
-    ...pts, show_points: m.points === "all", summary: m.summary, error_bars: m.errorBars,
-    show_mean_ci: m.summary === "mean", show_connect_means: m.connectMeans,
+    ...pts, show_points: m.points === "all", show_mean_ci: m.summary === "mean", show_connect_means: m.connectMeans,
   };
 }
 
@@ -219,8 +221,10 @@ export function onAxis<T>(
  *  route draws no bar for them), and `counts` rides only when n is shown.
  *  `errors` are the half-widths of the error-bar kind on screen (P2.6 box 1:
  *  `lib/statMarks.errorHalfWidth`, SEM unless the marks pick SD / 95% CI /
- *  none) — the export draws exactly the whiskers the canvas does. */
-function barWire(d: BarChartData, showN: boolean, m: ResolvedStatMarks | null = null) {
+ *  none) — the export draws exactly the whiskers the canvas does. The flat
+ *  plot's GROUPED bars also carry their points / summary marker
+ *  (`statBarMarks.barMarksWire`; `marksOn` false for stacked and facets). */
+function barWire(d: BarChartData, showN: boolean, m: ResolvedStatMarks | null = null, marksOn = false) {
   const kind = m?.errorBars ?? "se";
   const half = (s: { sem: number; n: number }) => errorHalfWidth(kind, s.sem, s.n);
   return {
@@ -229,6 +233,7 @@ function barWire(d: BarChartData, showN: boolean, m: ResolvedStatMarks | null = 
     values: d.groups.map((g) => g.series.map((s) => (Number.isFinite(s.mean) ? s.mean : null))),
     errors: d.groups.map((g) => g.series.map((s) => (Number.isFinite(half(s)) ? half(s) : null))),
     counts: showN ? d.groups.map((g) => g.series.map((s) => s.n)) : null,
+    ...barMarksWire(d, m, marksOn),
   };
 }
 
@@ -370,7 +375,7 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
   if (mode === "bar") {
     if (!draw || draw.mode !== "bar" || draw.data.groups.length === 0) return;
     await exportCategoricalFigure({
-      ...barWire(draw.data, showN && !o.barStack, o.marks ?? null),
+      ...barWire(draw.data, showN && !o.barStack, o.marks ?? null, !o.barStack),
       axis_style: axisWire(o.marks, draw.data.groups.map((g) => g.label)),
       stacked: o.barStack,
       caveat,

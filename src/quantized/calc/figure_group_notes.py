@@ -22,7 +22,11 @@ exactly one export behaviour to agree with:
 * :func:`footnote_text` -- P2.6 box 1: the error-bar note ("Error bars: SE of
   the mean", ``lib/statMarks.errorBarNote``, the exact line the screen shows
   under the plot) stacked ABOVE the caveat, one footnote line each. Also
-  posted verbatim; ``add_caveat`` draws every ``\n``-separated line.
+  posted verbatim; ``add_caveat`` draws every ``\n``-separated line. The
+  frontend posts it exactly while the figure DRAWS an error bar
+  (``Stage/statErrorNote.drawsErrorBars``: the mean marker's bar on box,
+  strip and -- since P2.6's second pass -- violin, and every bar's whisker),
+  so this module never decides it; both routes draw it for every kind.
 * :func:`connect_segments` -- where a connect-the-means line must break: at an
   empty slot, and (nested grouping) at every outer-factor boundary, mirroring
   ``lib/statstage.connectMeansBreaks`` on screen.

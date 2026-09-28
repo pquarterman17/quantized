@@ -573,14 +573,23 @@ def test_box_stats_computed_once_per_group_shared_across_scatter_summary_connect
 
 
 def test_box_stats_skipped_entirely_when_nothing_needs_it(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A violin with no points and no summary reads no box_stats at all --
-    the shared cache must not become a NEW unconditional computation."""
+    """A LEGACY violin (no mark field) reads no box_stats at all -- the shared
+    cache must not become a NEW unconditional computation. A new-style violin
+    now draws the box-semantics inner glyph (quartiles), so it reads them
+    exactly once per group, shared with its summary marker."""
     import quantized.calc.figure_stat_marks as fsm
     import quantized.calc.figure_statplots as fs
 
     calls: list[int] = []
-    counting = lambda g: calls.append(len(g)) or {}  # noqa: E731
+    real_box_stats = fs._box_stats
+
+    def counting(g: Any) -> Any:
+        calls.append(len(g))
+        return real_box_stats(g)
+
     monkeypatch.setattr(fs, "_box_stats", counting)
     monkeypatch.setattr(fsm, "_box_stats", counting)
-    _draw("violin", {"points": "none", "summary": "none"})
+    _draw("violin", None)
     assert calls == []
+    _draw("violin", {"points": "outliers", "summary": "mean", "error_bars": "se"})
+    assert len(calls) == len(_GROUPS)

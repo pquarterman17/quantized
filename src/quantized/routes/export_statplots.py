@@ -279,6 +279,25 @@ class CategoricalFigureRequest(BaseModel):
     # the schema but unused in that case.
     facets: list[CategoricalFacet] | None = None
     axis_style: CategoryAxisStyle | None = None  # P2.6 box 1, see StatplotFigureRequest
+    # P2.6 box 1 (calc.figure_stat_marks.overlay_bar_marks), GROUPED bars of
+    # the flat panel only: raw points ("outliers" = beyond the cell's Tukey
+    # whiskers), their jitter (fraction of the BAR's half-width) and a
+    # summary marker. `raw[group][series]` holds each cell's finite values,
+    # `raw_rows` their original row indices (the jitter hash's row). None =
+    # the request before these fields, drawn as before.
+    points: Literal["all", "outliers", "none"] | None = None
+    jitter_width: float | None = Field(default=None, ge=0.0, le=1.0)
+    summary: Literal["none", "mean", "median"] | None = None
+    raw: list[list[list[float]]] | None = None
+    raw_rows: list[list[list[int]]] | None = None
+
+    def bar_marks(self) -> dict[str, Any] | None:
+        fields = {
+            "points": self.points, "jitter_width": self.jitter_width, "summary": self.summary,
+            "raw": self.raw, "raw_rows": self.raw_rows,
+        }
+        out = {k: v for k, v in fields.items() if v is not None}
+        return out or None
 
 
 @router.post("/categorical-figure")
@@ -326,7 +345,7 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
                 fmt=req.fmt, style=req.style, title=req.title, x_label=req.x_label,
                 y_label=req.y_label, dpi=dpi, counts=req.counts,
                 caveat=footnote_text(req.error_note, req.caveat),
-                axis_style=_axis_style(req.axis_style),
+                axis_style=_axis_style(req.axis_style), bar_marks=req.bar_marks(),
             )
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)

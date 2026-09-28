@@ -24,7 +24,12 @@ from quantized.calc.figure_group_notes import (
 )
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
-from quantized.calc.figure_stat_marks import overlay_summary, resolve_marks, scatter_points
+from quantized.calc.figure_stat_marks import (
+    draw_violin_inner,
+    overlay_summary,
+    resolve_marks,
+    scatter_points,
+)
 from quantized.calc.figure_styles import figure_style
 from quantized.calc.statplots import box_stats as _box_stats
 from quantized.calc.statplots import histogram as _histogram
@@ -333,10 +338,13 @@ def _draw_statplot(
                 ax.boxplot(groups, tick_labels=labels, **box_kw)
         elif kind == "violin":
             # A new-style request draws the screen's glyph width (the points'
-            # jitter is scaled to it); matplotlib's own default is 0.5.
+            # jitter is scaled to it); matplotlib's own default is 0.5. Its
+            # inner glyph is the box's (q1-q3 bar + median dot, drawn below
+            # once the stats exist); only a legacy request keeps matplotlib's
+            # mean + extrema lines.
             ax.violinplot(
-                groups, positions=ticks, widths=mk.box_width or 0.5, showmeans=True,
-                showextrema=True,
+                groups, positions=ticks, widths=mk.box_width or 0.5,
+                showmeans=not mk.violin_quartiles, showextrema=not mk.violin_quartiles,
             )
             if labels or any(empty):
                 ax.set_xticks(all_ticks)
@@ -351,14 +359,19 @@ def _draw_statplot(
         # want -- computed ONCE here and shared, rather than once each,
         # whenever at least one of them actually needs it (an outliers
         # scatter reads the Tukey whiskers; a summary marker or the
-        # connect-means line reads the mean). A violin with no points/
-        # summary needs none of this, so it stays skipped entirely.
+        # connect-means line reads the mean; a new-style violin's inner
+        # glyph reads the quartiles). A LEGACY violin with no points/summary
+        # needs none of this, so it stays skipped entirely.
         connect_wanted = kind in ("box", "strip") and show_connect_means and len(groups) > 1
-        need_stats = mk.scatter == "outliers" or mk.summary != "none" or connect_wanted
+        inner = kind == "violin" and mk.violin_quartiles
+        need_stats = mk.scatter == "outliers" or mk.summary != "none" or connect_wanted or inner
         box_stats_cache = [_box_stats(g) for g in groups] if need_stats and groups else None
+        if inner and box_stats_cache is not None:
+            draw_violin_inner(ax, ticks, box_stats_cache)
         scatter_points(ax, groups, filled_labels, ticks, row_indices, mk, box_stats_cache)
-        if kind in ("box", "strip"):
-            overlay_summary(ax, groups, ticks, mk, box_stats_cache)
+        # Box, strip AND violin (P2.6 box 1): a legacy violin resolves to no
+        # summary, so its output is unchanged.
+        overlay_summary(ax, groups, ticks, mk, box_stats_cache)
         if connect_wanted:
             axis_tiers = (axis_style or {}).get("tiers")
             all_stats: list[dict[str, Any] | None] = [None] * len(all_groups)

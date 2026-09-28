@@ -5,11 +5,11 @@
 // footnote line, so a figure never leaves with whiskers nobody can read.
 //
 // The note appears exactly when at least one error bar is DRAWN, by the same
-// predicates the painters use (`statDrawMarks.summaryErrorBounds` for the box
-// family's mean marker, `barErrorHalf` for bars) — no note for bars that are
-// all below n = 2, for a median / no summary marker, or for "none". There is
-// no separate toggle: the note's opt-out is the error bars' own "none".
-// Violin draws no error bar (yet), so it never carries one.
+// predicates the painters use (`statDrawMarks.summaryErrorBounds` for the
+// mean marker of box / strip / violin — violin's since P2.6's second pass —
+// and `barErrorHalf` for bars) — no note for bars that are all below n = 2,
+// for a median / no summary marker, or for "none". There is no separate
+// toggle: the note's opt-out is the error bars' own "none".
 
 import { errorBarNote } from "../../lib/statMarks";
 import { barErrorHalf, drawMarks, summaryErrorBounds } from "./statDrawMarks";
@@ -19,9 +19,9 @@ import type { FacetDraw } from "./useStatStageCompute";
 /** Whether `d` paints at least one error bar. */
 export function drawsErrorBars(d: StatDrawData | null): boolean {
   if (!d) return false;
-  if (d.mode === "box" || d.mode === "strip") {
+  if (d.mode === "box" || d.mode === "strip" || d.mode === "violin") {
     const m = drawMarks(d);
-    return d.boxes.some((b) => summaryErrorBounds(b, m) !== null);
+    return (d.boxes ?? []).some((b) => summaryErrorBounds(b, m) !== null);
   }
   if (d.mode !== "bar") return false;
   const m = drawMarks(d);

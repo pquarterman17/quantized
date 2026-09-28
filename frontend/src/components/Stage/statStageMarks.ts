@@ -48,10 +48,12 @@ export function withNestLabel(d: StatDrawData, nestLabel: string | null): StatDr
 /** Facet panels carry no raw points (JMP_GAP J5 residual), so a panel shows
  *  what it CAN: a box its fliers (for "all" or "outliers"), a violin none.
  *  The export applies the same rule (`calc.figure_facets._facet_marks`). No
- *  connect-means line in a panel either: the faceted export draws none. */
+ *  connect-means line in a panel either: the faceted export draws none. A
+ *  bar panel draws no summary marker (P2.6 box 1: its cells carry no raw
+ *  values, and the faceted bar export takes no marks). */
 export function facetMarks(r: ResolvedStatMarks, mode: StatMode): ResolvedStatMarks {
   const points = mode === "box" && r.points !== "none" ? "outliers" : "none";
-  return { ...r, points, connectMeans: false };
+  return { ...r, points, connectMeans: false, ...(mode === "bar" ? { summary: "none" as const } : {}) };
 }
 
 /** `draw` / `drawFacets` with their marks stamped on. */

@@ -15,8 +15,11 @@
 //              summary + error bars, connect means;
 //   * strip  — points (all / outliers / none), jitter, summary + error bars,
 //              connect means;
-//   * violin — points + jitter (its summary is its inner quartile glyph);
-//   * bar    — error bars (the bar IS the mean);
+//   * violin — points + jitter, summary + error bars (its inner glyph is the
+//              box's: quartile bar + median, always drawn);
+//   * bar    — error bars (the bar IS the mean; always live), and on GROUPED
+//              bars points + jitter and a summary marker (stacked: disabled —
+//              a raw value has no place inside a stack);
 //   * all    — label rotation and wrapping.
 
 import type { ReactNode } from "react";
@@ -67,14 +70,19 @@ export interface StatMarksControlsProps {
   setMarks: (patch: StatMarks, label?: string) => void;
   /** A "group by" column is picked (connect-means needs one). */
   grouped: boolean;
+  /** Bar mode draws stacked bars (no points / summary marker there). */
+  stacked?: boolean;
 }
 
-export default function StatMarksControls({ mode, marks, setMarks, grouped }: StatMarksControlsProps) {
+const STACKED_HINT = "Stacked bars carry no raw points or summary marker — switch the layout to grouped";
+
+export default function StatMarksControls({ mode, marks, setMarks, grouped, stacked = false }: StatMarksControlsProps) {
   const boxFamily = mode === "box" || mode === "strip";
-  const hasPoints = boxFamily || mode === "violin";
+  const categorical = boxFamily || mode === "violin" || mode === "bar";
+  const off = mode === "bar" && stacked;
   // Box draws its outliers as fliers on the centre line; only "all" jitters.
-  const jitters = hasPoints && marks.points !== "none" && !(mode === "box" && marks.points === "outliers");
-  const errorsLive = mode === "bar" || (boxFamily && marks.summary === "mean");
+  const jitters = categorical && !off && marks.points !== "none" && !(mode === "box" && marks.points === "outliers");
+  const errorsLive = mode === "bar" || (categorical && marks.summary === "mean");
   const jitterValue = marks.jitterWidth === 0 ? "off" : String(marks.jitterWidth);
   const jitterOptions = [
     { value: "off", label: "off" },
@@ -84,10 +92,12 @@ export default function StatMarksControls({ mode, marks, setMarks, grouped }: St
   ];
   return (
     <span data-testid="stat-marks-controls" style={{ display: "contents" }}>
-      {hasPoints && (
+      {categorical && (
         <Picker label="points">
           <Select
             aria-label="raw points"
+            disabled={off}
+            title={off ? STACKED_HINT : undefined}
             options={POINTS}
             value={marks.points}
             onChange={(e) => setMarks({ points: e.target.value as StatMarks["points"] }, "show points")}
@@ -110,17 +120,19 @@ export default function StatMarksControls({ mode, marks, setMarks, grouped }: St
           />
         </Picker>
       )}
-      {boxFamily && (
+      {categorical && (
         <Picker label="summary">
           <Select
             aria-label="summary marker"
+            disabled={off}
+            title={off ? STACKED_HINT : undefined}
             options={SUMMARY}
             value={marks.summary}
             onChange={(e) => setMarks({ summary: e.target.value as StatMarks["summary"] }, "set summary marker")}
           />
         </Picker>
       )}
-      {(boxFamily || mode === "bar") && (
+      {categorical && (
         <Picker label="error bars">
           <Select
             aria-label="error bars"

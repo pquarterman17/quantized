@@ -227,7 +227,12 @@ export function drawCategoryAxis(
 }
 
 /** The nested axis's second tier: each outer level once, centred under its
- *  run, and a separator from the axis line down to the tier between runs. */
+ *  run, and a separator from the axis line down to the tier between runs.
+ *  The outer label is drawn WHOLE, as the export's outer tier is
+ *  (`calc.figure_category_axis.style_category_axis`: one unwrapped,
+ *  unrotated minor tick label per run) — it used to be cut to its run's
+ *  width on screen only, so a one-box run of "lot = Anneal 450 C" read
+ *  "lot …" on screen and in full in the figure. */
 function drawOuterTier(
   ctx: CanvasRenderingContext2D,
   rect: Rect,
@@ -251,9 +256,5 @@ function drawOuterTier(
   ctx.fillStyle = muted;
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
-  const pitch = slots.length ? rect.w / slots.length : rect.w;
-  for (const r of runs) {
-    const span = (r.last - r.first + 1) * pitch;
-    ctx.fillText(truncateLabel(r.label, Math.max(4, Math.floor(span / CHAR_W))), (x(r.first) + x(r.last)) / 2, tierY);
-  }
+  for (const r of runs) ctx.fillText(r.label, (x(r.first) + x(r.last)) / 2, tierY);
 }

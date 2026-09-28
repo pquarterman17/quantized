@@ -100,7 +100,7 @@ describe("categorical marks — the canvas and the export carry the same options
     expect(spec.point_row_indices).not.toBeNull();
   });
 
-  it("violin: points ride the draw and the request; no summary fields", async () => {
+  it("violin: points ride the draw and the request; no box/strip-only fields", async () => {
     const { result } = renderHook(() => useStatStage(params()));
     act(() => result.current.setMode("violin"));
     act(() => result.current.setValueCol(2));
@@ -112,8 +112,9 @@ describe("categorical marks — the canvas and the export carry the same options
     const draw = result.current.draw;
     if (draw?.mode !== "violin") throw new Error("expected a violin draw");
     const spec = await exported(result);
-    expect(spec).toMatchObject({ kind: "violin", points: "all", jitter_width: 1 });
-    expect(spec.summary).toBeUndefined();
+    expect(spec).toMatchObject({ kind: "violin", points: "all", jitter_width: 1, summary: "none" });
+    expect(spec.show_connect_means).toBeUndefined();
+    expect(spec.show_mean_ci).toBeUndefined();
     expect(spec.point_row_indices).toEqual(draw.points?.map((g) => g.points.map((p) => p.rowIndex)));
   });
 
