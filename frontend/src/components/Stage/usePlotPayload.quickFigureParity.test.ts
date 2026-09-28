@@ -204,4 +204,56 @@ describe("Quick Figure Builder preview vs the created figure's render pipeline (
     expect(result.current.errorSpans.size).toBe(0);
     expect(preview.errorSpans).toBeUndefined();
   });
+
+  // Per-series X (`X1,Y1,X2,Y2`, X2 a non-monotonic loop): the created figure
+  // renders its overlay dataset through the ordinary pipeline, and must draw
+  // exactly the preview's points -- each series on its own X, in row order.
+  it("per-series X: the created figure draws the SAME points, X order, and error spans as the preview", async () => {
+    const xyxy: Dataset = {
+      id: "parity-x",
+      name: "xyxy.csv",
+      data: {
+        time: [0, 1, 2, 3],
+        values: [[5, 0, 50, 0.5], [6, 2, 60, 0.6], [7, 0, 70, 0.7], [8, -2, 80, 0.8]],
+        labels: ["Y1", "X2", "Y2", "dY2"],
+        units: ["V", "Oe", "V", "V"],
+        metadata: {},
+      },
+    };
+    useApp.setState({ datasets: [xyxy] });
+    const ownX: QuickFigureMapping = {
+      xKey: null,
+      xKeyByY: { 2: 1 },
+      yKeys: [0, 2],
+      errorBindings: [{ channel: 3, target: 2, axis: "y", side: "both" }],
+      ignoredKeys: [],
+    };
+    const preview = quickFigurePreview(xyxy.data, ownX, "line");
+    if (preview.kind !== "xy") throw new Error("expected an xy preview");
+    expect(preview.payload.data[0]).toEqual([0, 1, 2, 3, 0, 2, 0, -2]); // unsorted loop
+    expect(preview.errorSpans?.get(2)?.[0].plus).toEqual([null, null, null, null, 0.5, 0.6, 0.7, 0.8]);
+
+    expect(useApp.getState().createQuickFigureFromMapping(xyxy.id, ownX, "line")).toBe(true);
+    const document = useApp.getState().editableFigures[0];
+    const overlay = useApp.getState().datasets.find((d) => d.id === document.bindings.datasetId)!;
+    expect(overlay.id).not.toBe(xyxy.id);
+    const view = figureDocumentToPlotView(document);
+    const params: PlotPayloadParams = {
+      active: overlay, yScale: "linear", xScale: "linear",
+      xKey: view.xKey, yKeys: view.yKeys, groupKey: view.groupKey, y2Keys: view.y2Keys,
+      seriesOrder: view.seriesOrder, seriesStyles: view.seriesStyles, seriesLabels: view.seriesLabels,
+      errKeys: view.errKeys, documentErrors: document.bindings.errors, hiddenChannels: view.hiddenChannels,
+      waterfall: view.waterfall, excludedDisplay: "hide", fitOverlay: null, baselineOverlay: null,
+      peakOverlay: null, derivOverlay: null, selection: null, xLim: null,
+    };
+    const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), { initialProps: params });
+    await waitFor(() => expect(result.current.displayPayload).not.toBeNull());
+
+    const shown = result.current.displayPayload!;
+    expect(shown.series.map((s) => s.label)).toEqual(["Y1", "Y2"]);
+    expect(shown.series.map((s) => s.label)).toEqual(preview.payload.series.map((s) => s.label));
+    expect(shown.xLabel).toBe(preview.payload.xLabel);
+    expect(shown.data).toEqual(preview.payload.data);
+    expect(Array.from(result.current.errorSpans.entries())).toEqual(Array.from((preview.errorSpans ?? new Map()).entries()));
+  });
 });

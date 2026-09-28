@@ -17,13 +17,17 @@
 // (lazy) `components/workshops/quickfigurebuilder/*`.
 
 import { figureSeedErrorBindings, type ErrorBinding, type ErrorSide } from "./errorRoles";
+import { columnMetaList } from "./columnmeta";
 import { originHiddenChannels } from "./errorbars";
 import type { QuickFigureMapping } from "./quickFigureMapping";
 import type { Dataset } from "./types";
 
 export type QuickColumnAssignment =
   | { role: "unassigned" }
+  /** The SHARED X (every Y without its own). */
   | { role: "x" }
+  /** The own X of these Y series (multi-X worksheets). */
+  | { role: "series-x"; targets: number[] }
   | { role: "y" }
   | { role: "ignore" }
   /** Single-slot roles: a label column (per-point text) and a grouping
@@ -33,6 +37,52 @@ export type QuickColumnAssignment =
   | { role: "error"; target: number; axis: "x" | "y"; side: ErrorSide };
 
 const uniqueSorted = (values: readonly number[]): number[] => [...new Set(values)].sort((a, b) => a - b);
+
+/** Columns holding a plotted/paired role, which therefore cannot be a Y's X. */
+function busyChannels(mapping: QuickFigureMapping): Set<number> {
+  return new Set([
+    ...mapping.yKeys,
+    ...mapping.errorBindings.map((binding) => binding.channel),
+    ...(mapping.groupKey != null ? [mapping.groupKey] : []),
+    ...(mapping.labelKey != null ? [mapping.labelKey] : []),
+  ]);
+}
+
+/** Keep only per-Y X overrides that still mean something: keyed by a current
+ *  Y, different from the shared X, and naming the acquisition axis or a
+ *  column with no other role. A column adopted as a series X leaves Ignore.
+ *  Drops the field entirely when none remain, so a shared-X mapping keeps
+ *  exactly its pre-existing shape. */
+function normalizeSeriesX(mapping: QuickFigureMapping): QuickFigureMapping {
+  const { xKeyByY, ...rest } = mapping;
+  if (!xKeyByY) return mapping;
+  const busy = busyChannels(mapping);
+  const kept = Object.entries(xKeyByY)
+    .map(([y, x]) => [Number(y), x] as const)
+    .filter(([y, x]) => mapping.yKeys.includes(y) && x !== mapping.xKey && (x === null || !busy.has(x)));
+  if (kept.length === 0) return rest;
+  const used = new Set(kept.map(([, x]) => x));
+  return { ...rest, xKeyByY: Object.fromEntries(kept), ignoredKeys: rest.ignoredKeys.filter((c) => !used.has(c)) };
+}
+
+/** Origin's own multi-X rule (`io/origin_project/opj_curves.py`'s
+ *  `_nearest_preceding_x`): a Y plots against the NEAREST-PRECEDING
+ *  X-designated column. The book's first X is the acquisition axis (`time`),
+ *  so a Y with no X value column before it keeps the shared X. Explicit
+ *  designations are the only evidence -- adjacency alone never pairs. */
+function inferSeriesX(dataset: Dataset, yKeys: readonly number[]): Record<number, number> {
+  const meta = columnMetaList(dataset.data);
+  const out: Record<number, number> = {};
+  for (const y of yKeys) {
+    for (let c = y - 1; c >= 0; c--) {
+      if (meta[c]?.designation === "X") {
+        out[y] = c;
+        break;
+      }
+    }
+  }
+  return out;
+}
 
 export function initialQuickFigureMapping(dataset: Dataset): QuickFigureMapping {
   const inferred = figureSeedErrorBindings(dataset);
@@ -46,16 +96,20 @@ export function initialQuickFigureMapping(dataset: Dataset): QuickFigureMapping 
   const yKeys = dataset.data.labels
     .map((_, channel) => channel)
     .filter((channel) => !errorChannels.has(channel) && !hidden.has(channel) && !ignored.has(channel));
-  return {
+  return normalizeSeriesX({
     xKey: null,
+    xKeyByY: inferSeriesX(dataset, yKeys),
     yKeys,
     errorBindings: inferred,
     ignoredKeys: uniqueSorted([...ignored, ...hidden].filter((channel) => !errorChannels.has(channel))),
-  };
+  });
 }
 
 export function assignmentFor(mapping: QuickFigureMapping, channel: number): QuickColumnAssignment {
   if (mapping.xKey === channel) return { role: "x" };
+  const own = mapping.xKeyByY ?? {};
+  const targets = mapping.yKeys.filter((y) => Object.hasOwn(own, y) && own[y] === channel);
+  if (targets.length > 0) return { role: "series-x", targets };
   if (mapping.yKeys.includes(channel)) return { role: "y" };
   if (mapping.groupKey === channel) return { role: "group" };
   if (mapping.labelKey === channel) return { role: "label" };
@@ -116,11 +170,22 @@ export function assignQuickFigureColumn(
     // exactly its pre-existing shape (templates, snapshots, equality).
     ...(mapping.groupKey != null && mapping.groupKey !== channel ? { groupKey: mapping.groupKey } : {}),
     ...(mapping.labelKey != null && mapping.labelKey !== channel ? { labelKey: mapping.labelKey } : {}),
+    // A column leaving the series-X role takes its Ys back to the shared X
+    // (never silently onto another column); `normalizeSeriesX` below drops
+    // the rest (a Y that stopped being Y, an override now equal to X).
+    ...(mapping.xKeyByY
+      ? { xKeyByY: Object.fromEntries(Object.entries(mapping.xKeyByY).filter(([, x]) => x !== channel)) }
+      : {}),
   };
   const result = ((): QuickFigureMapping => {
     switch (assignment.role) {
       case "unassigned": return base;
       case "x": return { ...base, xKey: channel };
+      case "series-x": {
+        const own: Record<number, number | null> = { ...base.xKeyByY };
+        for (const y of assignment.targets) own[y] = channel;
+        return { ...base, xKeyByY: own };
+      }
       case "y": return { ...base, yKeys: uniqueSorted([...base.yKeys, channel]) };
       case "ignore": return { ...base, ignoredKeys: uniqueSorted([...base.ignoredKeys, channel]) };
       case "group": return { ...base, groupKey: channel };
@@ -138,12 +203,36 @@ export function assignQuickFigureColumn(
   // X changed identity (reassigned, or the old X left the role above) --
   // every x-error binding referenced the OLD X and is now stale.
   if (result.xKey !== mapping.xKey) {
-    return { ...result, errorBindings: dropXErrorBindings(result.errorBindings) };
+    return normalizeSeriesX({ ...result, errorBindings: dropXErrorBindings(result.errorBindings) });
   }
-  return result;
+  return normalizeSeriesX(result);
 }
 
 export function useAcquisitionAxis(mapping: QuickFigureMapping): QuickFigureMapping {
   if (mapping.xKey === null) return mapping;
-  return { ...mapping, xKey: null, errorBindings: dropXErrorBindings(mapping.errorBindings) };
+  return normalizeSeriesX({ ...mapping, xKey: null, errorBindings: dropXErrorBindings(mapping.errorBindings) });
+}
+
+/** What Y series `y` may plot against, in column order: the acquisition axis
+ *  (null) and every column but `y` itself and the error / group / label
+ *  columns -- including another Y, since a CSV `X1,Y1,X2,Y2` imports its X2
+ *  as a Y (no designations) and pairing is how the user says otherwise. */
+export function seriesXCandidates(mapping: QuickFigureMapping, channelCount: number, y: number): (number | null)[] {
+  const busy = busyChannels({ ...mapping, yKeys: [y] });
+  return [null, ...Array.from({ length: channelCount }, (_, c) => c).filter((c) => !busy.has(c))];
+}
+
+/** Reassign ONE Y series' X: "shared" follows the shared X again; null is the
+ *  acquisition axis; a channel adopts that column -- leaving Ignore, or
+ *  leaving the Y role (and its Y error pairing) when it was plotted as a Y.
+ *  X error stays with the shared X -- the only X an error binding can name. */
+export function assignSeriesX(mapping: QuickFigureMapping, y: number, x: number | null | "shared"): QuickFigureMapping {
+  if (!mapping.yKeys.includes(y) || x === y) return mapping;
+  const base = typeof x === "number" && mapping.yKeys.includes(x)
+    ? assignQuickFigureColumn(mapping, x, { role: "unassigned" })
+    : mapping;
+  const own: Record<number, number | null> = { ...base.xKeyByY };
+  if (x === "shared") delete own[y];
+  else own[y] = x;
+  return normalizeSeriesX({ ...base, xKeyByY: own });
 }

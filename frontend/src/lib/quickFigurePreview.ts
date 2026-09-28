@@ -7,6 +7,7 @@ import { applyGroupSplit } from "./plotGroupSplit";
 import { effectiveChannels, buildColumns } from "./plotdata";
 import type { SpecRender } from "./plotspec";
 import { mappingReady, type QuickFigureMapping } from "./quickFigureMapping";
+import { quickFigureOverlay } from "./quickFigureSeriesX";
 import type { ChannelRole, DataStruct } from "./types";
 
 export type QuickPlotStyle = "line" | "scatter" | "line-symbol";
@@ -42,6 +43,12 @@ export function quickFigurePreview(
   if (!mappingReady(mapping)) {
     return { kind: "message", tone: "hint", message: "Assign at least one Y series to preview the figure." };
   }
+  // Per-series X: preview the SAME overlay the created figure binds to
+  // (lib/quickFigureSeriesX.ts). Role-filtered Y columns are dropped first,
+  // exactly as `previewedChannels` drops them below (creation is gated on
+  // there being none, so the figure never has to).
+  const own = quickFigureOverlay(data, { ...mapping, yKeys: mapping.yKeys.filter((y) => !channelRoles?.[y]) });
+  if (own) return quickFigurePreview(own.data, own.mapping, style);
   const plotted = previewedChannels(data, mapping, channelRoles);
   const flat = buildColumns(data, null, mapping.xKey, plotted);
   // Grouping role: the SAME split, with the SAME arguments, the created

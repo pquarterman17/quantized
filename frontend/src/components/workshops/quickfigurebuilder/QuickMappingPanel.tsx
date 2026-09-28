@@ -46,7 +46,7 @@ export default function QuickMappingPanel({ data, mapping, onAssign, onUseAcquis
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => assignDropped(event, { role: "x" })}
         >
-          <span>X axis</span><strong>{mapping.xKey === null ? "Acquisition axis" : data.labels[mapping.xKey]}</strong>
+          <span>{mapping.xKeyByY ? "Shared X axis" : "X axis"}</span><strong>{mapping.xKey === null ? "Acquisition axis" : data.labels[mapping.xKey]}</strong>
         </button>
         <div
           className="qzk-quick-builder-zone"
@@ -87,7 +87,14 @@ export default function QuickMappingPanel({ data, mapping, onAssign, onUseAcquis
                 onChange={(event) => onAssign(channel, parseRole(event.target.value))}
               >
                 <option value="unassigned">Unassigned</option>
-                <option value="x">X axis</option>
+                <option value="x">{mapping.xKeyByY ? "Shared X axis" : "X axis"}</option>
+                {assignment.role === "series-x" && (
+                  // Display-only: which series use this column as their own X
+                  // is edited per series under "Per-series X".
+                  <option value="series-x" disabled>
+                    {`X for ${assignment.targets.map((y) => data.labels[y]).join(", ")}`}
+                  </option>
+                )}
                 <option value="y">Y series</option>
                 <option value="group">Group by (one series per level)</option>
                 <option value="label">Point labels</option>

@@ -17,8 +17,15 @@ import { MAX_QUICK_POINT_LABELS, quickFigurePointLabels } from "./quickFigureLab
 import type { Dataset } from "./types";
 
 export interface QuickFigureMapping {
-  /** null means the DataStruct acquisition axis (`time`). */
+  /** The SHARED X: null means the DataStruct acquisition axis (`time`). */
   xKey: number | null;
+  /** Per-Y X override for multi-X worksheets (`X,Y,X,Y,…`): Y channel -> that
+   *  series' own X (a value channel, or null = the acquisition axis). A Y with
+   *  no entry uses the shared `xKey`. OPTIONAL and normalized (no entry ever
+   *  equals `xKey`), so a shared-X mapping -- and every template saved before
+   *  this existed -- keeps its exact shape. Rendered through a derived
+   *  segment-concatenated overlay (lib/quickFigureSeriesX.ts). */
+  xKeyByY?: Record<number, number | null>;
   yKeys: number[];
   errorBindings: ErrorBinding[];
   ignoredKeys: number[];
