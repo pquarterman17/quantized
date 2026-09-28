@@ -998,8 +998,11 @@ const STORE_UI_GRANDFATHERED = new Set([
 // values under its own label).
 //
 // So: a store module whose dataset updater writes `data`, `metadata`, `cat_levels`
-// or `formulas` must either route through `store/pendingEdit.refusePendingEdit` or
-// be listed below with a reason. A NEW such module fails this test.
+// or `formulas` must either route through `store/pendingEdit` (`resolvePendingEdit`
+// or `withResolved`, the resolve-then-apply boundary) or be listed below with a
+// reason. A NEW such module fails this test. The refuse-only guard it used to
+// accept (`refusePendingEdit`) was deleted 2026-09-28 (BUG-009) and is no longer a
+// guard here: a refusal on a book whose load failed for good is a permanent lockout.
 //
 // SHAPES IT MATCHES, counted in-repo rather than guessed: the object-literal
 // `datasets: <state>.datasets.map(` (38 uses), the assigned
@@ -1037,10 +1040,14 @@ const STORE_UI_GRANDFATHERED = new Set([
 //     the regex is what keeps a NEW row-state writer in a NEW slice from
 //     repeating it.)
 //   * anything outside `./store/`.
+//   * `await withResolved(...)` followed by a write OUTSIDE its callback: the
+//     literal is in the action, so the net passes it, but after a FAILED load that
+//     write lands on the still-pending preview. Write inside the callback.
 //
 // Checked while writing it: the only `useApp.setState` in `store/` that mutates
 // dataset data is `recode`'s, which IS matched; `relink`/`relinkCommit` set only
-// `source`/`versionOf`, so they are correctly not flagged.
+// `source`/`versionOf` (and, since BUG-009, re-point a not-yet-loaded book's
+// `pending` path with its file), so they are correctly not flagged.
 /** How far past a `datasets:` match to look for a mutated key. Updaters here carry
  *  20-line comment blocks, so a tight window false-NEGATIVES. */
 const PENDING_EDIT_WINDOW = 1400;
@@ -1066,7 +1073,7 @@ function hasGuardInEnclosingAction(src: string, at: number): boolean {
   const boundary =
     /^(?:(?:export\s+)?(?:async\s+)?function\s|(?:export\s+)?const\s+\w[\w$]*\s*=)|^\s{2,4}\w[\w$]*\s*:\s*(?:async\s*)?\(/;
   for (let i = lines.length - 1; i >= 0; i -= 1) {
-    if (/\b(?:refuse|resolve)PendingEdit\b/.test(lines[i])) return true;
+    if (/\b(?:resolvePendingEdit|withResolved)\b/.test(lines[i])) return true;
     if (boundary.test(lines[i])) return false;
   }
   return false;
@@ -1154,7 +1161,7 @@ describe("pending-edit guard ratchet (BUG-006 site 9)", () => {
     }
     expect(
       offenders,
-      "route the mutation through store/pendingEdit's refusePendingEdit or resolvePendingEdit (a pending " +
+      "route the mutation through store/pendingEdit's resolvePendingEdit or withResolved (a pending " +
         "dataset's `data` is replaced wholesale when its fetch lands, so anything " +
         "written into it is discarded silently), or add it to PENDING_EDIT_EXEMPT " +
         "with the reason it is safe",
@@ -1732,10 +1739,13 @@ const WEAK_WAIT_PINS: Record<string, number> = {
 
 // BUG-009: `lib/bookData.ts` keeps the reason the last lazy-book fetch failed in
 // MODULE state, cleared only by a SUCCESS. A test that exercises a pending-dataset
-// guard makes `refusePendingEdit` kick a real fetch, which rejects under jsdom and
-// records a reason that outlives the test — so a later test in the same file, on
-// the same dataset id, gets "the last attempt ... failed" where it expected
-// "still loading its full data".
+// guard kicks a real fetch (the guard was `refusePendingEdit` then; it is
+// `resolvePendingEdit`/`withResolved` now), which rejects under jsdom and records a
+// reason that outlives the test — so a later test in the same file, on the same
+// dataset id, gets "the last attempt ... failed" where it expected "still loading
+// its full data". Since 2026-09-28 the module-state-dependent wording is the
+// loading status: "will continue automatically" on a first load, "last attempt
+// failed" on a retry — the regex below follows it.
 //
 // This is not hypothetical and it is not a style rule. `cellEdit.test.ts` and
 // `computedColumns.test.ts` shipped exactly this and passed, because the one test
@@ -1746,7 +1756,7 @@ const WEAK_WAIT_PINS: Record<string, number> = {
 // documented rule nothing enforces is how that happened, so: enforce it.
 describe("pending-guard suites must reset the book-transport record (BUG-009)", () => {
   it("a test file asserting the pending-guard message also resets module state", () => {
-    const asserts = /still loading its full data|last attempt to load its full data/;
+    const asserts = /will continue automatically|last attempt failed/;
     const missing: string[] = [];
 
     for (const [p, src] of Object.entries(modules)) {

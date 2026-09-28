@@ -29,6 +29,7 @@ import { lit } from "../lib/macro";
 import type { BookSource, Dataset } from "../lib/types";
 import { toast } from "./toasts";
 import { nextDatasetId } from "./idSeq";
+import { announceBookFailure } from "./pendingEdit";
 import type { AppState } from "./useApp";
 
 export interface DataIntakeSlice {
@@ -74,6 +75,11 @@ export interface DataIntakeSlice {
 // Names successive clipboard pastes "pasted data 1", "pasted data 2", … (gap #47).
 let _pasteSeq = 0;
 
+/** The load failure last announced for each pending dataset OBJECT, so a view's
+ *  re-kick that fails the same way stays quiet (see `ensureBookData`). Weak:
+ *  a replaced dataset takes its entry with it. */
+const quietFailures = new WeakMap<Dataset, string>();
+
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
@@ -98,11 +104,20 @@ export function createDataIntakeSlice(set: SliceSet, get: SliceGet): DataIntakeS
     ensureBookData: (id) => {
       const ds = get().datasets.find((d) => d.id === id);
       if (!ds?.pending) return;
-      install(id, ds.pending).catch((e) => {
-        toast(
-          `couldn't load full data for "${ds.name}" — ${e instanceof Error ? e.message : "error"}`,
-          "danger",
-        );
+      // BUG-009: offers Re-import (the recovery for a moved source or an
+      // expired upload), once per failed fetch — an action queued on the same
+      // single-flight fetch toasts through the same dedupe, not a second time.
+      // And only when the failure is new for this DATASET OBJECT: views re-kick
+      // this whenever `datasets` changes (WindowCanvas, the multi-panel stage),
+      // so a dead book bound to a window re-failed — and re-toasted — on every
+      // edit anywhere in the project. A failure writes nothing, so the object
+      // survives those re-kicks; a reopened project, a relink or a reimport is a
+      // new object and is announced again. An action on it reports every time.
+      install(id, ds.pending).catch((e: unknown) => {
+        const reason = e instanceof Error ? e.message : String(e);
+        if (quietFailures.get(ds) === reason) return;
+        quietFailures.set(ds, reason);
+        announceBookFailure(get, ds, `couldn't load full data for "${ds.name}" — ${reason}`, e);
       });
     },
     resolvePendingDatasets: async () => {

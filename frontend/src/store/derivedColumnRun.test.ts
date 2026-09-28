@@ -95,6 +95,56 @@ describe("commit", () => {
   });
 });
 
+// BUG-009: adding a derived column was the last action behind the refuse-only
+// guard (P2.5 added it after the migration that retired the others). It now
+// resolves the book, then analyses and commits on the FULL rows; a failed load
+// is an ordinary refusal with the honest message instead of a rejected promise.
+describe("a lazy Origin book — resolve, then apply (BUG-009)", () => {
+  const fullRows = {
+    ...ds().data,
+    time: [0, 1, 2, 3],
+    values: [...ds().data.values, [8, 0.1, 10, 0.2, 1]],
+  };
+  /** Rows 0 and 2 of `fullRows` as a sampled preview. */
+  const lazy = (): Dataset =>
+    ds("d", {
+      data: { ...ds().data, time: [0, 2], values: [ds().data.values[0], ds().data.values[2]] },
+      pending: { kind: "path", path: "/moved.opj", bookId: "b1", rows: 4, cols: 5, previewSampled: true },
+      source: { kind: "path", path: "/moved.opj" },
+    });
+
+  it("resolves the book, then adds the column over the FULL rows — one undo entry, one step", async () => {
+    vi.mocked(fetchBookData).mockResolvedValueOnce(fullRows);
+    useApp.setState({ datasets: [lazy()], history: [] });
+
+    const r = await addDerivedColumn("d", { name: "P", expr: "A * C", propagate: false });
+
+    expect(r).toMatchObject({ ok: true, message: expect.stringMatching(/added column "P"/) });
+    expect(state().pending).toBeUndefined();
+    expect(col(state(), 5)).toEqual([6, 20, 42, 80]); // four rows, not the preview's two
+    expect(useApp.getState().history).toHaveLength(1);
+    expect(useApp.getState().macroSteps).toHaveLength(1);
+  });
+
+  it("a failed load adds nothing, records nothing, and says why — never 'in a moment'", async () => {
+    vi.mocked(fetchBookData).mockRejectedValueOnce(new Error("source not found"));
+    useApp.setState({ datasets: [lazy()], history: [] });
+    const before = state();
+
+    const r = await addDerivedColumn("d", { name: "P", expr: "A * C", propagate: false });
+
+    expect(r).toMatchObject({
+      ok: false,
+      error: expect.stringMatching(/its full data failed to load \(source not found\)\. Nothing was changed\. Re-import it/),
+    });
+    expect(state()).toBe(before);
+    expect(state().pending).toBeDefined();
+    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().macroSteps).toEqual([]);
+    expect(useApp.getState().status).not.toMatch(/in a moment/);
+  });
+});
+
 describe("recompute", () => {
   it("a cell edit recomputes value and σ (the incremental path)", async () => {
     await addDerivedColumn("d", { name: "P", expr: "A * C", propagate: true });

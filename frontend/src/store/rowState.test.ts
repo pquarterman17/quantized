@@ -128,7 +128,8 @@ describe("row-state writes resolve pending data and then apply (BUG-009)", () =>
     expect(ds().excludedRows).toBeUndefined();
     expect(ds().pending).toBeDefined();
     expect(useApp.getState().history).toHaveLength(0);
-    expect(useApp.getState().status).toMatch(/Nothing was changed; re-import/);
+    expect(useApp.getState().status).toMatch(/Nothing was changed\. Re-import the file/);
+    expect(useApp.getState().status).not.toMatch(/in a moment/);
   });
 
   it("does not apply an old project's queued edit to a replacement dataset with the same id", async () => {
@@ -138,7 +139,7 @@ describe("row-state writes resolve pending data and then apply (BUG-009)", () =>
     const replacement = dataset({ name: "new project", data: { ...fullData, time: [99], values: [[99]] } });
     useApp.setState({ datasets: [replacement], activeId: "d1", history: [] });
     finish(fullData);
-    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/full data is unavailable/));
+    await vi.waitFor(() => expect(useApp.getState().status).toMatch(/changed or closed while its full data loaded/));
     expect(ds().name).toBe("new project");
     expect(ds().data.time).toEqual([99]);
     expect(ds().excludedRows).toBeUndefined();
