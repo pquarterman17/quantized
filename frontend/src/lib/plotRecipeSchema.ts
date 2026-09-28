@@ -145,6 +145,7 @@ export interface RecipeVisual {
   showLegend: boolean;
   legendPos: LegendPos;
   legendXY: [number, number] | null;
+  legendSize: [number, number] | null;
   legendTitle: string | null;
   legendStatic: boolean;
   stackMode: boolean;

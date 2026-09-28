@@ -1899,6 +1899,7 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   showLegend: "display toggle, not channel-indexed",
   legendPos: "legend corner preset, not channel-indexed",
   legendXY: "legend free position, plot-area FRACTIONS -- not a column index",
+  legendSize: "legend box pixel dimensions, not a column index",
   legendFrameXY: "legend frame-anchored position, frame FRACTIONS -- not a column index",
   legendStatic: "display toggle, not channel-indexed",
   legendTitle: "text, not channel-indexed",

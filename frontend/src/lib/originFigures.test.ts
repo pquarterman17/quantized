@@ -1221,6 +1221,7 @@ describe("originLegendState (decode #52)", () => {
       legendPos: "ne",
       legendTitle: "Nb/Au",
       legendFrameXY: [0.8, 0.25],
+      legendSize: null,
     });
   });
 
@@ -1229,18 +1230,21 @@ describe("originLegendState (decode #52)", () => {
       legendPos: "sw",
       legendTitle: null,
       legendFrameXY: [0.1, 0.75],
+      legendSize: null,
     });
     // No decoded position -> legendPos omitted (never guessed), title + anchor null.
     expect(originLegendState({ ...base, legend_title: "S" })).toEqual({
       legendTitle: "S",
       legendFrameXY: null,
+      legendSize: null,
     });
-    expect(originLegendState({ ...base })).toEqual({ legendTitle: null, legendFrameXY: null });
+    expect(originLegendState({ ...base })).toEqual({ legendTitle: null, legendFrameXY: null, legendSize: null });
     // Out-of-frame position (x=8 in a [0,4] frame -> fx 2.0) -> corner-snap only.
     expect(originLegendState({ ...base, legend_pos: { x: 8, y: 75 }, x_to: 4 })).toEqual({
       legendPos: "ne",
       legendTitle: null,
       legendFrameXY: null,
+      legendSize: null,
     });
   });
 });

@@ -52,6 +52,11 @@ export interface PointerToolSlice {
    *  `legendXY` and the corner `legendPos` while set. No dedicated setter —
    *  the apply spreads it directly and `setLegendXY` clears it. */
   legendFrameXY: [number, number] | null;
+  /** User-sized legend box in CSS pixels; null keeps content-driven sizing.
+   *  No store setter: only the lazy resize handles write it
+   *  (via store/legendResize.ts), which keeps the writers off the eager
+   *  bundle. */
+  legendSize: [number, number] | null;
   /** Per-axis title drag offsets (CSS px) — a genuine PlotView field like
    *  `legendXY` (snapshot/hydrate/`.dwk` sanitize in lib/plotview.ts). */
   axisLabelOffsets: AxisLabelOffsets;
@@ -94,6 +99,7 @@ export function createPointerToolSlice(set: SliceSet, get: SliceGet): PointerToo
     setRegionPicked: (regionPicked) => set({ regionPicked }),
     legendXY: null,
     legendFrameXY: null,
+    legendSize: null,
     // Clears the frame anchor too (decode #52) — see the interface doc.
     setLegendXY: (legendXY) => set({ legendXY, legendFrameXY: null }),
     axisLabelOffsets: {},

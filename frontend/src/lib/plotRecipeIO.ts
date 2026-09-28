@@ -19,7 +19,7 @@ import {
   isAxisScale,
   type LegendPos,
 } from "./plotview";
-import { sanitizeRegionShades } from "./plotviewSanitize";
+import { sanitizeLegendSize, sanitizeRegionShades } from "./plotviewSanitize";
 import { PLOT_MARKS, type PlotMark } from "./plotspec";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import type { SignatureErrorRole } from "./quickPlotTemplates";
@@ -234,6 +234,7 @@ export function defaultRecipeVisual(): RecipeVisual {
     showLegend: true,
     legendPos: "ne",
     legendXY: null,
+    legendSize: null,
     legendTitle: null,
     legendStatic: false,
     stackMode: false,
@@ -293,6 +294,7 @@ function sanitizeVisual(v: unknown): RecipeVisual {
     showLegend: typeof o.showLegend === "boolean" ? o.showLegend : fb.showLegend,
     legendPos: (LEGEND_POS as readonly string[]).includes(o.legendPos as string) ? (o.legendPos as LegendPos) : fb.legendPos,
     legendXY: legendXYOrNull(o.legendXY),
+    legendSize: sanitizeLegendSize(o.legendSize),
     legendTitle: typeof o.legendTitle === "string" ? o.legendTitle : null,
     legendStatic: typeof o.legendStatic === "boolean" ? o.legendStatic : fb.legendStatic,
     stackMode: typeof o.stackMode === "boolean" ? o.stackMode : fb.stackMode,

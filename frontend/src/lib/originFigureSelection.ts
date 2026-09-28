@@ -94,12 +94,14 @@ export function originLegendState(
   legendPos?: "ne" | "nw" | "se" | "sw";
   legendTitle: string | null;
   legendFrameXY: [number, number] | null;
+  legendSize: null;
 } {
   const pos = originLegendPos(fig);
   return {
     ...(pos ? { legendPos: pos } : {}),
     legendTitle: fig.legend_title ? fig.legend_title : null,
     legendFrameXY: originLegendFrameXY(fig),
+    legendSize: null,
   };
 }
 

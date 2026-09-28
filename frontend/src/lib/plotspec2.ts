@@ -36,7 +36,7 @@
 //             the identical shape. `legend` captures the free-placement
 //             subset of the store's legend fields (`legendPos`/`legendXY`/
 //             `legendTitle`) — see `LegendBlock`'s doc for exactly why
-//             `legendFrameXY`/`legendStatic` are deliberately excluded.
+//             `legendFrameXY`/`legendStatic`/`legendSize` are deliberately excluded.
 //
 //   page    : page/panel PRESENTATION — stacking, fit mode, and the physical
 //             page model (ORIGIN_FILE_DECODE_PLAN #54 pass C, 2026-07-19;
@@ -83,7 +83,6 @@ import { PANEL_FITS, type PanelFit } from "./panelLayout";
 import { sanitizePageSetup, type PageSetup } from "./pagesetup";
 import { LEGEND_POS, legendXYOrNull, sanitizeAnnotations, sanitizeShapes, type LegendPos } from "./plotview";
 import { axisFmtParam } from "./types";
-
 // ── Display block ───────────────────────────────────────────────────────
 
 /** A per-channel display override. Field vocabulary mirrors `SeriesStyle`
@@ -152,8 +151,8 @@ export interface AxesBlock {
 // ── Decor block (annotations/shapes/legend — "part C") ───────────────────
 
 /** Free legend PLACEMENT (`pos`/`xy`) + its Origin-decode TITLE header — the
- *  subset of the store's FIVE legend-adjacent fields (`legendPos`/
- *  `legendXY`/`legendFrameXY`/`legendStatic`/`legendTitle`) a Graph Builder
+ *  subset of the store's SIX legend-adjacent fields (`legendPos`/
+ *  `legendXY`/`legendFrameXY`/`legendStatic`/`legendTitle`/`legendSize`) a Graph Builder
  *  save can meaningfully capture/reapply. `legendFrameXY` (Origin's
  *  frame-anchored placement) and `legendStatic` (Origin's read-only legend
  *  chrome) are deliberately OUT of this block: both are decode-only
@@ -164,7 +163,8 @@ export interface AxesBlock {
  *  hand-styled Graph Builder plot never has either field set, so this gap
  *  only ever touches an Origin-imported legend's exact frame anchor — a
  *  fidelity concern of the Origin import path itself, not the canonical
- *  spec. `title` mirrors `axes.*.step`'s existing precedent: captured for
+ *  spec. `legendSize` is interactive CSS-pixel geometry: recipes preserve it,
+ *  while Graph Builder/export fit contents. `title` mirrors `axes.*.step`: captured for
  *  round-trip fidelity even though `plotspecApply.ts` currently has no
  *  `setLegendTitle` action to push it back through (documented there, not
  *  silently dropped). */
@@ -578,7 +578,7 @@ export function buildAxesBlock(args: AxesBlockArgs): AxesBlock | undefined {
 
 /** The live legend-placement fields `buildDecorBlock` reads — the store's
  *  `legendPos`/`legendXY`/`legendTitle` (see `LegendBlock`'s doc for why
- *  `legendFrameXY`/`legendStatic` aren't part of v2 yet). */
+ *  `legendFrameXY`/`legendStatic`/`legendSize` aren't part of v2). */
 export interface DecorLegendArgs {
   pos: LegendPos;
   xy: [number, number] | null;

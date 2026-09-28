@@ -70,6 +70,7 @@ export interface ResolvedRecipeVisual {
   showLegend: boolean;
   legendPos: LegendPos;
   legendXY: [number, number] | null;
+  legendSize: [number, number] | null;
   legendTitle: string | null;
   legendStatic: boolean;
   stackMode: boolean;
@@ -336,6 +337,7 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset): RecipeResol
       showLegend: recipe.visual.showLegend,
       legendPos: recipe.visual.legendPos,
       legendXY: recipe.visual.legendXY,
+      legendSize: recipe.visual.legendSize,
       legendTitle: recipe.visual.legendTitle,
       legendStatic: recipe.visual.legendStatic,
       stackMode: recipe.visual.stackMode,

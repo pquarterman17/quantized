@@ -231,6 +231,7 @@ export function captureRecipe(
       showLegend: view.showLegend,
       legendPos: view.legendPos,
       legendXY: view.legendXY ? [view.legendXY[0], view.legendXY[1]] : null,
+      legendSize: view.legendSize ? [view.legendSize[0], view.legendSize[1]] : null,
       legendTitle: view.legendTitle,
       legendStatic: view.legendStatic,
       stackMode: view.stackMode,
