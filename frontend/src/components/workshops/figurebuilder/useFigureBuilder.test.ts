@@ -1641,7 +1641,9 @@ describe("useFigureBuilder", () => {
 
     it("detectErrorBindings replaces the draft's bindings with the pure name-inference result", async () => {
       useApp.setState({
-        datasets: [{ id: "d1", name: "scan.dat", data: { ...DATA, labels: ["R", "dR"] } }],
+        // Same unit on both: the unit gate (lib/errorUnitEvidence.ts) blocks a
+        // pairing whose units disagree, and DATA's placeholder "u"/"v" would.
+        datasets: [{ id: "d1", name: "scan.dat", data: { ...DATA, labels: ["R", "dR"], units: ["", ""] } }],
         figurePublicationSession: session(errorDocument("figure-err-e", [])),
       });
       const { result } = renderHook(() => useFigureBuilder());

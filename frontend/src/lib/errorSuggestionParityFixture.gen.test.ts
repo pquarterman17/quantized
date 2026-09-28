@@ -58,6 +58,9 @@ interface ColumnSpec {
   name: string;
   role: ImportColumnRole;
   effective_name?: string;
+  /** Omitted means blank (neutral). Carried into the fixture only when set,
+   *  so the unit-free cases' committed shape is unchanged. */
+  unit?: string;
 }
 
 interface CaseSpec {
@@ -82,7 +85,7 @@ function toColumns(spec: ColumnSpec[]): ImportPreviewColumn[] {
   return spec.map((c, index) => ({
     index,
     name: c.name,
-    unit: "",
+    unit: c.unit ?? "",
     role: c.role,
     ...(c.effective_name !== undefined ? { effective_name: c.effective_name } : {}),
   }));
@@ -214,6 +217,48 @@ const CASES: CaseSpec[] = [
       { name: "T", role: "y" },
       { name: "err", role: "error" },
       { name: "Sample", role: "categorical" },
+    ],
+  },
+  // UNIT evidence (error_unit_evidence.py / errorUnitEvidence.ts): a
+  // contradicting unit pair is dropped whichever rule produced it; blank is
+  // neutral; units never add or re-target a suggestion.
+  {
+    note: "units agree: a name-driven suggestion is kept",
+    columns: [
+      { name: "H", role: "x", unit: "Oe" },
+      { name: "M", role: "y", unit: "emu" },
+      { name: "M_err", role: "error", unit: "emu" },
+    ],
+  },
+  {
+    note: "units contradict (K beside emu): a name-driven suggestion is dropped, fail closed",
+    columns: [
+      { name: "H", role: "x", unit: "Oe" },
+      { name: "M", role: "y", unit: "emu" },
+      { name: "M_err", role: "error", unit: "K" },
+    ],
+  },
+  {
+    note: "an x-axis target is checked against the x column's unit: mismatch dropped, match kept",
+    columns: [
+      { name: "H", role: "x", unit: "Oe" },
+      { name: "M", role: "y", unit: "emu" },
+      { name: "xerr", role: "error", unit: "K" },
+      { name: "H_err", role: "error", unit: "Oe" },
+    ],
+  },
+  {
+    note: "a scale mismatch (mT vs T) drops a position-only suggestion",
+    columns: [
+      { name: "B", role: "y", unit: "T" },
+      { name: "err", role: "error", unit: "mT" },
+    ],
+  },
+  {
+    note: "a spelling-only unit match (ohm vs Ω) keeps a position-only suggestion",
+    columns: [
+      { name: "R", role: "y", unit: "ohm" },
+      { name: "err", role: "error", unit: "(Ω)" },
     ],
   },
 ];

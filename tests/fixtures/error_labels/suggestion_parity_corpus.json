@@ -406,6 +406,141 @@
           "side": "both"
         }
       ]
+    },
+    {
+      "note": "units agree: a name-driven suggestion is kept",
+      "columns": [
+        {
+          "name": "H",
+          "role": "x",
+          "unit": "Oe",
+          "index": 0
+        },
+        {
+          "name": "M",
+          "role": "y",
+          "unit": "emu",
+          "index": 1
+        },
+        {
+          "name": "M_err",
+          "role": "error",
+          "unit": "emu",
+          "index": 2
+        }
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "units contradict (K beside emu): a name-driven suggestion is dropped, fail closed",
+      "columns": [
+        {
+          "name": "H",
+          "role": "x",
+          "unit": "Oe",
+          "index": 0
+        },
+        {
+          "name": "M",
+          "role": "y",
+          "unit": "emu",
+          "index": 1
+        },
+        {
+          "name": "M_err",
+          "role": "error",
+          "unit": "K",
+          "index": 2
+        }
+      ],
+      "bindings": []
+    },
+    {
+      "note": "an x-axis target is checked against the x column's unit: mismatch dropped, match kept",
+      "columns": [
+        {
+          "name": "H",
+          "role": "x",
+          "unit": "Oe",
+          "index": 0
+        },
+        {
+          "name": "M",
+          "role": "y",
+          "unit": "emu",
+          "index": 1
+        },
+        {
+          "name": "xerr",
+          "role": "error",
+          "unit": "K",
+          "index": 2
+        },
+        {
+          "name": "H_err",
+          "role": "error",
+          "unit": "Oe",
+          "index": 3
+        }
+      ],
+      "bindings": [
+        {
+          "channel": 2,
+          "target": -1,
+          "axis": "x",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "a scale mismatch (mT vs T) drops a position-only suggestion",
+      "columns": [
+        {
+          "name": "B",
+          "role": "y",
+          "unit": "T",
+          "index": 0
+        },
+        {
+          "name": "err",
+          "role": "error",
+          "unit": "mT",
+          "index": 1
+        }
+      ],
+      "bindings": []
+    },
+    {
+      "note": "a spelling-only unit match (ohm vs Ω) keeps a position-only suggestion",
+      "columns": [
+        {
+          "name": "R",
+          "role": "y",
+          "unit": "ohm",
+          "index": 0
+        },
+        {
+          "name": "err",
+          "role": "error",
+          "unit": "(Ω)",
+          "index": 1
+        }
+      ],
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
     }
   ]
 }

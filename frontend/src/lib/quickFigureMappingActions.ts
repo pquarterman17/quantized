@@ -16,7 +16,7 @@
 // export below, and every real (non-test) importer of what moved is the
 // (lazy) `components/workshops/quickfigurebuilder/*`.
 
-import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "./errorRoles";
+import { figureSeedErrorBindings, type ErrorBinding, type ErrorSide } from "./errorRoles";
 import { originHiddenChannels } from "./errorbars";
 import type { QuickFigureMapping } from "./quickFigureMapping";
 import type { Dataset } from "./types";
@@ -31,7 +31,7 @@ export type QuickColumnAssignment =
 const uniqueSorted = (values: readonly number[]): number[] => [...new Set(values)].sort((a, b) => a - b);
 
 export function initialQuickFigureMapping(dataset: Dataset): QuickFigureMapping {
-  const inferred = dataset.errorRoles ?? inferErrorBindings(dataset.data);
+  const inferred = figureSeedErrorBindings(dataset);
   const errorChannels = new Set(inferred.map((binding) => binding.channel));
   const hidden = new Set(originHiddenChannels(dataset.data));
   const ignored = new Set(

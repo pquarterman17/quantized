@@ -17,9 +17,10 @@
 //     is a reference, never a rewrite — toggling or re-pairing error bars can
 //     never mutate the underlying X/Y data.
 
-import type { DataStruct } from "./types";
+import type { DataStruct, Dataset } from "./types";
 import { classifyErrorLabel, classifyErrorLabelInLabels, type ErrorSide } from "./errorLabelClassify";
 import { flatNorm } from "./errorLabelCandidates";
+import { compareUnits } from "./errorUnitEvidence";
 
 export type { ErrorSide };
 // Re-exported for callers that used to reach into this module for the
@@ -98,9 +99,43 @@ export function inferErrorBindingsFromLabels(labels: readonly string[]): ErrorBi
   return bindings;
 }
 
-/** `inferErrorBindingsFromLabels` against a real DataStruct's `.labels`. */
+/** `inferErrorBindingsFromLabels` against a real DataStruct's `.labels`, minus
+ *  every pairing whose UNITS contradict (`errorUnitEvidence.compareUnits`,
+ *  e.g. `M_err (K)` beside `M (emu)`, or an `xerr` in K on an Oe x axis):
+ *  FAIL CLOSED, the pair is never bound and never re-targeted. Units can only
+ *  remove a pairing; a blank/unitless unit is neutral. Mirrors the Python
+ *  `score_dataset_error_bindings` minus its blocked entries (parity:
+ *  tests/fixtures/error_labels/unit_evidence_corpus.json `pairings`). */
 export function inferErrorBindings(data: DataStruct): ErrorBinding[] {
-  return inferErrorBindingsFromLabels(data.labels ?? []);
+  const units = data.units ?? [];
+  const xUnit = xUnitOf(data.metadata);
+  return inferErrorBindingsFromLabels(data.labels ?? []).filter(
+    (b) => compareUnits(units[b.channel], b.target < 0 ? xUnit : units[b.target]) !== "mismatch",
+  );
+}
+
+/** The recorded x-axis unit, as Python's `x_units.x_unit_of` resolves it: the
+ *  first non-blank of `xUnit`/`x_column_unit`/`xColumnUnit`, top-level
+ *  metadata first, then a nested `parser_specific`/`parserSpecific` blob. */
+function xUnitOf(meta: Record<string, unknown> | undefined): string {
+  for (const src of [meta, meta?.parser_specific, meta?.parserSpecific]) {
+    if (!src || typeof src !== "object") continue;
+    for (const key of ["xUnit", "x_column_unit", "xColumnUnit"]) {
+      const raw = (src as Record<string, unknown>)[key];
+      if (typeof raw === "string" && raw.trim()) return raw.trim();
+    }
+  }
+  return "";
+}
+
+/** The bindings a NEW figure starts from: the dataset's committed roles once
+ *  determined (`[]` included -- "checked: none" is an answer, see
+ *  `store/importErrorRoles.ts`), else the label inference above. The ONE
+ *  resolver both creation paths share -- one-click Quick Plot
+ *  (`lib/errorbars.ts`'s `errorRoleViewDefaults`) and the Quick Figure
+ *  Builder's initial mapping -- so they can never pair a column differently. */
+export function figureSeedErrorBindings(dataset: Pick<Dataset, "data" | "errorRoles">): ErrorBinding[] {
+  return dataset.errorRoles ? [...dataset.errorRoles] : inferErrorBindings(dataset.data);
 }
 
 /** Back-compat projection: the legacy `errKeys` map (value channel → error

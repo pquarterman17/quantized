@@ -16,7 +16,9 @@
 //
 // The canonical LINE mapping every allowlisted technique shares: shared-X,
 // multi-Y -- every non-x channel plotted against `.time` as an ordinary
-// series (`defaultPlotView`/`datasetViewDefaults`'s `xKey: null` seed).
+// series (`defaultPlotView`/`datasetViewDefaults`'s `xKey: null` seed),
+// except error-role columns, which bind to their series as whiskers
+// instead (see quickPlotFigureSeed).
 // Per-column explicit-X or XYXY-paired layouts are NEVER re-inferred here;
 // that normalization already happened at IMPORT TIME (the parser puts the
 // resolved x axis in `.time`, one array, regardless of how the source file
@@ -38,6 +40,8 @@
 // import in place (see the PR report for the exact command).
 
 import { datasetViewDefaults } from "../store/windowDefaults";
+import { figureSeedErrorBindings, type ErrorBinding } from "./errorRoles";
+import { legacyErrorBindings } from "./figureDocument";
 import type { LibraryNode } from "./libraryHierarchy";
 import { is2DMap } from "./mapdata";
 import { defaultPlotView, type PlotView } from "./plotview";
@@ -243,12 +247,15 @@ export function pickConfigureQuickPlotWorksheet(
  *  a remembered per-technique view (`memory` -- `lib/techniqueViewMemory
  *  .ts`'s `TechniqueViewMemoryMap`, e.g. AppState.techniqueViewMemory) so a
  *  remembered MvsH view applies just like a silent dataset switch would.
- *  `datasetViewDefaults` already seeds `errKeys` (`defaultErrKeys`) and
- *  `hiddenChannels` (`originHiddenChannels`) from the dataset's own error-
- *  role/Origin-designation metadata, so a dataset with paired error columns
- *  or Origin-hidden X/error columns gets those carried into the seed for
- *  free -- this is the canonical mapping ALREADY handling them, not new
- *  inference layered on top.
+ *  Error columns: the seed opts into `datasetViewDefaults`' `errorRoles`
+ *  layer (`lib/errorbars.ts`'s `errorRoleViewDefaults`), so every column the
+ *  dataset's canonical roles bind -- Origin designation, parser declaration
+ *  or import-time label inference, resolved by `figureSeedErrorBindings`,
+ *  the Quick Figure Builder's own starting point -- is hidden as a curve and
+ *  its symmetric-Y pairing lands in `errKeys`. `errors` is the document's
+ *  binding list: that `errKeys` projection plus every binding it cannot
+ *  express (X error, asymmetric halves), the same rich-plus-legacy split
+ *  `updateFigureDocumentFromPlotView` keeps on every later commit.
  *
  *  Creation consumes the SAME `quickPlotProfile` resolution `quickPlot
  *  Availability` composes (one source of truth for both -- Sol's review):
@@ -262,17 +269,21 @@ export function pickConfigureQuickPlotWorksheet(
 export function quickPlotFigureSeed(
   dataset: Dataset,
   memory: TechniqueViewMemoryMap = {},
-): { name: string; view: PlotView } {
+): { name: string; view: PlotView; errors: ErrorBinding[] } {
   const profile = quickPlotProfile(dataset);
   if (!profile.supported) {
     throw new Error(`quickPlotFigureSeed called on an unsupported dataset ("${dataset.name}")`);
   }
   switch (profile.mode) {
-    case "line":
+    case "line": {
+      const view = { ...defaultPlotView(), ...datasetViewDefaults(dataset, undefined, memory, { errorRoles: true }) };
+      const rich = figureSeedErrorBindings(dataset).filter((b) => b.axis !== "y" || b.side !== "both");
       return {
         name: `Quick Plot — ${dataset.name}`,
-        view: { ...defaultPlotView(), ...datasetViewDefaults(dataset, undefined, memory) },
+        view,
+        errors: [...rich, ...legacyErrorBindings(view.errKeys)],
       };
+    }
   }
 }
 

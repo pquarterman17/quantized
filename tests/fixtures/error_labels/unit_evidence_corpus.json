@@ -1,0 +1,1143 @@
+{
+  "_about": "Cross-language parity for UNIT evidence in error-column pairing: src/quantized/io/error_unit_evidence.py (+ error_binding_confidence.py's score_dataset_error_bindings) vs frontend/src/lib/errorUnitEvidence.ts (+ errorRoles.ts's inferErrorBindings). Read by tests/test_error_unit_evidence_parity_fixture.py AND frontend/src/lib/errorUnitEvidence.test.ts. HAND-CURATED: each expected value was taken from the Python module (which landed first) and reviewed. A failure on one side means the two languages DISAGREE -- make them agree; never edit an expected value to hide a disagreement. cases: compare_units/compareUnits verdict + normalize_unit/normalizeUnit of each side. unitless: every spelling in Python's _UNITLESS (both sides must normalise each to null; the pytest also checks this list IS _UNITLESS). pairings: the label rules with the unit gate applied to a dataset (labels, units, metadata carrying the x unit) -- the bindings that survive (a unit mismatch is never bound).",
+  "cases": [
+    {
+      "note": "surrounding whitespace",
+      "error": " K ",
+      "value": "K",
+      "normalized": [
+        "K",
+        "K"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "tab and newline are whitespace",
+      "error": "K\t",
+      "value": "\nK",
+      "normalized": [
+        "K",
+        "K"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "round brackets around the whole unit",
+      "error": "(K)",
+      "value": "K",
+      "normalized": [
+        "K",
+        "K"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "square and curly brackets",
+      "error": "[K]",
+      "value": "{K}",
+      "normalized": [
+        "K",
+        "K"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "nested enclosing brackets",
+      "error": "((K))",
+      "value": "[(K)]",
+      "normalized": [
+        "K",
+        "K"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "KELVIN SIGN folds to K (NFKC)",
+      "error": "K",
+      "value": "K",
+      "normalized": [
+        "K",
+        "K"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "MICRO SIGN vs ASCII u",
+      "error": "µV",
+      "value": "uV",
+      "normalized": [
+        "uV",
+        "uV"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "GREEK SMALL MU vs bracketed MICRO SIGN",
+      "error": "μV",
+      "value": "(µV)",
+      "normalized": [
+        "uV",
+        "uV"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "OHM SIGN vs OMEGA",
+      "error": "Ω",
+      "value": "Ω",
+      "normalized": [
+        "Ω",
+        "Ω"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "ohm word vs OMEGA",
+      "error": "ohm",
+      "value": "Ω",
+      "normalized": [
+        "Ω",
+        "Ω"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "OHM upper-case word",
+      "error": "OHM",
+      "value": "ohms",
+      "normalized": [
+        "Ω",
+        "Ω"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "prefixed ohm word vs symbol",
+      "error": "mOhm",
+      "value": "mΩ",
+      "normalized": [
+        "mΩ",
+        "mΩ"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "prefixed ohms word vs OHM SIGN",
+      "error": "mohms",
+      "value": "mΩ",
+      "normalized": [
+        "mΩ",
+        "mΩ"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "prefixed ohm word, other prefix",
+      "error": "GOhms",
+      "value": "GΩ",
+      "normalized": [
+        "GΩ",
+        "GΩ"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "MICRO ohm: word prefix u vs MICRO SIGN + OMEGA",
+      "error": "uOhm",
+      "value": "µΩ",
+      "normalized": [
+        "uΩ",
+        "uΩ"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "product: asterisk vs MIDDLE DOT",
+      "error": "Ohm*cm",
+      "value": "Ω·cm",
+      "normalized": [
+        "Ωcm",
+        "Ωcm"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "product: space vs hyphen",
+      "error": "ohm cm",
+      "value": "ohm-cm",
+      "normalized": [
+        "Ωcm",
+        "Ωcm"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "product: DOT OPERATOR vs space",
+      "error": "Ω⋅cm",
+      "value": "Ohm cm",
+      "normalized": [
+        "Ωcm",
+        "Ωcm"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "product: BULLET OPERATOR",
+      "error": "N∙m",
+      "value": "N m",
+      "normalized": [
+        "Nm",
+        "Nm"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "product: EN DASH is a product hyphen",
+      "error": "N–m",
+      "value": "Nm",
+      "normalized": [
+        "Nm",
+        "Nm"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "exponent: caret vs superscripts",
+      "error": "cm^-3",
+      "value": "cm⁻³",
+      "normalized": [
+        "cm-3",
+        "cm-3"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "exponent: plain hyphen vs MINUS SIGN",
+      "error": "cm-3",
+      "value": "cm−3",
+      "normalized": [
+        "cm-3",
+        "cm-3"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "exponent: spaced caret",
+      "error": "cm ^ -3",
+      "value": "cm-3",
+      "normalized": [
+        "cm-3",
+        "cm-3"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "superscript two vs caret",
+      "error": "cm²",
+      "value": "cm^2",
+      "normalized": [
+        "cm2",
+        "cm2"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "area moment: space vs MIDDLE DOT + superscript",
+      "error": "A m^2",
+      "value": "A·m²",
+      "normalized": [
+        "Am2",
+        "Am2"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "area moment: asterisk + caret",
+      "error": "A*m^2",
+      "value": "A m2",
+      "normalized": [
+        "Am2",
+        "Am2"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "spaced slash",
+      "error": "emu / g",
+      "value": "[emu/g]",
+      "normalized": [
+        "emu/g",
+        "emu/g"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "deg vs DEGREE SIGN",
+      "error": "deg",
+      "value": "°",
+      "normalized": [
+        "°",
+        "°"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "degrees vs Degree",
+      "error": "degrees",
+      "value": "Degree",
+      "normalized": [
+        "°",
+        "°"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "degC vs DEGREE CELSIUS (NFKC)",
+      "error": "degC",
+      "value": "℃",
+      "normalized": [
+        "°C",
+        "°C"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "deg C vs DEGREE SIGN + C",
+      "error": "deg C",
+      "value": "°C",
+      "normalized": [
+        "°C",
+        "°C"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "DEGF upper-case word",
+      "error": "DEGF",
+      "value": "°F",
+      "normalized": [
+        "°F",
+        "°F"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "ANGSTROM SIGN vs A-RING",
+      "error": "Å",
+      "value": "Å",
+      "normalized": [
+        "Å",
+        "Å"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "Angstrom vs angstroms vs Ang",
+      "error": "Angstrom",
+      "value": "Ang",
+      "normalized": [
+        "Å",
+        "Å"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "percent word vs sign",
+      "error": "percent",
+      "value": "(%)",
+      "normalized": [
+        "%",
+        "%"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "LATIN SMALL LONG S folds to s (NFKC)",
+      "error": "ſ",
+      "value": "s",
+      "normalized": [
+        "s",
+        "s"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "IDEOGRAPHIC and EM SPACE fold to space (NFKC) and strip",
+      "error": "\u3000K\u2003",
+      "value": "K",
+      "normalized": [
+        "K",
+        "K"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "NEL U+0085 is Python whitespace (JS \\s is not)",
+      "error": "\u0085K\u0085",
+      "value": "K",
+      "normalized": [
+        "K",
+        "K"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "U+001F is Python whitespace (JS \\s is not)",
+      "error": "K\u001f",
+      "value": "K",
+      "normalized": [
+        "K",
+        "K"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "a word that is also an Object.prototype key",
+      "error": "constructor",
+      "value": "constructor",
+      "normalized": [
+        "constructor",
+        "constructor"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "identical plain unit",
+      "error": "emu",
+      "value": "emu",
+      "normalized": [
+        "emu",
+        "emu"
+      ],
+      "verdict": "match"
+    },
+    {
+      "note": "the headline case: K beside Oe",
+      "error": "K",
+      "value": "Oe",
+      "normalized": [
+        "K",
+        "Oe"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "same dimension, different scale",
+      "error": "mT",
+      "value": "T",
+      "normalized": [
+        "mT",
+        "T"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "relative error beside an absolute value",
+      "error": "%",
+      "value": "ohm",
+      "normalized": [
+        "%",
+        "Ω"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "mass-normalised vs total moment",
+      "error": "emu",
+      "value": "emu/g",
+      "normalized": [
+        "emu",
+        "emu/g"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "seconds vs milliseconds",
+      "error": "s",
+      "value": "ms",
+      "normalized": [
+        "s",
+        "ms"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "different exponents",
+      "error": "cm-3",
+      "value": "cm-2",
+      "normalized": [
+        "cm-3",
+        "cm-2"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "counts vs count rate",
+      "error": "counts",
+      "value": "cps",
+      "normalized": [
+        "counts",
+        "cps"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "exponent hyphen is kept",
+      "error": "K-1",
+      "value": "K",
+      "normalized": [
+        "K-1",
+        "K"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "spelling only, no algebra: 1/K vs K^-1",
+      "error": "1/K",
+      "value": "K^-1",
+      "normalized": [
+        "1/K",
+        "K-1"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "a bracket wrapping only part of the unit is kept",
+      "error": "(m/s)^2",
+      "value": "m/s",
+      "normalized": [
+        "(m/s)2",
+        "m/s"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "two bracket groups are not one enclosing pair",
+      "error": "(a)(b)",
+      "value": "a)(b",
+      "normalized": [
+        "(a)(b)",
+        "a)(b"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "an unbalanced bracket is kept",
+      "error": "(K",
+      "value": "K",
+      "normalized": [
+        "(K",
+        "K"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "prefixed ohm vs bare ohm",
+      "error": "kOhm",
+      "value": "ohm",
+      "normalized": [
+        "kΩ",
+        "Ω"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "a glued word run is not split into words",
+      "error": "Ohmcm",
+      "value": "Ω cm",
+      "normalized": [
+        "Ohmcm",
+        "Ωcm"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "a hyphen before a non-ASCII decimal digit is an exponent (Python \\d is Unicode)",
+      "error": "cm-٣",
+      "value": "cm٣",
+      "normalized": [
+        "cm-٣",
+        "cm٣"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "U+FEFF is not Python whitespace, so it is not stripped",
+      "error": "K\ufeff",
+      "value": "K",
+      "normalized": [
+        "K\ufeff",
+        "K"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "near-miss unitless spelling: au.",
+      "error": "au.",
+      "value": "K",
+      "normalized": [
+        "au.",
+        "K"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "near-miss unitless spelling: a.u..",
+      "error": "a.u..",
+      "value": "K",
+      "normalized": [
+        "a.u..",
+        "K"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "near-miss unitless spelling: arb.un",
+      "error": "arb.un",
+      "value": "K",
+      "normalized": [
+        "arb.un",
+        "K"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "near-miss unitless spelling: arbitraryunit",
+      "error": "arbitraryunit",
+      "value": "K",
+      "normalized": [
+        "arbitraryunit",
+        "K"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "near-miss unitless spelling: nulls",
+      "error": "nulls",
+      "value": "K",
+      "normalized": [
+        "nulls",
+        "K"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "near-miss unitless spelling: 11",
+      "error": "11",
+      "value": "K",
+      "normalized": [
+        "11",
+        "K"
+      ],
+      "verdict": "mismatch"
+    },
+    {
+      "note": "four hyphens are not unitless, but all are product hyphens: nothing is left",
+      "error": "----",
+      "value": "K",
+      "normalized": [
+        null,
+        "K"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "None on the error side",
+      "error": null,
+      "value": "K",
+      "normalized": [
+        null,
+        "K"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "None on the value side",
+      "error": "K",
+      "value": null,
+      "normalized": [
+        "K",
+        null
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "two blanks never agree",
+      "error": "",
+      "value": "",
+      "normalized": [
+        null,
+        null
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "whitespace only",
+      "error": "   ",
+      "value": "K",
+      "normalized": [
+        null,
+        "K"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "parentheses around nothing",
+      "error": "()",
+      "value": "K",
+      "normalized": [
+        null,
+        "K"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "bracketed a.u.",
+      "error": "(a.u.)",
+      "value": "K",
+      "normalized": [
+        null,
+        "K"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "arb. units with a space",
+      "error": "arb. units",
+      "value": "K",
+      "normalized": [
+        null,
+        "K"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "bracketed arb.u.",
+      "error": "[arb.u.]",
+      "value": "K",
+      "normalized": [
+        null,
+        "K"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "Arbitrary Units, mixed case",
+      "error": "Arbitrary Units",
+      "value": "K",
+      "normalized": [
+        null,
+        "K"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "NA upper case",
+      "error": "NA",
+      "value": "K",
+      "normalized": [
+        null,
+        "K"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "case-only: emu vs EMU",
+      "error": "emu",
+      "value": "EMU",
+      "normalized": [
+        "emu",
+        "EMU"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "case-only: Oe vs OE",
+      "error": "Oe",
+      "value": "OE",
+      "normalized": [
+        "Oe",
+        "OE"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "case-only but different units: mK vs MK",
+      "error": "mK",
+      "value": "MK",
+      "normalized": [
+        "mK",
+        "MK"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "case-only but different units: mS vs MS",
+      "error": "mS",
+      "value": "MS",
+      "normalized": [
+        "mS",
+        "MS"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "case-only prefixed ohm",
+      "error": "kOhm",
+      "value": "KOhm",
+      "normalized": [
+        "kΩ",
+        "KΩ"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "casefold: sharp s vs SS",
+      "error": "ß",
+      "value": "SS",
+      "normalized": [
+        "ß",
+        "SS"
+      ],
+      "verdict": "unknown"
+    },
+    {
+      "note": "casefold: final sigma vs capital sigma",
+      "error": "ς",
+      "value": "Σ",
+      "normalized": [
+        "ς",
+        "Σ"
+      ],
+      "verdict": "unknown"
+    }
+  ],
+  "unitless": [
+    "",
+    "-",
+    "--",
+    "---",
+    "1",
+    "?",
+    "a.u",
+    "a.u.",
+    "arb",
+    "arb.",
+    "arb.u",
+    "arb.u.",
+    "arb.unit",
+    "arb.units",
+    "arbitrary",
+    "arbitraryunits",
+    "arbunits",
+    "au",
+    "dimensionless",
+    "n/a",
+    "na",
+    "nan",
+    "none",
+    "null",
+    "unitless"
+  ],
+  "pairings": [
+    {
+      "note": "name pairing, units agree",
+      "labels": [
+        "M",
+        "M_err"
+      ],
+      "units": [
+        "emu",
+        "emu"
+      ],
+      "metadata": {},
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "name pairing, K beside emu is BLOCKED",
+      "labels": [
+        "M",
+        "M_err"
+      ],
+      "units": [
+        "emu",
+        "K"
+      ],
+      "metadata": {},
+      "bindings": []
+    },
+    {
+      "note": "a blank error unit is neutral",
+      "labels": [
+        "M",
+        "M_err"
+      ],
+      "units": [
+        "emu",
+        ""
+      ],
+      "metadata": {},
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "a case-only difference is neutral",
+      "labels": [
+        "M",
+        "M_err"
+      ],
+      "units": [
+        "emu",
+        "EMU"
+      ],
+      "metadata": {},
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "scale mismatch mT vs T is BLOCKED",
+      "labels": [
+        "B",
+        "dB"
+      ],
+      "units": [
+        "T",
+        "mT"
+      ],
+      "metadata": {},
+      "bindings": []
+    },
+    {
+      "note": "position pairing with a spelling-only unit match",
+      "labels": [
+        "R",
+        "err"
+      ],
+      "units": [
+        "Ω",
+        "ohm"
+      ],
+      "metadata": {},
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "position pairing, relative % beside ohm is BLOCKED",
+      "labels": [
+        "R",
+        "err"
+      ],
+      "units": [
+        "ohm",
+        "%"
+      ],
+      "metadata": {},
+      "bindings": []
+    },
+    {
+      "note": "x-prefix error agrees with the x unit",
+      "labels": [
+        "Signal",
+        "xerr"
+      ],
+      "units": [
+        "V",
+        "Oe"
+      ],
+      "metadata": {
+        "xUnit": "Oe"
+      },
+      "bindings": [
+        {
+          "channel": 1,
+          "target": -1,
+          "axis": "x",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "x-prefix error contradicts the x unit: BLOCKED",
+      "labels": [
+        "Signal",
+        "xerr"
+      ],
+      "units": [
+        "V",
+        "K"
+      ],
+      "metadata": {
+        "xUnit": "Oe"
+      },
+      "bindings": []
+    },
+    {
+      "note": "no recorded x unit is neutral",
+      "labels": [
+        "Signal",
+        "xerr"
+      ],
+      "units": [
+        "V",
+        "K"
+      ],
+      "metadata": {},
+      "bindings": [
+        {
+          "channel": 1,
+          "target": -1,
+          "axis": "x",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "x unit from the x_column_unit key",
+      "labels": [
+        "Signal",
+        "xerr"
+      ],
+      "units": [
+        "V",
+        "K"
+      ],
+      "metadata": {
+        "x_column_unit": "Oe"
+      },
+      "bindings": []
+    },
+    {
+      "note": "x unit from a nested parser_specific blob",
+      "labels": [
+        "Signal",
+        "xerr"
+      ],
+      "units": [
+        "V",
+        "K"
+      ],
+      "metadata": {
+        "parser_specific": {
+          "xColumnUnit": "Oe"
+        }
+      },
+      "bindings": []
+    },
+    {
+      "note": "a blocked pairing is never re-targeted to a column whose unit agrees",
+      "labels": [
+        "T1",
+        "T2",
+        "T2_err"
+      ],
+      "units": [
+        "K",
+        "mK",
+        "K"
+      ],
+      "metadata": {},
+      "bindings": []
+    },
+    {
+      "note": "one half of an asymmetric pair blocked, the other kept",
+      "labels": [
+        "M",
+        "M_err+",
+        "M_err-"
+      ],
+      "units": [
+        "emu",
+        "emu",
+        "K"
+      ],
+      "metadata": {},
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "+"
+        }
+      ]
+    },
+    {
+      "note": "mixed file: one error agrees, one contradicts",
+      "labels": [
+        "M",
+        "dM",
+        "T",
+        "dT"
+      ],
+      "units": [
+        "emu",
+        "emu",
+        "K",
+        "mK"
+      ],
+      "metadata": {},
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    },
+    {
+      "note": "all-blank units reproduce the label-only pairing",
+      "labels": [
+        "R",
+        "err",
+        "SA",
+        "SA_err"
+      ],
+      "units": [
+        "",
+        "",
+        "",
+        ""
+      ],
+      "metadata": {},
+      "bindings": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both"
+        },
+        {
+          "channel": 3,
+          "target": 2,
+          "axis": "y",
+          "side": "both"
+        }
+      ]
+    }
+  ]
+}

@@ -1,16 +1,25 @@
 // Dataset-aware defaults and the invariant main plot window, extracted from
 // the pinned window-management slice.
-import { defaultErrKeys, originHiddenChannels } from "../lib/errorbars";
+import { defaultErrKeys, errorRoleViewDefaults, originHiddenChannels } from "../lib/errorbars";
 import { isTechniqueChange, techniqueViewDefaults } from "../lib/techniqueDefaults";
 import { applyTechniqueMemory, type TechniqueViewMemoryMap } from "../lib/techniqueViewMemory";
 import { cascadeGeometry, defaultPlotView, type PlotView, type PlotWindow } from "../lib/plotview";
 import type { Dataset } from "../lib/types";
 import { createPlotWindowDocument } from "./windowDocuments";
 
+export interface DatasetViewDefaultsOptions {
+  /** Quick Plot's canonical mapping (`lib/quickPlot.ts`) opts in: bind the
+   *  dataset's error-role columns to their series (`errorRoleViewDefaults`)
+   *  instead of plotting them as curves. Off for every silent rebind
+   *  (import/switch/reimport), whose defaults this leaves byte-identical. */
+  errorRoles?: boolean;
+}
+
 export function datasetViewDefaults(
   dataset: Dataset | undefined,
   previous?: Dataset,
   memory: TechniqueViewMemoryMap = {},
+  options: DatasetViewDefaultsOptions = {},
 ): Partial<PlotView> {
   const remembered = applyTechniqueMemory(dataset, memory);
   return {
@@ -41,6 +50,8 @@ export function datasetViewDefaults(
     yLim: null,
     xStep: null,
     yStep: null,
+    // Below memory, like the two error seeds it widens (memory > defaults).
+    ...(dataset && options.errorRoles ? errorRoleViewDefaults(dataset) : {}),
     ...(remembered ?? (isTechniqueChange(dataset, previous) ? techniqueViewDefaults(dataset) : {})),
   };
 }

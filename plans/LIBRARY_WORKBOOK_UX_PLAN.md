@@ -761,11 +761,23 @@ At minimum, the design must account for:
     `tests/test_io_error_unit_evidence.py` and
     `tests/test_io_error_binding_confidence.py`. The latter includes the
     whole parity corpus with unknown units, which reproduces every pairing.
-  - [ ] Frontend: mirror the unit gate in `lib/errorRoles.ts`
-    (`inferErrorBindings(data)` has `data.units`) and
-    `lib/importErrorSuggestions.ts`, then have Quick Plot / the Quick Figure
-    Builder consume the confidence grade. Neither shared parity fixture
-    carries units, so neither forces this.
+  - [x] Frontend unit gate (2026-09-28): `lib/errorUnitEvidence.ts` ports
+    the normalisation and match / mismatch / unknown comparison.
+    `lib/errorRoles.ts` `inferErrorBindings(data)` drops a pairing whose
+    units contradict, comparing against `data.units` and, for an x-axis
+    target, the x unit that `x_unit_of` would resolve. This covers every
+    Quick Plot and Figure Builder caller. `lib/importErrorSuggestions.ts`
+    does the same with each preview column's `unit`. Parity: the new shared
+    `tests/fixtures/error_labels/unit_evidence_corpus.json` holds 81 unit
+    pairs with verdicts and normalised forms, the full `_UNITLESS` list, and
+    16 dataset pairings. It is read by
+    `tests/test_error_unit_evidence_parity_fixture.py` and
+    `lib/errorUnitEvidence.test.ts`. The suggestion parity fixture gained
+    five cases that carry units, and both languages agree on all of them.
+  - [ ] Frontend: have Quick Plot / the Quick Figure Builder CONSUME the
+    confidence grade (`high`/`medium`/`low`; ask before applying `low`).
+    The TypeScript applies only the mismatch block so far and computes no
+    grade.
 - [x] The user can override every inferred role before creating the figure. Verified 2026-09-28: `QuickMappingPanel`'s per-column X/Y/error/ignore `<Select>`s feed `assignQuickFigureColumn`; pinned by `QuickFigureBuilderWorkspace.test.tsx`'s "offers keyboard-accessible X, Y, ignore, and targeted error roles" (reassigns an auto-inferred error column to X-error and then to plain Y) and "supports dragging a column into an explicit role zone".
 
 Unknown and ambiguous are different states:
@@ -3159,8 +3171,15 @@ PR A acceptance gates:
   remembered child, not the first worksheet".
 - [ ] Right-click a recognized XYXYXY workbook and Quick Plot: three correctly
   paired editable series are created.
-- [ ] Right-click a recognized shared-X worksheet with Y error columns: errors
-  attach to the correct series.
+- [x] Right-click a recognized shared-X worksheet with Y error columns: errors
+  attach to the correct series. 2026-09-28: Quick Plot's seed now opts into
+  `datasetViewDefaults`' error-role layer (`lib/errorbars.ts`'s
+  `errorRoleViewDefaults`, via the Quick Figure Builder's own
+  `figureSeedErrorBindings` resolver) and its document carries the bindings;
+  new `components/Stage/usePlotPayload.quickPlotErrors.test.ts` drives the
+  real row action through the render hook (two Y +/- err, asymmetric pair,
+  Y without error, NCNR X error, unknown CSV disabled); forcing the opt-in
+  off turned 4 of them red.
 - [x] Right-click an unknown CSV: Quick Plot is disabled with a short reason;
   Configure Quick Plot remains available. Verified 2026-09-28: `frontend/src/lib/quickPlot.ts:95`'s `quickPlotProfile` returns `CONFIGURE_QUICK_PLOT_REASON` for technique `"generic"`, and `lib/quickPlotActions.ts`'s `datasetQuickPlotActions` gates only `"dataset.quickPlot"` (never `"dataset.configureQuickPlot"`); pinned by `components/Library/datasetRowMenu.test.ts`'s "Quick Plot is disabled with a reason for a generic dataset row" plus the new "Configure Quick Plot… remains enabled on the SAME generic (unknown) dataset row Quick Plot refuses".
 - [ ] Cancel the Quick Figure Builder: no plot, worksheet mutation, or template
@@ -3733,6 +3752,17 @@ back to the owner. No Library implementation is authorized by this pause.
   `c1adf97`, `914042e`.
 
 ## Change log
+
+- **2026-09-28 — Claude, frontend unit gate for error pairing:** the
+  frontend now blocks unit-mismatched error pairings the same way the
+  backend does (`lib/errorUnitEvidence.ts`, used by `inferErrorBindings`
+  and `suggestErrorBindings`). The shared fixture proves parity case by
+  case. The frontend sub-bullet was split. The gate half is `[x]`; the
+  half where Quick Plot / Quick Figure Builder consume the confidence grade
+  stays `[ ]`. The parent therefore stays `[ ]`. `errorRoles.ts` is on the
+  eager path. Measured with `vite build` on the same `node_modules`: eager
+  JS went from 865,870 B to 867,304 B (+1,434 B). That is 946 B over the
+  866,358 B pin, so this must be funded before it lands.
 
 - **2026-09-28 — Claude, unit evidence for error pairing:** added the
   backend half of "Required column-role inference"'s header/unit/metadata/

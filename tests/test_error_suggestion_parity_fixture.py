@@ -23,9 +23,10 @@ Every case in this fixture is DELIBERATELY chosen to be unaffected by the
 Python port's own extra review-round fixes (x-name-axis matching, source/
 target role restrictions) -- those are pinned separately, by dedicated
 Python-only regression tests in ``test_io_error_binding_suggestions.py``,
-never by this shared fixture. The same holds for the Python-only unit gate
-(``test_io_error_binding_confidence.py``): every column below is fed a
-blank unit, which that gate treats as neutral.
+never by this shared fixture. The unit gate is no longer Python-only: the
+TypeScript mirrors it (``errorUnitEvidence.ts``), so the fixture's trailing
+UNIT cases carry a ``unit`` per column and pin it in both languages. A
+column without one is fed a blank unit, which the gate treats as neutral.
 """
 
 from __future__ import annotations
@@ -57,7 +58,7 @@ def _columns_from_case(case: dict[str, object]) -> list[dict[str, object]]:
     for c in columns:
         assert isinstance(c, dict)
         col: dict[str, object] = {
-            "index": c["index"], "name": c["name"], "unit": "", "role": c["role"],
+            "index": c["index"], "name": c["name"], "unit": c.get("unit", ""), "role": c["role"],
         }
         if "effective_name" in c:
             col["effective_name"] = c["effective_name"]
