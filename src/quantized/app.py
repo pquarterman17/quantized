@@ -10,7 +10,7 @@ import asyncio
 import logging
 import os
 from collections.abc import Collection
-from contextlib import asynccontextmanager
+from contextlib import aclosing, asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
@@ -18,7 +18,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from starlette.requests import HTTPConnection
+from starlette.requests import ClientDisconnect, HTTPConnection
 
 from quantized import __version__
 from quantized.io.workbook_transfer_store import cleanup_transfer_dir
@@ -155,6 +155,50 @@ def _origin_ok(conn: HTTPConnection) -> bool:
     )
 
 
+# A refused request's body is read and discarded (never kept) up to this many
+# bytes before the 403 goes out; see ``_refuse``.
+_REFUSED_BODY_DRAIN_CAP = 64 * 1024
+
+
+async def _refuse(request: Request, detail: str) -> JSONResponse:
+    """The guard's 403, sent only once the request body has been drained.
+
+    Answering from the headers alone left the body unread (or still in
+    flight) when uvicorn closed the connection -- which it does straight after
+    the response when the client sent ``Connection: close``, as urllib does.
+    The kernel answers such a close with a TCP RST instead of a FIN, and on
+    Windows an RST discards data the client has received but not yet read, so
+    the refusal could surface as ``ConnectionResetError`` [WinError 10054]
+    instead of the 403 already sent.
+
+    Bounded: reading stops once more than ``_REFUSED_BODY_DRAIN_CAP`` bytes
+    have arrived, and nothing is read for ``Expect: 100-continue`` (reading
+    would make the server invite the very body being refused). When the body
+    was not fully read, the 403 carries ``Connection: close`` so the server
+    closes rather than keep reading it -- an attacker's body is never read
+    without limit. (A client that stalls mid-body stalls this wait exactly as
+    it would stall any route that reads a body; uvicorn times neither out.)"""
+    drained = await _drain_body(request)
+    headers = None if drained else {"Connection": "close"}
+    return JSONResponse({"detail": detail}, status_code=403, headers=headers)
+
+
+async def _drain_body(request: Request) -> bool:
+    """Read and discard the body up to the cap; True only if all of it was read."""
+    if request.headers.get("expect", "").lower() == "100-continue":
+        return False
+    seen = 0
+    try:
+        async with aclosing(request.stream()) as chunks:
+            async for chunk in chunks:
+                seen += len(chunk)
+                if seen > _REFUSED_BODY_DRAIN_CAP:
+                    return False
+    except ClientDisconnect:
+        return False
+    return True
+
+
 @asynccontextmanager
 async def _app_lifespan(app: FastAPI):  # type: ignore[no-untyped-def]
     """App lifespan: clean up the executor pool + dataset cache on shutdown."""
@@ -199,9 +243,9 @@ def create_app(*, dev_origins: Collection[str] | None = None) -> FastAPI:
         each one does and doesn't cover. CORSMiddleware alone is NOT this:
         it never inspects Host and doesn't block simple cross-site POSTs."""
         if not host_allowed(request.headers.get("host")):
-            return JSONResponse({"detail": "unrecognized Host header"}, status_code=403)
+            return await _refuse(request, "unrecognized Host header")
         if request.url.path.startswith("/api") and not _origin_ok(request):
-            return JSONResponse({"detail": "cross-origin API request blocked"}, status_code=403)
+            return await _refuse(request, "cross-origin API request blocked")
         return await call_next(request)
 
     @application.get("/api/health")
