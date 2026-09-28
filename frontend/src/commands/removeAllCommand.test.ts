@@ -49,4 +49,17 @@ describe("File ▸ Remove all", () => {
     expect(askConfirm).not.toHaveBeenCalled();
     expect(useApp.getState().datasets).toHaveLength(1);
   });
+
+  it("rechecks for an import that starts while confirmation is open", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "data", data: { time: [], values: [], labels: [], units: [], metadata: {} } }] });
+    let confirm: ((ok: boolean) => void) | undefined;
+    vi.mocked(askConfirm).mockReturnValue(new Promise((resolve) => { confirm = resolve; }));
+
+    runRemoveAll();
+    useImportBatch.setState({ running: true });
+    confirm?.(true);
+    await Promise.resolve();
+
+    expect(useApp.getState().datasets).toHaveLength(1);
+  });
 });

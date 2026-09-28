@@ -330,6 +330,10 @@ export function buildFileCommands(s: StoreGet): Action[] {
           true,
         ).then((ok) => {
           if (!ok) return;
+          // The confirmation can remain open long enough for an import to
+          // start after the pre-flight check above. Re-check at the commit
+          // point so its eventual response cannot repopulate the cleared app.
+          if (rejectIfImportRunning()) return;
           s().clearAll();
           toast("removed all datasets", "ok");
         });
