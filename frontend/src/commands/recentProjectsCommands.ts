@@ -31,6 +31,7 @@ import { useEffect } from "react";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { CANCELLED, openProject, pathState, readProject, type OpenProjectResult } from "../lib/desktopBridge";
 import { baseName, parentDirectory } from "../lib/importEntry";
+import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import {
   hasWorkspaceContent,
   replaceConfirmMessage,
@@ -85,6 +86,7 @@ async function pickProjectNear(
  *    relaunch. Degrade to the same dialog, seeded at the file's own folder
  *    — `read_project_file`'s documented contract — rather than a dead end. */
 export async function openRecentProject(name: string, path: string): Promise<ReopenProjectOutcome> {
+  if (rejectIfImportRunning()) return "cancelled";
   const state = await pathState(path);
   if (state === "offline") {
     toast(`${name}: the drive or share is not available right now — reconnect and try again`, "danger");

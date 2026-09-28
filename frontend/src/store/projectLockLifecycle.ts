@@ -1,4 +1,6 @@
-import { beginProjectLockOperation, useProjectLock } from "./projectLock";
+import { useProjectLock } from "./projectLock";
+import { beginProjectLockOperation } from "./projectLockEpoch";
+import { BROWSER_AUTOSAVE_LOCK_PATH } from "./projectLockPaths";
 
 /** Reserve a path as read-only while its asynchronous acquisition begins. */
 export function reserveProjectLock(path: string): number {
@@ -9,8 +11,12 @@ export function reserveProjectLock(path: string): number {
 
 /** Detach immediately; release only a record owned by this instance. */
 export function closeProjectLock(): void {
-  beginProjectLockOperation();
   const { provider, path, record, instanceId } = useProjectLock.getState();
+  // This helper closes a named project. The browser autosave slot is an
+  // app-lifetime lock; dropping it makes the ordinary path-based write gate
+  // disappear and would allow an unlocked tab to overwrite the shared slot.
+  if (path === BROWSER_AUTOSAVE_LOCK_PATH) return;
+  beginProjectLockOperation();
   if (path !== null && record !== null && record.instanceId === instanceId) {
     void provider.release(path, record.token ?? "").catch(() => false);
   }

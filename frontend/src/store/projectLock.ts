@@ -98,9 +98,9 @@ import {
   type LockStatus,
 } from "../lib/lockState";
 import { useApp } from "./useApp";
-let _projectEpoch = 0;
-export const beginProjectLockOperation = (): number => ++_projectEpoch;
-export const isCurrentProjectLockOperation = (candidate: number): boolean => candidate === _projectEpoch;
+import { beginProjectLockOperation, isCurrentProjectLockOperation } from "./projectLockEpoch";
+
+export { beginProjectLockOperation, isCurrentProjectLockOperation };
 
 // `createInMemoryLockProvider` lives in its own sibling module
 // (store/inMemoryLockProvider.ts) — extracted under the 500-line

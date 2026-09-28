@@ -18,9 +18,9 @@
 
 import { useEffect } from "react";
 
-import { BROWSER_AUTOSAVE_LOCK_PATH } from "../useWorkspaceAutosave";
 import { useCommands, type Action } from "../store/commands";
 import { useProjectLock } from "../store/projectLock";
+import { BROWSER_AUTOSAVE_LOCK_PATH } from "../store/projectLockPaths";
 import { toast } from "../store/toasts";
 
 export function useProjectLockCommands(): void {

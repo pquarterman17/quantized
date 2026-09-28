@@ -12,6 +12,7 @@ import { clearAutosave } from "../lib/autosave";
 import type { StoreGet } from "../lib/exportActive";
 import { createFigureDocument } from "../lib/figureDocument";
 import { chooseAndImport } from "../lib/importEntry";
+import { guardAgainstRunningImport, rejectIfImportRunning } from "../lib/importRunningGuard";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
 import {
@@ -25,7 +26,7 @@ import {
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "../lib/originTemplate";
 import { snapshotView } from "../lib/plotview";
 import type { Action } from "../store/commands";
-import { ALREADY_RUNNING_MSG, isImportRunning, useImportBatch } from "../store/importBatch";
+import { useImportBatch } from "../store/importBatch";
 import { withOp } from "../store/pendingOps";
 import { closeProjectLock } from "../store/projectLockLifecycle";
 import { toast } from "../store/toasts";
@@ -40,12 +41,6 @@ import { nextDatasetId } from "../store/useApp";
 // needs the guard applied here because `importFilesAppended` lives in
 // useApp.ts (out of bounds for this slice — see importDatasets.ts's own
 // comment on the same guard).
-function rejectIfImportRunning(): boolean {
-  if (!isImportRunning()) return false;
-  toast(ALREADY_RUNNING_MSG, "danger");
-  return true;
-}
-
 /** Wrap a dynamic `import()` in a pendingOp (F5, 2026-09-13 adversarial
  *  review of d6e67fb7's P3.4 export-cancel commit): every `void`-prefixed
  *  export command body below is a bare `void import(...).then((m) =>
@@ -249,12 +244,12 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // restore, which must never prompt). P3.4 slice 4: `replaceWorkspace`
       // stages every restored window except the active/linked ones behind a
       // placeholder until its drain turn, instead of mounting all at once.
-      run: openWorkspaceCommand(s, "open", (ws, native) => {
+      run: guardAgainstRunningImport(openWorkspaceCommand(s, "open", (ws, native) => {
         if (!hasWorkspaceContent(s)) return replaceWorkspace(s, ws, native);
         void askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length), "Replace", true).then(
           (ok) => ok && replaceWorkspace(s, ws, native),
         );
-      }),
+      })),
     },
     {
       id: "open-workspace-safe",
@@ -264,7 +259,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       keywords: "safe recovery layout skip windows corrupted crash",
       // Same replace-and-confirm flow as "open-workspace" above, via
       // replaceWorkspaceSafely (skipLayout: true).
-      run: openWorkspaceCommand(s, "open", (ws, native) => {
+      run: guardAgainstRunningImport(openWorkspaceCommand(s, "open", (ws, native) => {
         if (!hasWorkspaceContent(s)) return replaceWorkspaceSafely(s, ws, native);
         const extra = " The saved window layout will be skipped — everything opens in one default window.";
         void askConfirm(
@@ -273,7 +268,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
           "Replace",
           true,
         ).then((ok) => ok && replaceWorkspaceSafely(s, ws, native));
-      }),
+      })),
     },
     {
       id: "append-workspace",
@@ -291,10 +286,10 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // over-record; it just can't share openWorkspaceReplace.ts's
       // `replaceWorkspace` chokepoint (append doesn't call it) so it gets
       // its own push at its own commit point instead.
-      run: openWorkspaceCommand(s, "append", (ws, native) => {
+      run: guardAgainstRunningImport(openWorkspaceCommand(s, "append", (ws, native) => {
         s().appendWorkspace(ws);
         recordNativeOpen(native);
-      }),
+      })),
     },
     {
       id: "clear-autosave",
@@ -312,6 +307,7 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Remove all…",
       description: "Permanently clear every dataset, folder, report, and imported figure from the session.",
       run: () => {
+        if (rejectIfImportRunning()) return;
         const n = s().datasets.length;
         if (!hasWorkspaceContent(s)) { s().setStatus("library is already empty"); return; }
         const subject = n > 0 ? `all ${n} dataset${n === 1 ? "" : "s"}, plus every folder, report, and imported figure` : "every folder, workbook, report, page, and saved figure in this dataset-free session";

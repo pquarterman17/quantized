@@ -13,8 +13,9 @@ import { useCommands } from "../store/commands";
 import { useRecentProjects } from "../store/recentProjects";
 import { useToasts } from "../store/toasts";
 import { useApp } from "../store/useApp";
+import { useImportBatch } from "../store/importBatch";
 import { useWorkingPaths } from "../store/workingPaths";
-import { useRecentProjectsCommands } from "./recentProjectsCommands";
+import { openRecentProject, useRecentProjectsCommands } from "./recentProjectsCommands";
 
 vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 vi.mock("../lib/desktopBridge", async (orig) => ({
@@ -53,6 +54,7 @@ beforeEach(() => {
   vi.mocked(askConfirm).mockReset();
   vi.mocked(pathState).mockReset();
   vi.mocked(readProject).mockReset();
+  useImportBatch.setState({ running: false });
   vi.mocked(openProject).mockReset();
   vi.mocked(openProject).mockResolvedValue(null);
   useWorkingPaths.setState({ paths: [], current: "" });
@@ -105,6 +107,14 @@ describe("useRecentProjectsCommands — published registry entries", () => {
 });
 
 describe("useRecentProjectsCommands — reopening an entry", () => {
+  it("does not read or revoke grants while an import is running", async () => {
+    useImportBatch.setState({ running: true });
+    const outcome = await openRecentProject("workspace.dwk", "/p/workspace.dwk");
+    expect(outcome).toBe("cancelled");
+    expect(pathState).not.toHaveBeenCalled();
+    expect(readProject).not.toHaveBeenCalled();
+  });
+
   it("ok: reads the project and loads it straight away on an empty session", async () => {
     vi.mocked(pathState).mockResolvedValue("ok");
     vi.mocked(readProject).mockResolvedValue({ path: "/p/workspace.dwk", content: WS });

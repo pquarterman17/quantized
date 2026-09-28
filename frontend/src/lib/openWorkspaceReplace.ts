@@ -5,10 +5,11 @@
 // already carries a command's body out of the curated command list.
 
 import { canRelease, type LockRecord } from "../lib/lockState";
+import { rejectIfImportRunning } from "./importRunningGuard";
 import { plural } from "./plural";
-import { ALREADY_RUNNING_MSG, isImportRunning } from "../store/importBatch";
 import { stageWorkspaceRestore } from "../store/windowHydration";
-import { isCurrentProjectLockOperation, useProjectLock, type LockProvider } from "../store/projectLock";
+import { useProjectLock, type LockProvider } from "../store/projectLock";
+import { beginProjectLockOperation, isCurrentProjectLockOperation } from "../store/projectLockEpoch";
 import { closeProjectLock, reserveProjectLock } from "../store/projectLockLifecycle";
 import type { ProjectIdentity } from "../store/project";
 import { useRecentProjects } from "../store/recentProjects";
@@ -23,9 +24,7 @@ import type { LoadedWorkspace } from "./workspace";
  * workspace. Check before a picker for fast feedback and again after any
  * confirmation because an import can start while a dialog is open. */
 export function rejectWorkspaceReplacementWhileImporting(): boolean {
-  const running = isImportRunning();
-  if (running) toast(ALREADY_RUNNING_MSG, "danger");
-  return running;
+  return rejectIfImportRunning();
 }
 
 /** Snapshot of the lock this instance held BEFORE a project switch —
@@ -39,6 +38,9 @@ interface PriorLock {
   instanceId: string;
   provider: LockProvider;
   op: number | null;
+  status: ReturnType<typeof useProjectLock.getState>["status"];
+  openedAsCopy: boolean;
+  unverifiableHeartbeats: number;
 }
 
 /** P3 (adversarial review, 2026-08-19) — the SYNCHRONOUS half of PR I2's
@@ -67,10 +69,23 @@ interface PriorLock {
 function reserveLockForSwitch(native: ProjectIdentity | undefined): PriorLock | null {
   if (!native) return null;
   const prev = useProjectLock.getState();
-  const prior: PriorLock = { path: prev.path, record: prev.record, instanceId: prev.instanceId, provider: prev.provider, op: null };
+  const prior: PriorLock = {
+    path: prev.path, record: prev.record, instanceId: prev.instanceId, provider: prev.provider, op: null,
+    status: prev.status, openedAsCopy: prev.openedAsCopy, unverifiableHeartbeats: prev.unverifiableHeartbeats,
+  };
   if (prev.path === native.path) return prior; // same project — nothing to reserve or release
   prior.op = reserveProjectLock(native.path);
   return prior;
+}
+
+/** Undo a synchronous reservation if workspace hydration rejects. */
+function rollbackLockReservation(prior: PriorLock | null): void {
+  if (prior?.op === null || prior === null || !isCurrentProjectLockOperation(prior.op)) return;
+  beginProjectLockOperation();
+  useProjectLock.setState({
+    path: prior.path, record: prior.record, status: prior.status,
+    openedAsCopy: prior.openedAsCopy, unverifiableHeartbeats: prior.unverifiableHeartbeats,
+  });
 }
 
 /** PR I2 (L0.47): the ASYNC half — releases the prior project's lock (if
@@ -163,8 +178,13 @@ function replaceWorkspaceImpl(s: StoreGet, ws: LoadedWorkspace, native: ProjectI
   // through; closePanel is idempotent when the panel isn't open.
   useRelink.getState().closePanel();
   const priorLock = reserveLockForSwitch(native);
+  try {
+    s().loadWorkspace(ws, skipLayout ? { skipLayout: true } : undefined);
+  } catch (error) {
+    rollbackLockReservation(priorLock);
+    throw error;
+  }
   if (!native) closeProjectLock();
-  s().loadWorkspace(ws, skipLayout ? { skipLayout: true } : undefined);
   // BUG-010 (review): `loadWorkspace`'s own `migrationNotice` status-line
   // fold above is real here (nothing downstream in this function overwrites
   // `status`), but a status line is easy to miss on a big load — every

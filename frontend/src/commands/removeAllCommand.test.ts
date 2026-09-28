@@ -51,7 +51,7 @@ describe("File ▸ Remove all", () => {
     runRemoveAll();
     await Promise.resolve();
 
-    expect(askConfirm).toHaveBeenCalledOnce();
+    expect(askConfirm).not.toHaveBeenCalled();
     expect(useApp.getState().datasets).toHaveLength(1);
   });
 
