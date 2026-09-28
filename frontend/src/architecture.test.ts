@@ -2141,9 +2141,6 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   // workshop slices: search/discovery UI
   searchOpen: "search panel visibility; UI state, transient",
 
-  // uiStore / techniqueViewMemory: per-technique view defaults (not edit state)
-  techniqueViewMemory: "remembered view settings per data technique; UI preference, not data edit",
-
   // Figure/image state from figureLifecycle slice
   figurePublicationSession: "in-progress figure editing session; ephemeral until published",
 
@@ -2257,7 +2254,6 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   staleDatasets: "derived recalculation dirty set; recomputed, not authored",
   staleFits: "derived fit dirty set; recomputed, not authored",
   macroRecording: "macro recorder armed flag; runtime state",
-  macroSteps: "in-progress macro recording buffer; runtime state",
   pipelineRunning: "pipeline execution flag; runtime state",
 
   // map render settings (technique-view class, like techniqueViewMemory)

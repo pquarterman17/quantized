@@ -310,19 +310,21 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Remove all…",
       description: "Permanently clear every dataset, folder, report, and imported figure from the session.",
       run: () => {
+        if (rejectIfImportRunning()) return;
         const n = s().datasets.length;
-        if (n === 0) {
+        if (!hasWorkspaceContent(s)) {
           s().setStatus("library is already empty");
           return;
         }
+        const subject = n > 0 ? `all ${n} dataset${n === 1 ? "" : "s"}, plus every folder, report, and imported figure` : "every folder, workbook, report, page, and saved figure in this dataset-free session";
         void askConfirm(
           "Remove everything?",
-          `This removes all ${n} dataset${n === 1 ? "" : "s"}, plus every folder and ` +
-            `imported figure. This can't be undone.`,
+          `This removes ${subject}. You can undo this during the current session.`,
           "Remove all",
           true,
         ).then((ok) => {
           if (!ok) return;
+          if (rejectIfImportRunning()) return;
           s().clearAll();
           toast("removed all datasets", "ok");
         });
