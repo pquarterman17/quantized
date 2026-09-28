@@ -12,18 +12,24 @@ only. The pre-existing cases live in ``test_csrf_guard.py``.
 
 from __future__ import annotations
 
+import asyncio
 import json
+import select
+import socket
 import threading
 import time
 import urllib.error
 import urllib.request
+from collections.abc import Awaitable, Callable, Iterator
 from pathlib import Path
+from typing import Any
 
 import httpx
 import pytest
 import uvicorn
 from fastapi.testclient import TestClient
 
+from quantized import app as app_module
 from quantized import server_launch
 from quantized.app import create_app
 from quantized.io.workbook_transfer_store import TransferStore
@@ -246,13 +252,11 @@ def _request(url: str, origin: str, method: str = "GET") -> int:
         return int(e.code)
 
 
-def test_desktop_mode_real_server_on_auto_picked_port(
-    monkeypatch: pytest.MonkeyPatch, transfer_root: Path
-) -> None:
+@pytest.fixture
+def live_port(monkeypatch: pytest.MonkeyPatch) -> Iterator[int]:
     """``qz --desktop`` binds up front (``_bind``) and hands the socket to
     uvicorn; pywebview then loads ``http://127.0.0.1:<port>``. Port 0 here is
-    the auto-pick case: nothing knows the port before the bind, so the guard
-    must take it from the live request (Host), not from config."""
+    the auto-pick case: nothing knows the port before the bind."""
     monkeypatch.delenv(DEV_VITE_PORT_ENV, raising=False)
     sock = server_launch._bind("127.0.0.1", 0)
     assert sock is not None
@@ -267,18 +271,171 @@ def test_desktop_mode_real_server_on_auto_picked_port(
         while not server.started and time.monotonic() < deadline:
             time.sleep(0.05)
         assert server.started
-        base = f"http://127.0.0.1:{port}"
-        for alias in ("127.0.0.1", "localhost"):
-            own = f"http://{alias}:{port}"
-            assert _request(f"{base}/api/health", own) == 200
-            assert _request(f"{base}{TRANSFER}", own, "POST") == 200
-        n_written = len(_written(transfer_root))
-        assert n_written > 0
-        other = f"http://127.0.0.1:{port + 1 if port < 65535 else port - 1}"
-        assert _request(f"{base}/api/health", other) == 403
-        assert _request(f"{base}{TRANSFER}", other, "POST") == 403
-        assert _request(f"{base}{TRANSFER}", f"https://127.0.0.1:{port}", "POST") == 403
-        assert len(_written(transfer_root)) == n_written
+        yield port
     finally:
         server.should_exit = True
         t.join(timeout=10)
+
+
+def _other_port(port: int) -> int:
+    return port + 1 if port < 65535 else port - 1
+
+
+def test_desktop_mode_real_server_on_auto_picked_port(live_port: int, transfer_root: Path) -> None:
+    """The guard must take the auto-picked port from the live request (Host),
+    not from config: nothing knew it before the bind."""
+    port = live_port
+    base = f"http://127.0.0.1:{port}"
+    for alias in ("127.0.0.1", "localhost"):
+        own = f"http://{alias}:{port}"
+        assert _request(f"{base}/api/health", own) == 200
+        assert _request(f"{base}{TRANSFER}", own, "POST") == 200
+    n_written = len(_written(transfer_root))
+    assert n_written > 0
+    other = f"http://127.0.0.1:{_other_port(port)}"
+    assert _request(f"{base}/api/health", other) == 403
+    assert _request(f"{base}{TRANSFER}", other, "POST") == 403
+    assert _request(f"{base}{TRANSFER}", f"https://127.0.0.1:{port}", "POST") == 403
+    assert len(_written(transfer_root)) == n_written
+
+
+# ── a refused request's body is drained before the 403 (no TCP reset) ───────
+
+
+def _read_to_eof(c: socket.socket) -> bytes:
+    chunks = []
+    while chunk := c.recv(65536):
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
+@pytest.mark.parametrize(
+    ("host", "origin", "detail"),
+    [
+        ("127.0.0.1:{port}", "http://127.0.0.1:{other}", BLOCKED),
+        ("evil.example:{port}", None, "unrecognized Host header"),  # DNS rebinding
+    ],
+    ids=["origin-guard", "host-guard"],
+)
+def test_refused_post_is_answered_after_its_body_not_reset(
+    live_port: int, transfer_root: Path, host: str, origin: str | None, detail: str
+) -> None:
+    """Forces the Windows CI race behind ``ConnectionResetError [WinError
+    10054]`` in the desktop-mode test above, on every run and every OS.
+
+    http.client sends a request's headers and its body in two ``send()``
+    calls. The guard used to answer from the headers alone; uvicorn then
+    closed the connection (urllib sends ``Connection: close``) with the body
+    unread or still in flight, and the server's kernel answered that body with
+    a TCP RST instead of a FIN. Windows discards received-but-unread data on
+    an RST, so the client could lose the 403 it had already been sent. Here
+    the body is held back until the server has had ample time to answer from
+    the headers alone -- before the fix it always did, and the reset
+    followed."""
+    port = live_port
+    fields = {"Host": host.format(port=port), "Content-Type": "text/plain"}
+    if origin is not None:
+        fields["Origin"] = origin.format(other=_other_port(port))
+    head = f"POST {TRANSFER} HTTP/1.1\r\n" + "".join(f"{k}: {v}\r\n" for k, v in fields.items())
+    head += "Content-Length: 2\r\nConnection: close\r\n\r\n"
+    with socket.create_connection(("127.0.0.1", port), timeout=10) as c:
+        c.sendall(head.encode("ascii"))
+        answered_early, _, _ = select.select([c], [], [], 0.5)
+        assert not answered_early, "refused from the headers alone, before its body was read"
+        c.sendall(b"{}")
+        raw = _read_to_eof(c)  # the unfixed guard: ConnectionResetError here
+        assert c.getsockopt(socket.SOL_SOCKET, socket.SO_ERROR) == 0  # FIN, not RST
+    status, _, body = raw.partition(b"\r\n\r\n")
+    assert status.startswith(b"HTTP/1.1 403 ")
+    assert json.loads(body) == {"detail": detail}
+    assert _written(transfer_root) == []
+
+
+def _refuse_via_asgi(
+    receive: Callable[[], Awaitable[dict[str, Any]]], *extra: tuple[bytes, bytes]
+) -> tuple[int, dict[bytes, bytes], bytes]:
+    """One cross-origin POST straight through the ASGI app, so the test owns
+    every ``receive()`` the guard makes."""
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "POST",
+        "scheme": "http",
+        "path": TRANSFER,
+        "raw_path": TRANSFER.encode(),
+        "query_string": b"",
+        "root_path": "",
+        "headers": [
+            (b"host", b"127.0.0.1:8000"),
+            (b"origin", b"http://localhost:8888"),
+            (b"content-type", b"text/plain"),
+            *extra,
+        ],
+        "client": ("127.0.0.1", 50000),
+        "server": ("127.0.0.1", 8000),
+    }
+    sent: list[dict[str, Any]] = []
+
+    async def send(message: dict[str, Any]) -> None:
+        sent.append(message)
+
+    asyncio.run(create_app(dev_origins=())(scope, receive, send))
+    start, *rest = sent
+    return int(start["status"]), dict(start["headers"]), b"".join(m["body"] for m in rest)
+
+
+def test_refusal_drains_a_small_body_and_keeps_the_connection() -> None:
+    reads = 0
+
+    async def receive() -> dict[str, Any]:
+        nonlocal reads
+        reads += 1
+        return {"type": "http.request", "body": b"{}", "more_body": False}
+
+    status, headers, body = _refuse_via_asgi(receive)
+    assert (status, json.loads(body)) == (403, {"detail": BLOCKED})
+    assert reads == 1
+    assert b"connection" not in headers  # fully read: keep-alive stays usable
+
+
+def test_refusal_reads_only_a_bounded_prefix_of_an_endless_body() -> None:
+    """An attacker's body is never read without limit: past the cap the guard
+    stops, answers, and tells the server to close rather than keep reading."""
+    chunk = 16 * 1024
+    reads = 0
+
+    async def endless() -> dict[str, Any]:
+        nonlocal reads
+        reads += 1
+        return {"type": "http.request", "body": b"x" * chunk, "more_body": True}
+
+    status, headers, body = _refuse_via_asgi(endless)
+    assert (status, json.loads(body)) == (403, {"detail": BLOCKED})
+    assert headers.get(b"connection") == b"close"
+    assert 1 < reads <= app_module._REFUSED_BODY_DRAIN_CAP // chunk + 1
+
+
+def test_refusal_does_not_invite_a_100_continue_body() -> None:
+    """Reading would make the server send ``100 Continue``, soliciting the
+    very body being refused; a final 403 + close is the RFC 9110 answer."""
+    reads = 0
+
+    async def receive() -> dict[str, Any]:
+        nonlocal reads
+        reads += 1
+        return {"type": "http.request", "body": b"{}", "more_body": False}
+
+    status, headers, body = _refuse_via_asgi(receive, (b"expect", b"100-continue"))
+    assert (status, json.loads(body)) == (403, {"detail": BLOCKED})
+    assert reads == 0
+    assert headers.get(b"connection") == b"close"
+
+
+def test_refusal_survives_a_client_that_disconnects_mid_body() -> None:
+    async def gone() -> dict[str, Any]:
+        return {"type": "http.disconnect"}
+
+    status, headers, body = _refuse_via_asgi(gone)
+    assert (status, json.loads(body)) == (403, {"detail": BLOCKED})
+    assert headers.get(b"connection") == b"close"
