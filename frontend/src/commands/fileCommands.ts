@@ -310,6 +310,11 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Remove all…",
       description: "Permanently clear every dataset, folder, report, and imported figure from the session.",
       run: () => {
+        // An import owns an async response that can still append datasets after
+        // clearAll() commits.  Refuse the destructive gesture until that batch
+        // is cancelled or completes, otherwise an apparently empty project can
+        // silently repopulate a moment later.
+        if (rejectIfImportRunning()) return;
         const n = s().datasets.length;
         if (!hasWorkspaceContent(s)) {
           s().setStatus("library is already empty");

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { createPageDocument } from "../lib/pageDocumentActions";
+import { useImportBatch } from "../store/importBatch";
 import { useApp } from "../store/useApp";
 import { buildFileCommands } from "./fileCommands";
 
@@ -16,6 +17,7 @@ function runRemoveAll(): void {
 describe("File ▸ Remove all", () => {
   beforeEach(() => {
     vi.mocked(askConfirm).mockReset();
+    useImportBatch.setState({ running: false });
     useApp.setState({ datasets: [], folders: [], workbooks: [], pages: [], reports: [], figureDocs: [], editableFigures: [] });
   });
 
@@ -36,5 +38,15 @@ describe("File ▸ Remove all", () => {
     const message = vi.mocked(askConfirm).mock.calls[0][1];
     expect(message).toContain("undo this during the current session");
     expect(message).not.toContain("can't be undone");
+  });
+
+  it("does not clear the project while an import can still append results", () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "data", data: { time: [], values: [], labels: [], units: [], metadata: {} } }] });
+    useImportBatch.setState({ running: true });
+
+    runRemoveAll();
+
+    expect(askConfirm).not.toHaveBeenCalled();
+    expect(useApp.getState().datasets).toHaveLength(1);
   });
 });
