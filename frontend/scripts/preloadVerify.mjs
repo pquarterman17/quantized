@@ -34,17 +34,21 @@ const EMPTY = /,\s*\[\]\s*\)/g;
  * @returns {Promise<{ sites: number; checked: number; violations: string[] }>}
  */
 export async function verifyPreloadLists(chunks) {
-  await init;
+  await init();
   const statics = {};
   const dynamics = {};
   for (const [name, { code }] of Object.entries(chunks)) {
     const [imps] = parse(code);
     const dir = posix.dirname(name);
     const at = (spec) => posix.join(dir, spec);
-    statics[name] = [...new Set(imps.filter((i) => i.d === -1 && i.n).map((i) => at(i.n)))];
+    // es-module-lexer 3 records: a static edge is `type` "static" or, for
+    // `export * from`, "reexport-star" (v2 lumped both under `d === -1`);
+    // `specifier` is null when the dynamic import is not a string literal.
+    const isStatic = (i) => i.type === "static" || i.type === "reexport-star";
+    statics[name] = [...new Set(imps.filter((i) => isStatic(i) && i.specifier).map((i) => at(i.specifier)))];
     dynamics[name] = imps
-      .filter((i) => i.d > -1 && i.n)
-      .map((i) => ({ target: at(i.n), start: i.ss, end: i.e }))
+      .filter((i) => i.type === "dynamic" && i.specifier)
+      .map((i) => ({ target: at(i.specifier), start: i.importStart, end: i.end }))
       .sort((a, b) => a.start - b.start);
   }
   const closure = (host) => {
