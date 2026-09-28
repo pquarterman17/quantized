@@ -3159,8 +3159,15 @@ PR A acceptance gates:
   remembered child, not the first worksheet".
 - [ ] Right-click a recognized XYXYXY workbook and Quick Plot: three correctly
   paired editable series are created.
-- [ ] Right-click a recognized shared-X worksheet with Y error columns: errors
-  attach to the correct series.
+- [x] Right-click a recognized shared-X worksheet with Y error columns: errors
+  attach to the correct series. 2026-09-28: Quick Plot's seed now opts into
+  `datasetViewDefaults`' error-role layer (`lib/errorbars.ts`'s
+  `errorRoleViewDefaults`, via the Quick Figure Builder's own
+  `figureSeedErrorBindings` resolver) and its document carries the bindings;
+  new `components/Stage/usePlotPayload.quickPlotErrors.test.ts` drives the
+  real row action through the render hook (two Y +/- err, asymmetric pair,
+  Y without error, NCNR X error, unknown CSV disabled); forcing the opt-in
+  off turned 4 of them red.
 - [x] Right-click an unknown CSV: Quick Plot is disabled with a short reason;
   Configure Quick Plot remains available. Verified 2026-09-28: `frontend/src/lib/quickPlot.ts:95`'s `quickPlotProfile` returns `CONFIGURE_QUICK_PLOT_REASON` for technique `"generic"`, and `lib/quickPlotActions.ts`'s `datasetQuickPlotActions` gates only `"dataset.quickPlot"` (never `"dataset.configureQuickPlot"`); pinned by `components/Library/datasetRowMenu.test.ts`'s "Quick Plot is disabled with a reason for a generic dataset row" plus the new "Configure Quick Plot… remains enabled on the SAME generic (unknown) dataset row Quick Plot refuses".
 - [ ] Cancel the Quick Figure Builder: no plot, worksheet mutation, or template

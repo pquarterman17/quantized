@@ -17,7 +17,7 @@
 //     is a reference, never a rewrite — toggling or re-pairing error bars can
 //     never mutate the underlying X/Y data.
 
-import type { DataStruct } from "./types";
+import type { DataStruct, Dataset } from "./types";
 import { classifyErrorLabel, classifyErrorLabelInLabels, type ErrorSide } from "./errorLabelClassify";
 import { flatNorm } from "./errorLabelCandidates";
 
@@ -101,6 +101,16 @@ export function inferErrorBindingsFromLabels(labels: readonly string[]): ErrorBi
 /** `inferErrorBindingsFromLabels` against a real DataStruct's `.labels`. */
 export function inferErrorBindings(data: DataStruct): ErrorBinding[] {
   return inferErrorBindingsFromLabels(data.labels ?? []);
+}
+
+/** The bindings a NEW figure starts from: the dataset's committed roles once
+ *  determined (`[]` included -- "checked: none" is an answer, see
+ *  `store/importErrorRoles.ts`), else the label inference above. The ONE
+ *  resolver both creation paths share -- one-click Quick Plot
+ *  (`lib/errorbars.ts`'s `errorRoleViewDefaults`) and the Quick Figure
+ *  Builder's initial mapping -- so they can never pair a column differently. */
+export function figureSeedErrorBindings(dataset: Pick<Dataset, "data" | "errorRoles">): ErrorBinding[] {
+  return dataset.errorRoles ? [...dataset.errorRoles] : inferErrorBindings(dataset.data);
 }
 
 /** Back-compat projection: the legacy `errKeys` map (value channel → error

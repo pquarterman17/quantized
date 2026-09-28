@@ -5,8 +5,14 @@
 // canvas drawing lives in uplotOverlays.errorBarsPlugin.
 
 import { columnMetaList } from "./columnmeta";
-import { asymmetricPair, symmetricBinding, type ErrorBinding } from "./errorRoles";
-import type { DataStruct } from "./types";
+import {
+  asymmetricPair,
+  errKeysFromBindings,
+  figureSeedErrorBindings,
+  symmetricBinding,
+  type ErrorBinding,
+} from "./errorRoles";
+import type { DataStruct, Dataset } from "./types";
 
 /** Per-display-column error magnitudes, keyed by the uPlot data-column index
  *  (1-based: column 0 is x, column p+1 is the p-th plotted series). `errKeys`
@@ -88,6 +94,31 @@ export function originHiddenChannels(ds: DataStruct): number[] {
     if (g === "Y-error" || g === "X-error" || g === "X") out.push(i);
   }
   return out;
+}
+
+/** Quick Plot's error defaults: the two seeds above widened with the
+ *  dataset's canonical role bindings (`figureSeedErrorBindings` -- the same
+ *  resolver the Quick Figure Builder starts from, not a second inference).
+ *  `errKeys` gains the symmetric-Y projection (a role wins over a hint: roles
+ *  are the canonical contract); asymmetric and X roles need no errKeys --
+ *  they render from the bindings themselves. Every error column -- bound by
+ *  a role, a designation or an `error_channels` hint -- joins
+ *  `hiddenChannels`, `originHiddenChannels`' rule for a designated error:
+ *  never its own curve, still toggleable in the legend. */
+export function errorRoleViewDefaults(
+  dataset: Pick<Dataset, "data" | "errorRoles">,
+): { errKeys: Record<number, number>; hiddenChannels: number[] } {
+  const bindings = figureSeedErrorBindings(dataset);
+  const hinted = defaultErrKeys(dataset.data);
+  const hidden = new Set([
+    ...originHiddenChannels(dataset.data),
+    ...Object.values(hinted),
+    ...bindings.map((b) => b.channel),
+  ]);
+  return {
+    errKeys: { ...hinted, ...errKeysFromBindings(bindings) },
+    hiddenChannels: [...hidden].sort((a, b) => a - b),
+  };
 }
 
 // ── MAIN_PLAN #36: asymmetric and X error ──────────────────────────────────

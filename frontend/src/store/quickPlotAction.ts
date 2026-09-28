@@ -72,7 +72,7 @@ export function createQuickPlotActionSlice(set: SliceSet, get: SliceGet): QuickP
       const name = dedupeWindowTitle(seed.name, state.editableFigures.map((f) => f.name));
       const windowId = state.createWindow(dataset.id, seed.view, name); // the gesture's one recordHistory
       const id = nextFigureId();
-      const document = createFigureDocument({ id, name, datasetId: dataset.id, view: seed.view });
+      const document = createFigureDocument({ id, name, datasetId: dataset.id, view: seed.view, errors: seed.errors });
       set((current) => ({
         editableFigures: [...current.editableFigures, document],
         plotWindows: current.plotWindows.map((w) =>
