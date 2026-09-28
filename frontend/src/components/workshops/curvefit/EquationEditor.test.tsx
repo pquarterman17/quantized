@@ -3,6 +3,9 @@
 // sits under it, and a stale span is never drawn on newer text.
 
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+// Warm the REAL KaTeX (not mocked in this file) so the preview's lazy
+// import() resolves from the module cache rather than a cold transform.
+import "katex";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { validateEquation } from "../../../lib/api/curvefit";
@@ -115,5 +118,29 @@ describe("EquationEditor inline error marking (P2.7)", () => {
     fireEvent.change(screen.getByLabelText("Equation"), { target: { value: "a" } });
     await waitFor(() => expect(screen.getByLabelText("Equation")).toHaveAttribute("aria-invalid", "false"));
     expect(screen.queryByTestId("equation-error-mark")).toBeNull();
+  });
+});
+
+describe("EquationEditor rendered preview (P2.7 stretch)", () => {
+  it("draws the field's text with KaTeX under it, and nothing while the validator rejects it", async () => {
+    vi.mocked(validateEquation).mockResolvedValue({ ok: true, params: ["A", "tau", "c"], usesX: true });
+    renderWith("A*exp(-x/tau) + c");
+    const math = await screen.findByTestId("equation-preview-math", {}, { timeout: 10_000 });
+    expect(math.querySelector(".katex")).not.toBeNull();
+    // Read-only: the Python text in the field is still the one editable source.
+    expect(screen.getByLabelText("Equation")).toHaveValue("A*exp(-x/tau) + c");
+    expect(screen.getByTestId("equation-preview")).toHaveAttribute("aria-hidden", "true");
+
+    // Text the local converter parses, but the validator (the authority) rejects.
+    vi.mocked(validateEquation).mockResolvedValue({
+      ok: false,
+      params: [],
+      error: "bad (column 1)",
+      errorStart: 0,
+      errorEnd: 1,
+    });
+    fireEvent.change(screen.getByLabelText("Equation"), { target: { value: "A*exp(-x/tau) + c*x" } });
+    expect(await screen.findByRole("alert")).toHaveTextContent("bad");
+    expect(screen.queryByTestId("equation-preview-math")).toBeNull();
   });
 });

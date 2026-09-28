@@ -5,11 +5,14 @@
 // is an aria-hidden overlay with the same box, font and padding (it carries
 // the same `qz-input` class) whose text is transparent except for the wavy
 // underline under the error span, kept scrolled with the input so a long
-// equation marks the right characters.
+// equation marks the right characters. Under the field, a read-only rendered
+// preview of the same text (EquationPreview, P2.7 stretch); the field stays
+// the only thing the user edits.
 
 import { useId, useLayoutEffect, useRef } from "react";
 
 import type { TextSpan } from "../../../lib/equationSpan";
+import EquationPreview from "./EquationPreview";
 import type { ValidationStatus } from "./useEquationFit";
 
 interface Props {
@@ -91,6 +94,7 @@ export default function EquationEditor({ value, onChange, status, validationErro
           </div>
         )}
       </div>
+      <EquationPreview equation={value} suppressed={status === "error"} />
       <div className="qzk-ds-meta qzk-msg" style={{ marginTop: 6, minHeight: 16 }}>
         {status === "checking" && <span style={{ color: "var(--text-faint)" }}>checking…</span>}
         {status === "ok" && noParams && (
