@@ -36,6 +36,7 @@ import { useHistoryCommands } from "../history/useHistoryCommands";
 import { useWindowCommands } from "../windows/useWindowCommands";
 import WindowCanvas from "../windows/WindowCanvas";
 
+const EmptyProjectStage = lazyRegion(() => import("./EmptyProjectStage"), "Empty workspace");
 const MapStage = lazyRegion(() => import("./MapStage"), "Map");
 const Worksheet = lazyRegion(() => import("./Worksheet"), "Worksheet");
 
@@ -48,6 +49,15 @@ const TABS = [
 export default function Stage() {
   const stageTab = useApp((s) => s.stageTab);
   const setStageTab = useApp((s) => s.setStageTab);
+  const hasRenderableContent = useApp((s) =>
+    s.datasets.length > 0 ||
+    s.plotWindows.some((w) => w.kind === "snapshot" && w.snapshot !== undefined) ||
+    s.pages.length > 0 ||
+    s.reports.length > 0 ||
+    s.originFigures.length > 0 ||
+    s.editableFigures.length > 0 ||
+    s.figureDocs.length > 0,
+  );
   const active = useActiveDataset();
   useWindowCommands();
   useHistoryCommands();
@@ -69,6 +79,11 @@ export default function Stage() {
   useEffect(() => {
     if (stageTab === "map" && !mappable) setStageTab("plot");
   }, [stageTab, mappable, setStageTab]);
+
+  // A fresh/cleared project keeps the command-registration hooks above
+  // mounted. Do not key this on `active`: focusing a frozen snapshot clears
+  // activeId, and a snapshot-only workspace remains fully renderable.
+  if (!hasRenderableContent) return <EmptyProjectStage />;
 
   return (
     <section className="qzk-stage-cell">

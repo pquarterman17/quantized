@@ -191,6 +191,8 @@ describe("clearAll (File ▸ Remove all)", () => {
       ],
       activeId: "a",
       selectedIds: ["a", "b"],
+      currentProject: { name: "loaded.dwk", path: "C:/data/loaded.dwk" },
+      projectDirty: true,
     });
     useApp.getState().clearAll();
     const s = useApp.getState();
@@ -203,6 +205,8 @@ describe("clearAll (File ▸ Remove all)", () => {
     expect(s.originFigures).toEqual([]);
     expect(s.activeId).toBeNull();
     expect(s.selectedIds).toEqual([]);
+    expect(s.currentProject).toBeNull();
+    expect(s.projectDirty).toBe(false);
     expect(s.status).toMatch(/removed all/i);
   });
 });

@@ -295,6 +295,7 @@ export function createWorkspaceHydrationSlice(set: SliceSet, get: SliceGet): Wor
         figureDocs: [],
         editableFigures: [],
       });
+      get().setCurrentProject(null);
       set({ status: "removed all datasets, folders, figures, and reports" });
     },
   };
