@@ -1945,6 +1945,26 @@ describe("workspace saved-PlotSpec persistence (GUI_INTERACTION_PLAN #11)", () =
     expect(loaded.savedPlotSpecs).toEqual([savedA, savedV2]);
   });
 
+  it("round-trips a saved spec's P1.4 Color/Symbol/Label encodings unchanged, still version 1", () => {
+    const encoded: SavedPlotSpec = {
+      ...savedA,
+      id: "pspec-enc",
+      spec: {
+        ...specA,
+        zones: {
+          ...specA.zones,
+          color: { datasetId: "a", channel: 0 },
+          symbol: { datasetId: "a", channel: 0 },
+          label: { datasetId: "a", channel: 0 },
+        },
+      },
+    };
+    const datasets = [makeDataset("a", "first")];
+    const loaded = parseWorkspace(serializeWorkspace({ datasets, savedPlotSpecs: [savedA, encoded] }));
+    expect(loaded.savedPlotSpecs).toEqual([savedA, encoded]);
+    expect(loaded.savedPlotSpecs[1].spec.version).toBe(1);
+  });
+
   it("defaults to an empty list for a legacy doc with no savedPlotSpecs field (back-compat)", () => {
     const datasets = [makeDataset("a", "first")];
     const loaded = parseWorkspace(serializeWorkspace({ datasets }));

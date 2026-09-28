@@ -6668,6 +6668,40 @@ export interface components {
             y_label?: string;
         };
         /**
+         * FigureEncoding
+         * @description Per-level encodings for an xy figure. Present (with any column set) it
+         *     switches ``_figure_series`` to the encoded split, which ALSO takes
+         *     ``group_col`` as a split factor; absent, every request renders exactly as
+         *     it did before the field existed.
+         */
+        FigureEncoding: {
+            /**
+             * Color Col
+             * @description Categorical factor whose LEVEL picks each series' colour.
+             */
+            color_col?: number | null;
+            /**
+             * Label Col
+             * @description Column whose value(s) on a series' rows become its legend text, verbatim.
+             */
+            label_col?: number | null;
+            /**
+             * Markers
+             * @description The glyph cycle (`MarkerShape` names), indexed by symbol LEVEL.
+             */
+            markers?: string[] | null;
+            /**
+             * Palette
+             * @description The colour cycle, resolved to hex by the client (the screen's SERIES_VARS). Indexed by colour LEVEL with `color_col`, else by display position.
+             */
+            palette?: string[] | null;
+            /**
+             * Symbol Col
+             * @description Categorical factor whose LEVEL picks each series' marker glyph.
+             */
+            symbol_col?: number | null;
+        };
+        /**
          * FigureFacet
          * @description One xy small-multiples panel (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 —
          *     the export half of Stage's facet-by-column grid, `store.facetKey` /
@@ -6776,6 +6810,7 @@ export interface components {
              * @default 200
              */
             dpi?: number;
+            encoding?: components["schemas"]["FigureEncoding"] | null;
             /** Error Spans */
             error_spans?: ({
                 [key: string]: unknown;

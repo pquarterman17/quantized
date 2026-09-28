@@ -44,6 +44,7 @@ from quantized.routes._export_common import (
     _attachment,
     _safe_name,
 )
+from quantized.routes.export_figures_encoded import FigureEncoding, resolve_encoded_figure
 from quantized.routes.export_figures_facets import _render_facets_bytes, _render_facets_map
 from quantized.routes.export_figures_labels import (
     apply_offset_disclosure_to_renames,
@@ -121,6 +122,12 @@ class FigureRequest(BaseModel):
     # `calc.figure_group_styles`. `legend` is a LABEL, not a stroke: it
     # replaces the channel-label half of `"{label} ({group}={level})"`.
     group_col: int | None = None
+    # P1.4 Graph Builder Color-by / Symbol-by / legend-label source: with any
+    # column set, `group_col` + these factors split the series together and
+    # each series gets its level's colour/glyph and label-source legend -- see
+    # `routes.export_figures_encoded` / `calc.plotting_encoded`. None (default)
+    # = today's behaviour, byte-identical.
+    encoding: FigureEncoding | None = None
     # FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 (export half): one xy small-
     # multiples panel per facet-column level, RESOLVED client-side
     # (`lib/facet.facetPayloads`, wrapped by `lib/figureSpecFacets.ts`)
@@ -237,6 +244,13 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
     never assigns a grouped series to the secondary axis, so there's no
     sound semantic to invent for the combination)."""
     ds = DataStruct.from_dict(req.dataset)
+
+    if req.encoding is not None and req.encoding.active():  # P1.4, before group_col
+        return resolve_encoded_figure(
+            ds, req.encoding, x_key=req.x_key, y_keys=req.y_keys, group_col=req.group_col,
+            y2_keys=req.y2_keys, series_styles=req.series_styles, error_spans=req.error_spans,
+            x_label=req.x_label, y_label=req.y_label,
+        )
 
     if req.group_col is not None:
         if req.y2_keys:

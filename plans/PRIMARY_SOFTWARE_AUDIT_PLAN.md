@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-27 (latest): **P2.5 derived expressions** — Python-like worksheet formulas (`**`, `//`, `np.` functions, `where`, positioned errors), a derived unit for every new column (mismatched sums refused), `fit()`/`fitval()` over the dataset's saved fit (snapshotted, re-resolved when the fit changes), and an optional first-order, uncorrelated σ column bound as the new column's error; P2.5 box 2 ticked, so P2.5 is complete (see P2.5). Previous: 2026-09-26: **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-28 (latest): **P1.4 Graph Builder encodings** — Color-by and Symbol-by wells (categorical factors, one palette colour / marker per level through the existing cycles) and a legend-label source well (sample id, field, temperature: any column) in the Graph Builder, saved with the spec and exported with backend parity (`calc/plotting_encoded.py`); the editable Stage plot does not draw them yet (see P1.4's "Any suitable factor" box). Previous: 2026-09-27: **P2.5 derived expressions** — Python-like worksheet formulas (`**`, `//`, `np.` functions, `where`, positioned errors), a derived unit for every new column (mismatched sums refused), `fit()`/`fitval()` over the dataset's saved fit (snapshotted, re-resolved when the fit changes), and an optional first-order, uncorrelated σ column bound as the new column's error; P2.5 box 2 ticked, so P2.5 is complete (see P2.5). Previous: 2026-09-26: **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -937,13 +937,92 @@ output, not a caught error).
   run` over `components/workshops/importwizard` + `lib/importwizard.ts` —
   9 files, 126 tests passed. See P1.6's item below for the shipped detail
   and rulings; do not duplicate tracking here going forward.
-- [ ] Any suitable factor can drive Group, Facet, Legend, Color, Symbol, or
+- [~] Any suitable factor can drive Group, Facet, Legend, Color, Symbol, or
   X — the REPRESENTATION and the Group-label rendering path
   (`calc/plotting.build_grouped_series`, `lib/plotspec.ts` `buildXY`) are
   done; wiring Facet/Legend/Color/Symbol pickers and the Data
   Filter/Tabulate/Stat Stage workbenches through `is_categorical`/
   `isCategoricalChannel` is P1.5 (live Graph Builder) and P1.6 (Import
   Wizard UI) territory — this contract is what they now build against.
+  **Graph Builder half shipped 2026-09-28 (P1.4 encodings slice).** The
+  workbenches were already `[x]` under P1.5; X and Group were already done.
+  What this slice added, each piece test-pinned:
+  * **Color-by / Symbol-by** — optional single wells `zones.color` /
+    `zones.symbol` (`components/workshops/graphbuilder/EncodingWells.tsx`).
+    They offer and accept only channels the modeling chokepoint reads as
+    categorical (`lib/plotEncoding.isEncodingFactor` →
+    `channelModelingType`: override first, then `isCategoricalChannel`, then
+    inference — the discipline Data Filter/Tabulate/Stat Stage follow). A
+    dropped continuous column is refused with a toast; a pick that stops
+    reading categorical (a `channelTypes` override) is IGNORED at render time
+    and its chip says so (BUG-004's lesson). Each level gets
+    `SERIES_VARS[level % 8]` / `AUTO_MARKER_CYCLE[level % 8]` — the existing
+    cycles, indexed by LEVEL, so one level has one colour on every Y channel
+    and a user level order drives colour order. Colour and symbol on
+    DIFFERENT factors split by every present level combination (nested,
+    outer factor first; Group, when set, joins the split); with no colour
+    factor the colour stays Group's display-position rule.
+  * **Legend** — `zones.label`, see the box below.
+  * **Facet** — already took any column, P1.4 categorical factors included
+    (no categorical gate, by design: BUG-004's `facetCol` ruling); now pinned
+    by `plotspec.test.ts` (a categorical facet panels by its level strings in
+    the user's level order), and the Facet well's stale "Box/violin/bar don't
+    facet yet" note corrected.
+  * **Screen** — the Graph Builder preview draws each series' colour and
+    glyph (`graphbuilder/previewCanvas.ts`, moved out of `GraphPreview.tsx`
+    to keep it under 400 lines) and lists legend entries built through the
+    existing legend-entry builder (`multipanel.spatialCellStyling`),
+    rendered by the existing read-only `Stage/SpatialPanelLegend` —
+    `PlotLegend.tsx` untouched.
+  * **Save/reopen** — the zones validate and serialize omit-when-unset, so
+    the V1 byte fixture is unchanged; saved specs and the `.dwk` round-trip
+    them (`plotspec.test.ts`, `workspace.test.ts`, `useGraphBuilder.test.ts`).
+  * **Export parity** — the Graph Builder's Export builds an encoded spec's
+    request from the SAME `lib/plotEncoding.encodeSpec` derivation the
+    preview draws (`lib/plotEncodingExport.ts`, `FigureSpec.encoding`, sent
+    through the existing dialog + `exportActive` via
+    `runExportFigureCommand`'s new `buildSpec` hook); the backend splits and
+    encodes in `calc/plotting_encoded.py` (the port of `buildEncodedXY`,
+    kept out of `calc/plotting.py` for its ceiling) via
+    `routes/export_figures_encoded.py`. Pinned by the shared wire fixture
+    `tests/fixtures/wire/graph_encoding_export.json` (`{request, screen}`):
+    `lib/plotEncodingExport.test.ts` builds both halves from one derivation,
+    `tests/test_export_graph_encoding.py` posts the request and reads every
+    series' colour, glyph, point count and legend text back out of the SVG.
+    The request's PRESENTATION (scales, tick formats/steps, limits,
+    legend placement, annotations, page size) comes from the plot the
+    Export just applied the spec to (`withStagePresentation` over
+    `buildStageFigureSpec`), minus `y2_lim`; the legend is forced on, since
+    the preview always lists its entries (matplotlib draws none for a lone
+    series). A legend-source-only encoding splits nothing, so it KEEPS the
+    error wells on screen and on the wire; any factor split drops them, the
+    group split's own rule. `buildEncodedXY` with a group factor alone is
+    pinned equal to `buildXY` (and `build_encoded_series` to
+    `build_grouped_series`) — separate implementations, because `buildXY`
+    is eager and this module is lazy. Negative `y_keys`/`x_key` indices are
+    refused (422), not silently wrapped by numpy.
+    Sabotage-verified: colour by display position instead of level, and a
+    dropped glyph, each fail the SVG test; removing the categorical gate
+    fails 6 frontend tests; not persisting the zones fails 4.
+  **Why `[~]`, not `[x]` — the residuals, in order of weight:**
+  1. The editable Stage plot does not draw Color/Symbol/Label. A plot action
+     commits X/Y/Group/Facet exactly as before and SAYS so (an info toast,
+     plus a note under the wells). Carrying them needs a bindings-owned
+     `PlotView`/`FigureDocument` field through `usePlotPayload.ts` (498/500
+     lines), `figureSpec.ts`, `datasetViewDefaults`, `channelRemap`, window
+     persistence and the P3.3 cycle predicates — about a dozen eager,
+     pinned files — deferred for size and the ~2 kB eager-bundle headroom.
+  2. Publication Preview (the FigureDoc bridge) drops them; its confirm
+     dialog now lists "Color, Symbol and Label encodings" as a loss.
+  3. They do not apply while faceted (facet panels split nothing — the same
+     limit Group has there) or to box/violin/bar (the wells stay visible
+     there only while something is assigned, saying so, so it can be
+     removed). Greyscale export re-greys by display position, so under
+     greyscale one colour level is not one grey across Y channels.
+  4. A CONTINUOUS Color-by (a gradient) is not offered; the natural route is
+     MAIN #14's `SeriesStyle.colorBy`.
+  5. Row-indexed metadata text columns with no channel index (Origin
+     `origin_text_columns`) cannot be picked as a factor or a label source.
 - [x] Multiple ordered factors and missing-value policy — level ORDER is
   represented (the tuple's own order; NaN = missing is the representation's
   missing-value policy). **Verified 2026-09-12, shipped 2026-09-10 commit
@@ -1143,10 +1222,25 @@ output, not a caught error).
   so row-level full-text search over data columns is booked as its own feature
   needing an index, not faked here. What ships searches metadata ABOUT the file,
   bounded by the header block, not by the data.
-- [ ] Sample ID, field, or temperature can independently label the legend —
+- [x] Sample ID, field, or temperature can independently label the legend —
   the representation supports it (any categorical channel can be the group
   column); the Graph Builder wiring to pick ANY such channel as the legend
-  source specifically is P1.5.
+  source specifically is P1.5. **Shipped 2026-09-28 (P1.4 encodings slice):**
+  the Graph Builder's Label well (`zones.label`) takes ANY channel — a
+  categorical sample-id factor, or a numeric field/temperature column
+  (deliberately not categorical-gated: a temperature constant within each
+  series is a legitimate source even where inference reads it continuous) —
+  independently of the Group/Color/Symbol split, or with no split at all.
+  Each series' legend is that column's value(s) on the series' rows,
+  formatted like a group level plus the column's unit ("300 K"), joined with
+  ", ", or "first … last (n values)" past three; it replaces the name
+  verbatim (BUG-014's rename rule), prefixed "Y (…)" when more than one Y is
+  plotted; rows with no finite value keep the default name. The SAME text on
+  screen (the preview legend) and in the export
+  (`calc/plotting_encoded.legend_source_text`), pinned from both sides by the
+  shared wire fixture (see the box above). Residual, tracked there: the
+  editable Stage plot's legend does not use it yet, and metadata text
+  columns without a channel index cannot be picked.
 - [x] Lot/wafer/type can form nested grouping for a box plot. The COMPUTE half
   landed 2026-09-11 (#351); the PICKER landed the same day, so it is reachable.
   **Compute:** `lib/statschooser.groupsByNestedCategory` and its
@@ -10898,6 +10992,25 @@ work (its BACKLOG row).
   `PlotSpec.version` is a derived, non-authoritative tag over a v1 shape
   that is a strict subset of v2). See the P4.2 box's own note for the full
   breakdown.
+
+- ~~**P1.4 Graph Builder encodings — Color-by / Symbol-by / legend-label
+  source**~~ (2026-09-28, Claude) — three optional Graph Builder wells
+  (`zones.color`/`symbol`/`label`), categorical-gated through
+  `channelModelingType` for Color/Symbol, any column for Label; each level a
+  palette colour / marker through the existing cycles; preview legend through
+  `multipanel.spatialCellStyling` + `SpatialPanelLegend`; saved with the spec
+  and the `.dwk`; exported with backend parity (`calc/plotting_encoded.py`,
+  `routes/export_figures_encoded.py`, `FigureRequest.encoding`) pinned by
+  `tests/fixtures/wire/graph_encoding_export.json` from both sides. Funded by
+  two extractions (`lib/plotspecErrors.ts`, `graphbuilder/captureLiveBlocks.ts`)
+  and a third to keep `GraphPreview.tsx` under 400 (`previewCanvas.ts`); pins
+  ratcheted `plotspec.ts` 893→863, `useGraphBuilder.ts` 663→603. Tests: vitest
+  `plotEncoding`, `plotEncodingExport`, `EncodingWells`, `GraphPreview`, and
+  additions to `plotspec`, `workspace`, `useGraphBuilder`,
+  `figureCompatibility`; pytest `test_export_graph_encoding.py`. Box "Sample
+  ID, field, or temperature" ticked; "Any suitable factor" moved to `[~]`
+  with its five residuals — the editable Stage plot not drawing encodings is
+  the next dependency.
 
 ## Reference baseline
 

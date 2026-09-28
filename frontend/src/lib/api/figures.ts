@@ -40,6 +40,16 @@ export interface FigureFacetSpec {
   series: FigureFacetSeries[];
 }
 
+/** `FigureSpec.encoding` — see `routes/export_figures_encoded.FigureEncoding`.
+ *  `palette` is the colour cycle resolved to hex, `markers` the glyph cycle. */
+export interface FigureEncodingSpec {
+  color_col?: number;
+  symbol_col?: number;
+  label_col?: number;
+  palette?: string[];
+  markers?: string[];
+}
+
 export interface FigureSpec {
   dataset: DataStruct;
   x_key?: number | string;
@@ -80,6 +90,12 @@ export interface FigureSpec {
    *  series lands on the primary axis (`buildXY` never assigns `axis: 1`),
    *  so combining this with `y2_keys` is rejected by the backend (422). */
   group_col?: number;
+  /** P1.4 Graph Builder Color-by / Symbol-by / legend-label source
+   *  (`lib/plotEncodingExport.ts`; backend `routes/export_figures_encoded.py`).
+   *  With any column set it splits the series by `group_col` + these factors
+   *  and colours/marks/labels each one as the Graph Builder preview does.
+   *  Omit = today's behaviour, byte-identical. */
+  encoding?: FigureEncodingSpec;
   /** FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 (export half): one xy small-
    *  multiples panel per facet-column level -- present only when the source
    *  document/view carries a durable `facetKey` binding (`lib/figureSpec.ts`'s

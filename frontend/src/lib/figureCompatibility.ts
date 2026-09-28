@@ -65,6 +65,11 @@ export function plotSpecPublicationCompatibility(
   if (spec.decor?.shapes?.length) losses.add("shapes");
   if (spec.decor?.legend) losses.add("legend placement and title");
   if (spec.page) losses.add("page and panel settings");
+  // P1.4: the FigureDoc bridge carries no per-level encoding (the Graph
+  // Builder's own Export does — lib/plotEncodingExport.ts).
+  if (spec.zones.color || spec.zones.symbol || spec.zones.label) {
+    losses.add("Color, Symbol and Label encodings");
+  }
   return { blocker: null, losses: [...losses] };
 }
 

@@ -20,6 +20,8 @@ import {
 } from "../../../lib/figureCompatibility";
 import { figureDocumentFromLegacyFigureDoc } from "../../../lib/figureDocumentPublication";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
+import { encodedSpecRender, isEncodingFactor, type EncodedSpec } from "../../../lib/plotEncoding";
+import { buildEncodedExport } from "../../../lib/plotEncodingExport";
 import { plotSpecFigureReason, plotSpecToFigureDoc } from "../../../lib/plotSpecFigure";
 import { applySpecBlocks } from "../../../lib/plotspecApply";
 import {
@@ -36,7 +38,6 @@ import {
   prefillErrorZones,
   specDatasetId,
   specErrorBindings,
-  specToRender,
   validMarks,
   withInferredMark,
   type ChannelRef,
@@ -48,10 +49,10 @@ import {
   type StepMode,
   type ZoneName,
 } from "../../../lib/plotspec";
-import { buildAxesBlock, buildDecorBlock, buildDisplayBlock, buildPageBlock } from "../../../lib/plotspec2";
 import { toast } from "../../../store/toasts";
 import { plotIntentStageTab, useActiveDataset, useApp } from "../../../store/useApp";
 import { askConfirm } from "../../overlays/ConfirmDialog";
+import { captureLiveBlocks } from "./captureLiveBlocks";
 import type { WellChip, WellOption } from "./ZoneWell";
 
 /** Does this spec's error wells already carry explicit content? Drives
@@ -124,6 +125,11 @@ export interface GraphBuilderState {
    *  File menu's "Export figure…" command uses (xy family only — see the
    *  module doc). */
   exportPlot: () => Promise<void>;
+  /** P1.4: the encoded series the preview draws (styles + legend entries), or
+   *  null when the spec renders through the ordinary path (lib/plotEncoding). */
+  encoded: EncodedSpec | null;
+  /** Color-by / Symbol-by well options: only channels that read categorical. */
+  factorOptions: WellOption[];
 }
 
 export function useGraphBuilder(): GraphBuilderState {
@@ -212,7 +218,7 @@ export function useGraphBuilder(): GraphBuilderState {
   }, [seed]);
 
   const ctx = useMemo(() => markContext(spec, datasets), [spec, datasets]);
-  const render = useMemo(() => specToRender(spec, datasets), [spec, datasets]);
+  const { render, encoded } = useMemo(() => encodedSpecRender(spec, datasets), [spec, datasets]);
   const marks = useMemo(() => validMarks(spec, ctx), [spec, ctx]);
   const family = useMemo(() => markFamily(spec, ctx), [spec, ctx]);
 
@@ -220,19 +226,32 @@ export function useGraphBuilder(): GraphBuilderState {
     () => (ds ? ds.data.labels.map((label, index) => ({ index, label })) : []),
     [ds],
   );
+  // P1.4: Color-by / Symbol-by take a categorical factor — gated through the
+  // modeling chokepoint (lib/plotEncoding.isEncodingFactor), like Stat Stage.
+  const factorOptions = useMemo(() => (ds ? options.filter((o) => isEncodingFactor(ds, o.index)) : []), [ds, options]);
 
   const labelOf = (channel: number): string => ds?.data.labels[channel] ?? `col ${channel}`;
+  // A colour/symbol pick that stopped reading categorical is ignored at render
+  // time (BUG-004's lesson); the chip says so rather than looking live.
+  const ignoredFactor = (zone: ZoneName, channel: number): boolean =>
+    (zone === "color" || zone === "symbol") && ds !== null && !isEncodingFactor(ds, channel);
 
   const chips = (zone: ZoneName): WellChip[] => {
     const z = spec.zones;
     if (zone === "y") return z.y.map((r) => ({ channel: r.channel, label: labelOf(r.channel) }));
     if (zone === "yErr") return z.yErr.map((r) => ({ channel: r.channel, label: labelOf(r.channel) }));
     const ref = z[zone];
-    return ref ? [{ channel: ref.channel, label: labelOf(ref.channel) }] : [];
+    if (!ref) return [];
+    const label = labelOf(ref.channel);
+    return [{ channel: ref.channel, label: ignoredFactor(zone, ref.channel) ? `${label} (not categorical: ignored)` : label }];
   };
 
   const assign = (zone: ZoneName, channel: number) => {
     if (!ds) return;
+    if (ignoredFactor(zone, channel)) {
+      toast(`${zone === "color" ? "Color" : "Symbol"} needs a categorical column; set "${labelOf(channel)}" to nominal or ordinal first.`, "info");
+      return;
+    }
     const ref: ChannelRef = { datasetId: ds.id, channel };
     // #51 phase 3: an explicit drop into either error well IS the user
     // touching it — no further auto-prefill on this session's future Y drops.
@@ -360,6 +379,9 @@ export function useGraphBuilder(): GraphBuilderState {
       // setXKey/setYKeys above, so its own "carry the current x/y selection
       // when the dataset is already active" rule picks up exactly the
       // channels just assigned.
+      // P1.4: the editable plot does not render the encodings yet (see
+      // lib/plotEncoding's scope note) — say so instead of dropping them quietly.
+      if (encoded) toast("Color, Symbol and Label encodings show in the Graph Builder preview and its Export; the editable plot does not draw them yet.", "info");
       if (spec.zones.facet) {
         facetByColumn(ds.id, spec.zones.facet.channel);
         setStatus(
@@ -447,105 +469,16 @@ export function useGraphBuilder(): GraphBuilderState {
   // a spec with blocks the live `spec` state itself never gets back).
   const dirty = activeSpec !== null && !plotSpecCoreEqual(spec, activeSpec.spec);
 
-  // #12 Slice 3 ("Capture on save"), extended by "part C" to also fold in
-  // decor: fold the LIVE display/axes/decor state into the spec being
-  // saved. store/graphBuilder.ts stays dumb (it persists
-  // whatever PlotSpec it's handed) — this hook is the one place that holds
-  // both the spec and the live store, so it's the only place that can build
-  // the snapshot. Scoped to the spec's OWN plotted channels (zones.y ∪
-  // zones.x): seriesStyles/hiddenChannels/y2Keys/the axis singleton fields
-  // are the store's CURRENT-PLOT state (per-window, not per-dataset — see
-  // useApp's `restoredView` hydration), so they only describe whichever
-  // dataset is presently ACTIVE. A spec bound to a different (non-active)
-  // dataset — the #8i "worksheet handoff to a non-active dataset" case — has
-  // no live state to read here at all, so it saves zones-only, exactly like
-  // every save before this slice. Blocks are recomputed FRESH from the live
-  // store on every save (never merged with whatever blocks the spec carried
-  // IN, e.g. from a reopened v2 spec — see openSpec's doc): those blocks
-  // were never applied back to the live store anyway (that's Slice 5), so
-  // they're stale the moment the user touches anything, and a resave
-  // legitimately reflects the CURRENT plot, not the old saved one.
-  const captureLiveBlocks = (base: PlotSpec): PlotSpec => {
-    const dsId = specDatasetId(base);
-    const s = useApp.getState();
-    if (dsId === null || dsId !== s.activeId) return base;
-    const yChannels = base.zones.y.map((r) => r.channel);
-    const xChannel = base.zones.x?.channel;
-    const plotted = [...new Set(xChannel !== undefined ? [xChannel, ...yChannels] : yChannels)];
-    // The active dataset's column labels (dsId === s.activeId is guaranteed
-    // above) — captured so a re-applied spec can re-key by label if the
-    // columns shift later (see plotspecApply.applyDisplayBlock).
-    const channelLabels = s.datasets.find((d) => d.id === dsId)?.data.labels ?? [];
-    const display = buildDisplayBlock(
-      s.seriesStyles,
-      plotted,
-      s.y2Keys,
-      s.hiddenChannels,
-      s.seriesOrder,
-      channelLabels,
-    );
-    const axes = buildAxesBlock({
-      title: s.plotTitle,
-      xLabel: s.xAxisLabel,
-      yLabel: s.yAxisLabel,
-      y2Label: s.y2AxisLabel,
-      xLim: s.xLim,
-      yLim: s.yLim,
-      y2Lim: s.y2Lim,
-      xScale: s.xScale,
-      yScale: s.yScale,
-      y2Scale: s.y2Scale,
-      xStep: s.xStep,
-      yStep: s.yStep,
-      xFmt: s.xFmt,
-      yFmt: s.yFmt,
-      y2Fmt: s.y2Fmt,
-    });
-    // "part C": annotations/shapes are GLOBAL plot overlays (not
-    // channel-scoped), so — unlike display — they're captured verbatim, not
-    // filtered against `plotted`.
-    const decor = buildDecorBlock(s.annotations, s.shapes, {
-      pos: s.legendPos,
-      xy: s.legendXY,
-      title: s.legendTitle,
-    });
-    // #54 pass C: the page state a spec would otherwise lose on save/reopen —
-    // the page size a figure was composed at, its fit mode, and whether it
-    // was stacked. All-default captures to `undefined` (an ordinary flat plot
-    // never flips to v2).
-    const page = buildPageBlock({
-      stackMode: s.stackMode,
-      panelFit: s.panelFit,
-      pageSetup: s.pageSetup,
-    });
-    return {
-      version: display || axes || decor || page ? 2 : 1,
-      zones: base.zones,
-      mark: base.mark,
-      // GAP_PLOTTYPES: these are byte-stable v1 siblings of `mark` (see
-      // PlotSpec's doc), not derived from live store state — carried
-      // straight from the BUILDER's own spec (same as zones/mark above), so
-      // a saved "step" recipe still knows its alignment/marker toggle on
-      // reopen even though the display block below only ever captures the
-      // per-CHANNEL style, not this spec-level default.
-      ...(base.stepMode ? { stepMode: base.stepMode } : {}),
-      ...(base.showMarkers ? { showMarkers: base.showMarkers } : {}),
-      ...(display ? { display } : {}),
-      ...(axes ? { axes } : {}),
-      ...(page ? { page } : {}),
-      ...(decor ? { decor } : {}),
-    };
-  };
-
+  // #12 Slice 3 capture-on-save: ./captureLiveBlocks (moved out for P1.4).
   const saveActive = (): void => {
-    const id = useApp.getState().savePlotSpec(captureLiveBlocks(spec));
+    const id = useApp.getState().savePlotSpec(captureLiveBlocks(spec, useApp.getState));
     if (!id) return; // nothing active — the panel falls back to saveAs
     const nm = useApp.getState().savedPlotSpecs.find((p) => p.id === id)?.name ?? "";
     setStatus(`saved "${nm}"`);
   };
 
   const saveAs = (name: string): void => {
-    const id = useApp.getState().saveAsPlotSpec(name, captureLiveBlocks(spec));
+    const id = useApp.getState().saveAsPlotSpec(name, captureLiveBlocks(spec, useApp.getState));
     const nm = useApp.getState().savedPlotSpecs.find((p) => p.id === id)?.name ?? name;
     setStatus(`saved "${nm}"`);
   };
@@ -615,7 +548,12 @@ export function useGraphBuilder(): GraphBuilderState {
     if (!ds || !canApplyToCurrent) return;
     applyToCurrent();
     if (spec.mark === "scatter" || spec.mark === "line" || spec.mark === "step") {
-      await runExportFigureCommand(useApp.getState);
+      // P1.4: an encoded graph exports the preview's series over the applied
+      // plot's presentation, same dialog + chokepoint (lib/plotEncodingExport).
+      await runExportFigureCommand(
+        useApp.getState,
+        encoded ? (stem, d, o) => buildEncodedExport(useApp.getState, spec, d, stem, o) : undefined,
+      );
       return;
     }
     toast(`${spec.mark} exports from the Stat Stage's own Export button (now showing).`, "info");
@@ -658,5 +596,7 @@ export function useGraphBuilder(): GraphBuilderState {
     renameSpec,
     deleteSpec,
     exportPlot,
+    encoded,
+    factorOptions,
   };
 }

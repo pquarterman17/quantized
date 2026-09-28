@@ -636,6 +636,35 @@ describe("specToRender", () => {
     expect(r.facets?.[0].payload.data[0]).toHaveLength(6); // 6 rows per level
   });
 
+  // P1.4 "Any suitable factor can drive … Facet": the facet well takes any
+  // channel (no categorical gate — BUG-004's facetCol ruling), and a P1.4
+  // categorical factor facets by its LEVEL STRINGS in the user's level order.
+  it("a P1.4 categorical factor facets by its level strings, in the user's level order", () => {
+    const catData: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [
+        [10, 0],
+        [20, 1],
+        [30, 0],
+        [40, 1],
+      ],
+      labels: ["Value", "Region"],
+      units: ["V", ""],
+      metadata: {},
+      cat_levels: { 1: ["North", "South"] },
+      level_order: { 1: [1, 0] },
+    };
+    const catDs: Dataset = { id: "c9", name: "cat9.dat", data: catData };
+    const r = specToRender(
+      spec(null, [{ datasetId: "c9", channel: 0 }], "scatter", null, { datasetId: "c9", channel: 1 }),
+      [catDs],
+    );
+    expect(r.kind).toBe("xy");
+    if (r.kind !== "xy") return;
+    expect(r.facets?.map((f) => f.label)).toEqual(["South", "North"]);
+    expect(r.facets?.[0].payload.data[1]).toEqual([20, 40]);
+  });
+
   it("omits facets entirely when zones.facet is unset (untouched path)", () => {
     const r = specToRender(spec(ref(0), [ref(1)], "scatter"), [DS]);
     expect(r.kind).toBe("xy");
@@ -870,6 +899,38 @@ describe("serialize / deserialize / validate", () => {
     expect(v).not.toBeNull();
     expect(v!.zones.yErr).toEqual([ref(2)]);
     expect(v!.zones.xErr).toBeNull();
+  });
+
+  // ── P1.4 encoding zones (color/symbol/label): optional, omitted when unset ──
+  it("round-trips the Color/Symbol/Label encoding zones, staying version 1", () => {
+    const s: PlotSpec = spec(ref(0), [ref(1)], "scatter");
+    s.zones.color = ref(2);
+    s.zones.symbol = ref(2);
+    s.zones.label = ref(1);
+    const raw = serializePlotSpec(s);
+    expect(JSON.parse(raw).version).toBe(1);
+    expect(deserializePlotSpec(raw)).toEqual(s);
+    expect(specDatasetId({ ...emptySpec(), zones: { ...emptySpec().zones, label: ref(1, "d9") } })).toBe("d9");
+  });
+
+  it("an unset encoding is ABSENT, not null — assign then clear leaves the spec byte-identical", () => {
+    const base = spec(ref(0), [ref(1)], "scatter");
+    const cleared = clearZone(assignZone(base, "color", ref(2)), "color");
+    expect(cleared.zones).not.toHaveProperty("color");
+    expect(serializePlotSpec(cleared)).toBe(serializePlotSpec(base));
+    expect(JSON.parse(serializePlotSpec(base)).zones).not.toHaveProperty("symbol");
+  });
+
+  it("drops a malformed encoding ref rather than nulling the spec", () => {
+    const v = validatePlotSpec({
+      version: 1,
+      zones: { x: ref(0), y: [ref(1)], group: null, facet: null, color: "sample", symbol: { datasetId: "d1" }, label: ref(2) },
+      mark: "scatter",
+    });
+    expect(v).not.toBeNull();
+    expect(v!.zones).not.toHaveProperty("color");
+    expect(v!.zones).not.toHaveProperty("symbol");
+    expect(v!.zones.label).toEqual(ref(2));
   });
 
   it("tolerates a spec with no yErr/xErr keys at all (pre-#51-phase-3 payload)", () => {

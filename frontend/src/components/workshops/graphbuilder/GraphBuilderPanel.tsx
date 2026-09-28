@@ -1,7 +1,8 @@
 // Graph Builder (ORIGIN_GAP_PLAN #51 phase 2, durable artifact GUI_INTERACTION
 // #11) — view. A draggable ToolWindow: drop channels from the Channels card /
 // legend (the #49 CHANNEL_DND drag) into the X / Y / Group / Facet wells —
-// plus the Y error / X error wells XY marks render (F4.2a) — (or
+// plus the Y error / X error wells XY marks render (F4.2a) and the P1.4
+// Color / Symbol / Label encoding wells (./EncodingWells) — (or
 // click-to-assign for keyboard/AT); the mark morphs as columns land (scatter
 // ⇄ line ⇄ step ⇄ box ⇄ violin ⇄ bar); a live preview updates; explicit Create
 // New Plot / Apply to Current Plot actions commit the spec; Export applies it
@@ -21,6 +22,7 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { Checkbox } from "../../primitives/Checkbox";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Button } from "../../primitives";
+import EncodingWells from "./EncodingWells";
 import GraphPreview from "./GraphPreview";
 import PlotSpecBar from "./PlotSpecBar";
 import { useGraphBuilder } from "./useGraphBuilder";
@@ -103,13 +105,14 @@ export default function GraphBuilderPanel() {
               assigned={g.chips("facet")}
               note={
                 <span style={faint}>
-                  scatter/line: previews as small multiples below and either plot action carries it to
-                  the main plot as a facet grid. Box/violin/bar don't facet yet.
+                  any column, categorical factors included: previews as small multiples below; a plot
+                  action carries it to the main plot&apos;s facet grid (box/violin/bar: the stat stage&apos;s).
                 </span>
               }
               onAssign={(c) => g.assign("facet", c)}
               onRemove={(c) => g.remove("facet", c)}
             />
+            <EncodingWells g={g} />
             {g.family === "xy" && (
               <>
                 <ZoneWell
@@ -158,7 +161,7 @@ export default function GraphBuilderPanel() {
             </div>
           )}
 
-          <GraphPreview render={g.render} />
+          <GraphPreview render={g.render} encoded={g.encoded} />
 
           <div className="qzk-graph-actions">
             <Button

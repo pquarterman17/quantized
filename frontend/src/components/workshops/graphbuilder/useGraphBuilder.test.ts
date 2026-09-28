@@ -1461,3 +1461,123 @@ describe("useGraphBuilder — apply saved blocks on a plot action (GUI_INTERACTI
     expect(useApp.getState().status).toBe('opened "Plain"');
   });
 });
+
+// P1.4 (PRIMARY_SOFTWARE_AUDIT_PLAN): Color-by / Symbol-by / legend-label
+// source wells. The encoding rules themselves are pinned in
+// lib/plotEncoding.test.ts; this block pins the HOOK — gating, the preview
+// render, save/reopen, the commit disclosure and the export hand-off.
+describe("useGraphBuilder — Color/Symbol/Label encodings (P1.4)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(exportFigure).mockResolvedValue(undefined);
+    useToasts.setState({ toasts: [] });
+    useApp.setState({ yScale: "linear" }); // the Export test below sets "log"
+  });
+
+  const build = () => {
+    const hook = renderHook(() => useGraphBuilder());
+    act(() => hook.result.current.assign("x", 0));
+    act(() => hook.result.current.assign("y", 1));
+    return hook;
+  };
+
+  it("offers only categorical channels as Color/Symbol factors, every channel as a Label source", () => {
+    const { result } = build();
+    expect(result.current.factorOptions.map((o) => o.index)).toEqual([2, 3]);
+    expect(result.current.options.map((o) => o.index)).toEqual([0, 1, 2, 3]);
+  });
+
+  it("Color-by + Symbol-by split the preview and hand it styles + legend entries", () => {
+    const { result } = build();
+    act(() => result.current.assign("color", 2));
+    act(() => result.current.assign("symbol", 3));
+    expect(result.current.spec.zones.color).toEqual({ datasetId: "d1", channel: 2 });
+    expect(result.current.encoded).not.toBeNull();
+    expect(result.current.render.kind).toBe("xy");
+    // grp and fct move together here (rows 0-5 vs 6-11): two present combinations.
+    expect(result.current.encoded!.legend.map((l) => l.label)).toEqual([
+      "y (grp=0, fct=0) (emu)",
+      "y (grp=1, fct=1) (emu)",
+    ]);
+    expect(result.current.encoded!.styles.map((s) => [s.color, s.markerShape])).toEqual([
+      ["--series-1", "circle"],
+      ["--series-2", "square"],
+    ]);
+  });
+
+  it("refuses a continuous column dropped on Color, with a toast, leaving the spec untouched", () => {
+    const { result } = build();
+    const before = result.current.spec;
+    act(() => result.current.assign("color", 1));
+    expect(result.current.spec).toBe(before);
+    expect(useToasts.getState().toasts.some((t) => /Color needs a categorical column/.test(t.msg))).toBe(true);
+  });
+
+  it("a pick that stops reading categorical is ignored, and its chip says so (BUG-004's lesson)", () => {
+    const { result } = build();
+    act(() => result.current.assign("color", 2));
+    expect(result.current.encoded).not.toBeNull();
+    act(() => {
+      useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA, channelTypes: { 2: "continuous" } }] });
+    });
+    expect(result.current.encoded).toBeNull();
+    expect(result.current.chips("color")).toEqual([{ channel: 2, label: "grp (not categorical: ignored)" }]);
+  });
+
+  it("save / reopen restores the encodings, and editing one flips dirty", () => {
+    const { result } = build();
+    act(() => result.current.assign("color", 2));
+    act(() => result.current.assign("label", 3));
+    act(() => result.current.saveAs("Encoded"));
+    const saved = result.current.activeSpec!;
+    expect(saved.spec.zones.color).toEqual({ datasetId: "d1", channel: 2 });
+    expect(saved.spec.zones.label).toEqual({ datasetId: "d1", channel: 3 });
+    expect(result.current.dirty).toBe(false);
+    act(() => result.current.remove("label", 3));
+    expect(result.current.dirty).toBe(true);
+    act(() => result.current.reset());
+    expect(result.current.encoded).toBeNull();
+    act(() => result.current.openSpec(saved.id));
+    expect(result.current.spec.zones.label).toEqual({ datasetId: "d1", channel: 3 });
+    expect(result.current.encoded!.legend.map((l) => l.label)).toEqual(["0", "1"]);
+    expect(result.current.dirty).toBe(false);
+  });
+
+  it("a plot action says the editable plot does not draw the encodings, and binds no group", () => {
+    const { result } = build();
+    act(() => result.current.assign("color", 2));
+    act(() => result.current.createNewPlot());
+    expect(useApp.getState().groupKey).toBeNull();
+    expect(useToasts.getState().toasts.some((t) => /editable plot does not draw them yet/.test(t.msg))).toBe(true);
+  });
+
+  it("an UNencoded commit shows no encoding disclosure", () => {
+    const { result } = build();
+    act(() => result.current.createNewPlot());
+    expect(useToasts.getState().toasts.some((t) => /encodings/i.test(t.msg))).toBe(false);
+  });
+
+  it("Export sends the builder's encoded series over the applied plot's presentation", async () => {
+    useApp.setState({ yScale: "log" });
+    const { result } = build();
+    act(() => result.current.assign("color", 2));
+    act(() => result.current.assign("symbol", 2));
+    await act(async () => result.current.exportPlot());
+    expect(exportFigure).toHaveBeenCalledTimes(1);
+    const spec = vi.mocked(exportFigure).mock.calls[0][0];
+    expect(spec.encoding).toMatchObject({ color_col: 2, symbol_col: 2 });
+    expect(spec.y_keys).toEqual([1]);
+    expect(spec.x_key).toBe(0);
+    expect(spec.group_col).toBeUndefined();
+    // The presentation half comes from the plot the spec was applied to.
+    expect(spec.y_scale).toBe("log");
+    expect(spec.overrides?.legend?.show).toBe(true);
+  });
+
+  it("Export without encodings still goes through the Stage view (regression)", async () => {
+    const { result } = build();
+    await act(async () => result.current.exportPlot());
+    expect(exportFigure).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(exportFigure).mock.calls[0][0].encoding).toBeUndefined();
+  });
+});
