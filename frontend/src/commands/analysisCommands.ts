@@ -129,7 +129,7 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       group: "Analyze",
       section: "Statistics",
       label: "Distribution (histogram + normality of a column)…",
-      description: "Inspect one column with a histogram, quantiles, descriptive statistics, fit, and normality verdict, optionally repeated once per level of a By column.",
+      description: "Inspect one column with a histogram, quantiles, descriptive statistics, fit, and normality verdict; an optional By column runs the same profile once per level.",
       keywords: "jmp histogram normality shapiro wilk quantile descriptive stats by column by group",
       run: () => s().setDistributionOpen(true),
     },

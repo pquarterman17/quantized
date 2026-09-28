@@ -64,7 +64,7 @@ export default function HysteresisPanel() {
             size="sm"
             disabled={bgBusy}
             onClick={() => void subtractBackground()}
-            title="Fit the linear dia/paramagnetic slope on the high-field tails and subtract it (offset kept, so Hc/Mr are unchanged), writing a new (bg-sub) dataset."
+            title="Fit the linear dia/paramagnetic slope on the high-field tails and subtract it (offset kept, so Hc/Mr are unchanged); writes a new (bg-sub) dataset."
           >
             {bgBusy ? "Subtracting…" : "Subtract linear background"}
           </Button>

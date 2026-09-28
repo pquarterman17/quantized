@@ -233,7 +233,7 @@ export default function GridHeader({
                   e.stopPropagation();
                   onChangeChannelType(c, e.target.value === "" ? null : (e.target.value as ModelingType));
                 }}
-                title="Modeling type — Continuous is a measurement axis, Ordinal is ordered levels, Nominal is categories, and Auto is inferred (a level table always reads as nominal)."
+                title="Modeling type — Continuous: a measurement axis · Ordinal: ordered levels · Nominal: categories; Auto = inferred (a level table always reads as nominal)."
                 options={[
                   { value: "", label: `auto·${TYPE_TAG[modelingTypeOf(c)]}` },
                   { value: "continuous", label: "Cont" },
