@@ -151,4 +151,57 @@ describe("Quick Figure Builder preview vs the created figure's render pipeline (
     // Reflected in the actual render's per-series style list too.
     expect(result.current.styleList?.every((s) => s?.marker === true)).toBe(true);
   });
+
+  // Grouping role (LIBRARY_WORKBOOK_UX_PLAN six-role builder): the group
+  // split must reach the CREATED figure's legend, not just the mapping --
+  // the Stage's legend rows are `displayPayload.series` labels.
+  it("a Grouping role renders the SAME per-level legend entries and columns in the created figure as in the preview", async () => {
+    const grouped: Dataset = {
+      id: "parity-g",
+      name: "grouped.csv",
+      data: {
+        time: [0, 1, 2, 3],
+        values: [[1, 0, 0.1], [2, 1, 0.2], [3, 0, 0.3], [4, 1, 0.4]],
+        labels: ["R", "sample", "dR"],
+        units: ["Ω", "", "Ω"],
+        metadata: {},
+        cat_levels: { 1: ["A", "B"] },
+      },
+    };
+    useApp.setState({ datasets: [grouped] });
+    const groupedMapping: QuickFigureMapping = {
+      xKey: null,
+      yKeys: [0],
+      errorBindings: [{ channel: 2, target: 0, axis: "y", side: "both" }],
+      ignoredKeys: [],
+      groupKey: 1,
+    };
+    const preview = quickFigurePreview(grouped.data, groupedMapping, "scatter");
+    expect(preview.kind).toBe("xy");
+    if (preview.kind !== "xy") return;
+
+    expect(useApp.getState().createQuickFigureFromMapping(grouped.id, groupedMapping, "scatter")).toBe(true);
+    const document = useApp.getState().editableFigures[0];
+    const view = figureDocumentToPlotView(document);
+    expect(view.groupKey).toBe(1);
+
+    const params: PlotPayloadParams = {
+      active: grouped, yScale: "linear", xScale: "linear",
+      xKey: view.xKey, yKeys: view.yKeys, groupKey: view.groupKey, y2Keys: view.y2Keys,
+      seriesOrder: view.seriesOrder, seriesStyles: view.seriesStyles, seriesLabels: view.seriesLabels,
+      errKeys: view.errKeys, documentErrors: document.bindings.errors, hiddenChannels: view.hiddenChannels,
+      waterfall: view.waterfall, excludedDisplay: "hide", fitOverlay: null, baselineOverlay: null,
+      peakOverlay: null, derivOverlay: null, selection: null, xLim: null,
+    };
+    const { result } = renderHook((p: PlotPayloadParams) => usePlotPayload(p), { initialProps: params });
+    await waitFor(() => expect(result.current.displayPayload).not.toBeNull());
+
+    const legend = result.current.displayPayload!.series.map((s) => s.label);
+    expect(legend).toEqual(["R (sample=A)", "R (sample=B)"]);
+    expect(legend).toEqual(preview.payload.series.map((s) => s.label));
+    expect(result.current.displayPayload!.data).toEqual(preview.payload.data);
+    // Neither side draws error spans for a grouped view.
+    expect(result.current.errorSpans.size).toBe(0);
+    expect(preview.errorSpans).toBeUndefined();
+  });
 });

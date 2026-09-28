@@ -287,6 +287,67 @@ describe("QuickFigureBuilderWorkspace — G1 shell", () => {
     expect(useApp.getState().quickPlotTemplates).toEqual([]); // no template
   });
 
+  // LIBRARY_WORKBOOK_UX_PLAN acceptance scenario "Cancel the Quick Figure
+  // Builder: no plot, worksheet mutation, or template is left behind" -- the
+  // test above proved the store's top-level references only. This one closes
+  // its gaps: it exercises EVERY role kind (X, Y error, Group by, Point
+  // labels, Ignore) plus a style change first, starts from a NON-empty
+  // template list and an open window (so an append is visible), deep-compares
+  // the dataset (an in-place write -- e.g. a builder role leaking into
+  // `channelRoles` -- keeps the reference but not the value), and checks the
+  // undo history and the live facade the grouping/labels roles would feed.
+  it("Cancel after using every role leaves no window, figure, template, history entry, live-facade change, or in-place dataset edit", () => {
+    const roleful: Dataset = {
+      id: "d9",
+      name: "roleful.csv",
+      data: {
+        time: [0, 1, 2],
+        values: [[1, 0, 7, 0.1, 5], [2, 1, 8, 0.2, 6], [3, 0, 9, 0.3, 7]],
+        labels: ["temp", "sample", "run", "R_err", "R"],
+        units: ["K", "", "", "Ω", "Ω"],
+        metadata: {},
+        cat_levels: { 1: ["A", "B"] },
+      },
+    };
+    const template = {
+      id: "t0", name: "existing", createdAt: "x", modifiedAt: "x", scope: { kind: "schema" as const },
+      technique: "generic" as const, signature: { channels: [] }, style: "line" as const, labels: {},
+      mapping: { xKey: null, yKeys: [0], errorBindings: [], ignoredKeys: [] },
+    };
+    useApp.setState({ datasets: [roleful], quickFigureBuilderDatasetId: "d9", quickPlotTemplates: [template], history: [], future: [] });
+    const baseWindow = useApp.getState().createWindow(null);
+    useApp.setState({ history: [], future: [] });
+    const before = useApp.getState();
+    const datasetSnapshot = structuredClone(roleful);
+    render(<QuickFigureBuilderWorkspace />);
+
+    const roleOf = (label: string) => screen.getByRole("combobox", { name: `Role for ${label}` });
+    fireEvent.change(roleOf("temp"), { target: { value: "x" } });
+    fireEvent.change(roleOf("R"), { target: { value: "y" } });
+    fireEvent.change(roleOf("R_err"), { target: { value: "error:y:4:both" } });
+    fireEvent.change(roleOf("sample"), { target: { value: "group" } });
+    fireEvent.change(roleOf("run"), { target: { value: "label" } });
+    fireEvent.change(screen.getByRole("combobox", { name: "Plot style" }), { target: { value: "scatter" } });
+    expect(roleOf("R_err")).toHaveValue("error:y:4:both");
+    expect(roleOf("sample")).toHaveValue("group");
+    expect(roleOf("run")).toHaveValue("label");
+    // The mapping is live (the create path would be enabled) -- nothing written yet.
+    expect(screen.getByRole("button", { name: "Create Editable Figure" })).not.toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+
+    const after = useApp.getState();
+    expect(after.quickFigureBuilderDatasetId).toBeNull();
+    expect(after.plotWindows.map((w) => w.id)).toEqual([baseWindow]); // no plot window
+    expect(after.focusedWindowId).toBe(before.focusedWindowId);
+    expect(after.editableFigures).toEqual([]); // no figure
+    expect(after.quickPlotTemplates).toEqual([template]); // no template added or changed
+    expect(after.datasets).toBe(before.datasets);
+    expect(after.datasets[0]).toEqual(datasetSnapshot); // no in-place worksheet mutation
+    expect(after.history).toEqual([]); // nothing undoable happened
+    expect(after.groupKey).toBe(before.groupKey);
+    expect(after.annotations).toBe(before.annotations);
+  });
+
   it("Escape cancels, but the command palette owns Escape while open", async () => {
     render(<QuickFigureBuilderWorkspace />);
     useApp.setState({ cmdkOpen: true });

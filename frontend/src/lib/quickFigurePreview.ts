@@ -1,7 +1,9 @@
 // Canonical live-preview adapter for Quick Figure Builder G3. It consumes the
 // same PlotPayload and ErrorSpan contracts as the Graph Builder and Stage.
 
+import { groupLevelLabel, levelOrderFor } from "./categorical";
 import { buildErrorSpans } from "./errorbars";
+import { applyGroupSplit } from "./plotGroupSplit";
 import { effectiveChannels, buildColumns } from "./plotdata";
 import type { SpecRender } from "./plotspec";
 import { mappingReady, type QuickFigureMapping } from "./quickFigureMapping";
@@ -41,14 +43,30 @@ export function quickFigurePreview(
     return { kind: "message", tone: "hint", message: "Assign at least one Y series to preview the figure." };
   }
   const plotted = previewedChannels(data, mapping, channelRoles);
-  const payload = buildColumns(data, null, mapping.xKey, plotted);
-  const errorSpans = buildErrorSpans(data, plotted, mapping.errorBindings);
+  const flat = buildColumns(data, null, mapping.xKey, plotted);
+  // Grouping role: the SAME split, with the SAME arguments, the created
+  // window's Stage applies (`Stage/usePlotPayload.ts` -> `applyGroupSplit`),
+  // so preview legend entries are exactly the figure's -- including its
+  // degrade-to-ungrouped when the group column has no finite level. The
+  // Stage also draws no error spans for a grouped view (a per-level series
+  // has no 1:1 error column), so neither does the preview.
+  const g = mapping.groupKey ?? null;
+  const payload = g === null
+    ? flat
+    : applyGroupSplit(
+        flat,
+        data.values.map((row) => row[g]),
+        data.labels[g] ?? `col ${g}`,
+        (code) => groupLevelLabel(data, g, code),
+        levelOrderFor(data, g),
+      );
+  const errorSpans = g === null ? buildErrorSpans(data, plotted, mapping.errorBindings) : null;
   return {
     kind: "xy",
     payload,
     mark: style === "scatter" ? "scatter" : "line",
-    grouped: false,
+    grouped: g !== null,
     ...(style === "line-symbol" ? { showMarkers: true } : {}),
-    ...(errorSpans.size > 0 ? { errorSpans } : {}),
+    ...(errorSpans && errorSpans.size > 0 ? { errorSpans } : {}),
   };
 }

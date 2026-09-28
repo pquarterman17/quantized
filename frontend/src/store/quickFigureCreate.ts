@@ -65,16 +65,21 @@ export function createQuickFigureCreateSlice(set: SliceSet, get: SliceGet): Quic
         set({ status: `Quick Figure Builder unavailable: ${gate.reason}` });
         return false;
       }
-      const pieces = quickFigureCommit(dataset, mapping, style);
+      // Minted first so the Label role's annotation group id is unique per figure.
+      const id = nextFigureId();
+      const pieces = quickFigureCommit(dataset, mapping, style, `quick-labels-${id}`);
       const name = dedupeWindowTitle(pieces.name, state.editableFigures.map((f) => f.name));
       const windowId = state.createWindow(dataset.id, pieces.view, name); // the gesture's one recordHistory
-      const id = nextFigureId();
       const document = createFigureDocument({
         id,
         name,
         datasetId: dataset.id,
         view: pieces.view,
         mark: pieces.mark,
+        // Bindings-owned: the constructor drops `view.groupKey`, and the
+        // window's view is re-projected from THIS document just below, so the
+        // Grouping role must ride the explicit argument to reach the legend.
+        groupKey: pieces.view.groupKey,
         errors: pieces.errors,
       });
       set((current) => ({

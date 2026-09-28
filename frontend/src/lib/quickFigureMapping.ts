@@ -13,6 +13,7 @@
 // header for the verified-no-eager-consumer rationale.
 
 import { incompleteAsymmetricPairs, type ErrorBinding, type IncompleteAsymmetricPair } from "./errorRoles";
+import { MAX_QUICK_POINT_LABELS, quickFigurePointLabels } from "./quickFigureLabels";
 import type { Dataset } from "./types";
 
 export interface QuickFigureMapping {
@@ -21,6 +22,17 @@ export interface QuickFigureMapping {
   yKeys: number[];
   errorBindings: ErrorBinding[];
   ignoredKeys: number[];
+  /** Grouping role: a categorical column splitting every Y into one series
+   *  per level -- committed as the canonical `FigureBindings.groupKey` /
+   *  `PlotView.groupKey` (the Graph Builder "Group" well's own binding), so
+   *  the created window's legend lists one entry per level. Both roles below
+   *  are OPTIONAL (absent = unassigned) so a template saved before they
+   *  existed still parses and re-applies unchanged. */
+  groupKey?: number | null;
+  /** Label role: each row's value becomes a text label on its plotted point
+   *  (`lib/quickFigureLabels.ts` -- grouped annotations, the Label-peaks
+   *  mechanism; no new PlotView field). */
+  labelKey?: number | null;
 }
 
 export function mappingReady(mapping: QuickFigureMapping): boolean {
@@ -86,17 +98,28 @@ export function incompleteErrorNotices(dataset: Dataset, mapping: QuickFigureMap
   return incompleteAsymmetricPairs(mapping.errorBindings).map((pair) => describeIncompleteErrorPair(dataset, mapping, pair));
 }
 
+/** Why the Label role cannot become point labels, or null when it can (or is
+ *  unassigned). Zero labels would be a requested role silently vanishing;
+ *  over the cap is refused with the cap named, never silently truncated. */
+export function pointLabelBlock(dataset: Dataset, mapping: QuickFigureMapping): string | null {
+  if (mapping.labelKey == null || !mappingReady(mapping)) return null;
+  const n = quickFigurePointLabels(dataset, mapping, "", MAX_QUICK_POINT_LABELS + 1).length;
+  const name = `Label column "${dataset.data.labels[mapping.labelKey]}"`;
+  if (n === 0) return `${name} has no values on plotted points`;
+  return n > MAX_QUICK_POINT_LABELS ? `${name} would place over ${MAX_QUICK_POINT_LABELS} point labels` : null;
+}
+
 export type QuickFigureCreateGate =
   | { ok: true }
   | { ok: false; reason: string; reasonId: string };
 
 /** THE single predicate a mapping must pass to become a figure -- composes
- *  `mappingReady`, "no role-filtered Y channel", and "no incomplete
- *  asymmetric error pair". Both the Create button (for its disabled/title/
+ *  `mappingReady`, "no role-filtered Y channel", "no incomplete asymmetric
+ *  error pair", and `pointLabelBlock`. Both the Create button (for its disabled/title/
  *  aria state) and `createQuickFigureFromMapping` (store/quickFigureCreate.ts,
  *  fail-closed) call this SAME function so they cannot drift apart again.
  *  Priority order (first failing reason wins) matches what the button has
- *  always shown: unready, then role-filtered, then incomplete pairs. */
+ *  always shown: unready, then role-filtered, then incomplete pairs, then labels. */
 export function canCreateQuickFigure(dataset: Dataset, mapping: QuickFigureMapping): QuickFigureCreateGate {
   if (!mappingReady(mapping)) {
     return {
@@ -116,5 +139,6 @@ export function canCreateQuickFigure(dataset: Dataset, mapping: QuickFigureMappi
   if (notices.length > 0) {
     return { ok: false, reason: notices[0], reasonId: "quick-builder-error-warning" };
   }
-  return { ok: true };
+  const labelBlock = pointLabelBlock(dataset, mapping);
+  return labelBlock ? { ok: false, reason: labelBlock, reasonId: "quick-builder-label-warning" } : { ok: true };
 }
