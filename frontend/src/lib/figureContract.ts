@@ -13,6 +13,7 @@ import type { PlotView } from "./plotview";
 
 export type FigureFieldClass =
   | "canonical"
+  | "interactive-only"
   | "recipe-only"
   | "export-only"
   | "derived"
@@ -35,6 +36,7 @@ const field = (
 
 const canonical = (mapsTo: string, reason = "Persist the editable value losslessly.") =>
   field("canonical", mapsTo, reason);
+const interactive = (mapsTo: string, reason: string) => field("interactive-only", mapsTo, reason);
 const recipe = (mapsTo: string, reason = "Apply as a reusable construction rule, not document identity.") =>
   field("recipe-only", mapsTo, reason);
 const derived = (mapsTo: string | null, reason = "Generate from canonical document state.") =>
@@ -51,7 +53,10 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   showLegend: canonical("legend.visible"),
   legendPos: canonical("legend.presetPosition"),
   legendXY: canonical("legend.plotPosition"),
-  legendSize: canonical("legend.pixelSize"),
+  legendSize: interactive(
+    "legend.pixelSize",
+    "Persist DOM legend geometry for interactive reuse; CSS pixels do not map reliably to production export dimensions, whose legend remains content-fitted.",
+  ),
   legendFrameXY: canonical("legend.framePosition"),
   legendStatic: canonical("legend.static"),
   legendTitle: canonical("legend.title"),

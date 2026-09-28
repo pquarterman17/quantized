@@ -1,4 +1,4 @@
-import { useRef, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
+import { useEffect, useRef, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
 
 import { useApp } from "../../store/useApp";
 
@@ -8,6 +8,7 @@ export interface LegendRect { left: number; top: number; width: number; height: 
 const HANDLES: readonly LegendResizeEdge[] = ["n", "ne", "e", "se", "s", "sw", "w", "nw"];
 const MIN_W = 96;
 const MIN_H = 40;
+const DRAG_THRESHOLD = 3;
 const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
 
 /** Resize one or two edges while keeping the opposite edges fixed. */
@@ -51,6 +52,19 @@ export default function LegendResizeHandles({ boxRef }: Props) {
   const setLegendSize = useApp((s) => s.setLegendSize);
   const legendSize = useApp((s) => s.legendSize);
   const gestureRef = useRef<Gesture | null>(null);
+  const previewRafRef = useRef<number | null>(null);
+
+  const cancelPreview = () => {
+    if (previewRafRef.current !== null) cancelAnimationFrame(previewRafRef.current);
+    previewRafRef.current = null;
+  };
+
+  useEffect(() => () => {
+    cancelPreview();
+    const gesture = gestureRef.current;
+    if (gesture && boxRef.current) Object.assign(boxRef.current.style, gesture.original);
+    gestureRef.current = null;
+  }, [boxRef]);
 
   const onStart = (edge: LegendResizeEdge, e: ReactPointerEvent) => {
     if (e.button !== 0) return;
@@ -78,13 +92,21 @@ export default function LegendResizeHandles({ boxRef }: Props) {
     const gesture = gestureRef.current;
     const box = boxRef.current;
     if (!gesture || !box || gesture.pointerId !== e.pointerId) return;
+    const dx = e.clientX - gesture.x;
+    const dy = e.clientY - gesture.y;
+    if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
     const next = resizeLegendRect(
-      gesture.start, gesture.edge, e.clientX - gesture.x, e.clientY - gesture.y, gesture.bounds,
+      gesture.start, gesture.edge, dx, dy, gesture.bounds,
     );
     gesture.latest = next;
-    Object.assign(box.style, {
-      left: `${next.left}px`, top: `${next.top}px`, right: "auto", bottom: "auto",
-      width: `${next.width}px`, height: `${next.height}px`,
+    if (previewRafRef.current === null) previewRafRef.current = requestAnimationFrame(() => {
+      previewRafRef.current = null;
+      const latest = gestureRef.current?.latest;
+      if (!latest || !boxRef.current) return;
+      Object.assign(boxRef.current.style, {
+        left: `${latest.left}px`, top: `${latest.top}px`, right: "auto", bottom: "auto",
+        width: `${latest.width}px`, height: `${latest.height}px`,
+      });
     });
   };
 
@@ -92,6 +114,7 @@ export default function LegendResizeHandles({ boxRef }: Props) {
     const gesture = gestureRef.current;
     if (!gesture || gesture.pointerId !== e.pointerId) return;
     gestureRef.current = null;
+    cancelPreview();
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
     if (commit && gesture.latest) {
       setLegendBounds(
@@ -111,6 +134,7 @@ export default function LegendResizeHandles({ boxRef }: Props) {
       onPointerMove={onMove}
       onPointerUp={(event) => finish(event, true)}
       onPointerCancel={(event) => finish(event, false)}
+      onLostPointerCapture={(event) => finish(event, false)}
       onDoubleClick={() => { if (legendSize) setLegendSize(null); }}
     />
   ));

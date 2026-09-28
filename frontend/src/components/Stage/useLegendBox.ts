@@ -24,7 +24,9 @@ export function useLegendBox(tool: PlotTool) {
   };
 
   const onBoxMouseDown = (e: ReactMouseEvent) => {
-    if (tool !== "pointer" || e.button !== 0 || e.target !== e.currentTarget) return;
+    const target = e.target as HTMLElement;
+    const movableSurface = e.target === e.currentTarget || target.classList.contains("qzk-legend-content");
+    if (tool !== "pointer" || e.button !== 0 || !movableSurface) return;
     e.preventDefault();
     let recorded = false;
     const onMove = (ev: MouseEvent) => {

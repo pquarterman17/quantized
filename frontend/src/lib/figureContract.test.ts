@@ -21,9 +21,10 @@ describe("figure authoring contract census", () => {
   });
 
   it("keeps PlotView as the canonical editable-state foundation", () => {
-    expect(Object.values(PLOT_VIEW_FIELD_CONTRACT).every(
-      ({ classification }) => classification === "canonical",
+    expect(Object.entries(PLOT_VIEW_FIELD_CONTRACT).every(
+      ([key, { classification }]) => key === "legendSize" ? classification === "interactive-only" : classification === "canonical",
     )).toBe(true);
+    expect(PLOT_VIEW_FIELD_CONTRACT.legendSize.reason).toMatch(/production export dimensions/);
     expect(PLOT_VIEW_FIELD_CONTRACT.errKeys.mapsTo).toBe("bindings.errors");
     expect(PLOT_VIEW_FIELD_CONTRACT.y2Keys.mapsTo).toBe("bindings.y2.channels");
     expect(PLOT_VIEW_FIELD_CONTRACT.annotations.mapsTo).toBe("decor.annotations");

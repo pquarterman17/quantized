@@ -98,6 +98,17 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
     expect(useApp.getState().legendXY).toEqual([0.5, 0.8]);
   });
 
+  it("moves an enlarged legend from empty space in its content body", () => {
+    useApp.setState({ legendSize: [240, 140] });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    setParentRect(container, { width: 400, height: 200 });
+    const content = container.querySelector(".qzk-legend-content") as HTMLElement;
+    fireEvent.mouseDown(content, { clientX: 80, clientY: 60, button: 0 });
+    fireEvent.mouseMove(document, { clientX: 200, clientY: 100 });
+    fireEvent.mouseUp(document, { clientX: 200, clientY: 100 });
+    expect(useApp.getState().legendXY).toEqual([0.5, 0.5]);
+  });
+
   it("clamps the dragged fraction to [0, 1]", () => {
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
     setParentRect(container, { width: 200, height: 100 });
@@ -173,7 +184,7 @@ describe("PlotLegend edge and corner resize", () => {
     });
     fireEvent.pointerDown(handle, { pointerId: 7, clientX: 170, clientY: 100, button: 0 });
     fireEvent.pointerMove(handle, { pointerId: 7, clientX: 220, clientY: 150 });
-    expect(legend.style.width).toBe("170px");
+    await waitFor(() => expect(legend.style.width).toBe("170px"));
     expect(legend.style.height).toBe("130px");
     fireEvent.pointerUp(handle, { pointerId: 7, clientX: 220, clientY: 150 });
     expect(useApp.getState().legendXY).toEqual([0.125, 20 / 300]);
@@ -191,6 +202,45 @@ describe("PlotLegend edge and corner resize", () => {
     fireEvent.doubleClick(container.querySelector(".qzk-legend-resize-e")!);
     expect(useApp.getState().legendSize).toBeNull();
     expect(legend.style.width).toBe("");
+  });
+
+  it("ignores sub-threshold pointer jitter without adding an undo entry", async () => {
+    const history = vi.spyOn(useApp.getState(), "recordHistory");
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} />);
+    const legend = container.querySelector(".qzk-legend") as HTMLElement;
+    setParentRect(container, { width: 400, height: 300 });
+    setParentRect(legend, { left: 50, top: 20, width: 120, height: 80 });
+    await waitFor(() => expect(container.querySelector(".qzk-legend-resize-se")).toBeInTheDocument());
+    const handle = container.querySelector(".qzk-legend-resize-se") as HTMLElement;
+    Object.defineProperties(handle, {
+      setPointerCapture: { value: vi.fn() },
+      hasPointerCapture: { value: () => true },
+      releasePointerCapture: { value: vi.fn() },
+    });
+    fireEvent.pointerDown(handle, { pointerId: 8, clientX: 170, clientY: 100, button: 0 });
+    fireEvent.pointerMove(handle, { pointerId: 8, clientX: 171, clientY: 101 });
+    fireEvent.pointerUp(handle, { pointerId: 8, clientX: 171, clientY: 101 });
+    expect(useApp.getState().legendSize).toBeNull();
+    expect(history).not.toHaveBeenCalled();
+  });
+
+  it("cancels an in-progress preview if pointer capture is lost", async () => {
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} />);
+    const legend = container.querySelector(".qzk-legend") as HTMLElement;
+    setParentRect(container, { width: 400, height: 300 });
+    setParentRect(legend, { left: 50, top: 20, width: 120, height: 80 });
+    await waitFor(() => expect(container.querySelector(".qzk-legend-resize-se")).toBeInTheDocument());
+    const handle = container.querySelector(".qzk-legend-resize-se") as HTMLElement;
+    Object.defineProperties(handle, {
+      setPointerCapture: { value: vi.fn() }, hasPointerCapture: { value: () => false },
+      releasePointerCapture: { value: vi.fn() },
+    });
+    fireEvent.pointerDown(handle, { pointerId: 9, clientX: 170, clientY: 100, button: 0 });
+    fireEvent.pointerMove(handle, { pointerId: 9, clientX: 220, clientY: 150 });
+    await waitFor(() => expect(legend.style.width).toBe("170px"));
+    fireEvent.lostPointerCapture(handle, { pointerId: 9 });
+    expect(legend.style.width).toBe("");
+    expect(useApp.getState().legendSize).toBeNull();
   });
 });
 
