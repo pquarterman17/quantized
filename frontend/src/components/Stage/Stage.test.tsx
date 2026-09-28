@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Stage from "./Stage";
 import { useApp } from "../../store/useApp";
+import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
 
 // The stage hosts heavy canvas children; this file is about the TAB STRIP.
@@ -29,15 +30,44 @@ const ds = (nChannels: number): Dataset => ({
 });
 
 beforeEach(() => {
-  useApp.setState({ datasets: [], activeId: null, stageTab: "plot" });
+  useApp.setState({
+    datasets: [], activeId: null, stageTab: "plot", plotWindows: [], pages: [], reports: [],
+    originFigures: [], editableFigures: [], figureDocs: [],
+  });
 });
 
 describe("Map tab visibility", () => {
-  it("is hidden with no dataset at all", () => {
+  it("is hidden with no workspace content at all", async () => {
     render(<Stage />);
     expect(screen.queryByText("Map")).not.toBeInTheDocument();
     expect(screen.queryByText("Plot")).not.toBeInTheDocument();
-    expect(screen.getByRole("heading", { name: "No data loaded" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "No data loaded" })).toBeInTheDocument();
+  });
+
+  it("keeps the plot canvas mounted when a snapshot window clears activeId", () => {
+    const snapshot = {
+      id: "snapshot-1", kind: "snapshot", title: "Frozen", datasetId: null,
+      geometry: { x: 0, y: 0, w: 480, h: 360 }, z: 1, winState: "normal",
+      view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+      snapshot: {},
+    } as PlotWindow;
+    useApp.setState({ datasets: [ds(2)], activeId: null, plotWindows: [snapshot] });
+    render(<Stage />);
+    expect(screen.getByText("plot-canvas")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "No data loaded" })).not.toBeInTheDocument();
+  });
+
+  it("renders a snapshot-only workspace", () => {
+    useApp.setState({
+      plotWindows: [{
+        id: "snapshot-1", kind: "snapshot", title: "Frozen", datasetId: null,
+        geometry: { x: 0, y: 0, w: 480, h: 360 }, z: 1, winState: "normal",
+        view: defaultPlotView(), bg: "theme", linkGroup: null, pinned: false,
+        snapshot: {},
+      } as PlotWindow],
+    });
+    render(<Stage />);
+    expect(screen.getByText("plot-canvas")).toBeInTheDocument();
   });
 
   it("is hidden for an ordinary 1-D dataset (2 channels)", () => {

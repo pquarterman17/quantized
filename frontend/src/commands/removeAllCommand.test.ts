@@ -18,7 +18,10 @@ describe("File ▸ Remove all", () => {
   beforeEach(() => {
     vi.mocked(askConfirm).mockReset();
     useImportBatch.setState({ running: false });
-    useApp.setState({ datasets: [], folders: [], workbooks: [], pages: [], reports: [], figureDocs: [], editableFigures: [] });
+    useApp.setState({
+      datasets: [], folders: [], workbooks: [], pages: [], reports: [], figureDocs: [], editableFigures: [],
+      macroSteps: [], techniqueViewMemory: {}, history: [], future: [],
+    });
   });
 
   it("does not mistake a dataset-free project with other content for an empty project", async () => {
@@ -61,5 +64,24 @@ describe("File ▸ Remove all", () => {
     await Promise.resolve();
 
     expect(useApp.getState().datasets).toHaveLength(1);
+  });
+
+  it("undo restores recorded macro steps and technique-specific view memory", async () => {
+    const macroStep = { op: "normalize", params: { datasetId: "d1" } } as never;
+    const techniqueViewMemory = { "magnetometry.mvsh": { yScale: "log" } } as never;
+    useApp.setState({
+      datasets: [{ id: "d1", name: "data", data: { time: [], values: [], labels: [], units: [], metadata: {} } }],
+      macroSteps: [macroStep], techniqueViewMemory,
+    });
+    vi.mocked(askConfirm).mockResolvedValue(true);
+
+    runRemoveAll();
+    await Promise.resolve();
+    expect(useApp.getState().macroSteps).toEqual([]);
+    expect(useApp.getState().techniqueViewMemory).toEqual({});
+
+    useApp.getState().undo();
+    expect(useApp.getState().macroSteps).toEqual([macroStep]);
+    expect(useApp.getState().techniqueViewMemory).toEqual(techniqueViewMemory);
   });
 });

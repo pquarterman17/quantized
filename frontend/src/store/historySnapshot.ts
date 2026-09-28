@@ -89,6 +89,8 @@ export interface HistorySnapshot {
   // project's records to be saved into this one, nor undoing "remove all"
   // leave them emptied.
   fitModelCarry: AppState["fitModelCarry"];
+  macroSteps: AppState["macroSteps"];
+  techniqueViewMemory: AppState["techniqueViewMemory"];
   plotWindows: AppState["plotWindows"];
   focusedWindowId: AppState["focusedWindowId"];
   view: PlotView;
@@ -119,6 +121,8 @@ export function snapshotOf(s: AppState): HistorySnapshot {
     plotRecipes: s.plotRecipes,
     collections: s.collections,
     fitModelCarry: s.fitModelCarry,
+    macroSteps: s.macroSteps,
+    techniqueViewMemory: s.techniqueViewMemory,
     plotWindows: s.plotWindows,
     focusedWindowId: s.focusedWindowId,
     view: snapshotView(s),
