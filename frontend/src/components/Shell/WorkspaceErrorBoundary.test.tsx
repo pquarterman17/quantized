@@ -9,7 +9,7 @@ function Broken(): never {
 }
 
 describe("WorkspaceErrorBoundary", () => {
-  it("contains a workspace render failure and leaves surrounding chrome mounted", () => {
+  it("contains a workspace render failure and leaves surrounding chrome mounted", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     render(
       <div>
@@ -18,17 +18,33 @@ describe("WorkspaceErrorBoundary", () => {
       </div>,
     );
     expect(screen.getByText("File Edit Help")).toBeInTheDocument();
-    expect(screen.getByRole("alert")).toHaveTextContent("workspace view hit a problem");
+    expect(await screen.findByRole("alert")).toHaveTextContent("workspace view hit a problem");
     expect(screen.getByRole("button", { name: "Retry workspace view" })).toBeInTheDocument();
     log.mockRestore();
   });
 
-  it("keeps Ctrl+Z undo working while the failure replaces the workspace", () => {
+  it("Retry re-renders the workspace", async () => {
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    let fail = true;
+    function Flaky() {
+      if (fail) throw new Error("transient");
+      return <div>Workspace is back</div>;
+    }
+    render(<WorkspaceErrorBoundary resetKey="one"><Flaky /></WorkspaceErrorBoundary>);
+    const retry = await screen.findByRole("button", { name: "Retry workspace view" });
+    fail = false;
+    fireEvent.click(retry);
+    expect(screen.getByText("Workspace is back")).toBeInTheDocument();
+    log.mockRestore();
+  });
+
+  it("keeps Ctrl+Z undo working while the failure replaces the workspace", async () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
     useApp.setState({ datasets: [], history: [], future: [] });
     useApp.getState().recordHistory("rename dataset");
     const undo = vi.spyOn(useApp.getState(), "undo");
     render(<WorkspaceErrorBoundary resetKey="broken"><Broken /></WorkspaceErrorBoundary>);
+    await screen.findByRole("alert");
 
     fireEvent.keyDown(window, { key: "z", ctrlKey: true });
 
