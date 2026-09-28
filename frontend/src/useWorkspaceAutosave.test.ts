@@ -10,6 +10,7 @@ import { EMPTY_MAP_VIEWS } from "./lib/mapView";
 import { serializeWorkspace } from "./lib/workspace";
 import { useAutosaveStatus } from "./store/autosaveStatus";
 import { useProjectLock } from "./store/projectLock";
+import { closeProjectLock } from "./store/projectLockLifecycle";
 import { useRecentProjects } from "./store/recentProjects";
 import { useRecoveryChoice } from "./store/recoveryChoice";
 import { useApp, type AppState } from "./store/useApp";
@@ -633,6 +634,20 @@ describe("browser autosave lock — the debounced write actually consults it (M1
 
     await editAndFlushDebounce();
 
+    expect(autosaveHealth().savedAt).toBeNull();
+  });
+
+  // Remove All and a browser-picker Open both call `closeProjectLock()`. In a
+  // copy tab that must not clear `openedAsCopy`: the flag is the only thing
+  // keeping this tab off the shared slot the owning tab still writes.
+  it("N3 belt survives closing the workspace in an opened-as-copy tab", async () => {
+    useProjectLock.setState({ path: null, status: "unlocked", openedAsCopy: true, record: null });
+    closeProjectLock();
+    renderHook(() => useWorkspaceAutosave());
+
+    await editAndFlushDebounce();
+
+    expect(useProjectLock.getState().openedAsCopy).toBe(true);
     expect(autosaveHealth().savedAt).toBeNull();
   });
 });

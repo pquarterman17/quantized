@@ -21,7 +21,8 @@ import {
   type LockCasResult,
   type LockProvider,
 } from "./projectLock";
-import { closeProjectLock } from "./projectLockLifecycle";
+import { closeProjectLock, reserveProjectLock } from "./projectLockLifecycle";
+import { BROWSER_AUTOSAVE_LOCK_PATH } from "./projectLockPaths";
 
 let tokenSeq = 0;
 
@@ -104,6 +105,8 @@ describe("openProject", () => {
       provider: { ...base, read: () => new Promise<LockRecord | null>((resolve) => { finishRead = resolve; }) },
     });
 
+    // A named open always reserves its path first (openWorkspaceReplace.ts).
+    reserveProjectLock(PATH);
     const opening = useProjectLock.getState().openProject(PATH);
     closeProjectLock();
     finishRead?.(null);
@@ -112,6 +115,22 @@ describe("openProject", () => {
     expect(useProjectLock.getState().path).toBeNull();
     expect(useProjectLock.getState().record).toBeNull();
     expect(useProjectLock.getState().status).toBe("unlocked");
+  });
+
+  it("closing a workspace never abandons the browser autosave slot's first engagement", async () => {
+    const base = useProjectLock.getState().provider as ReturnType<typeof fakeProvider>;
+    let finishRead: ((record: LockRecord | null) => void) | undefined;
+    useProjectLock.setState({
+      provider: { ...base, read: () => new Promise<LockRecord | null>((resolve) => { finishRead = resolve; }) },
+    });
+
+    const engaging = useProjectLock.getState().openProject(BROWSER_AUTOSAVE_LOCK_PATH);
+    closeProjectLock(); // Remove All / a browser-picker Open, before the slot's read resolves
+    finishRead?.(null);
+    await engaging;
+
+    expect(useProjectLock.getState().path).toBe(BROWSER_AUTOSAVE_LOCK_PATH);
+    expect(useProjectLock.getState().status).toBe("held-by-me");
   });
 
   it("releases a provider lock won by an open that became stale before its acquire resolved", async () => {
@@ -126,6 +145,7 @@ describe("openProject", () => {
         release,
       },
     });
+    reserveProjectLock(PATH);
     const opening = useProjectLock.getState().openProject(PATH);
     await Promise.resolve();
     closeProjectLock();

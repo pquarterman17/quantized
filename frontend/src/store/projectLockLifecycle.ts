@@ -12,12 +12,16 @@ export function reserveProjectLock(path: string): number {
 /** Detach immediately; release only a record owned by this instance. */
 export function closeProjectLock(): void {
   const { provider, path, record, instanceId } = useProjectLock.getState();
-  // This helper closes a named project. The browser autosave slot is an
-  // app-lifetime lock; dropping it makes the ordinary path-based write gate
-  // disappear and would allow an unlocked tab to overwrite the shared slot.
-  if (path === BROWSER_AUTOSAVE_LOCK_PATH) return;
+  // This helper closes a NAMED project, so with no path there is nothing to
+  // close. Every named open reserves its path synchronously first
+  // (`reserveProjectLock`), so a null path is only ever browser autosave-slot
+  // state: a declined slot (`openedAsCopy`, the flag that keeps this tab off
+  // the shared slot) or its first engagement still in flight. Resetting
+  // either would let a read-only tab overwrite the owning tab's autosave, as
+  // would dropping the slot's app-lifetime lock itself.
+  if (path === null || path === BROWSER_AUTOSAVE_LOCK_PATH) return;
   beginProjectLockOperation();
-  if (path !== null && record !== null && record.instanceId === instanceId) {
+  if (record !== null && record.instanceId === instanceId) {
     void provider.release(path, record.token ?? "").catch(() => false);
   }
   useProjectLock.setState({ status: "unlocked", record: null, path: null, openedAsCopy: false, unverifiableHeartbeats: 0 });
