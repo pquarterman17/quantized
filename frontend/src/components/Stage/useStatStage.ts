@@ -51,6 +51,7 @@ import {
 } from "../../lib/statstage";
 import type { StatMarksByMode, StatMarksMode } from "../../lib/plotviewSanitize";
 import type { StatMarks } from "../../lib/statMarks";
+import { figureErrorNote } from "./statErrorNote";
 import { exportStatStage } from "./statStageExport";
 import { applyLevels, levelAxes } from "./statStageLevels";
 import { needsPoints, stageMarks, withMarks, withNestLabel } from "./statStageMarks";
@@ -419,13 +420,15 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     [axes, hideEmpty, showN, drawData, drawFacets, freshDraw, freshFacets],
   );
   const shown = useMemo(() => withMarks(levels.draw, levels.drawFacets, rm), [levels, rm]);
+  // P2.6 box 1: the error-bar footnote, from the SAME draws the screen shows.
+  const errorNote = useMemo(() => figureErrorNote(shown.draw, shown.drawFacets), [shown]);
 
   async function exportFigure(fmt: string): Promise<void> {
     if (!data) return;
     await exportStatStage(fmt, {
       data, mode, draw: shown.draw, drawFacets: shown.drawFacets, groups, indexedGroups, valueCol,
       valueLabel, groupLabel, barValueLabel, barStack, dist, bins, fit, marks: rm,
-      showN, caveat: levels.notice?.caveat ?? null,
+      showN, caveat: levels.notice?.caveat ?? null, errorNote,
     });
   }
 
@@ -460,6 +463,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     error,
     note,
     groupNotice: levels.notice,
+    errorNote,
     draw: shown.draw,
     drawFacets: shown.drawFacets,
     exportFigure,

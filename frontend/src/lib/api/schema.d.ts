@@ -5695,6 +5695,8 @@ export interface components {
              * @default 200
              */
             dpi?: number;
+            /** Error Note */
+            error_note?: string | null;
             /** Errors */
             errors?: (number | null)[][] | null;
             /** Facets */
@@ -9562,6 +9564,8 @@ export interface components {
             dpi?: number | null;
             /** Error Bars */
             error_bars?: ("none" | "sd" | "se" | "ci95") | null;
+            /** Error Note */
+            error_note?: string | null;
             /** Facets */
             facets?: components["schemas"]["StatplotFacet"][] | null;
             /**

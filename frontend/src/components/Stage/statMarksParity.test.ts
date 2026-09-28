@@ -10,9 +10,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { statsBox, statsViolin } from "../../lib/api";
 import { exportCategoricalFigure, exportStatplotFigure } from "../../lib/api/figures";
-import { errorHalfWidth } from "../../lib/statMarks";
+import { errorBarNote, errorHalfWidth } from "../../lib/statMarks";
 import type { DataStruct, Dataset } from "../../lib/types";
-import { barErrorHalf, boxValueDomain, stripValueDomain } from "./statDrawMarks";
+import { axisLabelsOf, axisStyleOf, barErrorHalf, boxValueDomain, stripValueDomain } from "./statDrawMarks";
 import { categoryAxisLayout } from "./statRenderAxes";
 import { useStatStage } from "./useStatStage";
 
@@ -225,6 +225,63 @@ describe("categorical marks — the canvas and the export carry the same options
     expect(spec.facets).toHaveLength(2);
     expect(spec.show_connect_means).toBeUndefined();
   });
+
+  // P2.6 "not done" item: the figure never said which error bar it shows.
+  it("box: the footnote the screen shows is the export's error_note, per kind", async () => {
+    const { result } = renderHook(() => useStatStage(params()));
+    act(() => result.current.setValueCol(2));
+    await waitFor(() => expect(result.current.draw?.mode).toBe("box"));
+    expect(result.current.errorNote).toBeNull(); // no mean marker, no bars, no note
+    expect((await exported(result)).error_note).toBeUndefined();
+    act(() => result.current.setMarks({ summary: "mean" }));
+    for (const kind of ["sd", "se", "ci95"] as const) {
+      act(() => result.current.setMarks({ errorBars: kind }));
+      await waitFor(() => expect(result.current.errorNote).toBe(errorBarNote(kind)));
+      const spec = await exported(result);
+      expect(spec.error_note).toBe(result.current.errorNote);
+      expect(spec.error_bars).toBe(kind);
+    }
+    act(() => result.current.setMarks({ errorBars: "none" }));
+    await waitFor(() => expect(result.current.errorNote).toBeNull());
+    expect((await exported(result)).error_note).toBeUndefined();
+  });
+
+  it("bar and faceted box carry the same footnote as the screen", async () => {
+    const { result } = renderHook(() => useStatStage({ ...params(), yKeys: Y_KEYS }));
+    act(() => result.current.setMode("bar"));
+    await waitFor(() => expect(result.current.errorNote).toBe("Error bars: SE of the mean")); // bar's default
+    await act(async () => {
+      await result.current.exportFigure("svg");
+    });
+    expect(vi.mocked(exportCategoricalFigure).mock.calls.at(-1)![0].error_note).toBe("Error bars: SE of the mean");
+    act(() => result.current.setMode("box"));
+    act(() => result.current.setValueCol(2));
+    act(() => result.current.setFacetCol(1));
+    act(() => result.current.setMarks({ summary: "mean", errorBars: "sd" }));
+    await waitFor(() => expect(result.current.drawFacets?.length).toBe(2));
+    await waitFor(() => expect(result.current.errorNote).toBe("Error bars: SD"));
+    expect((await exported(result)).error_note).toBe("Error bars: SD");
+  });
+
+  it.each([0, 45] as const)(
+    "long single-line labels: the canvas draws the export's labels WHOLE (rotation %s)",
+    async (labelRotation) => {
+      const levels = { 0: ["Anneal 450 C under vacuum", "Anneal 450 C under argon"], 1: ["W1", "W2"] };
+      const active = { ...DS, data: { ...DATA, cat_levels: levels } };
+      const { result } = renderHook(() => useStatStage({ ...params(), active }));
+      act(() => result.current.setValueCol(2));
+      act(() => result.current.setMarks({ labelRotation }));
+      await waitFor(() => {
+        const d = result.current.draw;
+        expect(d?.mode === "box" && d.marks?.labelRotation).toBe(labelRotation);
+      });
+      const draw = result.current.draw;
+      const spec = await exported(result);
+      const drawn = categoryAxisLayout(axisLabelsOf(draw), axisStyleOf(draw)).lines.map((l) => l.join(" "));
+      expect(drawn).toEqual(spec.labels);
+      expect(new Set(drawn).size).toBe(2); // the old 14-char cut drew both as "lot = Anneal…"
+    },
+  );
 
   it("marks are display-only: switching error bars never re-fetches the box stats", async () => {
     const { result } = renderHook(() => useStatStage(params()));

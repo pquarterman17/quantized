@@ -4,7 +4,7 @@
 // contract `BackgroundPlotWindow`'s XY path has had since item 4, extended to
 // the mode flags the view already carried. Each component here is a thin
 // store-connected wrapper (theme/accent + the lazy-book fetch action) around
-// a props-driven core (`PolarStageCore` / `StatStageCanvas`+`useStatStage` /
+// a props-driven core (`PolarStageCore` / `StatStagePlot`+`useStatStage` /
 // `useMultiPanelStage`), mirroring how the focused `PolarStage`/`StatStage`/
 // `MultiPanelStage` wrap the very same cores.
 //
@@ -30,7 +30,7 @@ import type { PlotBg, PlotView } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import PolarStageCore from "../Stage/PolarStageCore";
-import StatStageCanvas from "../Stage/StatStageCanvas";
+import StatStagePlot from "../Stage/StatStagePlot";
 import { useMultiPanelStage } from "../Stage/useMultiPanelStage";
 import { useStatStage } from "../Stage/useStatStage";
 
@@ -78,7 +78,9 @@ export function BackgroundStatWindow({ dataset, view }: BackgroundModeProps) {
   });
   return (
     <>
-      <StatStageCanvas data={st.draw} theme={theme} accent={accent} />
+      {/* The focused stage's plot shell (no facets, no selection link), so
+          the P2.6 error-bar footnote rides the background window too. */}
+      <StatStagePlot draw={st.draw} drawFacets={null} theme={theme} accent={accent} sel={null} right={0} errorNote={st.errorNote} />
       {st.error && (
         <div
           className="qzk-ds-meta"

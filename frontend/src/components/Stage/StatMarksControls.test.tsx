@@ -98,4 +98,18 @@ describe("StatMarksControls on the real stage", () => {
     await waitFor(() => expect(useApp.getState().statMarks.box).toEqual({ points: "all", jitter: false }));
     await waitFor(() => expect(combo("jitter width")).toHaveValue("off"));
   });
+
+  it("the plot states which error bar it draws, and follows the choice", async () => {
+    render(<StatStage />);
+    // No mean marker, no error bars: no footnote.
+    await waitFor(() => expect(combo("summary marker")).toHaveValue("none"));
+    expect(screen.queryByTestId("stat-error-note")).toBeNull();
+    await userEvent.selectOptions(combo("summary marker"), "mean");
+    expect(await screen.findByTestId("stat-error-note")).toHaveTextContent("Error bars: 95% CI of the mean");
+    await userEvent.selectOptions(combo("error bars"), "sd");
+    await waitFor(() => expect(screen.getByTestId("stat-error-note")).toHaveTextContent("Error bars: SD"));
+    // The error bars' own "none" is the note's opt-out.
+    await userEvent.selectOptions(combo("error bars"), "none");
+    await waitFor(() => expect(screen.queryByTestId("stat-error-note")).toBeNull());
+  });
 });

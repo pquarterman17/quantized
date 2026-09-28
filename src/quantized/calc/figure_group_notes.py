@@ -19,6 +19,10 @@ exactly one export behaviour to agree with:
   groups never leave the app without it. The TEXT is computed once, by the
   frontend (``lib/groupAxis.balanceCaveat``), and posted verbatim; this module
   only places it.
+* :func:`footnote_text` -- P2.6 box 1: the error-bar note ("Error bars: SE of
+  the mean", ``lib/statMarks.errorBarNote``, the exact line the screen shows
+  under the plot) stacked ABOVE the caveat, one footnote line each. Also
+  posted verbatim; ``add_caveat`` draws every ``\n``-separated line.
 * :func:`connect_segments` -- where a connect-the-means line must break: at an
   empty slot, and (nested grouping) at every outer-factor boundary, mirroring
   ``lib/statstage.connectMeansBreaks`` on screen.
@@ -41,6 +45,7 @@ __all__ = [
     "add_caveat",
     "annotate_top_counts",
     "connect_segments",
+    "footnote_text",
     "mark_empty_slots",
     "supxlabel_above_caveat",
 ]
@@ -61,6 +66,25 @@ CAVEAT_BAND = 0.06
 # attach a faceted grid's x title to -- clears every panel's own second tier
 # instead of sitting on top of it.
 TIER_BAND = 0.05
+# Each footnote line past the first reserves this much more height, in
+# points ("small" text plus leading), converted to a figure fraction.
+FOOTNOTE_LINE_PT = 12.0
+
+
+def footnote_text(error_note: str | None, caveat: str | None) -> str | None:
+    """The figure footnote for a request's ``error_note`` and ``caveat``:
+    the error-bar note on the first line, the caveat under it, ``None`` when
+    neither is set -- so a request without an error note keeps exactly the
+    footnote (and layout) it always had."""
+    lines = [s for s in (error_note, caveat) if s]
+    return "\n".join(lines) if lines else None
+
+
+def _band(fig: Any, footnote: str | None, tiered: bool) -> float:
+    """The bottom band (figure fraction) the footnote's lines need."""
+    extra = footnote.count("\n") if footnote else 0
+    line = FOOTNOTE_LINE_PT / (72.0 * float(fig.get_figheight())) if extra else 0.0
+    return CAVEAT_BAND + extra * line + (TIER_BAND if tiered else 0.0)
 
 
 def mark_empty_slots(ax: Any, ticks: Sequence[float], empty: Sequence[bool]) -> None:
@@ -89,9 +113,11 @@ def annotate_top_counts(ax: Any, ticks: Sequence[float], counts: Sequence[int]) 
 def add_caveat(
     fig: Any, caveat: str | None, tiered: bool = False,
 ) -> tuple[float, float, float, float] | None:
-    """Place ``caveat`` as a one-line italic footnote at the bottom-left of
-    ``fig`` and return the ``tight_layout`` rect that keeps the axes clear of
-    it (``None`` = no caveat, lay out as before -- byte-identical output).
+    """Place ``caveat`` as an italic footnote at the bottom-left of ``fig`` --
+    one text per ``\\n``-separated line (:func:`footnote_text`), the band
+    growing by :data:`FOOTNOTE_LINE_PT` per extra line -- and return the
+    ``tight_layout`` rect that keeps the axes clear of it (``None`` = no
+    caveat, lay out as before -- byte-identical output).
     De-mathed like every other label (``safe_mathtext_label``): it is a
     free-form API field, and an unbalanced ``$`` must not fail the export.
 
@@ -103,13 +129,18 @@ def add_caveat(
     plot's x title instead moves onto the outer axis directly
     (``(outer or ax).set_xlabel``, `figure_statplots.py` /
     `figure_categorical.py`), which needs no extra band here."""
-    band = CAVEAT_BAND + (TIER_BAND if tiered else 0.0)
+    band = _band(fig, caveat, tiered)
     if not caveat:
         return (0.0, band, 1.0, 1.0) if tiered else None
-    fig.text(
-        0.01, 0.01, safe_mathtext_label(caveat), ha="left", va="bottom", fontsize="small",
-        style="italic",
-    )
+    # One text per line (``footnote_text`` stacks the error-bar note above the
+    # caveat), bottom-up, each de-mathed on its own; a one-line caveat is the
+    # single call this always made.
+    step = FOOTNOTE_LINE_PT / (72.0 * float(fig.get_figheight()))
+    for i, line in enumerate(reversed(caveat.split("\n"))):
+        fig.text(
+            0.01, 0.01 + i * step, safe_mathtext_label(line), ha="left", va="bottom",
+            fontsize="small", style="italic",
+        )
     return (0.0, band, 1.0, 1.0)
 
 
@@ -130,7 +161,7 @@ def supxlabel_above_caveat(
     EVERY panel's second tier instead."""
     if not x_label:
         return
-    band = CAVEAT_BAND + (TIER_BAND if tiered else 0.0)
+    band = _band(fig, caveat, tiered)
     if caveat or tiered:
         fig.supxlabel(x_label, y=band, va="bottom")
     else:

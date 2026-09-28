@@ -94,8 +94,11 @@ def test_fixture_export_carries_every_slot_the_screen_showed() -> None:
     assert _markers(root) == empties
     # n per slot == the finite count the screen captions.
     assert _count_axis(root) == [f"n={len(g)}" for g in data]
-    # The caveat, verbatim, as a footnote.
+    # The caveat, verbatim, as a footnote -- and above it the error-bar note
+    # the screen shows under the plot (P2.6 box 1), verbatim too.
     assert spec["caveat"] in _texts(root)
+    assert spec["error_note"] == "Error bars: 95% CI of the mean"
+    assert spec["error_note"] in _texts(root)
 
 
 def test_fixture_without_show_n_keeps_the_markers_and_drops_the_counts() -> None:

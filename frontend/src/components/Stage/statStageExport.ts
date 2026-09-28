@@ -181,6 +181,15 @@ export interface FacetedExportInputs {
   caveat?: string | null;
   /** P2.6 box 1: the marks the screen draws with (null: legacy request). */
   marks?: ResolvedStatMarks | null;
+  /** P2.6 box 1: the error-bar footnote the screen shows under the plot
+   *  (`statErrorNote.figureErrorNote`), posted verbatim as `error_note`. */
+  errorNote?: string | null;
+}
+
+/** `error_note` on the wire only when there is one, so a request without
+ *  error bars stays the one it always was. */
+function noteWire(note: string | null | undefined): { error_note?: string } {
+  return note ? { error_note: note } : {};
 }
 
 /** Restate raw groups on the draw's axis (P2.6 box 2): one entry per AXIS
@@ -275,6 +284,7 @@ export async function exportFacetedFigure(
       filename: `bar_${barValueLabel}_faceted`,
       facets,
       caveat,
+      ...noteWire(o.errorNote),
       axis_style: axisWire(m, facets.flatMap((f) => f.groups)),
     };
     await exportCategoricalFigure(spec);
@@ -321,6 +331,7 @@ export async function exportFacetedFigure(
     facets,
     show_n: showN,
     caveat,
+    ...noteWire(o.errorNote),
     ...(m ? { summary: m.summary, error_bars: m.errorBars, points: m.points } : {}),
     // `tiered` (whether nesting is active) is shared; `tiers` itself is
     // NOT — dropped here so it can never be applied, uniformly and wrongly,
@@ -363,6 +374,7 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
       axis_style: axisWire(o.marks, draw.data.groups.map((g) => g.label)),
       stacked: o.barStack,
       caveat,
+      ...noteWire(o.errorNote),
       fmt,
       title: `${o.barValueLabel} by ${o.groupLabel}`,
       x_label: o.groupLabel,
@@ -402,6 +414,7 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
     }
     spec.show_n = showN;
     spec.caveat = caveat;
+    if (o.errorNote) spec.error_note = o.errorNote;
     spec.axis_style = axisWire(m, spec.labels ?? [], nestLabelOf(draw));
     // Review finding 2: send the canvas's own y-domain so matplotlib's
     // autoscale-to-drawn-artists can never disagree with it (points/fliers

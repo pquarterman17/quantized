@@ -163,6 +163,7 @@ export default function StatStage() {
         accent={accent}
         sel={categorical ? sel : null}
         right={dockOpen ? DOCK_WIDTH + 8 : 0}
+        errorNote={st.errorNote}
       />
       {dockOpen && sel.summary && (
         <div

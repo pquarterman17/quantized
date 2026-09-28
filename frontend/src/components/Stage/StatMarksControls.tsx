@@ -153,7 +153,7 @@ export default function StatMarksControls({ mode, marks, setMarks, grouped }: St
       <Checkbox
         checked={marks.labelWrap}
         onChange={(on) => setMarks({ labelWrap: on }, "wrap category labels")}
-        title="Wrap long category labels onto up to three lines instead of truncating them"
+        title="Wrap long category labels onto up to three lines (off: each label whole on one line)"
       >
         wrap
       </Checkbox>

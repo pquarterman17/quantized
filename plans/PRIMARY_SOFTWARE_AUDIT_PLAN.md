@@ -4388,12 +4388,14 @@ violin, bar, strip, or summary plots.
   the JMP_GAP J5 residual) and faceted strip; raw points / median summary on
   BAR; violin has points but no summary / error-bar marker, and its inner
   glyph still differs (screen: quartile bar + median dot; export: mean +
-  extrema lines — pre-existing); in-stage level RENAME (use Recode); the
-  figure does not state which error bar it shows (no legend / footnote);
-  single-line labels still truncate at 14 chars on screen (not in the export)
-  unless "wrap" is on; rotated-label depth is estimated from character counts
-  (both sides), not measured; the Graph Builder preview ignores the marks; no
-  e2e spec.
+  extrema lines — pre-existing); in-stage level RENAME (use Recode);
+  rotated-label depth is estimated from character counts (both sides), not
+  measured; a nested axis's OUTER-tier label is still fit to its run's width
+  on screen (the export draws it whole); an upright unwrapped label wider
+  than its slot overlaps its neighbour on BOTH sides (wrap / rotation is the
+  remedy); the Graph Builder preview ignores the marks; no e2e spec.
+  (Two former entries — the 14-char screen truncation and the unstated
+  error-bar kind — are done; see "Done 2026-09-28" below.)
   **Review round (2026-09-27, 10 findings fixed, each sabotage-verified):**
   a violin's jittered `points` groups now relabel alongside its `violins`
   when levels are hidden/reordered, so the canvas and the export jitter hash
@@ -4431,6 +4433,43 @@ violin, bar, strip, or summary plots.
   the frontend resolves `drawMarks` once per paint (was once per group/
   series) and memoizes `categoryAxisLayout` by its own inputs (was re-wrapped
   every hit-test).
+  **Done 2026-09-28 — labels whole on screen; the figure names its error
+  bar.** (1) Category tick labels are no longer cut at 14 characters on
+  screen: with "wrap" off a label is drawn WHOLE on one line, exactly the
+  export's tick label (`statRenderAxes.buildLayout`); two levels sharing a
+  13-character prefix ("lot = Anneal 450 C under vacuum" / "... argon") used
+  to read identically on screen. The only screen-side cut left is the canvas
+  cap: a ROTATED axis too deep for `plotRect`'s 45% bottom-margin cap now
+  keeps its rotation and ellipsizes each label to the characters that fit
+  (ladder: shorter wrap -> cut to fit -> upright) instead of dropping
+  straight to upright. (2) The figure says which error bar it draws: "Error
+  bars: SD" / "SE of the mean" / "95% CI of the mean" (`lib/statMarks.
+  errorBarNote`, ASCII), exactly while at least one bar is DRAWN
+  (`Stage/statErrorNote.figureErrorNote`, the painters' own predicates: the
+  box/strip mean marker, bars incl. stacked's top-segment rule, any facet
+  panel; violin draws none). On screen it is a footnote strip under the whole
+  figure (`StatStagePlot`, focused and background windows, one per facet
+  grid); the SAME string is posted as the export's new `error_note`
+  (statplot + categorical routes, flat + faceted), which `calc.
+  figure_group_notes.footnote_text` stacks above the caveat (`add_caveat` now
+  draws one text per line and grows the band per line; a caveat-only request
+  is the identical single call as before). No new toggle: the error bars'
+  own "none" removes bars and note together. Tests (each sabotage-verified —
+  restoring the 14-char cut, dropping the cap-fit step, not posting
+  `error_note`, the route ignoring it, not growing the band, unwiring the
+  background window): `statErrorNote.test.ts`; `statRender.test.ts` (whole
+  labels at 0/45/90 deg, cap fit); `BackgroundStatNotice.test.tsx`;
+  `statMarksParity.test.ts` (real hook: the screen's note == the export's
+  `error_note` per kind, bar, faceted; drawn tick text == exported labels for
+  the two levels the old cut collapsed); `StatMarksControls.test.tsx` (real
+  stage: note appears, follows the choice, goes with "none");
+  `statLevelsParity.test.ts` + wire fixture `statplot_levels_export.json`
+  (gains `error_note`); backend `tests/test_stat_error_note.py` (all four
+  routes draw it verbatim with/without a caveat; x title / note / caveat
+  stack without overprinting, flat and faceted; 422 over 200 chars) and
+  `test_statplot_levels_parity.py` (the fixture renders it). Eager bundle
+  unchanged: 865,437 B before and after (all new code in the lazy stat
+  chunks).
 - [x] Missing levels and unbalanced groups are explicit. (2026-09-26)
   **Survey (before):** every categorical path closed the axis up silently.
   `categoryLevels` never saw a level declared in `cat_levels` that no row

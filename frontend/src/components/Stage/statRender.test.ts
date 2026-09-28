@@ -370,18 +370,48 @@ describe("drawCategoryAxis — NESTED tick labels (Group R review finding 1; two
     expect(texts.find((t) => t.text === "lot")?.y).toBe(RECT.h + 30); // the caption never moved
   });
 
-  it("still truncates an inner level that is genuinely too long", () => {
+  // P2.6 "not done" item: a label used to be cut at 14 characters on screen
+  // only, while the export's tick label was always whole — and two levels
+  // sharing a 13-character prefix then read the SAME on screen.
+  it("draws a long inner level WHOLE, as the export's tick label is", () => {
     const { ctx, texts } = recordingCtx();
     drawCategoryAxis(
       ctx, RECT, SLOTS,
       ["wafer = 7 / deposition_chamber = 0", "wafer = 7 / deposition_chamber = 1"],
       "x", "#000", "#888", { nestLabel: "deposition_chamber" },
     );
-    expect(texts[0].text).toBe("deposition_ch…");
+    expect(texts.slice(0, 2).map((t) => t.text)).toEqual(["deposition_chamber = 0", "deposition_chamber = 1"]);
     expect(texts[2].text).toBe("wafer = 7");
   });
 
-  it("wraps a long label onto lines (the export's wrap_label), instead of truncating", () => {
+  it.each([0, 45, 90] as const)("draws a long single-line label whole at rotation %s (no 14-char cut)", (rotation) => {
+    const labels = ["Anneal 450 C under vacuum", "Anneal 450 C under argon"];
+    const { ctx, texts } = recordingCtx();
+    drawCategoryAxis(ctx, RECT, SLOTS, labels, "x", "#000", "#888", { rotation });
+    // The two levels the old cut rendered identically ("Anneal 450 C …").
+    expect(texts.filter((t) => t.text !== "x").map((t) => t.text)).toEqual(labels);
+    expect(categoryAxisLayout(labels, { rotation }).lines).toEqual(labels.map((l) => [l]));
+  });
+
+  it("under the canvas cap, a rotated label is cut to what fits and KEEPS its rotation", () => {
+    const labels = ["Anneal temperature under vacuum 450 C", "Anneal temperature under vacuum 500 C"];
+    const maxBottom = 120; // the natural 90-degree depth (37 chars x 6 px) needs ~260
+    expect(categoryAxisLayout(labels, { rotation: 90 }).bottom).toBeGreaterThan(maxBottom);
+    const fitted = categoryAxisLayout(labels, { rotation: 90 }, maxBottom);
+    expect(fitted.rotation).toBe(90);
+    expect(fitted.bottom).toBeLessThanOrEqual(maxBottom);
+    const chars = Array.from(fitted.lines[0][0]).length;
+    expect(fitted.lines[0][0].endsWith("…")).toBe(true);
+    expect(chars).toBeGreaterThanOrEqual(4);
+    // As long as the cap allows: one more character would not fit.
+    expect(6 * (chars + 1)).toBeGreaterThan(maxBottom - 6 - 13 - 18);
+    // Wrapped, the ladder shortens the wrap first and cuts only after that.
+    const wrapped = categoryAxisLayout(labels, { rotation: 90, wrap: true }, maxBottom);
+    expect(wrapped.rotation).toBe(90);
+    expect(wrapped.bottom).toBeLessThanOrEqual(maxBottom);
+  });
+
+  it("wraps a long label onto lines (the export's wrap_label)", () => {
     const { ctx, texts } = recordingCtx();
     drawCategoryAxis(ctx, RECT, SLOTS, ["Anneal temperature 450 C", "B"], "x", "#000", "#888", { wrap: true });
     const first = texts.filter((t) => t.x === 100 && t.text !== "x");

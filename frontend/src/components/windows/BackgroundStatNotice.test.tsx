@@ -59,4 +59,10 @@ describe("BackgroundStatWindow — the group notice", () => {
     const notice = await screen.findByTestId("bg-stat-group-notice");
     await waitFor(() => expect(notice).toHaveTextContent("1 empty level hidden"));
   });
+
+  it("P2.6 box 1: states the error bar its own persisted marks draw", async () => {
+    const statMarks = { box: { summary: "mean" as const, errorBars: "sd" as const } };
+    render(<BackgroundStatWindow dataset={DS} view={{ ...VIEW, statMarks }} />);
+    expect(await screen.findByTestId("stat-error-note")).toHaveTextContent("Error bars: SD");
+  });
 });

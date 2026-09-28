@@ -1321,6 +1321,18 @@
             "title": "Dpi",
             "type": "integer"
           },
+          "error_note": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Note"
+          },
           "errors": {
             "anyOf": [
               {
@@ -11340,6 +11352,18 @@
               }
             ],
             "title": "Error Bars"
+          },
+          "error_note": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Note"
           },
           "facets": {
             "anyOf": [
