@@ -9521,6 +9521,40 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   Today's rendered-bytes coverage is `tests/test_export_vector_structure.py`
   on ONE A8 fixture; the screen canvas has no rendered-output comparison at
   all.
+
+  **Partial progress (2026-09-28): the EXPORT-side half done for all nine,
+  the SCREEN-canvas half still open.** Backend rendered-output coverage
+  extended from A8's one fixture to all nine P4.2 fixtures (plain / errors /
+  group / facet / y2 / break / waterfall / decor / hidden), each rendered
+  through the real `/api/export/figure`(`-hitmap`) route (`TestClient`, the
+  same code `/api/export/figure` uses) and read back structurally out of the
+  SVG/PNG bytes — line/marker counts, stroke colours + dash patterns, legend
+  entries, axis limits/ticks recovered from the hit-map, annotation/shape/
+  ref-line/region-shade gids — never pixel-exact (CI runs ubuntu/windows/mac
+  with different fonts). New: `tests/_regression_matrix_wire.py` (shared
+  dataset ported from `regressionMatrixFixtures.testkit.ts`'s `matrixData()`
+  + SVG helpers), `tests/test_export_visual_matrix_flat.py` (plain/errors/
+  hidden), `tests/test_export_visual_matrix_split.py` (group/facet/y2),
+  `tests/test_export_visual_matrix_decor.py` (break/waterfall/decor) — three
+  modules, one per axes-shape family, each under 500 lines.
+  Sabotage-verified three realistic regressions by editing the real
+  production code, confirming the matching new test failed, then reverting
+  (`git checkout` each file, diff clean afterward): commenting out
+  `apply_error_bars(...)`'s call site in `calc.figure.draw_series_axes`
+  (errors fixture: 3 whiskers -> 0); disabling the `line in _LINESTYLE`
+  branch in `calc.figure._plot_kwargs` (group fixture: 3 dashed lines -> 0,
+  decor fixture's dashed/dotted assertion also failed); forcing
+  `calc.plotting.build_series` to ignore `y_keys` and always plot every
+  channel (hidden fixture: 2 drawn lines -> 9). All three now pass again on
+  the reverted source.
+  **Not covered, so the box stays unchecked:** the SCREEN canvas's own
+  rendered output (actual uPlot canvas pixels/DOM, as opposed to the options
+  object the 2026-09-14 structural matrix already reads) has no comparison
+  at all, before or after this pass — that needs a browser/canvas-level test
+  (e.g. Playwright), which is out of scope for a backend-only pass. One
+  documented gap carried over unchanged from the structural matrix: no
+  first-class 2-D/heatmap figure exists to build a ninth-plus fixture from
+  (`regressionMatrixFixtures.testkit.ts`'s own header note).
 - [x] ~~Migration fixtures for supported contract/workspace versions.~~ SHIPPED
   2026-09-28. Inventory of every persisted-format version this app still
   claims to LOAD (via `git log -S` on each version constant + its
