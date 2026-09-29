@@ -11,6 +11,7 @@ import MenuBar from "./components/Shell/MenuBar";
 import StatusBar from "./components/Shell/StatusBar";
 import TitleBar from "./components/Shell/TitleBar";
 import WorkspaceErrorBoundary from "./components/Shell/WorkspaceErrorBoundary";
+import { LibraryWorkspace, QuickFigureBuilderWorkspace } from "./components/Shell/workspaceSeams";
 import Stage from "./components/Stage/Stage";
 import CommandPalette, { type Action } from "./components/overlays/CommandPalette";
 import { buildAppActions } from "./appCommands";
@@ -35,16 +36,6 @@ import {
   useWorkspaceAutosave,
 } from "./useWorkspaceAutosave";
 
-const LibraryWorkspace = lazyRegion(
-  () => import("./components/Library/LibraryWorkspace"),
-  "Library workspace",
-  <section className="qzk-library-workspace" aria-label="Library workspace" />,
-);
-const QuickFigureBuilderWorkspace = lazyRegion(
-  () => import("./components/workshops/quickfigurebuilder/QuickFigureBuilderWorkspace"),
-  "Quick Figure Builder",
-  <section className="qzk-quick-builder" aria-label="Quick Figure Builder" />,
-);
 // E-c1 bundle pass: ~45 kB of Inspector cards off the pre-paint parse path.
 // The fallback keeps the grid column (same root class) so nothing shifts
 // while the chunk loads; the cards fill in immediately after first paint.
