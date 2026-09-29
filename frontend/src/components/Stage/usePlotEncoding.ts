@@ -76,9 +76,18 @@ export function useStageEncoding(
   // A window's document is rebuilt on every facade commit, so the picks arrive
   // as a fresh object each time — keyed by value, or every commit re-fetches.
   const stablePicks = useStableByValue(picks, (v) => JSON.stringify(v));
+  // Keyed on the fields the derivation reads (the gate: data, channelTypes,
+  // pending; the gradient's analysis view: excludedRows, filter), never on
+  // `active` itself: a rename mints a new `active` over the same data and
+  // must not rebuild the encoding, or `plotted` changes and the plot refetches.
+  const source = useMemo(
+    () => active ?? null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [active?.id, active?.data, active?.channelTypes, active?.pending, active?.excludedRows, active?.filter],
+  );
   const enc = useMemo(
-    () => (active ? windowEncoding(stablePicks, active, groupCol, y2Keys) : null),
-    [active, stablePicks, groupCol, y2Keys],
+    () => (source ? windowEncoding(stablePicks, source, groupCol, y2Keys) : null),
+    [source, stablePicks, groupCol, y2Keys],
   );
   const [mod, setMod] = useState<EncodingModule | null>(loaded);
   useEffect(() => {
@@ -93,11 +102,11 @@ export function useStageEncoding(
   }, [enc, mod]);
 
   return useMemo(() => {
-    if (!enc || !mod || !active) return null;
-    const data = mod.encodingData(active.data, enc); // residual 5: text-column factors appended
+    if (!enc || !mod || !source) return null;
+    const data = mod.encodingData(source.data, enc); // residual 5: text-column factors appended
     const split = mod.encodedSplit(data, channels, enc);
     const { specs, series } = mod.encodedNames(data, split);
-    const gradient = mod.stageGradient(active, data, enc); // residual 4: scale over the kept rows
+    const gradient = mod.stageGradient(source, data, enc); // residual 4: scale over the kept rows
 
     return {
       split: encodingSplits(enc),
@@ -110,7 +119,7 @@ export function useStageEncoding(
       },
       colorBy: gradient ? (styles) => mod.gradientColumns(gradient, styles) : null,
     };
-  }, [enc, mod, active, channels]);
+  }, [enc, mod, source, channels]);
 }
 
 /** `usePlotPayload`'s per-display-series style and label lists for an encoded
