@@ -96,7 +96,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
     toggleFolderExpanded, toggleWorkbookExpanded,
   });
   const libraryFocus = useLibraryFocus(hierarchy, allRows, contentFilter);
-  useRevealImported(libraryFocus.hierarchy, requestReveal);
+  useRevealImported(datasets, activeId, libraryFocus.hierarchy, requestReveal);
 
   // "Show in Library" (plan #13 sub-item 2; PR C adds the workbook step;
   // PR D2 generalizes it to EVERY hierarchy node kind for L0.26's search
