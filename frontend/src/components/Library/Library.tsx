@@ -332,7 +332,6 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
       <LibraryFocusBar
         focusedNode={libraryFocus.focusedNode}
         focusPath={libraryFocus.focusPath}
-        candidateNode={libraryFocus.candidateNode}
         searching={searchActive}
         onFocus={libraryFocus.focusOn}
         onShowAll={libraryFocus.clearFocus}
@@ -345,7 +344,11 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
           canExpand={libraryFocus.canExpand}
           canCollapse={libraryFocus.canCollapse}
           searching={searchActive}
+          focusActive={libraryFocus.focusActive}
+          focusedKey={libraryFocus.focusedNode?.key ?? null}
+          candidateNode={libraryFocus.candidateNode}
           onFilterChange={setContentFilter}
+          onFocus={libraryFocus.focusOn}
           onExpandAll={libraryFocus.expandAll}
           onCollapseAll={libraryFocus.collapseAll}
         />

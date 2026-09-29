@@ -3,7 +3,6 @@ import type { LibraryNode } from "../../lib/libraryHierarchy";
 interface Props {
   focusedNode: LibraryNode | null;
   focusPath: readonly LibraryNode[];
-  candidateNode: LibraryNode | null;
   searching: boolean;
   onFocus: (node: LibraryNode) => void;
   onShowAll: () => void;
@@ -11,7 +10,7 @@ interface Props {
 
 /** Compact, session-only scope control for dense imported projects. */
 export default function LibraryFocusBar({
-  focusedNode, focusPath, candidateNode, searching, onFocus, onShowAll,
+  focusedNode, focusPath, searching, onFocus, onShowAll,
 }: Props) {
   if (focusedNode) {
     return (
@@ -30,28 +29,8 @@ export default function LibraryFocusBar({
             </span>
           ))}
         </div>
-        {candidateNode && candidateNode.key !== focusedNode.key && (
-          <button
-            type="button"
-            className="qzk-library-focus-deeper"
-            title={`Narrow the view to ${candidateNode.name}`}
-            onClick={() => onFocus(candidateNode)}
-          >
-            Focus selection: {candidateNode.name}
-          </button>
-        )}
       </div>
     );
   }
-  if (!candidateNode || searching) return null;
-  return (
-    <button
-      type="button"
-      className="qzk-library-focus-offer"
-      title={`Temporarily show only ${candidateNode.name} and its contents`}
-      onClick={() => onFocus(candidateNode)}
-    >
-      Focus on <strong>{candidateNode.name}</strong>
-    </button>
-  );
+  return null;
 }

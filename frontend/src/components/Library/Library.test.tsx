@@ -118,7 +118,7 @@ describe("Library — focused project exploration", () => {
   async function focusBookA(): Promise<void> {
     const row = await screen.findByText("Book A");
     fireEvent.click(row.closest('[data-lib-row="workbook:w1"]')!);
-    fireEvent.click(screen.getByRole("button", { name: "Focus on Book A" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Focus on Book A" }));
   }
 
   it("temporarily narrows the tree to the selected workbook and restores the full project", async () => {
@@ -164,7 +164,7 @@ describe("Library — focused project exploration", () => {
   it("offers the containing workbook after selecting a worksheet", async () => {
     render(<Library />);
     fireEvent.click((await screen.findByText("Sheet A")).closest("[data-ds-id]")!);
-    expect(screen.getByRole("button", { name: "Focus on Book A" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Focus on Book A" })).toBeInTheDocument();
   });
 
   it("offers focus directly from a workbook context menu", async () => {
@@ -180,9 +180,9 @@ describe("Library — focused project exploration", () => {
   it("can narrow from a focused folder to its selected workbook, then navigate back by breadcrumb", async () => {
     render(<Library />);
     fireEvent.click((await screen.findByText("Project A")).closest('[data-lib-row="folder:f1"]')!);
-    fireEvent.click(screen.getByRole("button", { name: "Focus on Project A" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Focus on Project A" }));
     fireEvent.click((await screen.findByText("Book A")).closest('[data-lib-row="workbook:w1"]')!);
-    fireEvent.click(screen.getByRole("button", { name: "Focus selection: Book A" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Focus selection: Book A" }));
 
     const location = screen.getByRole("navigation", { name: "Focused Library location" });
     expect(location).toHaveTextContent("All/Project A/Book A");

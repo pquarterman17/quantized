@@ -1,4 +1,5 @@
 import type { LibraryContentFilter } from "../../lib/libraryExplorer";
+import type { LibraryNode, LibraryNodeKey } from "../../lib/libraryHierarchy";
 
 interface Props {
   filter: LibraryContentFilter;
@@ -6,15 +7,24 @@ interface Props {
   canExpand: boolean;
   canCollapse: boolean;
   searching: boolean;
+  focusActive: boolean;
+  focusedKey: LibraryNodeKey | null;
+  candidateNode: LibraryNode | null;
   onFilterChange: (filter: LibraryContentFilter) => void;
+  onFocus: (node: LibraryNode) => void;
   onExpandAll: () => void;
   onCollapseAll: () => void;
 }
 
 /** Dense-project controls kept on one compact row at normal Library widths. */
 export default function LibraryExplorerControls({
-  filter, count, canExpand, canCollapse, searching, onFilterChange, onExpandAll, onCollapseAll,
+  filter, count, canExpand, canCollapse, searching, focusActive, focusedKey, candidateNode,
+  onFilterChange, onFocus, onExpandAll, onCollapseAll,
 }: Props) {
+  const canFocus = candidateNode != null && candidateNode.key !== focusedKey;
+  const focusLabel = candidateNode
+    ? focusActive ? `Focus selection: ${candidateNode.name}` : `Focus on ${candidateNode.name}`
+    : "Select a folder, workbook, or worksheet to focus";
   return (
     <div className="qzk-library-explorer-controls" aria-label="Project explorer controls">
       <select
@@ -29,6 +39,16 @@ export default function LibraryExplorerControls({
         <option value="reports">Reports</option>
       </select>
       <span className="qzk-library-explorer-count" aria-live="polite">{count} {searching ? "eligible" : "shown"}</span>
+      <button
+        type="button"
+        className="qz-icon-btn"
+        aria-label={focusLabel}
+        title={candidateNode ? `Temporarily show only ${candidateNode.name} and its contents` : focusLabel}
+        disabled={!canFocus}
+        onClick={() => candidateNode && onFocus(candidateNode)}
+      >
+        ⌖
+      </button>
       <button
         type="button"
         className="qz-icon-btn"
