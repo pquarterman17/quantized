@@ -21,6 +21,7 @@ import { buildStageFigureSpec } from "./figureSpecStage";
 import { chooseExcludedRows } from "./excludedRowsChoice";
 import { excludedChoiceMatters } from "./excludedRowsExport";
 import type { Dataset } from "./types";
+import { toast } from "../store/toasts";
 
 /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3's "Greyscale (print-safe)" checkbox — the
  *  Export-figure dialog's own first boolean field. Exported so every OTHER
@@ -46,6 +47,14 @@ export async function runExportFigureCommand(
   s: StoreGet,
   buildSpec?: (stem: string, ds: Dataset, o: FigureRenderOpts) => FigureSpec,
 ): Promise<void> {
+  // Refuse before the dialog: `exportActive` would refuse anyway, but only
+  // after every field below had been answered.
+  if (!s().datasets.some((d) => d.id === s().activeId)) {
+    const msg = "Nothing to export: import or select a dataset first.";
+    s().setStatus(msg);
+    toast(msg, "info");
+    return;
+  }
   const params = await askParams("Export figure", [
     {
       key: "fmt",

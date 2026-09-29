@@ -886,3 +886,26 @@ describe("runExportFigureCommand — safe cancel (P3.4)", () => {
     expect(usePendingOps.getState().ops).toHaveLength(0); // busy indicator cleared
   });
 });
+
+// Audit item 6: an empty project used to walk the user through the whole
+// Export figure dialog (nine fields) before exportActive refused.
+describe("runExportFigureCommand — refuses up front when there is nothing to export", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useToasts.setState({ toasts: [] });
+  });
+
+  it.each([
+    ["an empty project", { datasets: [], activeId: null }],
+    ["no active dataset", { activeId: "gone" }],
+  ])("%s: one notice, no dialog, no request", async (_case, state) => {
+    useApp.setState({ status: "", ...state });
+    await runExportFigureCommand(useApp.getState);
+    expect(askParams).not.toHaveBeenCalled();
+    expect(exportFigure).not.toHaveBeenCalled();
+    const status = useApp.getState().status;
+    expect(status).toMatch(/^Nothing to export/);
+    expect(status.match(/\.(\s|$)/g)).toHaveLength(1);
+    expect(useToasts.getState().toasts.map((t) => t.msg)).toEqual([status]);
+  });
+});
