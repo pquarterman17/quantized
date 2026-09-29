@@ -9,14 +9,24 @@ import { create } from "zustand";
 
 import type { ParamField, ParamValues } from "../lib/params";
 
+/** Optional presentation for one ask: a visible explanatory line under the
+ *  title, and the confirm button's text (default "Run"). */
+export interface ParamDialogOptions {
+  message?: string;
+  confirmLabel?: string;
+}
+
 export interface ParamDialogState {
   title: string | null;
   fields: ParamField[];
+  message: string | null;
+  confirmLabel: string | null;
   resolve: ((v: ParamValues | null) => void) | null;
   open: (
     title: string,
     fields: ParamField[],
     resolve: (v: ParamValues | null) => void,
+    options?: ParamDialogOptions,
   ) => void;
   close: () => void;
 }
@@ -24,23 +34,26 @@ export interface ParamDialogState {
 export const useParamDialog = create<ParamDialogState>((set, get) => ({
   title: null,
   fields: [],
+  message: null,
+  confirmLabel: null,
   resolve: null,
-  open: (title, fields, resolve) => {
+  open: (title, fields, resolve, options) => {
     // A new request REPLACES a pending one; settle the old one as a cancel
     // (`null`) first so its caller never awaits forever (slice 8 review).
     get().resolve?.(null);
-    set({ title, fields, resolve });
+    set({ title, fields, resolve, message: options?.message ?? null, confirmLabel: options?.confirmLabel ?? null });
   },
-  close: () => set({ title: null, fields: [], resolve: null }),
+  close: () => set({ title: null, fields: [], resolve: null, message: null, confirmLabel: null }),
 }));
 
 /** Open the dialog; resolves with the values or null on cancel. */
 export function askParams(
   title: string,
   fields: ParamField[],
+  options?: ParamDialogOptions,
 ): Promise<ParamValues | null> {
   return new Promise((resolve) => {
-    useParamDialog.getState().open(title, fields, resolve);
+    useParamDialog.getState().open(title, fields, resolve, options);
   });
 }
 

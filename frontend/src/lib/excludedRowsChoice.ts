@@ -23,16 +23,22 @@ export const EXCLUDED_OMIT_OPTION = "Omit excluded rows";
 
 /** Ask how this export draws its excluded rows; null when dismissed. */
 export async function askExcludedRows(current: ExcludedDisplay): Promise<ExcludedRowsExport | null> {
-  const params = await askParams("Excluded rows", [
+  const params = await askParams(
+    "Excluded rows",
+    [
+      {
+        key: "mode",
+        label: "Excluded rows",
+        type: "select",
+        options: [EXCLUDED_GREY_OPTION, EXCLUDED_OMIT_OPTION],
+        default: current === "grey" ? EXCLUDED_GREY_OPTION : EXCLUDED_OMIT_OPTION,
+      },
+    ],
     {
-      key: "mode",
-      label: "Excluded rows",
-      type: "select",
-      options: [EXCLUDED_GREY_OPTION, EXCLUDED_OMIT_OPTION],
-      default: current === "grey" ? EXCLUDED_GREY_OPTION : EXCLUDED_OMIT_OPTION,
-      hint: "This figure has excluded rows, so choose whether the export shows them greyed or leaves them out.",
+      message: "This figure has excluded rows, so choose whether the export shows them greyed or leaves them out.",
+      confirmLabel: "Export",
     },
-  ]);
+  );
   if (!params) return null;
   return params.mode === EXCLUDED_OMIT_OPTION ? "omit" : "grey";
 }

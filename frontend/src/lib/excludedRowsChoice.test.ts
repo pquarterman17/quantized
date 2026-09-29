@@ -79,6 +79,15 @@ describe("askExcludedRows", () => {
       expect(await p).toBe(mode === "grey" ? "grey" : "omit");
     }
   });
+
+  it("states the question in visible text and confirms with Export, not Run", async () => {
+    const p = askExcludedRows("grey");
+    await vi.waitFor(() => expect(useParamDialog.getState().title).toBe("Excluded rows"));
+    expect(useParamDialog.getState().message).toMatch(/excluded rows/);
+    expect(useParamDialog.getState().confirmLabel).toBe("Export");
+    await answer("Excluded rows", null);
+    expect(await p).toBeNull();
+  });
 });
 
 describe("Copy figure asks about excluded rows (F4.2c (a))", () => {

@@ -22,9 +22,12 @@ export default function ParamDialog() {
   const fields = useParamDialog((s) => s.fields);
   const resolve = useParamDialog((s) => s.resolve);
   const close = useParamDialog((s) => s.close);
+  const message = useParamDialog((s) => s.message);
+  const confirmLabel = useParamDialog((s) => s.confirmLabel);
   const [values, setValues] = useState<ParamValues>({});
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
+  const messageId = useId();
 
   // P3.3. Escape/Enter live on the dialog box's React `onKeyDown`, so they
   // only work while focus is INSIDE it. `autoFocus` covers that for a
@@ -84,12 +87,14 @@ export default function ParamDialog() {
         className="qzk-glass qz-dialog"
         role="dialog"
         aria-labelledby={titleId}
+        aria-describedby={message ? messageId : undefined}
         ref={dialogRef}
         tabIndex={-1}
         onMouseDown={(e) => e.stopPropagation()}
         onKeyDown={onKey}
       >
         <h2 id={titleId}>{title}</h2>
+        {message && <p id={messageId} style={{ margin: 0, whiteSpace: "pre-line" }}>{message}</p>}
         {fields.map((f, i) => (
           <ParamFieldRow
             key={f.key}
@@ -102,7 +107,7 @@ export default function ParamDialog() {
         <div className="qz-btn-row">
           <Button onClick={() => finish(null)}>Cancel</Button>
           <Button variant="primary" onClick={() => finish(coerceParams(values, fields))}>
-            Run
+            {confirmLabel ?? "Run"}
           </Button>
         </div>
       </div>
