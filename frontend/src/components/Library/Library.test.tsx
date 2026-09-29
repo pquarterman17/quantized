@@ -16,6 +16,7 @@ import { createPageDocument } from "../../lib/pageDocumentActions";
 import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { LIBRARY_VIEW_PREFS_KEY, type LibraryViewMode } from "../../lib/libraryViewPrefs";
+import { useImportBatch } from "../../store/importBatch";
 import { useApp } from "../../store/useApp";
 
 const dsWith = (id: string, folderId?: string): Dataset => ({
@@ -211,6 +212,46 @@ describe("Library — focused project exploration", () => {
     fireEvent.click(screen.getByRole("button", { name: "Expand all folders and workbooks in view" }));
     expect(await screen.findByText("Sheet A")).toBeInTheDocument();
     expect(screen.getByText("Sheet B")).toBeInTheDocument();
+  });
+
+  // Audit item 2: an import landing outside the focused branch was invisible.
+  it("clears the focus to show a dataset an import adds outside it", async () => {
+    render(<Library />);
+    await focusBookA();
+    act(() => useImportBatch.setState({ running: true }));
+    act(() => {
+      useApp.setState((s) => ({ datasets: [...s.datasets, dsWith("Fresh import")], activeId: "Fresh import" }));
+    });
+    expect(screen.queryByText("Fresh import")).not.toBeInTheDocument(); // still focused mid-batch
+    act(() => useImportBatch.setState({ running: false }));
+
+    expect(await screen.findByText("Fresh import")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Focused Library location" })).not.toBeInTheDocument();
+  });
+
+  it("resets a type filter that would hide the imported dataset", async () => {
+    render(<Library />);
+    expect(await screen.findByText("Sheet A")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Show item type" }), { target: { value: "reports" } });
+    act(() => useImportBatch.setState({ running: true }));
+    act(() => useApp.setState((s) => ({ datasets: [...s.datasets, dsWith("Fresh import")] })));
+    act(() => useImportBatch.setState({ running: false }));
+
+    expect(await screen.findByText("Fresh import")).toBeInTheDocument();
+    expect(screen.getByRole("combobox", { name: "Show item type" })).toHaveValue("all");
+  });
+
+  it("leaves the focus alone when the import lands inside the focused branch", async () => {
+    render(<Library />);
+    await focusBookA();
+    act(() => useImportBatch.setState({ running: true }));
+    act(() => {
+      useApp.setState((s) => ({ datasets: [...s.datasets, { ...dsWith("Into A"), workbookId: "w1" }] }));
+    });
+    act(() => useImportBatch.setState({ running: false }));
+
+    expect(await screen.findByText("Into A")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Focused Library location" })).toHaveTextContent("Book A");
   });
 });
 

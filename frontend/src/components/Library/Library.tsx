@@ -14,6 +14,7 @@ import LibraryViewSelector from "./LibraryViewSelector";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
 import { useLibraryFocus } from "./useLibraryFocus";
 import { useLibraryResize } from "./useLibraryResize";
+import { useRevealImported } from "./useRevealImported";
 import { useLibraryViewTransition } from "./useLibraryViewTransition";
 import { makeDemoDataset } from "../../lib/demo";
 import { folderPath } from "../../lib/foldertree";
@@ -77,6 +78,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   const toggleWorkbookExpanded = useLibraryStore((s) => s.toggleWorkbookExpanded);
   const revealTarget = useLibraryStore((s) => s.revealTarget);
   const clearReveal = useLibraryStore((s) => s.clearReveal);
+  const requestReveal = useLibraryStore((s) => s.requestReveal);
   const startResize = useLibraryResize();
   // E-c3 large-Library safeguard: the ONE real scrolling ancestor for both
   // Tree and Details — header/search/sections and the row list share this
@@ -94,6 +96,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
     toggleFolderExpanded, toggleWorkbookExpanded,
   });
   const libraryFocus = useLibraryFocus(hierarchy, allRows, contentFilter);
+  useRevealImported(libraryFocus.hierarchy, requestReveal);
 
   // "Show in Library" (plan #13 sub-item 2; PR C adds the workbook step;
   // PR D2 generalizes it to EVERY hierarchy node kind for L0.26's search
