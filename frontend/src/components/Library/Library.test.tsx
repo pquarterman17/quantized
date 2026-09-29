@@ -411,6 +411,16 @@ describe("Library — project-wide search + Show in Library reveal (PR D2)", () 
     expect(await screen.findByRole("button", { name: /Loop Figure/ })).toBeInTheDocument();
   });
 
+  it("Show in Library reveals a node the active type filter would hide", async () => {
+    render(<Library />);
+    fireEvent.change(screen.getByLabelText("Show item type"), { target: { value: "data" } });
+    act(() => {
+      useApp.getState().requestReveal("editable-figure:fig1");
+    });
+    expect(useApp.getState().librarySelection).toEqual({ kind: "editable-figure", id: "fig1" });
+    expect(await screen.findByRole("button", { name: /Loop Figure/ })).toBeInTheDocument();
+  });
+
   it("a kind:id reveal request expands the target worksheet's folder AND workbook ancestors", () => {
     render(<Library />);
     act(() => {

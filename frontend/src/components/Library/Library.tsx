@@ -109,6 +109,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
     const node = hierarchy.byKey.get(key);
     if (!node) return;
     libraryFocus.clearFocus();
+    if (!libraryFocus.projectHierarchy.byKey.has(key)) setContentFilter("all"); // the type filter would hide it
     setQuery("");
     const s = useApp.getState();
     let parentKey = node.parentKey;
