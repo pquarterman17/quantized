@@ -154,16 +154,14 @@ describe("WindowCanvas — ≥2 windows (MDI chrome + focused-window routing)", 
 
     useApp.getState().toggleRowExcluded("d1", 0);
 
-    // Both PlotViewport instances rebuild. usePlotPayload's fetch effect keys
-    // off the `active`/`dataset` object REFERENCE (unchanged, pre-existing
-    // behavior — not something this plan's new code controls): the exclusion
-    // toggle replaces that reference, so each window rebuilds TWICE — once
-    // synchronously from the new `dropped` set against the still-in-flight
-    // payload, once more when the re-fetch resolves — 2 windows × (1 initial
-    // + 2 rebuilds) = 6. What matters for the row-state proof is that EVERY
-    // rebuild after the toggle reflects it in EVERY window, which the loop
-    // below checks regardless of exactly how many rebuilds that takes.
-    await waitFor(() => expect(created.length).toBe(6));
+    // Both PlotViewport instances rebuild ONCE, from the new `dropped` set.
+    // Since the 2026-09-29 perf audit usePlotPayload's fetch effect keys on
+    // the dataset's `data`, not the `active` reference the toggle replaces, so
+    // an exclusion toggle no longer re-fetches (it used to cost a second
+    // rebuild per window): 2 windows × (1 initial + 1 rebuild) = 4. What
+    // matters for the row-state proof is that EVERY rebuild after the toggle
+    // reflects it in EVERY window, which the loop below checks.
+    await waitFor(() => expect(created.length).toBe(4));
     const latest = created.slice(2);
     expect(latest.length).toBeGreaterThanOrEqual(2); // at least one per window
     for (const c of latest) {
