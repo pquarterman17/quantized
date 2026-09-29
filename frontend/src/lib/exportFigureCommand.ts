@@ -15,7 +15,10 @@
 import { askParams, type ParamField } from "../components/overlays/ParamDialog";
 import { exportFigure } from "./api/figures";
 import { exportActive, type StoreGet } from "./exportActive";
+import type { FigureSpec } from "./api/figures";
+import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
+import type { Dataset } from "./types";
 
 /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3's "Greyscale (print-safe)" checkbox — the
  *  Export-figure dialog's own first boolean field. Exported so every OTHER
@@ -34,7 +37,13 @@ export const GREYSCALE_FIELD: ParamField = {
  *  figure to report…" (lib/sendFigureToReport.ts) offers the SAME list. */
 export const FIGURE_STYLES = ["default", "aps", "nature", "thesis", "report", "web", "presentation", "poster"];
 
-export async function runExportFigureCommand(s: StoreGet): Promise<void> {
+/** `buildSpec` replaces the focused Stage plot as the figure's source while
+ *  keeping this dialog and `exportActive`'s chokepoint — the Graph Builder's
+ *  encoded export (`lib/plotEncodingExport.ts`) is its one caller. */
+export async function runExportFigureCommand(
+  s: StoreGet,
+  buildSpec?: (stem: string, ds: Dataset, o: FigureRenderOpts) => FigureSpec,
+): Promise<void> {
   const params = await askParams("Export figure", [
     {
       key: "fmt",
@@ -86,18 +95,16 @@ export async function runExportFigureCommand(s: StoreGet): Promise<void> {
   const xl = asStr(params.x_label).trim();
   const yl = asStr(params.y_label).trim();
   const titleStr = asStr(params.title).trim();
+  const opts: FigureRenderOpts = {
+    fmt: params.fmt as string,
+    style: params.style as string,
+    dpi: params.dpi as number,
+    title: titleStr,
+    xLabel: xl,
+    yLabel: yl,
+    greyscale: params.greyscale as boolean,
+  };
   await exportActive(s, (stem, ds, signal) =>
-    exportFigure(
-      buildStageFigureSpec(s, ds, stem, {
-        fmt: params.fmt as string,
-        style: params.style as string,
-        dpi: params.dpi as number,
-        title: titleStr,
-        xLabel: xl,
-        yLabel: yl,
-        greyscale: params.greyscale as boolean,
-      }),
-      signal,
-    ),
+    exportFigure(buildSpec ? buildSpec(stem, ds, opts) : buildStageFigureSpec(s, ds, stem, opts), signal),
   );
 }

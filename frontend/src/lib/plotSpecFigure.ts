@@ -47,7 +47,10 @@ export function plotSpecFigureReason(spec: PlotSpec): string | null {
   return plotSpecPublicationCompatibility(spec).blocker;
 }
 
-function stylesForMark(
+/** The mark's per-channel export styles (exported for the Graph Builder's
+ *  encoded export, `lib/plotEncodingExport.ts`, so both requests translate a
+ *  mark identically). */
+export function stylesForMark(
   spec: PlotSpec,
   seriesStyles: Record<number, SeriesStyle>,
   grouped: boolean,

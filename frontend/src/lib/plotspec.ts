@@ -21,6 +21,12 @@
 //                                        `y` (yErr[i] describes y[i]); XY
 //                                        family only (#51 phase 3)
 //   zones.xErr  : ChannelRef | null   — X error column; XY family only
+//   zones.color / .symbol / .label    — OPTIONAL encodings (P1.4): a
+//                                        categorical factor coloured / given a
+//                                        marker per level, and a column the
+//                                        legend text is read from. Omitted
+//                                        when unset (byte-stable v1); resolved
+//                                        and rendered by ./plotEncoding.
 //
 //   mark        : "scatter" | "line" | "box" | "violin" | "bar"
 //
@@ -111,7 +117,6 @@
 
 import { buildBarMatrix, type BarChartData } from "./barlayout";
 import { buildErrorSpans, type ErrorSpan } from "./errorbars";
-import { inferErrorBindings, type ErrorBinding } from "./errorRoles";
 import { facetPayloads, facetSlices, type FacetPanel } from "./facet";
 import { groupLevelLabel } from "./categorical";
 import { groupSplitLevels } from "./plotGroupSplit";
@@ -131,6 +136,7 @@ import {
   type DisplayBlock,
   type PageBlock,
 } from "./plotspec2";
+import { specErrorBindings } from "./plotspecErrors";
 import { analysisData } from "./rowstate";
 import {
   type BoxStat,
@@ -140,6 +146,9 @@ import {
 import type { DataStruct, Dataset, ModelingType, SeriesStyle, StepMode } from "./types";
 
 export type { StepMode } from "./types";
+// The error-well helpers live in ./plotspecErrors (moved to fund the P1.4
+// encoding zones against this module's pin); re-exported so no importer moved.
+export { prefillErrorZones, specErrorBindings } from "./plotspecErrors";
 
 export type {
   AxesBlock,
@@ -167,7 +176,7 @@ export type PlotMark = "scatter" | "line" | "step" | "box" | "violin" | "bar";
  *  model) are XY-family only: any scatter/line/step mark can carry error
  *  bars, but a categorical mark (box/violin/bar) ignores them entirely — see
  *  `specErrorBindings`'s doc. */
-export type ZoneName = "x" | "y" | "group" | "facet" | "yErr" | "xErr";
+export type ZoneName = "x" | "y" | "group" | "facet" | "yErr" | "xErr" | "color" | "symbol" | "label";
 
 export interface PlotZones {
   x: ChannelRef | null;
@@ -182,6 +191,12 @@ export interface PlotZones {
   yErr: ChannelRef[];
   /** X error column (single well, like `x`/`group`/`facet`). */
   xErr: ChannelRef | null;
+  /** P1.4 encodings (single wells, xy family): colour-by / symbol-by factor
+   *  and legend-label source. OPTIONAL and omitted from a validated spec when
+   *  unset, so every pre-existing spec serializes byte-identically. */
+  color?: ChannelRef | null;
+  symbol?: ChannelRef | null;
+  label?: ChannelRef | null;
 }
 
 export interface PlotSpec {
@@ -260,11 +275,12 @@ export function channelRefEq(a: ChannelRef | null, b: ChannelRef | null): boolea
 }
 
 /** The dataset a spec targets: the id shared by its filled zones (X wins, then
- *  the first Y, then group/facet). null when no zone is filled. v1 is
- *  single-dataset; a mixed-dataset spec resolves to its X/Y[0] dataset. */
+ *  the first Y, then group/facet, then the encodings). null when no zone is
+ *  filled. v1 is single-dataset; a mixed-dataset spec resolves to its X/Y[0]
+ *  dataset. */
 export function specDatasetId(spec: PlotSpec): string | null {
   const z = spec.zones;
-  return (z.x ?? z.y[0] ?? z.group ?? z.facet)?.datasetId ?? null;
+  return (z.x ?? z.y[0] ?? z.group ?? z.facet ?? z.color ?? z.symbol ?? z.label)?.datasetId ?? null;
 }
 
 /** Is any renderable zone filled (X, a Y, or group)? Facet alone is not
@@ -297,6 +313,8 @@ export function clearZone(spec: PlotSpec, zone: ZoneName, ref?: ChannelRef): Plo
     zones.y = ref ? zones.y.filter((r) => !channelRefEq(r, ref)) : [];
   } else if (zone === "yErr") {
     zones.yErr = ref ? zones.yErr.filter((r) => !channelRefEq(r, ref)) : [];
+  } else if (zone === "color" || zone === "symbol" || zone === "label") {
+    delete zones[zone]; // an unset encoding is ABSENT, as validatePlotSpec emits it
   } else {
     zones[zone] = null;
   }
@@ -403,60 +421,6 @@ export function markSeriesStyle(spec: PlotSpec): Partial<SeriesStyle> {
     return { step: spec.stepMode ?? "post", ...(spec.showMarkers ? { marker: true } : {}) };
   }
   return spec.showMarkers ? { marker: true } : {};
-}
-
-// ── Error-column wells (ORIGIN_GAP_PLAN #51 phase 3 — "any XY mark can carry
-// error bars", the COLUMN-DESIGNATION model rather than error-bars-as-plot-
-// types): `yErr`/`xErr` are POSITION-paired with `y`, not channel-keyed — the
-// simple shape the wells UI drags into. Two pure helpers bridge that to the
-// canonical `lib/errorRoles.ErrorBinding` contract the interactive Stage
-// (`Dataset.errorRoles`), `.dwk`, and publication export already speak. ────
-
-/** Wells -> `ErrorBinding[]`, position-paired: `yErr[i]` describes `y[i]`
- *  (only up to `min(y.length, yErr.length)` pairs — a stale/out-of-sync
- *  wells state never invents a pairing beyond what's actually aligned).
- *  `xErr` binds to the x axis (`target: -1`, the same sentinel
- *  `lib/errorRoles` uses elsewhere). Every binding is symmetric
- *  (`side: "both"`) — the simple wells model has no +/- half, unlike the
- *  Inspector's richer Error columns card. XY-family only by convention: a
- *  categorical mark's `zones.yErr`/`xErr` are validated like any other zone
- *  content but callers never read this for box/violin/bar (see
- *  useGraphBuilder's `commitToPlot` and `specToRender`'s xy branch). */
-export function specErrorBindings(spec: PlotSpec): ErrorBinding[] {
-  const { y, yErr, xErr } = spec.zones;
-  const out: ErrorBinding[] = [];
-  const n = Math.min(y.length, yErr.length);
-  for (let i = 0; i < n; i++) {
-    out.push({ channel: yErr[i].channel, target: y[i].channel, axis: "y", side: "both" });
-  }
-  if (xErr) out.push({ channel: xErr.channel, target: -1, axis: "x", side: "both" });
-  return out;
-}
-
-/** Seed `zones.yErr`/`zones.xErr` from the dataset's own name-based inference
- *  (`lib/errorRoles.inferErrorBindings`) — Origin's zero-click experience:
- *  drop a Y with no explicit error assignment and the matching error column
- *  (if any) fills in for free. Only SYMMETRIC inferred bindings project (the
- *  wells have no +/- half). The y-error prefix stops at the first Y channel
- *  with no unambiguous inferred error, since position-pairing has no way to
- *  represent a gap (an errorless Y followed by one that has an error) — this
- *  IS the "only prefill when unambiguous" rule, not a separate check. Pure:
- *  takes the live dataset's data in, never reads the store — the caller
- *  (useGraphBuilder) owns deciding WHEN to call this (never once the user has
- *  touched the error wells themselves). */
-export function prefillErrorZones(spec: PlotSpec, data: DataStruct, datasetId: string): PlotSpec {
-  const inferred = inferErrorBindings(data).filter((b) => b.side === "both");
-  const yErr: ChannelRef[] = [];
-  for (const yRef of spec.zones.y) {
-    const match = inferred.find((b) => b.axis === "y" && b.target === yRef.channel);
-    if (!match) break;
-    yErr.push({ datasetId, channel: match.channel });
-  }
-  const xMatch = inferred.find((b) => b.axis === "x" && b.target === -1);
-  return {
-    ...spec,
-    zones: { ...spec.zones, yErr, xErr: xMatch ? { datasetId, channel: xMatch.channel } : null },
-  };
 }
 
 // ── Live-context builder (resolves types + monotonicity from real datasets) ──
@@ -758,6 +722,12 @@ export function validatePlotSpec(value: unknown): PlotSpec | null {
     yErr,
     xErr: normRef(zin.xErr),
   };
+  // P1.4 encodings: kept only when a real ref survives, so a spec without them
+  // serializes exactly as before they existed (the V1_FIXTURE byte contract).
+  for (const k of ["color", "symbol", "label"] as const) {
+    const r = normRef(zin[k]);
+    if (r) zones[k] = r;
+  }
   const mark = isPlotMark(o.mark) ? o.mark : "scatter";
   // Byte-stable v1 siblings of `mark` (never a v2 "block" — see PlotSpec's
   // doc): tolerant per-field validation, omitted entirely when absent/

@@ -179,6 +179,10 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
   y2_fmt: derived("axes.y2.format"),
   y2_step: derived("axes.y2.step"),
   group_col: derived("bindings.group.channel"),
+  encoding: derived(
+    null,
+    "P1.4: built at request time from a Graph Builder spec's color/symbol/label zones (lib/plotEncodingExport.ts). No FigureDocument binding owns it yet -- the editable plot does not carry the encodings.",
+  ),
   facets: derived(
     "bindings.facet.channel",
     "F4.4 (export half): the resolved per-panel row partition of bindings.facet.channel, built at render time by lib/figureSpec.ts's buildFacetSpecs -- not a second source of the binding itself.",

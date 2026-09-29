@@ -1,0 +1,201 @@
+{
+  "request": {
+    "dataset": {
+      "time": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12
+      ],
+      "values": [
+        [
+          1,
+          0,
+          0,
+          10
+        ],
+        [
+          1.5,
+          0,
+          1,
+          10
+        ],
+        [
+          2,
+          1,
+          0,
+          300
+        ],
+        [
+          2.5,
+          1,
+          1,
+          300
+        ],
+        [
+          3,
+          2,
+          0,
+          77
+        ],
+        [
+          3.5,
+          2,
+          1,
+          77
+        ],
+        [
+          4,
+          2,
+          1,
+          80
+        ],
+        [
+          4.5,
+          0,
+          0,
+          10
+        ],
+        [
+          5,
+          1,
+          1,
+          300
+        ],
+        [
+          null,
+          0,
+          1,
+          10
+        ],
+        [
+          6,
+          null,
+          0,
+          10
+        ],
+        [
+          6.5,
+          1,
+          0,
+          300
+        ],
+        [
+          7,
+          2,
+          0,
+          77
+        ]
+      ],
+      "labels": [
+        "Rxy",
+        "sample",
+        "field",
+        "T"
+      ],
+      "units": [
+        "Ohm",
+        "",
+        "",
+        "K"
+      ],
+      "metadata": {
+        "x_column_name": "t",
+        "x_column_unit": "s"
+      },
+      "cat_levels": {
+        "1": [
+          "S1",
+          "S2",
+          "S3"
+        ]
+      },
+      "level_order": {
+        "1": [
+          2,
+          0,
+          1
+        ]
+      }
+    },
+    "y_keys": [
+      0
+    ],
+    "encoding": {
+      "color_col": 1,
+      "symbol_col": 2,
+      "label_col": 3,
+      "palette": [
+        "#0b6e4f",
+        "#c3423f",
+        "#2d3047",
+        "#f2a541",
+        "#5e548e",
+        "#1b998b",
+        "#e84855",
+        "#3e2f5b"
+      ],
+      "markers": [
+        "circle",
+        "square",
+        "triangle",
+        "diamond",
+        "downtriangle",
+        "plus",
+        "cross",
+        "star"
+      ]
+    },
+    "series_styles": [
+      {
+        "line": "none",
+        "marker": true
+      }
+    ],
+    "overrides": {
+      "legend": {
+        "show": true
+      }
+    },
+    "fmt": "svg",
+    "style": "default",
+    "dpi": 100,
+    "title": "",
+    "filename": "encoding"
+  },
+  "screen": {
+    "legend": [
+      "77 K",
+      "77 K, 80 K",
+      "10 K",
+      "10 K",
+      "300 K",
+      "300 K"
+    ],
+    "colors": [
+      "#0b6e4f",
+      "#0b6e4f",
+      "#c3423f",
+      "#c3423f",
+      "#2d3047",
+      "#2d3047"
+    ],
+    "markers": [
+      "circle",
+      "square",
+      "circle",
+      "square",
+      "circle",
+      "square"
+    ]
+  }
+}

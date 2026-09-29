@@ -3885,6 +3885,79 @@
         "title": "FieldFigureRequest",
         "type": "object"
       },
+      "FigureEncoding": {
+        "description": "Per-level encodings for an xy figure. Present (with any column set) it\nswitches ``_figure_series`` to the encoded split, which ALSO takes\n``group_col`` as a split factor; absent, every request renders exactly as\nit did before the field existed.",
+        "properties": {
+          "color_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Categorical factor whose LEVEL picks each series' colour.",
+            "title": "Color Col"
+          },
+          "label_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Column whose value(s) on a series' rows become its legend text, verbatim.",
+            "title": "Label Col"
+          },
+          "markers": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The glyph cycle (`MarkerShape` names), indexed by symbol LEVEL.",
+            "title": "Markers"
+          },
+          "palette": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The colour cycle, resolved to hex by the client (the screen's SERIES_VARS). Indexed by colour LEVEL with `color_col`, else by display position.",
+            "title": "Palette"
+          },
+          "symbol_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Categorical factor whose LEVEL picks each series' marker glyph.",
+            "title": "Symbol Col"
+          }
+        },
+        "title": "FigureEncoding",
+        "type": "object"
+      },
       "FigureFacet": {
         "description": "One xy small-multiples panel (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 \u2014\nthe export half of Stage's facet-by-column grid, `store.facetKey` /\n`lib/facet.facetPayloads`). RESOLVED, not re-derived: the frontend\nalready computed each panel's row slice (level ordering + binning,\n`lib/figureSpecFacets.ts`'s `buildFacetSpecs`) and ships it here verbatim,\nso this route never re-slices `dataset` itself and can never disagree with\nwhat Stage showed on screen. Mirrors `StatplotFacet`/`CategoricalFacet`'s\nestablished \"resolved facet panel\" shape (`routes/export_statplots.py`).\n`x`/each series' `y` may carry `null` for a non-finite cell (the\nfrontend's null-gap wire convention, same as every DataStruct value);\n`calc.figure_facets` treats it as NaN via `np.asarray(..., dtype=float)`,\nmatplotlib's own gap convention. Each series' `label` is likewise\nFINISHED legend text, composed client-side by the same rule the flat\npath's `series_styles[i].legend` is rendered under \u2014 a user's legend\nrename verbatim, otherwise \"label (unit)\" (BUG-014). `series_styles` is\nunused on this branch, so a panel label has no second source here.",
         "properties": {
@@ -4087,6 +4160,16 @@
             "default": 200,
             "title": "Dpi",
             "type": "integer"
+          },
+          "encoding": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FigureEncoding"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "error_spans": {
             "anyOf": [

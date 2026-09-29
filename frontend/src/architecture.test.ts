@@ -807,7 +807,11 @@ const TS_MODULE_PINS: Record<string, number> = {
   // and re-exported from types.ts (no importer changed). Funds the new
   // `SeriesStyle.logOffset` field and ratchets down by the balance.
   "/lib/types.ts": 934,
-  "/lib/plotspec.ts": 893,
+  // 893 -> 863 (P1.4 Graph Builder encodings): the error-well helpers
+  // (specErrorBindings/prefillErrorZones) moved verbatim to lib/plotspecErrors.ts
+  // (re-exported, no importer moved), funding the three optional encoding zones;
+  // the encoding logic itself lives in the lazy-only lib/plotEncoding.ts.
+  "/lib/plotspec.ts": 863,
   // originFigures.ts GRADUATED 2026-08-30 (pin was 793; BUNDLE_HEADROOM
   // slice 1): 793 -> 208 lines. The apply-only half — legend/annotation/
   // region resolution and the spatial multi-panel solver — moved to
@@ -859,7 +863,10 @@ const TS_MODULE_PINS: Record<string, number> = {
   // general ceiling); the facade file keeps only tab state, the constants
   // fetch, composition, and the cross-panel handoffs.
   "/lib/roiMath.ts": 664,
-  "/components/workshops/graphbuilder/useGraphBuilder.ts": 663,
+  // 663 -> 603 (P1.4 Graph Builder encodings): the pure capture-on-save
+  // builder moved to graphbuilder/captureLiveBlocks.ts, funding the
+  // Color/Symbol/Label wells' gating, preview and export hand-off.
+  "/components/workshops/graphbuilder/useGraphBuilder.ts": 603,
   // 658 -> 650 (2026-09-14, BUG-013): `applyWaterfall`'s span/step scan moved
   // to lib/waterfallOffset.ts, where the EXPORT wire's `waterfall_offsets` builder
   // reads it too — so the canvas and the exported figure resolve the same step

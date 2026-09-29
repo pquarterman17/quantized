@@ -99,6 +99,20 @@ describe("figure transition compatibility", () => {
     expect(plotSpecPublicationCompatibility(spec()).losses).not.toContain("error bars");
   });
 
+  // P1.4: the FigureDoc bridge carries no Color/Symbol/Label encoding, so
+  // Publication Preview must ask before dropping one (the Graph Builder's own
+  // Export carries them — lib/plotEncodingExport.ts).
+  it("reports a Color/Symbol/Label encoding as a loss, and nothing when there is none", () => {
+    for (const zone of ["color", "symbol", "label"] as const) {
+      const report = plotSpecPublicationCompatibility(
+        spec({ zones: { ...spec().zones, [zone]: { datasetId: "d1", channel: 2 } } }),
+      );
+      expect(report.blocker).toBeNull();
+      expect(report.losses).toContain("Color, Symbol and Label encodings");
+    }
+    expect(plotSpecPublicationCompatibility(spec()).losses).not.toContain("Color, Symbol and Label encodings");
+  });
+
   it("line, scatter, AND step all open unblocked (GAP_PLOTTYPES)", () => {
     expect(plotSpecPublicationCompatibility(spec({ mark: "line" })).blocker).toBeNull();
     expect(plotSpecPublicationCompatibility(spec({ mark: "scatter" })).blocker).toBeNull();
