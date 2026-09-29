@@ -29,6 +29,8 @@ import type { DataStruct } from "../../lib/types";
 import { usePendingOps } from "../../store/pendingOps";
 import { useToasts } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
+import { useParamDialog } from "../../store/paramDialog";
+import { EXCLUDED_GREY_OPTION } from "../../lib/excludedRowsChoice";
 
 const DATA: DataStruct = {
   time: [0, 1, 2],
@@ -261,5 +263,42 @@ describe("PagesSection", () => {
     expect(inFlight?.aborted).toBe(true);
     expect(useToasts.getState().toasts).toEqual([]);
     expect(usePendingOps.getState().ops).toEqual([]);
+  });
+});
+
+// FIGURE_AUTHORING_WORKFLOW_PLAN F4.2c (a): a saved page whose panel has
+// excluded rows asks "greyed or omitted?" before exporting — answered through
+// the real parameter-dialog store, waiting on its state, not on a mock call.
+describe("export without reopening asks about excluded rows (F4.2c (a))", () => {
+  async function exportPageWithExcludedRows(answer: string | null) {
+    const figure = createFigureDocument({
+      id: "figure-1", name: "Loop", datasetId: "d1", view: { ...defaultPlotView(), yKeys: [0] },
+    });
+    const page = createPageDocument({
+      id: "p1", name: "Masked page", panels: [{ figureId: "figure-1", label: null, title: null }],
+    });
+    useApp.setState({
+      pages: [page],
+      editableFigures: [figure],
+      datasets: [{ id: "d1", name: "scan.dat", data: DATA, excludedRows: [1] }],
+    });
+    render(<PagesSection />);
+    fireEvent.click(screen.getByTitle('export "Masked page" without reopening it'));
+    await waitFor(() => expect(useParamDialog.getState().title).toBe("Excluded rows"));
+    const { resolve, close } = useParamDialog.getState();
+    close();
+    resolve!(answer === null ? null : { mode: answer });
+  }
+
+  it("exports the chosen treatment", async () => {
+    await exportPageWithExcludedRows(EXCLUDED_GREY_OPTION);
+    await waitFor(() => expect(useApp.getState().status).toBe("exported figure_page.pdf"));
+    expect(vi.mocked(exportFigurePage).mock.calls[0][0].panels[0].figure.y_keys).toEqual([0, 2]);
+  });
+
+  it("dismissing the question cancels the export", async () => {
+    await exportPageWithExcludedRows(null);
+    await waitFor(() => expect(useApp.getState().status).toBe("export cancelled"));
+    expect(exportFigurePage).not.toHaveBeenCalled();
   });
 });

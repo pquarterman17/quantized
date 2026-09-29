@@ -33,13 +33,22 @@ async function exportSavedPage(page: PageDocument): Promise<void> {
     // P3.4: a StatusBar op with a Cancel that aborts the render request; a
     // cancelled export saves no file and raises no error toast.
     const done = await runCancellable(`Exporting "${page.name}"…`, async (signal) => {
-      const spec = await buildPageSpecFromDocument(page, s.editableFigures);
+      // F4.2c (a): a page with excluded rows asks "greyed or omitted?" first
+      // (lazy: the question's code stays out of the eager Library chunk).
+      const { chooseExcludedRows, pageExcludedChoiceMatters } = await import("../../lib/excludedRowsChoice");
+      const picked = await chooseExcludedRows(
+        (greyExcluded) => buildPageSpecFromDocument(page, s.editableFigures, greyExcluded),
+        pageExcludedChoiceMatters,
+        useApp.getState().excludedDisplay,
+      );
+      if (!picked) return "dismissed" as const;
+      const spec = picked.value;
       if (!spec) return false;
       signal.throwIfAborted();
       await exportFigurePage({ ...spec, fmt: page.output.format, dpi: page.output.dpi }, signal);
       return true;
     });
-    if (!done) {
+    if (!done || done.value === "dismissed") {
       s.setStatus("export cancelled");
       return;
     }

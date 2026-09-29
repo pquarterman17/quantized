@@ -112,12 +112,28 @@ export const PREF_DEFAULTS: Prefs = {
   sigFigs: 6,
   notation: "auto",
   confirmRemove: false,
-  excludedDisplay: "hide",
+  excludedDisplay: "grey", // F4.2c (a) owner decision — see EXCLUDED_DISPLAY_KEY
   originBookClickOpens: "worksheet",
   defaultPanelFit: "frames",
   libraryPanelWidth: LIBRARY_PANEL_WIDTH_DEFAULT,
   copyFigureTransparent: false,
 };
+
+/** F4.2c (a) (owner decision 2026-09-29): excluded rows default to GREYED.
+ *  The choice is persisted under this key, not the legacy `excludedDisplay`
+ *  one, because `syncPrefs` has always written EVERY pref on ANY change: a
+ *  legacy "hide" is therefore mostly the old implicit default, written the
+ *  first time a user changed anything else, and cannot be told apart from a
+ *  deliberate pick. A value under THIS key was written by a build whose
+ *  default is already "grey", so a "hide" here is always the user's own
+ *  choice and is kept. The legacy key is still written (for an older build
+ *  sharing this storage) but no longer read. */
+export const EXCLUDED_DISPLAY_KEY = "excludedDisplayV2";
+
+function loadExcludedDisplay(p: Record<string, unknown>): ExcludedDisplay {
+  const v = p[EXCLUDED_DISPLAY_KEY];
+  return v === "hide" || v === "grey" ? v : PREF_DEFAULTS.excludedDisplay;
+}
 
 export function loadPrefs(): Prefs {
   const fb = PREF_DEFAULTS;
@@ -142,7 +158,7 @@ export function loadPrefs(): Prefs {
       sigFigs: num(p.sigFigs, fb.sigFigs, 1, 12),
       notation: NOTATIONS.includes(p.notation as string) ? (p.notation as Notation) : fb.notation,
       confirmRemove: bool(p.confirmRemove, fb.confirmRemove),
-      excludedDisplay: p.excludedDisplay === "grey" ? "grey" : fb.excludedDisplay,
+      excludedDisplay: loadExcludedDisplay(p),
       originBookClickOpens: ORIGIN_BOOK_CLICK_OPENS.includes(p.originBookClickOpens as string)
         ? (p.originBookClickOpens as OriginBookClickOpens)
         : fb.originBookClickOpens,
@@ -207,7 +223,7 @@ export function syncPrefs(s: AppState): void {
   el.style.setProperty("--lw", `${s.libraryPanelWidth}px`);
   setFormatOpts(s.sigFigs, s.notation);
   try {
-    localStorage.setItem(PREFS_KEY, JSON.stringify(prefsOf(s)));
+    localStorage.setItem(PREFS_KEY, JSON.stringify({ ...prefsOf(s), [EXCLUDED_DISPLAY_KEY]: s.excludedDisplay }));
   } catch {
     /* storage unavailable (private mode) — non-fatal */
   }

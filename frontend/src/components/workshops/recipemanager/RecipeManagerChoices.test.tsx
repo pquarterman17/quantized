@@ -69,18 +69,86 @@ describe("RecipeManagerPanel — preview thumbnails", () => {
   });
 });
 
+const picker = (name: string) => screen.getByLabelText<HTMLSelectElement>(`Transformation for ${name}`);
+const selectedText = (sel: HTMLSelectElement) => sel.options[sel.selectedIndex]?.textContent;
+const withTransform = (id: string, name: string, transform: { name: string; revision: number }): PlotRecipe => ({
+  ...recipe(id, name),
+  transform,
+});
+
 describe("RecipeManagerPanel — apply-time choices", () => {
-  it("defaults to the recipe's own style template and no transformation", () => {
+  it("defaults to the recipe's own style template, and to no transformation when none was recorded", () => {
+    saveTemplate(toTemplate("Normalize", [], [], { revision: 4 }));
+    useApp.setState({ plotRecipes: [recipe("p1", "Scan")] });
     render(<RecipeManagerPanel />);
     expect(screen.getByLabelText<HTMLSelectElement>("Style template").value).toBe("");
-    expect(screen.getByLabelText<HTMLSelectElement>("Transformation").value).toBe("");
+    expect(picker("Scan").value).toBe("");
   });
 
   it("lists the saved transformation recipes to choose from", () => {
     saveTemplate(toTemplate("Normalize", [], [], { revision: 4 }));
+    useApp.setState({ plotRecipes: [recipe("p1", "Scan")] });
     render(<RecipeManagerPanel />);
-    const options = within(screen.getByLabelText("Transformation")).getAllByRole("option").map((o) => o.textContent);
+    const options = within(picker("Scan")).getAllByRole("option").map((o) => o.textContent);
     expect(options).toEqual(["None", "Normalize (r4)"]);
+  });
+
+  it("offers no transformation picker when nothing is saved and nothing was recorded", () => {
+    useApp.setState({ plotRecipes: [recipe("p1", "Scan")] });
+    render(<RecipeManagerPanel />);
+    expect(screen.queryByLabelText("Transformation for Scan")).toBeNull();
+  });
+
+  // F4.2c owner decision (c): "Pre-select but also easy override."
+  it("pre-selects the transformation the recipe recorded, marked as recorded", () => {
+    saveTemplate(toTemplate("Normalize", [], [], { revision: 4 }));
+    saveTemplate(toTemplate("Other", [], [], { revision: 1 }));
+    useApp.setState({ plotRecipes: [withTransform("p1", "Scan", { name: "Normalize", revision: 4 }), recipe("p2", "Plain")] });
+    render(<RecipeManagerPanel />);
+    expect(picker("Scan").value).toBe("Normalize");
+    expect(selectedText(picker("Scan"))).toBe("Normalize (r4) (recorded)");
+    expect(picker("Plain").value).toBe("");
+  });
+
+  it("says which revision was recorded when the saved transformation has changed since", () => {
+    saveTemplate(toTemplate("Normalize", [], [], { revision: 5 }));
+    useApp.setState({ plotRecipes: [withTransform("p1", "Scan", { name: "Normalize", revision: 2 })] });
+    render(<RecipeManagerPanel />);
+    expect(selectedText(picker("Scan"))).toBe("Normalize (r5) (recorded as r2)");
+  });
+
+  it("defaults to None and says so next to the picker when the recorded transformation is gone", () => {
+    saveTemplate(toTemplate("Normalize", [], [], { revision: 1 }));
+    useApp.setState({ plotRecipes: [withTransform("p1", "Scan", { name: "Gone", revision: 3 })] });
+    render(<RecipeManagerPanel />);
+    expect(picker("Scan").value).toBe("");
+    const row = screen.getByText("Scan").closest("li") as HTMLElement;
+    expect(within(row).getByText("Recorded transformation “Gone” is no longer saved, so it defaults to None.")).toBeInTheDocument();
+  });
+
+  it("runs the pre-selected transformation when Apply is pressed without changing it", async () => {
+    saveTemplate(toTemplate("Normalize", [], [], { revision: 1 }));
+    useApp.setState({ plotRecipes: [withTransform("p1", "Scan", { name: "Normalize", revision: 1 })] });
+    render(<RecipeManagerPanel />);
+    const row = screen.getByText("Scan").closest("li") as HTMLElement;
+    fireEvent.click(within(row).getByRole("button", { name: "Apply" }));
+    // A step-less transformation derives nothing, so its own refusal proves it was the one run.
+    expect(await screen.findByText(/transformation “Normalize” did not run/)).toBeInTheDocument();
+    expect(useApp.getState().plotWindows).toHaveLength(0);
+  });
+
+  it("overrides the recorded transformation with None in one action", async () => {
+    saveTemplate(toTemplate("Normalize", [], [], { revision: 1 }));
+    useApp.setState({ plotRecipes: [withTransform("p1", "Scan", { name: "Normalize", revision: 1 })] });
+    render(<RecipeManagerPanel />);
+    fireEvent.change(picker("Scan"), { target: { value: "" } });
+    expect(selectedText(picker("Scan"))).toBe("None");
+    const row = screen.getByText("Scan").closest("li") as HTMLElement;
+    fireEvent.click(within(row).getByRole("button", { name: "Apply" }));
+
+    await waitFor(() => expect(useApp.getState().plotWindows).toHaveLength(1));
+    expect(useApp.getState().plotWindows[0].document?.bindings.datasetId).toBe("d1");
+    expect(useApp.getState().datasets).toHaveLength(1);
   });
 
   it("applies with the chosen style template, leaving the saved recipe as it was", async () => {
@@ -99,7 +167,7 @@ describe("RecipeManagerPanel — apply-time choices", () => {
     saveTemplate(toTemplate("Normalize", [], [], { revision: 1 }));
     useApp.setState({ plotRecipes: [recipe("p1", "Scan")] });
     render(<RecipeManagerPanel />);
-    fireEvent.change(screen.getByLabelText("Transformation"), { target: { value: "Normalize" } });
+    fireEvent.change(picker("Scan"), { target: { value: "Normalize" } });
     localStorage.clear(); // deleted in another tab between choosing and applying
     const row = screen.getByText("Scan").closest("li") as HTMLElement;
     fireEvent.click(within(row).getByRole("button", { name: "Apply" }));

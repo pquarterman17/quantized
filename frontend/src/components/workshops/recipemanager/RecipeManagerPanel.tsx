@@ -26,11 +26,12 @@
 // bare truthiness check can't tell "mine" from "someone else's").
 //
 // F4.2 / audit P1.3: every row shows the recipe's captured preview
-// (RecipeThumbnail), and the second toolbar row holds the apply-time
-// choices -- a style template for this apply (default: the recipe's own)
-// and a saved transformation recipe to run first (default: none). Both are
-// explicit, per-gesture picks that never edit the saved recipe; see
-// `applyRecipeWithChoices`.
+// (RecipeThumbnail), and the second toolbar row holds the style template
+// for this apply (default: the recipe's own). The saved transformation to
+// run first is picked PER ROW (RecipeTransformPicker, F4.2c owner decision
+// (c)): it starts on the one the recipe recorded when that is still saved,
+// else None. Both are per-gesture picks that never edit the saved recipe;
+// see `applyRecipeWithChoices`.
 
 import { useEffect, useRef, useState } from "react";
 
@@ -44,6 +45,7 @@ import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Select } from "../../primitives";
 import { RecipeThumbnail } from "./RecipeThumbnail";
+import { RecipeTransformPicker } from "./RecipeTransformPicker";
 import {
   applyRecipeWithChoices,
   combinedRecipeRows,
@@ -54,6 +56,7 @@ import {
   exportRecipe,
   importRecipeToScope,
   recipeSummary,
+  recordedTransformChoice,
   renameRecipe,
   type RecipeScope,
 } from "./recipeManagerActions";
@@ -62,6 +65,10 @@ import {
 const rowKey = (scope: RecipeScope, id: string): string => `${scope}:${id}`;
 
 const SCOPE_LABEL: Record<RecipeScope, string> = { project: "Project", global: "Global" };
+
+// A row is its action line plus, when there is one, its Transform picker.
+const ROW_STYLE = { display: "grid", gap: 2 } as const;
+const LINE_STYLE = { display: "flex", alignItems: "center", gap: 6 } as const;
 
 export default function RecipeManagerPanel() {
   const close = useRecipeManager((s) => s.closeRecipeManager);
@@ -72,11 +79,14 @@ export default function RecipeManagerPanel() {
   const activeId = useApp((s) => s.activeId);
 
   const [datasetId, setDatasetId] = useState(activeId ?? datasets[0]?.id ?? "");
-  // Apply-time choices (F4.2): "" = as the recipe says (its own style
-  // template; no transformation). Read once per mount -- the Pipeline
-  // workshop that saves transformation recipes is a separate window.
+  // Apply-time choices (F4.2): "" = the recipe's own style template. The
+  // transformation is per row: `transformPick` holds only the rows the user
+  // overrode (keyed like the rows); every other row uses the recipe's
+  // recorded one (`recordedTransformChoice`). Saved transformations are read
+  // once per mount -- the Pipeline workshop that saves them is a separate
+  // window.
   const [styleTemplate, setStyleTemplate] = useState("");
-  const [transformName, setTransformName] = useState("");
+  const [transformPick, setTransformPick] = useState<Record<string, string>>({});
   const [transforms] = useState(() => loadTemplates());
   // Finding 3, belt-and-braces: keyed by `${scope}:${id}` (rowKey), not id
   // alone -- see the module doc.
@@ -128,14 +138,32 @@ export default function RecipeManagerPanel() {
       });
   };
 
+  // A row's transformation choice (its override, else the recorded one) and
+  // its picker -- none when nothing is saved and nothing was recorded.
+  const transformFor = (key: string, recipe: PlotRecipe) => {
+    const { value: recorded, missing } = recordedTransformChoice(recipe, transforms);
+    const value = transformPick[key] ?? recorded;
+    const picker =
+      transforms.length > 0 || recipe.transform ? (
+        <RecipeTransformPicker
+          recipe={recipe}
+          transforms={transforms}
+          value={value}
+          missing={missing}
+          onChange={(v) => setTransformPick((p) => ({ ...p, [key]: v }))}
+        />
+      ) : null;
+    return { value, picker };
+  };
+
   // Takes the bare `PlotRecipe` (not a `RecipeRow`) so the SAME apply
   // gesture -- and the SAME finding 2/5 guards -- serve the project/global
   // rows below AND the read-only "Built-in" group's rows, which have no
   // `RecipeRow`/scope of their own (store/plotRecipeApply.ts's
   // `applyPlotRecipeObject`, which `applyRecipeToDataset` calls, never
   // depends on the recipe being a member of either live list -- see its own
-  // doc).
-  const applyRow = (recipe: PlotRecipe): void => {
+  // doc). `transformName` is that row's Transform choice.
+  const applyRow = (recipe: PlotRecipe, transformName: string): void => {
     if (!datasetId || applyingRef.current) return; // finding 2: bail while an apply is already in flight
     applyingRef.current = true;
     setApplying(true);
@@ -228,14 +256,6 @@ export default function RecipeManagerPanel() {
           value={styleTemplate}
           onChange={(e) => setStyleTemplate(e.target.value)}
         />
-        <label className="qzk-field-lbl">Transform</label>
-        <Select
-          aria-label="Transformation"
-          title="Saved transformation recipe to run first; the recipe is applied to its new output dataset."
-          options={[{ value: "", label: "None" }, ...transforms.map((t) => ({ value: t.name, label: `${t.name} (r${t.revision ?? 1})` }))]}
-          value={transformName}
-          onChange={(e) => setTransformName(e.target.value)}
-        />
       </div>
 
       {rows.length === 0 ? (
@@ -247,57 +267,61 @@ export default function RecipeManagerPanel() {
           {rows.map((row) => {
             const key = rowKey(row.scope, row.recipe.id);
             const otherScope: RecipeScope = row.scope === "project" ? "global" : "project";
+            const transform = transformFor(key, row.recipe);
             return (
-              <li key={key} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <span className="qz-shortcut" style={{ width: 52, flexShrink: 0 }}>{SCOPE_LABEL[row.scope]}</span>
-                <RecipeThumbnail preview={row.recipe.preview} label={row.recipe.name} summary={recipeSummary(row.recipe)} />
-                {renamingKey === key ? (
-                  <input
-                    autoFocus
-                    value={renameValue}
-                    aria-label={`Rename ${row.recipe.name}`}
-                    onChange={(e) => setRenameValue(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") commitRename(row.scope, row.recipe.id);
-                      if (e.key === "Escape") setRenamingKey(null);
-                      e.stopPropagation();
+              <li key={key} style={ROW_STYLE}>
+                <div style={LINE_STYLE}>
+                  <span className="qz-shortcut" style={{ width: 52, flexShrink: 0 }}>{SCOPE_LABEL[row.scope]}</span>
+                  <RecipeThumbnail preview={row.recipe.preview} label={row.recipe.name} summary={recipeSummary(row.recipe)} />
+                  {renamingKey === key ? (
+                    <input
+                      autoFocus
+                      value={renameValue}
+                      aria-label={`Rename ${row.recipe.name}`}
+                      onChange={(e) => setRenameValue(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") commitRename(row.scope, row.recipe.id);
+                        if (e.key === "Escape") setRenamingKey(null);
+                        e.stopPropagation();
+                      }}
+                      onBlur={() => commitRename(row.scope, row.recipe.id)}
+                      style={{ flex: 1 }}
+                    />
+                  ) : (
+                    <span className="qzk-menu-trunc" style={{ flex: 1 }} title={row.recipe.name}>
+                      {row.recipe.name}
+                    </span>
+                  )}
+                  <Button size="sm" disabled={!datasetId || applying} onClick={() => applyRow(row.recipe, transform.value)}>
+                    Apply
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      setRenamingKey(key);
+                      setRenameValue(row.recipe.name);
                     }}
-                    onBlur={() => commitRename(row.scope, row.recipe.id)}
-                    style={{ flex: 1 }}
-                  />
-                ) : (
-                  <span className="qzk-menu-trunc" style={{ flex: 1 }} title={row.recipe.name}>
-                    {row.recipe.name}
-                  </span>
-                )}
-                <Button size="sm" disabled={!datasetId || applying} onClick={() => applyRow(row.recipe)}>
-                  Apply
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    setRenamingKey(key);
-                    setRenameValue(row.recipe.name);
-                  }}
-                >
-                  Rename
-                </Button>
-                <Button size="sm" onClick={() => duplicateRecipe(row.scope, row.recipe.id)}>
-                  Duplicate
-                </Button>
-                <Button
-                  size="sm"
-                  title={`Copy to ${SCOPE_LABEL[otherScope]} scope (the ${SCOPE_LABEL[row.scope]} original stays here -- delete it afterward to fully move it)`}
-                  onClick={() => copyRecipeToOtherScope(row.scope, row.recipe.id)}
-                >
-                  Copy to {SCOPE_LABEL[otherScope]}
-                </Button>
-                <Button size="sm" onClick={() => exportRecipe(row.recipe)}>
-                  Export
-                </Button>
-                <Button size="sm" variant="danger" onClick={() => deleteRecipe(row.scope, row.recipe.id)}>
-                  Delete
-                </Button>
+                  >
+                    Rename
+                  </Button>
+                  <Button size="sm" onClick={() => duplicateRecipe(row.scope, row.recipe.id)}>
+                    Duplicate
+                  </Button>
+                  <Button
+                    size="sm"
+                    title={`Copy to ${SCOPE_LABEL[otherScope]} scope (the ${SCOPE_LABEL[row.scope]} original stays here -- delete it afterward to fully move it)`}
+                    onClick={() => copyRecipeToOtherScope(row.scope, row.recipe.id)}
+                  >
+                    Copy to {SCOPE_LABEL[otherScope]}
+                  </Button>
+                  <Button size="sm" onClick={() => exportRecipe(row.recipe)}>
+                    Export
+                  </Button>
+                  <Button size="sm" variant="danger" onClick={() => deleteRecipe(row.scope, row.recipe.id)}>
+                    Delete
+                  </Button>
+                </div>
+                {transform.picker}
               </li>
             );
           })}
@@ -315,25 +339,31 @@ export default function RecipeManagerPanel() {
           act on; "Copy to Project" is the sanctioned way to edit one. */}
       <div className="qzk-ds-meta" style={{ marginTop: 12, marginBottom: 4 }}>Built-in</div>
       <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "grid", gap: 4 }}>
-        {BUILTIN_PLOT_RECIPES.map((recipe) => (
-          <li key={recipe.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <span className="qz-shortcut" style={{ width: 52, flexShrink: 0 }}>Built-in</span>
-            <RecipeThumbnail preview={recipe.preview} label={recipe.name} />
-            <span className="qzk-menu-trunc" style={{ flex: 1 }} title={recipe.description || recipe.name}>
-              {recipe.name}
-            </span>
-            <Button size="sm" disabled={!datasetId || applying} onClick={() => applyRow(recipe)}>
-              Apply
-            </Button>
-            <Button
-              size="sm"
-              title="Built-in recipes are read-only -- copy to Project to edit this one"
-              onClick={() => copyBuiltinToProject(recipe)}
-            >
-              Copy to Project
-            </Button>
-          </li>
-        ))}
+        {BUILTIN_PLOT_RECIPES.map((recipe) => {
+          const transform = transformFor(`builtin:${recipe.id}`, recipe);
+          return (
+            <li key={recipe.id} style={ROW_STYLE}>
+              <div style={LINE_STYLE}>
+                <span className="qz-shortcut" style={{ width: 52, flexShrink: 0 }}>Built-in</span>
+                <RecipeThumbnail preview={recipe.preview} label={recipe.name} />
+                <span className="qzk-menu-trunc" style={{ flex: 1 }} title={recipe.description || recipe.name}>
+                  {recipe.name}
+                </span>
+                <Button size="sm" disabled={!datasetId || applying} onClick={() => applyRow(recipe, transform.value)}>
+                  Apply
+                </Button>
+                <Button
+                  size="sm"
+                  title="Built-in recipes are read-only -- copy to Project to edit this one"
+                  onClick={() => copyBuiltinToProject(recipe)}
+                >
+                  Copy to Project
+                </Button>
+              </div>
+              {transform.picker}
+            </li>
+          );
+        })}
       </ul>
       {error && (
         <div className="qzk-ds-meta" style={{ color: "var(--danger)", marginTop: 8 }}>

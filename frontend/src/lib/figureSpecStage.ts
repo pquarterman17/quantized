@@ -113,6 +113,7 @@ export function buildStageFigureSpec(
         autoSeriesStyles,
         waterfallSpan,
         greyscale: o.greyscale,
+        greyExcluded: o.greyExcluded,
       })
     : buildFigureSpec(s, ds, stem, o, { autoSeriesStyles, waterfallSpan });
   return extra.transparent === undefined ? spec : { ...spec, transparent: extra.transparent };

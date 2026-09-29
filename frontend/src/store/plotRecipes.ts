@@ -118,7 +118,7 @@
 // `recipeLibs()`, which lives in that same sibling.
 
 import type { PlotRecipe } from "../lib/plotRecipe";
-import type { RecipeResolution, ResolvedRecipeApplication } from "../lib/plotRecipeMatch";
+import type { PendingPlotRecipeApplication } from "./pendingRecipeApplication";
 import { dedupeWindowTitle, snapshotView } from "../lib/plotview";
 import type { Dataset } from "../lib/types";
 import { plotWindowDatasetId } from "./windowDocuments";
@@ -145,13 +145,7 @@ function sameUnmatchedSet(a: readonly string[], b: readonly string[]): boolean {
 declare const __APP_VERSION__: string;
 const PLOT_RECIPE_APP_VERSION = typeof __APP_VERSION__ === "string" ? __APP_VERSION__ : "0";
 
-/** A recipe resolution with `unmatched` fields, staged for a preview+confirm
- *  UI (a later lane) rather than applied immediately -- see the module doc. */
-export interface PendingPlotRecipeApplication {
-  recipe: PlotRecipe;
-  datasetId: string;
-  resolution: Extract<RecipeResolution, { resolved: ResolvedRecipeApplication }>;
-}
+export type { PendingPlotRecipeApplication } from "./pendingRecipeApplication";
 
 /** Forward-compat options bag for `applyPlotRecipe` -- empty for now (this
  *  wave needs no flags); kept as an explicit parameter so a future caller
@@ -423,7 +417,7 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
         // (this action's remaining reason to exist) doesn't inherit that
         // same false claim.
         set({
-          pendingRecipeApplication: { recipe: pending.recipe, datasetId: pending.datasetId, resolution },
+          pendingRecipeApplication: { ...pending, resolution }, // keeps `onCancel`
           status: sameUnmatchedSet(resolution.unmatched, pending.resolution.unmatched)
             ? `Plot Recipe "${pending.recipe.name}": ${resolution.unmatched.length} field${resolution.unmatched.length === 1 ? "" : "s"} still unmatched`
             : `Plot Recipe "${pending.recipe.name}": the dataset changed since the preview -- review the updated mapping`,
@@ -473,7 +467,11 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
       return applied;
     },
 
-    cancelPendingRecipeApplication: () => set({ pendingRecipeApplication: null }),
+    cancelPendingRecipeApplication: () => {
+      const cancelled = get().pendingRecipeApplication;
+      set({ pendingRecipeApplication: null });
+      cancelled?.onCancel?.(); // F4.2c: take back a transformation run only for this preview
+    },
 
     matchingPlotRecipes: async (dataset) => {
       const candidates = await (await applyCore()).resolvedCandidates(get, dataset);

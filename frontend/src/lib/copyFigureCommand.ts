@@ -21,7 +21,7 @@
 // represent at all) and only falls back to the live-view builder when no
 // canonical document applies.
 
-import { renderFigureBlob } from "./api/figures";
+import { renderFigureBlob, type FigureSpec } from "./api/figures";
 import {
   clipboardImageSupported,
   clipboardSvgSupported,
@@ -29,8 +29,12 @@ import {
   copySvgAsync,
 } from "./clipboard";
 import { exportActive, type StoreGet } from "./exportActive";
+import { chooseExcludedRows } from "./excludedRowsChoice";
+import { excludedChoiceMatters } from "./excludedRowsExport";
+import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import { toast } from "../store/toasts";
+import type { Dataset } from "./types";
 
 /** Publication raster defaults. 300 DPI is the standard journal floor and what
  *  the export dialog already defaults to, so a copy and an export of the same
@@ -42,6 +46,27 @@ export const COPY_FIGURE_FMT = "png";
  *  "Export figure…", which prompts. Keeping this equal to the dialog default
  *  is what makes copy and export produce identical pixels by default. */
 export const COPY_FIGURE_STYLE = "default";
+
+/** The copy's spec, after the F4.2c (a) excluded-rows question when the
+ *  figure has any (null = dismissed). Background is a preference rather than
+ *  a fixed choice: transparent pastes cleanly onto a coloured slide, opaque is
+ *  safer for Word and print (Preferences ▸ Plot; opaque by default so a copy
+ *  looks like an export). The question's own click is a fresh user gesture,
+ *  so the clipboard write that follows it keeps its activation. */
+async function pickCopySpec(
+  s: StoreGet,
+  ds: Dataset,
+  stem: string,
+  o: FigureRenderOpts,
+): Promise<FigureSpec | null> {
+  const picked = await chooseExcludedRows(
+    (greyExcluded) =>
+      buildStageFigureSpec(s, ds, stem, { ...o, greyExcluded }, { transparent: s().copyFigureTransparent }),
+    excludedChoiceMatters,
+    s().excludedDisplay,
+  );
+  return picked?.value ?? null;
+}
 
 /** MAIN #35: vector copy, offered only where the browser will actually take an
  *  SVG on the clipboard (see clipboardSvgSupported — the sanctioned MIME set
@@ -57,20 +82,15 @@ export async function runCopyFigureSvgCommand(s: StoreGet): Promise<void> {
   await exportActive(
     s,
     async (stem, ds, signal) => {
-      const spec = buildStageFigureSpec(
-        s,
-        ds,
-        stem,
-        {
-          fmt: "svg",
-          style: COPY_FIGURE_STYLE,
-          dpi: COPY_FIGURE_DPI, // ignored by vector, sent for spec symmetry
-          title: s().plotTitle,
-          xLabel: s().xAxisLabel,
-          yLabel: s().yAxisLabel,
-        },
-        { transparent: s().copyFigureTransparent },
-      );
+      const spec = await pickCopySpec(s, ds, stem, {
+        fmt: "svg",
+        style: COPY_FIGURE_STYLE,
+        dpi: COPY_FIGURE_DPI, // ignored by vector, sent for spec symmetry
+        title: s().plotTitle,
+        xLabel: s().xAxisLabel,
+        yLabel: s().yAxisLabel,
+      });
+      if (!spec) return false;
       s().setStatus("rendering vector figure for the clipboard…");
       const ok = await copySvgAsync(renderFigureBlob(spec, signal), signal);
       s().setStatus("");
@@ -94,24 +114,15 @@ export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
   await exportActive(
     s,
     async (stem, ds, signal) => {
-      const spec = buildStageFigureSpec(
-        s,
-        ds,
-        stem,
-        {
-          fmt: COPY_FIGURE_FMT,
-          style: COPY_FIGURE_STYLE,
-          dpi: COPY_FIGURE_DPI,
-          title: s().plotTitle,
-          xLabel: s().xAxisLabel,
-          yLabel: s().yAxisLabel,
-        },
-        // Background is a preference rather than a fixed choice: transparent
-        // pastes cleanly onto a coloured slide, opaque is safer for Word and
-        // print. Set in Preferences ▸ Plot; opaque by default so a copy looks
-        // like an export.
-        { transparent: s().copyFigureTransparent },
-      );
+      const spec = await pickCopySpec(s, ds, stem, {
+        fmt: COPY_FIGURE_FMT,
+        style: COPY_FIGURE_STYLE,
+        dpi: COPY_FIGURE_DPI,
+        title: s().plotTitle,
+        xLabel: s().xAxisLabel,
+        yLabel: s().yAxisLabel,
+      });
+      if (!spec) return false;
       // Progress feedback: a large multi-panel render is not instant, and a
       // silent pause reads as a broken button.
       s().setStatus("rendering figure for the clipboard…");

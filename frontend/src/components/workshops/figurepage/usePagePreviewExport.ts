@@ -17,6 +17,9 @@ import { useShallow } from "zustand/react/shallow";
 
 import { exportFigurePage, renderFigurePageBlob, type FigurePageSpec, type PagePanelSpec } from "../../../lib/api";
 import { clipboardImageSupported, copyImageAsync } from "../../../lib/clipboard";
+import { chooseExcludedRows, pageExcludedChoiceMatters } from "../../../lib/excludedRowsChoice";
+import { ghosterFor } from "../../../lib/excludedRowsExport";
+import type { ExcludedRowsGhoster } from "../../../lib/figureSpec";
 import type { PageLabelFormat, PageLabelPosition } from "../../../lib/figurepage";
 import { filledCount, type PageSlot } from "../../../lib/figurepageActions";
 import type { PageLayoutSettings } from "../../../lib/pageDocument";
@@ -66,6 +69,9 @@ export interface PagePreviewExportOutput {
 
 export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExportOutput) {
   const setStatus = useApp((s) => s.setStatus);
+  // F4.2c (a): the preview draws excluded rows the way the app does, and an
+  // export/copy asks (pre-selected to this) whenever the page has any.
+  const excludedDisplay = useApp((s) => s.excludedDisplay);
   const { rows, cols, style, labelFormat, labelPos, layout, fmt, dpi, greyscale } = output;
 
   const [preview, setPreview] = useState<string | null>(null);
@@ -80,13 +86,13 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
   /** The page spec (sans format/dpi — each consumer below chooses its own).
    *  null when nothing is assigned or nothing can render anymore. The ONE
    *  spec-derivation path (F3.6) — see the module header. */
-  async function buildSpec(): Promise<FigurePageSpec | null> {
+  async function buildSpec(greyExcluded?: ExcludedRowsGhoster): Promise<FigurePageSpec | null> {
     if (filledCount(slots) === 0) return null;
     const panels: PagePanelSpec[] = [];
     for (let i = 0; i < slots.length; i++) {
       const slot = slots[i];
       if (!slot.source) continue;
-      const figure = await panelFigure(slot.source);
+      const figure = await panelFigure(slot.source, greyExcluded);
       if (!figure) {
         // A dead source (window closed, dataset gone) must FAIL the build,
         // not silently drop the panel and re-letter the rest (review
@@ -140,7 +146,7 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
     const timer = setTimeout(() => {
       void (async () => {
         try {
-          const spec = await buildSpec();
+          const spec = await buildSpec(ghosterFor(excludedDisplay));
           if (cancelled) return;
           if (!spec) {
             // F3.2: past the filledCount===0 guard above, buildSpec() can
@@ -181,7 +187,14 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
     // it for the same reason — the preview must show the print-safe page the
     // export will produce, not the coloured one it came from.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slots, rows, cols, style, labelFormat, labelPos, layout, greyscale, renderInputs]);
+  }, [slots, rows, cols, style, labelFormat, labelPos, layout, greyscale, excludedDisplay, renderInputs]);
+
+  /** Export/copy's spec: the F4.2c (a) question first when a panel has
+   *  excluded rows. `undefined` = the user dismissed it (the caller stops). */
+  async function pickSpec(): Promise<FigurePageSpec | null | undefined> {
+    const picked = await chooseExcludedRows(buildSpec, pageExcludedChoiceMatters, excludedDisplay);
+    return picked ? picked.value : undefined;
+  }
 
   async function exportNow(): Promise<void> {
     try {
@@ -197,13 +210,14 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
       // P3.4: a StatusBar op with a Cancel that aborts the render request; a
       // cancelled export saves no file and raises no error.
       const done = await runCancellable("Exporting figure page…", async (signal) => {
-        const spec = await buildSpec();
+        const spec = await pickSpec();
+        if (spec === undefined) return "dismissed" as const;
         if (!spec) return false;
         signal.throwIfAborted();
         await exportFigurePage({ ...spec, fmt, dpi }, signal);
         return true;
       });
-      if (!done) {
+      if (!done || done.value === "dismissed") {
         setStatus("export cancelled");
         return;
       }
@@ -238,7 +252,11 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
       setStatus("assign at least one panel to copy a figure page");
       return;
     }
-    const spec = await buildSpec();
+    const spec = await pickSpec();
+    if (spec === undefined) {
+      setStatus("copy cancelled");
+      return;
+    }
     if (!spec) {
       setStatus("cannot copy: a panel's source is missing - see the highlighted slot, then clear or reassign it");
       return;

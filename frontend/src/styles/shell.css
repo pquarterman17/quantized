@@ -944,6 +944,11 @@ body {
    slim footer row, not a toolbar. */
 .qzk-pending-cancel { display: inline-grid; place-items: center; width: 15px; height: 15px; flex: none; border: none; border-radius: 3px; background: transparent; color: var(--text-faint); font-size: 10px; line-height: 1; cursor: default; }
 .qzk-pending-cancel:hover { background: var(--surface-3); color: var(--danger, #d33); }
+/* F4.2c (a): the app-wide "Grey excluded rows" toggle — a slim footer chip. */
+.qzk-status-toggle { display: inline-flex; align-items: center; gap: 4px; flex: none; border: 1px solid var(--border-soft); border-radius: 3px; background: transparent; color: var(--text-faint); font: inherit; padding: 0 5px; cursor: default; }
+.qzk-status-toggle[aria-pressed="true"] { color: var(--text-dim); border-color: var(--border); }
+.qzk-status-toggle:hover { background: var(--surface-3); }
+.qzk-status-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 /* fit results rows */
 .qzk-fit-row { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: var(--font-size-sm); padding: 2px 0; }
