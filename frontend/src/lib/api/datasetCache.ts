@@ -106,11 +106,77 @@ function datasetKey(body: unknown): object | undefined {
   return typeof dataset === "object" && dataset !== null ? (dataset as object) : undefined;
 }
 
+/** Object -> the in-flight request uploading it, which settles with the
+ *  handle it earned (null: failed, aborted, or too large to cache). At most
+ *  one per object, shared by every caller -- see `settled`. */
+const pending = new WeakMap<object, Promise<string | null>>();
+
+const abortError = (): DOMException => new DOMException("aborted", "AbortError");
+
+/** Run `next` once no upload of `key` is in flight. PERF (cell-edit
+ *  re-upload audit): the focused plot and each background plot window fetch
+ *  the same new DataStruct in the same tick; before this each missed the
+ *  handle cache and uploaded the whole dataset in parallel (1M x 7: 1.53 s
+ *  JSON.stringify plus a 156 MB POST, per window).
+ *
+ *  `next` runs SYNCHRONOUSLY after the final "nothing pending" check, with
+ *  no await in between, so an `upload` it starts is registered before any
+ *  other waiter can re-check. That is also why this loops: a failed upload
+ *  hands over to the first waiter to wake, and the rest wait for that one.
+ *  Rejects with an AbortError as soon as the caller's own `signal` aborts,
+ *  rather than waiting out someone else's upload. */
+async function whenIdle<R>(key: object, signal: AbortSignal | undefined, next: () => Promise<R>): Promise<R> {
+  for (let p = pending.get(key); p; p = pending.get(key)) {
+    if (signal?.aborted) throw abortError();
+    if (!signal) {
+      await p;
+      continue;
+    }
+    let onAbort = (): void => {};
+    const aborted = new Promise<never>((_, reject) => {
+      onAbort = () => reject(abortError());
+      signal.addEventListener("abort", onAbort, { once: true });
+    });
+    try {
+      await Promise.race([p, aborted]);
+    } finally {
+      signal.removeEventListener("abort", onAbort);
+    }
+  }
+  if (signal?.aborted) throw abortError();
+  return next();
+}
+
+type Wire<T> = Promise<{ value: T; handle: string | null }>;
+type Send<T> = (extra: Record<string, unknown>) => Wire<T>;
+
+/** Send the full `dataset` as THE upload of `key`. Registered in `pending`
+ *  synchronously, before the first await, so a concurrent caller sees it and
+ *  waits instead of uploading the same object again. */
+async function upload<T>(key: object, send: Send<T>): Promise<T> {
+  let done: (handle: string | null) => void = () => {};
+  const p = new Promise<string | null>((resolve) => (done = resolve));
+  pending.set(key, p);
+  let earned: string | null = null;
+  try {
+    const res = await send({ dataset_handle: undefined });
+    if (res.handle) handles.set(key, (earned = res.handle));
+    return res.value;
+  } finally {
+    if (pending.get(key) === p) pending.delete(key);
+    done(earned);
+  }
+}
+
+const isMiss = (err: unknown): boolean => (err as HttpError | null)?.status === 409;
+
 /** Dataset-cache-aware POST for a cache-eligible path: swaps a remembered
- *  `dataset` for its `dataset_handle` when one is known, restores the full
- *  payload once on a 409 (unknown/evicted handle), and remembers whatever
- *  handle the server echoes back. A `body` with no `dataset`-shaped field
- *  (e.g. /api/rsm/strain) passes straight through untouched. */
+ *  `dataset` for its `dataset_handle` when one is known, uploads the full
+ *  payload once per object even under concurrent callers (see `settled`),
+ *  restores the full payload once on a 409 (unknown/evicted handle), and
+ *  remembers whatever handle the server echoes back. A `body` with no
+ *  `dataset`-shaped field (e.g. /api/rsm/strain) passes straight through
+ *  untouched. */
 export async function postJSONDatasetAware<T>(
   path: string,
   body: unknown,
@@ -121,29 +187,32 @@ export async function postJSONDatasetAware<T>(
   if (!key) return (await rawFetch<T>(path, body, signal)).value;
 
   const record = body as Record<string, unknown>;
-  const send = (useHandle: boolean): Promise<{ value: T; handle: string | null }> => {
-    const handle = useHandle ? handles.get(key) : undefined;
-    // `undefined`-valued keys are dropped by JSON.stringify -- this is how
-    // `dataset`/`dataset_handle` are swapped on the wire without allocating
-    // two differently-shaped body objects by hand.
-    const wireBody =
-      handle !== undefined
-        ? { ...record, dataset: undefined, dataset_handle: handle }
-        : { ...record, dataset_handle: undefined };
-    return rawFetch<T>(path, wireBody, signal);
+  // `undefined`-valued keys are dropped by JSON.stringify -- this is how
+  // `dataset`/`dataset_handle` are swapped on the wire without allocating
+  // two differently-shaped body objects by hand.
+  const send: Send<T> = (extra) => rawFetch<T>(path, { ...record, ...extra }, signal);
+  const byHandle = async (handle: string): Promise<T> =>
+    (await send({ dataset: undefined, dataset_handle: handle })).value;
+
+  const handleOrUpload = (): Promise<T> => {
+    const h = handles.get(key);
+    return h === undefined ? upload(key, send) : byHandle(h);
   };
 
-  try {
-    const first = await send(true);
-    if (first.handle) handles.set(key, first.handle);
-    return first.value;
-  } catch (err) {
-    // A 409 with no remembered handle would mean the FULL dataset was
-    // already what got sent -- the server can't miss on that, so this
-    // guard only ever fires for a genuine unknown/evicted handle.
-    if ((err as HttpError).status !== 409 || !handles.has(key)) throw err;
-    const retry = await send(false); // resend the full dataset exactly once
-    if (retry.handle) handles.set(key, retry.handle);
-    return retry.value;
-  }
+  return whenIdle(key, signal, async () => {
+    const known = handles.get(key);
+    if (known === undefined) return upload(key, send);
+    try {
+      return await byHandle(known);
+    } catch (err) {
+      // A 409 on a full upload re-throws from `upload` itself (the server
+      // cannot miss on a payload it was just given); only a remembered
+      // handle can have gone stale.
+      if (!isMiss(err)) throw err;
+      // Evicted server-side: resend the full dataset once -- unless a
+      // concurrent caller already did, in which case use what it earned.
+      if (handles.get(key) === known) handles.delete(key);
+      return whenIdle(key, signal, handleOrUpload);
+    }
+  });
 }
