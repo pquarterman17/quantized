@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { LARGE_PASTE_CELLS, useWorksheetBlockOps } from "./useWorksheetBlockOps";
 import { categoricalLevels } from "../../../lib/categorical";
+import { REDERIVED_EDIT_NOTICE } from "../../../lib/rederived";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 
@@ -178,5 +179,15 @@ describe("block ops follow the visible row order", () => {
     expect([cell(0), cell(1)]).toEqual([1, 0]);
     expect(useApp.getState().datasets[0].data.cat_levels?.[0]).toEqual(["control", "treated", "sham"]);
     expect(statuses.at(-1)).toBe("pasted 3 cells, added 1 level");
+  });
+
+  it("reports the re-derived refusal instead of a paste/fill count", () => {
+    const corrected = { ...sheet([[1], [2], [3]]), corrections: [], raw: sheet([[1], [2], [3]]).data };
+    useApp.setState({ datasets: [corrected as Dataset] });
+    const { result } = renderHook(() => useWorksheetBlockOps(live([0, 1], [0, 1, 2])));
+    result.current.fillDown();
+    result.current.clearBlock();
+    expect(cell(1)).toBe(2);
+    expect(statuses).toEqual([REDERIVED_EDIT_NOTICE, REDERIVED_EDIT_NOTICE]);
   });
 });

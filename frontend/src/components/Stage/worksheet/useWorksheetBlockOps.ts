@@ -20,6 +20,7 @@ import {
   pasteTargetRows,
   type PasteBounds,
 } from "../../../lib/clipboardGrid";
+import { isRederived, REDERIVED_EDIT_NOTICE } from "../../../lib/rederived";
 import { useApp } from "../../../store/useApp";
 
 export interface BlockOpsSource {
@@ -73,6 +74,16 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   const setCellBlock = useApp((s) => s.setCellBlock);
   const insertRowsAction = useApp((s) => s.insertRows);
   const deleteRowsAction = useApp((s) => s.deleteRows);
+  // The store refuses value edits on a re-derived dataset; refuse here first
+  // too, so the "pasted/cleared N" report never overwrites that notice.
+  const rederived = useApp((s) => {
+    const d = s.datasets.find((x) => x.id === src.datasetId);
+    return d != null && isRederived(d);
+  });
+  function refused(): boolean {
+    if (rederived) src.setStatus(REDERIVED_EDIT_NOTICE);
+    return rederived;
+  }
   // Row insert/delete edit the DATA, so they read the selection in index order.
   const rows = ordered(src.rows);
   const cols = ordered(src.cols);
@@ -107,6 +118,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function pasteBlock() {
+    if (refused()) return;
     const anchor = viewRows()[0];
     if (anchor === undefined || cols.length === 0) {
       src.setStatus("select the top-left cell to paste into");
@@ -160,6 +172,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function clearBlock() {
+    if (refused()) return;
     const block = viewRows();
     if (block.length === 0 || cols.length === 0) {
       src.setStatus("select rows and columns first");
@@ -175,6 +188,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function fillDown() {
+    if (refused()) return;
     const edits = fillDownEdits(viewRows(), cols, bounds, src.valueAt);
     if (edits.length === 0) {
       src.setStatus("select at least two rows to fill down");
@@ -185,6 +199,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function cutBlock() {
+    if (refused()) return;
     const block = viewRows();
     if (block.length === 0 || cols.length === 0) {
       src.setStatus("select rows and columns first");
@@ -209,6 +224,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function insertRows() {
+    if (refused()) return;
     if (rows.length === 0) {
       src.setStatus("select a row to insert above");
       return;
@@ -220,6 +236,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function deleteRows() {
+    if (refused()) return;
     if (rows.length === 0) {
       src.setStatus("select rows to delete");
       return;
