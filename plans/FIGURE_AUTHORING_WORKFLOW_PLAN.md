@@ -590,27 +590,57 @@ with parent items P1.3 and P1.5.
         in the status line. It is NOT applied — see the owner question below.
         (4) **Transformations** — a recipe saved from a transformation
         recipe's output records `transform: {name, revision}` (from
-        `metadata.transform_recipe`). The Recipe Manager's apply row now
-        offers **Transform** (None / any saved transformation recipe) and
-        **Style** (Recipe's own / any on-screen template):
+        `metadata.transform_recipe`). The Recipe Manager offers **Transform**
+        per row (None / any saved transformation recipe; see (c) below) and
+        **Style** for the panel (Recipe's own / any on-screen template):
         `applyRecipeWithChoices` runs the chosen transformation through the
         Pipeline's own `applyRecipe` (preflight, rebinding, provenance,
         rollback) and plots its NEW output; the style choice applies to this
         gesture only and never edits the saved recipe. Both default to "as
-        the recipe says"; nothing is chosen or applied automatically
+        the recipe says"; nothing is applied automatically
         (`recipeApplyChoices.test.ts` runs a real recorded transformation;
         `RecipeManagerChoices.test.tsx` drives the panel).
-        **Owner questions (left open):**
-        (a) *Should "Excluded rows" (hide/grey) become a per-figure setting so
-        a recipe can apply its recorded policy, or stay app-wide with the
-        recipe only reporting a mismatch (today's behavior)?*
-        (b) *When a chosen transformation succeeds but the Plot Recipe then
-        refuses its output (technique/column mismatch), should the new output
-        dataset be kept (today: kept, one undo removes it) or rolled back
-        automatically?*
-        (c) *Should the Manager pre-select the transformation a recipe
-        recorded (today: always "None", so running one is a deliberate
-        pick)?*
+        **Owner questions:**
+        (a) **OPEN.** *Should "Excluded rows" (hide/grey) become a per-figure
+        setting so a recipe can apply its recorded policy, or stay app-wide
+        with the recipe only reporting a mismatch (today's behavior)?*
+        (b) **DECIDED (owner, 2026-09-29): "Rejection with notice."** *When a
+        chosen transformation succeeds but the Plot Recipe then refuses its
+        output (technique/column mismatch)*, the transformation is rolled
+        back automatically and the notice names the recipe's reason; nothing
+        else in the project changes. Done in d764168e:
+        `takeBackTransform` (`recipeManagerActions.ts`) removes exactly the
+        datasets the run created (`ApplyResult.created`, `runTemplate.ts`),
+        never a before/after diff, and restores the pre-gesture undo AND
+        redo stacks exactly; if another edit was recorded in between it
+        instead scrubs the removed datasets out of every entry, so no undo
+        or redo can bring one back. The same take-back runs if the plot apply
+        throws. A STAGED preview (unmatched fields, not a refusal) keeps the
+        output, since the dialog plots it. The notice is the status line
+        plus the Manager's inline error, one sentence: `Plot Recipe "…"
+        unavailable: <reason> — the output of transformation “…” was
+        removed.` Tests (`recipeApplyChoices.test.ts`): refusal rolls back
+        with undo/redo seqs identical, the active dataset restored and the
+        reason named; the scrub fallback (an edit recorded in between, then
+        two undos resurrect nothing); a throw rolls back; a staged preview
+        keeps the output. Each guard (take-back call, exact restore, scrub
+        fallback, staged check, throw path, active restore, the run's
+        `created` list) was sabotaged once and turned red.
+        (c) **DECIDED (owner, 2026-09-29): "Pre-select but also easy
+        override."** Done in d764168e: the Transform picker moved into each
+        row (`RecipeTransformPicker.tsx`) because each recipe records its
+        own; `recordedTransformChoice` pre-selects the recorded
+        transformation when one of that name is still saved, its option
+        marked "(recorded)" (or "(recorded as rN)" when the saved one has a
+        different revision), and picking another entry or None is the one-
+        action override. A recorded transformation that is gone defaults to
+        None, with one sentence beside the picker: "Recorded transformation
+        “…” is no longer saved, so it defaults to None." A row with nothing
+        saved and nothing recorded shows no picker. Tests
+        (`RecipeManagerChoices.test.tsx`): pre-select + marker, revision
+        marker, missing note + None, Apply runs the pre-selected one, an
+        override to None plots the source, picker hidden when empty; each
+        guard sabotaged once and turned red.
 - [x] **F4.3 Apply templates explicitly.** Never overwrite an already
       customized figure without a preview and confirmation. (P1.3 waves 1-3:
       `applyPlotRecipe`/`applyPlotRecipeObject` are always an explicit, opt-in
@@ -1746,6 +1776,15 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-09-29 — F4.2c owner decisions (b) and (c) implemented
+
+(b) "Rejection with notice": a transformation whose output the Plot Recipe
+refuses is rolled back, with undo/redo left exactly as before, and the
+notice names the reason. (c) "Pre-select but also easy override": each
+Recipe Manager row's Transform picker starts on the recipe's recorded
+transformation (marked "(recorded)") when it is still saved, else None with
+a one-sentence note. (a) stays open.
 
 ### 2026-09-29 — F4.2c Plot Recipe schema v2 (Claude)
 
