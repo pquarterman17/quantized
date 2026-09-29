@@ -38,34 +38,57 @@ from numpy.typing import NDArray
 __all__ = ["decimate_columns", "decimate_row_indices", "is_ascending", "window_columns"]
 
 
-def _series_bucket_indices(y: NDArray[np.float64], bucket_count: int) -> list[int]:
-    """Row indices of the min-y and max-y sample per bucket over ``[0, n)``.
+def _bucket_layout(n: int, bucket_count: int) -> tuple[NDArray[np.intp], NDArray[np.intp]]:
+    """``(starts, bucket_id)`` for the non-empty buckets over ``[0, n)``.
 
-    ``bucket_count`` is assumed already clamped to ``[1, n]`` by the caller.
+    Bucket ``b`` spans ``[int(b * n / bucket_count), int((b + 1) * n /
+    bucket_count))`` (the last one ends at ``n``) -- the frontend's own float
+    boundaries, computed with the same IEEE multiply so every edge lands on
+    the same row. Consecutive buckets therefore share an edge, so the kept
+    ``starts`` alone describe every segment, which is what ``reduceat``
+    wants; a float-truncation-empty bucket (JS skips it too) is dropped.
+    ``bucket_id[i]`` is the kept-bucket index of row ``i``.
     """
-    n = y.shape[0]
-    out: list[int] = []
     bucket_size = n / bucket_count
-    for b in range(bucket_count):
-        start = int(b * bucket_size)
-        end = n if b == bucket_count - 1 else int((b + 1) * bucket_size)
-        if end <= start:
-            continue  # float-truncation can yield an empty bucket; JS skips it too
-        chunk = y[start:end]
-        finite = np.isfinite(chunk)
-        if not finite.any():
-            continue  # nothing plottable in this bucket
-        masked = np.where(finite, chunk, np.nan)
-        # nanargmin/nanargmax return the FIRST occurrence on ties, matching
-        # the frontend's strict-`<`/`>` scan (first min/max wins).
-        min_idx = start + int(np.nanargmin(masked))
-        max_idx = start + int(np.nanargmax(masked))
-        if min_idx == max_idx:
-            out.append(min_idx)
-        else:
-            out.append(min_idx)
-            out.append(max_idx)
-    return out
+    starts = (np.arange(bucket_count, dtype=np.float64) * bucket_size).astype(np.intp)
+    starts = starts[np.diff(starts, append=n) > 0]
+    lengths = np.diff(starts, append=n)
+    return starts, np.repeat(np.arange(starts.size, dtype=np.intp), lengths)
+
+
+def _first_hit_per_bucket(hit: NDArray[np.bool_], bucket_id: NDArray[np.intp]) -> NDArray[np.intp]:
+    """The first ``True`` row of ``hit`` within each bucket that has one."""
+    rows = np.flatnonzero(hit)
+    ids = bucket_id[rows]
+    first = np.ones(rows.size, dtype=bool)
+    first[1:] = ids[1:] != ids[:-1]
+    return rows[first]
+
+
+def _series_bucket_indices(
+    y: NDArray[np.float64], starts: NDArray[np.intp], bucket_id: NDArray[np.intp]
+) -> list[NDArray[np.intp]]:
+    """Row indices of the min-y and max-y sample per bucket, vectorized.
+
+    One ``reduceat`` per extremum replaces the old per-bucket Python loop
+    (~11k-27k numpy calls per request; at 100k rows the decimated request was
+    slower than full resolution). Non-finite values are masked to the
+    identity of each reduction (``+inf`` for min, ``-inf`` for max) and then
+    excluded from the hit test, so an all-non-finite bucket contributes
+    nothing. The FIRST row equal to the bucket's extremum wins, matching
+    ``nanargmin``/``nanargmax`` and the frontend's strict-``<``/``>`` scan
+    (``-0.0 == 0.0`` there too). A bucket whose min and max land on one row
+    contributes it once, via the caller's union.
+    """
+    finite = np.isfinite(y)
+    lo = np.where(finite, y, np.inf)
+    hi = np.where(finite, y, -np.inf)
+    mins = np.minimum.reduceat(lo, starts)[bucket_id]
+    maxs = np.maximum.reduceat(hi, starts)[bucket_id]
+    return [
+        _first_hit_per_bucket((lo == mins) & finite, bucket_id),
+        _first_hit_per_bucket((hi == maxs) & finite, bucket_id),
+    ]
 
 
 def decimate_row_indices(series: Sequence[NDArray[np.float64]], buckets: int) -> NDArray[np.intp]:
@@ -87,10 +110,9 @@ def decimate_row_indices(series: Sequence[NDArray[np.float64]], buckets: int) ->
     bucket_count = max(1, min(buckets, n))
     if n <= bucket_count:
         return np.arange(n, dtype=np.intp)
-    picked: set[int] = set()
-    for y in series:
-        picked.update(_series_bucket_indices(y, bucket_count))
-    return np.array(sorted(picked), dtype=np.intp)
+    starts, bucket_id = _bucket_layout(n, bucket_count)
+    picks = [p for y in series for p in _series_bucket_indices(y, starts, bucket_id)]
+    return np.unique(np.concatenate(picks)).astype(np.intp, copy=False)
 
 
 def decimate_columns(
