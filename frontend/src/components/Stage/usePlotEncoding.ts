@@ -33,6 +33,7 @@ import type { ColorScatterSpec } from "../../lib/colorscatter";
 import { seriesDisplayLabel } from "../../lib/figureSpecSeries";
 import type { PlotPayload } from "../../lib/plotdata";
 import { encodingSplits, windowEncoding, type FigureEncoding } from "../../lib/plotEncodingBinding";
+import { rowStateIdentity } from "../../lib/rowstate";
 import type { Dataset, SeriesStyle } from "../../lib/types";
 import { useStableByValue } from "../../lib/useStableValue";
 
@@ -80,10 +81,11 @@ export function useStageEncoding(
   // pending; the gradient's analysis view: excludedRows, filter), never on
   // `active` itself: a rename mints a new `active` over the same data and
   // must not rebuild the encoding, or `plotted` changes and the plot refetches.
+  const [excludedId, filterId, dataId] = rowStateIdentity(active);
   const source = useMemo(
     () => active ?? null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [active?.id, active?.data, active?.channelTypes, active?.pending, active?.excludedRows, active?.filter],
+    [active?.id, dataId, active?.channelTypes, active?.pending, excludedId, filterId],
   );
   const enc = useMemo(
     () => (source ? windowEncoding(stablePicks, source, groupCol, y2Keys) : null),
