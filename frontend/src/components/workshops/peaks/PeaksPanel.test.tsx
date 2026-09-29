@@ -680,3 +680,16 @@ describe("PeaksPanel — durable table exclusion column (P2.1)", () => {
     expect(fitMultiPeak).not.toHaveBeenCalled();
   });
 });
+
+describe("PeaksPanel — Batch integrate entry point", () => {
+  it("opens the batch window on demand, seeded with the detected peaks as windows", async () => {
+    render(<PeaksPanel />);
+    await screen.findByRole("button", { name: "Label all 2 detected peaks…" });
+    expect(screen.queryByRole("group", { name: "integration windows" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Batch integrate…" }));
+    const windows = await screen.findByRole("group", { name: "integration windows" });
+    // Peaks at 1 (FWHM 0.8) and 3 (FWHM 0.9): center ± FWHM each.
+    expect(within(windows).getByLabelText("window 1 low")).toHaveValue("0.2");
+    expect(within(windows).getByLabelText("window 2 high")).toHaveValue("3.9");
+  });
+});
