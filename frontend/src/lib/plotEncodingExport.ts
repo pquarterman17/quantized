@@ -43,7 +43,7 @@ export { resolvedPalette };
 export function encodedFigureSpec(e: EncodedSpec, spec: PlotSpec, stem: string, o: FigureRenderOpts): FigureSpec {
   const { group } = e.enc;
   return {
-    dataset: e.data,
+    dataset: e.source, // the text-column factors are appended server-side (`text_columns`)
     ...(e.xKey === null ? {} : { x_key: e.xKey }),
     y_keys: e.yChannels,
     ...(group === null ? {} : { group_col: group }),

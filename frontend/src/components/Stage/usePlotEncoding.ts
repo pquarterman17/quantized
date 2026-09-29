@@ -29,6 +29,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import type { ColorScatterSpec } from "../../lib/colorscatter";
 import { seriesDisplayLabel } from "../../lib/figureSpecSeries";
 import type { PlotPayload } from "../../lib/plotdata";
 import { encodingSplits, windowEncoding, type FigureEncoding } from "../../lib/plotEncodingBinding";
@@ -57,6 +58,9 @@ export interface StageEncoding {
   styles: (seriesStyles: Record<number, SeriesStyle>) => SeriesStyle[];
   /** Per-series FINISHED legend text, the channel renames applied. */
   labels: (seriesLabels: Record<number, string>) => string[];
+  /** A gradient Color-by's colour-mapped points (residual 4), keyed like
+   *  `colorscatter.buildColorByColumns`, or null without one. */
+  colorBy: ((styles: readonly SeriesStyle[]) => Map<number, ColorScatterSpec>) | null;
 }
 
 /** The Stage's encoding for `active`, or null when the window renders through
@@ -90,9 +94,11 @@ export function useStageEncoding(
 
   return useMemo(() => {
     if (!enc || !mod || !active) return null;
-    const data = active.data;
+    const data = mod.encodingData(active.data, enc); // residual 5: text-column factors appended
     const split = mod.encodedSplit(data, channels, enc);
     const { specs, series } = mod.encodedNames(data, split);
+    const gradient = mod.stageGradient(active, data, enc); // residual 4: scale over the kept rows
+
     return {
       split: encodingSplits(enc),
       plotted: series.map((s) => s.channel),
@@ -102,6 +108,7 @@ export function useStageEncoding(
         const named = mod.encodedNames(data, split, channels.map((c) => seriesLabels[c]));
         return named.specs.map((sp, i) => seriesDisplayLabel(sp.label, sp.unit, named.series[i].legend));
       },
+      colorBy: gradient ? (styles) => mod.gradientColumns(gradient, styles) : null,
     };
   }, [enc, mod, active, channels]);
 }

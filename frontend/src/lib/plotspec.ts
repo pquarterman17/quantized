@@ -167,6 +167,7 @@ export type {
 export interface ChannelRef {
   datasetId: string;
   channel: number;
+  text?: string; // P1.4 encoding wells only: a text column's short name (`channel` is then -1)
 }
 
 /** The mark (glyph) a spec renders with. */
@@ -272,7 +273,7 @@ export function emptySpec(): PlotSpec {
 /** Structural ChannelRef equality (same dataset + channel). */
 export function channelRefEq(a: ChannelRef | null, b: ChannelRef | null): boolean {
   if (a === null || b === null) return a === b;
-  return a.datasetId === b.datasetId && a.channel === b.channel;
+  return a.datasetId === b.datasetId && a.channel === b.channel && a.text === b.text;
 }
 
 /** The dataset a spec targets: the id shared by its filled zones (X wins, then
@@ -284,8 +285,7 @@ export function specDatasetId(spec: PlotSpec): string | null {
   return (z.x ?? z.y[0] ?? z.group ?? z.facet ?? z.color ?? z.symbol ?? z.label)?.datasetId ?? null;
 }
 
-/** Is any renderable zone filled (X, a Y, or group)? Facet alone is not
- *  renderable in v1. */
+/** Is any renderable zone filled (X, a Y, or group)? Facet alone is not renderable in v1. */
 export function specHasContent(spec: PlotSpec): boolean {
   return spec.zones.x !== null || spec.zones.y.length > 0 || spec.zones.group !== null;
 }
@@ -724,8 +724,8 @@ export function validatePlotSpec(value: unknown): PlotSpec | null {
   // P1.4 encodings: kept only when a real ref survives, so a spec without them
   // serializes exactly as before they existed (the V1_FIXTURE byte contract).
   for (const k of ["color", "symbol", "label"] as const) {
-    const r = normRef(zin[k]);
-    if (r) zones[k] = r;
+    const r = normRef(zin[k]), text = (zin[k] as { text?: unknown } | null)?.text; // residual 5: a text column
+    if (r) zones[k] = typeof text === "string" && text !== "" ? { ...r, text } : r;
   }
   const mark = isPlotMark(o.mark) ? o.mark : "scatter";
   // Byte-stable v1 siblings of `mark` (never a v2 "block" — see PlotSpec's

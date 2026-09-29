@@ -3985,6 +3985,18 @@
             "description": "Categorical factor whose LEVEL picks each series' colour.",
             "title": "Color Col"
           },
+          "gradient_col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Continuous column whose value colours each point (a gradient; no split).",
+            "title": "Gradient Col"
+          },
           "label_col": {
             "anyOf": [
               {
@@ -4038,6 +4050,21 @@
             ],
             "description": "Categorical factor whose LEVEL picks each series' marker glyph.",
             "title": "Symbol Col"
+          },
+          "text_columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Text columns (metadata `text_columns`/`origin_text_columns`, by short name) appended as categorical channels n, n+1, ... before the split.",
+            "title": "Text Columns"
           }
         },
         "title": "FigureEncoding",

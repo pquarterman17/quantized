@@ -60,10 +60,11 @@ describe("gating through the modeling chokepoint", () => {
     expect(isEncodingFactor(DS, 99)).toBe(false);
   });
 
-  it("a channelTypes override wins: a categorical column forced continuous stops being a factor", () => {
+  it("a channelTypes override wins: a categorical column forced continuous stops being a factor (a colour gradient)", () => {
     const overridden: Dataset = { ...DS, channelTypes: { 1: "continuous" } };
     expect(isEncodingFactor(overridden, 1)).toBe(false);
-    expect(resolveEncoding(spec({ color: r(1) }), overridden)).toBeNull();
+    expect(resolveEncoding(spec({ color: r(1) }), overridden)).toEqual(enc({ gradient: 1 }));
+    expect(resolveEncoding(spec({ symbol: r(1) }), overridden)).toBeNull();
   });
 
   it("resolveEncoding keeps a categorical colour/symbol pick, masks a continuous one, and takes ANY label column", () => {

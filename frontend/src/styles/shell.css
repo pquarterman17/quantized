@@ -869,6 +869,7 @@ body {
 .qzk-graph-preview-msg { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 16px; color: var(--text-faint); font-size: var(--font-size-sm); }
 .qzk-graph-preview-msg.note { color: var(--text-dim); }
 .qzk-graph-preview-approx { position: absolute; left: 6px; bottom: 4px; font-size: var(--type-nano); color: var(--text-faint); }
+.qzk-graph-preview-scale { position: absolute; left: 46px; top: 4px; display: flex; gap: 4px; align-items: center; }
 .qzk-graph-actions { display: flex; gap: 8px; margin-top: 10px; }
 
 /* ── Graph Builder saved-spec toolbar (GUI_INTERACTION_PLAN #11) ── */

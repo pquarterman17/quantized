@@ -19,7 +19,7 @@ import {
   plotSpecPublicationCompatibility,
 } from "../../../lib/figureCompatibility";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
-import { encodedSpecRender, isEncodingFactor, specFigureEncoding, type EncodedSpec } from "../../../lib/plotEncoding";
+import { encodedSpecRender, specFigureEncoding, type EncodedSpec } from "../../../lib/plotEncoding";
 import { buildEncodedExport } from "../../../lib/plotEncodingExport";
 import { plotSpecFigureReason, plotSpecToFigureDocument } from "../../../lib/plotSpecFigure";
 import { applySpecBlocks } from "../../../lib/plotspecApply";
@@ -53,6 +53,7 @@ import { plotIntentStageTab, useActiveDataset, useApp } from "../../../store/use
 import { withFocusedEncoding } from "../../../store/windowDocuments";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { captureLiveBlocks } from "./captureLiveBlocks";
+import { encodingChip, encodingOptions, encodingRef, isEncodingZone, type EncodingZone } from "./encodingWellModel";
 import type { WellChip, WellOption } from "./ZoneWell";
 
 /** Does this spec's error wells already carry explicit content? Drives
@@ -128,8 +129,8 @@ export interface GraphBuilderState {
   /** P1.4: the encoded series the preview draws (styles + legend entries), or
    *  null when the spec renders through the ordinary path (lib/plotEncoding). */
   encoded: EncodedSpec | null;
-  /** Color-by / Symbol-by well options: only channels that read categorical. */
-  factorOptions: WellOption[];
+  /** The Color / Symbol / Label wells' options (./encodingWellModel). */
+  encodingOptions: Record<EncodingZone, WellOption[]>;
 }
 
 export function useGraphBuilder(): GraphBuilderState {
@@ -226,15 +227,10 @@ export function useGraphBuilder(): GraphBuilderState {
     () => (ds ? ds.data.labels.map((label, index) => ({ index, label })) : []),
     [ds],
   );
-  // P1.4: Color-by / Symbol-by take a categorical factor — gated through the
-  // modeling chokepoint (lib/plotEncoding.isEncodingFactor), like Stat Stage.
-  const factorOptions = useMemo(() => (ds ? options.filter((o) => isEncodingFactor(ds, o.index)) : []), [ds, options]);
+  // P1.4: what the Color / Symbol / Label wells offer, show and accept.
+  const encOptions = useMemo(() => encodingOptions(ds, options), [ds, options]);
 
   const labelOf = (channel: number): string => ds?.data.labels[channel] ?? `col ${channel}`;
-  // A colour/symbol pick that stopped reading categorical is ignored at render
-  // time (BUG-004's lesson); the chip says so rather than looking live.
-  const ignoredFactor = (zone: ZoneName, channel: number): boolean =>
-    (zone === "color" || zone === "symbol") && ds !== null && !isEncodingFactor(ds, channel);
 
   const chips = (zone: ZoneName): WellChip[] => {
     const z = spec.zones;
@@ -242,17 +238,13 @@ export function useGraphBuilder(): GraphBuilderState {
     if (zone === "yErr") return z.yErr.map((r) => ({ channel: r.channel, label: labelOf(r.channel) }));
     const ref = z[zone];
     if (!ref) return [];
-    const label = labelOf(ref.channel);
-    return [{ channel: ref.channel, label: ignoredFactor(zone, ref.channel) ? `${label} (not categorical: ignored)` : label }];
+    return [isEncodingZone(zone) ? encodingChip(ds, zone, ref) : { channel: ref.channel, label: labelOf(ref.channel) }];
   };
 
   const assign = (zone: ZoneName, channel: number) => {
     if (!ds) return;
-    if (ignoredFactor(zone, channel)) {
-      toast(`${zone === "color" ? "Color" : "Symbol"} needs a categorical column; set "${labelOf(channel)}" to nominal or ordinal first.`, "info");
-      return;
-    }
-    const ref: ChannelRef = { datasetId: ds.id, channel };
+    const ref: ChannelRef | string = isEncodingZone(zone) ? encodingRef(ds, zone, channel) : { datasetId: ds.id, channel };
+    if (typeof ref === "string") return toast(ref, "info");
     // #51 phase 3: an explicit drop into either error well IS the user
     // touching it — no further auto-prefill on this session's future Y drops.
     if (zone === "yErr" || zone === "xErr") setErrorsTouched(true);
@@ -593,6 +585,6 @@ export function useGraphBuilder(): GraphBuilderState {
     deleteSpec,
     exportPlot,
     encoded,
-    factorOptions,
+    encodingOptions: encOptions,
   };
 }

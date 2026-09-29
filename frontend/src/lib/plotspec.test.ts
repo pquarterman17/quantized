@@ -921,6 +921,21 @@ describe("serialize / deserialize / validate", () => {
     expect(JSON.parse(serializePlotSpec(base)).zones).not.toHaveProperty("symbol");
   });
 
+  it("keeps a text-column encoding ref's name (P1.4 residual 5), on the encoding wells only", () => {
+    const text = { datasetId: "d1", channel: -1, text: "C" };
+    const v = validatePlotSpec({
+      version: 1,
+      zones: { x: { ...ref(0), text: "X" }, y: [ref(1)], group: null, facet: null, symbol: text, label: { ...text, text: "" } },
+      mark: "scatter",
+    })!;
+    expect(v.zones.symbol).toEqual(text);
+    expect(v.zones.label).toEqual({ datasetId: "d1", channel: -1 }); // an empty name is no name
+    expect(v.zones.x).toEqual(ref(0)); // other wells never carry one
+    expect(deserializePlotSpec(serializePlotSpec(v))).toEqual(v);
+    expect(channelRefEq(text, { ...text, text: "D" })).toBe(false);
+    expect(channelRefEq(text, { ...text })).toBe(true);
+  });
+
   it("drops a malformed encoding ref rather than nulling the spec", () => {
     const v = validatePlotSpec({
       version: 1,

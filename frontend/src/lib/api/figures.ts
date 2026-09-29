@@ -48,6 +48,10 @@ export interface FigureEncodingSpec {
   label_col?: number;
   palette?: string[];
   markers?: string[];
+  /** P1.4 residual 4: a continuous colour column (a gradient). */
+  gradient_col?: number;
+  /** P1.4 residual 5: text columns appended as channels n, n+1, … (by name). */
+  text_columns?: string[];
 }
 
 export interface FigureSpec {

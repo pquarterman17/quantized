@@ -1,9 +1,8 @@
 // P1.4 Graph Builder encoding pickers (EncodingWells): real ZoneWells over a
 // stub builder state, so the test reads exactly what a user can pick. The
-// gating rule behind `factorOptions` is pinned in useGraphBuilder.test.ts and
-// lib/plotEncoding.test.ts; this pins that the Color/Symbol pickers OFFER only
-// those options, the Label picker offers every column, and each pick is
-// routed to its own zone.
+// rules behind `encodingOptions` are pinned in useGraphBuilder.test.ts and
+// encodingWellModel.test.ts; this pins that each picker OFFERS its own
+// options and each pick is routed to its own zone.
 
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
@@ -24,7 +23,7 @@ function stub(over: Partial<GraphBuilderState> = {}, chips: Partial<Record<ZoneN
   return {
     datasetId: "d1",
     options: OPTIONS,
-    factorOptions: [OPTIONS[1], OPTIONS[2]],
+    encodingOptions: { color: OPTIONS, symbol: [OPTIONS[1], OPTIONS[2]], label: OPTIONS },
     chips: (zone: ZoneName) => chips[zone] ?? [],
     assign: vi.fn(),
     remove: vi.fn(),
@@ -39,10 +38,10 @@ const optionLabels = (select: HTMLElement): string[] =>
     .map((o) => o.textContent ?? "");
 
 describe("EncodingWells", () => {
-  it("Color and Symbol offer only the categorical factors; Label offers every column", () => {
+  it("Symbol offers only the categorical factors; Color and Label offer every column", () => {
     render(<EncodingWells g={stub()} />);
     const factorList = ["+ assign channel…", "sample", "field"];
-    expect(optionLabels(screen.getByLabelText("Assign a channel to Color"))).toEqual(factorList);
+    expect(optionLabels(screen.getByLabelText("Assign a channel to Color"))).toEqual(["+ assign channel…", "Rxy", "sample", "field", "T"]);
     expect(optionLabels(screen.getByLabelText("Assign a channel to Symbol"))).toEqual(factorList);
     expect(optionLabels(screen.getByLabelText("Assign a channel to Label"))).toEqual([
       "+ assign channel…",

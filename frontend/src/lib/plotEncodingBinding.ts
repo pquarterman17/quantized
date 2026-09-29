@@ -11,13 +11,24 @@
 // Channel indices, like every other binding (`groupKey`, `facetKey`): the
 // document's `bindings.datasetId` owns the dataset they index. Stored RAW —
 // the gate runs at render/export time, so a colour pick that stops reading
-// categorical (a `channelTypes` override) is IGNORED rather than silently
-// re-interpreted, and honoured again if the override is removed.
+// categorical (a `channelTypes` override) turns into a GRADIENT (residual 4:
+// each point coloured by its value through a sequential colormap, with a
+// colour scale in the legend) rather than being silently re-read as levels;
+// a symbol pick that stops reading categorical is ignored. A text column
+// (residual 5) is picked by NAME (`FigureEncoding.text`) and joins as an
+// appended categorical channel — `plotEncoding.encodingData` on screen, the
+// backend's port (`calc/encoding_text.py`) from the wire's `text_columns`.
+// The gradient's scale, stops and label are derived on each side from the
+// same rows (`plotEncoding.encodedGradient` / `calc.plotting_encoded.
+// gradient_spec`), so only the column rides the wire; the derivations stay
+// out of this eager module.
 
 import type { FigureEncodingSpec } from "./api/figures";
 import { resolveToHex } from "./color";
+import { textColumnCells } from "./columnmeta";
 import type { FigureEncoding } from "./figureEncoding";
 import { channelModelingType, isCategorical } from "./modeling";
+import { rowsAreSampled } from "./rowSidecars";
 import { AUTO_MARKER_CYCLE, SERIES_VARS, cssVar, seriesColor } from "./seriesStyleCycle";
 import type { Dataset } from "./types";
 
@@ -25,17 +36,24 @@ import type { Dataset } from "./types";
 // (the eager document codec imports them); re-exported here for callers.
 export { sanitizeFigureEncoding, type FigureEncoding } from "./figureEncoding";
 
-/** The resolved encoding factors (value-channel indices), after gating. */
+/** The resolved encoding factors (value-channel indices), after gating.
+ *  Indices at or past the dataset's own channel count address its picked TEXT
+ *  columns, appended in `text` order (`plotEncoding.encodingData`, residual 5). */
 export interface Encoding {
   group: number | null;
   color: number | null;
   symbol: number | null;
   label: number | null;
+  /** A continuous colour pick: each point coloured by its value (residual 4).
+   *  Present only when set, like `text`. */
+  gradient?: number;
+  /** The picked text columns' short names, appended as factor channels. */
+  text?: readonly string[];
 }
 
 /** What the gate reads: the data plus the per-channel type overrides. A frozen
  *  document's snapshot has no overrides, so `{ data }` alone is enough. */
-export type EncodingSource = Pick<Dataset, "data" | "channelTypes">;
+export type EncodingSource = Pick<Dataset, "data" | "channelTypes" | "pending">;
 
 /** Can `channel` drive Color-by / Symbol-by on `ds`? A value channel that the
  *  modeling chokepoint reads as categorical (nominal or ordinal). */
@@ -46,23 +64,42 @@ export function isEncodingFactor(ds: EncodingSource, channel: number): boolean {
 }
 
 /** THE gate: `picks` against `ds`, with `group` the render's own group channel.
- *  Colour and symbol survive only as encoding factors; the label source takes
- *  any in-range channel. Null when no colour / symbol / label survives — the
- *  ordinary render path. */
+ *  Colour survives as a factor, else (an in-range continuous column) as a
+ *  gradient; symbol only as a factor; the label source takes any in-range
+ *  channel. A text pick names a column this sheet really carries — never one
+ *  of a sampled preview, whose text cells describe other rows than its values.
+ *  Null when no colour / symbol / label / gradient survives — the ordinary
+ *  render path. */
 export function resolveFigureEncoding(
   picks: FigureEncoding | null | undefined,
   ds: EncodingSource,
   group: number | null,
 ): Encoding | null {
   if (!picks) return null;
+  const n = ds.data.labels.length;
   const own = (c: number | null | undefined): number | null =>
-    c !== null && c !== undefined && c >= 0 && c < ds.data.labels.length ? c : null;
+    c !== null && c !== undefined && c >= 0 && c < n ? c : null;
   const factor = (c: number | undefined): number | null => {
     const k = own(c);
     return k !== null && isEncodingFactor(ds, k) ? k : null;
   };
-  const enc = { group: own(group), color: factor(picks.color), symbol: factor(picks.symbol), label: own(picks.label) };
-  return enc.color === null && enc.symbol === null && enc.label === null ? null : enc;
+  const text: string[] = [];
+  const textPick = (name: string | undefined): number | null => {
+    if (!name || rowsAreSampled(ds.pending) || !textColumnCells(ds.data, name)) return null;
+    return n + (text.includes(name) ? text.indexOf(name) : text.push(name) - 1);
+  };
+  const t = picks.text ?? {};
+  const color = textPick(t.color) ?? factor(picks.color);
+  const gradient = t.color === undefined && color === null ? own(picks.color) : null;
+  const enc: Encoding = {
+    group: own(group),
+    color,
+    symbol: textPick(t.symbol) ?? factor(picks.symbol),
+    label: textPick(t.label) ?? own(picks.label),
+    ...(gradient === null ? {} : { gradient }),
+    ...(text.length > 0 ? { text } : {}),
+  };
+  return enc.color === null && enc.symbol === null && enc.label === null && gradient === null ? null : enc;
 }
 
 /** The encoding a plot WINDOW renders: `resolveFigureEncoding`, except that a
@@ -83,16 +120,17 @@ export function windowEncoding(
 }
 
 /** Does this encoding split the series (a group, colour or symbol factor)? A
- *  legend-source-only encoding keeps one series per Y channel. */
+ *  legend-source-only or gradient-only encoding keeps one series per Y channel. */
 export function encodingSplits(enc: Encoding): boolean {
   return enc.group !== null || enc.color !== null || enc.symbol !== null;
 }
 
 /** The `/api/export/figure` `encoding` field for a resolved encoding — the
  *  factors (the group rides `group_col`, as ever), the palette the canvas
- *  resolves and, for a symbol factor, the glyph cycle. The one builder both the
- *  Graph Builder's export (`plotEncodingExport`) and a plot window's own export
- *  (`figureSpec.buildFigureSpecForView`) send. */
+ *  resolves, for a symbol factor the glyph cycle, a gradient's column and the
+ *  picked text columns' names (appended by the backend as channels n, n+1, …).
+ *  The one builder both the Graph Builder's export (`plotEncodingExport`) and a
+ *  plot window's own export (`figureSpec.buildFigureSpecForView`) send. */
 export function figureEncodingWire(enc: Encoding): FigureEncodingSpec {
   const palette = resolvedPalette();
   return {
@@ -101,6 +139,8 @@ export function figureEncodingWire(enc: Encoding): FigureEncodingSpec {
     ...(enc.label === null ? {} : { label_col: enc.label }),
     ...(palette ? { palette } : {}),
     ...(enc.symbol === null ? {} : { markers: [...AUTO_MARKER_CYCLE] }),
+    ...(enc.gradient === undefined ? {} : { gradient_col: enc.gradient }),
+    ...(enc.text ? { text_columns: [...enc.text] } : {}),
   };
 }
 

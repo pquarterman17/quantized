@@ -6691,6 +6691,11 @@ export interface components {
              */
             color_col?: number | null;
             /**
+             * Gradient Col
+             * @description Continuous column whose value colours each point (a gradient; no split).
+             */
+            gradient_col?: number | null;
+            /**
              * Label Col
              * @description Column whose value(s) on a series' rows become its legend text, verbatim.
              */
@@ -6710,6 +6715,11 @@ export interface components {
              * @description Categorical factor whose LEVEL picks each series' marker glyph.
              */
             symbol_col?: number | null;
+            /**
+             * Text Columns
+             * @description Text columns (metadata `text_columns`/`origin_text_columns`, by short name) appended as categorical channels n, n+1, ... before the split.
+             */
+            text_columns?: string[] | null;
         };
         /**
          * FigureFacet

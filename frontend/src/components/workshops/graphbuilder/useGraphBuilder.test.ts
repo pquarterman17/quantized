@@ -1481,9 +1481,11 @@ describe("useGraphBuilder — Color/Symbol/Label encodings (P1.4)", () => {
     return hook;
   };
 
-  it("offers only categorical channels as Color/Symbol factors, every channel as a Label source", () => {
+  it("offers only categorical channels as Symbol factors, every channel as a Color or Label source", () => {
     const { result } = build();
-    expect(result.current.factorOptions.map((o) => o.index)).toEqual([2, 3]);
+    expect(result.current.encodingOptions.symbol.map((o) => o.index)).toEqual([2, 3]);
+    expect(result.current.encodingOptions.color.map((o) => o.index)).toEqual([0, 1, 2, 3]);
+    expect(result.current.encodingOptions.label.map((o) => o.index)).toEqual([0, 1, 2, 3]);
     expect(result.current.options.map((o) => o.index)).toEqual([0, 1, 2, 3]);
   });
 
@@ -1505,23 +1507,36 @@ describe("useGraphBuilder — Color/Symbol/Label encodings (P1.4)", () => {
     ]);
   });
 
-  it("refuses a continuous column dropped on Color, with a toast, leaving the spec untouched", () => {
+  it("refuses a continuous column dropped on Symbol, with a toast, leaving the spec untouched", () => {
     const { result } = build();
     const before = result.current.spec;
-    act(() => result.current.assign("color", 1));
+    act(() => result.current.assign("symbol", 1));
     expect(result.current.spec).toBe(before);
-    expect(useToasts.getState().toasts.some((t) => /Color needs a categorical column/.test(t.msg))).toBe(true);
+    expect(useToasts.getState().toasts.some((t) => /Symbol needs a categorical column/.test(t.msg))).toBe(true);
   });
 
-  it("a pick that stops reading categorical is ignored, and its chip says so (BUG-004's lesson)", () => {
+  it("takes a continuous column on Color as a gradient, and its chip says so (residual 4)", () => {
     const { result } = build();
-    act(() => result.current.assign("color", 2));
+    act(() => result.current.assign("color", 1));
+    expect(result.current.spec.zones.color).toEqual({ datasetId: "d1", channel: 1 });
+    expect(result.current.chips("color")).toEqual([{ channel: 1, label: "y (gradient)" }]);
+    expect(result.current.encoded!.gradient).toMatchObject({ channel: 1 });
+    expect(result.current.encoded!.split).toBe(false);
+  });
+
+  it("a pick that stops reading categorical: Symbol is ignored and says so, Color turns gradient and says so", () => {
+    const { result } = build();
+    act(() => result.current.assign("symbol", 2));
     expect(result.current.encoded).not.toBeNull();
     act(() => {
       useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA, channelTypes: { 2: "continuous" } }] });
     });
     expect(result.current.encoded).toBeNull();
-    expect(result.current.chips("color")).toEqual([{ channel: 2, label: "grp (not categorical: ignored)" }]);
+    expect(result.current.chips("symbol")).toEqual([{ channel: 2, label: "grp (not categorical: ignored)" }]);
+    act(() => result.current.remove("symbol", 2));
+    act(() => result.current.assign("color", 2));
+    expect(result.current.chips("color")).toEqual([{ channel: 2, label: "grp (gradient)" }]);
+    expect(result.current.encoded!.gradient).toMatchObject({ channel: 2 });
   });
 
   it("save / reopen restores the encodings, and editing one flips dirty", () => {
@@ -1557,6 +1572,20 @@ describe("useGraphBuilder — Color/Symbol/Label encodings (P1.4)", () => {
     expect(useApp.getState().groupKey).toBeNull();
     expect(focusedBindings()?.encoding).toEqual({ color: 2, label: 3 });
     expect(useToasts.getState().toasts.some((t) => /encodings/i.test(t.msg))).toBe(false);
+  });
+
+  it("a text column picked on Symbol / Label is stored by name, split on, and applied to the window (residual 5)", () => {
+    const text = { ...DATA.metadata, origin_text_columns: { B: ["a", "a", "a", "a", "a", "a", "b", "b", "b", "b", "b", "b"] } };
+    act(() => useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: { ...DATA, metadata: text } }] }));
+    const { result } = build();
+    expect(result.current.encodingOptions.symbol.at(-1)).toEqual({ index: 4, label: "B (text)" });
+    act(() => result.current.assign("symbol", 4));
+    act(() => result.current.assign("label", 4));
+    expect(result.current.spec.zones.symbol).toEqual({ datasetId: "d1", channel: -1, text: "B" });
+    expect(result.current.chips("symbol")).toEqual([{ channel: 4, label: "B (text)" }]);
+    expect(result.current.encoded!.legend.map((l) => l.label)).toEqual(["a", "b"]);
+    act(() => result.current.createNewPlot());
+    expect(focusedBindings()?.encoding).toEqual({ text: { symbol: "B", label: "B" } });
   });
 
   it("applying an UNencoded graph to the current plot clears the encoding it carried", () => {

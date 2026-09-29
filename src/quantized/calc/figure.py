@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from quantized.calc.figure_colorscatter import MARKER_CODES as _MARKER
 from quantized.calc.figure_colorscatter import (
     draw_color_scatter as _draw_color_scatter,
 )
@@ -39,10 +40,8 @@ _LINESTYLE = {"solid": "-", "dashed": "--", "dotted": ":", "none": "none"}
 # per-series `step` ("pre"/"post"/"mid" — SeriesStyle.step / ExportSeriesStyle
 # .step) maps 1:1 onto matplotlib's own `Line2D.drawstyle` vocabulary.
 _DRAWSTYLE = {"pre": "steps-pre", "post": "steps-post", "mid": "steps-mid"}
-# 8 `MarkerShape` glyphs -> matplotlib codes; wire key `marker_shape` (sent by
-# `lib/exportStyles`; was hardcoded "o", so every shape exported as a circle).
-_MARKER = {"circle": "o", "square": "s", "triangle": "^", "downtriangle": "v",
-           "diamond": "D", "plus": "+", "cross": "x", "star": "*"}
+# `_MARKER` (MarkerShape -> matplotlib code) lives in `calc.figure_colorscatter`,
+# whose gradient branch draws the same glyphs.
 # Fixed fill translucency for MAIN #13 (fill under/between curves) — matches
 # the screen side's `uplotFill.ts` FILL_ALPHA_PCT (25%) so an exported figure
 # reads the same as its on-screen counterpart.

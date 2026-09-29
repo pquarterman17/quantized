@@ -16,7 +16,8 @@
 // arrives with `encoded` (lib/plotEncoding.encodeSpec) — its per-series
 // `styles` go to the painter, and its `legend` entries render through the
 // existing read-only legend (Stage/SpatialPanelLegend, LegendSample swatches),
-// so the key shows the same colour and glyph the canvas draws.
+// so the key shows the same colour and glyph the canvas draws. A gradient
+// Color-by adds the Stage legend's own colour-scale chip (ColorScaleChip).
 //
 // Categorical marks (JMP_GAP J5 residual, closed 2026-09-29): given the live
 // `spec`, box / violin / bar draw the window's `PlotView.statMarks` for that
@@ -25,11 +26,13 @@
 
 import { useEffect, useMemo, useRef } from "react";
 
-import type { EncodedSpec } from "../../../lib/plotEncoding";
+import type { ColorScatterSpec } from "../../../lib/colorscatter";
+import { GRADIENT_COLORMAP, gradientColumns, type EncodedSpec } from "../../../lib/plotEncoding";
 import type { PlotSpec, SpecRender } from "../../../lib/plotspec";
 import type { SeriesStyle } from "../../../lib/types";
 import type { Accent, Theme } from "../../../store/useApp";
 import { useApp } from "../../../store/useApp";
+import ColorScaleChip from "../../Stage/ColorScaleChip";
 import SpatialPanelLegend from "../../Stage/SpatialPanelLegend";
 import StatStageCanvas from "../../Stage/StatStageCanvas";
 import { draw as drawStat, type StatDrawData } from "../../Stage/statRender";
@@ -43,6 +46,7 @@ function CanvasHost({
   render,
   stat,
   styles,
+  colorBy,
   theme,
   accent,
 }: {
@@ -50,6 +54,7 @@ function CanvasHost({
   /** The box / bar draw (`previewStatDraws`), marks included. */
   stat: StatDrawData | null;
   styles?: readonly SeriesStyle[];
+  colorBy?: ReadonlyMap<number, ColorScatterSpec>;
   theme: Theme;
   accent: Accent;
 }) {
@@ -67,7 +72,7 @@ function CanvasHost({
         if (render.facets && render.facets.length > 0) {
           drawFacetGrid(canvas, host, render.facets, render.mark, showMarkers, stepMode);
         } else {
-          drawXY(canvas, host, render.payload, render.mark, showMarkers, stepMode, render.errorSpans, styles);
+          drawXY(canvas, host, render.payload, render.mark, showMarkers, stepMode, render.errorSpans, styles, colorBy);
         }
       } else if (stat) {
         drawStat(canvas, host, stat);
@@ -81,7 +86,7 @@ function CanvasHost({
     const ro = new ResizeObserver(paint);
     ro.observe(host);
     return () => ro.disconnect();
-  }, [render, stat, styles, theme, accent]);
+  }, [render, stat, styles, colorBy, theme, accent]);
 
   return (
     <div ref={hostRef} style={{ position: "absolute", inset: 0 }}>
@@ -147,15 +152,26 @@ export default function GraphPreview({
     () => previewStatDraws(render, spec, datasets, statMarks ?? {}),
     [render, spec, datasets, statMarks],
   );
+  // P1.4 residual 4: a gradient Color-by's points and colour scale.
+  const colorBy = useMemo(
+    () => (encoded?.gradient ? gradientColumns(encoded.gradient, encoded.styles) : undefined),
+    [encoded],
+  );
+  const g = encoded?.gradient;
 
   return (
     <div className="qzk-graph-preview">
       {stat.facets && stat.facets.length > 0 ? (
         <FacetCellGrid cells={stat.facets} theme={theme} accent={accent} />
       ) : (
-        <CanvasHost render={render} stat={stat.flat} styles={encoded?.styles} theme={theme} accent={accent} />
+        <CanvasHost render={render} stat={stat.flat} styles={encoded?.styles} colorBy={colorBy} theme={theme} accent={accent} />
       )}
       {render.kind === "xy" && encoded && encoded.legend.length > 0 && <SpatialPanelLegend entries={encoded.legend} />}
+      {render.kind === "xy" && g && (
+        <div className="qzk-graph-preview-scale">
+          <ColorScaleChip scale={{ label: g.label, colormap: GRADIENT_COLORMAP, lo: g.lo, hi: g.hi }} />
+        </div>
+      )}
       {render.kind === "message" && (
         <div className={`qzk-graph-preview-msg${render.tone === "note" ? " note" : ""}`}>
           {render.message}
