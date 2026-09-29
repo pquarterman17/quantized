@@ -37,10 +37,11 @@ function v1ToV2(o: Raw): Raw {
   return { ...o, schemaVersion: 2, preview: null, outlierPolicy: null, transform: null };
 }
 
-/** `STEPS.get(n)` turns a version-n object into a version-(n+1) one. A Map,
- *  not an object literal, so a version read from a file can never resolve to
- *  an inherited property (CodeQL: unvalidated dynamic method call). */
-const STEPS: ReadonlyMap<number, (o: Raw) => Raw> = new Map([[1, v1ToV2]]);
+/** Every migration step in order: `from` is the version it upgrades. The
+ *  loop below walks this fixed list and applies the steps at or above the
+ *  file's version, so a version read from a file is only ever COMPARED,
+ *  never used to look anything up (CodeQL: unvalidated dynamic method call). */
+const STEPS: readonly { from: number; run: (o: Raw) => Raw }[] = [{ from: 1, run: v1ToV2 }];
 
 export type RecipeMigration = { ok: Raw } | { error: string };
 
@@ -58,11 +59,14 @@ export function migrateRecipeObject(o: Raw): RecipeMigration {
     };
   }
   let cur = o;
-  for (let at = v; at < PLOT_RECIPE_SCHEMA_VERSION; at++) {
-    const step = STEPS.get(at);
-    if (!step) return { error: `unsupported plot recipe schema version: ${v}` };
-    cur = step(cur);
+  let at = v;
+  for (const step of STEPS) {
+    if (step.from < at) continue;
+    if (step.from !== at) break; // a gap in the chain
+    cur = step.run(cur);
+    at += 1;
   }
+  if (at !== PLOT_RECIPE_SCHEMA_VERSION) return { error: `unsupported plot recipe schema version: ${v}` };
   return { ok: cur };
 }
 
