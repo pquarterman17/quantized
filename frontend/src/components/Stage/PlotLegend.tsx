@@ -20,6 +20,9 @@ import LegendSample from "./LegendSample";
 import { resolveSeriesStyle, type SeriesCycle } from "../../lib/seriesStyleCycle";
 import { useLegendBox } from "./useLegendBox";
 
+/** The canvas' excluded companion: line-free 5px hollow circles. */
+const EXCLUDED_SAMPLE: SeriesStyle = { width: 0, marker: true, markerShape: "circle", markerSize: 5 };
+
 const LegendResizeHandles = lazyRegion(() => import("./LegendResizeHandles"), "Legend resize handles");
 
 interface PlotLegendProps {
@@ -149,12 +152,18 @@ export default function PlotLegend({
         // a literal black swatch on our dark canvas doesn't go invisible in
         // the legend even though the plotted line itself was substituted.
         const override = styleList?.[i]?.color;
-        const swatch =
-          override && !override.startsWith("--")
+        // A greyed "(excluded)" companion (`maskExcludedPayload`) is drawn in
+        // the plot's dim ink as hollow markers, and exported as a grey marker
+        // entry (`EXCLUDED_GHOST_STYLE`) — so its row is a dim marker, never
+        // the next palette colour.
+        const swatch = s.muted
+          ? `var(${isDarkBg ? "--ink-dim-on-dark" : "--ink-dim-on-light"})`
+          : override && !override.startsWith("--")
             ? resolveDrawColor(override, isDarkBg, inkColor)
             : override
               ? `var(${override})`
               : `var(--series-${(i % 8) + 1})`;
+        const sampleStyle = s.muted ? EXCLUDED_SAMPLE : resolveSeriesStyle(styleList?.[i], i, seriesCycle ?? null);
         // Plotted channels are click-to-toggle + double-click-to-rename; overlays
         // (i ≥ plotted.length) are not. Refuse to hide the last visible series.
         const isChannel = i < plotted.length;
@@ -170,7 +179,7 @@ export default function PlotLegend({
         if (editing && editing.channel === channel) {
           return (
             <div className="it" key={s.label}>
-              <LegendSample color={swatch} style={resolveSeriesStyle(styleList?.[i], i, seriesCycle ?? null)} defaultTrace={defaultTrace} />
+              <LegendSample color={swatch} style={sampleStyle} defaultTrace={defaultTrace} />
               <input
                 className="qz-input"
                 autoFocus
@@ -238,7 +247,7 @@ export default function PlotLegend({
               textDecoration: isHidden ? "line-through" : "none",
             }}
           >
-            <LegendSample color={swatch} style={resolveSeriesStyle(styleList?.[i], i, seriesCycle ?? null)} defaultTrace={defaultTrace} />
+            <LegendSample color={swatch} style={sampleStyle} defaultTrace={defaultTrace} />
             {/* Rich-text rename support (GOTO #5): `$...$` renders as math. */}
             <RichText text={text} />
             {interactive && plotted.length > 1 && (

@@ -716,3 +716,36 @@ describe("PlotLegend — auto dash/marker cycle (P3.3)", () => {
     expect(compared).toBe(traces.length * styles.length);
   });
 });
+
+describe("PlotLegend greyed excluded rows (audit item 1)", () => {
+  // `maskExcludedPayload` grey mode appends one muted "(excluded)" companion
+  // per series. The canvas draws it as dim-ink hollow markers and the export
+  // as a grey, line-free marker entry (`EXCLUDED_GHOST_STYLE`), so its legend
+  // row must be a grey marker too, never the next palette colour.
+  const withGhosts: PlotSeriesSpec[] = [
+    { label: "A", unit: "" },
+    { label: "B", unit: "" },
+    { label: "A (excluded)", unit: "", kind: "points", muted: true },
+    { label: "B (excluded)", unit: "", kind: "points", muted: true },
+  ];
+
+  it("draws each excluded companion as a grey marker, not a palette colour", () => {
+    const { container } = render(
+      <PlotLegend series={withGhosts} plotted={[0, 1]} hidden={[false, false, false, false]} isDarkBg />,
+    );
+    const rows = [...container.querySelectorAll(".qzk-legend .it")];
+    expect(rows.map((r) => r.textContent)).toEqual(["A▲▼", "B▲▼", "A (excluded)", "B (excluded)"]);
+    for (const row of rows.slice(2)) {
+      const sample = row.querySelector(".qzk-legend-sample")!;
+      expect(sample).toHaveAttribute("data-line", "false");
+      expect(sample.querySelector("circle")).toHaveAttribute("stroke", "var(--ink-dim-on-dark)");
+      expect(sample.outerHTML).not.toMatch(/--series-/);
+    }
+  });
+
+  it("follows the plot background's dim ink on a light canvas", () => {
+    const { container } = render(<PlotLegend series={withGhosts} plotted={[0, 1]} isDarkBg={false} />);
+    const ghost = container.querySelectorAll(".qzk-legend .it")[2];
+    expect(ghost.querySelector("circle")).toHaveAttribute("stroke", "var(--ink-dim-on-light)");
+  });
+});
