@@ -62,6 +62,7 @@ import {
   orderLevels,
 } from "../lib/categorical";
 import { resolveRecodeChannel } from "../lib/recode";
+import { isRederived, REDERIVED_EDIT_NOTICE } from "../lib/rederived";
 import type { DataStruct } from "../lib/types";
 import { resolvePendingEdit } from "./pendingEdit";
 import { toast } from "./toasts";
@@ -173,6 +174,13 @@ export const useLevelOrder = create<LevelOrderState>((set, get) => ({
       toast(`"${ds?.data.labels[channel] ?? "that column"}" isn't categorical — level order needs a level table.`, "danger");
       return;
     }
+    // The recalc rebuilds a re-derived dataset's `data` from raw/its source,
+    // which lacks this order, so a reorder would silently vanish (measured in
+    // levelEditsRederived.test.ts). Refused here and again at commit.
+    if (isRederived(ds)) {
+      toast(REDERIVED_EDIT_NOTICE, "danger");
+      return;
+    }
     set({
       open: true,
       datasetId,
@@ -232,6 +240,10 @@ export const useLevelOrder = create<LevelOrderState>((set, get) => ({
     const ds = app.datasets.find((d) => d.id === datasetId);
     if (!ds) {
       toast("can't reorder levels: dataset not found", "danger");
+      return false;
+    }
+    if (isRederived(ds)) {
+      toast(REDERIVED_EDIT_NOTICE, "danger");
       return false;
     }
     if (ds.pending != null) {
