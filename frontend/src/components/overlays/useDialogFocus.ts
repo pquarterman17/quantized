@@ -65,11 +65,9 @@ const FOCUSABLE = [
  *  an `aria-hidden` region must still trap Tab among its controls rather than
  *  report having none.
  *
- *  Round 3 (review NIT 10): what this buys is precise — it moves the WRAP
- *  boundary, so Tab never lands on a hidden first/last control. It does not
- *  remove a hidden focusable from the natural tab order in between; the trap
- *  only intervenes at the two ends. Delivering the attribute's full meaning
- *  would need `inert`, which is a separate decision. */
+ *  Round 3 (review NIT 10) found this moved only the WRAP boundary: a hidden
+ *  focusable BETWEEN the two ends was still an ordinary Tab stop. R8 closes
+ *  that in the trap itself (`nextStop` below), with no `inert` needed. */
 function hiddenWithin(el: HTMLElement, root: HTMLElement): boolean {
   const stop = root.parentElement;
   for (let n: HTMLElement | null = el; n !== null && n !== stop; n = n.parentElement) {
@@ -83,6 +81,19 @@ function hiddenWithin(el: HTMLElement, root: HTMLElement): boolean {
 export function focusablesIn(root: HTMLElement | null): HTMLElement[] {
   if (!root) return [];
   return Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)).filter((el) => !hiddenWithin(el, root));
+}
+
+/** The first of `list` a Tab (or Shift+Tab, `back`) from `from` reaches in
+ *  DOM order, skipping the rest of `from`'s own radio group — the browser
+ *  gives a whole group ONE Tab stop, so its siblings are never the next stop. */
+function nextStop(list: HTMLElement[], from: HTMLElement, back: boolean): HTMLElement | undefined {
+  const dir = back ? Node.DOCUMENT_POSITION_PRECEDING : Node.DOCUMENT_POSITION_FOLLOWING;
+  const group = from instanceof HTMLInputElement && from.type === "radio" && from.name ? from.name : null;
+  return (back ? [...list].reverse() : list).find(
+    (el) =>
+      (from.compareDocumentPosition(el) & dir) !== 0 &&
+      !(group && el instanceof HTMLInputElement && el.type === "radio" && el.name === group),
+  );
 }
 
 /** Where focus goes when a surface closes and the element it was opened from
@@ -130,7 +141,8 @@ function focusSafeLanding(): void {
  * One order — open order — now drives Escape, Tab, `inert` and paint. */
 
 /** Keep Tab / Shift+Tab inside `ref` while `open`. Moves focus only when it
- *  would otherwise leave; an ordinary Tab between two controls is untouched.
+ *  would otherwise leave or land on a hidden stop (R8); an ordinary Tab
+ *  between two visible controls is untouched.
  *
  *  Listens in the CAPTURE phase on `document` for two reasons: it must also
  *  catch a Tab pressed while focus has already leaked outside the dialog
@@ -177,19 +189,20 @@ export function useFocusTrap(ref: RefObject<HTMLElement | null>, open: boolean):
         root.focus();
         return;
       }
-      const first = items[0];
-      const last = items[items.length - 1];
+      const wrapTo = e.shiftKey ? items[items.length - 1] : items[0];
       const active = document.activeElement as HTMLElement | null;
       if (!active || !root.contains(active)) {
         e.preventDefault();
-        (e.shiftKey ? last : first).focus();
-      } else if (!e.shiftKey && active === last) {
-        e.preventDefault();
-        first.focus();
-      } else if (e.shiftKey && active === first) {
-        e.preventDefault();
-        last.focus();
+        wrapTo.focus();
+        return;
       }
+      // Where the browser's own Tab would land. A visible control inside the
+      // dialog keeps the native move; nothing (the end of the dialog) or a
+      // hidden stop is taken over: the next VISIBLE stop, else wrap (R8).
+      const natural = nextStop(Array.from(root.querySelectorAll<HTMLElement>(FOCUSABLE)), active, e.shiftKey);
+      if (natural && !hiddenWithin(natural, root)) return;
+      e.preventDefault();
+      (nextStop(items, active, e.shiftKey) ?? wrapTo).focus();
     };
     document.addEventListener("keydown", onKey, true);
     return () => document.removeEventListener("keydown", onKey, true);
