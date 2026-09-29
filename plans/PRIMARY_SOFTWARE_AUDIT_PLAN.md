@@ -3394,10 +3394,18 @@ fit, uncertainty, SLD, residuals, results, and publication output.
   1-2 (PRs #405, #406): value/vary/min/max/tie per parameter, scale and
   background (per-channel names allowed), resolution from a dQ column or
   dQ/Q; a model that cannot mean what it says is refused.
-- [~] Linked data/model/residual/SLD views. Slices 2-3 (PRs #406, #407): the
+- [x] Linked data/model/residual/SLD views. Slices 2-3 (PRs #406, #407): the
   fitted curve overlays its data, and "Add fit curves" adds each channel's R
-  and model and each SLD profile (log-Y plot one click away). Open: no linked
-  multi-panel view, and residuals are returned but not yet plotted.
+  and model and each SLD profile (log-Y plot one click away). Residuals
+  (commit 854545ee, 2026-09-29): the Fit view shows, for the live fit and
+  for a saved one, data + model (log R), the normalised residuals under them
+  on the same Q column with a zero line ((R fit - R)/dR in sigma, or log10
+  residuals in dex), and the SLD profile; a Q zoom in either Q panel zooms
+  both and the cursor is shared (`ReflFitPlots.tsx`, `reflFitResiduals.ts`).
+  Saved fits store their residuals (`.dwk` round-trip); an older dR record
+  says it has none, an older log record recomputes them exactly. Tests:
+  `reflFitResiduals.test.ts`, `ReflFitPlots.test.tsx`,
+  `reflFitCurves.test.ts` "stored residuals".
 - [x] Posterior uncertainty. Slice 4 (PR TBD, 2026-09-24): "Estimate
   uncertainty (DREAM)" on a live or saved dR-weighted fit samples the
   posterior through the job queue (`calc/refl_dream.py`,
@@ -3410,7 +3418,7 @@ fit, uncertainty, SLD, residuals, results, and publication output.
   truths inside the 95% interval over 20 fresh noise realisations; a
   degenerate same-material pair gets bound-wide intervals and correlation
   -1. User doc: `docs/tutorials/reflectivity-fit-workbench.md`.
-- [~] Durable results table and FigureDoc. Slice 3 (2026-09-24): every
+- [x] Durable results table and FigureDoc. Slice 3 (2026-09-24): every
   finished fit is a durable record on its channel datasets (`Dataset.reflFits`,
   last 10, `.dwk` round-trip with the BUG-017 sentinels), shown again with a
   history picker, Apply-to-model guard, Restore fit setup and Add to report
@@ -3418,8 +3426,13 @@ fit, uncertainty, SLD, residuals, results, and publication output.
   provenance and export through the existing vector path (tested). Follow-up:
   records also store the fitted curves (≤ 2,000 points each, thinned and
   labelled past that), so a saved fit overlays and adds its curves without a
-  re-run; fit curves carry the Library's derived mark. Open: no dedicated
-  FigureDoc template for data/model/residual/SLD panels.
+  re-run; fit curves carry the Library's derived mark. Figure template
+  (commit 854545ee, 2026-09-29): "Send to figure page" on a live or saved fit
+  makes editable figures R(Q) / residuals / SLD bound to its fit-curve
+  datasets (one column per channel, every Q panel on the same Q limits) on a
+  saved Figure Page and opens it there for vector export, as one undo step
+  (`reflFitFigure.ts`, `useReflFitFigure.ts`; tests `reflFitFigure.test.ts`,
+  `reflFitFigureSend.test.tsx`).
 - [ ] Validate representative XRR and PNR fits against trusted results. Open:
   needs the owner's real instrument data and a trusted reference fit (e.g.
   refl1d/GenX) — the synthetic-fixture checks above do not close it.
