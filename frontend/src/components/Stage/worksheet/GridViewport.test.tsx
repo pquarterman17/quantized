@@ -10,6 +10,7 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { REDERIVED_EDIT_NOTICE } from "../../../lib/rederived";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import GridViewport from "./GridViewport";
@@ -26,7 +27,11 @@ function makeData(nRows: number): DataStruct {
 
 const noop = () => {};
 
-function renderGrid(nRows: number, onEditCell: (row: number, col: number, value: number) => void = noop) {
+function renderGrid(
+  nRows: number,
+  onEditCell: (row: number, col: number, value: number) => void = noop,
+  readOnly = false,
+) {
   const data = makeData(nRows);
   const utils = render(
     <GridViewport
@@ -51,6 +56,7 @@ function renderGrid(nRows: number, onEditCell: (row: number, col: number, value:
       colStats={null}
       statsErr={false}
       textCols={[]}
+      readOnly={readOnly}
     />,
   );
   const scrollEl = utils.container.querySelector(".qzk-grid") as HTMLElement;
@@ -110,6 +116,14 @@ describe("GridViewport windowed rendering", () => {
     fireEvent.keyDown(input, { key: "Enter" });
 
     expect(onEditCell).toHaveBeenCalledWith(1, -1, 42);
+  });
+
+  it("a read-only (re-derived) grid opens no editor and says why on hover", () => {
+    renderGrid(5, noop, true);
+    const cell = screen.getByText("1.0000"); // row 1's x cell
+    fireEvent.doubleClick(cell);
+    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(cell.closest("[role=gridcell]")!.getAttribute("title")).toBe(REDERIVED_EDIT_NOTICE);
   });
 });
 

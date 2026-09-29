@@ -47,6 +47,7 @@ import { dropRows, insertBlanks, padRows, patchCell, shiftForDelete, shiftForIns
 import { computeFormulasIncremental } from "../lib/formulaIncremental";
 import { asAlreadyComputed } from "../lib/formulaInputs";
 import { clearOverlaysFor } from "./corrections";
+import { isRederived, REDERIVED_EDIT_NOTICE } from "../lib/rederived";
 import type { CellEdit } from "../lib/clipboardGrid";
 import type { Dataset } from "../lib/types";
 import { recompute, type AppState } from "./useApp";
@@ -123,6 +124,16 @@ export interface CellEditSlice {
   setCategoricalCell: (id: string, row: number, col: number, label: string) => void;
 }
 
+/** Refuse a direct value edit on a dataset the recalc re-derives (see
+ *  lib/rederived.ts): the edit would reach `data` only and be silently lost
+ *  on the next recalc. Checked FIRST at every entry point below — before the
+ *  pending guard too, whose retry re-enters here anyway. */
+function refuseRederived(get: () => AppState, ds: Dataset): boolean {
+  if (!isRederived(ds)) return false;
+  get().setStatus(REDERIVED_EDIT_NOTICE);
+  return true;
+}
+
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
@@ -130,7 +141,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
   return {
     insertRows: (id, at, count) => {
       const ds = get().datasets.find((d) => d.id === id);
-      if (!ds || count <= 0) return;
+      if (!ds || count <= 0 || refuseRederived(get, ds)) return;
       if (resolvePendingEdit(get, ds, "inserting rows", () => get().insertRows(id, at, count))) return;
       get().recordHistory("insert rows");
       set((s) => ({
@@ -198,7 +209,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
 
     deleteRows: (id, rows) => {
       const ds = get().datasets.find((d) => d.id === id);
-      if (!ds || rows.length === 0) return;
+      if (!ds || rows.length === 0 || refuseRederived(get, ds)) return;
       if (ds.pending != null) {
         // The selection belongs to the click that scheduled this action. Do not
         // retain a mutable array owned by the grid while full data is loading.
@@ -248,7 +259,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     },
   setCellValue: (id, row, col, value) => {
     const ds = get().datasets.find((d) => d.id === id);
-    if (!ds) return;
+    if (!ds || refuseRederived(get, ds)) return;
     // PENDING FIRST, ALWAYS. A previous round moved this below the row check for
     // comment adjacency and silently broke the case BUG-009 singles out: on a
     // pending book whose preview is shorter than the real grid — a text-only book
@@ -305,7 +316,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
   },
   setCellBlock: (id, edits, label, newLevels) => {
     const ds = get().datasets.find((d) => d.id === id);
-    if (!ds || edits.length === 0) return;
+    if (!ds || edits.length === 0 || refuseRederived(get, ds)) return;
     // Computed columns are read-only, exactly as in setCellValue above. The
     // pure layer (lib/clipboardGrid) already filters them out, but a block
     // arriving from anywhere else must not be able to bypass the rule.
@@ -385,7 +396,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
   },
   setCategoricalCell: (id, row, col, label) => {
     const ds = get().datasets.find((d) => d.id === id);
-    if (!ds) return;
+    if (!ds || refuseRederived(get, ds)) return;
     if (resolvePendingEdit(get, ds, "editing a cell", () => get().setCategoricalCell(id, row, col, label))) return;
     // Same out-of-range/negative row guard as setCellValue above, and for
     // the same reason — BEFORE recordHistory, before the `.slice()`-based

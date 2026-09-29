@@ -92,6 +92,8 @@ export interface GridViewportProps {
   modelingTypeOf?: (col: number) => ModelingType;
   channelTypes?: Record<number, ModelingType>;
   onChangeChannelType?: (col: number, t: ModelingType | null) => void;
+  /** Every cell is read-only: the dataset is re-derived by the recalc (lib/rederived.ts). */
+  readOnly?: boolean;
 }
 
 /** The row height token, read once per mount (and on resize, in case a
@@ -135,6 +137,7 @@ export default function GridViewport({
   modelingTypeOf,
   channelTypes,
   onChangeChannelType,
+  readOnly,
 }: GridViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState({ top: 0, left: 0 });
@@ -298,6 +301,7 @@ export default function GridViewport({
           onRowNumClick={onRowNumClick}
           onRowContext={onRowContext}
           cellEdit={cellEdit}
+          readOnly={readOnly}
           textCols={textCols}
           catLevels={(col) => categoricalLevels(data, col)}
           onEditCategoricalCell={onEditCategoricalCell}

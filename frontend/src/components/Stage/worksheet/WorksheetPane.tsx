@@ -27,6 +27,7 @@ import { useEffect, useState } from "react";
 
 import { isCategoricalChannel } from "../../../lib/categorical";
 import { hasOriginReportSheets } from "../../../lib/columnmeta";
+import { isRederived } from "../../../lib/rederived";
 import { channelModelingType } from "../../../lib/modeling";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -237,6 +238,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         modelingTypeOf={(col) => channelModelingType(ds, col)}
         channelTypes={ds.channelTypes}
         onChangeChannelType={(col, t) => useApp.getState().setChannelType(ds.id, col, t)}
+        readOnly={isRederived(ds)}
       />
 
       {menu && (
