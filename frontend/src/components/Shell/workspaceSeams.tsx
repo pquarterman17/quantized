@@ -25,12 +25,13 @@ export const LibraryWorkspace = lazyRegion(
   ({ onClose }) => <PendingWorkspace className="qzk-library-workspace" label="Library workspace" onClose={onClose} />,
 );
 
+function PendingQuickFigureBuilder() {
+  const close = useApp((s) => s.closeQuickFigureBuilder);
+  return <PendingWorkspace className="qzk-quick-builder" label="Quick Figure Builder" onClose={close} />;
+}
+
 export const QuickFigureBuilderWorkspace = lazyRegion(
   () => import("../workshops/quickfigurebuilder/QuickFigureBuilderWorkspace"),
   "Quick Figure Builder",
-  <PendingWorkspace
-    className="qzk-quick-builder"
-    label="Quick Figure Builder"
-    onClose={() => useApp.getState().closeQuickFigureBuilder()}
-  />,
+  <PendingQuickFigureBuilder />,
 );
