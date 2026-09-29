@@ -820,6 +820,18 @@ At minimum, the design must account for:
     `QuickFigureBuilderErrorReview.test.tsx`. Sabotage: grading
     position+unknown as `medium` fails 9 vitest + 15 pytest cases; skipping
     the Quick Plot question fails 3; a loosened `seedIsSettled` fails 12.
+    Durable decisions (2026-09-29, commit 4f5c1fe4): a confirmation (a
+    ticked Quick Plot box, a low pairing the QFB's created mapping carries,
+    an Inspector edit or its per-row Confirm) is recorded in the dataset's
+    `metadata.error_roles` -- the existing P1.6 contract, no new field -- via
+    `lib/errorRoleConfirm.ts`, and `errorRoles.isDeclaredBinding` makes it
+    outrank the grade per binding, so it is not asked again, also after a
+    `.dwk` round trip. An unticked box, Cancel, or a cancelled builder
+    records nothing (asked again); an Inspector removal withdraws it; one
+    Undo removes the figure and its confirmation together. Tests:
+    `store/errorRoleConfirm.test.ts`, `ErrorRolesCard.test.tsx`,
+    `QuickFigureBuilderErrorReview.test.tsx`. Sabotage: a no-op confirmation
+    write fails 7.
 - [x] The user can override every inferred role before creating the figure. Verified 2026-09-28: `QuickMappingPanel`'s per-column X/Y/error/ignore `<Select>`s feed `assignQuickFigureColumn`; pinned by `QuickFigureBuilderWorkspace.test.tsx`'s "offers keyboard-accessible X, Y, ignore, and targeted error roles" (reassigns an auto-inferred error column to X-error and then to plain Y) and "supports dragging a column into an explicit role zone".
 
 Unknown and ambiguous are different states:
@@ -3394,9 +3406,10 @@ back to the owner. No Library implementation is authorized by this pause.
   figure, and Quick Plot templates; the TypeScript confidence grade is
   pinned to the Python by the shared `confidence_corpus.json`, and both the
   Quick Figure Builder and Quick Plot ask before applying a `low` pairing
-  and never auto-apply a `blocked` one. Eager JS +1,529 B (854,864 ->
-  856,393; budget unchanged); full vitest 868 files / 14,195 tests green,
-  pytest 6,175 passed.
+  and never auto-apply a `blocked` one; a confirmation is recorded in
+  `metadata.error_roles` so it is never asked again (commit 4f5c1fe4). Eager
+  JS +1,534 B (854,864 -> 856,398; budget unchanged); full vitest 869 files
+  / 14,208 tests green, pytest 6,175 passed.
 
 - **2026-09-25 — Group F, bounded clipboard transfer for large workbooks
   (worktree agent):** the transfer-requirements box 5 `[~]` -> `[x]`, and
