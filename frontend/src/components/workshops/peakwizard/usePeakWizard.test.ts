@@ -263,6 +263,24 @@ describe("usePeakWizard — a live drag outranks the marker-edit pause, ONE acti
     expect(useApp.getState().plotTool).toBe("fwhm"); // the wizard's claim stops the walk
     setActiveGestureCancel(null);
   });
+
+  it("Esc③ falls to the app tier and reverts the tool (R7: the whole ladder, one rung per key)", async () => {
+    const cancel = vi.fn();
+    setActiveGestureCancel(cancel);
+    useApp.setState({ plotTool: "fwhm", qfitRoi: null, gadgetCursors: null });
+    renderHook(() => useGlobalShortcuts());
+    const { result } = renderHook(() => usePeakWizard());
+    act(() => result.current.setStep(1));
+
+    await pressEscape(); // the drag
+    await pressEscape(); // the marker edit
+    await pressEscape(); // focus is in no window, so the tool
+
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(result.current.markerEditActive).toBe(false);
+    expect(useApp.getState().plotTool).toBe("pointer");
+    setActiveGestureCancel(null);
+  });
 });
 
 // Guard against the underlying vi.mock actually being invoked (it shouldn't
