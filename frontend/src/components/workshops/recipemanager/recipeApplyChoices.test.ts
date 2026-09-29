@@ -190,6 +190,61 @@ describe("applyRecipeWithChoices", () => {
     expect(output!.data.metadata.transform_recipe).toBeDefined();
   });
 
+  /** A recipe whose extra field never matches, so applying it stages the preview. */
+  async function stagingRecipe(): Promise<PlotRecipe> {
+    const base = await transformThenRecipe();
+    return { ...base, signature: [...base.signature, { ...base.signature[0], id: "ghost", label: "nowhere", aliases: [] }] };
+  }
+
+  it("rolls the output back, restoring undo/redo exactly, when the staged preview is cancelled", async () => {
+    const recipe = await stagingRecipe();
+    store().renameDataset("b", "b renamed");
+    store().undo(); // one redo entry to preserve
+    const ids = store().datasets.map((d) => d.id);
+    const activeBefore = store().activeId;
+    const historySeqs = store().history.map((e) => e.seq);
+    const futureSeqs = store().future.map((e) => e.seq);
+
+    expect(await applyRecipeWithChoices(recipe, "b", { transformName: "stacked" })).toBe(false);
+    expect(store().datasets.length).toBeGreaterThan(ids.length);
+    store().cancelPendingRecipeApplication();
+
+    expect(store().pendingRecipeApplication).toBeNull();
+    expect(store().datasets.map((d) => d.id)).toEqual(ids);
+    expect(store().activeId).toBe(activeBefore);
+    expect(store().history.map((e) => e.seq)).toEqual(historySeqs);
+    expect(store().future.map((e) => e.seq)).toEqual(futureSeqs);
+    expect(store().status).toBe(
+      "Plot Recipe “Stacked view” preview cancelled — the output of transformation “stacked” was removed.",
+    );
+  });
+
+  it("still rolls back when the preview was re-staged by a confirm and then cancelled", async () => {
+    const recipe = await stagingRecipe();
+    const ids = store().datasets.map((d) => d.id);
+    await applyRecipeWithChoices(recipe, "b", { transformName: "stacked" });
+
+    expect(await store().confirmPendingRecipeApplication()).toBe(false); // same unmatched field -> re-staged
+    expect(store().pendingRecipeApplication).not.toBeNull();
+    store().cancelPendingRecipeApplication();
+
+    expect(store().datasets.map((d) => d.id)).toEqual(ids);
+  });
+
+  it("keeps the output, plotted, when the staged preview is confirmed", async () => {
+    const recipe = await stagingRecipe();
+    await applyRecipeWithChoices(recipe, "b", { transformName: "stacked" });
+    const outputId = store().pendingRecipeApplication!.datasetId;
+
+    expect(await store().confirmPendingRecipeApplicationPartial()).toBe(true);
+
+    expect(store().datasets.some((d) => d.id === outputId)).toBe(true);
+    expect(store().plotWindows).toHaveLength(1);
+    expect(windowDataset(store().plotWindows[0])).toBe(outputId);
+    store().cancelPendingRecipeApplication(); // nothing pending: a no-op, never a late take-back
+    expect(store().datasets.some((d) => d.id === outputId)).toBe(true);
+  });
+
   it("rolls the output back if applying the Plot Recipe throws after the transformation ran", async () => {
     const recipe = await transformThenRecipe();
     const ids = store().datasets.map((d) => d.id);

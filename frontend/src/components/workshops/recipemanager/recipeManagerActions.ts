@@ -173,8 +173,10 @@ function takeBackTransform(created: readonly string[], before: HistoryState): vo
  *  transformation the gesture is TWO undo steps (the Pipeline apply's own,
  *  then the figure). If the Plot Recipe then REFUSES the output (or its
  *  apply throws), the transformation is taken back (`takeBackTransform`)
- *  and this throws a notice naming the recipe's reason; a staged preview
- *  keeps the output, since the dialog it opens plots it. */
+ *  and this throws a notice naming the recipe's reason. A staged preview
+ *  keeps the output only if the user confirms it: cancelling the dialog runs
+ *  the same take-back (`PendingPlotRecipeApplication.onCancel`) with a
+ *  one-sentence status notice. */
 export async function applyRecipeWithChoices(recipe: PlotRecipe, datasetId: string, choices: ApplyChoices): Promise<boolean> {
   let target = datasetId;
   let takeBack: (() => void) | null = null;
@@ -209,11 +211,23 @@ export async function applyRecipeWithChoices(recipe: PlotRecipe, datasetId: stri
     takeBack?.();
     throw e;
   }
-  if (!ok && takeBack && useApp.getState().pendingRecipeApplication === pendingBefore) {
+  const staged = useApp.getState().pendingRecipeApplication;
+  if (!ok && takeBack && staged === pendingBefore) {
     takeBack();
     const notice = `${useApp.getState().status} — the output of transformation “${choices.transformName}” was removed.`;
     useApp.setState({ status: notice });
     throw new Error(notice);
+  }
+  if (!ok && takeBack && staged) {
+    // Staged for a preview: the output stays only if the user confirms it.
+    const undo = takeBack;
+    const onCancel = (): void => {
+      undo();
+      useApp.setState({
+        status: `Plot Recipe “${recipe.name}” preview cancelled — the output of transformation “${choices.transformName}” was removed.`,
+      });
+    };
+    useApp.setState({ pendingRecipeApplication: { ...staged, onCancel } });
   }
   const note = ok ? outlierPolicyNote(recipe.outlierPolicy, useApp.getState().excludedDisplay) : "";
   if (note) useApp.setState((s) => ({ status: `${s.status} — ${note}` }));
