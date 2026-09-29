@@ -119,6 +119,14 @@ export function parseTemplate(text: string): AnalysisTemplate {
 // import this whole module — see that file's own comment).
 const KEY = TEMPLATES_KEY;
 
+/** Window event fired after every write below, so an open reader (the
+ *  Recipe Manager's Transform picker) can re-read the list. */
+export const TEMPLATES_CHANGED_EVENT = "qz:templates-changed";
+
+function announce(): void {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(TEMPLATES_CHANGED_EVENT));
+}
+
 export function loadTemplates(): AnalysisTemplate[] {
   try {
     const raw = localStorage.getItem(KEY);
@@ -152,6 +160,7 @@ export function saveTemplates(list: AnalysisTemplate[]): AnalysisTemplate[] {
   } catch {
     /* storage unavailable — template stays session-local */
   }
+  announce();
   return list;
 }
 
@@ -162,6 +171,7 @@ export function deleteTemplate(name: string): AnalysisTemplate[] {
   } catch {
     /* ignore */
   }
+  announce();
   return list;
 }
 
@@ -196,6 +206,7 @@ export function appendTemplates(records: readonly AnalysisTemplate[]): AnalysisT
     } catch {
       /* storage unavailable — stays session-local */
     }
+    announce();
   }
   return loadTemplates();
 }

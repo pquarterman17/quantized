@@ -2,13 +2,13 @@
 // apply-time choices (style template, transformation). Real stores; every
 // wait is on STATE, never on a mocked call.
 
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { BUILTIN_PLOT_RECIPES } from "../../../lib/builtinPlotRecipes";
 import { captureRecipe, type PlotRecipe } from "../../../lib/plotRecipe";
 import { defaultPlotView } from "../../../lib/plotview";
-import { saveTemplate, toTemplate } from "../../../lib/template";
+import { deleteTemplate, saveTemplate, toTemplate } from "../../../lib/template";
 import type { Dataset } from "../../../lib/types";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { recipeLibs } from "../../../store/plotRecipeApply";
@@ -175,5 +175,39 @@ describe("RecipeManagerPanel — apply-time choices", () => {
     expect(await screen.findByText(/transformation “Normalize” is no longer saved/)).toBeInTheDocument();
     expect(useApp.getState().plotWindows).toHaveLength(0);
     expect(useApp.getState().datasets).toHaveLength(1);
+  });
+});
+
+// Audit item 5: the Transform picker read the saved list once per mount, so a
+// transformation saved or deleted while the manager was open never showed.
+describe("RecipeManagerPanel — live saved-transformation list", () => {
+  it("lists a transformation saved while the manager is open", () => {
+    useApp.setState({ plotRecipes: [recipe("p1", "Scan")] });
+    render(<RecipeManagerPanel />);
+    expect(screen.queryByLabelText("Transformation for Scan")).toBeNull();
+    act(() => void saveTemplate(toTemplate("Normalize", [], [], { revision: 2 })));
+    const options = within(picker("Scan")).getAllByRole("option").map((o) => o.textContent);
+    expect(options).toEqual(["None", "Normalize (r2)"]);
+  });
+
+  it("drops a deleted transformation and falls back from a pick of it", () => {
+    saveTemplate(toTemplate("Normalize", [], [], { revision: 1 }));
+    saveTemplate(toTemplate("Other", [], [], { revision: 1 }));
+    useApp.setState({ plotRecipes: [recipe("p1", "Scan")] });
+    render(<RecipeManagerPanel />);
+    fireEvent.change(picker("Scan"), { target: { value: "Normalize" } });
+    act(() => void deleteTemplate("Normalize"));
+    expect(within(picker("Scan")).getAllByRole("option").map((o) => o.textContent)).toEqual(["None", "Other (r1)"]);
+    expect(picker("Scan").value).toBe("");
+  });
+
+  it("re-targets Apply to when the chosen dataset is deleted", () => {
+    const other: Dataset = { ...ds, id: "d2", name: "d2.xy" };
+    useApp.setState({ datasets: [ds, other], activeId: "d1", plotRecipes: [recipe("p1", "Scan")] });
+    render(<RecipeManagerPanel />);
+    const target = screen.getByLabelText<HTMLSelectElement>("Apply to dataset");
+    fireEvent.change(target, { target: { value: "d2" } });
+    act(() => useApp.setState({ datasets: [ds] }));
+    expect(target.value).toBe("d1");
   });
 });
