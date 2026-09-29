@@ -8510,7 +8510,7 @@ Original acceptance criteria (unchanged):
   `usePendingOps` and never reads a job-queue id, so a DREAM/fit-scan job's
   progress and identity are invisible to the shared location. Two
   progress systems coexist, not one; box stays open for that specific gap.
-- [~] Safe cancel for long import/fit/batch/export. **Narrowed 2026-09-13**
+- [x] Safe cancel for long import/fit/batch/export. **Narrowed 2026-09-13**
   (adversarial review of the export-cancel commit): import (slice 1) and
   the DREAM/bumps fit shipped earlier and are unaffected. Export cancel
   shipped above (slice 5), but only at the File-menu single-dataset export
@@ -8602,6 +8602,41 @@ Original acceptance criteria (unchanged):
   `.catch` or a two-argument `.then`, never the silent `onLoadFailure`
   outside runLazy); it listed exactly the nine sites above before the fix,
   and `Library/MultiSelectBar.lazyFail.test.tsx` proves the toast.
+  **Closed 2026-09-29 (export cancel, third pass) — box ticked.** The
+  code-actionable residuals named above are wired with the same
+  `runCancellable` shape (a Cancel writes no file, raises no error toast,
+  leaves a status line):
+  `workshops/figurebuilder/previewExport.ts` (both the canonical-document
+  and the legacy live-spec Export; `useFigureBuilder.ts` untouched);
+  `lib/api/figures.ts` `exportCornerFigure`/`exportTernaryFigure`/
+  `exportFieldFigure` now take a signal, and the one caller, Curve Fit's
+  corner plot (`curvefit/useCurveFit.ts`), runs bootstrap + render as one
+  op whose Cancel aborts whichever request is in flight
+  (`lib/api/curvefit.ts` `bootstrapFit` takes a signal too; ternary and
+  field have no frontend caller yet); the File-menu "Export consolidated
+  CSV" command (`commands/fileCommandsLazy.ts` `runExportConsolidated`)
+  passes its signal, and its `run()` is now `void runLazy(...)` like
+  export-csv, so `runAction` no longer wraps it in a second, cancel-less
+  entry; and the two Stage copy sites (`Stage/usePlotStageActions.ts`
+  Copy figure / Copy figure as SVG) load their chunk through `runLazy`,
+  so the load now has its busy entry (the copy itself was already
+  cancellable through `exportActive`). Measured: every
+  `postDownload`/`postBlob` call in `frontend/src` now forwards a signal.
+  Commit `f07ce636`. Evidence: `figurebuilder/previewExport.test.ts`,
+  `lib/api/figuresSignal.test.ts`, the corner-plot cancel block in
+  `curvefit/useCurveFit.test.ts`, `commands/fileCommands.test.ts`
+  (export-consolidated joins the one-cancellable-op `it.each`, plus a
+  direct cancel case), `Stage/usePlotStageActions.copyLazy.test.ts` and
+  `.copyLazyFail.test.ts`. Each was red against the pre-change code (the
+  failed-load toast case excepted: it passed before too, and guards that
+  the move to `runLazy` kept it) and each guard was sabotaged once and
+  seen red. **Remaining, none code-actionable on the client:** Send to
+  Origin (COM) stays the documented exception (a Windows COM transfer with
+  no abort point; it keeps `runAction`'s busy entry); the
+  clipboard-after-write limit above has no browser hook; and the recorded
+  server-side caveat stands (cancel means "stop waiting, discard the
+  result": the sync export routes still render to completion on a
+  threadpool worker).
 - [~] Errors say what failed, whether data changed, and next action.
   **Audited 2026-09-14, census corrected in the 2026-09-14 review round** —
   intended as the whole user-facing failure surface, not a sample; the first
@@ -11264,6 +11299,17 @@ work (its BACKLOG row).
   lazy chunk; what is eager is the gate, the document field, the Stage hook
   and the export wiring. See P1.4's **Stage** bullet for rules, tests, the
   25 sabotaged guards and the known limits. Residuals 2-5 unchanged.
+
+- ~~**P3.4 safe cancel — the remaining export sites**~~ (2026-09-29, commit
+  `f07ce636`) — the Figure Builder preview Export (`previewExport.ts`, both
+  paths), Curve Fit's corner plot (bootstrap + render, one op), and File ▸
+  Export consolidated CSV run through `runCancellable`; the three
+  `figures.ts` wrappers and `bootstrapFit` take a signal; the consolidated
+  command and the two Stage copy chunk loads go through `runLazy`. Box
+  "Safe cancel" ticked (the earlier entry's "stays `[~]`" is superseded);
+  Send to Origin (COM), the clipboard-after-write limit and the server-side
+  render-to-completion caveat remain as named non-client limits. Eager JS
+  855,236 → 855,178 B (−58 B, after `npm ci`).
 
 ## Reference baseline
 
