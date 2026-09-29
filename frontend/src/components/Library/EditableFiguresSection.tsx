@@ -3,6 +3,7 @@
 import { useState } from "react";
 
 import { pagesReferencingFigure } from "../../lib/pageDocumentActions";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { SESSION_BUSY_MSG } from "../../store/figureLifecycle";
 import { figurePublicationSourceUnavailable } from "../../store/figurePublicationLibrary";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
@@ -74,12 +75,14 @@ export default function EditableFiguresSection() {
               style={{ minHeight: 24, minWidth: 24 }}
               title="rename editable figure"
               onClick={() => {
-                void import("../overlays/ParamDialog").then(({ askParams }) =>
-                  askParams("Rename editable figure", [
-                    { key: "name", label: "Name", type: "text", default: document.name },
-                  ]).then((params) => {
-                    if (params) rename(document.id, String(params.name));
-                  }),
+                void runLazy("Loading rename dialog…", () => import("../overlays/ParamDialog")).then(
+                  ({ askParams }) =>
+                    askParams("Rename editable figure", [
+                      { key: "name", label: "Name", type: "text", default: document.name },
+                    ]).then((params) => {
+                      if (params) rename(document.id, String(params.name));
+                    }),
+                  onLoadFailure,
                 );
               }}
             >

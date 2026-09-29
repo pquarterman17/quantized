@@ -19,6 +19,7 @@ import { useEffect } from "react";
 
 import { listenForAppShortcuts } from "../../lib/appShortcuts";
 import { isEditingTarget } from "../../lib/editingTarget";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { freezePlotSnapshot, readLivePlotSnapshot } from "../../lib/plotsnapshot";
 import { cycleWindow, nextPlotBg, snapshotView, zOrderIds } from "../../lib/plotview";
 import { useCommands, type Action } from "../../store/commands";
@@ -182,7 +183,11 @@ export function useWindowCommands(): void {
         // only ever runs after an explicit user gesture, so its
         // implementation (saveFigureAsRecipe.ts) stays out of the always-
         // eager bundle -- see that module's own header.
-        run: () => void import("./saveFigureAsRecipe").then((m) => m.saveFocusedFigureAsRecipe()),
+        run: () =>
+          void runLazy("Loading plot recipe tools…", () => import("./saveFigureAsRecipe")).then(
+            (m) => m.saveFocusedFigureAsRecipe(),
+            onLoadFailure,
+          ),
       },
       { id: "window-new", group: "Window", label: "New Graph Window", shortcut: "⌘⇧N", run: newGraphWindow },
       {

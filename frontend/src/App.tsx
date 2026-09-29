@@ -17,6 +17,7 @@ import { buildAppActions } from "./appCommands";
 import { appRootFocusProps } from "./lib/appRoot";
 import { health } from "./lib/api";
 import { lazyRegion } from "./lib/lazyRegion";
+import { onLoadFailure, runLazy } from "./lib/runLazy";
 import { hasDesktopShell } from "./lib/desktopBridge";
 import {
   loadLibraryViewMode,
@@ -117,7 +118,12 @@ export default function App() {
   // the next bundle-diet pass.) Every variant tried in the original wave was
   // measured rather than assumed; this was the smallest found.
   useEffect(() => {
-    void import("./store/globalPlotRecipes").then((m) => m.useGlobalPlotRecipes.getState().hydrate());
+    // P3.4 residual: runLazy, so a failed chunk load toasts instead of
+    // silently leaving the global recipes unloaded.
+    void runLazy("Loading global plot recipes…", () => import("./store/globalPlotRecipes")).then(
+      (m) => m.useGlobalPlotRecipes.getState().hydrate(),
+      onLoadFailure,
+    );
   }, []);
 
   // Restore the autosaved library on startup + debounce-save workspace changes
@@ -136,9 +142,9 @@ export default function App() {
   // provider.
   useEffect(() => {
     if (hasDesktopShell()) {
-      void import("./lib/desktopLockProvider").then((m) => {
+      void runLazy("Loading desktop project lock…", () => import("./lib/desktopLockProvider")).then((m) => {
         useProjectLock.getState().setProvider(m.createDesktopLockProvider());
-      });
+      }, onLoadFailure);
     }
   }, []);
 
@@ -181,14 +187,14 @@ export default function App() {
     let cancelled = false;
     let dispose: (() => void) | null = null;
     const teardownReengage = installBrowserAutosaveReengage();
-    void import("./lib/browserLockProvider").then((m) => {
+    void runLazy("Loading browser project lock…", () => import("./lib/browserLockProvider")).then((m) => {
       if (cancelled) return;
       const lock = useProjectLock.getState();
       const provider = m.createBrowserLockProvider(lock.instanceId);
       dispose = provider.dispose;
       lock.setProvider(provider);
       void engageBrowserAutosaveLock();
-    });
+    }, onLoadFailure);
     return () => {
       cancelled = true;
       teardownReengage();

@@ -28,6 +28,7 @@
 //                bulk-select already use, just emptied).
 
 import { childFolders } from "../../lib/foldertree";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 import { askParams } from "../overlays/ParamDialog";
@@ -79,8 +80,13 @@ export default function MultiSelectBar() {
     if (updated > 0) toast(`tagged ${updated} dataset(s) "${tag}"`);
   };
 
-  // folderOps loads on the click, not at launch (bundle-size ratchet).
-  const onExport = () => void import("./folderOps").then((m) => m.exportDatasets([...selectedIds], `selection-${n}.csv`, ""));
+  // folderOps loads on the click, not at launch (bundle-size ratchet);
+  // runLazy toasts a failed chunk load instead of doing nothing.
+  const onExport = () =>
+    void runLazy("Loading dataset export…", () => import("./folderOps")).then(
+      (m) => m.exportDatasets([...selectedIds], `selection-${n}.csv`, ""),
+      onLoadFailure,
+    );
 
   // PR J slice 2 (L0.32-L0.34): same discoverable-from-the-multi-selection
   // entry point as Plot/Move/Tag/Export above — the dialog itself (not this

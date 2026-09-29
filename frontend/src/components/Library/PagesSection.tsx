@@ -18,6 +18,7 @@
 import { useState } from "react";
 
 import { exportFigurePage } from "../../lib/api";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import { useApp } from "../../store/useApp";
 import { toast } from "../../store/toasts";
@@ -86,12 +87,14 @@ export default function PagesSection() {
             style={{ minHeight: 24, minWidth: 24 }}
             title="rename saved page"
             onClick={() => {
-              void import("../overlays/ParamDialog").then(({ askParams }) =>
-                askParams("Rename saved page", [
-                  { key: "name", label: "Name", type: "text", default: page.name },
-                ]).then((params) => {
-                  if (params) rename(page.id, String(params.name));
-                }),
+              void runLazy("Loading rename dialog…", () => import("../overlays/ParamDialog")).then(
+                ({ askParams }) =>
+                  askParams("Rename saved page", [
+                    { key: "name", label: "Name", type: "text", default: page.name },
+                  ]).then((params) => {
+                    if (params) rename(page.id, String(params.name));
+                  }),
+                onLoadFailure,
               );
             }}
           >
