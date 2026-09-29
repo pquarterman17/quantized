@@ -4651,6 +4651,27 @@
       },
       "FindPeaksRequest": {
         "properties": {
+          "bg_iterative": {
+            "default": false,
+            "title": "Bg Iterative",
+            "type": "boolean"
+          },
+          "bg_method": {
+            "default": "snip",
+            "enum": [
+              "snip",
+              "polynomial"
+            ],
+            "title": "Bg Method",
+            "type": "string"
+          },
+          "bg_poly_degree": {
+            "default": 4,
+            "maximum": 12.0,
+            "minimum": 0.0,
+            "title": "Bg Poly Degree",
+            "type": "integer"
+          },
           "max_peaks": {
             "default": 50,
             "title": "Max Peaks",
@@ -6261,7 +6282,14 @@
               {
                 "items": {
                   "items": {
-                    "type": "number"
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
                   },
                   "type": "array"
                 },

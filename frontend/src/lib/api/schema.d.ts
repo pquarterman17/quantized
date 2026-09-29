@@ -6935,6 +6935,22 @@ export interface components {
         /** FindPeaksRequest */
         FindPeaksRequest: {
             /**
+             * Bg Iterative
+             * @default false
+             */
+            bg_iterative?: boolean;
+            /**
+             * Bg Method
+             * @default snip
+             * @enum {string}
+             */
+            bg_method?: "snip" | "polynomial";
+            /**
+             * Bg Poly Degree
+             * @default 4
+             */
+            bg_poly_degree?: number;
+            /**
              * Max Peaks
              * @default 50
              */
@@ -7604,7 +7620,7 @@ export interface components {
              */
             y_label?: string;
             /** Z Grid */
-            z_grid?: number[][] | null;
+            z_grid?: (number | null)[][] | null;
             /**
              * Z Label
              * @default

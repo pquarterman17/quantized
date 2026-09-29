@@ -185,6 +185,9 @@ def find_peaks_robust(
     max_width_deg: float = 10.0,
     min_prominence: float = 0.02,
     sensitivity: str = "medium",
+    bg_method: str = "snip",
+    bg_poly_degree: int = 4,
+    bg_iterative: bool = False,
 ) -> tuple[list[dict[str, Any]], NDArray[np.float64]]:
     """Detect peaks robustly. Port of utilities.findPeaksRobust.
 
@@ -192,6 +195,11 @@ def find_peaks_robust(
     area/xRange/status/bg/model/eta/prominence/localSNR (area/eta are NaN and
     xRange empty — filled later by an explicit fit). ``sensitivity`` (low/medium/
     high) tightens or loosens the SNR and prominence thresholds.
+
+    ``bg_method`` / ``bg_poly_degree`` / ``bg_iterative`` pass straight through
+    to :func:`estimate_background` (``snip`` or ``polynomial``, optionally
+    peak-masked and refined). The defaults are MATLAB's (SNIP, one pass), so
+    the golden path is untouched; the others are a quantized extension.
     """
     xv = np.asarray(x, dtype=float).ravel()
     yv = np.asarray(y, dtype=float).ravel()
@@ -207,7 +215,10 @@ def find_peaks_robust(
         snr_thr, min_prom = snr_threshold, min_prominence
 
     x_span = float(xv.max() - xv.min())
-    bg = estimate_background(xv, yv, max_window_deg=max(max_window_deg, x_span * 0.05))
+    bg = estimate_background(
+        xv, yv, method=bg_method, max_window_deg=max(max_window_deg, x_span * 0.05),
+        poly_degree=bg_poly_degree, iterative=bg_iterative,
+    )
     residual = yv - bg
     global_noise = _estimate_noise(yv)
     local_noise = global_noise * np.ones(n)

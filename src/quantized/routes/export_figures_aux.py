@@ -41,7 +41,10 @@ class MapFigureRequest(BaseModel):
     x_axis: list[float]
     y_axis: list[float]
     # (ny, nx), NaN allowed for gaps -- required when contour_source="grid".
-    z_grid: list[list[float]] | None = None
+    # A JSON null cell is a gap too (-> NaN in calc's float asarray): that is
+    # how /api/plot/map serves hull gaps, so MapStage's vector export posts
+    # the on-screen grid unchanged.
+    z_grid: list[list[float | None]] | None = None
     # Scattered per-point z, same length as x_axis/y_axis -- required when
     # contour_source="points" (gap #17 tri-contour: the RSM cloud shape,
     # never regridded).

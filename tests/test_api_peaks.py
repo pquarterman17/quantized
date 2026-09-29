@@ -200,3 +200,26 @@ def test_integrate_batch_bad_reference_is_422() -> None:
               "regions": [[0.0, 4.0]], "reference": 9},
     )
     assert resp.status_code == 422
+
+
+def test_find_background_method_is_selectable() -> None:
+    """The find's internal background can be the robust polynomial instead of
+    the default SNIP (calc.baseline.estimate_background's two methods)."""
+    x, y = _two_peaks()
+    base = client.post("/api/peaks/find", json={"x": x, "y": y}).json()
+    snip = client.post("/api/peaks/find", json={"x": x, "y": y, "bg_method": "snip"}).json()
+    poly = client.post(
+        "/api/peaks/find",
+        json={"x": x, "y": y, "bg_method": "polynomial", "bg_poly_degree": 2, "bg_iterative": True},
+    )
+    assert poly.status_code == 200, poly.text
+    assert snip == base  # the default is unchanged
+    assert poly.json()["background"] != base["background"]
+    centers = sorted(p["center"] for p in poly.json()["peaks"])
+    assert [round(c) for c in centers] == [3, 6]
+
+
+def test_find_unknown_background_method_is_422() -> None:
+    x, y = _two_peaks()
+    resp = client.post("/api/peaks/find", json={"x": x, "y": y, "bg_method": "als"})
+    assert resp.status_code == 422
