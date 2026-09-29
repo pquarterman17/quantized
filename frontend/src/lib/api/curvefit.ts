@@ -52,9 +52,10 @@ export interface BootstrapResult {
 /** Bootstrap parameter uncertainty (percentile CIs) for a named model fit;
  *  pass `return_samples: true` to also get the replicate matrix for a
  *  corner (pairs) plot — the uncertainty-quantification counterpart to
- *  `fitModel` (gap #29). */
-export function bootstrapFit(req: BootstrapRequest): Promise<BootstrapResult> {
-  return postJSON("/api/fitting/bootstrap", req);
+ *  `fitModel` (gap #29). `signal` aborts the request (P3.4: the corner
+ *  plot's Cancel). */
+export function bootstrapFit(req: BootstrapRequest, signal?: AbortSignal): Promise<BootstrapResult> {
+  return postJSON("/api/fitting/bootstrap", req, signal);
 }
 
 // ── Custom equation models (GOTO #1) ────────────────────────────────────────

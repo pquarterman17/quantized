@@ -389,8 +389,11 @@ export function buildFileCommands(s: StoreGet): Action[] {
       label: "Export consolidated CSV…",
       description: "Combine every loaded dataset into one consolidated CSV export.",
       // Body lives in lazily-imported commands/fileCommandsLazy.ts (bundle-
-      // size ratchet — see that file's own doc comment).
-      run: () => import("./fileCommandsLazy").then((m) => m.runExportConsolidated(s, exportConsolidated)),
+      // size ratchet — see that file's own doc comment). `void` + runLazy as
+      // "export-csv" above: the body registers its own cancellable op (P3.4).
+      run: () =>
+        void runLazy("Loading consolidated export…", () => import("./fileCommandsLazy"))
+          .then((m) => m.runExportConsolidated(s, exportConsolidated), onLoadFailure),
     },
     {
       id: "preferences",

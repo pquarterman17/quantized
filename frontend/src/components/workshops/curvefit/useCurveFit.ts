@@ -10,6 +10,7 @@ import { exportCornerFigure } from "../../../lib/api/figures";
 import { fitModel } from "../../../lib/api";
 import { activeRowIndices, analysisData, droppedRows, expandToFull } from "../../../lib/rowstate";
 import type { CalcResult, Dataset, FitModel, FitWeighting, WeightMode } from "../../../lib/types";
+import { runCancellable } from "../../../store/pendingOps";
 import { useActiveDataset, useApp } from "../../../store/useApp";
 import { toast } from "../../../store/toasts";
 import { fitStepParams, selectedFitData } from "../../../lib/fitselection";
@@ -305,27 +306,26 @@ export function useCurveFit(): CurveFitState {
       if (!pairs.complete) {
         toast(`${pairs.n - pairs.keep.length} of ${pairs.n} rows are gaps; they were excluded from the bootstrap.`);
       }
-      const boot = await bootstrapFit({
-        model: modelName,
-        x: pairs.x,
-        y: pairs.y,
-        p0,
-        return_samples: true,
+      // P3.4: bootstrap + render are one StatusBar op whose Cancel aborts
+      // whichever request is in flight; a cancel saves no file and sets no error.
+      const done = await runCancellable("Exporting corner plot…", async (signal) => {
+        const boot = await bootstrapFit({ model: modelName, x: pairs.x, y: pairs.y, p0, return_samples: true }, signal);
+        if (!boot.boot_samples || boot.boot_samples.length === 0) {
+          throw new Error("bootstrap returned no replicate samples");
+        }
+        const names = models.find((m) => m.name === modelName)?.paramNames ?? [];
+        const paramNames =
+          names.length === boot.params.length ? names : boot.params.map((_, i) => `p${i}`);
+        const stem = active.name.replace(/\.[^.]+$/, "");
+        await exportCornerFigure({
+          samples: boot.boot_samples,
+          param_names: paramNames,
+          truths: boot.params,
+          title: `${modelName} corner — ${active.name}`,
+          filename: `${stem}-corner`,
+        }, signal);
       });
-      if (!boot.boot_samples || boot.boot_samples.length === 0) {
-        throw new Error("bootstrap returned no replicate samples");
-      }
-      const names = models.find((m) => m.name === modelName)?.paramNames ?? [];
-      const paramNames =
-        names.length === boot.params.length ? names : boot.params.map((_, i) => `p${i}`);
-      const stem = active.name.replace(/\.[^.]+$/, "");
-      await exportCornerFigure({
-        samples: boot.boot_samples,
-        param_names: paramNames,
-        truths: boot.params,
-        title: `${modelName} corner — ${active.name}`,
-        filename: `${stem}-corner`,
-      });
+      if (!done) useApp.getState().setStatus("corner plot cancelled");
     } catch (e) {
       setError(e instanceof Error ? e.message : "corner plot failed");
     } finally {

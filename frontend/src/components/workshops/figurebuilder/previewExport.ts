@@ -12,6 +12,7 @@ import type { CanonicalReadiness } from "./canonicalReadiness";
 import type { FigureDocument } from "../../../lib/figureDocument";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import type { DataStruct, Dataset } from "../../../lib/types";
+import { runCancellable } from "../../../store/pendingOps";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 
@@ -34,6 +35,12 @@ export interface PreviewExportDeps {
   setStatus: (status: string) => void;
 }
 
+/** P3.4 safe cancel: each path is one StatusBar op whose Cancel aborts the
+ *  render request, so a cancelled export saves no file and raises no error
+ *  toast; it leaves this status line instead. */
+const EXPORT_LABEL = "Exporting figure…";
+const CANCELLED = "export cancelled";
+
 /** Export the current figure: the canonical FigureDocument when a
  *  publication session is open, else the legacy live-plot spec. Both paths
  *  resolve a still-pending dataset before exporting (#38) so the request
@@ -48,14 +55,18 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
       return;
     }
     try {
-      let dataset = canonicalDataset;
-      if (dataset?.pending) dataset = (await useApp.getState().resolveDataset(dataset.id)) ?? null;
-      const stem = (dataset?.name ?? canonicalDocument.name).replace(/\.[^.]+$/, "");
-      await exportFigure({
-        ...buildFigureSpecFromDocument(canonicalDocument, dataset, stem, { autoSeriesStyles }),
-        filename: stem,
+      const done = await runCancellable(EXPORT_LABEL, async (signal) => {
+        let dataset = canonicalDataset;
+        if (dataset?.pending) dataset = (await useApp.getState().resolveDataset(dataset.id)) ?? null;
+        signal.throwIfAborted();
+        const stem = (dataset?.name ?? canonicalDocument.name).replace(/\.[^.]+$/, "");
+        await exportFigure({
+          ...buildFigureSpecFromDocument(canonicalDocument, dataset, stem, { autoSeriesStyles }),
+          filename: stem,
+        }, signal);
+        return stem;
       });
-      setStatus(`exported ${stem}.${canonicalDocument.output.format}`);
+      setStatus(done ? `exported ${done.value}.${canonicalDocument.output.format}` : CANCELLED);
     } catch (e) {
       const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;
       toast(msg, "danger");
@@ -69,14 +80,17 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
     // dataset -- resolve its full data first rather than silently exporting
     // the small preview. A frozen doc's dataSnapshot is untouched (it was
     // deliberately captured as-is).
-    let dataset = spec.dataset;
-    if (!frozenData && active?.pending) {
-      const ds = await useApp.getState().resolveDataset(active.id);
-      if (ds) dataset = ds.data;
-    }
     const stem = (active?.name ?? "figure").replace(/\.[^.]+$/, "");
-    await exportFigure({ ...spec, dataset, fmt, dpi, filename: stem });
-    setStatus(`exported ${stem}.${fmt}`);
+    const done = await runCancellable(EXPORT_LABEL, async (signal) => {
+      let dataset = spec.dataset;
+      if (!frozenData && active?.pending) {
+        const ds = await useApp.getState().resolveDataset(active.id);
+        if (ds) dataset = ds.data;
+      }
+      signal.throwIfAborted();
+      await exportFigure({ ...spec, dataset, fmt, dpi, filename: stem }, signal);
+    });
+    setStatus(done ? `exported ${stem}.${fmt}` : CANCELLED);
   } catch (e) {
     setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
   }
