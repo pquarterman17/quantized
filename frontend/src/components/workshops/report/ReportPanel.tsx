@@ -24,6 +24,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { reportExport, type ExportFormat, type ReportExportResult } from "../../../lib/api/reportExport";
 import type { ReportSheet } from "../../../lib/report";
 import { moveReportBlock, removeReportBlock, reportBlockKey } from "../../../lib/reportBlocks";
+import { runCancellable } from "../../../store/pendingOps";
 import { TOAST_ACTION_TTL, toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
@@ -138,6 +139,7 @@ export default function ReportPanel() {
   const reports = useApp((s) => s.reports);
   const setOpenReport = useApp((s) => s.setOpenReport);
   const removeReport = useApp((s) => s.removeReport);
+  const setStatus = useApp((s) => s.setStatus);
   const updateReportSheet = useApp((s) => s.updateReportSheet);
   // Which format is currently exporting (P0.4 feedback/cancel audit tail):
   // `busy` used to be a plain boolean, so all four buttons went "disabled"
@@ -169,7 +171,16 @@ export default function ReportPanel() {
     setLastWarnings(null);
     const exported = entry.report;
     try {
-      const res = await reportExport(exported, format, entry.name);
+      // P3.4: a StatusBar op with a Cancel that aborts the request; a
+      // cancelled export saves nothing and raises no error toast.
+      const done = await runCancellable(`Exporting report as ${format}…`, (signal) =>
+        reportExport(exported, format, entry.name, signal),
+      );
+      if (!done) {
+        setStatus("report export cancelled");
+        return;
+      }
+      const res = done.value;
       if (res.warningCount > 0) {
         // Stale (the sheet changed while this export ran): drop the list.
         if (liveSheet.current === exported) setLastWarnings({ sheet: exported, label, res });

@@ -8,6 +8,8 @@ import type { FigureDoc } from "../../../lib/figuredoc";
 import { createPageDocument } from "../../../lib/pageDocumentActions";
 import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import type { DataStruct } from "../../../lib/types";
+import { usePendingOps } from "../../../store/pendingOps";
+import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { useFigurePage } from "./useFigurePage";
 
@@ -104,6 +106,8 @@ const FROZEN_DOC: FigureDoc = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  usePendingOps.setState({ ops: [] });
+  useToasts.setState({ toasts: [] });
   useApp.setState({
     datasets: [{ id: "d1", name: "scan.dat", data: DATA }],
     activeId: "d1",
@@ -1254,5 +1258,69 @@ describe("useFigurePage page-wide greyscale (P3.3)", () => {
     expect(after.result.current.greyscale).toBe(true);
     const spec = await after.result.current.buildSpec();
     expect(spec!.panels[0].figure.greyscale).toBe(true);
+  });
+});
+
+// P3.4: the composer's own Export / Copy are the longest renders in the app;
+// both now register a StatusBar op with a Cancel that aborts the request, and
+// a cancelled one writes nothing and raises no error toast.
+describe("figure page export/copy cancel (P3.4)", () => {
+  /** A request that settles only when its signal aborts (as fetch does). */
+  function hangUntilAborted(signal?: AbortSignal): Promise<never> {
+    return new Promise((_, reject) => signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+  }
+
+  it("Export shows a cancellable op; Cancel aborts it with no error toast", async () => {
+    let signal: AbortSignal | undefined;
+    vi.mocked(exportFigurePage).mockImplementationOnce((_body, s) => {
+      signal = s;
+      return hangUntilAborted(s);
+    });
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.windowSources[0]));
+    let p!: Promise<void>;
+    act(() => {
+      p = result.current.exportNow();
+    });
+    await waitFor(() => expect(signal).toBeDefined());
+    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Exporting figure page…"]);
+    expect(signal?.aborted).toBe(false);
+    act(() => usePendingOps.getState().ops[0].cancel?.());
+    await act(async () => {
+      await p;
+    });
+    expect(signal?.aborted).toBe(true);
+    expect(useApp.getState().status).toBe("export cancelled");
+    expect(useToasts.getState().toasts).toEqual([]);
+    expect(usePendingOps.getState().ops).toEqual([]);
+  });
+
+  it("Copy shows a cancellable op; Cancel aborts the render and reports no refusal", async () => {
+    let rendering: AbortSignal | undefined;
+    vi.mocked(renderFigurePageBlob).mockImplementationOnce((_body, signal) => {
+      rendering = signal;
+      return hangUntilAborted(signal);
+    });
+    vi.mocked(copyImageAsync).mockImplementationOnce(async (pending) => {
+      await pending.catch(() => null);
+      return false;
+    });
+    const { result } = renderHook(() => useFigurePage());
+    act(() => result.current.assign(0, result.current.windowSources[0]));
+    let p!: Promise<void>;
+    act(() => {
+      p = result.current.copyNow();
+    });
+    await waitFor(() => expect(rendering).toBeDefined());
+    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Copying figure page…"]);
+    act(() => usePendingOps.getState().ops[0].cancel?.());
+    await act(async () => {
+      await p;
+    });
+    expect(rendering?.aborted).toBe(true);
+    expect(vi.mocked(copyImageAsync).mock.calls[0][1]?.aborted).toBe(true);
+    expect(useApp.getState().status).toBe("copy cancelled");
+    expect(useToasts.getState().toasts).toEqual([]);
+    expect(usePendingOps.getState().ops).toEqual([]);
   });
 });

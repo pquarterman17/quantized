@@ -15,6 +15,7 @@ import { fmtNum } from "../../../lib/format";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Switch } from "../../primitives/Switch";
 import { Button, Select } from "../../primitives";
+import { runCancellable } from "../../../store/pendingOps";
 import { useApp } from "../../../store/useApp";
 import type { PcaDrawData } from "./pcaScoresRender";
 import PcaScoresCanvas from "./PcaScoresCanvas";
@@ -56,8 +57,10 @@ export default function PcaView({ m }: { m: MultivarState }) {
     if (!pca) return;
     setExporting("scree");
     try {
-      await exportPcaScreeFigure({ explained: pca.explained, cumulative: pca.cumulative });
-      setStatus("exported PCA scree figure");
+      const done = await runCancellable("Exporting PCA scree figure…", (signal) =>
+        exportPcaScreeFigure({ explained: pca.explained, cumulative: pca.cumulative }, signal),
+      );
+      setStatus(done ? "exported PCA scree figure" : "export cancelled");
     } catch (e) {
       setStatus(e instanceof Error ? e.message : "export failed");
     } finally {
@@ -69,15 +72,17 @@ export default function PcaView({ m }: { m: MultivarState }) {
     if (!drawData) return;
     setExporting("panel");
     try {
-      await exportPcaFigure({
-        mode,
-        points: drawData.points,
-        vectors: drawData.vectors,
-        x_label: drawData.xLabel,
-        y_label: drawData.yLabel,
-        filename: `pca-${mode}`,
-      });
-      setStatus(`exported PCA ${mode} figure`);
+      const done = await runCancellable(`Exporting PCA ${mode} figure…`, (signal) =>
+        exportPcaFigure({
+          mode,
+          points: drawData.points,
+          vectors: drawData.vectors,
+          x_label: drawData.xLabel,
+          y_label: drawData.yLabel,
+          filename: `pca-${mode}`,
+        }, signal),
+      );
+      setStatus(done ? `exported PCA ${mode} figure` : "export cancelled");
     } catch (e) {
       setStatus(e instanceof Error ? e.message : "export failed");
     } finally {

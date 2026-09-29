@@ -11,6 +11,7 @@ vi.mock("../../../lib/api/reportExport", () => ({ reportExport: vi.fn() }));
 
 import ReportPanel, { reportWarningToast } from "./ReportPanel";
 import type { ReportEntry } from "../../../lib/report";
+import { usePendingOps } from "../../../store/pendingOps";
 import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 
@@ -50,6 +51,7 @@ const ENTRY: ReportEntry = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  usePendingOps.setState({ ops: [] });
   vi.mocked(reportExport).mockResolvedValue({ warnings: [], warningCount: 0 });
   useApp.setState({ reports: [ENTRY], openReportId: "rep-1" });
 });
@@ -123,6 +125,27 @@ describe("ReportPanel", () => {
         await Promise.resolve();
       });
       expect(screen.getByRole("button", { name: "Word" })).toBeEnabled();
+    });
+
+    // P3.4: the export is a StatusBar op with a Cancel; a cancelled one saves
+    // nothing and raises no error toast.
+    it("can be cancelled from its StatusBar op, with no error toast", async () => {
+      let inFlight: AbortSignal | undefined;
+      vi.mocked(reportExport).mockImplementationOnce((_r, _f, _n, signal) => {
+        inFlight = signal;
+        return new Promise((_, reject) => signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+      });
+      useToasts.setState({ toasts: [] });
+      render(<ReportPanel />);
+      fireEvent.click(screen.getByRole("button", { name: "Word" }));
+      await waitFor(() => expect(inFlight).toBeDefined());
+      expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Exporting report as docx…"]);
+      act(() => usePendingOps.getState().ops[0].cancel?.());
+      await waitFor(() => expect(screen.getByRole("button", { name: "Word" })).toBeEnabled());
+      expect(inFlight?.aborted).toBe(true);
+      expect(useApp.getState().status).toBe("report export cancelled");
+      expect(useToasts.getState().toasts).toEqual([]);
+      expect(usePendingOps.getState().ops).toEqual([]);
     });
 
     it("reverts to the plain label and re-enables the buttons on failure", async () => {

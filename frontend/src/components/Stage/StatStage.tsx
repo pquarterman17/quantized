@@ -86,8 +86,8 @@ export default function StatStage() {
   async function onExport() {
     setExporting(true);
     try {
-      await st.exportFigure("pdf");
-      useApp.getState().setStatus("exported statistical-plot figure");
+      const done = await st.exportFigure("pdf");
+      useApp.getState().setStatus(done ? "exported statistical-plot figure" : "export cancelled");
     } catch (e) {
       useApp.getState().setStatus(e instanceof Error ? e.message : "export failed");
     } finally {

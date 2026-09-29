@@ -21,6 +21,7 @@ import type { PageLabelFormat, PageLabelPosition } from "../../../lib/figurepage
 import { filledCount, type PageSlot } from "../../../lib/figurepageActions";
 import type { PageLayoutSettings } from "../../../lib/pageDocument";
 import { withPageGreyscale } from "../../../lib/pageGreyscale";
+import { runCancellable } from "../../../store/pendingOps";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { panelFigure, panelRenderInputs } from "./panelResolve";
@@ -193,15 +194,26 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
         setStatus("assign at least one panel to export a figure page");
         return;
       }
-      const spec = await buildSpec();
-      if (!spec) {
+      // P3.4: a StatusBar op with a Cancel that aborts the render request; a
+      // cancelled export saves no file and raises no error.
+      const done = await runCancellable("Exporting figure page…", async (signal) => {
+        const spec = await buildSpec();
+        if (!spec) return false;
+        signal.throwIfAborted();
+        await exportFigurePage({ ...spec, fmt, dpi }, signal);
+        return true;
+      });
+      if (!done) {
+        setStatus("export cancelled");
+        return;
+      }
+      if (!done.value) {
         // buildSpec() already set the specific `error` state (visible in the
         // preview pane); mirror it on the status bar too so Export's failure
         // reads the same as the preview's, not a generic non-sequitur.
         setStatus("cannot export: a panel's source is missing - see the highlighted slot, then clear or reassign it");
         return;
       }
-      await exportFigurePage({ ...spec, fmt, dpi });
       setStatus(`exported figure_page.${fmt}`);
     } catch (e) {
       setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
@@ -232,9 +244,21 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
       return;
     }
     setStatus("rendering figure page for the clipboard…");
-    const ok = await copyImageAsync(renderFigurePageBlob({ ...spec, fmt: "png", dpi: COPY_PAGE_DPI }));
-    setStatus(ok ? "figure page copied to clipboard" : "");
-    if (!ok) toast("clipboard write refused", "danger");
+    // P3.4: cancellable like Export. copyImageAsync reports an aborted render
+    // as `false`, so a refusal only counts when the signal was not aborted.
+    // A Cancel that lands after the clipboard write went through cannot undo
+    // it, and is reported as the copy it was (lib/exportActive.ts's rule).
+    const done = await runCancellable("Copying figure page…", async (signal) => {
+      const ok = await copyImageAsync(renderFigurePageBlob({ ...spec, fmt: "png", dpi: COPY_PAGE_DPI }, signal), signal);
+      if (!ok) signal.throwIfAborted();
+      return ok;
+    });
+    if (!done) {
+      setStatus("copy cancelled");
+      return;
+    }
+    setStatus(done.value ? "figure page copied to clipboard" : "");
+    if (!done.value) toast("clipboard write refused", "danger");
   }
 
   return { preview, error, busy, buildSpec, exportNow, copyNow };

@@ -26,6 +26,8 @@ import { createFigureDocument } from "../../lib/figureDocument";
 import { createPageDocument } from "../../lib/pageDocumentActions";
 import { defaultPlotView } from "../../lib/plotview";
 import type { DataStruct } from "../../lib/types";
+import { usePendingOps } from "../../store/pendingOps";
+import { useToasts } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 
 const DATA: DataStruct = {
@@ -40,6 +42,8 @@ beforeEach(() => {
   vi.mocked(askConfirm).mockReset();
   vi.mocked(exportFigurePage).mockClear();
   askParams.mockReset();
+  usePendingOps.setState({ ops: [] });
+  useToasts.setState({ toasts: [] });
   useApp.setState({
     pages: [],
     pageDocSeed: null,
@@ -231,5 +235,31 @@ describe("PagesSection", () => {
       await waitFor(() => expect(useApp.getState().status).toMatch(/referenced figure no longer exists/));
       expect(exportFigurePage).not.toHaveBeenCalled();
     });
+  });
+
+  // P3.4: the Library export is a StatusBar op with a Cancel; a cancelled one
+  // saves nothing and raises no error toast.
+  it("export without reopening can be cancelled from the StatusBar op, with no error toast", async () => {
+    const figure = createFigureDocument({ id: "figure-1", name: "Loop", datasetId: "d1", view: defaultPlotView() });
+    const page = createPageDocument({
+      id: "p1", name: "Ready page", rows: 1, cols: 1,
+      panels: [{ figureId: "figure-1", label: null, title: null }],
+      output: { format: "pdf", stylePreset: "default", dpi: 300, labelFormat: "(a)", labelPos: "nw" },
+    });
+    useApp.setState({ pages: [page], editableFigures: [figure], datasets: [{ id: "d1", name: "scan.dat", data: DATA }] });
+    let inFlight: AbortSignal | undefined;
+    vi.mocked(exportFigurePage).mockImplementationOnce((_body, signal) => {
+      inFlight = signal;
+      return new Promise((_, reject) => signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+    });
+    render(<PagesSection />);
+    fireEvent.click(screen.getByTitle('export "Ready page" without reopening it'));
+    await waitFor(() => expect(inFlight).toBeDefined());
+    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(['Exporting "Ready page"…']);
+    usePendingOps.getState().ops[0].cancel?.();
+    await waitFor(() => expect(useApp.getState().status).toBe("export cancelled"));
+    expect(inFlight?.aborted).toBe(true);
+    expect(useToasts.getState().toasts).toEqual([]);
+    expect(usePendingOps.getState().ops).toEqual([]);
   });
 });

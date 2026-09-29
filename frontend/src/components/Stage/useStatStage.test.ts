@@ -5,6 +5,7 @@ import { exportCategoricalFigure, exportStatplotFigure } from "../../lib/api/fig
 import { statsBox, statsViolin } from "../../lib/api";
 import { deterministicJitter } from "../../lib/jitter";
 import type { DataStruct, Dataset } from "../../lib/types";
+import { usePendingOps } from "../../store/pendingOps";
 import type { StatStageSeed } from "../../store/useApp";
 import type { StatDrawData } from "./statRender";
 import { useStatStage, type UseStatStageParams } from "./useStatStage";
@@ -945,5 +946,39 @@ describe("useStatStage — nested second factor (Group R)", () => {
     rerender(baseParams({ active: { ...NEST_DS, id: "n2" } }));
 
     expect(result.current.group2Col).toBeNull();
+  });
+});
+
+// P3.4: the stage's figure export is a StatusBar op with a Cancel that aborts
+// the render request; a cancelled export saves nothing and reports it.
+describe("exportFigure cancel (P3.4)", () => {
+  const BOX_RESPONSE = {
+    n_groups: 2,
+    boxes: [
+      { label: "grp = 0", q1: 10, median: 12, q3: 14, iqr: 4, whislo: 10, whishi: 114, mean: 62, sem: 20, ci_lo: 10, ci_hi: 114, n: 6, fliers: [], whis: 1.5 },
+      { label: "grp = 1", q1: 30, median: 32, q3: 34, iqr: 4, whislo: 30, whishi: 134, mean: 82, sem: 20, ci_lo: 30, ci_hi: 134, n: 6, fliers: [], whis: 1.5 },
+    ],
+  };
+
+  it("registers a cancellable op and resolves false when cancelled", async () => {
+    usePendingOps.setState({ ops: [] });
+    vi.mocked(statsBox).mockResolvedValue(BOX_RESPONSE);
+    let inFlight: AbortSignal | undefined;
+    vi.mocked(exportStatplotFigure).mockImplementationOnce((_spec, signal) => {
+      inFlight = signal;
+      return new Promise((_, reject) => signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+    });
+    const { result } = renderHook(() => useStatStage(baseParams()));
+    await waitFor(() => expect(result.current.draw).not.toBeNull());
+    let p!: Promise<boolean>;
+    act(() => {
+      p = result.current.exportFigure("pdf");
+    });
+    await waitFor(() => expect(inFlight).toBeDefined());
+    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Exporting statistical plot…"]);
+    act(() => usePendingOps.getState().ops[0].cancel?.());
+    await expect(p).resolves.toBe(false);
+    expect(inFlight?.aborted).toBe(true);
+    expect(usePendingOps.getState().ops).toEqual([]);
   });
 });
