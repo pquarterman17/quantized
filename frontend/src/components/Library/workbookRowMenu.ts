@@ -21,6 +21,7 @@ export function buildWorkbookRowMenu(
   onBrowse?: () => void,
   onOpen?: () => void,
   onStageOpen?: () => void,
+  onFocus?: () => void,
 ): ContextMenuItem[] {
   const workbook = node.entity;
   const target: WorkbookActionTarget = { node, onRename, onBrowse, onOpen, onStageOpen };
@@ -40,6 +41,7 @@ export function buildWorkbookRowMenu(
   ];
 
   return [
+    ...(onFocus ? [{ label: "Focus on this workbook", run: onFocus } as ContextMenuItem, { separator: true } as ContextMenuItem] : []),
     ...buildMenuItems(workbookCoreActions, target),
     ...(moveItems.length ? [{ separator: true } as ContextMenuItem, ...moveItems] : []),
     { separator: true },

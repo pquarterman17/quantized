@@ -25,6 +25,7 @@ export function buildFolderRowMenu(
   count: number,
   onRename: () => void,
   onExpand: () => void,
+  onFocus?: () => void,
 ): ContextMenuItem[] {
   const target: FolderActionTarget = { folder, count, onRename, onExpand };
   const { folders, moveFolder } = useApp.getState();
@@ -52,6 +53,7 @@ export function buildFolderRowMenu(
   ];
 
   return [
+    ...(onFocus ? [{ label: "Focus on this folder", run: onFocus } as ContextMenuItem, { separator: true } as ContextMenuItem] : []),
     ...buildMenuItems(folderCoreActions, target),
     ...(moveItems.length ? [{ separator: true } as ContextMenuItem, ...moveItems] : []),
     { separator: true },

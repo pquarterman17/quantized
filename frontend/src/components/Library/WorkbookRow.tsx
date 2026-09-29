@@ -39,9 +39,10 @@ interface Props {
   depth: number;
   expanded: boolean;
   hasChildren: boolean;
+  onFocus?: () => void;
 }
 
-export default function WorkbookRow({ node, depth, expanded, hasChildren }: Props) {
+export default function WorkbookRow({ node, depth, expanded, hasChildren, onFocus }: Props) {
   const workbook = node.entity;
   const toggle = useLibraryStore((s) => s.toggleWorkbookExpanded);
   const selection = useLibraryStore((s) => s.librarySelection);
@@ -70,7 +71,7 @@ export default function WorkbookRow({ node, depth, expanded, hasChildren }: Prop
     setMenu({ x: r.left, y: r.bottom });
   };
 
-  const menuItems = buildWorkbookRowMenu(node, () => setRename(workbook.name));
+  const menuItems = buildWorkbookRowMenu(node, () => setRename(workbook.name), undefined, undefined, undefined, onFocus);
 
   return (
     <div

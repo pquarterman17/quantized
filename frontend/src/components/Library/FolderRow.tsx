@@ -76,9 +76,10 @@ interface Props {
   depth: number;
   count: number;
   expanded: boolean;
+  onFocus?: () => void;
 }
 
-export default function FolderRow({ folder, depth, count, expanded }: Props) {
+export default function FolderRow({ folder, depth, count, expanded, onFocus }: Props) {
   const toggle = useApp((s) => s.toggleFolderExpanded);
   const selection = useLibraryStore((s) => s.librarySelection);
   const renameFolder = useApp((s) => s.renameFolder);
@@ -129,7 +130,7 @@ export default function FolderRow({ folder, depth, count, expanded }: Props) {
   // shared `lib/contextActions.ts` folder registry — rebuilt on every render
   // (matching the pre-registry cost profile) since it's cheap and only
   // actually shown while `menu` is set.
-  const menuItems = buildFolderRowMenu(folder, count, () => setRename(folder.name), expand);
+  const menuItems = buildFolderRowMenu(folder, count, () => setRename(folder.name), expand, onFocus);
 
   // Keyboard path (matches DatasetRow): the ContextMenu key / Shift+F10, or
   // the "⋯" resting-cue button, opens the identical menu anchored at the
