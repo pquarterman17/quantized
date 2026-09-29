@@ -330,6 +330,61 @@ describe("takeOverEditing", () => {
     expect(provider.store.get(PATH)).toEqual(intruderRecord); // untouched by the refused takeover
   });
 
+  // A slow takeover CAS that resolves after the project was closed (or
+  // another opened) must not re-attach the old path: every close,
+  // reservation and acquisition supersedes older async work
+  // (projectLockEpoch.ts), and a lock won by a superseded takeover is
+  // released rather than left to go stale.
+  async function slowTakeOver(provider: ReturnType<typeof fakeProvider>) {
+    let finish: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => { finish = resolve; });
+    useProjectLock.setState({
+      provider: { ...provider, takeOver: async (path, token) => { await gate; return provider.takeOver(path, token); } },
+    });
+    const taking = useProjectLock.getState().takeOverEditing();
+    return { taking, finish: () => finish?.() };
+  }
+
+  it("a takeover that resolves after the project closed neither re-attaches nor keeps the lock", async () => {
+    const provider = await seedStale();
+    const { taking, finish } = await slowTakeOver(provider);
+    closeProjectLock();
+    finish();
+
+    expect(await taking).toBe(false);
+    const s = useProjectLock.getState();
+    expect(s.path).toBeNull();
+    expect(s.record).toBeNull();
+    expect(s.status).toBe("unlocked");
+    await vi.waitFor(() => expect(provider.store.has(PATH)).toBe(false)); // the won lock is released
+  });
+
+  it("a takeover that resolves after another project was opened leaves that project's state alone", async () => {
+    const provider = await seedStale();
+    const { taking, finish } = await slowTakeOver(provider);
+    await useProjectLock.getState().openProject("/other/project.dwk");
+    const other = useProjectLock.getState();
+    finish();
+
+    expect(await taking).toBe(false);
+    const s = useProjectLock.getState();
+    expect(s.path).toBe("/other/project.dwk");
+    expect(s.record).toEqual(other.record);
+    expect(s.status).toBe("held-by-me");
+  });
+
+  it("a refused takeover that resolves after the project closed does not overwrite the closed state", async () => {
+    const provider = await seedStale();
+    provider.store.set(PATH, withToken({ instanceId: "intruder", acquiredAt: Date.now(), heartbeatAt: Date.now() }));
+    const { taking, finish } = await slowTakeOver(provider);
+    closeProjectLock();
+    finish();
+
+    expect(await taking).toBe(false);
+    expect(useProjectLock.getState().status).toBe("unlocked");
+    expect(useProjectLock.getState().record).toBeNull();
+  });
+
   it("refuses outright when the project was never opened in a takeover-eligible state", async () => {
     await useProjectLock.getState().openProject(PATH); // acquires directly -> held-by-me
     const ok = await useProjectLock.getState().takeOverEditing();
