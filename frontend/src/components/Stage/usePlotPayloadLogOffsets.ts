@@ -27,8 +27,15 @@
 
 import { useMemo } from "react";
 
-import { buildErrorColumns } from "../../lib/errorbars";
-import { logOffsetDecades, logOffsetsApply, logOffsetSuffix, scaleErrorColumns } from "../../lib/logOffset";
+import { buildErrorColumns, buildErrorSpans, type ErrorSpan } from "../../lib/errorbars";
+import type { ErrorBinding } from "../../lib/errorRoles";
+import {
+  logOffsetDecades,
+  logOffsetsApply,
+  logOffsetSuffix,
+  scaleErrorColumns,
+  scaleErrorSpans,
+} from "../../lib/logOffset";
 import type { PlotPayload } from "../../lib/plotdata";
 import { firstVisiblePlottedChannel } from "../../lib/quickfit";
 import type { BaselineOverlay, Dataset, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
@@ -39,6 +46,8 @@ export interface LogOffsetScalingParams {
   seriesStyles: Record<number, SeriesStyle>;
   waterfall: number;
   groupCol: number | null;
+  /** P1.4: an encoded render never offsets (the export sends no offsets for one). */
+  encoded?: boolean;
   fitOverlay: FitOverlay | null;
   baselineOverlay: BaselineOverlay | null;
   peakOverlay: PeakOverlay | null;
@@ -71,7 +80,7 @@ function scaleOverlay<T extends { y: (number | null)[] } | null>(overlay: T, fac
 }
 
 export function useLogOffsetScaling(p: LogOffsetScalingParams): LogOffsetScalingResult {
-  const offsetsApply = logOffsetsApply(p.waterfall, p.groupCol);
+  const offsetsApply = logOffsetsApply(p.waterfall, p.groupCol) && !p.encoded;
 
   const offsetsKey = useMemo(
     () => p.plotted.map((ch) => logOffsetDecades(p.seriesStyles[ch]?.logOffset)).join(","),
@@ -101,12 +110,13 @@ export function useLogOffsetScaling(p: LogOffsetScalingParams): LogOffsetScaling
 /** Finding 3: `buildErrorColumns`' magnitudes, scaled by each channel's own
  *  decade offset -- built from the RAW dataset, so without this an offset
  *  series' whisker would stay at the true magnitude while the point it
- *  brackets moves by `10^k` (P1.5: suppressed when grouped, same ruling
- *  `usePlotPayload.ts`'s `colorByColumns` follows). */
+ *  brackets moves by `10^k` (P1.5: suppressed when `grouped` -- a group or
+ *  P1.4 encoding factor splits the series -- same ruling `usePlotPayload.ts`'s
+ *  `colorByColumns` follows). */
 export function useOffsetErrorBars(
   active: Dataset | null | undefined,
   plotted: number[],
-  groupCol: number | null,
+  grouped: boolean,
   errKeys: Record<number, number>,
   seriesStyles: Record<number, SeriesStyle>,
   offsetsApply: boolean,
@@ -114,15 +124,68 @@ export function useOffsetErrorBars(
   return useMemo(
     () =>
       scaleErrorColumns(
-        active && groupCol === null
+        active && !grouped
           ? buildErrorColumns(active.data, plotted, errKeys)
           : new Map<number, (number | null)[]>(),
         plotted,
         seriesStyles,
         offsetsApply,
       ),
-    [active, plotted, errKeys, groupCol, seriesStyles, offsetsApply],
+    [active, plotted, errKeys, grouped, seriesStyles, offsetsApply],
   );
+}
+
+  // #36 / G4: built from Dataset.errorRoles (the canonical contract) by
+  // default — absent for a dataset with no roles, in which case the legacy
+  // symmetric bars stand. G4's figure-scoped error-honesty fix: the FOCUSED
+  // window's OWN document errors (`documentErrors` in usePlotPayload) become the
+  // authoritative source instead, IFF they contain at least one binding the
+  // legacy `errKeys` projection cannot express (`hasRichErrorBindings`) —
+  // an X-error or an asymmetric `+`/`-` half. A document whose errors are
+  // entirely y/both is indistinguishable from what `errKeys` already
+  // carries, so it takes this branch only when there is something genuinely
+  // richer to show.
+  //
+  // An ordinary window's document CAN be rich (corrected 2026-09-09 — the
+  // previous claim that only Quick Figure / Graph Builder produce rich
+  // documents was false): `createPlotWindowDocument` seeds `bindings.errors`
+  // from `dataset.errorRoles`, so a parser-declared X binding makes a fresh
+  // ordinary window's document rich. The invariant this branch actually relies
+  // on is that dataset roles and every bound window's document errors are kept
+  // in sync by the single write chokepoint in `store/importErrorRoles.ts`.
+  //
+  // Double-render check (investigated, not just assumed): `errorBars` above
+  // is built from `p.errKeys` regardless of which path wins here, and
+  // `lib/uplotOpts.ts`'s `buildOpts` already excludes any column present in
+  // `errorSpans` from the legacy bars it draws
+  // (`legacyBars = ...filter(([col]) => !args.errorSpans?.has(col))`, see
+  // its own comment: "running both would double-draw the same whisker at a
+  // different thickness"). `buildErrorSpans` itself always evaluates BOTH
+  // the asymmetric-pair and symmetric-binding cases for every plotted
+  // channel — so even when the document-authoritative path is active, a
+  // y/both binding inside `documentErrors` still lands in the resulting
+  // `errorSpans` map, gets excluded from `legacyBars` by that existing
+  // filter, and draws exactly once via `errorSpansPlugin` — the identical
+  // dedupe the dataset-authoritative path already relied on. No new
+  // dedupe logic was needed; the existing column-based filter already
+  // covers a Map built from either source.
+//
+// Moved here from usePlotPayload.ts (P1.4, to fund the encodings under that
+// module's ceiling): `bindings` is whichever source that rule picked.
+export function useOffsetErrorSpans(
+  active: Dataset | null | undefined,
+  plotted: number[],
+  grouped: boolean,
+  bindings: readonly ErrorBinding[] | undefined,
+  seriesStyles: Record<number, SeriesStyle>,
+  offsetsApply: boolean,
+): Map<number, ErrorSpan[]> {
+  return useMemo(() => {
+    // P1.5: suppressed for a grouped render -- see `useOffsetErrorBars` above.
+    if (!active || grouped) return new Map<number, ErrorSpan[]>();
+    const spans = bindings?.length ? buildErrorSpans(active.data, plotted, bindings) : new Map<number, ErrorSpan[]>();
+    return scaleErrorSpans(spans, plotted, seriesStyles, offsetsApply); // finding 3, Y half only
+  }, [active, plotted, bindings, grouped, seriesStyles, offsetsApply]);
 }
 
 /** Finding 6: a legend rename is used VERBATIM by the renderer

@@ -70,6 +70,7 @@
 
 import type { ErrorBinding } from "./errorRoles";
 import type { FigureBindings, FigureViewState } from "./figureDocument";
+import type { FigureEncoding } from "./figureEncoding";
 import type { ChannelRole, ColumnFilter, FitSpec, ModelingType, SeriesStyle } from "./types";
 
 /** Shift one channel index down past a removed column. `null` = the index WAS
@@ -211,15 +212,30 @@ export function remapDatasetChannels(
  *  entry via `remapChannelList`; `errors` reuses `remapErrorRoles` (the same
  *  `ErrorBinding` shape as `Dataset.errorRoles` above). */
 export function remapFigureBindings(b: FigureBindings, removedCol: number): FigureBindings {
+  // P1.4: each encoding pick follows the same null-on-removed rule; the key is
+  // omitted when none survives (`FigureBindings.encoding`'s own contract).
+  const { encoding: picks, ...rest } = b;
+  const encoding = remapEncoding(picks, removedCol);
   return {
-    ...b,
+    ...rest,
     xKey: b.xKey === null ? null : remapChannel(b.xKey, removedCol),
     yKeys: b.yKeys === null ? null : remapChannelList(b.yKeys, removedCol),
     y2Keys: b.y2Keys === null ? null : remapChannelList(b.y2Keys, removedCol),
     groupKey: b.groupKey === null ? null : remapChannel(b.groupKey, removedCol),
     facetKey: b.facetKey === null ? null : remapChannel(b.facetKey, removedCol),
     errors: remapErrorRoles(b.errors, removedCol) ?? [],
+    ...(encoding ? { encoding } : {}),
   };
+}
+
+function remapEncoding(e: FigureEncoding | undefined, removedCol: number): FigureEncoding | undefined {
+  if (!e) return undefined;
+  const out: FigureEncoding = {};
+  for (const k of ["color", "symbol", "label"] as const) {
+    const c = e[k] === undefined ? null : remapChannel(e[k], removedCol);
+    if (c !== null) out[k] = c;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /** The view-scoped index-keyed fields (the half that was missing). */

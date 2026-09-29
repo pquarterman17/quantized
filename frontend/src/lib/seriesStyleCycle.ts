@@ -248,9 +248,15 @@ export function documentPinsSeriesStyles(
 export function windowCyclesSeriesStyles(
   on: boolean,
   view: CycleView,
-  doc: { publication?: { seriesStyles?: readonly unknown[] | null } } | null | undefined,
+  doc:
+    | { publication?: { seriesStyles?: readonly unknown[] | null }; bindings?: { encoding?: object } }
+    | null
+    | undefined,
 ): boolean {
-  return on && !documentPinsSeriesStyles(doc) && overlayExportsSeriesStyles(view);
+  // P1.4: a window with Color / Symbol / Label encodings has handed colour and
+  // glyph to its factor levels (lib/plotEncodingBinding) — refused like a
+  // grouped view, on the canvas and in the export alike.
+  return on && !documentPinsSeriesStyles(doc) && !doc?.bindings?.encoding && overlayExportsSeriesStyles(view);
 }
 
 /** The display positions of `count` series in their own natural order — the

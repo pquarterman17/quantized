@@ -1543,12 +1543,31 @@ describe("useGraphBuilder — Color/Symbol/Label encodings (P1.4)", () => {
     expect(result.current.dirty).toBe(false);
   });
 
-  it("a plot action says the editable plot does not draw the encodings, and binds no group", () => {
+  const focusedBindings = () => {
+    const s = useApp.getState();
+    const w = s.plotWindows.find((x) => x.id === s.focusedWindowId);
+    return w?.kind === "plot" ? w.document?.bindings : undefined;
+  };
+
+  it("a plot action stores the encoding on the new window's document (the Stage draws it) and binds no group", () => {
     const { result } = build();
     act(() => result.current.assign("color", 2));
+    act(() => result.current.assign("label", 3));
     act(() => result.current.createNewPlot());
     expect(useApp.getState().groupKey).toBeNull();
-    expect(useToasts.getState().toasts.some((t) => /editable plot does not draw them yet/.test(t.msg))).toBe(true);
+    expect(focusedBindings()?.encoding).toEqual({ color: 2, label: 3 });
+    expect(useToasts.getState().toasts.some((t) => /encodings/i.test(t.msg))).toBe(false);
+  });
+
+  it("applying an UNencoded graph to the current plot clears the encoding it carried", () => {
+    const { result } = build();
+    act(() => result.current.assign("symbol", 2));
+    act(() => result.current.createNewPlot());
+    expect(focusedBindings()?.encoding).toEqual({ symbol: 2 });
+    act(() => result.current.remove("symbol", 2));
+    act(() => result.current.applyToCurrent());
+    expect(focusedBindings()).toBeDefined();
+    expect(focusedBindings()).not.toHaveProperty("encoding");
   });
 
   it("an UNencoded commit shows no encoding disclosure", () => {

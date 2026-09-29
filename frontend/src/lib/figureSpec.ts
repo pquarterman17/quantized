@@ -46,6 +46,7 @@ import {
 import { marginFractions, pageSizeInches } from "./pagesetup";
 import type { PlotView } from "./plotview";
 import { canvasGroupCol } from "./plotGroupSplit";
+import { encodingSplits, figureEncodingWire, windowEncoding, type FigureEncoding } from "./plotEncodingBinding";
 import { pruneToLiveDataset } from "./rowstate";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
 // fund P3.3's threading against this file's 500-line ceiling. Imported, NOT
@@ -178,6 +179,8 @@ function buildFigureSpecForView(
     /** BUG-013 review round: the LIVE canvas' measured waterfall y-span —
      * see `FigureDocumentRenderOpts.waterfallSpan`. */
     waterfallSpan?: number | null;
+    /** P1.4: the document's Color / Symbol / Label picks (`bindings.encoding`). */
+    encoding?: FigureEncoding;
   } = {},
 ): FigureSpec {
   // #54 Stage 3: honor the window's page — figsize (inches) + margins. Absent pageSetup keeps the preset size + tight_layout behaviour.
@@ -268,6 +271,15 @@ function buildFigureSpecForView(
   // `figureSpecGroup` wrapper, a second name for this one predicate. Reused
   // below AS the waterfall's resolved grouping, so the two never disagree.
   const groupCol = canvasGroupCol(extras.groupKey, st.y2Keys);
+  // P1.4: the window's encodings through the SAME gate the Stage draws with
+  // (`plotEncodingBinding.windowEncoding`: categorical colour/symbol only, off
+  // with a secondary axis) — never with facets, whose panels split nothing on
+  // screen either. The backend splits and styles (`calc/plotting_encoded.py`,
+  // pinned to the frontend derivation by the shared wire fixture); like the
+  // group split, an encoded figure carries no offsets or stagger.
+  const encoding = facets === undefined
+    ? windowEncoding(extras.encoding, extras.liveDataset ?? { data }, groupCol, st.y2Keys)
+    : null;
   // `overrides` was built before this function learned the plotted/y2 split —
   // gate the two fields that depend on it (a stale y2_lim; a log-scaled
   // secondary axis's minor ticks) now that the split is known.
@@ -287,7 +299,7 @@ function buildFigureSpecForView(
   const legends = plotted.map((ch) => st.seriesLabels[ch]);
   const seriesPresentation = resolveSeriesPresentation(
     plotted, st.seriesStyles, positions, seriesCycle === true, legends,
-    extras.publicationSeriesStyles, groupCol !== null,
+    extras.publicationSeriesStyles, groupCol !== null || (encoding !== null && encodingSplits(encoding)),
     { displayChannels, hiddenChannels: st.hiddenChannels },
   );
 
@@ -306,6 +318,7 @@ function buildFigureSpecForView(
     // plot without this call site restating the rule.
     ...secondaryAxisWire(y2Axis),
     ...(groupCol === null ? {} : { group_col: groupCol }),
+    ...(encoding === null ? {} : { encoding: figureEncodingWire(encoding) }),
     ...(facets === undefined ? {} : { facets }),
     fmt: o.fmt,
     style: o.style,
@@ -332,9 +345,9 @@ function buildFigureSpecForView(
     ...(o.greyscale ? { greyscale: true } : {}),
     // P2.3: the canvas' per-series decade offsets (log-y comparison) — see
     // lib/logOffset.ts; never together with the waterfall below.
-    ...logOffsetWire({ plotted, seriesStyles: st.seriesStyles, waterfall: st.waterfall, view: cycleView, groupCol }),
+    ...(encoding ? {} : logOffsetWire({ plotted, seriesStyles: st.seriesStyles, waterfall: st.waterfall, view: cycleView, groupCol })),
     // BUG-013: the canvas' per-series waterfall stagger — see lib/waterfallOffset.ts.
-    ...waterfallWire({
+    ...(encoding ? {} : waterfallWire({
       data,
       canvasChannels,
       positions,
@@ -346,7 +359,7 @@ function buildFigureSpecForView(
       // field can be resolved from, not a second, possibly-disagreeing read
       // of the view's raw binding.
       groupCol,
-    }),
+    })),
     filename: extras.filename ?? stem,
   };
 }
@@ -402,6 +415,7 @@ export function buildFigureSpecFromDocument(
       // snapshot's own y-range off the figure, and only on the Stage export.
       waterfallSpan: document.data.mode === "frozen" ? null : overrides.waterfallSpan,
       liveDataset: document.data.mode === "frozen" ? null : (dataset ?? null), // C2
+      encoding: document.bindings.encoding, // P1.4
     },
   );
 }

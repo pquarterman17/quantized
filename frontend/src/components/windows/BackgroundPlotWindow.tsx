@@ -188,6 +188,7 @@ function BackgroundXYWindow({
       seriesLabels: view.seriesLabels,
       errKeys: view.errKeys,
       documentErrors,
+      encoding: document?.bindings.encoding, // P1.4: focus is not a styling input
       hiddenChannels: view.hiddenChannels,
       waterfall: view.waterfall,
       excludedDisplay,

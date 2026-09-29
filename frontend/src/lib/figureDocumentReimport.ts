@@ -83,10 +83,12 @@ import type { FigureDocument } from "./figureDocument";
  * fields and is left untouched. Never mutates.
  */
 export function resetFigureDocumentForReshape(document: FigureDocument): FigureDocument {
+  // P1.4: the encoding picks are channel indices too — dropped, key and all.
+  const { encoding: _encoding, ...bindings } = document.bindings;
   return {
     ...document,
     bindings: {
-      ...document.bindings,
+      ...bindings,
       xKey: null,
       yKeys: null,
       y2Keys: null,

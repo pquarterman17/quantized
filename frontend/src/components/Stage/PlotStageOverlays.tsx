@@ -50,6 +50,8 @@ export interface PlotStageOverlaysProps {
   // Matches usePlotPayload's own return type exactly — PlotStage passes
   // these straight through from that hook.
   styleList: (SeriesStyle | undefined)[] | undefined;
+  /** P1.4: an encoded render's finished legend text, 1:1 with the series. */
+  legendLabels?: (string | undefined)[];
   /** P3.3 (`lib/seriesStyleCycle.ts`): the display positions PlotStage opted
    *  this view's canvas into, so the legend swatch and the magnifier inset
    *  resolve the same dash/glyph the plot behind them drew. */
@@ -113,6 +115,7 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
         <PlotLegend
           series={p.displayPayload.series}
           styleList={p.styleList}
+          labels={p.legendLabels}
           seriesCycle={p.seriesCycle}
           plotted={p.plotted}
           hidden={p.hidden}
