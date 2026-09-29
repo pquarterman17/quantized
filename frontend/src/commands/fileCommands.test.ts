@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { buildFileCommands, runLazy } from "./fileCommands";
+import { runExportConsolidated } from "./fileCommandsLazy";
 import { runAction } from "../store/commands";
 import { spatialComposition } from "../lib/composition";
 import { defaultPageSetup } from "../lib/pagesetup";
@@ -130,7 +131,10 @@ describe("File menu — export commands register exactly one pending op (no doub
   // the identical reason (see fileCommands.ts) and was missing here too —
   // the same hole F1's fix closed for "export-page" alone. Sabotage: delete
   // the `void` at fileCommands.ts's "export-figure" run() and this fails.
-  it.each(["export-csv", "export-hdf5", "export-origin", "export-figure"])(
+  // P3.4: "export-consolidated" joined once runExportConsolidated registered
+  // its own cancellable op (runCancellable); before that, runAction's generic
+  // cancel-less wrap was its only entry.
+  it.each(["export-csv", "export-hdf5", "export-origin", "export-figure", "export-consolidated"])(
     "%s via runAction registers exactly one pendingOps entry, with a cancel callback",
     async (id) => {
       const cmd = buildFileCommands(useApp.getState).find((c) => c.id === id);
@@ -245,5 +249,48 @@ describe("runLazy (F5: dynamic-import failures toast instead of vanishing)", () 
     expect(await p).toBe("module");
     expect(usePendingOps.getState().ops).toHaveLength(0);
     expect(useToasts.getState().toasts).toEqual([]); // no failure toast on success
+  });
+});
+
+// P3.4 safe cancel: File ▸ Export consolidated CSV is a StatusBar op with a
+// Cancel that aborts the request; a cancelled export saves nothing, raises no
+// error toast and leaves a status line.
+describe("File ▸ Export consolidated CSV cancel (P3.4)", () => {
+  beforeEach(() => {
+    usePendingOps.setState({ ops: [] });
+    useToasts.setState({ toasts: [] });
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "a.dat", data: { time: [0], values: [[1]], labels: ["A"], units: [""], metadata: {} } },
+        { id: "d2", name: "b.dat", data: { time: [0], values: [[2]], labels: ["A"], units: [""], metadata: {} } },
+      ],
+      status: "",
+    });
+  });
+
+  it("Cancel aborts the request, reports a status line and no error toast", async () => {
+    let signal: AbortSignal | undefined;
+    const fn = vi.fn((_body: unknown, s?: AbortSignal) => {
+      signal = s;
+      return new Promise<void>((_, reject) =>
+        s?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))),
+      );
+    });
+    const p = runExportConsolidated(useApp.getState, fn);
+    await vi.waitFor(() => expect(signal).toBeDefined());
+    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Exporting 2 datasets…"]);
+    usePendingOps.getState().ops[0].cancel?.();
+    await p;
+    expect(signal?.aborted).toBe(true);
+    expect(useApp.getState().status).toBe("export cancelled");
+    expect(useToasts.getState().toasts).toEqual([]);
+    expect(usePendingOps.getState().ops).toEqual([]);
+  });
+
+  it("still reports a real failure as a failure", async () => {
+    const fn = vi.fn(() => Promise.reject(new Error("disk full")));
+    await runExportConsolidated(useApp.getState, fn);
+    expect(useApp.getState().status).toBe("export failed: disk full");
+    expect(usePendingOps.getState().ops).toEqual([]);
   });
 });

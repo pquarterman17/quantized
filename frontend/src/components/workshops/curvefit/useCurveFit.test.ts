@@ -6,6 +6,7 @@ import { autoGuess, bootstrapFit, listFitModels } from "../../../lib/api/curvefi
 import { exportCornerFigure } from "../../../lib/api/figures";
 import { fetchBookData, fitModel } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
+import { usePendingOps } from "../../../store/pendingOps";
 import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { useCurveFit } from "./useCurveFit";
@@ -344,7 +345,7 @@ describe("useCurveFit corner plot (gap #29 UI leg)", () => {
       y: [10, 20, 30, 40],
       p0: [2, 5],
       return_samples: true,
-    });
+    }, expect.any(AbortSignal));
     expect(exportCornerFigure).toHaveBeenCalledWith(
       expect.objectContaining({
         samples: [
@@ -354,6 +355,7 @@ describe("useCurveFit corner plot (gap #29 UI leg)", () => {
         truths: [2, 5],
         filename: "run-corner",
       }),
+      expect.any(AbortSignal),
     );
     expect(result.current.error).toBeNull();
   });
@@ -466,5 +468,82 @@ describe("useCurveFit — By grouping (JMP_GAP_PLAN J7 residual)", () => {
     await waitFor(() => expect(result.current.byResults).toHaveLength(2));
     act(() => result.current.setByCol(null));
     await waitFor(() => expect(result.current.byResults).toHaveLength(0));
+  });
+});
+
+// P3.4 safe cancel: the corner plot (bootstrap + render) is one StatusBar op
+// with a Cancel that aborts whichever request is in flight; a cancelled run
+// saves no file, sets no error and raises no toast, and leaves a status line.
+describe("useCurveFit corner plot cancel (P3.4)", () => {
+  const BOOT = {
+    params: [2, 5],
+    boot_mean: [2, 5],
+    boot_se: [0.1, 0.2],
+    ciLow: [1.8, 4.6],
+    ciHigh: [2.2, 5.4],
+    n_boot: 500,
+    n_failed: 0,
+    boot_samples: [[1.9, 4.9]],
+  };
+  /** A request that settles only when its signal aborts (as fetch does). */
+  function hangUntilAborted(signal?: AbortSignal): Promise<never> {
+    return new Promise((_, reject) => signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+  }
+
+  beforeEach(() => {
+    usePendingOps.setState({ ops: [] });
+    useApp.setState({ status: "" });
+    vi.mocked(fitModel).mockResolvedValue({ params: [2, 5], yFit: [10, 20, 30, 40] });
+  });
+
+  async function startCorner() {
+    const { result } = renderHook(() => useCurveFit());
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    let p!: Promise<void>;
+    act(() => {
+      p = result.current.runCornerPlot();
+    });
+    return { result, done: () => act(async () => { await p; }) };
+  }
+
+  it("Cancel during the bootstrap aborts it and never renders the figure", async () => {
+    let signal: AbortSignal | undefined;
+    vi.mocked(bootstrapFit).mockImplementationOnce((_req, s) => {
+      signal = s;
+      return hangUntilAborted(s);
+    });
+    const { result, done } = await startCorner();
+    await waitFor(() => expect(signal).toBeDefined());
+    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Exporting corner plot…"]);
+    expect(signal?.aborted).toBe(false);
+    act(() => usePendingOps.getState().ops[0].cancel?.());
+    await done();
+    expect(signal?.aborted).toBe(true);
+    expect(exportCornerFigure).not.toHaveBeenCalled();
+    expect(result.current.error).toBeNull();
+    expect(result.current.cornerBusy).toBe(false);
+    expect(useApp.getState().status).toBe("corner plot cancelled");
+    expect(useToasts.getState().toasts).toEqual([]);
+    expect(usePendingOps.getState().ops).toEqual([]);
+  });
+
+  it("Cancel during the render aborts the download with no error", async () => {
+    vi.mocked(bootstrapFit).mockResolvedValueOnce(BOOT);
+    let signal: AbortSignal | undefined;
+    vi.mocked(exportCornerFigure).mockImplementationOnce((_body, s) => {
+      signal = s;
+      return hangUntilAborted(s);
+    });
+    const { result, done } = await startCorner();
+    await waitFor(() => expect(signal).toBeDefined());
+    act(() => usePendingOps.getState().ops[0].cancel?.());
+    await done();
+    expect(signal?.aborted).toBe(true);
+    expect(result.current.error).toBeNull();
+    expect(useApp.getState().status).toBe("corner plot cancelled");
+    expect(useToasts.getState().toasts).toEqual([]);
+    expect(usePendingOps.getState().ops).toEqual([]);
   });
 });

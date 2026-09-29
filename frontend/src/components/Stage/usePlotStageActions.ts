@@ -22,6 +22,7 @@ import { withYRange } from "../../lib/regionSelect";
 // itself already awaits a server render before writing to the clipboard, so
 // the extra module-load await changes nothing about gesture context.
 import { exportPlotPng, plotPngBlob } from "../../lib/plotExport";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import type { Dataset } from "../../lib/types";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
@@ -131,13 +132,14 @@ export function usePlotStageActions(
   // limits, legend placement and multi-panel layout. This is the default
   // "Copy figure"; `snapshot` below stays as the quick screen grab.
   function copyFigure() {
-    void import("../../lib/copyFigureCommand").then((m) => m.runCopyFigureCommand(useApp.getState), (e: unknown) => toast(`Could not load the figure copy: ${e instanceof Error ? e.message : "error"}`, "danger"));
+    // P3.4: runLazy gives the chunk load a busy entry and the standard toast.
+    void runLazy("Loading figure copy…", () => import("../../lib/copyFigureCommand")).then((m) => m.runCopyFigureCommand(useApp.getState), onLoadFailure);
   }
 
   // MAIN #35: undefined where the browser won't take SVG, so the menu can
   // simply omit the entry rather than offer one that always fails.
   const copyFigureSvg = clipboardSvgSupported()
-    ? () => void import("../../lib/copyFigureCommand").then((m) => m.runCopyFigureSvgCommand(useApp.getState), (e: unknown) => toast(`Could not load the figure copy: ${e instanceof Error ? e.message : "error"}`, "danger"))
+    ? () => void runLazy("Loading figure copy…", () => import("../../lib/copyFigureCommand")).then((m) => m.runCopyFigureSvgCommand(useApp.getState), onLoadFailure)
     : undefined;
 
   // Snapshot: copy exactly what's on screen to the clipboard as a PNG — a quick

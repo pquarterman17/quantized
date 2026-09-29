@@ -215,9 +215,9 @@ export interface CornerFigureSpec {
 }
 
 /** Render a pairwise posterior/bootstrap corner plot server-side (matplotlib)
- *  and download it (gap #29). */
-export function exportCornerFigure(body: CornerFigureSpec): Promise<void> {
-  return postDownload("/api/export/corner-figure", body, `corner.${body.fmt ?? "pdf"}`);
+ *  and download it (gap #29). `signal`: see exportFigure. */
+export function exportCornerFigure(body: CornerFigureSpec, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/corner-figure", body, `corner.${body.fmt ?? "pdf"}`, signal);
 }
 
 /** Ternary diagram request: 3-component composition scatter plot (gap #23). */
@@ -234,9 +234,9 @@ export interface TernaryFigureSpec {
 }
 
 /** Render a ternary diagram (3-component scatter) server-side (matplotlib)
- *  and download it (gap #23). */
-export function exportTernaryFigure(body: TernaryFigureSpec): Promise<void> {
-  return postDownload("/api/export/ternary-figure", body, `ternary.${body.fmt ?? "pdf"}`);
+ *  and download it (gap #23). `signal`: see exportFigure. */
+export function exportTernaryFigure(body: TernaryFigureSpec, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/ternary-figure", body, `ternary.${body.fmt ?? "pdf"}`, signal);
 }
 
 /** Vector field plot request: quiver or streamline visualization (gap #23). */
@@ -256,9 +256,9 @@ export interface FieldFigureSpec {
 }
 
 /** Render a vector field plot (quiver arrows or streamlines) server-side
- *  (matplotlib) and download it (gap #23). */
-export function exportFieldFigure(body: FieldFigureSpec): Promise<void> {
-  return postDownload("/api/export/field-figure", body, `field.${body.fmt ?? "pdf"}`);
+ *  (matplotlib) and download it (gap #23). `signal`: see exportFigure. */
+export function exportFieldFigure(body: FieldFigureSpec, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/field-figure", body, `field.${body.fmt ?? "pdf"}`, signal);
 }
 
 /** One box/violin small-multiple panel (GUI_INTERACTION #12 slice 4b —

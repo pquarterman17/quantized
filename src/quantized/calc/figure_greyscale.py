@@ -41,7 +41,15 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-__all__ = ["L_MIN", "L_MAX", "LINE_CYCLE", "MARKER_SHAPES", "greyscale_ramp", "apply_greyscale"]
+__all__ = [
+    "L_MIN",
+    "L_MAX",
+    "LINE_CYCLE",
+    "MARKER_SHAPES",
+    "GREY_SLOT_KEY",
+    "greyscale_ramp",
+    "apply_greyscale",
+]
 
 # CIE L* target range for the grey ramp. Kept well inside [0, 100]: L*=0 is
 # true black (indistinguishable from a heavy grid line or the axis box) and
@@ -69,6 +77,33 @@ MARKER_SHAPES: tuple[str, ...] = (
     "circle", "square", "triangle", "diamond",
     "downtriangle", "plus", "cross", "star",
 )
+
+
+# Per-series style key naming the series' GREY SLOT (an ``int``): series that
+# share a slot share one grey, dash and glyph. Set only server-side, by
+# ``calc.plotting_encoded.encoded_series_styles`` for a P1.4 colour factor (the
+# slot is the colour LEVEL, so one level greys alike on every Y channel, as it
+# colours alike on screen); :func:`apply_greyscale` consumes and removes it.
+GREY_SLOT_KEY = "grey_slot"
+
+
+def _grey_keys(
+    styles: Sequence[Mapping[str, Any] | None] | None, n: int
+) -> tuple[list[int], int]:
+    """Each series' index into the ramp, and the ramp's length: the RANK of its
+    grey slot among the distinct slots present when every ramped series (all
+    but ``color_by``) names one, else its display position over ``n`` -- P3.3's
+    own rule, and the fallback for any request that mixes slotted and
+    unslotted series. A ``color_by`` series' entry is never read."""
+    raw = [styles[i] if styles and i < len(styles) else None for i in range(n)]
+    ramped = [s for s in raw if not (s and s.get("color_by") is not None)]
+    slots = [s.get(GREY_SLOT_KEY) if s else None for s in ramped]
+    ints = [k for k in slots if isinstance(k, int) and not isinstance(k, bool)]
+    if not slots or len(ints) != len(slots):
+        return list(range(n)), n
+    rank = {k: r for r, k in enumerate(sorted(set(ints)))}
+    keys = [rank[s[GREY_SLOT_KEY]] if s and s.get("color_by") is None else 0 for s in raw]
+    return keys, len(rank)
 
 
 def _y_from_lstar(lstar: float) -> float:
@@ -141,19 +176,28 @@ def apply_greyscale(
     ``styles`` entries beyond ``n`` are ignored; a missing/short list is
     treated as an all-``None`` list of length ``n`` (matching every other
     caller's ``series_styles[i] if series_styles and i < len(series_styles)
-    else None`` convention)."""
-    ramp = greyscale_ramp(n)
+    else None`` convention).
+
+    GREY SLOTS (P1.4): when every ramped series carries :data:`GREY_SLOT_KEY`,
+    the ramp spans the distinct slots instead of the series, and grey, dash and
+    glyph are all picked by the slot's rank -- an encoded figure's colour LEVEL,
+    so a level that shares one colour across Y channels on screen shares one
+    grey (and one dash/glyph) here too. The key never leaves this function."""
+    keys, n_ramp = _grey_keys(styles, n)
+    ramp = greyscale_ramp(n_ramp)
     out: list[dict[str, Any]] = []
     for i in range(n):
         raw = styles[i] if styles and i < len(styles) else None
         spec: dict[str, Any] = dict(raw) if raw else {}
+        spec.pop(GREY_SLOT_KEY, None)
         if spec.get("color_by") is not None:
             out.append(spec)  # untouched -- see the doc above
             continue
-        spec["color"] = ramp[i]
+        k = keys[i]
+        spec["color"] = ramp[k]
         if not spec.get("line"):
-            spec["line"] = LINE_CYCLE[i % len(LINE_CYCLE)]
+            spec["line"] = LINE_CYCLE[k % len(LINE_CYCLE)]
         if spec.get("marker") and not spec.get("marker_shape"):
-            spec["marker_shape"] = MARKER_SHAPES[i % len(MARKER_SHAPES)]
+            spec["marker_shape"] = MARKER_SHAPES[k % len(MARKER_SHAPES)]
         out.append(spec)
     return out

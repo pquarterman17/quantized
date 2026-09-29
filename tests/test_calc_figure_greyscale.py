@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 
 from quantized.calc.figure_greyscale import (
+    GREY_SLOT_KEY,
     LINE_CYCLE,
     MARKER_SHAPES,
     apply_greyscale,
@@ -159,6 +160,33 @@ def test_apply_greyscale_short_style_list_pads_with_defaults() -> None:
     assert out[0]["line"] == "dotted"
     assert out[1]["line"] == LINE_CYCLE[1]
     assert out[2]["line"] == LINE_CYCLE[2]
+
+
+# ── Grey slots (P1.4: an encoded figure greys by colour LEVEL) ───────────────
+def test_grey_slots_share_one_grey_dash_and_glyph_by_slot_rank() -> None:
+    styles = [{GREY_SLOT_KEY: k, "marker": True} for k in (4, 0, 4, 0, 7)]
+    out = apply_greyscale(styles, 5)
+    ramp = greyscale_ramp(3)  # three distinct slots: 0, 4, 7 -> ranks 0, 1, 2
+    assert [s["color"] for s in out] == [ramp[1], ramp[0], ramp[1], ramp[0], ramp[2]]
+    assert [s["line"] for s in out] == [LINE_CYCLE[r] for r in (1, 0, 1, 0, 2)]
+    assert [s["marker_shape"] for s in out] == [MARKER_SHAPES[r] for r in (1, 0, 1, 0, 2)]
+    assert all(GREY_SLOT_KEY not in s for s in out)  # consumed, never rendered
+
+
+def test_grey_slots_on_only_some_series_fall_back_to_display_position() -> None:
+    out = apply_greyscale([{GREY_SLOT_KEY: 0}, None, {GREY_SLOT_KEY: 1}], 3)
+    assert [s["color"] for s in out] == greyscale_ramp(3)
+    assert all(GREY_SLOT_KEY not in s for s in out)
+    # A bool is not a slot (bool subclasses int).
+    flags = apply_greyscale([{GREY_SLOT_KEY: True}, {GREY_SLOT_KEY: True}], 2)
+    assert [s["color"] for s in flags] == greyscale_ramp(2)
+
+
+def test_grey_slots_skip_a_colour_mapped_series() -> None:
+    styles = [{GREY_SLOT_KEY: 2}, {"color_by": [1.0, 2.0]}, {GREY_SLOT_KEY: 2}]
+    out = apply_greyscale(styles, 3)
+    assert out[0]["color"] == out[2]["color"] == greyscale_ramp(1)[0]
+    assert out[1] == {"color_by": [1.0, 2.0]}
 
 
 # ── Frontend/backend cycle-vocabulary drift guard ───────────────────────────

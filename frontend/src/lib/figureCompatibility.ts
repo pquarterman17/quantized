@@ -65,10 +65,14 @@ export function plotSpecPublicationCompatibility(
   if (spec.decor?.shapes?.length) losses.add("shapes");
   if (spec.decor?.legend) losses.add("legend placement and title");
   if (spec.page) losses.add("page and panel settings");
-  // P1.4: the FigureDoc bridge carries no per-level encoding (the Graph
-  // Builder's own Export does — lib/plotEncodingExport.ts).
-  if (spec.zones.color || spec.zones.symbol || spec.zones.label) {
-    losses.add("Color, Symbol and Label encodings");
+  // P1.4: the encodings themselves transfer (plotSpecFigure's
+  // `plotSpecToFigureDocument`), drawn with the mark's styles only — the Graph
+  // Builder's preview and Export do not draw per-channel styling either.
+  if (
+    (spec.zones.color || spec.zones.symbol || spec.zones.label) &&
+    (hasKeys(spec.display?.series) || hasKeys(liveSeriesStyles))
+  ) {
+    losses.add("per-series styling on encoded output");
   }
   return { blocker: null, losses: [...losses] };
 }

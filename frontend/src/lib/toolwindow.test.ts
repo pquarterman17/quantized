@@ -6,6 +6,8 @@ import { describe, expect, it } from "vitest";
 import {
   clampToolWindowPos,
   defaultToolWindowLayout,
+  KEY_STEP,
+  keyboardLayout,
   MIN_HEIGHT,
   MIN_WIDTH,
   sanitizeToolWindowLayout,
@@ -128,5 +130,27 @@ describe("sanitizeToolWindowLayout", () => {
     const out = sanitizeToolWindowLayout(raw);
     expect(out.a.x).toBe(0);
     expect(out.a.y).toBe(0);
+  });
+});
+
+describe("keyboardLayout (R3)", () => {
+  const base = { x: 100, y: 100, width: 300, height: null, collapsed: false };
+
+  it("ignores a key that is not an arrow", () => {
+    expect(keyboardLayout(base, "Enter", false, 200)).toBeNull();
+  });
+
+  it("a vertical resize gives an auto-sized window its measured height plus a step", () => {
+    expect(keyboardLayout(base, "ArrowDown", true, 200)).toMatchObject({ height: 200 + KEY_STEP, width: 300 });
+  });
+
+  it("a horizontal resize leaves an auto height auto", () => {
+    expect(keyboardLayout(base, "ArrowRight", true, 200)).toMatchObject({ width: 300 + KEY_STEP, height: null });
+  });
+
+  it("does not resize a collapsed window, but still moves it", () => {
+    const collapsed = { ...base, collapsed: true };
+    expect(keyboardLayout(collapsed, "ArrowDown", true, 30)).toBeNull();
+    expect(keyboardLayout(collapsed, "ArrowDown", false, 30)).toMatchObject({ y: 100 + KEY_STEP });
   });
 });

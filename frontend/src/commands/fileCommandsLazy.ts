@@ -40,6 +40,7 @@ import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { exportActive, type StoreGet } from "../lib/exportActive";
 import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { hasWorkspaceContent } from "../lib/openWorkspaceReplace";
+import { runCancellable } from "../store/pendingOps";
 import { closeProjectLock } from "../store/projectLockLifecycle";
 import { toast } from "../store/toasts";
 import type {
@@ -141,13 +142,19 @@ export async function runExportConsolidated(
     return;
   }
   try {
-    // #38 deferred edge: consolidate touches EVERY loaded dataset, including
-    // ones never activated/rendered — resolve them all first (bounded
-    // concurrency) rather than silently exporting previews.
-    const resolved = await s().resolveDatasets(all.map((d) => d.id));
-    await exportConsolidatedFn({
-      datasets: resolved.map((d) => ({ dataset: d.data, name: d.name })),
+    // P3.4 safe cancel: one StatusBar op whose Cancel aborts the request; a
+    // cancelled export saves no file and raises no error toast.
+    const done = await runCancellable(`Exporting ${all.length} dataset${all.length === 1 ? "" : "s"}…`, async (signal) => {
+      // #38 deferred edge: consolidate touches EVERY loaded dataset, including
+      // ones never activated/rendered — resolve them all first (bounded
+      // concurrency) rather than silently exporting previews.
+      const resolved = await s().resolveDatasets(all.map((d) => d.id));
+      signal.throwIfAborted();
+      await exportConsolidatedFn({
+        datasets: resolved.map((d) => ({ dataset: d.data, name: d.name })),
+      }, signal);
     });
+    if (!done) s().setStatus("export cancelled");
   } catch (e: unknown) {
     s().setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
   }

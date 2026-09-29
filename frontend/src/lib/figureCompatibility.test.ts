@@ -99,18 +99,21 @@ describe("figure transition compatibility", () => {
     expect(plotSpecPublicationCompatibility(spec()).losses).not.toContain("error bars");
   });
 
-  // P1.4: the FigureDoc bridge carries no Color/Symbol/Label encoding, so
-  // Publication Preview must ask before dropping one (the Graph Builder's own
-  // Export carries them — lib/plotEncodingExport.ts).
-  it("reports a Color/Symbol/Label encoding as a loss, and nothing when there is none", () => {
+  // P1.4 residual 2: the bridge now CARRIES Color/Symbol/Label
+  // (plotSpecFigureEncoding.test.ts), so they are no loss; what an encoded
+  // spec does not carry is per-channel styling, which the Graph Builder's own
+  // preview and Export do not draw either.
+  it("carries a Color/Symbol/Label encoding, reporting only per-series styling it will not draw", () => {
     for (const zone of ["color", "symbol", "label"] as const) {
-      const report = plotSpecPublicationCompatibility(
-        spec({ zones: { ...spec().zones, [zone]: { datasetId: "d1", channel: 2 } } }),
-      );
+      const encoded = spec({ zones: { ...spec().zones, [zone]: { datasetId: "d1", channel: 2 } } });
+      const report = plotSpecPublicationCompatibility(encoded);
       expect(report.blocker).toBeNull();
-      expect(report.losses).toContain("Color, Symbol and Label encodings");
+      expect(report.losses).toEqual([]);
+      expect(plotSpecPublicationCompatibility(encoded, { 1: { width: 3 } }).losses).toEqual([
+        "per-series styling on encoded output",
+      ]);
     }
-    expect(plotSpecPublicationCompatibility(spec()).losses).not.toContain("Color, Symbol and Label encodings");
+    expect(plotSpecPublicationCompatibility(spec(), { 1: { width: 3 } }).losses).toEqual([]);
   });
 
   it("line, scatter, AND step all open unblocked (GAP_PLOTTYPES)", () => {

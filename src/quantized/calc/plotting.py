@@ -14,6 +14,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from quantized.calc.figure_greyscale import GREY_SLOT_KEY
 from quantized.datastruct import DataStruct, is_categorical, level_of
 
 __all__ = [
@@ -344,6 +345,8 @@ def resolve_style_channels(
             out.append(None)
             continue
         resolved: dict[str, Any] = dict(spec)  # shallow copy -- never mutate the caller's dict
+        # A greyscale slot is set server-side only (calc.plotting_encoded), never from the wire.
+        resolved.pop(GREY_SLOT_KEY, None)
         fill = resolved.get("fill")
         if isinstance(fill, Mapping) and "vs" in fill:
             try:

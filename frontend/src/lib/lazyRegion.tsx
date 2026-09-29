@@ -150,11 +150,12 @@ export type PreloadableRegion<P> = ComponentType<P> & {
 /** `lazy(load)` plus a boundary: `label` names the region in the fallback
  *  ("Library failed to load."), `fallback` is the Suspense placeholder
  *  while the chunk is in flight (default none — these seams resolve in a
- *  frame or two on localhost). */
+ *  frame or two on localhost). A function fallback receives the region's own
+ *  props, so a placeholder can already honour e.g. an `onClose` (R9). */
 export function lazyRegion<P extends object>(
   load: () => Promise<{ default: ComponentType<P> }>,
   label: string,
-  fallback: ReactNode = null,
+  fallback: ReactNode | ((props: P) => ReactNode) = null,
 ): PreloadableRegion<P> {
   const taggedLoad = taggedLoader(load);
   // Written only by a SUCCESSFUL resolution, read only by a fresh mount's
@@ -189,7 +190,7 @@ export function lazyRegion<P extends object>(
     };
     return (
       <Catch key={attempt} label={label} onRetry={retry}>
-        <Suspense fallback={fallback}>
+        <Suspense fallback={typeof fallback === "function" ? fallback(props) : fallback}>
           <Comp {...props} />
         </Suspense>
       </Catch>
