@@ -17,6 +17,9 @@ import { exportRecipeFile, importRecipeFile } from "../../../lib/plotRecipeStora
 import type { PlotRecipe } from "../../../lib/plotRecipe";
 import { saveBlob } from "../../../lib/download";
 import { hydratedGlobalRecipes, useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
+// Static on purpose: this module is already in the eager bundle, and a
+// dynamic import of it split it into its own eager chunk (+517 B measured).
+import { removeDatasetsPatch, scrubDatasetsFromHistory } from "../../../store/removeDatasets";
 import { useApp } from "../../../store/useApp";
 
 // Re-exported, not redeclared: storage scope is a domain fact (see
@@ -93,8 +96,9 @@ export function applyRecipeToDataset(recipe: PlotRecipe, datasetId: string): Pro
 }
 
 /** What the user picked in the Recipe Manager's apply row (F4.2 / audit
- *  P1.3). Both default to "as the recipe says": no transformation, and the
- *  recipe's own style template. */
+ *  P1.3). Both default to "as the recipe says": the transformation it
+ *  recorded when that is still saved (`recordedTransformChoice`, else none),
+ *  and the recipe's own style template. */
 export interface ApplyChoices {
   /** A `PLOT_TEMPLATES` value used INSTEAD of the recipe's own
    *  `visual.plotTemplate`, for this apply only; null/absent keeps it. */
@@ -122,6 +126,44 @@ export function recipeSummary(r: PlotRecipe): string {
   return `${parts.join(", ")}.`;
 }
 
+/** The Transform picker's pre-selection for `recipe` (F4.2c owner decision
+ *  (c), "Pre-select but also easy override"): the transformation the recipe
+ *  recorded when one of that name is still saved, else none (""). `missing`
+ *  names a recorded transformation that is no longer saved, for the
+ *  one-sentence note beside the picker. */
+export function recordedTransformChoice(
+  recipe: PlotRecipe,
+  saved: readonly { name: string }[],
+): { value: string; missing: string | null } {
+  const rec = recipe.transform;
+  if (!rec) return { value: "", missing: null };
+  return saved.some((t) => t.name === rec.name) ? { value: rec.name, missing: null } : { value: "", missing: rec.name };
+}
+
+type HistoryState = Pick<ReturnType<typeof useApp.getState>, "history" | "future" | "activeId">;
+
+/** F4.2c owner decision (b), "Rejection with notice": take back a
+ *  transformation run whose output the Plot Recipe then refused (or failed
+ *  to plot). Removes exactly the datasets that run created, never a
+ *  before/after diff. When nothing else was recorded since the run's own
+ *  undo entry, undo and redo go back to exactly what they were before the
+ *  gesture; otherwise the removed datasets are scrubbed out of every entry,
+ *  so no undo or redo can bring them back. */
+function takeBackTransform(created: readonly string[], before: HistoryState): void {
+  useApp.setState((s) => {
+    const had = new Set(before.history.map((e) => e.seq));
+    const top = s.history[s.history.length - 1];
+    const onlyOurs = top !== undefined && !had.has(top.seq) && s.future.length === 0 && s.history.slice(0, -1).every((e) => had.has(e.seq));
+    const patch = removeDatasetsPatch(s, created);
+    const keepActive = before.activeId !== null && (patch.datasets ?? s.datasets).some((d) => d.id === before.activeId);
+    return {
+      ...patch,
+      ...(onlyOurs ? { history: before.history, future: before.future } : scrubDatasetsFromHistory(s, created)),
+      ...(keepActive ? { activeId: before.activeId } : {}),
+    };
+  });
+}
+
 /** `applyRecipeToDataset` with the apply-time choices. The transformation
  *  runs through the Pipeline's own `applyRecipe` (preflight, rebinding by
  *  column name, provenance, one undo step, rollback on failure) and creates
@@ -129,10 +171,13 @@ export function recipeSummary(r: PlotRecipe): string {
  *  Throws, creating nothing, when the transformation is gone or refuses the
  *  dataset -- the caller's inline error line shows the message. With a
  *  transformation the gesture is TWO undo steps (the Pipeline apply's own,
- *  then the figure); a plot apply that is refused or staged after a
- *  successful transformation leaves the new output dataset in place. */
+ *  then the figure). If the Plot Recipe then REFUSES the output (or its
+ *  apply throws), the transformation is taken back (`takeBackTransform`)
+ *  and this throws a notice naming the recipe's reason; a staged preview
+ *  keeps the output, since the dialog it opens plots it. */
 export async function applyRecipeWithChoices(recipe: PlotRecipe, datasetId: string, choices: ApplyChoices): Promise<boolean> {
   let target = datasetId;
+  let takeBack: (() => void) | null = null;
   if (choices.transformName) {
     const name = choices.transformName;
     const [{ loadTemplates }, { defaultBindings }, { applyRecipe }] = await Promise.all([
@@ -145,15 +190,31 @@ export async function applyRecipeWithChoices(recipe: PlotRecipe, datasetId: stri
     const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
     if (!ds) throw new Error("that dataset is no longer loaded");
     const bindings = defaultBindings(template.expects?.columns ?? [], ds.data);
+    const { history, future, activeId } = useApp.getState();
     const [result] = await applyRecipe(template, [{ datasetId, bindings }], { ackUnits: false });
     if (result?.status !== "ok" || !result.outputId) {
       throw new Error(`transformation “${name}” did not run: ${result?.note ?? "no result"}`);
     }
     target = result.outputId;
+    const created = result.created ?? [target];
+    takeBack = () => takeBackTransform(created, { history, future, activeId });
   }
   const style = choices.styleTemplate;
   const chosen = style && style !== recipe.visual.plotTemplate ? { ...recipe, visual: { ...recipe.visual, plotTemplate: style } } : recipe;
-  const ok = await applyRecipeToDataset(chosen, target);
+  const pendingBefore = useApp.getState().pendingRecipeApplication;
+  let ok: boolean;
+  try {
+    ok = await applyRecipeToDataset(chosen, target);
+  } catch (e) {
+    takeBack?.();
+    throw e;
+  }
+  if (!ok && takeBack && useApp.getState().pendingRecipeApplication === pendingBefore) {
+    takeBack();
+    const notice = `${useApp.getState().status} — the output of transformation “${choices.transformName}” was removed.`;
+    useApp.setState({ status: notice });
+    throw new Error(notice);
+  }
   const note = ok ? outlierPolicyNote(recipe.outlierPolicy, useApp.getState().excludedDisplay) : "";
   if (note) useApp.setState((s) => ({ status: `${s.status} — ${note}` }));
   return ok;

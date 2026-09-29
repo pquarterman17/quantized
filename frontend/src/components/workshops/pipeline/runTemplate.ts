@@ -118,6 +118,9 @@ export interface ApplyResult {
   /** The derived output (status "ok"). */
   outputId?: string;
   outputName?: string;
+  /** Every dataset the run created (status "ok"): a working copy and every
+   *  step's output -- what a caller that must take the run back removes. */
+  created?: string[];
   note: string;
 }
 
@@ -281,5 +284,5 @@ async function applyOne(recipe: AnalysisTemplate, plan: ApplyPlan, ackUnits: boo
   const outName = s().datasets.find((d) => d.id === output)?.name ?? output;
   const warned = Object.values(run.log).filter((l) => l.status === "warn").length;
   const created = outNames.map((n) => `“${n}”`).join(", ");
-  return { ...base, status: "ok", outputId: output, outputName: outName, note: `created ${created}${warned ? ` (${warned} step warning${warned === 1 ? "" : "s"})` : ""}` };
+  return { ...base, status: "ok", outputId: output, outputName: outName, created: createdByRun, note: `created ${created}${warned ? ` (${warned} step warning${warned === 1 ? "" : "s"})` : ""}` };
 }

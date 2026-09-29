@@ -117,6 +117,94 @@ describe("applyRecipeWithChoices", () => {
     expect(store().plotWindows).toHaveLength(0);
   });
 
+  // F4.2c owner decision (b): "Rejection with notice." The transformation
+  // runs, the Plot Recipe refuses its output -> the output is rolled back,
+  // the undo/redo stacks are exactly what they were, and the notice names
+  // the recipe's own reason.
+  it("rolls back the output, restores undo/redo exactly, and names the reason when the recipe refuses it", async () => {
+    const recipe = { ...(await transformThenRecipe()), technique: "magnetometry.mvsh" as const };
+    store().renameDataset("b", "b renamed");
+    store().undo(); // one redo entry to preserve
+    store().recordHistory("an earlier edit");
+    const ids = store().datasets.map((d) => d.id);
+    const activeBefore = store().activeId;
+    const historySeqs = store().history.map((e) => e.seq);
+    const futureSeqs = store().future.map((e) => e.seq);
+
+    await expect(applyRecipeWithChoices(recipe, "b", { transformName: "stacked" })).rejects.toThrow(
+      /saved for magnetometry\.mvsh, not xrd\.powder.*output of transformation “stacked” was removed/,
+    );
+
+    expect(store().datasets.map((d) => d.id)).toEqual(ids);
+    expect(store().activeId).toBe(activeBefore);
+    expect(store().plotWindows).toHaveLength(0);
+    expect(store().history.map((e) => e.seq)).toEqual(historySeqs);
+    expect(store().future.map((e) => e.seq)).toEqual(futureSeqs);
+    expect(store().status).toMatch(/saved for magnetometry\.mvsh, not xrd\.powder/);
+    // No entry left anywhere that could bring the removed output back.
+    for (const e of [...store().history, ...store().future]) {
+      expect(e.snapshot.datasets.some((d) => d.data.metadata.transform_recipe)).toBe(false);
+    }
+  });
+
+  it("scrubs the removed output from every undo entry when another edit was recorded in between", async () => {
+    const recipe = await transformThenRecipe();
+    const ids = store().datasets.map((d) => d.id);
+    const original = store().applyPlotRecipeObject;
+    // An unrelated edit lands between the transformation and the refusal.
+    useApp.setState({
+      applyPlotRecipeObject: () => {
+        store().renameDataset("src", "src renamed");
+        useApp.setState({ status: 'Plot Recipe "x" unavailable: refused for the test' });
+        return Promise.resolve(false);
+      },
+    });
+    try {
+      await expect(applyRecipeWithChoices(recipe, "b", { transformName: "stacked" })).rejects.toThrow(/refused for the test/);
+    } finally {
+      useApp.setState({ applyPlotRecipeObject: original });
+    }
+
+    expect(store().datasets.map((d) => d.id)).toEqual(ids);
+    expect(store().history.map((e) => e.label)).toContain("rename dataset");
+    for (const e of [...store().history, ...store().future]) {
+      expect(e.snapshot.datasets.some((d) => d.data.metadata.transform_recipe)).toBe(false);
+    }
+    store().undo();
+    store().undo();
+    expect(store().datasets.some((d) => d.data.metadata.transform_recipe)).toBe(false);
+  });
+
+  it("keeps the output when the recipe only stages a preview for it (not a refusal)", async () => {
+    const base = await transformThenRecipe();
+    const ghost = { ...base.signature[0], id: "ghost", label: "nowhere", aliases: [] };
+    const recipe = { ...base, signature: [...base.signature, ghost] };
+    const before = store().datasets.map((d) => d.id);
+
+    expect(await applyRecipeWithChoices(recipe, "b", { transformName: "stacked" })).toBe(false);
+
+    const pending = store().pendingRecipeApplication;
+    expect(pending).not.toBeNull();
+    const output = store().datasets.find((d) => d.id === pending!.datasetId);
+    expect(before).not.toContain(output!.id);
+    expect(output!.data.metadata.transform_recipe).toBeDefined();
+  });
+
+  it("rolls the output back if applying the Plot Recipe throws after the transformation ran", async () => {
+    const recipe = await transformThenRecipe();
+    const ids = store().datasets.map((d) => d.id);
+    const original = store().applyPlotRecipeObject;
+    useApp.setState({ applyPlotRecipeObject: () => Promise.reject(new Error("chunk failed")) });
+    try {
+      await expect(applyRecipeWithChoices(recipe, "b", { transformName: "stacked" })).rejects.toThrow(/chunk failed/);
+    } finally {
+      useApp.setState({ applyPlotRecipeObject: original });
+    }
+
+    expect(store().datasets.map((d) => d.id)).toEqual(ids);
+    expect(store().history).toHaveLength(0);
+  });
+
   it("reports the recipe's excluded-row policy when it differs from the preference, without changing it", async () => {
     const recipe = { ...(await transformThenRecipe()), outlierPolicy: { excludedDisplay: "grey" as const } };
     const stackedId = store().datasets[store().datasets.length - 1].id;
