@@ -901,6 +901,10 @@ export interface paths {
          *     here). The flat (non-facet) response below is
          *     UNCHANGED -- still ``elements`` + a single ``axes`` dict, no ``panels``
          *     key at all.
+         *
+         *     The Figure Builder's live preview: caches a posted ``dataset`` and echoes
+         *     ``X-Dataset-Handle`` (the ``/api/plot/series`` contract), and skips the
+         *     render (499) when the client aborted before it got the render lock.
          */
         post: operations["export_figure_hitmap_api_export_figure_hitmap_post"];
         delete?: never;
@@ -6822,9 +6826,11 @@ export interface components {
         /** FigureRequest */
         FigureRequest: {
             /** Dataset */
-            dataset: {
+            dataset?: {
                 [key: string]: unknown;
-            };
+            } | null;
+            /** Dataset Handle */
+            dataset_handle?: string | null;
             /**
              * Dpi
              * @default 200

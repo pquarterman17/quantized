@@ -12,12 +12,13 @@ import { isDatasetCachePath, postJSONDatasetAware } from "./datasetCache";
 import type { RawFetchJSON } from "./datasetCache";
 
 describe("isDatasetCachePath", () => {
-  it("matches /api/plot/map, /api/plot/series, and every /api/rsm/* path", () => {
+  it("matches /api/plot/map, /api/plot/series, the figure preview, and every /api/rsm/* path", () => {
     expect(isDatasetCachePath("/api/plot/map")).toBe(true);
     expect(isDatasetCachePath("/api/plot/series")).toBe(true);
     expect(isDatasetCachePath("/api/rsm/box")).toBe(true);
     expect(isDatasetCachePath("/api/rsm/box-stats")).toBe(true);
     expect(isDatasetCachePath("/api/rsm/strain")).toBe(true); // prefix match; no dataset field anyway
+    expect(isDatasetCachePath("/api/export/figure-hitmap")).toBe(true); // the live Figure Builder preview
   });
 
   it("does not match unrelated dataset-bearing routes", () => {

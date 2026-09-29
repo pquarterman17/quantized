@@ -179,9 +179,11 @@ export function exportFigure(body: FigureSpec, signal?: AbortSignal): Promise<vo
   return postDownload("/api/export/figure", body, `figure.${body.fmt ?? "pdf"}`, signal);
 }
 
-/** Preview render + element hit-map (#13): PNG + per-artist pixel boxes. */
-export function renderFigureHitmap(body: FigureSpec): Promise<FigureHitmap> {
-  return postJSON("/api/export/figure-hitmap", body);
+/** Preview render + element hit-map (#13): PNG + per-artist pixel boxes.
+ *  Rides the dataset-handle cache (`./datasetCache`); `signal` aborts a
+ *  superseded preview. */
+export function renderFigureHitmap(body: FigureSpec, signal?: AbortSignal): Promise<FigureHitmap> {
+  return postJSON("/api/export/figure-hitmap", body, signal);
 }
 
 /** Render a figure and return the raw image bytes — for an in-app WYSIWYG
