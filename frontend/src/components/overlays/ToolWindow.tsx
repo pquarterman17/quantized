@@ -12,7 +12,8 @@
 // Recoverability (#10 item 1): the ENTIRE title bar — not just the top-left
 // corner — is clamped inside the viewport on drag end and on every window
 // resize (a monitor unplug is the classic loss scenario), so a window can
-// never end up with its grab handle unreachable.
+// never end up with its grab handle unreachable. The title bar is also a Tab
+// stop whose arrow keys move the window and Shift+arrows resize it (R3).
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
@@ -20,6 +21,7 @@ import { useEscapeSurface } from "../../lib/escapeStack";
 import {
   clampToolWindowPos,
   defaultToolWindowLayout,
+  keyboardLayout,
   MIN_HEIGHT,
   MIN_WIDTH,
   TITLE_BAR_HEIGHT,
@@ -238,6 +240,17 @@ export default function ToolWindow({
     setLayout(id, { ...current, ...clampNow(current.x, current.y, current.width) });
   };
 
+  // R3: the focused title bar's keyboard twin of the drag and resize grip,
+  // clamped like a drag end. Only on the bar itself: its buttons keep their
+  // keys, and a claimed arrow never also steps the global dataset navigation.
+  const onTitleKey = (e: React.KeyboardEvent) => {
+    if (e.target !== e.currentTarget || e.altKey || e.ctrlKey || e.metaKey) return;
+    const next = keyboardLayout(layout, e.key, e.shiftKey, winRef.current?.offsetHeight ?? MIN_HEIGHT);
+    if (!next) return;
+    e.preventDefault();
+    setLayout(id, { ...next, ...clampNow(next.x, next.y, next.width) });
+  };
+
   const onCollapseToggle = () => toggleCollapsed(id, fallback);
 
   return (
@@ -258,7 +271,11 @@ export default function ToolWindow({
       <div
         ref={titleRef}
         className="qzk-win-title"
-        title="Drag to move · double-click to collapse"
+        tabIndex={0}
+        role="group"
+        aria-label={`${panelName} title bar`}
+        title="Drag or press the arrow keys to move, Shift+arrow keys to resize, double-click to collapse."
+        onKeyDown={onTitleKey}
         onPointerDown={onTitleDown}
         onPointerMove={onTitleMove}
         onPointerUp={onTitleUp}

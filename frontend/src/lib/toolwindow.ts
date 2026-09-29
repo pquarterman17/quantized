@@ -58,6 +58,37 @@ export function defaultToolWindowLayout(x: number, y: number, width: number): To
   return { x, y, width, height: null, collapsed: false };
 }
 
+/** How far one arrow-key press moves or resizes a window, in CSS px (R3). */
+export const KEY_STEP = 10;
+
+const ARROW_STEP: Record<string, [number, number]> = {
+  ArrowLeft: [-1, 0],
+  ArrowRight: [1, 0],
+  ArrowUp: [0, -1],
+  ArrowDown: [0, 1],
+};
+
+/** The keyboard twin of the title-bar drag (arrows) and the resize grip
+ *  (Shift+arrows), for a focused title bar (residual R3). `renderedHeight` is
+ *  the frame's measured height, used when an auto-sized window first gets an
+ *  explicit one. `null` for a key this does not own, or for a resize while
+ *  collapsed (the grip is not shown then either). Position is NOT clamped
+ *  here: the caller clamps it to the viewport exactly as a drag end does. */
+export function keyboardLayout(
+  layout: ToolWindowLayout,
+  key: string,
+  resize: boolean,
+  renderedHeight: number,
+): ToolWindowLayout | null {
+  const step = ARROW_STEP[key];
+  if (!step) return null;
+  const [dx, dy] = step;
+  if (!resize) return { ...layout, x: layout.x + dx * KEY_STEP, y: layout.y + dy * KEY_STEP };
+  if (layout.collapsed) return null;
+  if (dx !== 0) return { ...layout, width: Math.max(MIN_WIDTH, layout.width + dx * KEY_STEP) };
+  return { ...layout, height: Math.max(MIN_HEIGHT, (layout.height ?? renderedHeight) + dy * KEY_STEP) };
+}
+
 /** Is `target` inside the ToolWindow mounted with this `id`? The same "focus
  *  is inside this frame" test ToolWindow's own Escape surface makes, for a
  *  panel hook that renders the window but cannot reach its frame's ref

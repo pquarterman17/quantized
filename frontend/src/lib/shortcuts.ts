@@ -92,6 +92,8 @@ export const SHORTCUT_GROUPS: ShortcutGroup[] = [
       { keys: "⌃ Tab", desc: "Focus next window" },
       { keys: "⌃ ⇧ Tab", desc: "Focus previous window" },
       { keys: "Click", desc: "Focus a background window" },
+      { keys: "← ↑ → ↓", desc: "Move a floating panel whose title bar has focus" },
+      { keys: "⇧ ← ↑ → ↓", desc: "Resize a floating panel whose title bar has focus" },
     ],
   },
 ];
