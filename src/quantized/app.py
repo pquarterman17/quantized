@@ -70,6 +70,7 @@ from quantized.routes import (
     stats_design,
     stats_outliers,
     stats_varcomp,
+    structures,
     substrates,
     superconductor,
     thermal,
@@ -293,6 +294,7 @@ def create_app(*, dev_origins: Collection[str] | None = None) -> FastAPI:
     application.include_router(sld.router)
     application.include_router(spectral.router)
     application.include_router(crystallography.router)
+    application.include_router(structures.router)
     application.include_router(electrical.router)
     application.include_router(optics.router)
     application.include_router(vacuum.router)

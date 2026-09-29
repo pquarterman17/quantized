@@ -4493,6 +4493,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/structures/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Structure Path
+         * @description Parse a server-visible ``.cif`` path (the desktop shell's native pick).
+         */
+        post: operations["import_structure_path_api_structures_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/structures/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Structure
+         * @description Parse an uploaded ``.cif`` into its crystal structure.
+         */
+        post: operations["upload_structure_api_structures_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/substrates": {
         parameters: {
             query?: never;
@@ -5418,6 +5458,21 @@ export interface components {
             /** T */
             t: number;
         };
+        /** AtomSite */
+        AtomSite: {
+            /** Label */
+            label: string;
+            /** Occupancy */
+            occupancy: number | null;
+            /** Symbol */
+            symbol: string;
+            /** X */
+            x: number | null;
+            /** Y */
+            y: number | null;
+            /** Z */
+            z: number | null;
+        };
         /**
          * AucRequest
          * @description Request for AUC computation.
@@ -5450,7 +5505,11 @@ export interface components {
             /** X */
             x: number[];
         };
-        /** BatchIntegrateRequest */
+        /**
+         * BatchIntegrateRequest
+         * @description ``x`` is one grid shared by every spectrum; ``xs`` gives each spectrum
+         *     its own (datasets measured on different grids). Exactly one is required.
+         */
         BatchIntegrateRequest: {
             /**
              * Align
@@ -5475,9 +5534,11 @@ export interface components {
                 number
             ][];
             /** Spectra */
-            spectra: number[][];
+            spectra: (number | null)[][];
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** Xs */
+            xs?: (number | null)[][] | null;
         };
         /** BcsGapRequest */
         BcsGapRequest: {
@@ -5488,6 +5549,11 @@ export interface components {
         };
         /** Body_upload_file_api_parsers_upload_post */
         Body_upload_file_api_parsers_upload_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_upload_structure_api_structures_upload_post */
+        Body_upload_structure_api_structures_upload_post: {
             /** File */
             file: string;
         };
@@ -6366,6 +6432,20 @@ export interface components {
              * @default 0.3
              */
             nu?: number;
+        };
+        /** CrystalStructure */
+        CrystalStructure: {
+            /** Atom Sites */
+            atom_sites: components["schemas"]["AtomSite"][];
+            cell: components["schemas"]["UnitCell"];
+            /** Formula */
+            formula: string;
+            /** Name */
+            name: string;
+            /** Source Name */
+            source_name: string;
+            /** Space Group */
+            space_group: string;
         };
         /** CurieWeissFitRequest */
         CurieWeissFitRequest: {
@@ -9986,6 +10066,11 @@ export interface components {
                 number
             ];
         };
+        /** StructurePathRequest */
+        StructurePathRequest: {
+            /** Path */
+            path: string;
+        };
         /** SubtractBgRequest */
         SubtractBgRequest: {
             /**
@@ -10141,6 +10226,24 @@ export interface components {
             x: number[];
             /** Y */
             y: number[];
+        };
+        /**
+         * UnitCell
+         * @description Lengths in angstrom, angles in degrees; null when the CIF omits one.
+         */
+        UnitCell: {
+            /** A */
+            a: number | null;
+            /** Alpha */
+            alpha: number | null;
+            /** B */
+            b: number | null;
+            /** Beta */
+            beta: number | null;
+            /** C */
+            c: number | null;
+            /** Gamma */
+            gamma: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -17609,6 +17712,72 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_structure_path_api_structures_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StructurePathRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrystalStructure"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_structure_api_structures_upload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_structure_api_structures_upload_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrystalStructure"];
                 };
             };
             /** @description Validation Error */

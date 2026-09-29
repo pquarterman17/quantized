@@ -102,3 +102,40 @@ def test_validation_errors() -> None:
         batch_integrate_peaks(_X, [_gauss(50.0)[:-1]], [(40.0, 60.0)])
     with pytest.raises(ValueError, match="labels length"):
         batch_integrate_peaks(_X, [_gauss(50.0)], [(40.0, 60.0)], labels=["a", "b"])
+
+
+def test_per_spectrum_x_integrates_each_on_its_own_grid() -> None:
+    """Datasets measured on different grids integrate on their own x (no
+    resampling): a coarse and a fine copy of one peak give the same area."""
+    x_fine = np.linspace(0.0, 100.0, 1001)
+    x_coarse = np.linspace(10.0, 90.0, 161)
+    def g(x: np.ndarray) -> np.ndarray:
+        return np.asarray(100.0 * np.exp(-0.5 * ((x - 50.0) / 4.0) ** 2) + 2.0, dtype=float)
+    out = batch_integrate_peaks(
+        None, [g(x_fine), g(x_coarse)], [(35.0, 65.0)], xs=[x_fine, x_coarse])
+    a_fine, a_coarse = (row[0] for row in out["area_matrix"])
+    assert out["n_failed"] == 0
+    assert math.isclose(a_fine, a_coarse, rel_tol=1e-3)
+
+
+def test_per_spectrum_x_validation() -> None:
+    y = _gauss(50.0)
+    with pytest.raises(ValueError, match="exactly one of x or xs"):
+        batch_integrate_peaks(_X, [y], [(40.0, 60.0)], xs=[_X])
+    with pytest.raises(ValueError, match="exactly one of x or xs"):
+        batch_integrate_peaks(None, [y], [(40.0, 60.0)])
+    with pytest.raises(ValueError, match="one x array per spectrum"):
+        batch_integrate_peaks(None, [y, y], [(40.0, 60.0)], xs=[_X])
+    with pytest.raises(ValueError, match="spectrum 0 length"):
+        batch_integrate_peaks(None, [y[:-1]], [(40.0, 60.0)], xs=[_X])
+    with pytest.raises(ValueError, match="alignment needs one shared x"):
+        batch_integrate_peaks(None, [y], [(40.0, 60.0)], xs=[_X], align=True)
+
+
+def test_region_outside_one_spectrum_is_an_error_row() -> None:
+    """A window beyond one dataset's own range fails that row only."""
+    x_short = np.linspace(0.0, 30.0, 151)
+    out = batch_integrate_peaks(
+        None, [_gauss(50.0), 2.0 + 0.0 * x_short], [(40.0, 60.0)], xs=[_X, x_short])
+    assert [r["ok"] for r in out["results"]] == [True, False]
+    assert out["n_failed"] == 1

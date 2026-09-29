@@ -46,7 +46,7 @@ def _shift_samples(y: NDArray[np.float64], s: int) -> NDArray[np.float64]:
 
 
 def batch_integrate_peaks(
-    x: ArrayLike,
+    x: ArrayLike | None,
     spectra: list[ArrayLike],
     regions: list[tuple[float, float]],
     *,
@@ -54,8 +54,15 @@ def batch_integrate_peaks(
     align: bool = False,
     reference: int = 0,
     labels: list[str] | None = None,
+    xs: list[ArrayLike] | None = None,
 ) -> dict[str, Any]:
     """Integrate ``regions`` across every spectrum in ``spectra`` (shared ``x``).
+
+    Pass ``xs`` (one x array per spectrum) instead of ``x`` when the spectra
+    were measured on different grids: each is then integrated on its OWN x,
+    never resampled. Alignment shifts by whole samples, so it needs one shared
+    grid and is refused with ``xs``. Non-finite points are dropped by the
+    integrator, so a gap (NaN) cell is not an error.
 
     With ``align=True`` each spectrum is cross-correlated against the
     ``reference`` spectrum and shifted by the integer sample lag so a common
@@ -64,7 +71,8 @@ def batch_integrate_peaks(
     ``(n_spectra, n_regions)``; a spectrum that fails integration gets an
     ``error`` and an all-NaN row rather than aborting the batch.
     """
-    xv = np.asarray(x, dtype=float).ravel()
+    if (x is None) == (xs is None):
+        raise ValueError("pass exactly one of x or xs")
     if len(spectra) == 0:
         raise ValueError("batch_integrate_peaks needs at least one spectrum")
     if not regions:
@@ -75,12 +83,22 @@ def batch_integrate_peaks(
         raise ValueError("labels length must match the number of spectra")
 
     ys = [np.asarray(s, dtype=float).ravel() for s in spectra]
-    for i, y in enumerate(ys):
-        if y.size != xv.size:
-            raise ValueError(f"spectrum {i} length ({y.size}) must equal x length ({xv.size})")
+    if xs is None:
+        xv = np.asarray(x, dtype=float).ravel()
+        grids = [xv] * len(ys)
+    else:
+        if len(xs) != len(ys):
+            raise ValueError("xs needs one x array per spectrum")
+        if align:
+            raise ValueError("alignment needs one shared x grid; pass x instead of xs")
+        grids = [np.asarray(g, dtype=float).ravel() for g in xs]
+        xv = grids[reference]
+    for i, (g, y) in enumerate(zip(grids, ys, strict=True)):
+        if y.size != g.size:
+            raise ValueError(f"spectrum {i} length ({y.size}) must equal x length ({g.size})")
 
     ref = ys[reference]
-    dx = float(np.median(np.diff(xv))) if xv.size > 1 else 0.0
+    dx = float(np.nanmedian(np.diff(xv))) if xv.size > 1 else 0.0
     n_reg = len(regions)
     results: list[dict[str, Any]] = []
     area_m, cen_m, fwhm_m = [], [], []
@@ -97,7 +115,7 @@ def batch_integrate_peaks(
                 shift = int(cross_correlation(ref, y)["peakLag"])
                 yi = _shift_samples(y, -shift)
                 row["shift_samples"], row["shift_x"] = shift, shift * dx
-            integ = integrate_peaks(xv, yi, regions, baseline=baseline)
+            integ = integrate_peaks(grids[i], yi, regions, baseline=baseline)
             row["ok"] = True
             row["total_area"] = integ["total_area"]
             row["peaks"] = integ["peaks"]

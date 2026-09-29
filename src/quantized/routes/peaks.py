@@ -15,7 +15,8 @@ from typing import Annotated, Any, Literal
 
 import numpy as np
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from numpy.typing import NDArray
+from pydantic import BaseModel, Field, model_validator
 
 from quantized.calc.peak_batch import batch_integrate_peaks
 from quantized.calc.peak_fit import MODELS, fit_single_peak
@@ -162,14 +163,32 @@ def integrate(req: IntegrateRequest) -> dict[str, Any]:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
+# A null cell is a gap row (JSON has no NaN); the integrator drops it.
+_GapColumn = list[float | None]
+
+
+def _nan_filled(col: _GapColumn) -> NDArray[np.float64]:
+    return np.asarray([np.nan if v is None else v for v in col], dtype=float)
+
+
 class BatchIntegrateRequest(BaseModel):
-    x: list[float]
-    spectra: list[list[float]]  # each same length as x
+    """``x`` is one grid shared by every spectrum; ``xs`` gives each spectrum
+    its own (datasets measured on different grids). Exactly one is required."""
+
+    x: list[float] | None = None
+    xs: list[_GapColumn] | None = None
+    spectra: list[_GapColumn]  # each the length of its x
     regions: list[tuple[float, float]]
     baseline: str = "linear"
     align: bool = False
     reference: int = 0
     labels: list[str] | None = None
+
+    @model_validator(mode="after")
+    def _one_x_source(self) -> BatchIntegrateRequest:
+        if (self.x is None) == (self.xs is None):
+            raise ValueError("pass exactly one of x or xs")
+        return self
 
 
 @router.post("/integrate-batch")
@@ -187,11 +206,12 @@ def integrate_batch(req: BatchIntegrateRequest) -> dict[str, Any]:
         # NOTE(codeql py/stack-trace-exposure): reviewed, by design -- SECURITY.md.
         return to_jsonable(  # type: ignore[no-any-return]
             batch_integrate_peaks(
-                np.asarray(req.x, dtype=float),
-                [np.asarray(s, dtype=float) for s in req.spectra],
+                None if req.x is None else np.asarray(req.x, dtype=float),
+                [_nan_filled(s) for s in req.spectra],
                 [(float(a), float(b)) for a, b in req.regions],
                 baseline=req.baseline, align=req.align,
                 reference=req.reference, labels=req.labels,
+                xs=None if req.xs is None else [_nan_filled(g) for g in req.xs],
             )
         )
     except CALC_ERRORS as exc:

@@ -338,6 +338,72 @@
         "title": "ArrheniusRequest",
         "type": "object"
       },
+      "AtomSite": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "occupancy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occupancy"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "z": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z"
+          }
+        },
+        "required": [
+          "label",
+          "symbol",
+          "x",
+          "y",
+          "z",
+          "occupancy"
+        ],
+        "title": "AtomSite",
+        "type": "object"
+      },
       "AucRequest": {
         "description": "Request for AUC computation.",
         "properties": {
@@ -444,6 +510,7 @@
         "type": "object"
       },
       "BatchIntegrateRequest": {
+        "description": "``x`` is one grid shared by every spectrum; ``xs`` gives each spectrum\nits own (datasets measured on different grids). Exactly one is required.",
         "properties": {
           "align": {
             "default": false,
@@ -494,7 +561,14 @@
           "spectra": {
             "items": {
               "items": {
-                "type": "number"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "type": "array"
             },
@@ -502,15 +576,45 @@
             "type": "array"
           },
           "x": {
-            "items": {
-              "type": "number"
-            },
-            "title": "X",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "xs": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xs"
           }
         },
         "required": [
-          "x",
           "spectra",
           "regions"
         ],
@@ -553,6 +657,20 @@
           "file"
         ],
         "title": "Body_upload_file_api_parsers_upload_post",
+        "type": "object"
+      },
+      "Body_upload_structure_api_structures_upload_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_structure_api_structures_upload_post",
         "type": "object"
       },
       "Body_upload_template_api_import_template_upload_post": {
@@ -2955,6 +3073,46 @@
           "a_sub"
         ],
         "title": "CriticalThicknessRequest",
+        "type": "object"
+      },
+      "CrystalStructure": {
+        "properties": {
+          "atom_sites": {
+            "items": {
+              "$ref": "#/components/schemas/AtomSite"
+            },
+            "title": "Atom Sites",
+            "type": "array"
+          },
+          "cell": {
+            "$ref": "#/components/schemas/UnitCell"
+          },
+          "formula": {
+            "title": "Formula",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source_name": {
+            "title": "Source Name",
+            "type": "string"
+          },
+          "space_group": {
+            "title": "Space Group",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source_name",
+          "formula",
+          "space_group",
+          "cell",
+          "atom_sites"
+        ],
+        "title": "CrystalStructure",
         "type": "object"
       },
       "CurieWeissFitRequest": {
@@ -12345,6 +12503,19 @@
         "title": "StrainRequest",
         "type": "object"
       },
+      "StructurePathRequest": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "StructurePathRequest",
+        "type": "object"
+      },
       "SubtractBgRequest": {
         "properties": {
           "auto_fraction": {
@@ -12670,6 +12841,87 @@
           "y"
         ],
         "title": "TwoSampleRequest",
+        "type": "object"
+      },
+      "UnitCell": {
+        "description": "Lengths in angstrom, angles in degrees; null when the CIF omits one.",
+        "properties": {
+          "a": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "A"
+          },
+          "alpha": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alpha"
+          },
+          "b": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "B"
+          },
+          "beta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beta"
+          },
+          "c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "C"
+          },
+          "gamma": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gamma"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "c",
+          "alpha",
+          "beta",
+          "gamma"
+        ],
+        "title": "UnitCell",
         "type": "object"
       },
       "ValidationError": {
@@ -22248,6 +22500,90 @@
         "summary": "Youden Route",
         "tags": [
           "stats"
+        ]
+      }
+    },
+    "/api/structures/import": {
+      "post": {
+        "description": "Parse a server-visible ``.cif`` path (the desktop shell's native pick).",
+        "operationId": "import_structure_path_api_structures_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StructurePathRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrystalStructure"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Structure Path",
+        "tags": [
+          "structures"
+        ]
+      }
+    },
+    "/api/structures/upload": {
+      "post": {
+        "description": "Parse an uploaded ``.cif`` into its crystal structure.",
+        "operationId": "upload_structure_api_structures_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_structure_api_structures_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrystalStructure"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Structure",
+        "tags": [
+          "structures"
         ]
       }
     },
