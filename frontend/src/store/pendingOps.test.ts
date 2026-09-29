@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { beginOp, endOp, updateOp, usePendingOps, withOp } from "./pendingOps";
+import { beginOp, endOp, runCancellable, trackJob, updateOp, usePendingOps, withOp } from "./pendingOps";
 
 beforeEach(() => usePendingOps.setState({ ops: [] }));
 
@@ -109,6 +109,65 @@ describe("pendingOps store", () => {
       beginOp("A");
       expect(() => updateOp(999_999, "nope")).not.toThrow();
       expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["A"]);
+    });
+  });
+
+  describe("trackJob (job-queue progress in the shared location)", () => {
+    it("registers one op whose label carries the job's percent and message", () => {
+      const job = trackJob("Fit model scan");
+      job.progress(0.426, "Scanning 3/7: Gaussian");
+      const [op] = usePendingOps.getState().ops;
+      expect(op.label).toBe("Fit model scan 43% · Scanning 3/7: Gaussian");
+      job.progress(1.7);
+      expect(usePendingOps.getState().ops[0].label).toBe("Fit model scan 100%");
+      job.end();
+      expect(usePendingOps.getState().ops).toEqual([]);
+    });
+
+    it("keeps one id across progress ticks and attaches a cancel once the job exists", () => {
+      const job = trackJob("DREAM fit");
+      const id = usePendingOps.getState().ops[0].id;
+      expect(usePendingOps.getState().ops[0].cancel).toBeUndefined();
+      const cancel = vi.fn();
+      job.cancellable(cancel);
+      job.progress(0.5);
+      const [op] = usePendingOps.getState().ops;
+      expect(op).toMatchObject({ id, label: "DREAM fit 50%" });
+      op.cancel?.();
+      expect(cancel).toHaveBeenCalledTimes(1);
+      job.end();
+      job.progress(0.9); // a late tick after the end must not resurrect it
+      expect(usePendingOps.getState().ops).toEqual([]);
+    });
+  });
+
+  describe("runCancellable (export/copy cancel)", () => {
+    it("resolves with the value and unregisters when not cancelled", async () => {
+      let seen: AbortSignal | null = null;
+      const out = await runCancellable("Exporting page…", async (signal) => {
+        seen = signal;
+        expect(usePendingOps.getState().ops[0].label).toBe("Exporting page…");
+        return 7;
+      });
+      expect(out).toEqual({ value: 7 });
+      expect((seen as AbortSignal | null)?.aborted).toBe(false);
+      expect(usePendingOps.getState().ops).toEqual([]);
+    });
+
+    it("the op's Cancel aborts the signal and a rejection after it resolves to null", async () => {
+      const out = runCancellable("Exporting page…", (signal) =>
+        new Promise<never>((_, reject) => signal.addEventListener("abort", () => reject(new Error("aborted")))),
+      );
+      usePendingOps.getState().ops[0].cancel?.();
+      await expect(out).resolves.toBeNull();
+      expect(usePendingOps.getState().ops).toEqual([]);
+    });
+
+    it("rethrows a failure that was not a cancel", async () => {
+      await expect(runCancellable("Exporting…", async () => {
+        throw new Error("boom");
+      })).rejects.toThrow("boom");
+      expect(usePendingOps.getState().ops).toEqual([]);
     });
   });
 });

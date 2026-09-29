@@ -17,6 +17,7 @@ import {
   type ReflPosteriorResult,
 } from "../../../lib/api/reflectivity";
 import { reportEmit } from "../../../lib/api/report";
+import { usePendingOps } from "../../../store/pendingOps";
 import { useApp } from "../../../store/useApp";
 import { R_BAND_LABELS } from "./reflDreamBands";
 import { dreamResult, fitResponse, makeRecord, TEST_PRESETS, xrrDataset } from "./reflFit.testkit";
@@ -82,6 +83,7 @@ beforeEach(() => {
   // Reset, not just clear: a never-settling job from one test must not leak
   // its implementation into the next.
   vi.resetAllMocks();
+  usePendingOps.setState({ ops: [] });
   vi.mocked(reflPresets).mockResolvedValue({ presets: TEST_PRESETS });
   vi.mocked(cancelReflJob).mockResolvedValue({});
   useApp.setState({ datasets: [xrrDataset("xrr")], activeId: "xrr", status: "", fitOverlay: null, reflectivitySeed: null });
@@ -170,6 +172,47 @@ describe("estimating a live fit's uncertainty", () => {
     await waitFor(() => expect(view.result.current.fit.dream.progress).toBe(0.42));
     view.unmount();
     expect(cancelReflJob).toHaveBeenCalledWith("j1");
+  });
+
+  it("the run is one op in the shared StatusBar ops: progress, a Cancel that stops the job, gone when settled", async () => {
+    const { result } = await fittedHook();
+    const job = controllableJob();
+    let running: Promise<void> = Promise.resolve();
+    act(() => {
+      running = result.current.fit.dream.run(stored()[0]);
+    });
+    await waitFor(() =>
+      expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual([
+        "Reflectivity DREAM uncertainty 42% · sampling posterior",
+      ]),
+    );
+    usePendingOps.getState().ops[0].cancel?.();
+    expect(cancelReflJob).toHaveBeenCalledWith("j1");
+    await act(async () => {
+      job.finish(new ReflJobCancelled("j1"));
+      await running;
+    });
+    expect(usePendingOps.getState().ops).toEqual([]);
+    expect(result.current.fit.dream.error).toBeNull();
+  });
+
+  it("the StatusBar Cancel pressed before the job id comes back still cancels the job", async () => {
+    const { result } = await fittedHook();
+    let accept: (v: { job_id: string; plan: never }) => void = () => undefined;
+    vi.mocked(reflDream).mockReturnValue(new Promise((resolve) => (accept = resolve)));
+    let running: Promise<void> = Promise.resolve();
+    act(() => {
+      running = result.current.fit.dream.run(stored()[0]);
+    });
+    await waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(1));
+    usePendingOps.getState().ops[0].cancel?.();
+    await act(async () => {
+      accept({ job_id: "j4", plan: undefined as never });
+      await running;
+    });
+    expect(cancelReflJob).toHaveBeenCalledWith("j4");
+    expect(pollReflJob).not.toHaveBeenCalled();
+    expect(usePendingOps.getState().ops).toEqual([]);
   });
 
   it("Cancel pressed before the job id comes back still cancels the job", async () => {

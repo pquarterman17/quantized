@@ -7,7 +7,7 @@ import { useConnection } from "../../lib/lifecycle";
 import { exportFigure } from "../../lib/api/figures";
 import { runExportFigureCommand } from "../../lib/exportFigureCommand";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
-import { beginOp, endOp, updateOp, usePendingOps } from "../../store/pendingOps";
+import { beginOp, endOp, trackJob, updateOp, usePendingOps } from "../../store/pendingOps";
 import { useApp } from "../../store/useApp";
 
 vi.mock("../../lib/api/figures", () => ({ exportFigure: vi.fn() }));
@@ -180,6 +180,31 @@ describe("StatusBar cancel affordance (P3.4 slice 1)", () => {
     });
     expect(screen.getByText("Export figure…")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Cancel /i })).not.toBeInTheDocument();
+  });
+
+  it("shows a job-queue run's live percent and message, then its Cancel once the job exists", () => {
+    const cancel = vi.fn();
+    render(<StatusBar />);
+    let job!: ReturnType<typeof trackJob>;
+    act(() => {
+      job = trackJob("Fit model scan");
+    });
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    expect(screen.getByRole("status", { name: "Background operations" })).toHaveTextContent("Fit model scan");
+    expect(screen.queryByRole("button", { name: /^Cancel/ })).toBeNull();
+    act(() => {
+      job.cancellable(cancel);
+      job.progress(0.3, "Scanning 2/7: Gaussian");
+    });
+    expect(screen.getByRole("status", { name: "Background operations" })).toHaveTextContent(
+      "Fit model scan 30% · Scanning 2/7: Gaussian",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Cancel Fit model scan 30% · Scanning 2/7: Gaussian" }));
+    expect(cancel).toHaveBeenCalledOnce();
+    act(() => job.end());
+    expect(screen.getByRole("status", { name: "Background operations" })).toBeEmptyDOMElement();
   });
 
   it("renders a Cancel control for an op that carries one, named after that op, and clicking it calls cancel", () => {

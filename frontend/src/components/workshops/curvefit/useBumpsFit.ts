@@ -12,6 +12,7 @@ import { dropGapRows, restoreGapRows } from "../../../lib/api/finitePairs";
 import { cancelJob, isJobSubmit, JobCancelledError, pollJob } from "../../../lib/jobs";
 import { activeRowIndices, droppedRows, expandToFull } from "../../../lib/rowstate";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { trackJob } from "../../../store/pendingOps";
 import { toast } from "../../../store/toasts";
 import { selectedFitData } from "../../../lib/fitselection";
 
@@ -67,6 +68,9 @@ export function useBumpsFit(): BumpsFitState {
     setBusy(true);
     setError(null);
     setResult(null);
+    // P3.4: the run is one op in the shared StatusBar location (percent +
+    // Cancel once the DREAM job exists), not only this panel's own bar.
+    const op = trackJob(engine === "dream" ? "Bumps DREAM fit" : `Bumps ${engine} fit`);
     try {
       // Resolve past a lazy preview, then fit the analysis view (excluded/
       // filtered rows dropped) — same contract as the parity fit path.
@@ -91,7 +95,11 @@ export function useBumpsFit(): BumpsFitState {
       if (isJobSubmit(resp)) {
         jobRef.current = resp.job_id;
         setProgress(0);
-        fit = await pollJob<BumpsFitResult>(resp.job_id, (f) => setProgress(f));
+        op.cancellable(() => void cancel());
+        fit = await pollJob<BumpsFitResult>(resp.job_id, (f) => {
+          setProgress(f);
+          op.progress(f);
+        });
       } else {
         fit = resp;
       }
@@ -111,6 +119,7 @@ export function useBumpsFit(): BumpsFitState {
       }
       // a deliberate cancel is not an error — just return to idle
     } finally {
+      op.end();
       jobRef.current = null;
       setBusy(false);
       setProgress(null);

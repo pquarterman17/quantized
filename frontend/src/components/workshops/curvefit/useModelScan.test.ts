@@ -13,6 +13,7 @@ import { saveCustomModel } from "../../../lib/fitmodels";
 import { JobCancelledError } from "../../../lib/jobs";
 import * as jobs from "../../../lib/jobs";
 import type { DataStruct } from "../../../lib/types";
+import { usePendingOps } from "../../../store/pendingOps";
 import { useToasts } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import { useModelScan } from "./useModelScan";
@@ -55,6 +56,7 @@ const ENTRY: ScanEntry = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  usePendingOps.setState({ ops: [] });
   localStorage.clear();
   useToasts.setState({ toasts: [] });
   useApp.setState({
@@ -188,6 +190,32 @@ describe("useModelScan", () => {
     await act(async () => {
       await p;
     });
+  });
+
+  it("shows the running scan in the shared StatusBar ops, with its progress and a working Cancel", async () => {
+    let resolvePoll!: (v: { results: ScanEntry[] }) => void;
+    vi.mocked(jobs.pollJob).mockImplementation((_id, cb) => {
+      cb?.(0.5, "Scanning 2/4: Gaussian");
+      return new Promise((r) => {
+        resolvePoll = r as (v: { results: ScanEntry[] }) => void;
+      });
+    });
+    const { result } = renderHook(() => useModelScan());
+    let p!: Promise<void>;
+    act(() => {
+      p = result.current.scan();
+    });
+    await waitFor(() =>
+      expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Fit model scan 50% · Scanning 2/4: Gaussian"]),
+    );
+    usePendingOps.getState().ops[0].cancel?.();
+    expect(jobs.cancelJob).toHaveBeenCalledWith("job-1");
+
+    resolvePoll({ results: [ENTRY] });
+    await act(async () => {
+      await p;
+    });
+    expect(usePendingOps.getState().ops).toEqual([]);
   });
 
   it("a cancelled job clears busy without setting an error", async () => {

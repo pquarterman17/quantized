@@ -23,6 +23,7 @@ import {
 import { defaultPlotView } from "../../../lib/plotview";
 import { droppedRows } from "../../../lib/rowstate";
 import type { Dataset } from "../../../lib/types";
+import { trackJob } from "../../../store/pendingOps";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 import { bandDatasets, R_BAND_FILLS } from "./reflDreamBands";
 import { buildChannel } from "./reflFitData";
@@ -145,6 +146,15 @@ export function useReflDream(datasets: Dataset[]): ReflDreamState {
     setFailure(null);
     setProgress(0);
     setMessage("submitting");
+    // P3.4: the run is one op in the shared StatusBar location, cancellable
+    // from the start (a Cancel before the job id exists is honoured on
+    // submit, the same as this hook's own `cancel`). Refs only — this
+    // closure outlives the render that started the run.
+    const op = trackJob("Reflectivity DREAM uncertainty");
+    op.cancellable(() => {
+      if (jobRef.current) void cancelReflJob(jobRef.current).catch(() => undefined);
+      else cancelEarly.current = true;
+    });
     try {
       const channels = await rebuildChannels(record, resolveDataset);
       const centre = Object.fromEntries(record.result.parameters.filter((p) => p.vary && !p.tie).map((p) => [p.name, p.value]));
@@ -167,6 +177,7 @@ export function useReflDream(datasets: Dataset[]): ReflDreamState {
       }
       jobRef.current = job_id;
       const res = await pollReflJob<ReflPosteriorResult>(job_id, (f, m) => {
+        op.progress(f, m);
         if (!mounted.current) return;
         setProgress(f);
         setMessage(m);
@@ -190,6 +201,7 @@ export function useReflDream(datasets: Dataset[]): ReflDreamState {
       if (e instanceof ReflJobCancelled) setStatus("reflectivity uncertainty estimate cancelled");
       else setFailure({ recordId: record.id, message: e instanceof Error ? e.message : "the uncertainty estimate failed" });
     } finally {
+      op.end();
       jobRef.current = null;
       if (mounted.current) {
         setBusy(false);

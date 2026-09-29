@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PeakBatchResult } from "../../../lib/api/peakBatch";
 import { DEFAULT_RECIPE, type PeakRecipe } from "../../../lib/peakwizard";
 import type { Dataset } from "../../../lib/types";
+import { usePendingOps } from "../../../store/pendingOps";
 import { useApp } from "../../../store/useApp";
 import { modelFitResponse } from "./modelFit.testkit";
 import PeakBatchView from "./PeakBatchView";
@@ -57,6 +58,7 @@ const realResolve = useApp.getState().resolveDataset;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  usePendingOps.setState({ ops: [] });
   useApp.setState({ resolveDataset: realResolve });
   posted = [];
   cancelled = false;
@@ -154,6 +156,22 @@ describe("PeakBatchView", () => {
     expect(cancelled).toBe(true);
     expect(screen.queryByRole("table", { name: "batch results" })).toBeNull();
     expect(screen.getByRole("button", { name: "Run batch" })).toBeEnabled();
+  });
+
+  it("the batch is one op in the shared StatusBar ops: its progress, and a Cancel there that cancels the job", async () => {
+    script = [{ status: "running", progress: 0.5, message: "fitting 1/2" }];
+    await runAll();
+    await waitFor(() => expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Peak batch 50% · fitting 1/2"]));
+    usePendingOps.getState().ops[0].cancel?.();
+    await waitFor(() => expect(status()).toHaveTextContent("cancelled · cancelled — no results were kept"));
+    expect(cancelled).toBe(true);
+    await waitFor(() => expect(usePendingOps.getState().ops).toEqual([]));
+  });
+
+  it("the StatusBar op ends when the batch finishes, and when the view closes mid-fit", async () => {
+    await runAll();
+    await waitFor(() => expect(status()).toHaveTextContent("done · fitted 2/3 datasets"));
+    expect(usePendingOps.getState().ops).toEqual([]);
   });
 
   it("a failed job shows the backend's error", async () => {
@@ -285,8 +303,10 @@ describe("PeakBatchView", () => {
     fireEvent.click(screen.getByRole("button", { name: "Library selection (3)" }));
     fireEvent.click(screen.getByRole("button", { name: "Run batch" }));
     await waitFor(() => expect(status()).toHaveTextContent("fitting · fitting 1/2"));
+    expect(usePendingOps.getState().ops).toHaveLength(1);
     view.unmount();
     await waitFor(() => expect(cancelled).toBe(true));
+    await waitFor(() => expect(usePendingOps.getState().ops).toEqual([]));
   });
 });
 
