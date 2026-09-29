@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-29 (latest): **P1.4 encodings on the editable Stage** — a Graph Builder apply stores Color / Symbol / Label on the plot window's document (`FigureBindings.encoding`, omitted when unset), and the Stage (focused and background windows) draws them through the preview's own derivation, loaded lazily; the window's Export figure… / Copy figure send them too (screen == export, pinned to the shared wire fixture); P1.4's residual 1 closed (see P1.4's "Any suitable factor" box). Previous: 2026-09-28: **P1.4 Graph Builder encodings** — Color-by and Symbol-by wells (categorical factors, one palette colour / marker per level through the existing cycles) and a legend-label source well (sample id, field, temperature: any column) in the Graph Builder, saved with the spec and exported with backend parity (`calc/plotting_encoded.py`); the editable Stage plot does not draw them yet (see P1.4's "Any suitable factor" box). Previous: 2026-09-27: **P2.5 derived expressions** — Python-like worksheet formulas (`**`, `//`, `np.` functions, `where`, positioned errors), a derived unit for every new column (mismatched sums refused), `fit()`/`fitval()` over the dataset's saved fit (snapshotted, re-resolved when the fit changes), and an optional first-order, uncorrelated σ column bound as the new column's error; P2.5 box 2 ticked, so P2.5 is complete (see P2.5). Previous: 2026-09-26: **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-29 (latest): **P1.4 encodings in Publication Preview + greyscale by level** — opening Publication Preview from the Graph Builder carries Color / Symbol / Label onto the draft (`bindings.encoding`, the series half of the Graph Builder's Export), so the preview renders the committed wire fixture's request; greyscale export greys an encoded figure by colour LEVEL, one grey per level on every Y channel; P1.4's residual 2 and residual 3's greyscale half closed (see P1.4's "Any suitable factor" box). Previous: 2026-09-29: **P1.4 encodings on the editable Stage** — a Graph Builder apply stores Color / Symbol / Label on the plot window's document (`FigureBindings.encoding`, omitted when unset), and the Stage (focused and background windows) draws them through the preview's own derivation, loaded lazily; the window's Export figure… / Copy figure send them too (screen == export, pinned to the shared wire fixture); P1.4's residual 1 closed (see P1.4's "Any suitable factor" box). Previous: 2026-09-28: **P1.4 Graph Builder encodings** — Color-by and Symbol-by wells (categorical factors, one palette colour / marker per level through the existing cycles) and a legend-label source well (sample id, field, temperature: any column) in the Graph Builder, saved with the spec and exported with backend parity (`calc/plotting_encoded.py`); the editable Stage plot does not draw them yet (see P1.4's "Any suitable factor" box). Previous: 2026-09-27: **P2.5 derived expressions** — Python-like worksheet formulas (`**`, `//`, `np.` functions, `where`, positioned errors), a derived unit for every new column (mismatched sums refused), `fit()`/`fitval()` over the dataset's saved fit (snapshotted, re-resolved when the fit changes), and an optional first-order, uncorrelated σ column bound as the new column's error; P2.5 box 2 ticked, so P2.5 is complete (see P2.5). Previous: 2026-09-26: **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -1058,16 +1058,69 @@ output, not a caught error).
     legend-source series labels the Stage's Y axis with its text (uPlot's
     solo-label rule) while the export leaves the axis title blank; and a cold
     load draws one unencoded frame before the lazy derivation arrives.
+  * **Publication Preview (residual 2 CLOSED 2026-09-29, commit
+    `addeaf40`).** The preview edits a canonical draft and renders it through
+    `figureSpec.buildFigureSpecFromDocument`, which already sends a
+    document's `bindings.encoding` through the Stage's gate — so the fix is in
+    the bridge alone. `plotSpecFigure.plotSpecToFigureDocument` (the Graph
+    Builder's "Open Publication Preview", replacing the hook's own promote
+    call) takes the Graph Builder's `encodeSpec` result — the preview's own
+    derivation, not a new one — and, when it encodes, stores the GATED picks
+    as `bindings.encoding` (so a factor from another dataset can never become
+    this dataset's channel) with the series half the Graph Builder's Export
+    sends: the mark's styles only, error wells only when nothing splits. The
+    legend needs no override (the draft view shows it by default). The
+    confirm dialog no longer lists the encodings; it lists "per-series styling
+    on encoded output" when per-channel styles exist, which neither the Graph
+    Builder preview nor its Export draws. Tests:
+    `lib/plotSpecFigureEncoding.test.ts` runs the bridge then the preview's
+    own `computeCanonicalReadiness` and asserts the request's `encoding`,
+    `y_keys`, `series_styles` and `dataset` equal the committed wire fixture's
+    (`tests/fixtures/wire/graph_encoding_export.json`, whose SVG
+    `tests/test_export_graph_encoding.py` reads back), and that its series
+    half equals `encodedFigureSpec`'s (preview == Graph Builder export); plus
+    legend-source-only error wells, the gated-picks case, the ungated
+    control, `figureCompatibility.test.ts` and a `useGraphBuilder` hook test.
+    Sabotage-verified, each failing at least one test: binding not set, live
+    styles kept, split error wells kept, raw picks stored instead of gated,
+    the hook passing no derivation, the encodings listed as a loss again, and
+    the styling loss never reported (7). Eager bundle unchanged: 855,236 B
+    before and after (`npm ci` + clean build).
+  * **Greyscale (residual 3's greyscale half CLOSED 2026-09-29, commit
+    `addeaf40`).** P3.3's `apply_greyscale` picked grey, dash and glyph by
+    display position, so an encoded figure's one colour level drew a
+    different grey on every series. `calc.plotting_encoded.
+    encoded_series_styles` now tags each series with its colour LEVEL as a
+    greyscale slot (`calc.figure_greyscale.GREY_SLOT_KEY`, set only with a
+    colour factor), and `apply_greyscale` ramps over the distinct slots
+    present, keyed by rank — one grey, dash and glyph per level across Y
+    channels — falling back to position when any ramped series lacks a slot.
+    The slot is server-side only: `calc.plotting.resolve_style_channels`
+    strips one sent on the wire, and `apply_greyscale` consumes it. With no
+    colour factor the screen colours by position, so greyscale still does.
+    Every greyscale path (`/figure`, `/figure-hitmap`, figure pages) goes
+    through `apply_greyscale`, so it holds for all of them. Tests:
+    `tests/test_export_graph_encoding.py` (two Y channels in greyscale: every
+    curve's fill is `greyscale_ramp(3)[level]`, legend handles match, the
+    symbol factor's glyphs survive, the no-colour-factor control, a wire-sent
+    slot ignored) and `tests/test_calc_figure_greyscale.py` (rank mapping,
+    mixed/bool fallback, `color_by` skipped). Sabotage-verified: slot not set,
+    slot not consumed, grey by position, wire slot not stripped (4).
+    Gate for both: `npx tsc -b --force`, lint and build clean; vitest 880
+    files / 14,323 passed; pytest 6,182 passed; golden 249 passed.
   **Why `[~]`, not `[x]` — the residuals, in order of weight:**
   1. ~~The editable Stage plot does not draw Color/Symbol/Label.~~ CLOSED
      2026-09-29 — see the **Stage** bullet above.
-  2. Publication Preview (the FigureDoc bridge) drops them; its confirm
-     dialog now lists "Color, Symbol and Label encodings" as a loss.
+  2. ~~Publication Preview (the FigureDoc bridge) drops them.~~ CLOSED
+     2026-09-29 — see the **Publication Preview** bullet above.
   3. They do not apply while faceted (facet panels split nothing — the same
      limit Group has there) or to box/violin/bar (the wells stay visible
      there only while something is assigned, saying so, so it can be
-     removed). Greyscale export re-greys by display position, so under
-     greyscale one colour level is not one grey across Y channels.
+     removed). Both need a split the facet / stat renderers do not have
+     (`facetPayloads` and `calc.figure_facets` on screen and wire; the stat
+     Stage), so they are not a small follow-on. ~~Greyscale export re-greys
+     by display position.~~ CLOSED 2026-09-29 — see the **Greyscale**
+     bullet above.
   4. A CONTINUOUS Color-by (a gradient) is not offered; the natural route is
      MAIN #14's `SeriesStyle.colorBy`.
   5. Row-indexed metadata text columns with no channel index (Origin
