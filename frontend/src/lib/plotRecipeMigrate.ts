@@ -37,8 +37,10 @@ function v1ToV2(o: Raw): Raw {
   return { ...o, schemaVersion: 2, preview: null, outlierPolicy: null, transform: null };
 }
 
-/** `STEPS[n]` turns a version-n object into a version-(n+1) one. */
-const STEPS: Readonly<Record<number, (o: Raw) => Raw>> = { 1: v1ToV2 };
+/** `STEPS.get(n)` turns a version-n object into a version-(n+1) one. A Map,
+ *  not an object literal, so a version read from a file can never resolve to
+ *  an inherited property (CodeQL: unvalidated dynamic method call). */
+const STEPS: ReadonlyMap<number, (o: Raw) => Raw> = new Map([[1, v1ToV2]]);
 
 export type RecipeMigration = { ok: Raw } | { error: string };
 
@@ -57,7 +59,7 @@ export function migrateRecipeObject(o: Raw): RecipeMigration {
   }
   let cur = o;
   for (let at = v; at < PLOT_RECIPE_SCHEMA_VERSION; at++) {
-    const step = STEPS[at];
+    const step = STEPS.get(at);
     if (!step) return { error: `unsupported plot recipe schema version: ${v}` };
     cur = step(cur);
   }
