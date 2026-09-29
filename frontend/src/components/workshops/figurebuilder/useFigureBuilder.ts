@@ -5,6 +5,7 @@
 // layer on top of it (the export backend already existed; this adds the preview).
 
 import { useEffect, useMemo, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 
 import type { FigureSpec } from "../../../lib/api/figures";
 import { appendErrorBinding, patchErrorBindingList, removeErrorBindingFromList } from "./canonicalErrors";
@@ -24,6 +25,7 @@ import { editPreviewElementText, previewElementText, selectPreviewElement } from
 import { useGraphTemplates } from "./useGraphTemplates";
 import { usePreviewRender } from "./usePreviewRender";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
+import { secondaryAxisFromView } from "../../../lib/axisspec";
 import { figureDocumentToPlotView, type FigureViewState } from "../../../lib/figureDocument";
 import type { ExportSeriesStyle } from "../../../lib/exportStyles";
 import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "../../../lib/errorRoles";
@@ -43,7 +45,7 @@ export function useFigureBuilder() {
   const active = useActiveDataset();
   const yKeys = useApp((s) => s.yKeys);
   const xKey = useApp((s) => s.xKey);
-  const y2Keys = useApp((s) => s.y2Keys); // item 2: legacy secondary-axis presence
+  const liveY2 = useApp(useShallow(secondaryAxisFromView)); // legacy mode mirrors the live y2 axis
   const xScale = useApp((s) => s.xScale);
   const yScale = useApp((s) => s.yScale);
   const xFmt = useApp((s) => s.xFmt);
@@ -167,9 +169,6 @@ export function useFigureBuilder() {
     setCanonicalOutput({ stylePreset: next, ...(FIGURE_STYLE_DPI[next] === undefined ? {} : { dpi: FIGURE_STYLE_DPI[next] }) });
   const activeOverrides = effective ?? overrides;
   const setActiveOverrides = canonical ? setCanonicalOverrides : setOverrides;
-  // Item 2: does the panel's y2 min/max have a secondary axis to apply to --
-  // gateY2Overrides drops y2_lim server-side otherwise (placebo fields).
-  const hasY2 = canonical ? (canonicalDocument?.bindings.y2Keys?.length ?? 0) > 0 : (y2Keys?.length ?? 0) > 0;
   // Item 3: canonical x-breaks read/write through the unified home — see
   // canonicalOverrides.ts's effectiveXBreaks/migrateXBreaksPatch.
   const xBreaks = canonical ? effectiveXBreaks(canonicalDocument!) : undefined;
@@ -311,13 +310,16 @@ export function useFigureBuilder() {
   // legacyFigure.ts's module doc.
   const legacyState = useMemo<LegacyFigureState>(() => ({
     data, xKey: effXKey, yKeys: effYKeys, xScale: effXScale, yScale: effYScale,
-    xFmt, yFmt, style, overrides, title, xLabel, yLabel,
-    seriesStyles, docSeriesStyles, docGroupCol,
+    xFmt, yFmt, style, overrides, title, xLabel, yLabel, seriesStyles, docSeriesStyles, docGroupCol,
+    y2: docScales === undefined ? liveY2 : null, // a re-opened FigureDoc carries no y2
   }), [
-    data, effXKey, effYKeys, effXScale, effYScale, xFmt, yFmt, style,
-    overrides, title, xLabel, yLabel, seriesStyles, docSeriesStyles, docGroupCol,
+    data, effXKey, effYKeys, effXScale, effYScale, xFmt, yFmt, style, overrides, title, xLabel, yLabel,
+    seriesStyles, docSeriesStyles, docGroupCol, docScales, liveY2,
   ]);
   const legacySpec = useMemo<FigureSpec | null>(() => buildLegacyFigureSpec(legacyState), [legacyState]);
+  // Item 2 / F2.1g: y2 min/max need a secondary axis to apply to (gateY2Overrides
+  // drops y2_lim otherwise). Legacy reads the REQUEST, so controls and wire agree.
+  const hasY2 = canonical ? (canonicalDocument?.bindings.y2Keys?.length ?? 0) > 0 : (legacySpec?.y2_keys?.length ?? 0) > 0;
   const canonicalSpec = canonicalReadiness?.state === "ready"
     ? canonicalReadiness.spec
     : null;
