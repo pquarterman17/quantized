@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-28 (latest): **P1.4 Graph Builder encodings** — Color-by and Symbol-by wells (categorical factors, one palette colour / marker per level through the existing cycles) and a legend-label source well (sample id, field, temperature: any column) in the Graph Builder, saved with the spec and exported with backend parity (`calc/plotting_encoded.py`); the editable Stage plot does not draw them yet (see P1.4's "Any suitable factor" box). Previous: 2026-09-27: **P2.5 derived expressions** — Python-like worksheet formulas (`**`, `//`, `np.` functions, `where`, positioned errors), a derived unit for every new column (mismatched sums refused), `fit()`/`fitval()` over the dataset's saved fit (snapshotted, re-resolved when the fit changes), and an optional first-order, uncorrelated σ column bound as the new column's error; P2.5 box 2 ticked, so P2.5 is complete (see P2.5). Previous: 2026-09-26: **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-29 (latest): **P1.4 encodings on the editable Stage** — a Graph Builder apply stores Color / Symbol / Label on the plot window's document (`FigureBindings.encoding`, omitted when unset), and the Stage (focused and background windows) draws them through the preview's own derivation, loaded lazily; the window's Export figure… / Copy figure send them too (screen == export, pinned to the shared wire fixture); P1.4's residual 1 closed (see P1.4's "Any suitable factor" box). Previous: 2026-09-28: **P1.4 Graph Builder encodings** — Color-by and Symbol-by wells (categorical factors, one palette colour / marker per level through the existing cycles) and a legend-label source well (sample id, field, temperature: any column) in the Graph Builder, saved with the spec and exported with backend parity (`calc/plotting_encoded.py`); the editable Stage plot does not draw them yet (see P1.4's "Any suitable factor" box). Previous: 2026-09-27: **P2.5 derived expressions** — Python-like worksheet formulas (`**`, `//`, `np.` functions, `where`, positioned errors), a derived unit for every new column (mismatched sums refused), `fit()`/`fitval()` over the dataset's saved fit (snapshotted, re-resolved when the fit changes), and an optional first-order, uncorrelated σ column bound as the new column's error; P2.5 box 2 ticked, so P2.5 is complete (see P2.5). Previous: 2026-09-26: **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -1004,14 +1004,63 @@ output, not a caught error).
     Sabotage-verified: colour by display position instead of level, and a
     dropped glyph, each fail the SVG test; removing the categorical gate
     fails 6 frontend tests; not persisting the zones fails 4.
+  * **Stage (residual 1 CLOSED 2026-09-29, commit `2e3c0aac`).** A plot
+    action stores the picks on the plot window's canonical document as
+    `FigureBindings.encoding` (shape in `lib/figureEncoding.ts`, raw channel
+    indices; the field is ABSENT when unset, so documents and `.dwk` bytes
+    without one are unchanged), and the editable Stage draws them —
+    focused (`PlotStage`) and background (`BackgroundPlotWindow`) windows
+    alike — through `Stage/usePlotEncoding.ts`, which calls the SAME
+    `lib/plotEncoding` functions the preview is built from
+    (`encodedSplit`/`encodedNames`/`applyEncodedSplit`/`encodedStyle`;
+    `buildEncodedXY`/`encodedStyles` were refactored into exactly those, not
+    copied) over the Stage's own never-decimated fetch, loaded by a dynamic
+    import so the derivation stays out of the eager bundle. The ONE gate
+    (`windowEncoding`: categorical colour/symbol via the modeling chokepoint,
+    off with a bound y2 axis) is shared by the Stage and the window's own
+    export (`figureSpec.buildFigureSpecForView` now sends `encoding` +
+    palette from the document, never with facets), so Export figure… / Copy
+    figure of an encoded plot render what the Stage shows. Rules on the
+    Stage, each mirroring the group split or the backend: edit-all identity
+    (every split series maps to its Y channel in `plotted`); a colour factor
+    overrides the channel colour, otherwise the channel colour, otherwise the
+    position token (`calc.plotting_encoded.encoded_series_styles`' rule); a
+    channel rename replaces the Y name in every split name (BUG-014's
+    `y_legends`, now also a `buildEncodedXY` parameter) and the DOM legend
+    shows the finished text (`PlotLegend`'s new `labels`); no waterfall /
+    decade offsets / colour-mapped scatter / P3.3 auto cycle while encoded,
+    on screen and wire alike; error bars kept for a legend-source-only
+    encoding and dropped once a factor splits. Lifecycle: kept through every
+    facade commit on the same dataset, duplicated with the window, dropped on
+    a dataset switch/rebind and a shape-changed reimport, remapped on column
+    removal (`channelRemap.remapFigureBindings`), cleared by an unencoded
+    Graph Builder apply. Tests: `Stage/usePlotPayload.encoding.test.ts`
+    (the Stage draws the committed wire fixture's `screen` — colour, glyph
+    and legend text series for series — and the preview's own columns),
+    `lib/plotEncodingBinding.test.ts` (gate, lifecycle, cycle refusal, and
+    the window export sending the fixture's `encoding`/`y_keys`), plus
+    additions to `plotEncoding`, `PlotLegend`, `useGraphBuilder` and
+    `EncodingWells` tests. Sabotage-verified, 25 guards each failing at least
+    one test (the first run of the wire-offsets one passed vacuously —
+    waterfall already refuses offsets — and the test was fixed until it
+    failed; split not applied, styles/labels not encoded, rename ignored,
+    colour-factor precedence, gate removed, y2 degrade removed, offsets /
+    waterfall kept on screen and on the wire, errors kept when split, export
+    encoding dropped, colours not stripped, facet gate, document
+    carry/drop/sanitize, window reset and rebind, remap, reshape, cycle
+    refusal, legend labels, Graph Builder write and clear) — 25 in all.
+    Known limits, not new classes: the split's levels and combinations are
+    taken over the Stage's full rows while the export prunes excluded /
+    filtered rows first (P1.5's group split has the same property), so a
+    level present ONLY in excluded rows can shift a position colour; with no
+    colour factor, a HIDDEN channel shifts later series' position colour in
+    the export but not on screen (again as grouped views); a lone
+    legend-source series labels the Stage's Y axis with its text (uPlot's
+    solo-label rule) while the export leaves the axis title blank; and a cold
+    load draws one unencoded frame before the lazy derivation arrives.
   **Why `[~]`, not `[x]` — the residuals, in order of weight:**
-  1. The editable Stage plot does not draw Color/Symbol/Label. A plot action
-     commits X/Y/Group/Facet exactly as before and SAYS so (an info toast,
-     plus a note under the wells). Carrying them needs a bindings-owned
-     `PlotView`/`FigureDocument` field through `usePlotPayload.ts` (498/500
-     lines), `figureSpec.ts`, `datasetViewDefaults`, `channelRemap`, window
-     persistence and the P3.3 cycle predicates — about a dozen eager,
-     pinned files — deferred for size and the ~2 kB eager-bundle headroom.
+  1. ~~The editable Stage plot does not draw Color/Symbol/Label.~~ CLOSED
+     2026-09-29 — see the **Stage** bullet above.
   2. Publication Preview (the FigureDoc bridge) drops them; its confirm
      dialog now lists "Color, Symbol and Label encodings" as a loss.
   3. They do not apply while faceted (facet panels split nothing — the same
@@ -11011,6 +11060,24 @@ work (its BACKLOG row).
   ID, field, or temperature" ticked; "Any suitable factor" moved to `[~]`
   with its five residuals — the editable Stage plot not drawing encodings is
   the next dependency.
+
+- ~~**P1.4 encodings on the editable Stage (residual 1)**~~ (2026-09-29,
+  Claude, commit `2e3c0aac`) — `FigureBindings.encoding` (shape + validator in the dependency-free `lib/figureEncoding.ts`; new eager
+  `lib/plotEncodingBinding.ts`: the one gate, the wire
+  field and resolved palette) written by the Graph Builder apply
+  (`store/windowDocuments.withFocusedEncoding`); the Stage draws it through
+  `Stage/usePlotEncoding.ts` (lazy import of `lib/plotEncoding`, whose
+  `buildEncodedXY`/`encodedStyles` were split into the shared
+  `encodedSplit`/`encodedNames`/`applyEncodedSplit`/`encodedStyle`); the
+  window's own export sends it (`figureSpec.ts`). Funded under the pins by
+  moving the canonical-role `errorSpans` memo to
+  `Stage/usePlotPayloadLogOffsets.useOffsetErrorSpans` (`usePlotPayload.ts`
+  497 → 479 lines); `PlotStage.tsx` stays at 399, `useGraphBuilder.ts` at its
+  603 pin. Eager JS 834.8 → 840.8 kB (budget 846.1 kB untouched; 5.3 kB
+  headroom left) — the derivation itself (`plotEncoding`, 4.2 kB) stays a
+  lazy chunk; what is eager is the gate, the document field, the Stage hook
+  and the export wiring. See P1.4's **Stage** bullet for rules, tests, the
+  25 sabotaged guards and the known limits. Residuals 2-5 unchanged.
 
 ## Reference baseline
 
