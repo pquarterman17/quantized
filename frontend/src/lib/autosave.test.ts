@@ -61,6 +61,16 @@ describe("autosave round-trip (pre-#32 behaviour, preserved)", () => {
     expect(restored?.datasets[1].data.values).toEqual([[10], [20], [30]]);
   });
 
+  // Perf audit 2026-09-29: the autosave runs on the main thread after every
+  // structural change, so it writes compact JSON (no indentation).
+  it("writes the snapshot compact", async () => {
+    const backend = memoryBackend();
+    setAutosaveBackend(backend);
+    await saveAutosave({ datasets: [ds("a", "first")] });
+    const [gen] = await backend.read();
+    expect(gen.text).not.toContain("\n");
+  });
+
   it("round-trips the folder tree + membership + expansion (v2)", async () => {
     await saveAutosave({
       datasets: [{ ...ds("a", "first"), folderId: "f1", order: 0 }],
