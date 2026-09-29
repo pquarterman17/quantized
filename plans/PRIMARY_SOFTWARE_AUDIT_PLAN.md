@@ -5934,12 +5934,17 @@ that goes red without its fix.
   and **round 11 (2026-09-25) CLOSED R15**: a modal now gates the app's
   window-level shortcuts (`frontend/src/lib/appShortcuts.ts`).
   **2026-09-29 CLOSED R2, R4 and R11** (keyboard/a11y residual pass; see
-  each entry below).
-  Stays `[~]` rather than `[x]`: eight residuals remain (R3, R5–R10 and R14
-  below — R1, R2, R4, R11, R12, R13, R15 and R16 are closed, R14 was opened
-  by the round-9 re-review), each a distinct, smaller gap — none of them a
-  dialog with no keyboard dismissal at all, which is what the audit originally
-  found.
+  each entry below), then **R3, R5, R7, R8 and R9** in a second pass the
+  same day (branch `a11y-2`; each entry below names its commit, red-first
+  test and sabotages). That pass's eager bundle: parent `100d2bed`
+  **855,236 B** → tip **855,477 B**, **+241 B** (R9's placeholder surface
+  measured +188 B on its own), both built after `npm ci` and
+  `rm -rf node_modules/.vite`; budget unchanged.
+  Stays `[~]` rather than `[x]`: three residuals remain — R6 (re-audited:
+  no self-appearing panel exists to fix against), R10 (an owner decision)
+  and R14 (needs real IME hardware) — each a distinct, smaller gap, none of
+  them a dialog with no keyboard dismissal at all, which is what the audit
+  originally found. Every other R-number is closed.
 
   **The audit** — every `.tsx` under `components/overlays`, the `ToolWindow`
   workshop host, and the three Library views. Columns: focus moves INTO the
@@ -5957,7 +5962,7 @@ that goes red without its fix.
   | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | Y | Y | Y (stacked too, round 9) | Y | R1 CLOSED — focus-in + trap + restore in round 7; Escape ownership in round 9, on `escapeStack`'s `modal` layer (BUG-018) |
   | CommandPalette | Y | (single input) | Y | Y (R2, 2026-09-29) | R2 CLOSED — `useOpenerCapture` (leaf `openerCapture.ts`) + eager restore before a run command acts |
   | ContextMenu | Y | n/a (roving menu) | Y | Y | already correct |
-  | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2); Escape re-homed on the shared ordered registry (round 3); a DECLINED close keeps the key (round 4) |
+  | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2); Escape re-homed on the shared ordered registry (round 3); a DECLINED close keeps the key (round 4); keyboard move/resize from the title bar (R3, 2026-09-29) |
   | LibraryTree / LibraryDetails / LibraryTile | Y | n/a | Y | — | already correct, untouched |
 
   "dead" means the dialog HAD an Escape handler — on the dialog box's React
@@ -6182,6 +6187,19 @@ that goes red without its fix.
     Round 2's order was the inverse for the workshop case (the tool reverted
     first and the panel stayed), which is the inconsistency this fixes; the
     workspace case already behaved this way and still does.
+    **CLOSED (2026-09-29, `e2d0a3a2`) — not a defect, and now pinned rung by
+    rung.** The ladder is `lib/escapeStack.ts`'s stated invariant (one
+    Escape, one action, innermost first), so there is nothing to change; what
+    was missing is that only each ladder's FIRST rung was pinned. Every rung
+    is now, with the real hooks: `escapeLadder.test.tsx` "a focused workshop
+    over an armed tool: Esc① closes the window, Esc② reverts the tool" and
+    "Tiles over an armed tool: Esc① closes Tiles, Esc② reverts the tool";
+    `usePeakWizard.test.ts` gains "Esc③ falls to the app tier and reverts the
+    tool" after its existing Esc①/Esc② cases. Sabotage (the walk keeps going
+    after a claim, i.e. one Escape does two things) reddens both new ladder
+    cases and two `usePeakWizard` cases. If the owner ever wants ONE Escape to
+    dismiss everything instead, that is a change to the invariant itself, not
+    a residual of this box.
   - **R9** (round 3, found while writing the e2e spec) — `App.tsx` renders
     `LibraryWorkspace` and `QuickFigureBuilderWorkspace` LAZILY behind a
     `Suspense` fallback that carries the same `aria-label`, and that
@@ -6190,11 +6208,35 @@ that goes red without its fix.
     in the real component) and invisible to a user who did not press Escape
     within that window; recorded because it cost an afternoon to diagnose in
     the spec, which now waits for a real tile rather than the label.
+    **CLOSED (2026-09-29, `76432f9e` + `acad8ece`).** The two seams moved to
+    `components/Shell/workspaceSeams.tsx`, and each placeholder is now a
+    `workspace`-layer Escape surface that closes what the loaded workspace
+    closes (`lazyRegion` takes a props-aware fallback so the Library one can
+    reach `onClose`). One deliberate difference: the loaded Tiles view also
+    reveals its selection in the tree on close; a placeholder has no tiles to
+    have selected from, so it only closes. Red-first,
+    `workspaceSeams.test.tsx` mocks both chunks to NEVER resolve: "Escape
+    closes the Library workspace placeholder" and "… the Quick Figure Builder
+    placeholder" both red at base, green with the fix, red again with the
+    registration disabled. Eager cost +188 B measured on its own (see the P3.3
+    header for the pass total).
   - **R8** (round 3, review NIT 10) — `hiddenWithin` moves the WRAP boundary
     only. A focusable inside an `aria-hidden` wrapper is still reached by an
     ordinary Tab BETWEEN the first and last stops, because the trap intervenes
     at the two ends and nowhere else. Delivering the attribute's full meaning
     needs `inert`, which is a separate decision from this pass.
+    **CLOSED (2026-09-29, `e67a8719`) — without `inert`.** `useFocusTrap` now
+    works out where the browser's own Tab would land (`nextStop`): a visible
+    control inside the dialog keeps the native move, and the end of the
+    dialog or a hidden stop is taken over (next visible stop, else wrap). A
+    radio group counts as ONE stop, as the browser treats it, which also
+    closes a leak the old end-only check had: Tab from a trailing group's
+    checked radio (not the last radio) walked out of the dialog. Red-first,
+    `focusTrapHidden.a11y.test.tsx`: Tab and Shift+Tab across a middle
+    `aria-hidden` button red at base; sabotaging the hidden check reddens
+    both, sabotaging the radio skip reddens "treats a radio group as ONE
+    stop"; two cases pin that a plain Tab between visible controls stays
+    native (not `preventDefault()`ed).
 
   **Round 4 (2026-09-18) — every Escape consumer is in the ladder, and a
   declined close keeps the key.** Rounds 2 and 3 each shipped a fix that
@@ -7319,6 +7361,22 @@ that goes red without its fix.
     plan-level promise commits to one; GUI_INTERACTION #10's recoverability
     promise is met by title-bar clamping plus the keyboard-reachable View-menu
     "Reset window positions". Not invented here.
+    **CLOSED (2026-09-29, `eb8f1fd9`).** The title bar is now a Tab stop
+    (`role="group"`, named "<panel> title bar", `:focus-visible` ring): the
+    arrow keys move the window and Shift+arrows resize it, `KEY_STEP` = 10 px
+    per press, clamped to the viewport exactly as a drag end is and never
+    below `MIN_WIDTH`/`MIN_HEIGHT` (pure step: `lib/toolwindow.ts`
+    `keyboardLayout`). The keys act only when the bar itself has focus, so its
+    ✕ / ? / ▾ buttons keep theirs, and a claimed arrow is `preventDefault()`ed
+    so it never also steps the global previous/next-dataset ↑/↓. Tooltip and
+    the Shortcuts sheet's Window group state both bindings. Red-first,
+    `ToolWindowKeyboard.test.tsx` (six cases, all red at base). Sabotages,
+    each alone: target check removed → "an arrow key on a title-bar button
+    leaves the window where it is"; `preventDefault` removed → "the title
+    bar's arrow keys do not also step the active dataset"; clamp removed →
+    "a move is clamped to the viewport"; min width removed → the resize case;
+    `tabIndex` removed → five cases. The step (10 px) is one constant
+    (`KEY_STEP`) if the owner prefers another.
   - **R4** — `ToolWindow`'s ✕ takes its accessible name from `title="Close"`
     alone and does not say WHICH panel it closes. That belongs to the
     accessible-names box above, not this one.
@@ -7333,10 +7391,30 @@ that goes red without its fix.
     mount→cleanup→mount, `useOpenerRestore`'s cleanup restores to the opener
     mid-open and the re-run pulls focus back in. Net-correct, one dev-only
     flicker; not worth a latch that would complicate the real path.
+    **CLOSED (2026-09-29, `2d849c26`)** with a latch that leaves the real path
+    alone: the cleanup skips the restore only when the surface is still
+    committed open (a layout-phase ref) AND its root is still in the
+    document — true only for StrictMode's replay. A real close has either
+    committed `open=false` or removed the root, and restores exactly as
+    before. Red-first, `openerRestoreStrict.test.tsx`: under `<StrictMode>`
+    the opener received 2 focus events on one open at base (1 with the fix),
+    for both a `useDialogFocus` dialog and a `ToolWindow`. Sabotages: guard
+    removed → both bounce cases red; guard reduced to "root connected" → the
+    kept-mounted dialog's real close red; reduced to "committed open" → the
+    unmounting dialog's and window's real closes red.
   - **R6** (round 2, review NIT 13) — a SECOND `ToolWindow` mounting takes
     focus from the first. Correct for a user-initiated open, wrong for a panel
     that appears by itself; `ResultsWindow` is the only auto-appear candidate
     and nothing currently renders it, so there is no such path to fix against.
+    **Re-audited 2026-09-29, still OPEN and still not code-actionable.** 44
+    production files render `<ToolWindow`; every open flag is set from a user
+    command (menu, palette, shortcut, button, context menu) and synchronously
+    — the `fileCommands` / `figureLifecycle` / `reportsFigureDocs` opens run
+    inside the command, not after an await — and `.dwk` restore persists
+    window GEOMETRY only, never open flags, so nothing reopens a panel by
+    itself. `ResultsWindow` is still rendered nowhere. Fix when the first
+    self-appearing panel lands: give `ToolWindow` an opt-out of the mount
+    focus for it, pinned by a test where focus stays in the first window.
 - [~] Accessible names/state for icons, plots, trees, dialogs, progress.
   ~143 `aria-label`s already exist app-wide; this box has NOT had a full
   audit and stays `[~]` for that reason. What was verified and fixed
