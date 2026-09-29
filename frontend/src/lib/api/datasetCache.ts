@@ -68,7 +68,7 @@ export type RawFetchJSON = <T>(
 const handles = new WeakMap<object, string>();
 
 /** Paths that opt into the handle cache -- a narrow allowlist, not "any
- *  body with a `dataset` field": /api/corrections/apply, /api/export/* and
+ *  body with a `dataset` field": /api/corrections/apply, most /api/export/* and
  *  others also carry a `dataset` field for unrelated reasons (one-shot
  *  operations, not a repeat-fetch loop) and must not be silently rewritten
  *  -- rewriting THEM would mean their `dataset` field never round-trips
@@ -82,11 +82,22 @@ const handles = new WeakMap<object, string>();
  *  step -- measured 1M x 7 rows costing ~80 MB/request, 2.25s json.loads +
  *  0.5s DataStruct.from_dict server-side, plus a main-thread
  *  JSON.stringify client-side, for a dataset that never actually changed.
+ *  /api/export/figure-hitmap belongs here for the same reason: it is the
+ *  Figure Builder's live preview, re-rendered on every property edit
+ *  (`FigureRequest` extends `CachedDatasetRequest`). /api/export/figure
+ *  itself stays OUT: a download is one-shot (and goes through
+ *  postDownload/postBlob, which never consult this allowlist); the backend
+ *  accepts a handle there but does not cache a posted dataset for it.
  *  /api/rsm/strain matches the prefix but never carries a `dataset` field
  *  (it takes q_sub/q_film directly), so it falls through
  *  `postJSONDatasetAware` unchanged below -- no explicit exclusion needed. */
 export function isDatasetCachePath(path: string): boolean {
-  return path === "/api/plot/map" || path === "/api/plot/series" || path.startsWith("/api/rsm/");
+  return (
+    path === "/api/plot/map" ||
+    path === "/api/plot/series" ||
+    path === "/api/export/figure-hitmap" ||
+    path.startsWith("/api/rsm/")
+  );
 }
 
 function datasetKey(body: unknown): object | undefined {

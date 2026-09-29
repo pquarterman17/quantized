@@ -167,3 +167,33 @@ describe("ParamDialog / askParams", () => {
     expect(screen.getByText(GREYSCALE_FIELD.label)).toHaveAttribute("title", GREYSCALE_FIELD.hint);
   });
 });
+
+describe("ParamDialog — visible message and custom confirm label (audit item 3)", () => {
+  it("shows the message as visible text and labels the confirm button as asked", async () => {
+    render(<ParamDialog />);
+    let result!: Promise<ParamValues | null>;
+    act(() => {
+      result = askParams("Excluded rows", [{ key: "m", label: "Mode", type: "select", default: "a", options: ["a", "b"] }], {
+        message: "Choose how the export draws them.",
+        confirmLabel: "Export",
+      });
+    });
+    const message = screen.getByText("Choose how the export draws them.");
+    expect(screen.getByRole("dialog")).toHaveAttribute("aria-describedby", message.id);
+    expect(screen.queryByRole("button", { name: "Run" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Export" }));
+    await expect(result).resolves.toEqual({ m: "a" });
+  });
+
+  it("a later ask without options falls back to Run and no message", () => {
+    render(<ParamDialog />);
+    act(() => {
+      void askParams("First", [], { message: "One-off note.", confirmLabel: "Export" });
+    });
+    act(() => {
+      void askParams("Second", []);
+    });
+    expect(screen.queryByText("One-off note.")).toBeNull();
+    expect(screen.getByRole("button", { name: "Run" })).toBeInTheDocument();
+  });
+});

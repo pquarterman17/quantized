@@ -207,7 +207,8 @@ export function useCurveFit(): CurveFitState {
         // Resolve weighting -> dy over the SAME analysis rows as the fit; a
         // missing/invalid error column refits unweighted with a surfaced note.
         const weight = weightingFor(localXy.yKey);
-        const { dy, issue } = dyForFit(ds, localXy.yKey, weight);
+        // Validated over the KEPT rows only: a gap row's sigma leaves with it.
+        const { dy, issue } = dyForFit(ds, localXy.yKey, weight, pairs.keep);
         const finiteDy = dy ? pairs.keep.map((i) => dy[i]!) : null;
         setWeightNote(issue ?? null);
         // #30: the user's starting values / bounds / fixed flags. An

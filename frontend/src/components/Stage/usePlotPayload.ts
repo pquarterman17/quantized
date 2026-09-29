@@ -131,10 +131,10 @@ export interface PlotPayloadResult {
 }
 
 /** Fetch + compose the active dataset's plot payload and its per-channel
- *  style/label/error/hidden mappings. Re-fetches whenever the active dataset,
- *  scale, or plotted-channel selection changes; re-composes (no re-fetch)
- *  whenever an overlay, the waterfall offset, the exclusion mode, or the row
- *  selection changes. */
+ *  style/label/error/hidden mappings. Re-fetches whenever the active dataset's
+ *  data, a scale, or the plotted-channel selection changes (or decimation
+ *  eligibility flips); re-composes (no re-fetch) whenever an overlay, the
+ *  waterfall offset, the exclusion mode, or the row selection changes. */
 export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   const { active } = p;
   // ONE state, two fields, so `payloadDatasetId` is a property OF these rows.
@@ -178,8 +178,19 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // re-run (a ref write alone triggers nothing).
   const [baseDecimated, setBaseDecimated] = useState(false);
 
+  // What the base REQUEST is built from (perf audit 2026-09-29): a rename or
+  // an exclusion toggle mints a new `active` over the SAME `data`, so every
+  // fetch-side memo/effect keys on these fields, never on `active` itself.
+  const data = active?.data;
+  const activeId = active?.id;
+  const roles = active?.channelRoles;
+
   // Rows dropped from the plot: manually excluded (#50) ∪ filter-failed (#53).
-  const dropped = useMemo(() => droppedRows(active), [active]);
+  // Stabilized by content so a rename doesn't recompose the O(rows) display.
+  const dropped = useStableByValue(
+    useMemo(() => droppedRows(active), [active]),
+    (set) => [...set].join(","),
+  );
 
   // P1.5: degrades to ungrouped + y2 (mirrors the backend's own incompatibility).
   // The rule lives in `lib/plotGroupSplit.canvasGroupCol` (BUG-013 round 3).
@@ -189,9 +200,8 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // order -- the REAL channels to fetch (a group split happens CLIENT-SIDE
   // below on the fetched columns, not via a separate per-level request).
   const fetchChannels = useMemo(
-    () =>
-      active ? effectiveChannels(active.data, p.yKeys, p.xKey, active.channelRoles, p.seriesOrder) : [],
-    [active, p.yKeys, p.xKey, p.seriesOrder],
+    () => (data ? effectiveChannels(data, p.yKeys, p.xKey, roles, p.seriesOrder) : []),
+    [data, roles, p.yKeys, p.xKey, p.seriesOrder],
   );
   // P1.4: the window's Color / Symbol / Label encodings (usePlotEncoding.ts) --
   // when active they REPLACE the group split (the group joins the encoded one),
@@ -201,8 +211,8 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // The group channel's own per-row codes (row-aligned to active.data) --
   // feeds both the channel-map expansion below and applyGroupSplit's call.
   const groupCodes = useMemo(
-    () => (groupCol !== null && !encoded && active ? active.data.values.map((row) => row[groupCol]) : null),
-    [active, groupCol, encoded],
+    () => (groupCol !== null && !encoded && data ? data.values.map((row) => row[groupCol]) : null),
+    [data, groupCol, encoded],
   );
   // P1.5 edit-one/edit-all ruling (plotGroupSplit.ts header): the per-
   // DISPLAY-series channel map styleList/labelList/hidden (and PlotLegend/
@@ -224,7 +234,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     () =>
       payload
         ? composeDisplayPayload(applyLogOffsets(payload, plotted, p.seriesStyles, offsetsApply), {
-            id: active?.id ?? null,
+            id: activeId ?? null,
             waterfall,
             dropped,
             excludedDisplay: p.excludedDisplay,
@@ -245,7 +255,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       scaledBaselineOverlay,
       scaledDerivOverlay,
       waterfall,
-      active,
+      activeId,
       dropped,
       p.excludedDisplay,
       p.selection,
@@ -273,10 +283,10 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     () =>
       encoded?.colorBy
         ? encoded.colorBy(encoded.styles(p.seriesStyles))
-        : active && groupCol === null && !encoded
-          ? buildColorByColumns(active.data, plotted, p.seriesStyles)
+        : data && groupCol === null && !encoded
+          ? buildColorByColumns(data, plotted, p.seriesStyles)
           : new Map<number, ColorScatterSpec>(),
-    [active, plotted, p.seriesStyles, groupCol, encoded],
+    [data, plotted, p.seriesStyles, groupCol, encoded],
   );
 
   // Interactive-legend visibility, aligned 1:1 with the display series (overlays
@@ -288,8 +298,9 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     [displayPayload, plotted, p.hiddenChannels],
   );
 
-  // Fetch series whenever the active dataset, scale, channel roles, or
-  // decimation eligibility change. P3.4: request server-side decimation
+  // Fetch series whenever the request's inputs change: the dataset's `data`,
+  // the channels (roles folded in), the scales, the x channel's modeling type,
+  // and decimation eligibility. P3.4: request server-side decimation
   // (`decimateWidth`) when the dataset is dense enough to matter AND nothing
   // downstream needs full-resolution row alignment — error bars/spans and
   // colour-mapped scatter read their arrays keyed by row position off the
@@ -297,9 +308,45 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // overlay/selection/grey-exclusion companion gets appended at full length
   // by composeDisplayPayload (see hasOverlayCompanions above). Everything
   // else (the common "just look at a big dataset" path) gets decimated.
+  //
+  // Perf audit 2026-09-29: eligibility is folded to ONE primitive boolean
+  // here, OUTSIDE the effect, so display-only edits (a colour — `errorBars`/
+  // `colorByColumns` are new Maps on every style edit — a selection, a
+  // rename, an exclusion toggle) re-run the effect only when they actually
+  // flip decimate-vs-full-res. Selection/exclusion never enter the request
+  // body (composeDisplayPayload applies them client-side).
+  const decimateEligible =
+    !!active &&
+    active.data.time.length > DECIMATE_MIN_POINTS &&
+    !hasOverlayCompanions({
+      fitOverlay: p.fitOverlay,
+      baselineOverlay: p.baselineOverlay,
+      peakOverlay: p.peakOverlay,
+      derivOverlay: p.derivOverlay,
+      selection: p.selection,
+      excludedDisplay: p.excludedDisplay,
+      activeId: active.id,
+      dropped,
+    }) &&
+    decimationRequestEligible({
+      defaultTrace: p.defaultTrace,
+      hasErrorBars: errorBars.size > 0,
+      // M1: same bindings rule `errorSpans` below uses; this path draws X-error whiskers.
+      hasErrorSpans: errorBindingsApplyToPlotted(useDocumentErrors ? documentErrors : active.errorRoles, plotted, { xErrorRenders: true }),
+      hasColorByColumns: colorByColumns.size > 0,
+      hasGroupSplit: groupCol !== null || encoded !== null,
+    });
+  // xCategories producer (gap #20 residual): a categorical-typed x channel
+  // (nominal/ordinal — user override or inferred, see lib/modeling.ts) gets
+  // ordinal x positions + resolved category labels so lib/uplotOpts.ts's
+  // categoricalTickFormatter draws real tick names instead of the raw channel
+  // numbers. A primitive, so a `channelTypes` edit refetches only when it
+  // changes THIS. No-op for a continuous x/time axis (xKey === null).
+  const xType = active && p.xKey != null ? channelModelingType(active, p.xKey) : "continuous";
+
   useEffect(() => {
     let cancelled = false;
-    if (!active) {
+    if (!data || activeId === undefined) {
       setFetched(null);
       basePayloadRef.current = null;
       decimateWidthRef.current = null;
@@ -312,29 +359,9 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     // during the gap — it sees `baseDecimated: false` and simply waits.
     basePayloadRef.current = null;
     setBaseDecimated(false);
-    const eligible =
-      active.data.time.length > DECIMATE_MIN_POINTS &&
-      !hasOverlayCompanions({
-        fitOverlay: p.fitOverlay,
-        baselineOverlay: p.baselineOverlay,
-        peakOverlay: p.peakOverlay,
-        derivOverlay: p.derivOverlay,
-        selection: p.selection,
-        excludedDisplay: p.excludedDisplay,
-        activeId: active.id,
-        dropped,
-      }) &&
-      decimationRequestEligible({
-        defaultTrace: p.defaultTrace,
-        hasErrorBars: errorBars.size > 0,
-        // M1: same bindings rule `errorSpans` below uses; this path draws X-error whiskers.
-        hasErrorSpans: errorBindingsApplyToPlotted(useDocumentErrors ? documentErrors : active.errorRoles, plotted, { xErrorRenders: true }),
-        hasColorByColumns: colorByColumns.size > 0,
-        hasGroupSplit: groupCol !== null || encoded !== null,
-      });
-    const decimateWidth = eligible ? defaultDecimateWidthHint() : null;
+    const decimateWidth = decimateEligible ? defaultDecimateWidthHint() : null;
     void fetchPlot(
-      active.data,
+      data,
       p.yScale === "log",
       p.xScale === "log",
       fetchChannels,
@@ -343,14 +370,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       decimateWidth,
     ).then((raw) => {
       if (cancelled) return;
-      // xCategories producer (gap #20 residual): a categorical-typed x
-      // channel (nominal/ordinal — user override or inferred, see
-      // lib/modeling.ts) gets ordinal x positions + resolved category labels
-      // so lib/uplotOpts.ts's categoricalTickFormatter draws real tick names
-      // instead of the raw channel numbers. No-op for a continuous x/time axis
-      // (xKey === null, the time column, is never modeled/categorical).
-      const xType = p.xKey == null ? "continuous" : channelModelingType(active, p.xKey);
-      const withCategories = categoricalXPayload(raw, active.data, p.xKey, xType);
+      const withCategories = categoricalXPayload(raw, data, p.xKey, xType);
       // P1.5: group split (P1.4: or the encoded one) runs LAST, client-side, on the never-decimated fetch.
       const composed = encoded
         ? encoded.apply(withCategories)
@@ -358,39 +378,29 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
           ? applyGroupSplit(
               withCategories,
               groupCodes,
-              active.data.labels[groupCol] ?? `col ${groupCol}`,
-              (code) => groupLevelLabel(active.data, groupCol, code),
-              levelOrderFor(active.data, groupCol),
+              data.labels[groupCol] ?? `col ${groupCol}`,
+              (code) => groupLevelLabel(data, groupCol, code),
+              levelOrderFor(data, groupCol),
             )
           : withCategories;
       basePayloadRef.current = composed;
       decimateWidthRef.current = decimateWidth;
-      setFetched({ payload: composed, datasetId: active.id });
+      setFetched({ payload: composed, datasetId: activeId });
       setBaseDecimated(!!composed.decimated);
     });
     return () => {
       cancelled = true;
     };
   }, [
-    active,
+    data,
+    activeId,
+    xType,
     p.yScale,
     p.xScale,
     fetchChannels,
     p.y2Keys,
     p.xKey,
-    p.defaultTrace,
-    errorBars,
-    colorByColumns,
-    dropped,
-    p.fitOverlay,
-    p.baselineOverlay,
-    p.peakOverlay,
-    p.derivOverlay,
-    p.selection,
-    p.excludedDisplay,
-    useDocumentErrors,
-    documentErrors,
-    plotted,
+    decimateEligible,
     groupCol,
     groupCodes,
     encoded,
@@ -422,16 +432,16 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       // Reset/autoscale: restore the cached full-range payload with no fetch
       // at all — it's already in memory from the base effect above.
       const base = basePayloadRef.current;
-      // `active` is redundant here (the ref is cleared when there is none).
-      if (base && base !== payload && active) setFetched({ payload: base, datasetId: active.id });
+      // `activeId` is redundant here (the ref is cleared when there is none).
+      if (base && base !== payload && activeId !== undefined) setFetched({ payload: base, datasetId: activeId });
       return;
     }
-    if (!active || !shouldRefetchWindow(p.xLim, baseDecimated)) return;
+    if (!data || activeId === undefined || !shouldRefetchWindow(p.xLim, baseDecimated)) return;
     const [xMin, xMax] = p.xLim;
     let cancelled = false;
     const controller = new AbortController();
     fetchPlot(
-      active.data,
+      data,
       p.yScale === "log",
       p.xScale === "log",
       fetchChannels,
@@ -444,8 +454,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     )
       .then((raw) => {
         if (cancelled) return;
-        const xType = p.xKey == null ? "continuous" : channelModelingType(active, p.xKey);
-        setFetched({ payload: categoricalXPayload(raw, active.data, p.xKey, xType), datasetId: active.id });
+        setFetched({ payload: categoricalXPayload(raw, data, p.xKey, xType), datasetId: activeId });
       })
       .catch(() => {
         // Aborted (superseded by a newer commit) or a genuine network error
@@ -458,7 +467,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     };
     // `payload` is read but NOT listed — see this effect's header comment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.xLim, active, fetchChannels, p.y2Keys, p.xKey, p.yScale, p.xScale, baseDecimated]);
+  }, [p.xLim, data, activeId, xType, fetchChannels, p.y2Keys, p.xKey, p.yScale, p.xScale, baseDecimated]);
 
   // #36 / G4: the canonical-role error spans -- see usePlotPayloadLogOffsets.ts's
   // `useOffsetErrorSpans` for the document-vs-dataset authority rule.

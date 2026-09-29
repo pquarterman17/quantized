@@ -95,7 +95,8 @@ export interface MapToolbarProps {
   wedgeMode: WedgeMode;
   onToggleWedge: () => void;
 
-  onSavePng: () => void;
+  /** ⤓ — opens the export dialog (vector PDF/SVG by default, or PNG). */
+  onExport: () => void;
 }
 
 export default function MapToolbar(props: MapToolbarProps) {
@@ -131,7 +132,7 @@ export default function MapToolbar(props: MapToolbarProps) {
     onToggleRuler,
     wedgeMode,
     onToggleWedge,
-    onSavePng,
+    onExport,
   } = props;
 
   return (
@@ -283,7 +284,7 @@ export default function MapToolbar(props: MapToolbarProps) {
         </>
       )}
       <span className="qzk-tool-sep" />
-      <button className="qzk-tool-btn" title="Save map as PNG" onClick={onSavePng}>
+      <button className="qzk-tool-btn" title="Export map (PDF, SVG or PNG)…" onClick={onExport}>
         ⤓
       </button>
     </div>

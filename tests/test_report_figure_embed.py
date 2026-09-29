@@ -174,11 +174,13 @@ def test_docx_failing_figures_become_named_placeholders(client: TestClient) -> N
     assert len(doc.inline_shapes) == 1  # the good figure still embeds
     text = "\n".join(p.text for p in doc.paragraphs)
     assert "[figure: bad-channel — not embedded: render failed (" in text
-    assert "[figure: no-dataset — not embedded: invalid figure spec -- dataset:" in text
+    assert "[figure: no-dataset — not embedded: invalid figure spec -- " in text
+    assert "either dataset or dataset_handle is required" in text
     warns = _warnings(resp)
     assert resp.headers["x-report-warning-count"] == "2" and len(warns) == 2
     assert warns[0].startswith("figure 'bad-channel' (section 1): not embedded: render failed")
-    assert "figure 'no-dataset'" in warns[1] and "dataset: Field required" in warns[1]
+    assert "figure 'no-dataset'" in warns[1]
+    assert "either dataset or dataset_handle is required" in warns[1]
 
 
 def test_docx_svg_only_image_names_why_it_is_not_embedded() -> None:

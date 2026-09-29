@@ -8,8 +8,15 @@ import { colormapCss } from "../../lib/colormap";
 import { fmtNum } from "../../lib/format";
 
 export default function ColorScaleChip({ scale }: { scale: ColorScaleLegendEntry }) {
+  // GUI audit: a bare gradient strip has no accessible name; `img` + label
+  // announces the channel and range (the three number spans stay visual).
   return (
-    <div className="it qzk-colorbar" title={`colour = ${scale.label}`}>
+    <div
+      className="it qzk-colorbar"
+      role="img"
+      aria-label={`Colour scale ${scale.label}: ${fmtNum(scale.lo)} to ${fmtNum(scale.hi)}`}
+      title={`colour = ${scale.label}`}
+    >
       <span
         className="qzk-colorbar-grad"
         style={{

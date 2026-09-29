@@ -169,6 +169,7 @@ export default function GraphPreview({
       {render.kind === "xy" && encoded && encoded.legend.length > 0 && <SpatialPanelLegend entries={encoded.legend} />}
       {render.kind === "xy" && g && (
         <div className="qzk-graph-preview-scale">
+          <span className="qzk-colorbar-lbl" aria-hidden="true">Colour</span>
           <ColorScaleChip scale={{ label: g.label, colormap: GRADIENT_COLORMAP, lo: g.lo, hi: g.hi }} />
         </div>
       )}

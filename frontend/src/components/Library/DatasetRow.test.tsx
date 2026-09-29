@@ -141,13 +141,13 @@ describe("DatasetRow pending lazy book (ORIGIN_FILE_DECODE_PLAN #38)", () => {
     };
     render(<DatasetRow dataset={lazy} {...baseProps} />);
     expect(screen.getByText(/42180 pts/)).toBeInTheDocument();
-    expect(screen.getByText("4ch")).toBeInTheDocument();
+    expect(screen.getByText("4 ch")).toBeInTheDocument();
   });
 
   it("shows the real (preview) counts for a fully-loaded dataset", () => {
     render(<DatasetRow dataset={plain} {...baseProps} />);
     expect(screen.getByText(/1 pts/)).toBeInTheDocument();
-    expect(screen.getByText("1ch")).toBeInTheDocument();
+    expect(screen.getByText("1 ch")).toBeInTheDocument();
   });
 });
 

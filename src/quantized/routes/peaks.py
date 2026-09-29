@@ -44,6 +44,11 @@ class FindPeaksRequest(BaseModel):
     max_width_deg: float = 10.0
     min_prominence: float = 0.02
     sensitivity: str = "medium"
+    # The detector's internal background (calc.baseline.estimate_background):
+    # SNIP (default, MATLAB's) or a robust polynomial, optionally refined.
+    bg_method: Literal["snip", "polynomial"] = "snip"
+    bg_poly_degree: int = Field(4, ge=0, le=12)
+    bg_iterative: bool = False
 
 
 @router.post("/find")
@@ -60,6 +65,9 @@ def find(req: FindPeaksRequest) -> dict[str, Any]:
         max_width_deg=req.max_width_deg,
         min_prominence=req.min_prominence,
         sensitivity=req.sensitivity,
+        bg_method=req.bg_method,
+        bg_poly_degree=req.bg_poly_degree,
+        bg_iterative=req.bg_iterative,
     )
     return {"peaks": to_jsonable(peaks), "background": jsonify(background)}
 

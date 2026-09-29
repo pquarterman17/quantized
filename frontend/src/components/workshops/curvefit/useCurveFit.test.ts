@@ -263,6 +263,30 @@ describe("useCurveFit weighting (Sol audit — connect fitting to error columns)
     expect(useApp.getState().datasets[0].fitSpec?.weight).toEqual({ mode: "yerr", errKey: 1 });
   });
 
+  it("a gap row's invalid error value does not refuse weighting — the fit drops that row", async () => {
+    const gapped: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [[10, 2], [Number.NaN, 0], [30, 3], [40, 5]], // row 1: y gap, sigma 0
+      labels: ["moment", "err"],
+      units: ["emu", "emu"],
+      metadata: {},
+    };
+    useApp.setState({
+      datasets: [{ id: "d1", name: "run.dat", data: gapped }],
+      activeId: "d1",
+      yKeys: [0],
+      errKeys: { 0: 1 },
+    });
+    vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 31, 41], exitFlag: 1 });
+    const { result } = renderHook(() => useCurveFit());
+    act(() => result.current.setWeightMode("yerr"));
+    await act(async () => {
+      await result.current.run("fit");
+    });
+    expect(fitModel).toHaveBeenCalledWith({ model: "Linear", x: [0, 2, 3], y: [10, 30, 40], dy: [2, 3, 5] });
+    expect(result.current.weightNote).toBeNull();
+  });
+
   it("poisson mode sends dy = sqrt(max(|y|,1))", async () => {
     vi.mocked(fitModel).mockResolvedValue({ params: [1], yFit: [11, 21, 31, 41] });
     const { result } = renderHook(() => useCurveFit());

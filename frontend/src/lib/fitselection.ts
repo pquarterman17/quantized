@@ -15,6 +15,7 @@
 // tools) — all already lazy `workshops/` panels. See that file's own header
 // for the verified-no-eager-consumer rationale.
 
+import { dropGapRows } from "./api/finitePairs";
 import { dyForFit } from "./fitweights";
 import { effectiveChannels } from "./plotdata";
 import { analysisData } from "./rowstate";
@@ -131,7 +132,8 @@ export function fitDataForSpec(
   if (!spec.weight) return { x, y, yKey };
   // Reproduce the recorded weighting over the same analysis rows (Sol audit);
   // a missing/invalid error column refits unweighted (dyForFit returns null).
-  return { x, y, yKey, dy: dyForFit(dataset, yKey, spec.weight).dy };
+  // σ is checked only over the rows the fit keeps, as in useCurveFit.
+  return { x, y, yKey, dy: dyForFit(dataset, yKey, spec.weight, dropGapRows(x, y).keep).dy };
 }
 
 /** Stamp a spec with the result of a RECOMPUTE (MAIN_PLAN #30).

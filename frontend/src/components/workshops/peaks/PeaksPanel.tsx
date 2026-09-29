@@ -14,12 +14,14 @@
 
 import { useState } from "react";
 
+import PeakFindAdvanced from "./PeakFindAdvanced";
 import PeakFitControls from "./PeakFitControls";
 import PeakTable from "./PeakTable";
 import PeakValueCell from "./PeakValueCell";
+import { DEFAULT_PEAK_FIND } from "./peakFindParams";
 import { peakReportResult } from "./peakReport";
 import { usePeakTableSelection } from "./peakSelection";
-import { usePeaks } from "./usePeaks";
+import { usePeaks, type PeakFindRequest } from "./usePeaks";
 import ToolWindow from "../../overlays/ToolWindow";
 import { askParams } from "../../overlays/ParamDialog";
 import { Button } from "../../primitives";
@@ -45,6 +47,7 @@ export default function PeaksPanel() {
   const addReport = useApp((s) => s.addReport);
   const [reporting, setReporting] = useState(false);
   const [labeling, setLabeling] = useState(false);
+  const [find, setFind] = useState<PeakFindRequest>({ params: { ...DEFAULT_PEAK_FIND }, seq: 0 });
   const {
     active,
     peaks,
@@ -60,7 +63,7 @@ export default function PeaksPanel() {
     fitTogether,
     fitEach,
     labelPeaks,
-  } = usePeaks();
+  } = usePeaks(find);
 
   const close = () => {
     setPeakOverlay(null); // remove the markers when the panel closes
@@ -269,6 +272,14 @@ export default function PeaksPanel() {
           // (no aria-selected, no highlight, no tab stop, no handler) —
           // exactly the "never look selected while ignored" contract.
           onSelect={hasFit ? undefined : detectedSelection.select}
+        />
+      )}
+
+      {active && (
+        <PeakFindAdvanced
+          value={find.params}
+          busy={busy}
+          onApply={(params) => setFind((f) => ({ params, seq: f.seq + 1 }))}
         />
       )}
 

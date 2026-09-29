@@ -8,7 +8,12 @@
 //
 // The 300 ms debounce is what makes a live WYSIWYG preview affordable — every
 // keystroke in a property panel produces a new spec, and each render is a
-// real matplotlib round-trip on the backend.
+// real matplotlib round-trip on the backend. Two more things keep it cheap:
+// the request rides the dataset-handle cache (lib/api/datasetCache.ts), so the
+// dataset crosses the wire once and a short handle after that; and a render
+// superseded by a newer spec (or an unmount) is ABORTED, not just ignored --
+// the server skips a render whose client has gone by the time it holds the
+// matplotlib render lock, so a stale preview does not delay the fresh one.
 
 import { useEffect, useState } from "react";
 
@@ -47,9 +52,10 @@ export function usePreviewRender(spec: FigureSpec | null, canonical: boolean): P
       return;
     }
     let cancelled = false;
+    const controller = new AbortController();
     setBusy(true);
     const timer = setTimeout(() => {
-      renderFigureHitmap({ ...spec, dpi: PREVIEW_DPI })
+      renderFigureHitmap({ ...spec, dpi: PREVIEW_DPI }, controller.signal)
         .then((map) => {
           if (cancelled) return;
           setHitmap(map);
@@ -66,6 +72,7 @@ export function usePreviewRender(spec: FigureSpec | null, canonical: boolean): P
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      controller.abort();
     };
   }, [canonical, spec]);
 

@@ -23,6 +23,7 @@ import { useState } from "react";
 
 import { labelForCode } from "../../../lib/categorical";
 import type { TextColumn } from "../../../lib/columnmeta";
+import { REDERIVED_EDIT_NOTICE } from "../../../lib/rederived";
 import { fmtCell } from "./cellFormat";
 import type { CellEditApi } from "./useCellEdit";
 
@@ -76,6 +77,8 @@ export interface GridRowProps {
    *  supplied; every existing caller/test that omits `catLevels` never
    *  reads it. */
   onEditCell?: (row: number, col: number, value: number) => void;
+  /** Every cell is read-only: the dataset is re-derived by the recalc (lib/rederived.ts). */
+  readOnly?: boolean;
 }
 
 export default function GridRow({
@@ -101,6 +104,7 @@ export default function GridRow({
   catLevels,
   onEditCategoricalCell,
   onEditCell,
+  readOnly = false,
 }: GridRowProps) {
   const rowTitle = isMasked
     ? "excluded row"
@@ -189,7 +193,8 @@ export default function GridRow({
   // the highlight reads as one continuous column down the grid.
   const cell = (col: number, value: number | undefined, pinnedLeft?: number) => {
     const computed = col >= baseCount; // col -1 (x) and base channels are editable
-    const editing = !computed && cellEdit.isEditing(r, col);
+    const locked = computed || readOnly;
+    const editing = !locked && cellEdit.isEditing(r, col);
     const colSelected = selectedCols.has(col);
     const levels = computed ? null : (catLevels?.(col) ?? null);
     return (
@@ -207,14 +212,14 @@ export default function GridRow({
             : {}),
         }}
         onDoubleClick={
-          computed
+          locked
             ? undefined
             : () => {
                 setAddingNew(false); // a fresh double-click always opens the picker, not a stale text box
                 cellEdit.startEdit(r, col, value);
               }
         }
-        title={computed ? "computed column — edit the formula" : "double-click to edit"}
+        title={computed ? "computed column — edit the formula" : readOnly ? REDERIVED_EDIT_NOTICE : "double-click to edit"}
       >
         {editing && levels ? (
           catCell(col, levels, value ?? Number.NaN)

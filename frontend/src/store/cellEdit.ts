@@ -47,6 +47,7 @@ import { dropRows, insertBlanks, padRows, patchCell, shiftForDelete, shiftForIns
 import { computeFormulasIncremental } from "../lib/formulaIncremental";
 import { asAlreadyComputed } from "../lib/formulaInputs";
 import { clearOverlaysFor } from "./corrections";
+import { isRederived, REDERIVED_EDIT_NOTICE } from "../lib/rederived";
 import type { CellEdit } from "../lib/clipboardGrid";
 import type { Dataset } from "../lib/types";
 import { recompute, type AppState } from "./useApp";
@@ -89,12 +90,30 @@ function isValidExistingCode(ds: Dataset, col: number, value: number): boolean {
   return Number.isInteger(value) && value >= 0 && value < levels.length;
 }
 
+/** `cat_levels` with a paste's new labels appended (lib/clipboardGrid's
+ *  `newLevels`, whose codes already point past the current table), or null
+ *  when the paste adds none. Mirrors setCategoricalCell's "extend" branch. */
+function withNewLevels(ds: Dataset, added?: Readonly<Record<number, readonly string[]>>) {
+  let out: Record<number, string[]> | null = null;
+  for (const [key, labels] of Object.entries(added ?? {})) {
+    const levels = categoricalLevels(ds.data, Number(key));
+    if (levels && labels.length) out = { ...(out ?? ds.data.cat_levels), [key]: [...levels, ...labels] };
+  }
+  return out;
+}
+
 export interface CellEditSlice {
   setCellValue: (id: string, row: number, col: number, value: number) => void;
   /** Apply MANY edits as ONE operation — one undo entry, one recompute, one
    *  macro line. As N setCellValue calls a paste would need N presses of
-   *  Ctrl+Z to reverse, which is not an undo model anyone can use. */
-  setCellBlock: (id: string, edits: readonly CellEdit[], label: string) => void;
+   *  Ctrl+Z to reverse, which is not an undo model anyone can use.
+   *  `newLevels` appends pasted categorical labels in the same step. */
+  setCellBlock: (
+    id: string,
+    edits: readonly CellEdit[],
+    label: string,
+    newLevels?: Readonly<Record<number, readonly string[]>>,
+  ) => void;
   /** Insert `count` blank rows above row `at` (MAIN_PLAN #34). */
   insertRows: (id: string, at: number, count: number) => void;
   /** Delete the given rows (MAIN_PLAN #34). */
@@ -105,6 +124,16 @@ export interface CellEditSlice {
   setCategoricalCell: (id: string, row: number, col: number, label: string) => void;
 }
 
+/** Refuse a direct value edit on a dataset the recalc re-derives (see
+ *  lib/rederived.ts): the edit would reach `data` only and be silently lost
+ *  on the next recalc. Checked FIRST at every entry point below — before the
+ *  pending guard too, whose retry re-enters here anyway. */
+function refuseRederived(get: () => AppState, ds: Dataset): boolean {
+  if (!isRederived(ds)) return false;
+  get().setStatus(REDERIVED_EDIT_NOTICE);
+  return true;
+}
+
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
@@ -112,7 +141,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
   return {
     insertRows: (id, at, count) => {
       const ds = get().datasets.find((d) => d.id === id);
-      if (!ds || count <= 0) return;
+      if (!ds || count <= 0 || refuseRederived(get, ds)) return;
       if (resolvePendingEdit(get, ds, "inserting rows", () => get().insertRows(id, at, count))) return;
       get().recordHistory("insert rows");
       set((s) => ({
@@ -180,7 +209,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
 
     deleteRows: (id, rows) => {
       const ds = get().datasets.find((d) => d.id === id);
-      if (!ds || rows.length === 0) return;
+      if (!ds || rows.length === 0 || refuseRederived(get, ds)) return;
       if (ds.pending != null) {
         // The selection belongs to the click that scheduled this action. Do not
         // retain a mutable array owned by the grid while full data is loading.
@@ -230,7 +259,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     },
   setCellValue: (id, row, col, value) => {
     const ds = get().datasets.find((d) => d.id === id);
-    if (!ds) return;
+    if (!ds || refuseRederived(get, ds)) return;
     // PENDING FIRST, ALWAYS. A previous round moved this below the row check for
     // comment adjacency and silently broke the case BUG-009 singles out: on a
     // pending book whose preview is shorter than the real grid — a text-only book
@@ -285,9 +314,9 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     );
     get().touchDataset(id); // recalc graph (#1): data changed
   },
-  setCellBlock: (id, edits, label) => {
+  setCellBlock: (id, edits, label, newLevels) => {
     const ds = get().datasets.find((d) => d.id === id);
-    if (!ds || edits.length === 0) return;
+    if (!ds || edits.length === 0 || refuseRederived(get, ds)) return;
     // Computed columns are read-only, exactly as in setCellValue above. The
     // pure layer (lib/clipboardGrid) already filters them out, but a block
     // arriving from anywhere else must not be able to bypass the rule.
@@ -295,7 +324,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
       // Clipboard/grid callers may reuse their edit array after this method
       // returns; preserve the exact request that the user made before awaiting.
       const requestedEdits = edits.map((edit) => ({ ...edit }));
-      resolvePendingEdit(get, ds, "pasting cells", () => get().setCellBlock(id, requestedEdits, label));
+      resolvePendingEdit(get, ds, "pasting cells", () => get().setCellBlock(id, requestedEdits, label, newLevels));
       return;
     }
     const baseCount = ds.data.labels.length - (ds.formulas?.length ?? 0);
@@ -309,12 +338,15 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
     // matching setCellValue's "name the reason" voice rather than staying
     // quiet — the SAME honesty fix covers the pre-existing computed-column
     // silence too, since both reasons fold into one filter/one count.
+    // A paste's new labels are validated as levels of THIS write (one undo).
+    const catLevels = withNewLevels(ds, newLevels);
+    const guardDs = catLevels ? { ...ds, data: { ...ds.data, cat_levels: catLevels } } : ds;
     const usable = edits.filter(
       (e) =>
         e.col < baseCount &&
         e.row >= 0 &&
         e.row < ds.data.time.length &&
-        (!Number.isFinite(e.value) || isValidExistingCode(ds, e.col, e.value)),
+        (!Number.isFinite(e.value) || isValidExistingCode(guardDs, e.col, e.value)),
     );
     const skipped = edits.length - usable.length;
     if (usable.length === 0) {
@@ -350,7 +382,8 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
         // CONFIRMED 1 — a paste is the BULK sibling of typing a value, one
         // keystroke away from the path that already cleared. An interior x
         // (2θ) cell in particular moved the fit's own abscissa.
-        return recompute({ ...d, data: { ...d.data, time, values }, peakTable: undefined });
+        const data = catLevels ? { ...d.data, time, values, cat_levels: catLevels } : { ...d.data, time, values };
+        return recompute({ ...d, data, peakTable: undefined });
       }),
     }));
     get().recordMacro(`${label} on ${ds.name}`, `qz.setCells(${lit(ds.name)}, ${usable.length})`);
@@ -363,7 +396,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
   },
   setCategoricalCell: (id, row, col, label) => {
     const ds = get().datasets.find((d) => d.id === id);
-    if (!ds) return;
+    if (!ds || refuseRederived(get, ds)) return;
     if (resolvePendingEdit(get, ds, "editing a cell", () => get().setCategoricalCell(id, row, col, label))) return;
     // Same out-of-range/negative row guard as setCellValue above, and for
     // the same reason — BEFORE recordHistory, before the `.slice()`-based

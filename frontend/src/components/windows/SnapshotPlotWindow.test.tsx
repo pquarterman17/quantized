@@ -126,11 +126,11 @@ describe("SnapshotPlotWindow (item 11) — static frozen rendering", () => {
 
     useApp.getState().toggleRowExcluded("d1", 0);
 
-    // The LIVE window rebuilds (twice — the dataset-reference change re-fires
-    // the fetch effect, same pre-existing behavior WindowCanvas.test.tsx's
-    // row-state proof documents); the snapshot window must NOT rebuild at all
-    // (its frozen bundle's identity never changed).
-    await waitFor(() => expect(created.length).toBe(4));
+    // The LIVE window rebuilds (once — an exclusion toggle no longer
+    // re-fetches, see WindowCanvas.test.tsx's row-state proof); the snapshot
+    // window must NOT rebuild at all (its frozen bundle's identity never
+    // changed).
+    await waitFor(() => expect(created.length).toBe(3));
     const afterToggle = created.slice(2);
     for (const c of afterToggle) {
       expect(isFrozenData(c)).toBe(false); // every rebuild is the live window…

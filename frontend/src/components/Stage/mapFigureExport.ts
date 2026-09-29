@@ -1,0 +1,137 @@
+// The 2-D map's ⤓ export (MapStage). Vector by default (CLAUDE.md: carry
+// over the MATLAB vector-output preference): PDF/SVG are rendered server-side
+// by /api/export/map-figure (calc.figure_map) from the SAME regridded payload
+// the canvas painted; PNG stays the on-screen canvas grab it always was.
+//
+// What the body carries from the view, so the figure reads like the canvas:
+//   * the colormap, translated to matplotlib's name and orientation (the
+//     canvas' `rdbu` runs blue -> red, which matplotlib calls `RdBu_r`);
+//   * explicit colour limits, as a clamp of z — the canvas saturates there,
+//     and the route has no clim field;
+//   * the log colour scale, as log10(z) with the colorbar label saying so —
+//     the heatmap kind has no log norm; non-positive cells become gaps,
+//     exactly as the canvas leaves them unpainted;
+//   * the contour overlay, as filled contours with the overlay's level count
+//     and spacing (the route has no heatmap+contour kind).
+// Cuts, ROIs, slices and annotations are interactive overlays and are not
+// part of the exported figure.
+
+import type { ColormapName } from "../../lib/colormap";
+import { exportMapFigure, type MapFigureSpec } from "../../lib/api/mapFigure";
+import type { MapPayload } from "../../lib/mapdataFetch";
+import { exportCanvasPng } from "../../lib/plotExport";
+import { runCancellable } from "../../store/pendingOps";
+import { askParams } from "../overlays/ParamDialog";
+import { FIGURE_STYLES } from "../workshops/figurebuilder/figureOutputConstants";
+
+const MPL_CMAP: Record<ColormapName, string> = {
+  viridis: "viridis",
+  magma: "magma",
+  gray: "gray",
+  rdbu: "RdBu_r",
+};
+
+export interface MapExportView {
+  cmap: ColormapName;
+  logZ: boolean;
+  colorLimits: readonly [number, number] | null;
+  contour: { on: boolean; levelCount: number; scale: "linear" | "log" };
+}
+
+export interface MapExportOptions {
+  fmt: string;
+  style: string;
+  title: string;
+  filename: string;
+}
+
+const withUnit = (label: string, unit: string) => (unit ? `${label} (${unit})` : label);
+
+function zCell(v: number | null, view: MapExportView): number | null {
+  if (v == null || !Number.isFinite(v)) return null;
+  // The canvas drops a non-positive cell under log BEFORE any limit applies.
+  if (view.logZ && v <= 0) return null;
+  let z = v;
+  if (view.colorLimits) {
+    const [lo, hi] = view.colorLimits;
+    z = Math.min(hi, view.logZ && lo <= 0 ? z : Math.max(lo, z));
+  }
+  return view.logZ ? Math.log10(z) : z;
+}
+
+/** The /api/export/map-figure body for what this map is showing. Pure. */
+export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOptions): MapFigureSpec {
+  const zLabel = withUnit(p.zLabel, p.zUnit);
+  const contour = view.contour.on
+    ? {
+        kind: "contourf",
+        levels: view.contour.levelCount,
+        // A log colour scale already sends log10(z): linear levels over it ARE
+        // log-spaced, and a second log would be applied to exponents.
+        level_scale: view.logZ ? "linear" : view.contour.scale,
+      }
+    : { kind: "heatmap" };
+  return {
+    x_axis: p.xAxis,
+    y_axis: p.yAxis,
+    z_grid: p.zGrid.map((row) => row.map((v) => zCell(v, view))),
+    ...contour,
+    fmt: o.fmt,
+    style: o.style,
+    cmap: MPL_CMAP[view.cmap] ?? "viridis",
+    title: o.title,
+    x_label: withUnit(p.xLabel, p.xUnit),
+    y_label: withUnit(p.yLabel, p.yUnit),
+    z_label: view.logZ ? `log₁₀ ${zLabel}` : zLabel,
+    filename: o.filename,
+  };
+}
+
+export interface RunMapExportArgs {
+  canvas: HTMLCanvasElement | null;
+  payload: MapPayload | null;
+  view: MapExportView;
+  /** Filename stem (the dataset name without its extension). */
+  stem: string;
+  setStatus: (msg: string) => void;
+}
+
+/** Ask for format/style/title, then export: vector through the backend, PNG
+ *  from the canvas. A cancelled dialog does nothing. */
+export async function runMapExport({ canvas, payload, view, stem, setStatus }: RunMapExportArgs): Promise<void> {
+  const params = await askParams("Export map", [
+    {
+      key: "fmt",
+      label: "Format",
+      type: "select",
+      default: "pdf",
+      options: ["pdf", "svg", "png"],
+      hint: "PDF / SVG are vector; PNG saves the on-screen canvas",
+    },
+    { key: "style", label: "Style", type: "select", default: "default", options: FIGURE_STYLES },
+    { key: "title", label: "Title", type: "text", default: "" },
+  ]);
+  if (!params) return;
+  const filename = `${stem}_map`;
+  const fmt = typeof params.fmt === "string" ? params.fmt : "pdf";
+  if (fmt === "png") {
+    if (canvas) exportCanvasPng(canvas, `${filename}.png`);
+    return;
+  }
+  if (!payload) {
+    setStatus("map export failed — nothing is mapped yet");
+    return;
+  }
+  const body = mapFigureBody(payload, view, {
+    fmt,
+    style: typeof params.style === "string" ? params.style : "default",
+    title: typeof params.title === "string" ? params.title.trim() : "",
+    filename,
+  });
+  try {
+    const done = await runCancellable("Exporting map…", (signal) => exportMapFigure(body, signal));
+    setStatus(done ? `exported ${filename}.${fmt}` : "export cancelled");
+  } catch (e) {
+    setStatus(`map export failed — ${e instanceof Error ? e.message : "unknown error"}`);
+  }
+}

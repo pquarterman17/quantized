@@ -311,3 +311,56 @@ def test_wavenumber_to_nm_roundtrip() -> None:
     wn, _ = unit_convert(500.0, "nm", "cm^-1")
     back, _ = unit_convert(float(np.asarray(wn)), "cm^-1", "nm")
     assert float(np.asarray(back)) == pytest.approx(500.0, rel=1e-6)
+
+
+# ── offset temperature scales (°C/°F) are absolute, never linear ─────────────
+
+
+@pytest.mark.parametrize(
+    ("value", "from_u", "to_u", "expected"),
+    [
+        (25.0, "C", "mK", 298150.0),  # was 25000: C treated as a linear K alias
+        (298150.0, "mK", "C", 25.0),
+        (25.0, "degC", "K", 298.15),  # degC was listed but raised "unknown unit"
+        (77.0, "degF", "degC", 25.0),
+        (32.0, "F", "uK", 273.15e6),
+        (0.0, "C", "kK", 0.27315),
+    ],
+)
+def test_offset_temperature_scales_route_affine(
+    value: float, from_u: str, to_u: str, expected: float
+) -> None:
+    result, info = unit_convert(value, from_u, to_u)
+    assert float(np.asarray(result)) == pytest.approx(expected, rel=1e-12)
+    assert math.isnan(info["factor"])  # affine -> no single factor
+
+
+def test_celsius_to_ev_uses_absolute_temperature() -> None:
+    # 25 °C is 298.15 K, not 25 K.
+    expected, _ = unit_convert(298.15, "K", "eV")
+    result, _ = unit_convert(25.0, "C", "eV")
+    assert float(np.asarray(result)) == pytest.approx(float(np.asarray(expected)), rel=1e-12)
+    back, _ = unit_convert(float(np.asarray(result)), "eV", "degC")
+    assert float(np.asarray(back)) == pytest.approx(25.0, rel=1e-9)
+
+
+def test_below_absolute_zero_celsius_to_energy_is_refused() -> None:
+    with pytest.raises(ValueError, match="positive"):
+        unit_convert(-300.0, "C", "eV")
+
+
+@pytest.mark.parametrize("expr", ["C/min", "J/C", "mC", "degF^2", "K*C", "pF"])
+def test_compound_or_prefixed_offset_temperature_is_refused(expr: str) -> None:
+    with pytest.raises(ValueError, match="offset temperature scale"):
+        unit_convert(1.0, expr, "K/min" if "/" in expr else "K")
+
+
+def test_kelvin_prefixes_stay_linear() -> None:
+    result, info = unit_convert(1.5, "K", "mK")
+    assert float(np.asarray(result)) == pytest.approx(1500.0)
+    assert info["factor"] == pytest.approx(1000.0)
+
+
+def test_degc_renders_as_degrees_in_latex() -> None:
+    _, info = unit_convert(25.0, "degC", "K")
+    assert r"{}^{\circ}\mathrm{C}" in info["latex"]

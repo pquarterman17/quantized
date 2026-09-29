@@ -453,7 +453,9 @@ describe("derived worksheets (K5c/K5d)", () => {
       ],
     });
 
-    useApp.getState().setCellValue("b", 0, 0, 40); // gesture 1: edit b directly — stales only c
+    // gesture 1: b changes directly — stales only c. (A typed cell edit on a
+    // corrected b is now refused, lib/rederived.ts, so signal the change itself.)
+    useApp.getState().touchDataset("b");
     expect(useApp.getState().staleDatasets).toEqual(["c"]);
     useApp.getState().setCellValue("a", 0, 0, 5); // gesture 2: edit a — stales b too
     // The adversarial append order this bug needs: c sits BEFORE b.

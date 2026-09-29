@@ -17,8 +17,10 @@ import {
   gridToClipboardText,
   parseClipboardGrid,
   pasteEdits,
+  pasteTargetRows,
   type PasteBounds,
 } from "../../../lib/clipboardGrid";
+import { isRederived, REDERIVED_EDIT_NOTICE } from "../../../lib/rederived";
 import { useApp } from "../../../store/useApp";
 
 export interface BlockOpsSource {
@@ -27,12 +29,17 @@ export interface BlockOpsSource {
   rows: number[];
   /** Selected column indices; -1 is the x/time column. */
   cols: number[];
+  /** The VISIBLE rows in display order (after filter + sort). Cell ops walk
+   *  this, so they land where the user sees them and skip hidden rows. */
+  order: readonly number[];
   /** Row count of the dataset. */
   rowCount: number;
   /** Writable value columns — total columns minus computed/formula ones. */
   writableCols: number;
   /** Current cell value; null when missing. */
   valueAt: (row: number, col: number) => number | null | undefined;
+  /** A categorical column's level table; pasted labels map through it. */
+  levelsAt?: (col: number) => readonly string[] | null | undefined;
   setStatus: (msg: string) => void;
 }
 
@@ -67,27 +74,53 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   const setCellBlock = useApp((s) => s.setCellBlock);
   const insertRowsAction = useApp((s) => s.insertRows);
   const deleteRowsAction = useApp((s) => s.deleteRows);
+  // The store refuses value edits on a re-derived dataset; refuse here first
+  // too, so the "pasted/cleared N" report never overwrites that notice.
+  const rederived = useApp((s) => {
+    const d = s.datasets.find((x) => x.id === src.datasetId);
+    return d != null && isRederived(d);
+  });
+  function refused(): boolean {
+    if (rederived) src.setStatus(REDERIVED_EDIT_NOTICE);
+    return rederived;
+  }
+  // Row insert/delete edit the DATA, so they read the selection in index order.
   const rows = ordered(src.rows);
   const cols = ordered(src.cols);
-  const bounds: PasteBounds = { rows: src.rowCount, writableCols: src.writableCols };
+  const bounds: PasteBounds = {
+    rows: src.rowCount,
+    writableCols: src.writableCols,
+    levelsAt: src.levelsAt,
+  };
   const hasBlock = rows.length > 0 && cols.length > 0;
 
+  // Cell ops read the selection in DISPLAY order (filter + sort): a copy, paste
+  // or fill lands where the user sees it, and a hidden row is never touched.
+  // Computed on demand — it walks every visible row, which a render needn't pay.
+  function viewRows(): number[] {
+    const sel = new Set(src.rows);
+    return src.order.filter((r) => sel.has(r));
+  }
+
   function copyBlock() {
-    if (!hasBlock) {
+    const block = viewRows();
+    if (block.length === 0 || cols.length === 0) {
       src.setStatus("select rows and columns first");
       return;
     }
     // No header row: this block is meant to round-trip back into a paste, and
     // a header would land in the first data row. The header-bearing export is
     // the existing "Copy rows".
-    const grid = rows.map((r) => cols.map((c) => src.valueAt(r, c) ?? null));
+    const grid = block.map((r) => cols.map((c) => src.valueAt(r, c) ?? null));
     void copyText(gridToClipboardText(grid)).then((ok) =>
-      src.setStatus(ok ? `copied ${rows.length}×${cols.length} block` : "clipboard unavailable"),
+      src.setStatus(ok ? `copied ${block.length}×${cols.length} block` : "clipboard unavailable"),
     );
   }
 
   function pasteBlock() {
-    if (rows.length === 0 || cols.length === 0) {
+    if (refused()) return;
+    const anchor = viewRows()[0];
+    if (anchor === undefined || cols.length === 0) {
       src.setStatus("select the top-left cell to paste into");
       return;
     }
@@ -99,9 +132,16 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
           src.setStatus("clipboard is empty");
           return;
         }
-        const { edits, clippedCells, readOnlyCells } = pasteEdits(grid, rows[0], cols[0], bounds);
+        const targets = pasteTargetRows(src.order, anchor);
+        const { edits, clippedCells, readOnlyCells, skippedCells, newLevels } = pasteEdits(
+          grid,
+          targets,
+          cols[0],
+          bounds,
+        );
+        const skipped = skippedCells ? `skipped ${skippedCells} non-numeric` : "";
         if (edits.length === 0) {
-          src.setStatus("nothing pasted (outside the sheet or read-only columns)");
+          src.setStatus(skipped ? `nothing pasted, ${skipped}` : "nothing pasted (outside the sheet or read-only columns)");
           return;
         }
         // MAIN #34: say something BEFORE a big apply, not after. The apply is
@@ -113,15 +153,18 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
         if (edits.length >= LARGE_PASTE_CELLS) {
           src.setStatus(`pasting ${edits.length.toLocaleString()} cells…`);
         }
-        setCellBlock(src.datasetId, edits, "paste cells");
+        setCellBlock(src.datasetId, edits, "paste cells", newLevels);
         // Say what was DROPPED. Silently ignoring overflow is how a user ends up
         // believing a paste landed when half of it did not.
         const notes = [
           clippedCells ? `${clippedCells} outside the sheet` : "",
           readOnlyCells ? `${readOnlyCells} on read-only columns` : "",
         ].filter(Boolean);
+        const added = Object.values(newLevels).reduce((n, l) => n + l.length, 0);
+        const extra = [skipped, added ? `added ${added} level${added === 1 ? "" : "s"}` : ""].filter(Boolean);
         src.setStatus(
           `pasted ${edits.length} cell${edits.length === 1 ? "" : "s"}` +
+            extra.map((e) => `, ${e}`).join("") +
             (notes.length ? ` — dropped ${notes.join(", ")}` : ""),
         );
       })
@@ -129,11 +172,13 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function clearBlock() {
-    if (!hasBlock) {
+    if (refused()) return;
+    const block = viewRows();
+    if (block.length === 0 || cols.length === 0) {
       src.setStatus("select rows and columns first");
       return;
     }
-    const edits = clearEdits(rows, cols, bounds);
+    const edits = clearEdits(block, cols, bounds);
     if (edits.length === 0) {
       src.setStatus("nothing to clear (read-only columns)");
       return;
@@ -143,7 +188,8 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function fillDown() {
-    const edits = fillDownEdits(rows, cols, bounds, src.valueAt);
+    if (refused()) return;
+    const edits = fillDownEdits(viewRows(), cols, bounds, src.valueAt);
     if (edits.length === 0) {
       src.setStatus("select at least two rows to fill down");
       return;
@@ -153,19 +199,21 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function cutBlock() {
-    if (!hasBlock) {
+    if (refused()) return;
+    const block = viewRows();
+    if (block.length === 0 || cols.length === 0) {
       src.setStatus("select rows and columns first");
       return;
     }
     // Copy FIRST and only clear once the clipboard write resolved — a cut that
     // clears after a failed copy destroys data with nowhere to paste it.
-    const grid = rows.map((r) => cols.map((c) => src.valueAt(r, c) ?? null));
+    const grid = block.map((r) => cols.map((c) => src.valueAt(r, c) ?? null));
     void copyText(gridToClipboardText(grid)).then((ok) => {
       if (!ok) {
         src.setStatus("clipboard unavailable — nothing was cut");
         return;
       }
-      const edits = clearEdits(rows, cols, bounds);
+      const edits = clearEdits(block, cols, bounds);
       if (edits.length === 0) {
         src.setStatus("copied, but those columns are read-only");
         return;
@@ -176,6 +224,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function insertRows() {
+    if (refused()) return;
     if (rows.length === 0) {
       src.setStatus("select a row to insert above");
       return;
@@ -187,6 +236,7 @@ export function useWorksheetBlockOps(src: BlockOpsSource): BlockOpsApi {
   }
 
   function deleteRows() {
+    if (refused()) return;
     if (rows.length === 0) {
       src.setStatus("select rows to delete");
       return;

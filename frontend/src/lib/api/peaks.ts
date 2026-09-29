@@ -8,7 +8,9 @@ import { postJSON } from "./http";
 import type { MultiFitResult, Peak, SinglePeakFit } from "../types";
 import type { components } from "./schema";
 
-/** Robust peak detection -> peak list + estimated background. */
+/** Robust peak detection -> peak list + estimated background. Omitted
+ *  settings take the route's (2θ-tuned) defaults; the `_deg` fields are in x
+ *  units, and `bg_*` picks the detector's own background (SNIP default). */
 export function findPeaks(body: {
   x: number[];
   y: number[];
@@ -16,6 +18,13 @@ export function findPeaks(body: {
   min_prominence?: number;
   max_peaks?: number;
   sensitivity?: string;
+  min_separation?: number;
+  max_window_deg?: number;
+  min_width_deg?: number;
+  max_width_deg?: number;
+  bg_method?: "snip" | "polynomial";
+  bg_poly_degree?: number;
+  bg_iterative?: boolean;
 }): Promise<{ peaks: Peak[]; background: (number | null)[] }> {
   return postJSON("/api/peaks/find", body);
 }

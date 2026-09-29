@@ -26,43 +26,15 @@ import { peakOverlayArray } from "../../../lib/plotdata";
 import { rowStateIdentity } from "../../../lib/rowstate";
 import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/types";
 import { peakInputs } from "./peakInputs";
+import { nextLabelGroupId, rejectIfHistoryBatchRunning } from "./peakLabelGuards";
 import { usePeakManualEdits } from "./usePeakManualEdits";
 import { finiteRange } from "./peakRanges";
+import { findOverrides, type PeakFindParams } from "./peakFindParams";
 import { askParams } from "../../overlays/ParamDialog";
 import { confirmPeaksRefit, publishFitResult, setPeakExcluded } from "../../../store/peakTables";
 import { beginOp, endOp, updateOp } from "../../../store/pendingOps";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-
-// Local id sequence for a "Label peaks" run's shared `Annotation.groupId`
-// (MY RULING 2) — same `Date.now().toString(36)` + module-scoped counter
-// shape as every other id generator in the store (e.g. useApp.ts's
-// `nextFigureId`/`_annSeq`), kept local here since group ids for this
-// feature are minted nowhere else.
-let _labelGroupSeq = 0;
-function nextLabelGroupId(): string {
-  return `peak-labels-${Date.now().toString(36)}-${++_labelGroupSeq}`;
-}
-
-/** L5 review finding: `withHistoryBatch` folds ANY caller into whichever
- *  batch happens to already be in flight — not just a genuinely nested call
- *  from the SAME operation (see history.ts's `withHistoryBatch`: its
- *  reentrant check is keyed only on "is a batch running", not on caller
- *  identity). Reachable from the UI: `relink.ts`'s `importChangedAsNewVersion`
- *  (and `reimportAllRun.ts`'s bulk re-import) call `withHistoryBatch` with a
- *  real internal `await` (`importPaths`'s network round trips), and nothing
- *  disables the rest of the app — including an already-open Peaks panel —
- *  while that's in flight. Without this guard, labeling mid-import would
- *  silently ride the import's ONE undo entry: a single Ctrl+Z would revert
- *  the import AND delete every label. Same pre-flight-check + toast shape as
- *  `commands/fileCommands.ts`'s `rejectIfImportRunning` (`isImportRunning`,
- *  store/importBatch.ts) — a cooperative, not a hard, lock: it narrows
- *  the window rather than eliminating it (see the two call sites below). */
-function rejectIfHistoryBatchRunning(): boolean {
-  if (!useApp.getState().historySuppressed) return false;
-  toast("Another operation is in progress — try Label peaks again in a moment.", "danger");
-  return true;
-}
 
 export interface PeakFitOptions {
   model: string;
@@ -113,7 +85,14 @@ function seedsFrom(peaks: Peak[]): PeakSeed[] {
   return peaks.map((p) => ({ center: p.center, fwhm: p.fwhm, height: p.height }));
 }
 
-export function usePeaks(): PeaksState {
+/** The detector settings to find with, and a counter that re-runs the find
+ *  even when the settings are unchanged ("Find again"). */
+export interface PeakFindRequest {
+  params: PeakFindParams;
+  seq: number;
+}
+
+export function usePeaks(find?: PeakFindRequest): PeaksState {
   const active = useActiveDataset();
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
   const xKey = useApp((s) => s.xKey);
@@ -140,6 +119,9 @@ export function usePeaks(): PeaksState {
   const [rowExclusions, rowFilter, activeData] = rowStateIdentity(active);
   const activeRoles = active?.channelRoles;
   const activeTable = active?.peakTable ?? null;
+  // Only CHANGED settings go on the wire; a string key keeps the effect's deps stable.
+  const findExtras = JSON.stringify(find ? findOverrides(find.params) : {});
+  const findSeq = find?.seq ?? 0;
 
   useEffect(() => {
     let cancelled = false;
@@ -175,7 +157,7 @@ export function usePeaks(): PeaksState {
         if (gapCount > 0) {
           toast(`${gapCount} of ${sourceCount} rows are gaps; they were excluded from peak analysis.`);
         }
-        const res = await findPeaks({ x, y });
+        const res = await findPeaks({ x, y, ...(JSON.parse(findExtras) as Partial<PeakFindParams>) });
         if (cancelled) return;
         setPeaks(res.peaks);
         // Overlay on the FULL plotted x (not the pruned x) so markers align with
@@ -199,7 +181,7 @@ export function usePeaks(): PeaksState {
     return () => {
       cancelled = true;
     };
-  }, [activeId, activeData, rowExclusions, rowFilter, activeRoles, setPeakOverlay, xKey, yKeys, seriesOrder]);
+  }, [activeId, activeData, rowExclusions, rowFilter, activeRoles, setPeakOverlay, xKey, yKeys, seriesOrder, findExtras, findSeq]);
 
   // Draw fitted peak tops (height above the local background) as the overlay,
   // on the FULL plotted x so markers align with the full-length plot x.
@@ -318,7 +300,7 @@ export function usePeaks(): PeaksState {
     // "import as a new version") is already running — see
     // `rejectIfHistoryBatchRunning`'s doc for why this is reachable and why
     // it's a cooperative pre-flight check, not a hard lock.
-    if (rejectIfHistoryBatchRunning()) return;
+    if (rejectIfHistoryBatchRunning(useApp.getState().historySuppressed)) return;
 
     // RULING 7 (as extended by the peak-selection follow-up, RULING 3):
     // FITTED peaks when a fit result exists, otherwise DETECTED — never
@@ -460,7 +442,7 @@ export function usePeaks(): PeaksState {
       // — exactly what L5 exists to prevent. Every synchronous step between
       // this check and the call below (peakInputs/finiteRange/placeLabels)
       // has no await, so this is the last possible moment to catch it.
-      if (rejectIfHistoryBatchRunning()) return;
+      if (rejectIfHistoryBatchRunning(useApp.getState().historySuppressed)) return;
       await useApp.getState().withHistoryBatch(historyLabel, async (token) => {
         const store = useApp.getState();
         for (let i = 0; i < kept.length; i++) {

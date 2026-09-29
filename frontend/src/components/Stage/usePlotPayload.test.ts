@@ -419,7 +419,9 @@ describe("usePlotPayload — Round 7 item 4: documentErrors identity churn must 
     // `yKeys` via `fetchChannels` -> `plotted` -> `errorBars`/
     // `colorByColumns`) and confound what this test isolates:
     // `documentErrors` identity alone.
-    const active = errorDataset();
+    // Big (decimation-sized) so the document errors can flip eligibility --
+    // the only way they reach the request since the perf audit (2026-09-29).
+    const active = bigErrorDataset(false);
     const yKeys = [0];
     const contentEqualCopy = (): ErrorBinding[] => [
       { channel: 1, target: 0, axis: "y", side: "+" },
@@ -435,10 +437,13 @@ describe("usePlotPayload — Round 7 item 4: documentErrors identity churn must 
     rerender(errorParams({ active, yKeys, documentErrors: contentEqualCopy() }));
     expect(fetchPlotMock).toHaveBeenCalledTimes(1); // still just the one base fetch
 
-    // Sanity: a GENUINE content change still refetches -- proves this isn't
-    // simply "documentErrors is no longer a dependency at all".
-    rerender(errorParams({ active, yKeys, documentErrors: [{ channel: 3, target: 0, axis: "y", side: "both" }] }));
+    // Sanity: a GENUINE content change that flips decimation eligibility
+    // (rich -> legacy-only: full-res -> decimated) still refetches -- proves
+    // this isn't simply "documentErrors is no longer consulted at all".
+    rerender(errorParams({ active, yKeys, documentErrors: [{ channel: 1, target: 0, axis: "y", side: "both" }] }));
     expect(fetchPlotMock).toHaveBeenCalledTimes(2);
+    expect(fetchPlotMock.mock.calls[0]?.[6]).toBeNull();
+    expect(fetchPlotMock.mock.calls[1]?.[6]).not.toBeNull();
   });
 });
 

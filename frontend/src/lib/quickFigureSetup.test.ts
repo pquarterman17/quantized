@@ -8,6 +8,7 @@ import { defaultPlotView } from "./plotview";
 import type { SpecRender } from "./plotspec";
 import {
   DEFAULT_QUICK_FIGURE_SETUP,
+  logDropNotice,
   lookSeriesStyles,
   previewWithLook,
   quickFigureLook,
@@ -61,6 +62,25 @@ describe("previewWithLook", () => {
     expect(s.plus[0]).toBeCloseTo(Math.log10(19) - 1); // 10 + 9 on a log axis
     expect(s.minus[0]).toBeCloseTo(1 - Math.log10(5)); // 10 - 5
     expect(s.minus[1]).toBeNull(); // 1000 - 2000 crosses zero: no finite log whisker
+  });
+
+  // Audit item 7: a log axis silently dropped the non-positive points.
+  it("names how many points a log axis hides, in one sentence", () => {
+    const withZeros: SpecRender = {
+      ...xy,
+      payload: { ...xy.payload, data: [[-1, 0, 5, 10], [3, 4, -2, 7], [1, null, 0, 2]], series: [{ label: "A", unit: "" }, { label: "B", unit: "" }] },
+    };
+    const look = (xScale: "linear" | "log", yScale: "linear" | "log") =>
+      quickFigureLook({ ...DEFAULT_QUICK_FIGURE_SETUP, xScale, yScale }, "line", false);
+    expect(logDropNotice(withZeros, look("linear", "linear"))).toBeNull();
+    expect(logDropNotice(xy, look("log", "log"))).toBeNull();
+    // Rows 0 and 1 (X -1, 0) carry three drawn points; the null is no point.
+    expect(logDropNotice(withZeros, look("log", "linear"))).toBe("The log X axis hides 3 points with X ≤ 0.");
+    expect(logDropNotice(withZeros, look("linear", "log"))).toBe("The log Y axis hides 2 points with Y ≤ 0.");
+    // Each point is counted once: on X when its X is out, else on Y.
+    expect(logDropNotice(withZeros, look("log", "log"))).toBe(
+      "The log axes hide 5 points: 3 with X ≤ 0 and 2 with Y ≤ 0.",
+    );
   });
 
   it("error bars off drops the whiskers", () => {

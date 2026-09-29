@@ -363,11 +363,13 @@ export function startFromFit(
 /** The `/api/peaks/model-fit` body. `vary` is always explicit (the backend
  *  defaults it to false); a tied parameter's own value/bounds are ignored
  *  there. No x_min/x_max: `x` is the wizard's already range-cut segment, and
- *  re-sending the range only adds a way to fail (lo === hi is a 422). */
-export function modelFitBody(setup: ModelSetup, x: number[], y: number[]) {
+ *  re-sending the range only adds a way to fail (lo === hi is a 422).
+ *  `yErr` (1σ per point, aligned with `y`) makes it a weighted (χ²) fit. */
+export function modelFitBody(setup: ModelSetup, x: number[], y: number[], yErr?: number[] | null) {
   return {
     x,
     y,
+    ...(yErr ? { y_err: yErr } : {}),
     shapes: setup.shapes,
     background: setup.background,
     parameters: setup.params.map((p) => ({

@@ -23,11 +23,17 @@ export interface DyResolution {
  *  (`yKey`). `none` -> null (unweighted). `poisson` -> sqrt(max(|y|,1)) so
  *  sigma stays > 0. `yerr`/`manual` -> the abs of the `errKey` sigma column,
  *  rejected (issue, unweighted) if that column is missing or not strictly
- *  positive-finite. */
+ *  positive-finite.
+ *
+ *  `keep` (optional): the analysis-row indexes the fit actually uses (e.g.
+ *  `dropGapRows(x, y).keep`). Validation then covers ONLY those rows — a gap
+ *  row's sigma is dropped with the row, so it must not refuse the weighting.
+ *  The returned `dy` stays aligned to ALL analysis rows either way. */
 export function dyForFit(
   dataset: Dataset | null | undefined,
   yKey: number,
   weight: FitWeighting,
+  keep?: readonly number[],
 ): DyResolution {
   if (weight.mode === "none") return { dy: null };
   const data = analysisData(dataset);
@@ -52,7 +58,8 @@ export function dyForFit(
     };
   }
   const dy = data.values.map((row) => Math.abs(row[errKey]));
-  if (dy.some((v) => !Number.isFinite(v) || v <= 0)) {
+  const bad = (v: number | undefined) => v === undefined || !Number.isFinite(v) || v <= 0;
+  if (keep ? keep.some((i) => bad(dy[i])) : dy.some(bad)) {
     return {
       dy: null,
       issue: "the error column has non-positive or invalid values — fitting unweighted",

@@ -19,6 +19,7 @@ import { useEscapeSurface } from "../../../lib/escapeStack";
 import { quickFigurePreview, type QuickPlotStyle } from "../../../lib/quickFigurePreview";
 import {
   DEFAULT_QUICK_FIGURE_SETUP,
+  logDropNotice,
   lookSeriesStyles,
   previewWithLook,
   quickFigureLook,
@@ -74,7 +75,9 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
   // The setup panel, materialized ONCE: the preview and the created figure
   // (and a saved template) all consume this same look.
   const look = quickFigureLook(setup, style, mapping.groupKey != null);
-  const preview = previewWithLook(quickFigurePreview(dataset.data, mapping, style, dataset.channelRoles), look);
+  const raw = quickFigurePreview(dataset.data, mapping, style, dataset.channelRoles);
+  const preview = previewWithLook(raw, look);
+  const logNotice = logDropNotice(raw, look);
   const previewStyles = preview.kind === "xy" ? lookSeriesStyles(look, preview.payload.series.length) : undefined;
   // G5 review round (P1, FIX 1): `canCreateQuickFigure` (lib/quickFigureMapping.ts)
   // is now the ONE predicate both this button and the store action
@@ -184,6 +187,7 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
             </div>
           )}
           {mappingReady(mapping) && <QuickRoleSummary dataset={dataset} mapping={mapping} labelBlock={labelBlock} />}
+          {logNotice && <p className="qzk-quick-builder-notice" role="status">{logNotice}</p>}
           <QuickFigurePreviewCanvas render={preview} styles={previewStyles} legend={look.showLegend ? look.legendPos : null} />
         </section>
 

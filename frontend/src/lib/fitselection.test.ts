@@ -108,6 +108,17 @@ describe("fitDataForSpec (recompute reproduces the recorded channels)", () => {
       dy: [5, 7, 8],
     });
   });
+
+  it("keeps the recorded weighting when a gap row (y and sigma NaN) is dropped", () => {
+    const gappy: Dataset = {
+      ...dataset,
+      excludedRows: [],
+      data: { ...dataset.data, values: [[100, 10, 5], [200, NaN, NaN], [300, 30, 7], [400, 40, 8]] },
+    };
+    const spec = { model: "Linear", xKey: 0, yKey: 1, weight: { mode: "yerr" as const, errKey: 2 } };
+    expect(fitDataForSpec(gappy, spec, null, null, null)?.dy).not.toBeUndefined();
+    expect(fitDataForSpec(gappy, spec, null, null, null)?.dy).not.toBeNull();
+  });
 });
 
 describe("fitStepParams / fitSpecFromStepParams (pipeline fit-step recipe #6)", () => {

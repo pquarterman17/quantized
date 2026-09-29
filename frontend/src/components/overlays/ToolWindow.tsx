@@ -15,7 +15,7 @@
 // never end up with its grab handle unreachable. The title bar is also a Tab
 // stop whose arrow keys move the window and Shift+arrows resize it (R3).
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { useEscapeSurface } from "../../lib/escapeStack";
 import {
@@ -259,13 +259,17 @@ export default function ToolWindow({
       className="qzk-glass qzk-win"
       data-tool-window={id}
       tabIndex={-1}
-      style={{
-        left: layout.x,
-        top: layout.y,
-        zIndex: 200 + z,
-        width: layout.width,
-        height: layout.collapsed ? undefined : (layout.height ?? undefined),
-      }}
+      // --qzk-win-top: shell.css caps the window at the viewport below this edge.
+      style={
+        {
+          left: layout.x,
+          top: layout.y,
+          zIndex: 200 + z,
+          width: layout.width,
+          height: layout.collapsed ? undefined : (layout.height ?? undefined),
+          "--qzk-win-top": `${layout.y}px`,
+        } as CSSProperties
+      }
       onMouseDown={() => setZ(++zTop)}
     >
       <div

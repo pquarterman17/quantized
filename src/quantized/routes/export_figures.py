@@ -19,10 +19,12 @@ it. Filenames are sanitized before reaching the Content-Disposition header.
 
 from __future__ import annotations
 
+import threading
+from functools import partial
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel, Field, field_validator
+from fastapi import APIRouter, HTTPException, Request, Response
+from pydantic import Field, field_validator
 
 from quantized.calc.figure_group_styles import expand_grouped_series_styles
 from quantized.calc.plot_log_offsets import apply_log_offsets, scale_error_spans
@@ -34,8 +36,15 @@ from quantized.calc.plotting import (
     resolve_style_channels,
     validate_y2_subset,
 )
+from quantized.calc.render_lock import acquire_render_lock
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
+from quantized.routes._datasetcache import (
+    CachedDatasetRequest,
+    DatasetHandleMiss,
+    resolve_or_409,
+)
+from quantized.routes._disconnect import run_watching_disconnect
 from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
 from quantized.routes._export_common import (
     _DPI_MAX,
@@ -67,8 +76,9 @@ from quantized.routes.export_figures_schema import (
 router = APIRouter(prefix="/api/export", tags=["export"])
 
 
-class FigureRequest(BaseModel):
-    dataset: dict[str, Any]
+class FigureRequest(CachedDatasetRequest):
+    # `dataset`/`dataset_handle` come from CachedDatasetRequest; only
+    # /figure-hitmap caches a posted dataset (see _request_dataset).
     x_key: int | str | None = None
     y_keys: list[int | str] | None = None
     x_log: bool = False
@@ -218,7 +228,22 @@ class FigureRequest(BaseModel):
     _no_document_keys = field_validator("series_styles")(reject_document_only_style_keys)
 
 
-def _figure_series(req: FigureRequest) -> _ResolvedFigure:
+def _request_dataset(req: FigureRequest) -> DataStruct:
+    """``req``'s DataStruct WITHOUT caching a posted ``dataset``: a download,
+    page or report render is one-shot, and inserting it would only evict the
+    datasets the plot and preview are reusing. A stale ``dataset_handle`` is a
+    ``ValueError`` here (422, or a report's named placeholder), not the 409
+    that asks the client transport to resend -- no client routes these
+    one-shot paths through that transport (``lib/api/datasetCache.ts``)."""
+    if req.dataset is not None:
+        return DataStruct.from_dict(req.dataset)
+    try:
+        return req.resolve()[0]
+    except DatasetHandleMiss as exc:
+        raise ValueError("unknown or expired dataset_handle; send the dataset") from exc
+
+
+def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _ResolvedFigure:
     """Resolve a ``FigureRequest``'s dataset + channel picks into the
     renderer's inputs — shared by ``/figure``, ``/figure-hitmap``, and the
     figure-page route (``routes.export_page``). Caller-supplied labels
@@ -242,8 +267,10 @@ def _figure_series(req: FigureRequest) -> _ResolvedFigure:
     ``series_styles`` expanded onto them (BUG-016, below). Mutually
     exclusive with ``req.y2_keys`` (raises ``ValueError`` -- ``buildXY``
     never assigns a grouped series to the secondary axis, so there's no
-    sound semantic to invent for the combination)."""
-    ds = DataStruct.from_dict(req.dataset)
+    sound semantic to invent for the combination). ``ds`` is the already-
+    resolved dataset when the caller has one (the preview route)."""
+    if ds is None:
+        ds = _request_dataset(req)
 
     if req.encoding is not None and req.encoding.active():  # P1.4, before group_col
         return resolve_encoded_figure(
@@ -386,7 +413,9 @@ def export_figure(req: FigureRequest) -> Response:
 
 
 @router.post("/figure-hitmap")
-def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
+async def export_figure_hitmap(
+    req: FigureRequest, request: Request, response: Response
+) -> dict[str, Any]:
     """Preview render + element hit-map (gap #13): base64 PNG, per-artist
     pixel boxes (title/labels/legend/series/annotations), and the axes rect
     with data limits — the client hit-tests the preview and maps drags back
@@ -412,40 +441,54 @@ def export_figure_hitmap(req: FigureRequest) -> dict[str, Any]:
     -- full per-panel drag-edit is still future work, not silently faked
     here). The flat (non-facet) response below is
     UNCHANGED -- still ``elements`` + a single ``axes`` dict, no ``panels``
-    key at all."""
+    key at all.
+
+    The Figure Builder's live preview: caches a posted ``dataset`` and echoes
+    ``X-Dataset-Handle`` (the ``/api/plot/series`` contract), and skips the
+    render (499) when the client aborted before it got the render lock."""
+    return await run_watching_disconnect(request, partial(_figure_hitmap, req, response))
+
+
+def _figure_hitmap(req: FigureRequest, response: Response, gone: threading.Event) -> dict[str, Any]:
+    """``/figure-hitmap``'s sync body, run in the threadpool."""
     dpi = max(_DPI_MIN, min(_DPI_MAX, req.dpi))
 
     try:
-        if req.facets:
-            return _render_facets_map(req, _figure_series(req), dpi=dpi)
+        ds, handle = resolve_or_409(req)
+        if handle is not None:
+            response.headers["X-Dataset-Handle"] = handle
+        resolved = _figure_series(req, ds)
         with heavy_imports("quantized.calc.figure"):
             from quantized.calc.figure import render_figure_map
-
-        resolved = _figure_series(req)
-        return render_figure_map(
-            resolved.x,
-            resolved.series,
-            title=req.title,
-            x_label=resolved.x_label,
-            y_label=resolved.y_label,
-            x_log=req.x_log,
-            y_log=req.y_log,
-            x_scale=req.x_scale,
-            y_scale=req.y_scale,
-            style=req.style,
-            series_styles=resolved.styles,
-            dpi=dpi,
-            greyscale=req.greyscale,
-            overrides=req.overrides,
-            x_fmt=_tick_fmt(req.x_fmt),
-            y_fmt=_tick_fmt(req.y_fmt),
-            x_step=req.x_step,
-            y_step=req.y_step,
-            y2_mask=resolved.y2_mask,
-            y2_label=resolved.y2_label,
-            y2_scale=req.y2_scale,
-            y2_fmt=_tick_fmt(req.y2_fmt),
-            y2_step=req.y2_step,
-        )
+        with acquire_render_lock():
+            if gone.is_set():
+                raise HTTPException(status_code=499, detail="client_disconnected")
+            if req.facets:
+                return _render_facets_map(req, resolved, dpi=dpi)
+            return render_figure_map(
+                resolved.x,
+                resolved.series,
+                title=req.title,
+                x_label=resolved.x_label,
+                y_label=resolved.y_label,
+                x_log=req.x_log,
+                y_log=req.y_log,
+                x_scale=req.x_scale,
+                y_scale=req.y_scale,
+                style=req.style,
+                series_styles=resolved.styles,
+                dpi=dpi,
+                greyscale=req.greyscale,
+                overrides=req.overrides,
+                x_fmt=_tick_fmt(req.x_fmt),
+                y_fmt=_tick_fmt(req.y_fmt),
+                x_step=req.x_step,
+                y_step=req.y_step,
+                y2_mask=resolved.y2_mask,
+                y2_label=resolved.y2_label,
+                y2_scale=req.y2_scale,
+                y2_fmt=_tick_fmt(req.y2_fmt),
+                y2_step=req.y2_step,
+            )
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)

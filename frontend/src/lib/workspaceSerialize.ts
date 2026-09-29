@@ -38,7 +38,8 @@ import type { OriginFigureEntry } from "./originFigures";
 import { deriveBundleRelativePath } from "./bundlePath";
 import { projectFitModelsForSave } from "./fitModelsProject";
 import { projectTemplatesForSave } from "./templatesProject";
-import { encodePersistedCells, type WireDataStruct } from "./nonFiniteCells";
+import { stringifyWithCells } from "./dataStructJson";
+import type { WireDataStruct } from "./nonFiniteCells";
 import type { DatasetSource } from "./datasetSource";
 import type { Dataset, FolderNode } from "./types";
 import { WORKSPACE_FORMAT, WORKSPACE_VERSION, WORKSPACE_VERSION_TRANSFORM_STEPS, type WorkspaceState } from "./workspace";
@@ -152,8 +153,11 @@ interface WorkspaceDoc {
   analysisTemplates?: unknown[];
 }
 
-/** Serialize the library + folder tree to a pretty-printed .dwk JSON
- *  document.
+/** Serialize the library + folder tree to a .dwk JSON document. Each
+ *  dataset's cells come compact from lib/dataStructJson.ts's per-`data` cache
+ *  (perf audit 2026-09-29); the rest is indented unless `opts.compact` (the
+ *  autosave, which runs on the main thread after every structural change).
+ *  `JSON.parse` reads every one of these forms, and legacy files, the same.
  *
  *  `opts.projectDir` (P1.7 PR 3): the directory this `.dwk` is ABOUT to be
  *  written into (or is already saved in, for a quick save) — passed only by
@@ -170,7 +174,7 @@ interface WorkspaceDoc {
  *  lib/templatesProject.ts) out of the autosave, for the same reason. */
 export function serializeWorkspace(
   ws: WorkspaceState,
-  opts?: { projectDir?: string; fitModelLibrary?: boolean },
+  opts?: { projectDir?: string; fitModelLibrary?: boolean; compact?: boolean },
 ): string {
   const projectDir = opts?.projectDir;
   const fitModels = projectFitModelsForSave(ws.fitModelCarry, { fitModelLibrary: opts?.fitModelLibrary });
@@ -342,5 +346,8 @@ export function serializeWorkspace(
       ...(d.versionOf ? { versionOf: d.versionOf } : {}),
     })),
   };
-  return JSON.stringify(doc, encodePersistedCells, 2);
+  return stringifyWithCells((hole) => ({
+    ...doc,
+    datasets: doc.datasets.map((e) => ({ ...e, data: hole(e.data), raw: hole(e.raw) })),
+  }), opts?.compact ? undefined : 2);
 }

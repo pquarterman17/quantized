@@ -83,7 +83,7 @@ export async function saveAutosave(ws: WorkspaceState, now = Date.now()): Promis
     const kept = capBySize(
       // P2.7: the fit-model CARRY only, not the library — a restore happens
       // on this machine, whose library is newer (lib/fitModelsProject.ts).
-      capByAge(rotate(existing, { at: now, text: serializeWorkspace(ws, { fitModelLibrary: false }) }), now),
+      capByAge(rotate(existing, { at: now, text: serializeWorkspace(ws, { fitModelLibrary: false, compact: true }) }), now),
       AUTOSAVE_BUDGET_BYTES,
     );
     await backend.write(kept);

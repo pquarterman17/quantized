@@ -3,6 +3,7 @@ import type { DragEvent } from "react";
 import type { ErrorSide } from "../../../lib/errorRoles";
 import type { QuickFigureMapping } from "../../../lib/quickFigureMapping";
 import { assignmentFor, type QuickColumnAssignment } from "../../../lib/quickFigureMappingActions";
+import { xSourceName } from "../../../lib/quickFigureSeriesX";
 import type { DataStruct } from "../../../lib/types";
 
 interface Props {
@@ -46,7 +47,7 @@ export default function QuickMappingPanel({ data, mapping, onAssign, onUseAcquis
           onDragOver={(event) => event.preventDefault()}
           onDrop={(event) => assignDropped(event, { role: "x" })}
         >
-          <span>{mapping.xKeyByY ? "Shared X axis" : "X axis"}</span><strong>{mapping.xKey === null ? "Acquisition axis" : data.labels[mapping.xKey]}</strong>
+          <span>{mapping.xKeyByY ? "Shared X axis" : "X axis"}</span><strong>{xSourceName(data, mapping.xKey)}</strong>
         </button>
         <div
           className="qzk-quick-builder-zone"

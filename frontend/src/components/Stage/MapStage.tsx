@@ -10,7 +10,6 @@ import { COLORMAPS } from "../../lib/colormap";
 import { cutSpaceForKeys } from "../../lib/mapcuts";
 import { mapViewFor } from "../../lib/mapView";
 import { fetchMap, hasQSpace, rsmAxisKeys, type MapPayload } from "../../lib/mapdataFetch";
-import { exportCanvasPng } from "../../lib/plotExport";
 import type { Dataset } from "../../lib/types";
 import { askAnnotationText } from "../../store/annotationTextDialog";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -19,6 +18,7 @@ import MapSliceOverlay from "./MapSliceOverlay";
 import MapToolbar from "./MapToolbar";
 import { armExclusively, routedTool } from "./mapToolArming";
 import { fmt } from "./mapRender";
+import { runMapExport } from "./mapFigureExport";
 import { useMapPaint } from "./useMapPaint";
 import { useMapCuts } from "./useMapCuts";
 import { useMapPointer } from "./useMapPointer";
@@ -225,12 +225,15 @@ export default function MapStage({ dataset }: MapStageProps) {
   });
   const { readout, dragPx } = pointer;
 
-  function savePng() {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const stem = active?.name.replace(/\.[^.]+$/, "") ?? "map";
-    exportCanvasPng(canvas, `${stem}_map.png`);
-  }
+  // ⤓: vector (PDF/SVG via /api/export/map-figure) by default, or the canvas PNG.
+  const exportMap = () =>
+    void runMapExport({
+      canvas: canvasRef.current,
+      payload,
+      view: { cmap, logZ, colorLimits: mapView.colorLimits, contour: { on: contourOn, levelCount: contourLevelCount, scale: contourScale } },
+      stem: active?.name.replace(/\.[^.]+$/, "") ?? "map",
+      setStatus,
+    });
 
   // Box ROI, cut ruler, the sector wedge, and the H/V/seg cut tool are
   // mutually exclusive (same canvas gestures) — arming one disarms the rest.
@@ -362,7 +365,7 @@ export default function MapStage({ dataset }: MapStageProps) {
           onToggleRuler={toggleRuler}
           wedgeMode={wedge.mode}
           onToggleWedge={toggleWedge}
-          onSavePng={savePng}
+          onExport={exportMap}
         />
       )}
 

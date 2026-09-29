@@ -38,7 +38,6 @@ import { useEffect, useRef, useState } from "react";
 import { BUILTIN_PLOT_RECIPES } from "../../../lib/builtinPlotRecipes";
 import type { PlotRecipe } from "../../../lib/plotRecipe";
 import { PLOT_TEMPLATES } from "../../../lib/plotTemplates";
-import { loadTemplates } from "../../../lib/template";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
@@ -46,6 +45,7 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Select } from "../../primitives";
 import { RecipeThumbnail } from "./RecipeThumbnail";
 import { RecipeTransformPicker } from "./RecipeTransformPicker";
+import { useSavedTransforms } from "./useSavedTransforms";
 import {
   applyRecipeWithChoices,
   combinedRecipeRows,
@@ -78,16 +78,21 @@ export default function RecipeManagerPanel() {
   const datasets = useApp((s) => s.datasets);
   const activeId = useApp((s) => s.activeId);
 
-  const [datasetId, setDatasetId] = useState(activeId ?? datasets[0]?.id ?? "");
+  const [pickedDatasetId, setDatasetId] = useState(activeId ?? datasets[0]?.id ?? "");
+  // A picked dataset that has since been deleted falls back like the initial
+  // pick, so the select never shows (or applies to) a vanished dataset.
+  const datasetId = datasets.some((d) => d.id === pickedDatasetId)
+    ? pickedDatasetId
+    : (activeId ?? datasets[0]?.id ?? "");
   // Apply-time choices (F4.2): "" = the recipe's own style template. The
   // transformation is per row: `transformPick` holds only the rows the user
   // overrode (keyed like the rows); every other row uses the recipe's
-  // recorded one (`recordedTransformChoice`). Saved transformations are read
-  // once per mount -- the Pipeline workshop that saves them is a separate
-  // window.
+  // recorded one (`recordedTransformChoice`). The saved list stays live
+  // (`useSavedTransforms`): the Pipeline workshop saves into it while this
+  // window is open.
   const [styleTemplate, setStyleTemplate] = useState("");
   const [transformPick, setTransformPick] = useState<Record<string, string>>({});
-  const [transforms] = useState(() => loadTemplates());
+  const transforms = useSavedTransforms();
   // Finding 3, belt-and-braces: keyed by `${scope}:${id}` (rowKey), not id
   // alone -- see the module doc.
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
@@ -142,7 +147,9 @@ export default function RecipeManagerPanel() {
   // its picker -- none when nothing is saved and nothing was recorded.
   const transformFor = (key: string, recipe: PlotRecipe) => {
     const { value: recorded, missing } = recordedTransformChoice(recipe, transforms);
-    const value = transformPick[key] ?? recorded;
+    // An override of a since-deleted transformation reverts to the recorded one.
+    const pick = transformPick[key];
+    const value = pick !== undefined && (pick === "" || transforms.some((t) => t.name === pick)) ? pick : recorded;
     const picker =
       transforms.length > 0 || recipe.transform ? (
         <RecipeTransformPicker

@@ -62,6 +62,8 @@ export interface GadgetSlice {
   qfitModel: string;
   qfitBusy: boolean;
   qfitResult: CalcResult | null;
+  /** The model that PRODUCED `qfitResult` — what commit/report must name. */
+  qfitResultModel: string | null;
   qfitError: string | null;
   // ROI gadget family (#34): generalizes the #33 frame above with a mode
   // selector on the SAME chip. `gadgetMode` picks which of the region's rows
@@ -108,6 +110,15 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
   // Quick-fit gadget internals (#33): a module-level debounce timer, mirroring
   // the recalc scheduler in useApp.ts — a burst of ROI-drag moves triggers ONE fit.
   let qfitTimer: ReturnType<typeof setTimeout> | null = null;
+  // Fit-request sequence: bumped by every ROI/model change and every request,
+  // so only the LATEST request's response may land (a slow earlier one can't).
+  let qfitSeq = 0;
+  // Drop the current fit result — and the overlay only if this gadget drew it.
+  const dropQfitResult = (s: AppState): Partial<AppState> => ({
+    qfitResult: null,
+    qfitResultModel: null,
+    fitOverlay: s.qfitResult != null ? null : s.fitOverlay,
+  });
 
   return {
     qfitRoi: null,
@@ -115,6 +126,7 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
     qfitModel: "Linear",
     qfitBusy: false,
     qfitResult: null,
+    qfitResultModel: null,
     qfitError: null,
     gadgetMode: "fit",
     gadgetBusy: false,
@@ -131,10 +143,14 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
     setQfitRoi: (roi) => {
       // Stamp WHICH dataset + X column the band was drawn on (a re-set of the
       // same band keeps its stamp), so "Fit this range" can refuse a stale one.
+      // Any ROI (or, via setQfitModel, model) change invalidates the fit
+      // result and every in-flight request for the old range/model.
+      qfitSeq += 1;
       set((s) => ({
         qfitRoi: roi,
         qfitRoiFor: roi === null ? null
           : roi === s.qfitRoi && s.qfitRoiFor ? s.qfitRoiFor : { datasetId: s.activeId, xKey: s.xKey },
+        ...dropQfitResult(s),
       }));
       if (qfitTimer) {
         clearTimeout(qfitTimer);
@@ -147,10 +163,8 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
         // unrelated overlay (e.g. the Curve Fit workshop's own fitOverlay) just
         // because the tool was touched.
         set((s) => ({
-          qfitResult: null,
           qfitBusy: false,
           qfitError: null,
-          fitOverlay: s.qfitResult != null ? null : s.fitOverlay,
           gadgetBusy: false,
           gadgetError: null,
           gadgetIntegrateResult: null,
@@ -184,13 +198,15 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
         return;
       }
       set({ qfitBusy: true, qfitError: null });
+      const seq = ++qfitSeq;
+      const model = s.qfitModel;
+      // Guard a stale response: the gadget may have been cleared, the ROI or
+      // model changed, or the active dataset switched while in flight.
+      const stale = () => seq !== qfitSeq || get().activeId !== active.id || !get().qfitRoi;
       try {
-        const r = await fitModel({ model: s.qfitModel, x: sel.x, y: sel.y });
-        // Guard a stale response: the gadget may have been cleared, or the
-        // active dataset switched, while the request was in flight.
-        const cur = get();
-        if (cur.activeId !== active.id || !cur.qfitRoi) return;
-        set({ qfitResult: r, qfitBusy: false });
+        const r = await fitModel({ model, x: sel.x, y: sel.y });
+        if (stale()) return;
+        set({ qfitResult: r, qfitResultModel: model, qfitBusy: false });
         const yFit = r.yFit as (number | null)[] | undefined;
         if (Array.isArray(yFit)) {
           // yFit aligns to the ROI-sliced rows; expand back to the full row
@@ -201,7 +217,8 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
           set({ fitOverlay: { datasetId: active.id, y } });
         }
       } catch (e) {
-        set({ qfitBusy: false, qfitError: e instanceof Error ? e.message : "fit failed" });
+        if (stale()) return;
+        set((cur) => ({ ...dropQfitResult(cur), qfitBusy: false, qfitError: e instanceof Error ? e.message : "fit failed" }));
       }
     },
     commitQfit: () => {
@@ -212,10 +229,12 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
       // fit (first visible plotted channel + xKey), reused as the step params so
       // a template batch replays those channels, not time/values[0]. The ROI only
       // shaped which rows the user previewed (preview-only — never encoded).
-      const spec = qfitSpec(active, s, s.qfitModel, s.qfitResult);
-      get().recordMacro(`Fit ${s.qfitModel}`, `qz.fit(${lit(s.qfitModel)})`, {
+      // The model that PRODUCED the result, never the picker's current value.
+      const model = s.qfitResultModel ?? s.qfitModel;
+      const spec = qfitSpec(active, s, model, s.qfitResult);
+      get().recordMacro(`Fit ${model}`, `qz.fit(${lit(model)})`, {
         kind: "fit",
-        params: fitStepParams(s.qfitModel, spec),
+        params: fitStepParams(model, spec),
       });
       get().setFitSpec(active.id, spec);
     },

@@ -87,6 +87,16 @@ describe("QuickFigureBuilderWorkspace — per-series X", () => {
     expect(overlay.data.labels).toEqual(["Y1", "Y2", "Y3"]);
   });
 
+  it("names the acquisition axis by its own column name everywhere (GUI audit)", () => {
+    render(<QuickFigureBuilderWorkspace />);
+    const zones = screen.getByLabelText("Column role drop zones");
+    expect(zones).toHaveTextContent("Shared X axisX1");
+    // With a column as the shared X, the acquisition axis becomes a per-series option.
+    fireEvent.change(screen.getByRole("combobox", { name: "Role for Y1" }), { target: { value: "x" } });
+    expect(screen.getAllByRole("option", { name: "X1" })[0]).toHaveValue("acquisition");
+    expect(screen.queryByText(/Acquisition axis/)).toBeNull();
+  });
+
   it("back to Shared X for every series collapses to an ordinary shared-X figure on the source", () => {
     render(<QuickFigureBuilderWorkspace />);
     fireEvent.change(seriesX("Y2"), { target: { value: "shared" } });
