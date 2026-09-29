@@ -2,6 +2,7 @@ import type { LibraryNode } from "../../lib/libraryHierarchy";
 
 interface Props {
   focusedNode: LibraryNode | null;
+  focusPath: readonly LibraryNode[];
   candidateNode: LibraryNode | null;
   searching: boolean;
   onFocus: (node: LibraryNode) => void;
@@ -9,14 +10,36 @@ interface Props {
 }
 
 /** Compact, session-only scope control for dense imported projects. */
-export default function LibraryFocusBar({ focusedNode, candidateNode, searching, onFocus, onShowAll }: Props) {
+export default function LibraryFocusBar({
+  focusedNode, focusPath, candidateNode, searching, onFocus, onShowAll,
+}: Props) {
   if (focusedNode) {
     return (
-      <div className="qzk-library-focus" role="status">
-        <span title={focusedNode.name}>
-          {searching ? "Searching all · focus: " : "Focused on "}<strong>{focusedNode.name}</strong>
-        </span>
-        <button type="button" onClick={onShowAll}>Show all</button>
+      <div className="qzk-library-focus" role="navigation" aria-label="Focused Library location">
+        {searching && <span className="qzk-library-focus-search">Searching project</span>}
+        <div className="qzk-library-focus-path">
+          <button type="button" aria-label="Show all" onClick={onShowAll}>All</button>
+          {focusPath.map((node, index) => (
+            <span key={node.key}>
+              <span aria-hidden="true">/</span>
+              {index === focusPath.length - 1 ? (
+                <strong title={node.name}>{node.name}</strong>
+              ) : (
+                <button type="button" title={`Focus on ${node.name}`} onClick={() => onFocus(node)}>{node.name}</button>
+              )}
+            </span>
+          ))}
+        </div>
+        {candidateNode && candidateNode.key !== focusedNode.key && (
+          <button
+            type="button"
+            className="qzk-library-focus-deeper"
+            title={`Narrow the view to ${candidateNode.name}`}
+            onClick={() => onFocus(candidateNode)}
+          >
+            Focus selection: {candidateNode.name}
+          </button>
+        )}
       </div>
     );
   }

@@ -78,7 +78,7 @@ describe("Library — figures nested in the tree", () => {
     expect(await screen.findByText("Project")).toBeInTheDocument(); // folder header
     expect(screen.getByRole("button", { name: /MokeGraph/ })).toBeInTheDocument(); // figure row
     // The flat "Figures" section header must be absent in tree mode (no dup).
-    expect(screen.queryByText("Figures")).not.toBeInTheDocument();
+    expect(screen.queryByText("Figures", { selector: ".qzk-group-name" })).not.toBeInTheDocument();
   });
 
   it("PR C: still renders as a tree (not the flat Figures section) even with no folders — the library is non-empty", async () => {
@@ -94,7 +94,7 @@ describe("Library — figures nested in the tree", () => {
     // hidden and the figure appears as a tree row instead (root-level, since
     // there's no workbook to nest it under in this legacy-shaped fixture).
     expect(await screen.findByRole("button", { name: /MokeGraph/ })).toBeInTheDocument();
-    expect(screen.queryByText("Figures")).not.toBeInTheDocument();
+    expect(screen.queryByText("Figures", { selector: ".qzk-group-name" })).not.toBeInTheDocument();
   });
 });
 
@@ -127,7 +127,7 @@ describe("Library — focused project exploration", () => {
 
     expect(screen.getByText("Sheet A")).toBeInTheDocument();
     expect(screen.queryByText("Book B")).not.toBeInTheDocument();
-    expect(screen.getByText("Focused on")).toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Focused Library location" })).toHaveTextContent("All/Project A/Book A");
 
     fireEvent.click(screen.getByRole("button", { name: "Show all" }));
     expect(await screen.findByText("Book B")).toBeInTheDocument();
@@ -140,7 +140,7 @@ describe("Library — focused project exploration", () => {
     const input = screen.getByPlaceholderText(/Filter/);
     fireEvent.change(input, { target: { value: "Sheet B" } });
     expect(await screen.findByText("Sheet B")).toBeInTheDocument();
-    expect(screen.getByText("Searching all · focus:")).toBeInTheDocument();
+    expect(screen.getByText("Searching project")).toBeInTheDocument();
 
     fireEvent.change(input, { target: { value: "" } });
     expect(await screen.findByText("Sheet A")).toBeInTheDocument();
@@ -159,6 +159,58 @@ describe("Library — focused project exploration", () => {
     });
     expect(await screen.findByText("Book B")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Show all" })).not.toBeInTheDocument();
+  });
+
+  it("offers the containing workbook after selecting a worksheet", async () => {
+    render(<Library />);
+    fireEvent.click((await screen.findByText("Sheet A")).closest("[data-ds-id]")!);
+    expect(screen.getByRole("button", { name: "Focus on Book A" })).toBeInTheDocument();
+  });
+
+  it("offers focus directly from a workbook context menu", async () => {
+    render(<Library />);
+    const workbook = (await screen.findByText("Book A")).closest('[data-lib-row="workbook:w1"]')!;
+    fireEvent.contextMenu(workbook, { clientX: 20, clientY: 20 });
+    fireEvent.click(screen.getByText("Focus on this workbook"));
+
+    expect(screen.queryByText("Book B")).not.toBeInTheDocument();
+    expect(screen.getByRole("navigation", { name: "Focused Library location" })).toHaveTextContent("Book A");
+  });
+
+  it("can narrow from a focused folder to its selected workbook, then navigate back by breadcrumb", async () => {
+    render(<Library />);
+    fireEvent.click((await screen.findByText("Project A")).closest('[data-lib-row="folder:f1"]')!);
+    fireEvent.click(screen.getByRole("button", { name: "Focus on Project A" }));
+    fireEvent.click((await screen.findByText("Book A")).closest('[data-lib-row="workbook:w1"]')!);
+    fireEvent.click(screen.getByRole("button", { name: "Focus selection: Book A" }));
+
+    const location = screen.getByRole("navigation", { name: "Focused Library location" });
+    expect(location).toHaveTextContent("All/Project A/Book A");
+    fireEvent.click(screen.getByRole("button", { name: "Project A" }));
+    expect(location).toHaveTextContent("All/Project A");
+    expect(await screen.findByText("Book A")).toBeInTheDocument();
+  });
+
+  it("filters by item type without leaking the flat fallback and offers a one-click reset", async () => {
+    render(<Library />);
+    expect(await screen.findByText("6 shown")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: "Show item type" }), { target: { value: "reports" } });
+
+    expect(screen.getByText("No reports in this view.")).toBeInTheDocument();
+    expect(screen.queryByText("Sheet A")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Show all items" }));
+    expect(await screen.findByText("Sheet A")).toBeInTheDocument();
+  });
+
+  it("collapses and expands the complete visible hierarchy", async () => {
+    render(<Library />);
+    expect(await screen.findByText("Sheet A")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Collapse all folders and workbooks in view" }));
+    expect(screen.queryByText("Book A")).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Expand all folders and workbooks in view" }));
+    expect(await screen.findByText("Sheet A")).toBeInTheDocument();
+    expect(screen.getByText("Sheet B")).toBeInTheDocument();
   });
 });
 
@@ -300,7 +352,7 @@ describe("Library — sections hidden in tree mode AND search mode (PR C / PR D2
     render(<Library />);
     expect(screen.queryByText("Editable figures")).not.toBeInTheDocument();
     expect(screen.queryByText("Saved pages")).not.toBeInTheDocument();
-    expect(screen.queryByText("Reports")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reports", { selector: ".qzk-group-name" })).not.toBeInTheDocument();
   });
 
   it("search renders the flat results surface, NOT the unfiltered sections (PR D2)", async () => {
@@ -315,7 +367,7 @@ describe("Library — sections hidden in tree mode AND search mode (PR C / PR D2
     expect(screen.getByText("My Report")).toBeInTheDocument();
     expect(screen.queryByText("Editable figures")).not.toBeInTheDocument();
     expect(screen.queryByText("Saved pages")).not.toBeInTheDocument();
-    expect(screen.queryByText("Reports")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reports", { selector: ".qzk-group-name" })).not.toBeInTheDocument();
     // The query really is applied: the dataset "a" doesn't match "my".
     expect(screen.queryByText(/^a$/)).not.toBeInTheDocument();
   });

@@ -17,12 +17,8 @@
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
-import ArtifactRow from "./ArtifactRows";
 import { buildArtifactMenu, deleteArtifactConfirmed, isArtifactNode, type ArtifactNode } from "./artifactContextActions";
-import DatasetRow from "./DatasetRow";
-import FigureRow from "./FigureRow";
-import FolderRow from "./FolderRow";
-import WorkbookRow from "./WorkbookRow";
+import LibraryTreeRow from "./LibraryTreeRow";
 import { isSelected, openLibraryNode, selectLibraryNode } from "./libraryOpen";
 import { focusRowWhenRendered, useListVirtualization } from "./useListVirtualization";
 import { subtreeCount, subtreeCountIndex } from "../../lib/foldertree";
@@ -114,9 +110,10 @@ interface Props {
    *  in standalone test harnesses; the virtualization hook degrades to the
    *  row container itself (see useListVirtualization's header). */
   panelRef?: RefObject<HTMLElement | null>;
+  onFocusContainer?: (node: Extract<LibraryNode, { kind: "folder" | "workbook" }>) => void;
 }
 
-export default function LibraryTree({ rows, onFilterTag, panelRef }: Props) {
+export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContainer }: Props) {
   const activeId = useApp((s) => s.activeId);
   const selectedIds = useApp((s) => s.selectedIds);
   const librarySelection = useLibraryStore((s) => s.librarySelection);
@@ -348,41 +345,9 @@ export default function LibraryTree({ rows, onFilterTag, panelRef }: Props) {
       ref={containerRef}
       style={virt.virtualized ? { paddingTop: virt.padTop, paddingBottom: virt.padBottom } : undefined}
     >
-      {rendered.map(({ node, expanded, hasChildren }) => {
-        switch (node.kind) {
-          case "folder":
-            return (
-              <FolderRow
-                key={node.key}
-                folder={node.entity}
-                depth={node.depth}
-                count={folderCounts.get(node.entityId) ?? 0}
-                expanded={expanded}
-              />
-            );
-          case "workbook":
-            return <WorkbookRow key={node.key} node={node} depth={node.depth} expanded={expanded} hasChildren={hasChildren} />;
-          case "worksheet":
-            return (
-              <DatasetRow
-                key={node.key}
-                dataset={node.entity}
-                active={node.entity.id === activeId}
-                selected={selectedIdSet.has(node.entity.id)}
-                showReorder={false}
-                canMoveUp={false}
-                canMoveDown={false}
-                onFilterTag={onFilterTag}
-                depth={node.depth}
-                treeMode
-              />
-            );
-          case "origin-figure":
-            return <FigureRow key={node.key} entry={node.entity} depth={node.depth} treeMode />;
-          default:
-            return <ArtifactRow key={node.key} node={node} depth={node.depth} />;
-        }
-      })}
+      {rendered.map((row) => (
+        <LibraryTreeRow key={row.node.key} row={row} activeId={activeId} selectedIds={selectedIdSet} folderCounts={folderCounts} onFilterTag={onFilterTag} onFocusContainer={onFocusContainer} />
+      ))}
       {artifactMenu && (
         <ContextMenu
           x={artifactMenu.x}
