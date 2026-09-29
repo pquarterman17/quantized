@@ -317,7 +317,7 @@ export default function DatasetRow({
             </span>
             {nameEl}
             <span className="qzk-ds-compact-meta" title={pendingTitle}>
-              {pts} pts · {ch}ch{d.pending && " · …"}
+              {pts} pts · {ch} ch{d.pending && " · …"}
             </span>
             <DatasetRowPreview dataset={d} />
             {tagsEl}
@@ -338,7 +338,7 @@ export default function DatasetRow({
               {d.pending && " · …"}
             </span>
             <span className="qzk-ds-actions">
-              <Badge tone="accent">{ch}ch</Badge>
+              <Badge tone="accent">{ch} ch</Badge>
               {showReorder && (
                 <>
                   <button

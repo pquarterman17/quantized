@@ -62,7 +62,7 @@ export default function QuickSeriesXPanel({ data, mapping, onChange }: Props) {
               <option value={SHARED}>{`Shared X (${xSourceName(data, mapping.xKey)})`}</option>
               {candidates(y).map((x) => (
                 <option key={x ?? ACQUISITION} value={x === null ? ACQUISITION : String(x)}>
-                  {x === null ? `Acquisition axis (${xSourceName(data, null)})` : data.labels[x]}
+                  {xSourceName(data, x)}
                 </option>
               ))}
             </select>

@@ -58,6 +58,15 @@ describe("GraphPreview — encoded legend", () => {
     expect(chip).toHaveTextContent("9");
   });
 
+  it("names the gradient chip for assistive tech and captions it on screen (GUI audit)", () => {
+    const withT: Dataset = { ...DS, channelTypes: { 2: "continuous" } };
+    const spec: PlotSpec = { ...base, zones: { ...base.zones, color: ref(2) } };
+    const { render: r, encoded } = encodedSpecRender(spec, [withT]);
+    const { container } = render(<GraphPreview render={r} encoded={encoded} />);
+    expect(screen.getByRole("img", { name: "Colour scale T (K): 5 to 9" })).toBeInTheDocument();
+    expect(container.querySelector(".qzk-graph-preview-scale")).toHaveTextContent(/^Colour/);
+  });
+
   it("a categorical Color-by shows no colour scale", () => {
     const spec: PlotSpec = { ...base, zones: { ...base.zones, color: ref(1) } };
     const { render: r, encoded } = encodedSpecRender(spec, [DS]);

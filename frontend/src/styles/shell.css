@@ -325,6 +325,16 @@ body {
    aria-hidden+title convention as Folder's/Workbook's own icons. */
 .qzk-ds-icon { flex-shrink: 0; width: 12px; text-align: center; color: var(--text-dim); }
 .qzk-ds-compact-meta { flex-shrink: 0; color: var(--text-faint); font-family: var(--font-mono); font-size: var(--type-nano); white-space: nowrap; }
+/* GUI audit: the name outranks the counts. A zero basis keeps it on the first
+   line and its min-width reserves ~10 characters; when the counts no longer
+   fit beside it they wrap to their own line below instead of squeezing the
+   name to one character (it was ~8px at the default 210px panel). `order`
+   keeps the preview toggle on the name's line and the counts after it, so a
+   wrapped row never puts a button where a row click lands. */
+.qzk-ds-compact-row > .qzk-ds-name { flex: 1 1 0; min-width: min(10ch, 100%); }
+.qzk-ds-compact-row > .qzk-ds-compact-meta { order: 1; }
+.qzk-ds-compact-row > .qzk-ds-spark-wrap { order: 2; }
+.qzk-ds-compact-row > .qzk-ds-tags-compact { order: 3; }
 /* DatasetRowPreview's expanded Sparkline: a DIRECT flex child of
    .qzk-ds-compact-row (not nested inside a wrapper span) so `flex-basis:
    100%` can wrap it onto its own full-width line below the name/meta/
@@ -659,7 +669,14 @@ body {
    user sees exactly what will be zoomed. Double-click the plot to reset. */
 .u-select { background: color-mix(in srgb, var(--accent) 16%, transparent); border: 1px dashed var(--accent); }
 .qzk-glass { position: absolute; background: var(--glass); backdrop-filter: blur(14px); border: 1px solid var(--glass-border); border-radius: var(--radius); box-shadow: var(--shadow); }
-.qzk-float-tools { top: 12px; left: 50%; transform: translateX(-50%); display: flex; align-items: flex-end; gap: 3px; padding: 4px; }
+/* GUI audit P1: centred by auto margins between 12px insets, NOT left:50% +
+   translate — an absolute box at left:50% only gets half the stage as its
+   available width. `fit-content` then caps the dock at the stage minus the
+   insets. PlotToolbar collapses groups that do not fit into its "⋯" menu
+   (plotToolbarOverflow.ts); wrapping is the last resort for every dock. */
+.qzk-float-tools { top: 12px; left: 12px; right: 12px; width: fit-content; margin-inline: auto; display: flex; flex-wrap: wrap; justify-content: center; align-items: flex-end; gap: 3px; padding: 4px; }
+/* A collapsed group stays mounted so its width can still be measured. */
+.qzk-tool-group[data-overflow] { position: absolute; top: 0; left: 0; visibility: hidden; pointer-events: none; }
 .qzk-tool-btn { width: 32px; height: 32px; display: grid; place-items: center; border: none; border-radius: var(--radius-sm); background: transparent; color: var(--text-dim); font-size: 15px; cursor: default; }
 .qzk-tool-btn:hover { background: var(--surface-3); color: var(--text); }
 .qzk-tool-btn.active { background: var(--capture-soft); color: var(--capture); }
@@ -811,6 +828,12 @@ body {
 /* Floating-legend corner placement (Inspector "Legend position"). */
 .qzk-legend.ne { top: 12px; right: 12px; }
 .qzk-legend.nw { top: 12px; left: 12px; }
+/* GUI audit: on a stage that carries the plot dock, the top corners start
+   below it — the same 72px clearance .qzk-mini-toolbar uses (#17 above: the
+   dock's tallest row ends at 65px). The dock now never grows past one row, so
+   this constant holds. */
+.qzk-stage:has(> .qzk-float-tools) > .qzk-legend.ne,
+.qzk-stage:has(> .qzk-float-tools) > .qzk-legend.nw { top: 72px; }
 .qzk-legend.se { bottom: 12px; right: 12px; }
 .qzk-legend.sw { bottom: 12px; left: 12px; }
 /* Owner 2026-07-09 (item 2, "up the default x/y axis legend and label
@@ -871,6 +894,12 @@ body {
 .qzk-graph-preview-approx { position: absolute; left: 6px; bottom: 4px; font-size: var(--type-nano); color: var(--text-faint); }
 .qzk-graph-preview-scale { position: absolute; left: 46px; top: 4px; display: flex; gap: 4px; align-items: center; }
 .qzk-graph-actions { display: flex; gap: 8px; margin-top: 10px; }
+/* GUI audit: inside the viewport-capped window the wells scroll, and the
+   preview + actions stay pinned under them. The preview used to be a
+   flex-shrinkable child of the scrolling body and collapsed to ~2px. */
+.qzk-graph-builder-controls { flex: 0 1 auto; min-height: 80px; overflow-y: auto; display: flex; flex-direction: column; gap: var(--pad); }
+.qzk-graph-builder-preview { flex: none; display: flex; flex-direction: column; }
+.qzk-graph-builder-preview .qzk-graph-preview { flex-shrink: 0; min-height: 160px; height: clamp(160px, 28vh, 240px); }
 
 /* ── Graph Builder saved-spec toolbar (GUI_INTERACTION_PLAN #11) ── */
 .qzk-plotspec-bar { display: flex; flex-direction: column; gap: 6px; margin-bottom: 10px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
@@ -962,7 +991,11 @@ body {
    gains `flex: 1; min-height: 0` so it fills a user-resized fixed height
    (touch/resize handle behavior) while still shrinking to content when
    `height` is unset (auto), same dual-mode pattern as qzk-plotwin-body. */
-.qzk-win { position: absolute; display: flex; flex-direction: column; max-height: calc(100% - 24px); width: 360px; z-index: 20; }
+/* GUI audit: `100% - 24px` alone let a window placed at top:90px run 66px
+   past the viewport. ToolWindow publishes its top edge as --qzk-win-top, so
+   the cap is "down to 12px above the viewport bottom" (never under 120px, so a
+   window dragged low still shows a body). */
+.qzk-win { position: absolute; display: flex; flex-direction: column; max-height: max(120px, calc(100% - var(--qzk-win-top, 12px) - 12px)); width: 360px; z-index: 20; }
 .qzk-win-title { display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-bottom: 1px solid var(--border-soft); font-size: var(--font-size-sm); font-weight: var(--weight-semibold); color: var(--text-dim); cursor: default; user-select: none; touch-action: none; }
 .qzk-win-title .grow { flex: 1; }
 .qzk-win-title:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
@@ -1141,13 +1174,13 @@ body {
 .qzk-stale-dot { flex-shrink: 0; color: var(--warning, #d9a53f); font-size: 9px; cursor: pointer; }
 
 /* Quick Figure Builder: a focused main-workspace transaction, not a modal. */
-.qzk-quick-builder { min-width: 0; min-height: 0; overflow: auto; padding: clamp(18px, 2.4vw, 34px); background: var(--surface-0); }
+.qzk-quick-builder { container-type: inline-size; min-width: 0; min-height: 0; overflow: auto; padding: clamp(18px, 2.4vw, 34px); background: var(--surface-0); }
 .qzk-quick-builder-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 20px; }
 .qzk-quick-builder-eyebrow { margin-bottom: 4px; color: var(--accent); font-size: var(--type-label); font-weight: var(--weight-semibold); letter-spacing: var(--tracking-label); text-transform: uppercase; }
 .qzk-quick-builder h1 { margin: 0 0 6px; overflow-wrap: anywhere; font-size: clamp(20px, 2.2vw, 30px); font-weight: var(--weight-semibold); }
 .qzk-quick-builder h2 { margin: 0 0 6px; font-size: var(--type-body); }
 .qzk-quick-builder p { margin: 0; color: var(--text-dim); }
-.qzk-quick-builder-grid { display: grid; grid-template-columns: minmax(220px, .8fr) minmax(320px, 1.5fr) minmax(220px, .8fr); gap: 14px; align-items: stretch; min-height: min(600px, calc(100vh - 190px)); }
+.qzk-quick-builder-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: stretch; min-height: min(600px, calc(100vh - 190px)); }
 .qzk-quick-builder-card { position: relative; min-width: 0; padding: 18px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-1); }
 .qzk-quick-builder-step { position: absolute; top: 16px; right: 16px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--surface-3); color: var(--text-faint); font-family: var(--font-mono); font-size: var(--type-nano); }
 .qzk-quick-builder-columns { margin: 18px 0 0; padding: 0; list-style: none; }
@@ -1155,7 +1188,7 @@ body {
 .qzk-quick-builder-columns li > span { min-width: 0; overflow-wrap: anywhere; }
 .qzk-quick-builder-columns strong { color: var(--text-faint); font-weight: var(--weight-medium); }
 .qzk-quick-builder-columns select { flex: 0 1 190px; min-width: 118px; max-width: 52%; }
-.qzk-quick-builder-dropzones { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 16px; }
+.qzk-quick-builder-dropzones { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 6px; margin-top: 16px; }
 .qzk-quick-builder-zone { display: flex; min-width: 0; flex-direction: column; gap: 3px; padding: 8px; border: 1px dashed var(--border); border-radius: var(--radius); background: var(--surface-0); color: var(--text-dim); text-align: left; }
 .qzk-quick-builder-zone.qzk-active { border-style: solid; border-color: var(--accent); }
 .qzk-quick-builder-zone span { font-size: var(--type-nano); color: var(--text-faint); }
@@ -1168,7 +1201,7 @@ body {
 /* "Right -- concise setup" panel (QuickFigureSetupPanel.tsx): two compact columns. */
 .qzk-quick-setup-series { margin-top: 12px; color: var(--text-faint); font-size: var(--type-small); }
 .qzk-quick-setup-series ul { margin: 4px 0 0; padding-left: 16px; color: var(--text); }
-.qzk-quick-setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-top: 6px; }
+.qzk-quick-setup-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; margin-top: 6px; }
 .qzk-quick-setup-grid .qzk-quick-builder-field { margin-top: 0; }
 .qzk-quick-setup-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: flex-end; }
 .qzk-quick-setup-check { display: flex; gap: 6px; align-items: center; color: var(--text-dim); font-size: var(--type-small); }
@@ -1183,8 +1216,14 @@ body {
    class; only the <p> case collides with that reset. */
 .qzk-quick-builder p.qzk-quick-builder-notice { margin-top: 10px; }
 .qzk-quick-builder-notice p + p { margin-top: 6px; }
-@media (max-width: 1050px) { .qzk-quick-builder-grid { grid-template-columns: 1fr 1.35fr; } .qzk-quick-builder-grid > :last-child { grid-column: 1 / -1; } }
-@media (max-width: 720px) { .qzk-quick-builder-head { flex-direction: column-reverse; } .qzk-quick-builder-grid { grid-template-columns: 1fr; } .qzk-quick-builder-grid > :last-child { grid-column: auto; } }
+/* GUI audit: the builder sits between the Library and the Inspector, so its
+   width is not the viewport's. Container queries on .qzk-quick-builder pick
+   one, two or three columns from the space it really has; each breakpoint is
+   above the sum of its column minimums, so the grid never overflows. */
+.qzk-quick-builder-field select { width: 100%; min-width: 0; }
+@container (max-width: 559.98px) { .qzk-quick-builder-head { flex-direction: column-reverse; } }
+@container (min-width: 560px) { .qzk-quick-builder-grid { grid-template-columns: minmax(220px, 1fr) minmax(300px, 1.35fr); } .qzk-quick-builder-grid > :last-child { grid-column: 1 / -1; } }
+@container (min-width: 800px) { .qzk-quick-builder-grid { grid-template-columns: minmax(220px, .8fr) minmax(300px, 1.5fr) minmax(240px, .8fr); } .qzk-quick-builder-grid > :last-child { grid-column: auto; } }
 /* P3.5 Recipe Library — browse-first rows; operations stay in each manager. */
 .qz-recipe-library-toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .qz-recipe-library-count { margin-left: auto; color: var(--text-faint); font-family: var(--font-mono); font-size: var(--type-micro); }

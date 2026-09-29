@@ -15,6 +15,9 @@
 // toolbar) sits ABOVE the wells and stays visible even with no dataset
 // selected, so saved graphs are always reachable. Thin — all state and the
 // plot-spec grammar live in useGraphBuilder / lib/plotspec.
+//
+// GUI audit: the window is capped at the viewport, so the bar + wells scroll
+// in their own region while the preview and actions stay pinned below it.
 
 import type { StepMode } from "../../../lib/plotspec";
 import { useApp } from "../../../store/useApp";
@@ -50,117 +53,122 @@ export default function GraphBuilderPanel() {
 
   return (
     <ToolWindow id="graphbuilder" title="Graph Builder" width={420} onClose={() => setOpen(false)}>
-      <PlotSpecBar
-        specs={g.savedSpecs}
-        activeSpec={g.activeSpec}
-        dirty={g.dirty}
-        canSave={g.canPlot}
-        onSaveActive={g.saveActive}
-        onSaveAs={g.saveAs}
-        onOpen={g.openSpec}
-        onDuplicate={g.duplicateSpec}
-        onRename={g.renameSpec}
-        onDelete={g.deleteSpec}
-      />
-      {!g.hasData ? (
-        <div className="qzk-ds-meta" style={faint}>
-          Select a dataset to build a graph.
-        </div>
-      ) : (
-        <>
-          <div className="qzk-zone-wells">
-            <ZoneWell
-              title="X"
-              hint="continuous → scatter/line · categorical → box"
-              datasetId={g.datasetId}
-              options={g.options}
-              assigned={g.chips("x")}
-              onAssign={(c) => g.assign("x", c)}
-              onRemove={(c) => g.remove("x", c)}
-            />
-            <ZoneWell
-              title="Y"
-              hint="value axis (one or more)"
-              multiple
-              datasetId={g.datasetId}
-              options={g.options}
-              assigned={g.chips("y")}
-              onAssign={(c) => g.assign("y", c)}
-              onRemove={(c) => g.remove("y", c)}
-              onMove={g.moveY}
-            />
-            <ZoneWell
-              title="Group"
-              hint="colour split by category"
-              datasetId={g.datasetId}
-              options={g.options}
-              assigned={g.chips("group")}
-              onAssign={(c) => g.assign("group", c)}
-              onRemove={(c) => g.remove("group", c)}
-            />
-            <ZoneWell
-              title="Facet"
-              datasetId={g.datasetId}
-              options={g.options}
-              assigned={g.chips("facet")}
-              note={
-                <span style={faint}>
-                  any column, categorical factors included: previews as small multiples below; a plot
-                  action carries it to the main plot&apos;s facet grid (box/violin/bar: the stat stage&apos;s).
-                </span>
-              }
-              onAssign={(c) => g.assign("facet", c)}
-              onRemove={(c) => g.remove("facet", c)}
-            />
-            <EncodingWells g={g} />
-            {g.family === "xy" && (
-              <>
-                <ZoneWell
-                  title="Y error"
-                  hint="± uncertainty, paired by position with Y"
-                  multiple
-                  datasetId={g.datasetId}
-                  options={g.options}
-                  assigned={g.chips("yErr")}
-                  onAssign={(c) => g.assign("yErr", c)}
-                  onRemove={(c) => g.remove("yErr", c)}
-                />
-                <ZoneWell
-                  title="X error"
-                  hint="± uncertainty on the x axis"
-                  datasetId={g.datasetId}
-                  options={g.options}
-                  assigned={g.chips("xErr")}
-                  onAssign={(c) => g.assign("xErr", c)}
-                  onRemove={(c) => g.remove("xErr", c)}
-                />
-              </>
-            )}
+      <div className="qzk-graph-builder-controls">
+        <PlotSpecBar
+          specs={g.savedSpecs}
+          activeSpec={g.activeSpec}
+          dirty={g.dirty}
+          canSave={g.canPlot}
+          onSaveActive={g.saveActive}
+          onSaveAs={g.saveAs}
+          onOpen={g.openSpec}
+          onDuplicate={g.duplicateSpec}
+          onRename={g.renameSpec}
+          onDelete={g.deleteSpec}
+        />
+        {!g.hasData ? (
+          <div className="qzk-ds-meta" style={faint}>
+            Select a dataset to build a graph.
           </div>
-
-          <div className="qzk-graph-mark-row">
-            <span className="qzk-graph-mark-label">
-              {MARK_GLYPH[g.mark] ?? g.mark}
-              {g.family && <span style={faint}> · {g.family}</span>}
-            </span>
-            {g.marks.length > 1 && (
-              <Button size="sm" onClick={g.cycle} title="Cycle through the marks valid for these columns">
-                cycle ↻
-              </Button>
-            )}
-          </div>
-
-          {(g.mark === "line" || g.mark === "step") && (
-            <div className="qzk-graph-mark-row">
-              <Checkbox checked={g.showMarkers} onChange={g.setShowMarkers}>
-                Markers
-              </Checkbox>
-              {g.mark === "step" && (
-                <SegmentedControl<StepMode> options={STEP_MODE_OPTS} value={g.stepMode} onChange={g.setStepMode} />
+        ) : (
+          <>
+            <div className="qzk-zone-wells">
+              <ZoneWell
+                title="X"
+                hint="continuous → scatter/line · categorical → box"
+                datasetId={g.datasetId}
+                options={g.options}
+                assigned={g.chips("x")}
+                onAssign={(c) => g.assign("x", c)}
+                onRemove={(c) => g.remove("x", c)}
+              />
+              <ZoneWell
+                title="Y"
+                hint="value axis (one or more)"
+                multiple
+                datasetId={g.datasetId}
+                options={g.options}
+                assigned={g.chips("y")}
+                onAssign={(c) => g.assign("y", c)}
+                onRemove={(c) => g.remove("y", c)}
+                onMove={g.moveY}
+              />
+              <ZoneWell
+                title="Group"
+                hint="colour split by category"
+                datasetId={g.datasetId}
+                options={g.options}
+                assigned={g.chips("group")}
+                onAssign={(c) => g.assign("group", c)}
+                onRemove={(c) => g.remove("group", c)}
+              />
+              <ZoneWell
+                title="Facet"
+                datasetId={g.datasetId}
+                options={g.options}
+                assigned={g.chips("facet")}
+                note={
+                  <span style={faint}>
+                    any column, categorical factors included: previews as small multiples below; a plot
+                    action carries it to the main plot&apos;s facet grid (box/violin/bar: the stat stage&apos;s).
+                  </span>
+                }
+                onAssign={(c) => g.assign("facet", c)}
+                onRemove={(c) => g.remove("facet", c)}
+              />
+              <EncodingWells g={g} />
+              {g.family === "xy" && (
+                <>
+                  <ZoneWell
+                    title="Y error"
+                    hint="± uncertainty, paired by position with Y"
+                    multiple
+                    datasetId={g.datasetId}
+                    options={g.options}
+                    assigned={g.chips("yErr")}
+                    onAssign={(c) => g.assign("yErr", c)}
+                    onRemove={(c) => g.remove("yErr", c)}
+                  />
+                  <ZoneWell
+                    title="X error"
+                    hint="± uncertainty on the x axis"
+                    datasetId={g.datasetId}
+                    options={g.options}
+                    assigned={g.chips("xErr")}
+                    onAssign={(c) => g.assign("xErr", c)}
+                    onRemove={(c) => g.remove("xErr", c)}
+                  />
+                </>
               )}
             </div>
-          )}
 
+            <div className="qzk-graph-mark-row">
+              <span className="qzk-graph-mark-label">
+                {MARK_GLYPH[g.mark] ?? g.mark}
+                {g.family && <span style={faint}> · {g.family}</span>}
+              </span>
+              {g.marks.length > 1 && (
+                <Button size="sm" onClick={g.cycle} title="Cycle through the marks valid for these columns">
+                  cycle ↻
+                </Button>
+              )}
+            </div>
+
+            {(g.mark === "line" || g.mark === "step") && (
+              <div className="qzk-graph-mark-row">
+                <Checkbox checked={g.showMarkers} onChange={g.setShowMarkers}>
+                  Markers
+                </Checkbox>
+                {g.mark === "step" && (
+                  <SegmentedControl<StepMode> options={STEP_MODE_OPTS} value={g.stepMode} onChange={g.setStepMode} />
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+      {g.hasData && (
+        <div className="qzk-graph-builder-preview">
           <GraphPreview render={g.render} encoded={g.encoded} spec={g.spec} />
 
           <div className="qzk-graph-actions">
@@ -210,7 +218,7 @@ export default function GraphBuilderPanel() {
               Reset
             </Button>
           </div>
-        </>
+        </div>
       )}
     </ToolWindow>
   );

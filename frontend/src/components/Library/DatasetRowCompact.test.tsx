@@ -146,7 +146,7 @@ describe("DatasetRow — Tree (treeMode) compact worksheet row (UX-001)", () => 
 
   it("shows concise rows/channels meta text on the one line", () => {
     render(<DatasetRow dataset={ds} {...baseProps} treeMode />);
-    expect(screen.getByText("3 pts · 1ch")).toBeInTheDocument();
+    expect(screen.getByText("3 pts · 1 ch")).toBeInTheDocument();
   });
 
   it("the preview toggle mounts the Sparkline on demand, without selecting the row or touching activeId", () => {

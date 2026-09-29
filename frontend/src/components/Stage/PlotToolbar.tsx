@@ -22,8 +22,12 @@
 // own no-op guard in useGlobalShortcuts.ts), and Copy Image when the browser
 // has no Clipboard image API (the exact condition usePlotStageActions'
 // snapshot() already falls back on).
+//
+// GUI audit P1: when the stage is narrower than the dock (125% scaling, a
+// default Graph Window, a narrow window) the trailing groups collapse into the
+// "⋯" menu instead of being clipped (plotToolbarOverflow.ts).
 
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState, type ReactNode } from "react";
 
 import { clipboardImageSupported } from "../../lib/clipboard";
 import { keyForTool, RESET_VIEW_KEY } from "../../lib/plotToolKeys";
@@ -47,7 +51,8 @@ import {
 } from "../../lib/plotToolbarDefs";
 import { loadToolbarPrefs, saveToolbarPrefs } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
-import ContextMenu from "../overlays/ContextMenu";
+import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
+import { useToolGroupFit } from "./plotToolbarOverflow";
 import PlotToolbarGroup from "./PlotToolbarGroup";
 
 interface Props {
@@ -120,6 +125,7 @@ export default function PlotToolbar({
   const [showGroupLabels, setShowGroupLabels] = useState(() => loadToolbarPrefs().showGroupLabels);
   const shapeBtnRef = useRef<HTMLButtonElement>(null);
   const optsBtnRef = useRef<HTMLButtonElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
 
   const toggleGroupLabels = () => {
     const next = !showGroupLabels;
@@ -150,55 +156,112 @@ export default function PlotToolbar({
 
   const canResetView = Boolean(xLim || yLim);
   const canCopyImage = clipboardImageSupported();
+  const lastShape = SHAPE_TOOLS.find((t) => t.kind === lastShapeKind);
+
+  const annotate = (
+    <span style={{ display: "inline-flex" }}>
+      <button
+        className={`qzk-tool-btn${drawShapeKind ? " active" : ""}`}
+        aria-label={`Draw ${lastShape?.label ?? "Shape"}`}
+        aria-pressed={Boolean(drawShapeKind)}
+        data-tip="Draw Shape"
+        data-tip-desc="Use the last drawing tool; choose another with the arrow"
+        onClick={() => setDrawShapeKind(lastShapeKind)}
+      >
+        {lastShape?.glyph ?? "▱"}
+      </button>
+      <button
+        ref={shapeBtnRef}
+        className="qzk-tool-btn"
+        aria-label="Choose drawing tool"
+        data-tip="Choose Drawing Tool"
+        data-tip-desc="Pick an arrow, line, rectangle, ellipse, or text box"
+        style={{ width: 14, paddingInline: 1 }}
+        onClick={() => {
+          const r = shapeBtnRef.current?.getBoundingClientRect();
+          setShapeFlyout(r ? { x: r.left, y: r.bottom + 4 } : { x: 0, y: 0 });
+        }}
+      >
+        ▾
+      </button>
+    </span>
+  );
+  const pickShape = (kind: (typeof SHAPE_TOOLS)[number]["kind"]) => {
+    setLastShapeKind(kind);
+    setDrawShapeKind(kind);
+  };
+  const shapeItems: ContextMenuItem[] = SHAPE_TOOLS.map((t) => ({
+    label: `${t.glyph}  Draw ${t.label}`,
+    checked: drawShapeKind === t.kind,
+    run: () => pickShape(t.kind),
+  }));
+
+  // Order matters: groups collapse into "⋯" from the END, so Navigate (the
+  // most-used tools) is the last to go and never actually does.
+  const groups: { label: string; buttons?: BtnSpec[]; custom?: ReactNode; items?: ContextMenuItem[] }[] = [
+    { label: "Navigate", buttons: NAVIGATE_TOOLS.map(toolBtn) },
+    { label: "Inspect", buttons: INSPECT_TOOLS.map(toolBtn) },
+    { label: "Analyze", buttons: ANALYZE_TOOLS.map(toolBtn) },
+    { label: "Annotate", custom: annotate, items: shapeItems },
+    {
+      label: "View",
+      buttons: [
+        actionBtn(RESET_VIEW, {
+          shortcut: RESET_VIEW_KEY,
+          disabled: !canResetView,
+          disabledReason: "Nothing to reset — the view is already at its default extents",
+          onClick: onReset,
+        }),
+        actionBtn(SMART_SCALE, { onClick: onSmartScale }),
+        actionBtn(STACK_MODE, { active: stackMode, onClick: () => setStackMode(true) }),
+        actionBtn(INSET_MODE, { active: insetMode, onClick: () => setInsetMode(!insetMode) }),
+        actionBtn(POLAR_MODE, { active: polarMode, onClick: () => setPolarMode(true) }),
+        actionBtn(STAT_MODE, { active: statMode, onClick: () => setStatMode(true) }),
+      ],
+    },
+    {
+      label: "Export",
+      buttons: [
+        actionBtn(SAVE_PNG, { onClick: onSavePng }),
+        actionBtn(COPY_DATA, { onClick: onCopyData }),
+        actionBtn(COPY_IMAGE, {
+          disabled: !canCopyImage,
+          disabledReason: "Clipboard image copy isn't supported in this browser",
+          onClick: onSnapshot,
+        }),
+        actionBtn(SNAPSHOT_WINDOW, { onClick: onSnapshotWindow }),
+      ],
+    },
+  ];
+
+  const visible = useToolGroupFit(barRef, groups.length, showGroupLabels);
+  const overflowItems: ContextMenuItem[] = groups.slice(visible).flatMap((g) => [
+    { header: g.label },
+    ...(g.items ??
+      (g.buttons ?? []).map((b) => ({
+        label: `${b.glyph}  ${b.name}`,
+        checked: b.active,
+        disabled: b.disabled,
+        title: b.disabled ? b.disabledReason : undefined,
+        run: b.onClick,
+      }))),
+  ]);
+  const optsItems: ContextMenuItem[] = [
+    ...overflowItems,
+    ...(overflowItems.length ? [{ separator: true as const }] : []),
+    { label: "Group labels", checked: showGroupLabels, run: toggleGroupLabels },
+  ];
 
   return (
-    <div className="qzk-glass qzk-float-tools">
-      <PlotToolbarGroup label="Navigate" showLabel={showGroupLabels}>
-        {NAVIGATE_TOOLS.map((t) => (
-          <ToolButton key={t.id} {...toolBtn(t)} />
-        ))}
-      </PlotToolbarGroup>
-      <span className="qzk-tool-sep" />
-      <PlotToolbarGroup label="Inspect" showLabel={showGroupLabels}>
-        {INSPECT_TOOLS.map((t) => (
-          <ToolButton key={t.id} {...toolBtn(t)} />
-        ))}
-      </PlotToolbarGroup>
-      <span className="qzk-tool-sep" />
-      <PlotToolbarGroup label="Analyze" showLabel={showGroupLabels}>
-        {ANALYZE_TOOLS.map((t) => (
-          <ToolButton key={t.id} {...toolBtn(t)} />
-        ))}
-      </PlotToolbarGroup>
-      <span className="qzk-tool-sep" />
-      <PlotToolbarGroup label="Annotate" showLabel={showGroupLabels}>
-        <span style={{ display: "inline-flex" }}>
-          <button
-            className={`qzk-tool-btn${drawShapeKind ? " active" : ""}`}
-            aria-label={`Draw ${SHAPE_TOOLS.find((t) => t.kind === lastShapeKind)?.label ?? "Shape"}`}
-            aria-pressed={Boolean(drawShapeKind)}
-            data-tip="Draw Shape"
-            data-tip-desc="Use the last drawing tool; choose another with the arrow"
-            onClick={() => setDrawShapeKind(lastShapeKind)}
-          >
-            {SHAPE_TOOLS.find((t) => t.kind === lastShapeKind)?.glyph ?? "▱"}
-          </button>
-          <button
-            ref={shapeBtnRef}
-            className="qzk-tool-btn"
-            aria-label="Choose drawing tool"
-            data-tip="Choose Drawing Tool"
-            data-tip-desc="Pick an arrow, line, rectangle, ellipse, or text box"
-            style={{ width: 14, paddingInline: 1 }}
-            onClick={() => {
-              const r = shapeBtnRef.current?.getBoundingClientRect();
-              setShapeFlyout(r ? { x: r.left, y: r.bottom + 4 } : { x: 0, y: 0 });
-            }}
-          >
-            ▾
-          </button>
-        </span>
-      </PlotToolbarGroup>
+    <div ref={barRef} className="qzk-glass qzk-float-tools">
+      {groups.map((g, i) => (
+        <Fragment key={g.label}>
+          <PlotToolbarGroup label={g.label} showLabel={showGroupLabels} collapsed={i >= visible}>
+            {g.custom ?? g.buttons?.map((b) => <ToolButton key={b.name} {...b} />)}
+          </PlotToolbarGroup>
+          {i < visible - 1 && <span className="qzk-tool-sep" />}
+        </Fragment>
+      ))}
       {shapeFlyout && (
         <ContextMenu
           x={shapeFlyout.x}
@@ -206,50 +269,21 @@ export default function PlotToolbar({
           items={SHAPE_TOOLS.map((t) => ({
             label: `${t.glyph}  ${t.label}`,
             checked: drawShapeKind === t.kind,
-            run: () => {
-              setLastShapeKind(t.kind);
-              setDrawShapeKind(t.kind);
-            },
+            run: () => pickShape(t.kind),
           }))}
           onClose={() => setShapeFlyout(null)}
         />
       )}
-      <span className="qzk-tool-sep" />
-      <PlotToolbarGroup label="View" showLabel={showGroupLabels}>
-        <ToolButton
-          {...actionBtn(RESET_VIEW, {
-            shortcut: RESET_VIEW_KEY,
-            disabled: !canResetView,
-            disabledReason: "Nothing to reset — the view is already at its default extents",
-            onClick: onReset,
-          })}
-        />
-        <ToolButton {...actionBtn(SMART_SCALE, { onClick: onSmartScale })} />
-        <ToolButton {...actionBtn(STACK_MODE, { active: stackMode, onClick: () => setStackMode(true) })} />
-        <ToolButton {...actionBtn(INSET_MODE, { active: insetMode, onClick: () => setInsetMode(!insetMode) })} />
-        <ToolButton {...actionBtn(POLAR_MODE, { active: polarMode, onClick: () => setPolarMode(true) })} />
-        <ToolButton {...actionBtn(STAT_MODE, { active: statMode, onClick: () => setStatMode(true) })} />
-      </PlotToolbarGroup>
-      <span className="qzk-tool-sep" />
-      <PlotToolbarGroup label="Export" showLabel={showGroupLabels}>
-        <ToolButton {...actionBtn(SAVE_PNG, { onClick: onSavePng })} />
-        <ToolButton {...actionBtn(COPY_DATA, { onClick: onCopyData })} />
-        <ToolButton
-          {...actionBtn(COPY_IMAGE, {
-            disabled: !canCopyImage,
-            disabledReason: "Clipboard image copy isn't supported in this browser",
-            onClick: onSnapshot,
-          })}
-        />
-        <ToolButton {...actionBtn(SNAPSHOT_WINDOW, { onClick: onSnapshotWindow })} />
-      </PlotToolbarGroup>
-      <span className="qzk-tool-sep" />
+      <span className="qzk-tool-sep" data-tool-sep="opts" />
       <button
         ref={optsBtnRef}
         className="qzk-tool-btn"
         aria-label="Toolbar Options"
-        data-tip="Toolbar Options"
-        data-tip-desc="Show or hide the group captions"
+        data-tool-opts=""
+        data-tip={visible < groups.length ? "More Tools" : "Toolbar Options"}
+        data-tip-desc={
+          visible < groups.length ? "Tools that don't fit this window, plus group captions" : "Show or hide the group captions"
+        }
         onClick={() => {
           const r = optsBtnRef.current?.getBoundingClientRect();
           setOptsFlyout(r ? { x: r.left, y: r.bottom + 4 } : { x: 0, y: 0 });
@@ -258,12 +292,7 @@ export default function PlotToolbar({
         ⋯
       </button>
       {optsFlyout && (
-        <ContextMenu
-          x={optsFlyout.x}
-          y={optsFlyout.y}
-          items={[{ label: "Group labels", checked: showGroupLabels, run: toggleGroupLabels }]}
-          onClose={() => setOptsFlyout(null)}
-        />
+        <ContextMenu x={optsFlyout.x} y={optsFlyout.y} items={optsItems} onClose={() => setOptsFlyout(null)} />
       )}
     </div>
   );
