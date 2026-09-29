@@ -38,6 +38,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { statsDescriptive } from "../../../lib/api/statsDescriptive";
 import { copyText, tableToTSV } from "../../../lib/clipboard";
+import { categoricalLevels } from "../../../lib/categorical";
 import { useEscapeSurface } from "../../../lib/escapeStack";
 import { channelLetter } from "../../../lib/formula";
 import type { TextColumn } from "../../../lib/columnmeta";
@@ -237,9 +238,16 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   // (sheet tab, book switcher, Library click, …) — state keyed by column
   // INDEX is meaningless once the underlying columns can be entirely
   // different (the same rule the item-6 selection set already followed).
+  // Sort and filter are index-keyed too: carried over, they empty the new sheet
+  // or silently filter a different column (skewing Extract and the stats).
   useEffect(() => {
     setSelectedCols(new Set());
     setColWidths({});
+    setSort(null);
+    setFilterCol("");
+    setFilterOp(">");
+    setFilterV1("");
+    setFilterV2("");
   }, [ds.id]);
 
   // Origin #50 one-shot: select the exact decoded X/Y/error columns after
@@ -367,19 +375,26 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     setColStats(null);
     setStatsErr(false);
     const { time, values, labels } = ds.data;
-    const columns = [
-      analysisRows.map((r) => time[r]),
-      ...labels.map((_, c) => analysisRows.map((r) => values[r]?.[c])),
-    ];
-    Promise.all(columns.map((col) => statsDescriptive(col)))
-      .then((res) => {
-        if (!cancelled) setColStats(res);
-      })
-      .catch(() => {
-        if (!cancelled) setStatsErr(true);
-      });
+    // Finite values only, like the Distribution workshop: a blank (NaN) cell
+    // serializes as null, which the route rejects (422). Debounced so a burst
+    // of edits costs one round of requests, not one per edit.
+    const finite = (xs: (number | undefined)[]) => xs.filter((v): v is number => Number.isFinite(v));
+    const timer = setTimeout(() => {
+      const columns = [
+        finite(analysisRows.map((r) => time[r])),
+        ...labels.map((_, c) => finite(analysisRows.map((r) => values[r]?.[c]))),
+      ];
+      Promise.all(columns.map((col) => statsDescriptive(col)))
+        .then((res) => {
+          if (!cancelled) setColStats(res);
+        })
+        .catch(() => {
+          if (!cancelled) setStatsErr(true);
+        });
+    }, 300);
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [ds, showStats, analysisRows]);
 
@@ -396,9 +411,11 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
     datasetId: ds.id,
     rows: [...selected],
     cols: [...selectedCols],
+    order,
     rowCount: time.length,
     writableCols: baseCount,
     valueAt: (row, col) => (col < 0 ? time[row] : values[row]?.[col]),
+    levelsAt: (col) => categoricalLevels(ds.data, col),
     setStatus,
   });
 
@@ -425,8 +442,9 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
 
   function copyRows() {
     const apply = (source: Dataset) => {
+      const excluded = excludedSet(source); // once, not per row
       const rows = (source === ds ? order : resolveWorksheetRows(source, rowRules).ordered)
-        .filter((r) => !excludedSet(source).has(r));
+        .filter((r) => !excluded.has(r));
       const data = rows.map((r) => [source.data.time[r], ...source.data.labels.map((_, c) => source.data.values[r]?.[c])]);
       void copyText(tableToTSV(worksheetTsvHeaders(source), data)).then((ok) =>
         setStatus(ok ? `copied ${rows.length} rows to clipboard` : "clipboard unavailable"),

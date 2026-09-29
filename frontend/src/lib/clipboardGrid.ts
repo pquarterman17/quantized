@@ -11,8 +11,8 @@
 // COLUMN INDEXING follows the existing `setCellValue` contract: -1 is the x/time
 // column, 0..n-1 are value channels. Callers pass that space straight through.
 
-/** One cell to write. `value` is NaN for a blank/unparseable source cell — the
- *  same "missing" marker single-cell editing already commits. */
+/** One cell to write. `value` is NaN for a blank source cell — the same
+ *  "missing" marker single-cell editing already commits. */
 export interface CellEdit {
   row: number;
   col: number;
@@ -25,6 +25,9 @@ export interface PasteBounds {
   /** Number of WRITABLE value columns (formula columns are computed and
    *  read-only — `setCellValue` refuses them, so this excludes them). */
   writableCols: number;
+  /** A categorical column's level table (null for a numeric column). Pasted
+   *  labels map to level codes through it. */
+  levelsAt?: (col: number) => readonly string[] | null | undefined;
 }
 
 export interface PasteResult {
@@ -33,6 +36,12 @@ export interface PasteResult {
   clippedCells: number;
   /** Source cells dropped because they landed on a read-only computed column. */
   readOnlyCells: number;
+  /** Non-empty text a numeric column cannot take (a word, or an ambiguous
+   *  "1,5"). Skipped — writing NaN would silently blank the cell. */
+  skippedCells: number;
+  /** Labels to append to a categorical column's level table, by column. The
+   *  codes in `edits` already point at them (levels.length + i). */
+  newLevels: Record<number, string[]>;
 }
 
 /** Parse clipboard text into a rectangular grid of raw strings.
@@ -60,7 +69,18 @@ export function gridToClipboardText(grid: readonly (readonly (number | null)[])[
     .join("\n");
 }
 
+/** The rows a paste anchored at `anchor` fills: the VISIBLE order from the
+ *  anchor downward. A sorted or filtered sheet shows rows out of index order,
+ *  and a paste must land where the user sees it — never on a hidden row. */
+export function pasteTargetRows(order: readonly number[], anchor: number): number[] {
+  const at = order.indexOf(anchor);
+  return at < 0 ? [] : order.slice(at);
+}
+
 /** Turn a parsed clipboard grid into the edits to apply at an anchor cell.
+ *
+ *  `targetRows` are the destination rows in display order (see
+ *  `pasteTargetRows`): grid row r lands on `targetRows[r]`.
  *
  *  SHAPE MISMATCH IS CLIPPED, never grown: a paste can overwrite existing cells
  *  but must not silently change the dataset's dimensions — a worksheet row count
@@ -70,16 +90,18 @@ export function gridToClipboardText(grid: readonly (readonly (number | null)[])[
  *  UI can say how many were dropped instead of silently losing them. */
 export function pasteEdits(
   grid: readonly (readonly string[])[],
-  anchorRow: number,
+  targetRows: readonly number[],
   anchorCol: number,
   bounds: PasteBounds,
 ): PasteResult {
   const edits: CellEdit[] = [];
   let clippedCells = 0;
   let readOnlyCells = 0;
+  let skippedCells = 0;
+  const newLevels: Record<number, string[]> = {};
 
   for (let r = 0; r < grid.length; r++) {
-    const row = anchorRow + r;
+    const row = r < targetRows.length ? targetRows[r] : -1;
     const cells = grid[r];
     for (let c = 0; c < cells.length; c++) {
       const col = anchorCol + c;
@@ -95,20 +117,57 @@ export function pasteEdits(
         readOnlyCells++;
         continue;
       }
-      edits.push({ row, col, value: parseCell(cells[c]) });
+      const levels = col >= 0 ? bounds.levelsAt?.(col) : null;
+      const value = levels ? levelCode(cells[c], levels, col, newLevels) : parseCell(cells[c]);
+      if (value === null) skippedCells++;
+      else edits.push({ row, col, value });
     }
   }
-  return { edits, clippedCells, readOnlyCells };
+  return { edits, clippedCells, readOnlyCells, skippedCells, newLevels };
 }
 
-/** Blank/unparseable -> NaN, matching single-cell editing's "missing" marker.
- *  Strips thousands separators and surrounding whitespace, which is what a
- *  paste out of a formatted spreadsheet column actually contains. */
-export function parseCell(raw: string): number {
-  const text = raw.trim().replace(/,/g, "");
+/** A pasted cell in a categorical column, resolved the way
+ *  `setCategoricalCell` resolves a typed label: blank clears, an existing
+ *  level is picked (case-insensitive), a number is kept as a raw code (the
+ *  store's guard validates it), and any other label EXTENDS the table —
+ *  recorded in `added[col]`, deduplicated case-insensitively. */
+function levelCode(
+  raw: string,
+  levels: readonly string[],
+  col: number,
+  added: Record<number, string[]>,
+): number {
+  const text = raw.trim();
   if (text === "") return Number.NaN;
+  const key = text.toLowerCase();
+  const existing = levels.findIndex((l) => l.toLowerCase() === key);
+  if (existing >= 0) return existing;
+  const code = parseCell(text);
+  if (code !== null) return code;
+  const fresh = (added[col] ??= []);
+  const prior = fresh.findIndex((l) => l.toLowerCase() === key);
+  if (prior >= 0) return levels.length + prior;
+  fresh.push(text);
+  return levels.length + fresh.length - 1;
+}
+
+/** A valid thousands grouping: "1,500", "-12,345.6". Anything else with a
+ *  comma ("1,5" — is it 1.5 or 15?) is ambiguous and refused. */
+const THOUSANDS = /^[+-]?\d{1,3}(,\d{3})+(\.\d*)?$/;
+
+/** Blank -> NaN, matching single-cell editing's "missing" marker (a paste can
+ *  clear). Unparseable text -> null: the caller SKIPS it rather than writing
+ *  NaN over real data. Strips surrounding whitespace and valid thousands
+ *  separators, which is what a formatted spreadsheet column contains. */
+export function parseCell(raw: string): number | null {
+  let text = raw.trim();
+  if (text === "") return Number.NaN;
+  if (text.includes(",")) {
+    if (!THOUSANDS.test(text)) return null;
+    text = text.replace(/,/g, "");
+  }
   const n = Number(text);
-  return Number.isNaN(n) ? Number.NaN : n;
+  return Number.isNaN(n) ? null : n;
 }
 
 /** Edits that blank every cell in a rectangular selection (Delete on a block).
@@ -132,15 +191,18 @@ export function clearEdits(
 /** Edits that copy the FIRST selected row's value down the rest of the
  *  selection, per column (spreadsheet "fill down").
  *
- *  `valueAt` reads the current grid so this stays pure — the caller supplies the
- *  accessor rather than this module reaching into the store. */
+ *  `rows` are taken in the order given — the caller passes the DISPLAY order,
+ *  so on a sorted sheet the source is the top row the user sees, not the
+ *  smallest original index. `valueAt` reads the current grid so this stays
+ *  pure — the caller supplies the accessor rather than this module reaching
+ *  into the store. */
 export function fillDownEdits(
   rows: readonly number[],
   cols: readonly number[],
   bounds: PasteBounds,
   valueAt: (row: number, col: number) => number | null | undefined,
 ): CellEdit[] {
-  const ordered = [...rows].filter((r) => r >= 0 && r < bounds.rows).sort((a, b) => a - b);
+  const ordered = [...new Set(rows)].filter((r) => r >= 0 && r < bounds.rows);
   if (ordered.length < 2) return []; // nothing below the source row to fill
   const [source, ...rest] = ordered;
   const edits: CellEdit[] = [];

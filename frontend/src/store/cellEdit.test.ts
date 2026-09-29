@@ -350,6 +350,28 @@ describe("setCellBlock — categorical guard (P1.6b)", () => {
     expect(useApp.getState().status).toMatch(/skipped|invalid|nothing/i);
   });
 
+  // A pasted label that is not a level yet extends the table, as
+  // setCategoricalCell does for a typed one — in the SAME undo entry.
+  it("extends the level table with a paste's new labels, undone as one step", () => {
+    const history = useApp.getState().history.length;
+    useApp.getState().setCellBlock(
+      "d1",
+      [
+        { row: 0, col: 0, value: 3 }, // "Retake", appended below
+        { row: 1, col: 0, value: 2 },
+      ],
+      "paste cells",
+      { 0: ["Retake"] },
+    );
+    expect(active().data.cat_levels?.[0]).toEqual(["Pass", "OK", "Fail", "Retake"]);
+    expect(active().data.values[0][0]).toBe(3);
+    expect(active().data.values[1][0]).toBe(2);
+    expect(useApp.getState().history.length).toBe(history + 1);
+    useApp.getState().undo();
+    expect(active().data.cat_levels?.[0]).toEqual(["Pass", "OK", "Fail"]);
+    expect(active().data.values[0][0]).toBe(0);
+  });
+
   it("reports nothing when the whole block applies cleanly", () => {
     useApp.setState({ status: "" });
     useApp.getState().setCellBlock("d1", [{ row: 0, col: 0, value: 2 }], "paste cells");

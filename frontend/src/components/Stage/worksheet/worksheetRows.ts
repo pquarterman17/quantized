@@ -46,7 +46,9 @@ export function resolveWorksheetRows(source: Dataset, rules: WorksheetRowRules) 
       ));
     }
   }
-  const analysis = visible.filter((row) => !excludedSet(source).has(row));
+  // Built ONCE: rebuilding it per row was O(rows × excluded).
+  const excluded = excludedSet(source);
+  const analysis = visible.filter((row) => !excluded.has(row));
   if (!rules.sort) return { visible, analysis, ordered: visible };
   const key = (row: number) => (
     rules.sort!.col < 0 ? source.data.time[row] : source.data.values[row]?.[rules.sort!.col]
