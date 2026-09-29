@@ -23,6 +23,7 @@
 
 import type { StoreGet } from "../../../lib/exportActive";
 import { specDatasetId, type PlotSpec } from "../../../lib/plotspec";
+import { specXKey } from "../../../lib/plotspecGroupCol";
 import { buildAxesBlock, buildDecorBlock, buildDisplayBlock, buildPageBlock } from "../../../lib/plotspec2";
 
 export function captureLiveBlocks(base: PlotSpec, getState: StoreGet): PlotSpec {
@@ -30,8 +31,9 @@ export function captureLiveBlocks(base: PlotSpec, getState: StoreGet): PlotSpec 
   const s = getState();
   if (dsId === null || dsId !== s.activeId) return base;
   const yChannels = base.zones.y.map((r) => r.channel);
-  const xChannel = base.zones.x?.channel;
-  const plotted = [...new Set(xChannel !== undefined ? [xChannel, ...yChannels] : yChannels)];
+  // The dataset's own X (a negative channel) is no column and no series.
+  const xChannel = specXKey(base);
+  const plotted = [...new Set(xChannel !== null ? [xChannel, ...yChannels] : yChannels)];
   // The active dataset's column labels (dsId === s.activeId is guaranteed
   // above) — captured so a re-applied spec can re-key by label if the
   // columns shift later (see plotspecApply.applyDisplayBlock).

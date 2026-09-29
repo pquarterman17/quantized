@@ -121,7 +121,7 @@ import { facetPayloads, facetSlices, type FacetPanel } from "./facet";
 import { groupLevelLabel } from "./categorical";
 import { groupSplitLevels } from "./plotGroupSplit";
 import { channelModelingType, isCategorical } from "./modeling";
-import { specGroupCol } from "./plotspecGroupCol";
+import { specGroupCol, specXKey } from "./plotspecGroupCol";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import {
   axesBlockHasContent,
@@ -573,7 +573,7 @@ export function specToRender(spec: PlotSpec, datasets: readonly Dataset[]): Spec
   if (!data || data.time.length === 0) return hint("No rows to plot (all excluded or filtered out).");
   if (spec.zones.y.length === 0) return hint("Add a Y channel to plot a value.");
 
-  const xKey = spec.zones.x?.channel ?? null;
+  const xKey = specXKey(spec); // own X (a negative channel) = an empty well
   const yChannels = spec.zones.y.map((r) => r.channel);
 
   if (spec.mark === "scatter" || spec.mark === "line" || spec.mark === "step") {

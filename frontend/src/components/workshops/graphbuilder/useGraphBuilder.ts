@@ -18,11 +18,11 @@ import {
   figureTransitionWarning,
   plotSpecPublicationCompatibility,
 } from "../../../lib/figureCompatibility";
-import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { encodedSpecRender, specFigureEncoding, type EncodedSpec } from "../../../lib/plotEncoding";
 import { buildEncodedExport } from "../../../lib/plotEncodingExport";
 import { plotSpecFigureReason, plotSpecToFigureDocument } from "../../../lib/plotSpecFigure";
 import { applySpecBlocks } from "../../../lib/plotspecApply";
+import { specGroupCol, specXKey } from "../../../lib/plotspecGroupCol";
 import {
   assignZone,
   clearZone,
@@ -54,6 +54,7 @@ import { withFocusedEncoding } from "../../../store/windowDocuments";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { captureLiveBlocks } from "./captureLiveBlocks";
 import { encodingChip, encodingOptions, encodingRef, isEncodingZone, type EncodingZone } from "./encodingWellModel";
+import { ownXLabel, xWellOptions } from "./xWellModel";
 import type { WellChip, WellOption } from "./ZoneWell";
 
 /** Does this spec's error wells already carry explicit content? Drives
@@ -84,6 +85,7 @@ export interface GraphBuilderState {
   render: SpecRender;
   /** Well options (click-to-assign) — every channel of the active dataset. */
   options: WellOption[];
+  xOptions: WellOption[]; // the X well's: the dataset's own X (a negative channel), then `options`
   /** Assigned chips for a zone, with labels resolved for the UI. */
   chips: (zone: ZoneName) => WellChip[];
   assign: (zone: ZoneName, channel: number) => void;
@@ -223,14 +225,12 @@ export function useGraphBuilder(): GraphBuilderState {
   const marks = useMemo(() => validMarks(spec, ctx), [spec, ctx]);
   const family = useMemo(() => markFamily(spec, ctx), [spec, ctx]);
 
-  const options = useMemo<WellOption[]>(
-    () => (ds ? ds.data.labels.map((label, index) => ({ index, label })) : []),
-    [ds],
-  );
+  const options = useMemo<WellOption[]>(() => (ds ? ds.data.labels.map((label, index) => ({ index, label })) : []), [ds]);
+  const xOptions = useMemo(() => xWellOptions(ds, options), [ds, options]);
   // P1.4: what the Color / Symbol / Label wells offer, show and accept.
   const encOptions = useMemo(() => encodingOptions(ds, options), [ds, options]);
 
-  const labelOf = (channel: number): string => ds?.data.labels[channel] ?? `col ${channel}`;
+  const labelOf = (c: number): string => (ds && c < 0 ? ownXLabel(ds.data) : (ds?.data.labels[c] ?? `col ${c}`));
 
   const chips = (zone: ZoneName): WellChip[] => {
     const z = spec.zones;
@@ -328,7 +328,7 @@ export function useGraphBuilder(): GraphBuilderState {
     const wantTab = plotIntentStageTab(ds);
     if (useApp.getState().stageTab !== wantTab) setStageTab(wantTab);
     if (spec.mark === "scatter" || spec.mark === "line" || spec.mark === "step") {
-      setXKey(spec.zones.x?.channel ?? null);
+      setXKey(specXKey(spec)); // own X (a negative channel) = null, as an empty well
       setYKeys(spec.zones.y.map((r) => r.channel));
       setStatMode(false);
       // GAP_PLOTTYPES: the mark NEVER otherwise reaches the Stage — without
@@ -393,10 +393,8 @@ export function useGraphBuilder(): GraphBuilderState {
     // nothing (or fight a future StatStage change), so this is a deliberate
     // no-op rather than a dead call — see plotspecApply.ts, not wired here.
     if (spec.mark === "box" || spec.mark === "violin") {
-      const x = spec.zones.x;
-      const groupCol = x && isCategorical(channelModelingType(ds, x.channel)) ? x.channel : null;
       const facetCol = spec.zones.facet?.channel ?? null;
-      seedStatStage({ mode: spec.mark, groupCol, valueCol: spec.zones.y[0].channel, facetCol });
+      seedStatStage({ mode: spec.mark, groupCol: specGroupCol(spec, ds), valueCol: spec.zones.y[0].channel, facetCol });
       setStatus(
         facetCol !== null
           ? `${destination === "new" ? "created" : "applied"} ${spec.mark} plot in the stat stage, faceted by ${labelOf(facetCol)}`
@@ -408,8 +406,7 @@ export function useGraphBuilder(): GraphBuilderState {
     // from the main plot's Y selection (mirrors box/violin's own fallback —
     // see useStatStage's barValueChannels), so valueCol here is really just a
     // placeholder the seed shape requires; groupCol is the real payload.
-    const x = spec.zones.x;
-    const groupCol = x && isCategorical(channelModelingType(ds, x.channel)) ? x.channel : null;
+    const groupCol = specGroupCol(spec, ds);
     if (groupCol === null) {
       toast("Bar charts need a categorical X column.", "info");
       return;
@@ -560,6 +557,7 @@ export function useGraphBuilder(): GraphBuilderState {
     setStepMode,
     render,
     options,
+    xOptions,
     chips,
     assign,
     remove,

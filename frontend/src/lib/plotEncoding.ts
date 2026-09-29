@@ -96,6 +96,7 @@ import {
   type PlotSpec,
   type SpecRender,
 } from "./plotspec";
+import { specXKey } from "./plotspecGroupCol";
 import { analysisData } from "./rowstate";
 import { AUTO_MARKER_CYCLE, SERIES_VARS } from "./seriesStyleCycle";
 import { encodedGradient, encodingData, type EncodedGradient } from "./plotEncodingScales";
@@ -365,7 +366,7 @@ export function encodeSpec(spec: PlotSpec, datasets: readonly Dataset[]): Encode
   const enc = resolveEncoding(spec, ds);
   if (!enc) return null;
   const data = encodingData(rows, enc); // text-column factors appended (residual 5)
-  const xKey = spec.zones.x?.channel ?? null;
+  const xKey = specXKey(spec); // own X (a negative channel) = an empty well
   const yChannels = spec.zones.y.map((r) => r.channel);
   const { payload, series } = buildEncodedXY(data, xKey, yChannels, enc);
   const styles = encodedStyles(spec, series);

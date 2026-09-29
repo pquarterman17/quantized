@@ -77,7 +77,7 @@ export default function GraphBuilderPanel() {
                 title="X"
                 hint="continuous → scatter/line · categorical → box"
                 datasetId={g.datasetId}
-                options={g.options}
+                options={g.xOptions}
                 assigned={g.chips("x")}
                 onAssign={(c) => g.assign("x", c)}
                 onRemove={(c) => g.remove("x", c)}
