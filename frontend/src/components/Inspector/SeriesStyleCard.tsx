@@ -48,6 +48,7 @@ function StyleRow({
   const resetSeriesStyle = useApp((s) => s.resetSeriesStyle);
   const errCol = useApp((s) => s.errKeys[channel]);
   const setErrKey = useApp((s) => s.setErrKey);
+  const endHistoryRun = useApp((s) => s.endHistoryRun);
 
   const overridden = Object.values(style).some((v) => v !== undefined);
   const customHex = style.color && !style.color.startsWith("--") ? style.color : "#8b5cf6";
@@ -142,7 +143,11 @@ function StyleRow({
             type="color"
             title="Custom color"
             value={customHex}
-            onChange={(e) => setSeriesStyle(channel, { color: e.target.value })}
+            // Fires on every step of a picker drag: coalesce to one undo entry
+            // per gesture, which begins at the pointer/key press that opens it.
+            onPointerDown={endHistoryRun}
+            onKeyDown={endHistoryRun}
+            onChange={(e) => setSeriesStyle(channel, { color: e.target.value }, `series-color:${channel}`)}
             style={{ width: 24, height: 22, padding: 0, border: "1px solid var(--border)" }}
           />
         </div>

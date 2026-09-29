@@ -118,7 +118,10 @@ export interface PlotViewSettingsSlice {
    *  entry exactly as before. */
   addAnnotation: (x: number, y: number, text: string, historyToken?: HistoryBatchToken) => string;
   removeAnnotation: (id: string) => void;
-  setSeriesStyle: (channel: number, patch: Partial<SeriesStyle>) => void;
+  /** `coalesceKey`: record through `recordHistoryCoalesced` so a control that
+   *  fires per `input` event (the custom colour picker) makes one undo entry
+   *  per gesture; the caller ends the run with `endHistoryRun`. */
+  setSeriesStyle: (channel: number, patch: Partial<SeriesStyle>, coalesceKey?: string) => void;
   resetSeriesStyle: (channel: number) => void;
   setSeriesLabel: (channel: number, label: string) => void;
   setErrKey: (channel: number, errChannel: number | null) => void;
@@ -228,7 +231,9 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
       return id;
     },
     removeAnnotation: (id) => { get().recordHistory("delete annotation"); set((s) => ({ annotations: s.annotations.filter((a) => a.id !== id) })); },
-    setSeriesStyle: (channel, patch) => (get().recordHistory("style curve"),
+    setSeriesStyle: (channel, patch, coalesceKey) => (coalesceKey
+      ? get().recordHistoryCoalesced("style curve", coalesceKey)
+      : get().recordHistory("style curve"),
       set((s) => ({
         seriesStyles: { ...s.seriesStyles, [channel]: { ...s.seriesStyles[channel], ...patch } },
       }))),
