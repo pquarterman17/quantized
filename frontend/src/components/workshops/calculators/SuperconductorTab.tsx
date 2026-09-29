@@ -2,11 +2,12 @@
 // coherence length / Ginzburg-Landau parameter / critical fields / depairing
 // current (calc.superconductor, ports DiraCulator buildSuperconductorTab).
 // Self-contained: owns its own local state so the shared useCalculators hook
-// stays under the ceiling. Material presets are embedded locally for the
-// dropdown auto-fill (the backend exposes them too via scMaterialPresets).
+// stays under the ceiling. The material dropdowns auto-fill from the
+// backend's preset table (./usePresets).
 
 import { useState } from "react";
 
+import type { SuperconductorMaterial } from "../../../lib/api/materialPresets";
 import { scBcsGap, scCoherenceLength, scCriticalFields, scDepairingCurrent, scGlParameter, scLondonDepth } from "../../../lib/api/superconductor";
 import {
   Button,
@@ -18,22 +19,10 @@ import {
   useCard,
   withTouch,
 } from "./shared";
+import { useSuperconductorPresets } from "./usePresets";
 
-// lambda0 / xi0 in nm, Hc0 in Oe, Tc in K — port of materialPresets.m.
-const PRESETS: Record<
-  string,
-  { Tc: number; lambda0: number; xi0: number; Hc0: number }
-> = {
-  Nb: { Tc: 9.25, lambda0: 39, xi0: 38, Hc0: 1980 },
-  NbN: { Tc: 16.0, lambda0: 200, xi0: 5, Hc0: 80000 },
-  YBCO: { Tc: 92, lambda0: 150, xi0: 1.5, Hc0: 0 },
-  MgB2: { Tc: 39, lambda0: 140, xi0: 5, Hc0: 0 },
-  Al: { Tc: 1.18, lambda0: 16, xi0: 1600, Hc0: 105 },
-  Pb: { Tc: 7.19, lambda0: 37, xi0: 83, Hc0: 803 },
-  In: { Tc: 3.41, lambda0: 24, xi0: 440, Hc0: 282 },
-  Sn: { Tc: 3.72, lambda0: 34, xi0: 230, Hc0: 305 },
-};
-const MATERIALS = Object.keys(PRESETS);
+// Material presets (lambda0 / xi0 in nm, Hc0 in Oe, Tc in K) come from the
+// backend's calc.superconductor.material_presets table (./usePresets).
 
 const oe = (v: number) => (Number.isNaN(v) ? "—" : dual`${v} Oe`);
 
@@ -77,6 +66,9 @@ export default function SuperconductorTab() {
   const [dT, setDT] = useState("4.2");
   const c6 = useCard("Superconductor");
 
+  const presets = useSuperconductorPresets();
+  const materials = Object.keys(presets);
+
   function MatSelect({
     value,
     onChange,
@@ -85,7 +77,7 @@ export default function SuperconductorTab() {
   }: {
     value: string;
     onChange: (v: string) => void;
-    fill: (p: (typeof PRESETS)[string]) => void;
+    fill: (p: SuperconductorMaterial) => void;
     touch: () => void;
   }) {
     return (
@@ -96,11 +88,11 @@ export default function SuperconductorTab() {
         onChange={(e) => {
           const m = e.target.value;
           onChange(m);
-          if (PRESETS[m]) fill(PRESETS[m]);
+          if (presets[m]) fill(presets[m]);
           touch();
         }}
       >
-        {MATERIALS.map((m) => (
+        {(materials.length ? materials : [value]).map((m) => (
           <option key={m} value={m}>
             {m}
           </option>

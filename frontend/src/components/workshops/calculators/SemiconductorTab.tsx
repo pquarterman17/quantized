@@ -8,6 +8,7 @@
 
 import { useState } from "react";
 
+import type { SemiconductorMaterial } from "../../../lib/api/materialPresets";
 import { semiconductorBuiltInPotential, semiconductorCarrierConc, semiconductorDebyeLength, semiconductorDepletionWidth, semiconductorDiffusionCoeff, semiconductorDiffusionLength, semiconductorFermiLevel, semiconductorHallCoefficient, semiconductorIntrinsic, semiconductorMobilityModel, semiconductorSheetCarrierDensity, semiconductorThermalVelocity } from "../../../lib/api/semiconductor";
 import {
   Button,
@@ -20,23 +21,20 @@ import {
   useCard,
   withTouch,
 } from "./shared";
+import { useSemiconductorPresets } from "./usePresets";
 
-// Material presets (300 K) mirrored from calc.semiconductor.materialPresets so
-// the dropdowns auto-fill without a round-trip. Eg [eV], eps_r, me*, mh*.
-const MATERIALS: Record<string, { Eg: number; eps_r: number; me: number; mh: number }> = {
-  Si: { Eg: 1.12, eps_r: 11.7, me: 1.08, mh: 0.81 },
-  Ge: { Eg: 0.66, eps_r: 16.0, me: 0.55, mh: 0.37 },
-  GaAs: { Eg: 1.42, eps_r: 12.9, me: 0.067, mh: 0.45 },
-  InP: { Eg: 1.35, eps_r: 12.5, me: 0.08, mh: 0.6 },
-  GaN: { Eg: 3.4, eps_r: 8.9, me: 0.2, mh: 1.4 },
-  SiC: { Eg: 3.26, eps_r: 9.7, me: 0.37, mh: 1.0 },
-};
-const MAT_NAMES = Object.keys(MATERIALS);
+// Material presets (300 K; Eg [eV], eps_r, me*, mh*) come from the backend's
+// calc.semiconductor.material_presets table (./usePresets) — no local copy.
 const NM_TO_CM = 1e-7;
 
 type Vals = Record<string, string>;
-/** Picks one preset field into a form field, optionally transformed. */
-type Fill = { from: keyof (typeof MATERIALS)["Si"]; to: string }[];
+/** Picks one preset field into a form field. */
+type Fill = { from: "Eg" | "eps_r" | "me" | "mh"; to: string }[];
+
+/** The presets a card can offer: those with every field it fills. */
+function presetsFor(table: Record<string, SemiconductorMaterial>, fill: Fill): string[] {
+  return Object.keys(table).filter((n) => fill.every((f) => Number.isFinite(table[n][f.from])));
+}
 
 interface FieldSpec {
   id: string;
@@ -210,6 +208,7 @@ const DEFAULTS: Vals = Object.fromEntries(
 
 export default function SemiconductorTab() {
   const [vals, setVals] = useState<Vals>(DEFAULTS);
+  const presets = useSemiconductorPresets();
   // One useCard per CARDS entry, called directly (not inside a callback) so
   // the hook order stays fixed across renders — CARDS is a static,
   // module-level array whose length never changes.
@@ -238,7 +237,7 @@ export default function SemiconductorTab() {
   }
 
   function pickMaterial(idx: number, card: CardSpec, name: string): void {
-    const m = MATERIALS[name];
+    const m = presets[name];
     if (!m || !card.material) return;
     setVals((s) => {
       const next = { ...s };
@@ -261,7 +260,7 @@ export default function SemiconductorTab() {
                 onChange={(e) => e.target.value && pickMaterial(idx, card, e.target.value)}
               >
                 <option value="">(manual)</option>
-                {MAT_NAMES.map((n) => (
+                {presetsFor(presets, card.material).map((n) => (
                   <option key={n} value={n}>
                     {n}
                   </option>
