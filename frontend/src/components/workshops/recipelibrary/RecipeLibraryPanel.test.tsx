@@ -929,6 +929,16 @@ describe("row details disclosure (P3.5 slice 4)", () => {
     expect(screen.getByText("y = a*exp(-x/t) + c")).toBeInTheDocument();
   });
 
+  // F4.2 / audit P1.3: a plot recipe's Details show its saved preview.
+  it("shows a plot recipe's preview thumbnail once its Details are opened", () => {
+    useApp.setState({ plotRecipes: [{ ...plot, preview: { series: [[[0, 0], [0.5, 1], [1, 0.2]]] } }] });
+    render(<RecipeLibraryPanel />);
+    expect(screen.queryByRole("img", { name: "XRD publication: preview" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show details for XRD publication" }));
+    const thumb = screen.getByRole("img", { name: "XRD publication: preview" });
+    expect(thumb.querySelectorAll("polyline")).toHaveLength(1);
+  });
+
   it("a quickPlot row's details say unversioned and never list Export among available actions", () => {
     useApp.setState({
       datasets: [{

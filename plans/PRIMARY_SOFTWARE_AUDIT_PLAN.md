@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-29 (latest): **P1.4 encodings in Publication Preview + greyscale by level** — opening Publication Preview from the Graph Builder carries Color / Symbol / Label onto the draft (`bindings.encoding`, the series half of the Graph Builder's Export), so the preview renders the committed wire fixture's request; greyscale export greys an encoded figure by colour LEVEL, one grey per level on every Y channel; P1.4's residual 2 and residual 3's greyscale half closed (see P1.4's "Any suitable factor" box). Previous: 2026-09-29: **P1.4 encodings on the editable Stage** — a Graph Builder apply stores Color / Symbol / Label on the plot window's document (`FigureBindings.encoding`, omitted when unset), and the Stage (focused and background windows) draws them through the preview's own derivation, loaded lazily; the window's Export figure… / Copy figure send them too (screen == export, pinned to the shared wire fixture); P1.4's residual 1 closed (see P1.4's "Any suitable factor" box). Previous: 2026-09-28: **P1.4 Graph Builder encodings** — Color-by and Symbol-by wells (categorical factors, one palette colour / marker per level through the existing cycles) and a legend-label source well (sample id, field, temperature: any column) in the Graph Builder, saved with the spec and exported with backend parity (`calc/plotting_encoded.py`); the editable Stage plot does not draw them yet (see P1.4's "Any suitable factor" box). Previous: 2026-09-27: **P2.5 derived expressions** — Python-like worksheet formulas (`**`, `//`, `np.` functions, `where`, positioned errors), a derived unit for every new column (mismatched sums refused), `fit()`/`fitval()` over the dataset's saved fit (snapshotted, re-resolved when the fit changes), and an optional first-order, uncorrelated σ column bound as the new column's error; P2.5 box 2 ticked, so P2.5 is complete (see P2.5). Previous: 2026-09-26: **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-29 (latest): **P1.3 Plot Recipe schema v2** — recipes carry a preview thumbnail (Recipe Manager rows, apply dialog, Library Details), the excluded-row (outlier) policy and the source transformation recipe; older recipes migrate forward on every read boundary and a newer one is refused by name; the Recipe Manager's apply row picks a transformation to run first and a style template, both defaulting to the recipe's own; four P1.3 boxes ticked, three owner questions open (see FIGURE_AUTHORING_WORKFLOW_PLAN F4.2c). Previous: 2026-09-29: **P1.4 encodings in Publication Preview + greyscale by level** — opening Publication Preview from the Graph Builder carries Color / Symbol / Label onto the draft (`bindings.encoding`, the series half of the Graph Builder's Export), so the preview renders the committed wire fixture's request; greyscale export greys an encoded figure by colour LEVEL, one grey per level on every Y channel; P1.4's residual 2 and residual 3's greyscale half closed (see P1.4's "Any suitable factor" box). Previous: 2026-09-29: **P1.4 encodings on the editable Stage** — a Graph Builder apply stores Color / Symbol / Label on the plot window's document (`FigureBindings.encoding`, omitted when unset), and the Stage (focused and background windows) draws them through the preview's own derivation, loaded lazily; the window's Export figure… / Copy figure send them too (screen == export, pinned to the shared wire fixture); P1.4's residual 1 closed (see P1.4's "Any suitable factor" box). Previous: 2026-09-28: **P1.4 Graph Builder encodings** — Color-by and Symbol-by wells (categorical factors, one palette colour / marker per level through the existing cycles) and a legend-label source well (sample id, field, temperature: any column) in the Graph Builder, saved with the spec and exported with backend parity (`calc/plotting_encoded.py`); the editable Stage plot does not draw them yet (see P1.4's "Any suitable factor" box). Previous: 2026-09-27: **P2.5 derived expressions** — Python-like worksheet formulas (`**`, `//`, `np.` functions, `where`, positioned errors), a derived unit for every new column (mismatched sums refused), `fit()`/`fitval()` over the dataset's saved fit (snapshotted, re-resolved when the fit changes), and an optional first-order, uncorrelated σ column bound as the new column's error; P2.5 box 2 ticked, so P2.5 is complete (see P2.5). Previous: 2026-09-26: **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -798,9 +798,11 @@ preview+confirm dialog, an explicit "apply anyway, drop unmatched" opt-in
 (`confirmPendingRecipeApplicationPartial`), a "Save as Plot Recipe…" entry
 point on the focused plot window, and a subtle (never-auto-apply) post-import
 suggestion toast. See F4.2b in `FIGURE_AUTHORING_WORKFLOW_PLAN.md` for the
-itemized still-open gaps (live grouping/faceting composition parity,
-version migration beyond the v1 schema parse-gate, waterfall settings beyond
-the scalar offset, preview thumbnails).
+itemized still-open gaps (SPATIAL composition rebuild, maps/panels,
+waterfall settings beyond the scalar offset). **2026-09-29 (F4.2c):** recipe
+schema v2 closed the preview-thumbnail, outlier-policy capture, version-
+migration and transformation/style-template-choice gaps — see F4.2c for the
+evidence and the three owner questions it leaves open.
 
 Recipes should include:
 
@@ -810,18 +812,26 @@ Recipes should include:
   legend fields captured/applied; the group/facet BINDINGS are captured and
   re-key correctly, but rebuilding the actual live composition/panels on
   apply is a documented gap — F4.4);
-- [~] scales, autoscale policy, ranges, secondary axes, breaks, labels, units,
-  tick formats, and outlier policy (everything but outlier policy, which
-  isn't captured);
+- [x] scales, autoscale policy, ranges, secondary axes, breaks, labels, units,
+  tick formats, and outlier policy (2026-09-29, F4.2c: the excluded-row
+  hide/grey policy is captured as `outlierPolicy`, shown in the Library's
+  Details, and a mismatch with the current preference is named on apply —
+  `plotRecipePreview.test.ts`, `recipeApplyChoices.test.ts`. It is recorded,
+  not applied, because the preference is app-wide; whether it should become
+  per-figure is F4.2c's owner question (a));
 - [~] style cycle, visibility/order, annotations/shapes, maps/panels (style
   cycle/visibility/order/annotations/shapes are captured/applied; maps/panels
   are not);
 - [~] waterfall settings (only the scalar offset; no richer settings exist to
   capture);
 - [x] technique scope such as XRD, XRR, SIMS, or magnetometry;
-- [~] provenance, schema version, description, and preview (provenance +
-  schema version + description are captured; preview thumbnails do not
-  exist).
+- [x] provenance, schema version, description, and preview (2026-09-29,
+  F4.2c: a numbers-only preview is captured at save time
+  (`lib/plotRecipePreview.ts`) and drawn as a thumbnail in the Recipe Manager
+  rows, the apply preview dialog, and the Library's Details —
+  `RecipeManagerChoices.test.tsx`, `PlotRecipeApplyDialog.test.tsx`,
+  `RecipeLibraryPanel.test.tsx`; the source transformation recipe is
+  recorded too).
 
 Behavior:
 
@@ -830,9 +840,18 @@ Behavior:
 - [x] Never overwrite a customized plot without explicit warning (applying a
   recipe always creates a NEW figure; it never edits a live window in place).
 - [x] Ambiguous matches show mapping/preview and report unmatched fields.
-- [~] Import/export/duplicate/rename/version migration work (import, export,
+- [x] Import/export/duplicate/rename/version migration work (import, export,
   duplicate, and rename all work in both scopes via the Recipe Manager
-  panel; schema version migration beyond the v1 parse-gate does not exist).
+  panel; 2026-09-29, F4.2c: `lib/plotRecipeMigrate.ts` walks an older recipe
+  forward on every read boundary and refuses a newer one by name — a frozen
+  v1 literal loads from a `.dwk` list, the global slot, and an imported file,
+  `plotRecipeMigrate.test.ts`).
+- [x] Choosing transformations and style template when applying (2026-09-29,
+  F4.2c: the Recipe Manager's Transform / Style pickers, both defaulting to
+  "as the recipe says"; the transformation runs through the Pipeline's own
+  apply and the recipe is plotted on its new output — `recipeApplyChoices.
+  test.ts` with a real recorded transformation). Open owner questions (b)
+  and (c) in F4.2c.
 - [x] Reordered equivalent XRD columns map correctly, but the recipe is not
   auto-applied to SIMS.
 - [x] Stage/Figure Builder/reopen/export/clipboard remain equivalent —

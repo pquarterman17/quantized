@@ -92,6 +92,73 @@ export function applyRecipeToDataset(recipe: PlotRecipe, datasetId: string): Pro
   return useApp.getState().applyPlotRecipeObject(recipe, datasetId);
 }
 
+/** What the user picked in the Recipe Manager's apply row (F4.2 / audit
+ *  P1.3). Both default to "as the recipe says": no transformation, and the
+ *  recipe's own style template. */
+export interface ApplyChoices {
+  /** A `PLOT_TEMPLATES` value used INSTEAD of the recipe's own
+   *  `visual.plotTemplate`, for this apply only; null/absent keeps it. */
+  styleTemplate?: string | null;
+  /** A saved transformation recipe (Pipeline analysis template, P2.5) to run
+   *  on the dataset FIRST; the Plot Recipe is then applied to its output. */
+  transformName?: string | null;
+}
+
+/** The status suffix naming a recipe's recorded excluded-row policy when it
+ *  differs from the current app-wide preference; "" when it matches or was
+ *  never recorded. Reported, never applied (see `RecipeOutlierPolicy`). */
+export function outlierPolicyNote(policy: PlotRecipe["outlierPolicy"], current: "hide" | "grey"): string {
+  if (!policy || policy.excludedDisplay === current) return "";
+  const saved = policy.excludedDisplay === "grey" ? "greyed" : "hidden";
+  return `it was saved with excluded rows ${saved}; Preferences › Excluded rows is set to ${current === "grey" ? "Grey" : "Hide"}`;
+}
+
+/** One sentence describing where a recipe's preview came from -- its
+ *  thumbnail's tooltip. Names only what the recipe actually recorded. */
+export function recipeSummary(r: PlotRecipe): string {
+  const parts = [`Saved from “${r.provenance.sourceDatasetLabel || "an unnamed dataset"}”`];
+  if (r.outlierPolicy) parts.push(`excluded rows ${r.outlierPolicy.excludedDisplay === "grey" ? "greyed" : "hidden"}`);
+  if (r.transform) parts.push(`after transformation “${r.transform.name}” (r${r.transform.revision})`);
+  return `${parts.join(", ")}.`;
+}
+
+/** `applyRecipeToDataset` with the apply-time choices. The transformation
+ *  runs through the Pipeline's own `applyRecipe` (preflight, rebinding by
+ *  column name, provenance, one undo step, rollback on failure) and creates
+ *  a NEW dataset; the source and the saved Plot Recipe are never modified.
+ *  Throws, creating nothing, when the transformation is gone or refuses the
+ *  dataset -- the caller's inline error line shows the message. With a
+ *  transformation the gesture is TWO undo steps (the Pipeline apply's own,
+ *  then the figure); a plot apply that is refused or staged after a
+ *  successful transformation leaves the new output dataset in place. */
+export async function applyRecipeWithChoices(recipe: PlotRecipe, datasetId: string, choices: ApplyChoices): Promise<boolean> {
+  let target = datasetId;
+  if (choices.transformName) {
+    const name = choices.transformName;
+    const [{ loadTemplates }, { defaultBindings }, { applyRecipe }] = await Promise.all([
+      import("../../../lib/template"),
+      import("../../../lib/recipePreflight"),
+      import("../pipeline/runTemplate"),
+    ]);
+    const template = loadTemplates().find((t) => t.name === name);
+    if (!template) throw new Error(`transformation “${name}” is no longer saved`);
+    const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
+    if (!ds) throw new Error("that dataset is no longer loaded");
+    const bindings = defaultBindings(template.expects?.columns ?? [], ds.data);
+    const [result] = await applyRecipe(template, [{ datasetId, bindings }], { ackUnits: false });
+    if (result?.status !== "ok" || !result.outputId) {
+      throw new Error(`transformation “${name}” did not run: ${result?.note ?? "no result"}`);
+    }
+    target = result.outputId;
+  }
+  const style = choices.styleTemplate;
+  const chosen = style && style !== recipe.visual.plotTemplate ? { ...recipe, visual: { ...recipe.visual, plotTemplate: style } } : recipe;
+  const ok = await applyRecipeToDataset(chosen, target);
+  const note = ok ? outlierPolicyNote(recipe.outlierPolicy, useApp.getState().excludedDisplay) : "";
+  if (note) useApp.setState((s) => ({ status: `${s.status} — ${note}` }));
+  return ok;
+}
+
 /** Trigger a browser download of `recipe` as a standalone `.json` file. */
 export function exportRecipe(recipe: PlotRecipe): void {
   saveBlob(

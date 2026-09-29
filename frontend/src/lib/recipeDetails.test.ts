@@ -98,10 +98,10 @@ beforeEach(() => {
 });
 
 describe("recipeDetails — schema version is always visible", () => {
-  it("plot: versioned, shows v1", () => {
+  it("plot: versioned, shows the current version (v2)", () => {
     const sources = buildSources();
     const details = recipeDetails(rowFor("plot", sources), sources);
-    expect(details && fieldValue(details, "Schema version")).toBe("v1");
+    expect(details && fieldValue(details, "Schema version")).toBe("v2");
   });
 
   it("quickPlot: unversioned by construction", () => {
@@ -327,5 +327,27 @@ describe("recipeDetails — a vanished record is a normal race, not an error", (
     const row = rowFor("plot", sources);
     const emptied: RecipeSourceInput = { ...sources, plotProject: [] };
     expect(recipeDetails(row, emptied)).toBeNull();
+  });
+});
+
+describe("recipeDetails — plot recipe v2 fields (F4.2 / audit P1.3)", () => {
+  it("names the style template, the outlier policy and the transformation, and carries the preview", () => {
+    const sources = buildSources();
+    const [base] = sources.plotProject;
+    const recipe = { ...base, outlierPolicy: { excludedDisplay: "grey" as const }, transform: { name: "Normalize", revision: 2 } };
+    const withV2 = { ...sources, plotProject: [recipe] };
+    const details = recipeDetails(rowFor("plot", withV2), withV2);
+    expect(details && fieldValue(details, "Style template")).toBe("Screen (default)");
+    expect(details && fieldValue(details, "Excluded rows")).toBe("greyed when saved");
+    expect(details && fieldValue(details, "Transformation")).toBe("Normalize (r2)");
+    expect(base.preview).not.toBeNull();
+    expect(details?.preview).toEqual(base.preview);
+  });
+
+  it("says 'not recorded' / 'none' rather than inventing a policy or transformation", () => {
+    const sources = buildSources();
+    const details = recipeDetails(rowFor("plot", sources), sources);
+    expect(details && fieldValue(details, "Excluded rows")).toBe("not recorded");
+    expect(details && fieldValue(details, "Transformation")).toBe("none");
   });
 });

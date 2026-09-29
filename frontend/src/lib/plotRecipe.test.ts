@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from "vitest";
 
-import { captureRecipe, classifyErrorRole, normalizeLabel, serializeRecipe, type PlotRecipe } from "./plotRecipe";
+import { captureRecipe, classifyErrorRole, normalizeLabel, PLOT_RECIPE_SCHEMA_VERSION, serializeRecipe, type PlotRecipe } from "./plotRecipe";
 import { defaultPlotView, type PlotView } from "./plotview";
 import type { Dataset } from "./types";
 
@@ -70,7 +70,7 @@ describe("captureRecipe", () => {
     expect(r.description).toBe("");
     expect(r.createdAt).toBe("2026-08-22T00:00:00.000Z");
     expect(r.modifiedAt).toBe("2026-08-22T00:00:00.000Z");
-    expect(r.schemaVersion).toBe(1);
+    expect(r.schemaVersion).toBe(PLOT_RECIPE_SCHEMA_VERSION);
     expect(r.provenance).toEqual({ sourceDatasetLabel: "xrd-scan.xy", appVersion: "0.0.0-test" });
     expect(r.technique).toBe("xrd.powder");
   });

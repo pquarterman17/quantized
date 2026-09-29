@@ -56,8 +56,13 @@ describe("parseRecipe", () => {
   });
 
   it("throws a named error on an unsupported schema version", () => {
-    const bad = { ...goodRecipe(), schemaVersion: 2 };
-    expect(() => parseRecipe(JSON.stringify(bad))).toThrow(/unsupported plot recipe schema version: 2/);
+    const bad = { ...goodRecipe(), schemaVersion: 0 };
+    expect(() => parseRecipe(JSON.stringify(bad))).toThrow(/unsupported plot recipe schema version: 0/);
+  });
+
+  it("throws a named error on a schema version newer than this build (v2 is now current, v1 migrates)", () => {
+    const newer = { ...goodRecipe(), schemaVersion: 3 };
+    expect(() => parseRecipe(JSON.stringify(newer))).toThrow(/schema version 3 is newer than this app supports/);
   });
 
   it("throws when the signature/mapping is structurally malformed", () => {

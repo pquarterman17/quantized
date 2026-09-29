@@ -33,6 +33,8 @@ import {
   type RecipeOperation,
 } from "./recipeLibrary";
 import { expectationsText } from "./recipeExpect";
+import type { RecipePreview } from "./plotRecipeSchema";
+import { resolveTemplate } from "./plotTemplates";
 import type { RecipeSourceInput } from "./recipeSources";
 import { loadTemplates, type AnalysisTemplate } from "./template";
 
@@ -53,6 +55,9 @@ export interface RecipeDetailsSection {
 export interface RecipeDetails {
   readonly fields: readonly RecipeDetailsField[];
   readonly sections?: readonly RecipeDetailsSection[];
+  /** Plot recipes only (F4.2): the thumbnail captured at save time; null
+   *  when none was saved. Absent for every other kind. */
+  readonly preview?: RecipePreview | null;
 }
 
 // ── "Available actions", derived — never hardcoded per kind ────────────────
@@ -133,11 +138,16 @@ function plotDetails(row: RecipeDescriptor, r: RecipeSourceInput["plotProject"][
     { label: "Mark", value: r.visual.mark },
     { label: "X scale", value: r.visual.xScale },
     { label: "Y scale", value: r.visual.yScale },
+    // F4.2 / audit P1.3: the v2 fields, stated as recorded -- "not
+    // recorded"/"none" rather than a guessed default.
+    { label: "Style template", value: resolveTemplate(r.visual.plotTemplate).label },
+    { label: "Excluded rows", value: r.outlierPolicy ? `${r.outlierPolicy.excludedDisplay === "grey" ? "greyed" : "hidden"} when saved` : "not recorded" },
+    { label: "Transformation", value: r.transform ? `${r.transform.name} (r${r.transform.revision})` : "none" },
   );
   if (r.description) fields.push({ label: "Description", value: r.description });
   fields.push(actionsField(row.kind));
   const channels = r.signature.map((s) => `${s.role} · ${s.label}${s.unit ? ` (${s.unit})` : ""}`);
-  return { fields, sections: [{ title: "Channels", items: channels }] };
+  return { fields, sections: [{ title: "Channels", items: channels }], preview: r.preview ?? null };
 }
 
 function quickPlotDetails(row: RecipeDescriptor, t: RecipeSourceInput["quickPlot"][number]): RecipeDetails {

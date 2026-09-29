@@ -211,7 +211,7 @@ describe("RecipeManagerPanel — actions", () => {
     useRecipeManager.setState({ open: true });
 
     render(<RecipeManagerPanel />);
-    fireEvent.change(screen.getByRole("combobox"), { target: { value: "d2" } }); // mismatched technique
+    fireEvent.change(screen.getByLabelText("Apply to dataset"), { target: { value: "d2" } }); // mismatched technique
     fireEvent.click(screen.getAllByRole("button", { name: "Apply" })[0]); // the project row, see above
 
     await waitFor(() => expect(useApp.getState().status).toContain("unavailable"));
