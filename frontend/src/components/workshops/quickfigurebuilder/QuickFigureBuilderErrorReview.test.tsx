@@ -3,7 +3,7 @@
 // QuickErrorSuggestions.tsx). The grade itself is pinned in
 // lib/errorBindingConfidence.test.ts; this covers the panel and that the
 // created figure honours the answer.
-import { fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
@@ -48,6 +48,26 @@ describe("Quick Figure Builder — error-pairing confidence", () => {
     expect(screen.queryByRole("status", { name: "Suggested error pairings" })).toBeNull();
     create();
     expect(useApp.getState().editableFigures[0].bindings.errors).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+  });
+
+  it("a confirmed pairing is recorded on create, so the builder does not ask next time", () => {
+    open(sheet(["R", "err"], ["", ""]));
+    fireEvent.click(screen.getByRole("button", { name: "Use as error bars" }));
+    create();
+    const ds = useApp.getState().datasets[0];
+    expect(ds.data.metadata.error_roles).toEqual([{ channel: 1, target: 0, axis: "y", side: "both" }]);
+    cleanup();
+    useApp.setState({ quickFigureBuilderDatasetId: ds.id });
+    render(<QuickFigureBuilderWorkspace />);
+    expect(screen.queryByRole("status", { name: "Suggested error pairings" })).toBeNull();
+    expect(role("err")).toHaveValue("error:y:0:both");
+  });
+
+  it("confirming then cancelling the builder records nothing", () => {
+    open(sheet(["R", "err"], ["", ""]));
+    fireEvent.click(screen.getByRole("button", { name: "Use as error bars" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(useApp.getState().datasets[0].data.metadata.error_roles).toBeUndefined();
   });
 
   it("asks nothing when the units back the pairing", () => {

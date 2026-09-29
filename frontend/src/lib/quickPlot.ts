@@ -280,14 +280,13 @@ export function quickPlotFigureSeed(
       // `withhold`: seeded pairings the confidence review kept back
       // (store/quickPlotRun.ts -- declined, or unit-blocked). Their columns
       // are neither paired nor plotted: hidden, still toggleable in the legend.
+      // (A parser's `error_channels` hint is declared evidence and still
+      // pairs; `seeded` only drops the held label-rule roles. Both are no-ops
+      // when nothing is held: `datasetViewDefaults` reads `errorRoles` only
+      // through `figureSeedErrorBindings`, which yields the same list.)
       const held = new Set(withhold.map((b) => b.channel));
-      const seeded = held.size
-        ? { ...dataset, errorRoles: figureSeedErrorBindings(dataset).filter((b) => !held.has(b.channel)) }
-        : dataset;
+      const seeded = { ...dataset, errorRoles: figureSeedErrorBindings(dataset).filter((b) => !held.has(b.channel)) };
       const view = { ...defaultPlotView(), ...datasetViewDefaults(seeded, undefined, memory, { errorRoles: true }) };
-      // (No-ops when nothing is held.) A parser `error_channels` hint must not
-      // re-pair a held column either.
-      view.errKeys = Object.fromEntries(Object.entries(view.errKeys).filter(([, ch]) => !held.has(ch)));
       view.hiddenChannels = [...new Set([...view.hiddenChannels, ...held])];
       const rich = figureSeedErrorBindings(seeded).filter((b) => b.axis !== "y" || b.side !== "both");
       return {

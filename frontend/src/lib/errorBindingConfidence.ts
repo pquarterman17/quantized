@@ -21,7 +21,7 @@
 // store/quickPlotRun.ts's cheap `seedIsSettled` keeps the common Quick Plot
 // synchronous without pulling the grade into the eager bundle.
 
-import { declaresErrorRoles, figureSeedErrorBindings, inferErrorBindingsFromLabels, xUnitOf, type ErrorBinding } from "./errorRoles";
+import { figureSeedErrorBindings, isDeclaredBinding, inferErrorBindingsFromLabels, xUnitOf, type ErrorBinding } from "./errorRoles";
 import { flatNorm } from "./errorLabelCandidates";
 import { classifyErrorLabelInLabels, type ClassifiedLabel } from "./errorLabelClassify";
 import { compareUnits, type UnitEvidence } from "./errorUnitEvidence";
@@ -97,22 +97,26 @@ export interface SeedErrorReview {
 /** What a NEW figure (Quick Plot, the Quick Figure Builder's first mapping)
  *  may apply from `figureSeedErrorBindings(dataset)` without asking.
  *
- *  Origin's column designations and a parser's declared `error_roles` are the
- *  fourth kind of evidence and OUTRANK every inferred pairing (the precedence
- *  `store/importErrorRoles.ts` applies), so they are applied as they stand.
- *  Otherwise each seeded binding the label rules also produce is graded: a
+ *  A DECLARED pairing (`errorRoles.isDeclaredBinding`: Origin's column
+ *  designations, or one listed in `metadata.error_roles` -- a parser's, or a
+ *  user confirmation recorded by lib/errorRoleConfirm.ts) is the fourth kind
+ *  of evidence and OUTRANKS every inferred pairing (the precedence
+ *  `store/importErrorRoles.ts` applies), so it is applied as it stands.
+ *  Every other seeded binding the label rules also produce is graded: a
  *  `low` one moves to `confirm`, a `blocked` one is dropped (a pre-unit-gate
  *  `.dwk` can still carry one). A binding the rules never propose (the user
  *  picked it) passes through, and an explicit `[]` stays none. */
 export function reviewSeedErrorBindings(dataset: Pick<Dataset, "data" | "errorRoles">): SeedErrorReview {
   const seed = figureSeedErrorBindings(dataset);
   const { data } = dataset;
-  if (declaresErrorRoles(data) || (dataset.errorRoles && seed.length === 0)) return { apply: seed, confirm: [], blocked: [] };
+  const undeclared = seed.filter((b) => !isDeclaredBinding(data, b));
+  if (dataset.errorRoles && undeclared.length === 0) return { apply: seed, confirm: [], blocked: [] };
   const scored = scoreDatasetErrorBindings(data);
-  const graded = (b: ErrorBinding) => scored.find((s) => sameBinding(s, b))?.confidence;
+  const graded = (b: ErrorBinding) => (undeclared.includes(b) ? scored.find((s) => sameBinding(s, b))?.confidence : undefined);
   return {
     apply: seed.filter((b) => graded(b) !== "low" && graded(b) !== "blocked"),
-    confirm: scored.filter((s) => s.confidence === "low" && seed.some((b) => sameBinding(b, s))),
-    blocked: scored.filter((s) => s.confidence === "blocked"),
+    confirm: scored.filter((s) => s.confidence === "low" && undeclared.some((b) => sameBinding(b, s))),
+    // A declared pairing is applied, so it is not "blocked" even if its units disagree.
+    blocked: scored.filter((s) => s.confidence === "blocked" && !seed.some((b) => !undeclared.includes(b) && sameBinding(b, s))),
   };
 }

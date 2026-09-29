@@ -139,14 +139,19 @@ export function figureSeedErrorBindings(dataset: Pick<Dataset, "data" | "errorRo
   return dataset.errorRoles ? [...dataset.errorRoles] : inferErrorBindings(dataset.data);
 }
 
-/** Did the FILE declare its error roles -- Origin column designations (exactly
- *  when `originBookErrorRoles` is non-null) or a parser's `error_roles`? Those
- *  outrank every inferred pairing (store/importErrorRoles.ts), so the
- *  confidence grade (lib/errorBindingConfidence.ts) never second-guesses them. */
-export function declaresErrorRoles(data: DataStruct): boolean {
+/** Is this pairing DECLARED rather than guessed? Either the file's Origin
+ *  column designations (the whole book -- exactly when `originBookErrorRoles`
+ *  is non-null), or the pairing is listed in `metadata.error_roles`: the P1.6
+ *  contract a parser / import filter writes, which a user's confirmation
+ *  extends (lib/errorRoleConfirm.ts), so it survives `.dwk`. Declared pairings
+ *  outrank the confidence grade (lib/errorBindingConfidence.ts). Matched by
+ *  channel and target. */
+export function isDeclaredBinding(data: DataStruct, b: ErrorBinding): boolean {
   return (
     columnMetaList(data).some((c) => c?.designation !== undefined) ||
-    !!sanitizeBindings(data.metadata?.["error_roles"], data.labels.length)?.length
+    !!sanitizeBindings(data.metadata?.["error_roles"], data.labels.length)?.some(
+      (d) => d.channel === b.channel && d.target === b.target,
+    )
   );
 }
 

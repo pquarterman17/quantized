@@ -20,7 +20,7 @@ import {
   type HeaderEvidence,
   type ScoredErrorBinding,
 } from "./errorBindingConfidence";
-import { declaresErrorRoles } from "./errorRoles";
+import { isDeclaredBinding } from "./errorRoles";
 import type { UnitEvidence } from "./errorUnitEvidence";
 import { originBookErrorRoles } from "./originBookRoles";
 import type { Dataset } from "./types";
@@ -70,6 +70,8 @@ function sheet(labels: string[], units: string[], extra: Partial<Dataset> = {}):
     ...extra,
   };
 }
+
+const LOW_R = { channel: 1, target: 0, axis: "y" as const, side: "both" as const };
 
 describe("reviewSeedErrorBindings -- what a new figure may apply without asking", () => {
   it("withholds an adjacency-only (low) pairing for confirmation and applies the rest", () => {
@@ -130,11 +132,21 @@ describe("reviewSeedErrorBindings -- what a new figure may apply without asking"
     ];
     for (const metadata of shapes) {
       const data = { ...sheet(["R", "err"], ["", ""]).data, metadata };
-      expect(declaresErrorRoles(data), JSON.stringify(metadata)).toBe(originBookErrorRoles(data) !== null);
+      const b = { channel: 1, target: 0, axis: "y" as const, side: "both" as const };
+      expect(isDeclaredBinding(data, b), JSON.stringify(metadata)).toBe(originBookErrorRoles(data) !== null);
     }
     const designated = sheet(["R", "err"], ["", ""], { errorRoles: [{ channel: 1, target: 0, axis: "y", side: "both" }] });
     designated.data.metadata = shapes[3];
     expect(reviewSeedErrorBindings(designated).confirm).toEqual([]);
+  });
+
+  it("a listed metadata.error_roles pairing is declared on its own; an unlisted one is still graded", () => {
+    const committed = [LOW_R, { channel: 3, target: 2, axis: "y" as const, side: "both" as const }];
+    const ds = sheet(["R", "err", "S", "err"], ["", "", "", ""], { errorRoles: committed });
+    ds.data.metadata = { error_roles: [LOW_R] };
+    const review = reviewSeedErrorBindings(ds);
+    expect(review.apply).toEqual([LOW_R]);
+    expect(review.confirm.map((s) => s.channel)).toEqual([3]);
   });
 
   it("a parser's declared roles outrank the grade and are applied without asking", () => {

@@ -14,20 +14,20 @@
 import { compareUnits } from "../lib/errorUnitEvidence";
 import { flatNorm } from "../lib/errorLabelCandidates";
 import { classifyErrorLabelInLabels } from "../lib/errorLabelClassify";
-import { declaresErrorRoles, figureSeedErrorBindings, type ErrorBinding } from "../lib/errorRoles";
-import { quickPlotAvailability } from "../lib/quickPlot";
+import { figureSeedErrorBindings, isDeclaredBinding, type ErrorBinding } from "../lib/errorRoles";
 import type { Dataset } from "../lib/types";
 import { useApp } from "./useApp";
 
-/** True when every seeded pairing is DECLARED (Origin designations, a
- *  parser's `error_roles`) or a base-name match (`dR` -> `R`) whose units do
+/** True when every seeded pairing is DECLARED (`isDeclaredBinding`: Origin
+ *  designations, or listed in `metadata.error_roles` -- a parser's, or one the
+ *  user confirmed earlier) or a base-name match (`dR` -> `R`) whose units do
  *  not contradict: header evidence the grade never rates `low`. A seeded
  *  binding the label rules would NOT produce (the user chose it) is passed
  *  through by the review unasked, so vouching for one is safe too. */
 export function seedIsSettled(ds: Pick<Dataset, "data" | "errorRoles">): boolean {
   const { labels, units = [] } = ds.data;
-  if (declaresErrorRoles(ds.data)) return true;
   return figureSeedErrorBindings(ds).every((b) => {
+    if (isDeclaredBinding(ds.data, b)) return true;
     const base = b.target >= 0 && classifyErrorLabelInLabels(labels, b.channel)?.base;
     return (
       !!base &&
@@ -46,7 +46,9 @@ export function runQuickPlot(datasetId: string, onDone?: () => void): void {
     return ok;
   };
   const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
-  if (!ds || !quickPlotAvailability(ds).available || seedIsSettled(ds)) {
+  // An unavailable dataset is refused by `quickPlotDataset`; the lazy review
+  // refuses it too before asking anything.
+  if (!ds || seedIsSettled(ds)) {
     create();
     return;
   }

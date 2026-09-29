@@ -2,7 +2,8 @@
 // (lib/errorBindingConfidence.ts). `initialQuickFigureMapping` withholds an
 // adjacency-only (`low`) pairing -- its column starts as Ignore -- and this
 // panel asks: one sentence of why, and a button that applies it through the
-// ordinary role assignment. A unit-`blocked` pairing is explained, never
+// ordinary role assignment; Create records it as confirmed on the dataset
+// (lib/errorRoleConfirm.ts), Cancel records nothing. A unit-`blocked` pairing is explained, never
 // offered (the user can still assign any role explicitly in the column list).
 
 import { useMemo } from "react";

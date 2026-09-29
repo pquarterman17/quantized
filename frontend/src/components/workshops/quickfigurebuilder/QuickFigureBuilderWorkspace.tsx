@@ -14,6 +14,7 @@ import {
   useAcquisitionAxis,
   type QuickColumnAssignment,
 } from "../../../lib/quickFigureMappingActions";
+import { confirmAppliedPairings } from "../../../lib/errorRoleConfirm";
 import { useEscapeSurface } from "../../../lib/escapeStack";
 import { quickFigurePreview, type QuickPlotStyle } from "../../../lib/quickFigurePreview";
 import {
@@ -131,7 +132,11 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
   // mid-click) leaves the builder open; the workspace's own missing-source
   // state (see the parent component below) takes over on the next render.
   const createFigure = (): void => {
-    if (createQuickFigureFromMapping(dataset.id, mapping, style, look)) close();
+    if (!createQuickFigureFromMapping(dataset.id, mapping, style, look)) return;
+    // An adjacency-only pairing the user applied is an explicit decision:
+    // recorded on the dataset (same undo unit) so the next figure does not ask.
+    confirmAppliedPairings(dataset, mapping.errorBindings);
+    close();
   };
 
   return (
