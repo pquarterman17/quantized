@@ -42,6 +42,15 @@ export interface QuickFigureCommitPieces {
   overlay: QuickFigureOverlay | null;
 }
 
+/** The builder's setup panel (lib/quickFigureSetup.ts), MATERIALIZED into
+ *  existing figure vocabulary: five PlotView fields, per-series SeriesStyles
+ *  cycled by plotted position, and whether the mapping's error bindings are
+ *  drawn. Also what a Quick Plot template stores (`QuickPlotTemplate.look`). */
+export interface QuickFigureLook extends Pick<PlotView, "xScale" | "yScale" | "showGrid" | "showLegend" | "legendPos"> {
+  series: SeriesStyle[];
+  errorBars: boolean;
+}
+
 /** Translate a Quick Figure Builder style into a `PlotMark` + any per-series
  *  overlay it implies, mirroring `plotSpecFigure.ts`'s `stylesForMark`
  *  convention (plotSpecFigure.ts:40-58):
@@ -80,6 +89,7 @@ export function quickFigureCommit(
   mapping: QuickFigureMapping,
   style: QuickPlotStyle,
   labelGroupId = "quick-figure-labels",
+  look?: QuickFigureLook,
 ): QuickFigureCommitPieces {
   const overlay = quickFigureOverlay(dataset.data, mapping);
   const plot = overlay?.mapping ?? mapping;
@@ -92,11 +102,19 @@ export function quickFigureCommit(
   view.annotations = quickFigurePointLabels(dataset, mapping, labelGroupId);
   const { mark, seriesStyles } = markAndSeriesStyles(style, plot.yKeys, view.seriesStyles);
   view.seriesStyles = seriesStyles;
+  let errors = [...plot.errorBindings];
+  if (look) {
+    const { series, errorBars, ...axes } = look;
+    Object.assign(view, axes);
+    const n = series.length;
+    if (n) plot.yKeys.forEach((ch, i) => (seriesStyles[ch] = { ...seriesStyles[ch], ...series[i % n] }));
+    if (!errorBars) errors = [];
+  }
   return {
     name: `Quick Figure — ${dataset.name}`,
     view,
     mark,
-    errors: [...plot.errorBindings],
+    errors,
     overlay,
   };
 }

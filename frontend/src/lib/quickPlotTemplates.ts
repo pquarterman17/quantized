@@ -40,6 +40,7 @@
 // schema reasoning; see H6's plan-doc note.
 
 import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "./errorRoles";
+import type { QuickFigureLook } from "./quickFigureCommit";
 import type { QuickFigureMapping } from "./quickFigureMapping";
 import type { QuickPlotStyle } from "./quickFigurePreview";
 import { techniqueOf } from "./techniqueDefaults";
@@ -85,6 +86,8 @@ export interface QuickPlotTemplate {
    *  dataset only at apply time (`resolveTemplate`), never mutated here. */
   mapping: QuickFigureMapping;
   style: QuickPlotStyle;
+  /** The builder's setup panel, materialized; absent on a pre-setup template. */
+  look?: QuickFigureLook;
   /** The techniqueViewMemory idiom: every channel the mapping REFERENCES
    *  (xKey, each yKey, each error binding's channel + real target), keyed by
    *  its own index, to the column LABEL it had at save time. `resolveTemplate`

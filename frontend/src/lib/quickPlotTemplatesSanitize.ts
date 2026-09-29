@@ -5,6 +5,8 @@
 // at startup. Drop-malformed-never-throw, exactly as before.
 
 import type { ErrorBinding, ErrorSide } from "./errorRoles";
+import { sanitizePlotView, type PlotView } from "./plotview";
+import type { QuickFigureLook } from "./quickFigureCommit";
 import type { QuickFigureMapping } from "./quickFigureMapping";
 import type { QuickPlotStyle } from "./quickFigurePreview";
 import type {
@@ -15,6 +17,7 @@ import type {
   SignatureErrorRole,
 } from "./quickPlotTemplates";
 import { isValidTechnique } from "./techniqueDefaults";
+import type { SeriesStyle } from "./types";
 
 // ── `.dwk` sanitizer ─────────────────────────────────────────────────────
 
@@ -110,6 +113,21 @@ function sanitizeStyle(v: unknown): QuickPlotStyle {
   return v === "scatter" || v === "line-symbol" ? v : "line";
 }
 
+/** The look's view fields go through `sanitizePlotView`'s own per-field rules;
+ *  its series styles are kept as objects, the trust `sanitizePlotView` gives
+ *  `seriesStyles`. Absent/malformed -> undefined, the pre-setup shape. */
+function sanitizeLook(v: unknown): QuickFigureLook | undefined {
+  if (!(v instanceof Object)) return undefined;
+  const o = v as Record<string, unknown>;
+  const view = sanitizePlotView(o);
+  const keys = ["xScale", "yScale", "showGrid", "showLegend", "legendPos"] as const;
+  return {
+    ...(Object.fromEntries(keys.map((k) => [k, view[k]])) as Pick<PlotView, (typeof keys)[number]>),
+    series: Array.isArray(o.series) ? o.series.filter((s): s is SeriesStyle => s instanceof Object) : [],
+    errorBars: o.errorBars !== false,
+  };
+}
+
 function sanitizeLabelsMap(v: unknown): Record<number, string> {
   if (typeof v !== "object" || v === null) return {};
   const out: Record<number, string> = {};
@@ -148,6 +166,7 @@ export function sanitizeQuickPlotTemplates(v: unknown): QuickPlotTemplate[] {
       signature,
       mapping,
       style: sanitizeStyle(o.style),
+      look: sanitizeLook(o.look),
       labels: sanitizeLabelsMap(o.labels),
     });
   }

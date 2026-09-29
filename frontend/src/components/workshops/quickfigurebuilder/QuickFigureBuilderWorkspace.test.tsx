@@ -263,7 +263,7 @@ describe("QuickFigureBuilderWorkspace — G1 shell", () => {
       setData: (type: string, value: string) => values.set(type, value),
       getData: (type: string) => values.get(type) ?? "",
     };
-    const row = screen.getByText("signal").closest("li")!;
+    const row = screen.getByRole("combobox", { name: "Role for signal" }).closest("li")!;
     const ignoreZone = screen.getByLabelText("Column role drop zones").querySelectorAll(".qzk-quick-builder-zone")[2];
     fireEvent.dragStart(row, { dataTransfer });
     fireEvent.drop(ignoreZone, { dataTransfer });

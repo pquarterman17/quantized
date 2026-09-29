@@ -14,6 +14,7 @@ import { quickPlotAvailability } from "./quickPlot";
 import type { ContextAction, DatasetActionTarget } from "./contextActions";
 import { useApp } from "../store/useApp";
 import { openQuickPlotWith } from "../store/quickPlotWithDialog";
+import { runQuickPlot } from "../store/quickPlotRun";
 
 export const datasetQuickPlotActions: ContextAction<DatasetActionTarget>[] = [
   {
@@ -24,10 +25,10 @@ export const datasetQuickPlotActions: ContextAction<DatasetActionTarget>[] = [
       const availability = quickPlotAvailability(t.dataset);
       return availability.available ? "" : availability.reason;
     },
-    // quickPlotDataset returns true only on success (fix #6) -- a
+    // runQuickPlot calls back only on success (fix #6) -- a
     // fail-closed refusal has no plot to return the Stage to.
     run: (t) => {
-      if (useApp.getState().quickPlotDataset(t.dataset.id)) t.onStageOpen?.();
+      runQuickPlot(t.dataset.id, t.onStageOpen);
     },
   },
   {

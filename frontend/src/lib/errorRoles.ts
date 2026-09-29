@@ -21,6 +21,7 @@ import type { DataStruct, Dataset } from "./types";
 import { classifyErrorLabel, classifyErrorLabelInLabels, type ErrorSide } from "./errorLabelClassify";
 import { flatNorm } from "./errorLabelCandidates";
 import { compareUnits } from "./errorUnitEvidence";
+import { columnMetaList } from "./columnmeta";
 
 export type { ErrorSide };
 // Re-exported for callers that used to reach into this module for the
@@ -117,7 +118,7 @@ export function inferErrorBindings(data: DataStruct): ErrorBinding[] {
 /** The recorded x-axis unit, as Python's `x_units.x_unit_of` resolves it: the
  *  first non-blank of `xUnit`/`x_column_unit`/`xColumnUnit`, top-level
  *  metadata first, then a nested `parser_specific`/`parserSpecific` blob. */
-function xUnitOf(meta: Record<string, unknown> | undefined): string {
+export function xUnitOf(meta: Record<string, unknown> | undefined): string {
   for (const src of [meta, meta?.parser_specific, meta?.parserSpecific]) {
     if (!src || typeof src !== "object") continue;
     for (const key of ["xUnit", "x_column_unit", "xColumnUnit"]) {
@@ -136,6 +137,17 @@ function xUnitOf(meta: Record<string, unknown> | undefined): string {
  *  Builder's initial mapping -- so they can never pair a column differently. */
 export function figureSeedErrorBindings(dataset: Pick<Dataset, "data" | "errorRoles">): ErrorBinding[] {
   return dataset.errorRoles ? [...dataset.errorRoles] : inferErrorBindings(dataset.data);
+}
+
+/** Did the FILE declare its error roles -- Origin column designations (exactly
+ *  when `originBookErrorRoles` is non-null) or a parser's `error_roles`? Those
+ *  outrank every inferred pairing (store/importErrorRoles.ts), so the
+ *  confidence grade (lib/errorBindingConfidence.ts) never second-guesses them. */
+export function declaresErrorRoles(data: DataStruct): boolean {
+  return (
+    columnMetaList(data).some((c) => c?.designation !== undefined) ||
+    !!sanitizeBindings(data.metadata?.["error_roles"], data.labels.length)?.length
+  );
 }
 
 /** Back-compat projection: the legacy `errKeys` map (value channel → error

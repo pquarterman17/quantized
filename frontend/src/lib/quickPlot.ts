@@ -269,6 +269,7 @@ export function pickConfigureQuickPlotWorksheet(
 export function quickPlotFigureSeed(
   dataset: Dataset,
   memory: TechniqueViewMemoryMap = {},
+  withhold: readonly ErrorBinding[] = [],
 ): { name: string; view: PlotView; errors: ErrorBinding[] } {
   const profile = quickPlotProfile(dataset);
   if (!profile.supported) {
@@ -276,8 +277,19 @@ export function quickPlotFigureSeed(
   }
   switch (profile.mode) {
     case "line": {
-      const view = { ...defaultPlotView(), ...datasetViewDefaults(dataset, undefined, memory, { errorRoles: true }) };
-      const rich = figureSeedErrorBindings(dataset).filter((b) => b.axis !== "y" || b.side !== "both");
+      // `withhold`: seeded pairings the confidence review kept back
+      // (store/quickPlotRun.ts -- declined, or unit-blocked). Their columns
+      // are neither paired nor plotted: hidden, still toggleable in the legend.
+      const held = new Set(withhold.map((b) => b.channel));
+      const seeded = held.size
+        ? { ...dataset, errorRoles: figureSeedErrorBindings(dataset).filter((b) => !held.has(b.channel)) }
+        : dataset;
+      const view = { ...defaultPlotView(), ...datasetViewDefaults(seeded, undefined, memory, { errorRoles: true }) };
+      // (No-ops when nothing is held.) A parser `error_channels` hint must not
+      // re-pair a held column either.
+      view.errKeys = Object.fromEntries(Object.entries(view.errKeys).filter(([, ch]) => !held.has(ch)));
+      view.hiddenChannels = [...new Set([...view.hiddenChannels, ...held])];
+      const rich = figureSeedErrorBindings(seeded).filter((b) => b.axis !== "y" || b.side !== "both");
       return {
         name: `Quick Plot — ${dataset.name}`,
         view,

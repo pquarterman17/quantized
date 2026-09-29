@@ -16,6 +16,7 @@
 // export below, and every real (non-test) importer of what moved is the
 // (lazy) `components/workshops/quickfigurebuilder/*`.
 
+import { reviewSeedErrorBindings } from "./errorBindingConfidence";
 import { figureSeedErrorBindings, type ErrorBinding, type ErrorSide } from "./errorRoles";
 import { columnMetaList } from "./columnmeta";
 import { originHiddenChannels } from "./errorbars";
@@ -84,15 +85,24 @@ function inferSeriesX(dataset: Dataset, yKeys: readonly number[]): Record<number
   return out;
 }
 
+/** The builder's first mapping. Error bindings come from the shared seed
+ *  (`figureSeedErrorBindings`) through the CONFIDENCE GRADE
+ *  (`reviewSeedErrorBindings`): an adjacency-only (`low`) or unit-`blocked`
+ *  pairing is WITHHELD -- its column starts as Ignore, neither an error nor a
+ *  Y, and `QuickErrorSuggestions` asks before applying a `low` one. */
 export function initialQuickFigureMapping(dataset: Dataset): QuickFigureMapping {
-  const inferred = figureSeedErrorBindings(dataset);
+  const inferred = reviewSeedErrorBindings(dataset).apply;
   const errorChannels = new Set(inferred.map((binding) => binding.channel));
+  const withheld = figureSeedErrorBindings(dataset)
+    .map((binding) => binding.channel)
+    .filter((channel) => !errorChannels.has(channel));
   const hidden = new Set(originHiddenChannels(dataset.data));
-  const ignored = new Set(
-    Object.entries(dataset.channelRoles ?? {})
+  const ignored = new Set([
+    ...withheld,
+    ...Object.entries(dataset.channelRoles ?? {})
       .filter(([, role]) => role === "ignore" || role === "label")
       .map(([channel]) => Number(channel)),
-  );
+  ]);
   const yKeys = dataset.data.labels
     .map((_, channel) => channel)
     .filter((channel) => !errorChannels.has(channel) && !hidden.has(channel) && !ignored.has(channel));
