@@ -70,15 +70,15 @@ export interface FacetSlice {
  *  same "identity means no drop" convention `resolveGroupsIndexed` uses, so
  *  the result is exactly `slice.rows` unchanged.
  *
- *  The ONE production entry point for this composition: `lib/statstage.
- *  resolveGroupsIndexed`'s `rowIds` argument, wherever a caller resolves
- *  points PER FACET SLICE rather than for the flat dataset — so a faceted
- *  box/strip "show points" overlay (not wired on any mode as of this
- *  writing; `useStatStageCompute.computeFacetGroupDraws` never sets
- *  `points`) cannot reinvent its own row math and drift from the flat
- *  panel's. Until that lands, this has no production caller either — it
- *  exists so the recipe lives in ONE place instead of being duplicated
- *  inline wherever a test needs it. */
+ *  The ONE production entry point for this composition, wherever a caller
+ *  resolves points PER FACET SLICE rather than for the flat dataset — so a
+ *  faceted points overlay cannot reinvent its own row math and drift from
+ *  the flat panel's. Callers (JMP_GAP J5 residual, closed 2026-09-29):
+ *  `Stage/useStatStageCompute.computeFacetGroupDraws` (box / violin / strip
+ *  points, via `statstage.resolveGroupsIndexed`'s `rowIds`),
+ *  `computeFacetBarDraws` (bar cells' raw points, via `statBarMarks.
+ *  barCellPoints`) and the Graph Builder preview's marks
+ *  (`workshops/graphbuilder/previewMarks`). */
 export function facetSliceRowIds(slice: FacetSlice, rowIds: readonly number[] | null): number[] {
   return rowIds ? slice.rows.map((r) => rowIds[r] ?? r) : [...slice.rows];
 }

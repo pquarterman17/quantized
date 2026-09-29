@@ -221,31 +221,38 @@ describe("facetSliceRowIds — a facet slice's points' ORIGINAL dataset rows", (
   });
 });
 
-// P2.6 review finding 2 (enforcement): the facet box/violin compute path does
-// not build indexed ("show points") groups yet at all
-// (`useStatStageCompute.computeFacetGroupDraws` hardcodes `points: null`).
-// The day it does, it MUST compose `FacetSlice.rows` with the analysis
-// view's `rowIds` through `facetSliceRowIds` — never slice-local positions —
-// so this greps the source for `resolveGroupsIndexed(` (the only builder that
-// can attach real row indices) and, the moment one shows up there, demands
-// `facetSliceRowIds` appear in the same file. Sabotage-verifiable: wiring
-// `resolveGroupsIndexed(s.data, ...)` into `computeFacetGroupDraws` without
-// `facetSliceRowIds` fails this test.
-describe("faceted points, if ever wired, must go through facetSliceRowIds", () => {
-  it("useStatStageCompute.ts names facetSliceRowIds wherever it calls resolveGroupsIndexed", () => {
+// P2.6 review finding 2 (enforcement), live since the JMP_GAP J5 residual
+// closed (2026-09-29): every faceted points resolve MUST compose
+// `FacetSlice.rows` with the analysis view's `rowIds` through
+// `facetSliceRowIds` — never slice-local positions, which would hash a
+// different jitter than the flat panel and the export. So every
+// `resolveGroupsIndexed(` call in the facet compute (the only builder that
+// attaches row indices) must pass `facetSliceRowIds(` among its OWN
+// arguments. Sabotage-verified: replacing that argument with `s.rows` (or
+// dropping it) fails this test.
+function callArgs(src: string, callee: string): string[] {
+  const out: string[] = [];
+  for (let i = src.indexOf(`${callee}(`); i >= 0; i = src.indexOf(`${callee}(`, i + 1)) {
+    let depth = 0;
+    let j = i + callee.length;
+    for (; j < src.length; j++) {
+      if (src[j] === "(") depth++;
+      else if (src[j] === ")" && --depth === 0) break;
+    }
+    out.push(src.slice(i + callee.length + 1, j));
+  }
+  return out;
+}
+
+describe("faceted points go through facetSliceRowIds", () => {
+  it("every resolveGroupsIndexed call in useStatStageCompute.ts passes facetSliceRowIds(...)", () => {
     const path = join(
       dirname(fileURLToPath(import.meta.url)),
       "../components/Stage/useStatStageCompute.ts",
     );
-    const src = readFileSync(path, "utf8");
-    if (src.includes("resolveGroupsIndexed(")) {
-      expect(src).toContain("facetSliceRowIds");
-    } else {
-      // Not wired yet — the guard above is dormant, not vacuous: this branch
-      // documents WHY (JMP_GAP J5 residual, see useStatStageCompute.ts's own
-      // header) rather than silently passing for an unrelated reason.
-      expect(src).toContain("points: null");
-    }
+    const calls = callArgs(readFileSync(path, "utf8"), "resolveGroupsIndexed");
+    expect(calls.length).toBeGreaterThan(0);
+    for (const args of calls) expect(args).toContain("facetSliceRowIds(");
   });
 });
 

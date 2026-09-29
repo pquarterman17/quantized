@@ -111,7 +111,7 @@ export default function StatStage() {
       .filter((c) => c.index !== st.groupCol)
       .map((c) => ({ value: String(c.index), label: c.label })),
   ];
-  // #11: small multiples for Box/Violin/Bar — one panel per level of a
+  // #11: small multiples for Box/Violin/Strip/Bar — one panel per level of a
   // SECOND categorical column (independent of "group by"). Both the
   // "group by" and "then by" columns are omitted for the same reason
   // `thenByOptions` omits "group by" above: faceting by the column already
@@ -226,17 +226,15 @@ export default function StatStage() {
                 />
               </Picker>
             )}
-            {/* Strip mode isn't wired into the facet grid yet (JMP_GAP J5
-                residual) -- box/violin/bar keep faceting unchanged. */}
-            {st.mode !== "strip" && (
-              <Picker label="facet by">
-                <Select
-                  options={facetByOptions}
-                  value={st.facetCol == null ? "none" : String(st.facetCol)}
-                  onChange={(e) => st.setFacetCol(e.target.value === "none" ? null : Number(e.target.value))}
-                />
-              </Picker>
-            )}
+            {/* Every categorical mode facets, strip included (JMP_GAP J5
+                residual closed 2026-09-29: panels carry their own points). */}
+            <Picker label="facet by">
+              <Select
+                options={facetByOptions}
+                value={st.facetCol == null ? "none" : String(st.facetCol)}
+                onChange={(e) => st.setFacetCol(e.target.value === "none" ? null : Number(e.target.value))}
+              />
+            </Picker>
           </>
         )}
 

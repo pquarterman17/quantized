@@ -1238,9 +1238,78 @@
             "title": "Groups",
             "type": "array"
           },
+          "jitter_width": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Jitter Width"
+          },
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "points": {
+            "anyOf": [
+              {
+                "enum": [
+                  "all",
+                  "outliers",
+                  "none"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Points"
+          },
+          "raw": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "items": {
+                      "type": "number"
+                    },
+                    "type": "array"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw"
+          },
+          "raw_rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "items": {
+                      "type": "integer"
+                    },
+                    "type": "array"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Raw Rows"
           },
           "series": {
             "items": {
@@ -1248,6 +1317,22 @@
             },
             "title": "Series",
             "type": "array"
+          },
+          "summary": {
+            "anyOf": [
+              {
+                "enum": [
+                  "none",
+                  "mean",
+                  "median"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Summary"
           },
           "values": {
             "items": {
@@ -11365,6 +11450,23 @@
               }
             ],
             "title": "Labels"
+          },
+          "point_row_indices": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Point Row Indices"
           },
           "tiers": {
             "anyOf": [

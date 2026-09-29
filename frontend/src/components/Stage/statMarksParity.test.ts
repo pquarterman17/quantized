@@ -204,26 +204,29 @@ describe("categorical marks — the canvas and the export carry the same options
     }
   });
 
-  it("faceted: each panel shows what a panel can (fliers, summary; no points, no connect line), as the export does", async () => {
+  it("faceted: each panel draws the stage's points and summary (no connect line), as the export does", async () => {
     const { result } = renderHook(() => useStatStage(params()));
     act(() => result.current.setValueCol(2));
     act(() => result.current.setFacetCol(1));
     act(() => result.current.setMarks({ points: "all", summary: "mean", errorBars: "se", connectMeans: true }));
-    await waitFor(() => expect(result.current.drawFacets?.length).toBe(2));
+    await waitFor(() => {
+      const f = result.current.drawFacets;
+      expect(f?.length === 2 && f.every((p) => p.draw.mode === "box" && p.draw.points != null)).toBe(true);
+    });
     for (const f of result.current.drawFacets ?? []) {
       expect(f.draw.mode === "box" && f.draw.marks).toMatchObject({
-        points: "outliers", summary: "mean", errorBars: "se", connectMeans: false,
+        points: "all", summary: "mean", errorBars: "se", connectMeans: false,
       });
     }
     await act(async () => {
       await result.current.exportFigure("svg");
     });
     const spec = vi.mocked(exportStatplotFigure).mock.calls.at(-1)![0];
-    // The request names the stage's choice; the backend maps it per panel
-    // with the SAME rule (calc.figure_facets._facet_marks: box "all" ->
-    // its fliers) and draws no connect line in a facet.
+    // Each panel posts its own rows (statFacetPoints.test.ts pins them row
+    // for row); the faceted export draws no connect line in a facet.
     expect(spec).toMatchObject({ points: "all", summary: "mean", error_bars: "se" });
     expect(spec.facets).toHaveLength(2);
+    for (const panel of spec.facets ?? []) expect(panel.point_row_indices).toBeTruthy();
     expect(spec.show_connect_means).toBeUndefined();
   });
 

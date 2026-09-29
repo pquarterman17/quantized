@@ -378,10 +378,15 @@ describe("StatStage — categorical marks controls (JMP_GAP J5, P2.6 box 1)", ()
     expect(setMarks.mock.calls.map((c) => c[0])).toEqual([{ jitter: false }, { jitter: true, jitterWidth: 0.5 }]);
   });
 
-  it("strip mode hides the facet-by picker (JMP_GAP J5 residual: no faceted strip yet)", () => {
-    stateRef.current = makeState({ mode: "strip", draw: STRIP_DRAW });
+  it("strip mode offers the facet-by picker (JMP_GAP J5 residual closed: faceted strip)", async () => {
+    const setFacetCol = vi.fn();
+    stateRef.current = makeState({ mode: "strip", draw: STRIP_DRAW, setFacetCol });
     render(<StatStage />);
-    expect(screen.queryByRole("combobox", { name: "facet by" })).not.toBeInTheDocument();
+    const picker = screen.getByRole("combobox", { name: "facet by" });
+    const option = [...(picker as HTMLSelectElement).options].find((o) => o.value !== "none");
+    if (!option) throw new Error("expected a facet column option");
+    await userEvent.selectOptions(picker, option.value);
+    expect(setFacetCol).toHaveBeenCalledWith(Number(option.value));
   });
 });
 

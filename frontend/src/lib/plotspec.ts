@@ -121,6 +121,7 @@ import { facetPayloads, facetSlices, type FacetPanel } from "./facet";
 import { groupLevelLabel } from "./categorical";
 import { groupSplitLevels } from "./plotGroupSplit";
 import { channelModelingType, isCategorical } from "./modeling";
+import { specGroupCol } from "./plotspecGroupCol";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import {
   axesBlockHasContent,
@@ -600,8 +601,7 @@ export function specToRender(spec: PlotSpec, datasets: readonly Dataset[]): Spec
   }
 
   if (spec.mark === "box" || spec.mark === "violin") {
-    const x = spec.zones.x;
-    const groupCol = x && isCategorical(channelModelingType(ds, x.channel)) ? x.channel : null;
+    const groupCol = specGroupCol(spec, ds);
     const valueCol = yChannels[0];
     const groups = resolveGroups(data, groupCol, valueCol, yChannels).filter((g) => g.values.length > 0);
     if (groups.length === 0) return hint("No finite values to group.");
@@ -629,8 +629,7 @@ export function specToRender(spec: PlotSpec, datasets: readonly Dataset[]): Spec
 
   // mark === "bar" (GAP_PLOTTYPES #4): X must be categorical — it's the
   // group axis; every Y channel becomes a clustered/stacked series within it.
-  const x = spec.zones.x;
-  const groupCol = x && isCategorical(channelModelingType(ds, x.channel)) ? x.channel : null;
+  const groupCol = specGroupCol(spec, ds);
   if (groupCol === null) return note("Bar charts need a categorical X column.");
   const seriesLabels = yChannels.map((c) => channelLabel(data, c));
   const matrix = buildBarMatrix(data, groupCol, yChannels, seriesLabels);

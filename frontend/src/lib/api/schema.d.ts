@@ -5676,10 +5676,20 @@ export interface components {
             errors?: (number | null)[][] | null;
             /** Groups */
             groups: string[];
+            /** Jitter Width */
+            jitter_width?: number | null;
             /** Label */
             label: string;
+            /** Points */
+            points?: ("all" | "outliers" | "none") | null;
+            /** Raw */
+            raw?: number[][][] | null;
+            /** Raw Rows */
+            raw_rows?: number[][][] | null;
             /** Series */
             series: string[];
+            /** Summary */
+            summary?: ("none" | "mean" | "median") | null;
             /** Values */
             values: (number | null)[][];
         };
@@ -9575,6 +9585,8 @@ export interface components {
             label: string;
             /** Labels */
             labels?: string[] | null;
+            /** Point Row Indices */
+            point_row_indices?: number[][] | null;
             /** Tiers */
             tiers?: [
                 string,

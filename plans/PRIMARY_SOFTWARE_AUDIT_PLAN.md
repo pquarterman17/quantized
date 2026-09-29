@@ -4593,18 +4593,18 @@ violin, bar, strip, or summary plots.
   per option, the shared fixtures, route validation). Wire fixture
   `statplot_levels_export.json` gained the new fields. Eager bundle 858,336 ->
   858,810 B (+474, the sanitizer and the field); all UI in the lazy stage chunk.
-  **Not done:** jittered points in FACET panels (no per-slice row indices —
-  the JMP_GAP J5 residual) and faceted strip; a faceted BAR panel draws no
-  points / summary marker (same residual: its cells carry no raw rows; the
-  faceted bar export takes no marks either, so the two agree); in-stage
-  level RENAME (use Recode); rotated-label depth is estimated from character
-  counts (both sides), not measured; an upright unwrapped label wider than
-  its slot overlaps its neighbour on BOTH sides (wrap / rotation is the
-  remedy); the Graph Builder preview ignores the marks; no e2e spec.
-  (Five former entries — the 14-char screen truncation, the unstated
-  error-bar kind, bar raw points / median, the violin summary + inner-glyph
-  mismatch, and the screen-truncated outer tier — are done; see the two
-  "Done 2026-09-28" blocks below.)
+  **Not done:** in-stage level RENAME (use Recode); rotated-label depth is
+  estimated from character counts (both sides), not measured; an upright
+  unwrapped label wider than its slot overlaps its neighbour on BOTH sides
+  (wrap / rotation is the remedy); no connect-means line inside a facet
+  panel (neither side draws one); the Graph Builder preview shows no
+  error-bar footnote and still previews a violin as a box (its KDE needs the
+  backend); no e2e spec. (Former entries done: the 14-char screen
+  truncation, the unstated error-bar kind, bar raw points / median, the
+  violin summary + inner-glyph mismatch, the screen-truncated outer tier —
+  the two "Done 2026-09-28" blocks below — and faceted points / faceted
+  strip / faceted bar marks / the Graph Builder preview's marks, "Done
+  2026-09-29" below.)
   **Review round (2026-09-27, 10 findings fixed, each sabotage-verified):**
   a violin's jittered `points` groups now relabel alongside its `violins`
   when levels are hidden/reordered, so the canvas and the export jitter hash
@@ -4721,6 +4721,69 @@ violin, bar, strip, or summary plots.
   outliers, stacked none, route 200/422 and that the route really draws).
   openapi.json / schema.d.ts regenerated. Eager bundle 865,437 -> 865,440 B
   (+3; all new code in the lazy stat chunks).
+  **Done 2026-09-29 — faceted raw points, faceted strip, faceted bar marks,
+  marks in the Graph Builder preview (the JMP_GAP J5 residual).** Facet
+  slices already carried their kept rows (`lib/facet.FacetSlice.rows`);
+  nothing composed them. Now every faceted points resolve goes through the
+  ONE recipe, `facetSliceRowIds(slice, analysisView(ds).rowIds)`, so a
+  panel's points carry ORIGINAL dataset rows exactly as the flat plot's do
+  and the `(row, category)` jitter hash (`lib/jitter.ts` /
+  `calc.statplots.deterministic_jitter`) puts each point in the same place
+  on screen and in the export. (1) STAGE: `useStatStageCompute.
+  computeFacetGroupDraws` resolves each panel's indexed points (box / violin
+  when `needsPoints`; strip always) and `computeFacetBarDraws` each grouped
+  bar cell's raw points (when `needsBarRaw`); `statStageMarks.facetMarks`
+  no longer demotes a panel to fliers-only / no bar summary — a panel draws
+  the stage's points, jitter, summary, error bars (only connect-means stays
+  off in a panel, as the faceted export draws none). STRIP now facets (the
+  "facet by" picker shows in strip mode; `useStatStage` facets every
+  categorical mode). Panel selection rings, the empty-slot axis and the
+  notice work unchanged (they already threaded strip draws). (2) EXPORT:
+  each `StatplotFacet` panel posts its own `point_row_indices` (aligned on
+  the panel's axis like the flat request) and may be `kind: "strip"`; the
+  faceted request now also carries `jitter_width` (so a faceted box is drawn
+  at the screen's 0.6-pitch width, as the flat one already was); each
+  `CategoricalFacet` panel carries its own `points` / `jitter_width` /
+  `summary` / `raw` / `raw_rows` (`routes/export_statplots`,
+  `calc.figure_facets` passes them to `_draw_statplot` /
+  `_draw_categorical_bars`, which draw them exactly as for the flat plot;
+  stacked panels none). `calc.figure_stat_marks.facet_marks` (moved from
+  `figure_facets._facet_marks`) keeps the old fliers-only rule for a panel
+  WITHOUT rows, so a request from before renders as it did. openapi.json /
+  schema.d.ts regenerated. (3) GRAPH BUILDER PREVIEW: `workshops/
+  graphbuilder/previewMarks.previewStatDraws` turns `specToRender`'s box /
+  bar render into the draws the preview paints, with the window's per-mode
+  `PlotView.statMarks` (the options the Stat Stage it sends to reads) and
+  the points they need, flat and per facet cell — same marks resolution,
+  same "which points" rule, same row recipe, same columns (the group-axis
+  rule moved to `lib/plotspecGroupCol.specGroupCol`, shared with
+  `specToRender`; `plotspec.ts` 862 -> 861 lines, pin unchanged). A violin
+  previews as a box drawn with the violin's marks. Tests (red first; each
+  guard sabotage-verified — 10 frontend, 4 backend: slice-local rows in the
+  compute, the export dropping `point_row_indices`, `facetMarks` demoting
+  again, bar facets resolving no raw, the bar facet export dropping marks,
+  strip hiding the picker, strip not faceting, the preview ignoring the spec,
+  the preview using slice-local rows, the preview using the wrong mode's
+  marks; backend `facet_marks` ignoring rows, the route dropping
+  `point_row_indices` / `bar_marks`, the renderer dropping the panel's
+  rows): `Stage/statFacetPoints.test.ts` (real hook, box / strip / violin /
+  bar, under an exclusion: every panel's drawn points == the export panel's
+  `point_row_indices` + labels + data, row for row; bar cells == `raw_rows`
+  / `raw` / groups; stacked and summary-only post no rows);
+  `lib/facet.test.ts` (the dormant guard is now live: every
+  `resolveGroupsIndexed(` call in the facet compute passes
+  `facetSliceRowIds(` among its own arguments); `statMarksParity.test.ts`
+  (faceted panels carry the stage's points); `StatStage.test.tsx` (strip
+  offers facet-by); `graphbuilder/previewMarks.test.ts`,
+  `GraphPreview.marks.test.tsx` (the painters are handed the marked draws);
+  backend `tests/test_stat_facet_points.py` (per panel, the scatter read
+  back from matplotlib == tick + hash(row, label) * 0.3 * jitter for box /
+  strip / violin; strip outliers; a row-less panel keeps fliers-only; bar
+  panels' points + median squares; stacked none; both routes draw them and
+  validate them). Eager bundle 855,417 -> 855,754 B (+337: the eager
+  `statStageExport` posts the panel rows; everything else is in the lazy
+  stat / Graph Builder chunks), measured after `npm ci` + a cleared vite
+  cache.
 - [x] Missing levels and unbalanced groups are explicit. (2026-09-26)
   **Survey (before):** every categorical path closed the axis up silently.
   `categoryLevels` never saw a level declared in `cat_levels` that no row

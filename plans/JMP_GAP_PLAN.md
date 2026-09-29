@@ -339,6 +339,10 @@ replacements and its priority case is now stronger, not different.
    all with matplotlib export parity on shared fixtures. Noted scope
    reading: connect-means gates on the stage's one grouping axis
    (`groupCol`), the JMP oneway reading.
+   Facet residual closed 2026-09-29 (PRIMARY P2.6 "Done 2026-09-29"):
+   faceted panels draw jittered points (original rows per slice), strip
+   facets, faceted bars take points / summary, and the Graph Builder
+   preview draws the marks -- screen == export per panel.
 
 ## Tier 2 — Medium Impact
 

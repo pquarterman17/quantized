@@ -30,9 +30,8 @@ from matplotlib.figure import Figure
 
 from quantized.app import app
 from quantized.calc.figure_category_axis import nested_tiers, style_category_axis, wrap_label
-from quantized.calc.figure_facets import _facet_marks
 from quantized.calc.figure_group_notes import connect_segments
-from quantized.calc.figure_stat_marks import SLOT_WIDTH, resolve_marks
+from quantized.calc.figure_stat_marks import SLOT_WIDTH, facet_marks, resolve_marks
 from quantized.calc.figure_statplots import _draw_statplot
 from quantized.calc.figure_styles import figure_style
 from quantized.calc.statplots import box_stats, deterministic_jitter, error_bar_bounds
@@ -435,13 +434,16 @@ def test_categorical_route_takes_axis_style_flat_and_faceted() -> None:
 
 
 def test_facet_panels_show_what_a_panel_can_like_the_screen() -> None:
-    # frontend statStageMarks.facetMarks: no row indices in a facet panel.
+    # A panel WITHOUT row indices (a request from before panels carried
+    # them) keeps the old rule; `test_stat_facet_points.py` covers the rows.
     marks = {"points": "all", "summary": "mean", "error_bars": "se"}
-    assert _facet_marks(marks, "box") == {**marks, "points": "outliers"}
-    assert (_facet_marks({**marks, "points": "none"}, "box") or {})["points"] == "none"
-    assert (_facet_marks(marks, "violin") or {})["points"] == "none"
-    assert _facet_marks(None, "box") is None
-    assert _facet_marks({"summary": "mean"}, "box") == {"summary": "mean"}  # legacy: untouched
+    assert facet_marks(marks, "box", has_rows=False) == {**marks, "points": "outliers"}
+    none = facet_marks({**marks, "points": "none"}, "box", has_rows=False) or {}
+    assert none["points"] == "none"
+    assert (facet_marks(marks, "violin", has_rows=False) or {})["points"] == "none"
+    assert facet_marks(None, "box", has_rows=False) is None
+    # legacy: untouched
+    assert facet_marks({"summary": "mean"}, "box", has_rows=False) == {"summary": "mean"}
 
 
 def test_faceted_route_draws_the_summary_in_every_panel() -> None:

@@ -51,6 +51,7 @@ __all__ = [
     "SUMMARY_MARKS",
     "StatMarks",
     "draw_violin_inner",
+    "facet_marks",
     "overlay_bar_marks",
     "overlay_summary",
     "resolve_marks",
@@ -158,6 +159,22 @@ def resolve_marks(
         box_width=SLOT_WIDTH if new_geometry else None,
         violin_quartiles=new_style,
     )
+
+
+def facet_marks(
+    marks: dict[str, Any] | None, kind: str, *, has_rows: bool,
+) -> dict[str, Any] | None:
+    """The marks one FACET panel draws (the screen's ``statStageMarks.
+    facetMarks``). A panel that carries its own original row indices
+    (``point_row_indices``, the JMP_GAP J5 residual closed 2026-09-29) draws
+    exactly what the flat plot would -- jittered points included. One
+    without them (a request from before that) keeps the old rule: no
+    jittered points -- a box panel shows its fliers for ``points`` "all" or
+    "outliers", a strip or violin panel none."""
+    if not marks or "points" not in marks or has_rows:
+        return marks
+    shown = kind == "box" and marks["points"] != "none"
+    return {**marks, "points": "outliers" if shown else "none"}
 
 
 def scatter_points(

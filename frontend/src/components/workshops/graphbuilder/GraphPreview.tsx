@@ -17,11 +17,16 @@
 // `styles` go to the painter, and its `legend` entries render through the
 // existing read-only legend (Stage/SpatialPanelLegend, LegendSample swatches),
 // so the key shows the same colour and glyph the canvas draws.
+//
+// Categorical marks (JMP_GAP J5 residual, closed 2026-09-29): given the live
+// `spec`, box / violin / bar draw the window's `PlotView.statMarks` for that
+// mode — raw points on ORIGINAL rows, summary marker, error bars — flat and
+// per facet panel, as the Stat Stage it sends to does (`./previewMarks`).
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import type { EncodedSpec } from "../../../lib/plotEncoding";
-import type { SpecRender } from "../../../lib/plotspec";
+import type { PlotSpec, SpecRender } from "../../../lib/plotspec";
 import type { SeriesStyle } from "../../../lib/types";
 import type { Accent, Theme } from "../../../store/useApp";
 import { useApp } from "../../../store/useApp";
@@ -29,17 +34,21 @@ import SpatialPanelLegend from "../../Stage/SpatialPanelLegend";
 import StatStageCanvas from "../../Stage/StatStageCanvas";
 import { draw as drawStat, type StatDrawData } from "../../Stage/statRender";
 import { drawFacetGrid, drawXY } from "./previewCanvas";
+import { previewStatDraws, type PreviewStatDraws } from "./previewMarks";
 
 /** The single-panel canvas host (xy incl. its own facet grid, flat box/bar,
  *  message). Owns the ONE canvas + its paint effect — unchanged from before
  *  #11's box/bar facet grid split it out of the default export. */
 function CanvasHost({
   render,
+  stat,
   styles,
   theme,
   accent,
 }: {
   render: SpecRender;
+  /** The box / bar draw (`previewStatDraws`), marks included. */
+  stat: StatDrawData | null;
   styles?: readonly SeriesStyle[];
   theme: Theme;
   accent: Accent;
@@ -60,21 +69,8 @@ function CanvasHost({
         } else {
           drawXY(canvas, host, render.payload, render.mark, showMarkers, stepMode, render.errorSpans, styles);
         }
-      } else if (render.kind === "box") {
-        drawStat(canvas, host, {
-          mode: "box",
-          boxes: render.boxes,
-          valueLabel: render.valueLabel,
-          groupLabel: render.groupLabel,
-        });
-      } else if (render.kind === "bar") {
-        drawStat(canvas, host, {
-          mode: "bar",
-          data: render.data,
-          valueLabel: render.valueLabel,
-          groupLabel: render.groupLabel,
-          stacked: render.stacked,
-        });
+      } else if (stat) {
+        drawStat(canvas, host, stat);
       } else {
         const ctx = canvas.getContext("2d");
         if (ctx) ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -85,7 +81,7 @@ function CanvasHost({
     const ro = new ResizeObserver(paint);
     ro.observe(host);
     return () => ro.disconnect();
-  }, [render, styles, theme, accent]);
+  }, [render, stat, styles, theme, accent]);
 
   return (
     <div ref={hostRef} style={{ position: "absolute", inset: 0 }}>
@@ -131,50 +127,33 @@ function FacetCellGrid({
   );
 }
 
-/** Faceted box/bar (#11): one small `StatStageCanvas` per facet level instead
- *  of the single shared canvas `CanvasHost` paints — each cell built via the
- *  SAME draw-arg shape the flat `CanvasHost` box/bar branches construct
- *  above, just per facet slice. Narrows on `render.kind` once (not per cell)
- *  so each branch's `facets` element type stays concrete. */
-function FacetStatGrid({
+export default function GraphPreview({
   render,
-  theme,
-  accent,
+  encoded,
+  spec = null,
 }: {
-  render: Extract<SpecRender, { kind: "box" | "bar" }>;
-  theme: Theme;
-  accent: Accent;
+  render: SpecRender;
+  encoded?: EncodedSpec | null;
+  /** The live spec: box / violin / bar then draw the window's marks. */
+  spec?: PlotSpec | null;
 }) {
-  if (render.kind === "box") {
-    const cells = (render.facets ?? []).map((f) => ({
-      label: f.label,
-      draw: { mode: "box", boxes: f.boxes, valueLabel: render.valueLabel, groupLabel: render.groupLabel } as StatDrawData,
-    }));
-    return <FacetCellGrid cells={cells} theme={theme} accent={accent} />;
-  }
-  const cells = (render.facets ?? []).map((f) => ({
-    label: f.label,
-    draw: {
-      mode: "bar",
-      data: f.data,
-      valueLabel: render.valueLabel,
-      groupLabel: render.groupLabel,
-      stacked: render.stacked,
-    } as StatDrawData,
-  }));
-  return <FacetCellGrid cells={cells} theme={theme} accent={accent} />;
-}
-
-export default function GraphPreview({ render, encoded }: { render: SpecRender; encoded?: EncodedSpec | null }) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
+  const datasets = useApp((s) => s.datasets);
+  const statMarks = useApp((s) => s.statMarks);
+  // Faceted box/bar (#11): one small `StatStageCanvas` per facet level instead
+  // of the single shared canvas `CanvasHost` paints.
+  const stat = useMemo<PreviewStatDraws>(
+    () => previewStatDraws(render, spec, datasets, statMarks ?? {}),
+    [render, spec, datasets, statMarks],
+  );
 
   return (
     <div className="qzk-graph-preview">
-      {(render.kind === "box" || render.kind === "bar") && render.facets && render.facets.length > 0 ? (
-        <FacetStatGrid render={render} theme={theme} accent={accent} />
+      {stat.facets && stat.facets.length > 0 ? (
+        <FacetCellGrid cells={stat.facets} theme={theme} accent={accent} />
       ) : (
-        <CanvasHost render={render} styles={encoded?.styles} theme={theme} accent={accent} />
+        <CanvasHost render={render} stat={stat.flat} styles={encoded?.styles} theme={theme} accent={accent} />
       )}
       {render.kind === "xy" && encoded && encoded.legend.length > 0 && <SpatialPanelLegend entries={encoded.legend} />}
       {render.kind === "message" && (

@@ -86,7 +86,7 @@ export interface StatStageState {
    *  (`StatMarksControls.tsx`'s own convention already did). */
   marks: ResolvedStatMarks;
   setMarks: (patch: StatMarks, label?: string) => void;
-  /** Box/Violin/Bar "facet by" column (GUI_INTERACTION #11) — null = no
+  /** Box/Violin/Strip/Bar "facet by" column (GUI_INTERACTION #11) — null = no
    *  facet (the ordinary single-panel draw). Internal picker state, not a
    *  hook param: background windows never seed or set one (see the module
    *  doc). */
@@ -104,7 +104,7 @@ export interface StatStageState {
    *  else null — shown under the plot and exported verbatim as `error_note`. */
   errorNote: string | null;
   draw: StatDrawData | null;
-  /** Small multiples for Box/Violin/Bar (#11) — one draw per facet-column
+  /** Small multiples for Box/Violin/Strip/Bar (#11) — one draw per facet-column
    *  level, non-null only when `facetCol` is set AND the mode is box/violin/
    *  bar. `draw` above is null while this is non-null (a facet grid has no
    *  single flat panel) — `exportFigure` below reads THIS instead when set

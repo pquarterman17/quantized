@@ -62,8 +62,8 @@ def _draw_categorical_bars(
     ``bar_marks`` (P2.6 box 1, GROUPED bars only): raw points / jitter / the
     summary marker, keyword arguments of ``calc.figure_stat_marks.
     overlay_bar_marks`` (``points``, ``jitter_width``, ``summary``, ``raw``,
-    ``raw_rows``). Stacked bars draw none of them, as on screen; faceted
-    panels are never given any (a panel has no row indices)."""
+    ``raw_rows``). Stacked bars draw none of them, as on screen; a facet
+    panel is given its own cells' (``figure_facets``, JMP_GAP J5 residual)."""
     n_groups, n_series = len(groups), len(series)
     x = np.arange(n_groups, dtype=float)
     if stacked:
