@@ -11,6 +11,7 @@ import type { Dataset } from "../../../lib/types";
 import {
   applyPointBudget,
   batchChannels,
+  batchErrKeys,
   batchSegment,
   batchTotalDeadline,
   mapPool,
@@ -133,6 +134,41 @@ describe("prepareBatchItem", () => {
     const D = dataset("d", ["2theta", "I"], (i) => [tth(i), i === 5 ? Number.NaN : inten(i)]);
     const out = await prepareBatchItem(D, recipe(), CH);
     expect(out.ok && out.notes).toEqual(["1 gap rows in range were excluded"]);
+  });
+});
+
+describe("per-dataset y_err (the dataset's own error column)", () => {
+  const sigma = (i: number) => 0.1 * (i + 1);
+  // Row 5 is a gap in I, row 6 excluded: kept rows are analysis-view indices.
+  const E = dataset("e", ["2theta", "I", "dI"], (i) => [tth(i), i === 5 ? Number.NaN : inten(i), sigma(i)], {
+    excludedRows: [6],
+  });
+  const range = { lo: tth(2), hi: tth(9) };
+
+  it("sends |sigma| for exactly the fitted rows when the dataset designates an error column", async () => {
+    const out = await prepareBatchItem(E, recipe({ range }), CH, { 1: 2 });
+    if (!out.ok) throw new Error(out.error);
+    expect(out.item.y_err).toEqual([2, 3, 4, 7, 8, 9].map(sigma));
+    expect(out.item.y_err).toHaveLength(out.item.x.length);
+  });
+
+  it("no designation, or a sigma column with a zero, fits unweighted", async () => {
+    const none = await prepareBatchItem(E, recipe({ range }), CH, {});
+    expect(none.ok && "y_err" in none.item).toBe(false);
+    const Z = dataset("z", ["2theta", "I", "dI"], (i) => [tth(i), inten(i), i === 3 ? 0 : sigma(i)]);
+    const zero = await prepareBatchItem(Z, recipe({ range }), CH, { 1: 2 });
+    expect(zero.ok && "y_err" in zero.item).toBe(false);
+  });
+
+  it("the designation is the dataset's own: live view errKeys for the active one, stored roles elsewhere", () => {
+    const live = { 1: 2 };
+    expect(batchErrKeys(E, "e", live)).toBe(live);
+    const roles = dataset("r", ["2theta", "I", "sig"], (i) => [tth(i), inten(i), sigma(i)], {
+      errorRoles: [{ channel: 2, target: 1, axis: "y", side: "both" }],
+    });
+    expect(batchErrKeys(roles, "e", live)[1]).toBe(2);
+    const bare = dataset("n", ["2theta", "I", "T"], (i) => [tth(i), inten(i), 300], { errorRoles: [] });
+    expect(batchErrKeys(bare, "e", live)[1]).toBeUndefined();
   });
 });
 
