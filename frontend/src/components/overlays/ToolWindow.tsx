@@ -69,6 +69,8 @@ export default function ToolWindow({
   // its own edit; an explicit `helpTopic` still wins, including for a window
   // with no registry entry.
   const topic = helpTopic ?? workshopHelpTopic(id);
+  // The title-bar buttons' accessible names say WHICH panel they act on.
+  const panelName = typeof title === "string" ? title : "this panel";
 
   const [z, setZ] = useState(() => ++zTop);
   const dragRef = useRef<{ dx: number; dy: number } | null>(null);
@@ -242,6 +244,7 @@ export default function ToolWindow({
     <div
       ref={winRef}
       className="qzk-glass qzk-win"
+      data-tool-window={id}
       tabIndex={-1}
       style={{
         left: layout.x,
@@ -265,6 +268,8 @@ export default function ToolWindow({
           <button
             className="qzk-win-close"
             title="Close"
+            // R4: name the panel, like Help below, so two open ✕s differ.
+            aria-label={`Close ${panelName}`}
             onPointerDown={(e) => e.stopPropagation()}
             // `closeNow`, not `onClose`: the ✕ unmounts the panel with focus
             // ON ITSELF, so the restore has to run before it disappears.
@@ -276,7 +281,7 @@ export default function ToolWindow({
           <button
             type="button"
             className="qz-card-help"
-            aria-label={`Help for ${typeof title === "string" ? title : "this panel"}`}
+            aria-label={`Help for ${panelName}`}
             data-tip="Open related help"
             data-tip-desc="Show Help already filtered to this panel's related tools."
             // The title bar IS the drag handle; Close and Collapse both stop

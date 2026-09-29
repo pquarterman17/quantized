@@ -2,7 +2,10 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import PeakWizardPanel from "./PeakWizardPanel";
+import ToolWindow from "../../overlays/ToolWindow";
+import { pushEscapeSurface } from "../../../lib/escapeStack";
 import type { Dataset } from "../../../lib/types";
+import { pressEscape } from "../../../test/pressEscape";
 import { useApp } from "../../../store/useApp";
 
 const { findMock, fitMock, integrateMock, emitMock, alsMock } = vi.hoisted(() => ({
@@ -69,6 +72,7 @@ beforeEach(() => {
     openReportId: null,
     peakOverlay: null,
     baselineOverlay: null,
+    peakWizardEdit: null,
   });
 });
 
@@ -171,5 +175,83 @@ describe("PeakWizardPanel", () => {
     expect(s.peakWizardOpen).toBe(false);
     expect(s.peakOverlay).toBeNull();
     expect(s.baselineOverlay).toBeNull();
+  });
+});
+
+// Residual R11 (PRIMARY_SOFTWARE_AUDIT_PLAN): step ②'s marker-edit pause used
+// to claim Escape with a window-bubble `preventDefault()` from ANY focus, so it
+// out-ranked an open menu and stole keystrokes aimed at other windows. It is
+// now a registered surface on `lib/escapeStack.ts`'s ladder: a `window`-tier
+// claim only while focus is inside the Analyzer, and a `selection`-tier claim
+// (below every open surface) when focus is outside all of them, e.g. the plot.
+describe("PeakWizardPanel — the step ② Escape pause is scoped (R11)", () => {
+  const stepTwo = () => {
+    const chip = screen.getByText("Find peaks", { selector: ".qzk-wizard-step" });
+    fireEvent.click(chip);
+    expect(useApp.getState().peakWizardEdit).not.toBeNull();
+    return chip;
+  };
+
+  it("inside the Analyzer: Esc① pauses and keeps it open, Esc② closes it", async () => {
+    render(<PeakWizardPanel />);
+    const chip = stepTwo();
+    chip.focus();
+    await pressEscape(chip);
+    expect(useApp.getState().peakWizardEdit).toBeNull();
+    expect(useApp.getState().peakWizardOpen).toBe(true);
+    await pressEscape(chip);
+    expect(useApp.getState().peakWizardOpen).toBe(false);
+  });
+
+  it("an open menu owns Escape: it closes and the edit stays live", async () => {
+    render(<PeakWizardPanel />);
+    const chip = stepTwo();
+    chip.focus();
+    const closeMenu = vi.fn(() => true);
+    const unregister = pushEscapeSurface("menu", closeMenu);
+    try {
+      await pressEscape(chip);
+      expect(closeMenu).toHaveBeenCalledOnce();
+      expect(useApp.getState().peakWizardEdit).not.toBeNull();
+      expect(useApp.getState().peakWizardOpen).toBe(true);
+    } finally {
+      unregister();
+    }
+  });
+
+  it("an Escape aimed at another window closes that window, not the edit", async () => {
+    const closeOther = vi.fn();
+    render(
+      <>
+        <PeakWizardPanel />
+        <ToolWindow id="other-panel" title="Other" onClose={closeOther}>
+          <button type="button">Other control</button>
+        </ToolWindow>
+      </>,
+    );
+    stepTwo();
+    const other = screen.getByRole("button", { name: "Other control" });
+    other.focus();
+    await pressEscape(other);
+    expect(closeOther).toHaveBeenCalledOnce();
+    expect(useApp.getState().peakWizardEdit).not.toBeNull();
+  });
+
+  it("from outside every window it pauses only after the surfaces above decline", async () => {
+    render(<PeakWizardPanel />);
+    stepTwo();
+    (document.activeElement as HTMLElement | null)?.blur();
+    const closeWorkspace = vi.fn(() => true);
+    const unregister = pushEscapeSurface("workspace", closeWorkspace);
+    try {
+      await pressEscape(document.body);
+      expect(closeWorkspace).toHaveBeenCalledOnce();
+      expect(useApp.getState().peakWizardEdit).not.toBeNull();
+    } finally {
+      unregister();
+    }
+    await pressEscape(document.body); // nothing above it now: the plot-side pause
+    expect(useApp.getState().peakWizardEdit).toBeNull();
+    expect(useApp.getState().peakWizardOpen).toBe(true);
   });
 });

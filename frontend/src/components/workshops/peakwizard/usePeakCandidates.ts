@@ -23,12 +23,14 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { useEscapeSurface } from "../../../lib/escapeStack";
 import { visiblePeakMarkers } from "../../../lib/peakMarkerHit";
 import { seedPeakNear } from "../../../lib/peakSeed";
 import { baselineValueAt, plotApexY } from "../../../lib/peakWizardApex";
 import type { PeakRecipe } from "../../../lib/peakwizard";
 import { fullPlottedX } from "../../../lib/fitselectionActions";
 import { peakOverlayArray } from "../../../lib/plotdata";
+import { isInsideToolWindow } from "../../../lib/toolwindow";
 import type { Dataset, Peak } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
@@ -80,6 +82,10 @@ interface Inputs {
 
 let nextCandidateId = 1;
 const includedIds = (cs: readonly CandidatePeak[]): number[] => cs.filter((c) => c.included).map((c) => c.id);
+
+/** The Peak Analyzer's `ToolWindow` id — shared with PeakWizardPanel so the
+ *  Escape pause below can tell focus inside its own frame (R11). */
+export const PEAK_WIZARD_WINDOW_ID = "peakwizard";
 
 /** How many INCLUDED candidates precede candidate `i` (its model index). */
 const includedIndex = (cs: readonly CandidatePeak[], i: number): number =>
@@ -205,24 +211,24 @@ export function usePeakCandidates(inp: Inputs) {
   // Escape pauses the mode (mirrors useGadgetChip's Escape-to-dismiss) without
   // navigating away from step ②; re-entering the step below un-pauses it.
   //
-  // `preventDefault()` is the repo's "this keystroke was mine" convention
-  // (useGlobalShortcuts' header documents it), and here it is load-bearing:
-  // this panel is hosted by `ToolWindow`, whose Escape-to-close reads
-  // `defaultPrevented` once the dispatch is over. Without the claim, one
-  // Escape would pause the marker-edit mode AND close the whole Peak Analyzer.
-  // The listener is mounted only while there is something to pause, so a
-  // SECOND Escape (mode already paused) claims nothing and closes the panel as
-  // usual.
-  useEffect(() => {
-    if (step !== 1 || !active || editSuppressed) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape" || e.defaultPrevented) return;
-      e.preventDefault();
-      setEditSuppressed(true);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [step, active, editSuppressed]);
+  // Residual R11: this used to be a bare window-bubble listener that
+  // `preventDefault()`ed from ANY focus, so it out-ranked an open menu (the
+  // escapeStack walk re-reads `defaultPrevented`) and stole keystrokes aimed at
+  // other windows. It now sits on the shared ladder (lib/escapeStack.ts) twice,
+  // both registered only while there is something to pause, so the SECOND
+  // Escape (mode already paused) closes the Analyzer as usual:
+  //  - `window` tier, only while focus is inside the Analyzer's own frame.
+  //    Registered on reaching step ②, i.e. after the host `ToolWindow`, so it
+  //    is offered the key first and the host does not close on the same key.
+  //  - `selection` tier otherwise — focus on the plot being clicked, or on
+  //    <body>. That is below every open menu, window and workspace, exactly
+  //    like the Stage's other armed modes.
+  const pauseEdit = () => {
+    setEditSuppressed(true);
+    return true;
+  };
+  useEscapeSurface("window", (e) => isInsideToolWindow(e.target, PEAK_WIZARD_WINDOW_ID) && pauseEdit(), markerEditActive);
+  useEscapeSurface("selection", pauseEdit, markerEditActive);
 
   // Any step change resets the pause — so it never outlives the visit to ②
   // that raised it, and returning to ② always starts un-paused.

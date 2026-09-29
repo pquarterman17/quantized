@@ -10,6 +10,7 @@ import { fireEvent, renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { pushEscapeSurface } from "../../../lib/escapeStack";
 import { setActiveGestureCancel } from "../../../lib/gestureCancel";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -169,12 +170,12 @@ describe("usePeakWizard — click-on-plot add/remove drive the existing handlers
 });
 
 describe("usePeakWizard — Escape pauses click-on-plot editing", () => {
-  it("Escape deactivates without changing the step; re-entering step ② re-arms it", () => {
+  it("Escape deactivates without changing the step; re-entering step ② re-arms it", async () => {
     const { result } = renderHook(() => usePeakWizard());
     act(() => result.current.setStep(1));
     expect(result.current.markerEditActive).toBe(true);
 
-    fireEvent.keyDown(window, { key: "Escape" });
+    await pressEscape(); // a registry surface since R11, so the walk is deferred
     expect(result.current.markerEditActive).toBe(false);
     expect(useApp.getState().peakWizardEdit).toBeNull();
     expect(result.current.step).toBe(1); // still on step ② — Escape didn't navigate
@@ -192,28 +193,28 @@ describe("usePeakWizard — Escape pauses click-on-plot editing", () => {
     expect(result.current.markerEditActive).toBe(true);
   });
 
-  // P3.3 round 2 (review finding 2): this panel is hosted by `ToolWindow`,
-  // whose Escape-to-close re-reads `defaultPrevented` once the dispatch is
-  // over. Without the claim, ONE Escape both paused the marker-edit mode and
-  // closed the whole Peak Analyzer.
-  it("CLAIMS the Escape it consumes, so the hosting window keeps the panel open", () => {
-    const { result } = renderHook(() => usePeakWizard());
-    act(() => result.current.setStep(1));
+  // P3.3 round 2 (review finding 2): without a claim, ONE Escape both paused
+  // the marker-edit mode and acted below it (it used to close the whole Peak
+  // Analyzer). Since R11 the claim is a registry surface, not a
+  // `preventDefault()`; the host-window half of this is pinned against the
+  // real panel in PeakWizardPanel.test.tsx.
+  it("CLAIMS the Escape it consumes, and only while there is something to pause", async () => {
+    const below = vi.fn(() => true);
+    const unregister = pushEscapeSurface("app", below);
+    try {
+      const { result } = renderHook(() => usePeakWizard());
+      act(() => result.current.setStep(1));
 
-    const paused = new KeyboardEvent("keydown", { key: "Escape", cancelable: true, bubbles: true });
-    act(() => {
-      window.dispatchEvent(paused);
-    });
-    expect(result.current.markerEditActive).toBe(false);
-    expect(paused.defaultPrevented).toBe(true);
+      await pressEscape();
+      expect(result.current.markerEditActive).toBe(false);
+      expect(below).not.toHaveBeenCalled(); // the pause stopped the walk
 
-    // A SECOND Escape has nothing left to pause, so it claims nothing and the
-    // window is free to close the panel.
-    const spare = new KeyboardEvent("keydown", { key: "Escape", cancelable: true, bubbles: true });
-    act(() => {
-      window.dispatchEvent(spare);
-    });
-    expect(spare.defaultPrevented).toBe(false);
+      // A SECOND Escape has nothing left to pause, so it reaches the surface below.
+      await pressEscape();
+      expect(below).toHaveBeenCalledOnce();
+    } finally {
+      unregister();
+    }
   });
 });
 

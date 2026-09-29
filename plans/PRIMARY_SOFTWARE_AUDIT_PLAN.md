@@ -5880,9 +5880,11 @@ that goes red without its fix.
   Round 10's review follow-up also CLOSED R16, the residual that round opened,
   and **round 11 (2026-09-25) CLOSED R15**: a modal now gates the app's
   window-level shortcuts (`frontend/src/lib/appShortcuts.ts`).
-  Stays `[~]` rather than `[x]`: eleven residuals remain (R2–R11 and R14
-  below — R1, R12, R13, R15 and R16 are closed, R14 was opened by the round-9
-  re-review), each a distinct, smaller gap — none of them a
+  **2026-09-29 CLOSED R2, R4 and R11** (keyboard/a11y residual pass; see
+  each entry below).
+  Stays `[~]` rather than `[x]`: eight residuals remain (R3, R5–R10 and R14
+  below — R1, R2, R4, R11, R12, R13, R15 and R16 are closed, R14 was opened
+  by the round-9 re-review), each a distinct, smaller gap — none of them a
   dialog with no keyboard dismissal at all, which is what the audit originally
   found.
 
@@ -5900,7 +5902,7 @@ that goes red without its fix.
   | QuickPlotWithDialog | **N** | **N** | **dead** | **N** | all four |
   | AnnotationTextDialog | **N** | **N** | weak | **N** | all four |
   | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | Y | Y | Y (stacked too, round 9) | Y | R1 CLOSED — focus-in + trap + restore in round 7; Escape ownership in round 9, on `escapeStack`'s `modal` layer (BUG-018) |
-  | CommandPalette | Y | (single input) | Y | **N** | unchanged — residual |
+  | CommandPalette | Y | (single input) | Y | Y (R2, 2026-09-29) | R2 CLOSED — `useOpenerCapture` (leaf `openerCapture.ts`) + eager restore before a run command acts |
   | ContextMenu | Y | n/a (roving menu) | Y | Y | already correct |
   | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2); Escape re-homed on the shared ordered registry (round 3); a DECLINED close keeps the key (round 4) |
   | LibraryTree / LibraryDetails / LibraryTile | Y | n/a | Y | — | already correct, untouched |
@@ -6167,7 +6169,7 @@ that goes red without its fix.
 
   | Layer | Consumer | Why it sits there |
   |---|---|---|
-  | `menu` | `MenuBar`, `AppearanceMenu` | GUI_INTERACTION #9: an open menu OWNS Escape. Both used to close on a plain document-keydown with no `preventDefault`, so the registry walked too and a surface below acted on the same keystroke (measured: menu closed AND the armed tool reverted). **Not unconditional — CORRECTED in round 6 (review finding 3): with the Peak Analyzer at step ②, `usePeakWizard`'s window-bubble `preventDefault()` lands during the dispatch, the walk's re-read then returns, and the open menu does NOT close. Measured at round 5's tip and unchanged by round 6: menu registered + wizard at step ② → the menu stays open and the wizard pauses instead. That is residual R11's class (the wizard claims without checking that focus is inside its own window), and closing it is R11's fix, not a table edit.** |
+  | `menu` | `MenuBar`, `AppearanceMenu` | GUI_INTERACTION #9: an open menu OWNS Escape. Both used to close on a plain document-keydown with no `preventDefault`, so the registry walked too and a surface below acted on the same keystroke (measured: menu closed AND the armed tool reverted). **Not unconditional — CORRECTED in round 6 (review finding 3): with the Peak Analyzer at step ②, `usePeakWizard`'s window-bubble `preventDefault()` lands during the dispatch, the walk's re-read then returns, and the open menu does NOT close. Measured at round 5's tip and unchanged by round 6: menu registered + wizard at step ② → the menu stays open and the wizard pauses instead. That is residual R11's class (the wizard claims without checking that focus is inside its own window), and closing it is R11's fix, not a table edit.** **Now unconditional — R11 CLOSED 2026-09-29: the pause is a registered `window`/`selection` surface, so the menu (rank 5) is offered the key first and closes; pinned by `PeakWizardPanel.test.tsx` "an open menu owns Escape: it closes and the edit stays live".** |
   | `gesture` | `useGlobalShortcuts` → `cancelActiveGesture()` | A drag happening RIGHT NOW is genuinely innermost — the user's hand is on it — so it outranks even the window focus is in. Declines (returns false) when nothing is mid-drag. Resolved synchronously at keydown since round 5, and since round 6 a claim here also `preventDefault()`s, so a late window-bubble consumer cannot act on the same key. |
   | `window` | `ToolWindow` (every workshop host, incl. `OriginSavedPreviewWindow`) | A floating panel is in front of the workspace behind it. Declines when focus is not inside its own frame. **("all 48 hosts" as written in round 4 was not reproducible — CORRECTED in round 6, review finding 5. Measured at round 6's tip: **40** production `.tsx` files render `<ToolWindow` across **41** render sites, and **44** import it; counting test files too gives 45 files / 78 sites / 50 importers. The substance — one registry entry per `ToolWindow` mount, so every host gets it — is unchanged; only the decorative count was wrong.)** |
   | `workspace` | `LibraryWorkspace` (Tiles), `QuickFigureBuilderWorkspace` | Full-Stage workspaces; mutually exclusive in `App.tsx`, so two can never co-exist. |
@@ -6286,6 +6288,28 @@ that goes red without its fix.
     and the pause fired instead — and fixed the MODAL side by resolving that
     layer at keydown. The menu side is unchanged and still R11's to close: a
     `menu` is resolved in the deferred walk, so the pause still wins there.
+
+    **CLOSED (2026-09-29).** The pause no longer `preventDefault()`s from a
+    bare window listener. `usePeakCandidates.ts` registers it on the ladder
+    twice, both only while there is something to pause: a `window`-tier
+    surface that claims only when focus is inside the Analyzer's own frame
+    (`ToolWindow` now stamps `data-tool-window={id}`, read by
+    `lib/toolwindow.ts`'s `isInsideToolWindow` — the hook renders the window
+    but cannot reach its ref), registered after the host so it is offered the
+    key first; and a `selection`-tier surface for focus outside every window
+    (the plot being clicked, `<body>`), below every menu, window and
+    workspace like the Stage's other armed modes. `lib/escapeStack.ts`'s
+    header now lists ONE documented `preventDefault()` exception
+    (`SymbolPalette`). Red-first, `PeakWizardPanel.test.tsx` "the step ②
+    Escape pause is scoped (R11)": three of four red at base (menu stays open;
+    an Escape aimed at another window paused the edit instead; a workspace
+    lost to the pause), the in-frame "Esc① pauses and keeps it open, Esc②
+    closes it" green at base as the regression guard. Two sabotages: dropping
+    the focus scope re-reddens 2 (other window, workspace); dropping the
+    `window`-tier registration re-reddens the in-frame guard (the host closed
+    the Analyzer on Esc①). `usePeakWizard.test.ts`'s old "CLAIMS … 
+    `defaultPrevented`" case was rewritten to the registry contract (the
+    pause stops the walk; the second Escape reaches the surface below).
 
   - **R12** (round 8, review NIT 4) — **two `aria-modal="true"` dialogs can be
     mounted at once, and each one hides the app's live regions.** Follows
@@ -7218,6 +7242,26 @@ that goes red without its fix.
     phase's.
   - **R2** — `CommandPalette` focuses its input but never restores focus to
     the opener on close.
+    **CLOSED (2026-09-29).** NOT via `useOpenerRestore` itself, measured:
+    importing it from the EAGER palette made `architecture.test.ts` "nothing
+    eager reaches a seam" fail — `useDialogFocus.ts` and `lib/scrollOutFocus.ts`
+    are DRAGGED_OUT of the entry chunk by bundle-diet slice 8. So the
+    dependency-free `useOpenerCapture` moved to the leaf
+    `overlays/openerCapture.ts` (re-exported by `useDialogFocus`, importers
+    untouched), and the palette applies `useOpenerRestore`'s contract with it
+    minus the safe-landing fallback: every close path (Escape, running a
+    command, a backdrop mousedown) goes through one `close` that restores
+    EAGERLY, before the input unmounts and before a run command acts — so a
+    dialog the command opens captures the real opener instead of a dead input
+    — and an effect cleanup is the backstop for a close from elsewhere
+    (acting only on a dropped focus). The backdrop mousedown now
+    `preventDefault()`s so the click's default focus move cannot land on
+    `<body>` after the restore. Red-first, `CommandPalette.test.tsx` "returns
+    focus to its opener (R2)": Escape / run / backdrop all red at base (focus
+    left on `<body>`); the backstop case was added with the fix. Sabotages:
+    eager restore off → "on running a command, BEFORE the command acts"
+    re-reddens; backstop off → "on a close from outside the palette"
+    re-reddens.
   - **R3** — floating workshop windows have no keyboard MOVE or RESIZE. No
     plan-level promise commits to one; GUI_INTERACTION #10's recoverability
     promise is met by title-bar clamping plus the keyboard-reachable View-menu
@@ -7225,6 +7269,13 @@ that goes red without its fix.
   - **R4** — `ToolWindow`'s ✕ takes its accessible name from `title="Close"`
     alone and does not say WHICH panel it closes. That belongs to the
     accessible-names box above, not this one.
+    **CLOSED (2026-09-29).** The ✕ now carries `aria-label="Close <panel
+    title>"` ("Close this panel" for a non-string title), the same rule the
+    adjacent Help button already used — both now read one `panelName`.
+    `title="Close"` stays as the one-sentence tooltip, so every
+    `getByTitle("Close")` site (unit + the `arbitrary-data-journey` e2e) is
+    unaffected. Red-first, `ToolWindow.test.tsx` "names the panel it closes";
+    sabotage (label removed) re-reddens it.
   - **R5** (round 2, review NIT 12) — under React StrictMode's dev-only
     mount→cleanup→mount, `useOpenerRestore`'s cleanup restores to the opener
     mid-open and the re-run pulls focus back in. Net-correct, one dev-only
