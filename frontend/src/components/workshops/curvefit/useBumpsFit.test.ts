@@ -94,10 +94,10 @@ describe("useBumpsFit DREAM job in the shared StatusBar ops", () => {
   });
 
   it("a synchronous engine shows a busy op with no Cancel control", async () => {
-    let done!: (v: unknown) => void;
+    let done!: (v: Awaited<ReturnType<typeof fitBumps>>) => void;
     vi.mocked(fitBumps).mockReturnValue(new Promise((r) => {
       done = r;
-    }) as ReturnType<typeof fitBumps>);
+    }));
     const { result } = renderHook(() => useBumpsFit());
     act(() => result.current.setEngine("lm"));
     let p!: Promise<void>;
@@ -106,7 +106,7 @@ describe("useBumpsFit DREAM job in the shared StatusBar ops", () => {
     });
     await waitFor(() => expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Bumps lm fit"]));
     expect(usePendingOps.getState().ops[0].cancel).toBeUndefined();
-    done({ engine: "lm", popt: [1], uncertainties: [0.1], chisq: 1, uncertainty_kind: "hessian", paramNames: ["m"] });
+    done({ engine: "lm", popt: [1], uncertainties: [0.1], chisq: 1, uncertainty_kind: "hessian", paramNames: ["m"], yFit: [11, 31, 41] });
     await act(async () => {
       await p;
     });
