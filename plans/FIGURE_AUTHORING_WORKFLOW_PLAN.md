@@ -601,9 +601,46 @@ with parent items P1.3 and P1.5.
         (`recipeApplyChoices.test.ts` runs a real recorded transformation;
         `RecipeManagerChoices.test.tsx` drives the panel).
         **Owner questions:**
-        (a) **OPEN.** *Should "Excluded rows" (hide/grey) become a per-figure
-        setting so a recipe can apply its recorded policy, or stay app-wide
-        with the recipe only reporting a mismatch (today's behavior)?*
+        (a) *Should "Excluded rows" (hide/grey) become a per-figure setting so
+        a recipe can apply its recorded policy, or stay app-wide with the
+        recipe only reporting a mismatch (today's behavior)?*
+        **Decided 2026-09-29 (owner): keep app-wide, notice only; default
+        greyed, an easy toggle, and an explicit choice on export when rows are
+        masked.** Shipped in `7544eee3`:
+        - App-wide, unchanged in kind: recipes still record the mode and only
+          name a mismatch on apply (no per-figure setting).
+        - Default **greyed** (`store/prefs.ts`). The choice now persists under
+          `excludedDisplayV2`; the legacy `excludedDisplay` key is still
+          written but no longer read, because `syncPrefs` always wrote every
+          pref, so a stored legacy "hide" cannot be told from the old implicit
+          default. Absent or legacy-only prefs load greyed; any v2 value (a
+          "hide" there can only be the user's own pick) is kept
+          (`prefs.test.ts`).
+        - Easy toggle: an always-visible status-bar button, "Grey excluded
+          rows" with `aria-pressed` (`Shell/ExcludedRowsToggle.tsx`), plus the
+          palette command "Toggle greyed excluded rows". Both go through
+          `setPref`: a view preference, never an undo entry, and every plot
+          re-renders from the store (`ExcludedRowsToggle.test.tsx`).
+        - Explicit choice on export: each covered path builds its request
+          twice (greyed / omitted) and asks "Show excluded rows greyed" vs
+          "Omit excluded rows", pre-selected to the app mode, only when the
+          two differ; dismissing cancels (`lib/excludedRowsChoice.ts`). No
+          backend change: greyed rows ride the EXISTING request fields
+          (`dataset` re-indexed kept-then-dropped, one "(excluded)" ghost
+          channel per plotted series in `y_keys`, a grey, line-free marker
+          `series_styles` entry, the parent's `y2_keys` / waterfall / decade
+          offsets), mirroring the canvas' own companions
+          (`lib/excludedRowsExport.ts`; `excludedRowsExport.test.ts`). Covered:
+          Export figure, Copy figure (PNG and SVG), the Figure Page composer's
+          Export / Copy (its preview now follows the app mode), the Library's
+          saved-page export, and the Figure Builder's canonical Export
+          (`excludedRowsChoice.test.ts`,
+          `usePagePreviewExport.excluded.test.ts`, `PagesSection.test.tsx`).
+          **Not covered** (still omit, no question): the spatial Origin
+          "Export page…", "Send figure to report…", the Figure Builder's
+          legacy (non-canonical) live-plot export, and faceted or
+          Color/Symbol-encoded figures (the faceted grid never greys on screen
+          either; the encoded renderer would recolour the ghosts).
         (b) **DECIDED (owner, 2026-09-29): "Rejection with notice."** *When a
         chosen transformation succeeds but the Plot Recipe then refuses its
         output (technique/column mismatch)*, the transformation is rolled
@@ -1808,6 +1845,15 @@ Transform / Style choices in the Recipe Manager. Recipes stay manual: both
 choices default to "as the recipe says", nothing is applied automatically,
 and every apply still creates a new figure. Three owner questions are left
 open under F4.2c.
+
+### 2026-09-29 — F4.2c (a) decided: excluded rows stay app-wide (Claude)
+
+Owner decision: keep "Excluded rows" app-wide with recipes noting a mismatch
+only; default greyed; a one-click status-bar toggle plus a palette command;
+and an explicit greyed-or-omitted question on export whenever the figure has
+masked rows. Greyed rows ride existing export request fields, so the backend
+is unchanged. Details and the paths not covered are under F4.2c (a); code in
+`7544eee3`.
 
 ### 2026-09-09 — Plans reconciliation: F2.2 parent box flipped (Claude)
 
