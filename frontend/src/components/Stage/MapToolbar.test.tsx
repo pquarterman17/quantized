@@ -32,7 +32,7 @@ function renderToolbar(overrides: Partial<MapToolbarProps> = {}) {
     roiMode: "off", onToggleRoi: vi.fn(),
     rulerMode: "off", onToggleRuler: vi.fn(),
     wedgeMode: "off", onToggleWedge: vi.fn(),
-    onSavePng: vi.fn(),
+    onExport: vi.fn(),
     ...overrides,
   } as MapToolbarProps;
   render(<MapToolbar {...props} />);
