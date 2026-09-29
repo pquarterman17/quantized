@@ -21,6 +21,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePeakBaseline } from "./usePeakBaseline";
 import { usePeakCandidates, type CandidatePeak } from "./usePeakCandidates";
 import { useModelFit, type ModelFitState } from "./useModelFit";
+import { segmentYErr } from "./modelFitWeights";
 import { modelPeaksForIntegrate, usePeakWizardOutput, type IntegrateResult } from "./usePeakWizardOutput";
 
 import { fitMultiPeak } from "../../../lib/api/peaks";
@@ -126,6 +127,7 @@ export function usePeakWizard(): PeakWizardState {
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
+  const errKeys = useApp((s) => s.errKeys);
 
   const [step, setStep] = useState(0);
   const [recipe, setRecipe] = useState<PeakRecipe>(DEFAULT_RECIPE);
@@ -203,6 +205,7 @@ export function usePeakWizard(): PeakWizardState {
       x: pairs.x,
       y: pairs.y,
       kept: pairs.keep.map((i) => cut.kept[i]!),
+      yKey: sel.yKey,
       gapCount: pairs.n - pairs.keep.length,
       sourceCount: pairs.n,
     };
@@ -301,9 +304,14 @@ export function usePeakWizard(): PeakWizardState {
     [candidates],
   );
   // useModelFit invalidates its own result from a content key of these inputs
-  // (dataset, included peaks, recipe model, engine, working x/y) — see its header.
+  // (dataset, included peaks, recipe model, engine, working x/y, y_err) — see its header.
+  // The primary channel's designated error column as σ (the curve fit's pick).
+  const yErr = useMemo(
+    () => (segment ? segmentYErr(active, segment.yKey, errKeys[segment.yKey], segment.kept) : null),
+    [active, segment, errKeys],
+  );
   const model = useModelFit({
-    active, segment, workingY, baseline, baselineOn: recipe.baseline.method !== "none",
+    active, segment, workingY, yErr, baseline, baselineOn: recipe.baseline.method !== "none",
     peaks: included, model: recipe.model, fit: recipe.fit, setFit,
     xKey, recipeName: recipe.name, baselineMethod: recipe.baseline.method,
   });

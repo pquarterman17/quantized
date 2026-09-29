@@ -6,8 +6,9 @@
 //
 // ONE CONTENT KEY drives everything that depends on the inputs: the active
 // dataset id, the included candidates, the recipe's shape / background degree
-// / width link, the engine, and a digest of the working x and y (so a range,
-// baseline, toggle/add/remove-peak or same-id data change all move it).
+// / width link, the engine, and a digest of the working x and y and of the
+// per-point σ sent as `y_err` (so a range, baseline, toggle/add/remove-peak,
+// error-column or same-id data change all move it).
 //   * Parameters (slice 3): the USER'S EDITS live in the recipe's fit section
 //     (`fit`, lib/peakRecipeFit.ts — engine, per-peak shapes, background, and
 //     field-level parameter edits by stable name), so they save and load with
@@ -133,6 +134,8 @@ export interface ModelFitInputs {
   active: Dataset | null;
   segment: { x: number[]; kept: number[] } | null;
   workingY: number[] | null;
+  /** 1σ per segment point (the designated error column), or null = unweighted. */
+  yErr?: number[] | null;
   baseline: (number | null)[] | null;
   baselineOn: boolean;
   peaks: SeedPeak[];
@@ -193,8 +196,8 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
   const activeId = active?.id ?? null;
   const key = useMemo(
     () => JSON.stringify([activeId, peaks, model.shape, model.bgDegree, model.linkMode, engine,
-      digest(segment?.x), digest(workingY)]),
-    [activeId, peaks, model.shape, model.bgDegree, model.linkMode, engine, segment, workingY],
+      digest(segment?.x), digest(workingY), inp.yErr ? digest(inp.yErr) : null]),
+    [activeId, peaks, model.shape, model.bgDegree, model.linkMode, engine, segment, workingY, inp.yErr],
   );
   const setup = useMemo(
     () => buildSetup(peaks, fit, model, segment?.x ?? [], workingY ?? []),
@@ -300,7 +303,7 @@ export function useModelFit(inp: ModelFitInputs): ModelFitState {
     setRefusal(null);
     setPublishedTable(null);
     try {
-      const res = await fitPeakModel(modelFitBody(setup, segment.x, workingY), controller.signal);
+      const res = await fitPeakModel(modelFitBody(setup, segment.x, workingY, inp.yErr), controller.signal);
       if (seq.current !== id) return; // superseded — a newer run/cancel/reset owns this panel
       dropOverlays(false);
       setRan({
