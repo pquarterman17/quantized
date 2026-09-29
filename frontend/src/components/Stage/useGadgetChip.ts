@@ -79,7 +79,10 @@ export function useGadgetChip(): GadgetChipState {
   const cursors = useApp((s) => s.gadgetCursors);
   const model = useApp((s) => s.qfitModel);
   const setModel = useApp((s) => s.setQfitModel);
-  const fitResult = useApp((s) => s.qfitResult);
+  // Only a result the PICKED model produced is shown, committable or reportable.
+  const fitResult = useApp((s) =>
+    s.qfitResultModel == null || s.qfitResultModel === s.qfitModel ? s.qfitResult : null,
+  );
   const qfitBusy = useApp((s) => s.qfitBusy);
   const qfitError = useApp((s) => s.qfitError);
   const integrateResult = useApp((s) => s.gadgetIntegrateResult);

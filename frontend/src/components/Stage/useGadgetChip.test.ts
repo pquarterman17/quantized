@@ -57,6 +57,14 @@ describe("useGadgetChip — fit mode (gap #33, unchanged behavior)", () => {
     expect(result.current.fitResult).toEqual(expect.objectContaining({ R2: 0.9 }));
   });
 
+  it("hides a result another model produced, so the chip can't commit/report it under the picked name", () => {
+    useApp.setState({ qfitResultModel: "Gaussian" }); // picker says Linear
+    const { result } = renderHook(() => useGadgetChip());
+    expect(result.current.fitResult).toBeNull();
+    act(() => useApp.setState({ qfitModel: "Gaussian" }));
+    expect(result.current.fitResult).toEqual(expect.objectContaining({ R2: 0.9 }));
+  });
+
   it("dismiss() clears the roi (Escape-dismiss now lives in useGlobalShortcuts — see its test)", () => {
     const { result } = renderHook(() => useGadgetChip());
     expect(useApp.getState().qfitRoi).toEqual([1, 2]);
