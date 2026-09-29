@@ -65,6 +65,27 @@ describe("useProjectLockCommands", () => {
     expect(takeOverEditing).toHaveBeenCalled();
   });
 
+  it("Take Over Editing reports a refusal, but stays quiet when the project closed meanwhile", async () => {
+    renderHook(() => useProjectLockCommands());
+    const refused = vi.fn(async () => false);
+    useProjectLock.setState({ status: "held-by-other-stale", path: "/p/x.dwk", takeOverEditing: refused });
+    action("take-over-editing").run();
+    await refused.mock.results[0]?.value;
+    await Promise.resolve();
+    expect(toast).toHaveBeenCalledWith(expect.stringMatching(/responding again/), "danger");
+
+    vi.mocked(toast).mockClear();
+    const superseded = vi.fn(async () => {
+      useProjectLock.setState({ path: null, status: "unlocked" }); // closed while the CAS ran
+      return false;
+    });
+    useProjectLock.setState({ status: "held-by-other-stale", path: "/p/x.dwk", takeOverEditing: superseded });
+    action("take-over-editing").run();
+    await superseded.mock.results[0]?.value;
+    await Promise.resolve();
+    expect(toast).not.toHaveBeenCalled();
+  });
+
   it("Open as Copy refuses with a reason when the project isn't currently held read-only", () => {
     renderHook(() => useProjectLockCommands());
     const openAsCopy = vi.fn();

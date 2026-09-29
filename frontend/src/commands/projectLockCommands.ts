@@ -46,6 +46,8 @@ export function useProjectLockCommands(): void {
             return;
           }
           void lock.takeOverEditing().then((ok) => {
+            // Closed or switched projects meanwhile: the takeover was dropped, nothing to report.
+            if (!ok && useProjectLock.getState().path !== lock.path) return;
             toast(ok ? "took over editing" : "take over failed — the other instance is responding again", ok ? "ok" : "danger");
           });
         },
