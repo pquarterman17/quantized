@@ -54,7 +54,7 @@ export function buildUiCommands(s: StoreGet): Action[] {
       id: "toggle-excluded-rows",
       group: "View",
       label: "Toggle greyed excluded rows",
-      description: "Switch every plot between greying and hiding excluded or filtered-out rows.",
+      description: "Switch XY plot windows between greying and hiding excluded or filtered-out rows.",
       run: () => s().setPref("excludedDisplay", s().excludedDisplay === "grey" ? "hide" : "grey"),
     },
     {

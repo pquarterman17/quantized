@@ -20,6 +20,16 @@ describe("ExcludedRowsToggle (F4.2c (a))", () => {
     expect(btn.getAttribute("title")).toMatch(/greyed/);
   });
 
+  // Audit item 4: the stat, polar, Graph Builder and QFB previews ignore the
+  // preference, so the tooltip must not claim "every plot".
+  it("tooltip claims only the XY plot windows that honour it, in one sentence", () => {
+    render(<ExcludedRowsToggle />);
+    const title = screen.getByRole("button", { name: "Grey excluded rows" }).getAttribute("title") ?? "";
+    expect(title).not.toMatch(/every plot/);
+    expect(title).toMatch(/XY plot windows/);
+    expect(title.match(/\.(\s|$)/g)).toHaveLength(1);
+  });
+
   it("one click flips the app-wide preference and re-renders with the new state", () => {
     useApp.getState().setPref("excludedDisplay", "grey");
     render(<ExcludedRowsToggle />);

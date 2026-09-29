@@ -2,7 +2,8 @@
 // F4.2c (a), owner decision 2026-09-29): one click, always visible in the
 // status bar under every plot. The same preference Preferences ▸ Plot sets,
 // through the same `setPref`: a view preference, so it persists but never
-// enters undo history, and every plot re-renders from the store at once.
+// enters undo history, and every XY plot window re-renders from the store at
+// once (stat, polar and the Graph Builder/QFB previews do not read it).
 //
 // A toggle button with a CONSTANT name ("Grey excluded rows") and
 // `aria-pressed` carrying the mode — the pattern that lets a screen reader say
@@ -19,7 +20,9 @@ export default function ExcludedRowsToggle() {
       type="button"
       className="qzk-status-toggle"
       aria-pressed={grey}
-      title={`Excluded rows are ${grey ? "greyed" : "hidden"} on every plot; click to ${grey ? "hide" : "grey"} them.`}
+      // Only the XY plot windows (Stage, background windows, page cells) read
+      // this; stat, polar and the Graph Builder/QFB previews do not.
+      title={`Excluded rows are ${grey ? "greyed" : "hidden"} on XY plot windows only; click to ${grey ? "hide" : "grey"} them.`}
       onClick={() => setPref("excludedDisplay", grey ? "hide" : "grey")}
     >
       <span aria-hidden="true">{grey ? "◉" : "○"}</span> Grey excluded rows
