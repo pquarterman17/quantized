@@ -8363,7 +8363,26 @@ Prioritized slices (in pain order):
 
 Original acceptance criteria (unchanged):
 
-- [~] Consistent progress location and job identity. **Narrowed
+- [x] Consistent progress location and job identity. **Closed
+  2026-09-29** (the job-queue gap named below): every poll-based job now
+  registers ONE `pendingOps` entry for its whole run through
+  `store/pendingOps.ts`'s `trackJob` — a label formatter over the existing
+  `beginOp`/`updateOp`/`endOp`, not a third progress system — so the
+  StatusBar shows the job's live percent + message ("Fit model scan 43% ·
+  Scanning 3/7: Gaussian") under one stable `OpId`, with a Cancel control
+  once there is a job to cancel. Wired: `curvefit/useBumpsFit.ts` (DREAM;
+  the synchronous engines show a busy entry with no Cancel),
+  `curvefit/useModelScan.ts`, `reflectivity/useReflDream.ts` (cancellable
+  from submit, honouring the hook's own early-cancel path),
+  `peakwizard/usePeakBatch.ts` (preparing + fitting; cancel-while-preparing
+  and unmount end the entry at once). The job panels keep their own bars.
+  Evidence: `store/pendingOps.test.ts` (trackJob), `useBumpsFit.test.ts`,
+  `useModelScan.test.ts`, `useReflDream.test.tsx` (two cases, incl. a
+  StatusBar Cancel before the job id exists), `PeakBatchView.test.tsx`
+  (progress, Cancel, finish, unmount) and a DOM case in
+  `components/Shell/StatusBar.test.tsx`; each new guard sabotaged once
+  (entry never ended / progress not reported / cancel not attached / early
+  cancel dropped) and seen red. **Narrowed
   2026-09-13:** slices 1-4 gave import, command-palette actions, and
   workspace open ONE shared location (`StatusBar.tsx`'s `.qzk-pending`
   span reading `store/pendingOps.ts`) and ONE identity scheme (`OpId`, a
@@ -8427,6 +8446,45 @@ Original acceptance criteria (unchanged):
   plus an unhandled-rejection console warning. (`store/recordRecipeUse.ts`
   is NOT on this list: it carries its own explicit `.catch` with a
   fire-and-forget rationale, so its failure is a deliberate silent no-op.)
+  **Update 2026-09-29 (export cancel, second pass):** the uncancelled
+  export list above is now wired except where noted. Each site runs as a
+  `pendingOps` entry with a Cancel control through `store/pendingOps.ts`'s
+  `runCancellable` (the same AbortController + `signal.aborted` shape as
+  `lib/exportPageCommand.ts`), and the signal reaches
+  `postDownload`/`postBlob`, so a cancelled export saves no file and
+  reports a status line, never an error toast: the Figure Page composer's
+  Export and Copy (`figurepage/usePagePreviewExport.ts`;
+  `renderFigurePageBlob` takes a signal again), `Library/PagesSection.tsx`,
+  the multi-selection and folder CSV export (`Library/folderOps.ts`
+  `exportDatasets`; `exportConsolidated` takes a signal), all four
+  `lib/api/exportMultivar.ts` wrappers and their views, the report viewer
+  (`lib/api/reportExport.ts` — the `report.ts:37` citation above has since
+  moved there — and `report/ReportPanel.tsx`), and the statistics stage
+  (`Stage/useStatStage.ts` → `statStageExport.ts` →
+  `exportStatplotFigure`/`exportCategoricalFigure`). Evidence: cancel
+  cases in `useFigurePage.test.ts` (export + copy), `PagesSection.test.tsx`,
+  `folderOps.test.ts`, `MultivarPanel.test.tsx`, `ReportPanel.test.tsx`,
+  `useStatStage.test.ts`, each waiting on the in-flight request's signal
+  (state), and each seen red against the pre-change code or a sabotaged
+  signal. **Still open (the box stays [~]):**
+  `workshops/figurebuilder/previewExport.ts` (out of this slice's bounds:
+  another workstream owns figurebuilder/), the rest of `lib/api/figures.ts`
+  (`exportCornerFigure`/`exportTernaryFigure`/`exportFieldFigure` take no
+  signal), the two named carve-outs (Send to Origin COM; the File-menu
+  "Export consolidated CSV" command still calls `exportConsolidated`
+  without one), and the clipboard-after-write limit above.
+  **The `void import(...)` residual is closed (2026-09-29):**
+  `runLazy`/`onLoadFailure` moved to `lib/runLazy.ts` (re-exported by
+  `commands/fileCommands.ts`); every site listed above now shows a busy
+  entry while the chunk loads and the standard "Could not load the …"
+  error toast if it fails — except `Stage/usePlotStageActions.ts`, where
+  only the two call lines could be touched (a concurrent Graph Builder
+  edit), so those two handle the rejection inline with the same toast
+  wording and no busy entry. `src/lazyImportGuard.test.ts` is the ratchet:
+  every `void import(` must handle its rejection in its own chain (a
+  `.catch` or a two-argument `.then`, never the silent `onLoadFailure`
+  outside runLazy); it listed exactly the nine sites above before the fix,
+  and `Library/MultiSelectBar.lazyFail.test.tsx` proves the toast.
 - [~] Errors say what failed, whether data changed, and next action.
   **Audited 2026-09-14, census corrected in the 2026-09-14 review round** —
   intended as the whole user-facing failure surface, not a sample; the first
@@ -11060,6 +11118,17 @@ work (its BACKLOG row).
   ID, field, or temperature" ticked; "Any suitable factor" moved to `[~]`
   with its five residuals — the editable Stage plot not drawing encodings is
   the next dependency.
+- ~~**P3.4 operations visibility — job progress, export cancel, lazy-load
+  failures**~~ (2026-09-29) — job-queue runs (DREAM/bumps fit, model scan,
+  reflectivity DREAM, peak batch) report percent + message and Cancel through
+  the shared StatusBar ops (`trackJob`); the untracked export/copy sites get
+  a Cancel control and busy entry (`runCancellable`), a cancel saving nothing
+  and raising no error toast; the remaining bare `void import(...)` sites go
+  through `runLazy` (now `lib/runLazy.ts`), locked by
+  `lazyImportGuard.test.ts`. Box "Consistent progress location and job
+  identity" ticked; "Safe cancel" stays `[~]` with its named residuals
+  (figurebuilder `previewExport.ts`, three `figures.ts` wrappers, the two
+  carve-outs). Eager JS 854,864 → 855,610 B (+746 B, after `npm ci`).
 
 - ~~**P1.4 encodings on the editable Stage (residual 1)**~~ (2026-09-29,
   Claude, commit `2e3c0aac`) — `FigureBindings.encoding` (shape + validator in the dependency-free `lib/figureEncoding.ts`; new eager
