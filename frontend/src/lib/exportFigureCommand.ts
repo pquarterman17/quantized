@@ -18,6 +18,8 @@ import { exportActive, type StoreGet } from "./exportActive";
 import type { FigureSpec } from "./api/figures";
 import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
+import { chooseExcludedRows } from "./excludedRowsChoice";
+import { excludedChoiceMatters } from "./excludedRowsExport";
 import type { Dataset } from "./types";
 
 /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3's "Greyscale (print-safe)" checkbox — the
@@ -104,7 +106,17 @@ export async function runExportFigureCommand(
     yLabel: yl,
     greyscale: params.greyscale as boolean,
   };
-  await exportActive(s, (stem, ds, signal) =>
-    exportFigure(buildSpec ? buildSpec(stem, ds, opts) : buildStageFigureSpec(s, ds, stem, opts), signal),
-  );
+  // F4.2c (a): a figure with excluded rows asks "greyed or omitted?" first.
+  await exportActive(s, async (stem, ds, signal) => {
+    const picked = await chooseExcludedRows(
+      (greyExcluded) => {
+        const o = { ...opts, greyExcluded };
+        return buildSpec ? buildSpec(stem, ds, o) : buildStageFigureSpec(s, ds, stem, o);
+      },
+      excludedChoiceMatters,
+      s().excludedDisplay,
+    );
+    if (!picked) return false;
+    await exportFigure(picked.value, signal);
+  });
 }

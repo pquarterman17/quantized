@@ -47,7 +47,7 @@ import type { FigurePageSpec } from "../../../lib/api/figurePage";
 import type { FigureDocument } from "../../../lib/figureDocument";
 import { figureDocumentFromLegacyFigureDoc } from "../../../lib/figureDocumentPublication";
 import type { FigureOverrides } from "../../../lib/figureOverrides";
-import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
+import { buildFigureSpecFromDocument, type ExcludedRowsGhoster } from "../../../lib/figureSpec";
 import type { PanelSource } from "../../../lib/figurepageActions";
 import type { PageDocument } from "../../../lib/pageDocument";
 import { pagePanelLabels, resolvePagePanel } from "../../../lib/pageDocumentActions";
@@ -109,7 +109,10 @@ export function stripPageIncompatibleOverrides(
  *  "figure" kind — the referenced editableFigures entry is gone, its live
  *  dataset is unavailable, or its FigureDocument->FigureSpec adapter rejects
  *  the document, e.g. a grouped figure with a secondary axis). */
-export async function panelFigure(source: PanelSource): Promise<FigureSpec | null> {
+export async function panelFigure(
+  source: PanelSource,
+  greyExcluded?: ExcludedRowsGhoster, // F4.2c (a): greyed vs omitted excluded rows
+): Promise<FigureSpec | null> {
   const s = useApp.getState();
   if (source.kind === "figure") {
     const document = s.editableFigures.find((f) => f.id === source.id);
@@ -127,7 +130,7 @@ export async function panelFigure(source: PanelSource): Promise<FigureSpec | nul
     // grouped+secondary-axis combination) — any such failure is exactly a
     // "this source can no longer render" case, same as a dead window/figdoc.
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name);
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded });
       return { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
     } catch {
       return null;
@@ -151,7 +154,7 @@ export async function panelFigure(source: PanelSource): Promise<FigureSpec | nul
       : undefined;
     if (!dataset) return null;
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name);
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded });
       return { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
     } catch {
       return null;
@@ -179,7 +182,7 @@ export async function panelFigure(source: PanelSource): Promise<FigureSpec | nul
       : undefined;
   if (document.data.mode === "live" && !dataset) return null;
   try {
-    const spec = buildFigureSpecFromDocument(document, dataset, document.name);
+    const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded });
     return { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
   } catch {
     return null;
@@ -311,6 +314,7 @@ export function panelRenderInputs(slots: { source: PanelSource | null }[], s: Ap
 export async function buildPageSpecFromDocument(
   pageDoc: PageDocument,
   figures: readonly FigureDocument[],
+  greyExcluded?: ExcludedRowsGhoster, // F4.2c (a): greyed vs omitted excluded rows
 ): Promise<FigurePageSpec | null> {
   const labels = pagePanelLabels(pageDoc.panels, pageDoc.output.labelFormat);
   const panels: PagePanelSpec[] = [];
@@ -332,7 +336,7 @@ export async function buildPageSpecFromDocument(
     }
     let figure: FigureSpec;
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name);
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded });
       figure = { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
     } catch (e) {
       throw new Error(

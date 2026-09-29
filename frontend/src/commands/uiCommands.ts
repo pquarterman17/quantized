@@ -51,6 +51,13 @@ export function buildUiCommands(s: StoreGet): Action[] {
       },
     },
     {
+      id: "toggle-excluded-rows",
+      group: "View",
+      label: "Toggle greyed excluded rows",
+      description: "Switch every plot between greying and hiding excluded or filtered-out rows.",
+      run: () => s().setPref("excludedDisplay", s().excludedDisplay === "grey" ? "hide" : "grey"),
+    },
+    {
       id: "left",
       group: "View",
       label: "Toggle library panel",

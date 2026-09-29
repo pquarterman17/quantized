@@ -10,6 +10,8 @@
 import { exportFigure, type FigureSpec } from "../../../lib/api/figures";
 import type { CanonicalReadiness } from "./canonicalReadiness";
 import type { FigureDocument } from "../../../lib/figureDocument";
+import { chooseExcludedRows } from "../../../lib/excludedRowsChoice";
+import { excludedChoiceMatters } from "../../../lib/excludedRowsExport";
 import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { runCancellable } from "../../../store/pendingOps";
@@ -60,13 +62,17 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
         if (dataset?.pending) dataset = (await useApp.getState().resolveDataset(dataset.id)) ?? null;
         signal.throwIfAborted();
         const stem = (dataset?.name ?? canonicalDocument.name).replace(/\.[^.]+$/, "");
-        await exportFigure({
-          ...buildFigureSpecFromDocument(canonicalDocument, dataset, stem, { autoSeriesStyles }),
-          filename: stem,
-        }, signal);
+        // F4.2c (a): a figure with excluded rows asks "greyed or omitted?".
+        const picked = await chooseExcludedRows(
+          (greyExcluded) => buildFigureSpecFromDocument(canonicalDocument, dataset, stem, { autoSeriesStyles, greyExcluded }),
+          excludedChoiceMatters,
+          useApp.getState().excludedDisplay,
+        );
+        if (!picked) return null;
+        await exportFigure({ ...picked.value, filename: stem }, signal);
         return stem;
       });
-      setStatus(done ? `exported ${done.value}.${canonicalDocument.output.format}` : CANCELLED);
+      setStatus(done?.value ? `exported ${done.value}.${canonicalDocument.output.format}` : CANCELLED);
     } catch (e) {
       const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;
       toast(msg, "danger");

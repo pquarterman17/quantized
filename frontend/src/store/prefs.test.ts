@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from "vitest";
 
-import { loadPrefs, LIBRARY_PANEL_WIDTH_MAX, LIBRARY_PANEL_WIDTH_MIN } from "./prefs";
+import { EXCLUDED_DISPLAY_KEY, loadPrefs, LIBRARY_PANEL_WIDTH_MAX, LIBRARY_PANEL_WIDTH_MIN } from "./prefs";
 import { useApp } from "./useApp";
 import { fmtNum } from "../lib/format";
 
@@ -11,7 +11,7 @@ afterEach(() => {
   s.setPref("notation", "auto");
   s.setPref("reduceMotion", false);
   s.setPref("confirmRemove", false);
-  s.setPref("excludedDisplay", "hide");
+  s.setPref("excludedDisplay", "grey");
   s.setPref("originBookClickOpens", "worksheet");
   s.setPref("defaultPanelFit", "frames");
   s.setPref("libraryPanelWidth", 210);
@@ -41,11 +41,31 @@ describe("preferences", () => {
     expect(fmtNum(3)).toBe("3.00e+0");
   });
 
-  it("excludedDisplay defaults to hide and persists when changed to grey", () => {
-    expect(useApp.getState().excludedDisplay).toBe("hide");
-    useApp.getState().setPref("excludedDisplay", "grey");
+  it("excludedDisplay defaults to grey and persists when changed to hide (F4.2c (a))", () => {
     expect(useApp.getState().excludedDisplay).toBe("grey");
-    expect(JSON.parse(localStorage.getItem("qz.prefs") ?? "{}").excludedDisplay).toBe("grey");
+    useApp.getState().setPref("excludedDisplay", "hide");
+    expect(useApp.getState().excludedDisplay).toBe("hide");
+    const saved = JSON.parse(localStorage.getItem("qz.prefs") ?? "{}");
+    expect(saved[EXCLUDED_DISPLAY_KEY]).toBe("hide");
+    // the legacy key is still written, for an older build sharing this storage
+    expect(saved.excludedDisplay).toBe("hide");
+  });
+
+  it("excludedDisplay migration: absent or legacy-only values load as grey, a v2 choice is kept", () => {
+    const load = (blob: Record<string, unknown>) => {
+      localStorage.setItem("qz.prefs", JSON.stringify(blob));
+      return loadPrefs().excludedDisplay;
+    };
+    expect(load({})).toBe("grey");
+    // A legacy "hide" is indistinguishable from the old implicit default, which
+    // syncPrefs wrote on ANY pref change — so it no longer pins "hide".
+    expect(load({ excludedDisplay: "hide" })).toBe("grey");
+    expect(load({ excludedDisplay: "grey" })).toBe("grey");
+    // Written by a grey-default build, a "hide" is always the user's own pick.
+    expect(load({ excludedDisplay: "grey", [EXCLUDED_DISPLAY_KEY]: "hide" })).toBe("hide");
+    expect(load({ [EXCLUDED_DISPLAY_KEY]: "grey" })).toBe("grey");
+    expect(load({ [EXCLUDED_DISPLAY_KEY]: "junk" })).toBe("grey");
+    localStorage.removeItem("qz.prefs");
   });
 
   it("originBookClickOpens (WORKSHEET_PLAN item 15) defaults to worksheet and persists when changed to plot", () => {

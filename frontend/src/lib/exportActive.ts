@@ -90,7 +90,7 @@ export async function exportActive(
     stem: string,
     ds: ReturnType<StoreGet>["datasets"][number],
     signal: AbortSignal,
-  ) => Promise<void>,
+  ) => Promise<void | false>,
   labels: ExportActiveLabels = {},
 ): Promise<void> {
   const verb = labels.verb ?? "export";
@@ -124,7 +124,12 @@ export async function exportActive(
       return;
     }
     const stem = stemFromName(ds.name);
-    await fn(stem, ds, controller.signal);
+    // `false`: the user dismissed a question `fn` asked (F4.2c's excluded-
+    // rows choice) — the same outcome as Cancel, reported the same way.
+    if ((await fn(stem, ds, controller.signal)) === false) {
+      cancelled(s, verb);
+      return;
+    }
     // Race guard: `fn` resolving successfully right as Cancel lands.
     if (controller.signal.aborted) {
       // For a download (postDownload's throwIfAborted + synchronous

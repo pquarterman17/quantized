@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { plural } from "../../lib/plural";
 
 import { StatusDot } from "../primitives";
+import ExcludedRowsToggle from "./ExcludedRowsToggle";
 import { useConnection } from "../../lib/lifecycle";
 import { useAutosaveStatus } from "../../store/autosaveStatus";
 import { usePendingOps, type PendingOp } from "../../store/pendingOps";
@@ -161,6 +162,7 @@ export default function StatusBar() {
           </span>
         )
       )}
+      <ExcludedRowsToggle />
       {active && (
         <span style={{ color: "var(--text-dim)" }} title={active.name}>
           {active.name} · {active.data.time.length} pts · {active.data.labels.length} ch

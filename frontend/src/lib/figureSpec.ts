@@ -47,7 +47,7 @@ import { marginFractions, pageSizeInches } from "./pagesetup";
 import type { PlotView } from "./plotview";
 import { canvasGroupCol } from "./plotGroupSplit";
 import { encodingSplits, figureEncodingWire, windowEncoding, type FigureEncoding } from "./plotEncodingBinding";
-import { pruneToLiveDataset } from "./rowstate";
+import { droppedRows, pruneToLiveDataset } from "./rowstate";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
 // fund P3.3's threading against this file's 500-line ceiling. Imported, NOT
 // re-exported: a barrel here would make every importer of this module pull the
@@ -75,7 +75,16 @@ export interface FigureRenderOpts {
    *  applied AFTER them, in `calc.figure_greyscale`). Undefined/false omits
    *  the wire field entirely, matching the backend's own default. */
   greyscale?: boolean;
+  /** F4.2c (a): an export that chose "greyed" passes the transform that adds
+   *  the canvas' "(excluded)" companions for a live dataset's excluded and
+   *  filter-dropped rows (`excludedRowsExport.withExcludedGhosts`) — injected,
+   *  not imported, so its code stays in the lazy export chunks. Absent = those
+   *  rows omitted, byte-identical to before. */
+  greyExcluded?: ExcludedRowsGhoster;
 }
+
+/** See `FigureRenderOpts.greyExcluded`. */
+export type ExcludedRowsGhoster = (spec: FigureSpec, data: DataStruct, dropped: ReadonlySet<number>) => FigureSpec;
 
 /** Optional publication choices layered over a FigureDocument's saved output
  * settings. Labels and title default to the document's PlotView; `filename`
@@ -303,7 +312,7 @@ function buildFigureSpecForView(
     { displayChannels, hiddenChannels: st.hiddenChannels },
   );
 
-  return {
+  const spec: FigureSpec = {
     dataset: wireDataset,
     x_key: st.xKey ?? undefined,
     y_keys: plotted,
@@ -362,6 +371,8 @@ function buildFigureSpecForView(
     })),
     filename: extras.filename ?? stem,
   };
+  // F4.2c (a): greyed excluded rows ride as extra series on the pruned wire.
+  return o.greyExcluded && extras.liveDataset ? o.greyExcluded(spec, data, droppedRows(extras.liveDataset)) : spec;
 }
 
 /** Derive an export request directly from the canonical document. Frozen
@@ -398,6 +409,7 @@ export function buildFigureSpecFromDocument(
       xLabel: overrides.xLabel ?? view.xAxisLabel,
       yLabel: overrides.yLabel ?? view.yAxisLabel,
       greyscale: overrides.greyscale,
+      greyExcluded: overrides.greyExcluded,
     },
     {
       groupKey: document.bindings.groupKey,
