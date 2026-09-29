@@ -59,6 +59,16 @@ describe("dyForFit", () => {
     expect(bad.issue).toMatch(/non-positive|invalid/);
   });
 
+  it("validates dy only over the rows the fit keeps (a gap row's bad sigma is irrelevant)", () => {
+    // Analysis rows [0, 2, 3]; errKey 3 = [0, -1, 5]. Keeping only analysis
+    // rows 2 (its sigma is 5) must weight, not refuse over rows the fit drops.
+    const r = dyForFit(dataset, 1, { mode: "manual", errKey: 3 }, [2]);
+    expect(r.issue).toBeUndefined();
+    expect(r.dy?.[2]).toBe(5);
+    // A bad sigma on a KEPT row still refuses.
+    expect(dyForFit(dataset, 1, { mode: "manual", errKey: 3 }, [0, 2]).dy).toBeNull();
+  });
+
   it("rejects an out-of-range error column", () => {
     expect(dyForFit(dataset, 1, { mode: "manual", errKey: 9 }).dy).toBeNull();
   });
