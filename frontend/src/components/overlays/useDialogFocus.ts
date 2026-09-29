@@ -23,7 +23,7 @@
 //
 // No new dependency: this is ~100 lines of DOM, not a focus-trap package.
 
-import { useCallback, useEffect, useLayoutEffect, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
 
 import { APP_ROOT_FOCUS_SELECTOR } from "../../lib/appRoot";
 import { isTopModal, registerModal, releaseModal } from "../../lib/modalInert";
@@ -246,6 +246,12 @@ export { useOpenerCapture };
  *  effect — `useOpenerCapture` above owns that rule and argues it out. */
 export function useOpenerRestore(ref: RefObject<HTMLElement | null>, open: boolean): () => void {
   const opener = useOpenerCapture(open);
+  // R5: the `open` of the latest COMMIT, written in the layout phase so the
+  // passive cleanup below reads it. See that cleanup for why.
+  const committedOpen = useRef(open);
+  useLayoutEffect(() => {
+    committedOpen.current = open;
+  });
 
   useEffect(() => {
     if (!open) return;
@@ -253,7 +259,14 @@ export function useOpenerRestore(ref: RefObject<HTMLElement | null>, open: boole
     // `root` is captured at effect time because by cleanup time React has
     // already detached the ref.
     const root = ref.current;
-    return () => restoreFocusTo(cameFrom, root);
+    return () => {
+      // R5: StrictMode's dev-only effect replay runs this cleanup with the
+      // surface still committed open and still in the document, then re-runs
+      // the effect; restoring here bounced focus through the opener mid-open.
+      // A real close has either committed `open` false or removed the root.
+      if (committedOpen.current && root?.isConnected) return;
+      restoreFocusTo(cameFrom, root);
+    };
     // `opener` is a ref, so its identity never changes; it is listed only
     // because the hook comes from `useOpenerCapture` and the exhaustive-deps
     // rule cannot see that.
