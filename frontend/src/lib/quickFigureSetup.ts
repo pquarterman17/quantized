@@ -127,6 +127,31 @@ export function previewWithLook(render: SpecRender, look: QuickFigureLook): Spec
   return out;
 }
 
+/** One sentence naming the points a log axis cannot draw (X or Y ≤ 0), or
+ *  null when it hides none. Counted on the UNtransformed render, one per drawn
+ *  point: on X when its X is out, else on Y, so nothing is counted twice. */
+export function logDropNotice(render: SpecRender, look: QuickFigureLook): string | null {
+  const logX = look.xScale === "log";
+  const logY = look.yScale === "log";
+  if (render.kind !== "xy" || (!logX && !logY)) return null;
+  const [xs, ...ys] = render.payload.data as (number | null)[][];
+  let onX = 0;
+  let onY = 0;
+  for (const col of ys) {
+    col.forEach((y, r) => {
+      const x = xs[r];
+      if (y == null || x == null || !Number.isFinite(y) || !Number.isFinite(x)) return;
+      if (logX && x <= 0) onX += 1;
+      else if (logY && y <= 0) onY += 1;
+    });
+  }
+  const pts = (n: number): string => `${n} point${n === 1 ? "" : "s"}`;
+  if (onX > 0 && onY > 0) return `The log axes hide ${pts(onX + onY)}: ${onX} with X ≤ 0 and ${onY} with Y ≤ 0.`;
+  if (onX > 0) return `The log X axis hides ${pts(onX)} with X ≤ 0.`;
+  if (onY > 0) return `The log Y axis hides ${pts(onY)} with Y ≤ 0.`;
+  return null;
+}
+
 /** The per-series styles the preview canvas paints (series `i` of the payload). */
 export function lookSeriesStyles(look: QuickFigureLook, count: number): SeriesStyle[] | undefined {
   const n = look.series.length;

@@ -77,6 +77,15 @@ describe("Quick Figure Builder — concise setup panel", () => {
     expect(doc.bindings.errors).toEqual([]);
   });
 
+  it("a log axis names the points it hides instead of dropping them silently", () => {
+    render(<QuickFigureBuilderWorkspace />);
+    expect(screen.queryByText(/hides \d+ points?/)).toBeNull();
+    change("X axis", "log"); // the acquisition axis starts at 0: row 0 is out
+    expect(screen.getByText("The log X axis hides 3 points with X ≤ 0.")).toHaveAttribute("role", "status");
+    change("X axis", "linear");
+    expect(screen.queryByText(/hides \d+ points?/)).toBeNull();
+  });
+
   it("a hidden legend leaves the preview without one and the figure with showLegend off", () => {
     render(<QuickFigureBuilderWorkspace />);
     expect(screen.getByLabelText("Preview legend")).toHaveClass("ne");
