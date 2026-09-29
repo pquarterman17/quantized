@@ -1599,4 +1599,16 @@ describe("useGraphBuilder — Color/Symbol/Label encodings (P1.4)", () => {
     expect(exportFigure).toHaveBeenCalledTimes(1);
     expect(vi.mocked(exportFigure).mock.calls[0][0].encoding).toBeUndefined();
   });
+
+  it("Open Publication Preview carries the encodings onto the draft, with no loss to confirm", async () => {
+    useApp.setState({ seriesStyles: {} });
+    const { result } = build();
+    act(() => result.current.assign("color", 2));
+    act(() => result.current.assign("label", 3));
+    expect(result.current.figureBuilderLosses).toEqual([]);
+    await act(async () => result.current.openInFigureBuilder());
+    expect(askConfirm).not.toHaveBeenCalled();
+    const draft = useApp.getState().figurePublicationSession?.draft;
+    expect(draft?.bindings.encoding).toEqual({ color: 2, label: 3 });
+  });
 });

@@ -18,11 +18,10 @@ import {
   figureTransitionWarning,
   plotSpecPublicationCompatibility,
 } from "../../../lib/figureCompatibility";
-import { figureDocumentFromLegacyFigureDoc } from "../../../lib/figureDocumentPublication";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { encodedSpecRender, isEncodingFactor, specFigureEncoding, type EncodedSpec } from "../../../lib/plotEncoding";
 import { buildEncodedExport } from "../../../lib/plotEncodingExport";
-import { plotSpecFigureReason, plotSpecToFigureDoc } from "../../../lib/plotSpecFigure";
+import { plotSpecFigureReason, plotSpecToFigureDocument } from "../../../lib/plotSpecFigure";
 import { applySpecBlocks } from "../../../lib/plotspecApply";
 import {
   assignZone,
@@ -445,16 +444,13 @@ export function useGraphBuilder(): GraphBuilderState {
       );
       if (!proceed) return;
     }
-    const doc = plotSpecToFigureDoc(
-      spec,
-      activeSpec?.name ?? "Graph Builder plot",
-      useApp.getState().seriesStyles,
-    );
+    // P1.4: `encoded` (the preview's own derivation) carries Color/Symbol/Label onto the draft.
+    const doc = plotSpecToFigureDocument(spec, activeSpec?.name ?? "Graph Builder plot", useApp.getState().seriesStyles, encoded);
     if (!doc) {
       toast(plotSpecFigureReason(spec) ?? "This graph cannot open in Publication Preview.", "info");
       return;
     }
-    if (!useApp.getState().beginDetachedFigurePublicationEdit(figureDocumentFromLegacyFigureDoc(doc))) return;
+    if (!useApp.getState().beginDetachedFigurePublicationEdit(doc)) return;
     setStatus("opened XY plot in Publication Preview");
   }
 

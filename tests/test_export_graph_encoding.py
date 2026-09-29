@@ -34,6 +34,7 @@ from fastapi.testclient import TestClient
 
 from _regression_matrix_wire import axes_minus_legend, extract_group, legend_entries
 from quantized.app import app
+from quantized.calc.figure_greyscale import GREY_SLOT_KEY, greyscale_ramp
 from quantized.calc.plotting import build_grouped_series
 from quantized.calc.plotting_encoded import build_encoded_series, legend_source_text
 from quantized.datastruct import DataStruct
@@ -218,3 +219,53 @@ def test_bad_encoding_requests_are_422(patch: dict[str, Any]) -> None:
     body = {**_fixture()["request"], **patch, "fmt": "svg"}
     r = client.post("/api/export/figure", json=body)
     assert r.status_code == 422, r.text
+
+
+# ── Greyscale (P1.4 residual 3's second half) ────────────────────────────────
+# P3.3's print-safe mode used to re-grey an encoded figure by DISPLAY POSITION,
+# so one colour level drew a different grey on every series it appears in. With
+# a colour factor the grey (and the forced dash/glyph cycle) is keyed by the
+# colour LEVEL instead, over the levels present -- the greyscale form of the
+# screen's "one level, one colour on every Y channel" rule.
+
+
+def _two_channel(**encoding: Any) -> dict[str, Any]:
+    base = _fixture()["request"]
+    style = base["series_styles"][0]
+    return {
+        **base,
+        "y_keys": [0, 3],
+        "series_styles": [style, style],
+        "encoding": {**base["encoding"], **encoding},
+        "greyscale": True,
+    }
+
+
+def test_greyscale_gives_one_colour_level_one_grey_across_y_channels() -> None:
+    drawn = _drawn_series(_svg(_two_channel()))
+    ramp = greyscale_ramp(3)  # three sample levels present
+    levels = [0, 0, 1, 1, 2, 2]  # the fixture's colour level per series, per channel
+    assert [c for c, _g, _n in drawn] == [ramp[k] for k in levels + levels]
+    # The symbol factor's glyphs survive greyscale (an explicit shape wins).
+    assert [g for _c, g, _n in drawn] == _fixture()["screen"]["markers"] * 2
+
+
+def test_greyscale_legend_handles_match_their_curves() -> None:
+    svg = _svg(_two_channel())
+    handles = [c for _m, c in _USE_FILL.findall(extract_group(svg, "legend_1"))]
+    assert handles == [c for c, _g, _n in _drawn_series(svg)]
+
+
+def test_greyscale_without_a_colour_factor_stays_by_display_position() -> None:
+    # Control: with no colour factor the screen colours by position, so the
+    # grey does too (P3.3's own rule, unchanged).
+    drawn = _drawn_series(_svg(_two_channel(color_col=None)))
+    assert [c for c, _g, _n in drawn] == greyscale_ramp(len(drawn))
+
+
+def test_a_grey_slot_sent_on_the_wire_is_ignored() -> None:
+    # The slot is server-side only: a client cannot collapse series to one grey.
+    body = _two_channel(color_col=None)
+    body["series_styles"] = [{**s, GREY_SLOT_KEY: 0} for s in body["series_styles"]]
+    drawn = _drawn_series(_svg(body))
+    assert [c for c, _g, _n in drawn] == greyscale_ramp(len(drawn))

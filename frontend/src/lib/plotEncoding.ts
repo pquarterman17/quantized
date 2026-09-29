@@ -54,6 +54,8 @@
 // `encodedStyle` below (Stage/usePlotEncoding.ts), the SAME functions
 // `buildEncodedXY` and `encodedStyles` are made of, over its own fetched
 // columns. The gate is `plotEncodingBinding.resolveFigureEncoding`, shared.
+// Opening Publication Preview puts the picks on its draft the same way
+// (`plotSpecFigure.plotSpecToFigureDocument`), rendered by the document export.
 //
 // LAZY-ONLY on purpose: imported by the Graph Builder workshop and, through a
 // dynamic import, by the Stage — never by lib/plotspec.ts, which sits in the

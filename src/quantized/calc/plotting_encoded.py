@@ -47,6 +47,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from quantized.calc.figure_greyscale import GREY_SLOT_KEY
 from quantized.calc.figure_group_styles import expand_grouped_series_styles
 from quantized.calc.plotting import (
     PlotData,
@@ -251,14 +252,19 @@ def encoded_series_styles(
     :func:`expand_grouped_series_styles`, same channel-major nesting), then the
     encoding laid over them -- a palette colour (overriding any channel colour
     when ``color_by_level``, else filling only a missing one, as the screen's
-    ``seriesColor`` does) and, for a symbol factor, ``marker`` + its glyph."""
+    ``seriesColor`` does) and, for a symbol factor, ``marker`` + its glyph.
+    With ``color_by_level`` each series also names its colour level as its
+    greyscale slot (:data:`quantized.calc.figure_greyscale.GREY_SLOT_KEY`), so
+    print-safe mode greys a level alike on every Y channel."""
     n = len(encoded.plot.series)
     expanded = expand_grouped_series_styles(channel_styles, n_channels, n) or [None] * n
     out: list[dict[str, Any] | None] = []
     for i in range(n):
         st: dict[str, Any] = dict(expanded[i] or {})
+        level = encoded.color_levels[i]
+        if color_by_level and level is not None:
+            st[GREY_SLOT_KEY] = level
         if palette:
-            level = encoded.color_levels[i]
             if color_by_level and level is not None:
                 st["color"] = palette[level % len(palette)]
             elif not st.get("color"):

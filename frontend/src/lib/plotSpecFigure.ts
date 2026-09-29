@@ -34,12 +34,25 @@
 // A grouped spec still fails closed if it ALSO uses the secondary (Y2)
 // axis — `buildXY` never assigns a grouped series to axis 1, so there's no
 // sound semantic for the combination (see `specUsesY2` below).
+//
+// Encoded specs (P1.4 Color / Symbol / Label, residual 2): the Publication
+// Preview edits the canonical draft `plotSpecToFigureDocument` promotes, and
+// renders it through `figureSpec.buildFigureSpecFromDocument`, which already
+// sends a document's `bindings.encoding` through the Stage's own gate. So the
+// bridge only has to put the Graph Builder's encoding there, with the series
+// half the Graph Builder's Export sends (`plotEncodingExport.encodedFigureSpec`)
+// — preview == export, pinned to the shared wire fixture by
+// `plotSpecFigureEncoding.test.ts`.
 
 import type { ErrorBinding } from "./errorRoles";
 import { buildExportStyles, type ExportSeriesStyle } from "./exportStyles";
 import { plotSpecPublicationCompatibility } from "./figureCompatibility";
+import type { FigureDocument } from "./figureDocument";
+import { figureDocumentFromLegacyFigureDoc } from "./figureDocumentPublication";
+import type { FigureEncoding } from "./figureEncoding";
 import { compactOverrides, type FigureOverrides } from "./figureOverrides";
 import type { FigureDoc } from "./figuredoc";
+import type { EncodedSpec } from "./plotEncoding";
 import { specDatasetId, specErrorBindings, type AxesBlock, type DisplayBlock, type PlotSpec } from "./plotspec";
 import type { AxisScale, SeriesStyle } from "./types";
 
@@ -170,4 +183,43 @@ export function plotSpecToFigureDoc(
       seriesStyles: stylesForMark(spec, liveSeriesStyles, groupCol !== null),
     },
   };
+}
+
+/** The encoding a draft stores: the GATED factors `encodeSpec` resolved (own
+ *  dataset, categorical colour/symbol), as the document's channel indices. */
+function draftEncoding({ color, symbol, label }: EncodedSpec["enc"]): FigureEncoding {
+  return {
+    ...(color === null ? {} : { color }),
+    ...(symbol === null ? {} : { symbol }),
+    ...(label === null ? {} : { label }),
+  };
+}
+
+/** The Graph Builder -> Publication Preview handoff: `plotSpecToFigureDoc`,
+ *  promoted to the canonical draft the preview edits. `encoded` is the Graph
+ *  Builder's own `encodeSpec` result for `spec` (null when nothing encodes —
+ *  then this is exactly the promotion it always was). When set, the draft
+ *  carries the encoding as `bindings.encoding` (a plot window's binding, gated
+ *  again at render) and the series half of the Graph Builder's Export: the
+ *  mark's styles only (the preview draws no per-channel styling), the error
+ *  wells only when nothing splits (`EncodedSpec.errors`). The legend needs no
+ *  override: the draft view shows it by default, as the preview lists it. */
+export function plotSpecToFigureDocument(
+  spec: PlotSpec,
+  name: string,
+  seriesStyles: Record<number, SeriesStyle>,
+  encoded: EncodedSpec | null,
+): FigureDocument | null {
+  const doc = plotSpecToFigureDoc(spec, name, seriesStyles);
+  if (!doc) return null;
+  if (!encoded) return figureDocumentFromLegacyFigureDoc(doc);
+  const document = figureDocumentFromLegacyFigureDoc({
+    ...doc,
+    config: {
+      ...doc.config,
+      errors: encoded.errors,
+      seriesStyles: stylesForMark(spec, {}, true),
+    },
+  });
+  return { ...document, bindings: { ...document.bindings, encoding: draftEncoding(encoded.enc) } };
 }
