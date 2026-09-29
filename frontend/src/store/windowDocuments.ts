@@ -7,6 +7,7 @@ import {
   type FigureDocument,
 } from "../lib/figureDocument";
 import { errKeysFromBindings, type ErrorBinding } from "../lib/errorRoles";
+import type { FigureEncoding } from "../lib/figureEncoding";
 import type { PlotView, PlotWindow } from "../lib/plotview";
 import type { Dataset } from "../lib/types";
 
@@ -63,6 +64,10 @@ export interface CreatePlotWindowDocumentOptions {
    *  memory does carry them, so they can come back restored on a
    *  same-dataset re-drop rather than resetting (round-3 review NIT 1). */
   resetAxisBreaks?: boolean;
+  /** P1.4: drop `previous`'s `bindings.encoding` — a shape-changed reimport,
+   *  whose column indices it may no longer name (the view's own channel-keyed
+   *  bindings reset through `datasetViewDefaults` on the same path). */
+  resetEncoding?: boolean;
 }
 
 export function createPlotWindowDocument(
@@ -100,6 +105,12 @@ export function createPlotWindowDocument(
     groupKey: view.groupKey,
     facetKey: view.facetKey,
     errors: options.errors === null ? undefined : (options.errors ?? previous?.bindings.errors),
+    // P1.4: NOT a PlotView field, so `previous` is its only source — dropped
+    // wherever facetKey resets (a genuine dataset switch, `resetAxisBreaks`), on
+    // a rebind to another dataset, and on a shape-changed reimport.
+    encoding: options.resetAxisBreaks || options.resetEncoding || previous?.bindings.datasetId !== datasetId
+      ? undefined
+      : previous?.bindings.encoding,
     data: previous?.data,
     axisBreaks: options.resetAxisBreaks ? undefined : previous?.plot.axisBreaks,
     output: previous?.output,
@@ -117,6 +128,8 @@ interface SyncPlotWindowOptions {
    *  and `rebindWindow`'s background branch (`store/windows.ts`), and
    *  `rebindFocusedPlotWindow` below (the import leg). */
   resetAxisBreaks?: boolean;
+  /** Forwarded to `createPlotWindowDocument` — `store/reimport.ts`'s shape reset. */
+  resetEncoding?: boolean;
 }
 
 /** Keep compatibility projections aligned while the document is authoritative at rest. */
@@ -134,6 +147,7 @@ export function syncPlotWindow(
         previous: window.document,
         errors: options.resetErrors ? (options.errors ?? null) : (options.errors ?? window.document?.bindings.errors),
         resetAxisBreaks: options.resetAxisBreaks,
+        resetEncoding: options.resetEncoding,
       });
   return {
     ...window,
@@ -247,6 +261,28 @@ export function withWindowDocumentErrors(
     ),
     errKeys: errKeysFromBindings(errors),
   };
+}
+
+/** P1.4: set (or, with `undefined`, clear) the FOCUSED plot window's
+ *  `bindings.encoding` — the Graph Builder's apply — through the declared
+ *  document-write chokepoint. The same array comes back when nothing changes. */
+export function withFocusedEncoding(
+  windows: readonly PlotWindow[],
+  focusedId: string | null,
+  encoding: FigureEncoding | undefined,
+): PlotWindow[] {
+  let changed = false;
+  const next = windows.map((window) => {
+    if (window.id !== focusedId || window.kind !== "plot" || !window.document) return window;
+    if (JSON.stringify(window.document.bindings.encoding) === JSON.stringify(encoding)) return window;
+    changed = true;
+    const { encoding: _previous, ...bindings } = window.document.bindings;
+    return withPlotWindowDocument(window, {
+      ...window.document,
+      bindings: encoding === undefined ? bindings : { ...bindings, encoding },
+    });
+  });
+  return changed ? next : (windows as PlotWindow[]);
 }
 
 export function commitFocusedPlotWindow(

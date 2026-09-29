@@ -14,14 +14,24 @@ import {
   useAcquisitionAxis,
   type QuickColumnAssignment,
 } from "../../../lib/quickFigureMappingActions";
+import { confirmAppliedPairings } from "../../../lib/errorRoleConfirm";
 import { useEscapeSurface } from "../../../lib/escapeStack";
 import { quickFigurePreview, type QuickPlotStyle } from "../../../lib/quickFigurePreview";
+import {
+  DEFAULT_QUICK_FIGURE_SETUP,
+  lookSeriesStyles,
+  previewWithLook,
+  quickFigureLook,
+  type QuickFigureSetup,
+} from "../../../lib/quickFigureSetup";
 import { seriesXKey, usesPerSeriesX } from "../../../lib/quickFigureSeriesX";
 import type { QuickPlotTemplateScope } from "../../../lib/quickPlotTemplates";
 import type { Dataset } from "../../../lib/types";
 import { askParams } from "../../overlays/ParamDialog";
 import { useApp } from "../../../store/useApp";
-import GraphPreview from "../graphbuilder/GraphPreview";
+import QuickErrorSuggestions from "./QuickErrorSuggestions";
+import QuickFigurePreviewCanvas from "./QuickFigurePreviewCanvas";
+import QuickFigureSetupPanel from "./QuickFigureSetupPanel";
 import QuickMappingPanel from "./QuickMappingPanel";
 import QuickRoleSummary from "./QuickRoleSummary";
 import QuickSeriesXPanel from "./QuickSeriesXPanel";
@@ -54,13 +64,18 @@ function promptSaveTemplate(dataset: Dataset): Promise<{ name: string; scope: Qu
 function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => void }) {
   const [mapping, setMapping] = useState(() => initialQuickFigureMapping(dataset));
   const [style, setStyle] = useState<QuickPlotStyle>("line");
+  const [setup, setSetup] = useState<QuickFigureSetup>(DEFAULT_QUICK_FIGURE_SETUP);
   const assign = (channel: number, assignment: QuickColumnAssignment): void => {
     setMapping((current) => assignQuickFigureColumn(current, channel, assignment));
   };
   const xName = usesPerSeriesX(mapping)
     ? `their own X (${new Set(mapping.yKeys.map((y) => seriesXKey(mapping, y))).size} X columns)`
     : axisDisplayName(dataset, mapping);
-  const preview = quickFigurePreview(dataset.data, mapping, style, dataset.channelRoles);
+  // The setup panel, materialized ONCE: the preview and the created figure
+  // (and a saved template) all consume this same look.
+  const look = quickFigureLook(setup, style, mapping.groupKey != null);
+  const preview = previewWithLook(quickFigurePreview(dataset.data, mapping, style, dataset.channelRoles), look);
+  const previewStyles = preview.kind === "xy" ? lookSeriesStyles(look, preview.payload.series.length) : undefined;
   // G5 review round (P1, FIX 1): `canCreateQuickFigure` (lib/quickFigureMapping.ts)
   // is now the ONE predicate both this button and the store action
   // (`createQuickFigureFromMapping`) gate on -- composing `mappingReady`, the
@@ -106,7 +121,7 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
   const saveTemplate = (): void => {
     void promptSaveTemplate(dataset).then((result) => {
       if (!result) return;
-      saveQuickPlotTemplate(dataset.id, mapping, style, result.name, result.scope);
+      saveQuickPlotTemplate(dataset.id, mapping, style, result.name, result.scope, look);
     });
   };
   // Mutate FIRST, close only on success (L0.36: disabled with a reason, never
@@ -117,7 +132,11 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
   // mid-click) leaves the builder open; the workspace's own missing-source
   // state (see the parent component below) takes over on the next render.
   const createFigure = (): void => {
-    if (createQuickFigureFromMapping(dataset.id, mapping, style)) close();
+    if (!createQuickFigureFromMapping(dataset.id, mapping, style, look)) return;
+    // An adjacency-only pairing the user applied is an explicit decision:
+    // recorded on the dataset (same undo unit) so the next figure does not ask.
+    confirmAppliedPairings(dataset, mapping.errorBindings);
+    close();
   };
 
   return (
@@ -143,6 +162,7 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
             onUseAcquisitionX={() => setMapping(useAcquisitionAxis)}
           />
           <QuickSeriesXPanel data={dataset.data} mapping={mapping} onChange={setMapping} />
+          <QuickErrorSuggestions dataset={dataset} mapping={mapping} onAssign={assign} />
         </section>
 
         <section className="qzk-quick-builder-card qzk-quick-builder-preview" aria-labelledby="quick-builder-preview">
@@ -164,20 +184,20 @@ function BuilderForDataset({ dataset, close }: { dataset: Dataset; close: () => 
             </div>
           )}
           {mappingReady(mapping) && <QuickRoleSummary dataset={dataset} mapping={mapping} labelBlock={labelBlock} />}
-          <GraphPreview render={preview} />
+          <QuickFigurePreviewCanvas render={preview} styles={previewStyles} legend={look.showLegend ? look.legendPos : null} />
         </section>
 
         <section className="qzk-quick-builder-card" aria-labelledby="quick-builder-settings">
           <div className="qzk-quick-builder-step">3</div>
           <h2 id="quick-builder-settings">Figure setup</h2>
-          <label className="qzk-quick-builder-field">
-            <span>Plot style</span>
-            <select value={style} onChange={(event) => setStyle(event.target.value as QuickPlotStyle)}>
-              <option value="line">Line</option>
-              <option value="scatter">Scatter</option>
-              <option value="line-symbol">Line + symbol</option>
-            </select>
-          </label>
+          <QuickFigureSetupPanel
+            dataset={dataset}
+            mapping={mapping}
+            style={style}
+            onStyle={setStyle}
+            setup={setup}
+            onSetup={(patch) => setSetup((current) => ({ ...current, ...patch }))}
+          />
           <dl className="qzk-quick-builder-facts">
             <div><dt>Rows</dt><dd>{dataset.data.time.length.toLocaleString()}</dd></div>
             <div><dt>Value columns</dt><dd>{dataset.data.labels.length}</dd></div>

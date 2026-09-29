@@ -5,6 +5,7 @@
 
 import { Button, Select } from "../../primitives";
 import FitResults from "./FitResults";
+import ReflFitPlots from "./ReflFitPlots";
 import { decimationNote } from "./reflFitCurves";
 import { formatNum } from "./reflFitModel";
 import ReflUncertainty from "./ReflUncertainty";
@@ -75,6 +76,7 @@ export default function SavedFit({ fit }: { fit: ReflFitState }) {
         </ul>
       )}
       <FitResults result={r.result} />
+      {r.curves && <ReflFitPlots curves={r.curves} weighting={r.result.weighting} />}
       <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
         <Button size="sm" disabled={h.applyBlocked != null} title={h.applyBlocked ?? undefined} onClick={h.applySaved}>
           Apply to model
@@ -90,6 +92,14 @@ export default function SavedFit({ fit }: { fit: ReflFitState }) {
         </Button>
         <Button size="sm" disabled={!r.curves || h.savedCurvesAdded} onClick={() => void h.addSavedCurves()}>
           {h.savedCurvesAdded ? "Fit curves added" : "Add fit curves"}
+        </Button>
+        <Button
+          size="sm"
+          disabled={!r.curves}
+          title="Lay out data, model, residuals and SLD as linked figures on a new figure page."
+          onClick={h.sendSavedToFigure}
+        >
+          Send to figure page
         </Button>
       </div>
       {h.applyBlocked && (

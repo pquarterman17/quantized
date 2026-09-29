@@ -1,8 +1,9 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { type CorrelationResponse, type PCAResponse, exportCorrelationHeatmapFigure, exportPcaFigure, exportPcaScreeFigure, exportSplomFigure, statsCorrelation, statsPCA } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
+import { usePendingOps } from "../../../store/pendingOps";
 import { useApp } from "../../../store/useApp";
 import MultivarPanel from "./MultivarPanel";
 
@@ -71,6 +72,7 @@ const PCA: PCAResponse = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  usePendingOps.setState({ ops: [] });
   vi.stubGlobal("ResizeObserver", MockResizeObserver);
   vi.mocked(statsCorrelation).mockResolvedValue(CORR);
   vi.mocked(statsPCA).mockResolvedValue(PCA);
@@ -158,7 +160,7 @@ describe("MultivarPanel — figure export (JMP_GAP #10 residual)", () => {
         labels: ["a", "b"],
         r: CORR.r,
         filename: "correlation",
-      }),
+      }, expect.any(AbortSignal)),
     );
   });
 
@@ -173,7 +175,7 @@ describe("MultivarPanel — figure export (JMP_GAP #10 residual)", () => {
         labels: ["a", "b"],
         columns: [DATA.values.map((r) => r[0]), DATA.values.map((r) => r[1])],
         filename: "splom",
-      }),
+      }, expect.any(AbortSignal)),
     );
   });
 
@@ -185,14 +187,36 @@ describe("MultivarPanel — figure export (JMP_GAP #10 residual)", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Export scree" }));
     await waitFor(() =>
-      expect(exportPcaScreeFigure).toHaveBeenCalledWith({ explained: PCA.explained, cumulative: PCA.cumulative }),
+      expect(exportPcaScreeFigure).toHaveBeenCalledWith({ explained: PCA.explained, cumulative: PCA.cumulative }, expect.any(AbortSignal)),
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Export figure" }));
     await waitFor(() =>
       expect(exportPcaFigure).toHaveBeenCalledWith(
         expect.objectContaining({ mode: "scores", filename: "pca-scores" }),
+        expect.any(AbortSignal),
       ),
     );
+  });
+
+  // P3.4: each figure export is a StatusBar op with a Cancel; a cancelled one
+  // saves nothing and reports "export cancelled", not an error.
+  it("a figure export can be cancelled from its StatusBar op", async () => {
+    let inFlight: AbortSignal | undefined;
+    vi.mocked(exportCorrelationHeatmapFigure).mockImplementationOnce((_body, signal) => {
+      inFlight = signal;
+      return new Promise((_, reject) => signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+    });
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1", status: "" });
+    render(<MultivarPanel />);
+    const button = await screen.findByRole("button", { name: "Export figure" });
+    await waitFor(() => expect(button).toBeEnabled());
+    fireEvent.click(button);
+    await waitFor(() => expect(inFlight).toBeDefined());
+    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Exporting correlation heatmap…"]);
+    act(() => usePendingOps.getState().ops[0].cancel?.());
+    await waitFor(() => expect(useApp.getState().status).toBe("export cancelled"));
+    expect(inFlight?.aborted).toBe(true);
+    expect(usePendingOps.getState().ops).toEqual([]);
   });
 });

@@ -12,6 +12,7 @@ import { useCallback, useState } from "react";
 import { exportSplomFigure } from "../../../lib/api";
 import { transposeRows } from "../../../lib/multivar";
 import { Button } from "../../primitives";
+import { runCancellable } from "../../../store/pendingOps";
 import { useApp } from "../../../store/useApp";
 import SplomView from "./SplomView";
 import type { MultivarState } from "./useMultivar";
@@ -27,8 +28,10 @@ export default function SplomTabView({ m }: { m: MultivarState }) {
   async function exportFigure(): Promise<void> {
     setExporting(true);
     try {
-      await exportSplomFigure({ labels: m.labels, columns: transposeRows(m.rows), filename: "splom" });
-      setStatus("exported SPLOM figure");
+      const done = await runCancellable("Exporting SPLOM figure…", (signal) =>
+        exportSplomFigure({ labels: m.labels, columns: transposeRows(m.rows), filename: "splom" }, signal),
+      );
+      setStatus(done ? "exported SPLOM figure" : "export cancelled");
     } catch (e) {
       setStatus(e instanceof Error ? e.message : "export failed");
     } finally {

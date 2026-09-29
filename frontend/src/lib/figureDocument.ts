@@ -7,9 +7,11 @@
  * behind characterization tests instead of changing every surface at once.
  */
 import { errKeysFromBindings, type ErrorBinding } from "./errorRoles";
-import { sanitizeFigureOverrides, type FigureOverrides } from "./figureOverrides";
+import type { FigureOverrides } from "./figureOverrides";
+import { sanitizeFigureOverrides } from "./figureOverridesSanitize";
 import { sanitizeExportSeriesStyles, type ExportSeriesStyle } from "./publicationStyles";
 import { PLOT_MARKS, type PlotMark } from "./plotMarks";
+import { sanitizeFigureEncoding, type FigureEncoding } from "./figureEncoding";
 import { sanitizePlotView, snapshotView, type PlotView } from "./plotview";
 import {
   decodeCell,
@@ -33,6 +35,11 @@ export interface FigureBindings {
   facetKey: number | null;
   /** Canonical rich error roles: X/Y, symmetric, and asymmetric are representable. */
   errors: ErrorBinding[];
+  /** P1.4 Color-by / Symbol-by / legend-label source (lib/plotEncodingBinding).
+   *  ABSENT, not null, when unset — a document without one serializes exactly
+   *  as before the field existed. Not projected into PlotView: the document is
+   *  its only home, read by the Stage and the export straight off it. */
+  encoding?: FigureEncoding;
 }
 
 export interface FigureDataState {
@@ -99,6 +106,7 @@ export interface CreateFigureDocumentInput {
   axisBreaks?: Partial<FigurePlotState["axisBreaks"]>;
   /** Prefer dataset ErrorBindings; legacy PlotView.errKeys are the fallback. */
   errors?: readonly ErrorBinding[];
+  encoding?: FigureEncoding;
   data?: FigureDataState;
   output?: Partial<FigureOutputSettings>;
   publication?: FigurePublicationState;
@@ -175,6 +183,7 @@ export function createFigureDocument(input: CreateFigureDocumentInput): FigureDo
       groupKey: input.groupKey ?? null,
       facetKey: input.facetKey ?? null,
       errors: input.errors ? clone([...input.errors]) : legacyErrorBindings(errKeys),
+      ...(input.encoding === undefined ? {} : { encoding: clone(input.encoding) }),
     },
     data: data.snapshot === undefined ? { mode: data.mode } : { mode: data.mode, snapshot: clone(data.snapshot) },
     plot: {
@@ -258,6 +267,11 @@ export function updateFigureDocumentFromPlotView(
     // durably commits it back onto the canonical document.
     facetKey: input.view.facetKey,
     errors: [...richErrors, ...legacyErrorBindings(input.view.errKeys)],
+    // P1.4: channel indices of the BOUND dataset, so they survive every facade
+    // commit except a rebind to a different one (like facetKey's own reset).
+    encoding: input.datasetId === undefined || input.datasetId === document.bindings.datasetId
+      ? document.bindings.encoding
+      : undefined,
     data: document.data,
     axisBreaks: document.plot.axisBreaks,
     output: document.output,
@@ -389,6 +403,8 @@ export function sanitizeFigureDocument(value: unknown): FigureDocument | null {
     facetKey: integerOrNull(rawBindings.facetKey),
     errors: errorBindings(rawBindings.errors),
   };
+  const encoding = sanitizeFigureEncoding(rawBindings.encoding);
+  if (encoding) bindings.encoding = encoding;
 
   const mode = value.data.mode;
   if (mode !== "live" && mode !== "frozen") return null;

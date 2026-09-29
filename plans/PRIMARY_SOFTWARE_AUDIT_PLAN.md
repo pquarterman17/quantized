@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-28 (latest): **P1.4 Graph Builder encodings** — Color-by and Symbol-by wells (categorical factors, one palette colour / marker per level through the existing cycles) and a legend-label source well (sample id, field, temperature: any column) in the Graph Builder, saved with the spec and exported with backend parity (`calc/plotting_encoded.py`); the editable Stage plot does not draw them yet (see P1.4's "Any suitable factor" box). Previous: 2026-09-27: **P2.5 derived expressions** — Python-like worksheet formulas (`**`, `//`, `np.` functions, `where`, positioned errors), a derived unit for every new column (mismatched sums refused), `fit()`/`fitval()` over the dataset's saved fit (snapshotted, re-resolved when the fit changes), and an optional first-order, uncorrelated σ column bound as the new column's error; P2.5 box 2 ticked, so P2.5 is complete (see P2.5). Previous: 2026-09-26: **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-29 (latest): **P1.4 encodings on the editable Stage** — a Graph Builder apply stores Color / Symbol / Label on the plot window's document (`FigureBindings.encoding`, omitted when unset), and the Stage (focused and background windows) draws them through the preview's own derivation, loaded lazily; the window's Export figure… / Copy figure send them too (screen == export, pinned to the shared wire fixture); P1.4's residual 1 closed (see P1.4's "Any suitable factor" box). Previous: 2026-09-28: **P1.4 Graph Builder encodings** — Color-by and Symbol-by wells (categorical factors, one palette colour / marker per level through the existing cycles) and a legend-label source well (sample id, field, temperature: any column) in the Graph Builder, saved with the spec and exported with backend parity (`calc/plotting_encoded.py`); the editable Stage plot does not draw them yet (see P1.4's "Any suitable factor" box). Previous: 2026-09-27: **P2.5 derived expressions** — Python-like worksheet formulas (`**`, `//`, `np.` functions, `where`, positioned errors), a derived unit for every new column (mismatched sums refused), `fit()`/`fitval()` over the dataset's saved fit (snapshotted, re-resolved when the fit changes), and an optional first-order, uncorrelated σ column bound as the new column's error; P2.5 box 2 ticked, so P2.5 is complete (see P2.5). Previous: 2026-09-26: **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -1004,14 +1004,63 @@ output, not a caught error).
     Sabotage-verified: colour by display position instead of level, and a
     dropped glyph, each fail the SVG test; removing the categorical gate
     fails 6 frontend tests; not persisting the zones fails 4.
+  * **Stage (residual 1 CLOSED 2026-09-29, commit `2e3c0aac`).** A plot
+    action stores the picks on the plot window's canonical document as
+    `FigureBindings.encoding` (shape in `lib/figureEncoding.ts`, raw channel
+    indices; the field is ABSENT when unset, so documents and `.dwk` bytes
+    without one are unchanged), and the editable Stage draws them —
+    focused (`PlotStage`) and background (`BackgroundPlotWindow`) windows
+    alike — through `Stage/usePlotEncoding.ts`, which calls the SAME
+    `lib/plotEncoding` functions the preview is built from
+    (`encodedSplit`/`encodedNames`/`applyEncodedSplit`/`encodedStyle`;
+    `buildEncodedXY`/`encodedStyles` were refactored into exactly those, not
+    copied) over the Stage's own never-decimated fetch, loaded by a dynamic
+    import so the derivation stays out of the eager bundle. The ONE gate
+    (`windowEncoding`: categorical colour/symbol via the modeling chokepoint,
+    off with a bound y2 axis) is shared by the Stage and the window's own
+    export (`figureSpec.buildFigureSpecForView` now sends `encoding` +
+    palette from the document, never with facets), so Export figure… / Copy
+    figure of an encoded plot render what the Stage shows. Rules on the
+    Stage, each mirroring the group split or the backend: edit-all identity
+    (every split series maps to its Y channel in `plotted`); a colour factor
+    overrides the channel colour, otherwise the channel colour, otherwise the
+    position token (`calc.plotting_encoded.encoded_series_styles`' rule); a
+    channel rename replaces the Y name in every split name (BUG-014's
+    `y_legends`, now also a `buildEncodedXY` parameter) and the DOM legend
+    shows the finished text (`PlotLegend`'s new `labels`); no waterfall /
+    decade offsets / colour-mapped scatter / P3.3 auto cycle while encoded,
+    on screen and wire alike; error bars kept for a legend-source-only
+    encoding and dropped once a factor splits. Lifecycle: kept through every
+    facade commit on the same dataset, duplicated with the window, dropped on
+    a dataset switch/rebind and a shape-changed reimport, remapped on column
+    removal (`channelRemap.remapFigureBindings`), cleared by an unencoded
+    Graph Builder apply. Tests: `Stage/usePlotPayload.encoding.test.ts`
+    (the Stage draws the committed wire fixture's `screen` — colour, glyph
+    and legend text series for series — and the preview's own columns),
+    `lib/plotEncodingBinding.test.ts` (gate, lifecycle, cycle refusal, and
+    the window export sending the fixture's `encoding`/`y_keys`), plus
+    additions to `plotEncoding`, `PlotLegend`, `useGraphBuilder` and
+    `EncodingWells` tests. Sabotage-verified, 25 guards each failing at least
+    one test (the first run of the wire-offsets one passed vacuously —
+    waterfall already refuses offsets — and the test was fixed until it
+    failed; split not applied, styles/labels not encoded, rename ignored,
+    colour-factor precedence, gate removed, y2 degrade removed, offsets /
+    waterfall kept on screen and on the wire, errors kept when split, export
+    encoding dropped, colours not stripped, facet gate, document
+    carry/drop/sanitize, window reset and rebind, remap, reshape, cycle
+    refusal, legend labels, Graph Builder write and clear) — 25 in all.
+    Known limits, not new classes: the split's levels and combinations are
+    taken over the Stage's full rows while the export prunes excluded /
+    filtered rows first (P1.5's group split has the same property), so a
+    level present ONLY in excluded rows can shift a position colour; with no
+    colour factor, a HIDDEN channel shifts later series' position colour in
+    the export but not on screen (again as grouped views); a lone
+    legend-source series labels the Stage's Y axis with its text (uPlot's
+    solo-label rule) while the export leaves the axis title blank; and a cold
+    load draws one unencoded frame before the lazy derivation arrives.
   **Why `[~]`, not `[x]` — the residuals, in order of weight:**
-  1. The editable Stage plot does not draw Color/Symbol/Label. A plot action
-     commits X/Y/Group/Facet exactly as before and SAYS so (an info toast,
-     plus a note under the wells). Carrying them needs a bindings-owned
-     `PlotView`/`FigureDocument` field through `usePlotPayload.ts` (498/500
-     lines), `figureSpec.ts`, `datasetViewDefaults`, `channelRemap`, window
-     persistence and the P3.3 cycle predicates — about a dozen eager,
-     pinned files — deferred for size and the ~2 kB eager-bundle headroom.
+  1. ~~The editable Stage plot does not draw Color/Symbol/Label.~~ CLOSED
+     2026-09-29 — see the **Stage** bullet above.
   2. Publication Preview (the FigureDoc bridge) drops them; its confirm
      dialog now lists "Color, Symbol and Label encodings" as a loss.
   3. They do not apply while faceted (facet panels split nothing — the same
@@ -3345,10 +3394,18 @@ fit, uncertainty, SLD, residuals, results, and publication output.
   1-2 (PRs #405, #406): value/vary/min/max/tie per parameter, scale and
   background (per-channel names allowed), resolution from a dQ column or
   dQ/Q; a model that cannot mean what it says is refused.
-- [~] Linked data/model/residual/SLD views. Slices 2-3 (PRs #406, #407): the
+- [x] Linked data/model/residual/SLD views. Slices 2-3 (PRs #406, #407): the
   fitted curve overlays its data, and "Add fit curves" adds each channel's R
-  and model and each SLD profile (log-Y plot one click away). Open: no linked
-  multi-panel view, and residuals are returned but not yet plotted.
+  and model and each SLD profile (log-Y plot one click away). Residuals
+  (commit 854545ee, 2026-09-29): the Fit view shows, for the live fit and
+  for a saved one, data + model (log R), the normalised residuals under them
+  on the same Q column with a zero line ((R fit - R)/dR in sigma, or log10
+  residuals in dex), and the SLD profile; a Q zoom in either Q panel zooms
+  both and the cursor is shared (`ReflFitPlots.tsx`, `reflFitResiduals.ts`).
+  Saved fits store their residuals (`.dwk` round-trip); an older dR record
+  says it has none, an older log record recomputes them exactly. Tests:
+  `reflFitResiduals.test.ts`, `ReflFitPlots.test.tsx`,
+  `reflFitCurves.test.ts` "stored residuals".
 - [x] Posterior uncertainty. Slice 4 (PR TBD, 2026-09-24): "Estimate
   uncertainty (DREAM)" on a live or saved dR-weighted fit samples the
   posterior through the job queue (`calc/refl_dream.py`,
@@ -3361,7 +3418,7 @@ fit, uncertainty, SLD, residuals, results, and publication output.
   truths inside the 95% interval over 20 fresh noise realisations; a
   degenerate same-material pair gets bound-wide intervals and correlation
   -1. User doc: `docs/tutorials/reflectivity-fit-workbench.md`.
-- [~] Durable results table and FigureDoc. Slice 3 (2026-09-24): every
+- [x] Durable results table and FigureDoc. Slice 3 (2026-09-24): every
   finished fit is a durable record on its channel datasets (`Dataset.reflFits`,
   last 10, `.dwk` round-trip with the BUG-017 sentinels), shown again with a
   history picker, Apply-to-model guard, Restore fit setup and Add to report
@@ -3369,8 +3426,13 @@ fit, uncertainty, SLD, residuals, results, and publication output.
   provenance and export through the existing vector path (tested). Follow-up:
   records also store the fitted curves (≤ 2,000 points each, thinned and
   labelled past that), so a saved fit overlays and adds its curves without a
-  re-run; fit curves carry the Library's derived mark. Open: no dedicated
-  FigureDoc template for data/model/residual/SLD panels.
+  re-run; fit curves carry the Library's derived mark. Figure template
+  (commit 854545ee, 2026-09-29): "Send to figure page" on a live or saved fit
+  makes editable figures R(Q) / residuals / SLD bound to its fit-curve
+  datasets (one column per channel, every Q panel on the same Q limits) on a
+  saved Figure Page and opens it there for vector export, as one undo step
+  (`reflFitFigure.ts`, `useReflFitFigure.ts`; tests `reflFitFigure.test.ts`,
+  `reflFitFigureSend.test.tsx`).
 - [ ] Validate representative XRR and PNR fits against trusted results. Open:
   needs the owner's real instrument data and a trusted reference fit (e.g.
   refl1d/GenX) — the synthetic-fixture checks above do not close it.
@@ -5818,9 +5880,11 @@ that goes red without its fix.
   Round 10's review follow-up also CLOSED R16, the residual that round opened,
   and **round 11 (2026-09-25) CLOSED R15**: a modal now gates the app's
   window-level shortcuts (`frontend/src/lib/appShortcuts.ts`).
-  Stays `[~]` rather than `[x]`: eleven residuals remain (R2–R11 and R14
-  below — R1, R12, R13, R15 and R16 are closed, R14 was opened by the round-9
-  re-review), each a distinct, smaller gap — none of them a
+  **2026-09-29 CLOSED R2, R4 and R11** (keyboard/a11y residual pass; see
+  each entry below).
+  Stays `[~]` rather than `[x]`: eight residuals remain (R3, R5–R10 and R14
+  below — R1, R2, R4, R11, R12, R13, R15 and R16 are closed, R14 was opened
+  by the round-9 re-review), each a distinct, smaller gap — none of them a
   dialog with no keyboard dismissal at all, which is what the audit originally
   found.
 
@@ -5838,7 +5902,7 @@ that goes red without its fix.
   | QuickPlotWithDialog | **N** | **N** | **dead** | **N** | all four |
   | AnnotationTextDialog | **N** | **N** | weak | **N** | all four |
   | Split / Separate / Combine / ReimportAll / Shortcuts / TextFormatHelp / Preferences / Help | Y | Y | Y (stacked too, round 9) | Y | R1 CLOSED — focus-in + trap + restore in round 7; Escape ownership in round 9, on `escapeStack`'s `modal` layer (BUG-018) |
-  | CommandPalette | Y | (single input) | Y | **N** | unchanged — residual |
+  | CommandPalette | Y | (single input) | Y | Y (R2, 2026-09-29) | R2 CLOSED — `useOpenerCapture` (leaf `openerCapture.ts`) + eager restore before a run command acts |
   | ContextMenu | Y | n/a (roving menu) | Y | Y | already correct |
   | ToolWindow (all 48 workshops) | **N** | n/a (non-modal) | **none** | **N** | focus-in + Escape + restore (round 2); Escape re-homed on the shared ordered registry (round 3); a DECLINED close keeps the key (round 4) |
   | LibraryTree / LibraryDetails / LibraryTile | Y | n/a | Y | — | already correct, untouched |
@@ -6105,7 +6169,7 @@ that goes red without its fix.
 
   | Layer | Consumer | Why it sits there |
   |---|---|---|
-  | `menu` | `MenuBar`, `AppearanceMenu` | GUI_INTERACTION #9: an open menu OWNS Escape. Both used to close on a plain document-keydown with no `preventDefault`, so the registry walked too and a surface below acted on the same keystroke (measured: menu closed AND the armed tool reverted). **Not unconditional — CORRECTED in round 6 (review finding 3): with the Peak Analyzer at step ②, `usePeakWizard`'s window-bubble `preventDefault()` lands during the dispatch, the walk's re-read then returns, and the open menu does NOT close. Measured at round 5's tip and unchanged by round 6: menu registered + wizard at step ② → the menu stays open and the wizard pauses instead. That is residual R11's class (the wizard claims without checking that focus is inside its own window), and closing it is R11's fix, not a table edit.** |
+  | `menu` | `MenuBar`, `AppearanceMenu` | GUI_INTERACTION #9: an open menu OWNS Escape. Both used to close on a plain document-keydown with no `preventDefault`, so the registry walked too and a surface below acted on the same keystroke (measured: menu closed AND the armed tool reverted). **Not unconditional — CORRECTED in round 6 (review finding 3): with the Peak Analyzer at step ②, `usePeakWizard`'s window-bubble `preventDefault()` lands during the dispatch, the walk's re-read then returns, and the open menu does NOT close. Measured at round 5's tip and unchanged by round 6: menu registered + wizard at step ② → the menu stays open and the wizard pauses instead. That is residual R11's class (the wizard claims without checking that focus is inside its own window), and closing it is R11's fix, not a table edit.** **Now unconditional — R11 CLOSED 2026-09-29: the pause is a registered `window`/`selection` surface, so the menu (rank 5) is offered the key first and closes; pinned by `PeakWizardPanel.test.tsx` "an open menu owns Escape: it closes and the edit stays live".** |
   | `gesture` | `useGlobalShortcuts` → `cancelActiveGesture()` | A drag happening RIGHT NOW is genuinely innermost — the user's hand is on it — so it outranks even the window focus is in. Declines (returns false) when nothing is mid-drag. Resolved synchronously at keydown since round 5, and since round 6 a claim here also `preventDefault()`s, so a late window-bubble consumer cannot act on the same key. |
   | `window` | `ToolWindow` (every workshop host, incl. `OriginSavedPreviewWindow`) | A floating panel is in front of the workspace behind it. Declines when focus is not inside its own frame. **("all 48 hosts" as written in round 4 was not reproducible — CORRECTED in round 6, review finding 5. Measured at round 6's tip: **40** production `.tsx` files render `<ToolWindow` across **41** render sites, and **44** import it; counting test files too gives 45 files / 78 sites / 50 importers. The substance — one registry entry per `ToolWindow` mount, so every host gets it — is unchanged; only the decorative count was wrong.)** |
   | `workspace` | `LibraryWorkspace` (Tiles), `QuickFigureBuilderWorkspace` | Full-Stage workspaces; mutually exclusive in `App.tsx`, so two can never co-exist. |
@@ -6224,6 +6288,28 @@ that goes red without its fix.
     and the pause fired instead — and fixed the MODAL side by resolving that
     layer at keydown. The menu side is unchanged and still R11's to close: a
     `menu` is resolved in the deferred walk, so the pause still wins there.
+
+    **CLOSED (2026-09-29).** The pause no longer `preventDefault()`s from a
+    bare window listener. `usePeakCandidates.ts` registers it on the ladder
+    twice, both only while there is something to pause: a `window`-tier
+    surface that claims only when focus is inside the Analyzer's own frame
+    (`ToolWindow` now stamps `data-tool-window={id}`, read by
+    `lib/toolwindow.ts`'s `isInsideToolWindow` — the hook renders the window
+    but cannot reach its ref), registered after the host so it is offered the
+    key first; and a `selection`-tier surface for focus outside every window
+    (the plot being clicked, `<body>`), below every menu, window and
+    workspace like the Stage's other armed modes. `lib/escapeStack.ts`'s
+    header now lists ONE documented `preventDefault()` exception
+    (`SymbolPalette`). Red-first, `PeakWizardPanel.test.tsx` "the step ②
+    Escape pause is scoped (R11)": three of four red at base (menu stays open;
+    an Escape aimed at another window paused the edit instead; a workspace
+    lost to the pause), the in-frame "Esc① pauses and keeps it open, Esc②
+    closes it" green at base as the regression guard. Two sabotages: dropping
+    the focus scope re-reddens 2 (other window, workspace); dropping the
+    `window`-tier registration re-reddens the in-frame guard (the host closed
+    the Analyzer on Esc①). `usePeakWizard.test.ts`'s old "CLAIMS … 
+    `defaultPrevented`" case was rewritten to the registry contract (the
+    pause stops the walk; the second Escape reaches the surface below).
 
   - **R12** (round 8, review NIT 4) — **two `aria-modal="true"` dialogs can be
     mounted at once, and each one hides the app's live regions.** Follows
@@ -7156,6 +7242,26 @@ that goes red without its fix.
     phase's.
   - **R2** — `CommandPalette` focuses its input but never restores focus to
     the opener on close.
+    **CLOSED (2026-09-29).** NOT via `useOpenerRestore` itself, measured:
+    importing it from the EAGER palette made `architecture.test.ts` "nothing
+    eager reaches a seam" fail — `useDialogFocus.ts` and `lib/scrollOutFocus.ts`
+    are DRAGGED_OUT of the entry chunk by bundle-diet slice 8. So the
+    dependency-free `useOpenerCapture` moved to the leaf
+    `overlays/openerCapture.ts` (re-exported by `useDialogFocus`, importers
+    untouched), and the palette applies `useOpenerRestore`'s contract with it
+    minus the safe-landing fallback: every close path (Escape, running a
+    command, a backdrop mousedown) goes through one `close` that restores
+    EAGERLY, before the input unmounts and before a run command acts — so a
+    dialog the command opens captures the real opener instead of a dead input
+    — and an effect cleanup is the backstop for a close from elsewhere
+    (acting only on a dropped focus). The backdrop mousedown now
+    `preventDefault()`s so the click's default focus move cannot land on
+    `<body>` after the restore. Red-first, `CommandPalette.test.tsx` "returns
+    focus to its opener (R2)": Escape / run / backdrop all red at base (focus
+    left on `<body>`); the backstop case was added with the fix. Sabotages:
+    eager restore off → "on running a command, BEFORE the command acts"
+    re-reddens; backstop off → "on a close from outside the palette"
+    re-reddens.
   - **R3** — floating workshop windows have no keyboard MOVE or RESIZE. No
     plan-level promise commits to one; GUI_INTERACTION #10's recoverability
     promise is met by title-bar clamping plus the keyboard-reachable View-menu
@@ -7163,6 +7269,13 @@ that goes red without its fix.
   - **R4** — `ToolWindow`'s ✕ takes its accessible name from `title="Close"`
     alone and does not say WHICH panel it closes. That belongs to the
     accessible-names box above, not this one.
+    **CLOSED (2026-09-29).** The ✕ now carries `aria-label="Close <panel
+    title>"` ("Close this panel" for a non-string title), the same rule the
+    adjacent Help button already used — both now read one `panelName`.
+    `title="Close"` stays as the one-sentence tooltip, so every
+    `getByTitle("Close")` site (unit + the `arbitrary-data-journey` e2e) is
+    unaffected. Red-first, `ToolWindow.test.tsx` "names the panel it closes";
+    sabotage (label removed) re-reddens it.
   - **R5** (round 2, review NIT 12) — under React StrictMode's dev-only
     mount→cleanup→mount, `useOpenerRestore`'s cleanup restores to the opener
     mid-open and the re-run pulls focus back in. Net-correct, one dev-only
@@ -8314,7 +8427,26 @@ Prioritized slices (in pain order):
 
 Original acceptance criteria (unchanged):
 
-- [~] Consistent progress location and job identity. **Narrowed
+- [x] Consistent progress location and job identity. **Closed
+  2026-09-29** (the job-queue gap named below): every poll-based job now
+  registers ONE `pendingOps` entry for its whole run through
+  `store/pendingOps.ts`'s `trackJob` — a label formatter over the existing
+  `beginOp`/`updateOp`/`endOp`, not a third progress system — so the
+  StatusBar shows the job's live percent + message ("Fit model scan 43% ·
+  Scanning 3/7: Gaussian") under one stable `OpId`, with a Cancel control
+  once there is a job to cancel. Wired: `curvefit/useBumpsFit.ts` (DREAM;
+  the synchronous engines show a busy entry with no Cancel),
+  `curvefit/useModelScan.ts`, `reflectivity/useReflDream.ts` (cancellable
+  from submit, honouring the hook's own early-cancel path),
+  `peakwizard/usePeakBatch.ts` (preparing + fitting; cancel-while-preparing
+  and unmount end the entry at once). The job panels keep their own bars.
+  Evidence: `store/pendingOps.test.ts` (trackJob), `useBumpsFit.test.ts`,
+  `useModelScan.test.ts`, `useReflDream.test.tsx` (two cases, incl. a
+  StatusBar Cancel before the job id exists), `PeakBatchView.test.tsx`
+  (progress, Cancel, finish, unmount) and a DOM case in
+  `components/Shell/StatusBar.test.tsx`; each new guard sabotaged once
+  (entry never ended / progress not reported / cancel not attached / early
+  cancel dropped) and seen red. **Narrowed
   2026-09-13:** slices 1-4 gave import, command-palette actions, and
   workspace open ONE shared location (`StatusBar.tsx`'s `.qzk-pending`
   span reading `store/pendingOps.ts`) and ONE identity scheme (`OpId`, a
@@ -8378,6 +8510,45 @@ Original acceptance criteria (unchanged):
   plus an unhandled-rejection console warning. (`store/recordRecipeUse.ts`
   is NOT on this list: it carries its own explicit `.catch` with a
   fire-and-forget rationale, so its failure is a deliberate silent no-op.)
+  **Update 2026-09-29 (export cancel, second pass):** the uncancelled
+  export list above is now wired except where noted. Each site runs as a
+  `pendingOps` entry with a Cancel control through `store/pendingOps.ts`'s
+  `runCancellable` (the same AbortController + `signal.aborted` shape as
+  `lib/exportPageCommand.ts`), and the signal reaches
+  `postDownload`/`postBlob`, so a cancelled export saves no file and
+  reports a status line, never an error toast: the Figure Page composer's
+  Export and Copy (`figurepage/usePagePreviewExport.ts`;
+  `renderFigurePageBlob` takes a signal again), `Library/PagesSection.tsx`,
+  the multi-selection and folder CSV export (`Library/folderOps.ts`
+  `exportDatasets`; `exportConsolidated` takes a signal), all four
+  `lib/api/exportMultivar.ts` wrappers and their views, the report viewer
+  (`lib/api/reportExport.ts` — the `report.ts:37` citation above has since
+  moved there — and `report/ReportPanel.tsx`), and the statistics stage
+  (`Stage/useStatStage.ts` → `statStageExport.ts` →
+  `exportStatplotFigure`/`exportCategoricalFigure`). Evidence: cancel
+  cases in `useFigurePage.test.ts` (export + copy), `PagesSection.test.tsx`,
+  `folderOps.test.ts`, `MultivarPanel.test.tsx`, `ReportPanel.test.tsx`,
+  `useStatStage.test.ts`, each waiting on the in-flight request's signal
+  (state), and each seen red against the pre-change code or a sabotaged
+  signal. **Still open (the box stays [~]):**
+  `workshops/figurebuilder/previewExport.ts` (out of this slice's bounds:
+  another workstream owns figurebuilder/), the rest of `lib/api/figures.ts`
+  (`exportCornerFigure`/`exportTernaryFigure`/`exportFieldFigure` take no
+  signal), the two named carve-outs (Send to Origin COM; the File-menu
+  "Export consolidated CSV" command still calls `exportConsolidated`
+  without one), and the clipboard-after-write limit above.
+  **The `void import(...)` residual is closed (2026-09-29):**
+  `runLazy`/`onLoadFailure` moved to `lib/runLazy.ts` (re-exported by
+  `commands/fileCommands.ts`); every site listed above now shows a busy
+  entry while the chunk loads and the standard "Could not load the …"
+  error toast if it fails — except `Stage/usePlotStageActions.ts`, where
+  only the two call lines could be touched (a concurrent Graph Builder
+  edit), so those two handle the rejection inline with the same toast
+  wording and no busy entry. `src/lazyImportGuard.test.ts` is the ratchet:
+  every `void import(` must handle its rejection in its own chain (a
+  `.catch` or a two-argument `.then`, never the silent `onLoadFailure`
+  outside runLazy); it listed exactly the nine sites above before the fix,
+  and `Library/MultiSelectBar.lazyFail.test.tsx` proves the toast.
 - [~] Errors say what failed, whether data changed, and next action.
   **Audited 2026-09-14, census corrected in the 2026-09-14 review round** —
   intended as the whole user-facing failure surface, not a sample; the first
@@ -11011,6 +11182,35 @@ work (its BACKLOG row).
   ID, field, or temperature" ticked; "Any suitable factor" moved to `[~]`
   with its five residuals — the editable Stage plot not drawing encodings is
   the next dependency.
+- ~~**P3.4 operations visibility — job progress, export cancel, lazy-load
+  failures**~~ (2026-09-29) — job-queue runs (DREAM/bumps fit, model scan,
+  reflectivity DREAM, peak batch) report percent + message and Cancel through
+  the shared StatusBar ops (`trackJob`); the untracked export/copy sites get
+  a Cancel control and busy entry (`runCancellable`), a cancel saving nothing
+  and raising no error toast; the remaining bare `void import(...)` sites go
+  through `runLazy` (now `lib/runLazy.ts`), locked by
+  `lazyImportGuard.test.ts`. Box "Consistent progress location and job
+  identity" ticked; "Safe cancel" stays `[~]` with its named residuals
+  (figurebuilder `previewExport.ts`, three `figures.ts` wrappers, the two
+  carve-outs). Eager JS 854,864 → 855,610 B (+746 B, after `npm ci`).
+
+- ~~**P1.4 encodings on the editable Stage (residual 1)**~~ (2026-09-29,
+  Claude, commit `2e3c0aac`) — `FigureBindings.encoding` (shape + validator in the dependency-free `lib/figureEncoding.ts`; new eager
+  `lib/plotEncodingBinding.ts`: the one gate, the wire
+  field and resolved palette) written by the Graph Builder apply
+  (`store/windowDocuments.withFocusedEncoding`); the Stage draws it through
+  `Stage/usePlotEncoding.ts` (lazy import of `lib/plotEncoding`, whose
+  `buildEncodedXY`/`encodedStyles` were split into the shared
+  `encodedSplit`/`encodedNames`/`applyEncodedSplit`/`encodedStyle`); the
+  window's own export sends it (`figureSpec.ts`). Funded under the pins by
+  moving the canonical-role `errorSpans` memo to
+  `Stage/usePlotPayloadLogOffsets.useOffsetErrorSpans` (`usePlotPayload.ts`
+  497 → 479 lines); `PlotStage.tsx` stays at 399, `useGraphBuilder.ts` at its
+  603 pin. Eager JS 834.8 → 840.8 kB (budget 846.1 kB untouched; 5.3 kB
+  headroom left) — the derivation itself (`plotEncoding`, 4.2 kB) stays a
+  lazy chunk; what is eager is the gate, the document field, the Stage hook
+  and the export wiring. See P1.4's **Stage** bullet for rules, tests, the
+  25 sabotaged guards and the known limits. Residuals 2-5 unchanged.
 
 ## Reference baseline
 

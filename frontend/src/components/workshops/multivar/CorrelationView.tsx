@@ -11,6 +11,7 @@ import { exportCorrelationHeatmapFigure } from "../../../lib/api";
 import { copyText } from "../../../lib/clipboard";
 import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Button } from "../../primitives";
+import { runCancellable } from "../../../store/pendingOps";
 import { useApp } from "../../../store/useApp";
 import CorrelationMatrix from "./CorrelationMatrix";
 import type { CorrMethod, MultivarState } from "./useMultivar";
@@ -33,8 +34,11 @@ export default function CorrelationView({ m }: { m: MultivarState }) {
     if (!m.corr) return;
     setExporting(true);
     try {
-      await exportCorrelationHeatmapFigure({ labels: m.labels, r: m.corr.r, filename: "correlation" });
-      setStatus("exported correlation heatmap figure");
+      const corr = m.corr;
+      const done = await runCancellable("Exporting correlation heatmap…", (signal) =>
+        exportCorrelationHeatmapFigure({ labels: m.labels, r: corr.r, filename: "correlation" }, signal),
+      );
+      setStatus(done ? "exported correlation heatmap figure" : "export cancelled");
     } catch (e) {
       setStatus(e instanceof Error ? e.message : "export failed");
     } finally {

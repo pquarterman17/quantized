@@ -37,7 +37,7 @@
 // import record can see.
 
 import { act, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Library from "./Library";
 import { buildLibraryHierarchy } from "../../lib/libraryHierarchy";
@@ -78,6 +78,16 @@ const ds = (id: string): Dataset => ({
 
 const emptyHierarchy = buildLibraryHierarchy({ folders: [], workbooks: [], datasets: [] });
 
+// The first test waits for the lazy LibraryTree region to render. Cold, that
+// chunk's first transform can take longer than findByText's 1 s default on a
+// loaded machine (it failed 4/6 at load ~22, identically on main). What this
+// file asserts is WHICH chunk is fetched, not how fast, so warm the tree
+// module up front; the render then resolves in microtasks. The explicit
+// timeout below stays only as a loose backstop.
+beforeAll(async () => {
+  await import("./LibraryTree");
+});
+
 beforeEach(() => {
   loaded.clear();
   vi.mocked(useLibraryHierarchyModel).mockReset();
@@ -110,7 +120,7 @@ describe("Library flat-row fallback — chunk-deferred, and unreachable through 
     // left pending.
     useApp.setState({ datasets: [ds("a")] });
     const { rerender } = render(<Library />);
-    await screen.findByText("a");
+    await screen.findByText("a", undefined, { timeout: 5000 });
     await act(async () => {});
     expect([...loaded]).not.toContain("LibraryFlatRows");
 
@@ -134,6 +144,6 @@ describe("Library flat-row fallback — chunk-deferred, and unreachable through 
     render(<Library />);
     expect([...loaded]).not.toContain("LibraryFlatRows");
     await waitFor(() => expect([...loaded]).toContain("LibraryFlatRows"), { timeout: 5000 });
-    expect(await screen.findByText("a")).toBeInTheDocument();
+    expect(await screen.findByText("a", undefined, { timeout: 5000 })).toBeInTheDocument();
   });
 });

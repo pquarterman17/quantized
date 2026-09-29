@@ -34,9 +34,10 @@ import {
   type Weighting,
 } from "./reflFitData";
 import { channelDigest, recordGone, recordId, savedResult, type ReflFitRecord } from "./reflFitRecord";
-import { curveDatasets, liveCurves, savedCurves } from "./reflFitCurves";
+import { curveDatasetFor, curveDatasets, liveCurves, presentIds, savedCurves } from "./reflFitCurves";
 import type { RestoredSetup } from "./reflFitRestore";
 import { useReflDream, type ReflDreamState } from "./useReflDream";
+import { useReflFitFigure } from "./useReflFitFigure";
 import { useReflFitHistory, type ReflFitHistory } from "./useReflFitHistory";
 import {
   applyBlockedReason,
@@ -98,6 +99,8 @@ export interface ReflFitState {
   cancel: () => void;
   addCurves: () => string[];
   openLogPlot: () => void;
+  /** The fit's data/model/residual/SLD figure template on a new Figure Page. */
+  sendToFigure: () => void;
   applyToModel: () => void;
 }
 
@@ -375,7 +378,8 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
 
   function addCurves(): string[] {
     if (!result) return [];
-    if (curveIds.length) return curveIds;
+    // Reused only while every one is still in the library.
+    if (presentIds(curveIds, datasets)) return curveIds;
     // Named for, placed with, and pointing back at the fit's record
     // (reflFitCurves.ts); a fit whose record could not be stored (its datasets
     // deleted mid-fit) names them generically.
@@ -387,6 +391,14 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     setCurveIds(ids);
     setStatus(`added ${ids.length} reflectivity-fit datasets`);
     return ids;
+  }
+
+  const sendFigure = useReflFitFigure();
+  function sendToFigure(): void {
+    if (!result) return;
+    const ids = addCurves();
+    const base = liveRecord ? curveDatasetFor(liveRecord, datasets).base : "Reflectivity fit";
+    if (ids.length) sendFigure({ ids, curves: liveCurves(result), weighting: result.weighting, base });
   }
 
   function openLogPlot(): void {
@@ -425,7 +437,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     history,
     dream,
     applyBlocked,
-    curvesAdded: curveIds.length > 0,
+    curvesAdded: presentIds(curveIds, datasets),
     selectDataset,
     setChannel,
     addChannel,
@@ -436,6 +448,7 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     cancel,
     addCurves,
     openLogPlot,
+    sendToFigure,
     applyToModel,
   };
 }

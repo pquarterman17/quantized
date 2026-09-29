@@ -11,6 +11,8 @@
 
 import { useRef } from "react";
 
+import { reviewSeedErrorBindings } from "../../lib/errorBindingConfidence";
+import { confirmErrorBindings, withdrawErrorBindingConfirmation } from "../../lib/errorRoleConfirm";
 import { asymmetricPair, type ErrorBinding, type ErrorSide } from "../../lib/errorRoles";
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import type { Dataset } from "../../lib/types";
@@ -34,15 +36,32 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
   const setErrorRoles = useApp((s) => s.setErrorRoles);
   const detectErrorRoles = useApp((s) => s.detectErrorRoles);
   const setStatus = useApp((s) => s.setStatus);
+  const recordHistory = useApp((s) => s.recordHistory);
   if (!active || active.data.labels.length < 2) return null;
 
   const labels = active.data.labels;
   const roles = active.errorRoles ?? [];
-  const patch = (i: number, next: Partial<ErrorBinding>) =>
-    setErrorRoles(
-      active.id,
-      roles.map((r, k) => (k === i ? { ...r, ...next } : r)),
-    );
+  // An edit here is an explicit decision: recorded as confirmed
+  // (lib/errorRoleConfirm.ts) so a new figure applies it without asking; a
+  // removal withdraws any confirmation for that column.
+  const patch = (i: number, next: Partial<ErrorBinding>) => {
+    const edited = { ...roles[i], ...next };
+    setErrorRoles(active.id, roles.map((r, k) => (k === i ? edited : r)));
+    confirmErrorBindings(active.id, [edited]);
+  };
+  const remove = (i: number) => {
+    setErrorRoles(active.id, roles.filter((_, k) => k !== i));
+    withdrawErrorBindingConfirmation(active.id, roles[i].channel);
+  };
+  // Pairings the confidence grade would ask about before a new figure applies
+  // them (adjacency alone); each row offers a one-click confirm.
+  const unconfirmed = reviewSeedErrorBindings(active).confirm;
+  const confirmRow = (r: ErrorBinding) => {
+    recordHistory("confirm error role");
+    confirmErrorBindings(active.id, [r]);
+  };
+  const needsConfirm = (r: ErrorBinding) =>
+    unconfirmed.some((u) => u.channel === r.channel && u.target === r.target && u.axis === r.axis && u.side === r.side);
 
   // Warn about a half-pair: it is legal to have one and drawn as nothing, so
   // saying so beats leaving the user to wonder why no bars appeared.
@@ -105,10 +124,25 @@ export default function ErrorRolesCard({ active }: { active: Dataset | null }) {
               aria-label={`Remove error role for ${labels[r.channel]}`}
               title="Remove this binding (the column itself is untouched)"
               className="qz-shortcut"
-              onClick={() => removeRowSafely(containerRef.current, () => setErrorRoles(active.id, roles.filter((_, k) => k !== i)))}
+              onClick={() => removeRowSafely(containerRef.current, () => remove(i))}
             >
               ✕
             </span>
+            {needsConfirm(r) && (
+              <span
+                role="button"
+                tabIndex={0}
+                aria-label={`Confirm error role for ${labels[r.channel]}`}
+                title="Only column position suggests this pairing; confirm it so new figures apply it without asking."
+                className="qz-shortcut"
+                onClick={() => confirmRow(r)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") confirmRow(r);
+                }}
+              >
+                ✓
+              </span>
+            )}
           </div>
         ))
       )}

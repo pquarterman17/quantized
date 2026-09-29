@@ -6,6 +6,7 @@ import type { SldPreset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import ReflectivityPanel from "./ReflectivityPanel";
 
+vi.mock("uplot", async () => ({ default: (await import("./reflFit.testkit")).UPlotStub }));
 vi.mock("../../../lib/api/reflectivity", () => ({
   reflPresets: vi.fn(),
   reflSimulate: vi.fn(),

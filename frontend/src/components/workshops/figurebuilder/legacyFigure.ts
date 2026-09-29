@@ -16,6 +16,7 @@
 // from). One input type makes that structural instead of a review question.
 
 import type { FigureSpec } from "../../../lib/api/figures";
+import { resolveSecondaryAxis, secondaryAxisWire, type SecondaryAxisSpec } from "../../../lib/axisspec";
 import { buildExportStyles, toWireSeriesStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
 import type { FigureDoc } from "../../../lib/figuredoc";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
@@ -45,6 +46,11 @@ export interface LegacyFigureState {
    *  order. The three-way distinction is why this is not just `| null`. */
   docSeriesStyles: (ExportSeriesStyle | null)[] | null | undefined;
   docGroupCol: number | null;
+  /** The live plot's secondary (right) Y axis, mirrored like its xFmt/yFmt;
+   *  null for a re-opened doc, since a `FigureDoc` config carries no y2. The
+   *  preview-only field: "Save as figure" cannot persist it (known gap, see
+   *  FIGURE_AUTHORING_WORKFLOW_PLAN F2.1g). */
+  y2: SecondaryAxisSpec | null;
 }
 
 /** The channels a spec plots when `yKeys` is the "all channels" null sentinel. */
@@ -89,6 +95,15 @@ export function buildLegacyFigureSpec(state: LegacyFigureState): FigureSpec | nu
   // array, and the provenance flag off, on every request (BUG-016 round 3).
   const docStyles = exportStyles(state, state.data);
   const styles = docStyles === null ? null : toWireSeriesStyles(docStyles, state.docGroupCol !== null);
+  // F2.1g's legacy y2 placebo: the hook enabled y2-limit controls off the live
+  // y2Keys while this request never declared `y2_keys`, so the server dropped
+  // every `y2_lim` they wrote. The hook now reads `hasY2` off THIS field, so a
+  // control is live exactly when the wire has an axis for it. The split and
+  // its inherit rules are lib/axisspec.ts's, shared with the Stage export; a
+  // grouped request cannot carry y2 at all (the backend 422s the pair).
+  const y2Axis = state.y2 === null || state.docGroupCol !== null
+    ? null
+    : resolveSecondaryAxis(plottedChannels(state, state.data), state.y2, { scale: state.yScale, fmt: state.yFmt });
   return {
     dataset: state.data,
     x_key: state.xKey ?? undefined,
@@ -106,6 +121,7 @@ export function buildLegacyFigureSpec(state: LegacyFigureState): FigureSpec | nu
     y_label: state.yLabel.trim() || undefined,
     series_styles: styles ?? undefined,
     group_col: state.docGroupCol ?? undefined,
+    ...secondaryAxisWire(y2Axis),
   };
 }
 

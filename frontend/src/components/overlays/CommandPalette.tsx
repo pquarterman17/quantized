@@ -12,9 +12,10 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { contextPaletteActions } from "../../lib/paletteContextActions";
 import { fuzzy } from "../../lib/fuzzy";
-import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
+import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
 import { mergeCommands, runAction, useCommands, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
+import { useOpenerCapture } from "./openerCapture";
 
 export type { Action };
 
@@ -28,6 +29,31 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
   const [cursor, setCursor] = useState(0);
   const [menuCmds, setMenuCmds] = useState<Action[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  // R2 (PRIMARY_SOFTWARE_AUDIT_PLAN): give focus back to whatever opened the
+  // palette. Without it every close dropped focus on <body>, where the global
+  // Delete binding removes the active dataset. This is `useOpenerRestore`'s
+  // contract, minus its safe-landing fallback: that hook lives in the LAZY
+  // `useDialogFocus` seam, which this eager component must not import (see
+  // openerCapture.ts). `close` restores EAGERLY — before the input unmounts
+  // (useOpenerRestore's doc has the measured reason) and before a run command
+  // acts, so a dialog it opens captures the real opener; the effect cleanup is
+  // the backstop for a close from anywhere else, and only acts on a dropped focus.
+  const opener = useOpenerCapture(open);
+  const restoreOpener = () => {
+    if (opener.current?.isConnected) opener.current.focus();
+  };
+  useEffect(() => {
+    if (!open) return;
+    return () => {
+      const active = document.activeElement;
+      if (active === null || active === document.body) restoreOpener();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `opener` is a ref
+  }, [open]);
+  const close = () => {
+    restoreOpener();
+    setCmdk(false);
+  };
 
   useEffect(() => {
     if (open) {
@@ -73,7 +99,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
   if (!open) return null;
 
   const run = (a: Action) => {
-    setCmdk(false);
+    close();
     // P3.4 slice 2: routes through the shared chokepoint so an async
     // command (every File-menu export) registers an in-flight signal
     // StatusBar can show instead of firing untracked.
@@ -83,7 +109,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       e.preventDefault();
-      setCmdk(false);
+      close();
     } else if (e.key === "ArrowDown") {
       e.preventDefault();
       setCursor((c) => Math.min(matches.length - 1, c + 1));
@@ -99,7 +125,15 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
   let lastGroup = "";
 
   return (
-    <div className="qz-overlay-backdrop" onMouseDown={() => setCmdk(false)}>
+    <div
+      className="qz-overlay-backdrop"
+      // preventDefault: the click's default focus move would otherwise land
+      // on <body> after `close` has already put focus back on the opener.
+      onMouseDown={(e) => {
+        e.preventDefault();
+        close();
+      }}
+    >
       <div className="qzk-glass qz-cmdk" onMouseDown={(e) => e.stopPropagation()}>
         <input
           ref={inputRef}

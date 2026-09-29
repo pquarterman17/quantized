@@ -14,6 +14,7 @@ import {
   type BatchRow,
 } from "../../lib/template";
 import type { Dataset, FolderNode } from "../../lib/types";
+import { runCancellable } from "../../store/pendingOps";
 import { ACCENTS } from "../../store/prefs";
 import { toast } from "../../store/toasts";
 import { nextDatasetId, useApp } from "../../store/useApp";
@@ -87,15 +88,25 @@ export async function openFolderProperties(folder: FolderNode): Promise<void> {
 export async function exportDatasets(ids: string[], filename: string, label: string): Promise<void> {
   if (ids.length === 0) return;
   try {
-    // #38 deferred edge: the set very often includes datasets that were
-    // never activated/rendered — resolve them all first (bounded
-    // concurrency) rather than silently exporting previews.
-    const resolved = await useApp.getState().resolveDatasets(ids);
-    await exportConsolidated({
-      datasets: resolved.map((d) => ({ dataset: d.data, name: d.name })),
-      filename,
+    // P3.4: a StatusBar op with a Cancel that aborts the request; a cancelled
+    // export saves no file and raises no error toast.
+    const done = await runCancellable(`Exporting ${ids.length} dataset${ids.length === 1 ? "" : "s"}…`, async (signal) => {
+      // #38 deferred edge: the set very often includes datasets that were
+      // never activated/rendered — resolve them all first (bounded
+      // concurrency) rather than silently exporting previews.
+      const resolved = await useApp.getState().resolveDatasets(ids);
+      signal.throwIfAborted();
+      await exportConsolidated({
+        datasets: resolved.map((d) => ({ dataset: d.data, name: d.name })),
+        filename,
+      }, signal);
+      return resolved.length;
     });
-    toast(`exported ${resolved.length} dataset(s)${label}`);
+    if (!done) {
+      useApp.getState().setStatus("export cancelled");
+      return;
+    }
+    toast(`exported ${done.value} dataset(s)${label}`);
   } catch (e) {
     const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;
     useApp.getState().setStatus(msg);

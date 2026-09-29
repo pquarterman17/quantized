@@ -10,6 +10,7 @@ import {
   buildEncodedXY,
   encodeSpec,
   encodedSpecRender,
+  encodedStyle,
   isEncodingFactor,
   legendSourceText,
   resolveEncoding,
@@ -126,6 +127,23 @@ describe("buildEncodedXY — the split", () => {
     const { payload, series } = buildEncodedXY(DATA, null, [0, 4], enc({ label: 3 }));
     expect(payload.series.map((s) => s.label)).toEqual(["y", "y2"]);
     expect(series.map((s) => s.legend)).toEqual(["y (10 K, 300 K)", "y2 (10 K, 300 K)"]);
+  });
+
+  it("a channel rename (BUG-014's y_legends) replaces the Y name in the series name and the legend prefix", () => {
+    const { payload, series } = buildEncodedXY(DATA, null, [0, 4], enc({ color: 1, label: 3 }), ["R", undefined]);
+    expect(payload.series.map((s) => s.label)).toEqual([
+      "R (sample=S1)", "R (sample=S2)", "y2 (sample=S1)", "y2 (sample=S2)",
+    ]);
+    expect(series.map((s) => s.legend)).toEqual(["R (10 K)", "R (300 K)", "y2 (10 K)", "y2 (300 K)"]);
+  });
+
+  it("encodedStyle: a colour factor overrides the base colour; without one the base colour, else the position token", () => {
+    const s = { channel: 0, colorLevel: 2, symbolLevel: null, legend: undefined };
+    expect(encodedStyle({ color: "#ff0000", width: 3 }, s, 0)).toEqual({ color: SERIES_VARS[2], width: 3 });
+    expect(encodedStyle({ color: "#ff0000" }, { ...s, colorLevel: null }, 1).color).toBe("#ff0000");
+    expect(encodedStyle(undefined, { ...s, colorLevel: null, symbolLevel: 1 }, 1)).toEqual({
+      color: SERIES_VARS[1], marker: true, markerShape: AUTO_MARKER_CYCLE[1],
+    });
   });
 });
 

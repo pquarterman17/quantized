@@ -16,7 +16,7 @@
 // decisions" #2), and global Preferences-dialog defaults (defaultTrace,
 // wheelZoom, excludedDisplay, sigFigs, … — app-wide, not per-window).
 
-import { PANEL_FITS, type PanelFit } from "./panelLayout";
+import { PANEL_FITS, type PanelFit } from "./panelFit";
 import { sanitizePageSetup, type PageSetup } from "./pagesetup";
 import {
   sanitizePanelDatasetIds,

@@ -262,6 +262,7 @@ function axisWire(
 export async function exportFacetedFigure(
   fmt: string,
   o: FacetedExportInputs,
+  signal?: AbortSignal,
 ): Promise<void> {
   const { drawFacets, mode, barStack, groupLabel, barValueLabel, valueLabel } = o;
   const showN = o.showN ?? false;
@@ -292,7 +293,7 @@ export async function exportFacetedFigure(
       ...noteWire(o.errorNote),
       axis_style: axisWire(m, facets.flatMap((f) => f.groups)),
     };
-    await exportCategoricalFigure(spec);
+    await exportCategoricalFigure(spec, signal);
     return;
   }
   if (mode !== "box" && mode !== "violin") return;
@@ -344,7 +345,7 @@ export async function exportFacetedFigure(
     // its own `StatplotFacetSpec.tiers` above instead).
     axis_style: style ? { rotation: style.rotation, wrap: style.wrap, tiered: style.tiered } : null,
   };
-  await exportStatplotFigure(spec);
+  await exportStatplotFigure(spec, signal);
 }
 
 /** Everything the stage's "Export" button needs — moved out of
@@ -362,14 +363,16 @@ export interface StatStageExportInputs extends FacetedExportInputs {
   fit: string | null;
 }
 
-export async function exportStatStage(fmt: string, o: StatStageExportInputs): Promise<void> {
+/** `signal` (P3.4): the stage's StatusBar Cancel; every render request
+ *  below takes it, so a cancelled export saves nothing. */
+export async function exportStatStage(fmt: string, o: StatStageExportInputs, signal?: AbortSignal): Promise<void> {
   const { mode, draw } = o;
   const showN = o.showN ?? false;
   const caveat = o.caveat ?? null;
   // Faceted export (GUI_INTERACTION #12 slice 4b): drawFacets is set for
   // exactly the modes that facet (box/violin/bar). Checked first.
   if (o.drawFacets && o.drawFacets.length > 0) {
-    await exportFacetedFigure(fmt, o);
+    await exportFacetedFigure(fmt, o, signal);
     return;
   }
   if (mode === "bar") {
@@ -385,7 +388,7 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
       x_label: o.groupLabel,
       y_label: o.barValueLabel,
       filename: `bar_${o.barValueLabel}`,
-    });
+    }, signal);
     return;
   }
   // Box's points overlay (JMP_GAP J5 #1) and Strip mode (#3, which always
@@ -426,5 +429,5 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs): Pr
     // hidden by the current marks would otherwise narrow the export's range).
     spec.y_domain = canvasYDomain(draw, m);
   }
-  await exportStatplotFigure(spec);
+  await exportStatplotFigure(spec, signal);
 }

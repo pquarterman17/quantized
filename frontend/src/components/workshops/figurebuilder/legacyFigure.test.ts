@@ -33,12 +33,35 @@ const BASE: LegacyFigureState = {
   seriesStyles: {},
   docSeriesStyles: undefined,
   docGroupCol: null,
+  y2: null,
 };
 
 const IDENTITY = { id: "figd-1", name: "Saved", datasetId: "d1", live: true };
 const OUTPUT = { fmt: "pdf", dpi: 300 };
 
 describe("buildLegacyFigureSpec", () => {
+  describe("secondary axis (F2.1g legacy y2 placebo)", () => {
+    const Y2 = { keys: [1], lim: null, scale: null, step: null, fmt: null, label: "" };
+
+    it("declares the live y2 subset, inheriting the primary scale/format", () => {
+      const spec = buildLegacyFigureSpec({ ...BASE, yScale: "log", yFmt: { mode: "sci", digits: 3 }, y2: Y2 })!;
+      expect(spec.y2_keys).toEqual([1]);
+      expect(spec.y2_scale).toBe("log");
+      expect(spec.y2_fmt).toEqual({ mode: "sci", digits: 3 });
+      expect(spec.y2_label).toBeUndefined(); // blank -> backend auto-derives
+    });
+
+    it("sends nothing when y2 is null, off the plotted set, or the doc is grouped", () => {
+      for (const state of [
+        BASE,
+        { ...BASE, yKeys: [0], y2: Y2 },
+        { ...BASE, yKeys: [0, 1], docGroupCol: 0, y2: Y2 },
+      ]) {
+        expect(buildLegacyFigureSpec(state)!.y2_keys).toBeUndefined();
+      }
+    });
+  });
+
   it("returns null with no data, so the caller renders nothing", () => {
     expect(buildLegacyFigureSpec({ ...BASE, data: null })).toBeNull();
   });

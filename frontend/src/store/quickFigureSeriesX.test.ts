@@ -7,7 +7,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { QuickFigureMapping } from "../lib/quickFigureMapping";
-import { sanitizeQuickPlotTemplates } from "../lib/quickPlotTemplates";
+import { sanitizeQuickPlotTemplates } from "../lib/quickPlotTemplatesSanitize";
 import type { Dataset } from "../lib/types";
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
 import { useApp } from "./useApp";

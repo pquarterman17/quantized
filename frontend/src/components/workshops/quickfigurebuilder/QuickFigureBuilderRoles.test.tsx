@@ -78,9 +78,9 @@ describe("QuickFigureBuilderWorkspace — Group by and Point labels roles", () =
     const zone = (name: string) =>
       Array.from(screen.getByLabelText("Column role drop zones").querySelectorAll(".qzk-quick-builder-zone"))
         .find((el) => el.querySelector("span")?.textContent === name)!;
-    fireEvent.dragStart(screen.getByText("sample").closest("li")!, { dataTransfer });
+    fireEvent.dragStart(screen.getByRole("combobox", { name: "Role for sample" }).closest("li")!, { dataTransfer });
     fireEvent.drop(zone("Group by"), { dataTransfer });
-    fireEvent.dragStart(screen.getByText("run").closest("li")!, { dataTransfer });
+    fireEvent.dragStart(screen.getByRole("combobox", { name: "Role for run" }).closest("li")!, { dataTransfer });
     fireEvent.drop(zone("Point labels"), { dataTransfer });
     expect(role("sample")).toHaveValue("group");
     expect(role("run")).toHaveValue("label");

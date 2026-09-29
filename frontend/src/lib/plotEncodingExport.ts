@@ -10,36 +10,28 @@
 // placement, annotations and the rest of `overrides`, page size) comes from
 // `figureSpecStage.buildStageFigureSpec` — the plot the Graph Builder's Export
 // has just applied the spec to, exactly what an unencoded Graph Builder export
-// sends. Its series fields are NOT taken: the editable plot does not draw the
-// encodings yet (see useGraphBuilder's commit note and the plan's P1.4
-// residual), so its series list is not the screen this export must match. The
-// dialog, `exportActive`'s resolve/cancel chokepoint and `/api/export/figure`
-// are reused as-is via `runExportFigureCommand`'s `buildSpec` hook.
+// sends. Its series fields are NOT taken: this export draws the PREVIEW's
+// series (the spec's mark, no per-channel restyling), which is what the Graph
+// Builder shows beside the button. The applied plot's own export — the Stage's
+// Export figure… — carries the encoding too (`figureSpec.ts`, from the window
+// document's `bindings.encoding`) over its per-channel styles. The dialog,
+// `exportActive`'s resolve/cancel chokepoint and `/api/export/figure` are
+// reused as-is via `runExportFigureCommand`'s `buildSpec` hook.
 // Lazy-only, like `plotEncoding.ts`.
 
 import type { FigureSpec } from "./api/figures";
-import { resolveToHex } from "./color";
 import type { StoreGet } from "./exportActive";
 import { toWireSeriesStyles } from "./exportStyles";
 import type { FigureRenderOpts } from "./figureSpec";
 import { exportErrorSpans } from "./figureSpecSeries";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import { encodeSpec, type EncodedSpec } from "./plotEncoding";
+import { figureEncodingWire, resolvedPalette } from "./plotEncodingBinding";
 import type { PlotSpec } from "./plotspec";
 import { stylesForMark } from "./plotSpecFigure";
-import { AUTO_MARKER_CYCLE, SERIES_VARS, cssVar, seriesColor } from "./seriesStyleCycle";
 import type { Dataset } from "./types";
 
-/** The colour cycle exactly as the preview resolves it — each palette token
- *  through `seriesColor` (the canvas' own call), then to hex because matplotlib
- *  cannot read a CSS token. null when any token is undefined (no theme loaded;
- *  checked explicitly, because an unknown colour string "resolves" to the
- *  canvas' previous fill): the request then carries no palette rather than a
- *  partial or fabricated one. */
-export function resolvedPalette(): string[] | null {
-  const hex = SERIES_VARS.map((token) => (cssVar(token) ? resolveToHex(seriesColor(0, { color: token })) : null));
-  return hex.every((h): h is string => h !== null) ? hex : null;
-}
+export { resolvedPalette };
 
 /** The `/api/export/figure` request for an encoded Graph Builder spec. The
  *  per-channel `series_styles` carry only the mark (the preview draws no
@@ -49,20 +41,13 @@ export function resolvedPalette(): string[] | null {
  *  none for a lone series, dropping a label-source legend. Error spans ride
  *  only when nothing splits (`EncodedSpec.errors`), as the preview draws them. */
 export function encodedFigureSpec(e: EncodedSpec, spec: PlotSpec, stem: string, o: FigureRenderOpts): FigureSpec {
-  const palette = resolvedPalette();
-  const { group, color, symbol, label } = e.enc;
+  const { group } = e.enc;
   return {
     dataset: e.data,
     ...(e.xKey === null ? {} : { x_key: e.xKey }),
     y_keys: e.yChannels,
     ...(group === null ? {} : { group_col: group }),
-    encoding: {
-      ...(color === null ? {} : { color_col: color }),
-      ...(symbol === null ? {} : { symbol_col: symbol }),
-      ...(label === null ? {} : { label_col: label }),
-      ...(palette ? { palette } : {}),
-      ...(symbol === null ? {} : { markers: [...AUTO_MARKER_CYCLE] }),
-    },
+    encoding: figureEncodingWire(e.enc),
     series_styles: toWireSeriesStyles(stylesForMark(spec, {}, true), true),
     ...(e.errors.length > 0 ? { error_spans: exportErrorSpans(e.data, e.yChannels, e.errors) } : {}),
     overrides: { legend: { show: true } },

@@ -64,7 +64,7 @@ function makeState(overrides: Partial<StatStageState> = {}): StatStageState {
     errorNote: null,
     draw: { mode: "box", boxes: [], valueLabel: "y", groupLabel: "grp" },
     drawFacets: null,
-    exportFigure: vi.fn().mockResolvedValue(undefined),
+    exportFigure: vi.fn().mockResolvedValue(true),
     axes: null,
     ...overrides,
   };

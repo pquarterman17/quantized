@@ -15,6 +15,7 @@ import ReflFitView from "./ReflFitView";
 import { useReflFit } from "./useReflFit";
 import { useReflectivity } from "./useReflectivity";
 
+vi.mock("uplot", async () => ({ default: (await import("./reflFit.testkit")).UPlotStub }));
 vi.mock("../../../lib/api/reflectivity", () => ({
   reflPresets: vi.fn(),
   reflSimulate: vi.fn(),
@@ -71,7 +72,7 @@ describe("a saved fit's stored curves", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add fit curves" }));
     const added = useApp.getState().datasets.slice(1);
     expect(added.map((d) => d.name)).toEqual(["film.refl — refl fit #1 model", "film.refl — refl fit #1 SLD"]);
-    expect(added[0].data.values).toEqual([[1, 0.9], [0.5, 0.4], [0.2, 0.1]]);
+    expect(added[0].data.values).toEqual([[1, 0.9, -10], [0.5, 0.4, -10], [0.2, 0.1, -10]]);
     const host = useApp.getState().datasets[0];
     expect(added.map((d) => [d.workbookId, d.derivedFrom])).toEqual(added.map(() => [host.workbookId, undefined]));
     expect(screen.getByRole("button", { name: "Fit curves added" })).toHaveProperty("disabled", true);

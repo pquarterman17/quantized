@@ -142,7 +142,7 @@ describe("folder.runTemplate (finding #10 — shares lib/template.ts's storage k
   });
 
   it("is hidden with no saved templates, shown once one is saved under lib/template.ts's own key", async () => {
-    const { folderBulkActions } = await import("./contextActions");
+    const { folderBulkActions } = await import("../components/Library/folderRowMenu");
     const { TEMPLATES_KEY } = await import("./templateKey");
     const { saveTemplate, toTemplate } = await import("./template");
     const { makeStep } = await import("./pipeline");

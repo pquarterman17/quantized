@@ -14,9 +14,9 @@ import {
   buildQuickPlotTemplateSignature,
   captureQuickPlotTemplateLabels,
   resolveTemplate,
-  sanitizeQuickPlotTemplates,
   type QuickPlotTemplate,
 } from "./quickPlotTemplates";
+import { sanitizeQuickPlotTemplates } from "./quickPlotTemplatesSanitize";
 import type { Dataset } from "./types";
 
 // Channels: 0 temp (X candidate), 1 R (Y), 2 dR (Y error), 3 sample

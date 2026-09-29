@@ -21,7 +21,7 @@
 import type uPlot from "uplot";
 
 import { defaultDenseChannels, type PlotPayload, type PlotSeriesSpec } from "./plotdata";
-import { facetGridSize } from "./multipanel";
+import { facetGridSize } from "./facetGrid";
 import { analysisData } from "./rowstate";
 import type { Dataset } from "./types";
 

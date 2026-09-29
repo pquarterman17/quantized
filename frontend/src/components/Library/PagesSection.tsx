@@ -18,7 +18,9 @@
 import { useState } from "react";
 
 import { exportFigurePage } from "../../lib/api";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
+import { runCancellable } from "../../store/pendingOps";
 import { useApp } from "../../store/useApp";
 import { toast } from "../../store/toasts";
 import { buildPageSpecFromDocument } from "../workshops/figurepage/panelResolve";
@@ -28,14 +30,25 @@ import type { PageDocument } from "../../lib/pageDocument";
 async function exportSavedPage(page: PageDocument): Promise<void> {
   const s = useApp.getState();
   try {
-    const spec = await buildPageSpecFromDocument(page, s.editableFigures);
-    if (!spec) {
+    // P3.4: a StatusBar op with a Cancel that aborts the render request; a
+    // cancelled export saves no file and raises no error toast.
+    const done = await runCancellable(`Exporting "${page.name}"…`, async (signal) => {
+      const spec = await buildPageSpecFromDocument(page, s.editableFigures);
+      if (!spec) return false;
+      signal.throwIfAborted();
+      await exportFigurePage({ ...spec, fmt: page.output.format, dpi: page.output.dpi }, signal);
+      return true;
+    });
+    if (!done) {
+      s.setStatus("export cancelled");
+      return;
+    }
+    if (!done.value) {
       const msg = `"${page.name}" has no assigned panels to export`;
       s.setStatus(msg);
       toast(msg, "danger");
       return;
     }
-    await exportFigurePage({ ...spec, fmt: page.output.format, dpi: page.output.dpi });
     s.setStatus(`exported figure_page.${page.output.format}`);
   } catch (e) {
     const msg = `export failed: ${e instanceof Error ? e.message : "error"}`;
@@ -86,12 +99,14 @@ export default function PagesSection() {
             style={{ minHeight: 24, minWidth: 24 }}
             title="rename saved page"
             onClick={() => {
-              void import("../overlays/ParamDialog").then(({ askParams }) =>
-                askParams("Rename saved page", [
-                  { key: "name", label: "Name", type: "text", default: page.name },
-                ]).then((params) => {
-                  if (params) rename(page.id, String(params.name));
-                }),
+              void runLazy("Loading rename dialog…", () => import("../overlays/ParamDialog")).then(
+                ({ askParams }) =>
+                  askParams("Rename saved page", [
+                    { key: "name", label: "Name", type: "text", default: page.name },
+                  ]).then((params) => {
+                    if (params) rename(page.id, String(params.name));
+                  }),
+                onLoadFailure,
               );
             }}
           >

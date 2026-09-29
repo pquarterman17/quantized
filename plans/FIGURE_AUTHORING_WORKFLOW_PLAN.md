@@ -234,10 +234,35 @@ decisions are merged.
         gate D-4; F2.1e shipped 2026-08-12).** Once both legacy openers are gone: delete
         `legacyFigure.ts`, `figureDocSeed`, the hook's legacy state twins,
         and the `canonical` fork everywhere (~150 lines out of
-        `useFigureBuilder.ts`). Kills the known legacy y2 placebo defect
+        `useFigureBuilder.ts`). ~~Kills the known legacy y2 placebo defect
         (`hasY2` from live `y2Keys` enables y2-limit controls whose
         `y2_lim` reaches a request that never declares `y2_keys` — inert);
-        fix that one line sooner if D-4 keeps legacy mode alive.
+        fix that one line sooner if D-4 keeps legacy mode alive.~~
+        **The y2 placebo is FIXED ahead of F2.1g (2026-09-29).** The legacy
+        request now declares the live secondary axis: `LegacyFigureState`
+        gains `y2` (the store's y2 fields via `secondaryAxisFromView`, `null`
+        for a re-opened `FigureDoc`, which carries no y2), and
+        `buildLegacyFigureSpec` spreads `secondaryAxisWire(resolveSecondaryAxis
+        (...))` — the same resolver + wire the Stage export uses, so the
+        plotted-subset intersection and the scale/format inherit rules are not
+        re-derived; a grouped doc sends no y2 (the backend 422s the pair).
+        Legacy `hasY2` now reads `legacySpec.y2_keys`, so a y2-limit control is
+        enabled exactly when the wire has an axis for it. Backend accepted it
+        unchanged: `FigureRequest` already had `y2_keys`/`y2_label`/`y2_scale`/
+        `y2_fmt`/`y2_step` (`routes/export_figures.py`) and
+        `calc/figure_y2.py` applies `overrides["y2_lim"]`. Measured through
+        `/api/export/figure` (TestClient, numeric keys as the legacy wire
+        sends them): WITHOUT `y2_keys`, adding `y2_lim` left the PNG
+        byte-identical (the placebo); WITH `y2_keys=[1]`, it changed the render.
+        Red-first: `useFigureBuilder.test.ts` "legacy mode declares the live
+        secondary axis, so y2 limits reach the export" (red: `y2_keys`
+        undefined), "keeps the y2 controls off when no plotted channel rides
+        y2" and "a re-opened FigureDoc … ignores the live plot's y2" (both red:
+        `hasY2` true), plus two pure cases in `legacyFigure.test.ts`. Sabotage
+        (wire spread removed) re-reddens the export test and the pure case.
+        Known gap, unchanged: "Save as figure" cannot persist y2 (the
+        `FigureDoc` config has no y2 field), so a re-saved doc reopens
+        single-axis — which the builder now SHOWS honestly (controls off).
   - [x] **F2.1h Library editable figures open canonically (Claude
         Sonnet 5, 2026-08-12).** A saved editable figure now opens directly
         into Publication Preview (new `⎙` Library row button) via a third

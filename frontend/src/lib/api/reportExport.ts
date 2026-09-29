@@ -34,13 +34,15 @@ export function parseReportWarnings(h: Headers): ReportExportResult {
 export type ExportFormat = "html" | "latex" | "docx" | "pptx";
 
 /** Render a report sheet server-side and download it (.html/.tex/.docx/.pptx);
- *  resolves with the export's warnings once the file is saved. */
+ *  resolves with the export's warnings once the file is saved. `signal`: the
+ *  report viewer's StatusBar Cancel (P3.4); a cancelled export saves nothing. */
 export async function reportExport(
   report: ReportSheet,
   format: ExportFormat,
   filename: string,
+  signal?: AbortSignal,
 ): Promise<ReportExportResult> {
   return parseReportWarnings(
-    await postDownloadHeaders("/api/report/export", { report, format, filename }, filename),
+    await postDownloadHeaders("/api/report/export", { report, format, filename }, filename, signal),
   );
 }

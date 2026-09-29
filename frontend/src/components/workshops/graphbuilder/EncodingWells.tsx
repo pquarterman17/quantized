@@ -23,7 +23,6 @@ const WELLS: { zone: ZoneName; title: string; hint: string; factor: boolean }[] 
 function noteFor(g: GraphBuilderState): string | null {
   if (g.family === "categorical") return "Box, violin and bar ignore encodings.";
   if (g.chips("facet").length > 0) return "Ignored while faceted: facet panels do not split by encodings yet.";
-  if (g.encoded) return "Shown in this preview and its Export; the editable plot does not draw encodings yet.";
   return null;
 }
 

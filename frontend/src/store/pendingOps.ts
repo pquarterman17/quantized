@@ -38,6 +38,11 @@
 //                            exactly as before; this only wraps it. No
 //                            `cancel` — for that, call `beginOp`/`endOp`
 //                            directly (see store/importDatasets.ts).
+//   trackJob(label)          a job-queue run's entry (below): its label
+//                            carries the polled percent + message, and a
+//                            cancel attaches once the job id exists.
+//   runCancellable(label, fn) an export/copy's entry with a Cancel control
+//                            that aborts the signal `fn` gets (below).
 //   usePendingOps            the zustand hook — `.ops` is oldest-first.
 // The only feature-specific field is `cancel` (added deliberately for slice
 // 1, one Cancel affordance per op) — don't grow `PendingOp` further; label +
@@ -108,6 +113,71 @@ export async function withOp<T>(label: string, fn: () => Promise<T>): Promise<T>
   const id = beginOp(label);
   try {
     return await fn();
+  } finally {
+    endOp(id);
+  }
+}
+
+/** A polled job's handle: see `trackJob`. */
+export interface TrackedJob {
+  /** Show the job's latest poll: "label 42% · message". */
+  progress(fraction: number, message?: string): void;
+  /** Attach the Cancel control once there is something to cancel. */
+  cancellable(cancel: () => void): void;
+  end(): void;
+}
+
+/** Job-queue progress in the shared location (PRIMARY_SOFTWARE_AUDIT_PLAN
+ *  P3.4, "consistent progress location and job identity"). Every poll-based
+ *  job hook — Curve Fit's DREAM fit and model scan, the reflectivity DREAM
+ *  estimate, the Peak Analyzer batch — used to keep its progress in private
+ *  state that only its own panel rendered, so the StatusBar never saw a job.
+ *  This is NOT a second store: it is `beginOp`/`updateOp`/`endOp` with the
+ *  label formatting in one place, so the job becomes one ordinary op (one
+ *  stable `OpId` for the whole run) that StatusBar already renders. A job
+ *  panel may keep its own bar; this is the app-wide copy of the same number.
+ *  `cancellable` exists because a hook registers at run start, before the
+ *  submit returns a job id — a Cancel control that could not cancel anything
+ *  yet would be a lie, so it appears only once the job exists. */
+export function trackJob(label: string): TrackedJob {
+  let text = label;
+  const id = beginOp(label);
+  return {
+    progress(fraction, message) {
+      const pct = Math.round(Math.min(1, Math.max(0, fraction)) * 100);
+      text = `${label} ${pct}%${message ? ` · ${message}` : ""}`;
+      updateOp(id, text);
+    },
+    cancellable(cancel) {
+      updateOp(id, text, cancel);
+    },
+    end() {
+      endOp(id);
+    },
+  };
+}
+
+/** Run one export/copy with a Cancel control (P3.4 export cancel): the same
+ *  AbortController + `signal.aborted` shape lib/exportPageCommand.ts and
+ *  lib/exportActive.ts use, for the call sites that report on their own.
+ *  Resolves `{ value }` when `fn` resolved — the work happened, even if
+ *  Cancel landed after it (the download transport rejects instead when the
+ *  cancel beats the write), so the caller reports it as done. Resolves
+ *  `null` when `fn` rejected after Cancel: the caller writes nothing and
+ *  shows no error. Any other rejection is rethrown for the caller's own
+ *  error report. A multi-step `fn` calls `signal.throwIfAborted()` between
+ *  steps that do not take the signal themselves. */
+export async function runCancellable<T>(
+  label: string,
+  fn: (signal: AbortSignal) => Promise<T>,
+): Promise<{ value: T } | null> {
+  const controller = new AbortController();
+  const id = beginOp(label, () => controller.abort());
+  try {
+    return { value: await fn(controller.signal) };
+  } catch (e) {
+    if (controller.signal.aborted) return null;
+    throw e;
   } finally {
     endOp(id);
   }

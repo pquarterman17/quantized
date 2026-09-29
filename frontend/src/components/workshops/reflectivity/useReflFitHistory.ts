@@ -13,12 +13,13 @@ import { useEffect, useRef, useState } from "react";
 import { reportEmit } from "../../../lib/api/report";
 import type { Dataset } from "../../../lib/types";
 import { nextDatasetId, useApp } from "../../../store/useApp";
-import { curveDatasets, savedOverlay } from "./reflFitCurves";
+import { curveDatasetFor, curveDatasets, presentIds, savedOverlay } from "./reflFitCurves";
 import { applyBlockedReason, applyResults, fittedGlobals, type FitGlobals } from "./reflFitModel";
 import { nextSeq, recordDatasetIds, recordsFor, withFitRecord, type ReflFitRecord } from "./reflFitRecord";
 import { recordIssues, restoreSetup, type RecordIssues, type RestoredSetup } from "./reflFitRestore";
 import type { ModelLayer, Radiation } from "./useReflectivity";
 import type { ReflModelHandle } from "./useReflFit";
+import { useReflFitFigure } from "./useReflFitFigure";
 
 export interface ReflFitHistory {
   /** The bound dataset's saved fits, newest first. */
@@ -39,6 +40,8 @@ export interface ReflFitHistory {
   showOverlay: () => void;
   /** Add the saved fit's stored curves to the library (no re-run). */
   addSavedCurves: () => string[];
+  /** The saved fit's figure template on a new Figure Page (no re-run). */
+  sendSavedToFigure: () => void;
   applySaved: () => void;
   restore: () => void;
   /** Store a finished fit, numbered from the CURRENT library. Returns the
@@ -155,7 +158,7 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
   function addSavedCurves(): string[] {
     if (!selected?.curves) return [];
     const done = addedFor[selected.id];
-    if (done) return done;
+    if (done && presentIds(done, datasets)) return done;
     const fallback = { weighting: selected.result.weighting, radiation: selected.model.radiation };
     const ids = curveDatasets(selected.curves, selected, datasets, fallback).map((c) => {
       const id = nextDatasetId();
@@ -165,6 +168,14 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
     setAddedFor((m) => ({ ...m, [selected.id]: ids }));
     setStatus(`added ${ids.length} datasets from reflectivity fit #${selected.seq}`);
     return ids;
+  }
+
+  const sendFigure = useReflFitFigure();
+  function sendSavedToFigure(): void {
+    if (!selected?.curves) return;
+    const ids = addSavedCurves();
+    const src = { curves: selected.curves, weighting: selected.result.weighting, base: curveDatasetFor(selected, datasets).base };
+    if (ids.length) sendFigure({ ids, ...src });
   }
 
   async function addToReport(record: ReflFitRecord): Promise<void> {
@@ -203,10 +214,11 @@ export function useReflFitHistory(deps: HistoryDeps): ReflFitHistory {
     issues,
     applyBlocked,
     reporting,
-    savedCurvesAdded: selected != null && selected.id in addedFor,
+    savedCurvesAdded: selected != null && presentIds(addedFor[selected.id] ?? [], datasets),
     pick: setPickedId,
     showOverlay,
     addSavedCurves,
+    sendSavedToFigure,
     applySaved,
     restore,
     publish,

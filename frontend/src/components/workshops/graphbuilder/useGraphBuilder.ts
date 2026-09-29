@@ -20,7 +20,7 @@ import {
 } from "../../../lib/figureCompatibility";
 import { figureDocumentFromLegacyFigureDoc } from "../../../lib/figureDocumentPublication";
 import { channelModelingType, isCategorical } from "../../../lib/modeling";
-import { encodedSpecRender, isEncodingFactor, type EncodedSpec } from "../../../lib/plotEncoding";
+import { encodedSpecRender, isEncodingFactor, specFigureEncoding, type EncodedSpec } from "../../../lib/plotEncoding";
 import { buildEncodedExport } from "../../../lib/plotEncodingExport";
 import { plotSpecFigureReason, plotSpecToFigureDoc } from "../../../lib/plotSpecFigure";
 import { applySpecBlocks } from "../../../lib/plotspecApply";
@@ -51,6 +51,7 @@ import {
 } from "../../../lib/plotspec";
 import { toast } from "../../../store/toasts";
 import { plotIntentStageTab, useActiveDataset, useApp } from "../../../store/useApp";
+import { withFocusedEncoding } from "../../../store/windowDocuments";
 import { askConfirm } from "../../overlays/ConfirmDialog";
 import { captureLiveBlocks } from "./captureLiveBlocks";
 import type { WellChip, WellOption } from "./ZoneWell";
@@ -379,9 +380,8 @@ export function useGraphBuilder(): GraphBuilderState {
       // setXKey/setYKeys above, so its own "carry the current x/y selection
       // when the dataset is already active" rule picks up exactly the
       // channels just assigned.
-      // P1.4: the editable plot does not render the encodings yet (see
-      // lib/plotEncoding's scope note) — say so instead of dropping them quietly.
-      if (encoded) toast("Color, Symbol and Label encodings show in the Graph Builder preview and its Export; the editable plot does not draw them yet.", "info");
+      // P1.4: the encodings ride the window's document (the Stage draws and exports them); none set clears stale ones.
+      useApp.setState((s) => ({ plotWindows: withFocusedEncoding(s.plotWindows, s.focusedWindowId, specFigureEncoding(spec)) }));
       if (spec.zones.facet) {
         facetByColumn(ds.id, spec.zones.facet.channel);
         setStatus(

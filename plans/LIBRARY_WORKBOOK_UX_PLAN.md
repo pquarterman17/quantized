@@ -769,8 +769,9 @@ At minimum, the design must account for:
   created figure's rendered payload -- `quickFigureSeriesX.test.ts`,
   `usePlotPayload.quickFigureParity.test.ts`.)
 - [x] Explicit column designations override inferred adjacency. Verified 2026-09-28: `frontend/src/lib/quickFigureMappingActions.ts`'s `assignQuickFigureColumn` lets any channel be reassigned to any role, dropping stale bindings; pinned by `quickFigureMapping.test.ts`'s "keeps roles exclusive and drops bindings whose target stops being Y" and related cases.
-- [ ] Header, unit, parser metadata, and adjacency evidence contribute to a
-  confidence result; adjacency alone is insufficient.
+- [x] Header, unit, parser metadata, and adjacency evidence contribute to a
+  confidence result; adjacency alone is insufficient. (All three halves
+  below done 2026-09-29, commit d0dbae3e.)
   - [x] Backend (2026-09-28): UNIT evidence added
     (`io/error_unit_evidence.py`: trivial-spelling normalisation, then
     match / mismatch / unknown; blank, unitless, a.u., and case-only
@@ -796,10 +797,41 @@ At minimum, the design must account for:
     `tests/test_error_unit_evidence_parity_fixture.py` and
     `lib/errorUnitEvidence.test.ts`. The suggestion parity fixture gained
     five cases that carry units, and both languages agree on all of them.
-  - [ ] Frontend: have Quick Plot / the Quick Figure Builder CONSUME the
+  - [x] Frontend: have Quick Plot / the Quick Figure Builder CONSUME the
     confidence grade (`high`/`medium`/`low`; ask before applying `low`).
-    The TypeScript applies only the mismatch block so far and computes no
-    grade.
+    2026-09-29, commit d0dbae3e: `lib/errorBindingConfidence.ts` ports
+    `binding_confidence` / `is_name_driven_match` / `score_error_bindings`
+    and adds `reviewSeedErrorBindings` (apply / confirm / blocked over
+    `figureSeedErrorBindings`; Origin designations and a parser's
+    `error_roles` -- `errorRoles.declaresErrorRoles` -- still outrank it).
+    Parity: the new shared `tests/fixtures/error_labels/confidence_corpus.json`
+    (the full grade table, 20 hand-curated cases with units and x unit, and
+    every `parity_corpus.json` case re-graded with blank units), read by
+    `tests/test_error_binding_confidence_parity_fixture.py` (109 passed) and
+    `lib/errorBindingConfidence.test.ts`. QFB: `initialQuickFigureMapping`
+    withholds a `low`/`blocked` pairing (column starts as Ignore) and
+    `QuickErrorSuggestions.tsx` asks, one sentence plus "Use as error bars";
+    a blocked one is explained, never offered. Quick Plot: the menu path
+    (`store/quickPlotRun.ts`) asks per `low` pairing (unticked by default;
+    Cancel creates nothing), withholds `blocked` unasked, and stays
+    synchronous when `seedIsSettled` proves nothing to ask (pinned against
+    the whole corpus). Tests: `store/quickPlotErrorConfidence.test.ts`,
+    `lib/quickFigureErrorConfidence.test.ts`,
+    `QuickFigureBuilderErrorReview.test.tsx`. Sabotage: grading
+    position+unknown as `medium` fails 9 vitest + 15 pytest cases; skipping
+    the Quick Plot question fails 3; a loosened `seedIsSettled` fails 12.
+    Durable decisions (2026-09-29, commit 4f5c1fe4): a confirmation (a
+    ticked Quick Plot box, a low pairing the QFB's created mapping carries,
+    an Inspector edit or its per-row Confirm) is recorded in the dataset's
+    `metadata.error_roles` -- the existing P1.6 contract, no new field -- via
+    `lib/errorRoleConfirm.ts`, and `errorRoles.isDeclaredBinding` makes it
+    outrank the grade per binding, so it is not asked again, also after a
+    `.dwk` round trip. An unticked box, Cancel, or a cancelled builder
+    records nothing (asked again); an Inspector removal withdraws it; one
+    Undo removes the figure and its confirmation together. Tests:
+    `store/errorRoleConfirm.test.ts`, `ErrorRolesCard.test.tsx`,
+    `QuickFigureBuilderErrorReview.test.tsx`. Sabotage: a no-op confirmation
+    write fails 7.
 - [x] The user can override every inferred role before creating the figure. Verified 2026-09-28: `QuickMappingPanel`'s per-column X/Y/error/ignore `<Select>`s feed `assignQuickFigureColumn`; pinned by `QuickFigureBuilderWorkspace.test.tsx`'s "offers keyboard-accessible X, Y, ignore, and targeted error roles" (reassigns an auto-inferred error column to X-error and then to plain Y) and "supports dragging a column into an explicit role zone".
 
 Unknown and ambiguous are different states:
@@ -839,8 +871,25 @@ It is a fast mapping and initial-style surface, not an export-only builder.
   866,358 unchanged).
 - [x] **Center — live preview:** every accepted mapping/style change is visible
   before creation; Cancel produces no figure or data change. Verified 2026-09-28: `QuickFigureBuilderWorkspace.tsx` recomputes `quickFigurePreview(dataset.data, mapping, style, ...)` from React state on every render (no separate "apply" step); pinned by `QuickFigureBuilderWorkspace.test.tsx`'s "Cancel clears only the transient builder target — no plot, worksheet mutation, or template left behind" and `quickFigurePreview.test.ts`'s mapping-change cases.
-- [ ] **Right — concise setup:** detected series, plot type, color preset,
+- [x] **Right — concise setup:** detected series, plot type, color preset,
   lines/markers, axes, legend, and error-bar settings.
+  2026-09-29, commit d0dbae3e: `QuickFigureSetupPanel.tsx` (detected series
+  vs their X, plot style, `lib/palettes.ts` preset, line width/style, marker
+  shape/size, X/Y linear/log, grid, legend corner or hidden, error bars;
+  inapplicable settings disabled with a one-sentence reason). The model
+  (`lib/quickFigureSetup.ts`) materializes into `QuickFigureLook`
+  (`lib/quickFigureCommit.ts`): existing PlotView fields plus cycled
+  SeriesStyles -- no new figure vocabulary. The preview
+  (`QuickFigurePreviewCanvas.tsx`: colour, markers, legend corner, log shape,
+  error bars), `createQuickFigureFromMapping`, and Quick Plot templates
+  (`QuickPlotTemplate.look`, sanitized on `.dwk` load) consume the same look;
+  an untouched setup is a no-op. A grouped figure keeps the theme colour
+  cycle. Evidence: `store/quickFigureSetup.test.ts` (document + window +
+  template save/.dwk/apply + malformed look), `lib/quickFigureSetup.test.ts`,
+  `QuickFigureBuilderSetup.test.tsx`. Sabotage: dropping the view merge in
+  `quickFigureCommit` or the template `look` sanitize fails 3; not passing
+  the look from Create fails 2. Residual: the compact preview painter does
+  not draw line width/dash or the grid (they reach the figure).
 - [x] **Ambiguity display:** uncertain assignments are visibly highlighted and
   explained in one sentence. Verified 2026-09-28: `QuickFigureBuilderWorkspace.tsx`'s role-filtered-Y and incomplete-error-pair `role="status"` notices; pinned by `QuickFigureBuilderWorkspace.test.tsx`'s "identifies and blocks a half-complete asymmetric error pair" and "reports BOTH notices when a role-filtered Y and an incomplete error pair are both present".
 - [x] **Actions:** **Create Editable Figure**, **Save Quick Plot Template...**,
@@ -3348,6 +3397,19 @@ back to the owner. No Library implementation is authorized by this pause.
   results remain understandable and do not create Origin-like clutter.
 
 ## Completed
+
+- **2026-09-29 — Quick Figure Builder concise setup + error-pairing
+  confidence grade (worktree agent, commit d0dbae3e):** the "Right —
+  concise setup" box and the frontend half of "adjacency alone is
+  insufficient" (which closes that parent box). The setup panel
+  materializes into a `QuickFigureLook` shared by the preview, the created
+  figure, and Quick Plot templates; the TypeScript confidence grade is
+  pinned to the Python by the shared `confidence_corpus.json`, and both the
+  Quick Figure Builder and Quick Plot ask before applying a `low` pairing
+  and never auto-apply a `blocked` one; a confirmation is recorded in
+  `metadata.error_roles` so it is never asked again (commit 4f5c1fe4). Eager
+  JS +1,534 B (854,864 -> 856,398; budget unchanged); full vitest 869 files
+  / 14,208 tests green, pytest 6,175 passed.
 
 - **2026-09-25 — Group F, bounded clipboard transfer for large workbooks
   (worktree agent):** the transfer-requirements box 5 `[~]` -> `[x]`, and

@@ -105,11 +105,9 @@ export default function PlotStage() {
   const winLinkGroup = useApp(
     (s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.linkGroup ?? null,
   );
-  // G4: the focused window's own document errors (see usePlotPayload's doc),
-  // looked up the same derived-selector way as `winBg`/`winLinkGroup` above.
-  const focusedDocumentErrors = useApp(
-    (s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document?.bindings.errors,
-  );
+  // G4 / P1.4: the focused window's own document errors and encodings (see
+  // usePlotPayload's doc), looked up the same derived-selector way as `winBg`.
+  const focusedBindings = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document?.bindings);
   const tool = useApp((s) => s.plotTool);
   // MAIN #18: pointer-mode annotation select/drag/resize/edit/menu bridge.
   const { bridge: annotationEdit, menu: annotationMenu, closeMenu: closeAnnotationMenu } = useAnnotationEdit(tool);
@@ -162,7 +160,7 @@ export default function PlotStage() {
     displayPayload,
     plotted,
     styleList,
-    labelList,
+    labelList, legendLabels, // P1.4: an encoded render's finished legend text (usePlotPayload)
     errorBars,
     errorSpans,
     colorByColumns,
@@ -179,7 +177,8 @@ export default function PlotStage() {
     seriesStyles,
     seriesLabels,
     errKeys,
-    documentErrors: focusedDocumentErrors,
+    documentErrors: focusedBindings?.errors,
+    encoding: focusedBindings?.encoding,
     hiddenChannels,
     waterfall,
     excludedDisplay,
@@ -377,6 +376,7 @@ export default function PlotStage() {
         insetMode={insetMode}
         showLegend={showLegend}
         styleList={styleList}
+        legendLabels={legendLabels}
         seriesCycle={seriesCycle}
         plotted={plotted}
         hidden={hidden}

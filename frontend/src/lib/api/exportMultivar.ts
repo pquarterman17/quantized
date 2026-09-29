@@ -10,6 +10,9 @@
 // scores/loadings, the scree explained/cumulative arrays) — server-side
 // rendering (calc.figure_multivar) matches the on-screen read exactly, never
 // re-deriving anything.
+//
+// `signal` (P3.4): each view passes its StatusBar Cancel's signal
+// (store/pendingOps.ts runCancellable); a cancelled download saves nothing.
 
 import { postDownload } from "./http";
 
@@ -27,11 +30,12 @@ export interface CorrelationHeatmapFigureSpec {
 
 /** Render the correlation matrix as a publication heatmap (matplotlib) and
  *  download it. */
-export function exportCorrelationHeatmapFigure(body: CorrelationHeatmapFigureSpec): Promise<void> {
+export function exportCorrelationHeatmapFigure(body: CorrelationHeatmapFigureSpec, signal?: AbortSignal): Promise<void> {
   return postDownload(
     "/api/export/correlation-heatmap-figure",
     body,
     `correlation.${body.fmt ?? "pdf"}`,
+    signal,
   );
 }
 
@@ -50,8 +54,8 @@ export interface SplomFigureSpec {
 }
 
 /** Render the full n x n scatterplot matrix (matplotlib) and download it. */
-export function exportSplomFigure(body: SplomFigureSpec): Promise<void> {
-  return postDownload("/api/export/splom-figure", body, `splom.${body.fmt ?? "pdf"}`);
+export function exportSplomFigure(body: SplomFigureSpec, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/splom-figure", body, `splom.${body.fmt ?? "pdf"}`, signal);
 }
 
 export interface PcaVectorSpec {
@@ -76,8 +80,8 @@ export interface PcaFigureSpec {
 }
 
 /** Render a PCA scores/loadings/biplot panel (matplotlib) and download it. */
-export function exportPcaFigure(body: PcaFigureSpec): Promise<void> {
-  return postDownload("/api/export/pca-figure", body, `pca.${body.fmt ?? "pdf"}`);
+export function exportPcaFigure(body: PcaFigureSpec, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/pca-figure", body, `pca.${body.fmt ?? "pdf"}`, signal);
 }
 
 export interface PcaScreeFigureSpec {
@@ -94,6 +98,6 @@ export interface PcaScreeFigureSpec {
 
 /** Render a PCA scree plot (percent-explained bars + cumulative curve) and
  *  download it. */
-export function exportPcaScreeFigure(body: PcaScreeFigureSpec): Promise<void> {
-  return postDownload("/api/export/pca-scree-figure", body, `pca-scree.${body.fmt ?? "pdf"}`);
+export function exportPcaScreeFigure(body: PcaScreeFigureSpec, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/pca-scree-figure", body, `pca-scree.${body.fmt ?? "pdf"}`, signal);
 }

@@ -89,6 +89,36 @@ describe("ErrorRolesCard", () => {
     expect(after.data.values).toEqual(d.data.values); // a reference, not a rewrite
   });
 
+  describe("an Inspector decision is recorded as a confirmed pairing (lib/errorRoleConfirm.ts)", () => {
+    const low: NonNullable<Dataset["errorRoles"]> = [{ channel: 1, target: 0, axis: "y", side: "both" }];
+    const live = () => useApp.getState().datasets[0];
+
+    it("offers Confirm on an adjacency-only pairing and records it once clicked", () => {
+      useApp.setState({ datasets: [ds(["R", "err"], low)] });
+      const { rerender } = render(<ErrorRolesCard active={live()} />);
+      fireEvent.click(screen.getByRole("button", { name: "Confirm error role for err" }));
+      expect(live().data.metadata.error_roles).toEqual(low);
+      rerender(<ErrorRolesCard active={live()} />);
+      expect(screen.queryByRole("button", { name: /Confirm error role/ })).toBeNull();
+    });
+
+    it("an edit records the edited pairing; a removal withdraws it", () => {
+      useApp.setState({ datasets: [ds(["R", "err", "S"], low)] });
+      const { rerender } = render(<ErrorRolesCard active={live()} />);
+      fireEvent.change(screen.getByTitle(/series \(or axis\)/), { target: { value: "2" } });
+      expect(live().data.metadata.error_roles).toEqual([{ channel: 1, target: 2, axis: "y", side: "both" }]);
+      rerender(<ErrorRolesCard active={live()} />);
+      fireEvent.click(screen.getByRole("button", { name: /Remove error role/ }));
+      expect(live().data.metadata.error_roles).toEqual([]);
+    });
+
+    it("a name-backed pairing needs no confirmation", () => {
+      useApp.setState({ datasets: [ds(["R", "dR"], low)] });
+      render(<ErrorRolesCard active={live()} />);
+      expect(screen.queryByRole("button", { name: /Confirm error role/ })).toBeNull();
+    });
+  });
+
   it("re-points a binding to a different axis", () => {
     const roles: Dataset["errorRoles"] = [{ channel: 1, target: 0, axis: "y", side: "both" }];
     const d = ds(["M", "dM"], roles);

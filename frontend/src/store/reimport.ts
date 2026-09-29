@@ -257,7 +257,7 @@ export function applyReimportMerge(
       ? {
           plotWindows: s.plotWindows.map((w) =>
             w.datasetId === ds.id
-              ? syncPlotWindow(w, { ...plotWindowView(w), ...viewReset }, { resetErrors: true })
+              ? syncPlotWindow(w, { ...plotWindowView(w), ...viewReset }, { resetErrors: true, resetEncoding: true })
               : w,
           ),
         }

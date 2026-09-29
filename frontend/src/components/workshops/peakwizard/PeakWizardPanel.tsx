@@ -20,6 +20,7 @@ import {
   StepRangeBaseline,
   StepReport,
 } from "./steps";
+import { PEAK_WIZARD_WINDOW_ID } from "./usePeakCandidates";
 import { usePeakWizard, WIZARD_STEPS } from "./usePeakWizard";
 import PeakBatchView from "./PeakBatchView";
 
@@ -51,7 +52,7 @@ export default function PeakWizardPanel() {
   ][w.step];
 
   return (
-    <ToolWindow id="peakwizard" title="Peak Analyzer" width={420} onClose={close}>
+    <ToolWindow id={PEAK_WIZARD_WINDOW_ID} title="Peak Analyzer" width={420} onClose={close}>
       <div role="tablist" aria-label="Peak Analyzer mode" style={{ display: "flex", gap: 6, marginBottom: 8 }}>
         {(["wizard", "batch"] as const).map((m) => (
           <Button key={m} size="sm" role="tab" aria-selected={mode === m} variant={mode === m ? "primary" : "default"} onClick={() => show(m)}>

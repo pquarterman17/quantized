@@ -180,6 +180,24 @@ describe("ToolWindow close button", () => {
     );
     expect(screen.queryByTitle("Close")).not.toBeInTheDocument();
   });
+
+  // Residual R4 (PRIMARY_SOFTWARE_AUDIT_PLAN): the ✕'s name came from
+  // title="Close" alone, so two open workshops read "Close button, Close
+  // button". It now names its panel, the way the adjacent Help button does.
+  it("names the panel it closes", () => {
+    render(
+      <>
+        <ToolWindow id="t12" title="Find peaks" onClose={() => {}}>
+          body
+        </ToolWindow>
+        <ToolWindow id="t13" title={<b>Rich</b>} onClose={() => {}}>
+          body
+        </ToolWindow>
+      </>,
+    );
+    expect(screen.getByRole("button", { name: "Close Find peaks" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Close this panel" })).toBeInTheDocument();
+  });
 });
 
 describe("ToolWindow viewport re-clamp on mount", () => {

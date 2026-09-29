@@ -73,10 +73,10 @@ describe("EncodingWells", () => {
     expect(g.remove).toHaveBeenCalledWith("color", 1);
   });
 
-  it("says where encodings render once one is live, and that a facet overrides them", () => {
+  it("a live encoding needs no note (the Stage draws it too); a facet overriding them does", () => {
     const live = stub({ encoded: {} as GraphBuilderState["encoded"] }, { symbol: [{ channel: 2, label: "field" }] });
     const { rerender } = render(<EncodingWells g={live} />);
-    expect(screen.getByRole("note")).toHaveTextContent("the editable plot does not draw encodings yet");
+    expect(screen.queryByRole("note")).toBeNull();
     rerender(
       <EncodingWells
         g={stub({}, { symbol: [{ channel: 2, label: "field" }], facet: [{ channel: 1, label: "sample" }] })}

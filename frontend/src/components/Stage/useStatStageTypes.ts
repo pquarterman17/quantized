@@ -115,8 +115,9 @@ export interface StatStageState {
    *  "Export figure" button (a no-op when there's nothing to export yet).
    *  Renders a faceted small-multiples figure when `drawFacets` is set
    *  (GUI_INTERACTION #12 slice 4b), otherwise the flat single-panel figure
-   *  from `draw`. */
-  exportFigure: (fmt: string) => Promise<void>;
+   *  from `draw`. Runs as a cancellable StatusBar op (P3.4); resolves
+   *  false when the user cancelled it (nothing was saved). */
+  exportFigure: (fmt: string) => Promise<boolean>;
   /** P2.6 box 4: the whole-plot category axis with the rows behind every
    *  slot (`statStageLevels.levelAxes`) — what the summary table and the
    *  plot's selection link read. Null outside the categorical modes. */

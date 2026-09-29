@@ -31,6 +31,7 @@ import { pickConfigureQuickPlotWorksheet, pickQuickPlotWorksheet, quickPlotWorkb
 import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
 import { openQuickPlotWith, openQuickPlotWithForWorkbook } from "../store/quickPlotWithDialog";
+import { runQuickPlot } from "../store/quickPlotRun";
 import { openCombineDialog } from "../store/combineDialog";
 import { workbookDeleteBlockers } from "../store/workbookActions";
 import { workbookProperties } from "./workbookProperties";
@@ -81,9 +82,9 @@ export const workbookCoreActions: ContextAction<WorkbookActionTarget>[] = [
     run: (t) => {
       const picked = pickQuickPlotWorksheet(t.node.children, useApp.getState().workbookLastChild, t.node.entity.id);
       if (!picked) return; // fail-closed: the menu already disables this when nothing qualifies
-      // quickPlotDataset returns true only on success (fix #6) -- a
+      // runQuickPlot calls back only on success (fix #6) -- a
       // fail-closed refusal has no plot to return the Stage to.
-      if (useApp.getState().quickPlotDataset(picked.id)) t.onStageOpen?.();
+      runQuickPlot(picked.id, t.onStageOpen);
     },
   },
   {

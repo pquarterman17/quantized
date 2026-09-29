@@ -51,6 +51,7 @@ import {
 } from "../../lib/statstage";
 import type { StatMarksByMode, StatMarksMode } from "../../lib/plotviewSanitize";
 import type { StatMarks } from "../../lib/statMarks";
+import { runCancellable } from "../../store/pendingOps";
 import { needsBarRaw } from "./statBarMarks";
 import { figureErrorNote } from "./statErrorNote";
 import { exportStatStage } from "./statStageExport";
@@ -427,13 +428,15 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   // P2.6 box 1: the error-bar footnote, from the SAME draws the screen shows.
   const errorNote = useMemo(() => figureErrorNote(shown.draw, shown.drawFacets), [shown]);
 
-  async function exportFigure(fmt: string): Promise<void> {
-    if (!data) return;
-    await exportStatStage(fmt, {
+  async function exportFigure(fmt: string): Promise<boolean> {
+    if (!data) return true;
+    const inputs = {
       data, mode, draw: shown.draw, drawFacets: shown.drawFacets, groups, indexedGroups, valueCol,
       valueLabel, groupLabel, barValueLabel, barStack, dist, bins, fit, marks: rm,
       showN, caveat: levels.notice?.caveat ?? null, errorNote,
-    });
+    };
+    // P3.4: a StatusBar op whose Cancel aborts the render request.
+    return (await runCancellable("Exporting statistical plot…", (signal) => exportStatStage(fmt, inputs, signal))) !== null;
   }
 
   return {

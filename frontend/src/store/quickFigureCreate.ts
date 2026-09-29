@@ -26,7 +26,7 @@
 // falling back to the legacy `errKeys` projection.
 import { createFigureDocument } from "../lib/figureDocument";
 import { dedupeWindowTitle } from "../lib/plotview";
-import { quickFigureCommit } from "../lib/quickFigureCommit";
+import { quickFigureCommit, type QuickFigureLook } from "../lib/quickFigureCommit";
 import { canCreateQuickFigure, type QuickFigureMapping } from "../lib/quickFigureMapping";
 import type { QuickPlotStyle } from "../lib/quickFigurePreview";
 import { quickFigureOverlayDataset } from "../lib/quickFigureSeriesX";
@@ -49,13 +49,20 @@ export interface QuickFigureCreateSlice {
    *  independently-drifting check: it is the one gate, called twice. G5
    *  review round closed a prior drift where this action checked only
    *  `mappingReady` and the button's role-filtered/incomplete-pair checks
-   *  lived inline in the component only). */
-  createQuickFigureFromMapping: (datasetId: string, mapping: QuickFigureMapping, style: QuickPlotStyle) => boolean;
+   *  lived inline in the component only). `look` is the builder's setup
+   *  panel, materialized (lib/quickFigureCommit.ts's `QuickFigureLook`);
+   *  absent = the builder's plain defaults. */
+  createQuickFigureFromMapping: (
+    datasetId: string,
+    mapping: QuickFigureMapping,
+    style: QuickPlotStyle,
+    look?: QuickFigureLook,
+  ) => boolean;
 }
 
 export function createQuickFigureCreateSlice(set: SliceSet, get: SliceGet): QuickFigureCreateSlice {
   return {
-    createQuickFigureFromMapping: (datasetId, mapping, style) => {
+    createQuickFigureFromMapping: (datasetId, mapping, style, look) => {
       const state = get();
       const dataset = state.datasets.find((d) => d.id === datasetId);
       if (!dataset) {
@@ -69,7 +76,7 @@ export function createQuickFigureCreateSlice(set: SliceSet, get: SliceGet): Quic
       }
       // Minted first so the Label role's annotation group id is unique per figure.
       const id = nextFigureId();
-      const pieces = quickFigureCommit(dataset, mapping, style, `quick-labels-${id}`);
+      const pieces = quickFigureCommit(dataset, mapping, style, `quick-labels-${id}`, look);
       // Per-series X: the figure binds to a NEW overlay dataset
       // (lib/quickFigureSeriesX.ts). It joins `datasets` in the SAME set()
       // as the figure below, after createWindow's snapshot, so the one undo

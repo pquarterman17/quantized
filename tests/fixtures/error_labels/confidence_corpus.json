@@ -1,0 +1,1676 @@
+{
+  "_about": "Cross-language parity for the error-binding CONFIDENCE GRADE: src/quantized/io/error_binding_confidence.py (score_error_bindings / binding_confidence) vs frontend/src/lib/errorBindingConfidence.ts (scoreErrorBindings / bindingConfidence). Read by tests/test_error_binding_confidence_parity_fixture.py AND frontend/src/lib/errorBindingConfidence.test.ts. HAND-CURATED inputs; each expected value was taken from the Python module (which landed first) and reviewed. A failure on one side means the two languages DISAGREE -- make them agree; never edit an expected value to hide a disagreement. grades: the full header x unit table. cases: labels + per-label units + the x-axis unit (null = unrecorded) -> every label-rule pairing, in order, graded (blocked ones included). label_only: every parity_corpus.json case with blank units -> the same pairings, graded medium (name) or low (position).",
+  "grades": [
+    {
+      "header": "name",
+      "unit": "match",
+      "confidence": "high"
+    },
+    {
+      "header": "name",
+      "unit": "unknown",
+      "confidence": "medium"
+    },
+    {
+      "header": "name",
+      "unit": "mismatch",
+      "confidence": "blocked"
+    },
+    {
+      "header": "position",
+      "unit": "match",
+      "confidence": "medium"
+    },
+    {
+      "header": "position",
+      "unit": "unknown",
+      "confidence": "low"
+    },
+    {
+      "header": "position",
+      "unit": "mismatch",
+      "confidence": "blocked"
+    }
+  ],
+  "cases": [
+    {
+      "note": "name + unit match is high",
+      "labels": [
+        "M",
+        "M_err"
+      ],
+      "units": [
+        "emu",
+        "emu"
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "match",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "note": "name + unit unknown is medium",
+      "labels": [
+        "M",
+        "M_err"
+      ],
+      "units": [
+        "emu",
+        ""
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "position + unit match is medium",
+      "labels": [
+        "R",
+        "err"
+      ],
+      "units": [
+        "counts",
+        "counts"
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "match",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "position + unit unknown is low (adjacency alone)",
+      "labels": [
+        "R",
+        "err"
+      ],
+      "units": [
+        "",
+        ""
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        }
+      ]
+    },
+    {
+      "note": "name + unit mismatch is blocked",
+      "labels": [
+        "M",
+        "M_err"
+      ],
+      "units": [
+        "emu",
+        "K"
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "mismatch",
+          "confidence": "blocked"
+        }
+      ]
+    },
+    {
+      "note": "position + unit mismatch is blocked",
+      "labels": [
+        "R",
+        "err"
+      ],
+      "units": [
+        "counts",
+        "K"
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "mismatch",
+          "confidence": "blocked"
+        }
+      ]
+    },
+    {
+      "note": "x prefix is name evidence; x unit matches",
+      "labels": [
+        "Signal",
+        "xerr"
+      ],
+      "units": [
+        "V",
+        "Oe"
+      ],
+      "x_unit": "Oe",
+      "scored": [
+        {
+          "channel": 1,
+          "target": -1,
+          "axis": "x",
+          "side": "both",
+          "header": "name",
+          "unit": "match",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "note": "x prefix with a contradicting x unit is blocked",
+      "labels": [
+        "Signal",
+        "xerr"
+      ],
+      "units": [
+        "V",
+        "K"
+      ],
+      "x_unit": "Oe",
+      "scored": [
+        {
+          "channel": 1,
+          "target": -1,
+          "axis": "x",
+          "side": "both",
+          "header": "name",
+          "unit": "mismatch",
+          "confidence": "blocked"
+        }
+      ]
+    },
+    {
+      "note": "x prefix with no recorded x unit is medium",
+      "labels": [
+        "Signal",
+        "xerr"
+      ],
+      "units": [
+        "V",
+        "Oe"
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": -1,
+          "axis": "x",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "y prefix alone falls to nearest-preceding position",
+      "labels": [
+        "Signal",
+        "yerr"
+      ],
+      "units": [
+        "",
+        ""
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        }
+      ]
+    },
+    {
+      "note": "reflectometry R++/err/SA/err, blank units: both low",
+      "labels": [
+        "R++",
+        "err",
+        "SA",
+        "err"
+      ],
+      "units": [
+        "",
+        "",
+        "",
+        ""
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        },
+        {
+          "channel": 3,
+          "target": 2,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        }
+      ]
+    },
+    {
+      "note": "reflectometry pairs, one confirmed by units",
+      "labels": [
+        "R++",
+        "err",
+        "SA",
+        "err"
+      ],
+      "units": [
+        "1",
+        "",
+        "counts",
+        "counts"
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        },
+        {
+          "channel": 3,
+          "target": 2,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "match",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "asymmetric halves, matching units: both high",
+      "labels": [
+        "M",
+        "M_err+",
+        "M_err-"
+      ],
+      "units": [
+        "emu",
+        "emu",
+        "emu"
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "+",
+          "header": "name",
+          "unit": "match",
+          "confidence": "high"
+        },
+        {
+          "channel": 2,
+          "target": 0,
+          "axis": "y",
+          "side": "-",
+          "header": "name",
+          "unit": "match",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "note": "asymmetric halves, one contradicting unit",
+      "labels": [
+        "M",
+        "M_err+",
+        "M_err-"
+      ],
+      "units": [
+        "emu",
+        "emu",
+        "Oe"
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "+",
+          "header": "name",
+          "unit": "match",
+          "confidence": "high"
+        },
+        {
+          "channel": 2,
+          "target": 0,
+          "axis": "y",
+          "side": "-",
+          "header": "name",
+          "unit": "mismatch",
+          "confidence": "blocked"
+        }
+      ]
+    },
+    {
+      "note": "dR beside R is a name match",
+      "labels": [
+        "Q",
+        "R",
+        "dR"
+      ],
+      "units": [
+        "1/A",
+        "",
+        ""
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "case-only unit difference is neutral",
+      "labels": [
+        "M",
+        "M_err"
+      ],
+      "units": [
+        "emu",
+        "EMU"
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "bracketed and spaced units normalise to a match",
+      "labels": [
+        "T",
+        "T_err"
+      ],
+      "units": [
+        "(K)",
+        " K "
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "match",
+          "confidence": "high"
+        }
+      ]
+    },
+    {
+      "note": "unitless spellings are neutral",
+      "labels": [
+        "R",
+        "err"
+      ],
+      "units": [
+        "a.u.",
+        "arb. units"
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        }
+      ]
+    },
+    {
+      "note": "mixed name and position pairings in one sheet",
+      "labels": [
+        "Q",
+        "R",
+        "dR",
+        "SA",
+        "err"
+      ],
+      "units": [
+        "1/A",
+        "",
+        "",
+        "counts",
+        "counts"
+      ],
+      "x_unit": null,
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        },
+        {
+          "channel": 4,
+          "target": 3,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "match",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "no error columns at all",
+      "labels": [
+        "Temperature",
+        "Moment"
+      ],
+      "units": [
+        "K",
+        "emu"
+      ],
+      "x_unit": null,
+      "scored": []
+    }
+  ],
+  "label_only": [
+    {
+      "note": "base-name match: dR -> R (unambiguous)",
+      "labels": [
+        "R",
+        "dR"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "explicit x-prefix binds to the x axis",
+      "labels": [
+        "Signal",
+        "xerr"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": -1,
+          "axis": "x",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "explicit y-prefix (symmetry check for x-prefix)",
+      "labels": [
+        "Signal",
+        "yerr"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        }
+      ]
+    },
+    {
+      "note": "nearest PRECEDING value column (reflectometry instrument-file convention)",
+      "labels": [
+        "R++",
+        "err",
+        "SA",
+        "err"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        },
+        {
+          "channel": 3,
+          "target": 2,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        }
+      ]
+    },
+    {
+      "note": "both halves of an asymmetric +/- pair",
+      "labels": [
+        "M",
+        "M_err+",
+        "M_err-"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "+",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        },
+        {
+          "channel": 2,
+          "target": 0,
+          "axis": "y",
+          "side": "-",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "asymmetric hi/lo suffixes",
+      "labels": [
+        "M",
+        "M_hi",
+        "M_lo"
+      ],
+      "scored": []
+    },
+    {
+      "note": "asymmetric upper/lower suffixes",
+      "labels": [
+        "M",
+        "M_upper",
+        "M_lower"
+      ],
+      "scored": []
+    },
+    {
+      "note": "leading error column has nothing defensible preceding it -> unbound",
+      "labels": [
+        "err",
+        "M"
+      ],
+      "scored": []
+    },
+    {
+      "note": "no error columns at all -> nothing",
+      "labels": [
+        "Temp",
+        "Moment"
+      ],
+      "scored": []
+    },
+    {
+      "note": "inferErrorBindingsFromLabels === inferErrorBindings(ds) delegation fixture",
+      "labels": [
+        "R",
+        "dR",
+        "M_err+",
+        "M_err-",
+        "M"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        },
+        {
+          "channel": 2,
+          "target": 4,
+          "axis": "y",
+          "side": "+",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        },
+        {
+          "channel": 3,
+          "target": 4,
+          "axis": "y",
+          "side": "-",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "dQ base-name match (second delta-convention letter)",
+      "labels": [
+        "Q",
+        "dQ"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "never-classify: Kerr beside T,R (no K sibling) -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Kerr"
+      ],
+      "scored": []
+    },
+    {
+      "note": "never-classify: Phase beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Phase"
+      ],
+      "scored": []
+    },
+    {
+      "note": "never-classify: Noise beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Noise"
+      ],
+      "scored": []
+    },
+    {
+      "note": "never-classify: Sensor beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Sensor"
+      ],
+      "scored": []
+    },
+    {
+      "note": "never-classify: Response beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Response"
+      ],
+      "scored": []
+    },
+    {
+      "note": "never-classify: Dose beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Dose"
+      ],
+      "scored": []
+    },
+    {
+      "note": "never-classify: Pulse beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Pulse"
+      ],
+      "scored": []
+    },
+    {
+      "note": "never-classify: Base beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Base"
+      ],
+      "scored": []
+    },
+    {
+      "note": "never-classify: Use beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Use"
+      ],
+      "scored": []
+    },
+    {
+      "note": "never-classify: Series beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Series"
+      ],
+      "scored": []
+    },
+    {
+      "note": "never-classify: Second beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Second"
+      ],
+      "scored": []
+    },
+    {
+      "note": "never-classify: Depth beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Depth"
+      ],
+      "scored": []
+    },
+    {
+      "note": "never-classify: Delay beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Delay"
+      ],
+      "scored": []
+    },
+    {
+      "note": "never-classify: Density beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Density"
+      ],
+      "scored": []
+    },
+    {
+      "note": "never-classify: Set beside T,R (2-char token glue exclusion) -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Set"
+      ],
+      "scored": []
+    },
+    {
+      "note": "X_err acceptance: Phase_err -> Phase",
+      "labels": [
+        "Time",
+        "Phase",
+        "Phase_err"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "X_err acceptance: Base_err -> Base",
+      "labels": [
+        "Time",
+        "Base",
+        "Base_err"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "X_err acceptance: Noise_err -> Noise",
+      "labels": [
+        "Time",
+        "Noise",
+        "Noise_err"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "X_err acceptance: Sensor_err -> Sensor",
+      "labels": [
+        "Time",
+        "Sensor",
+        "Sensor_err"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "X_err acceptance: Response_err -> Response",
+      "labels": [
+        "Time",
+        "Response",
+        "Response_err"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "X_err acceptance: Set_err -> Set",
+      "labels": [
+        "Time",
+        "Set",
+        "Set_err"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "X_err acceptance: Pulse_err -> Pulse",
+      "labels": [
+        "Time",
+        "Pulse",
+        "Pulse_err"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "X_err acceptance: Use_err -> Use",
+      "labels": [
+        "Time",
+        "Use",
+        "Use_err"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "Ierr with NO I sibling -> positional pairing takes over (XRD)",
+      "labels": [
+        "2theta",
+        "Intensity",
+        "Ierr"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        }
+      ]
+    },
+    {
+      "note": "Ierr WITH a literal I sibling -> base-name match",
+      "labels": [
+        "I",
+        "Ierr"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "Ierr alone, no siblings at all -> unbound (nothing precedes)",
+      "labels": [
+        "Ierr"
+      ],
+      "scored": []
+    },
+    {
+      "note": "Kerr beside Field,Phase (no K sibling) -> unbound (the deliberate exclusion)",
+      "labels": [
+        "Field",
+        "Phase",
+        "Kerr"
+      ],
+      "scored": []
+    },
+    {
+      "note": "Kerr WITH a literal K sibling -> base-name match (symmetric with Ierr)",
+      "labels": [
+        "K",
+        "Kerr"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "MStdErr beside M -> base-name match on the longer token (stderr)",
+      "labels": [
+        "M",
+        "MStdErr"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "M_std_err (explicit separators) beside M -> same as camelCase",
+      "labels": [
+        "M",
+        "M_std_err"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "ordinary name starting with d-: Depth, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Depth"
+      ],
+      "scored": []
+    },
+    {
+      "note": "ordinary name starting with d-: Density, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Density"
+      ],
+      "scored": []
+    },
+    {
+      "note": "ordinary name starting with d-: Delay, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Delay"
+      ],
+      "scored": []
+    },
+    {
+      "note": "ordinary name starting with d-: Deviation, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Deviation"
+      ],
+      "scored": []
+    },
+    {
+      "note": "ordinary name starting with d-: Delta, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Delta"
+      ],
+      "scored": []
+    },
+    {
+      "note": "ordinary name starting with d-: Deg, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Deg"
+      ],
+      "scored": []
+    },
+    {
+      "note": "ordinary name starting with s-: Sample, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Sample"
+      ],
+      "scored": []
+    },
+    {
+      "note": "ordinary name starting with s-: Sensitivity, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Sensitivity"
+      ],
+      "scored": []
+    },
+    {
+      "note": "ordinary name starting with s-: Separation, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Separation"
+      ],
+      "scored": []
+    },
+    {
+      "note": "ordinary name starting with e-: Temperature, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Temperature"
+      ],
+      "scored": []
+    },
+    {
+      "note": "ordinary name starting with e-: Energy, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Energy"
+      ],
+      "scored": []
+    },
+    {
+      "note": "ordinary name starting with e-: Extinction, beside T,R -> unbound",
+      "labels": [
+        "T",
+        "R",
+        "Extinction"
+      ],
+      "scored": []
+    },
+    {
+      "note": "nastiest shape: a real D column beside Depth -> still unbound",
+      "labels": [
+        "D",
+        "Depth"
+      ],
+      "scored": []
+    },
+    {
+      "note": "nastiest shape: a real S column beside Sample -> still unbound",
+      "labels": [
+        "S",
+        "Sample"
+      ],
+      "scored": []
+    },
+    {
+      "note": "nastiest shape: a real E column beside Energy -> still unbound",
+      "labels": [
+        "E",
+        "Energy"
+      ],
+      "scored": []
+    },
+    {
+      "note": "a genuine error bar still detected alongside an inert ordinary name (not merely inert everywhere)",
+      "labels": [
+        "Depth",
+        "R",
+        "Rerr"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "Rerr glued reading alone (provisional, no sibling) -> unbound",
+      "labels": [
+        "Rerr"
+      ],
+      "scored": []
+    },
+    {
+      "note": "Rerr glued reading WITH sibling R -> base-name match",
+      "labels": [
+        "R",
+        "Rerr"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "T,Set (2-char token glue exclusion, single-letter sibling present)",
+      "labels": [
+        "T",
+        "Set"
+      ],
+      "scored": []
+    },
+    {
+      "note": "Std Dev (separated, no base) binds positionally",
+      "labels": [
+        "M",
+        "Std Dev"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        }
+      ]
+    },
+    {
+      "note": "hyphenated Origin sample name: NbAu-1_err -> NbAu-1 (punctuation base-matching)",
+      "labels": [
+        "NbAu-1",
+        "NbAu-1_err"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "hyphenated Origin sample names: NbAu-1_err must not bind to NbAu-2",
+      "labels": [
+        "NbAu-1",
+        "NbAu-2",
+        "NbAu-1_err"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "MOKE: Field, Kerr, Phase (Kerr stays unbound, no K sibling)",
+      "labels": [
+        "Field",
+        "Kerr",
+        "Phase"
+      ],
+      "scored": []
+    },
+    {
+      "note": "XRD: 2theta, Intensity, Ierr",
+      "labels": [
+        "2theta",
+        "Intensity",
+        "Ierr"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        }
+      ]
+    },
+    {
+      "note": "SIMS depth profile: Depth (nm), Si, O, Si_sigma",
+      "labels": [
+        "Depth (nm)",
+        "Si",
+        "O",
+        "Si_sigma"
+      ],
+      "scored": [
+        {
+          "channel": 3,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "magnetometry: Temp (K), M, M_std_err",
+      "labels": [
+        "Temp (K)",
+        "M",
+        "M_std_err"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "Temp, M, err -- single-candidate positional pairing",
+      "labels": [
+        "Temp",
+        "M",
+        "err"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 1,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        }
+      ]
+    },
+    {
+      "note": "T1, 'T err', T2 -- raw inference still binds via rule 3 (unbounded-forward); the wizard's two-tier narrowing (Python error_binding_suggestions.py, TS importwizard.ts) is what demotes this to unassigned, NOT this function",
+      "labels": [
+        "T1",
+        "T err",
+        "T2"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        }
+      ]
+    },
+    {
+      "note": "Unicode accented base name with explicit _err suffix",
+      "labels": [
+        "R\u00e9sistance",
+        "R\u00e9sistance_err"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "Unicode Greek letter base name with explicit _err suffix",
+      "labels": [
+        "\u03a9",
+        "\u03a9_err"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "Unicode combining base name (Delta-theta) with explicit _err suffix",
+      "labels": [
+        "\u0394\u03b8",
+        "\u0394\u03b8_err"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "mixed case: ALL-CAPS base, mixed-case _ERR suffix",
+      "labels": [
+        "MASS",
+        "mass_ERR"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "mixed case: Title-case base, ALL-CAPS _ERR suffix",
+      "labels": [
+        "Voltage",
+        "VOLTAGE_ERR"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "empty label list",
+      "labels": [],
+      "scored": []
+    },
+    {
+      "note": "single ordinary column, no error columns at all",
+      "labels": [
+        "Temp"
+      ],
+      "scored": []
+    },
+    {
+      "note": "single error-like column alone -- nothing to bind to",
+      "labels": [
+        "err"
+      ],
+      "scored": []
+    },
+    {
+      "note": "U+FEFF (BOM) leading a base name must still base-name-match its error column (JS treats BOM as whitespace)",
+      "labels": [
+        "\ufeffM",
+        "T",
+        "M_err"
+      ],
+      "scored": [
+        {
+          "channel": 2,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "U+FEFF (BOM) trailing an error label's own name doesn't break suffix matching either",
+      "labels": [
+        "M",
+        "M_err\ufeff"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "name",
+          "unit": "unknown",
+          "confidence": "medium"
+        }
+      ]
+    },
+    {
+      "note": "U+001C (file separator) is NOT whitespace to JS -- stays part of the label, so it does NOT base-name-match a sibling missing it",
+      "labels": [
+        "R\u001c",
+        "dR"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        }
+      ]
+    },
+    {
+      "note": "U+0085 (NEL) is NOT whitespace to JS either -- same divergence shape as U+001C",
+      "labels": [
+        "R\u0085",
+        "dR"
+      ],
+      "scored": [
+        {
+          "channel": 1,
+          "target": 0,
+          "axis": "y",
+          "side": "both",
+          "header": "position",
+          "unit": "unknown",
+          "confidence": "low"
+        }
+      ]
+    }
+  ]
+}

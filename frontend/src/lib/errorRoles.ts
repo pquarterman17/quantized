@@ -21,6 +21,7 @@ import type { DataStruct, Dataset } from "./types";
 import { classifyErrorLabel, classifyErrorLabelInLabels, type ErrorSide } from "./errorLabelClassify";
 import { flatNorm } from "./errorLabelCandidates";
 import { compareUnits } from "./errorUnitEvidence";
+import { columnMetaList } from "./columnmeta";
 
 export type { ErrorSide };
 // Re-exported for callers that used to reach into this module for the
@@ -117,7 +118,7 @@ export function inferErrorBindings(data: DataStruct): ErrorBinding[] {
 /** The recorded x-axis unit, as Python's `x_units.x_unit_of` resolves it: the
  *  first non-blank of `xUnit`/`x_column_unit`/`xColumnUnit`, top-level
  *  metadata first, then a nested `parser_specific`/`parserSpecific` blob. */
-function xUnitOf(meta: Record<string, unknown> | undefined): string {
+export function xUnitOf(meta: Record<string, unknown> | undefined): string {
   for (const src of [meta, meta?.parser_specific, meta?.parserSpecific]) {
     if (!src || typeof src !== "object") continue;
     for (const key of ["xUnit", "x_column_unit", "xColumnUnit"]) {
@@ -136,6 +137,22 @@ function xUnitOf(meta: Record<string, unknown> | undefined): string {
  *  Builder's initial mapping -- so they can never pair a column differently. */
 export function figureSeedErrorBindings(dataset: Pick<Dataset, "data" | "errorRoles">): ErrorBinding[] {
   return dataset.errorRoles ? [...dataset.errorRoles] : inferErrorBindings(dataset.data);
+}
+
+/** Is this pairing DECLARED rather than guessed? Either the file's Origin
+ *  column designations (the whole book -- exactly when `originBookErrorRoles`
+ *  is non-null), or the pairing is listed in `metadata.error_roles`: the P1.6
+ *  contract a parser / import filter writes, which a user's confirmation
+ *  extends (lib/errorRoleConfirm.ts), so it survives `.dwk`. Declared pairings
+ *  outrank the confidence grade (lib/errorBindingConfidence.ts). Matched by
+ *  channel and target. */
+export function isDeclaredBinding(data: DataStruct, b: ErrorBinding): boolean {
+  return (
+    columnMetaList(data).some((c) => c?.designation !== undefined) ||
+    !!sanitizeBindings(data.metadata?.["error_roles"], data.labels.length)?.some(
+      (d) => d.channel === b.channel && d.target === b.target,
+    )
+  );
 }
 
 /** Back-compat projection: the legacy `errKeys` map (value channel → error

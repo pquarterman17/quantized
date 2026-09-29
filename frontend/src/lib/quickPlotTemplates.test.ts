@@ -12,9 +12,9 @@ import {
   pruneDanglingWorkbookScopeTemplates,
   quickPlotTemplateInScope,
   resolveTemplate,
-  sanitizeQuickPlotTemplates,
   type QuickPlotTemplate,
 } from "./quickPlotTemplates";
+import { sanitizeQuickPlotTemplates } from "./quickPlotTemplatesSanitize";
 import type { Dataset } from "./types";
 
 function ds(overrides: Partial<Dataset> = {}): Dataset {

@@ -13,7 +13,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { groupLevelLabel, levelOrderFor } from "../../lib/categorical";
 import { buildColorByColumns, type ColorScatterSpec } from "../../lib/colorscatter";
-import { buildErrorSpans, type ErrorSpan } from "../../lib/errorbars";
+import type { ErrorSpan } from "../../lib/errorbars";
 import { hasOverlayCompanions } from "./overlayCompanions";
 import { hasRichErrorBindings, type ErrorBinding } from "../../lib/errorRoles";
 import { channelModelingType } from "../../lib/modeling";
@@ -32,11 +32,13 @@ import {
   shouldRefetchWindow,
 } from "../../lib/plotDecimate";
 import { applyGroupSplit, canvasGroupCol, groupSplitChannelMap } from "../../lib/plotGroupSplit";
-import { applyLogOffsets, scaleErrorSpans } from "../../lib/logOffset";
+import { applyLogOffsets } from "../../lib/logOffset";
 import { droppedRows } from "../../lib/rowstate";
 import type { AxisScale, BaselineOverlay, Dataset, DefaultTrace, FitOverlay, PeakOverlay, SeriesStyle } from "../../lib/types";
 import { useStableByValue } from "../../lib/useStableValue";
-import { useLogOffsetScaling, useOffsetErrorBars, useOffsetLabelList } from "./usePlotPayloadLogOffsets";
+import { useLogOffsetScaling, useOffsetErrorBars, useOffsetErrorSpans, useOffsetLabelList } from "./usePlotPayloadLogOffsets";
+import { useEncodedLists, useStageEncoding } from "./usePlotEncoding";
+import type { FigureEncoding } from "../../lib/plotEncodingBinding";
 
 export interface PlotPayloadParams {
   active: Dataset | null | undefined;
@@ -61,6 +63,9 @@ export interface PlotPayloadParams {
    *  document -- background/panel windows) behaves exactly like today: the
    *  dataset's own `errorRoles` decide. */
   documentErrors?: readonly ErrorBinding[];
+  /** P1.4: the window document's Color / Symbol / Label picks
+   *  (`FigureBindings.encoding`) -- see usePlotEncoding.ts. Undefined = none. */
+  encoding?: FigureEncoding;
   hiddenChannels: number[];
   waterfall: number;
   excludedDisplay: "hide" | "grey";
@@ -112,6 +117,9 @@ export interface PlotPayloadResult {
   styleList: (SeriesStyle | undefined)[] | undefined;
   /** Per-display-series legend-rename overrides, aligned 1:1 with `displayPayload.series`. */
   labelList: (string | undefined)[] | undefined;
+  /** P1.4: an encoded render's FINISHED legend text (the same list as
+   *  `labelList`), for the DOM legend to show over the channel rename; undefined otherwise. */
+  legendLabels?: (string | undefined)[];
   /** Error-bar magnitudes keyed by uPlot data-column index (1-based). */
   errorBars: Map<number, (number | null)[]>;
   /** MAIN #36: asymmetric / X error spans from the canonical role bindings. */
@@ -185,23 +193,29 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       active ? effectiveChannels(active.data, p.yKeys, p.xKey, active.channelRoles, p.seriesOrder) : [],
     [active, p.yKeys, p.xKey, p.seriesOrder],
   );
+  // P1.4: the window's Color / Symbol / Label encodings (usePlotEncoding.ts) --
+  // when active they REPLACE the group split (the group joins the encoded one),
+  // never offset or stagger, and drop errors / colour-mapping as it does.
+  const encoded = useStageEncoding(active, p.encoding, groupCol, p.y2Keys, fetchChannels);
+  const grouped = encoded ? encoded.split : groupCol !== null; // a factor splits the series
   // The group channel's own per-row codes (row-aligned to active.data) --
   // feeds both the channel-map expansion below and applyGroupSplit's call.
   const groupCodes = useMemo(
-    () => (groupCol !== null && active ? active.data.values.map((row) => row[groupCol]) : null),
-    [active, groupCol],
+    () => (groupCol !== null && !encoded && active ? active.data.values.map((row) => row[groupCol]) : null),
+    [active, groupCol, encoded],
   );
   // P1.5 edit-one/edit-all ruling (plotGroupSplit.ts header): the per-
   // DISPLAY-series channel map styleList/labelList/hidden (and PlotLegend/
   // PlotContextMenu's own `plotted[i]` lookups) key against.
   const plotted = useMemo(
-    () => (groupCodes ? groupSplitChannelMap(fetchChannels, groupCodes) : fetchChannels),
-    [fetchChannels, groupCodes],
+    () => encoded?.plotted ?? (groupCodes ? groupSplitChannelMap(fetchChannels, groupCodes) : fetchChannels),
+    [fetchChannels, groupCodes, encoded],
   );
+  const waterfall = encoded ? 0 : p.waterfall;
 
   const { offsetsApply, offsetsKey, scaledFitOverlay, scaledBaselineOverlay, scaledPeakOverlay, scaledDerivOverlay } =
     useLogOffsetScaling({ // P2.3 decade offsets -- see usePlotPayloadLogOffsets.ts
-      plotted, hiddenChannels: p.hiddenChannels, seriesStyles: p.seriesStyles, waterfall: p.waterfall, groupCol,
+      plotted, hiddenChannels: p.hiddenChannels, seriesStyles: p.seriesStyles, waterfall, groupCol, encoded: !!encoded,
       fitOverlay: p.fitOverlay, baselineOverlay: p.baselineOverlay, peakOverlay: p.peakOverlay, derivOverlay: p.derivOverlay,
     });
 
@@ -211,7 +225,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       payload
         ? composeDisplayPayload(applyLogOffsets(payload, plotted, p.seriesStyles, offsetsApply), {
             id: active?.id ?? null,
-            waterfall: p.waterfall,
+            waterfall,
             dropped,
             excludedDisplay: p.excludedDisplay,
             fitOverlay: scaledFitOverlay,
@@ -230,7 +244,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       scaledPeakOverlay,
       scaledBaselineOverlay,
       scaledDerivOverlay,
-      p.waterfall,
+      waterfall,
       active,
       dropped,
       p.excludedDisplay,
@@ -250,15 +264,16 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // magnitudes (finding 3 scaling), both aligned 1:1 to `plotted` -- see
   // usePlotPayloadLogOffsets.ts.
   const labelList = useOffsetLabelList(displayPayload, plotted, p.seriesLabels, p.seriesStyles, offsetsApply);
-  const errorBars = useOffsetErrorBars(active, plotted, groupCol, p.errKeys, p.seriesStyles, offsetsApply);
+  const errorBars = useOffsetErrorBars(active, plotted, grouped, p.errKeys, p.seriesStyles, offsetsApply);
+  const encodedLists = useEncodedLists(encoded, displayPayload, p.seriesStyles, p.seriesLabels); // P1.4
 
   // Colour-mapped-scatter specs per plotted series (MAIN #14), same p+1 keying.
   const colorByColumns = useMemo(
     () =>
-      active && groupCol === null
+      active && groupCol === null && !encoded
         ? buildColorByColumns(active.data, plotted, p.seriesStyles)
         : new Map<number, ColorScatterSpec>(),
-    [active, plotted, p.seriesStyles, groupCol],
+    [active, plotted, p.seriesStyles, groupCol, encoded],
   );
 
   // Interactive-legend visibility, aligned 1:1 with the display series (overlays
@@ -312,7 +327,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
         // M1: same bindings rule `errorSpans` below uses; this path draws X-error whiskers.
         hasErrorSpans: errorBindingsApplyToPlotted(useDocumentErrors ? documentErrors : active.errorRoles, plotted, { xErrorRenders: true }),
         hasColorByColumns: colorByColumns.size > 0,
-        hasGroupSplit: groupCol !== null,
+        hasGroupSplit: groupCol !== null || encoded !== null,
       });
     const decimateWidth = eligible ? defaultDecimateWidthHint() : null;
     void fetchPlot(
@@ -333,9 +348,10 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       // (xKey === null, the time column, is never modeled/categorical).
       const xType = p.xKey == null ? "continuous" : channelModelingType(active, p.xKey);
       const withCategories = categoricalXPayload(raw, active.data, p.xKey, xType);
-      // P1.5: group split runs LAST, client-side, on the never-decimated fetch.
-      const composed =
-        groupCol !== null && groupCodes
+      // P1.5: group split (P1.4: or the encoded one) runs LAST, client-side, on the never-decimated fetch.
+      const composed = encoded
+        ? encoded.apply(withCategories)
+        : groupCol !== null && groupCodes
           ? applyGroupSplit(
               withCategories,
               groupCodes,
@@ -374,6 +390,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     plotted,
     groupCol,
     groupCodes,
+    encoded,
   ]);
 
   // P3.4 zoom-refetch residual: when the BASE payload above came back
@@ -440,55 +457,20 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.xLim, active, fetchChannels, p.y2Keys, p.xKey, p.yScale, p.xScale, baseDecimated]);
 
-  // #36 / G4: built from Dataset.errorRoles (the canonical contract) by
-  // default — absent for a dataset with no roles, in which case the legacy
-  // symmetric bars stand. G4's figure-scoped error-honesty fix: the FOCUSED
-  // window's OWN document errors (`p.documentErrors`) become the
-  // authoritative source instead, IFF they contain at least one binding the
-  // legacy `errKeys` projection cannot express (`hasRichErrorBindings`) —
-  // an X-error or an asymmetric `+`/`-` half. A document whose errors are
-  // entirely y/both is indistinguishable from what `errKeys` already
-  // carries, so it takes this branch only when there is something genuinely
-  // richer to show.
-  //
-  // An ordinary window's document CAN be rich (corrected 2026-09-09 — the
-  // previous claim that only Quick Figure / Graph Builder produce rich
-  // documents was false): `createPlotWindowDocument` seeds `bindings.errors`
-  // from `dataset.errorRoles`, so a parser-declared X binding makes a fresh
-  // ordinary window's document rich. The invariant this branch actually relies
-  // on is that dataset roles and every bound window's document errors are kept
-  // in sync by the single write chokepoint in `store/importErrorRoles.ts`.
-  //
-  // Double-render check (investigated, not just assumed): `errorBars` above
-  // is built from `p.errKeys` regardless of which path wins here, and
-  // `lib/uplotOpts.ts`'s `buildOpts` already excludes any column present in
-  // `errorSpans` from the legacy bars it draws
-  // (`legacyBars = ...filter(([col]) => !args.errorSpans?.has(col))`, see
-  // its own comment: "running both would double-draw the same whisker at a
-  // different thickness"). `buildErrorSpans` itself always evaluates BOTH
-  // the asymmetric-pair and symmetric-binding cases for every plotted
-  // channel — so even when the document-authoritative path is active, a
-  // y/both binding inside `documentErrors` still lands in the resulting
-  // `errorSpans` map, gets excluded from `legacyBars` by that existing
-  // filter, and draws exactly once via `errorSpansPlugin` — the identical
-  // dedupe the dataset-authoritative path already relied on. No new
-  // dedupe logic was needed; the existing column-based filter already
-  // covers a Map built from either source.
-  const errorSpans = useMemo(() => {
-    // P1.5: suppressed for a grouped render -- see the `errorBars` doc above.
-    if (!active || groupCol !== null) return new Map<number, ErrorSpan[]>();
-    const bindings = useDocumentErrors ? documentErrors! : active.errorRoles;
-    const spans = bindings?.length ? buildErrorSpans(active.data, plotted, bindings) : new Map<number, ErrorSpan[]>();
-    return scaleErrorSpans(spans, plotted, p.seriesStyles, offsetsApply); // finding 3, Y half only
-  }, [active, plotted, useDocumentErrors, documentErrors, groupCol, p.seriesStyles, offsetsApply]);
+  // #36 / G4: the canonical-role error spans -- see usePlotPayloadLogOffsets.ts's
+  // `useOffsetErrorSpans` for the document-vs-dataset authority rule.
+  const errorSpans = useOffsetErrorSpans(
+    active, plotted, grouped, useDocumentErrors ? documentErrors! : active?.errorRoles, p.seriesStyles, offsetsApply,
+  );
 
   return {
     payload,
     payloadDatasetId: fetched?.datasetId ?? null,
     displayPayload,
     plotted,
-    styleList,
-    labelList,
+    styleList: encodedLists?.styleList ?? styleList,
+    labelList: encodedLists?.labelList ?? labelList,
+    legendLabels: encodedLists?.labelList,
     errorBars,
     errorSpans,
     colorByColumns,

@@ -58,6 +58,15 @@ export function defaultToolWindowLayout(x: number, y: number, width: number): To
   return { x, y, width, height: null, collapsed: false };
 }
 
+/** Is `target` inside the ToolWindow mounted with this `id`? The same "focus
+ *  is inside this frame" test ToolWindow's own Escape surface makes, for a
+ *  panel hook that renders the window but cannot reach its frame's ref
+ *  (residual R11). The frame carries `data-tool-window={id}` for this. */
+export function isInsideToolWindow(target: EventTarget | null, id: string): boolean {
+  if (!(target instanceof Element)) return false;
+  return target.closest("[data-tool-window]")?.getAttribute("data-tool-window") === id;
+}
+
 /** Validate one persisted layout entry from an untrusted `.dwk` — anything
  *  malformed degrades to `null` (the caller drops the key entirely, so that
  *  window falls back to its own component default props rather than

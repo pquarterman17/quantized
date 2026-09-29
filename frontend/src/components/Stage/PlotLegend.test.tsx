@@ -66,6 +66,26 @@ describe("PlotLegend position", () => {
   });
 });
 
+describe("PlotLegend — P1.4 encoded legend text", () => {
+  it("an encoded render's finished text wins over the channel rename; without it the rename shows", () => {
+    useApp.setState({ seriesLabels: { 0: "Renamed" } });
+    const split: PlotSeriesSpec[] = [
+      { label: "A (s=S1)", unit: "" },
+      { label: "A (s=S2)", unit: "" },
+    ];
+    const labels = ["Renamed (s=S1)", "Renamed (s=S2)"];
+    const { container, rerender } = render(
+      <PlotLegend series={split} plotted={[0, 0]} hidden={[false, false]} labels={labels} />,
+    );
+    const legend = () => container.querySelector(".qzk-legend")!;
+    expect(legend()).toHaveTextContent("Renamed (s=S1)");
+    expect(legend()).toHaveTextContent("Renamed (s=S2)");
+    rerender(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    expect(legend()).toHaveTextContent("Renamed");
+    expect(legend()).not.toHaveTextContent("(s=");
+  });
+});
+
 describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
   beforeEach(() => {
     // jsdom's requestAnimationFrame never fires on its own (no paint loop) —

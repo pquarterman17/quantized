@@ -4,10 +4,14 @@
 // survives a Model ⇄ Fit switch). Slice 3: the history picker, and a saved
 // fit (SavedFit) whenever the picked fit is not the one just run.
 
+import { useMemo } from "react";
+
 import { Button } from "../../primitives";
 import FitDataBinding from "./FitDataBinding";
 import FitParamTable from "./FitParamTable";
 import FitResults from "./FitResults";
+import ReflFitPlots from "./ReflFitPlots";
+import { liveCurves } from "./reflFitCurves";
 import ReflUncertainty from "./ReflUncertainty";
 import SavedFit, { FitHistoryPicker } from "./SavedFit";
 import type { ReflFitState } from "./useReflFit";
@@ -20,6 +24,8 @@ export default function ReflFitView({ fit }: { fit: ReflFitState }) {
   const live = fit.result != null && (h.pickedId === null || h.pickedId === fit.liveRecord?.id);
   // The live fit's record as the store holds it NOW (with any posterior).
   const liveRecord = h.records.find((r) => r.id === fit.liveRecord?.id) ?? fit.liveRecord;
+  // One object per result, so the plots rebuild only when the fit changes.
+  const curves = useMemo(() => (fit.result ? liveCurves(fit.result) : null), [fit.result]);
   return (
     <div>
       <div className="qzk-field-lbl" style={SECTION}>Data</div>
@@ -55,6 +61,7 @@ export default function ReflFitView({ fit }: { fit: ReflFitState }) {
         <>
           <div className="qzk-field-lbl" style={SECTION}>Result</div>
           <FitResults result={fit.result} />
+          {curves && <ReflFitPlots curves={curves} weighting={fit.result.weighting} />}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
             <Button size="sm" disabled={fit.applyBlocked != null} title={fit.applyBlocked ?? undefined} onClick={fit.applyToModel}>
               Apply to model
@@ -64,6 +71,9 @@ export default function ReflFitView({ fit }: { fit: ReflFitState }) {
             </Button>
             <Button size="sm" onClick={fit.openLogPlot}>
               Open log-Y plot
+            </Button>
+            <Button size="sm" title="Lay out data, model, residuals and SLD as linked figures on a new figure page." onClick={fit.sendToFigure}>
+              Send to figure page
             </Button>
             {liveRecord && (
               <Button size="sm" disabled={h.reporting} onClick={() => void h.addToReport(liveRecord)}>

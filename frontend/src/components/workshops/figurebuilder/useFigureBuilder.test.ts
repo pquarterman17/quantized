@@ -55,6 +55,10 @@ beforeEach(() => {
     datasets: [{ id: "d1", name: "scan.dat", data: DATA }],
     activeId: "d1",
     yKeys: null,
+    y2Keys: null,
+    y2Scale: null,
+    y2Fmt: null,
+    y2AxisLabel: "",
     xScale: "linear",
     yScale: "linear",
     xFmt: { mode: "auto", digits: 2 },
@@ -238,6 +242,54 @@ describe("useFigureBuilder", () => {
     act(() => result.current.saveAsFigure("Re-saved", true));
     const saved = useApp.getState().figureDocs.at(-1);
     expect(saved?.config.groupCol).toBe(1);
+  });
+
+  // FIGURE_AUTHORING_WORKFLOW_PLAN F2.1g's legacy y2 placebo: `hasY2` read the
+  // live `y2Keys`, enabling the y2 min/max controls, but the legacy request
+  // never declared `y2_keys` -- so the server's gateY2Overrides dropped the
+  // `y2_lim` those controls wrote. Controls and wire must now answer as one.
+  it("legacy mode declares the live secondary axis, so y2 limits reach the export", async () => {
+    useApp.setState({ yKeys: [0, 1], y2Keys: [1], y2Scale: "log", y2AxisLabel: "Right" });
+    const { result } = renderHook(() => useFigureBuilder());
+    expect(result.current.hasY2).toBe(true);
+    act(() => result.current.setOverrides({ y2_lim: [5, 50] }));
+    await waitFor(() => expect(result.current.overrides).toEqual({ y2_lim: [5, 50] }));
+    await act(async () => result.current.exportNow());
+    const body = vi.mocked(exportFigure).mock.calls.at(-1)?.[0];
+    expect(body?.y_keys).toEqual([0, 1]);
+    expect(body?.y2_keys).toEqual([1]);
+    expect(body?.y2_scale).toBe("log");
+    expect(body?.y2_label).toBe("Right");
+    expect(body?.overrides).toEqual({ y2_lim: [5, 50] });
+  });
+
+  it("legacy mode keeps the y2 controls off when no plotted channel rides y2", async () => {
+    // A stale y2 tag on a channel the plot no longer draws is not an axis.
+    useApp.setState({ yKeys: [0], y2Keys: [1] });
+    const { result } = renderHook(() => useFigureBuilder());
+    expect(result.current.hasY2).toBe(false);
+    await act(async () => result.current.exportNow());
+    expect(vi.mocked(exportFigure).mock.calls.at(-1)?.[0].y2_keys).toBeUndefined();
+  });
+
+  it("a re-opened FigureDoc (which carries no y2) ignores the live plot's y2", async () => {
+    useApp.setState({
+      yKeys: [0, 1],
+      y2Keys: [1],
+      figureDocSeed: {
+        id: "draft", name: "Saved", datasetId: "d1", live: true,
+        config: {
+          xKey: null, yKeys: [0, 1], xScale: "linear", yScale: "linear",
+          title: "", xLabel: "", yLabel: "", style: "default", fmt: "pdf", dpi: 300,
+          overrides: null, seriesStyles: null,
+        },
+      },
+    });
+    const { result } = renderHook(() => useFigureBuilder());
+    await waitFor(() => expect(useApp.getState().figureDocSeed).toBeNull());
+    expect(result.current.hasY2).toBe(false);
+    await act(async () => result.current.exportNow());
+    expect(vi.mocked(exportFigure).mock.calls.at(-1)?.[0].y2_keys).toBeUndefined();
   });
 
   it("a plain (non-doc-seeded) builder sends no group_col", async () => {

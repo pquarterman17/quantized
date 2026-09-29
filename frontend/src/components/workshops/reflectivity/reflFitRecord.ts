@@ -85,6 +85,9 @@ export interface SavedChannelCurve {
   q: number[];
   r: number[];
   model: (number | null)[];
+  /** The fit's residuals on the same points (reflFitResiduals.ts). Absent on
+   *  a record written before residuals were stored. */
+  residual?: (number | null)[];
   total: number;
 }
 
@@ -260,6 +263,15 @@ const spinOf = (v: unknown): "+" | "-" | null => (v === "+" || v === "-" ? v : n
 const nums = (v: unknown): number[] => list(v, (x) => need(num(x), "number"));
 const gappy = (v: unknown): (number | null)[] => list(v, (x) => numOrNull(x) ?? null);
 
+function optional<T>(read: () => T): T | undefined {
+  try {
+    return read();
+  } catch (e) {
+    if (e instanceof Bad) return undefined;
+    throw e;
+  }
+}
+
 function sized<T extends { total: number }>(curve: T, lengths: number[]): T {
   if (lengths.some((n) => n !== lengths[0])) throw new Bad("curve lengths");
   if (!Number.isInteger(curve.total) || curve.total < lengths[0]) curve.total = lengths[0];
@@ -274,7 +286,10 @@ function decodeCurves(v: unknown): SavedCurves | undefined {
     return {
       channels: list(v.channels, (c) => {
         if (!isObj(c)) throw new Bad("curve");
-        const out = { label: str(c.label) ?? "", spin: spinOf(c.spin), q: nums(c.q), r: nums(c.r), model: gappy(c.model), total: num(c.total) ?? 0 };
+        const out: SavedChannelCurve = { label: str(c.label) ?? "", spin: spinOf(c.spin), q: nums(c.q), r: nums(c.r), model: gappy(c.model), total: num(c.total) ?? 0 };
+        // A bad residual array costs the curve its residuals only.
+        const residual = optional(() => gappy(c.residual));
+        if (residual?.length === out.q.length) out.residual = residual;
         return sized(out, [out.q.length, out.r.length, out.model.length]);
       }),
       sld: list(v.sld, (p) => {

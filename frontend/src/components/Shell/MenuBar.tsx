@@ -11,7 +11,7 @@ import { useEscapeSurface } from "../../lib/escapeStack";
 import { reopenRecent } from "../../lib/reopenRecent";
 import { recentKey, recentParentLabel, relativeTime, type RecentFile } from "../../lib/recentFiles";
 import { withSectionHeaders } from "../../lib/menuSections";
-import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
+import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
 import { absorbStrayDeleteOnContainer, removeRowSafely } from "../../lib/focusGuard";
 import { useApp } from "../../store/useApp";
 

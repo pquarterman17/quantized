@@ -136,7 +136,7 @@ describe("MultiSelectBar actions dispatch the existing bulk operations", () => {
         { dataset: raw, name: "b.dat" },
       ],
       filename: "selection-2.csv",
-    });
+    }, expect.any(AbortSignal));
   });
 
   it("Clear empties the multi-selection", () => {

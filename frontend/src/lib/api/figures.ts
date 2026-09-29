@@ -359,9 +359,9 @@ export interface CategoryAxisStyleWire {
 }
 
 /** Render a statistical plot (box/violin/Q-Q/histogram) server-side
- *  (matplotlib) and download it (gap #16). */
-export function exportStatplotFigure(body: StatplotFigureSpec): Promise<void> {
-  return postDownload("/api/export/statplot-figure", body, `statplot.${body.fmt ?? "pdf"}`);
+ *  (matplotlib) and download it (gap #16). `signal`: see exportFigure. */
+export function exportStatplotFigure(body: StatplotFigureSpec, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/statplot-figure", body, `statplot.${body.fmt ?? "pdf"}`, signal);
 }
 
 // ── Categorical (bar/column) plots — gap #20 ────────────────────────────────
@@ -417,7 +417,7 @@ export interface CategoricalFigureSpec {
 }
 
 /** Render a grouped/stacked bar chart server-side (matplotlib) and download
- *  it (gap #20). */
-export function exportCategoricalFigure(body: CategoricalFigureSpec): Promise<void> {
-  return postDownload("/api/export/categorical-figure", body, `bar.${body.fmt ?? "pdf"}`);
+ *  it (gap #20). `signal`: see exportFigure. */
+export function exportCategoricalFigure(body: CategoricalFigureSpec, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/categorical-figure", body, `bar.${body.fmt ?? "pdf"}`, signal);
 }

@@ -27,6 +27,10 @@ interface PlotLegendProps {
   series: PlotSeriesSpec[];
   /** Per-display-series style overrides (for the swatch color), 1:1 with series. */
   styleList?: (SeriesStyle | undefined)[];
+  /** P1.4 (`Stage/usePlotEncoding`): an encoded render's FINISHED legend text
+   *  per series, winning over the channel's rename — which the encoded name
+   *  already carries — exactly as the canvas labels it. Absent elsewhere. */
+  labels?: (string | undefined)[];
   /** P3.3 (`lib/seriesStyleCycle.ts`): the SAME display positions the canvas
    *  beside this legend was built with. Absent = no cycle, which is what every
    *  legend rendered next to an uncycled plot passes. Without it the swatch
@@ -57,6 +61,7 @@ interface PlotLegendProps {
 export default function PlotLegend({
   series,
   styleList,
+  labels,
   seriesCycle,
   plotted,
   hidden,
@@ -161,7 +166,7 @@ export default function PlotLegend({
         // the error/secondary-X columns it doesn't draw (decode #52).
         if (legendStatic && isHidden) return null;
         const visibleCount = plotted.filter((c) => !hiddenChannels.includes(c)).length;
-        const text = isChannel ? (seriesLabels[channel] ?? defaultLabel(s)) : defaultLabel(s);
+        const text = isChannel ? (labels?.[i] ?? seriesLabels[channel] ?? defaultLabel(s)) : defaultLabel(s);
 
         if (editing && editing.channel === channel) {
           return (

@@ -1,6 +1,15 @@
 # Bundle headroom campaign
 
-**Current state (2026-09-27, after slice 10 and its review round):** one
+**Current state (2026-09-29, after slice 12):** no seam — eight import
+edges, the slice-11 method generalised. Taken on PR #486's tree
+(`f277d2f4`, the Library explorer controls) to fund a queued batch that needs
+~10.5 kB more eager. Measured **846,860 B** eager against that parent's
+**861,092 B** (**−14,232 B**), with no behaviour or timing change: every byte
+that left is code only already-lazy modules call. The pin is NOT moved
+(**866,358 B**), so **19,498 B** of headroom is left, and the forced `SLACK`
+floor (826,358 B) is 20,502 B below the measurement. See "Slice 12".
+
+**Previous state (2026-09-27, after slice 10 and its review round):** one
 async-only seam, the import slice (`store/importDatasets.ts` + six modules
 only it reached), taken to fund the queued P2.5 derived-expressions work
 (~+2.9 kB of formula-parser code that must be eager). Landed measured
@@ -33,7 +42,7 @@ finding is not a seam: most of the "chunk-boundary tax" slices 3–5 kept
 measuring was Vite's preload lists naming already-loaded chunks, and removing
 them (build-time, runtime-neutral) recovered 10.7 kB by itself. See "Slice 8".
 
-**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4, 5, 6, 8, 9, 10 and 11
+**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4, 5, 6, 8, 9, 10, 11 and 12
 executed; slice 7 built and reverted, never on main** (slice 5 deliberately small — see its ruling on `PlotLegend`; slice
 6 ratchets the pin DOWN, the first slice authorized to) (see their sections
 below); slice 2 is partially done. Slice 5 is no longer the
@@ -1905,6 +1914,149 @@ the eager side uses only `sanitizeFigureOverrides`), `lib/report.ts`
 (2,661 B — the eager side uses only `pruneReportRefs`; `sanitizeReports` and
 its validators serve the codec), `lib/foldertree.ts`, `lib/panelLayout.ts`,
 `lib/pipeline.ts`, `lib/desktopBridge.ts` (save-path helpers).
+
+### Slice 12 — eight import edges, no seam — **DONE (2026-09-29)**
+
+**Measured net eager delta −14,232 B — pin NOT moved (866,358 B)**
+
+Brief: PR #486 (`sol/origin-project-explorer-v1`, about to merge) measured
+861,092 B, 5,266 B under the pin, and a batch of queued features needs
+~10.5 kB more eager. Target: free ≥ 12 kB (aim 14 kB) with no behaviour
+change, without touching `EAGER_JS_BUDGET` or the Stage-encoding, Graph
+Builder, Quick Figure Builder, reflectivity, StatusBar/jobs/pendingOps,
+Figure Builder, CommandPalette or ToolWindow code in flight elsewhere (one
+import line in `CommandPalette.tsx` is the only touch there). Exact bytes out
+of `dist/index.html` (entry + `modulepreload`), `npm ci` once, then
+`node_modules/.vite` wiped before EVERY build:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `f277d2f4` (parent, PR #486 head) | 861,092 | — |
+| + `pruneReportRefs` → `lib/reportRefs.ts` | 858,476 | **−2,616** |
+| + `formatShortcut`/`isMacPlatform` → `lib/shortcutFormat.ts` | 856,292 | **−2,184** |
+| + `PanelFit`/`PANEL_FITS`/`nextPanelFit` → `lib/panelFit.ts` | 854,025 | **−2,267** |
+| + folder + curve action registries out of `lib/contextActions.ts` | 851,432 | **−2,593** |
+| + Quick Plot template `.dwk` sanitizer → `lib/quickPlotTemplatesSanitize.ts` | 848,865 | **−2,567** |
+| + `facetGridSize` → `lib/facetGrid.ts` | 847,631 | **−1,234** |
+| + `sanitizeFigureOverrides`/`compactOverrides` → `lib/figureOverridesSanitize.ts` | 846,860 | **−771** |
+| + folder registry folded into `folderRowMenu.ts`, guards (landed tip) | 846,860 | 0 |
+
+Rows are MARGINAL (each on top of the rows above it), the slice-5
+distinction. The landed tip was re-measured with the full CI recipe
+(`npm ci`, `.vite` wiped, `tsc -b --force`, `npm run build`): 846,860 B,
+`check-bundle-size` "827.0 kB eager, 19.0 kB under budget", `preload-verify`
+160 lists / 160 sites / 0 violations. `npm run lint` clean; full `npx vitest
+run` 863 files, 14,042 passed + 2 expected-fail, 0 failed.
+
+#### How it was found
+
+Slice 11's scan (eager modules' exports that only lazy modules import), run
+over the build's own `getModuleInfo` graph, then priced per DECLARATION
+rather than per module: a scratch variant of `scripts/eagerAttribution.mjs`
+that keeps each mapping segment's original source LINE and sums bytes per
+top-level declaration. That turns "module X is 4.5 kB and the eager side uses
+one name" into "the eager side's name is 89 B and the rest is 2.5 kB", which is
+what decides whether an edge is worth cutting. Two shapes came out:
+
+- **Small eager half** (slice 11's `PLOT_MARKS` shape): the eager importer
+  needs a few hundred bytes of a module whose bulk only lazy code uses. The
+  small piece moves to a leaf the eager side imports; the original module
+  re-exports it, so every other importer is untouched, and the module leaves
+  the entry chunk. `lib/report.ts` (eager needed `pruneReportRefs`, 89 B, of
+  2,661 B — the rest is the `.dwk` report validators), `lib/shortcuts.ts`
+  (menubar/palette needed `formatShortcut` + `isMacPlatform`, 245 B, of
+  2,479 B — the rest is the Help cheat-sheet table), `lib/panelLayout.ts`
+  (the plot-view model/store needed the fit-mode cycle, 115 B, of 2,403 B —
+  the rest is spatial pixel geometry), `lib/multipanel.ts` (the panel-window
+  model needed `facetGridSize`, 110 B, of 1,288 B), `lib/figureOverrides.ts`
+  (the figure-document parser needed the sanitizer and the compaction it
+  calls; merge / legend locations / the y2 gate serve the lazy Figure Builder
+  and exporters).
+- **Large lazy half**: the eager module is genuinely eager but carries code
+  only lazy modules call. That code moves OUT to a module only lazy modules
+  import; nothing re-exports it. `lib/contextActions.ts`'s folder registry
+  (1,600 B incl. `hasSavedTemplates`/`activeDataset`; consumers
+  `folderRowMenu.ts` and `LibraryTree.tsx`, both in the lazy tree chunk) and
+  curve registry (802 B; consumer `lib/plotMenu.ts`, lazy since slice 4), and
+  `lib/quickPlotTemplates.ts`'s `.dwk` sanitizer (~2.4 kB; consumer the lazy
+  codec). `lib/templateKey.ts` left with the folder registry.
+
+Replayed over the build graph: 408 → 407 eager modules (`report`,
+`shortcuts`, `panelLayout`, `multipanel`, `figureOverrides`, `templateKey`
+out; the five leaves in).
+
+#### Why it qualifies under the `PlotLegend` ruling, and what it costs
+
+No function, value or control flow changed — every move is verbatim — and no
+`import()` was added, so no `Suspense`, fallback, focus or Escape path exists
+to regress, and no chunk fetch was put in front of any gesture. Each moved
+piece is imported STATICALLY by a module that was already lazy, so it now
+arrives in (or in parallel with, via the pruned preload list) the chunk
+fetch that module already paid. In particular the right-click latency that
+`lib/contextActions.ts` is kept eager for is unchanged: a folder row cannot
+be right-clicked before the lazy Library tree that renders it has loaded,
+and the folder registry is in that tree's static graph; the plot-canvas curve
+menu's renderer was already lazy (slice 4) and the curve registry rides with
+it. None of the modules that left has top-level side effects (checked), so
+nothing that ran at startup stops running. The ⌘K palette's dataset actions,
+the menubar's shortcut labels, report pruning on dataset removal, the
+figure-document parse and the panel-fit cycle all still run synchronously
+from the entry chunk. Not measured in a browser (no Playwright browser here);
+the claim rests on the emitted preload lists, which `preload-verify` checks
+on every build.
+
+**Why the folder registry lives in `folderRowMenu.ts`, not its own file.**
+The first cut put it in a new `components/Library/folderContextActions.ts`;
+that is one more file under `components/` calling `useApp.getState()` (in
+handlers — legitimate), which the getState file-count ratchet (pin 81) counts
+regardless. Moving it to `lib/` instead would have needed its
+`import("../components/Library/folderOps")` loader — a new `lib` →
+`components` edge the lib layering guard exists to stop, which its
+`from "…components/"` regex happens not to see for a dynamic import; relying
+on that blind spot would be evading the guard, not satisfying it. Its one
+real consumer, `folderRowMenu.ts`, already calls `getState()`, so the
+registry was folded in there (no pin moved; 187 lines).
+
+#### Guards and sabotage
+
+`architecture.test.ts`: the nine modules below that left or never joined the
+eager set are `DRAGGED_OUT` (each is still imported statically by lazy
+modules, so only reachability can hold them): `lib/report.ts`,
+`lib/shortcuts.ts`, `lib/panelLayout.ts`, `lib/multipanel.ts`,
+`lib/figureOverrides.ts`, `lib/templateKey.ts`,
+`components/Library/folderRowMenu.ts`, `lib/curveContextActions.ts`,
+`lib/quickPlotTemplatesSanitize.ts`.
+
+| sabotage | result |
+|---|---|
+| `store/removeDatasets.ts` imports `pruneReportRefs` from `lib/report` again, and `MenuBar.tsx` imports from `lib/shortcuts` again | RED — `DRAGGED_OUT` arm names `/lib/report.ts`, `/lib/shortcuts.ts` |
+| `lib/contextActions.ts` re-exports `curveActions` from the new module | RED — `DRAGGED_OUT` arm names `/lib/curveContextActions.ts` |
+
+Not guarded: code moving back INTO an eager module (e.g. the folder registry
+pasted back into `contextActions.ts`) is invisible to a reachability check;
+the bundle-size gate is what sees it. No test needed converting — nothing
+crosses a new async boundary, so there is no tick-counting blast radius; the
+four tests that imported a moved name (`contextActions.test.ts`,
+`quickPlotTemplates.test.ts`, `quickFigureRoles.test.ts`,
+`quickFigureSeriesX.test.ts`) now import it from its new module.
+
+#### Candidates found by the same scan, not taken
+
+Upper bounds from the per-declaration attribution, each a verbatim move of the
+same kind, not needed for the target: `lib/foldertree.ts` (~1.5 kB of
+lazy-only query/drop helpers; `parseFolders` shares helpers with the eager
+mutators, so it needs care), `lib/pipeline.ts` (~1.0 kB: `sanitizeSteps`,
+`validateExpression`, `pipelineToScript`), `lib/panelwindow.ts` (~1.3 kB:
+`buildOverlayPayload` and the panel-cell drag codec), `lib/barlayout.ts`
+(~1.0 kB), `lib/quickPlot.ts` (~0.9 kB of worksheet pickers),
+`lib/quickFigureMapping.ts` (~0.8 kB), `lib/desktopBridge.ts` (~0.8 kB of
+save helpers), `lib/columnmeta.ts` (~0.6 kB). Render seams considered and not
+built: `LibraryFocusBar` (renders only while a session-only focus is set, so
+never on first paint, but ~0.7 kB before chunk costs) and
+`LibraryExplorerControls` (on first paint for any non-empty Library —
+disqualified by the `PlotLegend` ruling). Command `description`/`keywords`
+strings are most of `commands/*.ts`'s bytes, but the ⌘K palette and Help
+search read them synchronously; not a candidate.
 
 ## What this does NOT change
 

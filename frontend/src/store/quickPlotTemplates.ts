@@ -35,6 +35,7 @@ import {
   type QuickPlotTemplateScope,
 } from "../lib/quickPlotTemplates";
 import { canCreateQuickFigure, type QuickFigureMapping } from "../lib/quickFigureMapping";
+import type { QuickFigureLook } from "../lib/quickFigureCommit";
 import type { QuickPlotStyle } from "../lib/quickFigurePreview";
 import { techniqueOf } from "../lib/techniqueDefaults";
 import { recordRecipeUse } from "./recordRecipeUse";
@@ -65,6 +66,7 @@ export interface QuickPlotTemplatesSlice {
     style: QuickPlotStyle,
     name: string,
     scope: QuickPlotTemplateScope,
+    look?: QuickFigureLook,
   ) => string | null;
   /** No-op for an unknown id or a blank/unchanged name (mirrors
    *  `renamePlotSpec`). A name collision with another template DEDUPES
@@ -95,7 +97,7 @@ export function createQuickPlotTemplatesSlice(set: SliceSet, get: SliceGet): Qui
   return {
     quickPlotTemplates: [],
 
-    saveQuickPlotTemplate: (datasetId, mapping, style, name, scope) => {
+    saveQuickPlotTemplate: (datasetId, mapping, style, name, scope, look) => {
       const state = get();
       const dataset = state.datasets.find((d) => d.id === datasetId);
       if (!dataset) {
@@ -122,6 +124,7 @@ export function createQuickPlotTemplatesSlice(set: SliceSet, get: SliceGet): Qui
         signature: buildQuickPlotTemplateSignature(dataset),
         mapping,
         style,
+        look,
         labels: captureQuickPlotTemplateLabels(dataset, mapping),
       };
       set((s) => ({ quickPlotTemplates: [...s.quickPlotTemplates, entry] }));
@@ -186,7 +189,7 @@ export function createQuickPlotTemplatesSlice(set: SliceSet, get: SliceGet): Qui
       }
       // The ONE canonical create path (G4) -- its own recordHistory is the
       // gesture's only history entry; this function adds none of its own.
-      const created = get().createQuickFigureFromMapping(dataset.id, resolution.mapping, template.style);
+      const created = get().createQuickFigureFromMapping(dataset.id, resolution.mapping, template.style, template.look);
       // P3.5 "recently used": only a figure that actually got created counts.
       // Every refusal above returns before this, and the create path can still
       // decline on its own (a gate this function does not re-check), so the

@@ -23,11 +23,12 @@
 //
 // No new dependency: this is ~100 lines of DOM, not a focus-trap package.
 
-import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from "react";
+import { useCallback, useEffect, useLayoutEffect, type RefObject } from "react";
 
 import { APP_ROOT_FOCUS_SELECTOR } from "../../lib/appRoot";
 import { isTopModal, registerModal, releaseModal } from "../../lib/modalInert";
 import { SCROLL_OUT_FOCUS_SELECTOR } from "../../lib/scrollOutFocus";
+import { useOpenerCapture } from "./openerCapture";
 
 // Deliberately NOT filtered by visibility/offsetParent. jsdom performs no
 // layout, so every element reports zero size and `offsetParent === null`; a
@@ -218,30 +219,10 @@ function restoreFocusTo(cameFrom: HTMLElement | null, root: HTMLElement | null):
   else focusSafeLanding();
 }
 
-/** Remember, during the RENDER that opens a surface, where focus came from.
- *
- *  Render time, not effect time, and R12 turned that from a subtlety into a
- *  requirement: `useFocusTrap`'s layout effect makes the background `inert`
- *  before any passive effect runs, and HTML's focus-fixup rule lets an engine
- *  blur a focused element under a newly inert ancestor (Chromium 141 measured
- *  not to), so an effect-time read could remember <body>. It was already
- *  necessary before that, because by effect time an `autoFocus` field
- *  (ParamDialog's first row) or a surface's own focus-on-mount has run and the
- *  read would name a node INSIDE the surface — i.e. no restore at all.
- *
- *  The read is idempotent (nothing has moved focus yet), so a StrictMode
- *  double render sees the same answer, and the `wasOpen` latch makes it
- *  once-per-open either way. Shared with ConfirmDialog, which keeps its own
- *  restore rules but must capture the opener by exactly this rule. */
-export function useOpenerCapture(open: boolean): RefObject<HTMLElement | null> {
-  const opener = useRef<HTMLElement | null>(null);
-  const wasOpen = useRef(false);
-  if (open !== wasOpen.current) {
-    wasOpen.current = open;
-    if (open) opener.current = document.activeElement as HTMLElement | null;
-  }
-  return opener;
-}
+// `useOpenerCapture` (render-time opener read) lives in the leaf
+// `./openerCapture.ts` so the EAGER CommandPalette can share it without
+// pulling this lazy seam into the entry chunk (R2); re-exported for importers.
+export { useOpenerCapture };
 
 /** Remember where focus came FROM when `open` goes true, and give it back
  *  when the surface closes or unmounts. Shared by `useDialogFocus` and by

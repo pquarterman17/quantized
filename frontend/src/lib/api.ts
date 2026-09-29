@@ -233,8 +233,8 @@ export function exportConsolidated(body: {
   datasets: { dataset: DataStruct; name: string }[];
   fmt?: string;
   filename?: string;
-}): Promise<void> {
-  return postDownload("/api/export/consolidated", body, "consolidated.csv");
+}, signal?: AbortSignal): Promise<void> {
+  return postDownload("/api/export/consolidated", body, "consolidated.csv", signal);
 }
 
 // ── Peak integration (#32) ──────────────────────────────────────────────────

@@ -16,6 +16,8 @@ import {
 } from "./folderOps";
 import { applyCorrections as applyCorrectionsApi, exportConsolidated, fitModel, reportEmit } from "../../lib/api";
 import type { Dataset, DataStruct, FolderNode } from "../../lib/types";
+import { usePendingOps } from "../../store/pendingOps";
+import { useToasts } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 import { askParams } from "../overlays/ParamDialog";
 
@@ -90,7 +92,7 @@ describe("exportFolderCsv", () => {
         { dataset: raw, name: "d1.dat" },
       ],
       filename: "My_Group.csv",
-    });
+       }, expect.any(AbortSignal));
   });
 
   it("is a no-op on an empty folder", async () => {
@@ -192,12 +194,34 @@ describe("exportDatasets (shared export core, GUI_INTERACTION_PLAN #13 sub-item 
         { dataset: raw, name: "d3.dat" },
       ],
       filename: "selection-2.csv",
-    });
+       }, expect.any(AbortSignal));
   });
 
   it("is a no-op on an empty id list", async () => {
     await exportDatasets([], "empty.csv", "");
     expect(exportConsolidated).not.toHaveBeenCalled();
+  });
+
+  // P3.4: consolidated CSV export is a StatusBar op with a Cancel; a
+  // cancelled one saves nothing and raises no error toast.
+  it("registers a cancellable op; Cancel aborts the request with no error toast", async () => {
+    usePendingOps.setState({ ops: [] });
+    useToasts.setState({ toasts: [] });
+    useApp.setState({ status: "" });
+    let inFlight: AbortSignal | undefined;
+    vi.mocked(exportConsolidated).mockImplementationOnce((_body, signal) => {
+      inFlight = signal;
+      return new Promise((_, reject) => signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+    });
+    const p = exportDatasets(["d1", "d3"], "selection-2.csv", "");
+    await vi.waitFor(() => expect(inFlight).toBeDefined());
+    expect(usePendingOps.getState().ops.map((o) => o.label)).toEqual(["Exporting 2 datasets…"]);
+    usePendingOps.getState().ops[0].cancel?.();
+    await p;
+    expect(inFlight?.aborted).toBe(true);
+    expect(useApp.getState().status).toBe("export cancelled");
+    expect(useToasts.getState().toasts).toEqual([]);
+    expect(usePendingOps.getState().ops).toEqual([]);
   });
 });
 

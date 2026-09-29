@@ -17,6 +17,7 @@ import { loadCustomModels } from "../../../lib/fitmodels";
 import { scanFitModelsJob } from "../../../lib/fitscan";
 import { cancelJob, pollJob, JobCancelledError } from "../../../lib/jobs";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { trackJob } from "../../../store/pendingOps";
 import { toast } from "../../../store/toasts";
 import { selectedFitData } from "../../../lib/fitselection";
 
@@ -57,6 +58,9 @@ export function useModelScan(): ModelScanState {
     setError(null);
     setProgress(0);
     setProgressMessage(null);
+    // P3.4: the scan is one op in the shared StatusBar location (percent +
+    // Cancel once the job exists), not only this section's own bar.
+    const op = trackJob("Fit model scan");
     try {
       // Resolve a still-pending dataset first (#38), then scan the plotted
       // X/primary-Y over the analysis view (#50/#53) — the same channels + rows
@@ -84,9 +88,11 @@ export function useModelScan(): ModelScanState {
         ...(equations.length > 0 ? { equations } : {}),
       });
       jobRef.current = job_id;
+      op.cancellable(() => void cancel());
       const r = await pollJob<ScanJobResult>(job_id, (f, m) => {
         setProgress(f);
         setProgressMessage(m);
+        op.progress(f, m);
       });
       setResults(r.results);
     } catch (e) {
@@ -95,6 +101,7 @@ export function useModelScan(): ModelScanState {
       }
       // a deliberate cancel is not an error — the prior results (if any) stay
     } finally {
+      op.end();
       jobRef.current = null;
       setBusy(false);
       setProgress(null);

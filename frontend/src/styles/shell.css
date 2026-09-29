@@ -1158,6 +1158,13 @@ body {
 .qzk-quick-builder-preview .qzk-graph-preview { flex: 1; min-height: 280px; height: auto; margin-top: 12px; }
 .qzk-quick-builder-preview-summary { margin-top: 10px !important; font-family: var(--font-mono); font-size: var(--type-nano); }
 .qzk-quick-builder-field { display: grid; gap: 5px; margin-top: 18px; color: var(--text-faint); font-size: var(--type-small); }
+/* "Right -- concise setup" panel (QuickFigureSetupPanel.tsx): two compact columns. */
+.qzk-quick-setup-series { margin-top: 12px; color: var(--text-faint); font-size: var(--type-small); }
+.qzk-quick-setup-series ul { margin: 4px 0 0; padding-left: 16px; color: var(--text); }
+.qzk-quick-setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; margin-top: 6px; }
+.qzk-quick-setup-grid .qzk-quick-builder-field { margin-top: 0; }
+.qzk-quick-setup-checks { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: flex-end; }
+.qzk-quick-setup-check { display: flex; gap: 6px; align-items: center; color: var(--text-dim); font-size: var(--type-small); }
 .qzk-quick-builder-facts { margin: 18px 0 24px; }
 .qzk-quick-builder-facts div { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--border-soft); }
 .qzk-quick-builder-facts dt { color: var(--text-faint); }

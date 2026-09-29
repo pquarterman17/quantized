@@ -98,9 +98,57 @@ describe("stored curves", () => {
     const out = curveDatasets(rec.curves!, rec, [d], { weighting: "dr", radiation: "xray" });
     expect(out.map((c) => c.name)).toEqual(["film.refl — refl fit #1 model", "film.refl — refl fit #1 SLD"]);
     expect(out[0].placement).toEqual({ workbookId: "wb-1" });
-    expect(out[0].data.values).toEqual([[1, 0.9], [0.5, 0.4], [0.2, 0.1]]);
+    expect(out[0].data.values).toEqual([[1, 0.9, -10], [0.5, 0.4, -10], [0.2, 0.1, -10]]);
     expect(out[0].data.metadata).toMatchObject({ reflFit: { fitId: rec.id, seq: 1, sourceIds: ["xrr"] } });
     expect(out[0].data.metadata).not.toHaveProperty("decimated");
+  });
+});
+
+describe("stored residuals (P2.2)", () => {
+  it("are stored beside the model, thinned on the same points, and survive save -> reopen", () => {
+    const res = fitResponse({
+      curves: [{ label: "c", spin: null, q: [1, 2, 3, 4, 5], r: [5, 4, 3, 2, 1], dr: [1, 1, 1, 1, 1], model: [5, 4, 3, 2, 1], residual: [0.5, 1, Number.NaN, 2, null] }],
+    });
+    expect(savedCurves(res, 3).channels[0].residual).toEqual([0.5, Number.NaN, null]);
+    const d = xrrDataset("xrr");
+    const rec = { ...fittedRecord(d), curves: savedCurves(res) };
+    const [reopened] = parseWorkspace(serializeWorkspace({ datasets: withFitRecord([d], rec) })).datasets;
+    const back = recordsFor(reopened)[0].curves!.channels[0].residual!;
+    expect(back.slice(0, 2)).toEqual([0.5, 1]);
+    expect(back[2]).toBeNaN();
+    expect(back.slice(3)).toEqual([2, null]);
+  });
+
+  it("a residual array that does not match its points is not stored, and a bad stored one costs only itself", () => {
+    const res = fitResponse();
+    res.curves[0].residual = [1];
+    expect(savedCurves(res).channels[0]).not.toHaveProperty("residual");
+    const stored = encodeRecord(fittedRecord(xrrDataset("xrr"))) as { curves: { channels: { residual: unknown }[] } };
+    for (const bad of [[1, 2], "residuals", { 0: 1 }]) {
+      stored.curves.channels[0].residual = bad;
+      const back = decodeRecord(stored)!;
+      expect(back.curves!.channels[0].model).toEqual([0.9, 0.4, 0.1]);
+      expect(back.curves!.channels[0]).not.toHaveProperty("residual");
+    }
+  });
+
+  it("add a residual column to the fit-curve dataset, in the unit of the fit's weighting", () => {
+    const d = xrrDataset("xrr");
+    const [model] = curveDatasets(fittedRecord(d).curves!, null, [d], { weighting: "dr", radiation: "xray" });
+    expect(model.data.labels).toEqual(["R", "R fit", "residual"]);
+    expect(model.data.units).toEqual(["", "", "σ"]);
+    expect(model.data.metadata).toMatchObject({ residual: "(R fit − R) / dR" });
+  });
+
+  it("a saved log fit from before residuals were stored gets them recomputed; a dR one keeps two columns", () => {
+    const d = xrrDataset("xrr");
+    const { residual: _r, ...legacy } = fittedRecord(d).curves!.channels[0];
+    const curves = { channels: [legacy], sld: [] };
+    const [log] = curveDatasets(curves, null, [d], { weighting: "log", radiation: "xray" });
+    expect(log.data.units[2]).toBe("dex");
+    expect(log.data.values[0][2]).toBeCloseTo(Math.log10(0.9), 15);
+    const [dr] = curveDatasets(curves, null, [d], { weighting: "dr", radiation: "xray" });
+    expect(dr.data.labels).toEqual(["R", "R fit"]);
   });
 });
 

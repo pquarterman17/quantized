@@ -33,6 +33,7 @@
 // -- they ride along in the SAME undo unit for free, because `undo()`
 // simply restores the snapshot taken before the first (only) recordHistory
 // call, regardless of how many plain `set()`s followed it.
+import type { ErrorBinding } from "../lib/errorRoles";
 import { createFigureDocument } from "../lib/figureDocument";
 import { dedupeWindowTitle } from "../lib/plotview";
 import { quickPlotAvailability, quickPlotFigureSeed } from "../lib/quickPlot";
@@ -50,13 +51,15 @@ export interface QuickPlotActionSlice {
    *  new document or window) when the dataset is missing or unrecognized --
    *  see lib/quickPlot.ts's quickPlotAvailability for the exact gate.
    *  Callers gate a stage-return (`onStageOpen`) on the return value: a
-   *  refused Quick Plot has nothing to return TO. */
-  quickPlotDataset: (datasetId: string) => boolean;
+   *  refused Quick Plot has nothing to return TO. `withhold` lists seeded
+   *  error pairings to leave out -- ALREADY decided by the caller; the menu
+   *  path (store/quickPlotRun.ts) asks the user before calling this. */
+  quickPlotDataset: (datasetId: string, withhold?: readonly ErrorBinding[]) => boolean;
 }
 
 export function createQuickPlotActionSlice(set: SliceSet, get: SliceGet): QuickPlotActionSlice {
   return {
-    quickPlotDataset: (datasetId) => {
+    quickPlotDataset: (datasetId, withhold) => {
       const state = get();
       const dataset = state.datasets.find((d) => d.id === datasetId);
       if (!dataset) {
@@ -68,7 +71,7 @@ export function createQuickPlotActionSlice(set: SliceSet, get: SliceGet): QuickP
         set({ status: `Quick Plot unavailable for "${dataset.name}": ${availability.reason}` });
         return false;
       }
-      const seed = quickPlotFigureSeed(dataset, state.techniqueViewMemory);
+      const seed = quickPlotFigureSeed(dataset, state.techniqueViewMemory, withhold);
       const name = dedupeWindowTitle(seed.name, state.editableFigures.map((f) => f.name));
       const windowId = state.createWindow(dataset.id, seed.view, name); // the gesture's one recordHistory
       const id = nextFigureId();

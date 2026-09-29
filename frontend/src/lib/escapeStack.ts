@@ -28,17 +28,16 @@
 // deselect listeners, the two Shell menus — so "innermost claims it, exactly
 // once" is a property of one ordered walk instead of of listener phase.
 //
-// THE TWO DOCUMENTED EXCEPTIONS. Both claim by `preventDefault()` before this
-// dispatcher runs, and both are correct there:
-//  - `SymbolPalette` — a popover opened FROM a text field, which has to keep
-//    owning Escape while focus is still IN that field. `isEditingTarget`
-//    below deliberately gives that state to the field, so the palette cannot
-//    be expressed as a surface here.
-//  - `usePeakWizard`'s marker-edit pause — a window-bubble claim from inside
-//    its own `ToolWindow`, mounted only while there is something to pause.
-// Each is conditional on its own surface being present, so neither can swallow
-// an Escape that nothing wanted. Residual R11 records the focus gap in the
-// second.
+// THE ONE DOCUMENTED EXCEPTION. `SymbolPalette` claims by `preventDefault()`
+// before this dispatcher runs, and is correct there: a popover opened FROM a
+// text field has to keep owning Escape while focus is still IN that field.
+// `isEditingTarget` below deliberately gives that state to the field, so the
+// palette cannot be expressed as a surface here. It is conditional on its own
+// surface being present, so it cannot swallow an Escape that nothing wanted.
+// (`usePeakWizard`'s marker-edit pause was the second exception until residual
+// R11 closed: its window-bubble claim ignored focus and out-ranked an open
+// menu. It is now a `window` surface scoped to its own frame plus a
+// `selection` surface for focus outside every window — usePeakCandidates.ts.)
 //
 // HOW IT DISPATCHES. One listener, on `window` in the BUBBLE phase, i.e. the
 // very last stop on the propagation path. Everything that already owns Escape
@@ -52,9 +51,10 @@
 // The walk is then deferred ONE MACROTASK and re-reads `defaultPrevented`,
 // which is a live property of the event. That is round 2's finding-2 fix, kept
 // verbatim: a consumer that claims the key with `preventDefault()` wins over
-// the whole stack whatever order it registered in — `usePeakWizard` registers
-// its listener when the wizard reaches step ②, long after the hosting window
-// mounted, so registration order could never have fixed it. A microtask would
+// the whole stack whatever order it registered in — pre-R11, `usePeakWizard`
+// registered its listener when the wizard reached step ②, long after the
+// hosting window mounted, so registration order could never have fixed it.
+// (`SymbolPalette` is the claimant that still relies on this.) A microtask would
 // not do: the spec runs a microtask checkpoint between listeners, so it can
 // land mid-dispatch. That deferred re-read is now the ONLY `defaultPrevented`
 // gate (review NIT 10): the synchronous copy could fire only for a
@@ -163,8 +163,8 @@ const LAYER_RANK: Record<EscapeLayer, number> = {
  *     below rather than making Escape dead app-wide (round 9 review);
  *   - its claim is resolved SYNCHRONOUSLY at keydown and marks the event with
  *     `preventDefault()`, so any listener that honours `defaultPrevented` and
- *     runs after this dispatcher stands down. `usePeakWizard`'s marker-edit
- *     pause is the one in the tree, and it does honour it.
+ *     runs after this dispatcher stands down. (`usePeakWizard`'s marker-edit
+ *     pause was the one in the tree; since R11 it is a surface here instead.)
  *  WHAT IT DOES NOT:
  *   - it cannot stop a listener that ignores `defaultPrevented`, and it cannot
  *     stop one that claims BEFORE this dispatcher runs — a window-capture or
@@ -359,8 +359,8 @@ function onKeyDown(event: KeyboardEvent): void {
   // Resolve the layers that cannot wait, NOW, inside the keydown listener.
   // Only surfaces ABOVE the first non-synchronous one can be offered the key
   // here: a `menu` outranks a drag, and asking a menu synchronously would
-  // defeat the deferral that the two documented `preventDefault()` claimants
-  // rely on. So the scan stops at the first entry that does not resolve here,
+  // defeat the deferral that a documented `preventDefault()` claimant
+  // relies on. So the scan stops at the first entry that does not resolve here,
   // and everything from there down goes to the walk.
   //
   // Which layers those are depends on whether a modal is the claimant. With
@@ -389,8 +389,8 @@ function onKeyDown(event: KeyboardEvent): void {
       // (round 6, finding 1). Returning without this left the key un-marked
       // for the rest of the propagation path, so a window-bubble consumer
       // registered after the dispatcher — `usePeakWizard`'s marker-edit pause
-      // is the one in the tree — still acted on it: measured, one Escape with
-      // a live drag and the Peak Analyzer at step ② cancelled the drag AND
+      // was the one in the tree until R11 — still acted on it: measured, one
+      // Escape with a live drag and the Peak Analyzer at step ② cancelled the drag AND
       // paused the marker edit. Two actions, one key.
       event.preventDefault();
       // Nothing below may run for this key, and a walk armed by an earlier

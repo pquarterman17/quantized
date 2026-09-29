@@ -48,19 +48,30 @@
 //
 // SCOPE, honestly: xy marks only, and not while faceted (facet panels render
 // through `facetPayloads`, which splits nothing — the same limit Group has
-// there). The editable Stage plot does not carry these encodings yet; the Graph
-// Builder previews and exports them (see useGraphBuilder).
+// there). Applying the graph stores the picks on the plot window's document
+// (`FigureBindings.encoding`, lib/plotEncodingBinding.ts); the editable Stage
+// draws them through `encodedSplit` / `applyEncodedSplit` / `encodedNames` /
+// `encodedStyle` below (Stage/usePlotEncoding.ts), the SAME functions
+// `buildEncodedXY` and `encodedStyles` are made of, over its own fetched
+// columns. The gate is `plotEncodingBinding.resolveFigureEncoding`, shared.
 //
-// LAZY-ONLY on purpose: imported by the Graph Builder workshop, never by
-// lib/plotspec.ts, which sits in the eager graph (figureDocument.ts imports it).
+// LAZY-ONLY on purpose: imported by the Graph Builder workshop and, through a
+// dynamic import, by the Stage — never by lib/plotspec.ts, which sits in the
+// eager graph (figureDocument.ts imports it).
 
 import { categoryLevels, groupLevelLabel, levelOrderFor, levelsOf, orderLevels } from "./categorical";
 import { buildErrorSpans, type ErrorSpan } from "./errorbars";
 import type { ErrorBinding } from "./errorRoles";
 import { seriesDisplayLabel } from "./figureSpecSeries";
-import { channelModelingType, isCategorical } from "./modeling";
 import { spatialCellStyling } from "./multipanel";
 import { buildColumns, type PlotPayload } from "./plotdata";
+import {
+  encodingSplits,
+  isEncodingFactor,
+  resolveFigureEncoding,
+  type Encoding,
+  type FigureEncoding,
+} from "./plotEncodingBinding";
 import {
   markSeriesStyle,
   specDatasetId,
@@ -78,13 +89,7 @@ import type { DataStruct, Dataset, SeriesStyle } from "./types";
  *  form — `calc.plotting_encoded.LABEL_LIST_MAX`. */
 export const LABEL_LIST_MAX = 3;
 
-/** The resolved encoding factors (value-channel indices), after gating. */
-export interface Encoding {
-  group: number | null;
-  color: number | null;
-  symbol: number | null;
-  label: number | null;
-}
+export { isEncodingFactor, type Encoding };
 
 /** One encoded series, 1:1 with the payload's series. */
 export interface EncodedSeries {
@@ -118,24 +123,30 @@ export interface EncodedSpec {
   errors: ErrorBinding[];
 }
 
-/** Can `channel` drive Color-by / Symbol-by on `ds`? A value channel that the
- *  modeling chokepoint reads as categorical (nominal or ordinal). */
-export function isEncodingFactor(ds: Dataset, channel: number): boolean {
-  return channel >= 0 && channel < ds.data.labels.length && isCategorical(channelModelingType(ds, channel));
+/** The spec's encoding picks as the plot window's document stores them
+ *  (`FigureBindings.encoding`) — raw channel indices, ungated (the gate runs at
+ *  render time) — or undefined when the spec sets none. */
+export function specFigureEncoding(spec: PlotSpec): FigureEncoding | undefined {
+  const { color, symbol, label } = spec.zones;
+  if (!color && !symbol && !label) return undefined;
+  return {
+    ...(color ? { color: color.channel } : {}),
+    ...(symbol ? { symbol: symbol.channel } : {}),
+    ...(label ? { label: label.channel } : {}),
+  };
 }
 
 /** The spec's encoding against `ds`, gated (see the module doc), or null when
  *  no colour / symbol / label encoding survives — the ordinary render path. */
 export function resolveEncoding(spec: PlotSpec, ds: Dataset): Encoding | null {
-  const own = (r: ChannelRef | null | undefined): number | null =>
-    r && r.datasetId === ds.id && r.channel >= 0 && r.channel < ds.data.labels.length ? r.channel : null;
-  const factor = (r: ChannelRef | null | undefined): number | null => {
-    const c = own(r);
-    return c !== null && isEncodingFactor(ds, c) ? c : null;
-  };
+  const own = (r: ChannelRef | null | undefined): number | undefined =>
+    r && r.datasetId === ds.id ? r.channel : undefined;
   const z = spec.zones;
-  const enc = { group: own(z.group), color: factor(z.color), symbol: factor(z.symbol), label: own(z.label) };
-  return enc.color === null && enc.symbol === null && enc.label === null ? null : enc;
+  return resolveFigureEncoding(
+    { color: own(z.color), symbol: own(z.symbol), label: own(z.label) },
+    ds,
+    own(z.group) ?? null,
+  );
 }
 
 function channelLabel(data: DataStruct, channel: number): string {
@@ -162,14 +173,31 @@ function compareKeys(a: readonly number[], b: readonly number[]): number {
   return 0;
 }
 
-/** Split `yChannels` by the encoding factors — the pure core `encodeSpec` and
+/** One (Y channel, level combination) cell of the split, 1:1 with the series. */
+interface SplitCell {
+  /** Index into `EncodedSplit.yChannels` (so a payload column), not a channel. */
+  y: number;
+  /** The combination's rows, ascending — shared by every Y channel's cell. */
+  rows: readonly number[];
+  /** "factor=level, …" (empty with no factor) and the label-source text. */
+  parts: string;
+  text: string | null;
+  colorLevel: number | null;
+  symbolLevel: number | null;
+}
+
+/** The split's STRUCTURE — which rows each series draws and its levels — with
+ *  no names yet (see `encodedNames`), so a caller that renames channels does
+ *  not recompute it. */
+export interface EncodedSplit {
+  yChannels: readonly number[];
+  cells: readonly SplitCell[];
+}
+
+/** Split `yChannels` by the encoding factors — the pure core
+ *  `buildEncodedXY`, the Stage (`Stage/usePlotEncoding`) and
  *  `calc.plotting_encoded.build_encoded_series` share (see the module doc). */
-export function buildEncodedXY(
-  data: DataStruct,
-  xKey: number | null,
-  yChannels: readonly number[],
-  enc: Encoding,
-): { payload: PlotPayload; series: EncodedSeries[] } {
+export function encodedSplit(data: DataStruct, yChannels: readonly number[], enc: Encoding): EncodedSplit {
   const factors: number[] = [];
   for (const c of [enc.group, enc.color, enc.symbol]) if (c !== null && !factors.includes(c)) factors.push(c);
   const levels = factors.map((f) => categoryLevels(data, f));
@@ -190,46 +218,111 @@ export function buildEncodedXY(
   });
   const combos = [...byKey.values()].sort((a, b) => compareKeys(a.key, b.key));
   const texts = combos.map((c) => (enc.label === null ? null : legendSourceText(data, enc.label, c.rows)));
+  const parts = combos.map(({ key }) =>
+    factors.map((f, k) => `${channelLabel(data, f)}=${groupLevelLabel(data, f, levels[k][key[k]])}`).join(", "),
+  );
   const colorAt = enc.color === null ? -1 : factors.indexOf(enc.color);
   const symbolAt = enc.symbol === null ? -1 : factors.indexOf(enc.symbol);
-
-  // The x column and its axis label, exactly as every other xy payload builds them.
-  const base = buildColumns(data, null, xKey, []);
-  const cols: (number | null)[][] = [base.data[0] as (number | null)[]];
-  const out: PlotPayload["series"] = [];
-  const series: EncodedSeries[] = [];
-  for (const yc of yChannels) {
-    const yLabel = channelLabel(data, yc);
-    combos.forEach(({ key, rows }, ci) => {
-      const col: (number | null)[] = new Array<number | null>(data.time.length).fill(null);
-      for (const r of rows) if (Number.isFinite(data.values[r][yc])) col[r] = data.values[r][yc];
-      cols.push(col);
-      const parts = factors.map((f, k) => `${channelLabel(data, f)}=${groupLevelLabel(data, f, levels[k][key[k]])}`);
-      out.push({ label: parts.length ? `${yLabel} (${parts.join(", ")})` : yLabel, unit: data.units[yc] ?? "", axis: 0 });
-      const text = texts[ci];
-      series.push({
-        channel: yc,
+  const cells: SplitCell[] = [];
+  yChannels.forEach((_, y) =>
+    combos.forEach(({ key, rows }, ci) =>
+      cells.push({
+        y,
+        rows,
+        parts: parts[ci],
+        text: texts[ci],
         colorLevel: colorAt < 0 ? null : key[colorAt],
         symbolLevel: symbolAt < 0 ? null : key[symbolAt],
-        legend: text === null ? undefined : yChannels.length > 1 ? `${yLabel} (${text})` : text,
-      });
-    });
-  }
-  return { payload: { ...base, data: cols as PlotPayload["data"], series: out }, series };
+      }),
+    ),
+  );
+  return { yChannels, cells };
 }
 
-/** Each encoded series' EFFECTIVE style: the mark's own translation
- *  (`markSeriesStyle`) plus the level's palette token and, for a symbol
+/** Each split series' name and encoding. `yLegends` is BUG-014's per-Y-channel
+ *  rename (aligned with `yChannels`): it replaces the channel label in both the
+ *  default name and the multi-channel legend prefix, exactly as
+ *  `calc.plotting_encoded.build_encoded_series`'s `y_legends` does. */
+export function encodedNames(
+  data: DataStruct,
+  split: EncodedSplit,
+  yLegends?: readonly (string | undefined)[],
+): { specs: PlotPayload["series"]; series: EncodedSeries[] } {
+  const { yChannels } = split;
+  const specs: PlotPayload["series"] = [];
+  const series: EncodedSeries[] = [];
+  for (const cell of split.cells) {
+    const yc = yChannels[cell.y];
+    const yLabel = yLegends?.[cell.y] ?? channelLabel(data, yc);
+    specs.push({ label: cell.parts ? `${yLabel} (${cell.parts})` : yLabel, unit: data.units[yc] ?? "", axis: 0 });
+    series.push({
+      channel: yc,
+      colorLevel: cell.colorLevel,
+      symbolLevel: cell.symbolLevel,
+      legend: cell.text === null ? undefined : yChannels.length > 1 ? `${yLabel} (${cell.text})` : cell.text,
+    });
+  }
+  return { specs, series };
+}
+
+/** Lay `split` over `base` — an x column plus one ROW-ALIGNED column per
+ *  `split.yChannels` entry, in that order (`buildColumns`' own shape, and the
+ *  Stage's never-decimated fetch) — keeping its x column and axis labels. */
+export function applyEncodedSplit(
+  base: PlotPayload,
+  split: EncodedSplit,
+  specs: PlotPayload["series"],
+): PlotPayload {
+  const [x, ...ys] = base.data as (number | null)[][];
+  const cols: (number | null)[][] = [x];
+  for (const cell of split.cells) {
+    const src = ys[cell.y] ?? [];
+    const col: (number | null)[] = new Array<number | null>(x.length).fill(null);
+    for (const r of cell.rows) {
+      const v = src[r];
+      if (v !== null && v !== undefined && Number.isFinite(v)) col[r] = v;
+    }
+    cols.push(col);
+  }
+  return { ...base, data: cols as PlotPayload["data"], series: specs };
+}
+
+/** Split `yChannels` by the encoding factors into a drawable payload — the
+ *  Graph Builder preview's and the export's form of the split. */
+export function buildEncodedXY(
+  data: DataStruct,
+  xKey: number | null,
+  yChannels: readonly number[],
+  enc: Encoding,
+  yLegends?: readonly (string | undefined)[],
+): { payload: PlotPayload; series: EncodedSeries[] } {
+  const split = encodedSplit(data, yChannels, enc);
+  const { specs, series } = encodedNames(data, split, yLegends);
+  // The x column and its axis label, exactly as every other xy payload builds them.
+  return { payload: applyEncodedSplit(buildColumns(data, null, xKey, [...yChannels]), split, specs), series };
+}
+
+/** One encoded series' EFFECTIVE style over `base`: the level's palette token
+ *  when a colour factor is set (overriding any base colour), else the base
+ *  colour, else the series' display-position token — `seriesColor`'s own rule,
+ *  and `calc.plotting_encoded.encoded_series_styles`' — and, for a symbol
  *  factor, markers on with the level's glyph. */
-export function encodedStyles(spec: PlotSpec, series: readonly EncodedSeries[]): SeriesStyle[] {
-  const base = markSeriesStyle(spec);
-  return series.map((s, i) => ({
+export function encodedStyle(base: SeriesStyle | undefined, s: EncodedSeries, i: number): SeriesStyle {
+  const n = SERIES_VARS.length;
+  return {
     ...base,
-    color: SERIES_VARS[(s.colorLevel ?? i) % SERIES_VARS.length],
+    color: s.colorLevel !== null ? SERIES_VARS[s.colorLevel % n] : (base?.color ?? SERIES_VARS[i % n]),
     ...(s.symbolLevel !== null
       ? { marker: true, markerShape: AUTO_MARKER_CYCLE[s.symbolLevel % AUTO_MARKER_CYCLE.length] }
       : {}),
-  }));
+  };
+}
+
+/** The Graph Builder's styles: `encodedStyle` over the mark's own translation
+ *  (`markSeriesStyle`), which sets no colour. */
+export function encodedStyles(spec: PlotSpec, series: readonly EncodedSeries[]): SeriesStyle[] {
+  const base = markSeriesStyle(spec);
+  return series.map((s, i) => encodedStyle(base, s, i));
 }
 
 /** THE derivation (see the module doc), or null when the spec renders through
@@ -247,7 +340,7 @@ export function encodeSpec(spec: PlotSpec, datasets: readonly Dataset[]): Encode
   const yChannels = spec.zones.y.map((r) => r.channel);
   const { payload, series } = buildEncodedXY(data, xKey, yChannels, enc);
   const styles = encodedStyles(spec, series);
-  const split = enc.group !== null || enc.color !== null || enc.symbol !== null;
+  const split = encodingSplits(enc);
   // The existing legend-entry builder, keyed by DISPLAY POSITION: each encoded
   // series is its own "channel" here, so the entry carries exactly the style
   // the preview canvas draws it with (no cycle — the encoding already chose).
