@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/aggregate/confidence-band": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confidence Band Route
+         * @description Pointwise spread band across N datasets (utilities.confidenceBand).
+         */
+        post: operations["confidence_band_route_api_aggregate_confidence_band_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/baseline/als": {
         parameters: {
             query?: never;
@@ -1237,6 +1257,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/bands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bands
+         * @description Confidence and prediction bands around a fitted curve (fitting.fitBands).
+         */
+        post: operations["bands_api_fitting_bands_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/bootstrap": {
         parameters: {
             query?: never;
@@ -1271,6 +1311,50 @@ export interface paths {
          * @description Fit a registry model with a bumps engine (sync) or queue a DREAM job.
          */
         post: operations["bumps_fit_api_fitting_bumps_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare
+         * @description Fit two or more models to one selection and compare them.
+         *
+         *     Per-candidate fit failures come back as ``error`` entries (curated fit
+         *     diagnostics, as for ``/scan`` -- see SECURITY.md); only invalid input is
+         *     a 422.
+         */
+        post: operations["compare_api_fitting_compare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Diagnostics
+         * @description Goodness-of-fit metrics and residual diagnostics for one fit.
+         */
+        post: operations["diagnostics_api_fitting_diagnostics_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1376,6 +1460,26 @@ export interface paths {
         get: operations["list_models_api_fitting_models_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/odr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Odr
+         * @description Orthogonal distance (Deming) straight-line fit, errors in x and y.
+         */
+        post: operations["odr_api_fitting_odr_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5324,6 +5428,28 @@ export interface components {
             /** Tpr */
             tpr: number[];
         };
+        /** BandsRequest */
+        BandsRequest: {
+            /** Covar */
+            covar?: number[][] | null;
+            /** Dof */
+            dof: number;
+            /** Equation */
+            equation?: string | null;
+            /**
+             * Level
+             * @default 0.95
+             */
+            level?: number;
+            /** Model */
+            model?: string | null;
+            /** N Points */
+            n_points: number;
+            /** Params */
+            params: number[];
+            /** X */
+            x: number[];
+        };
         /** BatchIntegrateRequest */
         BatchIntegrateRequest: {
             /**
@@ -5900,10 +6026,54 @@ export interface components {
             /** Xi0 */
             xi0?: number | null;
         };
+        /** CompareEquation */
+        CompareEquation: {
+            /** Equation */
+            equation: string;
+            /** Guesses */
+            guesses?: number[] | null;
+            /** Name */
+            name: string;
+        };
+        /** CompareRequest */
+        CompareRequest: {
+            /** Equations */
+            equations?: components["schemas"]["CompareEquation"][] | null;
+            /** Models */
+            models?: string[] | null;
+            /** Reference */
+            reference?: string | null;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** ConductivityRequest */
         ConductivityRequest: {
             /** Rho */
             rho: number;
+        };
+        /** ConfidenceBandRequest */
+        ConfidenceBandRequest: {
+            /**
+             * Channel
+             * @default 0
+             */
+            channel?: number;
+            /** Datasets */
+            datasets: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Method
+             * @default mean
+             */
+            method?: string;
+            /**
+             * N Points
+             * @default 0
+             */
+            n_points?: number;
         };
         /** ConsolidatedItem */
         ConsolidatedItem: {
@@ -6373,6 +6543,15 @@ export interface components {
         DescriptiveRequest: {
             /** X */
             x: number[];
+        };
+        /** DiagnosticsRequest */
+        DiagnosticsRequest: {
+            /** N Params */
+            n_params: number;
+            /** Residuals */
+            residuals: number[];
+            /** Y */
+            y: number[];
         };
         /** DielectricToRefractiveRequest */
         DielectricToRefractiveRequest: {
@@ -7867,6 +8046,22 @@ export interface components {
             quantity: string;
             /** Value */
             value: number;
+        };
+        /** OdrRequest */
+        OdrRequest: {
+            /**
+             * Lambda
+             * @default 1
+             */
+            lambda?: number;
+            /** X */
+            x: number[];
+            /** X Error */
+            x_error?: number[] | null;
+            /** Y */
+            y: number[];
+            /** Y Error */
+            y_error?: number[] | null;
         };
         /** OhmicDropRequest */
         OhmicDropRequest: {
@@ -10179,6 +10374,41 @@ export interface operations {
             };
         };
     };
+    confidence_band_route_api_aggregate_confidence_band_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfidenceBandRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     als_api_baseline_als_post: {
         parameters: {
             query?: never;
@@ -12121,6 +12351,41 @@ export interface operations {
             };
         };
     };
+    bands_api_fitting_bands_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BandsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     bootstrap_api_fitting_bootstrap_post: {
         parameters: {
             query?: never;
@@ -12166,6 +12431,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["BumpsFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_api_fitting_compare_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompareRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    diagnostics_api_fitting_diagnostics_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiagnosticsRequest"];
             };
         };
         responses: {
@@ -12347,6 +12682,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    odr_api_fitting_odr_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OdrRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

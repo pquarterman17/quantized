@@ -363,6 +363,86 @@
         "title": "AucRequest",
         "type": "object"
       },
+      "BandsRequest": {
+        "properties": {
+          "covar": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Covar"
+          },
+          "dof": {
+            "title": "Dof",
+            "type": "integer"
+          },
+          "equation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equation"
+          },
+          "level": {
+            "default": 0.95,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Level",
+            "type": "number"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "n_points": {
+            "title": "N Points",
+            "type": "integer"
+          },
+          "params": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Params",
+            "type": "array"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          }
+        },
+        "required": [
+          "params",
+          "x",
+          "n_points",
+          "dof"
+        ],
+        "title": "BandsRequest",
+        "type": "object"
+      },
       "BatchIntegrateRequest": {
         "properties": {
           "align": {
@@ -1897,6 +1977,101 @@
         "title": "CoherenceRequest",
         "type": "object"
       },
+      "CompareEquation": {
+        "properties": {
+          "equation": {
+            "title": "Equation",
+            "type": "string"
+          },
+          "guesses": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guesses"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "equation"
+        ],
+        "title": "CompareEquation",
+        "type": "object"
+      },
+      "CompareRequest": {
+        "properties": {
+          "equations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CompareEquation"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equations"
+          },
+          "models": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Models"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "CompareRequest",
+        "type": "object"
+      },
       "ConductivityRequest": {
         "properties": {
           "rho": {
@@ -1908,6 +2083,38 @@
           "rho"
         ],
         "title": "ConductivityRequest",
+        "type": "object"
+      },
+      "ConfidenceBandRequest": {
+        "properties": {
+          "channel": {
+            "default": 0,
+            "title": "Channel",
+            "type": "integer"
+          },
+          "datasets": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
+          "method": {
+            "default": "mean",
+            "title": "Method",
+            "type": "string"
+          },
+          "n_points": {
+            "default": 0,
+            "title": "N Points",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "datasets"
+        ],
+        "title": "ConfidenceBandRequest",
         "type": "object"
       },
       "ConsolidatedItem": {
@@ -3203,6 +3410,35 @@
           "x"
         ],
         "title": "DescriptiveRequest",
+        "type": "object"
+      },
+      "DiagnosticsRequest": {
+        "properties": {
+          "n_params": {
+            "title": "N Params",
+            "type": "integer"
+          },
+          "residuals": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Residuals",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "y",
+          "residuals",
+          "n_params"
+        ],
+        "title": "DiagnosticsRequest",
         "type": "object"
       },
       "DielectricToRefractiveRequest": {
@@ -6839,6 +7075,63 @@
           "value"
         ],
         "title": "NeutronCalcRequest",
+        "type": "object"
+      },
+      "OdrRequest": {
+        "properties": {
+          "lambda": {
+            "default": 1.0,
+            "title": "Lambda",
+            "type": "number"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "x_error": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Error"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          },
+          "y_error": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Error"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "OdrRequest",
         "type": "object"
       },
       "OhmicDropRequest": {
@@ -12865,6 +13158,50 @@
         ]
       }
     },
+    "/api/aggregate/confidence-band": {
+      "post": {
+        "description": "Pointwise spread band across N datasets (utilities.confidenceBand).",
+        "operationId": "confidence_band_route_api_aggregate_confidence_band_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfidenceBandRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Confidence Band Route Api Aggregate Confidence Band Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confidence Band Route",
+        "tags": [
+          "aggregate"
+        ]
+      }
+    },
     "/api/baseline/als": {
       "post": {
         "description": "Asymmetric least-squares (Eilers/Whittaker) baseline.",
@@ -15291,6 +15628,50 @@
         ]
       }
     },
+    "/api/fitting/bands": {
+      "post": {
+        "description": "Confidence and prediction bands around a fitted curve (fitting.fitBands).",
+        "operationId": "bands_api_fitting_bands_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BandsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Bands Api Fitting Bands Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bands",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
     "/api/fitting/bootstrap": {
       "post": {
         "description": "Bootstrap parameter CIs for a registry-model fit (calc.fit_bootstrap).",
@@ -15374,6 +15755,94 @@
           }
         },
         "summary": "Bumps Fit",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/compare": {
+      "post": {
+        "description": "Fit two or more models to one selection and compare them.\n\nPer-candidate fit failures come back as ``error`` entries (curated fit\ndiagnostics, as for ``/scan`` -- see SECURITY.md); only invalid input is\na 422.",
+        "operationId": "compare_api_fitting_compare_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Compare Api Fitting Compare Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Compare",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/diagnostics": {
+      "post": {
+        "description": "Goodness-of-fit metrics and residual diagnostics for one fit.",
+        "operationId": "diagnostics_api_fitting_diagnostics_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiagnosticsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Diagnostics Api Fitting Diagnostics Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Diagnostics",
         "tags": [
           "fitting"
         ]
@@ -15572,6 +16041,50 @@
           }
         },
         "summary": "List Models",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/odr": {
+      "post": {
+        "description": "Orthogonal distance (Deming) straight-line fit, errors in x and y.",
+        "operationId": "odr_api_fitting_odr_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OdrRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Odr Api Fitting Odr Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Odr",
         "tags": [
           "fitting"
         ]

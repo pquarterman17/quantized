@@ -44,6 +44,7 @@ from quantized.routes import (
     export_statplots,
     fitting,
     fitting_bumps,
+    fitting_stats,
     import_template,
     import_wizard,
     jobs_api,
@@ -266,6 +267,7 @@ def create_app(*, dev_origins: Collection[str] | None = None) -> FastAPI:
     application.include_router(database.router)
     application.include_router(fitting.router)
     application.include_router(fitting_bumps.router)
+    application.include_router(fitting_stats.router)
     application.include_router(jobs_api.router)
     application.include_router(baseline.router)
     application.include_router(stats.router)
