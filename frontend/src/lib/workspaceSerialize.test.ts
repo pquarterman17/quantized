@@ -50,7 +50,11 @@ describe("serializeWorkspace — compact output, exact round trip", () => {
     const text = serializeWorkspace({ datasets: [ds("a", struct([0, 1], [[1], [2]]))] });
     expect(text).toContain('\n  "format": ');
     expect(text).toContain('"time":[0,1],"values":[[1],[2]]');
-    expect(JSON.parse(text)).toEqual(JSON.parse(serializeWorkspace({ datasets: [ds("a", struct([0, 1], [[1], [2]]))] }, { compact: true })));
+    // Compare everything but the save timestamp: two calls can straddle a
+    // millisecond (CI saw 22:44:00.888 vs .889), so savedAt is not content.
+    const content = (t: string) => ({ ...(JSON.parse(t) as Record<string, unknown>), savedAt: null });
+    const compact = serializeWorkspace({ datasets: [ds("a", struct([0, 1], [[1], [2]]))] }, { compact: true });
+    expect(content(text)).toEqual(content(compact));
   });
 
   it("round-trips NaN, ±Infinity and -0 in data AND raw exactly", () => {
