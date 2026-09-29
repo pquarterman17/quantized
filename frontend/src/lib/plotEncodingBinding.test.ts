@@ -33,6 +33,7 @@ import { defaultPlotView, type PlotView, type PlotWindow } from "./plotview";
 import { AUTO_MARKER_CYCLE, SERIES_VARS, windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { Dataset, DataStruct } from "./types";
 import { createPlotWindowDocument, syncPlotWindow, withFocusedEncoding } from "../store/windowDocuments";
+import { GRADIENT_DS, readGradientFixture } from "../test/gradientEncodingFixture";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const FIXTURE = JSON.parse(readFileSync(join(here, "../../../tests/fixtures/wire/graph_encoding_export.json"), "utf-8")) as {
@@ -70,10 +71,11 @@ beforeEach(() => PALETTE.forEach((c, i) => root.style.setProperty(SERIES_VARS[i]
 afterEach(() => SERIES_VARS.forEach((v) => root.style.removeProperty(v)));
 
 describe("the gate", () => {
-  it("keeps categorical colour/symbol picks, masks a continuous one, takes any label column", () => {
+  it("keeps categorical colour/symbol picks, reads a continuous colour as a gradient, takes any label column", () => {
     expect(resolveFigureEncoding(PICKS, DS, null)).toEqual({ group: null, color: 1, symbol: 2, label: 3 });
-    expect(resolveFigureEncoding({ color: 0, label: 3 }, DS, null)).toEqual({ group: null, color: null, symbol: null, label: 3 });
-    expect(resolveFigureEncoding({ color: 0 }, DS, null)).toBeNull();
+    expect(resolveFigureEncoding({ color: 0, label: 3 }, DS, null)).toEqual({ group: null, color: null, symbol: null, label: 3, gradient: 0 });
+    expect(resolveFigureEncoding({ color: 0 }, DS, null)).toEqual({ group: null, color: null, symbol: null, label: null, gradient: 0 });
+    expect(resolveFigureEncoding({ symbol: 0 }, DS, null)).toBeNull(); // a continuous symbol is still ignored
     expect(resolveFigureEncoding({ color: 99 }, DS, null)).toBeNull();
     expect(resolveFigureEncoding(undefined, DS, 1)).toBeNull();
   });
@@ -166,6 +168,36 @@ describe("FigureBindings.encoding lifecycle", () => {
   });
 });
 
+describe("residuals 4 and 5 on the document: a gradient and text-column picks", () => {
+  const G = readGradientFixture();
+  const gradDoc = (encoding?: FigureEncoding) =>
+    createFigureDocument({ id: "g", name: "g", datasetId: "grad", view: view(), mark: "scatter", encoding });
+  const PICKS_G: FigureEncoding = { color: 1, text: { symbol: "C", label: "D" } };
+
+  it("the window's own export sends the gradient fixture's encoding and text-factor dataset", () => {
+    const spec = buildFigureSpecFromDocument(gradDoc(PICKS_G), GRADIENT_DS, "g", OPTS);
+    expect(spec.encoding).toEqual(G.request.encoding);
+    expect(JSON.parse(JSON.stringify(spec.dataset))).toEqual(G.request.dataset);
+  });
+
+  it("text picks persist by name, survive save/reopen and a column removal, and sanitize like the rest", () => {
+    const reopened = deserializeFigureDocument(serializeFigureDocument(gradDoc(PICKS_G)))!;
+    expect(reopened.bindings.encoding).toEqual(PICKS_G);
+    expect(remapFigureBindings(reopened.bindings, 1).encoding).toEqual({ text: { symbol: "C", label: "D" } });
+    expect(sanitizeFigureEncoding({ text: { symbol: "C", label: "", color: 3 }, extra: 1 })).toEqual({ text: { symbol: "C" } });
+    expect(sanitizeFigureEncoding({ text: ["C"] })).toBeUndefined();
+  });
+
+  it("an excluded row leaves the wire dataset — the rows the Stage's colour scale is taken over", () => {
+    // Row 9 (T = 300) excluded: pruned from the wire, so the backend's scale
+    // tops out at 185, as the Stage's (Stage/usePlotEncoding, analysis rows).
+    const excluded: Dataset = { ...GRADIENT_DS, excludedRows: [9] };
+    const spec = buildFigureSpecFromDocument(gradDoc({ color: 1 }), excluded, "g", OPTS);
+    expect(spec.dataset.time).toHaveLength(9);
+    expect(spec.encoding).toMatchObject({ gradient_col: 1 });
+  });
+});
+
 describe("the plot window's own export carries the encoding (screen == export)", () => {
   it("sends the Graph Builder fixture's encoding and series, over the window's styles", () => {
     const spec = buildFigureSpecFromDocument(doc(PICKS), DS, "enc", OPTS);
@@ -186,8 +218,8 @@ describe("the plot window's own export carries the encoding (screen == export)",
     expect(buildFigureSpecFromDocument(doc(), DS, "p", OPTS).encoding).toBeUndefined();
   });
 
-  it("the SAME gate as the Stage: a continuous colour pick, a bound y2 axis and a facet grid all send none", () => {
-    expect(buildFigureSpecFromDocument(doc({ color: 0 }), DS, "c", OPTS).encoding).toBeUndefined();
+  it("the SAME gate as the Stage: a continuous symbol pick, a bound y2 axis and a facet grid all send none", () => {
+    expect(buildFigureSpecFromDocument(doc({ symbol: 0 }), DS, "c", OPTS).encoding).toBeUndefined();
     const y2 = buildFigureSpecFromDocument(doc(PICKS, { yKeys: [0, 3], y2Keys: [3] }), DS, "y2", OPTS);
     expect(y2.encoding).toBeUndefined();
     const faceted = createFigureDocument({ id: "f", name: "f", datasetId: "enc", view: { ...view(), facetKey: 2 }, facetKey: 2, encoding: PICKS });

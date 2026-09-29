@@ -173,6 +173,13 @@ export function originTextColumnNames(ds: Pick<DataStruct, "metadata">): string[
   return textColumnEntries(ds).map(([shortName]) => shortName);
 }
 
+/** One text column's raw cells by short name (row order, uncopied), or null
+ *  when the sheet has no such column — for a reader of a single named column
+ *  (P1.4's text-column factors, lib/plotEncodingBinding.ts). */
+export function textColumnCells(ds: Pick<DataStruct, "metadata">, name: string): readonly unknown[] | null {
+  return textColumnEntries(ds).find(([n]) => n === name)?.[1] ?? null;
+}
+
 /** True when the sheet carries any `metadata.origin_report_sheets` columns
  *  (FitLinear/NLFit report residue — unresolved `cell://…` reference
  *  strings). These stay Inspector-only (`OriginProvenanceCard` already

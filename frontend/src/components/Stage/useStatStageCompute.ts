@@ -10,12 +10,25 @@
 // stats from raw values; they never reuse the interactive stage's
 // precomputed boxes/violins), while bar facets don't need it (`draw.data`
 // already has everything exportFigure needs, mean/SEM per category/series).
+//
+// Faceted points (JMP_GAP J5 residual, closed 2026-09-29): a panel's raw
+// points (box / violin / strip `points`, a grouped bar cell's `raw`) carry
+// ORIGINAL dataset rows — each slice's kept rows (`FacetSlice.rows`) composed
+// with the analysis view's `rowIds` by `lib/facet.facetSliceRowIds`, the one
+// recipe — so a panel's jitter is the flat plot's, on screen and in export.
 
 import { statsBox, statsHistogram, statsQQ, statsViolin } from "../../lib/api";
 import type { BoxStatWire } from "../../lib/api/stats";
 import { buildBarMatrix, seriesStat, type BarChartData } from "../../lib/barlayout";
+import { facetSliceRowIds, type FacetSlice } from "../../lib/facet";
 import type { GroupSpec } from "../../lib/statschooser";
-import { groupBoxStatsClient, resolveGroups, type BoxStat, type IndexedGroupSpec } from "../../lib/statstage";
+import {
+  groupBoxStatsClient,
+  resolveGroups,
+  resolveGroupsIndexed,
+  type BoxStat,
+  type IndexedGroupSpec,
+} from "../../lib/statstage";
 import type { DataStruct } from "../../lib/types";
 import { barCellPoints, withBarRaw } from "./statBarMarks";
 import type { StatDrawData } from "./statRender";
@@ -206,10 +219,15 @@ export async function computeViolinDraw(
   }
 }
 
+/** The analysis view's `rowIds` (null: nothing dropped), when a faceted
+ *  compute must resolve raw points; null when no mark needs them. */
+export type FacetRaw = { rowIds: readonly number[] | null } | null;
+
 /** Bar facet path is synchronous (no backend round-trip) — one matrix per
- *  slice via `computeBarData`, dropping any slice that groups to nothing. */
+ *  slice via `computeBarData`, dropping any slice that groups to nothing.
+ *  `raw`: attach each cell's raw points, rows mapped per slice. */
 export function computeFacetBarDraws(
-  slices: readonly { label: string; data: DataStruct }[],
+  slices: readonly FacetSlice[],
   groupCol: number | null,
   barValueChannels: readonly number[],
   barLabels: readonly string[],
@@ -218,10 +236,12 @@ export function computeFacetBarDraws(
   barValueLabel: string,
   barStack: boolean,
   groupLabel: string,
+  raw: FacetRaw = null,
 ): FacetDraw[] {
   const out: FacetDraw[] = [];
   for (const s of slices) {
-    const bd = computeBarData(s.data, groupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel);
+    const sliceRaw = raw ? { rowIds: facetSliceRowIds(s, raw.rowIds) } : null;
+    const bd = computeBarData(s.data, groupCol, barValueChannels, barLabels, valueCol, plotted, barValueLabel, sliceRaw);
     if (bd.groups.length > 0) {
       out.push({
         label: s.label,
@@ -232,16 +252,15 @@ export function computeFacetBarDraws(
   return out;
 }
 
-/** Box/Violin facet path: one async compute per slice (in parallel), each
- *  independently degrading on failure (a backend hiccup on one slice never
- *  takes down the others); slices with no finite groups drop. Faceted box
- *  marks aren't wired yet (JMP_GAP J5 residual — points/mean-CI stay
- *  flat-panel only for now): the box branch's draw always carries
- *  `points: null` (its facet-adjusted marks, `statStageMarks.facetMarks`,
- *  are stamped on afterward — never mean-CI/connect-means in a panel). */
+/** Box/Violin/Strip facet path: one async compute per slice (in parallel),
+ *  each independently degrading on failure (a backend hiccup on one slice
+ *  never takes down the others); slices with no finite groups drop. `raw`
+ *  (the flat path's `needsPoints`; strip always) resolves each panel's
+ *  indexed points, ORIGINAL rows via `facetSliceRowIds`; the marks
+ *  (`statStageMarks.facetMarks`) are stamped on afterward. */
 export async function computeFacetGroupDraws(
-  slices: readonly { label: string; data: DataStruct }[],
-  mode: "box" | "violin",
+  slices: readonly FacetSlice[],
+  mode: "box" | "violin" | "strip",
   groupCol: number | null,
   valueCol: number,
   plotted: readonly number[],
@@ -257,6 +276,7 @@ export async function computeFacetGroupDraws(
    *  read the same structural way the flat plot's is — never sniffed off
    *  the panel's own composite label text. Null outside a nested plot. */
   nestLabel: string | null = null,
+  raw: FacetRaw = null,
 ): Promise<FacetDraw[]> {
   const rs = await Promise.all(
     slices.map(async (s): Promise<FacetDraw | null> => {
@@ -264,10 +284,18 @@ export async function computeFacetGroupDraws(
         (g) => g.values.length > 0,
       );
       if (!finiteGroups.length) return null;
-      const draw =
-        mode === "box"
-          ? (await computeBoxDraw(finiteGroups, valueLabel, groupLabel)).draw
-          : await computeViolinDraw(finiteGroups, valueLabel, groupLabel);
+      // Same partition as `finiteGroups` (index-aligned), rows mapped back.
+      const pts = raw || mode === "strip"
+        ? resolveGroupsIndexed(s.data, groupCol, valueCol, plotted, group2Col, facetSliceRowIds(s, raw?.rowIds ?? null))
+          .filter((g) => g.points.length > 0)
+        : null;
+      let draw: StatDrawData;
+      if (mode === "box") draw = (await computeBoxDraw(finiteGroups, valueLabel, groupLabel, pts)).draw;
+      else if (mode === "strip") draw = (await computeStripDraw(finiteGroups, pts ?? [], valueLabel, groupLabel)).draw;
+      else {
+        draw = await computeViolinDraw(finiteGroups, valueLabel, groupLabel);
+        if (pts && (draw.mode === "violin" || draw.mode === "box")) draw = { ...draw, points: pts };
+      }
       // Export fidelity (GUI_INTERACTION #12 slice 4b): carry the raw groups
       // this draw was computed from so exportFigure can rebuild a faithful
       // per-facet request without a second resolveGroups pass.

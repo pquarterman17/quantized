@@ -48,6 +48,23 @@ describe("GraphPreview — encoded legend", () => {
     expect(glyphs).toEqual(["circle", "square"]);
   });
 
+  it("a gradient Color-by shows the Stage legend's colour-scale chip with its range", () => {
+    const withT: Dataset = { ...DS, channelTypes: { 2: "continuous" } };
+    const spec: PlotSpec = { ...base, zones: { ...base.zones, color: ref(2) } };
+    const { render: r, encoded } = encodedSpecRender(spec, [withT]);
+    render(<GraphPreview render={r} encoded={encoded} />);
+    const chip = screen.getByTitle("colour = T (K)");
+    expect(chip).toHaveTextContent("5");
+    expect(chip).toHaveTextContent("9");
+  });
+
+  it("a categorical Color-by shows no colour scale", () => {
+    const spec: PlotSpec = { ...base, zones: { ...base.zones, color: ref(1) } };
+    const { render: r, encoded } = encodedSpecRender(spec, [DS]);
+    render(<GraphPreview render={r} encoded={encoded} />);
+    expect(screen.queryByTitle(/^colour = /)).toBeNull();
+  });
+
   it("an unencoded render (Group only) shows no legend, as before", () => {
     const spec: PlotSpec = { ...base, zones: { ...base.zones, group: ref(1) } };
     const { render: r, encoded } = encodedSpecRender(spec, [DS]);

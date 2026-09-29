@@ -15,7 +15,8 @@
 //   * "outliers" = outside the cell's own Tukey whiskers; the summary marker
 //     is a diamond at the bar's mean or a square at the cell's median;
 //   * stacked bars draw none of it (a raw value has no place in a stack), and
-//     neither do facet panels (no row indices per slice — `facetMarks`).
+//     a facet panel draws them over its own cells (rows per slice via
+//     `lib/facet.facetSliceRowIds`, JMP_GAP J5 residual closed 2026-09-29).
 
 import type { BarCellRaw, BarChartData, BarSeriesStat } from "../../lib/barlayout";
 import { categoryLevels, columnOf } from "../../lib/categorical";

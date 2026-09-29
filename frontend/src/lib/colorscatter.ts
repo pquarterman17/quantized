@@ -5,10 +5,13 @@
 // the same channel index server-side, see `calc/plotting.resolve_style_channels`).
 // This module is the pure, testable core; the canvas drawing lives in
 // `uplotOverlays.colorScatterPlugin` — the same split `lib/errorbars.ts` uses
-// for error-bar magnitudes.
+// for error-bar magnitudes. P1.4's gradient Color-by (lib/plotEncoding.ts)
+// builds the same specs, so the Stage, the Graph Builder preview and the
+// export colour a point through ONE rule: `colorScatterFill`.
 
-import type { ColormapName } from "./colormap";
-import type { DataStruct, SeriesStyle } from "./types";
+import { colormap, normalize, type ColormapName } from "./colormap";
+import { FILLED_SHAPES, markerSubpaths } from "./markers";
+import type { DataStruct, MarkerShape, SeriesStyle } from "./types";
 
 export interface ColorScatterSpec {
   /** Source channel index (for the legend/colorbar label). */
@@ -17,6 +20,43 @@ export interface ColorScatterSpec {
   colormap: ColormapName;
   lo: number;
   hi: number;
+  /** P1.4: the colour-scale label (default: the channel's label). */
+  label?: string;
+  /** P1.4: the point glyph (default: a circle) — a Symbol-by level's. */
+  shape?: MarkerShape;
+}
+
+/** The fill of row `i`'s point: its z value normalized over [lo, hi] (linear;
+ *  a degenerate range reads 0) through the colormap, as `rgb(r, g, b)` — or
+ *  null for a non-finite z (the point is not drawn). The backend port is
+ *  `calc.figure_colorscatter.gradient_colors`. */
+export function colorScatterFill(spec: ColorScatterSpec, i: number): string | null {
+  const t = normalize(spec.z[i] ?? NaN, spec.lo, spec.hi, false);
+  if (t == null) return null;
+  const [r, g, b] = colormap(spec.colormap, t);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** Paint one colour-mapped point at (px, py): a circle of radius `r`, or a
+ *  `markerSubpaths` glyph (closed glyphs fill, open ones stroke). */
+export function paintColorPoint(
+  ctx: CanvasRenderingContext2D,
+  px: number,
+  py: number,
+  r: number,
+  fill: string,
+  shape: MarkerShape = "circle",
+): void {
+  const closed = shape === "circle" || FILLED_SHAPES.has(shape);
+  ctx.fillStyle = ctx.strokeStyle = fill;
+  ctx.beginPath();
+  if (shape === "circle") ctx.arc(px, py, r, 0, Math.PI * 2);
+  for (const sub of markerSubpaths(shape, px, py, r + 1)) {
+    sub.forEach(([x, y], k) => (k ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    if (closed) ctx.closePath();
+  }
+  if (closed) ctx.fill();
+  else ctx.stroke();
 }
 
 /** Per-display-column colour-by-value specs, keyed by the uPlot data-column
@@ -57,17 +97,18 @@ export interface ColorScaleLegendEntry {
   hi: number;
 }
 
-/** Display-ready colour-scale entries (one per colour-mapped series) for the
- *  colorbar chip — the channel's own label, so "colour = <label>" reads
- *  clearly even with multiple colour-mapped series on one plot. */
+/** Display-ready colour-scale entries for the colorbar chip — the channel's
+ *  own label (or the spec's), so "colour = <label>" reads clearly even with
+ *  multiple colour-mapped series on one plot. Identical entries collapse to
+ *  one: series sharing one scale (a gradient over split series) need one key. */
 export function colorScaleLegendEntries(
   ds: DataStruct,
   columns: Map<number, ColorScatterSpec>,
 ): ColorScaleLegendEntry[] {
-  return [...columns.values()].map((spec) => ({
-    label: ds.labels[spec.channel] ?? `channel ${spec.channel}`,
-    colormap: spec.colormap,
-    lo: spec.lo,
-    hi: spec.hi,
-  }));
+  const seen = new Set<string>();
+  return [...columns.values()].flatMap((spec) => {
+    const e = { label: spec.label ?? ds.labels[spec.channel] ?? `channel ${spec.channel}`, colormap: spec.colormap, lo: spec.lo, hi: spec.hi };
+    const key = JSON.stringify(e);
+    return seen.has(key) ? [] : (seen.add(key), [e]);
+  });
 }

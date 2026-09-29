@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { computeCanonicalReadiness } from "../components/workshops/figurebuilder/canonicalReadiness";
+import { GRADIENT_DS, GRADIENT_SPEC, readGradientFixture } from "../test/gradientEncodingFixture";
 import type { FigureSpec } from "./api/figures";
 import { encodeSpec } from "./plotEncoding";
 import { encodedFigureSpec } from "./plotEncodingExport";
@@ -104,6 +105,21 @@ describe("Publication Preview of an encoded Graph Builder spec (P1.4)", () => {
     expect(previewRequest({ ...SPEC, zones: { ...wells, color: ref(1) } }).error_spans).toBeUndefined();
   });
 
+  it("a gradient Color-by and text-column factors open as the gradient wire fixture's request (residuals 4, 5)", () => {
+    const G = readGradientFixture();
+    const e = encodeSpec(GRADIENT_SPEC, [GRADIENT_DS]);
+    const document = plotSpecToFigureDocument(GRADIENT_SPEC, "Gradient", {}, e)!;
+    // The gated picks go back to the document's form: the gradient as the colour
+    // pick, the text columns by name.
+    expect(document.bindings.encoding).toEqual({ color: 1, text: { symbol: "C", label: "D" } });
+    const ready = computeCanonicalReadiness(document, GRADIENT_DS);
+    if (ready?.state !== "ready") throw new Error(`preview not ready: ${JSON.stringify(ready)}`);
+    expect(ready.spec.encoding).toEqual(G.request.encoding);
+    expect(ready.spec.y_keys).toEqual(G.request.y_keys);
+    expect(ready.spec.series_styles).toEqual(G.request.series_styles);
+    expect(JSON.parse(JSON.stringify(ready.spec.dataset))).toEqual(G.request.dataset);
+  });
+
   it("stores the GATED picks: a factor from another dataset never becomes this dataset's channel", () => {
     const foreign: PlotSpec = { ...SPEC, zones: zones({ color: { datasetId: "other", channel: 1 }, label: ref(3) }) };
     const document = plotSpecToFigureDocument(foreign, "Encoded", {}, encodeSpec(foreign, [DS]))!;
@@ -111,8 +127,8 @@ describe("Publication Preview of an encoded Graph Builder spec (P1.4)", () => {
     expect(previewRequest(foreign).encoding).not.toHaveProperty("color_col");
   });
 
-  it("an ungated pick (a continuous colour column) opens as an ordinary figure", () => {
-    const req = previewRequest({ ...SPEC, zones: zones({ color: ref(0) }) });
+  it("an ungated pick (a continuous symbol column) opens as an ordinary figure", () => {
+    const req = previewRequest({ ...SPEC, zones: zones({ symbol: ref(0) }) });
     expect(req.encoding).toBeUndefined();
   });
 });

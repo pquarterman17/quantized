@@ -221,9 +221,9 @@ export function onAxis<T>(
  *  route draws no bar for them), and `counts` rides only when n is shown.
  *  `errors` are the half-widths of the error-bar kind on screen (P2.6 box 1:
  *  `lib/statMarks.errorHalfWidth`, SEM unless the marks pick SD / 95% CI /
- *  none) — the export draws exactly the whiskers the canvas does. The flat
- *  plot's GROUPED bars also carry their points / summary marker
- *  (`statBarMarks.barMarksWire`; `marksOn` false for stacked and facets). */
+ *  none) — the export draws exactly the whiskers the canvas does. GROUPED
+ *  bars, flat or one facet panel, also carry their points / summary marker
+ *  (`statBarMarks.barMarksWire`; `marksOn` false for stacked). */
 function barWire(d: BarChartData, showN: boolean, m: ResolvedStatMarks | null = null, marksOn = false) {
   const kind = m?.errorBars ?? "se";
   const half = (s: { sem: number; n: number }) => errorHalfWidth(kind, s.sem, s.n);
@@ -274,7 +274,7 @@ export async function exportFacetedFigure(
     for (const f of drawFacets) {
       const draw = f.draw;
       if (draw.mode !== "bar") continue;
-      facets.push({ label: f.label, ...barWire(draw.data, showN && !barStack, m) });
+      facets.push({ label: f.label, ...barWire(draw.data, showN && !barStack, m, !barStack) });
     }
     if (!facets.length) return;
     const spec: CategoricalFigureSpec = {
@@ -296,7 +296,7 @@ export async function exportFacetedFigure(
     await exportCategoricalFigure(spec, signal);
     return;
   }
-  if (mode !== "box" && mode !== "violin") return;
+  if (mode !== "box" && mode !== "violin" && mode !== "strip") return;
   // Review finding 4: every panel shares the SAME nest column (a single
   // `useStatStage` compute, stamped uniformly by `computeFacetGroupDraws`),
   // so its `nestLabel` is read once, off the first panel, for the SHARED
@@ -307,14 +307,20 @@ export async function exportFacetedFigure(
   const facets: StatplotFacetSpec[] = [];
   for (const f of drawFacets) {
     if (!f.rawGroups || f.rawGroups.length === 0) continue;
-    const slots = f.draw.mode === "box" || f.draw.mode === "violin" ? f.draw.slots : null;
+    const d = f.draw;
+    const slots = d.mode === "box" || d.mode === "violin" || d.mode === "strip" ? d.slots : null;
     const axis = onAxis(slots, f.rawGroups.map((g) => g.values), []);
     const labels = axis ? axis.labels : f.rawGroups.map((g) => g.label);
+    // JMP_GAP J5 residual: the panel's points' ORIGINAL rows (index-aligned
+    // with `rawGroups`), when it draws any — the jitter hash's row, as flat.
+    const pts = (d.mode === "box" || d.mode === "violin" || d.mode === "strip") && m?.points !== "none" ? d.points : null;
+    const rows = pts?.length ? pts.map((g) => g.points.map((p) => p.rowIndex)) : null;
     facets.push({
       label: f.label,
-      kind: f.draw.mode === "violin" ? "violin" : "box",
+      kind: d.mode === "violin" || d.mode === "strip" ? d.mode : "box",
       data: axis ? axis.values : f.rawGroups.map((g) => g.values),
       labels,
+      ...(rows ? { point_row_indices: axis ? onAxis(slots, rows, [])?.values ?? rows : rows } : {}),
       // Review finding 2: this panel's OWN canvas domain, under its OWN
       // facet-adjusted marks (`statStageMarks.facetMarks`, already stamped
       // on `f.draw.marks`) — each panel autoscales independently, on screen
@@ -338,7 +344,7 @@ export async function exportFacetedFigure(
     show_n: showN,
     caveat,
     ...noteWire(o.errorNote),
-    ...(m ? { summary: m.summary, error_bars: m.errorBars, points: m.points } : {}),
+    ...(m ? { summary: m.summary, error_bars: m.errorBars, points: m.points, jitter_width: m.jitterWidth } : {}),
     // `tiered` (whether nesting is active) is shared; `tiers` itself is
     // NOT — dropped here so it can never be applied, uniformly and wrongly,
     // to every panel's own different label set (each panel's pairs ride
@@ -370,7 +376,7 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs, sig
   const showN = o.showN ?? false;
   const caveat = o.caveat ?? null;
   // Faceted export (GUI_INTERACTION #12 slice 4b): drawFacets is set for
-  // exactly the modes that facet (box/violin/bar). Checked first.
+  // exactly the modes that facet (box/violin/strip/bar). Checked first.
   if (o.drawFacets && o.drawFacets.length > 0) {
     await exportFacetedFigure(fmt, o, signal);
     return;

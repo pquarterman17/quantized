@@ -5,8 +5,9 @@
 // toggle button can point `aria-controls` at it.
 
 import type { RecipeDetails as RecipeDetailsData } from "../../../lib/recipeDetails";
+import { RecipeThumbnail } from "../recipemanager/RecipeThumbnail";
 
-export function RecipeDetails({ id, details }: { id: string; details: RecipeDetailsData | null }) {
+export function RecipeDetails({ id, details, label = "Recipe" }: { id: string; details: RecipeDetailsData | null; label?: string }) {
   if (!details) {
     return (
       <div id={id} className="qz-recipe-details qz-recipe-details-gone">
@@ -16,6 +17,8 @@ export function RecipeDetails({ id, details }: { id: string; details: RecipeDeta
   }
   return (
     <div id={id} className="qz-recipe-details">
+      {/* Plot recipes only (F4.2): the thumbnail captured at save time. */}
+      {details.preview !== undefined && <RecipeThumbnail preview={details.preview} label={label} />}
       <dl className="qz-recipe-details-fields">
         {details.fields.map((f) => (
           <div className="qz-recipe-details-row" key={f.label}>

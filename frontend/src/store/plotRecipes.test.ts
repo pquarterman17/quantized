@@ -101,6 +101,18 @@ describe("saveAsPlotRecipe", () => {
     expect(recipe.signature.map((e) => e.label)).toContain("Intensity");
   });
 
+  // F4.2 / audit P1.3: the v2 fields are captured from the live app state.
+  it("records the app's excluded-row preference as the outlier policy, and a preview of the focused plot", async () => {
+    useApp.setState({ excludedDisplay: "grey" });
+    focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
+
+    await useApp.getState().saveAsPlotRecipe("Greyed", "d1");
+
+    const [recipe] = useApp.getState().plotRecipes;
+    expect(recipe.outlierPolicy).toEqual({ excludedDisplay: "grey" });
+    expect(recipe.preview?.series).toHaveLength(1);
+  });
+
   it("never overwrites a same-named recipe -- dedupes the name instead (L0.31)", async () => {
     focusPlotWindow("d1", { xKey: 0, yKeys: [1] });
     await useApp.getState().saveAsPlotRecipe("Dup", "d1");

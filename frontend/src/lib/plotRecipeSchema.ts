@@ -25,7 +25,13 @@ import type {
   Technique,
 } from "./types";
 
-export const PLOT_RECIPE_SCHEMA_VERSION = 1 as const;
+/** v2 (F4.2 / audit P1.3 recipe gaps) added `preview`, `outlierPolicy` and
+ *  `transform` -- see `PlotRecipe`. Older persisted recipes still load:
+ *  `lib/plotRecipeMigrate.ts` walks them forward one version at a time on
+ *  every read boundary (`.dwk`, global localStorage, an imported file), so
+ *  the rest of the app only ever sees the current shape. A recipe from a
+ *  NEWER build is refused by name, never guessed at. */
+export const PLOT_RECIPE_SCHEMA_VERSION = 2 as const;
 
 /** What role a captured channel plays in the recipe's mapping. `"error"`
  *  covers every error channel (its finer x/y/+/- classification lives in
@@ -166,6 +172,34 @@ export interface RecipeVisual {
   compositionKind: CompositionKind | null;
 }
 
+/** A captured, data-free preview of the plot the recipe was saved from:
+ *  up to 4 plotted series of up to 48 points each, every coordinate
+ *  normalized to [0, 1] in the axis's own scale (log where the view was
+ *  log). Numbers only, never markup, so an imported recipe cannot smuggle
+ *  SVG/HTML into the thumbnail that renders it. */
+export interface RecipePreview {
+  series: [number, number][][];
+}
+
+/** How rows excluded from analysis (outliers the user excluded, or rows a
+ *  data filter drops) were drawn when the recipe was saved -- the app-wide
+ *  "Excluded rows" preference at capture time. Recorded, and reported on
+ *  apply when it differs from the current preference; never applied, since
+ *  that preference is app-wide and changing it would restyle every other
+ *  plot too. */
+export interface RecipeOutlierPolicy {
+  excludedDisplay: "hide" | "grey";
+}
+
+/** The saved transformation recipe (a Pipeline analysis template, P2.5) the
+ *  SOURCE dataset was derived with, read off its `metadata.transform_recipe`
+ *  provenance at capture time. A reference by name + revision only; running
+ *  it is always the user's explicit choice in the Recipe Manager. */
+export interface RecipeTransformRef {
+  name: string;
+  revision: number;
+}
+
 export interface PlotRecipeProvenance {
   sourceDatasetLabel: string;
   appVersion: string;
@@ -200,4 +234,11 @@ export interface PlotRecipe {
    *  older or ordinarily-captured recipe means "eligible", so no migration
    *  is needed. */
   noAutoSuggest?: boolean;
+  /** v2. Null when there was nothing plottable, or for a recipe migrated
+   *  from v1 (it was never captured -- never invented after the fact). */
+  preview: RecipePreview | null;
+  /** v2. Null for a migrated v1 recipe or a built-in: not recorded. */
+  outlierPolicy: RecipeOutlierPolicy | null;
+  /** v2. Null when the source dataset was not a transformation output. */
+  transform: RecipeTransformRef | null;
 }

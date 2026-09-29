@@ -126,6 +126,11 @@ function oneYRecipe(opts: OneYRecipeOptions): PlotRecipe {
     createdAt: BUILTIN_TIMESTAMP,
     modifiedAt: BUILTIN_TIMESTAMP,
     schemaVersion: PLOT_RECIPE_SCHEMA_VERSION,
+    // Hand-authored, not captured from a plot: no data to preview, no
+    // excluded-row policy or source transformation to record.
+    preview: null,
+    outlierPolicy: null,
+    transform: null,
     provenance: { sourceDatasetLabel: "", appVersion: BUILTIN_APP_VERSION },
     technique: opts.technique,
     signature: [

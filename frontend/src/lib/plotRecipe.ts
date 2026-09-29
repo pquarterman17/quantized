@@ -64,8 +64,12 @@ import {
   type RecipeAxisRange,
   type RecipeChannelRole,
   type RecipeErrorBinding,
+  type RecipeOutlierPolicy,
   type RecipeSignatureEntry,
+  type RecipeTransformRef,
 } from "./plotRecipeSchema";
+import { sanitizeTransformRef } from "./plotRecipeMigrate";
+import { capturePreview } from "./plotRecipePreview";
 
 export * from "./plotRecipeSchema";
 
@@ -102,6 +106,18 @@ export interface CaptureRecipeOptions {
   /** Injectable clock for deterministic tests; defaults to
    *  `() => new Date().toISOString()`. */
   now?: () => string;
+  /** The app-wide "Excluded rows" preference at save time -- recorded as the
+   *  recipe's outlier policy (v2). Omitted = not recorded (null). */
+  excludedDisplay?: RecipeOutlierPolicy["excludedDisplay"];
+}
+
+/** The transformation recipe a derived dataset came from -- `runTemplate.ts`
+ *  stamps `metadata.transform_recipe` on the output of every P2.5 apply. */
+function transformOf(dataset: Dataset): RecipeTransformRef | null {
+  const prov = dataset.data.metadata.transform_recipe;
+  if (typeof prov !== "object" || prov === null) return null;
+  const { recipe, revision } = prov as Record<string, unknown>;
+  return sanitizeTransformRef({ name: recipe, revision });
 }
 
 /** Capture a `PlotRecipe` from a live `PlotView` + the dataset it's bound to.
@@ -204,6 +220,9 @@ export function captureRecipe(
     createdAt: timestamp,
     modifiedAt: timestamp,
     schemaVersion: PLOT_RECIPE_SCHEMA_VERSION,
+    preview: capturePreview(dataset, view),
+    outlierPolicy: opts.excludedDisplay ? { excludedDisplay: opts.excludedDisplay } : null,
+    transform: transformOf(dataset),
     provenance: {
       sourceDatasetLabel: opts.sourceDatasetLabel ?? dataset.name,
       appVersion: opts.appVersion,

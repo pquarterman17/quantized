@@ -45,15 +45,16 @@ export function withNestLabel(d: StatDrawData, nestLabel: string | null): StatDr
   return { ...d, nestLabel };
 }
 
-/** Facet panels carry no raw points (JMP_GAP J5 residual), so a panel shows
- *  what it CAN: a box its fliers (for "all" or "outliers"), a violin none.
- *  The export applies the same rule (`calc.figure_facets._facet_marks`). No
- *  connect-means line in a panel either: the faceted export draws none. A
- *  bar panel draws no summary marker (P2.6 box 1: its cells carry no raw
- *  values, and the faceted bar export takes no marks). */
-export function facetMarks(r: ResolvedStatMarks, mode: StatMode): ResolvedStatMarks {
-  const points = mode === "box" && r.points !== "none" ? "outliers" : "none";
-  return { ...r, points, connectMeans: false, ...(mode === "bar" ? { summary: "none" as const } : {}) };
+/** A facet panel's marks. Since the JMP_GAP J5 residual closed
+ *  (2026-09-29) a panel carries its own ORIGINAL rows (`lib/facet.
+ *  facetSliceRowIds`), so it draws what the flat plot draws — raw points,
+ *  jitter, summary marker, error bars; a grouped bar panel its cells' points
+ *  and summary — and the export posts each panel's rows so it draws the same
+ *  (`calc.figure_stat_marks.facet_marks` keeps the old fliers-only rule for
+ *  a panel WITHOUT rows, a request from before). The one exception: no
+ *  connect-means line in a panel — the faceted export draws none. */
+export function facetMarks(r: ResolvedStatMarks): ResolvedStatMarks {
+  return { ...r, connectMeans: false };
 }
 
 /** `draw` / `drawFacets` with their marks stamped on. */
@@ -64,6 +65,6 @@ export function withMarks(
 ): { draw: StatDrawData | null; drawFacets: FacetDraw[] | null } {
   return {
     draw: draw && stamp(draw, r),
-    drawFacets: facets && facets.map((f) => ({ ...f, draw: stamp(f.draw, facetMarks(r, f.draw.mode)) })),
+    drawFacets: facets && facets.map((f) => ({ ...f, draw: stamp(f.draw, facetMarks(r)) })),
   };
 }

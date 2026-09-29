@@ -24,18 +24,28 @@
 // (finding 5 -- the manager can open over an ALREADY-staged preview+confirm
 // dialog, and a refused apply never touches that pre-existing pending, so a
 // bare truthiness check can't tell "mine" from "someone else's").
+//
+// F4.2 / audit P1.3: every row shows the recipe's captured preview
+// (RecipeThumbnail), and the second toolbar row holds the apply-time
+// choices -- a style template for this apply (default: the recipe's own)
+// and a saved transformation recipe to run first (default: none). Both are
+// explicit, per-gesture picks that never edit the saved recipe; see
+// `applyRecipeWithChoices`.
 
 import { useEffect, useRef, useState } from "react";
 
 import { BUILTIN_PLOT_RECIPES } from "../../../lib/builtinPlotRecipes";
 import type { PlotRecipe } from "../../../lib/plotRecipe";
+import { PLOT_TEMPLATES } from "../../../lib/plotTemplates";
+import { loadTemplates } from "../../../lib/template";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
 import { useApp } from "../../../store/useApp";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button, Select } from "../../primitives";
+import { RecipeThumbnail } from "./RecipeThumbnail";
 import {
-  applyRecipeToDataset,
+  applyRecipeWithChoices,
   combinedRecipeRows,
   copyBuiltinToProject,
   copyRecipeToOtherScope,
@@ -43,6 +53,7 @@ import {
   duplicateRecipe,
   exportRecipe,
   importRecipeToScope,
+  recipeSummary,
   renameRecipe,
   type RecipeScope,
 } from "./recipeManagerActions";
@@ -61,6 +72,12 @@ export default function RecipeManagerPanel() {
   const activeId = useApp((s) => s.activeId);
 
   const [datasetId, setDatasetId] = useState(activeId ?? datasets[0]?.id ?? "");
+  // Apply-time choices (F4.2): "" = as the recipe says (its own style
+  // template; no transformation). Read once per mount -- the Pipeline
+  // workshop that saves transformation recipes is a separate window.
+  const [styleTemplate, setStyleTemplate] = useState("");
+  const [transformName, setTransformName] = useState("");
+  const [transforms] = useState(() => loadTemplates());
   // Finding 3, belt-and-braces: keyed by `${scope}:${id}` (rowKey), not id
   // alone -- see the module doc.
   const [renamingKey, setRenamingKey] = useState<string | null>(null);
@@ -132,7 +149,7 @@ export default function RecipeManagerPanel() {
     // just staged something new" apart from "there was already one there
     // that isn't mine".
     const pendingBefore = useApp.getState().pendingRecipeApplication;
-    void applyRecipeToDataset(recipe, datasetId)
+    void applyRecipeWithChoices(recipe, datasetId, { styleTemplate, transformName })
       .then((ok) => {
         const pendingAfter = useApp.getState().pendingRecipeApplication;
         // Close on a clean apply OR once a preview+confirm has been staged for
@@ -160,10 +177,11 @@ export default function RecipeManagerPanel() {
   };
 
   return (
-    <ToolWindow id="recipe-manager" title="Plot Recipe Manager" width={520} onClose={close}>
+    <ToolWindow id="recipe-manager" title="Plot Recipe Manager" width={600} onClose={close}>
       <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
         <label className="qzk-field-lbl">Apply to</label>
         <Select
+          aria-label="Apply to dataset"
           options={[
             { value: "", label: "pick a dataset…" },
             ...datasets.map((d) => ({ value: d.id, label: d.name })),
@@ -201,6 +219,24 @@ export default function RecipeManagerPanel() {
           }}
         />
       </div>
+      <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 8 }}>
+        <label className="qzk-field-lbl">Style</label>
+        <Select
+          aria-label="Style template"
+          title="Style template for this apply; the saved recipe keeps its own."
+          options={[{ value: "", label: "Recipe's own" }, ...PLOT_TEMPLATES.map((t) => ({ value: t.value, label: t.label }))]}
+          value={styleTemplate}
+          onChange={(e) => setStyleTemplate(e.target.value)}
+        />
+        <label className="qzk-field-lbl">Transform</label>
+        <Select
+          aria-label="Transformation"
+          title="Saved transformation recipe to run first; the recipe is applied to its new output dataset."
+          options={[{ value: "", label: "None" }, ...transforms.map((t) => ({ value: t.name, label: `${t.name} (r${t.revision ?? 1})` }))]}
+          value={transformName}
+          onChange={(e) => setTransformName(e.target.value)}
+        />
+      </div>
 
       {rows.length === 0 ? (
         <div style={{ color: "var(--text-faint)" }}>
@@ -214,6 +250,7 @@ export default function RecipeManagerPanel() {
             return (
               <li key={key} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                 <span className="qz-shortcut" style={{ width: 52, flexShrink: 0 }}>{SCOPE_LABEL[row.scope]}</span>
+                <RecipeThumbnail preview={row.recipe.preview} label={row.recipe.name} summary={recipeSummary(row.recipe)} />
                 {renamingKey === key ? (
                   <input
                     autoFocus
@@ -281,6 +318,7 @@ export default function RecipeManagerPanel() {
         {BUILTIN_PLOT_RECIPES.map((recipe) => (
           <li key={recipe.id} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span className="qz-shortcut" style={{ width: 52, flexShrink: 0 }}>Built-in</span>
+            <RecipeThumbnail preview={recipe.preview} label={recipe.name} />
             <span className="qzk-menu-trunc" style={{ flex: 1 }} title={recipe.description || recipe.name}>
               {recipe.name}
             </span>

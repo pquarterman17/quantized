@@ -537,8 +537,8 @@ with parent items P1.3 and P1.5.
         unambiguous-only prefill; committed marks finally translate into
         Stage series styles (previously silently dropped), and error
         designations flow through commit, preview whiskers, publication
-        handoff, and export. Transformations/style-template choice remain
-        open. A direct "Plot in new window" action (Library + palette)
+        handoff, and export. Transformations/style-template choice: see
+        F4.2c. A direct "Plot in new window" action (Library + palette)
         closed the one-plot-per-dataset misconception.
   - [~] **F4.2b Plot Recipe schema + resolve/apply pipeline (P1.3 waves 1-3,
         PRs #203/#204, wave 3 2026-08-22).** `lib/plotRecipe.ts`'s schema
@@ -554,14 +554,63 @@ with parent items P1.3 and P1.5.
         export/apply-to-a-chosen-dataset), an explicit "apply anyway, drop
         unmatched" opt-in, a "Save as Plot Recipe…" entry point on the
         focused plot window, and a subtle (never-auto-apply) post-import
-        suggestion toast. Still open: transformations and style-template
-        choice (this item's own text), SPATIAL/BREAK composition rebuild on
-        apply (F4.4 below — genuinely out of scope: those need per-panel
-        placement/break ranges the resolve step can't produce; FACET rebuild
-        itself is closed by F4.4 via the durable `facetKey` binding), a
-        maps/panels payload, schema version migration beyond the v1 parse-
-        gate, waterfall settings beyond the scalar offset, and preview
-        thumbnails.
+        suggestion toast. Still open: SPATIAL composition rebuild on apply
+        (F4.4 below — needs per-panel placement the resolve step can't
+        produce; FACET is closed by F4.4's durable `facetKey`, BREAK by
+        BUG-012's `axisBreaks` rebuild), a maps/panels payload, and waterfall
+        settings beyond the scalar offset. Transformations, style-template
+        choice, schema migration and preview thumbnails moved to F4.2c.
+  - [x] **F4.2c Recipe schema v2: preview, outlier policy, transformation,
+        migration; apply-time choices (Claude, 2026-09-29).**
+        `PLOT_RECIPE_SCHEMA_VERSION` is 2. Evidence, each with a test that
+        a sabotage of the guarded line turns red:
+        (1) **Migration past the v1 parse-gate** — `lib/plotRecipeMigrate.ts`
+        walks an older recipe forward one version at a time (step table,
+        `1: v1ToV2`) on every read boundary (`sanitizeRecipes` for `.dwk` +
+        global localStorage, `parseRecipe` for an imported file); a newer
+        version is refused by name ("… is newer than this app supports"),
+        never guessed at. A FROZEN v1 literal (not today's capture) loads on
+        all three boundaries with every v1 field intact
+        (`plotRecipeMigrate.test.ts`). Consequence, by design: an OLDER build
+        opening a project saved by this one drops its (v2) recipes, as it
+        always has for any future-schema entry.
+        (2) **Preview thumbnails** — captured at save time
+        (`lib/plotRecipePreview.ts`): ≤4 visible series × ≤48 points,
+        normalized to [0,1] in each axis's own scale (log/reciprocal), rows
+        dropped from analysis left out, original row order kept (loops stay
+        loops). Stored as numbers only and re-sanitized on load (clamped,
+        capped, non-numbers dropped), so an imported recipe cannot inject
+        markup. Drawn by `RecipeThumbnail.tsx` in every Recipe Manager row,
+        the apply preview dialog, and the Recipe Library's Details; a recipe
+        without one (built-ins, migrated v1) shows an empty "no preview"
+        frame, never an invented curve.
+        (3) **Outlier policy** — the app-wide "Excluded rows" (hide/grey)
+        preference at save time is recorded as `outlierPolicy` and shown in
+        Details; on apply a difference from the current preference is named
+        in the status line. It is NOT applied — see the owner question below.
+        (4) **Transformations** — a recipe saved from a transformation
+        recipe's output records `transform: {name, revision}` (from
+        `metadata.transform_recipe`). The Recipe Manager's apply row now
+        offers **Transform** (None / any saved transformation recipe) and
+        **Style** (Recipe's own / any on-screen template):
+        `applyRecipeWithChoices` runs the chosen transformation through the
+        Pipeline's own `applyRecipe` (preflight, rebinding, provenance,
+        rollback) and plots its NEW output; the style choice applies to this
+        gesture only and never edits the saved recipe. Both default to "as
+        the recipe says"; nothing is chosen or applied automatically
+        (`recipeApplyChoices.test.ts` runs a real recorded transformation;
+        `RecipeManagerChoices.test.tsx` drives the panel).
+        **Owner questions (left open):**
+        (a) *Should "Excluded rows" (hide/grey) become a per-figure setting so
+        a recipe can apply its recorded policy, or stay app-wide with the
+        recipe only reporting a mismatch (today's behavior)?*
+        (b) *When a chosen transformation succeeds but the Plot Recipe then
+        refuses its output (technique/column mismatch), should the new output
+        dataset be kept (today: kept, one undo removes it) or rolled back
+        automatically?*
+        (c) *Should the Manager pre-select the transformation a recipe
+        recorded (today: always "None", so running one is a deliberate
+        pick)?*
 - [x] **F4.3 Apply templates explicitly.** Never overwrite an already
       customized figure without a preview and confirmation. (P1.3 waves 1-3:
       `applyPlotRecipe`/`applyPlotRecipeObject` are always an explicit, opt-in
@@ -1697,6 +1746,16 @@ Before starting a slice:
       trusted and non-destructive.
 
 ## Completed / decision log
+
+### 2026-09-29 — F4.2c Plot Recipe schema v2 (Claude)
+
+Preview thumbnails, outlier (excluded-row) policy capture, the source
+transformation reference, a real schema migration path (v1 recipes load on
+every read boundary; newer ones are refused by name), and apply-time
+Transform / Style choices in the Recipe Manager. Recipes stay manual: both
+choices default to "as the recipe says", nothing is applied automatically,
+and every apply still creates a new figure. Three owner questions are left
+open under F4.2c.
 
 ### 2026-09-09 — Plans reconciliation: F2.2 parent box flipped (Claude)
 

@@ -1,0 +1,185 @@
+{
+  "request": {
+    "dataset": {
+      "time": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9
+      ],
+      "values": [
+        [
+          1,
+          10
+        ],
+        [
+          1.5,
+          35
+        ],
+        [
+          2,
+          60
+        ],
+        [
+          2.5,
+          85
+        ],
+        [
+          3,
+          110
+        ],
+        [
+          3.5,
+          135
+        ],
+        [
+          4,
+          160
+        ],
+        [
+          null,
+          185
+        ],
+        [
+          5,
+          null
+        ],
+        [
+          5.5,
+          300
+        ]
+      ],
+      "labels": [
+        "Rxy",
+        "T"
+      ],
+      "units": [
+        "Ohm",
+        "K"
+      ],
+      "metadata": {
+        "x_column_name": "t",
+        "x_column_unit": "s",
+        "origin_text_columns": {
+          "C": [
+            "S1",
+            "S2",
+            "S1",
+            "S2",
+            "S1",
+            "S2",
+            "S1",
+            "S2",
+            "S1",
+            ""
+          ],
+          "D": [
+            "ann",
+            "ann",
+            "bob",
+            "bob",
+            "ann",
+            "cy",
+            "bob",
+            "bob",
+            "ann",
+            "ann"
+          ]
+        }
+      }
+    },
+    "y_keys": [
+      0
+    ],
+    "encoding": {
+      "symbol_col": 2,
+      "label_col": 3,
+      "palette": [
+        "#0b6e4f",
+        "#c3423f",
+        "#2d3047",
+        "#f2a541",
+        "#5e548e",
+        "#1b998b",
+        "#e84855",
+        "#3e2f5b"
+      ],
+      "markers": [
+        "circle",
+        "square",
+        "triangle",
+        "diamond",
+        "downtriangle",
+        "plus",
+        "cross",
+        "star"
+      ],
+      "gradient_col": 1,
+      "text_columns": [
+        "C",
+        "D"
+      ]
+    },
+    "series_styles": [
+      {
+        "line": "none",
+        "marker": true
+      }
+    ],
+    "overrides": {
+      "legend": {
+        "show": true
+      }
+    },
+    "fmt": "svg",
+    "style": "default",
+    "dpi": 100,
+    "title": "",
+    "filename": "gradient"
+  },
+  "screen": {
+    "legend": [
+      "ann, bob",
+      "ann, bob, cy"
+    ],
+    "markers": [
+      "circle",
+      "square"
+    ],
+    "points": [
+      [
+        "#440154",
+        "#423a80",
+        "#30698d",
+        "#22948b"
+      ],
+      [
+        "#461f6e",
+        "#3a538b",
+        "#277f8e"
+      ]
+    ],
+    "colorbar": {
+      "label": "T (K)",
+      "lo": 10,
+      "hi": 300
+    },
+    "stops": [
+      "#440154",
+      "#472c7a",
+      "#3b518b",
+      "#2c718e",
+      "#21908d",
+      "#27ad81",
+      "#5cc863",
+      "#aadc32",
+      "#fde725"
+    ]
+  }
+}

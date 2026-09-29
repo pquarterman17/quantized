@@ -78,6 +78,7 @@ const builderState = {
   setStepMode: vi.fn(),
   render: {},
   options: [],
+  encodingOptions: { color: [], symbol: [], label: [] },
   chips: () => [],
   assign: vi.fn(),
   remove: vi.fn(),

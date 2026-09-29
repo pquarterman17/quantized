@@ -267,12 +267,15 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   const errorBars = useOffsetErrorBars(active, plotted, grouped, p.errKeys, p.seriesStyles, offsetsApply);
   const encodedLists = useEncodedLists(encoded, displayPayload, p.seriesStyles, p.seriesLabels); // P1.4
 
-  // Colour-mapped-scatter specs per plotted series (MAIN #14), same p+1 keying.
+  // Colour-mapped-scatter specs per plotted series (MAIN #14), same p+1 keying;
+  // P1.4 residual 4: an encoded gradient Color-by draws through the same map.
   const colorByColumns = useMemo(
     () =>
-      active && groupCol === null && !encoded
-        ? buildColorByColumns(active.data, plotted, p.seriesStyles)
-        : new Map<number, ColorScatterSpec>(),
+      encoded?.colorBy
+        ? encoded.colorBy(encoded.styles(p.seriesStyles))
+        : active && groupCol === null && !encoded
+          ? buildColorByColumns(active.data, plotted, p.seriesStyles)
+          : new Map<number, ColorScatterSpec>(),
     [active, plotted, p.seriesStyles, groupCol, encoded],
   );
 

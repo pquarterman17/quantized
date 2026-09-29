@@ -161,7 +161,7 @@ export default function GraphBuilderPanel() {
             </div>
           )}
 
-          <GraphPreview render={g.render} encoded={g.encoded} />
+          <GraphPreview render={g.render} encoded={g.encoded} spec={g.spec} />
 
           <div className="qzk-graph-actions">
             <Button

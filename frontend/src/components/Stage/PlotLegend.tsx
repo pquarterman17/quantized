@@ -9,14 +9,13 @@ import { useState } from "react";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
 import { colorScaleLegendEntries, type ColorScatterSpec } from "../../lib/colorscatter";
-import { colormapCss } from "../../lib/colormap";
 import { resolveDrawColor } from "../../lib/contrastColor";
-import { fmtNum } from "../../lib/format";
 import { lazyRegion } from "../../lib/lazyRegion";
 import type { PlotSeriesSpec } from "../../lib/plotdata";
 import type { DefaultTrace, SeriesStyle } from "../../lib/types";
 import { RichText } from "../primitives";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import ColorScaleChip from "./ColorScaleChip";
 import LegendSample from "./LegendSample";
 import { resolveSeriesStyle, type SeriesCycle } from "../../lib/seriesStyleCycle";
 import { useLegendBox } from "./useLegendBox";
@@ -272,19 +271,7 @@ export default function PlotLegend({
         );
       })}
       {colorScales.map((cs, i) => (
-        <div className="it qzk-colorbar" key={`cbar-${i}`} title={`colour = ${cs.label}`}>
-          <span
-            className="qzk-colorbar-grad"
-            style={{
-              background: `linear-gradient(90deg, ${Array.from({ length: 9 }, (_, s) =>
-                colormapCss(cs.colormap, s / 8),
-              ).join(", ")})`,
-            }}
-          />
-          <span className="qzk-colorbar-lbl">{fmtNum(cs.lo)}</span>
-          <span className="qzk-colorbar-lbl">–</span>
-          <span className="qzk-colorbar-lbl">{fmtNum(cs.hi)}</span>
-        </div>
+        <ColorScaleChip key={`cbar-${i}`} scale={cs} />
       ))}
       </div>
       {menu && (

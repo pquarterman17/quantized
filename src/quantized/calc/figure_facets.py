@@ -236,16 +236,6 @@ def render_facets_figure(
         return savefig_bytes(built.fig, fmt, dpi=dpi, transparent=transparent)
 
 
-def _facet_marks(marks: dict[str, Any] | None, kind: str) -> dict[str, Any] | None:
-    """A facet panel carries no row indices, so no jittered points (P2.6 box
-    1): a box panel shows its fliers for ``points`` "all" or "outliers", a
-    violin panel none -- the screen's ``statStageMarks.facetMarks``."""
-    if not marks or "points" not in marks:
-        return marks
-    shown = kind == "box" and marks["points"] != "none"
-    return {**marks, "points": "outliers" if shown else "none"}
-
-
 def render_stat_facets_figure(
     panels: list[dict[str, Any]],
     *,
@@ -282,12 +272,19 @@ def render_stat_facets_figure(
     facet renders byte-identically to that module's flat single-panel path --
     including P2.6 box 2's empty slots, ``show_n`` counts and ``caveat``
     footnote (``calc.figure_group_notes``) and P2.6 box 1's ``marks``
-    (summary marker / error bars / fliers -- faceted panels carry no row
-    indices, so no jittered points) and ``axis_style`` (label rotation /
-    wrapping / two-tier nested axis), applied to every panel alike.
+    (points / jitter / summary marker / error bars) and ``axis_style``
+    (label rotation / wrapping / two-tier nested axis), applied to every
+    panel alike. A panel's optional ``"kind": "strip"`` and
+    ``"point_row_indices"`` (its groups' ORIGINAL rows, parallel to ``data``)
+    draw its jittered points with the screen's hash; a panel without them
+    shows no jittered points (``figure_stat_marks.facet_marks``).
     """
-    with heavy_imports("quantized.calc.figure_group_notes", "quantized.calc.figure_statplots"):
+    with heavy_imports(
+        "quantized.calc.figure_group_notes", "quantized.calc.figure_stat_marks",
+        "quantized.calc.figure_statplots",
+    ):
         from quantized.calc.figure_group_notes import add_caveat, supxlabel_above_caveat
+        from quantized.calc.figure_stat_marks import facet_marks
         from quantized.calc.figure_statplots import _GROUPED, _draw_statplot
 
     if fmt not in _FORMATS:
@@ -322,7 +319,7 @@ def render_stat_facets_figure(
         title = safe_mathtext_label(title)
         x_label = safe_mathtext_label(x_label)
         y_label = safe_mathtext_label(y_label)
-        prepared: list[tuple[str, str, Any, list[str] | None, Any, Any, list[str] | None]] = []
+        prepared: list[tuple[str, str, Any, list[str] | None, Any, Any, list[str] | None, Any]] = []
         for p in panels:
             label = safe_mathtext_label(str(p.get("label", "")))
             kind = p.get("kind") or default_kind
@@ -337,12 +334,14 @@ def render_stat_facets_figure(
             raw_flabels = [str(g) for g in flabels] if flabels else None
             flabels = [safe_mathtext_label(str(g)) for g in flabels] if flabels else flabels
             prepared.append(
-                (label, kind, data, flabels, p.get("y_domain"), p.get("tiers"), raw_flabels),
+                (label, kind, data, flabels, p.get("y_domain"), p.get("tiers"), raw_flabels,
+                 p.get("point_row_indices")),
             )
         fig, axes = _new_grid_figure(n, figsize)
         panel_rows = zip(axes, prepared, strict=True)
         any_outer = False
-        for ax, (label, kind, data, flabels, y_domain, panel_tiers, raw_flabels) in panel_rows:
+        for ax, panel in panel_rows:
+            label, kind, data, flabels, y_domain, panel_tiers, raw_flabels, rows = panel
             # Review finding 4: a nested axis's [outer, inner] pairs are
             # PER-PANEL (each panel's own composite labels) -- never the
             # shared top-level `axis_style`, whose own `tiers` (if any) was
@@ -354,7 +353,8 @@ def render_stat_facets_figure(
             )
             outer = _draw_statplot(
                 ax, kind, data, flabels, dist, bins, fit, st, show_n=show_n,
-                marks=_facet_marks(marks, kind), axis_style=panel_style, raw_labels=raw_flabels,
+                marks=facet_marks(marks, kind, has_rows=rows is not None), axis_style=panel_style,
+                raw_labels=raw_flabels, point_row_indices=rows,
             )
             # Review finding 5: at least one panel drew a two-tier nested
             # axis (its own outer-level row) -- the shared x title/caveat
@@ -410,7 +410,10 @@ def render_categorical_facets_figure(
 
     P2.6 box 2: an optional per-panel ``"counts"`` (``[group][series]``)
     labels each grouped bar ``n=K``, and ``caveat`` becomes a footnote --
-    the flat renderer's behaviour, via the same helpers.
+    the flat renderer's behaviour, via the same helpers. An optional
+    per-panel ``"bar_marks"`` (``figure_stat_marks.overlay_bar_marks``'s
+    keywords, that panel's own ``raw`` / ``raw_rows``) draws its points and
+    summary marker as the flat export does; stacked panels draw none.
     """
     with heavy_imports("quantized.calc.figure_categorical", "quantized.calc.figure_group_notes"):
         from quantized.calc.figure_categorical import (
@@ -465,12 +468,13 @@ def render_categorical_facets_figure(
             )
             errs = _to_error_matrix(p.get("errors"), len(groups), len(series))
             cnts = None if stacked else _to_counts(p.get("counts"), len(groups), len(series))
-            prepared.append((label, groups, series, vals, errs, cnts, raw_groups))
+            marks = p.get("bar_marks")  # stacked panels draw none (_draw_categorical_bars)
+            prepared.append((label, groups, series, vals, errs, cnts, raw_groups, marks))
         fig, axes = _new_grid_figure(n, figsize)
         cat_rows = zip(axes, prepared, strict=True)
-        for ax, (label, groups, series, vals, errs, cnts, raw_groups) in cat_rows:
+        for ax, (label, groups, series, vals, errs, cnts, raw_groups, bar_marks) in cat_rows:
             _draw_categorical_bars(
-                ax, groups, series, vals, errs, stacked, cnts, axis_style, raw_groups,
+                ax, groups, series, vals, errs, stacked, cnts, axis_style, raw_groups, bar_marks,
             )
             ax.set_title(label, fontsize=st.font_size)
             if not st.box_on:

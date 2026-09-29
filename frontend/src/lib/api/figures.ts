@@ -48,6 +48,10 @@ export interface FigureEncodingSpec {
   label_col?: number;
   palette?: string[];
   markers?: string[];
+  /** P1.4 residual 4: a continuous colour column (a gradient). */
+  gradient_col?: number;
+  /** P1.4 residual 5: text columns appended as channels n, n+1, … (by name). */
+  text_columns?: string[];
 }
 
 export interface FigureSpec {
@@ -269,7 +273,7 @@ export function exportFieldFigure(body: FieldFigureSpec, signal?: AbortSignal): 
  *  falls back to the request's own top-level `kind`. */
 export interface StatplotFacetSpec {
   label: string;
-  kind?: "box" | "violin";
+  kind?: "box" | "violin" | "strip";
   data: number[][];
   labels?: string[] | null;
   /** Review finding 2: this panel's own canvas y-domain (box only — see
@@ -282,6 +286,10 @@ export interface StatplotFacetSpec {
    *  SHARED top-level `axis_style.tiers` (which has no single panel's
    *  labels to describe). Null/absent outside a nested plot. */
   tiers?: [string, string][] | null;
+  /** JMP_GAP J5 residual: this panel's groups' ORIGINAL rows, parallel to
+   *  `data` — its jittered points hash the screen's `(row, category)`.
+   *  Absent: the panel draws no jittered points. */
+  point_row_indices?: number[][] | null;
 }
 
 /** A statistical-plot export request (StatStage's "Export figure" button):
@@ -382,6 +390,13 @@ export interface CategoricalFacetSpec {
   errors: (number | null)[][];
   /** P2.6 box 2: [group][series] n -> an n=K label over each grouped bar. */
   counts?: number[][] | null;
+  /** JMP_GAP J5 residual: this panel's grouped-bar points / summary marker
+   *  (the flat request's `points` .. `raw_rows`, over this panel's cells). */
+  points?: "all" | "outliers" | "none" | null;
+  jitter_width?: number | null;
+  summary?: "none" | "mean" | "median" | null;
+  raw?: number[][][] | null;
+  raw_rows?: number[][][] | null;
 }
 
 /** A grouped/stacked bar-chart export request (StatStage bar mode's "Export

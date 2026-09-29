@@ -2,8 +2,9 @@
 // (which owns the schema + pure capture) to keep both files well under the
 // 500-line god-module ceiling. `parseRecipe` is the strict, throwing entry
 // point for an explicit import/paste (the `lib/template.ts` `parseTemplate`
-// precedent: throws "unsupported ... version" on a schema mismatch, throws a
-// clear message on any other structural defect). `sanitizeRecipes` is the
+// precedent: an older schema version is first migrated forward by
+// `plotRecipeMigrate.ts`, a newer/malformed one throws a named error, and any
+// other structural defect throws a clear message). `sanitizeRecipes` is the
 // tolerant, NEVER-throws entry point for the untrusted `.dwk`/workspace-load
 // boundary (the `lib/quickPlotTemplates.ts` `sanitizeQuickPlotTemplates`
 // "drop-malformed-never-throw" shape) -- each list entry validated
@@ -38,6 +39,7 @@ import {
 } from "./plotRecipeSchema";
 import type { CompositionKind } from "./composition";
 import type { ErrorSide } from "./errorRoles";
+import { migrateRecipeObject, sanitizeOutlierPolicy, sanitizePreview, sanitizeTransformRef } from "./plotRecipeMigrate";
 
 const ROLES: readonly RecipeChannelRole[] = ["x", "y", "y2", "group", "facet", "error"];
 const ERROR_ROLES: readonly SignatureErrorRole[] = [
@@ -329,13 +331,15 @@ function sanitizeVisual(v: unknown): RecipeVisual {
  *  signature/mapping (those default to nothing sane, so a defect there drops
  *  the WHOLE recipe); every `visual` field degrades independently instead
  *  (a corrupt legend position doesn't cost the recipe its channel mapping).
- *  `schemaVersion` must match exactly -- a mismatch is treated the same as
- *  any other structural defect here (drop); `parseRecipe` below gives that
- *  ONE case its own distinct, named error instead. */
+ *  An OLDER `schemaVersion` is first walked forward by `plotRecipeMigrate.ts`
+ *  (so a recipe saved by an earlier build still loads); a newer or
+ *  non-integer one is treated like any other structural defect here (drop);
+ *  `parseRecipe` below gives that case its own distinct, named error. */
 function sanitizeRecipeEntry(v: unknown): PlotRecipe | null {
   if (typeof v !== "object" || v === null) return null;
-  const o = v as Record<string, unknown>;
-  if (o.schemaVersion !== PLOT_RECIPE_SCHEMA_VERSION) return null;
+  const migrated = migrateRecipeObject(v as Record<string, unknown>);
+  if ("error" in migrated) return null;
+  const o = migrated.ok;
   if (typeof o.id !== "string" || !o.id) return null;
   // finding 4: unified on the trim check `parseRecipe` already used, so the
   // strict and tolerant paths never again disagree on a whitespace-only name.
@@ -372,6 +376,9 @@ function sanitizeRecipeEntry(v: unknown): PlotRecipe | null {
     // anything but a literal `true` reads as "eligible for auto-suggestion",
     // same as an older persisted recipe that predates the field entirely.
     ...(o.noAutoSuggest === true ? { noAutoSuggest: true } : {}),
+    preview: sanitizePreview(o.preview),
+    outlierPolicy: sanitizeOutlierPolicy(o.outlierPolicy),
+    transform: sanitizeTransformRef(o.transform),
   };
 }
 
@@ -393,8 +400,8 @@ export function sanitizeRecipes(v: unknown): PlotRecipe[] {
 /** Parse + validate a single recipe document (an explicit import/paste, the
  *  `lib/template.ts` `parseTemplate` precedent) -- throws with a clear
  *  message rather than degrading, since there is no sane default for "the
- *  file the user explicitly chose to import". A `schemaVersion` that isn't
- *  exactly `PLOT_RECIPE_SCHEMA_VERSION` gets its own named error; every
+ *  file the user explicitly chose to import". An older `schemaVersion` is
+ *  migrated forward; a newer or malformed one gets its own named error; every
  *  other structural defect (missing signature/mapping/identity) reuses the
  *  same validators `sanitizeRecipes` does, so "strict" and "tolerant" always
  *  agree on what counts as well-formed. Unrecognized extra top-level keys
@@ -410,9 +417,8 @@ export function parseRecipe(text: string): PlotRecipe {
   }
   if (typeof parsed !== "object" || parsed === null) throw new Error("not a plot recipe file");
   const o = parsed as Record<string, unknown>;
-  if (o.schemaVersion !== PLOT_RECIPE_SCHEMA_VERSION) {
-    throw new Error(`unsupported plot recipe schema version: ${String(o.schemaVersion)}`);
-  }
+  const migrated = migrateRecipeObject(o);
+  if ("error" in migrated) throw new Error(migrated.error);
   if (typeof o.name !== "string" || !o.name.trim()) throw new Error("plot recipe needs a name");
   const recipe = sanitizeRecipeEntry(o);
   if (!recipe) throw new Error("plot recipe has malformed identity, signature, or mapping fields");

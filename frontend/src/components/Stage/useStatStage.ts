@@ -17,7 +17,7 @@
 // background window feeds it the window's OWN `PlotView` snapshot
 // (`windows/BackgroundAltModes.tsx`). ZERO store value imports (types only).
 //
-// Faceting (GUI_INTERACTION #11 residual): Box/Violin/Bar can facet by a
+// Faceting (GUI_INTERACTION #11 residual): Box/Violin/Strip/Bar can facet by a
 // second categorical column (`facetCol`, internal picker state — see its
 // declaration below). When set, `drawFacets` holds one draw per facet-column
 // level (`lib/facet.facetSlices` re-runs the SAME group/bar pipeline per
@@ -248,11 +248,11 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
       return;
     }
 
-    // Faceted box/violin/bar (GUI_INTERACTION #11): one draw per facet-column
-    // level instead of the flat single panel. The flat `draw` stays null
+    // Faceted box/violin/strip/bar (GUI_INTERACTION #11): one draw per facet-
+    // column level instead of the flat single panel (with its own points). The flat `draw` stays null
     // while faceted (see the StatStageState doc — `exportFigure` reads
     // `drawFacets` instead, GUI_INTERACTION #12 slice 4b).
-    if (effectiveFacetCol != null && (mode === "box" || mode === "violin" || mode === "bar")) {
+    if (effectiveFacetCol != null && marksMode) {
       setDrawData(null);
       const finishFacets = (results: FacetDraw[]) => {
         if (cancelled) return;
@@ -264,7 +264,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
           setNote(null);
         }
       };
-      if (mode === "bar") {
+      if (marksMode === "bar") {
         // Synchronous (no backend round-trip) — mirrors the flat bar branch
         // below, which also skips busy/cancelled bookkeeping.
         finishFacets(
@@ -278,6 +278,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
             barValueLabel,
             barStack,
             groupLabel,
+            barRaw ? { rowIds } : null,
           ),
         );
         return () => {
@@ -286,7 +287,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
       }
       setBusy(true);
       void computeFacetGroupDraws(
-        slices ?? [], mode, effectiveGroupCol, valueCol, plotted, valueLabel, groupLabel, nestCol, nestLabel,
+        slices ?? [], marksMode, effectiveGroupCol, valueCol, plotted, valueLabel, groupLabel, nestCol, nestLabel,
+        wantPoints ? { rowIds } : null,
       )
         .then(finishFacets)
         .finally(() => !cancelled && setBusy(false));
@@ -392,6 +394,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     groups,
     indexedGroups,
     wantPoints,
+    barRaw,
+    rowIds,
+    marksMode,
     valueCol,
     dist,
     bins,
@@ -418,8 +423,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   // The axes depend on the data + picks alone, so they are memoized apart.
   const axes = useMemo(() => levelAxes({
     active, data, mode, groupCol: effectiveGroupCol, group2Col: nestCol, valueCol, plotted, barValueChannels, slices,
-    facetCol: mode === "box" || mode === "violin" || mode === "bar" ? effectiveFacetCol : null,
-  }), [active, data, mode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels, effectiveFacetCol, slices]);
+    facetCol: marksMode ? effectiveFacetCol : null,
+  }), [active, data, mode, marksMode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels, effectiveFacetCol, slices]);
   const levels = useMemo(
     () => applyLevels(axes, { hideEmpty, showN }, drawData, drawFacets, { draw: freshDraw, facets: freshFacets }),
     [axes, hideEmpty, showN, drawData, drawFacets, freshDraw, freshFacets],

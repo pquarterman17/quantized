@@ -866,7 +866,9 @@ const TS_MODULE_PINS: Record<string, number> = {
   // 663 -> 603 (P1.4 Graph Builder encodings): the pure capture-on-save
   // builder moved to graphbuilder/captureLiveBlocks.ts, funding the
   // Color/Symbol/Label wells' gating, preview and export hand-off.
-  "/components/workshops/graphbuilder/useGraphBuilder.ts": 603,
+  // 603 -> 591 (P1.4 residuals 4, 5): the wells' options / chips / refusals
+  // moved to graphbuilder/encodingWellModel.ts. A ratchet, not a bump.
+  "/components/workshops/graphbuilder/useGraphBuilder.ts": 591,
   // 658 -> 650 (2026-09-14, BUG-013): `applyWaterfall`'s span/step scan moved
   // to lib/waterfallOffset.ts, where the EXPORT wire's `waterfall_offsets` builder
   // reads it too — so the canvas and the exported figure resolve the same step

@@ -14,6 +14,8 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { resolveToHex } from "../../lib/color";
+import { colorScaleLegendEntries, colorScatterFill } from "../../lib/colorscatter";
+import { GRADIENT_DS, GRADIENT_SPEC, readGradientFixture, rgbToHex } from "../../test/gradientEncodingFixture";
 import { encodeSpec, specFigureEncoding } from "../../lib/plotEncoding";
 import { markSeriesStyle, type PlotSpec } from "../../lib/plotspec";
 import { SERIES_VARS, seriesColor } from "../../lib/seriesStyleCycle";
@@ -173,12 +175,63 @@ describe("usePlotPayload — P1.4 encodings on the editable Stage", () => {
     expect(split.result.current.errorBars.size).toBe(0);
   });
 
-  it("a continuous Color pick is ignored at render time (the gate), not re-interpreted", async () => {
+  it("a continuous Symbol pick is ignored at render time (the gate), not re-interpreted", async () => {
     const { result } = renderHook((q: PlotPayloadParams) => usePlotPayload(q), {
-      initialProps: params({ encoding: { color: 0 } }),
+      initialProps: params({ encoding: { symbol: 0 } }),
     });
     await waitFor(() => expect(result.current.displayPayload?.series).toHaveLength(1));
     expect(result.current.legendLabels).toBeUndefined();
     expect(result.current.displayPayload!.series[0].label).toBe("Rxy");
+    expect(result.current.colorByColumns.size).toBe(0);
+  });
+});
+
+// P1.4 residuals 4 and 5 on the Stage: a gradient Color-by (a continuous column)
+// and text-column factors, against the gradient wire fixture's `screen` — the
+// SAME points, glyphs, legend text and colour scale the Graph Builder preview
+// and the backend SVG are pinned to (lib/plotEncodingGradient.test.ts).
+describe("usePlotPayload — gradient Color-by and text-column factors (P1.4 residuals 4, 5)", () => {
+  const GRADIENT = readGradientFixture().screen;
+
+  it("draws every point in the fixture's colour, glyph by text level, one colour scale", async () => {
+    const encoding = specFigureEncoding(GRADIENT_SPEC)!;
+    expect(encoding).toEqual({ color: 1, text: { symbol: "C", label: "D" } });
+    const { result } = await renderEncoded(
+      params({ active: GRADIENT_DS, encoding, seriesStyles: { 0: markSeriesStyle(GRADIENT_SPEC) } }),
+      2,
+    );
+    const r = result.current;
+    const [x, ...ys] = r.displayPayload!.data as (number | null)[][];
+    const points = ys.map((col, i) =>
+      col.flatMap((y, row) => {
+        const fill = x[row] != null && y != null ? colorScatterFill(r.colorByColumns.get(i + 1)!, row) : null;
+        return fill === null ? [] : [rgbToHex(fill)];
+      }),
+    );
+    expect(points).toEqual(GRADIENT.points);
+    expect([...r.colorByColumns.values()].map((s) => s.shape)).toEqual(GRADIENT.markers);
+    expect(r.labelList).toEqual(GRADIENT.legend);
+    expect(colorScaleLegendEntries(GRADIENT_DS.data, r.colorByColumns)).toEqual([
+      { ...GRADIENT.colorbar, colormap: "viridis" },
+    ]);
+  });
+
+  it("takes the colour scale over the rows the figure keeps — the export's wire rows", async () => {
+    // Row 9 (T = 300) excluded: the window export prunes it, so the scale tops out at 185 on both.
+    const excluded: Dataset = { ...GRADIENT_DS, excludedRows: [9] };
+    const { result } = await renderEncoded(params({ active: excluded, encoding: { color: 1 } }), 1);
+    await waitFor(() => expect(result.current.colorByColumns.size).toBe(1));
+    expect(result.current.colorByColumns.get(1)).toMatchObject({ lo: 10, hi: 185, label: "T (K)" });
+  });
+
+  it("a gradient alone keeps one series per channel and its error bars", async () => {
+    const data = GRADIENT_DS.data;
+    const withErr: Dataset = {
+      ...GRADIENT_DS,
+      data: { ...data, labels: ["Rxy", "T", "dR"], units: ["Ohm", "K", "Ohm"], values: data.values.map((row) => [...row, 0.1]) },
+    };
+    const { result } = await renderEncoded(params({ active: withErr, encoding: { color: 1 }, errKeys: { 0: 2 } }), 1);
+    await waitFor(() => expect(result.current.colorByColumns.size).toBe(1));
+    expect(result.current.errorBars.size).toBe(1);
   });
 });

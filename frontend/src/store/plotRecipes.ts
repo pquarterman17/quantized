@@ -308,8 +308,8 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
         appVersion: PLOT_RECIPE_APP_VERSION,
         mark: focused.document?.plot.mark,
         errors: focused.document?.bindings.errors,
-        // No facetKey opt (K4/K6): `view` above already carries the live one.
-        axisBreaks: focused.document?.plot.axisBreaks,
+        axisBreaks: focused.document?.plot.axisBreaks, // facetKey rides `view` (K4/K6)
+        excludedDisplay: state.excludedDisplay, // v2 outlier policy (recorded, never applied)
       });
       get().recordHistory("Save Plot Recipe");
       set((s) => ({ plotRecipes: [...s.plotRecipes, recipe] }));

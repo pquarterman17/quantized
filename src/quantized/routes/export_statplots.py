@@ -93,6 +93,11 @@ class StatplotFacet(BaseModel):
     # `axis_style.tiers` (see CategoryAxisStyle.tiers's doc). None = no
     # tiering for this panel beyond the shared `axis_style.tiered` gate.
     tiers: list[tuple[str, str]] | None = None
+    # JMP_GAP J5 residual (closed 2026-09-29): this panel's groups' ORIGINAL
+    # dataset rows, parallel to `data` -- its jittered points use the screen's
+    # `(row, category)` hash. None = no jittered points in this panel (the
+    # rule before panels carried rows, `figure_stat_marks.facet_marks`).
+    point_row_indices: list[list[int]] | None = None
 
 
 class StatplotFigureRequest(BaseModel):
@@ -195,6 +200,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 {
                     "label": f.label, "kind": f.kind, "data": f.data, "labels": f.labels,
                     "y_domain": f.y_domain, "tiers": f.tiers,
+                    "point_row_indices": f.point_row_indices,
                 }
                 for f in req.facets
             ]
@@ -245,6 +251,29 @@ class CategoricalFacet(BaseModel):
     values: list[list[float | None]]
     errors: list[list[float | None]] | None = None
     counts: list[list[int]] | None = None
+    # JMP_GAP J5 residual (closed 2026-09-29): this panel's grouped-bar
+    # points / summary marker, the flat request's fields of the same names
+    # (see CategoricalFigureRequest) over this panel's own cells.
+    points: Literal["all", "outliers", "none"] | None = None
+    jitter_width: float | None = Field(default=None, ge=0.0, le=1.0)
+    summary: Literal["none", "mean", "median"] | None = None
+    raw: list[list[list[float]]] | None = None
+    raw_rows: list[list[list[int]]] | None = None
+
+    def bar_marks(self) -> dict[str, Any] | None:
+        return _bar_marks(self.points, self.jitter_width, self.summary, self.raw, self.raw_rows)
+
+
+def _bar_marks(
+    points: str | None, jitter_width: float | None, summary: str | None,
+    raw: list[list[list[float]]] | None, raw_rows: list[list[list[int]]] | None,
+) -> dict[str, Any] | None:
+    fields = {
+        "points": points, "jitter_width": jitter_width, "summary": summary,
+        "raw": raw, "raw_rows": raw_rows,
+    }
+    out = {k: v for k, v in fields.items() if v is not None}
+    return out or None
 
 
 class CategoricalFigureRequest(BaseModel):
@@ -292,12 +321,7 @@ class CategoricalFigureRequest(BaseModel):
     raw_rows: list[list[list[int]]] | None = None
 
     def bar_marks(self) -> dict[str, Any] | None:
-        fields = {
-            "points": self.points, "jitter_width": self.jitter_width, "summary": self.summary,
-            "raw": self.raw, "raw_rows": self.raw_rows,
-        }
-        out = {k: v for k, v in fields.items() if v is not None}
-        return out or None
+        return _bar_marks(self.points, self.jitter_width, self.summary, self.raw, self.raw_rows)
 
 
 @router.post("/categorical-figure")
@@ -324,6 +348,7 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
                 {
                     "label": f.label, "groups": f.groups, "series": f.series,
                     "values": f.values, "errors": f.errors, "counts": f.counts,
+                    "bar_marks": f.bar_marks(),
                 }
                 for f in req.facets
             ]

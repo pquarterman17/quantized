@@ -47,6 +47,7 @@ from typing import Any
 import numpy as np
 from numpy.typing import NDArray
 
+from quantized.calc.figure_colorscatter import GRADIENT_STOPS
 from quantized.calc.figure_greyscale import GREY_SLOT_KEY
 from quantized.calc.figure_group_styles import expand_grouped_series_styles
 from quantized.calc.plotting import (
@@ -64,6 +65,7 @@ __all__ = [
     "EncodedPlot",
     "build_encoded_series",
     "encoded_series_styles",
+    "gradient_spec",
     "legend_source_text",
 ]
 
@@ -246,6 +248,7 @@ def encoded_series_styles(
     palette: Sequence[str] | None,
     markers: Sequence[str] | None,
     color_by_level: bool,
+    gradient: Mapping[str, Any] | None = None,
 ) -> list[dict[str, Any] | None]:
     """Per-series styles for an encoded figure: the ``y_keys``-aligned
     ``channel_styles`` expanded onto each channel's series (BUG-016's
@@ -255,7 +258,13 @@ def encoded_series_styles(
     ``seriesColor`` does) and, for a symbol factor, ``marker`` + its glyph.
     With ``color_by_level`` each series also names its colour level as its
     greyscale slot (:data:`quantized.calc.figure_greyscale.GREY_SLOT_KEY`), so
-    print-safe mode greys a level alike on every Y channel."""
+    print-safe mode greys a level alike on every Y channel.
+
+    ``gradient`` (:func:`gradient_spec`, P1.4 residual 4) makes every series a
+    colour-mapped scatter over the same per-row values, stops and range --
+    ``calc.figure_colorscatter``'s gradient branch, the screen's colour rule --
+    with one colourbar (on the first series); a symbol factor's glyph still
+    applies."""
     n = len(encoded.plot.series)
     expanded = expand_grouped_series_styles(channel_styles, n_channels, n) or [None] * n
     out: list[dict[str, Any] | None] = []
@@ -273,5 +282,31 @@ def encoded_series_styles(
         if markers and glyph is not None:
             st["marker"] = True
             st["marker_shape"] = markers[glyph % len(markers)]
+        if gradient is not None:
+            st.update(gradient)
+            st["colorbar"] = i == 0
         out.append(st or None)
     return out
+
+
+def gradient_spec(ds: DataStruct, gradient_col: int | str) -> dict[str, Any] | None:
+    """The style keys a gradient Color-by lays on every encoded series -- the
+    port of ``lib/plotEncoding.ts``'s ``encodedGradient``: the column's per-row
+    values (``color_by``), its finite range over the request's rows (the rows
+    the screen keeps: ``color_lim``), the screen's colormap stops
+    (:data:`quantized.calc.figure_colorscatter.GRADIENT_STOPS`) and the
+    colour-scale label ``"name (unit)"``. ``None`` when the column has no
+    finite value, as the screen then colours nothing."""
+    col = _check(ds, gradient_col, "gradient_col")
+    z = ds.values[:, col]
+    finite = z[np.isfinite(z)]
+    if finite.size == 0:
+        return None
+    unit = ds.units[col]
+    return {
+        "color_by": z.tolist(),
+        "color_lim": [float(finite.min()), float(finite.max())],
+        "color_stops": list(GRADIENT_STOPS),
+        "colormap": "viridis",
+        "colorbar_label": f"{ds.labels[col]} ({unit})" if unit else ds.labels[col],
+    }

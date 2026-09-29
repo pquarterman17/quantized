@@ -187,12 +187,19 @@ export function plotSpecToFigureDoc(
 
 /** The encoding a draft stores: the GATED factors `encodeSpec` resolved (own
  *  dataset, categorical colour/symbol), as the document's channel indices. */
-function draftEncoding({ color, symbol, label }: EncodedSpec["enc"]): FigureEncoding {
-  return {
-    ...(color === null ? {} : { color }),
-    ...(symbol === null ? {} : { symbol }),
-    ...(label === null ? {} : { label }),
-  };
+/** The GATED picks back in the document's form: an index past the dataset's
+ *  own channels is a text column (`Encoding.text`), a gradient is a colour pick. */
+function draftEncoding({ ds, enc }: EncodedSpec): FigureEncoding {
+  const n = ds.data.labels.length;
+  const out: FigureEncoding = {};
+  const text: Record<string, string> = {};
+  const slots = { color: enc.color ?? enc.gradient ?? null, symbol: enc.symbol, label: enc.label };
+  for (const [k, c] of Object.entries(slots) as [keyof typeof slots, number | null][]) {
+    if (c === null) continue;
+    if (c >= n) text[k] = enc.text?.[c - n] ?? "";
+    else out[k] = c;
+  }
+  return Object.keys(text).length > 0 ? { ...out, text } : out;
 }
 
 /** The Graph Builder -> Publication Preview handoff: `plotSpecToFigureDoc`,
@@ -221,5 +228,5 @@ export function plotSpecToFigureDocument(
       seriesStyles: stylesForMark(spec, {}, true),
     },
   });
-  return { ...document, bindings: { ...document.bindings, encoding: draftEncoding(encoded.enc) } };
+  return { ...document, bindings: { ...document.bindings, encoding: draftEncoding(encoded) } };
 }

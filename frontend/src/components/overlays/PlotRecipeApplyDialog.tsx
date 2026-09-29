@@ -32,6 +32,7 @@ import { useId, useRef } from "react";
 import { useApp } from "../../store/useApp";
 import { useDialogFocus } from "./useDialogFocus";
 import { Button } from "../primitives";
+import { RecipeThumbnail } from "../workshops/recipemanager/RecipeThumbnail";
 
 /** Human-readable "recipe field -> current column" rows, built straight off
  *  the resolution's already-re-keyed indices + the live dataset's labels --
@@ -88,6 +89,8 @@ export default function PlotRecipeApplyDialog() {
         }}
       >
         <h2 id={titleId}>Apply Plot Recipe “{pending.recipe.name}”</h2>
+        {/* F4.2: what the recipe looks like, captured when it was saved. */}
+        <RecipeThumbnail preview={pending.recipe.preview} label={pending.recipe.name} />
         {rows.length > 0 && (
           <table className="qzk-recipe-mapping" style={{ width: "100%", borderCollapse: "collapse", marginTop: 8 }}>
             <tbody>

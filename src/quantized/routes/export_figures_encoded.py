@@ -15,8 +15,13 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
+from quantized.calc.encoding_text import append_text_factors
 from quantized.calc.plotting import resolve_style_channels
-from quantized.calc.plotting_encoded import build_encoded_series, encoded_series_styles
+from quantized.calc.plotting_encoded import (
+    build_encoded_series,
+    encoded_series_styles,
+    gradient_spec,
+)
 from quantized.datastruct import DataStruct
 from quantized.routes.export_figures_labels import derived_axis_label, series_legends
 from quantized.routes.export_figures_schema import _ResolvedFigure
@@ -51,9 +56,20 @@ class FigureEncoding(BaseModel):
         default=None,
         description="The glyph cycle (`MarkerShape` names), indexed by symbol LEVEL.",
     )
+    gradient_col: int | None = Field(
+        default=None,
+        description="Continuous column whose value colours each point (a gradient; no split).",
+    )
+    text_columns: list[str] | None = Field(
+        default=None,
+        description=(
+            "Text columns (metadata `text_columns`/`origin_text_columns`, by short name) "
+            "appended as categorical channels n, n+1, ... before the split."
+        ),
+    )
 
     def active(self) -> bool:
-        cols = (self.color_col, self.symbol_col, self.label_col)
+        cols = (self.color_col, self.symbol_col, self.label_col, self.gradient_col)
         return any(c is not None for c in cols)
 
 
@@ -89,6 +105,7 @@ def resolve_encoded_figure(
             "drawn on the primary axis"
         )
     keys = list(y_keys) if y_keys is not None else list(range(ds.n_channels))
+    ds = append_text_factors(ds, enc.text_columns or [])
     encoded = build_encoded_series(
         ds,
         x_key,
@@ -114,6 +131,7 @@ def resolve_encoded_figure(
         palette=enc.palette,
         markers=enc.markers,
         color_by_level=enc.color_col is not None,
+        gradient=None if enc.gradient_col is None else gradient_spec(ds, enc.gradient_col),
     )
     split = group_col is not None or enc.color_col is not None or enc.symbol_col is not None
     return _ResolvedFigure(

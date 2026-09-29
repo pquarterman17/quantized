@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { buildColorByColumns, colorScaleLegendEntries } from "./colorscatter";
+import {
+  buildColorByColumns,
+  colorScaleLegendEntries,
+  colorScatterFill,
+  paintColorPoint,
+  type ColorScatterSpec,
+} from "./colorscatter";
 import type { DataStruct, SeriesStyle } from "./types";
 
 const ds: DataStruct = {
@@ -63,5 +69,46 @@ describe("colorScaleLegendEntries", () => {
 
   it("returns an empty array for an empty columns map", () => {
     expect(colorScaleLegendEntries(ds, new Map())).toEqual([]);
+  });
+
+  it("collapses identical scales to one key and prefers a spec's own label (P1.4 gradient)", () => {
+    const spec: ColorScatterSpec = { channel: 1, z: [100], colormap: "viridis", lo: 100, hi: 400, label: "T (K)" };
+    const columns = new Map([[1, spec], [2, { ...spec, shape: "square" as const }]]);
+    expect(colorScaleLegendEntries(ds, columns)).toEqual([{ label: "T (K)", colormap: "viridis", lo: 100, hi: 400 }]);
+    // A different range is a different key.
+    columns.set(3, { ...spec, hi: 500 });
+    expect(colorScaleLegendEntries(ds, columns)).toHaveLength(2);
+  });
+});
+
+describe("colorScatterFill / paintColorPoint — the one colour rule (P1.4 gradient shares it)", () => {
+  const spec: ColorScatterSpec = { channel: 2, z: [0, 5, 10, null, -3, 99], colormap: "viridis", lo: 0, hi: 10 };
+
+  it("normalizes over [lo, hi], clamps outside it, and draws nothing for a missing value", () => {
+    expect(colorScatterFill(spec, 0)).toBe("rgb(68, 1, 84)"); // viridis' first stop
+    expect(colorScatterFill(spec, 2)).toBe("rgb(253, 231, 37)"); // its last
+    expect(colorScatterFill(spec, 1)).toBe("rgb(33, 144, 141)"); // the middle stop
+    expect(colorScatterFill(spec, 3)).toBeNull();
+    expect(colorScatterFill(spec, 4)).toBe("rgb(68, 1, 84)");
+    expect(colorScatterFill(spec, 5)).toBe("rgb(253, 231, 37)");
+    expect(colorScatterFill({ ...spec, hi: 0 }, 1)).toBe("rgb(68, 1, 84)"); // degenerate range reads 0
+  });
+
+  it("paints a circle by default and a glyph when asked — filled or stroked", () => {
+    const calls: string[] = [];
+    const ctx = new Proxy({} as CanvasRenderingContext2D, {
+      get: (_t, k: string) => (k === "fillStyle" || k === "strokeStyle" ? "" : () => calls.push(k)),
+      set: () => true,
+    });
+    paintColorPoint(ctx, 5, 5, 2, "rgb(1, 2, 3)");
+    expect(calls).toEqual(["beginPath", "arc", "fill"]);
+    calls.length = 0;
+    paintColorPoint(ctx, 5, 5, 2, "rgb(1, 2, 3)", "square");
+    // The square's four corners, closed and filled — no circle.
+    expect(calls).toEqual(["beginPath", "moveTo", "lineTo", "lineTo", "lineTo", "closePath", "fill"]);
+    calls.length = 0;
+    paintColorPoint(ctx, 5, 5, 2, "rgb(1, 2, 3)", "plus");
+    expect(calls).toContain("lineTo");
+    expect(calls.at(-1)).toBe("stroke");
   });
 });

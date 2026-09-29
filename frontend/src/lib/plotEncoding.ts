@@ -39,12 +39,24 @@
 // (BUG-014's rename rule, `seriesDisplayLabel`), prefixed "Y (…)" when more than
 // one Y channel is plotted; rows with no finite value keep the default name.
 //
-// GATING, through the modeling chokepoint: colour and symbol accept only a
-// channel `channelModelingType` reads as categorical (override first, then the
-// P1.4 level table, then inference — `isCategoricalChannel` is consulted there,
-// the discipline Data Filter/Tabulate/Stat Stage already follow). A pick that
-// stops reading categorical is IGNORED at render time (the BUG-004 lesson), not
-// silently re-interpreted; the well says so.
+// GATING, through the modeling chokepoint: symbol accepts only a channel
+// `channelModelingType` reads as categorical (override first, then the P1.4
+// level table, then inference — `isCategoricalChannel` is consulted there, the
+// discipline Data Filter/Tabulate/Stat Stage already follow); a symbol pick
+// that stops reading categorical is IGNORED at render time (the BUG-004
+// lesson), and the well says so. Colour takes a categorical column as levels
+// and a CONTINUOUS one as a GRADIENT (residual 4): no split; every point is
+// coloured by its own row's value through `colorscatter.colorScatterFill`
+// (viridis over the column's full finite range, `EncodedGradient`) and drawn
+// as a point — the series' line hidden, MAIN #14's colour-mapped scatter rule
+// — with its series' glyph; the legend gains one colour scale. The well names
+// which reading applies.
+//
+// TEXT COLUMNS (residual 5): a row-indexed text column (Origin's
+// `origin_text_columns`, no channel index) is picked by name and appended as a
+// categorical channel by `plotEncodingBinding.encodingData` before the split,
+// so it is a factor or a label source like any other column, and the wire
+// dataset carries it to the backend.
 //
 // SCOPE, honestly: xy marks only, and not while faceted (facet panels render
 // through `facetPayloads`, which splits nothing — the same limit Group has
@@ -64,6 +76,7 @@
 import { categoryLevels, groupLevelLabel, levelOrderFor, levelsOf, orderLevels } from "./categorical";
 import { buildErrorSpans, type ErrorSpan } from "./errorbars";
 import type { ErrorBinding } from "./errorRoles";
+import { ENCODING_SLOTS, type FigureEncodingText } from "./figureEncoding";
 import { seriesDisplayLabel } from "./figureSpecSeries";
 import { spatialCellStyling } from "./multipanel";
 import { buildColumns, type PlotPayload } from "./plotdata";
@@ -85,6 +98,7 @@ import {
 } from "./plotspec";
 import { analysisData } from "./rowstate";
 import { AUTO_MARKER_CYCLE, SERIES_VARS } from "./seriesStyleCycle";
+import { encodedGradient, encodingData, type EncodedGradient } from "./plotEncodingScales";
 import type { DataStruct, Dataset, SeriesStyle } from "./types";
 
 /** Distinct label values listed in full before the "first … last (n values)"
@@ -92,6 +106,10 @@ import type { DataStruct, Dataset, SeriesStyle } from "./types";
 export const LABEL_LIST_MAX = 3;
 
 export { isEncodingFactor, type Encoding };
+// Residuals 4 and 5 (gradient scale, text-column factors) live in
+// ./plotEncodingScales for this module's ceiling; re-exported so the Stage's one
+// lazy import (`Stage/usePlotEncoding`) reaches them too.
+export * from "./plotEncodingScales";
 
 /** One encoded series, 1:1 with the payload's series. */
 export interface EncodedSeries {
@@ -108,6 +126,9 @@ export type EncodedLegendEntry = ReturnType<typeof spatialCellStyling>["legendEn
 /** Everything the preview and the export read, from one derivation. */
 export interface EncodedSpec {
   ds: Dataset;
+  /** The analysis rows (the wire dataset); `data` is them plus the appended
+   *  text-column factors (`encodingData`), which the split reads. */
+  source: DataStruct;
   data: DataStruct;
   enc: Encoding;
   /** Does a factor (group/color/symbol) split the series? False for a
@@ -123,32 +144,37 @@ export interface EncodedSpec {
    *  series has no 1:1 well pairing, the group split's own rule), so the
    *  preview's whiskers and the export's `error_spans` come from one list. */
   errors: ErrorBinding[];
+  /** The gradient Color-by's scale and per-row values (`data`'s rows), or null. */
+  gradient: EncodedGradient | null;
+}
+
+/** The picks among `refs` (optionally only `datasetId`'s) as a document stores
+ *  them: raw channel indices, a text column by name. Undefined when none. */
+function picksOf(refs: PlotSpec["zones"], datasetId?: string): FigureEncoding | undefined {
+  const picks: FigureEncoding = {};
+  const text: FigureEncodingText = {};
+  for (const k of ENCODING_SLOTS) {
+    const r = refs[k];
+    if (!r || (datasetId !== undefined && r.datasetId !== datasetId)) continue;
+    if (r.text !== undefined) text[k] = r.text;
+    else picks[k] = r.channel;
+  }
+  if (Object.keys(text).length > 0) picks.text = text;
+  return Object.keys(picks).length > 0 ? picks : undefined;
 }
 
 /** The spec's encoding picks as the plot window's document stores them
- *  (`FigureBindings.encoding`) — raw channel indices, ungated (the gate runs at
- *  render time) — or undefined when the spec sets none. */
+ *  (`FigureBindings.encoding`) — raw channel indices and text-column names,
+ *  ungated (the gate runs at render time) — or undefined when it sets none. */
 export function specFigureEncoding(spec: PlotSpec): FigureEncoding | undefined {
-  const { color, symbol, label } = spec.zones;
-  if (!color && !symbol && !label) return undefined;
-  return {
-    ...(color ? { color: color.channel } : {}),
-    ...(symbol ? { symbol: symbol.channel } : {}),
-    ...(label ? { label: label.channel } : {}),
-  };
+  return picksOf(spec.zones);
 }
 
 /** The spec's encoding against `ds`, gated (see the module doc), or null when
- *  no colour / symbol / label encoding survives — the ordinary render path. */
+ *  no colour / symbol / label / gradient survives — the ordinary render path. */
 export function resolveEncoding(spec: PlotSpec, ds: Dataset): Encoding | null {
-  const own = (r: ChannelRef | null | undefined): number | undefined =>
-    r && r.datasetId === ds.id ? r.channel : undefined;
-  const z = spec.zones;
-  return resolveFigureEncoding(
-    { color: own(z.color), symbol: own(z.symbol), label: own(z.label) },
-    ds,
-    own(z.group) ?? null,
-  );
+  const group: ChannelRef | null = spec.zones.group;
+  return resolveFigureEncoding(picksOf(spec.zones, ds.id), ds, group && group.datasetId === ds.id ? group.channel : null);
 }
 
 function channelLabel(data: DataStruct, channel: number): string {
@@ -334,10 +360,11 @@ export function encodeSpec(spec: PlotSpec, datasets: readonly Dataset[]): Encode
   if (spec.mark !== "scatter" && spec.mark !== "line" && spec.mark !== "step") return null;
   if (spec.zones.facet || spec.zones.y.length === 0) return null;
   const ds = datasets.find((d) => d.id === specDatasetId(spec));
-  const data = analysisData(ds);
-  if (!ds || !data || data.time.length === 0) return null;
+  const rows = analysisData(ds);
+  if (!ds || !rows || rows.time.length === 0) return null;
   const enc = resolveEncoding(spec, ds);
   if (!enc) return null;
+  const data = encodingData(rows, enc); // text-column factors appended (residual 5)
   const xKey = spec.zones.x?.channel ?? null;
   const yChannels = spec.zones.y.map((r) => r.channel);
   const { payload, series } = buildEncodedXY(data, xKey, yChannels, enc);
@@ -359,7 +386,8 @@ export function encodeSpec(spec: PlotSpec, datasets: readonly Dataset[]): Encode
     false,
   );
   const errors = split ? [] : specErrorBindings(spec);
-  return { ds, data, enc, split, xKey, yChannels, payload, series, styles, legend: legendEntries, errors };
+  const gradient = encodedGradient(data, enc);
+  return { ds, source: rows, data, enc, split, xKey, yChannels, payload, series, styles, legend: legendEntries, errors, gradient };
 }
 
 /** The Graph Builder render: `specToRender` for every spec that does not

@@ -322,7 +322,7 @@ export function RecipeRow({
       <RecipeRowActions row={row} onChanged={refresh} onResult={onResult}
         busy={busy} setBusy={setBusy}
         onRename={supportsOperation(row.kind, "rename") ? openNameEditor : undefined} />
-      {detailsOpen && <RecipeDetails id={detailsId} details={details} />}
+      {detailsOpen && <RecipeDetails id={detailsId} details={details} label={row.name} />}
     </li>
   );
 }

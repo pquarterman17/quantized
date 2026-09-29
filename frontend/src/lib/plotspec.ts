@@ -121,6 +121,7 @@ import { facetPayloads, facetSlices, type FacetPanel } from "./facet";
 import { groupLevelLabel } from "./categorical";
 import { groupSplitLevels } from "./plotGroupSplit";
 import { channelModelingType, isCategorical } from "./modeling";
+import { specGroupCol } from "./plotspecGroupCol";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import {
   axesBlockHasContent,
@@ -166,6 +167,7 @@ export type {
 export interface ChannelRef {
   datasetId: string;
   channel: number;
+  text?: string; // P1.4 encoding wells only: a text column's short name (`channel` is then -1)
 }
 
 /** The mark (glyph) a spec renders with. */
@@ -271,7 +273,7 @@ export function emptySpec(): PlotSpec {
 /** Structural ChannelRef equality (same dataset + channel). */
 export function channelRefEq(a: ChannelRef | null, b: ChannelRef | null): boolean {
   if (a === null || b === null) return a === b;
-  return a.datasetId === b.datasetId && a.channel === b.channel;
+  return a.datasetId === b.datasetId && a.channel === b.channel && a.text === b.text;
 }
 
 /** The dataset a spec targets: the id shared by its filled zones (X wins, then
@@ -283,8 +285,7 @@ export function specDatasetId(spec: PlotSpec): string | null {
   return (z.x ?? z.y[0] ?? z.group ?? z.facet ?? z.color ?? z.symbol ?? z.label)?.datasetId ?? null;
 }
 
-/** Is any renderable zone filled (X, a Y, or group)? Facet alone is not
- *  renderable in v1. */
+/** Is any renderable zone filled (X, a Y, or group)? Facet alone is not renderable in v1. */
 export function specHasContent(spec: PlotSpec): boolean {
   return spec.zones.x !== null || spec.zones.y.length > 0 || spec.zones.group !== null;
 }
@@ -600,8 +601,7 @@ export function specToRender(spec: PlotSpec, datasets: readonly Dataset[]): Spec
   }
 
   if (spec.mark === "box" || spec.mark === "violin") {
-    const x = spec.zones.x;
-    const groupCol = x && isCategorical(channelModelingType(ds, x.channel)) ? x.channel : null;
+    const groupCol = specGroupCol(spec, ds);
     const valueCol = yChannels[0];
     const groups = resolveGroups(data, groupCol, valueCol, yChannels).filter((g) => g.values.length > 0);
     if (groups.length === 0) return hint("No finite values to group.");
@@ -629,8 +629,7 @@ export function specToRender(spec: PlotSpec, datasets: readonly Dataset[]): Spec
 
   // mark === "bar" (GAP_PLOTTYPES #4): X must be categorical — it's the
   // group axis; every Y channel becomes a clustered/stacked series within it.
-  const x = spec.zones.x;
-  const groupCol = x && isCategorical(channelModelingType(ds, x.channel)) ? x.channel : null;
+  const groupCol = specGroupCol(spec, ds);
   if (groupCol === null) return note("Bar charts need a categorical X column.");
   const seriesLabels = yChannels.map((c) => channelLabel(data, c));
   const matrix = buildBarMatrix(data, groupCol, yChannels, seriesLabels);
@@ -725,8 +724,8 @@ export function validatePlotSpec(value: unknown): PlotSpec | null {
   // P1.4 encodings: kept only when a real ref survives, so a spec without them
   // serializes exactly as before they existed (the V1_FIXTURE byte contract).
   for (const k of ["color", "symbol", "label"] as const) {
-    const r = normRef(zin[k]);
-    if (r) zones[k] = r;
+    const r = normRef(zin[k]), text = (zin[k] as { text?: unknown } | null)?.text; // residual 5: a text column
+    if (r) zones[k] = typeof text === "string" && text !== "" ? { ...r, text } : r;
   }
   const mark = isPlotMark(o.mark) ? o.mark : "scatter";
   // Byte-stable v1 siblings of `mark` (never a v2 "block" — see PlotSpec's

@@ -16,8 +16,7 @@ import {
   overPointerToCanvas,
 } from "./annotationHit";
 import { CLICK_PX } from "./pointGesture";
-import type { ColorScatterSpec } from "./colorscatter";
-import { colormap, normalize } from "./colormap";
+import { colorScatterFill, paintColorPoint, type ColorScatterSpec } from "./colorscatter";
 import { richLabelAst, type RichNode } from "./richtext";
 import { DESCENT_EM, drawRich, measureRich, type RichFont } from "./richtextCanvas";
 import type { Annotation, RefLine, RegionShade } from "./types";
@@ -1076,15 +1075,9 @@ export function colorScatterPlugin(specs: Map<number, ColorScatterSpec>): uPlot.
             const x = xs[i];
             const y = ys[i];
             if (x == null || y == null) continue;
-            const t = normalize(spec.z[i] ?? NaN, spec.lo, spec.hi, false);
-            if (t == null) continue;
-            const [rr, gg, bb] = colormap(spec.colormap, t);
-            const px = u.valToPos(x, "x", true);
-            const py = u.valToPos(y, scaleKey, true);
-            ctx.beginPath();
-            ctx.fillStyle = `rgb(${rr}, ${gg}, ${bb})`;
-            ctx.arc(px, py, r, 0, Math.PI * 2);
-            ctx.fill();
+            const fill = colorScatterFill(spec, i); // the one colour rule (P1.4 gradient shares it)
+            if (fill === null) continue;
+            paintColorPoint(ctx, u.valToPos(x, "x", true), u.valToPos(y, scaleKey, true), r, fill, spec.shape);
           }
         }
         ctx.restore();

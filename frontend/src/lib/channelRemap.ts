@@ -230,7 +230,8 @@ export function remapFigureBindings(b: FigureBindings, removedCol: number): Figu
 
 function remapEncoding(e: FigureEncoding | undefined, removedCol: number): FigureEncoding | undefined {
   if (!e) return undefined;
-  const out: FigureEncoding = {};
+  // Text-column picks are by name, so a channel removal leaves them as they are.
+  const out: FigureEncoding = e.text ? { text: { ...e.text } } : {};
   for (const k of ["color", "symbol", "label"] as const) {
     const c = e[k] === undefined ? null : remapChannel(e[k], removedCol);
     if (c !== null) out[k] = c;

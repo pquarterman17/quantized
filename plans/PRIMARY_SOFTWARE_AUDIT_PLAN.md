@@ -3,7 +3,7 @@
 **Status:** Active
 **Parent:** `plans/MAIN_PLAN.md`
 **Created:** 2026-07-25
-**Updated:** 2026-09-29 (latest): **P1.4 encodings in Publication Preview + greyscale by level** — opening Publication Preview from the Graph Builder carries Color / Symbol / Label onto the draft (`bindings.encoding`, the series half of the Graph Builder's Export), so the preview renders the committed wire fixture's request; greyscale export greys an encoded figure by colour LEVEL, one grey per level on every Y channel; P1.4's residual 2 and residual 3's greyscale half closed (see P1.4's "Any suitable factor" box). Previous: 2026-09-29: **P1.4 encodings on the editable Stage** — a Graph Builder apply stores Color / Symbol / Label on the plot window's document (`FigureBindings.encoding`, omitted when unset), and the Stage (focused and background windows) draws them through the preview's own derivation, loaded lazily; the window's Export figure… / Copy figure send them too (screen == export, pinned to the shared wire fixture); P1.4's residual 1 closed (see P1.4's "Any suitable factor" box). Previous: 2026-09-28: **P1.4 Graph Builder encodings** — Color-by and Symbol-by wells (categorical factors, one palette colour / marker per level through the existing cycles) and a legend-label source well (sample id, field, temperature: any column) in the Graph Builder, saved with the spec and exported with backend parity (`calc/plotting_encoded.py`); the editable Stage plot does not draw them yet (see P1.4's "Any suitable factor" box). Previous: 2026-09-27: **P2.5 derived expressions** — Python-like worksheet formulas (`**`, `//`, `np.` functions, `where`, positioned errors), a derived unit for every new column (mismatched sums refused), `fit()`/`fitval()` over the dataset's saved fit (snapshotted, re-resolved when the fit changes), and an optional first-order, uncorrelated σ column bound as the new column's error; P2.5 box 2 ticked, so P2.5 is complete (see P2.5). Previous: 2026-09-26: **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
+**Updated:** 2026-09-29 (latest): **P1.4 gradient Color-by + text-column factors** — a continuous column in the Graph Builder's Color well colours every point by its value (viridis over the column's finite range, one colour scale in the legend, the series' glyph kept), and Origin text columns with no channel index are pickable as a Color/Symbol factor or legend-label source; identical on the Graph Builder preview, the Stage, Publication Preview and export, pinned by the new shared fixture `tests/fixtures/wire/graph_encoding_gradient.json`; P1.4 residuals 4 and 5 closed (see P1.4's "Any suitable factor" box). Previous: 2026-09-29: **P1.3 Plot Recipe schema v2** — recipes carry a preview thumbnail (Recipe Manager rows, apply dialog, Library Details), the excluded-row (outlier) policy and the source transformation recipe; older recipes migrate forward on every read boundary and a newer one is refused by name; the Recipe Manager's apply row picks a transformation to run first and a style template, both defaulting to the recipe's own; four P1.3 boxes ticked, three owner questions open (see FIGURE_AUTHORING_WORKFLOW_PLAN F4.2c). Previous: 2026-09-29: **P1.4 encodings in Publication Preview + greyscale by level** — opening Publication Preview from the Graph Builder carries Color / Symbol / Label onto the draft (`bindings.encoding`, the series half of the Graph Builder's Export), so the preview renders the committed wire fixture's request; greyscale export greys an encoded figure by colour LEVEL, one grey per level on every Y channel; P1.4's residual 2 and residual 3's greyscale half closed (see P1.4's "Any suitable factor" box). Previous: 2026-09-29: **P1.4 encodings on the editable Stage** — a Graph Builder apply stores Color / Symbol / Label on the plot window's document (`FigureBindings.encoding`, omitted when unset), and the Stage (focused and background windows) draws them through the preview's own derivation, loaded lazily; the window's Export figure… / Copy figure send them too (screen == export, pinned to the shared wire fixture); P1.4's residual 1 closed (see P1.4's "Any suitable factor" box). Previous: 2026-09-28: **P1.4 Graph Builder encodings** — Color-by and Symbol-by wells (categorical factors, one palette colour / marker per level through the existing cycles) and a legend-label source well (sample id, field, temperature: any column) in the Graph Builder, saved with the spec and exported with backend parity (`calc/plotting_encoded.py`); the editable Stage plot does not draw them yet (see P1.4's "Any suitable factor" box). Previous: 2026-09-27: **P2.5 derived expressions** — Python-like worksheet formulas (`**`, `//`, `np.` functions, `where`, positioned errors), a derived unit for every new column (mismatched sums refused), `fit()`/`fitval()` over the dataset's saved fit (snapshotted, re-resolved when the fit changes), and an optional first-order, uncorrelated σ column bound as the new column's error; P2.5 box 2 ticked, so P2.5 is complete (see P2.5). Previous: 2026-09-26: **P2.5 saved transformation recipes** — a saved analysis template is a transformation recipe with a description, revision and expected input; Apply… runs it on loaded datasets after a per-dataset preflight with column rebinding, one derived output each with recipe provenance, one undo step per apply; templates ride the .dwk; P2.5 box 4 ticked (see P2.5). Previous: 2026-09-26: **P2.5 metadata cleanup / promotion to factors** — a lazy "Metadata → factors" workshop promotes a metadata field to a per-row factor column and unifies / normalizes metadata keys and values, every change previewed, one undo entry, recorded as a replayable step; append can add a source-dataset column; P2.5 box 3 ticked (see P2.5). Previous: 2026-09-26: **P2.5 previewed append / keyed join / reshape / split** — one lazy Reshape & combine workshop previews every op live through the commit's own compute; append by column name; text join keys; P2.5 box 1 ticked (see P2.5). Previous: 2026-09-26: **P2.5 align/interpolate slice** — previewed Resample / align workshop over `POST /api/transform/resample`, recorded as a replayable `resample` transform step (see P2.5). Previous: 2026-09-26: **P2.7 follow-up** — saved custom fit models ride the .dwk (see P2.7). Previous: 2026-09-26: **P2.1 per-peak uncertainties via the P2.4 model fit** — the Peak Analyzer publishes its model-fit results, standard errors and shapes into the durable peak table (see P2.1). Previous: 2026-09-25: **P2.5 opener slice** — transform warnings + recordable transform steps (see P2.5). Previous: 2026-09-25: **P2.4 slice 4** — Peak Analyzer batch recipe + uncertainty/diagnostic table (see P2.4). Previous: 2026-09-06: **P1.7 Pack Project PR 5** — adversarial
 audit of the whole Pack Project stack (PR 1-4/#305-#308): two real defects
 found and fixed (a POSIX TOCTOU race letting `publish_bundle`'s atomic
 rename silently absorb an empty directory created in its check-then-act
@@ -798,9 +798,11 @@ preview+confirm dialog, an explicit "apply anyway, drop unmatched" opt-in
 (`confirmPendingRecipeApplicationPartial`), a "Save as Plot Recipe…" entry
 point on the focused plot window, and a subtle (never-auto-apply) post-import
 suggestion toast. See F4.2b in `FIGURE_AUTHORING_WORKFLOW_PLAN.md` for the
-itemized still-open gaps (live grouping/faceting composition parity,
-version migration beyond the v1 schema parse-gate, waterfall settings beyond
-the scalar offset, preview thumbnails).
+itemized still-open gaps (SPATIAL composition rebuild, maps/panels,
+waterfall settings beyond the scalar offset). **2026-09-29 (F4.2c):** recipe
+schema v2 closed the preview-thumbnail, outlier-policy capture, version-
+migration and transformation/style-template-choice gaps — see F4.2c for the
+evidence and the three owner questions it leaves open.
 
 Recipes should include:
 
@@ -810,18 +812,26 @@ Recipes should include:
   legend fields captured/applied; the group/facet BINDINGS are captured and
   re-key correctly, but rebuilding the actual live composition/panels on
   apply is a documented gap — F4.4);
-- [~] scales, autoscale policy, ranges, secondary axes, breaks, labels, units,
-  tick formats, and outlier policy (everything but outlier policy, which
-  isn't captured);
+- [x] scales, autoscale policy, ranges, secondary axes, breaks, labels, units,
+  tick formats, and outlier policy (2026-09-29, F4.2c: the excluded-row
+  hide/grey policy is captured as `outlierPolicy`, shown in the Library's
+  Details, and a mismatch with the current preference is named on apply —
+  `plotRecipePreview.test.ts`, `recipeApplyChoices.test.ts`. It is recorded,
+  not applied, because the preference is app-wide; whether it should become
+  per-figure is F4.2c's owner question (a));
 - [~] style cycle, visibility/order, annotations/shapes, maps/panels (style
   cycle/visibility/order/annotations/shapes are captured/applied; maps/panels
   are not);
 - [~] waterfall settings (only the scalar offset; no richer settings exist to
   capture);
 - [x] technique scope such as XRD, XRR, SIMS, or magnetometry;
-- [~] provenance, schema version, description, and preview (provenance +
-  schema version + description are captured; preview thumbnails do not
-  exist).
+- [x] provenance, schema version, description, and preview (2026-09-29,
+  F4.2c: a numbers-only preview is captured at save time
+  (`lib/plotRecipePreview.ts`) and drawn as a thumbnail in the Recipe Manager
+  rows, the apply preview dialog, and the Library's Details —
+  `RecipeManagerChoices.test.tsx`, `PlotRecipeApplyDialog.test.tsx`,
+  `RecipeLibraryPanel.test.tsx`; the source transformation recipe is
+  recorded too).
 
 Behavior:
 
@@ -830,9 +840,18 @@ Behavior:
 - [x] Never overwrite a customized plot without explicit warning (applying a
   recipe always creates a NEW figure; it never edits a live window in place).
 - [x] Ambiguous matches show mapping/preview and report unmatched fields.
-- [~] Import/export/duplicate/rename/version migration work (import, export,
+- [x] Import/export/duplicate/rename/version migration work (import, export,
   duplicate, and rename all work in both scopes via the Recipe Manager
-  panel; schema version migration beyond the v1 parse-gate does not exist).
+  panel; 2026-09-29, F4.2c: `lib/plotRecipeMigrate.ts` walks an older recipe
+  forward on every read boundary and refuses a newer one by name — a frozen
+  v1 literal loads from a `.dwk` list, the global slot, and an imported file,
+  `plotRecipeMigrate.test.ts`).
+- [x] Choosing transformations and style template when applying (2026-09-29,
+  F4.2c: the Recipe Manager's Transform / Style pickers, both defaulting to
+  "as the recipe says"; the transformation runs through the Pipeline's own
+  apply and the recipe is plotted on its new output — `recipeApplyChoices.
+  test.ts` with a real recorded transformation). Open owner questions (b)
+  and (c) in F4.2c.
 - [x] Reordered equivalent XRD columns map correctly, but the recipe is not
   auto-applied to SIMS.
 - [x] Stage/Figure Builder/reopen/export/clipboard remain equivalent —
@@ -1108,6 +1127,78 @@ output, not a caught error).
     slot not consumed, grey by position, wire slot not stripped (4).
     Gate for both: `npx tsc -b --force`, lint and build clean; vitest 880
     files / 14,323 passed; pytest 6,182 passed; golden 249 passed.
+  * **Gradient Color-by (residual 4 CLOSED 2026-09-29).** The Color well
+    now takes every column: a categorical one colours by level as before, a
+    CONTINUOUS one (the modeling chokepoint's reading, so a `channelTypes`
+    override flips it visibly — the chip says "(gradient)") becomes a gradient.
+    No persisted field was added: the gate (`plotEncodingBinding.
+    resolveFigureEncoding`) reads the same `color` pick as `Encoding.gradient`
+    when it is not a factor; a continuous Symbol pick is still ignored and says
+    so. A gradient splits nothing (one series per Y channel, error wells kept)
+    and draws each point in its own row's colour through MAIN #14's
+    colour-mapped-scatter rule, now ONE function on screen
+    (`colorscatter.colorScatterFill`: linear over the colour scale, clamped,
+    non-finite = no point; `paintColorPoint` adds the series' Symbol glyph) used
+    by the Stage's `colorScatterPlugin`, the Graph Builder preview canvas and
+    the fixture; the backend port is `calc.figure_colorscatter.gradient_colors`
+    (JavaScript `Math.round`, not Python's banker's rounding) over
+    `GRADIENT_STOPS`, a pinned verbatim copy of `lib/colormap.ts`'s viridis
+    stops (not matplotlib's table). The colour scale is the column's finite
+    range over the rows the figure KEEPS (`plotEncodingScales.encodedGradient`
+    / `stageGradient`; the export's wire dataset is exactly those rows, so
+    `calc.plotting_encoded.gradient_spec` finds the same range), labelled
+    "name (unit)"; one colour-scale chip (`Stage/ColorScaleChip.tsx`, extracted
+    from `PlotLegend`, now also in the preview; identical scales collapse to
+    one) and ONE matplotlib colourbar (first series only). Only
+    `encoding.gradient_col` rides the wire; greyscale leaves it alone (MAIN
+    #14's ruling). Stage: `usePlotEncoding` hands `usePlotPayload` the
+    gradient's `colorByColumns`, so the existing plugin and chip draw it.
+  * **Text-column factors (residual 5 CLOSED 2026-09-29).** A row-indexed
+    text column (`metadata.text_columns ?? origin_text_columns`, no channel
+    index) is offered in all three encoding wells as "name (text)" under a
+    UI-only virtual option index and stored BY NAME — `ChannelRef.text`
+    (channel -1) in the spec, `FigureEncoding.text.{color,symbol,label}` on the
+    window document — so no index can go stale when columns are added; both
+    omit-when-unset, so specs, documents and `.dwk` bytes without one are
+    unchanged. The gate appends picked columns as channels n, n+1, …
+    (`Encoding.text`; a missing column or a sampled preview's is ignored), and
+    `plotEncodingScales.encodingData` builds them as categorical channels
+    (levels = distinct trimmed cells in first-appearance order, blank = NaN)
+    for the preview and the Stage; the wire sends the names
+    (`encoding.text_columns`) and the backend port
+    `calc/encoding_text.append_text_factors` appends the same channels before
+    the split. Publication Preview maps the gated picks back to names
+    (`plotSpecFigure.draftEncoding`); column removal (`channelRemap`) keeps
+    them.
+  * **Evidence for both.** Shared fixture
+    `tests/fixtures/wire/graph_encoding_gradient.json` (`{request, screen}`:
+    per-series point colours, glyphs, legend text, colour scale, stops),
+    written by `lib/plotEncodingGradient.test.ts` from one `encodeSpec` and
+    read by the Stage (`usePlotPayload.encoding.test.ts`: same points, glyphs,
+    legend, chip; scale over kept rows), Publication Preview
+    (`plotSpecFigureEncoding.test.ts`: request == fixture), the window export
+    (`plotEncodingBinding.test.ts`) and the backend
+    (`tests/test_export_graph_encoding_gradient.py`: every SVG point's fill and
+    glyph, legend text, exactly one colourbar with the screen's label, the
+    stops copy, the calc ports, 422s). Plus `encodingWellModel.test.ts`,
+    `colorscatter`, `plotspec`, `GraphPreview`, `useGraphBuilder` tests.
+    Sabotage-verified: 38 guards, each failing at least one test (two first
+    passed vacuously — first-appearance vs sorted levels on already-sorted
+    data, and a glyph check a circle also satisfied — and the tests were
+    fixed until they failed). Funded under the pins:
+    `graphbuilder/encodingWellModel.ts` extracted (`useGraphBuilder.ts` pin
+    603 → 591), `lib/plotEncodingScales.ts` split out of `plotEncoding.ts`
+    (lazy), `plotspec.ts` at its 863 pin. Eager JS 855,417 → 856,854 B
+    (+1,437 B, `npm ci` + clean build): the derivations stay lazy; eager is
+    the gate, the wire names, the shared colour/paint rule and the chip.
+    Known limits: a gradient series is drawn as points only (MAIN #14's
+    colour-mapped-scatter rule, also for line/step marks); a legend row's
+    swatch shows the series' position colour on screen while matplotlib's
+    legend handle shows its first point's colour; with excluded rows the Graph
+    Builder preview's scale (analysis rows) and the Stage's agree, but levels
+    and combinations still follow residual 1's known full-rows property.
+    Gate: `npx tsc -b --force`, lint, build clean; vitest 891 files / 14,393
+    passed; pytest 6,199 passed; golden 249 passed.
   **Why `[~]`, not `[x]` — the residuals, in order of weight:**
   1. ~~The editable Stage plot does not draw Color/Symbol/Label.~~ CLOSED
      2026-09-29 — see the **Stage** bullet above.
@@ -1121,10 +1212,12 @@ output, not a caught error).
      Stage), so they are not a small follow-on. ~~Greyscale export re-greys
      by display position.~~ CLOSED 2026-09-29 — see the **Greyscale**
      bullet above.
-  4. A CONTINUOUS Color-by (a gradient) is not offered; the natural route is
-     MAIN #14's `SeriesStyle.colorBy`.
-  5. Row-indexed metadata text columns with no channel index (Origin
-     `origin_text_columns`) cannot be picked as a factor or a label source.
+  4. ~~A CONTINUOUS Color-by (a gradient) is not offered.~~ CLOSED
+     2026-09-29 — see the **Gradient Color-by** bullet above.
+  5. ~~Row-indexed metadata text columns with no channel index cannot be
+     picked as a factor or a label source.~~ CLOSED 2026-09-29 — see the
+     **Text-column factors** bullet above. Residual 3 (faceted and
+     box/violin/bar encodings) is what keeps this box `[~]`.
 - [x] Multiple ordered factors and missing-value policy — level ORDER is
   represented (the tuple's own order; NaN = missing is the representation's
   missing-value policy). **Verified 2026-09-12, shipped 2026-09-10 commit
@@ -4593,18 +4686,18 @@ violin, bar, strip, or summary plots.
   per option, the shared fixtures, route validation). Wire fixture
   `statplot_levels_export.json` gained the new fields. Eager bundle 858,336 ->
   858,810 B (+474, the sanitizer and the field); all UI in the lazy stage chunk.
-  **Not done:** jittered points in FACET panels (no per-slice row indices —
-  the JMP_GAP J5 residual) and faceted strip; a faceted BAR panel draws no
-  points / summary marker (same residual: its cells carry no raw rows; the
-  faceted bar export takes no marks either, so the two agree); in-stage
-  level RENAME (use Recode); rotated-label depth is estimated from character
-  counts (both sides), not measured; an upright unwrapped label wider than
-  its slot overlaps its neighbour on BOTH sides (wrap / rotation is the
-  remedy); the Graph Builder preview ignores the marks; no e2e spec.
-  (Five former entries — the 14-char screen truncation, the unstated
-  error-bar kind, bar raw points / median, the violin summary + inner-glyph
-  mismatch, and the screen-truncated outer tier — are done; see the two
-  "Done 2026-09-28" blocks below.)
+  **Not done:** in-stage level RENAME (use Recode); rotated-label depth is
+  estimated from character counts (both sides), not measured; an upright
+  unwrapped label wider than its slot overlaps its neighbour on BOTH sides
+  (wrap / rotation is the remedy); no connect-means line inside a facet
+  panel (neither side draws one); the Graph Builder preview shows no
+  error-bar footnote and still previews a violin as a box (its KDE needs the
+  backend); no e2e spec. (Former entries done: the 14-char screen
+  truncation, the unstated error-bar kind, bar raw points / median, the
+  violin summary + inner-glyph mismatch, the screen-truncated outer tier —
+  the two "Done 2026-09-28" blocks below — and faceted points / faceted
+  strip / faceted bar marks / the Graph Builder preview's marks, "Done
+  2026-09-29" below.)
   **Review round (2026-09-27, 10 findings fixed, each sabotage-verified):**
   a violin's jittered `points` groups now relabel alongside its `violins`
   when levels are hidden/reordered, so the canvas and the export jitter hash
@@ -4721,6 +4814,69 @@ violin, bar, strip, or summary plots.
   outliers, stacked none, route 200/422 and that the route really draws).
   openapi.json / schema.d.ts regenerated. Eager bundle 865,437 -> 865,440 B
   (+3; all new code in the lazy stat chunks).
+  **Done 2026-09-29 — faceted raw points, faceted strip, faceted bar marks,
+  marks in the Graph Builder preview (the JMP_GAP J5 residual).** Facet
+  slices already carried their kept rows (`lib/facet.FacetSlice.rows`);
+  nothing composed them. Now every faceted points resolve goes through the
+  ONE recipe, `facetSliceRowIds(slice, analysisView(ds).rowIds)`, so a
+  panel's points carry ORIGINAL dataset rows exactly as the flat plot's do
+  and the `(row, category)` jitter hash (`lib/jitter.ts` /
+  `calc.statplots.deterministic_jitter`) puts each point in the same place
+  on screen and in the export. (1) STAGE: `useStatStageCompute.
+  computeFacetGroupDraws` resolves each panel's indexed points (box / violin
+  when `needsPoints`; strip always) and `computeFacetBarDraws` each grouped
+  bar cell's raw points (when `needsBarRaw`); `statStageMarks.facetMarks`
+  no longer demotes a panel to fliers-only / no bar summary — a panel draws
+  the stage's points, jitter, summary, error bars (only connect-means stays
+  off in a panel, as the faceted export draws none). STRIP now facets (the
+  "facet by" picker shows in strip mode; `useStatStage` facets every
+  categorical mode). Panel selection rings, the empty-slot axis and the
+  notice work unchanged (they already threaded strip draws). (2) EXPORT:
+  each `StatplotFacet` panel posts its own `point_row_indices` (aligned on
+  the panel's axis like the flat request) and may be `kind: "strip"`; the
+  faceted request now also carries `jitter_width` (so a faceted box is drawn
+  at the screen's 0.6-pitch width, as the flat one already was); each
+  `CategoricalFacet` panel carries its own `points` / `jitter_width` /
+  `summary` / `raw` / `raw_rows` (`routes/export_statplots`,
+  `calc.figure_facets` passes them to `_draw_statplot` /
+  `_draw_categorical_bars`, which draw them exactly as for the flat plot;
+  stacked panels none). `calc.figure_stat_marks.facet_marks` (moved from
+  `figure_facets._facet_marks`) keeps the old fliers-only rule for a panel
+  WITHOUT rows, so a request from before renders as it did. openapi.json /
+  schema.d.ts regenerated. (3) GRAPH BUILDER PREVIEW: `workshops/
+  graphbuilder/previewMarks.previewStatDraws` turns `specToRender`'s box /
+  bar render into the draws the preview paints, with the window's per-mode
+  `PlotView.statMarks` (the options the Stat Stage it sends to reads) and
+  the points they need, flat and per facet cell — same marks resolution,
+  same "which points" rule, same row recipe, same columns (the group-axis
+  rule moved to `lib/plotspecGroupCol.specGroupCol`, shared with
+  `specToRender`; `plotspec.ts` 862 -> 861 lines, pin unchanged). A violin
+  previews as a box drawn with the violin's marks. Tests (red first; each
+  guard sabotage-verified — 10 frontend, 4 backend: slice-local rows in the
+  compute, the export dropping `point_row_indices`, `facetMarks` demoting
+  again, bar facets resolving no raw, the bar facet export dropping marks,
+  strip hiding the picker, strip not faceting, the preview ignoring the spec,
+  the preview using slice-local rows, the preview using the wrong mode's
+  marks; backend `facet_marks` ignoring rows, the route dropping
+  `point_row_indices` / `bar_marks`, the renderer dropping the panel's
+  rows): `Stage/statFacetPoints.test.ts` (real hook, box / strip / violin /
+  bar, under an exclusion: every panel's drawn points == the export panel's
+  `point_row_indices` + labels + data, row for row; bar cells == `raw_rows`
+  / `raw` / groups; stacked and summary-only post no rows);
+  `lib/facet.test.ts` (the dormant guard is now live: every
+  `resolveGroupsIndexed(` call in the facet compute passes
+  `facetSliceRowIds(` among its own arguments); `statMarksParity.test.ts`
+  (faceted panels carry the stage's points); `StatStage.test.tsx` (strip
+  offers facet-by); `graphbuilder/previewMarks.test.ts`,
+  `GraphPreview.marks.test.tsx` (the painters are handed the marked draws);
+  backend `tests/test_stat_facet_points.py` (per panel, the scatter read
+  back from matplotlib == tick + hash(row, label) * 0.3 * jitter for box /
+  strip / violin; strip outliers; a row-less panel keeps fliers-only; bar
+  panels' points + median squares; stacked none; both routes draw them and
+  validate them). Eager bundle 855,417 -> 855,754 B (+337: the eager
+  `statStageExport` posts the panel rows; everything else is in the lazy
+  stat / Graph Builder chunks), measured after `npm ci` + a cleared vite
+  cache.
 - [x] Missing levels and unbalanced groups are explicit. (2026-09-26)
   **Survey (before):** every categorical path closed the axis up silently.
   `categoryLevels` never saw a level declared in `cat_levels` that no row
@@ -11377,6 +11533,17 @@ work (its BACKLOG row).
   lazy chunk; what is eager is the gate, the document field, the Stage hook
   and the export wiring. See P1.4's **Stage** bullet for rules, tests, the
   25 sabotaged guards and the known limits. Residuals 2-5 unchanged.
+
+- ~~**P1.4 gradient Color-by + text-column factors (residuals 4, 5)**~~
+  (2026-09-29, Claude) — continuous Color pick = per-point gradient with one
+  colour scale; Origin text columns pickable by name as Color/Symbol factor
+  or legend source; one colour rule shared by preview, Stage, Publication
+  Preview and export (backend ports `gradient_colors`, `gradient_spec`,
+  `append_text_factors`), pinned by
+  `tests/fixtures/wire/graph_encoding_gradient.json` from vitest and pytest;
+  38 sabotaged guards. `useGraphBuilder.ts` pin 603 → 591. Eager JS 855,417 →
+  856,854 B (+1,437 B, after `npm ci`). See P1.4's **Gradient Color-by** and
+  **Text-column factors** bullets. Residual 3 remains.
 
 - ~~**P3.4 safe cancel — the remaining export sites**~~ (2026-09-29, commit
   `f07ce636`) — the Figure Builder preview Export (`previewExport.ts`, both

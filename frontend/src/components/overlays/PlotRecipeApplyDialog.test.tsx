@@ -85,6 +85,16 @@ describe("PlotRecipeApplyDialog — preview + actions", () => {
     expect(screen.getByText(/Unmatched fields \(1\)/)).toBeInTheDocument();
   });
 
+  // F4.2 / audit P1.3: the preview shows what the recipe LOOKS like, not
+  // just which columns it maps -- the thumbnail captured when it was saved.
+  it("shows the recipe's captured preview thumbnail", async () => {
+    await stagePending();
+    render(<PlotRecipeApplyDialog />);
+
+    const thumb = screen.getByRole("img", { name: "XRD Recipe: preview" });
+    expect(thumb.querySelectorAll("polyline")).toHaveLength(1);
+  });
+
   // RULING A, red-first requirement 1: exactly two actions, ever -- no
   // "Confirm" button that can never succeed while the dialog is up.
   it("renders EXACTLY two actions: Cancel and Apply mapped fields", async () => {

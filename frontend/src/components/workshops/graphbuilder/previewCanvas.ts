@@ -4,10 +4,13 @@
 // ceiling while gaining the encoded render: an optional per-series `styles`
 // list (lib/plotEncoding's colour token + marker glyph) that the painters draw
 // with. Absent `styles` paints exactly as before — `seriesColor(i)` by position
-// and circle markers. The canvas is invisible to jsdom (no 2-D context), so
+// and circle markers. A gradient Color-by (P1.4 residual 4) passes `colorBy`
+// (`plotEncoding.gradientColumns`): those series paint each point through the
+// Stage's own `colorscatter.colorScatterFill` / `paintColorPoint`, no line. The canvas is invisible to jsdom (no 2-D context), so
 // this stays eyeball-verified; the styles it draws are unit-tested in
 // lib/plotEncoding.
 
+import { colorScatterFill, paintColorPoint, type ColorScatterSpec } from "../../../lib/colorscatter";
 import type { ErrorSpan } from "../../../lib/errorbars";
 import type { FacetPanel } from "../../../lib/facet";
 import { FILLED_SHAPES, markerSubpaths } from "../../../lib/markers";
@@ -113,6 +116,7 @@ function drawXYIntoRect(
   errorSpans?: Map<number, ErrorSpan[]>,
   label?: string,
   styles?: readonly SeriesStyle[],
+  colorBy?: ReadonlyMap<number, ColorScatterSpec>,
 ) {
   const cols = payload.data as (number | null)[][];
   const x = (cols[0] ?? []).map((v) => (v == null ? NaN : v));
@@ -157,10 +161,19 @@ function drawXYIntoRect(
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     ctx.lineWidth = 1.5;
-    // "scatter" always shows markers, no connecting line; "line"/"step" draw
-    // their connector and add markers only when showMarkers is on — same
-    // rule the Stage commit uses (lib/plotspec.ts's markSeriesStyle).
-    if (mark === "line" || mark === "step") {
+    const mapped = colorBy?.get(i + 1);
+    // P1.4 gradient Color-by: each point in its own row's colour through the
+    // Stage's rule (`colorScatterFill`), no line — MAIN #14's colour-mapped
+    // scatter, as the Stage and the export draw it.
+    if (mapped) {
+      col.forEach((yv, r) => {
+        const fill = Number.isFinite(x[r]) && Number.isFinite(yv) ? colorScatterFill(mapped, r) : null;
+        if (fill !== null) paintColorPoint(ctx, sx(x[r]), sy(yv), 2.5, fill, mapped.shape);
+      });
+    } else if (mark === "line" || mark === "step") {
+      // "scatter" always shows markers, no connecting line; "line"/"step" draw
+      // their connector and add markers only when showMarkers is on — same
+      // rule the Stage commit uses (lib/plotspec.ts's markSeriesStyle).
       ctx.beginPath();
       if (mark === "step") traceStep(ctx, x, col, sx, sy, stepMode);
       else {
@@ -220,11 +233,13 @@ export function drawXY(
   stepMode: StepMode,
   errorSpans?: Map<number, ErrorSpan[]>,
   styles?: readonly SeriesStyle[],
+  colorBy?: ReadonlyMap<number, ColorScatterSpec>,
 ) {
   const setup = setupCanvas(canvas, host);
   if (!setup) return;
   const { ctx, W, H } = setup;
-  drawXYIntoRect(ctx, { x: 0, y: 0, w: W, h: H }, payload, mark, showMarkers, stepMode, errorSpans, undefined, styles);
+  const rect = { x: 0, y: 0, w: W, h: H };
+  drawXYIntoRect(ctx, rect, payload, mark, showMarkers, stepMode, errorSpans, undefined, styles, colorBy);
 }
 
 /** Small-multiples grid (#21 faceting): one mini xy panel per facet level,
