@@ -38,8 +38,13 @@ _BASE_UNITS: dict[str, tuple[tuple[int, ...], float]] = {
     "hr": ((0, 0, 1, 0, 0, 0, 0), 3600.0),
     "A": ((0, 0, 0, 1, 0, 0, 0), 1.0),
     "K": ((0, 0, 0, 0, 1, 0, 0), 1.0),
+    # Offset temperature SCALES: registered so they parse (dims/scale for the
+    # info payload), but a conversion touching one always takes the affine
+    # path in `unit_convert` -- never this scale-1.0 ratio (see _offset_scale).
     "C": ((0, 0, 0, 0, 1, 0, 0), 1.0),
     "F": ((0, 0, 0, 0, 1, 0, 0), 1.0),
+    "degC": ((0, 0, 0, 0, 1, 0, 0), 1.0),
+    "degF": ((0, 0, 0, 0, 1, 0, 0), 1.0),
     "mol": ((0, 0, 0, 0, 0, 1, 0), 1.0),
     "Hz": ((0, 0, -1, 0, 0, 0, 0), 1.0),
     "THz": ((0, 0, -1, 0, 0, 0, 0), 1e12),
@@ -207,22 +212,45 @@ def _parse_units(unit_str: str) -> dict[str, Any]:
     return {"dims": dims, "scale": scale, "display": unit_str}
 
 
-def _identify_temp_unit(unit_str: str) -> str:
-    return {"K": "K", "C": "C", "degC": "C", "F": "F", "degF": "F"}.get(unit_str.strip(), "")
+_OFFSET_SCALES = {"C": "C", "degC": "C", "F": "F", "degF": "F"}
 
 
-def _try_temperature(
-    value: NDArray[np.float64], from_p: dict[str, Any], to_p: dict[str, Any],
-    from_str: str, to_str: str,
-) -> tuple[bool, NDArray[np.float64] | None, float]:
-    if not (np.array_equal(from_p["dims"], _TEMP_DIM) and np.array_equal(to_p["dims"], _TEMP_DIM)):
-        return False, None, float("nan")
-    from_u, to_u = _identify_temp_unit(from_str), _identify_temp_unit(to_str)
-    if not from_u or not to_u:
-        return False, None, float("nan")
-    val_k = {"K": value, "C": value + 273.15, "F": (value - 32) * 5 / 9 + 273.15}[from_u]
-    result = {"K": val_k, "C": val_k - 273.15, "F": (val_k - 273.15) * 9 / 5 + 32}[to_u]
-    return True, np.asarray(result, dtype=float), float("nan")
+def _is_offset_token(name: str) -> bool:
+    """A token naming an offset scale, bare or SI-prefixed (``C``, ``mC``, ``pF``)."""
+    if name in _OFFSET_SCALES:
+        return True
+    return name not in _BASE_UNITS and any(
+        name.startswith(p) and name[len(p) :] in _OFFSET_SCALES for p in _PREFIX_KEYS
+    )
+
+
+def _offset_scale(unit_str: str) -> str:
+    """``"C"``/``"F"`` when ``unit_str`` is exactly one offset temperature scale
+    (C, degC, F, degF), ``""`` when it contains none. An offset scale is an
+    ABSOLUTE temperature with a zero offset, so it has no meaning prefixed or
+    inside a compound expression (``C/min``, ``J/C``, ``mC``): refuse those
+    rather than silently treating the scale as a linear alias of K."""
+    toks = _tokenize(unit_str)
+    if len(toks) == 1:
+        tok = toks[0]
+        if tok["str"] in _OFFSET_SCALES and tok["exp"] == 1.0 and not tok["in_denom"]:
+            return _OFFSET_SCALES[tok["str"]]
+    if any(_is_offset_token(t["str"]) for t in toks):
+        raise ValueError(
+            f"'{unit_str}': C/F are offset temperature scales and cannot be prefixed or "
+            "combined with other units; use K (e.g. 'K/min'); farad is 'F_cap'"
+        )
+    return ""
+
+
+def _to_kelvin(value: NDArray[np.float64], scale: str) -> NDArray[np.float64]:
+    k = value + 273.15 if scale == "C" else (value - 32) * 5 / 9 + 273.15
+    return np.asarray(k, dtype=float)
+
+
+def _from_kelvin(val_k: NDArray[np.float64], scale: str) -> NDArray[np.float64]:
+    out = val_k - 273.15 if scale == "C" else (val_k - 273.15) * 9 / 5 + 32
+    return np.asarray(out, dtype=float)
 
 
 def _try_bridge(
@@ -314,6 +342,8 @@ _LATEX_BASE: dict[str, str] = {
     "deg": r"{}^{\circ}",
     "C": r"{}^{\circ}\mathrm{C}",  # the registry's "C" is degrees Celsius
     "F": r"{}^{\circ}\mathrm{F}",  # ... and "F" Fahrenheit (farad is "F_cap")
+    "degC": r"{}^{\circ}\mathrm{C}",
+    "degF": r"{}^{\circ}\mathrm{F}",
     "F_cap": r"\mathrm{F}",
     "Coul": r"\mathrm{C}",
 }
@@ -387,21 +417,33 @@ def unit_convert(
     and a ``description``. Raises ``ValueError`` on incompatible dimensions.
     """
     val = np.asarray(value, dtype=float)
+    from_off, to_off = _offset_scale(from_str), _offset_scale(to_str)
     from_p = _parse_units(from_str)
     to_p = _parse_units(to_str)
 
-    ok, result, factor = _try_temperature(val, from_p, to_p, from_str, to_str)
-    if not ok:
-        if np.array_equal(from_p["dims"], to_p["dims"]):
-            factor = float(from_p["scale"] / to_p["scale"])
-            result = np.asarray(val * factor, dtype=float)
-        else:
-            ok, result, factor = _try_bridge(val, from_p, to_p)
-            if not ok:
-                raise ValueError(
-                    f"cannot convert from '{from_str}' to '{to_str}': incompatible dimensions"
-                )
-    assert result is not None
+    def linear_or_bridge(
+        v: NDArray[np.float64], fp: dict[str, Any], tp: dict[str, Any]
+    ) -> tuple[NDArray[np.float64], float]:
+        if np.array_equal(fp["dims"], tp["dims"]):
+            f = float(fp["scale"] / tp["scale"])
+            return np.asarray(v * f, dtype=float), f
+        ok, out, f = _try_bridge(v, fp, tp)
+        if not ok or out is None:
+            raise ValueError(
+                f"cannot convert from '{from_str}' to '{to_str}': incompatible dimensions"
+            )
+        return out, f
+
+    if from_off or to_off:
+        # Affine: pivot through ABSOLUTE kelvin, so 25 C -> mK is 298150 and
+        # 25 C -> eV is kB*298.15 K -- never 25 K. Any K-side conversion
+        # (prefixed K, the photon/thermal bridge) runs on the kelvin value.
+        kelvin = _parse_units("K")
+        val_k = _to_kelvin(val, from_off) if from_off else linear_or_bridge(val, from_p, kelvin)[0]
+        result = _from_kelvin(val_k, to_off) if to_off else linear_or_bridge(val_k, kelvin, to_p)[0]
+        factor = float("nan")
+    else:
+        result, factor = linear_or_bridge(val, from_p, to_p)
     desc = f"{from_str} -> {to_str}" if np.isnan(factor) else f"1 {from_str} = {factor:g} {to_str}"
     latex = ""
     if val.size == 1 and result.size == 1:
