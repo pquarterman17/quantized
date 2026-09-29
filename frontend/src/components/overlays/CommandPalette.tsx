@@ -12,7 +12,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { contextPaletteActions } from "../../lib/paletteContextActions";
 import { fuzzy } from "../../lib/fuzzy";
-import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
+import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
 import { mergeCommands, runAction, useCommands, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
 

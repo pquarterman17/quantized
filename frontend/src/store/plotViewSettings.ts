@@ -49,7 +49,7 @@
 
 import { lit } from "../lib/macro";
 import type { PageSetup } from "../lib/pagesetup";
-import { nextPanelFit, type PanelFit } from "../lib/panelLayout";
+import { nextPanelFit, type PanelFit } from "../lib/panelFit";
 import { effectiveChannels } from "../lib/plotdata";
 import type { AxisFormat, AxisScale, SeriesStyle } from "../lib/types";
 import type { HistoryBatchToken } from "./history";

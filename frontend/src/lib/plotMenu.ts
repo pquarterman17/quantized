@@ -7,7 +7,8 @@
 // the result to <ContextMenu>.
 
 import type { ContextMenuItem, Swatch } from "../components/overlays/ContextMenu";
-import { buildMenuItems, curveActions } from "./contextActions";
+import { buildMenuItems } from "./contextActions";
+import { curveActions } from "./curveContextActions";
 import { fmtNum } from "./format";
 import { MARKER_SHAPES } from "./markers";
 import type { AxisZone } from "./plotHitTest";

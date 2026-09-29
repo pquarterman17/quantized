@@ -3264,6 +3264,26 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/statschooser.ts",
     "/lib/tdist.ts",
     "/lib/nestedLevels.ts",
+    // SLICE 12 (2026-09-29): no seam, eight edges. Each eager importer needed
+    // one small piece of a module whose bulk only lazy code uses, so the small
+    // piece moved to a leaf the eager side imports instead (`lib/reportRefs.ts`,
+    // `lib/shortcutFormat.ts`, `lib/panelFit.ts`, `lib/facetGrid.ts`,
+    // `lib/figureOverridesSanitize.ts`) and the module left the entry chunk;
+    // or the lazy-only bulk moved OUT of an eager module into a new one only
+    // lazy modules import (the folder and curve action registries, the Quick
+    // Plot template `.dwk` sanitizer). `lib/templateKey.ts` went with the
+    // folder registry. Every one is still imported statically by lazy
+    // modules, so only reachability can hold them. Replayed over the build's
+    // own module graph: 408 -> 407 eager modules (six out, five leaves in).
+    "/lib/report.ts",
+    "/lib/shortcuts.ts",
+    "/lib/panelLayout.ts",
+    "/lib/multipanel.ts",
+    "/lib/figureOverrides.ts",
+    "/lib/templateKey.ts",
+    "/components/Library/folderRowMenu.ts",
+    "/lib/curveContextActions.ts",
+    "/lib/quickPlotTemplatesSanitize.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

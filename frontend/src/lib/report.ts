@@ -284,13 +284,6 @@ export function sanitizeReports(
   return out;
 }
 
-/** Null a removed dataset out of the entries' back-references (keep the
- *  reports themselves — they are computed artifacts, not views). */
-export function pruneReportRefs(
-  reports: ReportEntry[],
-  removedIds: ReadonlySet<string>,
-): ReportEntry[] {
-  return reports.map((r) =>
-    r.datasetId && removedIds.has(r.datasetId) ? { ...r, datasetId: null } : r,
-  );
-}
+// Lives in the leaf lib/reportRefs.ts (bundle diet slice 12) so the entry
+// chunk reaches it without this module; re-exported for existing importers.
+export { pruneReportRefs } from "./reportRefs";

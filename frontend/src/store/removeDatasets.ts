@@ -15,7 +15,7 @@ import { pruneEditableFigureRefs } from "./figureLifecycle";
 import { pruneOriginFidelityRefs, pruneOriginFigureRefs } from "./originImport";
 import type { AppState } from "./useApp";
 import { pruneWindowDatasetRefs } from "./windowDocuments";
-import { pruneReportRefs } from "../lib/report";
+import { pruneReportRefs } from "../lib/reportRefs";
 
 /** The slice of state `removeDatasetsPatch` reads and rewrites — every
  *  id-bearing field a dataset removal must prune. A `HistorySnapshot`

@@ -7,7 +7,8 @@
  * behind characterization tests instead of changing every surface at once.
  */
 import { errKeysFromBindings, type ErrorBinding } from "./errorRoles";
-import { sanitizeFigureOverrides, type FigureOverrides } from "./figureOverrides";
+import type { FigureOverrides } from "./figureOverrides";
+import { sanitizeFigureOverrides } from "./figureOverridesSanitize";
 import { sanitizeExportSeriesStyles, type ExportSeriesStyle } from "./publicationStyles";
 import { PLOT_MARKS, type PlotMark } from "./plotMarks";
 import { sanitizeFigureEncoding, type FigureEncoding } from "./figureEncoding";

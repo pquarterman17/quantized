@@ -23,34 +23,13 @@
 // #1).
 
 import { multiSelected } from "./multiSelected";
-// folderOps (and the pipeline runner + template libs it pulls in) load on
-// the click, not at launch: every use is inside a `run` (bundle-size ratchet).
-const folderOps = () => import("../components/Library/folderOps");
 import type { ContextMenuItem } from "../components/overlays/ContextMenu";
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { plotInNewWindow } from "./plotInNewWindow";
 import { plotSelectedTogether } from "./plotSelectedTogether";
-import type { PlotMenuContext, MenuSeries } from "./plotMenu";
-import { TEMPLATES_KEY } from "./templateKey";
-import type { Dataset, FolderNode } from "./types";
+import type { Dataset } from "./types";
 import type { Action as PaletteAction } from "../store/commands";
-import { toast } from "../store/toasts";
 import { useApp } from "../store/useApp";
-
-/** Whether any analysis template is saved, WITHOUT importing lib/template.ts,
- *  whose parser (and P2.5's transformation-recipe fields) stays in the lazy
- *  chunk. It counts stored records, not readable ones; `runTemplateOnFolder`
- *  re-reads them and does nothing when none parse (bundle-size ratchet).
- *  The key itself comes from lib/templateKey.ts (finding #10), not a
- *  duplicated literal — that module is template.ts's own source for it. */
-function hasSavedTemplates(): boolean {
-  try {
-    const v: unknown = JSON.parse(localStorage.getItem(TEMPLATES_KEY) ?? "[]");
-    return Array.isArray(v) && v.length > 0;
-  } catch {
-    return false;
-  }
-}
 
 // ── generic engine ──────────────────────────────────────────────────────
 
@@ -342,151 +321,12 @@ export const datasetActions: ContextAction<DatasetActionTarget>[] = [
   ...datasetRemoveActions,
 ];
 
-// ── folder registry ─────────────────────────────────────────────────────
-
-export interface FolderActionTarget {
-  folder: FolderNode;
-  count: number;
-  /** Local UI: open this row's own inline rename input / reveal a new child. */
-  onRename: () => void;
-  onExpand: () => void;
-}
-
-function activeDataset(): Dataset | undefined {
-  const s = useApp.getState();
-  return s.datasets.find((d) => d.id === s.activeId);
-}
-
-// GUI_INTERACTION #3 sub-item 4: split into named groups (mirroring the
-// dataset registry's own `datasetCoreActions`/`datasetMoveActions`/…) so
-// `folderRowMenu.ts` can splice the genuinely-dynamic per-folder "Move to …"
-// list (one entry per LIVE folder, same reason the dataset one can't be a
-// fixed registry entry) between the core and bulk-ops groups — the same
-// slot the drag-onto-another-folder-header gesture's menu equivalent
-// belongs in. `folderActions` below is still the flat concatenation (with
-// separators) for a caller that wants "every folder action" without caring
-// about layout.
-export const folderCoreActions: ContextAction<FolderActionTarget>[] = [
-  {
-    id: "folder.newSubfolder",
-    label: "New subfolder",
-    run: (t) => {
-      useApp.getState().createFolder(t.folder.id, "New Folder");
-      t.onExpand();
-    },
-  },
-  { id: "folder.rename", label: "Rename…", run: (t) => t.onRename() },
-  { id: "folder.properties", label: "Properties…", run: (t) => void folderOps().then((m) => m.openFolderProperties(t.folder)) },
-];
-
-// ── bulk ops over the whole subtree (project-organization plan item 8) ──
-export const folderBulkActions: ContextAction<FolderActionTarget>[] = [
-  {
-    id: "folder.selectAll",
-    label: (t) => `Select all in folder (${t.count})`,
-    enabled: (t) => t.count > 0,
-    run: (t) => void folderOps().then((m) => m.selectFolderContents(t.folder)),
-  },
-  {
-    id: "folder.exportCsv",
-    label: "Export folder as consolidated CSV",
-    enabled: (t) => t.count > 0,
-    run: (t) => void folderOps().then((m) => m.exportFolderCsv(t.folder)),
-  },
-  {
-    id: "folder.applyActiveCorrections",
-    label: (t) => `Apply active corrections to folder (${t.count})`,
-    hidden: (t) => t.count === 0 || !activeDataset()?.corrections,
-    run: (t) => void folderOps().then((m) => m.applyActiveCorrectionsToFolder(t.folder)),
-  },
-  {
-    id: "folder.runTemplate",
-    label: "Run analysis template on folder…",
-    hidden: (t) => t.count === 0 || !hasSavedTemplates(),
-    run: (t) => void folderOps().then((m) => m.runTemplateOnFolder(t.folder)),
-  },
-];
-
-export const folderDeleteActions: ContextAction<FolderActionTarget>[] = [
-  {
-    id: "folder.delete",
-    label: "Delete folder",
-    destructive: true,
-    confirm: (t) => ({ title: `Delete folder "${t.folder.name}"?`, confirmLabel: "Delete" }),
-    run: (t) => {
-      useApp.getState().deleteFolder(t.folder.id); // reparent: contents move up, datasets survive
-      toast(`deleted folder "${t.folder.name}"`);
-    },
-  },
-  {
-    id: "folder.deleteWithDatasets",
-    label: (t) => `Delete folder + ${t.count} dataset(s)`,
-    hidden: (t) => t.count === 0,
-    destructive: true,
-    confirm: (t) => ({
-      title: `Delete "${t.folder.name}" and its ${t.count} dataset(s)?`,
-      message: "This can't be undone.",
-      confirmLabel: "Delete",
-    }),
-    run: (t) => void folderOps().then((m) => m.removeFolderWithDatasets(t.folder)),
-  },
-];
-
-/** Every folder action, flat — for callers that don't care about layout. */
-export const folderActions: MenuEntry<FolderActionTarget>[] = [
-  ...folderCoreActions,
-  { separator: true },
-  ...folderBulkActions,
-  { separator: true },
-  ...folderDeleteActions,
-];
-
-// ── plot curve (series) registry ────────────────────────────────────────
-
-export interface CurveActionTarget {
-  series: MenuSeries;
-  ctx: PlotMenuContext;
-  /** Whether any style field on this series has been overridden — gates
-   *  "Reset series style". */
-  overridden: boolean;
-}
-
-export const curveActions: ContextAction<CurveActionTarget>[] = [
-  {
-    id: "curve.toggleHidden",
-    label: (t) => (t.series.hidden ? "Show series" : "Hide series"),
-    enabled: (t) => t.series.hidden || t.ctx.canHide,
-    run: (t) => t.ctx.toggleHidden(t.series.channel),
-  },
-  { id: "curve.rename", label: "Rename…", run: (t) => t.ctx.rename(t.series.channel) },
-  {
-    id: "curve.toggleY2",
-    label: (t) => (t.series.onY2 ? "Move to left Y axis" : "Move to right Y axis"),
-    run: (t) => t.ctx.toggleY2(t.series.channel),
-  },
-  // GUI_INTERACTION #3 sub-item 4: the menu-path equivalent of the legend
-  // row's own draw-order reorder (its up/down arrow buttons + its own
-  // right-click menu) — now defined ONCE here so the plot-canvas right-click
-  // (lib/plotMenu.ts's curve menu) offers the same reorder PlotLegend always
-  // has, instead of it being legend-only.
-  {
-    id: "curve.moveEarlier",
-    label: "Move earlier (draw under)",
-    enabled: (t) => t.ctx.canMoveSeries(t.series.channel, -1),
-    run: (t) => t.ctx.moveSeries(t.series.channel, -1),
-  },
-  {
-    id: "curve.moveLater",
-    label: "Move later (draw over)",
-    enabled: (t) => t.ctx.canMoveSeries(t.series.channel, 1),
-    run: (t) => t.ctx.moveSeries(t.series.channel, 1),
-  },
-  {
-    id: "curve.resetStyle",
-    label: "Reset series style",
-    hidden: (t) => !t.overridden,
-    run: (t) => t.ctx.resetStyle(t.series.channel),
-  },
-];
+// The folder registry lives in components/Library/folderRowMenu.ts and
+// the plot-curve registry in lib/curveContextActions.ts (bundle diet slice
+// 12, plans/BUNDLE_HEADROOM.md): their only consumers are the folder row
+// menu / Library tree and the plot-canvas menu, all already lazy, so they
+// load in the same chunk as the menu that shows them — no right-click waits
+// longer. This module (the engine and the dataset registry the ⌘K palette
+// reads) stays eager.
 
 export { multiSelected };

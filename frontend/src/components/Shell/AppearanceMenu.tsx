@@ -9,7 +9,7 @@ import { PALETTES } from "../../lib/palettes";
 import { isCalcOnlyView } from "../../lib/viewMode";
 import { type Accent, type Density, type Theme, useApp } from "../../store/useApp";
 import { Select } from "../primitives";
-import { formatShortcut, isMacPlatform } from "../../lib/shortcuts";
+import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
 
 const THEMES: Theme[] = ["dark", "light"];
 const ACCENTS: Accent[] = ["violet", "teal", "ocean", "amber", "rose"];
