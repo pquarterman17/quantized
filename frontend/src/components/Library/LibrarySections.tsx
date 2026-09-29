@@ -42,6 +42,9 @@ export interface LibrarySectionsProps {
   hierarchy: LibraryHierarchy;
   onFilterTag: (query: string) => void;
   onShowInLibrary: (node: LibraryNode) => void;
+  /** Focus mode deliberately suppresses project-wide navigation sections so
+   *  the selected Origin branch is the only hierarchy competing for space. */
+  focusActive?: boolean;
 }
 
 export default function LibrarySections(p: LibrarySectionsProps) {
@@ -55,6 +58,7 @@ export default function LibrarySections(p: LibrarySectionsProps) {
   const smartFolderCount = useApp((s) => s.smartFolders.length);
   const collectionCount = useApp((s) => s.collections.length);
   const flat = !p.inHierarchy && !p.searchActive;
+  if (p.focusActive) return null;
   return (
     <>
       {flat && originFigureCount > 0 && <FiguresSection />}

@@ -150,6 +150,17 @@ body {
 .qzk-library.dragover { outline: 2px dashed var(--accent); outline-offset: -6px; background: var(--accent-soft); }
 .qzk-lib-head { display: flex; align-items: center; justify-content: space-between; padding: 2px; }
 .qzk-lib-title { font-size: var(--type-label); font-weight: var(--weight-semibold); text-transform: uppercase; letter-spacing: var(--tracking-label); color: var(--text-faint); }
+.qzk-library-focus,
+.qzk-library-focus-offer { display: flex; min-width: 0; align-items: center; gap: 6px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); padding: 5px 7px; background: var(--surface-2); color: var(--text-dim); font-size: var(--type-nano); }
+.qzk-library-focus span { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qzk-library-focus strong,
+.qzk-library-focus-offer strong { overflow: hidden; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
+.qzk-library-focus button { flex: none; border: 0; padding: 1px 3px; background: none; color: var(--accent); font: inherit; cursor: default; }
+.qzk-library-focus button:hover { text-decoration: underline; }
+.qzk-library-focus-offer { width: 100%; justify-content: flex-start; cursor: default; }
+.qzk-library-focus-offer:hover { border-color: var(--accent); background: var(--accent-soft); }
+.qzk-library-focus button:focus-visible,
+.qzk-library-focus-offer:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* PR D/E: textual controls remain recognizable at the Library's 160 px
    minimum width; Tiles opens the wide main-workspace browser. */
 .qzk-lib-view-switch { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border: 1px solid var(--border-soft); border-radius: var(--radius-sm); overflow: hidden; }

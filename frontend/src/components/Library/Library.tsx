@@ -22,9 +22,11 @@ import { useEffect, useRef, useState } from "react";
 
 import { lazyRegion } from "../../lib/lazyRegion";
 import LibrarySections from "./LibrarySections";
+import LibraryFocusBar from "./LibraryFocusBar";
 import { LIBRARY_NODE_GLYPH } from "./nodeIcons";
 import LibraryViewSelector from "./LibraryViewSelector";
 import { useLibraryHierarchyModel } from "./useLibraryHierarchyRows";
+import { useLibraryFocus } from "./useLibraryFocus";
 import { useLibraryResize } from "./useLibraryResize";
 import { useLibraryViewTransition } from "./useLibraryViewTransition";
 import { makeDemoDataset } from "../../lib/demo";
@@ -95,14 +97,15 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   // their virtualization hooks must measure/scroll THIS element, not their
   // own row container.
   const panelRef = useRef<HTMLElement>(null);
-  const { hierarchy, rows } = useLibraryHierarchyModel();
+  const { hierarchy, rows: allRows } = useLibraryHierarchyModel();
   const [query, setQuery] = useState("");
   const [dragging, setDragging] = useState(false);
   const { viewMode, changeViewMode, rememberLibraryFocus } = useLibraryViewTransition({
     controlledMode: controlledViewMode, onModeChange: onViewModeChange,
-    hierarchy, rows, expandedFolders, expandedWorkbookIds,
+    hierarchy, rows: allRows, expandedFolders, expandedWorkbookIds,
     toggleFolderExpanded, toggleWorkbookExpanded,
   });
+  const libraryFocus = useLibraryFocus(hierarchy, allRows);
 
   // "Show in Library" (plan #13 sub-item 2; PR C adds the workbook step;
   // PR D2 generalizes it to EVERY hierarchy node kind for L0.26's search
@@ -117,6 +120,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
     clearReveal();
     const node = hierarchy.byKey.get(key);
     if (!node) return;
+    libraryFocus.clearFocus();
     setQuery("");
     const s = useApp.getState();
     let parentKey = node.parentKey;
@@ -208,6 +212,8 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   // breadcrumbs, normal open, per-row "Show in Library" — regardless of the
   // Tree/Details view preference (the preference governs browsing; results
   // are always the flat table).
+  const rows = libraryFocus.rows;
+  const browseHierarchy = libraryFocus.hierarchy;
   const inHierarchy = query.trim() === "" && rows.length > 0;
   const showInLibrary = (node: LibraryNode): void => {
     setQuery("");
@@ -215,11 +221,12 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
   };
   let body: React.ReactNode;
   if (query.trim() !== "") {
+    // Search stays project-wide even while browse focus is active.
     body = (
       <LibraryDetails hierarchy={hierarchy} searchQuery={query} onShowInLibrary={showInLibrary} panelRef={panelRef} />
     );
   } else if (inHierarchy && viewMode === "details") {
-    body = <LibraryDetails hierarchy={hierarchy} panelRef={panelRef} />;
+    body = <LibraryDetails hierarchy={browseHierarchy} panelRef={panelRef} />;
   } else if (inHierarchy) {
     // Tiles owns the main workspace; the narrow Library deliberately remains
     // an Origin-like tree navigator while that workspace is open (L0.15).
@@ -336,6 +343,14 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
         )}
       </div>
 
+      <LibraryFocusBar
+        focusedNode={libraryFocus.focusedNode}
+        candidateNode={libraryFocus.candidateNode}
+        searching={searchActive}
+        onFocus={libraryFocus.focusOn}
+        onShowAll={libraryFocus.clearFocus}
+      />
+
       {selectedIds.length > 1 && <MultiSelectBar />}
 
       <LibrarySections
@@ -344,6 +359,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
         hierarchy={hierarchy}
         onFilterTag={setQuery}
         onShowInLibrary={showInLibrary}
+        focusActive={libraryFocus.focusActive}
       />
 
       {body}
@@ -352,7 +368,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
        *  no dataset/folder/workbook/figure/page/report) is the only way to
        *  reach here with no active search, since any dataset always yields
        *  at least a root worksheet row. */}
-      {query.trim() === "" && rows.length === 0 && <HomeScreen onImport={onImport} />}
+      {query.trim() === "" && allRows.length === 0 && <HomeScreen onImport={onImport} />}
       {/* Panel-width drag-resize (plan #13 sub-item 5) — a thin strip at the
        *  right edge; drag streams --lw live, release persists to qz.prefs. */}
       <div

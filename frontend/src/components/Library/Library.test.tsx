@@ -98,6 +98,70 @@ describe("Library — figures nested in the tree", () => {
   });
 });
 
+describe("Library — focused project exploration", () => {
+  beforeEach(() => {
+    useApp.setState({
+      folders: [folder("f1", "Project A"), { ...folder("f2", "Project B"), order: 1 }],
+      workbooks: [
+        { id: "w1", name: "Book A", folderId: "f1", order: 0 },
+        { id: "w2", name: "Book B", folderId: "f2", order: 0 },
+      ],
+      datasets: [
+        { ...dsWith("Sheet A"), workbookId: "w1" },
+        { ...dsWith("Sheet B"), workbookId: "w2" },
+      ],
+      expandedFolders: ["f1", "f2"],
+      expandedWorkbookIds: ["w1", "w2"],
+    });
+  });
+
+  async function focusBookA(): Promise<void> {
+    const row = await screen.findByText("Book A");
+    fireEvent.click(row.closest('[data-lib-row="workbook:w1"]')!);
+    fireEvent.click(screen.getByRole("button", { name: "Focus on Book A" }));
+  }
+
+  it("temporarily narrows the tree to the selected workbook and restores the full project", async () => {
+    render(<Library />);
+    await focusBookA();
+
+    expect(screen.getByText("Sheet A")).toBeInTheDocument();
+    expect(screen.queryByText("Book B")).not.toBeInTheDocument();
+    expect(screen.getByText("Focused on")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Show all" }));
+    expect(await screen.findByText("Book B")).toBeInTheDocument();
+  });
+
+  it("keeps search project-wide and resumes the focused branch when search is cleared", async () => {
+    render(<Library />);
+    await focusBookA();
+
+    const input = screen.getByPlaceholderText(/Filter/);
+    fireEvent.change(input, { target: { value: "Sheet B" } });
+    expect(await screen.findByText("Sheet B")).toBeInTheDocument();
+    expect(screen.getByText("Searching all · focus:")).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: "" } });
+    expect(await screen.findByText("Sheet A")).toBeInTheDocument();
+    expect(screen.queryByText("Book B")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the complete Library when the focused workbook disappears", async () => {
+    render(<Library />);
+    await focusBookA();
+
+    act(() => {
+      useApp.setState({
+        workbooks: [{ id: "w2", name: "Book B", folderId: "f2", order: 0 }],
+        datasets: [{ ...dsWith("Sheet B"), workbookId: "w2" }],
+      });
+    });
+    expect(await screen.findByText("Book B")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Show all" })).not.toBeInTheDocument();
+  });
+});
+
 // project-organization plan item 6: the group-chip UI (filter dropdown +
 // collapsible group sections) is retired — folders are the one organizational
 // model. A dataset that still carries a legacy `.group` (bypassing the
