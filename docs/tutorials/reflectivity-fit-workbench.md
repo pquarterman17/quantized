@@ -54,10 +54,21 @@ the parameter ended **on a bound** (widen it or fix it), or the data do not
 determine it independently (two layers of the same material, say — fix or
 tie one of them). The fitted curve of channel 1 is overlaid on its data.
 
+Under the result, three linked plots: data (points) and model (line) on a
+log-R axis, the **residuals** below on the same Q points with a zero line,
+and the SLD depth profile. A residual is what the fit minimised: with dR
+weighting (R fit − R)/dR, in units of σ; with log weighting log₁₀ R fit −
+log₁₀ R, in dex. Dragging a Q range in the data or residual plot zooms
+both, and the cursor is shared; the SLD plot has its own depth axis. A PNR
+pair shows one data/model/residual series per spin state.
+
 Follow-ups: **Apply to model** writes the fitted values into the layer
-model; **Add fit curves** adds each channel's R and model and each SLD
-profile to the library (named "… refl fit #n", with provenance in
-`metadata.reflFit`); **Open log-Y plot**; **Add to report**.
+model; **Add fit curves** adds each channel's R, model and residual and each
+SLD profile to the library (named "… refl fit #n", with provenance in
+`metadata.reflFit`); **Open log-Y plot**; **Send to figure page** makes
+editable figures — R(Q), residuals and SLD, one column per channel, every Q
+panel on the same Q range — on a new Figure Page and opens it there for
+styling and vector export (one undo step); **Add to report**.
 
 ## 4. Saved fits
 
@@ -66,7 +77,10 @@ keep their curves) and saved with the project. The **History** picker shows
 them again after the workshop closes. A saved fit can be applied (guarded
 against a changed layer stack or radiation), **restored** as a setup
 (model, parameters, bindings and settings), overlaid, re-added as curves,
-or added to a report. It warns when a dataset it used is gone or its data
+sent to a figure page, or added to a report. Its linked plots, residuals
+included, come back from the stored curves without a re-run; a dR-weighted
+fit saved before residuals were stored says so instead (its log-weighted
+counterpart recomputes them, which is exact). It warns when a dataset it used is gone or its data
 changed since the fit.
 
 ## 5. Estimate uncertainty (DREAM)

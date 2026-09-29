@@ -57,7 +57,7 @@ export function fitResponse(over: Partial<ReflFitResult> = {}): ReflFitResult {
     n_evaluations: 42,
     weighting: "dr",
     curves: [
-      { label: "c", spin: null, q: [0.01, 0.03, 0.05], r: [1, 0.5, 0.2], dr: [0.01, 0.01, 0.01], model: [0.9, 0.4, 0.1], residual: [] },
+      { label: "c", spin: null, q: [0.01, 0.03, 0.05], r: [1, 0.5, 0.2], dr: [0.01, 0.01, 0.01], model: [0.9, 0.4, 0.1], residual: [-10, -10, -10] },
     ],
     sld_profiles: [{ spin: null, z: [-10, 0, 10], sld: [0, 7e-5, 2e-5] }],
     warnings: ["parameters ended on a bound (errors not reported): L1.roughness"],
@@ -171,4 +171,15 @@ export function dreamResult(over: Partial<ReflPosteriorResult> = {}): ReflPoster
     warnings: ["R-hat above 1.2 (the chains have not mixed) for: background; sample longer or constrain the model"],
     ...over,
   };
+}
+
+/** A do-nothing uPlot for the tests that render the fit view (jsdom has no
+ *  `matchMedia`, which uPlot's module init calls): `vi.mock("uplot", async
+ *  () => ({ default: (await import("./reflFit.testkit")).UPlotStub }))`.
+ *  ReflFitPlots.test.tsx records what each plot was built with instead. */
+export class UPlotStub {
+  scales = { x: { min: 0, max: 1 } };
+  destroy(): void {}
+  setSize(): void {}
+  setScale(): void {}
 }

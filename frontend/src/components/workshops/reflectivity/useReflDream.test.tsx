@@ -27,6 +27,7 @@ import ReflFitView from "./ReflFitView";
 import { useReflFit } from "./useReflFit";
 import { useReflectivity } from "./useReflectivity";
 
+vi.mock("uplot", async () => ({ default: (await import("./reflFit.testkit")).UPlotStub }));
 vi.mock("../../../lib/api/reflectivity", async () => {
   const actual = await vi.importActual<typeof import("../../../lib/api/reflectivity")>("../../../lib/api/reflectivity");
   return {

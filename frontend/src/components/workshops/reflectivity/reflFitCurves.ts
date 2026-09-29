@@ -22,6 +22,7 @@ import {
   type SavedCurves,
   type SavedSldProfile,
 } from "./reflFitRecord";
+import { channelResiduals, RESIDUAL_MEANING, residualUnit } from "./reflFitResiduals";
 import { resolveBinding } from "./reflFitRestore";
 
 /** At most this many points per stored curve. Reflectometry scans are a few
@@ -46,7 +47,9 @@ export function savedCurves(res: Pick<ReflFitResult, "curves" | "sld_profiles">,
   return {
     channels: res.curves.map((c): SavedChannelCurve => {
       const idx = decimateIndices(c.q.length, max);
-      return { label: c.label, spin: c.spin, q: pick(c.q, idx), r: pick(c.r, idx), model: pick(c.model, idx), total: c.q.length };
+      const out: SavedChannelCurve = { label: c.label, spin: c.spin, q: pick(c.q, idx), r: pick(c.r, idx), model: pick(c.model, idx), total: c.q.length };
+      if (c.residual.length === c.q.length) out.residual = pick(c.residual, idx);
+      return out;
     }),
     sld: res.sld_profiles.map((p): SavedSldProfile => {
       const idx = decimateIndices(p.z.length, max);
@@ -65,6 +68,12 @@ export function decimationNote(curves: SavedCurves): string | null {
 }
 
 // ── fit-curve datasets ───────────────────────────────────────────────────────
+
+/** Are the fit-curve datasets made earlier (`ids`) all still in the library?
+ *  False for none made yet: a deleted one must be made again, never reused. */
+export function presentIds(ids: readonly string[], datasets: readonly Dataset[]): boolean {
+  return ids.length > 0 && ids.every((id) => datasets.some((d) => d.id === id));
+}
 
 /** Name, placement and provenance for the datasets "Add fit curves" makes
  *  from `record`: named for the fit ("<source> — refl fit #n model"), placed
@@ -101,7 +110,16 @@ export function curveDatasetFor(record: ReflFitRecord, datasets: readonly Datase
 
 /** Curves as either a live response or a saved record carries them. */
 export interface CurvesLike {
-  channels: { label: string; spin: "+" | "-" | null; q: number[]; r: number[]; model: (number | null)[]; total?: number }[];
+  channels: {
+    label: string;
+    spin: "+" | "-" | null;
+    q: number[];
+    r: number[];
+    model: (number | null)[];
+    /** Absent on a record saved before residuals were stored. */
+    residual?: (number | null)[];
+    total?: number;
+  }[];
   sld: { spin: "+" | "-" | null; z: number[]; sld: (number | null)[]; total?: number }[];
 }
 
@@ -116,8 +134,9 @@ export interface CurveDataset {
 }
 
 /** The library datasets for a fit's curves: one "model" per channel (R and
- *  R fit on the fitted Q points) and one per SLD profile. `record` null (a
- *  live fit whose record could not be stored) names them generically. */
+ *  R fit on the fitted Q points, plus the residual when it is known —
+ *  reflFitResiduals.ts) and one per SLD profile. `record` null (a live fit
+ *  whose record could not be stored) names them generically. */
 export function curveDatasets(
   curves: CurvesLike,
   record: ReflFitRecord | null,
@@ -131,18 +150,28 @@ export function curveDatasets(
     out ? out.metadata(extra) : { source: "reflectivity-fit", ...fallback, ...extra };
   const thinned = (n: number, total: number | undefined) => (total && total > n ? { decimated: { kept: n, total } } : {});
   const many = curves.channels.length > 1;
+  const weighting = record?.result.weighting ?? (fallback.weighting === "log" ? "log" : "dr");
   return [
-    ...curves.channels.map((c, i) => ({
-      name: `${base} model${many ? ` (${c.spin ?? `channel ${i + 1}`})` : ""}`,
-      placement,
-      data: {
-        time: c.q,
-        values: c.q.map((_, k) => [c.r[k], c.model[k] ?? Number.NaN]),
-        labels: ["R", "R fit"],
-        units: ["", ""],
-        metadata: meta({ spin: c.spin, channel: i + 1, ...thinned(c.q.length, c.total) }),
-      },
-    })),
+    ...curves.channels.map((c, i) => {
+      // A third column when the fit's residuals are known (reflFitResiduals.ts).
+      const res = channelResiduals(c, weighting);
+      return {
+        name: `${base} model${many ? ` (${c.spin ?? `channel ${i + 1}`})` : ""}`,
+        placement,
+        data: {
+          time: c.q,
+          values: c.q.map((_, k) => [c.r[k], c.model[k] ?? Number.NaN, ...(res ? [res[k] ?? Number.NaN] : [])]),
+          labels: ["R", "R fit", ...(res ? ["residual"] : [])],
+          units: ["", "", ...(res ? [residualUnit(weighting)] : [])],
+          metadata: meta({
+            spin: c.spin,
+            channel: i + 1,
+            ...(res ? { residual: RESIDUAL_MEANING[weighting] } : {}),
+            ...thinned(c.q.length, c.total),
+          }),
+        },
+      };
+    }),
     ...curves.sld.map((p) => ({
       name: `${base} SLD${p.spin ? ` (${p.spin})` : ""}`,
       placement,
