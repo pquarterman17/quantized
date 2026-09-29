@@ -616,16 +616,28 @@ with parent items P1.3 and P1.5.
         instead scrubs the removed datasets out of every entry, so no undo
         or redo can bring one back. The same take-back runs if the plot apply
         throws. A STAGED preview (unmatched fields, not a refusal) keeps the
-        output, since the dialog plots it. The notice is the status line
+        output only if the user CONFIRMS it: cancelling the dialog runs the
+        same take-back, with the same undo/redo handling, through
+        `PendingPlotRecipeApplication.onCancel` (new
+        `store/pendingRecipeApplication.ts`; `cancelPendingRecipeApplication`
+        calls it, and a confirm that re-stages carries it over), with the
+        one-sentence status `Plot Recipe “…” preview cancelled — the output
+        of transformation “…” was removed.` (352f7dc7). For a refusal, the
+        notice is the status line
         plus the Manager's inline error, one sentence: `Plot Recipe "…"
         unavailable: <reason> — the output of transformation “…” was
         removed.` Tests (`recipeApplyChoices.test.ts`): refusal rolls back
         with undo/redo seqs identical, the active dataset restored and the
         reason named; the scrub fallback (an edit recorded in between, then
         two undos resurrect nothing); a throw rolls back; a staged preview
-        keeps the output. Each guard (take-back call, exact restore, scrub
+        keeps the output while it is open; cancelling it rolls back with
+        undo/redo seqs identical and the notice set; a confirm that re-stages
+        then a cancel still rolls back; a confirmed preview keeps and plots
+        the output. Each guard (take-back call, exact restore, scrub
         fallback, staged check, throw path, active restore, the run's
-        `created` list) was sabotaged once and turned red.
+        `created` list; the cancel action calling `onCancel`, re-staging
+        keeping it, the apply attaching it, `onCancel` taking back) was
+        sabotaged once and turned red.
         (c) **DECIDED (owner, 2026-09-29): "Pre-select but also easy
         override."** Done in d764168e: the Transform picker moved into each
         row (`RecipeTransformPicker.tsx`) because each recipe records its
@@ -1781,7 +1793,8 @@ Before starting a slice:
 
 (b) "Rejection with notice": a transformation whose output the Plot Recipe
 refuses is rolled back, with undo/redo left exactly as before, and the
-notice names the reason. (c) "Pre-select but also easy override": each
+notice names the reason; the same take-back runs when the user cancels the
+preview dialog a partially-matching recipe opens on that output. (c) "Pre-select but also easy override": each
 Recipe Manager row's Transform picker starts on the recipe's recorded
 transformation (marked "(recorded)") when it is still saved, else None with
 a one-sentence note. (a) stays open.
