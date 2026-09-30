@@ -6,19 +6,16 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { renderFigureBlob } from "./api/figures";
-import {
-  clipboardImageSupported,
-  clipboardSvgSupported,
-  copyImageAsync,
-  copySvgAsync,
-} from "./clipboard";
+import { clipboardImageSupported, clipboardSvgSupported, copySvgAsync } from "./clipboard";
 import {
   COPY_FIGURE_DPI,
   COPY_FIGURE_FMT,
   runCopyFigureCommand,
   runCopyFigureSvgCommand,
 } from "./copyFigureCommand";
+import { COPY_SVG_MAX_POINTS } from "./copySvgBudget";
 import { createFigureDocument } from "./figureDocument";
+import { copyOfficeGraphicAsync } from "./officeClipboard";
 import { defaultPlotView } from "./plotview";
 import type { DataStruct, Dataset } from "./types";
 import { usePendingOps } from "../store/pendingOps";
@@ -29,8 +26,10 @@ vi.mock("./api/figures", () => ({
 vi.mock("./clipboard", () => ({
   clipboardImageSupported: vi.fn(() => true),
   clipboardSvgSupported: vi.fn(() => true),
-  copyImageAsync: vi.fn(async () => true),
   copySvgAsync: vi.fn(async () => true),
+}));
+vi.mock("./officeClipboard", () => ({
+  copyOfficeGraphicAsync: vi.fn(async () => true),
 }));
 
 const data: DataStruct = {
@@ -108,19 +107,49 @@ beforeEach(() => {
   vi.mocked(clipboardImageSupported).mockReturnValue(true);
   vi.mocked(clipboardSvgSupported).mockReturnValue(true);
   vi.mocked(copySvgAsync).mockResolvedValue(true);
-  vi.mocked(copyImageAsync).mockResolvedValue(true);
+  vi.mocked(copyOfficeGraphicAsync).mockResolvedValue(true);
   vi.mocked(renderFigureBlob).mockResolvedValue(new Blob(["x"], { type: "image/png" }));
 });
 
 describe("runCopyFigureCommand", () => {
   it("renders through the publication route at 300-DPI PNG", async () => {
     await runCopyFigureCommand(fakeGet());
-    expect(renderFigureBlob).toHaveBeenCalledTimes(1);
+    expect(renderFigureBlob).toHaveBeenCalledTimes(2);
     const spec = vi.mocked(renderFigureBlob).mock.calls[0][0];
     expect(spec.fmt).toBe(COPY_FIGURE_FMT);
     expect(spec.fmt).toBe("png");
     expect(spec.dpi).toBe(COPY_FIGURE_DPI);
     expect(spec.dpi).toBe(300);
+    // The optional raw-SVG representation: a second render, glyphs as paths.
+    const svgSpec = vi.mocked(renderFigureBlob).mock.calls[1][0];
+    expect(svgSpec.fmt).toBe("svg");
+    expect(svgSpec.svg_text_as_paths).toBe(true);
+    expect(spec.svg_text_as_paths).toBeUndefined();
+    expect(vi.mocked(copyOfficeGraphicAsync).mock.calls[0][0].pngDpi).toBe(300);
+  });
+
+  it("skips the SVG render when the browser does not advertise raw SVG", async () => {
+    vi.mocked(clipboardSvgSupported).mockReturnValue(false);
+    await runCopyFigureCommand(fakeGet());
+    expect(renderFigureBlob).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(renderFigureBlob).mock.calls[0][0].fmt).toBe("png");
+    expect(vi.mocked(copyOfficeGraphicAsync).mock.calls[0][0].svg).toBeNull();
+  });
+
+  it("skips the SVG render for a figure over the point budget", async () => {
+    const rows = Math.floor(COPY_SVG_MAX_POINTS / 2) + 1; // x 2 plotted channels
+    const dense: Dataset = {
+      id: "d1",
+      name: "dense.dat",
+      data: {
+        ...data,
+        time: Array.from({ length: rows }, (_, i) => i),
+        values: Array.from({ length: rows }, (_, i) => [i, -i]),
+      },
+    };
+    await runCopyFigureCommand(fakeGet({ datasets: [dense], resolveDataset: async () => dense }));
+    expect(renderFigureBlob).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(copyOfficeGraphicAsync).mock.calls[0][0].svg).toBeNull();
   });
 
   it("carries the on-screen view into the spec, not raw defaults", async () => {
@@ -136,8 +165,9 @@ describe("runCopyFigureCommand", () => {
     // Awaiting the render before touching the clipboard can drop the transient
     // user activation, so the command must pass a promise, not a resolved Blob.
     await runCopyFigureCommand(fakeGet());
-    const arg = vi.mocked(copyImageAsync).mock.calls[0][0];
-    expect(typeof (arg as Promise<Blob | null>).then).toBe("function");
+    const source = vi.mocked(copyOfficeGraphicAsync).mock.calls[0][0];
+    expect(typeof source.png.then).toBe("function");
+    expect(typeof source.svg?.then).toBe("function");
   });
 
   it("does not render at all when the clipboard image API is unavailable", async () => {
@@ -150,7 +180,7 @@ describe("runCopyFigureCommand", () => {
   });
 
   it("reports a copy failure using copy wording, not export wording", async () => {
-    vi.mocked(copyImageAsync).mockResolvedValue(false);
+    vi.mocked(copyOfficeGraphicAsync).mockResolvedValue(false);
     await runCopyFigureCommand(fakeGet());
     const messages = setStatus.mock.calls.map((c) => String(c[0]));
     expect(messages.some((m) => m.startsWith("copy failed"))).toBe(true);
@@ -174,7 +204,7 @@ describe("runCopyFigureCommand", () => {
   });
 
   it("surfaces a render failure instead of silently copying nothing", async () => {
-    vi.mocked(copyImageAsync).mockRejectedValue(new Error("boom"));
+    vi.mocked(copyOfficeGraphicAsync).mockRejectedValue(new Error("boom"));
     await runCopyFigureCommand(fakeGet());
     const messages = setStatus.mock.calls.map((c) => String(c[0]));
     expect(messages.some((m) => m.includes("boom"))).toBe(true);
@@ -280,7 +310,7 @@ describe("F2.5b — Stage copy routes through the focused window's canonical doc
         }),
       ),
     ).resolves.toBeUndefined();
-    expect(renderFigureBlob).toHaveBeenCalledTimes(1);
+    expect(renderFigureBlob).toHaveBeenCalledTimes(2);
     const spec = vi.mocked(renderFigureBlob).mock.calls[0][0];
     expect(spec.group_col).toBeUndefined();
     expect(spec.y2_keys).toEqual([1]);
@@ -307,11 +337,11 @@ describe("runCopyFigureCommand — safe cancel (P3.4)", () => {
         );
       });
     });
-    // copyImageAsync's own documented fallback (lib/clipboard.ts): a pending
-    // render that fails resolves to `false` rather than throwing — simulate
-    // that outcome directly rather than re-exercising its internals here.
-    vi.mocked(copyImageAsync).mockImplementation(async (pending) => {
-      await pending.catch(() => null);
+    // copyOfficeGraphicAsync's own documented fallback
+    // (lib/officeClipboard.ts): failed pending renders resolve to `false`
+    // rather than escaping.
+    vi.mocked(copyOfficeGraphicAsync).mockImplementation(async (source) => {
+      await Promise.allSettled([source.png, source.svg]);
       return false;
     });
 

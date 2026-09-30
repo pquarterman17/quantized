@@ -84,6 +84,7 @@ def _render_facets_bytes(
         x_fmt=_tick_fmt(req.x_fmt),
         y_fmt=_tick_fmt(req.y_fmt),
         overrides=req.overrides,
+        svg_text_as_paths=req.svg_text_as_paths,
     )
 
 

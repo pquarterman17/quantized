@@ -6,13 +6,14 @@
 // accessible name (aria-label) instead of getByTitle.
 
 import { fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { loadToolbarPrefs, saveToolbarPrefs } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
 import PlotToolbar from "./PlotToolbar";
 
 const ORIGINAL = useApp.getState();
+const ORIGINAL_CLIPBOARD = navigator.clipboard;
 
 // The global setup.ts afterEach already calls RTL's cleanup() (which
 // properly unmounts the flyout's document.body portal) — a manual
@@ -21,6 +22,8 @@ const ORIGINAL = useApp.getState();
 afterEach(() => {
   useApp.setState(ORIGINAL, true);
   localStorage.removeItem("qz.toolbarPrefs");
+  Object.defineProperty(navigator, "clipboard", { value: ORIGINAL_CLIPBOARD, configurable: true });
+  vi.unstubAllGlobals();
 });
 
 beforeEach(() => {
@@ -33,7 +36,7 @@ const props = {
   onSmartScale: NOOP,
   onSavePng: NOOP,
   onCopyData: NOOP,
-  onSnapshot: NOOP,
+  onCopyFigure: NOOP,
   onSnapshotWindow: NOOP,
 };
 
@@ -148,11 +151,20 @@ describe("PlotToolbar — disabled-with-reason (GUI_INTERACTION_PLAN #7)", () =>
     expect(btn).toHaveAttribute("data-tip-desc", "Restore the default zoom and pan");
   });
 
-  it("disables Copy Image when the browser has no Clipboard image API (jsdom's default)", () => {
+  it("disables Copy Figure when the browser has no Clipboard image API (jsdom's default)", () => {
     render(<PlotToolbar {...props} />);
-    const btn = screen.getByRole("button", { name: "Copy Image" });
+    const btn = screen.getByRole("button", { name: "Copy Figure" });
     expect(btn).toBeDisabled();
     expect(btn).toHaveAttribute("data-tip-desc", "Clipboard image copy isn't supported in this browser");
+  });
+
+  it("runs the publication Copy Figure action directly from the toolbar", () => {
+    const copy = vi.fn();
+    Object.defineProperty(navigator, "clipboard", { value: { write: vi.fn() }, configurable: true });
+    vi.stubGlobal("ClipboardItem", class {});
+    render(<PlotToolbar {...props} onCopyFigure={copy} />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy Figure" }));
+    expect(copy).toHaveBeenCalledTimes(1);
   });
 });
 

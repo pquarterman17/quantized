@@ -120,6 +120,10 @@ export interface FigureSpec {
   dpi?: number;
   /** MAIN #35: render on a transparent canvas (Copy figure preference). */
   transparent?: boolean;
+  /** SVG only: glyphs as path outlines instead of live `<text>`, so the SVG
+   *  needs no installed font (Copy Figure's clipboard SVG — see
+   *  lib/officeClipboard.ts). Omitted/`false` = editable text, the default. */
+  svg_text_as_paths?: boolean;
   /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: print-safe export -- every series'
    *  colour is overridden to a grey ramp and the dash/marker cycle is
    *  forced server-side (`calc.figure_greyscale`). Omitted/`false` = today's

@@ -298,6 +298,7 @@ def _render_impl(
     y2_scale: str | None = None,
     y2_fmt: Mapping[str, Any] | None = None,
     y2_step: float | None = None,
+    svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
 ) -> bytes | dict[str, Any]:
     """Render ``series`` (each ``(label, y)``) against ``x`` to image bytes.
 
@@ -463,7 +464,9 @@ def _render_impl(
                 x_scale=resolve_axis_scale(x_scale, x_log),
                 y_scale=resolve_axis_scale(y_scale, y_log),
             )
-        return savefig_bytes(fig, fmt, dpi=resolved_dpi, transparent=transparent)
+        return savefig_bytes(
+            fig, fmt, dpi=resolved_dpi, transparent=transparent, svg_text_as_paths=svg_text_as_paths
+        )
 
 
 def render_figure(

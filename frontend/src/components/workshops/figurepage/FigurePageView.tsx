@@ -258,7 +258,7 @@ export default function FigurePageView() {
             <Button variant="primary" onClick={() => void p.exportNow()}>
               Export {p.fmt.toUpperCase()}
             </Button>
-            <Button onClick={() => void p.copyNow()} title="Copy a 300 DPI image of this page to the clipboard">
+            <Button onClick={() => void p.copyNow()} title="Copy a 300 DPI image of this page for Office (plus vector SVG where the browser allows)">
               Copy
             </Button>
           </div>

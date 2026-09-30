@@ -15,7 +15,7 @@ file (rather than joining ``routes/export_figures.py``) to respect the
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quantized.heavy_import import heavy_imports
 from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
@@ -28,7 +28,7 @@ from quantized.routes._export_common import (
 )
 from quantized.routes.export_figures import FigureRequest, _figure_series
 from quantized.routes.export_figures_facets import _facet_panels
-from quantized.routes.export_figures_schema import _tick_fmt
+from quantized.routes.export_figures_schema import SVG_TEXT_AS_PATHS_DOC, _tick_fmt
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -102,6 +102,7 @@ class FigurePageRequest(BaseModel):
     link_y: bool = False
     align_labels: bool = False
     resize_mode: str = "constrained"  # constrained | tight | none
+    svg_text_as_paths: bool = Field(default=False, description=SVG_TEXT_AS_PATHS_DOC)
 
 
 @router.post("/figure-page")
@@ -224,6 +225,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
             link_y=req.link_y,
             align_labels=req.align_labels,
             resize_mode=req.resize_mode,
+            svg_text_as_paths=req.svg_text_as_paths,
         )
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)

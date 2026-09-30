@@ -116,7 +116,7 @@ describe("clipboardImageSupported", () => {
 
   it("is false in jsdom's default environment (no Clipboard image API)", () => {
     // jsdom ships no navigator.clipboard at all — this is the real "Firefox /
-    // insecure context" case the toolbar's Copy Image button must disable for.
+    // insecure context" case the toolbar's Copy Figure button must disable for.
     expect(clipboardImageSupported()).toBe(false);
   });
 

@@ -194,6 +194,7 @@ def render_facets_figure(
     # `buildOpts` at all. Applying the FULL override set here (as the flat
     # path does) would render things the screen's facet grid never shows.
     overrides: Mapping[str, Any] | None = None,
+    svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
 ) -> bytes:
     """Render one small-multiples panel per facet level.
 
@@ -233,7 +234,9 @@ def render_facets_figure(
         width_in=width_in, height_in=height_in, x_fmt=x_fmt, y_fmt=y_fmt,
         overrides=overrides,
     ) as built:
-        return savefig_bytes(built.fig, fmt, dpi=dpi, transparent=transparent)
+        return savefig_bytes(
+            built.fig, fmt, dpi=dpi, transparent=transparent, svg_text_as_paths=svg_text_as_paths
+        )
 
 
 def render_stat_facets_figure(

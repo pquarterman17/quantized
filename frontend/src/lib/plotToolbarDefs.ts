@@ -155,11 +155,11 @@ export const COPY_DATA: ActionDef = {
   name: "Copy Data",
   desc: "Copy the plotted data as tab-separated values",
 };
-export const COPY_IMAGE: ActionDef = {
-  id: "snapshot",
+export const COPY_FIGURE: ActionDef = {
+  id: "copyFigure",
   glyph: "⎘",
-  name: "Copy Image",
-  desc: "Copy the plot image to the clipboard",
+  name: "Copy Figure",
+  desc: "Copy the publication figure (300 DPI) for Office; adds vector SVG where the browser allows",
 };
 export const SNAPSHOT_WINDOW: ActionDef = {
   id: "snapshotWindow",
