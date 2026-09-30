@@ -18,6 +18,7 @@ from quantized.calc.figure_category_axis import style_category_axis
 from quantized.calc.figure_group_notes import add_caveat, mark_empty_slots
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
+from quantized.calc.figure_stat_colors import bar_colors, check_aligned
 from quantized.calc.figure_stat_marks import overlay_bar_marks
 from quantized.calc.figure_styles import figure_style
 
@@ -37,6 +38,7 @@ def _draw_categorical_bars(
     axis_style: dict[str, Any] | None = None,
     raw_groups: list[str] | None = None,
     bar_marks: dict[str, Any] | None = None,
+    colors: list[str | None] | None = None,
 ) -> Any | None:
     """Draw one grouped/stacked bar panel into `ax` — shared by the flat
     single-panel path below and `figure_facets.render_categorical_facets_figure`
@@ -63,8 +65,12 @@ def _draw_categorical_bars(
     summary marker, keyword arguments of ``calc.figure_stat_marks.
     overlay_bar_marks`` (``points``, ``jitter_width``, ``summary``, ``raw``,
     ``raw_rows``). Stacked bars draw none of them, as on screen; a facet
-    panel is given its own cells' (``figure_facets``, JMP_GAP J5 residual)."""
+    panel is given its own cells' (``figure_facets``, JMP_GAP J5 residual).
+
+    ``colors`` (P1.4 Color-by, one per category): every series' bar in its
+    category's colour (``calc.figure_stat_colors.bar_colors``)."""
     n_groups, n_series = len(groups), len(series)
+    check_aligned(colors, n_groups, "category")
     x = np.arange(n_groups, dtype=float)
     if stacked:
         bottom = np.zeros(n_groups)
@@ -72,7 +78,7 @@ def _draw_categorical_bars(
             yerr = errs[:, si] if errs is not None and si == n_series - 1 else None
             ax.bar(
                 x, vals[:, si], 0.68, bottom=bottom, yerr=yerr, capsize=3,
-                label=series[si],
+                label=series[si], **bar_colors(colors, si),
             )
             bottom = bottom + np.nan_to_num(vals[:, si])
     else:
@@ -84,7 +90,7 @@ def _draw_categorical_bars(
             yerr = errs[:, si] if errs is not None else None
             ax.bar(
                 x + offset, vals[:, si], width * 0.85, yerr=yerr, capsize=3,
-                label=series[si],
+                label=series[si], **bar_colors(colors, si),
             )
         if bar_marks:
             overlay_bar_marks(
@@ -178,6 +184,7 @@ def render_categorical_figure(
     caveat: str | None = None,
     axis_style: dict[str, Any] | None = None,
     bar_marks: dict[str, Any] | None = None,
+    colors: list[str | None] | None = None,
     title: str = "",
     x_label: str = "",
     y_label: str = "",
@@ -201,7 +208,8 @@ def render_categorical_figure(
     ``counts`` / ``caveat`` (P2.6 box 2): see ``_draw_categorical_bars`` and
     ``calc.figure_group_notes.add_caveat``. Both default off --
     byte-identical to before. ``bar_marks`` (P2.6 box 1): raw points and the
-    summary marker over grouped bars, see ``_draw_categorical_bars``.
+    summary marker over grouped bars, and ``colors`` (P1.4 Color-by, one per
+    category), see ``_draw_categorical_bars``.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -243,6 +251,7 @@ def render_categorical_figure(
         ax = fig.subplots()
         outer = _draw_categorical_bars(
             ax, groups, series, vals, errs, stacked, cnts, axis_style, raw_groups, bar_marks,
+            colors,
         )
         layout_rect = add_caveat(fig, caveat)
         if title:

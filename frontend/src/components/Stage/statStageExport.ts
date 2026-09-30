@@ -40,6 +40,7 @@ import {
 } from "../../lib/api/figures";
 import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
+import { resolvedPalette } from "../../lib/plotEncodingBinding";
 import { axisStyleWire, errorHalfWidth, nestedTiers, type ResolvedStatMarks } from "../../lib/statMarks";
 import type { GroupSpec } from "../../lib/statschooser";
 import { finiteOf, type IndexedGroupSpec, type StatMode } from "../../lib/statstage";
@@ -188,6 +189,28 @@ export interface FacetedExportInputs {
   errorNote?: string | null;
 }
 
+/** P1.4 Color-by on the wire: each group's colour LEVEL (`lib/statColor`,
+ *  aligned with the request's groups) and the palette the canvas resolves, as
+ *  hex. Nothing without a colour factor, so every other request is unchanged. */
+function colorWire(levels: readonly (number | null)[] | null | undefined): {
+  color_levels?: (number | null)[];
+  palette?: string[];
+} {
+  if (!levels) return {};
+  return { ...levelsWire(levels), ...paletteWire(true) };
+}
+
+/** A facet panel's half: its levels only (the palette rides the request). */
+function levelsWire(levels: readonly (number | null)[] | null | undefined): { color_levels?: (number | null)[] } {
+  return levels ? { color_levels: [...levels] } : {};
+}
+
+/** The request's palette, when any group is coloured by level. */
+function paletteWire(coloured: boolean): { palette?: string[] } {
+  const palette = coloured ? resolvedPalette() : null;
+  return palette ? { palette } : {};
+}
+
 /** `error_note` on the wire only when there is one, so a request without
  *  error bars stays the one it always was. */
 function noteWire(note: string | null | undefined): { error_note?: string } {
@@ -274,7 +297,7 @@ export async function exportFacetedFigure(
     for (const f of drawFacets) {
       const draw = f.draw;
       if (draw.mode !== "bar") continue;
-      facets.push({ label: f.label, ...barWire(draw.data, showN && !barStack, m, !barStack) });
+      facets.push({ label: f.label, ...barWire(draw.data, showN && !barStack, m, !barStack), ...levelsWire(draw.colorLevels) });
     }
     if (!facets.length) return;
     const spec: CategoricalFigureSpec = {
@@ -292,6 +315,7 @@ export async function exportFacetedFigure(
       caveat,
       ...noteWire(o.errorNote),
       axis_style: axisWire(m, facets.flatMap((f) => f.groups)),
+      ...paletteWire(facets.some((f) => f.color_levels)),
     };
     await exportCategoricalFigure(spec, signal);
     return;
@@ -323,6 +347,7 @@ export async function exportFacetedFigure(
       ...(rows ? { point_row_indices: axis ? onAxis(slots, rows, [])?.values ?? rows : rows } : {}),
       // The panel's connect-means line lifts where a hidden empty level sat, as flat.
       ...(m?.connectMeans && axis?.breaks.some(Boolean) ? { connect_breaks: axis.breaks } : {}),
+      ...levelsWire(axis && "colorLevels" in d && d.colorLevels ? onAxis(slots, d.colorLevels, null)?.values : null),
       // Review finding 2: this panel's OWN canvas domain, under its OWN
       // facet-adjusted marks (`statStageMarks.facetMarks`, already stamped
       // on `f.draw.marks`) — each panel autoscales independently, on screen
@@ -348,6 +373,7 @@ export async function exportFacetedFigure(
     ...noteWire(o.errorNote),
     ...(m ? { summary: m.summary, error_bars: m.errorBars, points: m.points, jitter_width: m.jitterWidth } : {}),
     ...(m?.connectMeans ? { show_connect_means: true } : {}),
+    ...paletteWire(facets.some((f) => f.color_levels)),
     // `tiered` (whether nesting is active) is shared; `tiers` itself is
     // NOT — dropped here so it can never be applied, uniformly and wrongly,
     // to every panel's own different label set (each panel's pairs ride
@@ -388,6 +414,7 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs, sig
     if (!draw || draw.mode !== "bar" || draw.data.groups.length === 0) return;
     await exportCategoricalFigure({
       ...barWire(draw.data, showN && !o.barStack, o.marks ?? null, !o.barStack),
+      ...colorWire(draw.colorLevels),
       axis_style: axisWire(o.marks, draw.data.groups.map((g) => g.label)),
       stacked: o.barStack,
       caveat,
@@ -428,6 +455,7 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs, sig
       // Only when a HIDDEN empty level must break the line (visible empties
       // travel as `[]` groups and break it on their own).
       if (m?.connectMeans && axis.breaks.some(Boolean)) spec.connect_breaks = axis.breaks;
+      if (draw && "colorLevels" in draw) Object.assign(spec, colorWire(draw.colorLevels && onAxis(slots, draw.colorLevels, null)?.values));
     }
     spec.show_n = showN;
     spec.caveat = caveat;

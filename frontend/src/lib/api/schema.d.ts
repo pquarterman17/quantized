@@ -5866,6 +5866,8 @@ export interface components {
          *     one category set.
          */
         CategoricalFacet: {
+            /** Color Levels */
+            color_levels?: (number | null)[] | null;
             /** Counts */
             counts?: number[][] | null;
             /** Errors */
@@ -5894,6 +5896,8 @@ export interface components {
             axis_style?: components["schemas"]["CategoryAxisStyle"] | null;
             /** Caveat */
             caveat?: string | null;
+            /** Color Levels */
+            color_levels?: (number | null)[] | null;
             /** Counts */
             counts?: number[][] | null;
             /**
@@ -5921,6 +5925,8 @@ export interface components {
             groups: string[];
             /** Jitter Width */
             jitter_width?: number | null;
+            /** Palette */
+            palette?: string[] | null;
             /** Points */
             points?: ("all" | "outliers" | "none") | null;
             /** Raw */
@@ -9895,6 +9901,8 @@ export interface components {
          *     falls back to the request's own top-level ``kind``.
          */
         StatplotFacet: {
+            /** Color Levels */
+            color_levels?: (number | null)[] | null;
             /** Connect Breaks */
             connect_breaks?: boolean[] | null;
             /** Data */
@@ -9928,6 +9936,8 @@ export interface components {
             bins?: string | number;
             /** Caveat */
             caveat?: string | null;
+            /** Color Levels */
+            color_levels?: (number | null)[] | null;
             /** Connect Breaks */
             connect_breaks?: boolean[] | null;
             /** Data */
@@ -9963,6 +9973,8 @@ export interface components {
             kind: string;
             /** Labels */
             labels?: string[] | null;
+            /** Palette */
+            palette?: string[] | null;
             /** Point Row Indices */
             point_row_indices?: number[][] | null;
             /** Points */

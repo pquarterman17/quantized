@@ -5,12 +5,15 @@
 // colours by level, a continuous one by gradient); Label offers every channel —
 // a sample id, a field or a temperature column. All three offer the sheet's
 // text columns too (./encodingWellModel).
-// Box/violin/bar ignore encodings, so the wells hide for those marks unless one
-// is already assigned — then they stay, saying so, so it can still be removed.
+// Box / violin / bar (residual 3) take a categorical Color — by the X
+// category, or nesting X by another column (lib/plotEncodingStat) — and refuse
+// the rest: a drop is refused with a toast, and a pick the mark cannot draw
+// reads "(ignored)" with its one-sentence reason under the wells.
 // Thin: assignment, gating and rendering live in useGraphBuilder and
 // lib/plotEncoding.
 
-import type { EncodingZone } from "./encodingWellModel";
+import { useApp } from "../../../store/useApp";
+import { encodingNotes, type EncodingZone } from "./encodingWellModel";
 import type { GraphBuilderState } from "./useGraphBuilder";
 import ZoneWell from "./ZoneWell";
 
@@ -20,18 +23,13 @@ const WELLS: { zone: EncodingZone; title: string; hint: string }[] = [
   { zone: "label", title: "Label", hint: "legend text from a column" },
 ];
 
-/** Why the assigned encodings are not drawn, or where they are — null when
- *  there is nothing to say. */
-function noteFor(g: GraphBuilderState): string | null {
-  if (g.family === "categorical") return "Box, violin and bar ignore encodings.";
-  if (g.chips("facet").length > 0) return "Ignored while faceted: facet panels do not split by encodings yet.";
-  return null;
-}
-
 export default function EncodingWells({ g }: { g: GraphBuilderState }) {
+  const ds = useApp((s) => s.datasets?.find((d) => d.id === g.datasetId) ?? null);
   const used = WELLS.some((w) => g.chips(w.zone).length > 0);
-  if (g.family === "categorical" && !used) return null;
-  const note = used ? noteFor(g) : null;
+  const notes = used ? encodingNotes(ds, g.spec) : [];
+  if (used && g.family !== "categorical" && g.chips("facet").length > 0) {
+    notes.push("Ignored while faceted: facet panels do not split by encodings yet.");
+  }
   return (
     <>
       {WELLS.map((w) => (
@@ -46,11 +44,11 @@ export default function EncodingWells({ g }: { g: GraphBuilderState }) {
           onRemove={(c) => g.remove(w.zone, c)}
         />
       ))}
-      {note && (
-        <div className="qzk-zone-well-note" role="note" style={{ gridColumn: "1 / -1" }}>
+      {notes.map((note) => (
+        <div key={note} className="qzk-zone-well-note" role="note" style={{ gridColumn: "1 / -1" }}>
           {note}
         </div>
-      )}
+      ))}
     </>
   );
 }

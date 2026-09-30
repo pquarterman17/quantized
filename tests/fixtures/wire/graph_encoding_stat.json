@@ -1,0 +1,489 @@
+{
+  "box": {
+    "request": {
+      "kind": "box",
+      "data": [
+        [
+          5,
+          5.5
+        ],
+        [
+          6,
+          6.1,
+          6.4
+        ],
+        [
+          1,
+          1.5,
+          1.2
+        ],
+        [
+          2,
+          2.4
+        ],
+        [
+          3,
+          3.3,
+          3.1,
+          3.6
+        ],
+        []
+      ],
+      "labels": [
+        "lot = L3 / wafer = W1",
+        "lot = L3 / wafer = W2",
+        "lot = L1 / wafer = W1",
+        "lot = L1 / wafer = W2",
+        "lot = L2 / wafer = W1",
+        "lot = L2 / wafer = W2"
+      ],
+      "fmt": "svg",
+      "title": "y by lot / wafer",
+      "x_label": "lot / wafer",
+      "y_label": "y",
+      "filename": "box_y",
+      "points": "outliers",
+      "jitter_width": 0.7,
+      "point_row_indices": null,
+      "summary": "none",
+      "error_bars": "ci95",
+      "show_points": false,
+      "show_mean_ci": false,
+      "show_connect_means": false,
+      "color_levels": [
+        0,
+        1,
+        0,
+        1,
+        0,
+        null
+      ],
+      "palette": [
+        "#0b6e4f",
+        "#c3423f",
+        "#2d3047",
+        "#f2a541",
+        "#5e548e",
+        "#1b998b",
+        "#e84855",
+        "#3e2f5b"
+      ],
+      "show_n": true,
+      "caveat": "Caveat: n < 3 in 2 groups - summaries and intervals are unreliable",
+      "axis_style": {
+        "rotation": 0,
+        "wrap": null,
+        "tiered": true,
+        "tiers": [
+          [
+            "lot = L3",
+            "wafer = W1"
+          ],
+          [
+            "lot = L3",
+            "wafer = W2"
+          ],
+          [
+            "lot = L1",
+            "wafer = W1"
+          ],
+          [
+            "lot = L1",
+            "wafer = W2"
+          ],
+          [
+            "lot = L2",
+            "wafer = W1"
+          ],
+          [
+            "lot = L2",
+            "wafer = W2"
+          ]
+        ]
+      },
+      "y_domain": [
+        0.568,
+        6.832000000000001
+      ]
+    },
+    "screen": {
+      "fills": [
+        [
+          "#0b6e4f",
+          "#c3423f",
+          "#0b6e4f",
+          "#c3423f",
+          "#0b6e4f"
+        ]
+      ]
+    }
+  },
+  "violin": {
+    "request": {
+      "kind": "violin",
+      "data": [
+        [
+          5,
+          5.5,
+          6,
+          6.1,
+          6.4
+        ],
+        [
+          1,
+          1.5,
+          2,
+          2.4,
+          1.2
+        ],
+        [
+          3,
+          3.3,
+          3.1,
+          3.6
+        ]
+      ],
+      "labels": [
+        "lot = L3",
+        "lot = L1",
+        "lot = L2"
+      ],
+      "fmt": "svg",
+      "title": "y by lot",
+      "x_label": "lot",
+      "y_label": "y",
+      "filename": "violin_y",
+      "points": "none",
+      "jitter_width": 0.7,
+      "point_row_indices": null,
+      "summary": "none",
+      "error_bars": "ci95",
+      "color_levels": [
+        0,
+        1,
+        2
+      ],
+      "palette": [
+        "#0b6e4f",
+        "#c3423f",
+        "#2d3047",
+        "#f2a541",
+        "#5e548e",
+        "#1b998b",
+        "#e84855",
+        "#3e2f5b"
+      ],
+      "show_n": true,
+      "caveat": null,
+      "axis_style": null,
+      "y_domain": null
+    },
+    "screen": {
+      "fills": [
+        [
+          "#0b6e4f",
+          "#c3423f",
+          "#2d3047"
+        ]
+      ]
+    }
+  },
+  "bar": {
+    "request": {
+      "groups": [
+        "L3",
+        "L1",
+        "L2"
+      ],
+      "series": [
+        "y"
+      ],
+      "values": [
+        [
+          5.8
+        ],
+        [
+          1.6199999999999999
+        ],
+        [
+          3.25
+        ]
+      ],
+      "errors": [
+        [
+          0.24698178070456941
+        ],
+        [
+          0.2576819745345025
+        ],
+        [
+          0.13228756555322954
+        ]
+      ],
+      "counts": [
+        [
+          5
+        ],
+        [
+          5
+        ],
+        [
+          4
+        ]
+      ],
+      "color_levels": [
+        0,
+        1,
+        2
+      ],
+      "palette": [
+        "#0b6e4f",
+        "#c3423f",
+        "#2d3047",
+        "#f2a541",
+        "#5e548e",
+        "#1b998b",
+        "#e84855",
+        "#3e2f5b"
+      ],
+      "axis_style": null,
+      "stacked": false,
+      "caveat": null,
+      "error_note": "Error bars: SE of the mean",
+      "fmt": "svg",
+      "title": "y by lot",
+      "x_label": "lot",
+      "y_label": "y",
+      "filename": "bar_y"
+    },
+    "screen": {
+      "fills": [
+        [
+          "#0b6e4f",
+          "#c3423f",
+          "#2d3047"
+        ]
+      ]
+    }
+  },
+  "facets": {
+    "request": {
+      "kind": "box",
+      "data": [
+        [
+          5
+        ],
+        [
+          6,
+          6.4
+        ],
+        [
+          1,
+          1.2
+        ],
+        [
+          2
+        ],
+        [
+          3,
+          3.1
+        ],
+        []
+      ],
+      "labels": [
+        "lot = L3 / wafer = W1",
+        "lot = L3 / wafer = W2",
+        "lot = L1 / wafer = W1",
+        "lot = L1 / wafer = W2",
+        "lot = L2 / wafer = W1",
+        "lot = L2 / wafer = W2"
+      ],
+      "fmt": "svg",
+      "title": "y by lot / wafer, faceted",
+      "x_label": "lot / wafer",
+      "y_label": "y",
+      "filename": "box_y_faceted",
+      "facets": [
+        {
+          "label": "F1",
+          "kind": "box",
+          "data": [
+            [
+              5
+            ],
+            [
+              6,
+              6.4
+            ],
+            [
+              1,
+              1.2
+            ],
+            [
+              2
+            ],
+            [
+              3,
+              3.1
+            ],
+            []
+          ],
+          "labels": [
+            "lot = L3 / wafer = W1",
+            "lot = L3 / wafer = W2",
+            "lot = L1 / wafer = W1",
+            "lot = L1 / wafer = W2",
+            "lot = L2 / wafer = W1",
+            "lot = L2 / wafer = W2"
+          ],
+          "color_levels": [
+            0,
+            1,
+            0,
+            1,
+            0,
+            null
+          ],
+          "y_domain": [
+            0.568,
+            6.832000000000001
+          ],
+          "tiers": [
+            [
+              "lot = L3",
+              "wafer = W1"
+            ],
+            [
+              "lot = L3",
+              "wafer = W2"
+            ],
+            [
+              "lot = L1",
+              "wafer = W1"
+            ],
+            [
+              "lot = L1",
+              "wafer = W2"
+            ],
+            [
+              "lot = L2",
+              "wafer = W1"
+            ],
+            [
+              "lot = L2",
+              "wafer = W2"
+            ]
+          ]
+        },
+        {
+          "label": "F2",
+          "kind": "box",
+          "data": [
+            [
+              5.5
+            ],
+            [
+              6.1
+            ],
+            [
+              1.5
+            ],
+            [
+              2.4
+            ],
+            [
+              3.3,
+              3.6
+            ],
+            []
+          ],
+          "labels": [
+            "lot = L3 / wafer = W1",
+            "lot = L3 / wafer = W2",
+            "lot = L1 / wafer = W1",
+            "lot = L1 / wafer = W2",
+            "lot = L2 / wafer = W1",
+            "lot = L2 / wafer = W2"
+          ],
+          "color_levels": [
+            0,
+            1,
+            0,
+            1,
+            0,
+            null
+          ],
+          "y_domain": [
+            1.1320000000000001,
+            6.468
+          ],
+          "tiers": [
+            [
+              "lot = L3",
+              "wafer = W1"
+            ],
+            [
+              "lot = L3",
+              "wafer = W2"
+            ],
+            [
+              "lot = L1",
+              "wafer = W1"
+            ],
+            [
+              "lot = L1",
+              "wafer = W2"
+            ],
+            [
+              "lot = L2",
+              "wafer = W1"
+            ],
+            [
+              "lot = L2",
+              "wafer = W2"
+            ]
+          ]
+        }
+      ],
+      "show_n": true,
+      "caveat": "Caveat: n < 3 in 10 groups - summaries and intervals are unreliable",
+      "summary": "none",
+      "error_bars": "ci95",
+      "points": "outliers",
+      "jitter_width": 0.7,
+      "palette": [
+        "#0b6e4f",
+        "#c3423f",
+        "#2d3047",
+        "#f2a541",
+        "#5e548e",
+        "#1b998b",
+        "#e84855",
+        "#3e2f5b"
+      ],
+      "axis_style": {
+        "rotation": 0,
+        "wrap": null,
+        "tiered": true
+      }
+    },
+    "screen": {
+      "fills": [
+        [
+          "#0b6e4f",
+          "#c3423f",
+          "#0b6e4f",
+          "#c3423f",
+          "#0b6e4f"
+        ],
+        [
+          "#0b6e4f",
+          "#c3423f",
+          "#0b6e4f",
+          "#c3423f",
+          "#0b6e4f"
+        ]
+      ]
+    }
+  }
+}

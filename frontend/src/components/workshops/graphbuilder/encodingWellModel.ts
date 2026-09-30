@@ -12,7 +12,8 @@
 
 import { originTextColumnNames } from "../../../lib/columnmeta";
 import { isEncodingFactor } from "../../../lib/plotEncoding";
-import type { ChannelRef } from "../../../lib/plotspec";
+import { isStatSpec, statEncodingRefusal } from "../../../lib/plotEncodingStat";
+import type { ChannelRef, PlotSpec } from "../../../lib/plotspec";
 import { rowsAreSampled } from "../../../lib/rowSidecars";
 import type { Dataset } from "../../../lib/types";
 import type { WellChip, WellOption } from "./ZoneWell";
@@ -40,8 +41,13 @@ export function encodingOptions(ds: Dataset | null, options: readonly WellOption
   };
 }
 
-/** The chip for an assigned encoding ref, saying how it is read. */
-export function encodingChip(ds: Dataset | null, zone: EncodingZone, ref: ChannelRef): WellChip {
+/** The chip for an assigned encoding ref, saying how it is read — "(ignored)"
+ *  when the spec's categorical mark refuses it (`encodingNotes` says why). */
+export function encodingChip(ds: Dataset | null, zone: EncodingZone, ref: ChannelRef, spec?: PlotSpec): WellChip {
+  if (ds && spec && statEncodingRefusal(spec, ds, zone, ref)) {
+    const name = ref.text ?? ds.data.labels[ref.channel] ?? `col ${ref.channel}`;
+    return { channel: ref.text !== undefined ? -1 : ref.channel, label: `${name} (ignored)` };
+  }
   if (ref.text !== undefined) {
     const k = ds ? textNames(ds).indexOf(ref.text) : -1;
     const n = ds?.data.labels.length ?? 0;
@@ -54,15 +60,28 @@ export function encodingChip(ds: Dataset | null, zone: EncodingZone, ref: Channe
 }
 
 /** The ref an assignment of option `channel` to `zone` stores, or a refusal
- *  message (a continuous column dropped on Symbol). */
-export function encodingRef(ds: Dataset, zone: EncodingZone, channel: number): ChannelRef | string {
+ *  message (a continuous column dropped on Symbol; an encoding the spec's
+ *  box / violin / bar mark cannot draw, `lib/plotEncodingStat`). */
+export function encodingRef(ds: Dataset, zone: EncodingZone, channel: number, spec?: PlotSpec): ChannelRef | string {
   const n = ds.data.labels.length;
+  let ref: ChannelRef = { datasetId: ds.id, channel };
   if (channel >= n) {
     const name = textNames(ds)[channel - n];
-    return name === undefined ? "That text column is no longer in this sheet." : { datasetId: ds.id, channel: -1, text: name };
-  }
-  if (zone === "symbol" && !isEncodingFactor(ds, channel)) {
+    if (name === undefined) return "That text column is no longer in this sheet.";
+    ref = { datasetId: ds.id, channel: -1, text: name };
+  } else if (zone === "symbol" && !isEncodingFactor(ds, channel) && !(spec && isStatSpec(spec))) {
     return `Symbol needs a categorical column; set "${ds.data.labels[channel] ?? `col ${channel}`}" to nominal or ordinal first.`;
   }
-  return { datasetId: ds.id, channel };
+  return (spec && statEncodingRefusal(spec, ds, zone, ref)) ?? ref;
+}
+
+/** Why each assigned encoding is not drawn by `spec`'s categorical mark, one
+ *  sentence per well (empty when every assigned one applies). */
+export function encodingNotes(ds: Dataset | null, spec: PlotSpec): string[] {
+  if (!ds) return [];
+  return (["color", "symbol", "label"] as const).flatMap((zone) => {
+    const ref = spec.zones[zone];
+    const why = ref ? statEncodingRefusal(spec, ds, zone, ref) : null;
+    return why ? [why] : [];
+  });
 }

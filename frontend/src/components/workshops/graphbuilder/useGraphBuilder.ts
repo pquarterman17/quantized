@@ -20,6 +20,7 @@ import {
 } from "../../../lib/figureCompatibility";
 import { encodedSpecRender, specFigureEncoding, type EncodedSpec } from "../../../lib/plotEncoding";
 import { buildEncodedExport } from "../../../lib/plotEncodingExport";
+import { statSeed } from "../../../lib/plotEncodingStat";
 import { plotSpecFigureReason, plotSpecToFigureDocument } from "../../../lib/plotSpecFigure";
 import { applySpecBlocks } from "../../../lib/plotspecApply";
 import { specGroupCol, specXKey } from "../../../lib/plotspecGroupCol";
@@ -238,12 +239,12 @@ export function useGraphBuilder(): GraphBuilderState {
     if (zone === "yErr") return z.yErr.map((r) => ({ channel: r.channel, label: labelOf(r.channel) }));
     const ref = z[zone];
     if (!ref) return [];
-    return [isEncodingZone(zone) ? encodingChip(ds, zone, ref) : { channel: ref.channel, label: labelOf(ref.channel) }];
+    return [isEncodingZone(zone) ? encodingChip(ds, zone, ref, spec) : { channel: ref.channel, label: labelOf(ref.channel) }];
   };
 
   const assign = (zone: ZoneName, channel: number) => {
     if (!ds) return;
-    const ref: ChannelRef | string = isEncodingZone(zone) ? encodingRef(ds, zone, channel) : { datasetId: ds.id, channel };
+    const ref: ChannelRef | string = isEncodingZone(zone) ? encodingRef(ds, zone, channel, spec) : { datasetId: ds.id, channel };
     if (typeof ref === "string") return toast(ref, "info");
     // #51 phase 3: an explicit drop into either error well IS the user
     // touching it — no further auto-prefill on this session's future Y drops.
@@ -394,7 +395,7 @@ export function useGraphBuilder(): GraphBuilderState {
     // no-op rather than a dead call — see plotspecApply.ts, not wired here.
     if (spec.mark === "box" || spec.mark === "violin") {
       const facetCol = spec.zones.facet?.channel ?? null;
-      seedStatStage({ mode: spec.mark, groupCol: specGroupCol(spec, ds), valueCol: spec.zones.y[0].channel, facetCol });
+      seedStatStage(statSeed(spec, ds)); // P1.4: a Color pick may nest the axis (lib/plotEncodingStat)
       setStatus(
         facetCol !== null
           ? `${destination === "new" ? "created" : "applied"} ${spec.mark} plot in the stat stage, faceted by ${labelOf(facetCol)}`
@@ -412,7 +413,7 @@ export function useGraphBuilder(): GraphBuilderState {
       return;
     }
     const facetCol = spec.zones.facet?.channel ?? null;
-    seedStatStage({ mode: "bar", groupCol, valueCol: spec.zones.y[0]?.channel ?? 0, facetCol });
+    seedStatStage(statSeed(spec, ds));
     setStatus(
       facetCol !== null
         ? `${destination === "new" ? "created" : "applied"} bar chart in the stat stage, faceted by ${labelOf(facetCol)}`

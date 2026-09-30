@@ -96,6 +96,7 @@ import {
   type PlotSpec,
   type SpecRender,
 } from "./plotspec";
+import { statPlanRender } from "./plotEncodingStat";
 import { specXKey } from "./plotspecGroupCol";
 import { analysisData } from "./rowstate";
 import { AUTO_MARKER_CYCLE, SERIES_VARS } from "./seriesStyleCycle";
@@ -401,7 +402,8 @@ export function encodedSpecRender(
   datasets: readonly Dataset[],
 ): { render: SpecRender; encoded: EncodedSpec | null } {
   const encoded = encodeSpec(spec, datasets);
-  if (!encoded) return { render: specToRender(spec, datasets), encoded: null };
+  // Box / violin: a Color pick may nest the axis (lib/plotEncodingStat).
+  if (!encoded) return { render: statPlanRender(spec, datasets) ?? specToRender(spec, datasets), encoded: null };
   const spans: Map<number, ErrorSpan[]> =
     encoded.errors.length > 0 ? buildErrorSpans(encoded.data, encoded.yChannels, encoded.errors) : new Map();
   return {

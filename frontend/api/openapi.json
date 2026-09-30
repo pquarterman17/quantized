@@ -1388,6 +1388,27 @@
       "CategoricalFacet": {
         "description": "One bar-chart small-multiple panel (GUI_INTERACTION #12 slice 4b \u2014\nStatStage bar mode's faceted export). Self-contained (own ``groups``):\na facet-column level can be absent from one slice, so panels never share\none category set.",
         "properties": {
+          "color_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Levels"
+          },
           "counts": {
             "anyOf": [
               {
@@ -1582,6 +1603,27 @@
             ],
             "title": "Caveat"
           },
+          "color_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Levels"
+          },
           "counts": {
             "anyOf": [
               {
@@ -1683,6 +1725,20 @@
               }
             ],
             "title": "Jitter Width"
+          },
+          "palette": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Palette"
           },
           "points": {
             "anyOf": [
@@ -11954,6 +12010,27 @@
       "StatplotFacet": {
         "description": "One box/violin small-multiple panel (GUI_INTERACTION #12 slice 4b \u2014\nStatStage's faceted export). ``kind`` is per-facet MODE FIDELITY: the\ninteractive StatStage computes each facet slice independently and a\nviolin slice whose OWN ``/api/statplots/violin`` call failed degrades to\na box plot for just that slice (never fabricating a KDE) \u2014 an explicit\nper-facet ``kind`` reproduces that same mixed grid on export; omitted\nfalls back to the request's own top-level ``kind``.",
         "properties": {
+          "color_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Levels"
+          },
           "connect_breaks": {
             "anyOf": [
               {
@@ -12112,6 +12189,27 @@
             ],
             "title": "Caveat"
           },
+          "color_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Levels"
+          },
           "connect_breaks": {
             "anyOf": [
               {
@@ -12256,6 +12354,20 @@
               }
             ],
             "title": "Labels"
+          },
+          "palette": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Palette"
           },
           "point_row_indices": {
             "anyOf": [

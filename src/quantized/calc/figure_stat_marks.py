@@ -185,6 +185,7 @@ def scatter_points(
     row_indices: list[list[int]],
     marks: StatMarks,
     box_stats: list[dict[str, Any]] | None = None,
+    colors: list[str | None] | None = None,
 ) -> None:
     """The jittered raw-point overlay: ``marks.scatter`` values of each group
     (``"outliers"``: only those outside ``box_stats``' Tukey whiskers -- the
@@ -197,12 +198,16 @@ def scatter_points(
     also needs it for :func:`overlay_summary` / the connect-means line on
     the SAME groups (``_draw_statplot`` computes it once and shares it
     across all three). ``None`` (default) falls back to computing it here,
-    byte-identical to before this fix."""
+    byte-identical to before this fix. ``colors`` (P1.4 Color-by, parallel
+    to ``groups``): each group's points in its glyph colour, as the screen
+    draws them; ``None`` = the neutral grey."""
     if marks.scatter is None:
         return
     spread = marks.half_width * marks.jitter_width
     stats = box_stats if box_stats is not None else [None] * len(groups)
-    for g, lab, tick, idx, cached in zip(groups, labels, ticks, row_indices, stats, strict=True):
+    tints = colors if colors is not None else [None] * len(groups)
+    rows = zip(groups, labels, ticks, row_indices, stats, tints, strict=True)
+    for g, lab, tick, idx, cached, tint in rows:
         if g.size == 0:
             continue
         keep = np.ones(g.size, dtype=bool)
@@ -212,7 +217,7 @@ def scatter_points(
         if not keep.any():
             continue
         xs = [tick + _jitter(i, lab) * spread for i, k in zip(idx, keep, strict=True) if k]
-        ax.scatter(xs, g[keep], s=10, color="0.25", alpha=0.6, zorder=4, linewidths=0)
+        ax.scatter(xs, g[keep], s=10, color=tint or "0.25", alpha=0.6, zorder=4, linewidths=0)
 
 
 def overlay_summary(

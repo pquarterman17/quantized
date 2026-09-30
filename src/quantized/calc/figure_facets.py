@@ -301,7 +301,8 @@ def render_stat_facets_figure(
     draw its jittered points with the screen's hash; a panel without them
     shows no jittered points (``figure_stat_marks.facet_marks``).
     ``show_connect_means`` joins each box / strip panel's own means, lifted
-    at its optional ``"connect_breaks"`` (the flat request's rule, per panel).
+    at its optional ``"connect_breaks"`` (the flat request's rule, per panel);
+    a panel's optional ``"colors"`` colours its glyphs (P1.4 Color-by).
     """
     with heavy_imports(
         "quantized.calc.figure_group_notes", "quantized.calc.figure_stat_marks",
@@ -365,6 +366,7 @@ def render_stat_facets_figure(
                 marks=facet_marks(marks, kind, has_rows=rows is not None), axis_style=panel_style,
                 raw_labels=raw_flabels, point_row_indices=rows,
                 show_connect_means=show_connect_means, connect_breaks=p.get("connect_breaks"),
+                colors=p.get("colors"),
             )
             # Review finding 5: at least one panel drew a two-tier nested
             # axis (its own outer-level row) -- the shared x title/caveat
@@ -423,7 +425,8 @@ def render_categorical_facets_figure(
     the flat renderer's behaviour, via the same helpers. An optional
     per-panel ``"bar_marks"`` (``figure_stat_marks.overlay_bar_marks``'s
     keywords, that panel's own ``raw`` / ``raw_rows``) draws its points and
-    summary marker as the flat export does; stacked panels draw none.
+    summary marker as the flat export does; stacked panels draw none. An
+    optional per-panel ``"colors"`` colours its categories (P1.4 Color-by).
     """
     with heavy_imports("quantized.calc.figure_categorical", "quantized.calc.figure_group_notes"):
         from quantized.calc.figure_categorical import (
@@ -466,12 +469,13 @@ def render_categorical_facets_figure(
             errs = _to_error_matrix(p.get("errors"), len(groups), len(series))
             cnts = None if stacked else _to_counts(p.get("counts"), len(groups), len(series))
             marks = p.get("bar_marks")  # stacked panels draw none (_draw_categorical_bars)
-            prepared.append((label, groups, series, vals, errs, cnts, raw_groups, marks))
+            prepared.append((label, groups, series, vals, errs, cnts, raw_groups, marks, p))
         fig, axes = _new_grid_figure(n, figsize)
         cat_rows = zip(axes, prepared, strict=True)
-        for ax, (label, groups, series, vals, errs, cnts, raw_groups, bar_marks) in cat_rows:
+        for ax, (label, groups, series, vals, errs, cnts, raw_groups, bar_marks, p) in cat_rows:
             _draw_categorical_bars(
                 ax, groups, series, vals, errs, stacked, cnts, axis_style, raw_groups, bar_marks,
+                p.get("colors"),
             )
             ax.set_title(label, fontsize=st.font_size)
             if not st.box_on:

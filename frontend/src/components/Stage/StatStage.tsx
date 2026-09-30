@@ -111,6 +111,13 @@ export default function StatStage() {
       .filter((c) => c.index !== st.groupCol)
       .map((c) => ({ value: String(c.index), label: c.label })),
   ];
+  // P1.4 Color-by: only the group column or (box / violin / strip) the nest.
+  const colourByOptions = [
+    { value: "none", label: "(position)" },
+    ...st.categoricalCols
+      .filter((c) => c.index === st.groupCol || (st.mode !== "bar" && c.index === st.group2Col))
+      .map((c) => ({ value: String(c.index), label: c.label })),
+  ];
   // #11: small multiples for Box/Violin/Strip/Bar — one panel per level of a
   // SECOND categorical column (independent of "group by"). Both the
   // "group by" and "then by" columns are omitted for the same reason
@@ -235,6 +242,16 @@ export default function StatStage() {
                 onChange={(e) => st.setFacetCol(e.target.value === "none" ? null : Number(e.target.value))}
               />
             </Picker>
+            {/* P1.4 Color-by: a colour per level of one of the plot's own factors (lib/statColor). */}
+            {st.groupCol != null && (
+              <Picker label="colour by">
+                <Select
+                  options={colourByOptions}
+                  value={st.colorCol == null ? "none" : String(st.colorCol)}
+                  onChange={(e) => st.setColorCol(e.target.value === "none" ? null : Number(e.target.value))}
+                />
+              </Picker>
+            )}
           </>
         )}
 
