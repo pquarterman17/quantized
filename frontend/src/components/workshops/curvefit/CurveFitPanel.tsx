@@ -33,6 +33,8 @@ const FitBandsSection = lazyRegion(() => import("./FitBandsSection"), "Bands");
 const FitDiagnosticsSection = lazyRegion(() => import("./FitDiagnosticsSection"), "Diagnostics");
 const CompareModelsSection = lazyRegion(() => import("./CompareModelsSection"), "Compare models");
 const OdrSection = lazyRegion(() => import("./OdrSection"), "ODR");
+// Global (shared-parameter) fit mode: replaces the single-fit body while on.
+const GlobalFitSection = lazyRegion(() => import("./GlobalFitSection"), "Global fit");
 
 // Custom-model picker values are namespaced "custom:<name>"; the bare prefix
 // is the blank "type a new equation" entry (GOTO #1).
@@ -53,6 +55,7 @@ export default function CurveFitPanel() {
   const setOpen = useApp((s) => s.setCurveFitOpen);
   const addReport = useApp((s) => s.addReport);
   const [reporting, setReporting] = useState(false);
+  const [globalMode, setGlobalMode] = useState(false);
   const {
     active,
     models,
@@ -187,18 +190,48 @@ export default function CurveFitPanel() {
           ["AIC", fmt(result.AIC)],
         ];
 
+  const modelPicker = (
+    <>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+        <label className="qzk-field-lbl">Model</label>
+        <Button
+          size="sm"
+          variant={globalMode ? "primary" : "ghost"}
+          aria-pressed={globalMode}
+          title="Fit one model to several series with shared parameters"
+          onClick={() => setGlobalMode((v) => !v)}
+        >
+          Global fit
+        </Button>
+      </div>
+      <Select
+        aria-label="Model"
+        options={modelOptions}
+        value={modelName}
+        onChange={(e) => setModelName(e.target.value)}
+      />
+    </>
+  );
+
+  if (globalMode) {
+    const reg = models.find((m) => m.name === modelName);
+    const globalModel = currentCustom
+      ? { name: currentCustom.name, paramNames: currentCustom.params, p0: currentCustom.guesses, lb: currentCustom.lower, ub: currentCustom.upper, equation: currentCustom.equation }
+      : (reg ?? null);
+    return (
+      <ToolWindow id="curvefit" title="Curve Fit" width={360} onClose={close}>
+        {modelPicker}
+        <GlobalFitSection model={globalModel} />
+      </ToolWindow>
+    );
+  }
+
   // Custom-equation mode: same window + picker, the equation panel below
   // (new sub-component — the registry-model body stays untouched).
   if (isCustom) {
     return (
       <ToolWindow id="curvefit" title="Curve Fit" width={340} onClose={close}>
-        <label className="qzk-field-lbl">Model</label>
-        <Select
-          aria-label="Model"
-          options={modelOptions}
-          value={modelName}
-          onChange={(e) => setModelName(e.target.value)}
-        />
+        {modelPicker}
         <EquationModelPanel
           key={modelName}
           initial={currentCustom}
@@ -210,13 +243,7 @@ export default function CurveFitPanel() {
 
   return (
     <ToolWindow id="curvefit" title="Curve Fit" width={340} onClose={close}>
-      <label className="qzk-field-lbl">Model</label>
-      <Select
-        aria-label="Model"
-        options={modelOptions}
-        value={modelName}
-        onChange={(e) => setModelName(e.target.value)}
-      />
+      {modelPicker}
 
       {weighting}
       {fitParams}
