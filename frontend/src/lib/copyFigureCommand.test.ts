@@ -218,6 +218,16 @@ describe("runCopyFigureSvgCommand (MAIN #35)", () => {
     expect(spec.fmt).toBe("svg");
   });
 
+  it("asks for glyphs as paths, like the raster copy's SVG leg — the paste target has no fonts", async () => {
+    // The CLIPBOARD vector must not depend on an installed font: Office and
+    // other paste targets render live `<text>` with whatever they have. Only
+    // "Export figure…" (a file the user may edit) keeps SVG text editable.
+    await runCopyFigureSvgCommand(fakeGet());
+    expect(renderFigureBlob).toHaveBeenCalledTimes(1);
+    const spec = vi.mocked(renderFigureBlob).mock.calls[0][0];
+    expect(spec.svg_text_as_paths).toBe(true);
+  });
+
   it("hands the pending render to the clipboard, keeping the gesture", async () => {
     await runCopyFigureSvgCommand(fakeGet());
     const arg = vi.mocked(copySvgAsync).mock.calls[0][0];
