@@ -98,6 +98,9 @@ class StatplotFacet(BaseModel):
     # `(row, category)` hash. None = no jittered points in this panel (the
     # rule before panels carried rows, `figure_stat_marks.facet_marks`).
     point_row_indices: list[list[int]] | None = None
+    # Where this panel's connect-means line lifts (the flat `connect_breaks`,
+    # per panel). The line itself is the request's `show_connect_means`.
+    connect_breaks: list[bool] | None = None
 
 
 class StatplotFigureRequest(BaseModel):
@@ -200,7 +203,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 {
                     "label": f.label, "kind": f.kind, "data": f.data, "labels": f.labels,
                     "y_domain": f.y_domain, "tiers": f.tiers,
-                    "point_row_indices": f.point_row_indices,
+                    "point_row_indices": f.point_row_indices, "connect_breaks": f.connect_breaks,
                 }
                 for f in req.facets
             ]
@@ -210,6 +213,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 fmt=req.fmt, style=req.style, dpi=dpi, show_n=req.show_n,
                 caveat=footnote_text(req.error_note, req.caveat),
                 marks=req.marks(), axis_style=_axis_style(req.axis_style),
+                show_connect_means=req.show_connect_means,
             )
         else:
             with heavy_imports(

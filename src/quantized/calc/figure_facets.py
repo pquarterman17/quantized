@@ -77,6 +77,27 @@ def _new_grid_figure(n: int, figsize: tuple[float, float]) -> tuple[Any, list[An
     return fig, flat[:n]
 
 
+def _grid_setup(
+    style: str, n: int, width_in: float | None, height_in: float | None, *, box_ticks: bool,
+) -> tuple[Any, tuple[float, float], dict[str, Any]]:
+    """The style preset, figure size and rc of an ``n``-panel stat / bar facet
+    grid (``box_ticks``: mirror ticks on the top/right spines, the box family's)."""
+    st = figure_style(style)
+    rows, cols = _grid_shape(n)
+    figsize = (width_in or st.fig_width_in * cols * 0.8, height_in or st.fig_height_in * rows * 0.8)
+    fallback = "DejaVu Serif" if st.font_generic == "serif" else "DejaVu Sans"
+    rc: dict[str, Any] = {
+        "font.family": st.font_generic,
+        f"font.{st.font_generic}": [st.font_name, fallback],
+        "font.size": st.font_size,
+        "axes.labelsize": st.font_size,
+        "axes.titlesize": st.font_size,
+    }
+    if box_ticks:
+        rc.update({"xtick.top": st.box_on, "ytick.right": st.box_on})
+    return st, figsize, rc
+
+
 def draw_facet_grid(
     axes: list[Any],
     panels: list[dict[str, Any]],
@@ -255,6 +276,7 @@ def render_stat_facets_figure(
     caveat: str | None = None,
     marks: dict[str, Any] | None = None,
     axis_style: dict[str, Any] | None = None,
+    show_connect_means: bool = False,
 ) -> bytes:
     """Faceted box/violin export (GUI_INTERACTION #12 slice 4b, StatStage's
     "facet by" grid). Each ``panels[i]`` is ``{"label": str, "kind": "box" |
@@ -278,6 +300,8 @@ def render_stat_facets_figure(
     ``"point_row_indices"`` (its groups' ORIGINAL rows, parallel to ``data``)
     draw its jittered points with the screen's hash; a panel without them
     shows no jittered points (``figure_stat_marks.facet_marks``).
+    ``show_connect_means`` joins each box / strip panel's own means, lifted
+    at its optional ``"connect_breaks"`` (the flat request's rule, per panel).
     """
     with heavy_imports(
         "quantized.calc.figure_group_notes", "quantized.calc.figure_stat_marks",
@@ -292,24 +316,9 @@ def render_stat_facets_figure(
     if not panels:
         raise ValueError("panels must be non-empty")
 
-    st = figure_style(style)
-    resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
     n = len(panels)
-    rows, cols = _grid_shape(n)
-    figsize = (
-        width_in or st.fig_width_in * cols * 0.8,
-        height_in or st.fig_height_in * rows * 0.8,
-    )
-    fallback = "DejaVu Serif" if st.font_generic == "serif" else "DejaVu Sans"
-    rc: dict[str, Any] = {
-        "font.family": st.font_generic,
-        f"font.{st.font_generic}": [st.font_name, fallback],
-        "font.size": st.font_size,
-        "axes.labelsize": st.font_size,
-        "axes.titlesize": st.font_size,
-        "xtick.top": st.box_on,
-        "ytick.right": st.box_on,
-    }
+    st, figsize, rc = _grid_setup(style, n, width_in, height_in, box_ticks=True)
+    resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
 
     with render_scope(rc):
         # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
@@ -319,7 +328,8 @@ def render_stat_facets_figure(
         title = safe_mathtext_label(title)
         x_label = safe_mathtext_label(x_label)
         y_label = safe_mathtext_label(y_label)
-        prepared: list[tuple[str, str, Any, list[str] | None, Any, Any, list[str] | None, Any]] = []
+        Labels = list[str] | None
+        prepared: list[tuple[str, str, Any, Labels, Labels, dict[str, Any]]] = []
         for p in panels:
             label = safe_mathtext_label(str(p.get("label", "")))
             kind = p.get("kind") or default_kind
@@ -333,15 +343,14 @@ def render_stat_facets_figure(
             # ones (`_draw_statplot`'s own `raw_labels` doc).
             raw_flabels = [str(g) for g in flabels] if flabels else None
             flabels = [safe_mathtext_label(str(g)) for g in flabels] if flabels else flabels
-            prepared.append(
-                (label, kind, data, flabels, p.get("y_domain"), p.get("tiers"), raw_flabels,
-                 p.get("point_row_indices")),
-            )
+            prepared.append((label, kind, data, flabels, raw_flabels, p))
         fig, axes = _new_grid_figure(n, figsize)
         panel_rows = zip(axes, prepared, strict=True)
         any_outer = False
         for ax, panel in panel_rows:
-            label, kind, data, flabels, y_domain, panel_tiers, raw_flabels, rows = panel
+            label, kind, data, flabels, raw_flabels, p = panel
+            y_domain, panel_tiers = p.get("y_domain"), p.get("tiers")
+            rows = p.get("point_row_indices")
             # Review finding 4: a nested axis's [outer, inner] pairs are
             # PER-PANEL (each panel's own composite labels) -- never the
             # shared top-level `axis_style`, whose own `tiers` (if any) was
@@ -355,6 +364,7 @@ def render_stat_facets_figure(
                 ax, kind, data, flabels, dist, bins, fit, st, show_n=show_n,
                 marks=facet_marks(marks, kind, has_rows=rows is not None), axis_style=panel_style,
                 raw_labels=raw_flabels, point_row_indices=rows,
+                show_connect_means=show_connect_means, connect_breaks=p.get("connect_breaks"),
             )
             # Review finding 5: at least one panel drew a two-tier nested
             # axis (its own outer-level row) -- the shared x title/caveat
@@ -429,21 +439,8 @@ def render_categorical_facets_figure(
     if not panels:
         raise ValueError("panels must be non-empty")
 
-    st = figure_style(style)
     n = len(panels)
-    rows, cols = _grid_shape(n)
-    figsize = (
-        width_in or st.fig_width_in * cols * 0.8,
-        height_in or st.fig_height_in * rows * 0.8,
-    )
-    fallback = "DejaVu Serif" if st.font_generic == "serif" else "DejaVu Sans"
-    rc: dict[str, Any] = {
-        "font.family": st.font_generic,
-        f"font.{st.font_generic}": [st.font_name, fallback],
-        "font.size": st.font_size,
-        "axes.labelsize": st.font_size,
-        "axes.titlesize": st.font_size,
-    }
+    st, figsize, rc = _grid_setup(style, n, width_in, height_in, box_ticks=False)
 
     with render_scope(rc):
         # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never

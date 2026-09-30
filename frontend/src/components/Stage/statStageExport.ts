@@ -321,6 +321,8 @@ export async function exportFacetedFigure(
       data: axis ? axis.values : f.rawGroups.map((g) => g.values),
       labels,
       ...(rows ? { point_row_indices: axis ? onAxis(slots, rows, [])?.values ?? rows : rows } : {}),
+      // The panel's connect-means line lifts where a hidden empty level sat, as flat.
+      ...(m?.connectMeans && axis?.breaks.some(Boolean) ? { connect_breaks: axis.breaks } : {}),
       // Review finding 2: this panel's OWN canvas domain, under its OWN
       // facet-adjusted marks (`statStageMarks.facetMarks`, already stamped
       // on `f.draw.marks`) — each panel autoscales independently, on screen
@@ -345,6 +347,7 @@ export async function exportFacetedFigure(
     caveat,
     ...noteWire(o.errorNote),
     ...(m ? { summary: m.summary, error_bars: m.errorBars, points: m.points, jitter_width: m.jitterWidth } : {}),
+    ...(m?.connectMeans ? { show_connect_means: true } : {}),
     // `tiered` (whether nesting is active) is shared; `tiers` itself is
     // NOT — dropped here so it can never be applied, uniformly and wrongly,
     // to every panel's own different label set (each panel's pairs ride

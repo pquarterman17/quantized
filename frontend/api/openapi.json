@@ -4717,6 +4717,21 @@
             ],
             "title": "Error Spans"
           },
+          "excluded_rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rows of `dataset` the plot window does not draw as data (excluded, or dropped by the Data Filter). With `encoding` only: the split takes its levels over every row, then these rows are blanked in each series.",
+            "title": "Excluded Rows"
+          },
           "facets": {
             "anyOf": [
               {
@@ -4740,6 +4755,12 @@
             "default": "pdf",
             "title": "Fmt",
             "type": "string"
+          },
+          "grey_excluded": {
+            "default": false,
+            "description": "With `excluded_rows`: also draw those rows as one grey, line-free '(excluded)' marker series per series, after all the series.",
+            "title": "Grey Excluded",
+            "type": "boolean"
           },
           "greyscale": {
             "default": false,
@@ -11933,6 +11954,20 @@
       "StatplotFacet": {
         "description": "One box/violin small-multiple panel (GUI_INTERACTION #12 slice 4b \u2014\nStatStage's faceted export). ``kind`` is per-facet MODE FIDELITY: the\ninteractive StatStage computes each facet slice independently and a\nviolin slice whose OWN ``/api/statplots/violin`` call failed degrades to\na box plot for just that slice (never fabricating a KDE) \u2014 an explicit\nper-facet ``kind`` reproduces that same mixed grid on export; omitted\nfalls back to the request's own top-level ``kind``.",
         "properties": {
+          "connect_breaks": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "boolean"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connect Breaks"
+          },
           "data": {
             "items": {
               "items": {

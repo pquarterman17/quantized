@@ -298,6 +298,9 @@ export interface StatplotFacetSpec {
    *  `data` — its jittered points hash the screen's `(row, category)`.
    *  Absent: the panel draws no jittered points. */
   point_row_indices?: number[][] | null;
+  /** Where this panel's connect-means line lifts (a hidden empty level sat
+   *  before that group), as the flat request's `connect_breaks`. */
+  connect_breaks?: boolean[] | null;
 }
 
 /** A statistical-plot export request (StatStage's "Export figure" button):
