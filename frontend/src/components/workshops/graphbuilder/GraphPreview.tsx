@@ -156,11 +156,14 @@ export default function GraphPreview({
   const accent = useApp((s) => s.accent);
   const datasets = useApp((s) => s.datasets);
   const statMarks = useApp((s) => s.statMarks);
+  // P2.6 box 2: the window's persisted level options, as the stage reads them.
+  const hideEmpty = useApp((s) => s.statHideEmptyLevels);
+  const showN = useApp((s) => s.statShowGroupN);
   // Faceted box/bar (#11): one small `StatStageCanvas` per facet level instead
   // of the single shared canvas `CanvasHost` paints.
   const marked = useMemo<PreviewStatDraws>(
-    () => previewStatDraws(render, spec, datasets, statMarks ?? {}),
-    [render, spec, datasets, statMarks],
+    () => previewStatDraws(render, spec, datasets, statMarks ?? {}, { hideEmpty, showN }),
+    [render, spec, datasets, statMarks, hideEmpty, showN],
   );
   // A violin's KDE (J5 leftover): the box stands in until it arrives, or offline.
   const { draws: stat, boxed } = usePreviewViolins(marked);

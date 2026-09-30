@@ -20,6 +20,16 @@
 // (`violin`), from which `./usePreviewViolins` fetches the KDE the Stat Stage
 // draws; the box stands in until then, or when the backend is unreachable.
 // No spec (or no dataset) = the unmarked draws the preview always made.
+//
+// EMPTY LEVELS (P2.6 box 2 leftover): `specToRender` groups only the rows
+// that have a finite value, as the stage's own compute does, so a declared
+// level no row uses, an all-NaN level or an all-excluded one is not among its
+// boxes. The stage threads its draws onto the full category axis afterwards
+// (`Stage/statStageLevels`: empty slots, one label resolution, the n
+// captions, a padded bar matrix); the preview applies the SAME decoration
+// with the window's persisted `hideEmpty` / `showN`, so a level missing on
+// the stage and in the export is missing in the preview too — never closed
+// up.
 
 import { facetSlices, facetSliceRowIds, type FacetSlice } from "../../../lib/facet";
 import { specDatasetId, type PlotSpec, type SpecRender } from "../../../lib/plotspec";
@@ -33,6 +43,7 @@ import { resolveGroups, resolveGroupsIndexed, type IndexedGroupSpec } from "../.
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { barCellPoints, needsBarRaw, withBarRaw } from "../../Stage/statBarMarks";
 import type { StatDrawData } from "../../Stage/statRender";
+import { applyLevels, levelAxes, type LevelsDisplay } from "../../Stage/statStageLevels";
 import { facetMarks, needsPoints, stageMarks } from "../../Stage/statStageMarks";
 
 type StatRender = Extract<SpecRender, { kind: "box" | "bar" }>;
@@ -99,14 +110,33 @@ function barDraw(
   return { ...draw, data: raw, marks: ctx.m, ...(colorLevels ? { colorLevels } : {}) };
 }
 
-/** The preview's draws for a box / bar render (see the module header). */
+/** The preview's draws for a box / bar render (see the module header).
+ *  `levels` is the window's persisted hide-empty / n-caption choice
+ *  (`PlotView.statHideEmptyLevels` / `statShowGroupN`), applied as the stage
+ *  applies it. */
 export function previewStatDraws(
   render: SpecRender,
   spec: PlotSpec | null | undefined,
   datasets: readonly Dataset[],
   marksByMode: StatMarksByMode,
+  levels: LevelsDisplay,
 ): PreviewStatDraws {
-  if (render.kind !== "box" && render.kind !== "bar") return { flat: null, facets: null };
+  const out = previewDraws(render, spec, datasets, marksByMode);
+  if (!out.axes) return out.draws;
+  // The stage's decoration (empty slots, relabelling, n, padded bars) over
+  // the SAME draws — `notice` is the stage's to show, not the preview's.
+  const { draw, drawFacets } = applyLevels(out.axes, { ...levels, color: out.color }, out.draws.flat, out.draws.facets);
+  return { ...out.draws, flat: draw, facets: drawFacets };
+}
+
+function previewDraws(
+  render: SpecRender,
+  spec: PlotSpec | null | undefined,
+  datasets: readonly Dataset[],
+  marksByMode: StatMarksByMode,
+): { draws: PreviewStatDraws; axes: ReturnType<typeof levelAxes>; color: StatColor | null } {
+  const none = { axes: null, color: null };
+  if (render.kind !== "box" && render.kind !== "bar") return { draws: { flat: null, facets: null }, ...none };
   const dsId = spec ? specDatasetId(spec) : null; // specToRender's own dataset
   const ds = dsId !== null ? datasets.find((d) => d.id === dsId) : undefined;
   const view = ds ? analysisView(ds) : null;
@@ -123,14 +153,25 @@ export function previewStatDraws(
     : null;
   const flatSrc = view?.data ? { data: view.data, rowIds: view.rowIds } : null;
   const facetCol = spec?.zones.facet?.channel ?? null;
-  const slices = new Map<string, FacetSlice>(
-    flatSrc && facetCol != null ? facetSlices(flatSrc.data, facetCol).map((s) => [s.label, s] as const) : [],
-  );
+  // specToRender's own slices (the same `facetSlices` call), reused for the
+  // level axes rather than re-sliced — as the stage shares its slices.
+  const sliceList = flatSrc && facetCol != null ? facetSlices(flatSrc.data, facetCol) : null;
+  const slices = new Map<string, FacetSlice>(sliceList?.map((s) => [s.label, s] as const) ?? []);
   const sliceSrc = (label: string): Source | null => {
     const s = slices.get(label);
     return s ? { data: s.data, rowIds: facetSliceRowIds(s, flatSrc?.rowIds ?? null) } : null;
   };
   const panelCtx = ctx && { ...ctx, m: facetMarks(ctx.m) };
+  // The stage's axes over the stage's inputs (`useStatStage` -> `levelAxes`):
+  // the ANALYSIS view, the plan's columns, every Y as the plotted / bar
+  // channels (the per-channel fallback's slots when nothing groups).
+  const axes = ctx && ds && flatSrc
+    ? levelAxes({
+        active: ds, data: flatSrc.data, mode, groupCol: ctx.plan.groupCol, group2Col: ctx.plan.group2Col,
+        valueCol: ctx.yChannels[0], plotted: ctx.yChannels, barValueChannels: ctx.yChannels, facetCol, slices: sliceList,
+      })
+    : null;
+  const decor = { axes, color: ctx?.color ?? null };
   if (render.kind === "box") {
     // A violin's KDE input: specToRender's own groups, per draw.
     const groupsOf = (src: Source | null) =>
@@ -138,16 +179,18 @@ export function previewStatDraws(
         ? resolveGroups(src.data, ctx.plan.groupCol, ctx.yChannels[0], ctx.yChannels, ctx.plan.group2Col)
             .filter((g) => g.values.length > 0)
         : [];
-    return {
+    const draws: PreviewStatDraws = {
       flat: boxDraw(render, render.boxes, flatSrc, ctx),
       facets: render.facets?.map((f) => ({ label: f.label, draw: boxDraw(render, f.boxes, sliceSrc(f.label), panelCtx) })) ?? null,
       ...(render.violin && ctx
         ? { violin: { flat: groupsOf(flatSrc), facets: render.facets?.map((f) => groupsOf(sliceSrc(f.label))) ?? [] } }
         : {}),
     };
+    return { draws, ...decor };
   }
-  return {
+  const draws: PreviewStatDraws = {
     flat: barDraw(render, render.data, flatSrc, ctx),
     facets: render.facets?.map((f) => ({ label: f.label, draw: barDraw(render, f.data, sliceSrc(f.label), panelCtx) })) ?? null,
   };
+  return { draws, ...decor };
 }

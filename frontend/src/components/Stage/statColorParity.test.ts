@@ -183,7 +183,7 @@ describe("Color-by on box / violin / bar — the Stat Stage draws and exports th
     if (which === "box") expect(panels[0].color_levels).toEqual([0, 1, 0, 1, 0, null]); // the empty L2/W2 slot
     // (3) the Graph Builder preview colours the same groups the same way.
     const s = CASES[which];
-    const preview = previewStatDraws(encodedSpecRender(s, [DS]).render, s, [DS], {});
+    const preview = previewStatDraws(encodedSpecRender(s, [DS]).render, s, [DS], {}, { hideEmpty: false, showN: true });
     const previewDraws = preview.facets?.map((f) => f.draw) ?? [preview.flat!];
     expect(previewDraws.map((d) => ("colorLevels" in d ? d.colorLevels : null))).toEqual(
       draws.map((d) => ("colorLevels" in d ? d.colorLevels : null)),

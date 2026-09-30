@@ -14,12 +14,18 @@ import type { StatDrawData } from "../../Stage/statRender";
 import { computeViolinDraw } from "../../Stage/useStatStageCompute";
 import type { PreviewStatDraws } from "./previewMarks";
 
-/** One box stand-in as a violin, or the box itself when no KDE came back. */
+/** One box stand-in as a violin, or the box itself when no KDE came back.
+ *  The violins take the box's decoration with them (P2.6 box 2: its slots,
+ *  n captions, colours and slot-resolved labels), so an empty level stays an
+ *  empty slot once the KDE lands. */
 async function toViolin(box: StatDrawData | null, groups: GroupSpec[]): Promise<StatDrawData | null> {
   if (!box || box.mode !== "box" || groups.length === 0) return box;
   const v = await computeViolinDraw(groups, box.valueLabel, box.groupLabel);
   if (v.mode !== "violin" || v.violins.length !== box.boxes.length) return box;
-  return { ...v, points: box.points ?? null, ...(box.marks ? { marks: box.marks } : {}) };
+  const { mode: _mode, boxes, ...decoration } = box;
+  return {
+    ...v, ...decoration, violins: v.violins.map((g, i) => ({ ...g, label: boxes[i].label })), points: box.points ?? null,
+  };
 }
 
 /** `stat` with its violins drawn, and whether any draw is still a box. */
