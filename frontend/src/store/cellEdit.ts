@@ -48,6 +48,7 @@ import { computeFormulasIncremental } from "../lib/formulaIncremental";
 import { asAlreadyComputed } from "../lib/formulaInputs";
 import { clearOverlaysFor } from "./corrections";
 import { isRederived, REDERIVED_EDIT_NOTICE } from "../lib/rederived";
+import { noteCellEdit } from "../lib/api/datasetCache";
 import type { CellEdit } from "../lib/clipboardGrid";
 import type { Dataset } from "../lib/types";
 import { recompute, type AppState } from "./useApp";
@@ -69,6 +70,13 @@ import { recompute, type AppState } from "./useApp";
  *  (919,727 -> 919,674 exact eager bytes), which funds this round's two
  *  `peakTable: undefined` clears with room to spare. */
 const PASTE_SKIP_REASON = "read-only/out-of-range or not a valid level code for a categorical column";
+
+/** Tell the dataset-handle cache that `next.data` is `d.data` with cells
+ *  edited, so the next plot fetch uploads only the changed cells. */
+function noted(d: Dataset, next: Dataset): Dataset {
+  noteCellEdit(d.data, next.data);
+  return next;
+}
 
 function recomputeAfterCellEdit(d: Dataset, row: number): Dataset {
   if (!d.formulas?.length) return d;
@@ -305,7 +313,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
         // peakTable (audit P2.1 review round 2): a typed-over value is a
         // change to the data any saved fit was measured from, so the durable
         // table goes with it — the same rule store/corrections.ts applies.
-        return recomputeAfterCellEdit({ ...d, data, peakTable: undefined }, row);
+        return noted(d, recomputeAfterCellEdit({ ...d, data, peakTable: undefined }, row));
       }),
     }));
     get().recordMacro(
@@ -383,7 +391,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
         // keystroke away from the path that already cleared. An interior x
         // (2θ) cell in particular moved the fit's own abscissa.
         const data = catLevels ? { ...d.data, time, values, cat_levels: catLevels } : { ...d.data, time, values };
-        return recompute({ ...d, data, peakTable: undefined });
+        return noted(d, recompute({ ...d, data, peakTable: undefined }));
       }),
     }));
     get().recordMacro(`${label} on ${ds.name}`, `qz.setCells(${lit(ds.name)}, ${usable.length})`);
@@ -439,7 +447,7 @@ export function createCellEditSlice(set: SliceSet, get: SliceGet): CellEditSlice
         // peakTable: the third cell writer, cleared for the same reason as the
         // two above — a level code IS a number in `values`, so a fit measured
         // from this worksheet is measured from data this just rewrote.
-        return recomputeAfterCellEdit({ ...d, data, peakTable: undefined }, row);
+        return noted(d, recomputeAfterCellEdit({ ...d, data, peakTable: undefined }, row));
       }),
     }));
     get().recordMacro(

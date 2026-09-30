@@ -33,6 +33,7 @@ from quantized.routes import (
     corrections,
     crystallography,
     database,
+    datasets,
     diffusion,
     electrical,
     electrochemistry,
@@ -265,6 +266,7 @@ def create_app(*, dev_origins: Collection[str] | None = None) -> FastAPI:
     application.include_router(import_wizard.router)
     application.include_router(import_template.router)
     application.include_router(plot.router)
+    application.include_router(datasets.router)
     application.include_router(corrections.router)
     application.include_router(database.router)
     application.include_router(fitting.router)

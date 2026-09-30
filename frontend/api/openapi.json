@@ -1873,6 +1873,39 @@
         "title": "CategoryAxisStyle",
         "type": "object"
       },
+      "CellPatch": {
+        "description": "One cell. ``col`` -1 is the time column; ``value`` null is NaN.\n\nA TypedDict, not a model: pydantic validates a list of these ~8x faster\n(measured 0.18 s vs 1.4 s for 350k patches), and validation runs on the\nevent loop.",
+        "properties": {
+          "col": {
+            "minimum": -1.0,
+            "title": "Col",
+            "type": "integer"
+          },
+          "row": {
+            "minimum": 0.0,
+            "title": "Row",
+            "type": "integer"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "row",
+          "col",
+          "value"
+        ],
+        "title": "CellPatch",
+        "type": "object"
+      },
       "CellRequest": {
         "properties": {
           "a": {
@@ -3343,6 +3376,48 @@
           "l"
         ],
         "title": "DSpacingRequest",
+        "type": "object"
+      },
+      "DatasetHandleResponse": {
+        "description": "``dataset_handle`` is null when the patched dataset is too large to\nstay cached; the client then sends the full dataset instead.",
+        "properties": {
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          }
+        },
+        "required": [
+          "dataset_handle"
+        ],
+        "title": "DatasetHandleResponse",
+        "type": "object"
+      },
+      "DatasetPatchRequest": {
+        "properties": {
+          "dataset_handle": {
+            "title": "Dataset Handle",
+            "type": "string"
+          },
+          "patches": {
+            "items": {
+              "$ref": "#/components/schemas/CellPatch"
+            },
+            "title": "Patches",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dataset_handle",
+          "patches"
+        ],
+        "title": "DatasetPatchRequest",
         "type": "object"
       },
       "DebyeLengthRequest": {
@@ -14352,6 +14427,48 @@
         "summary": "Sqlite Query",
         "tags": [
           "database"
+        ]
+      }
+    },
+    "/api/datasets/patch": {
+      "post": {
+        "description": "Clone a cached dataset, overwrite the given cells, and cache the result.",
+        "operationId": "patch_dataset_api_datasets_patch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetHandleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Dataset",
+        "tags": [
+          "datasets"
         ]
       }
     },

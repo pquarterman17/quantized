@@ -48,6 +48,7 @@
 // failure.
 
 import type { HttpError } from "./http";
+import type { DataStruct } from "../types";
 
 /** The low-level fetch primitive this module drives: POST JSON, parse the
  *  body as `T`, and hand back whatever `X-Dataset-Handle` header (if any)
@@ -108,7 +109,7 @@ function datasetKey(body: unknown): object | undefined {
 
 /** Object -> the in-flight request uploading it, which settles with the
  *  handle it earned (null: failed, aborted, or too large to cache). At most
- *  one per object, shared by every caller -- see `settled`. */
+ *  one per object, shared by every caller -- see `whenIdle`. */
 const pending = new WeakMap<object, Promise<string | null>>();
 
 const abortError = (): DOMException => new DOMException("aborted", "AbortError");
@@ -150,29 +151,86 @@ async function whenIdle<R>(key: object, signal: AbortSignal | undefined, next: (
 type Wire<T> = Promise<{ value: T; handle: string | null }>;
 type Send<T> = (extra: Record<string, unknown>) => Wire<T>;
 
-/** Send the full `dataset` as THE upload of `key`. Registered in `pending`
+const isMiss = (err: unknown): boolean => (err as HttpError | null)?.status === 409;
+
+/** Child DataStruct -> the dataset it was cell-edited from (see
+ *  `noteCellEdit`). Dropped once the child earns its own handle, so a child
+ *  keeps at most one ancestor alive, and only until its first upload. */
+const derived = new WeakMap<object, object>();
+
+/** Record that `child` is `parent` with some cells edited (store/cellEdit.ts
+ *  calls this). When `child` is first sent, and the server holds `parent`, only
+ *  the changed cells are uploaded -- see ./datasetPatch. A `parent` that was
+ *  never sent is skipped over to ITS parent, so a burst of edits before a plot
+ *  fetch still patches from the last dataset the server saw. */
+export function noteCellEdit(parent: DataStruct, child: DataStruct): void {
+  if (parent === child) return;
+  const known = handles.has(parent) || pending.has(parent);
+  derived.set(child, known ? parent : (derived.get(parent) ?? parent));
+}
+
+const PATCH_PATH = "/api/datasets/patch";
+
+/** A handle for `key` built server-side from its recorded parent plus cell
+ *  patches, or null when that is not possible (no parent, parent never sent,
+ *  shape change, too many cells, parent evicted) and the caller should send
+ *  the full dataset. Rejects only on abort. */
+async function patchedHandle(key: object, signal: AbortSignal | undefined, rawFetch: RawFetchJSON): Promise<string | null> {
+  const base = derived.get(key);
+  if (!base || !(handles.has(base) || pending.has(base))) return null;
+  // Lazy: the diff only runs for an edited dataset, so it stays out of the eager bundle.
+  const { cellPatches } = await import("./datasetPatch");
+  const patches = cellPatches(base as DataStruct, key as DataStruct);
+  if (!patches) return null;
+  const parent = await whenIdle(base, signal, async () => handles.get(base));
+  if (parent === undefined) return null;
+  try {
+    const { value } = await rawFetch<{ dataset_handle: string | null }>(
+      PATCH_PATH,
+      { dataset_handle: parent, patches },
+      signal,
+    );
+    return value.dataset_handle;
+  } catch (err) {
+    if (signal?.aborted) throw err;
+    if (isMiss(err) && handles.get(base) === parent) handles.delete(base);
+    return null; // a full upload is always a correct answer
+  }
+}
+
+/** THE upload of `key`: cell patches against its parent when possible (see
+ *  `patchedHandle`), else the full `dataset`. Registered in `pending`
  *  synchronously, before the first await, so a concurrent caller sees it and
  *  waits instead of uploading the same object again. */
-async function upload<T>(key: object, send: Send<T>): Promise<T> {
+async function upload<T>(key: object, send: Send<T>, viaPatch: () => Promise<string | null>): Promise<T> {
   let done: (handle: string | null) => void = () => {};
   const p = new Promise<string | null>((resolve) => (done = resolve));
   pending.set(key, p);
   let earned: string | null = null;
   try {
+    const patched = await viaPatch();
+    if (patched !== null) {
+      try {
+        const res = await send({ dataset: undefined, dataset_handle: patched });
+        handles.set(key, (earned = res.handle ?? patched));
+        return res.value;
+      } catch (err) {
+        if (!isMiss(err)) throw err; // evicted in between: fall through to a full upload
+      }
+    }
     const res = await send({ dataset_handle: undefined });
     if (res.handle) handles.set(key, (earned = res.handle));
     return res.value;
   } finally {
     if (pending.get(key) === p) pending.delete(key);
+    if (earned !== null) derived.delete(key);
     done(earned);
   }
 }
 
-const isMiss = (err: unknown): boolean => (err as HttpError | null)?.status === 409;
-
 /** Dataset-cache-aware POST for a cache-eligible path: swaps a remembered
  *  `dataset` for its `dataset_handle` when one is known, uploads the full
- *  payload once per object even under concurrent callers (see `settled`),
+ *  payload once per object even under concurrent callers (see `whenIdle`),
  *  restores the full payload once on a 409 (unknown/evicted handle), and
  *  remembers whatever handle the server echoes back. A `body` with no
  *  `dataset`-shaped field (e.g. /api/rsm/strain) passes straight through
@@ -193,15 +251,16 @@ export async function postJSONDatasetAware<T>(
   const send: Send<T> = (extra) => rawFetch<T>(path, { ...record, ...extra }, signal);
   const byHandle = async (handle: string): Promise<T> =>
     (await send({ dataset: undefined, dataset_handle: handle })).value;
+  const viaPatch = () => patchedHandle(key, signal, rawFetch);
 
   const handleOrUpload = (): Promise<T> => {
     const h = handles.get(key);
-    return h === undefined ? upload(key, send) : byHandle(h);
+    return h === undefined ? upload(key, send, viaPatch) : byHandle(h);
   };
 
   return whenIdle(key, signal, async () => {
     const known = handles.get(key);
-    if (known === undefined) return upload(key, send);
+    if (known === undefined) return upload(key, send, viaPatch);
     try {
       return await byHandle(known);
     } catch (err) {

@@ -190,6 +190,11 @@ CASES = [
 # Routes the enumeration finds that the sweep deliberately does not probe.
 # Every entry needs a reason; a stale entry fails the completeness test.
 EXEMPT = {
+    "/api/datasets/patch": (
+        "takes a dataset_handle and cell patches, never a dataset payload, so "
+        "there is no dataset to malform; unknown handles (409) and out-of-range "
+        "cells (422) are covered in test_dataset_patch.py"
+    ),
     "/api/export/origin-com": (
         "the COM availability gate returns 409 before any dataset is parsed on "
         "non-Windows/CI machines, so the probe cannot reach from_dict here; "

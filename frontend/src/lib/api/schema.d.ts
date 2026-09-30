@@ -386,6 +386,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/datasets/patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Patch Dataset
+         * @description Clone a cached dataset, overwrite the given cells, and cache the result.
+         */
+        post: operations["patch_dataset_api_datasets_patch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/diffusion/arrhenius": {
         parameters: {
             query?: never;
@@ -6041,6 +6061,22 @@ export interface components {
             /** Wrap */
             wrap?: number | null;
         };
+        /**
+         * CellPatch
+         * @description One cell. ``col`` -1 is the time column; ``value`` null is NaN.
+         *
+         *     A TypedDict, not a model: pydantic validates a list of these ~8x faster
+         *     (measured 0.18 s vs 1.4 s for 350k patches), and validation runs on the
+         *     event loop.
+         */
+        CellPatch: {
+            /** Col */
+            col: number;
+            /** Row */
+            row: number;
+            /** Value */
+            value: number | null;
+        };
         /** CellRequest */
         CellRequest: {
             /** A */
@@ -6593,6 +6629,22 @@ export interface components {
             l: number;
             /** System */
             system: string;
+        };
+        /**
+         * DatasetHandleResponse
+         * @description ``dataset_handle`` is null when the patched dataset is too large to
+         *     stay cached; the client then sends the full dataset instead.
+         */
+        DatasetHandleResponse: {
+            /** Dataset Handle */
+            dataset_handle: string | null;
+        };
+        /** DatasetPatchRequest */
+        DatasetPatchRequest: {
+            /** Dataset Handle */
+            dataset_handle: string;
+            /** Patches */
+            patches: components["schemas"]["CellPatch"][];
         };
         /** DebyeLengthRequest */
         DebyeLengthRequest: {
@@ -11203,6 +11255,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_dataset_api_datasets_patch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatasetPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetHandleResponse"];
                 };
             };
             /** @description Validation Error */
