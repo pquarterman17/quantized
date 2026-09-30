@@ -781,8 +781,10 @@ const TS_MODULE_PINS: Record<string, number> = {
   // glyph by display position) — which also stops lib/exportStyles.ts importing
   // the whole uPlot options builder just to resolve a colour. The palette is
   // re-exported from here, so no importer changed. Ratcheted to what the file
-  // actually is.
-  "/lib/uplotOpts.ts": 1428,
+  // actually is. 1428 -> 1330 (2026-09-30, display-only repaint): the per-series
+  // half of `buildOpts` moved verbatim to lib/uplotSeries.ts, so PlotViewport
+  // can re-resolve a LIVE instance's paint through the code a rebuild runs.
+  "/lib/uplotOpts.ts": 1330,
   "/lib/uplotOverlays.ts": 1175,
   // 1090 -> 1040 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A1): the Reductions
   // wire types (WilliamsonHallResult/FftThicknessResult/SuperlatticeResult/
