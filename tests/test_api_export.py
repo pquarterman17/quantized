@@ -1073,6 +1073,42 @@ def test_export_opj_roundtrips_through_our_reader(tmp_path):
     assert list(books[0].time) == [1.0, 2.0, 3.0]
 
 
+def test_export_opj_multibook_as_the_file_menu_posts_it(tmp_path):
+    """File > Export Origin project (.opj) posts every dataset as a named item
+    with filename "project": each becomes its own workbook, in order, with
+    labels/units intact, and the download is named project.opj."""
+    from quantized.io.origin_project import read_origin_books
+
+    def ds(v: float, label: str, unit: str) -> dict[str, Any]:
+        return {
+            "time": [0.0, 1.0],
+            "values": [[v], [v + 1.0]],
+            "labels": [label],
+            "units": [unit],
+            "metadata": {},
+        }
+
+    resp = client.post(
+        "/api/export/opj",
+        json={
+            "datasets": [
+                {"dataset": ds(1.0, "Moment", "emu"), "name": "loopA"},
+                {"dataset": ds(5.0, "Intensity", "cps"), "name": "rocking"},
+            ],
+            "filename": "project",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.headers["content-disposition"] == 'attachment; filename="project.opj"'
+    out = tmp_path / "project.opj"
+    out.write_bytes(resp.content)
+    books = read_origin_books(out)
+    assert [b.metadata["origin_book"] for b in books] == ["loopA", "rocking"]
+    assert [b.labels for b in books] == [("Moment",), ("Intensity",)]
+    assert [b.units for b in books] == [("emu",), ("cps",)]
+    assert books[1].values[:, 0].tolist() == [5.0, 6.0]
+
+
 def test_export_opj_rejects_empty():
     resp = client.post("/api/export/opj", json={"datasets": [], "filename": "x"})
     assert resp.status_code == 422
