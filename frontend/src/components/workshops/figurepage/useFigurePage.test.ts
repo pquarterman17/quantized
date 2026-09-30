@@ -2,9 +2,10 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigurePage, renderFigurePageBlob } from "../../../lib/api";
-import { clipboardImageSupported, copyOfficeGraphicAsync } from "../../../lib/clipboard";
+import { clipboardImageSupported, clipboardSvgSupported } from "../../../lib/clipboard";
 import { createFigureDocument, type FigureDocument } from "../../../lib/figureDocument";
 import type { FigureDoc } from "../../../lib/figuredoc";
+import { copyOfficeGraphicAsync } from "../../../lib/officeClipboard";
 import { createPageDocument } from "../../../lib/pageDocumentActions";
 import { defaultPlotView, type PlotWindow } from "../../../lib/plotview";
 import type { DataStruct } from "../../../lib/types";
@@ -23,6 +24,9 @@ vi.mock("../../../lib/api", () => ({
 
 vi.mock("../../../lib/clipboard", () => ({
   clipboardImageSupported: vi.fn(() => true),
+  clipboardSvgSupported: vi.fn(() => true),
+}));
+vi.mock("../../../lib/officeClipboard", () => ({
   copyOfficeGraphicAsync: vi.fn().mockResolvedValue(true),
 }));
 
@@ -990,6 +994,7 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
   beforeEach(() => {
     askConfirm.mockReset();
     vi.mocked(clipboardImageSupported).mockReturnValue(true);
+    vi.mocked(clipboardSvgSupported).mockReturnValue(true);
     vi.mocked(copyOfficeGraphicAsync).mockResolvedValue(true);
     useApp.setState({ editableFigures: [], pages: [], pageDocSeed: null, figurePageOpen: false });
   });
@@ -1064,15 +1069,33 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
         await result.current.copyNow();
       });
       expect(copyOfficeGraphicAsync).toHaveBeenCalledTimes(1);
-      // Both representations remain pending so clipboard.write starts inside
-      // so the clipboard write stays inside the user gesture — resolve it to
-      // inspect what was actually rendered.
+      // The renders are handed over still PENDING so the clipboard write
+      // stays inside the user gesture — resolve them to inspect what was
+      // actually rendered.
       const source = vi.mocked(copyOfficeGraphicAsync).mock.calls[0][0];
       await expect(source.png).resolves.toBeInstanceOf(Blob);
       await expect(source.svg).resolves.toBeInstanceOf(Blob);
-      const bodies = vi.mocked(renderFigurePageBlob).mock.calls.slice(-2).map((call) => call[0]);
-      expect(bodies.map((body) => body.fmt)).toEqual(["png", "svg"]);
-      expect(bodies.every((body) => body.dpi === 300)).toBe(true);
+      expect(source.pngDpi).toBe(300);
+      const [png, svg] = vi.mocked(renderFigurePageBlob).mock.calls.slice(-2).map((call) => call[0]);
+      expect(png.fmt).toBe("png");
+      expect(png.dpi).toBe(300);
+      expect(png.svg_text_as_paths).toBeUndefined();
+      // The optional raw-SVG representation: glyphs as outlines.
+      expect(svg.fmt).toBe("svg");
+      expect(svg.svg_text_as_paths).toBe(true);
+      expect(useApp.getState().status).toBe("figure page copied to clipboard");
+    });
+
+    it("skips the page SVG render when the browser does not advertise raw SVG", async () => {
+      vi.mocked(clipboardSvgSupported).mockReturnValue(false);
+      const { result } = renderHook(() => useFigurePage());
+      act(() => result.current.assign(0, result.current.windowSources[0]));
+      vi.mocked(renderFigurePageBlob).mockClear();
+      await act(async () => {
+        await result.current.copyNow();
+      });
+      expect(vi.mocked(renderFigurePageBlob).mock.calls.map((call) => call[0].fmt)).toEqual(["png"]);
+      expect(vi.mocked(copyOfficeGraphicAsync).mock.calls[0][0].svg).toBeNull();
       expect(useApp.getState().status).toBe("figure page copied to clipboard");
     });
 

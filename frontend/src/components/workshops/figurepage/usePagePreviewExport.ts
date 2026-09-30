@@ -16,13 +16,15 @@ import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { exportFigurePage, renderFigurePageBlob, type FigurePageSpec, type PagePanelSpec } from "../../../lib/api";
-import { clipboardImageSupported, copyOfficeGraphicAsync } from "../../../lib/clipboard";
+import { clipboardImageSupported } from "../../../lib/clipboard";
+import { copySvgWanted, pagePointCount } from "../../../lib/copySvgBudget";
 import { chooseExcludedRows, pageExcludedChoiceMatters } from "../../../lib/excludedRowsChoice";
 import { ghosterFor } from "../../../lib/excludedRowsExport";
 import type { ExcludedRowsGhoster } from "../../../lib/figureSpec";
 import type { PageLabelFormat, PageLabelPosition } from "../../../lib/figurepage";
 import { filledCount, type PageSlot } from "../../../lib/figurepageActions";
 import type { PageLayoutSettings } from "../../../lib/pageDocument";
+import { copyOfficeGraphicAsync } from "../../../lib/officeClipboard";
 import { withPageGreyscale } from "../../../lib/pageGreyscale";
 import { runCancellable } from "../../../store/pendingOps";
 import { toast } from "../../../store/toasts";
@@ -234,14 +236,16 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
     }
   }
 
-  /** F3.6 "clipboard copy for pages" (A7 convention): vector SVG plus a
-   *  300-DPI PNG fallback go to the Office clipboard through the SAME
-   *  `buildSpec` preview/export share
-   *  — never a third ad-hoc render path. Mirrors copyFigureCommand.ts's
-   *  gesture-preserving pattern: check capability BEFORE any async work (a
-   *  render on a browser that can't accept it would be pure waste), then
-   *  hand both PENDING renders to `copyOfficeGraphicAsync` rather than awaiting
-   *  first, so the write stays inside the originating click. */
+  /** F3.6 "clipboard copy for pages" (A7 convention): the 300-DPI PNG, an
+   *  HTML `<img>` of that same PNG, and (only where the browser advertises
+   *  raw SVG and the page is under lib/copySvgBudget.ts's point budget) a
+   *  text-as-paths SVG go to the clipboard through the SAME `buildSpec`
+   *  preview/export share — never a third ad-hoc render path. Mirrors
+   *  copyFigureCommand.ts's gesture-preserving pattern: check capability
+   *  BEFORE any async work (a render on a browser that can't accept it would
+   *  be pure waste), then hand the PENDING renders to `copyOfficeGraphicAsync`
+   *  (lib/officeClipboard.ts) rather than awaiting first, so the write stays
+   *  inside the originating click. */
   async function copyNow(): Promise<void> {
     if (!clipboardImageSupported()) {
       const msg = "clipboard image unavailable - use Export";
@@ -268,12 +272,15 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
     // A Cancel that lands after the clipboard write went through cannot undo
     // it, and is reported as the copy it was (lib/exportActive.ts's rule).
     const done = await runCancellable("Copying figure page…", async (signal) => {
+      // PNG requested first: it is the mandatory representation, and the
+      // backend serializes renders (one render lock), so the optional SVG
+      // should not delay it.
+      const png = renderFigurePageBlob({ ...spec, fmt: "png", dpi: COPY_PAGE_DPI }, signal);
+      const svg = copySvgWanted(pagePointCount(spec))
+        ? renderFigurePageBlob({ ...spec, fmt: "svg", svg_text_as_paths: true }, signal)
+        : null;
       const ok = await copyOfficeGraphicAsync(
-        {
-          png: renderFigurePageBlob({ ...spec, fmt: "png", dpi: COPY_PAGE_DPI }, signal),
-          svg: renderFigurePageBlob({ ...spec, fmt: "svg", dpi: COPY_PAGE_DPI }, signal),
-          alt: "Quantized figure page",
-        },
+        { png, svg, pngDpi: COPY_PAGE_DPI, alt: "Quantized figure page" },
         signal,
       );
       if (!ok) signal.throwIfAborted();

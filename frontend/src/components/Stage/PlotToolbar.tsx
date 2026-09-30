@@ -61,8 +61,8 @@ interface Props {
   onSavePng: () => void;
   onCopyData: () => void;
   onCopyFigure: () => void;
-  /** Item 11: freeze the current plot into a static compare window (the ⎘
-   *  clipboard snapshot's in-app sibling). */
+  /** Item 11: freeze the current plot into a static in-app compare window
+   *  (the toolbar's in-app counterpart to the ⎘ Copy Figure clipboard copy). */
   onSnapshotWindow: () => void;
 }
 

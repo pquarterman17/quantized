@@ -159,7 +159,7 @@ export const COPY_FIGURE: ActionDef = {
   id: "copyFigure",
   glyph: "⎘",
   name: "Copy Figure",
-  desc: "Copy an Office-ready vector figure with a 300 DPI image fallback",
+  desc: "Copy the publication figure (300 DPI) for Office; adds vector SVG where the browser allows",
 };
 export const SNAPSHOT_WINDOW: ActionDef = {
   id: "snapshotWindow",

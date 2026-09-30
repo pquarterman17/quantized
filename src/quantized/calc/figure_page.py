@@ -189,6 +189,7 @@ def render_figure_page(
     link_y: bool = False,
     align_labels: bool = False,
     resize_mode: str = "constrained",
+    svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
 ) -> bytes:
     """Compose ``panels`` onto one rows x cols page and render to image bytes.
 
@@ -281,7 +282,7 @@ def render_figure_page(
             align_labels=align_labels,
             resize_mode=resize_mode,
         )
-        return savefig_bytes(fig, fmt, dpi=resolved_dpi)
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi, svg_text_as_paths=svg_text_as_paths)
 
 
 def _build_page_figure(

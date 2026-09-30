@@ -1,5 +1,9 @@
-// "Copy figure" (MAIN_PLAN #35) — put a PUBLICATION-quality raster of the
-// current plot on the clipboard, in one click, with no dialog.
+// "Copy figure" (MAIN_PLAN #35) — put the publication render of the current
+// plot on the clipboard, in one click, with no dialog: the 300-DPI PNG, an
+// HTML `<img>` of that same PNG for Office, and — only where the browser
+// advertises `image/svg+xml` and the figure is under the point budget — a
+// text-as-paths SVG (lib/officeClipboard.ts says what each target receives,
+// lib/copySvgBudget.ts when the SVG is rendered).
 //
 // The gap this closes: the older snapshot composited the live uPlot canvas at
 // screen resolution, so what landed in PowerPoint disagreed with what the
@@ -22,17 +26,14 @@
 // canonical document applies.
 
 import { renderFigureBlob, type FigureSpec } from "./api/figures";
-import {
-  clipboardImageSupported,
-  clipboardSvgSupported,
-  copyOfficeGraphicAsync,
-  copySvgAsync,
-} from "./clipboard";
+import { clipboardImageSupported, clipboardSvgSupported, copySvgAsync } from "./clipboard";
+import { copySvgWanted, figurePointCount } from "./copySvgBudget";
 import { exportActive, type StoreGet } from "./exportActive";
 import { chooseExcludedRows } from "./excludedRowsChoice";
 import { excludedChoiceMatters } from "./excludedRowsExport";
 import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
+import { copyOfficeGraphicAsync } from "./officeClipboard";
 import { toast } from "../store/toasts";
 import type { Dataset } from "./types";
 
@@ -125,19 +126,20 @@ export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
       if (!spec) return false;
       // Progress feedback: a large multi-panel render is not instant, and a
       // silent pause reads as a broken button.
-      s().setStatus("rendering Office-ready figure for the clipboard…");
-      // One ClipboardItem advertises the vector SVG (inside an Office-safe
-      // HTML image) and the publication PNG together.  The paste target picks
-      // the richest representation it understands; the PNG remains the
-      // guaranteed 300-DPI fallback. Both renders start before the first await
-      // so clipboard.write() stays in this click's activation task.
-      const svgSpec: FigureSpec = { ...spec, fmt: "svg" };
+      s().setStatus("rendering figure for the clipboard…");
+      // Every render starts before the first await so clipboard.write()
+      // stays in this click's activation task. The SVG is a SECOND render
+      // (text as outlines, so the paste needs no installed font), requested
+      // only when the browser can take it and the figure is small enough to
+      // be worth it (lib/copySvgBudget.ts); otherwise the copy costs one
+      // render, as before. PNG requested first: the backend serializes
+      // renders, and the optional SVG should not delay the mandatory PNG.
+      const png = renderFigureBlob(spec, signal);
+      const svg = copySvgWanted(figurePointCount(spec))
+        ? renderFigureBlob({ ...spec, fmt: "svg", svg_text_as_paths: true }, signal)
+        : null;
       const ok = await copyOfficeGraphicAsync(
-        {
-          png: renderFigureBlob(spec, signal),
-          svg: renderFigureBlob(svgSpec, signal),
-          alt: spec.title || stem,
-        },
+        { png, svg, pngDpi: COPY_FIGURE_DPI, alt: spec.title || stem },
         signal,
       );
       s().setStatus("");

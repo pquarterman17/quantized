@@ -4,7 +4,6 @@ import {
   clipboardImageSupported,
   clipboardSvgSupported,
   copyImageAsync,
-  copyOfficeGraphicAsync,
   copySvgAsync,
   copyTextAsync,
   payloadToTSV,
@@ -22,7 +21,7 @@ class FakeClipboardItem {
   // probe as "no" — a real static method is needed here for copySvgAsync's
   // tests to actually reach its write path rather than short-circuiting on
   // capability detection before ever exercising the signal guard.
-  static supports(_type?: string): boolean {
+  static supports(): boolean {
     return true;
   }
   constructor(public readonly items: Record<string, Blob | Promise<Blob>>) {}
@@ -117,7 +116,7 @@ describe("clipboardImageSupported", () => {
 
   it("is false in jsdom's default environment (no Clipboard image API)", () => {
     // jsdom ships no navigator.clipboard at all — this is the real "Firefox /
-    // insecure context" case the toolbar's Copy Image button must disable for.
+    // insecure context" case the toolbar's Copy Figure button must disable for.
     expect(clipboardImageSupported()).toBe(false);
   });
 
@@ -290,104 +289,6 @@ describe("copyImageAsync / copySvgAsync — signal race guard (F7)", () => {
     stubClipboardWrite();
     const ok = await copyImageAsync(Promise.resolve(new Blob(["x"])), signal);
     expect(ok).toBe(true);
-  });
-});
-
-describe("copyOfficeGraphicAsync — vector plus publication fallback", () => {
-  const originalClipboard = navigator.clipboard;
-  const originalClipboardItem = (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem;
-
-  afterEach(() => {
-    Object.defineProperty(navigator, "clipboard", { value: originalClipboard, configurable: true });
-    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = originalClipboardItem;
-  });
-
-  function installWrite(svgMime = false): {
-    write: ReturnType<typeof vi.fn>;
-    item: () => FakeClipboardItem;
-  } {
-    let seen!: FakeClipboardItem;
-    const write = vi.fn(async (items: FakeClipboardItem[]) => {
-      seen = items[0];
-      for (const value of Object.values(seen.items)) await value;
-    });
-    class OfficeClipboardItem extends FakeClipboardItem {
-      static supports(type?: string): boolean {
-        return type === "image/svg+xml" ? svgMime : true;
-      }
-    }
-    Object.defineProperty(navigator, "clipboard", { value: { write }, configurable: true });
-    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = OfficeClipboardItem;
-    return { write, item: () => seen };
-  }
-
-  it("starts one multi-format write before either server render settles", async () => {
-    const { write, item } = installWrite();
-    let pngReady!: (blob: Blob) => void;
-    let svgReady!: (blob: Blob) => void;
-    const png = new Promise<Blob>((resolve) => (pngReady = resolve));
-    const svg = new Promise<Blob>((resolve) => (svgReady = resolve));
-
-    const copying = copyOfficeGraphicAsync({ png, svg, alt: "M & H" });
-    expect(write).toHaveBeenCalledTimes(1);
-
-    pngReady(new Blob(["png"], { type: "image/png" }));
-    svgReady(new Blob(['<svg width="432pt" height="288pt"></svg>'], { type: "image/svg+xml" }));
-    expect(await copying).toBe(true);
-    expect(Object.keys(item().items)).toEqual(["text/html", "image/png"]);
-    const html = await (await item().items["text/html"]).text();
-    expect(html).toContain("data:image/svg+xml;charset=utf-8,");
-    expect(html).toContain('alt="M &amp; H"');
-  });
-
-  it("adds raw SVG only when the browser explicitly accepts that MIME", async () => {
-    const { item } = installWrite(true);
-    expect(await copyOfficeGraphicAsync({
-      png: Promise.resolve(new Blob(["png"], { type: "image/png" })),
-      svg: Promise.resolve(new Blob(["<svg></svg>"], { type: "image/svg+xml" })),
-    })).toBe(true);
-    expect(Object.keys(item().items)).toEqual(["text/html", "image/png", "image/svg+xml"]);
-  });
-
-  it("keeps copying the PNG when vector rendering is unavailable", async () => {
-    const { item } = installWrite();
-    const png = new Blob(["png"], { type: "image/png" });
-    expect(await copyOfficeGraphicAsync({
-      png: Promise.resolve(png),
-      svg: Promise.reject(new Error("SVG renderer offline")),
-    })).toBe(true);
-    expect(await item().items["image/png"]).toBe(png);
-    const html = await (await item().items["text/html"]).text();
-    expect(html).toContain("data:image/png;base64,");
-  });
-
-  it("falls back to the legacy PNG-only write when an engine rejects multiple formats", async () => {
-    const writes: FakeClipboardItem[][] = [];
-    const write = vi.fn(async (items: FakeClipboardItem[]) => {
-      writes.push(items);
-      if (writes.length === 1) throw new Error("multiple formats unsupported");
-      for (const value of Object.values(items[0].items)) await value;
-    });
-    Object.defineProperty(navigator, "clipboard", { value: { write }, configurable: true });
-    (globalThis as unknown as { ClipboardItem?: unknown }).ClipboardItem = FakeClipboardItem;
-
-    expect(await copyOfficeGraphicAsync({
-      png: Promise.resolve(new Blob(["png"], { type: "image/png" })),
-      svg: Promise.resolve(new Blob(["<svg></svg>"], { type: "image/svg+xml" })),
-    })).toBe(true);
-    expect(write).toHaveBeenCalledTimes(2);
-    expect(Object.keys(writes[1][0].items)).toEqual(["image/png"]);
-  });
-
-  it("does not complete a write when already cancelled", async () => {
-    const { write } = installWrite();
-    const controller = new AbortController();
-    controller.abort();
-    expect(await copyOfficeGraphicAsync({
-      png: Promise.resolve(new Blob(["png"], { type: "image/png" })),
-      svg: Promise.resolve(new Blob(["<svg></svg>"], { type: "image/svg+xml" })),
-    }, controller.signal)).toBe(false);
-    await expect(write.mock.results[0]?.value).rejects.toThrow();
   });
 });
 

@@ -9435,19 +9435,36 @@ was not raised.
   check: the actual OS-clipboard paste into Word/PowerPoint (Windows) or
   Keynote/Pages/Preview (macOS), i.e. whether the pasted bytes this route
   produces are what those apps actually accept and render from the system
-  clipboard. **Pipeline implemented 2026-09-29 (ChatGPT-Sol; owner platform
-  sign-off still keeps this box open):** ordinary **Copy Figure** now starts
-  the canonical SVG and 300-DPI PNG renders together and writes one
-  multi-format `ClipboardItem`: self-contained `text/html` carrying the SVG,
-  `image/png` as the fallback, and raw `image/svg+xml` when the browser
-  explicitly advertises it. Engines that reject the multi-format item retry
-  through the prior PNG-only path. Figure Page copy uses the same helper, and
-  the plot toolbar's one-click copy action now invokes this publication path
-  rather than the screen-resolution canvas snapshot. Automated coverage pins
-  pending-render/user-gesture timing, SVG failure -> PNG fallback, raw-SVG
-  capability gating, strict-engine fallback, cancellation, single-figure and
-  multi-panel parity. Final Word/PowerPoint and macOS paste behavior remains
-  the owner/platform acceptance check above.
+  clipboard. **Pipeline implemented 2026-09-29 (ChatGPT-Sol; revised in the
+  PR #492 review; owner platform sign-off still keeps this box open):**
+  ordinary **Copy Figure** writes one multi-format `ClipboardItem`
+  (`frontend/src/lib/officeClipboard.ts`): `image/png` at 300 DPI; a
+  self-contained `text/html` `<img>` of that SAME PNG (base64, sized in CSS
+  px so it pastes at its physical size -- it never carries the SVG, whose
+  live `<text>` would need fonts Office lacks); and, only where the browser
+  advertises `image/svg+xml` and the figure is at most 20k plotted points
+  (`lib/copySvgBudget.ts`), a raw SVG rendered with `svg_text_as_paths`
+  (glyphs as outlines; `tests/test_export_svg_text_as_paths.py`). A failed
+  first write retries from what resolved (PNG + HTML, then PNG alone); a
+  failed PNG render fails the copy. Figure Page copy uses the same helper,
+  and the plot toolbar's one-click copy invokes this publication path rather
+  than the screen-resolution canvas snapshot. **Automated coverage, as
+  narrow as it actually is:** `officeClipboard.test.ts` runs the helper
+  against a jsdom stand-in clipboard that reads every value promise and
+  rejects the whole write if one rejects (the spec's rule) -- write started
+  before the renders settle, HTML content and size, raw-SVG capability
+  gating, SVG-render failure -> PNG + HTML, PNG failure -> no copy,
+  promise-refusing and multi-format-refusing engines, and cancellation
+  before the write and mid-render after the write started (no retry). A
+  cancel landing after every value resolved is not observable and not
+  tested. The commands' tests (`copyFigureCommand.test.ts`,
+  `useFigurePage.test.ts`) mock the helper and pin only the wiring: which
+  renders are requested (PNG spec from the same builder Export uses, the
+  page from the same `buildSpec` as preview/export, SVG skipped when not
+  advertised or over budget) and that a cancel aborts the render and reports
+  "copy cancelled". No test compares copied pixels with exported pixels, and
+  nothing here exercises a real browser clipboard. Final Word/PowerPoint and
+  macOS paste behavior remains the owner/platform acceptance check above.
 - [x] ~~Expected bounding box, transparency, fonts, and scale.~~ VERIFIED
   2026-09-28, server-side, against the real `POST /api/export/figure` route
   (`tests/test_export_copy_figure_raster.py` +
