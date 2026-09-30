@@ -109,3 +109,43 @@ describe("GraphPreview — categorical marks reach the painters", () => {
     expect(d && "marks" in d ? d.marks : undefined).toBeUndefined();
   });
 });
+
+// The error-bar footnote (PRIMARY_SOFTWARE_AUDIT_PLAN P2.6 box 1 leftover):
+// the preview names the error bars it draws with the SAME text the Stat Stage
+// shows under its plot (`Stage/statErrorNote.figureErrorNote`), and shows
+// nothing when no bar is drawn.
+describe("GraphPreview — error-bar footnote", () => {
+  it("flat box with a mean marker: the stage's footnote text, once", () => {
+    useApp.setState({ statMarks: { box: { summary: "mean", errorBars: "se" } } });
+    const s = spec("box", false);
+    const { getAllByTestId } = render(<GraphPreview render={specToRender(s, [DS])} spec={s} />);
+    const notes = getAllByTestId("preview-error-note");
+    expect(notes).toHaveLength(1);
+    expect(notes[0].textContent).toBe("Error bars: SE of the mean");
+  });
+
+  it("faceted bar: one footnote for the whole grid, from the bar's own default (SE)", () => {
+    useApp.setState({ statMarks: {} });
+    const s = spec("bar", true);
+    const { getAllByTestId } = render(<GraphPreview render={specToRender(s, [DS])} spec={s} />);
+    expect(getAllByTestId("preview-error-note").map((n) => n.textContent)).toEqual(["Error bars: SE of the mean"]);
+  });
+
+  it("no error bar drawn (box without a summary marker; bar with 'none'): no footnote", () => {
+    useApp.setState({ statMarks: { box: { points: "all" }, bar: { errorBars: "none" } } });
+    const b = spec("box", false);
+    const { queryByTestId, unmount } = render(<GraphPreview render={specToRender(b, [DS])} spec={b} />);
+    expect(queryByTestId("preview-error-note")).toBeNull();
+    unmount();
+    const r = spec("bar", false);
+    const { queryByTestId: q2 } = render(<GraphPreview render={specToRender(r, [DS])} spec={r} />);
+    expect(q2("preview-error-note")).toBeNull();
+  });
+
+  it("without a spec (the unmarked draw) there is no footnote", () => {
+    useApp.setState({ statMarks: { box: { summary: "mean", errorBars: "sd" } } });
+    const s = spec("box", false);
+    const { queryByTestId } = render(<GraphPreview render={specToRender(s, [DS])} />);
+    expect(queryByTestId("preview-error-note")).toBeNull();
+  });
+});

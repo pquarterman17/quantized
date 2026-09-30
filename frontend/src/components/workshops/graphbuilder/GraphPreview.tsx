@@ -25,6 +25,9 @@
 // per facet panel, as the Stat Stage it sends to does (`./previewMarks`). A
 // violin draws its KDE once the backend returns it (`./usePreviewViolins`);
 // the box stands in, with a note, until then or when it is unreachable.
+// The error-bar footnote under the preview is the Stat Stage's own
+// (`Stage/statErrorNote.figureErrorNote` — one text, shown exactly when a
+// bar is drawn), so a preview never shows whiskers it does not name.
 
 import { useEffect, useMemo, useRef } from "react";
 
@@ -37,10 +40,14 @@ import { useApp } from "../../../store/useApp";
 import ColorScaleChip from "../../Stage/ColorScaleChip";
 import SpatialPanelLegend from "../../Stage/SpatialPanelLegend";
 import StatStageCanvas from "../../Stage/StatStageCanvas";
+import { figureErrorNote } from "../../Stage/statErrorNote";
 import { draw as drawStat, type StatDrawData } from "../../Stage/statRender";
 import { drawFacetGrid, drawXY } from "./previewCanvas";
 import { previewStatDraws, type PreviewStatDraws } from "./previewMarks";
 import { usePreviewViolins } from "./usePreviewViolins";
+
+/** Height of the error-bar footnote strip under the preview, px. */
+const NOTE_H = 16;
 
 /** The single-panel canvas host (xy incl. its own facet grid, flat box/bar,
  *  message). Owns the ONE canvas + its paint effect — unchanged from before
@@ -157,6 +164,10 @@ export default function GraphPreview({
   );
   // A violin's KDE (J5 leftover): the box stands in until it arrives, or offline.
   const { draws: stat, boxed } = usePreviewViolins(marked);
+  // The error-bar footnote, from the SAME draws the preview paints — the
+  // stage's text and its "shown exactly when a bar is drawn" rule.
+  const errorNote = useMemo(() => figureErrorNote(stat.flat, stat.facets), [stat]);
+  const foot = errorNote ? NOTE_H : 0;
   // P1.4 residual 4: a gradient Color-by's points and colour scale.
   const colorBy = useMemo(
     () => (encoded?.gradient ? gradientColumns(encoded.gradient, encoded.styles) : undefined),
@@ -166,10 +177,35 @@ export default function GraphPreview({
 
   return (
     <div className="qzk-graph-preview">
-      {stat.facets && stat.facets.length > 0 ? (
-        <FacetCellGrid cells={stat.facets} theme={theme} accent={accent} />
-      ) : (
-        <CanvasHost render={render} stat={stat.flat} styles={encoded?.styles} colorBy={colorBy} theme={theme} accent={accent} />
+      {/* The plot keeps clear of the footnote strip, as the stage's does. */}
+      <div style={{ position: "absolute", inset: 0, bottom: foot }}>
+        {stat.facets && stat.facets.length > 0 ? (
+          <FacetCellGrid cells={stat.facets} theme={theme} accent={accent} />
+        ) : (
+          <CanvasHost render={render} stat={stat.flat} styles={encoded?.styles} colorBy={colorBy} theme={theme} accent={accent} />
+        )}
+      </div>
+      {errorNote && (
+        <div
+          data-testid="preview-error-note"
+          style={{
+            position: "absolute",
+            left: 6,
+            right: 6,
+            bottom: 2,
+            height: NOTE_H - 4,
+            fontFamily: "var(--font-mono)",
+            fontSize: 10,
+            fontStyle: "italic",
+            color: "var(--text-dim)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            pointerEvents: "none",
+          }}
+        >
+          {errorNote}
+        </div>
       )}
       {render.kind === "xy" && encoded && encoded.legend.length > 0 && <SpatialPanelLegend entries={encoded.legend} />}
       {render.kind === "xy" && g && (
@@ -184,7 +220,9 @@ export default function GraphPreview({
         </div>
       )}
       {render.kind === "box" && render.violin && (!marked.violin || boxed) && (
-        <div className="qzk-graph-preview-approx">violin preview shows box · KDE renders in the editable plot</div>
+        <div className="qzk-graph-preview-approx" style={{ bottom: 4 + foot }}>
+          violin preview shows box · KDE renders in the editable plot
+        </div>
       )}
     </div>
   );
