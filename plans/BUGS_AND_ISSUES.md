@@ -152,7 +152,7 @@ That default is wrong. The latter two columns describe uncertainty; they are not
 
 - [x] The NCNR Reductus parser currently maps Qz to the independent axis and puts every remaining file column into `DataStruct.values`.
 - [x] Unlike the NCNR refl1d-style parser, `import_ncnr_refl` supplies no `default_value_channels` or `error_channels` plotting hints.
-- [ ] ~~Generic label inference can recognize the standalone `uncertainty` label and associate it with the preceding measured channel.~~ **Corrected 2026-09-09 (Claude): this is not what happens for this file.** Measured against the fixture's own labels: `inferErrorBindings({labels: ["Intensity","uncertainty","resolution"]})` returns `[]`. The context-free classifier does return a spurious hit on `uncertainty` — it strips a leading `unc` and reports base `"ertainty"` — and the sibling-evidence gate then correctly rejects it, since no `ertainty` column exists. So no binding was produced by inference, and the roles had to come from the parser.
+- [x] ~~Generic label inference can recognize the standalone `uncertainty` label and associate it with the preceding measured channel.~~ **Corrected 2026-09-09 (Claude): this is not what happens for this file** (resolved: the claim was measured false and the roles come from the parser; box closed 2026-09-30). Measured against the fixture's own labels: `inferErrorBindings({labels: ["Intensity","uncertainty","resolution"]})` returns `[]`. The context-free classifier does return a spurious hit on `uncertainty` — it strips a leading `unc` and reports base `"ertainty"` — and the sibling-evidence gate then correctly rejects it, since no `ertainty` column exists. So no binding was produced by inference, and the roles had to come from the parser.
 - [x] Generic default channel selection does not hide inferred error-role channels from the initial plot.
 - [x] `resolution` is not a generic error token, so label inference does not identify its scientific role.
 - [x] The existing fixture declares columns `[Qz, Intensity, uncertainty, resolution]` with units `[1/Ang, counts, counts, 1/Ang]`, which provides a stable regression case.
@@ -7629,11 +7629,15 @@ dialogs in open order, too. See R16 in `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`.
       still calls `cancelReimportAll()` (coordinator-review G1), and
       `ConfirmDialog` keeps Enter's `e.repeat` safeguard on its own
       window-capture listener (only Escape moved)
-- [ ] UI wording/tooltips/accessibility included where relevant — **NOT done,
-      and deliberately out of scope here**: see R12 (two concurrent
+- [x] UI wording/tooltips/accessibility included where relevant — **NOT done
+      by this fix, and deliberately out of scope here**: see R12 (two concurrent
       `aria-modal` dialogs, and `aria-modal` hiding the toaster and status-bar
       live regions). This fix changes who gets the KEY, not the ARIA surface,
-      so R12's wording is unchanged by it
+      so R12's wording is unchanged by it. **Closed via R12 on 2026-09-25**
+      (`46ed0750`, hardened by `08b2902a`): `aria-modal` is gone from all 16
+      dialogs and `lib/modalInert.ts` makes the rest of the app inert behind
+      the open modal — see the PRIMARY P3.3 R12 entry and the 2026-09-25
+      change-log rows below
 
 #### Tests and acceptance
 
@@ -9330,13 +9334,63 @@ see it half-built.
 ## Open follow-ups from the 2026-09-29 audit
 
 - [x] `store/recode.ts` and `store/levelOrder.ts` rewrite values on a re-derived dataset without the `lib/rederived.ts` guard (the next recalc may drop them).
-- [ ] Graph Builder X well cannot pick the dataset's own X: a negative channel is passed straight through as a column index in `specToRender`, `plotEncoding.ts`, `plotSpecFigure.ts`, `useGraphBuilder` and `captureLiveBlocks`.
+- [x] Graph Builder X well cannot pick the dataset's own X: a negative channel is passed straight through as a column index in `specToRender`, `plotEncoding.ts`, `plotSpecFigure.ts`, `useGraphBuilder` and `captureLiveBlocks`. **Done 2026-09-29** (`d944669c`): the spec model reserves `OWN_X_CHANNEL` and every consumer resolves the plotted X through `specXKey` (`lib/plotspecGroupCol.ts`); pinned by `useGraphBuilder.ownX.test.ts`.
 - [x] Peak batch fits never send `y_err` (the error-column choice is per active dataset).
 - [x] Legend rows for selected-row highlight companions use the palette colour, not the accent the canvas draws.
-- [ ] Perf, measured but not yet done: cell-patch uploads instead of a full re-upload per edit, plus in-flight de-dupe across plot windows; JSON body parsing off the event loop; uPlot `setSeries`/redraw instead of rebuild for hide/colour; binary column transport for full-resolution plots; ~~an encoding-active rename still refetches (`useStageEncoding` keyed on `active`)~~ (done 2026-09-29).
+- [ ] Perf, measured but not yet done: ~~cell-patch uploads instead of a full re-upload per edit, plus in-flight de-dupe across plot windows~~ (done 2026-09-30, `6df85c8f`: `POST /api/datasets/patch` + `lib/api/datasetCache.ts`'s per-object `pending` WeakMap so every window shares one in-flight upload); ~~JSON body parsing off the event loop~~ (done 2026-09-30, `843bd4b8`: `routes/_offloop.py`, dataset bodies decoded in the threadpool); ~~uPlot `setSeries`/redraw instead of rebuild for hide/colour~~ (done 2026-09-30, `bed8f987`: `lib/uplotLivePaint.ts`); **binary column transport for full-resolution plots — still open, landing in a separate worktree**; ~~an encoding-active rename still refetches (`useStageEncoding` keyed on `active`)~~ (done 2026-09-29).
+
+## Owner-gated
+
+Open work that needs the owner's judgment, machine, data or MATLAB — not
+code. One line per category, with the plan boxes it covers (line numbers as
+of 2026-09-30; grep by content when they drift).
+
+- **Real-use sessions and timings** — `PRIMARY_SOFTWARE_AUDIT_PLAN.md` P0
+  representative-project rows (~300–317: pick the project, time
+  import-to-first-plot / production figure / routine fit, log every impulse
+  to open Origin/JMP) and the release-acceptance rows (~10691–10704);
+  `LIBRARY_WORKBOOK_UX_PLAN.md` ~3405 (revisit L0.44 after real cross-workbook
+  work); `ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md` Day-4 SOL review row.
+- **Windows/macOS packaging and the Office paste check** — PRIMARY ~626
+  (packaged Windows/macOS E2E), ~8633 (scaling/high-DPI readability),
+  ~9515/~9763 (vector copy, 300-DPI fallback, EMF only on evidence),
+  ~10617–10623 (signing, notarization, fresh-machine install, updater);
+  BUGS BUG-030 residual (~8960: the `tauri://localhost` allowance can only be
+  removed after a packaged-app check).
+- **Real GPU / network measurements** — PRIMARY ~395 (network/offline source
+  transitions), ~403/~423 (direct-manipulation <100 ms on real hardware,
+  failed thresholds need profiles), ~5938 (regrid bottleneck on a real
+  4M-point map), ~10700 (large 2-D / long sessions); P3.3 R14 (~6936, needs
+  real IME hardware).
+- **Origin screenshot / visual review** — PRIMARY ~326–331 (the 62 paired
+  screenshots; graphic objects / >2 Y axes only on reviewed evidence),
+  ~10630–10633 (decode-plan #53/#54, `.opju` matrix edges, Rigaku/SPC/Oxford
+  wait for specimens), ~10483 (visual equivalence of the nine fixtures);
+  live-Origin COM send on the owner's Windows machine (`PORT_CHECKLIST.md`
+  COM row).
+- **Owner instrument data** — PRIMARY ~3602 / ~3661–3662 / ~3683 (validate
+  XRD phases, XRR/PNR fits and SIMS on representative owner instruments
+  against trusted reference fits), the Bruker RAW byte-624/632 decode
+  (~3390); BUGS BUG-001 ~176 (a second Reductus `.refl` variant before
+  broadening name matching).
+- **MATLAB goldens** — PRIMARY ~3394 (per-peak uncertainties for the legacy
+  `fit_multi_peak` / `fit_peak` producers and weighted Williamson-Hall need a
+  MATLAB freeze first); BUGS BUG-029 ~8918 (whether MATLAB `parrattRefl`
+  should change its imaginary-SLD sign — sibling repo, deliberate change
+  only).
+- **Decisions** — PRIMARY: CVD default-palette gap and the `tol-bright`
+  `#999933` 8th slot (~8232/~8326/~8364–8365); the raw-code data-export
+  question (~1416); F4.2c's per-figure outlier-policy question (~821/~858);
+  the SMB-timeout save policy (~617); P3.3 R10 (~6181/~6600, Escape-to-close
+  on the multi-plot document frame is a product call); BUGS UX-002 ~712/~716
+  (what lineage means across a copy boundary; "copy with dependents"),
+  BUG-030 ~8960 (drop the Tauri allowance); FIGURE F2.1f/g (BACKLOG owner
+  table D-1 auto-migrate, D-3 graph templates, D-4 retire legacy mode);
+  LIBRARY ~3405 (folder-level behaviour after real use).
 
 ## Completed
 
+- 2026-09-30 — Plan reconciliation against `c74776d5`: the 2026-09-29 audit's Graph Builder own-X box and three of the perf clauses (cell patches, off-loop body decode, uPlot `setSeries`) ticked with commits; BUG-018's ARIA box closed via R12; BUG-001's struck-through inference box closed; PRIMARY's clients/types + growth-ratchet rows, the manual-peak-edit/batch-recipe row, PORT_CHECKLIST's Origin COM row, the sprint's two lane-N rows (deferred with evidence) and FIGURE F2.1 (restated blocked) / F4.4's stale `[~]` note reconciled; new "Owner-gated" section above lists everything that waits on the owner.
 - 2026-09-30: "Copy figure (vector)" sends `svg_text_as_paths: true` (clipboard only; the SVG file export keeps editable text). The canonical Publication Preview draws masked rows per the app's "Excluded rows" mode (greyed companions / hidden) exactly as its export does, with the wire dataset object reused across unrelated edits so the dataset-handle cache still hits (`canonicalReadiness.ts`).
 - 2026-09-30 — Facet grid encodings (P1.4 residual 3 follow-ups): an encoded xy facet grid with no explicit Y splits the flat plot's default channel list, the same in every panel, on screen and in the export (`lib/facet.facetSplitChannels`); a sheet with no default Y stays unencoded and the Graph Builder says why in one sentence.
 - 2026-09-30 — Facet grid encodings (P1.4 residual 3 follow-ups): an encoded xy facet grid with no explicit Y splits the flat plot's default channel list, the same in every panel, on screen and in the export (`lib/facet.facetSplitChannels`); a sheet with no default Y stays unencoded and the Graph Builder says why in one sentence. Group ALONE on a facet grid now splits each panel's series by level like the flat plot, on screen and in the export (`facetSplitEncoding`; `group_col` + panel `rows`/`channels` on the wire), pinned by the `group` entry of `tests/fixtures/wire/facet_styles.json`.

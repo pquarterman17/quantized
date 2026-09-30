@@ -3511,7 +3511,7 @@ a plan edit.
   The peak emitters moved to `calc/report_emit_peaks.py` (500-line ceiling).
   A classic table's request and report are unchanged, pinned by a
   whole-sheet test.
-- [~] Manual peak edits and reviewed batch recipe. **2026-09-23 slice:** fitted
+- [x] Manual peak edits and reviewed batch recipe. **2026-09-23 slice:** fitted
   peak rows can now be selected, edited (center/FWHM/height/area), or removed
   directly in the Peaks workshop. The durable `PeakTable` is the source of
   truth, so edits survive save/reopen and feed downstream consumers such as
@@ -3537,7 +3537,16 @@ a plan edit.
   column in the peak-fit report. Recording every writer matters because undo
   snapshots the whole dataset list: an unrecorded write made after a recorded
   one is rolled back by undoing it (an unrecorded re-fit was lost this way).
-  Batch recipe remains open, as does direct manual peak creation.
+  ~~Batch recipe remains open, as does direct manual peak creation.~~
+  **Closed 2026-09-30:** both landed in the Peak Analyzer (the slice above
+  is the legacy Peaks workshop's fitted-row editing). Direct manual peak
+  creation: `addPeakAt` (`peakwizard/usePeakCandidates.ts`, reached from a
+  plot click in `peakwizard/steps.tsx`). Reviewed batch recipe: the Batch
+  mode (`peakwizard/PeakBatchView.tsx`, `usePeakBatch`) runs a saved recipe
+  over the chosen datasets as one queued job through the same
+  `recipeSteps.ts` baseline/find functions the wizard uses, with the
+  uncertainty-diagnostic table (`PeakBatchView.test.tsx`,
+  `PeakBatchView.limits.test.tsx`).
 - [x] Technique-specific plot recipe is manually chosen, never auto-overwrites.
   **2026-09-28:** three built-in Plot Recipes (`lib/builtinPlotRecipes.ts`) on
   the existing P1.3 `PlotRecipe` schema, no new schema version — XRD θ–2θ (log
@@ -10360,8 +10369,15 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   gap. LOW (confirmed): this note's own "the two plain boolean
   flip-setters (`startMacro`/`stopMacro`/`setPipelineRunning`)" named three,
   not two — corrected to "three" above.
-- [ ] Generate clients/types where it reduces drift.
-- [ ] Add a growth ratchet, not an arbitrary rewrite.
+- [x] Generate clients/types where it reduces drift. **Done** (`91583f9c`,
+  2026-09-03): `npm run api:types` generates `src/lib/api/schema.d.ts` from
+  the dumped OpenAPI document; `ci.yml`'s "Generated API types are up to
+  date" step regenerates and fails on a diff, and
+  `tests/test_openapi_snapshot.py` pins the backend schema.
+- [x] Add a growth ratchet, not an arbitrary rewrite. **Done**: the eager-JS
+  budget in `frontend/scripts/check-bundle-size.mjs` (fails the build when
+  the bundle grows past `EAGER_JS_BUDGET`, ratcheted down on every diet
+  slice) plus `architecture.test.ts`'s `STORE_PINS` per-store line ceilings.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy
   boundary~~ SHIPPED 2026-07-26 (`95bf0b2`): profiling found `main.tsx`'s
   STATIC import of `CalcOnlyApp` (the `?view=calc` DiraCulator launcher)

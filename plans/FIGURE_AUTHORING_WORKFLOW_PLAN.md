@@ -200,8 +200,10 @@ instead of a reduced shadow model.
 **Recommended models:** GPT-5.6 Terra high / Claude Sonnet 5 after F1's schema
 decisions are merged.
 
-- [ ] **F2.1 Bind the preview to FigureDocument.** Display document name and
-      dirty state; stop creating a detached source of truth.
+- [ ] **F2.1 Bind the preview to FigureDocument — BLOCKED on owner gates
+      D-1/D-3/D-4 (2026-09-30 status: a–e, h and i are done; only f and g
+      remain and both wait on the owner, not on code).** Display document
+      name and dirty state; stop creating a detached source of truth.
   - [x] **F2.1a Model/adapters.** FigureDocument v2 retains lossless
         publication-only overrides and exact export styles; v1 migrates without
         publication state. UI binding and Apply/Cancel remain open.
@@ -762,7 +764,9 @@ with parent items P1.3 and P1.5.
       present (and resolved into real panels) for a faceted document, absent
       for a flat one. Item (1) (SPATIAL/BREAK composition rebuild) remains
       genuinely open — this slice only closes (2); `F4.4` therefore stays
-      `[~]`.
+      `[~]`. *(Superseded: the SPATIAL half closed 2026-09-30 with recipe
+      schema v3 — `67e29ecb`, see the closing note further down — and F4.4
+      is `[x]`.)*
 
       **2026-08-24 fix round (Claude): 6 correctness findings against the
       above closed, 2 accepted as-is.** Closed: (C1) the facet branch only
