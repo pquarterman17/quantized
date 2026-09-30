@@ -48,6 +48,7 @@ import type { PlotView } from "./plotview";
 import { canvasGroupCol } from "./plotGroupSplit";
 import { encodingSplits, facetEncoding, figureEncodingWire, windowEncoding, type FigureEncoding } from "./plotEncodingBinding";
 import { droppedRows, pruneToLiveDataset } from "./rowstate";
+import { facetSplitChannels } from "./facet";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
 // fund P3.3's threading against this file's 500-line ceiling. Imported, NOT
 // re-exported: a barrel here would make every importer of this module pull the
@@ -289,11 +290,16 @@ function buildFigureSpecForView(
   // with a secondary axis). The backend splits and styles (`calc/plotting_
   // encoded.py`, pinned to the frontend derivation by the shared wire fixture);
   // like the group split, an encoded figure carries no offsets or stagger. A
-  // facet grid (residual 3) takes it over explicit Y channels only, less a
-  // gradient (`facetEncoding`), as `Stage/useFacetEncoding` draws it; its
-  // panels then name their rows so the route re-splits each one.
+  // facet grid (residual 3) takes it less a gradient (`facetEncoding`) over
+  // the explicit Y channels or, with none, the flat plot's default list
+  // (`facetSplitChannels`, the same in every panel), as
+  // `Stage/useFacetEncoding` draws it; its panels then name their rows so
+  // the route re-splits each one.
   const gated = windowEncoding(extras.encoding, extras.liveDataset ?? { data }, groupCol, st.y2Keys);
-  const facetYKeys = facets !== undefined && st.facetKey != null && st.yKeys?.length ? st.yKeys : null;
+  const facetYKeys =
+    facets !== undefined && st.facetKey != null
+      ? facetSplitChannels(pruneToLiveDataset(data, extras.liveDataset), st.xKey, st.yKeys)
+      : null;
   const encoding = facets === undefined ? gated : facetYKeys ? facetEncoding(gated) : null;
   const wireFacets = facets && encoding && facetYKeys
     ? withFacetRows(facets, data, st.facetKey as number, facetYKeys, extras.liveDataset, st.seriesLabels)

@@ -136,6 +136,26 @@ export function facetPayloads(
   });
 }
 
+/** The Y channels an ENCODED or GROUPED facet grid splits — the SAME list in
+ *  every panel, which the split needs (one style per series across panels;
+ *  the backend refuses panels that disagree). Explicit `yKeys` when set;
+ *  otherwise the FLAT plot's own default over the whole (analysis) `data`
+ *  (`defaultDenseChannels`), never the per-panel default `facetPayloads`
+ *  resolves for an unencoded grid, which can differ panel to panel
+ *  (FEATURE-001). Null when even that default names no channel — the grid
+ *  then draws unencoded, and the Graph Builder says why in one sentence
+ *  (`graphbuilder/encodingWellModel.FACET_NO_Y_NOTE`). Shared by the Stage
+ *  (`Stage/useFacetEncoding`) and the export (`figureSpec.ts`), so the two
+ *  cannot disagree about which channels an encoded grid draws. */
+export function facetSplitChannels(
+  data: DataStruct,
+  xKey: number | null,
+  yKeys: readonly number[] | null | undefined,
+): number[] | null {
+  const channels = yKeys && yKeys.length > 0 ? [...yKeys] : defaultDenseChannels(data, xKey);
+  return channels.length > 0 ? channels : null;
+}
+
 /** Union x-domain across a set of facet panels — the min/max of every panel's
  *  own finite x values. `MultiPanelStage`'s facet-grid mode uses this as a
  *  fixed `xLim` applied to EVERY panel so the small multiples share one

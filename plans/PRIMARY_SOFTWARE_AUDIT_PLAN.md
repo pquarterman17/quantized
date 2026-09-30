@@ -1256,9 +1256,14 @@ output, not a caught error).
     glyph, points and legend text read back, the always-key rule, 422s).
     18 sabotages, each failing a test. Eager JS 841.8 → 842.2 kB (`npm ci` +
     clean build, base `efcfe17a`).
-    Known limits, not new classes: an encoded grid needs explicit Y channels
+    Known limits, not new classes: ~~an encoded grid needs explicit Y channels
     (a default channel list can differ panel to panel — FEATURE-001 — so the
-    grid then stays unencoded on both sides); ~~per-channel styles (the mark's
+    grid then stays unencoded on both sides)~~ — CLOSED 2026-09-30: with no
+    explicit Y the grid splits the FLAT plot's default list, the same in
+    every panel (`lib/facet.facetSplitChannels`, shared by
+    `Stage/useFacetEncoding` and `figureSpec.ts`); only a sheet with no
+    default Y at all stays unencoded, and the Graph Builder's wells say so in
+    one sentence (`FACET_NO_Y_NOTE`); ~~per-channel styles (the mark's
     line/scatter shape included) still do not reach a facet panel on either
     side (FEATURE-001)~~ — CLOSED 2026-09-30: styles are keyed by CHANNEL,
     one per channel applied in every panel through each panel's own

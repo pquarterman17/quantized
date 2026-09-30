@@ -2,9 +2,11 @@
 // xy FACET grid — focused (`MultiPanelStage`) and background
 // (`BackgroundStackWindow`) windows alike. The picks are the window's document
 // (`FigureBindings.encoding`), gated by the SAME `windowEncoding` the flat
-// Stage and the export use, less a gradient (`facetEncoding`), and only over
-// explicit Y channels — the export's own gate (`figureSpec.ts`), so screen and
-// PDF agree on whether a grid is encoded at all.
+// Stage and the export use, less a gradient (`facetEncoding`), over the
+// window's explicit Y channels or, with none, the FLAT plot's default list
+// (`lib/facet.facetSplitChannels` — the same in every panel, as the split
+// needs) — the export's own gate (`figureSpec.ts`), so screen and PDF agree
+// on whether a grid is encoded at all and over which channels.
 //
 // The derivation is `lib/plotEncoding.encodedFacetPanels`, the one the Graph
 // Builder preview draws: the split is taken over the dataset's FULL rows (the
@@ -18,7 +20,7 @@
 
 import { useMemo } from "react";
 
-import { facetSliceRowIds, facetSlices, type FacetPanel } from "../../lib/facet";
+import { facetSliceRowIds, facetSlices, facetSplitChannels, type FacetPanel } from "../../lib/facet";
 import { facetEncoding, windowEncoding, type FigureEncoding } from "../../lib/plotEncodingBinding";
 import { analysisView } from "../../lib/rowstate";
 import type { Dataset, SeriesStyle } from "../../lib/types";
@@ -36,8 +38,9 @@ export interface FacetEncodingRender {
 const EMPTY_LABELS: Record<number, string> = {};
 const EMPTY_STYLES: Record<number, SeriesStyle> = {};
 
-/** The grid's encoding (see the module doc), or null: no facet column, no
- *  explicit Y channels, no surviving pick, or the derivation not loaded yet. */
+/** The grid's encoding (see the module doc), or null: no facet column, no Y
+ *  channel (explicit or default), no surviving pick, or the derivation not
+ *  loaded yet. */
 export function useFacetEncoding(
   active: Dataset | null | undefined,
   picks: FigureEncoding | undefined,
@@ -52,21 +55,21 @@ export function useFacetEncoding(
   const stablePicks = useStableByValue(picks, (v) => JSON.stringify(v));
   const enc = useMemo(
     () =>
-      active && facetKey != null && yKeys && yKeys.length > 0
-        ? facetEncoding(windowEncoding(stablePicks, active, groupCol, y2Keys))
-        : null,
-    [active, stablePicks, groupCol, y2Keys, facetKey, yKeys],
+      active && facetKey != null ? facetEncoding(windowEncoding(stablePicks, active, groupCol, y2Keys)) : null,
+    [active, stablePicks, groupCol, y2Keys, facetKey],
   );
   const mod = useEncodingModule(enc !== null);
   return useMemo(() => {
-    if (!enc || !mod || !active || facetKey == null || !yKeys) return null;
+    if (!enc || !mod || !active || facetKey == null) return null;
     const view = analysisView(active);
     if (!view.data) return null;
+    const channels = facetSplitChannels(view.data, xKey, yKeys);
+    if (!channels) return null;
     const slices = facetSlices(view.data, facetKey).map((s) => ({ ...s, rows: facetSliceRowIds(s, view.rowIds) }));
-    const renames = yKeys.map((c) => seriesLabels[c]);
+    const renames = channels.map((c) => seriesLabels[c]);
     // FEATURE-001: each series' encoding over its CHANNEL's own style.
     const panels = mod.encodedFacetPanels(
-      mod.encodingData(active.data, enc), slices, xKey, yKeys, enc, renames, seriesStyles,
+      mod.encodingData(active.data, enc), slices, xKey, channels, enc, renames, seriesStyles,
     );
     return { panels, styles: panels.map((p) => p.styles), labels: panels.map((p) => p.labels) };
   }, [enc, mod, active, facetKey, xKey, yKeys, seriesLabels, seriesStyles]);

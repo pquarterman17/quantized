@@ -27,6 +27,7 @@ import { encodingNotes } from "../components/workshops/graphbuilder/encodingWell
 import { createFigureDocument } from "./figureDocument";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import { withFacetRows } from "./figureSpecFacets";
+import { facetSplitChannels } from "./facet";
 import { encodedFacetPanels, encodeSpec } from "./plotEncoding";
 import { facetEncoding, type FigureEncoding } from "./plotEncodingBinding";
 import type { PlotSpec } from "./plotspec";
@@ -176,9 +177,41 @@ describe("Color / Symbol / Label on an xy facet grid — preview, Stage and expo
     expect(panels[0].styles[0].markerShape).toBe("square");
   });
 
-  it("no encoding without explicit Y channels, with only a gradient, or with none: the grid is unchanged", async () => {
-    // Default Y channels can differ panel to panel (FEATURE-001), so the grid stays unencoded.
-    expect(buildFigureSpecFromDocument(windowDoc(PICKS, null), DS, "fe", OPTS).encoding).toBeUndefined();
+  it("without explicit Y channels the grid splits the FLAT plot's default list, the same in every panel", async () => {
+    // A default channel list resolved PER PANEL can differ panel to panel
+    // (FEATURE-001), which the split cannot take; the flat plot's own default
+    // over the whole data is one list, so an encoded grid uses that, on
+    // screen and in the request alike.
+    const DEFAULT = facetSplitChannels(DATA, 0, null);
+    expect(DEFAULT).toEqual([1, 2, 3, 4, 5]);
+    expect(facetSplitChannels(DATA, 0, Y)).toEqual(Y); // explicit Y wins
+    const { result } = renderHook(() => useFacetEncoding(DS, PICKS, null, null, 5, 0, null));
+    await waitFor(() => expect(result.current).not.toBeNull());
+    expect(result.current!.panels.map((p) => p.channels[0])).toEqual([1, 1]);
+    expect(new Set(result.current!.panels[0].channels)).toEqual(new Set(DEFAULT));
+    const request = buildFigureSpecFromDocument(windowDoc(PICKS, null), DS, "fe", OPTS);
+    expect(request.encoding).toMatchObject({ color_col: 2, symbol_col: 3, label_col: 4 });
+    expect(request.facets?.map((f) => f.channels)).toEqual([DEFAULT, DEFAULT]);
+    expect(request.facets?.map((f) => f.rows)).toEqual([[0, 1, 2, 4, 5, 10, 11, 12], [6, 7, 8, 9]]);
+  });
+
+  it("with no Y channel at all the grid stays unencoded, and the Graph Builder says why", () => {
+    // A sheet whose only column is X has no default Y to split.
+    const lone: DataStruct = { time: [0, 1], values: [[0], [1]], labels: ["x"], units: [""], metadata: {} };
+    expect(facetSplitChannels(lone, 0, null)).toBeNull();
+    const ds: Dataset = { id: "lone", name: "lone.csv", data: lone };
+    const { result } = renderHook(() => useFacetEncoding(ds, { label: 0 }, null, null, 0, 0, null));
+    expect(result.current).toBeNull();
+    const r = { datasetId: "lone", channel: 0 };
+    const zones = { ...SPEC.zones, x: r, y: [], facet: r, color: null, symbol: null, label: r };
+    expect(encodingNotes(ds, { ...SPEC, zones })).toEqual([
+      "Color, Symbol and Label need a Y channel on a facet grid, and this sheet has no default one to use.",
+    ]);
+    expect(encodingNotes(ds, { ...SPEC, zones: { ...zones, label: null } })).toEqual([]); // nothing assigned
+    expect(encodingNotes(ds, { ...SPEC, zones: { ...zones, y: [r] } })).toEqual([]); // explicit Y
+  });
+
+  it("no encoding with only a gradient, or with none: the grid is unchanged", async () => {
     // A gradient is not drawn per panel.
     expect(facetEncoding({ group: null, color: null, symbol: null, label: null, gradient: 1 })).toBeNull();
     expect(facetEncoding({ group: null, color: null, symbol: null, label: 4, gradient: 1 })).toEqual({
