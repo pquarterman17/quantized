@@ -9387,6 +9387,7 @@ of 2026-09-30; grep by content when they drift).
   BUG-030 ~8960 (drop the Tauri allowance); FIGURE F2.1f/g (BACKLOG owner
   table D-1 auto-migrate, D-3 graph templates, D-4 retire legacy mode);
   LIBRARY ~3405 (folder-level behaviour after real use).
+- [ ] Perf, measured but not yet done: cell-patch uploads instead of a full re-upload per edit, plus in-flight de-dupe across plot windows; JSON body parsing off the event loop; uPlot `setSeries`/redraw instead of rebuild for hide/colour; ~~binary column transport for full-resolution plots~~ (done 2026-09-30); ~~an encoding-active rename still refetches (`useStageEncoding` keyed on `active`)~~ (done 2026-09-29).
 
 ## Completed
 
@@ -9417,3 +9418,4 @@ of 2026-09-30; grep by content when they drift).
 - 2026-09-30: Partial-outcome reports say how many succeeded and which failed and why: the ROI batch status line names each skipped/failed dataset with its reason (`useRoiBatch.test.ts`), and `recalcNow` ends a pass with failures on one "recalculated N of M — name: reason; …" status (`store/recalcDatasets.test.ts`).
 - 2026-09-30: Quick Plot on a recognized XYXYXY workbook now makes three correctly paired series (`lib/quickPlot.xyxyxy.test.ts`; LIBRARY_WORKBOOK_UX_PLAN acceptance scenario ticked).
 - 2026-09-30: Plot recipes rebuild SPATIAL multi-panel compositions (schema v3 `panels` + `map`, by dataset name/column label; missing bindings get a rebind picker in the apply dialog) — closes PRIMARY_SOFTWARE_AUDIT_PLAN P1.3 maps/panels + F4.2b/F4.4 spatial halves.
+- 2026-09-30 — perf: opt-in binary column transport for `/api/plot/series` (`Accept: application/x-quantized-columns`; JSON header + LE float64 columns, NaN gaps); `plotSeries` uses it above 50k rows via a lazy decoder and falls back to JSON on any failure. 1M×7 full-res: route 1.089 s / 146.3 MB → 0.179 s / 64.0 MB; client decode best 830 → 376 ms. Numbers in `docs/performance_envelope.md`.

@@ -85,7 +85,7 @@ export async function deleteJSON<T>(path: string): Promise<T> {
  *  shape goes through `./errorDetail`, loaded lazily so the formatter's bytes
  *  stay out of the eager bundle (that module's header explains why). A body
  *  that is not JSON, or whose detail is empty, keeps the status line. */
-async function ensureOk(res: Response): Promise<Response> {
+export async function ensureOk(res: Response): Promise<Response> {
   if (!res.ok) {
     let detail = `${res.status} ${res.statusText}`;
     try {
