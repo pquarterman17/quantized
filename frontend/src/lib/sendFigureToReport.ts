@@ -26,6 +26,8 @@ import { askParams } from "../store/paramDialog";
 import type { ParamField } from "./params";
 import type { ReportEntry, ReportFigureBlock, ReportSheet, ReportSourceRef } from "./report";
 import { cancelled, exportActive, stemFromName, type StoreGet } from "./exportActive";
+import { chooseExcludedRows } from "./excludedRowsChoice";
+import { excludedChoiceMatters } from "./excludedRowsExport";
 import { FIGURE_STYLES, GREYSCALE_FIELD } from "./exportFigureCommand";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import type { FigureRenderOpts } from "./figureSpec";
@@ -272,7 +274,14 @@ async function sendActivePlot(s: StoreGet): Promise<void> {
         xLabel: s().xAxisLabel,
         yLabel: s().yAxisLabel,
       };
-      const block = figureBlockFromSpec(buildStageFigureSpec(s, ds, stem, renderOpts), stem, caption);
+      // F4.2c (a): a figure with excluded rows asks "greyed or omitted?".
+      const picked = await chooseExcludedRows(
+        (greyExcluded) => buildStageFigureSpec(s, ds, stem, { ...renderOpts, greyExcluded }),
+        excludedChoiceMatters,
+        s().excludedDisplay,
+      );
+      if (!picked) return false;
+      const block = figureBlockFromSpec(picked.value, stem, caption);
       addFigureToReport(
         s, targetId, block, stem, ds.id, newReportName, [{ kind: "dataset", id: ds.id, name: ds.name }],
       );
@@ -405,13 +414,31 @@ export async function runSendEditableFigureToReport(s: StoreGet, figureId: strin
       }
 
       const stem = stemFromName(current.name);
-      let spec;
+      const doc = current;
+      let picked;
       try {
-        spec = buildFigureSpecFromDocument(current, dataset, stem, { ...choice.opts, dpi: REPORT_FIGURE_DPI });
+        // F4.2c (a): a figure with excluded rows asks "greyed or omitted?".
+        picked = await chooseExcludedRows(
+          (greyExcluded) =>
+            buildFigureSpecFromDocument(doc, dataset, stem, { ...choice.opts, dpi: REPORT_FIGURE_DPI, greyExcluded }),
+          excludedChoiceMatters,
+          s().excludedDisplay,
+        );
       } catch (error) {
         fail(`send failed: ${error instanceof Error ? error.message : "the figure could not be rendered"}`);
         return;
       }
+      if (!picked) {
+        cancelled(s, "send");
+        return;
+      }
+      // The question is one more await: the same rebind/delete race as above.
+      const after = readFigure();
+      if (!after || binding(after) !== initialBinding) {
+        fail("send failed: the figure changed while it was sending");
+        return;
+      }
+      const spec = picked.value;
       const block = figureBlockFromSpec(spec, stem, choice.caption);
       const refs: ReportSourceRef[] = [{ kind: "figure", id: current.id, name: current.name }];
       if (dataset) refs.push({ kind: "dataset", id: dataset.id, name: dataset.name });
