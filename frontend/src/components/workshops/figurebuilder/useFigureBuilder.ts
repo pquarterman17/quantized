@@ -45,7 +45,7 @@ export function useFigureBuilder() {
   const yKeys = useApp((s) => s.yKeys);
   const xKey = useApp((s) => s.xKey);
   const liveY2 = useApp(useShallow(secondaryAxisFromView)); // legacy mode mirrors the live y2 axis
-  const excludedDisplay = useApp((s) => s.excludedDisplay); // ...and greys excluded rows as it does
+  const excludedDisplay = useApp((s) => s.excludedDisplay); // both modes grey/hide excluded rows as the canvas does
   const xScale = useApp((s) => s.xScale);
   const yScale = useApp((s) => s.yScale);
   const xFmt = useApp((s) => s.xFmt);
@@ -136,11 +136,11 @@ export function useFigureBuilder() {
     ? datasets.find((dataset) => dataset.id === canonicalDocument.bindings.datasetId) ?? null
     : null;
   const cyclesStyles = useApp(selectSessionCyclesSeriesStyles); // P3.3 -- see that selector's doc
-  // F2.3c: readiness resolution itself lives in canonicalReadiness.ts (a
-  // pure function of document + dataset) -- this hook just memoizes the call.
+  // F2.3c: readiness resolution itself lives in canonicalReadiness.ts (a pure
+  // function of document + dataset + the app's excluded-rows mode) -- this hook just memoizes the call.
   const canonicalReadiness = useMemo<CanonicalReadiness | null>(
-    () => computeCanonicalReadiness(canonicalDocument, canonicalDataset, cyclesStyles),
-    [canonicalDocument, canonicalDataset, cyclesStyles],
+    () => computeCanonicalReadiness(canonicalDocument, canonicalDataset, cyclesStyles, excludedDisplay),
+    [canonicalDocument, canonicalDataset, cyclesStyles, excludedDisplay],
   );
   const canonicalData = canonicalReadiness?.state === "missing-source" ? null : canonicalReadiness?.data ?? null;
   const patchCanonical = (patch: (document: NonNullable<typeof canonicalDocument>) => NonNullable<typeof canonicalDocument>) => {

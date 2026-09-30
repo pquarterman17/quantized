@@ -9522,6 +9522,9 @@ was not raised.
   "copy cancelled". No test compares copied pixels with exported pixels, and
   nothing here exercises a real browser clipboard. Final Word/PowerPoint and
   macOS paste behavior remains the owner/platform acceptance check above.
+  **2026-09-30:** "Copy figure (vector)" now also requests
+  `svg_text_as_paths` (clipboard only; Export figure… still writes an SVG
+  file with editable text), pinned in `copyFigureCommand.test.ts`.
 - [x] ~~Expected bounding box, transparency, fonts, and scale.~~ VERIFIED
   2026-09-28, server-side, against the real `POST /api/export/figure` route
   (`tests/test_export_copy_figure_raster.py` +
