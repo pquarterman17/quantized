@@ -31,6 +31,12 @@ export const IMPORT_FORMATS: readonly ImportFormat[] = [
     category: "X-ray & diffraction",
     note: "Auto-detected by magic bytes (Rigaku 'FI' vs Bruker 'RAW1.01').",
   },
+  {
+    exts: [".cif"],
+    name: "Crystallographic Information File (CIF)",
+    category: "X-ray & diffraction",
+    note: "A crystal structure, not a dataset: it becomes a lattice preset for Pawley and the Crystal calculator.",
+  },
   // ── Magnetometry & transport ─────────────────────────────────────────
   {
     exts: [".dat"],

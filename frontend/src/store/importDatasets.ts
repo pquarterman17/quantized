@@ -27,9 +27,7 @@
 
 import { plural } from "../lib/plural";
 
-import { importFile, uploadFile } from "../lib/api";
 import type { HistoryBatchToken } from "./history";
-import { probeSource } from "../lib/desktopBridge";
 import { lit } from "../lib/macro";
 import { revealAncestorChain } from "../lib/foldertree";
 import { originBookErrorRoles } from "../lib/originBookRoles";
@@ -45,6 +43,8 @@ import { deriveWorkbooks } from "../lib/workbooks";
 import { ALREADY_RUNNING_MSG, useImportBatch } from "./importBatch";
 import { presentBatchOutcome } from "./importBatchOffers";
 import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from "./importErrorRoles";
+import type { StructurePreset } from "./crystalStructures";
+import { loadPath, loadUpload, pathBasename, presentStructures, type ImportLoad, type ImportOrigin } from "./importLoaders";
 import { resolveImportTargetFolderId } from "./importTargetFolder";
 import { beginOp, endOp, updateOp, type OpId } from "./pendingOps";
 import { toast } from "./toasts";
@@ -52,25 +52,12 @@ import { nextDatasetId, nextFolderId } from "./idSeq";
 import type { AppState } from "./useApp";
 import { nextWorkbookId } from "./workbookIds";
 
+export { pathBasename };
+
 // Double-import guard: its state lives in ./importBatch (eager — the command
 // layer reads it synchronously) since bundle headroom slice 10, which made
 // this module load on first import. Import it from there directly — the
 // guard names are no longer re-exported from here.
-
-/** Where one imported payload came from — the only thing the two entry points
- *  disagree about. */
-interface ImportOrigin {
-  /** Display name (a file's name, or a path's basename). */
-  name: string;
-  /** Bytes, for the Recent list's tooltip; 0 when unknown (a path import does
-   *  not stat the file, and a wrong number would be worse than none). */
-  size: number;
-  /** Set ONLY for a path import — see `Dataset.source`'s doc for the full
-   *  "where a path is/isn't knowable" matrix, including the P1.7
-   *  checksum/mtime/size provenance fields threaded through from
-   *  `importPaths`'s `probeSource` call below. */
-  source?: Dataset["source"];
-}
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
@@ -133,12 +120,6 @@ export interface ImportSlice extends ErrorRolesActions {
    *  ANY dataset a concurrent, unblocked action — paste, demo, merge — adds
    *  during the same window as this call's own). */
   importPaths: (paths: string[], opts?: ImportPathsOptions) => Promise<string[]>;
-}
-
-/** Basename without directory — the display name for a path import. */
-export function pathBasename(path: string): string {
-  const parts = path.split(/[\\/]/).filter(Boolean);
-  return parts[parts.length - 1] ?? path;
 }
 
 /** Expand ONE parsed payload into datasets. Extracted verbatim from the old
@@ -354,7 +335,7 @@ async function runImport<T>(
   get: SliceGet,
   items: T[],
   describe: (item: T) => string,
-  load: (item: T, signal: AbortSignal) => Promise<{ data: DataStruct; origin: ImportOrigin }>,
+  load: (item: T, signal: AbortSignal) => Promise<ImportLoad>,
   historyToken?: HistoryBatchToken,
   presentOutcome = true,
   internal: InternalRunOptions = {},
@@ -393,6 +374,7 @@ async function runImport<T>(
   let lastError = "";
   let cancelled = false;
   const createdIds: string[] = [];
+  const structures: StructurePreset[] = []; // .cif: lattice presets, not datasets
   try {
     for (let i = 0; i < items.length; i++) {
       if (controller.signal.aborted) {
@@ -403,8 +385,9 @@ async function runImport<T>(
       updateOp(opId, label(i));
       get().setStatus(`importing ${describe(item)}…`);
       try {
-        const { data, origin } = await load(item, controller.signal);
-        createdIds.push(...addFromPayload(set, get, data, origin, targetFolderId, historyToken));
+        const loaded = await load(item, controller.signal);
+        if ("structure" in loaded) structures.push(loaded.structure);
+        else createdIds.push(...addFromPayload(set, get, loaded.data, loaded.origin, targetFolderId, historyToken));
         added += 1;
       } catch (e) {
         // A rejection that lands after cancel() was called is the abort,
@@ -448,7 +431,9 @@ async function runImport<T>(
   // dynamic import, an async recipe match) must never run at all for a
   // caller that has its own `withHistoryBatch` wrapped around this call, per
   // `ImportPathsOptions.presentOutcome`'s own doc.
-  if (added > 0 && presentOutcome) await presentBatchOutcome(get, added, createdIds, targetFolderId);
+  const dataAdded = added - structures.length;
+  if (structures.length > 0) presentStructures(structures);
+  if (dataAdded > 0 && presentOutcome) await presentBatchOutcome(get, dataAdded, createdIds, targetFolderId);
   // P3.4 error-quality audit (2026-09-14, deduped in the review round): the
   // toast carries the "whether data changed" fact too. The status line said
   // "imported 3/5 — failed …" while the toast — what actually appears over
@@ -465,35 +450,11 @@ export function createImportSlice(set: SliceSet, get: SliceGet): ImportSlice {
     // is how the two drift into different ideas of what a binding means.
     ...createErrorRolesActions(set, get),
     importFiles: (files, opts) =>
-      runImport(set, get, files, (f) => f.name, async (file, signal) => ({
-        data: await uploadFile(file, signal),
-        origin: { name: file.name, size: file.size },
-      }), undefined, true, { bypassGuard: opts?.bypassGuard, existingOpId: opts?.existingOpId }),
+      runImport(set, get, files, (f) => f.name, loadUpload, undefined, true,
+        { bypassGuard: opts?.bypassGuard, existingOpId: opts?.existingOpId }),
 
     importPaths: (paths, opts) =>
-      runImport(set, get, paths, pathBasename, async (path, signal) => {
-        const data = await importFile(path, signal);
-        // P1.7 / L0.32 provenance: "record source path, import time,
-        // observed modification time, and a checksum where practical".
-        // `probeSource` returns null with no bridge (a browser tab, or a
-        // test with no mock) — degrades to path-only provenance rather
-        // than failing the import; a native pick already granted this
-        // exact path read consent moments ago (lib/importEntry.ts's
-        // `chooseAndImport` -> `pick_files`), so the checksum is real
-        // whenever a bridge is present at all.
-        const probe = await probeSource(path);
-        const source: Dataset["source"] =
-          probe?.state === "ok"
-            ? {
-                kind: "path",
-                path,
-                ...(probe.checksum != null ? { checksum: probe.checksum } : {}),
-                ...(probe.mtime != null ? { mtime: probe.mtime } : {}),
-                ...(probe.size != null ? { size: probe.size } : {}),
-              }
-            : { kind: "path", path };
-        // The path is what makes this import re-importable without a picker.
-        return { data, origin: { name: pathBasename(path), size: probe?.size ?? 0, source } };
-      }, opts?.historyToken, opts?.presentOutcome ?? true, { bypassGuard: opts?.bypassGuard, existingOpId: opts?.existingOpId }),
+      runImport(set, get, paths, pathBasename, loadPath, opts?.historyToken, opts?.presentOutcome ?? true,
+        { bypassGuard: opts?.bypassGuard, existingOpId: opts?.existingOpId }),
   };
 }

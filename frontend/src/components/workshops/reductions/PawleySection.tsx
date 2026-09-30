@@ -1,6 +1,7 @@
 import { Button, Select } from "../../primitives";
 import { DataTable } from "../../primitives/DataTable";
 import { NumberField } from "../../primitives/NumberField";
+import StructurePresetPicker from "../structures/StructurePresetPicker";
 import type { PawleyField, PawleyTie } from "./pawleyInputs";
 import { pawleyVerdict } from "./pawleyInputs";
 import { type PawleyCentering, usePawley } from "./usePawley";
@@ -69,6 +70,9 @@ export default function PawleySection() {
         value={String(s.col)}
         onChange={(e) => s.setCol(Number(e.target.value))}
       />
+
+      <label className="qzk-field-lbl" style={{ marginTop: 10 }}>Starting cell</label>
+      <StructurePresetPicker onApply={s.applyLattice} disabled={s.busy} />
 
       <div style={grid}>
         <label className="qzk-field-lbl" style={lbl}>Axes</label>

@@ -11,8 +11,10 @@ import { SegmentedControl } from "../../primitives/SegmentedControl";
 import { Button, Select } from "../../primitives";
 import { fmtNum } from "../../../lib/format";
 import { crystalInterplanarAngle } from "../../../lib/api/crystallography";
+import StructurePresetPicker from "../structures/StructurePresetPicker";
 import BondAngleCard from "./BondAngleCard";
 import { Card, CopyButton, ROW, dual, resultLine, useCard, withTouch } from "./shared";
+import { latticeFormPatch } from "./useCrystalCalc";
 import {
   assembleCell,
   CRYSTAL_SYSTEMS,
@@ -74,6 +76,9 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
         onChange={(e) => updateLattice({ system: e.target.value })}
         aria-label="crystal system"
       />
+      <div style={{ marginTop: 8 }}>
+        <StructurePresetPicker onApply={(p) => updateLattice(latticeFormPatch(p))} />
+      </div>
 
       {/* Lattice lengths (a always; b/c per system) */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginTop: 10 }}>

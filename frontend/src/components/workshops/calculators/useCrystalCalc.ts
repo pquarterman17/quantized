@@ -9,6 +9,7 @@
 import { useRef, useState } from "react";
 
 import { crystalCell, crystalDSpacing } from "../../../lib/api";
+import type { LatticePreset } from "../../../lib/crystalStructure";
 import { fmtNum } from "../../../lib/format";
 import { useCalcHistory } from "../../../store/calcHistory";
 
@@ -76,6 +77,16 @@ export function assembleCell(f: CrystalForm): {
     gamma = alpha;
   }
   return { a, b, c, alpha, beta, gamma };
+}
+
+/** A CIF lattice preset as a form patch: system and cell only. Formula and Z
+ *  stay as typed: the CIF's Z is not parsed, and a wrong Z is a wrong density. */
+export function latticeFormPatch(p: LatticePreset): Partial<CrystalForm> {
+  const c = p.cell;
+  return {
+    system: p.system, a: String(c.a), b: String(c.b), c: String(c.c),
+    alpha: String(c.alpha), beta: String(c.beta), gamma: String(c.gamma),
+  };
 }
 
 // Which results each form field feeds (the lattice feeds both): hkl are

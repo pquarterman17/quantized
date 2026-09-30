@@ -387,3 +387,44 @@ it("discards a stale completion when the active dataset changes mid-flight", asy
   expect(hook.current.error).toBeNull();
   expect(hook.current.busy).toBe(false);
 });
+
+describe("usePawley lattice preset (CIF)", () => {
+  const hex = {
+    cell: { a: 3.19, b: 3.19, c: 5.19, alpha: 90, beta: 90, gamma: 120 },
+    tie: "ab" as const, centering: "P" as const, system: "hexagonal" as const,
+  };
+  const source = {
+    id: "cif-1", name: "GaN", source_name: "gan.cif", formula: "Ga N", space_group: "P 63 m c",
+    cell: hex.cell, atom_sites: [],
+  };
+
+  it("fills the cell, tie and centering; a preset without a centering keeps the user's", () => {
+    const { result: hook } = renderHook(() => usePawley());
+    act(() => hook.current.setSymmetry("I"));
+    act(() => hook.current.applyLattice({ ...hex, centering: null }, source));
+    expect(hook.current.fields).toMatchObject({ a: "3.19", b: "3.19", c: "5.19", alpha: "90", gamma: "120" });
+    expect(hook.current.tie).toBe("ab");
+    expect(hook.current.symmetry).toBe("I");
+    act(() => hook.current.applyLattice(hex, source));
+    expect(hook.current.symmetry).toBe("P");
+  });
+
+  it("records the CIF the starting cell came from, but not once the cell is edited", async () => {
+    vi.mocked(pawleyRefine).mockResolvedValue(result);
+    const { result: hook } = renderHook(() => usePawley());
+    act(() => hook.current.applyLattice(hex, source));
+    await act(async () => {
+      await hook.current.compute();
+    });
+    act(() => hook.current.toLibrary());
+    const pawley = (ds: number) => useApp.getState().datasets[ds].data.metadata.pawley as Record<string, unknown>;
+    expect(pawley(1).start_cell_from).toEqual({ name: "GaN", source_name: "gan.cif", space_group: "P 63 m c" });
+
+    act(() => hook.current.setField("a", "3.2"));
+    await act(async () => {
+      await hook.current.compute();
+    });
+    act(() => hook.current.toLibrary());
+    expect(pawley(2).start_cell_from).toBeNull();
+  });
+});
