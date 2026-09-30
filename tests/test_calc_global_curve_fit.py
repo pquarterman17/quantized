@@ -149,3 +149,41 @@ def test_unknown_param_raises() -> None:
 def test_empty_datasets_raises() -> None:
     with pytest.raises(ValueError, match="at least one dataset"):
         global_curve_fit([], _gauss, ["A", "mu", "sigma"], None, init_guess=[])
+
+
+def test_abort_check_cancels_mid_fit() -> None:
+    from quantized.calc.global_curve_fit import GlobalFitCancelled
+
+    x = np.linspace(-5, 5, 50)
+    ds = [(x, _gauss(x, np.array([10.0, float(c), 1.2]))) for c in (-1, 1)]
+    calls = {"n": 0}
+
+    def abort_after_a_few() -> bool:
+        calls["n"] += 1
+        return calls["n"] > 5
+
+    with pytest.raises(GlobalFitCancelled):
+        global_curve_fit(ds, _gauss, ["A", "mu", "sigma"],
+                         [{"param_name": "sigma", "datasets": [0, 1]}],
+                         init_guess=[[9, -0.8, 1.0], [9, 1.1, 1.0]],
+                         abort_check=abort_after_a_few)
+    assert calls["n"] == 6  # polled once per cost evaluation, stopped at the first True
+
+
+def test_progress_callback_reports_iterations_without_changing_the_fit() -> None:
+    x = np.linspace(-5, 5, 50)
+    ds = [(x, _gauss(x, np.array([10.0, float(c), 1.2]))) for c in (-1, 1)]
+    kw: dict[str, Any] = {"init_guess": [[9, -0.8, 1.0], [9, 1.1, 1.0]],
+                          "lower": [0, -10, 0.1], "upper": [100, 10, 10]}
+    seen: list[tuple[float, str]] = []
+
+    def record(fraction: float, message: str) -> None:
+        seen.append((fraction, message))
+
+    groups = [{"param_name": "sigma", "datasets": [0, 1]}]
+    r1 = global_curve_fit(ds, _gauss, ["A", "mu", "sigma"], groups, progress_callback=record, **kw)
+    r0 = global_curve_fit(ds, _gauss, ["A", "mu", "sigma"], groups, **kw)
+    assert seen, "no progress was reported"
+    assert all(0.0 <= f <= 1.0 for f, _ in seen)
+    assert "iteration" in seen[-1][1]
+    assert_allclose(np.asarray(r1["params"]), np.asarray(r0["params"]), rtol=0, atol=0)

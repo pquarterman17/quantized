@@ -5783,6 +5783,163 @@
         "title": "GlmRequest",
         "type": "object"
       },
+      "GlobalFitRequest": {
+        "properties": {
+          "constraints": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ShareGroup"
+            },
+            "title": "Constraints",
+            "type": "array"
+          },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/GlobalSeries"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
+          "equation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equation"
+          },
+          "lower": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lower"
+          },
+          "max_iter": {
+            "default": 20000,
+            "maximum": 200000.0,
+            "minimum": 1.0,
+            "title": "Max Iter",
+            "type": "integer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "p0": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P0"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upper"
+          }
+        },
+        "required": [
+          "datasets"
+        ],
+        "title": "GlobalFitRequest",
+        "type": "object"
+      },
+      "GlobalSeries": {
+        "description": "One dataset of a global fit: its (x, y) pairs and optional 1-sigma dy.",
+        "properties": {
+          "dy": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dy"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "GlobalSeries",
+        "type": "object"
+      },
       "GroupsRequest": {
         "properties": {
           "groups": {
@@ -10910,6 +11067,28 @@
           "q_max"
         ],
         "title": "SectorRequest",
+        "type": "object"
+      },
+      "ShareGroup": {
+        "description": "Parameter ``param_name`` takes ONE value across these datasets (0-based).",
+        "properties": {
+          "datasets": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
+          "param_name": {
+            "title": "Param Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "param_name",
+          "datasets"
+        ],
+        "title": "ShareGroup",
         "type": "object"
       },
       "SheetCarrierRequest": {
@@ -16531,6 +16710,94 @@
           }
         },
         "summary": "Fit",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/global": {
+      "post": {
+        "description": "Fit one model to several datasets with shared parameters (synchronous).",
+        "operationId": "global_fit_route_api_fitting_global_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GlobalFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Global Fit Route Api Fitting Global Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Global Fit Route",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/global/job": {
+      "post": {
+        "description": "Queue the global fit; poll ``GET /api/jobs/{id}`` and fetch ``/result``.\n\nProgress is the Nelder-Mead iteration (``fraction`` = iteration /\n``max_iter``, an upper bound). A cancel stops the fit at its next model\nevaluation and ends the job ``cancelled`` with no partial result.",
+        "operationId": "global_fit_job_api_fitting_global_job_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GlobalFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Global Fit Job Api Fitting Global Job Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Global Fit Job",
         "tags": [
           "fitting"
         ]

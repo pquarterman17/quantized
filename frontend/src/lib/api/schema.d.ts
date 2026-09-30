@@ -1466,6 +1466,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/global": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Global Fit Route
+         * @description Fit one model to several datasets with shared parameters (synchronous).
+         */
+        post: operations["global_fit_route_api_fitting_global_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/global/job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Global Fit Job
+         * @description Queue the global fit; poll ``GET /api/jobs/{id}`` and fetch ``/result``.
+         *
+         *     Progress is the Nelder-Mead iteration (``fraction`` = iteration /
+         *     ``max_iter``, an upper bound). A cancel stops the fit at its next model
+         *     evaluation and ends the job ``cancelled`` with no partial result.
+         */
+        post: operations["global_fit_job_api_fitting_global_job_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/models": {
         parameters: {
             query?: never;
@@ -7574,6 +7618,43 @@ export interface components {
             /** Y */
             y: number[];
         };
+        /** GlobalFitRequest */
+        GlobalFitRequest: {
+            /**
+             * Constraints
+             * @default []
+             */
+            constraints?: components["schemas"]["ShareGroup"][];
+            /** Datasets */
+            datasets: components["schemas"]["GlobalSeries"][];
+            /** Equation */
+            equation?: string | null;
+            /** Lower */
+            lower?: (number | null)[] | null;
+            /**
+             * Max Iter
+             * @default 20000
+             */
+            max_iter?: number;
+            /** Model */
+            model?: string | null;
+            /** P0 */
+            p0?: number[][] | number[] | null;
+            /** Upper */
+            upper?: (number | null)[] | null;
+        };
+        /**
+         * GlobalSeries
+         * @description One dataset of a global fit: its (x, y) pairs and optional 1-sigma dy.
+         */
+        GlobalSeries: {
+            /** Dy */
+            dy?: number[] | null;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** GroupsRequest */
         GroupsRequest: {
             /** Groups */
@@ -9565,6 +9646,16 @@ export interface components {
             q_max: number;
             /** Q Min */
             q_min: number;
+        };
+        /**
+         * ShareGroup
+         * @description Parameter ``param_name`` takes ONE value across these datasets (0-based).
+         */
+        ShareGroup: {
+            /** Datasets */
+            datasets: number[];
+            /** Param Name */
+            param_name: string;
         };
         /** SheetCarrierRequest */
         SheetCarrierRequest: {
@@ -12940,6 +13031,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["FitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    global_fit_route_api_fitting_global_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GlobalFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    global_fit_job_api_fitting_global_job_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GlobalFitRequest"];
             };
         };
         responses: {
