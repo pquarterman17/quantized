@@ -32,12 +32,19 @@ import type { ErrorPair } from "../api";
 export interface FigureFacetSeries {
   label: string;
   y: (number | null)[];
+  /** With `FigureSpec.encoding` only: the channel's legend rename (BUG-014). */
+  legend?: string;
 }
 
 export interface FigureFacetSpec {
   label: string;
   x: (number | null)[];
   series: FigureFacetSeries[];
+  /** P1.4 residual 3, with `FigureSpec.encoding` only: the dataset row behind
+   *  each `x` entry and the Y channel behind each series, so the route
+   *  re-splits the panel by the encoding (`lib/figureSpecFacets.withFacetRows`). */
+  rows?: number[];
+  channels?: number[];
 }
 
 /** `FigureSpec.encoding` — see `routes/export_figures_encoded.FigureEncoding`.
@@ -298,6 +305,12 @@ export interface StatplotFacetSpec {
    *  `data` — its jittered points hash the screen's `(row, category)`.
    *  Absent: the panel draws no jittered points. */
   point_row_indices?: number[][] | null;
+  /** Where this panel's connect-means line lifts (a hidden empty level sat
+   *  before that group), as the flat request's `connect_breaks`. */
+  connect_breaks?: boolean[] | null;
+  /** P1.4 Color-by: each group's colour level (null: by position), with the
+   *  request's `palette` (lib/statColor). */
+  color_levels?: (number | null)[] | null;
 }
 
 /** A statistical-plot export request (StatStage's "Export figure" button):
@@ -363,6 +376,10 @@ export interface StatplotFigureSpec {
    *  forced limit (today's autoscale-to-drawn-artists behaviour); violin has
    *  no such divergence (its domain is the KDE curve's own extent). */
   y_domain?: [number, number] | null;
+  /** P1.4 Color-by (lib/statColor): each group's colour LEVEL, aligned with
+   *  `data` (null: by position), and the palette as hex, indexed by level. */
+  color_levels?: (number | null)[] | null;
+  palette?: string[] | null;
 }
 
 /** P2.6 box 1: the category-axis label options (routes/export_statplots.
@@ -405,6 +422,8 @@ export interface CategoricalFacetSpec {
   summary?: "none" | "mean" | "median" | null;
   raw?: number[][][] | null;
   raw_rows?: number[][][] | null;
+  /** P1.4 Color-by: each category's colour level, with the request's `palette`. */
+  color_levels?: (number | null)[] | null;
 }
 
 /** A grouped/stacked bar-chart export request (StatStage bar mode's "Export
@@ -437,6 +456,10 @@ export interface CategoricalFigureSpec {
   summary?: "none" | "mean" | "median" | null;
   raw?: number[][][] | null;
   raw_rows?: number[][][] | null;
+  /** P1.4 Color-by (lib/statColor): each category's colour LEVEL (every
+   *  series of it; null: by series), and the palette as hex. */
+  color_levels?: (number | null)[] | null;
+  palette?: string[] | null;
 }
 
 /** Render a grouped/stacked bar chart server-side (matplotlib) and download

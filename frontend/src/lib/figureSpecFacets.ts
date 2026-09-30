@@ -31,9 +31,9 @@
 // `plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md`'s F4.4 note.)
 
 import type { FigureFacetSpec } from "./api/figures";
-import { facetPayloads } from "./facet";
+import { facetPayloads, facetSliceRowIds, facetSlices } from "./facet";
 import { seriesDisplayLabel } from "./figureSpecSeries";
-import { pruneToLiveDataset } from "./rowstate";
+import { activeRowIndices, droppedRows, pruneToLiveDataset } from "./rowstate";
 import type { Dataset, DataStruct } from "./types";
 
 /** Resolves `facetCol`'s row partition into wire-shaped panels. Returns
@@ -100,4 +100,32 @@ export function resolveFacetsOrThrow(
     facetKey == null ? undefined : buildFacetSpecs(data, facetKey, xKey, yKeys, liveDataset, seriesLabels);
   if (plottedCount === 0 && facets === undefined) throw new Error("no visible series to export");
   return facets;
+}
+
+/** P1.4 residual 3: `facets` (`buildFacetSpecs`' panels for the same `data`,
+ *  `facetCol` and `liveDataset`, in the same order) for an ENCODED request —
+ *  each panel names the row of `data` behind each x entry and its Y channels
+ *  (`yKeys`, the same in every panel), and each series its channel's rename,
+ *  so the route re-splits the panel by the encoding
+ *  (`calc/plotting_encoded_facets.py`) as the Stage's facet grid does
+ *  (`Stage/useFacetEncoding`). */
+export function withFacetRows(
+  facets: readonly FigureFacetSpec[],
+  data: DataStruct,
+  facetCol: number,
+  yKeys: readonly number[],
+  liveDataset: Dataset | null | undefined,
+  seriesLabels: Record<number, string>,
+): FigureFacetSpec[] {
+  const kept = liveDataset ? activeRowIndices(data.time.length, droppedRows(liveDataset)) : null;
+  const slices = facetSlices(pruneToLiveDataset(data, liveDataset), facetCol);
+  return facets.map((f, i) => ({
+    ...f,
+    rows: facetSliceRowIds(slices[i], kept),
+    channels: [...yKeys],
+    series: f.series.map((s, j) => {
+      const legend = seriesLabels[yKeys[j]];
+      return legend === undefined ? s : { ...s, legend };
+    }),
+  }));
 }

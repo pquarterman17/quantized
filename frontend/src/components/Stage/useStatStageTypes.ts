@@ -92,6 +92,10 @@ export interface StatStageState {
    *  doc). */
   facetCol: number | null;
   setFacetCol: (i: number | null) => void;
+  /** P1.4 Color-by: the grouping factor whose level colours each glyph (null:
+   *  by position); only the group column or the nest take effect. */
+  colorCol: number | null;
+  setColorCol: (i: number | null) => void;
   busy: boolean;
   error: string | null;
   /** Non-fatal note (e.g. an offline degrade) shown alongside the plot. */

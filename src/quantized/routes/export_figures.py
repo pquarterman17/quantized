@@ -39,11 +39,7 @@ from quantized.calc.plotting import (
 from quantized.calc.render_lock import acquire_render_lock
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
-from quantized.routes._datasetcache import (
-    CachedDatasetRequest,
-    DatasetHandleMiss,
-    resolve_or_409,
-)
+from quantized.routes._datasetcache import CachedDatasetRequest, resolve_or_409
 from quantized.routes._disconnect import run_watching_disconnect
 from quantized.routes._errors import CALC_ERRORS_WITH_LOCK, raise_calc_error
 from quantized.routes._export_common import (
@@ -59,7 +55,11 @@ from quantized.routes.export_figures_encoded import (
     FigureEncoding,
     resolve_encoded_figure,
 )
-from quantized.routes.export_figures_facets import _render_facets_bytes, _render_facets_map
+from quantized.routes.export_figures_facets import (
+    _render_facets_bytes,
+    _render_facets_map,
+    _request_dataset,
+)
 from quantized.routes.export_figures_labels import (
     apply_offset_disclosure_to_renames,
     derived_axis_label,
@@ -231,21 +231,6 @@ class FigureRequest(CachedDatasetRequest, ExcludedRowsFields):
     # live with the list itself, in `export_figures_schema`. Declared on this
     # model, so the page route inherits it through `PagePanelSpec.figure`.
     _no_document_keys = field_validator("series_styles")(reject_document_only_style_keys)
-
-
-def _request_dataset(req: FigureRequest) -> DataStruct:
-    """``req``'s DataStruct WITHOUT caching a posted ``dataset``: a download,
-    page or report render is one-shot, and inserting it would only evict the
-    datasets the plot and preview are reusing. A stale ``dataset_handle`` is a
-    ``ValueError`` here (422, or a report's named placeholder), not the 409
-    that asks the client transport to resend -- no client routes these
-    one-shot paths through that transport (``lib/api/datasetCache.ts``)."""
-    if req.dataset is not None:
-        return DataStruct.from_dict(req.dataset)
-    try:
-        return req.resolve()[0]
-    except DatasetHandleMiss as exc:
-        raise ValueError("unknown or expired dataset_handle; send the dataset") from exc
 
 
 def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _ResolvedFigure:

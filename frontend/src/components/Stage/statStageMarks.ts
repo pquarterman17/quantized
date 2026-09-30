@@ -51,10 +51,11 @@ export function withNestLabel(d: StatDrawData, nestLabel: string | null): StatDr
  *  jitter, summary marker, error bars; a grouped bar panel its cells' points
  *  and summary — and the export posts each panel's rows so it draws the same
  *  (`calc.figure_stat_marks.facet_marks` keeps the old fliers-only rule for
- *  a panel WITHOUT rows, a request from before). The one exception: no
- *  connect-means line in a panel — the faceted export draws none. */
+ *  a panel WITHOUT rows, a request from before). Since 2026-09-30 that
+ *  includes the connect-means line: each panel joins its own means, and the
+ *  faceted export draws it per panel (`show_connect_means`, `connect_breaks`). */
 export function facetMarks(r: ResolvedStatMarks): ResolvedStatMarks {
-  return { ...r, connectMeans: false };
+  return r;
 }
 
 /** `draw` / `drawFacets` with their marks stamped on. */

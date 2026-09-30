@@ -3,7 +3,7 @@
 // mocks the hook entirely and asserts on what the VIEW does with a given
 // StatStageState — the workshop-pattern split lets the two stay independent.
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -57,6 +57,8 @@ function makeState(overrides: Partial<StatStageState> = {}): StatStageState {
     setMarks: vi.fn(),
     facetCol: null,
     setFacetCol: vi.fn(),
+    colorCol: null,
+    setColorCol: vi.fn(),
     busy: false,
     error: null,
     note: null,
@@ -118,6 +120,24 @@ describe("StatStage — facet grid (GUI_INTERACTION #11)", () => {
     stateRef.current = makeState({ mode: "histogram" });
     rerender(<StatStage />);
     expect(screen.queryByRole("combobox", { name: "facet by" })).not.toBeInTheDocument();
+  });
+
+  it('"colour by" offers the plot\'s own factors (bar: the group only) and sets the pick', () => {
+    const setColorCol = vi.fn();
+    stateRef.current = makeState({ mode: "box", groupCol: 0, group2Col: 2, colorCol: 2, setColorCol });
+    const { rerender } = render(<StatStage />);
+    const picker = screen.getByRole("combobox", { name: "colour by" }) as HTMLSelectElement;
+    expect(Array.from(picker.options).map((o) => o.textContent)).toEqual(["(position)", "grp", "fac"]);
+    expect(picker.value).toBe("2");
+    fireEvent.change(picker, { target: { value: "0" } });
+    expect(setColorCol).toHaveBeenLastCalledWith(0);
+    stateRef.current = makeState({ mode: "bar", groupCol: 0, group2Col: 2 });
+    rerender(<StatStage />);
+    const bar = screen.getByRole("combobox", { name: "colour by" }) as HTMLSelectElement;
+    expect(Array.from(bar.options).map((o) => o.textContent)).toEqual(["(position)", "grp"]);
+    stateRef.current = makeState({ mode: "box", groupCol: null });
+    rerender(<StatStage />);
+    expect(screen.queryByRole("combobox", { name: "colour by" })).not.toBeInTheDocument();
   });
 
   it("the facet-by picker's options are the categorical columns, plus (none)", () => {

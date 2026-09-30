@@ -204,7 +204,7 @@ describe("categorical marks — the canvas and the export carry the same options
     }
   });
 
-  it("faceted: each panel draws the stage's points and summary (no connect line), as the export does", async () => {
+  it("faceted: each panel draws the stage's points, summary and connect-means line, as the export does", async () => {
     const { result } = renderHook(() => useStatStage(params()));
     act(() => result.current.setValueCol(2));
     act(() => result.current.setFacetCol(1));
@@ -215,7 +215,7 @@ describe("categorical marks — the canvas and the export carry the same options
     });
     for (const f of result.current.drawFacets ?? []) {
       expect(f.draw.mode === "box" && f.draw.marks).toMatchObject({
-        points: "all", summary: "mean", errorBars: "se", connectMeans: false,
+        points: "all", summary: "mean", errorBars: "se", connectMeans: true,
       });
     }
     await act(async () => {
@@ -223,11 +223,18 @@ describe("categorical marks — the canvas and the export carry the same options
     });
     const spec = vi.mocked(exportStatplotFigure).mock.calls.at(-1)![0];
     // Each panel posts its own rows (statFacetPoints.test.ts pins them row
-    // for row); the faceted export draws no connect line in a facet.
-    expect(spec).toMatchObject({ points: "all", summary: "mean", error_bars: "se" });
+    // for row); the faceted export draws each panel's connect line too.
+    expect(spec).toMatchObject({ points: "all", summary: "mean", error_bars: "se", show_connect_means: true });
     expect(spec.facets).toHaveLength(2);
     for (const panel of spec.facets ?? []) expect(panel.point_row_indices).toBeTruthy();
-    expect(spec.show_connect_means).toBeUndefined();
+  });
+
+  it("faceted: connect-means off posts no flag, so an old request is unchanged", async () => {
+    const { result } = renderHook(() => useStatStage(params()));
+    act(() => result.current.setValueCol(2));
+    act(() => result.current.setFacetCol(1));
+    await waitFor(() => expect(result.current.drawFacets?.length).toBe(2));
+    expect((await exported(result)).show_connect_means).toBeUndefined();
   });
 
   // P2.6 "not done" item: the figure never said which error bar it shows.

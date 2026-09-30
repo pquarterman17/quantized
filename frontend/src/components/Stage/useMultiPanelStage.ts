@@ -63,6 +63,7 @@ import type { Accent, ExcludedDisplay, PlotTool, Theme } from "../../store/useAp
 import { renderBreakPanels, resizeBreakPanels } from "./breakPanelRender";
 import { fetchSpatialPanel, type SpatialFetch } from "./spatialPanelFetch";
 import { renderFacetGrid, resizeFacetGrid } from "./facetGridRender";
+import type { FacetEncodingRender } from "./useFacetEncoding";
 import { renderStackPanels, resizeStackPanels } from "./stackPanelRender";
 import type { SpatialLegendEntry } from "./SpatialPanelLegend";
 
@@ -157,6 +158,8 @@ export interface MultiPanelStageParams {
   errKeys: Record<number, number>;
   hiddenChannels: number[];
   seriesOrder: number[] | null;
+  /** P1.4 residual 3: the facet grid's encoding (`useFacetEncoding`), or null. */
+  encodedFacets?: FacetEncodingRender | null;
   /** The focused view passes the live plot tool; a background window passes
    *  the inert "zoom" default (Key Decision 2 — non-interactive). */
   tool: PlotTool;
@@ -207,6 +210,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     errKeys,
     hiddenChannels,
     seriesOrder,
+    encodedFacets = null,
     tool,
     theme,
     accent,
@@ -567,7 +571,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     }
 
     if (facet) {
-      const fPanels = facetPanels ?? [];
+      const fPanels = encodedFacets?.panels ?? facetPanels ?? [];
       if (fPanels.length === 0) {
         destroyAll();
         return;
@@ -577,18 +581,13 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       const box = { w: host.clientWidth || 600, h: host.clientHeight || 400 };
       plotsRef.current = renderFacetGrid(host, {
         panels: fPanels,
-        // BUG-014: the grid used to pass NO renames at all, so a renamed
-        // series read its derived "label (unit)" in every facet panel while
-        // the flat plot read the rename. `buildOpts` applies these the same
-        // way the flat path does, and `lib/figureSpecFacets.ts` applies the
-        // SAME map on the export side -- so screen and export agree.
+        // BUG-014: renames applied as the flat path and `lib/figureSpecFacets.ts` do.
         seriesLabels,
+        ...(encodedFacets ? { encoded: encodedFacets } : {}),
         grid: facetGrid,
         gap: GRID_GAP,
         syncKey,
-        // Same x-zoom/pan sync idiom as the plain per-channel stack below (one
-        // shared hook instance for the whole panel set — the x axis means the
-        // same thing in every facet panel too).
+        // The plain stack's x-zoom/pan sync idiom: one shared hook for the panel set.
         onSetScale: xZoomSyncHook(() => plotsRef.current),
         box,
         cell: {
@@ -650,6 +649,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     breakYLim,
     facet,
     facetPanels,
+    encodedFacets,
     facetGrid,
     facetXLim,
     payload,

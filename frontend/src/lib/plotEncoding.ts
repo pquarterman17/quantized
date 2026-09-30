@@ -58,9 +58,17 @@
 // so it is a factor or a label source like any other column, and the wire
 // dataset carries it to the backend.
 //
-// SCOPE, honestly: xy marks only, and not while faceted (facet panels render
-// through `facetPayloads`, which splits nothing — the same limit Group has
-// there). Applying the graph stores the picks on the plot window's document
+// FACETS (residual 3): an xy facet grid is split ONCE over the whole data, then
+// each panel keeps the series whose level combination has rows in it, over
+// those rows (`encodedFacetPanels`). A series keeps one style in every panel —
+// its level's colour, else its position in the WHOLE split — and its legend
+// text is taken over the panel's rows. A gradient is not drawn per panel
+// (`plotEncodingBinding.facetEncoding` drops it). The Stage's facet grid
+// (`Stage/useFacetEncoding`) and the export's port (`calc/plotting_encoded_
+// facets.py`, pinned by `tests/fixtures/wire/graph_encoding_facets.json`)
+// apply the same rule. Box / violin / bar: `./plotEncodingStat`.
+//
+// Applying the graph stores the picks on the plot window's document
 // (`FigureBindings.encoding`, lib/plotEncodingBinding.ts); the editable Stage
 // draws them through `encodedSplit` / `applyEncodedSplit` / `encodedNames` /
 // `encodedStyle` below (Stage/usePlotEncoding.ts), the SAME functions
@@ -77,11 +85,13 @@ import { categoryLevels, groupLevelLabel, levelOrderFor, levelsOf, orderLevels }
 import { buildErrorSpans, type ErrorSpan } from "./errorbars";
 import type { ErrorBinding } from "./errorRoles";
 import { ENCODING_SLOTS, type FigureEncodingText } from "./figureEncoding";
+import { facetSlices, type FacetPanel, type FacetSlice } from "./facet";
 import { seriesDisplayLabel } from "./figureSpecSeries";
 import { spatialCellStyling } from "./multipanel";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import {
   encodingSplits,
+  facetEncoding,
   isEncodingFactor,
   resolveFigureEncoding,
   type Encoding,
@@ -96,6 +106,7 @@ import {
   type PlotSpec,
   type SpecRender,
 } from "./plotspec";
+import { statPlanRender } from "./plotEncodingStat";
 import { specXKey } from "./plotspecGroupCol";
 import { analysisData } from "./rowstate";
 import { AUTO_MARKER_CYCLE, SERIES_VARS } from "./seriesStyleCycle";
@@ -147,6 +158,17 @@ export interface EncodedSpec {
   errors: ErrorBinding[];
   /** The gradient Color-by's scale and per-row values (`data`'s rows), or null. */
   gradient: EncodedGradient | null;
+  /** A faceted spec's panels (`encodedFacetPanels`); `series`/`styles` above
+   *  are then the whole grid's split, which the panels draw from. */
+  facets?: EncodedFacetPanel[];
+}
+
+/** One panel of an encoded xy FACET grid: the facet grid's own panel, plus
+ *  each series' encoding, style and FINISHED legend text. */
+export interface EncodedFacetPanel extends FacetPanel {
+  series: EncodedSeries[];
+  styles: SeriesStyle[];
+  labels: string[];
 }
 
 /** The picks among `refs` (optionally only `datasetId`'s) as a document stores
@@ -331,6 +353,42 @@ export function buildEncodedXY(
   return { payload: applyEncodedSplit(buildColumns(data, null, xKey, [...yChannels]), split, specs), series };
 }
 
+/** An encoded xy FACET grid (see the module doc): `data` is the split's
+ *  source, each slice's `rows` index it, and each slice's `data` gives the
+ *  panel's x and Y columns. `yLegends` is the per-Y rename, as `encodedNames`. */
+export function encodedFacetPanels(
+  data: DataStruct,
+  slices: readonly Pick<FacetSlice, "label" | "data" | "rows">[],
+  xKey: number | null,
+  yChannels: readonly number[],
+  enc: Encoding,
+  yLegends?: readonly (string | undefined)[],
+): EncodedFacetPanel[] {
+  const whole = encodedSplit(data, yChannels, enc);
+  const styles = encodedNames(data, whole).series.map((s, i) => encodedStyle(undefined, s, i));
+  return slices.map((slice) => {
+    const local = new Map(slice.rows.map((r, j) => [r, j]));
+    const keep: number[] = [];
+    const cells = whole.cells.flatMap((c, i) => {
+      const mine = c.rows.filter((r) => local.has(r));
+      if (mine.length === 0) return [];
+      keep.push(i);
+      const text = enc.label === null ? null : legendSourceText(data, enc.label, mine);
+      return [{ ...c, rows: mine.map((r) => local.get(r) as number), text }];
+    });
+    const split: EncodedSplit = { yChannels, cells };
+    const { specs, series } = encodedNames(data, split, yLegends);
+    return {
+      label: slice.label,
+      payload: applyEncodedSplit(buildColumns(slice.data, null, xKey, [...yChannels]), split, specs),
+      channels: series.map((s) => s.channel),
+      series,
+      styles: keep.map((i) => styles[i]),
+      labels: specs.map((sp, i) => seriesDisplayLabel(sp.label, sp.unit, series[i].legend)),
+    };
+  });
+}
+
 /** One encoded series' EFFECTIVE style over `base`: the level's palette token
  *  when a colour factor is set (overriding any base colour), else the base
  *  colour, else the series' display-position token — `seriesColor`'s own rule,
@@ -355,15 +413,16 @@ export function encodedStyles(spec: PlotSpec, series: readonly EncodedSeries[]):
 }
 
 /** THE derivation (see the module doc), or null when the spec renders through
- *  the ordinary path: not an xy mark, faceted, no dataset/rows/Y, or no
- *  surviving encoding. */
+ *  the ordinary path: not an xy mark, no dataset/rows/Y, or no surviving
+ *  encoding (a faceted spec's gradient does not survive). */
 export function encodeSpec(spec: PlotSpec, datasets: readonly Dataset[]): EncodedSpec | null {
   if (spec.mark !== "scatter" && spec.mark !== "line" && spec.mark !== "step") return null;
-  if (spec.zones.facet || spec.zones.y.length === 0) return null;
+  if (spec.zones.y.length === 0) return null;
   const ds = datasets.find((d) => d.id === specDatasetId(spec));
   const rows = analysisData(ds);
   if (!ds || !rows || rows.time.length === 0) return null;
-  const enc = resolveEncoding(spec, ds);
+  const facetCol = spec.zones.facet?.channel ?? null;
+  const enc = facetCol === null ? resolveEncoding(spec, ds) : facetEncoding(resolveEncoding(spec, ds));
   if (!enc) return null;
   const data = encodingData(rows, enc); // text-column factors appended (residual 5)
   const xKey = specXKey(spec); // own X (a negative channel) = an empty well
@@ -371,24 +430,35 @@ export function encodeSpec(spec: PlotSpec, datasets: readonly Dataset[]): Encode
   const { payload, series } = buildEncodedXY(data, xKey, yChannels, enc);
   const styles = encodedStyles(spec, series);
   const split = encodingSplits(enc);
+  // Facets: the grid's key lists each distinct (label, colour, glyph) once, in
+  // panel order — a series' legend text may differ between panels.
+  const facets = facetCol === null ? undefined : encodedFacetPanels(data, facetSlices(data, facetCol), xKey, yChannels, enc);
+  const flat = series.map((s, i) => ({
+    label: seriesDisplayLabel(payload.series[i].label, payload.series[i].unit, s.legend),
+    style: styles[i],
+  }));
+  const keyed = facets?.flatMap((p) => p.labels.map((label, i) => ({ label, style: p.styles[i] })));
+  const same = (a: (typeof flat)[number], b: (typeof flat)[number]) =>
+    a.label === b.label && a.style.color === b.style.color && a.style.markerShape === b.style.markerShape;
+  const entries = keyed ? keyed.filter((e, i) => keyed.findIndex((o) => same(o, e)) === i) : flat;
   // The existing legend-entry builder, keyed by DISPLAY POSITION: each encoded
   // series is its own "channel" here, so the entry carries exactly the style
   // the preview canvas draws it with (no cycle — the encoding already chose).
-  const positions = series.map((_, i) => i);
   const { legendEntries } = spatialCellStyling(
     {
-      yKeys: positions,
+      yKeys: entries.map((_, i) => i),
       hiddenChannels: [],
-      seriesStyles: Object.fromEntries(styles.map((st, i) => [i, st])),
-      seriesLabels: Object.fromEntries(
-        series.map((s, i) => [i, seriesDisplayLabel(payload.series[i].label, payload.series[i].unit, s.legend)]),
-      ),
+      seriesStyles: Object.fromEntries(entries.map((e, i) => [i, e.style])),
+      seriesLabels: Object.fromEntries(entries.map((e, i) => [i, e.label])),
     },
     false,
   );
-  const errors = split ? [] : specErrorBindings(spec);
+  const errors = split || facets ? [] : specErrorBindings(spec);
   const gradient = encodedGradient(data, enc);
-  return { ds, source: rows, data, enc, split, xKey, yChannels, payload, series, styles, legend: legendEntries, errors, gradient };
+  return {
+    ds, source: rows, data, enc, split, xKey, yChannels, payload, series, styles, legend: legendEntries, errors, gradient,
+    ...(facets ? { facets } : {}),
+  };
 }
 
 /** The Graph Builder render: `specToRender` for every spec that does not
@@ -401,7 +471,8 @@ export function encodedSpecRender(
   datasets: readonly Dataset[],
 ): { render: SpecRender; encoded: EncodedSpec | null } {
   const encoded = encodeSpec(spec, datasets);
-  if (!encoded) return { render: specToRender(spec, datasets), encoded: null };
+  // Box / violin: a Color pick may nest the axis (lib/plotEncodingStat).
+  if (!encoded) return { render: statPlanRender(spec, datasets) ?? specToRender(spec, datasets), encoded: null };
   const spans: Map<number, ErrorSpan[]> =
     encoded.errors.length > 0 ? buildErrorSpans(encoded.data, encoded.yChannels, encoded.errors) : new Map();
   return {
@@ -413,6 +484,7 @@ export function encodedSpecRender(
       ...(spec.showMarkers ? { showMarkers: true } : {}),
       ...(spec.mark === "step" ? { stepMode: spec.stepMode ?? "post" } : {}),
       ...(spans.size > 0 ? { errorSpans: spans } : {}),
+      ...(encoded.facets ? { facets: encoded.facets } : {}),
     },
     encoded,
   };

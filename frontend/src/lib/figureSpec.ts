@@ -30,7 +30,7 @@ import {
 import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { figureDocumentToPlotView, type FigureDocument } from "./figureDocument";
-import { resolveFacetsOrThrow } from "./figureSpecFacets";
+import { resolveFacetsOrThrow, withFacetRows } from "./figureSpecFacets";
 import {
   exportErrorSpans,
   resolveDisplaySeries,
@@ -46,7 +46,7 @@ import {
 import { marginFractions, pageSizeInches } from "./pagesetup";
 import type { PlotView } from "./plotview";
 import { canvasGroupCol } from "./plotGroupSplit";
-import { encodingSplits, figureEncodingWire, windowEncoding, type FigureEncoding } from "./plotEncodingBinding";
+import { encodingSplits, facetEncoding, figureEncodingWire, windowEncoding, type FigureEncoding } from "./plotEncodingBinding";
 import { droppedRows, pruneToLiveDataset } from "./rowstate";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
 // fund P3.3's threading against this file's 500-line ceiling. Imported, NOT
@@ -282,13 +282,18 @@ function buildFigureSpecForView(
   const groupCol = canvasGroupCol(extras.groupKey, st.y2Keys);
   // P1.4: the window's encodings through the SAME gate the Stage draws with
   // (`plotEncodingBinding.windowEncoding`: categorical colour/symbol only, off
-  // with a secondary axis) — never with facets, whose panels split nothing on
-  // screen either. The backend splits and styles (`calc/plotting_encoded.py`,
-  // pinned to the frontend derivation by the shared wire fixture); like the
-  // group split, an encoded figure carries no offsets or stagger.
-  const encoding = facets === undefined
-    ? windowEncoding(extras.encoding, extras.liveDataset ?? { data }, groupCol, st.y2Keys)
-    : null;
+  // with a secondary axis). The backend splits and styles (`calc/plotting_
+  // encoded.py`, pinned to the frontend derivation by the shared wire fixture);
+  // like the group split, an encoded figure carries no offsets or stagger. A
+  // facet grid (residual 3) takes it over explicit Y channels only, less a
+  // gradient (`facetEncoding`), as `Stage/useFacetEncoding` draws it; its
+  // panels then name their rows so the route re-splits each one.
+  const gated = windowEncoding(extras.encoding, extras.liveDataset ?? { data }, groupCol, st.y2Keys);
+  const facetYKeys = facets !== undefined && st.facetKey != null && st.yKeys?.length ? st.yKeys : null;
+  const encoding = facets === undefined ? gated : facetYKeys ? facetEncoding(gated) : null;
+  const wireFacets = facets && encoding && facetYKeys
+    ? withFacetRows(facets, data, st.facetKey as number, facetYKeys, extras.liveDataset, st.seriesLabels)
+    : facets;
   // F4.2c (a): an encoded request is split server-side, so it keeps EVERY row
   // (the window takes the split's levels over all of them) and names the ones
   // the window does not draw as data in `excluded_rows` -- the backend blanks
@@ -336,8 +341,8 @@ function buildFigureSpecForView(
     ...secondaryAxisWire(y2Axis),
     ...(groupCol === null ? {} : { group_col: groupCol }),
     ...(encoding === null ? {} : { encoding: figureEncodingWire(encoding) }),
-    ...(encoding === null || excludedRows.length === 0 ? {} : { excluded_rows: excludedRows }),
-    ...(facets === undefined ? {} : { facets }),
+    ...(encoding === null || facets || excludedRows.length === 0 ? {} : { excluded_rows: excludedRows }),
+    ...(wireFacets === undefined ? {} : { facets: wireFacets }),
     fmt: o.fmt,
     style: o.style,
     dpi: o.dpi,

@@ -51,6 +51,7 @@ import {
 } from "../../lib/statstage";
 import type { StatMarksByMode, StatMarksMode } from "../../lib/plotviewSanitize";
 import type { StatMarks } from "../../lib/statMarks";
+import { statColorOf } from "../../lib/statColor";
 import { runCancellable } from "../../store/pendingOps";
 import { needsBarRaw } from "./statBarMarks";
 import { figureErrorNote } from "./statErrorNote";
@@ -118,7 +119,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     mode, setMode,
     setGroupCol, setGroup2Col,
     valueCol, setValueCol,
-    setFacetCol,
+    setFacetCol, colorCol, setColorCol,
     effectiveGroupCol, effectiveGroup2Col, effectiveFacetCol,
   } = useStatStagePicks({ active, categoricalCols, seed, onSeedConsumed });
 
@@ -166,6 +167,11 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   // the two never disagree about what is being shown.
   const nestCol =
     mode === "box" || mode === "violin" || mode === "strip" ? effectiveGroup2Col : null;
+  // P1.4 Color-by: the factor (group, or the nest) whose level colours each glyph.
+  const color = useMemo(
+    () => (active && marksMode ? statColorOf(active.data, colorCol, effectiveGroupCol, nestCol) : null),
+    [active, marksMode, colorCol, effectiveGroupCol, nestCol],
+  );
 
   const groups = useMemo<GroupSpec[]>(() => {
     if (!data || (mode !== "box" && mode !== "violin" && mode !== "strip")) return [];
@@ -426,8 +432,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     facetCol: marksMode ? effectiveFacetCol : null,
   }), [active, data, mode, marksMode, effectiveGroupCol, nestCol, valueCol, plotted, barValueChannels, effectiveFacetCol, slices]);
   const levels = useMemo(
-    () => applyLevels(axes, { hideEmpty, showN }, drawData, drawFacets, { draw: freshDraw, facets: freshFacets }),
-    [axes, hideEmpty, showN, drawData, drawFacets, freshDraw, freshFacets],
+    () => applyLevels(axes, { hideEmpty, showN, color }, drawData, drawFacets, { draw: freshDraw, facets: freshFacets }),
+    [axes, hideEmpty, showN, color, drawData, drawFacets, freshDraw, freshFacets],
   );
   const shown = useMemo(() => withMarks(levels.draw, levels.drawFacets, rm), [levels, rm]);
   // P2.6 box 1: the error-bar footnote, from the SAME draws the screen shows.
@@ -471,6 +477,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     setMarks: patchMarks,
     facetCol: effectiveFacetCol,
     setFacetCol,
+    colorCol: color?.col ?? null,
+    setColorCol,
     busy,
     error,
     note,

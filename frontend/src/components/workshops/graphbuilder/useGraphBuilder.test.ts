@@ -1622,6 +1622,21 @@ describe("useGraphBuilder — Color/Symbol/Label encodings (P1.4)", () => {
     expect(spec.overrides?.legend?.show).toBe(true);
   });
 
+  it("a FACETED encoded graph previews per panel and exports the window's encoded facet grid", async () => {
+    const { result } = build();
+    act(() => result.current.assign("color", 2));
+    act(() => result.current.assign("facet", 3));
+    const render = result.current.render;
+    expect(render.kind === "xy" && render.facets?.length).toBe(2);
+    expect(result.current.encoded?.facets).toHaveLength(2);
+    await act(async () => result.current.exportPlot());
+    const spec = vi.mocked(exportFigure).mock.calls[0][0];
+    // Not the flat split: the facet grid, each panel naming its dataset rows.
+    expect(spec.facets?.map((f) => f.rows?.length)).toEqual([6, 6]);
+    expect(spec.facets?.every((f) => JSON.stringify(f.channels) === "[1]")).toBe(true);
+    expect(spec.encoding).toMatchObject({ color_col: 2 });
+  });
+
   it("Export without encodings still goes through the Stage view (regression)", async () => {
     const { result } = build();
     await act(async () => result.current.exportPlot());

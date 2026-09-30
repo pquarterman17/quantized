@@ -7,7 +7,9 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import type { ZoneName } from "../../../lib/plotspec";
+import { emptySpec, type PlotSpec, type ZoneName } from "../../../lib/plotspec";
+import type { Dataset } from "../../../lib/types";
+import { useApp } from "../../../store/useApp";
 import EncodingWells from "./EncodingWells";
 import type { GraphBuilderState } from "./useGraphBuilder";
 import type { WellChip } from "./ZoneWell";
@@ -19,6 +21,18 @@ const OPTIONS = [
   { index: 3, label: "T" },
 ];
 
+// ch1 lot and ch2 field are categorical; ch0 Rxy the value.
+const DS: Dataset = {
+  id: "d1",
+  name: "d1.csv",
+  data: {
+    time: [0, 1, 2, 3], values: [[1, 0, 0, 5], [2, 0, 1, 5], [3, 1, 0, 6], [4, 1, 1, 6]],
+    labels: ["Rxy", "sample", "field", "T"], units: ["", "", "", ""], metadata: {},
+    cat_levels: { 1: ["S1", "S2"], 2: ["F1", "F2"] },
+  },
+};
+const ref = (channel: number) => ({ datasetId: "d1", channel });
+
 function stub(over: Partial<GraphBuilderState> = {}, chips: Partial<Record<ZoneName, WellChip[]>> = {}) {
   return {
     datasetId: "d1",
@@ -28,6 +42,7 @@ function stub(over: Partial<GraphBuilderState> = {}, chips: Partial<Record<ZoneN
     assign: vi.fn(),
     remove: vi.fn(),
     encoded: null,
+    spec: emptySpec(),
     ...over,
   } as unknown as GraphBuilderState;
 }
@@ -72,16 +87,18 @@ describe("EncodingWells", () => {
     expect(g.remove).toHaveBeenCalledWith("color", 1);
   });
 
-  it("a live encoding needs no note (the Stage draws it too); a facet overriding them does", () => {
-    const live = stub({ encoded: {} as GraphBuilderState["encoded"] }, { symbol: [{ channel: 2, label: "field" }] });
+  it("a live encoding needs no note, faceted too (residual 3); a faceted gradient says why it is ignored", () => {
+    useApp.setState({ datasets: [DS] });
+    const xy = (zones: Partial<PlotSpec["zones"]>): PlotSpec => ({
+      version: 1,
+      zones: { x: ref(3), y: [ref(0)], group: null, facet: ref(1), yErr: [], xErr: null, ...zones },
+      mark: "scatter",
+    });
+    const live = stub({ spec: xy({ symbol: ref(2) }) }, { symbol: [{ channel: 2, label: "field" }], facet: [{ channel: 1, label: "sample" }] });
     const { rerender } = render(<EncodingWells g={live} />);
     expect(screen.queryByRole("note")).toBeNull();
-    rerender(
-      <EncodingWells
-        g={stub({}, { symbol: [{ channel: 2, label: "field" }], facet: [{ channel: 1, label: "sample" }] })}
-      />,
-    );
-    expect(screen.getByRole("note")).toHaveTextContent("Ignored while faceted");
+    rerender(<EncodingWells g={stub({ spec: xy({ color: ref(0) }) }, { color: [{ channel: 0, label: "Rxy (ignored)" }] })} />);
+    expect(screen.getByRole("note")).toHaveTextContent("A gradient colours single points, so it does not apply while faceted.");
   });
 
   it("shows no note while nothing is assigned", () => {
@@ -89,13 +106,24 @@ describe("EncodingWells", () => {
     expect(screen.queryByRole("note")).toBeNull();
   });
 
-  it("hides for box/violin/bar until something is assigned, then stays — saying so — so it can be removed", () => {
-    const { container, rerender } = render(<EncodingWells g={stub({ family: "categorical" })} />);
-    expect(container).toBeEmptyDOMElement();
-    const g = stub({ family: "categorical" }, { color: [{ channel: 1, label: "sample" }] });
+  it("box/violin/bar show the wells; a pick their mark cannot draw says why, in one sentence, and can be removed", () => {
+    useApp.setState({ datasets: [DS] });
+    const box = (zones: Partial<PlotSpec["zones"]>): PlotSpec => ({
+      version: 1,
+      zones: { x: ref(1), y: [ref(0)], group: null, facet: null, yErr: [], xErr: null, ...zones },
+      mark: "box",
+    });
+    const { rerender } = render(<EncodingWells g={stub({ family: "categorical", spec: box({}) })} />);
+    expect(screen.getByLabelText("Assign a channel to Color")).toBeTruthy();
+    // Color on a categorical column applies (the preview and the Stat Stage draw it): no note.
+    rerender(<EncodingWells g={stub({ family: "categorical", spec: box({ color: ref(2) }) }, { color: [{ channel: 2, label: "field" }] })} />);
+    expect(screen.queryByRole("note")).toBeNull();
+    const g = stub({ family: "categorical", spec: box({ symbol: ref(2) }) }, { symbol: [{ channel: 2, label: "field (ignored)" }] });
     rerender(<EncodingWells g={g} />);
-    expect(screen.getByRole("note")).toHaveTextContent("Box, violin and bar ignore encodings.");
-    fireEvent.click(screen.getByRole("button", { name: "Remove sample" }));
-    expect(g.remove).toHaveBeenCalledWith("color", 1);
+    expect(screen.getByRole("note")).toHaveTextContent(
+      "Box, violin and bar draw no per-series marker, so Symbol does not apply.",
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Remove field (ignored)" }));
+    expect(g.remove).toHaveBeenCalledWith("symbol", 2);
   });
 });

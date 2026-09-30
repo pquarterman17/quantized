@@ -1388,6 +1388,27 @@
       "CategoricalFacet": {
         "description": "One bar-chart small-multiple panel (GUI_INTERACTION #12 slice 4b \u2014\nStatStage bar mode's faceted export). Self-contained (own ``groups``):\na facet-column level can be absent from one slice, so panels never share\none category set.",
         "properties": {
+          "color_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Levels"
+          },
           "counts": {
             "anyOf": [
               {
@@ -1582,6 +1603,27 @@
             ],
             "title": "Caveat"
           },
+          "color_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Levels"
+          },
           "counts": {
             "anyOf": [
               {
@@ -1683,6 +1725,20 @@
               }
             ],
             "title": "Jitter Width"
+          },
+          "palette": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Palette"
           },
           "points": {
             "anyOf": [
@@ -4576,9 +4632,37 @@
       "FigureFacet": {
         "description": "One xy small-multiples panel (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 \u2014\nthe export half of Stage's facet-by-column grid, `store.facetKey` /\n`lib/facet.facetPayloads`). RESOLVED, not re-derived: the frontend\nalready computed each panel's row slice (level ordering + binning,\n`lib/figureSpecFacets.ts`'s `buildFacetSpecs`) and ships it here verbatim,\nso this route never re-slices `dataset` itself and can never disagree with\nwhat Stage showed on screen. Mirrors `StatplotFacet`/`CategoricalFacet`'s\nestablished \"resolved facet panel\" shape (`routes/export_statplots.py`).\n`x`/each series' `y` may carry `null` for a non-finite cell (the\nfrontend's null-gap wire convention, same as every DataStruct value);\n`calc.figure_facets` treats it as NaN via `np.asarray(..., dtype=float)`,\nmatplotlib's own gap convention. Each series' `label` is likewise\nFINISHED legend text, composed client-side by the same rule the flat\npath's `series_styles[i].legend` is rendered under \u2014 a user's legend\nrename verbatim, otherwise \"label (unit)\" (BUG-014). `series_styles` is\nunused on this branch, so a panel label has no second source here.",
         "properties": {
+          "channels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channels"
+          },
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
           },
           "series": {
             "items": {
@@ -4615,6 +4699,17 @@
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "legend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legend"
           },
           "y": {
             "items": {
@@ -12332,6 +12427,41 @@
       "StatplotFacet": {
         "description": "One box/violin small-multiple panel (GUI_INTERACTION #12 slice 4b \u2014\nStatStage's faceted export). ``kind`` is per-facet MODE FIDELITY: the\ninteractive StatStage computes each facet slice independently and a\nviolin slice whose OWN ``/api/statplots/violin`` call failed degrades to\na box plot for just that slice (never fabricating a KDE) \u2014 an explicit\nper-facet ``kind`` reproduces that same mixed grid on export; omitted\nfalls back to the request's own top-level ``kind``.",
         "properties": {
+          "color_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Levels"
+          },
+          "connect_breaks": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "boolean"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connect Breaks"
+          },
           "data": {
             "items": {
               "items": {
@@ -12475,6 +12605,27 @@
               }
             ],
             "title": "Caveat"
+          },
+          "color_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Levels"
           },
           "connect_breaks": {
             "anyOf": [
@@ -12620,6 +12771,20 @@
               }
             ],
             "title": "Labels"
+          },
+          "palette": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Palette"
           },
           "point_row_indices": {
             "anyOf": [

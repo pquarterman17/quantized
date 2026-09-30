@@ -235,8 +235,10 @@ describe("encodedSpecRender — scope", () => {
     expect(render).toMatchObject({ kind: "xy", mark: "step", stepMode: "post", showMarkers: true });
   });
 
-  it("box/violin/bar and faceted specs ignore the encodings", () => {
+  it("box/violin/bar leave the xy split to lib/plotEncodingStat; a facet grid splits per panel (residual 3)", () => {
     expect(encodedSpecRender(spec({ x: r(1), color: r(1) }, "box"), [DS]).encoded).toBeNull();
-    expect(encodedSpecRender(spec({ facet: r(2), color: r(1) }), [DS]).encoded).toBeNull();
+    const faceted = encodedSpecRender(spec({ facet: r(2), color: r(1) }), [DS]);
+    expect(faceted.encoded?.facets?.length).toBeGreaterThan(0);
+    expect(faceted.render.kind === "xy" && faceted.render.facets).toBe(faceted.encoded?.facets);
   });
 });

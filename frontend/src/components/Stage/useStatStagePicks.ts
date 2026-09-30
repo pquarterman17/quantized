@@ -45,6 +45,9 @@ export interface StatStagePicks {
   setValueCol: (i: number) => void;
   facetCol: number | null;
   setFacetCol: (i: number | null) => void;
+  /** P1.4 Color-by: which grouping factor colours the glyphs (`lib/statColor`). */
+  colorCol: number | null;
+  setColorCol: (i: number | null) => void;
   /** MASKED picks — what the grouping/faceting math must use. Never a column
    *  that has stopped reading as categorical, and (for `group2Col`) never a
    *  nesting that would be degenerate. See `maskStaleCategoricalPicks`. */
@@ -76,6 +79,7 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
   // param: background windows (params.seed === null) have no facet Picker
   // and never call setFacetCol, so they simply never facet.
   const [facetCol, setFacetColState] = useState<number | null>(null);
+  const [colorCol, setColorCol] = useState<number | null>(null);
 
   // Re-derive the default picks whenever the active dataset changes — a
   // channel index from the PREVIOUS dataset would silently mis-group.
@@ -86,6 +90,7 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
     setValueCol(firstValueChannel(active, g ?? -999));
     setGroup2ColState(null);
     setFacetColState(null);
+    setColorCol(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
 
@@ -97,12 +102,13 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
     setMode(seed.mode);
     setGroupColState(seed.groupCol);
     setValueCol(seed.valueCol);
-    // CLEARED, not left alone: a `StatStageSeed` fully specifies its grouping
-    // and has no second factor to send (Graph Builder's spec carries one
-    // category zone). Leaving a previously picked nest in place would silently
-    // split the sent plot by a column the sender never mentioned.
-    setGroup2ColState(null);
+    // CLEARED unless sent, not left alone: a `StatStageSeed` fully specifies
+    // its grouping. Its only second factor is a Color pick on another column
+    // (P1.4), which nests the plot by that column; leaving a previously picked
+    // nest in place would split the sent plot by a column the sender never named.
+    setGroup2ColState(seed.group2Col ?? null);
     setFacetColState(seed.facetCol ?? null);
+    setColorCol(seed.colorCol ?? null);
     onSeedConsumed();
   }, [seed, onSeedConsumed]);
 
@@ -125,6 +131,8 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
     setValueCol,
     facetCol,
     setFacetCol: setFacetColState,
+    colorCol,
+    setColorCol,
     effectiveGroupCol: effective.groupCol,
     effectiveGroup2Col: effective.group2Col,
     effectiveFacetCol: effective.facetCol,

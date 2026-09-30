@@ -119,6 +119,16 @@ export function windowEncoding(
   return y2Keys && y2Keys.length > 0 ? null : resolveFigureEncoding(picks, ds, groupCol);
 }
 
+/** The encoding an xy FACET grid draws (P1.4 residual 3): a gradient colours
+ *  single points of one series and is not drawn per panel, so it is dropped —
+ *  null when nothing else is left. The Graph Builder says so in one sentence. */
+export function facetEncoding(enc: Encoding | null): Encoding | null {
+  if (!enc || enc.gradient === undefined) return enc;
+  const rest: Encoding = { ...enc };
+  delete rest.gradient;
+  return rest.color === null && rest.symbol === null && rest.label === null ? null : rest;
+}
+
 /** Does this encoding split the series (a group, colour or symbol factor)? A
  *  legend-source-only or gradient-only encoding keeps one series per Y channel. */
 export function encodingSplits(enc: Encoding): boolean {

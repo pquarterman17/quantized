@@ -107,7 +107,7 @@ export function drawBar(
       const segs = stackedSegments(g.series);
       segs.forEach((seg, si) => {
         if (!Number.isFinite(g.series[si].mean)) return;
-        const color = seriesColor(si);
+        const color = seriesColor(d.colorLevels?.[gi] ?? si); // Color-by: the category's level
         const yTop = vy(seg.top);
         const yBot = vy(seg.base);
         ctx.globalAlpha = 0.75;
@@ -133,7 +133,7 @@ export function drawBar(
         const half = barErrorHalf(d, s, m);
         if (showN) drawCountLabel(ctx, barCx, vy(barCountAnchor(s.mean, half)), s.n, muted);
         if (!Number.isFinite(s.mean)) return;
-        const color = seriesColor(si);
+        const color = seriesColor(d.colorLevels?.[gi] ?? si); // Color-by: the category's level
         const yTop = vy(Math.max(s.mean, 0));
         const yBot = vy(Math.min(s.mean, 0));
         ctx.globalAlpha = 0.75;
