@@ -115,7 +115,9 @@ def draw_facet_grid(
     formats (``apply_tick_formats``), spines/box, grid, the R3 override
     subset (``apply_axis_shape_overrides``, ``x_lim`` only -- see this
     module's ``overrides`` doc on ``render_facets_figure``), legend, and
-    hides any trailing cells in ``axes`` past ``len(panels)``.
+    hides any trailing cells in ``axes`` past ``len(panels)``. A series'
+    optional ``"style"`` (P1.4 encodings, ``calc.plotting_encoded_facets``)
+    styles it as the flat renderer would, and its panel always has a legend.
 
     Returns the per-panel drawn series artists (FU-facet-hitmap), one list
     per panel in ``panels`` order, mirroring ``calc.figure.draw_series_axes``'s
@@ -145,7 +147,7 @@ def draw_facet_grid(
         series = panel.get("series", [])
         artists: list[Any] = []
         for si, s in enumerate(series):
-            kw = _plot_kwargs(st.line_width, st.marker_size, None)
+            kw = _plot_kwargs(st.line_width, st.marker_size, s.get("style"))  # P1.4 encoded
             (line,) = ax.plot(
                 x, np.asarray(s.get("y", []), dtype=float),
                 label=safe_mathtext_label(str(s.get("label", f"s{si}"))), **kw,
@@ -166,7 +168,7 @@ def draw_facet_grid(
         # _apply_overrides sequence. x_lim ONLY (no y_lim -- see
         # render_facets_figure's own `overrides` doc).
         apply_axis_shape_overrides(ax, st, ov, lim_keys=("x_lim",))
-        if len(series) > 1:
+        if len(series) > 1 or any(s.get("style") for s in series):  # an encoded key, always
             ax.legend(fontsize=max(6.0, st.legend_font_size - 2), frameon=st.legend_box)
     for j in range(n, len(axes)):
         axes[j].set_visible(False)

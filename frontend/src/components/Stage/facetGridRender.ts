@@ -20,6 +20,7 @@ import uPlot from "uplot";
 import type { FacetPanel } from "../../lib/facet";
 import { cellSize, type xZoomSyncHook } from "../../lib/multipanel";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
+import type { SeriesStyle } from "../../lib/types";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 
 /** Everything a facet cell's `buildOpts` call needs that is the SAME for
@@ -48,13 +49,16 @@ export interface FacetGridArgs {
    *  fallback. */
   box: { w: number; h: number };
   cell: FacetCellOpts;
+  /** P1.4 residual 3: an ENCODED grid's per-panel series styles and finished
+   *  legend text (`Stage/useFacetEncoding`), in place of the channel renames. */
+  encoded?: { styles: readonly (readonly SeriesStyle[])[]; labels: readonly (readonly string[])[] };
 }
 
 /** Build one uPlot per facet panel into `host` (which the caller has already
  *  emptied) and return them in panel order. */
 export function renderFacetGrid(host: HTMLDivElement, args: FacetGridArgs): uPlot[] {
   const { cellW, cellH } = cellSize(args.box.w, args.box.h, args.grid, args.gap);
-  return args.panels.map((p) => {
+  return args.panels.map((p, i) => {
     const div = document.createElement("div");
     host.appendChild(div);
     const opts = buildOpts(p.payload, {
@@ -65,7 +69,8 @@ export function renderFacetGrid(host: HTMLDivElement, args: FacetGridArgs): uPlo
       // `channels[i]` is the dataset channel behind `payload.series[i]`,
       // carried by the panel because the default (null `yKeys`) channel list
       // is resolved per row-slice and can differ panel to panel.
-      seriesLabels: p.channels.map((ch) => args.seriesLabels[ch]),
+      seriesLabels: args.encoded ? [...args.encoded.labels[i]] : p.channels.map((ch) => args.seriesLabels[ch]),
+      ...(args.encoded ? { seriesStyles: [...args.encoded.styles[i]] } : {}),
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });

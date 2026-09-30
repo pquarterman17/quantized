@@ -45,6 +45,23 @@ function loadEncodingModule(): Promise<EncodingModule> {
   return loading;
 }
 
+/** The lazy derivation module once `wanted` has asked for it (null until it
+ *  resolves) — shared by this hook and the facet grid's (`useFacetEncoding`). */
+export function useEncodingModule(wanted: boolean): EncodingModule | null {
+  const [mod, setMod] = useState<EncodingModule | null>(loaded);
+  useEffect(() => {
+    if (!wanted || mod) return;
+    let live = true;
+    void loadEncodingModule().then((m) => {
+      if (live) setMod(m);
+    });
+    return () => {
+      live = false;
+    };
+  }, [wanted, mod]);
+  return mod;
+}
+
 /** What an encoded Stage render needs from the derivation. */
 export interface StageEncoding {
   /** Does a factor split the series? False for a legend-source-only encoding,
@@ -91,17 +108,7 @@ export function useStageEncoding(
     () => (source ? windowEncoding(stablePicks, source, groupCol, y2Keys) : null),
     [source, stablePicks, groupCol, y2Keys],
   );
-  const [mod, setMod] = useState<EncodingModule | null>(loaded);
-  useEffect(() => {
-    if (!enc || mod) return;
-    let live = true;
-    void loadEncodingModule().then((m) => {
-      if (live) setMod(m);
-    });
-    return () => {
-      live = false;
-    };
-  }, [enc, mod]);
+  const mod = useEncodingModule(enc !== null);
 
   return useMemo(() => {
     if (!enc || !mod || !source) return null;

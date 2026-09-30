@@ -136,7 +136,11 @@ export default function BackgroundPlotWindow({
       effectiveChannels(dataset.data, view.yKeys, view.xKey, dataset.channelRoles, view.seriesOrder).length,
     )
   )
-    return <BackgroundStackWindow dataset={dataset} view={view} bg={bg} composition={composition} />;
+    return (
+      <BackgroundStackWindow
+        dataset={dataset} view={view} bg={bg} composition={composition} encoding={document?.bindings.encoding}
+      />
+    );
   return (
     <BackgroundXYWindow dataset={dataset} view={view} bg={bg} linkGroup={linkGroup} document={document} />
   );

@@ -7010,8 +7010,12 @@ export interface components {
          *     unused on this branch, so a panel label has no second source here.
          */
         FigureFacet: {
+            /** Channels */
+            channels?: number[] | null;
             /** Label */
             label: string;
+            /** Rows */
+            rows?: number[] | null;
             /** Series */
             series: components["schemas"]["FigureFacetSeries"][];
             /** X */
@@ -7021,6 +7025,8 @@ export interface components {
         FigureFacetSeries: {
             /** Label */
             label: string;
+            /** Legend */
+            legend?: string | null;
             /** Y */
             y: (number | null)[];
         };

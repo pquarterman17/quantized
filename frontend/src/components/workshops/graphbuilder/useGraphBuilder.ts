@@ -538,7 +538,7 @@ export function useGraphBuilder(): GraphBuilderState {
       // plot's presentation, same dialog + chokepoint (lib/plotEncodingExport).
       await runExportFigureCommand(
         useApp.getState,
-        encoded ? (stem, d, o) => buildEncodedExport(useApp.getState, spec, d, stem, o) : undefined,
+        encoded && !encoded.facets ? (stem, d, o) => buildEncodedExport(useApp.getState, spec, d, stem, o) : undefined,
       );
       return;
     }

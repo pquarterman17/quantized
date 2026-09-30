@@ -41,10 +41,22 @@ export function encodingOptions(ds: Dataset | null, options: readonly WellOption
   };
 }
 
+/** The one sentence a gradient Color gets on an xy facet grid (residual 3). */
+export const FACET_GRADIENT_NOTE = "A gradient colours single points, so it does not apply while faceted.";
+
+/** Why `spec` does not draw `ref` in `zone`, or null: a box / violin / bar
+ *  refusal (`lib/plotEncodingStat`), or a gradient Color on an xy facet grid
+ *  (`plotEncodingBinding.facetEncoding` drops it). */
+function refusal(spec: PlotSpec, ds: Dataset, zone: EncodingZone, ref: ChannelRef): string | null {
+  const gradient = zone === "color" && ref.text === undefined && !isEncodingFactor(ds, ref.channel);
+  if (!isStatSpec(spec) && spec.zones.facet && gradient) return FACET_GRADIENT_NOTE;
+  return statEncodingRefusal(spec, ds, zone, ref);
+}
+
 /** The chip for an assigned encoding ref, saying how it is read — "(ignored)"
- *  when the spec's categorical mark refuses it (`encodingNotes` says why). */
+ *  when the spec refuses it (`encodingNotes` says why). */
 export function encodingChip(ds: Dataset | null, zone: EncodingZone, ref: ChannelRef, spec?: PlotSpec): WellChip {
-  if (ds && spec && statEncodingRefusal(spec, ds, zone, ref)) {
+  if (ds && spec && refusal(spec, ds, zone, ref)) {
     const name = ref.text ?? ds.data.labels[ref.channel] ?? `col ${ref.channel}`;
     return { channel: ref.text !== undefined ? -1 : ref.channel, label: `${name} (ignored)` };
   }
@@ -72,16 +84,16 @@ export function encodingRef(ds: Dataset, zone: EncodingZone, channel: number, sp
   } else if (zone === "symbol" && !isEncodingFactor(ds, channel) && !(spec && isStatSpec(spec))) {
     return `Symbol needs a categorical column; set "${ds.data.labels[channel] ?? `col ${channel}`}" to nominal or ordinal first.`;
   }
-  return (spec && statEncodingRefusal(spec, ds, zone, ref)) ?? ref;
+  return (spec && refusal(spec, ds, zone, ref)) ?? ref;
 }
 
-/** Why each assigned encoding is not drawn by `spec`'s categorical mark, one
- *  sentence per well (empty when every assigned one applies). */
+/** Why each assigned encoding is not drawn by `spec`, one sentence per well
+ *  (empty when every assigned one applies). */
 export function encodingNotes(ds: Dataset | null, spec: PlotSpec): string[] {
   if (!ds) return [];
   return (["color", "symbol", "label"] as const).flatMap((zone) => {
     const ref = spec.zones[zone];
-    const why = ref ? statEncodingRefusal(spec, ds, zone, ref) : null;
+    const why = ref ? refusal(spec, ds, zone, ref) : null;
     return why ? [why] : [];
   });
 }

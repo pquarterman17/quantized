@@ -7,8 +7,9 @@
 // text columns too (./encodingWellModel).
 // Box / violin / bar (residual 3) take a categorical Color — by the X
 // category, or nesting X by another column (lib/plotEncodingStat) — and refuse
-// the rest: a drop is refused with a toast, and a pick the mark cannot draw
-// reads "(ignored)" with its one-sentence reason under the wells.
+// the rest; an xy facet grid takes all three but a gradient Color. A refused
+// drop is a toast, and a pick the plot cannot draw reads "(ignored)" with its
+// one-sentence reason under the wells.
 // Thin: assignment, gating and rendering live in useGraphBuilder and
 // lib/plotEncoding.
 
@@ -27,9 +28,6 @@ export default function EncodingWells({ g }: { g: GraphBuilderState }) {
   const ds = useApp((s) => s.datasets?.find((d) => d.id === g.datasetId) ?? null);
   const used = WELLS.some((w) => g.chips(w.zone).length > 0);
   const notes = used ? encodingNotes(ds, g.spec) : [];
-  if (used && g.family !== "categorical" && g.chips("facet").length > 0) {
-    notes.push("Ignored while faceted: facet panels do not split by encodings yet.");
-  }
   return (
     <>
       {WELLS.map((w) => (

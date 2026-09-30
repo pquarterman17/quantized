@@ -4523,9 +4523,37 @@
       "FigureFacet": {
         "description": "One xy small-multiples panel (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 \u2014\nthe export half of Stage's facet-by-column grid, `store.facetKey` /\n`lib/facet.facetPayloads`). RESOLVED, not re-derived: the frontend\nalready computed each panel's row slice (level ordering + binning,\n`lib/figureSpecFacets.ts`'s `buildFacetSpecs`) and ships it here verbatim,\nso this route never re-slices `dataset` itself and can never disagree with\nwhat Stage showed on screen. Mirrors `StatplotFacet`/`CategoricalFacet`'s\nestablished \"resolved facet panel\" shape (`routes/export_statplots.py`).\n`x`/each series' `y` may carry `null` for a non-finite cell (the\nfrontend's null-gap wire convention, same as every DataStruct value);\n`calc.figure_facets` treats it as NaN via `np.asarray(..., dtype=float)`,\nmatplotlib's own gap convention. Each series' `label` is likewise\nFINISHED legend text, composed client-side by the same rule the flat\npath's `series_styles[i].legend` is rendered under \u2014 a user's legend\nrename verbatim, otherwise \"label (unit)\" (BUG-014). `series_styles` is\nunused on this branch, so a panel label has no second source here.",
         "properties": {
+          "channels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channels"
+          },
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
           },
           "series": {
             "items": {
@@ -4562,6 +4590,17 @@
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "legend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legend"
           },
           "y": {
             "items": {

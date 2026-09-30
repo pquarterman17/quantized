@@ -222,12 +222,15 @@ describe("the plot window's own export carries the encoding (screen == export)",
     expect(buildFigureSpecFromDocument(doc(), DS, "p", OPTS).encoding).toBeUndefined();
   });
 
-  it("the SAME gate as the Stage: a continuous symbol pick, a bound y2 axis and a facet grid all send none", () => {
+  it("the SAME gate as the Stage: a continuous symbol pick and a bound y2 axis send none; a facet grid its panels' rows", () => {
     expect(buildFigureSpecFromDocument(doc({ symbol: 0 }), DS, "c", OPTS).encoding).toBeUndefined();
     const y2 = buildFigureSpecFromDocument(doc(PICKS, { yKeys: [0, 3], y2Keys: [3] }), DS, "y2", OPTS);
     expect(y2.encoding).toBeUndefined();
+    // Residual 3: a facet grid is encoded too (lib/plotEncodingFacets.test.ts pins it).
     const faceted = createFigureDocument({ id: "f", name: "f", datasetId: "enc", view: { ...view(), facetKey: 2 }, facetKey: 2, encoding: PICKS });
-    expect(buildFigureSpecFromDocument(faceted, DS, "f", OPTS).encoding).toBeUndefined();
+    const spec = buildFigureSpecFromDocument(faceted, DS, "f", OPTS);
+    expect(spec.encoding).toEqual(FIXTURE.request.encoding);
+    expect(spec.facets?.every((f) => f.rows !== undefined)).toBe(true);
   });
 
   it("never sends the waterfall stagger or decade offsets for an encoded figure", () => {

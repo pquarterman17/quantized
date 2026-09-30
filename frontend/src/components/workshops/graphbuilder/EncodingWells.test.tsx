@@ -87,16 +87,18 @@ describe("EncodingWells", () => {
     expect(g.remove).toHaveBeenCalledWith("color", 1);
   });
 
-  it("a live encoding needs no note (the Stage draws it too); a facet overriding them does", () => {
-    const live = stub({ encoded: {} as GraphBuilderState["encoded"] }, { symbol: [{ channel: 2, label: "field" }] });
+  it("a live encoding needs no note, faceted too (residual 3); a faceted gradient says why it is ignored", () => {
+    useApp.setState({ datasets: [DS] });
+    const xy = (zones: Partial<PlotSpec["zones"]>): PlotSpec => ({
+      version: 1,
+      zones: { x: ref(3), y: [ref(0)], group: null, facet: ref(1), yErr: [], xErr: null, ...zones },
+      mark: "scatter",
+    });
+    const live = stub({ spec: xy({ symbol: ref(2) }) }, { symbol: [{ channel: 2, label: "field" }], facet: [{ channel: 1, label: "sample" }] });
     const { rerender } = render(<EncodingWells g={live} />);
     expect(screen.queryByRole("note")).toBeNull();
-    rerender(
-      <EncodingWells
-        g={stub({}, { symbol: [{ channel: 2, label: "field" }], facet: [{ channel: 1, label: "sample" }] })}
-      />,
-    );
-    expect(screen.getByRole("note")).toHaveTextContent("Ignored while faceted");
+    rerender(<EncodingWells g={stub({ spec: xy({ color: ref(0) }) }, { color: [{ channel: 0, label: "Rxy (ignored)" }] })} />);
+    expect(screen.getByRole("note")).toHaveTextContent("A gradient colours single points, so it does not apply while faceted.");
   });
 
   it("shows no note while nothing is assigned", () => {

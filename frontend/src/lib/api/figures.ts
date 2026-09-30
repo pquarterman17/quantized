@@ -32,12 +32,19 @@ import type { ErrorPair } from "../api";
 export interface FigureFacetSeries {
   label: string;
   y: (number | null)[];
+  /** With `FigureSpec.encoding` only: the channel's legend rename (BUG-014). */
+  legend?: string;
 }
 
 export interface FigureFacetSpec {
   label: string;
   x: (number | null)[];
   series: FigureFacetSeries[];
+  /** P1.4 residual 3, with `FigureSpec.encoding` only: the dataset row behind
+   *  each `x` entry and the Y channel behind each series, so the route
+   *  re-splits the panel by the encoding (`lib/figureSpecFacets.withFacetRows`). */
+  rows?: number[];
+  channels?: number[];
 }
 
 /** `FigureSpec.encoding` — see `routes/export_figures_encoded.FigureEncoding`.

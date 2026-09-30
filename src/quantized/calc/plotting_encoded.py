@@ -77,12 +77,14 @@ LABEL_LIST_MAX = 3
 class EncodedPlot:
     """``plot`` plus, per series (1:1 with ``plot.series``): the label-source
     legend (``None`` = keep the default name) and the colour/symbol factor
-    LEVEL indices (``None`` when that factor is not set)."""
+    LEVEL indices (``None`` when that factor is not set), and the rows of its
+    level combination (``calc.plotting_encoded_facets`` slices them per panel)."""
 
     plot: PlotData
     legends: tuple[str | None, ...]
     color_levels: tuple[int | None, ...]
     symbol_levels: tuple[int | None, ...]
+    rows: tuple[NDArray[np.intp], ...] = ()
 
 
 def _level_text(ds: DataStruct, channel: int, value: float) -> str:
@@ -206,6 +208,7 @@ def build_encoded_series(
     legends: list[str | None] = []
     color_levels: list[int | None] = []
     symbol_levels: list[int | None] = []
+    series_rows: list[NDArray[np.intp]] = []
     for c, yk in enumerate(y_keys):
         yi = _check(ds, yk, "y_keys entry")
         rename = y_legends[c] if y_legends is not None and c < len(y_legends) else None
@@ -233,11 +236,14 @@ def build_encoded_series(
             )
             color_levels.append(k[color_at] if color_at >= 0 else None)
             symbol_levels.append(k[symbol_at] if symbol_at >= 0 else None)
+            series_rows.append(combo_rows[k])
 
     plot = PlotData(
         x=x, x_label=x_label, x_unit=x_unit, series=tuple(series), x_log=False, y_log=False
     )
-    return EncodedPlot(plot, tuple(legends), tuple(color_levels), tuple(symbol_levels))
+    return EncodedPlot(
+        plot, tuple(legends), tuple(color_levels), tuple(symbol_levels), tuple(series_rows)
+    )
 
 
 def encoded_series_styles(

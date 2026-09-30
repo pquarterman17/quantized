@@ -247,7 +247,7 @@ export function drawXY(
 export function drawFacetGrid(
   canvas: HTMLCanvasElement,
   host: HTMLElement,
-  panels: FacetPanel[],
+  panels: (FacetPanel & { styles?: readonly SeriesStyle[] })[], // P1.4: an encoded panel's styles
   mark: XYMark,
   showMarkers: boolean,
   stepMode: StepMode,
@@ -271,6 +271,7 @@ export function drawFacetGrid(
       stepMode,
       undefined, // error wells degrade for faceted xy too (same gate as grouped — see plotspec.ts)
       p.label,
+      p.styles,
     );
   });
 }
