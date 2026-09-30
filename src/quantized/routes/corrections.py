@@ -16,9 +16,10 @@ from pydantic import BaseModel, ConfigDict, Field
 from quantized.calc.corrections import apply_corrections
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS
+from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import DataStructResponse, datastruct_payload
 
-router = APIRouter(prefix="/api/corrections", tags=["corrections"])
+router = APIRouter(prefix="/api/corrections", tags=["corrections"], route_class=OffloopJSONRoute)
 
 
 class CorrectionParams(BaseModel):

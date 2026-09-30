@@ -13,11 +13,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
 from quantized.io.bruker_brml import import_bruker_brml
 from quantized.io.bruker_raw import import_bruker_raw, is_bruker_raw
+from quantized.io.cif import import_cif
 from quantized.io.delimited import import_csv
 from quantized.io.import_filters import match_filter
 from quantized.io.import_preview import parse_import
@@ -37,6 +39,8 @@ from quantized.io.xrdml import import_xrdml
 
 __all__ = [
     "import_auto",
+    "import_structure",
+    "is_structure_file",
     "register_parser",
     "resolve_parser",
     "unregister_plugin_parsers",
@@ -71,6 +75,32 @@ _EXT_MAP: dict[str, Parser] = {
     # no spec and no example file — nothing to implement against honestly.
     ".opus": import_opus,  # Bruker OPUS FTIR/NIR/Raman binary
 }
+
+
+# STRUCTURE files: a crystal structure (cell + atom sites) is not a
+# time/value series, so it never becomes a DataStruct. They are registered
+# HERE, in the one registry, so the DataStruct path refuses them with a
+# pointer instead of a misleading parse error, plugins cannot claim their
+# extensions, and routes/structures.py dispatches them through
+# :func:`import_structure`.
+StructureParser = Callable[[Path], dict[str, Any]]
+_STRUCTURE_MAP: dict[str, StructureParser] = {
+    ".cif": import_cif,  # Crystallographic Information File (port of calc.importCIF)
+}
+
+
+def is_structure_file(path: Path) -> bool:
+    """True when ``path``'s extension names a crystal-structure format."""
+    return path.suffix.lower() in _STRUCTURE_MAP
+
+
+def import_structure(path: str | Path) -> dict[str, Any]:
+    """Parse a crystal-structure file (``.cif``) into its structure dict."""
+    resolved = Path(path)
+    parser = _STRUCTURE_MAP.get(resolved.suffix.lower())
+    if parser is None:
+        raise ValueError(f"'{resolved.name}' is not a crystal-structure file (expected .cif)")
+    return parser(resolved)
 
 
 def _accept_any(_path: Path) -> bool:
@@ -189,7 +219,7 @@ def register_parser(
     for raw in extensions:
         ext = _normalize_ext(raw)
         if sniff is None:
-            if ext in _EXT_MAP or ext in _SNIFFERS:
+            if ext in _EXT_MAP or ext in _SNIFFERS or ext in _STRUCTURE_MAP:
                 raise ValueError(
                     f"extension '{ext}' is already claimed by a built-in parser "
                     "(plugins may not shadow built-in extensions)"
@@ -228,6 +258,11 @@ def resolve_parser(path: Path) -> Parser:
     import filter (gap #40 — a user-named glob -> ``ImportSettings``), else
     content sniffing."""
     ext = path.suffix.lower()
+    if ext in _STRUCTURE_MAP:
+        raise ValueError(
+            f"'{path.name}' is a crystal structure, not a data series; "
+            "File > Import adds it to the XRD lattice presets"
+        )
     if ext in _EXT_MAP:
         return _EXT_MAP[ext]
     if match_filter(path) is not None:

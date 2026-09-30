@@ -4,7 +4,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import type { FigureSpec } from "./api/figures";
-import { excludedChoiceMatters, EXCLUDED_GHOST_STYLE, withExcludedGhosts } from "./excludedRowsExport";
+import {
+  excludedChoiceMatters,
+  EXCLUDED_GHOST_STYLE,
+  FACET_OMIT_REASON,
+  omitOnlyReason,
+  withExcludedGhosts,
+} from "./excludedRowsExport";
 import { pageExcludedChoiceMatters } from "./excludedRowsChoice";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import { createFigureDocument } from "./figureDocument";
@@ -91,12 +97,20 @@ describe("withExcludedGhosts (F4.2c (a))", () => {
     expect(grey.error_spans).toEqual([spec.error_spans![0], null, null, null]);
   });
 
-  it("leaves faceted and encoded requests alone (their renderers cannot grey)", () => {
+  it("adds no ghost channels to faceted or encoded requests", () => {
     const base: FigureSpec = { dataset: { ...DATA, time: [1, 3, 4], values: [] }, y_keys: [0] };
     const faceted = { ...base, facets: [] as never[] };
     const encoded = { ...base, encoding: { color_col: 2 } };
-    expect(withExcludedGhosts(faceted, DATA, new Set([1]))).toBe(faceted);
+    // A faceted request cannot grey: an unchanged wire, tagged with the reason.
+    const facetedGrey = withExcludedGhosts(faceted, DATA, new Set([1]));
+    expect(JSON.stringify(facetedGrey)).toBe(JSON.stringify(faceted));
+    expect(omitOnlyReason(facetedGrey)).toBe(FACET_OMIT_REASON);
+    expect(omitOnlyReason(faceted)).toBeNull();
+    // An encoded request without a mask has nothing to grey; with one, the
+    // backend greys it (`grey_excluded`), still with no client-side channels.
     expect(withExcludedGhosts(encoded, DATA, new Set([1]))).toBe(encoded);
+    const masked = { ...encoded, dataset: DATA, excluded_rows: [1] };
+    expect(withExcludedGhosts(masked, DATA, new Set([1]))).toEqual({ ...masked, grey_excluded: true });
   });
 
   it("refuses a spec whose rows are not the pruned view of this data", () => {

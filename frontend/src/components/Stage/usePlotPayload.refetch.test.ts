@@ -111,9 +111,9 @@ describe("usePlotPayload — display-only edits never refetch", () => {
     expect(fetchPlotMock).toHaveBeenCalledTimes(1);
   });
 
-  it("an exclusion toggle under 'hide' does not refetch (exclusion is client-side, not in the request)", async () => {
-    const { rerender } = await mount(params({ active: BIG }));
-    rerender(params({ active: { ...BIG, excludedRows: [5] } }));
+  it("an exclusion toggle under 'hide' on a small dataset does not refetch (exclusion is client-side)", async () => {
+    const { rerender } = await mount(params());
+    rerender(params({ active: { ...SMALL, excludedRows: [1] } }));
     expect(fetchPlotMock).toHaveBeenCalledTimes(1);
   });
 });
@@ -142,6 +142,15 @@ describe("usePlotPayload — edits that DO change the request still refetch", ()
     // Growing the selection keeps eligibility false: no further round trip.
     rerender(params({ active: BIG, selection: { datasetId: "d1", rows: [1, 2] } }));
     expect(fetchPlotMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("an exclusion toggle under 'hide' on a BIG dataset refetches at full resolution", async () => {
+    // The hide mask is row-indexed; on a decimated payload it would blank the wrong points.
+    const { rerender } = await mount(params({ active: BIG }));
+    expect(decimateWidthOf(0)).not.toBeNull();
+    rerender(params({ active: { ...BIG, excludedRows: [5] } }));
+    expect(fetchPlotMock).toHaveBeenCalledTimes(2);
+    expect(decimateWidthOf(1)).toBeNull();
   });
 
   it("an exclusion toggle under 'grey' on a BIG dataset refetches at full resolution", async () => {

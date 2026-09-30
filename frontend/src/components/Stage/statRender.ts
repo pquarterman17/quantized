@@ -15,6 +15,7 @@
 
 import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
+import { glyphColor } from "../../lib/statColor";
 import type { ResolvedStatMarks } from "../../lib/statMarks";
 import { niceTicks } from "../../lib/ticks";
 import { axisLabelsOf, axisStyleOf, drawMarks, violinValueDomain } from "./statDrawMarks";
@@ -79,6 +80,9 @@ export interface CategoryAxisMarks {
    *  `NESTED_LABEL_SEP` in the string, so a NESTED outer level whose own
    *  text contains " / " groups correctly too. */
   nestLabel?: string | null;
+  /** P1.4 Color-by: each plotted group's colour LEVEL (`lib/statColor`; bar:
+   *  each drawn category's), null/absent = coloured by position. */
+  colorLevels?: (number | null)[] | null;
 }
 
 export type StatDrawData =
@@ -144,6 +148,8 @@ export type StatDrawData =
        *  `nestCol` is gated to box/violin/strip). Present only so `withNestLabel`'s
        *  union spread type-checks uniformly across every non-qq/histogram mode. */
       nestLabel?: string | null;
+      /** P1.4 Color-by: each category's colour LEVEL (every series of it). */
+      colorLevels?: (number | null)[] | null;
     }
   | {
       /** Points-only categorical plot (JMP_GAP J5 #3): same category slots
@@ -318,7 +324,7 @@ function drawViolins(
     const slot = plan.slots[plan.groupSlot[i]];
     const cx = rect.x + slot.cx * rect.w;
     const hw = slot.halfWidth * rect.w;
-    const color = seriesColor(i);
+    const color = glyphColor(d.colorLevels, i);
     const outline = violinOutline(v.x, v.density);
     if (outline.length < 2) return;
 

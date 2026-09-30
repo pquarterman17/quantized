@@ -781,8 +781,10 @@ const TS_MODULE_PINS: Record<string, number> = {
   // glyph by display position) — which also stops lib/exportStyles.ts importing
   // the whole uPlot options builder just to resolve a colour. The palette is
   // re-exported from here, so no importer changed. Ratcheted to what the file
-  // actually is.
-  "/lib/uplotOpts.ts": 1428,
+  // actually is. 1428 -> 1330 (2026-09-30, display-only repaint): the per-series
+  // half of `buildOpts` moved verbatim to lib/uplotSeries.ts, so PlotViewport
+  // can re-resolve a LIVE instance's paint through the code a rebuild runs.
+  "/lib/uplotOpts.ts": 1330,
   "/lib/uplotOverlays.ts": 1175,
   // 1090 -> 1040 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A1): the Reductions
   // wire types (WilliamsonHallResult/FftThicknessResult/SuperlatticeResult/
@@ -836,7 +838,9 @@ const TS_MODULE_PINS: Record<string, number> = {
   // its own `channels` list, so `breakPanelRender.ts` projects the
   // channel-keyed renames per panel with no derivation to guard. Part of the
   // saving went back into the stack leg's payload/channel snapshot (N4).
-  "/components/Stage/useMultiPanelStage.ts": 753,
+  // 753 -> 705 (2026-09-29, F4.2c (a)): the spatial leg's per-panel fetch
+  // moved to `spatialPanelFetch.ts`, which also masks excluded rows.
+  "/components/Stage/useMultiPanelStage.ts": 705,
   // useStatStage.ts GRADUATED 2026-09-27 (pin was 546; P2.6 box 4): its
   // public types (params + the returned state) moved to
   // components/Stage/useStatStageTypes.ts, re-exported unchanged, which put
@@ -3287,6 +3291,21 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/components/Library/folderRowMenu.ts",
     "/lib/curveContextActions.ts",
     "/lib/quickPlotTemplatesSanitize.ts",
+    // SLICE 13 (2026-09-30): three more edges, no seam. AppOverlays gates the
+    // Recode panel on the tiny `store/recodePanel.ts` mirror instead of
+    // `store/recode.ts`; the window model and the panels slice import the
+    // panel window's record half from the leaf `lib/panelWindowModel.ts`
+    // (taking `lib/facetGrid.ts`, which only `panelGridShape` reached
+    // eagerly); the macro recorder imports the step model from the leaf
+    // `lib/pipelineStep.ts`. Each is still imported statically by lazy
+    // modules (WorksheetPane/RecodePanel, the PanelPlotWindow tree, the
+    // Pipeline panel and `.dwk` codec), so only reachability can hold them.
+    // Replayed over the build's own module graph: 426 -> 425 eager modules
+    // (these four out, the three leaves in).
+    "/store/recode.ts",
+    "/lib/panelwindow.ts",
+    "/lib/facetGrid.ts",
+    "/lib/pipeline.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

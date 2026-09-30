@@ -32,9 +32,10 @@ from quantized.calc.sims_process import (
 from quantized.calc.sims_region import region_measures, region_summary_csv
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS
+from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import DataStructResponse, datastruct_payload
 
-router = APIRouter(prefix="/api/sims", tags=["sims"])
+router = APIRouter(prefix="/api/sims", tags=["sims"], route_class=OffloopJSONRoute)
 
 
 class SimsCalibration(BaseModel):

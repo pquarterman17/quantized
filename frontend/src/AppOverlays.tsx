@@ -70,9 +70,10 @@ import { useQuickPlotWithDialog } from "./store/quickPlotWithDialog";
 import { useFitYByXStore } from "./store/fitYByX";
 import { useOutlierScreeningStore } from "./store/outlierScreening";
 import { useMultivarStore } from "./store/multivar";
+import { useStatsTestsStore } from "./store/statsTests";
 import { useVariabilityStore } from "./store/variability";
 import { useRelink } from "./store/relink";
-import { useRecode } from "./store/recode";
+import { useRecodePanel } from "./store/recodePanel";
 import { useLevelOrderPanel } from "./store/levelOrderPanel";
 import { useCombineDialog } from "./store/combineDialog";
 import { useResampleDialog } from "./store/resampleDialog";
@@ -124,6 +125,7 @@ const DistributionPanel = lazyPanel(() => import("./components/workshops/distrib
 const FitYByXPanel = lazyPanel(() => import("./components/workshops/fityx/FitYByXPanel"), "FitYByXPanel");
 const OutlierScreeningPanel = lazyPanel(() => import("./components/workshops/outliers/OutlierScreeningPanel"), "OutlierScreeningPanel");
 const MultivarPanel = lazyPanel(() => import("./components/workshops/multivar/MultivarPanel"), "MultivarPanel");
+const StatsTestsPanel = lazyPanel(() => import("./components/workshops/statstests/StatsTestsPanel"), "StatsTestsPanel");
 const VariabilityChartPanel = lazyPanel(() => import("./components/workshops/variability/VariabilityChartPanel"), "VariabilityChartPanel");
 const ReportPanel = lazyPanel(() => import("./components/workshops/report/ReportPanel"), "ReportPanel");
 const StatsChooserPanel = lazyPanel(() => import("./components/workshops/statschooser/StatsChooserPanel"), "StatsChooserPanel");
@@ -193,6 +195,7 @@ const PackProjectPanel = lazyPanel(() => import("./components/workshops/packproj
 // J2: the Recode workshop, opened from the worksheet's column context menu
 // (a categorical column only) — rare-ish, on-demand, so it stays out of the
 // eager bundle like every other workshop panel above.
+// Its open flag is the tiny store/recodePanel.ts mirror, not store/recode.ts.
 const RecodePanel = lazyPanel(() => import("./components/workshops/recode/RecodePanel"), "RecodePanel");
 // JMP_GAP J1 (Group O-2b): the level-order reorder workshop, opened from the
 // same worksheet column context menu as Recode (categorical columns only) —
@@ -229,6 +232,7 @@ export default function AppOverlays() {
   const fitYByXOpen = useFitYByXStore((s) => s.open);
   const outlierScreeningOpen = useOutlierScreeningStore((s) => s.open);
   const multivarOpen = useMultivarStore((s) => s.open);
+  const statsTestsOpen = useStatsTestsStore((s) => s.open);
   const variabilityOpen = useVariabilityStore((s) => s.open);
   const dataFilterOpen = useApp((s) => s.dataFilterOpen);
   const columnSwitcherOpen = useApp((s) => s.columnSwitcherOpen);
@@ -268,7 +272,7 @@ export default function AppOverlays() {
   const recoveryPending = useRecoveryChoice((s) => s.pending !== null);
   const relinkOpen = useRelink((s) => s.open);
   const packProjectOpen = usePackProjectPanel((s) => s.open);
-  const recodeOpen = useRecode((s) => s.open);
+  const recodeOpen = useRecodePanel((s) => s.open);
   const levelOrderOpen = useLevelOrderPanel((s) => s.open);
   const workbookPropertiesOpen = useWorkbookPropertiesDialog((s) => s.properties !== null);
   // Heard while the dialog chunk is still unloaded -- the store owns the
@@ -320,6 +324,7 @@ export default function AppOverlays() {
       {fitYByXOpen && <FitYByXPanel />}
       {outlierScreeningOpen && <OutlierScreeningPanel />}
       {multivarOpen && <MultivarPanel />}
+      {statsTestsOpen && <StatsTestsPanel />}
       {variabilityOpen && <VariabilityChartPanel />}
       {dataFilterOpen && <DataFilterPanel />}
       {statsChooserOpen && <StatsChooserPanel />}

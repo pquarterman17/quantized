@@ -9,6 +9,7 @@
 
 import { exportFigure, type FigureSpec } from "../../../lib/api/figures";
 import type { CanonicalReadiness } from "./canonicalReadiness";
+import { buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
 import type { FigureDocument } from "../../../lib/figureDocument";
 import { chooseExcludedRows } from "../../../lib/excludedRowsChoice";
 import { excludedChoiceMatters } from "../../../lib/excludedRowsExport";
@@ -24,6 +25,9 @@ export interface PreviewExportDeps {
   canonicalReadiness: CanonicalReadiness | null;
   canonicalDataset: Dataset | null;
   spec: FigureSpec | null;
+  /** The legacy request's inputs, rebuilt at export time over the resolved
+   *  dataset, once greyed and once omitted (F4.2c (a)). */
+  legacyState: LegacyFigureState;
   frozenData: DataStruct | null;
   active: Dataset | null;
   fmt: string;
@@ -48,7 +52,7 @@ const CANCELLED = "export cancelled";
  *  resolve a still-pending dataset before exporting (#38) so the request
  *  never silently ships the small preview subset. */
 export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void> {
-  const { canonicalDocument, canonicalReadiness, canonicalDataset, spec, frozenData, active, fmt, dpi, autoSeriesStyles, setStatus } = deps;
+  const { canonicalDocument, canonicalReadiness, canonicalDataset, spec, legacyState, frozenData, active, fmt, dpi, autoSeriesStyles, setStatus } = deps;
   if (canonicalDocument) {
     if (canonicalReadiness?.state !== "ready") {
       const msg = `export unavailable: ${canonicalReadiness?.error ?? "figure is not ready"}`;
@@ -88,15 +92,23 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
     // deliberately captured as-is).
     const stem = (active?.name ?? "figure").replace(/\.[^.]+$/, "");
     const done = await runCancellable(EXPORT_LABEL, async (signal) => {
-      let dataset = spec.dataset;
+      let state = legacyState;
       if (!frozenData && active?.pending) {
         const ds = await useApp.getState().resolveDataset(active.id);
-        if (ds) dataset = ds.data;
+        if (ds) state = { ...state, data: ds.data, liveDataset: state.liveDataset ? ds : null };
       }
       signal.throwIfAborted();
-      await exportFigure({ ...spec, dataset, fmt, dpi, filename: stem }, signal);
+      // F4.2c (a): a figure with excluded rows asks "greyed or omitted?".
+      const picked = await chooseExcludedRows(
+        (greyExcluded) => buildLegacyFigureSpec(state, greyExcluded),
+        (grey, omit) => !!grey && !!omit && excludedChoiceMatters(grey, omit),
+        useApp.getState().excludedDisplay,
+      );
+      if (!picked?.value) return false;
+      await exportFigure({ ...picked.value, fmt, dpi, filename: stem }, signal);
+      return true;
     });
-    setStatus(done ? `exported ${stem}.${fmt}` : CANCELLED);
+    setStatus(done?.value ? `exported ${stem}.${fmt}` : CANCELLED);
   } catch (e) {
     setStatus(`export failed: ${e instanceof Error ? e.message : "error"}`);
   }

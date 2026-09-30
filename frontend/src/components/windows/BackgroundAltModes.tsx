@@ -25,12 +25,15 @@
 import { useId } from "react";
 
 import type { Composition } from "../../lib/composition";
+import type { FigureEncoding } from "../../lib/figureEncoding";
+import { canvasGroupCol } from "../../lib/plotGroupSplit";
 import { resolveTemplate } from "../../lib/plotTemplates";
 import type { PlotBg, PlotView } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import PolarStageCore from "../Stage/PolarStageCore";
 import StatStagePlot from "../Stage/StatStagePlot";
+import { useFacetEncoding } from "../Stage/useFacetEncoding";
 import { useMultiPanelStage } from "../Stage/useMultiPanelStage";
 import { useStatStage } from "../Stage/useStatStage";
 
@@ -123,13 +126,15 @@ export interface BackgroundStackWindowProps extends BackgroundModeProps {
    *  BUG-012 review F5 — its `document.plot.axisBreaks.x` — null renders
    *  the plain per-channel stack, same as before this field existed. */
   composition?: Composition | null;
+  /** P1.4 residual 3: the window's document encodings, drawn on its facet grid. */
+  encoding?: FigureEncoding;
 }
 
 /** Per-channel stack (or, with a facet binding or saved x-breaks, that
  *  arrangement) from the window's own view (focused twin: `MultiPanelStage`,
  *  which can additionally show the SPATIAL arrangement — that one stays
  *  focused-only, see the module doc). */
-export function BackgroundStackWindow({ dataset, view, bg, composition = null }: BackgroundStackWindowProps) {
+export function BackgroundStackWindow({ dataset, view, bg, composition = null, encoding }: BackgroundStackWindowProps) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const ensureBookData = useApp((s) => s.ensureBookData);
@@ -140,6 +145,10 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null }:
   // never with the focused stage's panels or another window's (cross-window
   // linking stays item 13's opt-in XY feature — deliberately NOT wired here).
   const instanceId = useId();
+  const encodedFacets = useFacetEncoding(
+    dataset, encoding, canvasGroupCol(view.groupKey, view.y2Keys), view.y2Keys, view.facetKey,
+    view.xKey, view.yKeys, view.seriesLabels,
+  );
   const { hostRef, hostStyle } = useMultiPanelStage({
     active: dataset,
     datasets: NO_DATASETS,
@@ -164,6 +173,7 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null }:
     errKeys: view.errKeys,
     hiddenChannels: view.hiddenChannels,
     seriesOrder: view.seriesOrder,
+    encodedFacets,
     // No on-plot tools until the window is focused (Key Decision 2) — "zoom"
     // is the inert default the XY background path also uses.
     tool: "zoom",

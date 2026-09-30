@@ -5,6 +5,7 @@
 
 import { fmtNum } from "../../../lib/format";
 import { useApp } from "../../../store/useApp";
+import { useStatsTestsStore } from "../../../store/statsTests";
 import ToolWindow from "../../overlays/ToolWindow";
 import { Checkbox } from "../../primitives/Checkbox";
 import { DataTable } from "../../primitives/DataTable";
@@ -87,7 +88,7 @@ export default function StatsChooserPanel() {
             </Checkbox>
           </div>
 
-          <div style={{ marginTop: 8 }}>
+          <div style={{ marginTop: 8, display: "flex", gap: 6 }}>
             <Button
               variant="primary"
               size="sm"
@@ -95,6 +96,14 @@ export default function StatsChooserPanel() {
               onClick={() => void c.recommend()}
             >
               {c.busy ? "Checking…" : "Which test?"}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              title="Open normality, paired, Dunnett, two-way ANOVA, regression and power tests."
+              onClick={() => useStatsTestsStore.getState().setOpen(true)}
+            >
+              More tests…
             </Button>
           </div>
 

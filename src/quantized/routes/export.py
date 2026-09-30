@@ -29,8 +29,9 @@ from quantized.io.origin_project.writer import opj_bytes
 from quantized.io.xrd_csv import format_xrd_csv
 from quantized.routes._errors import CALC_ERRORS, CALC_ERRORS_IO
 from quantized.routes._export_common import _attachment, _safe_name
+from quantized.routes._offloop import OffloopJSONRoute
 
-router = APIRouter(prefix="/api/export", tags=["export"])
+router = APIRouter(prefix="/api/export", tags=["export"], route_class=OffloopJSONRoute)
 
 
 class XrdCsvRequest(BaseModel):

@@ -33,6 +33,7 @@ import type { ColorScatterSpec } from "../../lib/colorscatter";
 import { seriesDisplayLabel } from "../../lib/figureSpecSeries";
 import type { PlotPayload } from "../../lib/plotdata";
 import { encodingSplits, windowEncoding, type FigureEncoding } from "../../lib/plotEncodingBinding";
+import { rowStateIdentity } from "../../lib/rowstate";
 import type { Dataset, SeriesStyle } from "../../lib/types";
 import { useStableByValue } from "../../lib/useStableValue";
 
@@ -42,6 +43,23 @@ let loading: Promise<EncodingModule> | null = null;
 function loadEncodingModule(): Promise<EncodingModule> {
   loading ??= import("../../lib/plotEncoding").then((m) => (loaded = m));
   return loading;
+}
+
+/** The lazy derivation module once `wanted` has asked for it (null until it
+ *  resolves) — shared by this hook and the facet grid's (`useFacetEncoding`). */
+export function useEncodingModule(wanted: boolean): EncodingModule | null {
+  const [mod, setMod] = useState<EncodingModule | null>(loaded);
+  useEffect(() => {
+    if (!wanted || mod) return;
+    let live = true;
+    void loadEncodingModule().then((m) => {
+      if (live) setMod(m);
+    });
+    return () => {
+      live = false;
+    };
+  }, [wanted, mod]);
+  return mod;
 }
 
 /** What an encoded Stage render needs from the derivation. */
@@ -76,28 +94,28 @@ export function useStageEncoding(
   // A window's document is rebuilt on every facade commit, so the picks arrive
   // as a fresh object each time — keyed by value, or every commit re-fetches.
   const stablePicks = useStableByValue(picks, (v) => JSON.stringify(v));
-  const enc = useMemo(
-    () => (active ? windowEncoding(stablePicks, active, groupCol, y2Keys) : null),
-    [active, stablePicks, groupCol, y2Keys],
+  // Keyed on the fields the derivation reads (the gate: data, channelTypes,
+  // pending; the gradient's analysis view: excludedRows, filter), never on
+  // `active` itself: a rename mints a new `active` over the same data and
+  // must not rebuild the encoding, or `plotted` changes and the plot refetches.
+  const [excludedId, filterId, dataId] = rowStateIdentity(active);
+  const source = useMemo(
+    () => active ?? null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [active?.id, dataId, active?.channelTypes, active?.pending, excludedId, filterId],
   );
-  const [mod, setMod] = useState<EncodingModule | null>(loaded);
-  useEffect(() => {
-    if (!enc || mod) return;
-    let live = true;
-    void loadEncodingModule().then((m) => {
-      if (live) setMod(m);
-    });
-    return () => {
-      live = false;
-    };
-  }, [enc, mod]);
+  const enc = useMemo(
+    () => (source ? windowEncoding(stablePicks, source, groupCol, y2Keys) : null),
+    [source, stablePicks, groupCol, y2Keys],
+  );
+  const mod = useEncodingModule(enc !== null);
 
   return useMemo(() => {
-    if (!enc || !mod || !active) return null;
-    const data = mod.encodingData(active.data, enc); // residual 5: text-column factors appended
+    if (!enc || !mod || !source) return null;
+    const data = mod.encodingData(source.data, enc); // residual 5: text-column factors appended
     const split = mod.encodedSplit(data, channels, enc);
     const { specs, series } = mod.encodedNames(data, split);
-    const gradient = mod.stageGradient(active, data, enc); // residual 4: scale over the kept rows
+    const gradient = mod.stageGradient(source, data, enc); // residual 4: scale over the kept rows
 
     return {
       split: encodingSplits(enc),
@@ -110,7 +128,7 @@ export function useStageEncoding(
       },
       colorBy: gradient ? (styles) => mod.gradientColumns(gradient, styles) : null,
     };
-  }, [enc, mod, active, channels]);
+  }, [enc, mod, source, channels]);
 }
 
 /** `usePlotPayload`'s per-display-series style and label lists for an encoded

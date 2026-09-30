@@ -70,3 +70,20 @@ export function pawleyRefine(body: {
 }): Promise<PawleyResult> {
   return postJSON("/api/reductions/pawley", body);
 }
+
+/** /api/reductions/spin-asymmetry's reply (NaN travels as null). */
+export interface SpinAsymmetryResult {
+  asymmetry: (number | null)[];
+  d_asymmetry: (number | null)[];
+  n_valid: number;
+}
+
+/** Neutron spin asymmetry (R++ - R--)/(R++ + R--) on one shared Q grid. */
+export function spinAsymmetry(body: {
+  r_pp: number[];
+  r_mm: number[];
+  dr_pp?: number[];
+  dr_mm?: number[];
+}): Promise<SpinAsymmetryResult> {
+  return postJSON("/api/reductions/spin-asymmetry", body);
+}

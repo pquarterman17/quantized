@@ -77,3 +77,58 @@ export function fitPeakModel(
 ): Promise<PeakModelFitResponse> {
   return postJSON("/api/peaks/model-fit", body, signal);
 }
+
+// ── batch integration (ORIGIN_GAP_PLAN #35) ──────────────────────────────────
+
+/** One integrated window of one spectrum (NaN travels as null). */
+export interface IntegrateBatchPeak {
+  region: [number, number];
+  area: number | null;
+  area_pct: number | null;
+  centroid: number | null;
+  height: number | null;
+  position: number | null;
+  fwhm: number | null;
+}
+
+/** One spectrum's row from /api/peaks/integrate-batch: `peaks` when `ok`,
+ *  else `error` saying why (a window outside the data, …). */
+export interface IntegrateBatchRow {
+  index: number;
+  label: string;
+  ok: boolean;
+  error?: string;
+  shift_samples: number;
+  shift_x: number;
+  total_area: number | null;
+  peaks?: IntegrateBatchPeak[];
+}
+
+export interface IntegrateBatchResponse {
+  regions: [number, number][];
+  n_spectra: number;
+  n_regions: number;
+  aligned: boolean;
+  reference: number;
+  baseline: string;
+  results: IntegrateBatchRow[];
+  n_failed: number;
+}
+
+export interface IntegrateBatchRequest {
+  /** One grid shared by every spectrum — the only form alignment accepts. */
+  x?: number[];
+  /** Each spectrum's own x (datasets measured on different grids). */
+  xs?: number[][];
+  spectra: number[][];
+  regions: [number, number][];
+  baseline?: "linear" | "none";
+  align?: boolean;
+  reference?: number;
+  labels?: string[];
+}
+
+/** Integrate fixed windows across many spectra (/api/peaks/integrate-batch). */
+export function integratePeaksBatch(body: IntegrateBatchRequest, signal?: AbortSignal): Promise<IntegrateBatchResponse> {
+  return postJSON("/api/peaks/integrate-batch", body, signal);
+}

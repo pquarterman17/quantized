@@ -186,3 +186,92 @@ describe("postJSONDatasetAware", () => {
     }
   });
 });
+
+// PERF (cell-edit re-upload audit): the focused plot and every background plot
+// window fetch the SAME dataset object at once after a load or an edit. Before
+// de-duplication each of them missed the handle cache and uploaded the whole
+// DataStruct in parallel (1M x 7 rows: 1.53 s JSON.stringify + a 156 MB POST,
+// once per window). Now one caller uploads and the rest wait for its handle.
+describe("postJSONDatasetAware — in-flight upload de-duplication", () => {
+  type Settle = {
+    resolve: (v: { value: unknown; handle: string | null }) => void;
+    reject: (e: unknown) => void;
+  };
+  function gatedFetch() {
+    const gates: Settle[] = [];
+    const rawFetch = vi.fn(
+      () =>
+        new Promise<{ value: unknown; handle: string | null }>((resolve, reject) => {
+          gates.push({ resolve, reject });
+        }),
+    );
+    return { rawFetch, gates, asRaw: rawFetch as unknown as RawFetchJSON };
+  }
+  const bodyOf = (fn: { mock: { calls: unknown[][] } }, i: number) =>
+    fn.mock.calls[i][1] as Record<string, unknown>;
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it("N concurrent calls for the same object upload it once and reuse its handle", async () => {
+    const dataset = { time: [1, 2, 3] };
+    const { rawFetch, gates, asRaw } = gatedFetch();
+    const calls = [0, 1, 2, 3].map((i) =>
+      postJSONDatasetAware("/api/plot/series", { dataset, w: i }, undefined, asRaw),
+    );
+    await flush();
+    expect(rawFetch).toHaveBeenCalledTimes(1); // the others wait for the upload
+    expect(bodyOf(rawFetch, 0).dataset).toBe(dataset);
+    gates[0].resolve({ value: 0, handle: "h1" });
+    await flush();
+    for (let i = 1; i < gates.length; i++) gates[i].resolve({ value: i, handle: "h1" });
+    expect(await Promise.all(calls)).toEqual([0, 1, 2, 3]);
+    expect(rawFetch).toHaveBeenCalledTimes(4);
+    for (let i = 1; i < 4; i++) {
+      expect(bodyOf(rawFetch, i).dataset).toBeUndefined();
+      expect(bodyOf(rawFetch, i).dataset_handle).toBe("h1");
+    }
+  });
+
+  it("a failed upload hands the job to ONE waiter; its error stays with its own caller", async () => {
+    const dataset = { time: [1] };
+    const { rawFetch, gates, asRaw } = gatedFetch();
+    const first = postJSONDatasetAware("/api/plot/series", { dataset }, undefined, asRaw);
+    const others = [1, 2].map(() => postJSONDatasetAware("/api/plot/series", { dataset }, undefined, asRaw));
+    await flush();
+    gates[0].reject(new HttpError(422, "bad x_key"));
+    await expect(first).rejects.toThrow("bad x_key");
+    await flush();
+    expect(rawFetch).toHaveBeenCalledTimes(2); // one waiter took over the upload
+    expect(bodyOf(rawFetch, 1).dataset).toBe(dataset);
+    gates[1].resolve({ value: "a", handle: "h2" });
+    await flush();
+    gates[2].resolve({ value: "b", handle: "h2" });
+    expect(await Promise.all(others)).toEqual(["a", "b"]);
+    expect(bodyOf(rawFetch, 2).dataset_handle).toBe("h2");
+  });
+
+  it("a waiter aborted while waiting rejects with AbortError and sends nothing", async () => {
+    const dataset = { time: [1] };
+    const { rawFetch, gates, asRaw } = gatedFetch();
+    const first = postJSONDatasetAware("/api/plot/series", { dataset }, undefined, asRaw);
+    const controller = new AbortController();
+    const waiter = postJSONDatasetAware("/api/plot/series", { dataset }, controller.signal, asRaw);
+    controller.abort();
+    await expect(waiter).rejects.toMatchObject({ name: "AbortError" });
+    gates[0].resolve({ value: 1, handle: "h3" });
+    await first;
+    expect(rawFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("no handle from the server (too large to cache): every waiter still gets its answer", async () => {
+    const dataset = { time: [1] };
+    const rawFetch = vi.fn(async () => ({ value: "ok", handle: null }));
+    const results = await Promise.all(
+      [0, 1, 2].map(() =>
+        postJSONDatasetAware("/api/plot/series", { dataset }, undefined, rawFetch as unknown as RawFetchJSON),
+      ),
+    );
+    expect(results).toEqual(["ok", "ok", "ok"]);
+    expect(rawFetch).toHaveBeenCalledTimes(3);
+    for (let i = 0; i < 3; i++) expect(bodyOf(rawFetch, i).dataset).toBe(dataset);
+  });
+});

@@ -187,6 +187,13 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
     "bindings.facet.channel",
     "F4.4 (export half): the resolved per-panel row partition of bindings.facet.channel, built at render time by lib/figureSpec.ts's buildFacetSpecs -- not a second source of the binding itself.",
   ),
+  excluded_rows: derived(
+    null,
+    "F4.2c (a): the live dataset's excluded and filter-dropped rows, read at render time from its row state (lib/rowstate.droppedRows) for an encoded request only -- the document stores no row mask.",
+  ),
+  grey_excluded: unsupported(
+    "F4.2c (a): chosen at every export (greyed or omitted, lib/excludedRowsChoice.ts), like greyscale -- never saved with the document.",
+  ),
   fmt: output("output.format"),
   style: output("output.stylePreset"),
   dpi: output("output.dpi"),

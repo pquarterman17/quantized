@@ -338,6 +338,72 @@
         "title": "ArrheniusRequest",
         "type": "object"
       },
+      "AtomSite": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "occupancy": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Occupancy"
+          },
+          "symbol": {
+            "title": "Symbol",
+            "type": "string"
+          },
+          "x": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "y": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
+          },
+          "z": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z"
+          }
+        },
+        "required": [
+          "label",
+          "symbol",
+          "x",
+          "y",
+          "z",
+          "occupancy"
+        ],
+        "title": "AtomSite",
+        "type": "object"
+      },
       "AucRequest": {
         "description": "Request for AUC computation.",
         "properties": {
@@ -363,7 +429,88 @@
         "title": "AucRequest",
         "type": "object"
       },
+      "BandsRequest": {
+        "properties": {
+          "covar": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Covar"
+          },
+          "dof": {
+            "title": "Dof",
+            "type": "integer"
+          },
+          "equation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equation"
+          },
+          "level": {
+            "default": 0.95,
+            "exclusiveMaximum": 1.0,
+            "exclusiveMinimum": 0.0,
+            "title": "Level",
+            "type": "number"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "n_points": {
+            "title": "N Points",
+            "type": "integer"
+          },
+          "params": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Params",
+            "type": "array"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          }
+        },
+        "required": [
+          "params",
+          "x",
+          "n_points",
+          "dof"
+        ],
+        "title": "BandsRequest",
+        "type": "object"
+      },
       "BatchIntegrateRequest": {
+        "description": "``x`` is one grid shared by every spectrum; ``xs`` gives each spectrum\nits own (datasets measured on different grids). Exactly one is required.",
         "properties": {
           "align": {
             "default": false,
@@ -414,7 +561,14 @@
           "spectra": {
             "items": {
               "items": {
-                "type": "number"
+                "anyOf": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               },
               "type": "array"
             },
@@ -422,15 +576,45 @@
             "type": "array"
           },
           "x": {
-            "items": {
-              "type": "number"
-            },
-            "title": "X",
-            "type": "array"
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
+          },
+          "xs": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "anyOf": [
+                      {
+                        "type": "number"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Xs"
           }
         },
         "required": [
-          "x",
           "spectra",
           "regions"
         ],
@@ -473,6 +657,20 @@
           "file"
         ],
         "title": "Body_upload_file_api_parsers_upload_post",
+        "type": "object"
+      },
+      "Body_upload_structure_api_structures_upload_post": {
+        "properties": {
+          "file": {
+            "contentMediaType": "application/octet-stream",
+            "title": "File",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_structure_api_structures_upload_post",
         "type": "object"
       },
       "Body_upload_template_api_import_template_upload_post": {
@@ -1190,6 +1388,27 @@
       "CategoricalFacet": {
         "description": "One bar-chart small-multiple panel (GUI_INTERACTION #12 slice 4b \u2014\nStatStage bar mode's faceted export). Self-contained (own ``groups``):\na facet-column level can be absent from one slice, so panels never share\none category set.",
         "properties": {
+          "color_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Levels"
+          },
           "counts": {
             "anyOf": [
               {
@@ -1384,6 +1603,27 @@
             ],
             "title": "Caveat"
           },
+          "color_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Levels"
+          },
           "counts": {
             "anyOf": [
               {
@@ -1485,6 +1725,20 @@
               }
             ],
             "title": "Jitter Width"
+          },
+          "palette": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Palette"
           },
           "points": {
             "anyOf": [
@@ -1673,6 +1927,39 @@
           }
         },
         "title": "CategoryAxisStyle",
+        "type": "object"
+      },
+      "CellPatch": {
+        "description": "One cell. ``col`` -1 is the time column; ``value`` null is NaN.\n\nA TypedDict, not a model: pydantic validates a list of these ~8x faster\n(measured 0.18 s vs 1.4 s for 350k patches), and validation runs on the\nevent loop.",
+        "properties": {
+          "col": {
+            "minimum": -1.0,
+            "title": "Col",
+            "type": "integer"
+          },
+          "row": {
+            "minimum": 0.0,
+            "title": "Row",
+            "type": "integer"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value"
+          }
+        },
+        "required": [
+          "row",
+          "col",
+          "value"
+        ],
+        "title": "CellPatch",
         "type": "object"
       },
       "CellRequest": {
@@ -1897,6 +2184,101 @@
         "title": "CoherenceRequest",
         "type": "object"
       },
+      "CompareEquation": {
+        "properties": {
+          "equation": {
+            "title": "Equation",
+            "type": "string"
+          },
+          "guesses": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Guesses"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "equation"
+        ],
+        "title": "CompareEquation",
+        "type": "object"
+      },
+      "CompareRequest": {
+        "properties": {
+          "equations": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CompareEquation"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equations"
+          },
+          "models": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Models"
+          },
+          "reference": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "CompareRequest",
+        "type": "object"
+      },
       "ConductivityRequest": {
         "properties": {
           "rho": {
@@ -1908,6 +2290,38 @@
           "rho"
         ],
         "title": "ConductivityRequest",
+        "type": "object"
+      },
+      "ConfidenceBandRequest": {
+        "properties": {
+          "channel": {
+            "default": 0,
+            "title": "Channel",
+            "type": "integer"
+          },
+          "datasets": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
+          "method": {
+            "default": "mean",
+            "title": "Method",
+            "type": "string"
+          },
+          "n_points": {
+            "default": 0,
+            "title": "N Points",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "datasets"
+        ],
+        "title": "ConfidenceBandRequest",
         "type": "object"
       },
       "ConsolidatedItem": {
@@ -2750,6 +3164,46 @@
         "title": "CriticalThicknessRequest",
         "type": "object"
       },
+      "CrystalStructure": {
+        "properties": {
+          "atom_sites": {
+            "items": {
+              "$ref": "#/components/schemas/AtomSite"
+            },
+            "title": "Atom Sites",
+            "type": "array"
+          },
+          "cell": {
+            "$ref": "#/components/schemas/UnitCell"
+          },
+          "formula": {
+            "title": "Formula",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source_name": {
+            "title": "Source Name",
+            "type": "string"
+          },
+          "space_group": {
+            "title": "Space Group",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "source_name",
+          "formula",
+          "space_group",
+          "cell",
+          "atom_sites"
+        ],
+        "title": "CrystalStructure",
+        "type": "object"
+      },
       "CurieWeissFitRequest": {
         "properties": {
           "fit_range": {
@@ -2980,6 +3434,48 @@
         "title": "DSpacingRequest",
         "type": "object"
       },
+      "DatasetHandleResponse": {
+        "description": "``dataset_handle`` is null when the patched dataset is too large to\nstay cached; the client then sends the full dataset instead.",
+        "properties": {
+          "dataset_handle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dataset Handle"
+          }
+        },
+        "required": [
+          "dataset_handle"
+        ],
+        "title": "DatasetHandleResponse",
+        "type": "object"
+      },
+      "DatasetPatchRequest": {
+        "properties": {
+          "dataset_handle": {
+            "title": "Dataset Handle",
+            "type": "string"
+          },
+          "patches": {
+            "items": {
+              "$ref": "#/components/schemas/CellPatch"
+            },
+            "title": "Patches",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dataset_handle",
+          "patches"
+        ],
+        "title": "DatasetPatchRequest",
+        "type": "object"
+      },
       "DebyeLengthRequest": {
         "properties": {
           "epsilon_r": {
@@ -3049,6 +3545,40 @@
           "deleted"
         ],
         "title": "DeletedResponse",
+        "type": "object"
+      },
+      "DemagCustomRequest": {
+        "description": "A geometry by its dimensions: a cylinder's length and diameter (same\nunit), or a spheroid's axis ratio (prolate c/a, oblate a/c, both > 1).",
+        "properties": {
+          "diameter": {
+            "default": 1.0,
+            "title": "Diameter",
+            "type": "number"
+          },
+          "length": {
+            "default": 1.0,
+            "title": "Length",
+            "type": "number"
+          },
+          "ratio": {
+            "default": 2.0,
+            "title": "Ratio",
+            "type": "number"
+          },
+          "shape": {
+            "enum": [
+              "cylinder",
+              "prolate",
+              "oblate"
+            ],
+            "title": "Shape",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shape"
+        ],
+        "title": "DemagCustomRequest",
         "type": "object"
       },
       "DemagRequest": {
@@ -3203,6 +3733,35 @@
           "x"
         ],
         "title": "DescriptiveRequest",
+        "type": "object"
+      },
+      "DiagnosticsRequest": {
+        "properties": {
+          "n_params": {
+            "title": "N Params",
+            "type": "integer"
+          },
+          "residuals": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Residuals",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "y",
+          "residuals",
+          "n_params"
+        ],
+        "title": "DiagnosticsRequest",
         "type": "object"
       },
       "DielectricToRefractiveRequest": {
@@ -4073,9 +4632,37 @@
       "FigureFacet": {
         "description": "One xy small-multiples panel (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 \u2014\nthe export half of Stage's facet-by-column grid, `store.facetKey` /\n`lib/facet.facetPayloads`). RESOLVED, not re-derived: the frontend\nalready computed each panel's row slice (level ordering + binning,\n`lib/figureSpecFacets.ts`'s `buildFacetSpecs`) and ships it here verbatim,\nso this route never re-slices `dataset` itself and can never disagree with\nwhat Stage showed on screen. Mirrors `StatplotFacet`/`CategoricalFacet`'s\nestablished \"resolved facet panel\" shape (`routes/export_statplots.py`).\n`x`/each series' `y` may carry `null` for a non-finite cell (the\nfrontend's null-gap wire convention, same as every DataStruct value);\n`calc.figure_facets` treats it as NaN via `np.asarray(..., dtype=float)`,\nmatplotlib's own gap convention. Each series' `label` is likewise\nFINISHED legend text, composed client-side by the same rule the flat\npath's `series_styles[i].legend` is rendered under \u2014 a user's legend\nrename verbatim, otherwise \"label (unit)\" (BUG-014). `series_styles` is\nunused on this branch, so a panel label has no second source here.",
         "properties": {
+          "channels": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channels"
+          },
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
           },
           "series": {
             "items": {
@@ -4112,6 +4699,17 @@
           "label": {
             "title": "Label",
             "type": "string"
+          },
+          "legend": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Legend"
           },
           "y": {
             "items": {
@@ -4329,6 +4927,21 @@
             ],
             "title": "Error Spans"
           },
+          "excluded_rows": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Rows of `dataset` the plot window does not draw as data (excluded, or dropped by the Data Filter). With `encoding` only: the split takes its levels over every row, then these rows are blanked in each series.",
+            "title": "Excluded Rows"
+          },
           "facets": {
             "anyOf": [
               {
@@ -4352,6 +4965,12 @@
             "default": "pdf",
             "title": "Fmt",
             "type": "string"
+          },
+          "grey_excluded": {
+            "default": false,
+            "description": "With `excluded_rows`: also draw those rows as one grey, line-free '(excluded)' marker series per series, after all the series.",
+            "title": "Grey Excluded",
+            "type": "boolean"
           },
           "greyscale": {
             "default": false,
@@ -5269,6 +5888,163 @@
           "y"
         ],
         "title": "GlmRequest",
+        "type": "object"
+      },
+      "GlobalFitRequest": {
+        "properties": {
+          "constraints": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/ShareGroup"
+            },
+            "title": "Constraints",
+            "type": "array"
+          },
+          "datasets": {
+            "items": {
+              "$ref": "#/components/schemas/GlobalSeries"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
+          "equation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Equation"
+          },
+          "lower": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lower"
+          },
+          "max_iter": {
+            "default": 20000,
+            "maximum": 200000.0,
+            "minimum": 1.0,
+            "title": "Max Iter",
+            "type": "integer"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "p0": {
+            "anyOf": [
+              {
+                "items": {
+                  "items": {
+                    "type": "number"
+                  },
+                  "type": "array"
+                },
+                "type": "array"
+              },
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "P0"
+          },
+          "upper": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upper"
+          }
+        },
+        "required": [
+          "datasets"
+        ],
+        "title": "GlobalFitRequest",
+        "type": "object"
+      },
+      "GlobalSeries": {
+        "description": "One dataset of a global fit: its (x, y) pairs and optional 1-sigma dy.",
+        "properties": {
+          "dy": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dy"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "GlobalSeries",
         "type": "object"
       },
       "GroupsRequest": {
@@ -6851,6 +7627,63 @@
           "value"
         ],
         "title": "NeutronCalcRequest",
+        "type": "object"
+      },
+      "OdrRequest": {
+        "properties": {
+          "lambda": {
+            "default": 1.0,
+            "title": "Lambda",
+            "type": "number"
+          },
+          "x": {
+            "items": {
+              "type": "number"
+            },
+            "title": "X",
+            "type": "array"
+          },
+          "x_error": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X Error"
+          },
+          "y": {
+            "items": {
+              "type": "number"
+            },
+            "title": "Y",
+            "type": "array"
+          },
+          "y_error": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y Error"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "OdrRequest",
         "type": "object"
       },
       "OhmicDropRequest": {
@@ -10343,6 +11176,28 @@
         "title": "SectorRequest",
         "type": "object"
       },
+      "ShareGroup": {
+        "description": "Parameter ``param_name`` takes ONE value across these datasets (0-based).",
+        "properties": {
+          "datasets": {
+            "items": {
+              "type": "integer"
+            },
+            "title": "Datasets",
+            "type": "array"
+          },
+          "param_name": {
+            "title": "Param Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "param_name",
+          "datasets"
+        ],
+        "title": "ShareGroup",
+        "type": "object"
+      },
       "SheetCarrierRequest": {
         "properties": {
           "n": {
@@ -11312,6 +12167,96 @@
         "title": "SpinAsymmetryRequest",
         "type": "object"
       },
+      "SplineSldRequest": {
+        "description": "Knots (z \u00c5, SLD \u00c5\u207b\u00b2) interpolated onto ``n_points`` over ``z_range``\n(default: 50 \u00c5 past each end knot); flat ambient/substrate outside.",
+        "properties": {
+          "method": {
+            "default": "pchip",
+            "enum": [
+              "pchip",
+              "spline",
+              "makima",
+              "linear"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "n_points": {
+            "default": 500,
+            "maximum": 2001.0,
+            "minimum": 2.0,
+            "title": "N Points",
+            "type": "integer"
+          },
+          "sld_ambient": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sld Ambient"
+          },
+          "sld_knots": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 64,
+            "minItems": 2,
+            "title": "Sld Knots",
+            "type": "array"
+          },
+          "sld_substrate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sld Substrate"
+          },
+          "z_knots": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 64,
+            "minItems": 2,
+            "title": "Z Knots",
+            "type": "array"
+          },
+          "z_range": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Range"
+          }
+        },
+        "required": [
+          "z_knots",
+          "sld_knots"
+        ],
+        "title": "SplineSldRequest",
+        "type": "object"
+      },
       "SplomFigureRequest": {
         "properties": {
           "bins": {
@@ -11494,6 +12439,41 @@
       "StatplotFacet": {
         "description": "One box/violin small-multiple panel (GUI_INTERACTION #12 slice 4b \u2014\nStatStage's faceted export). ``kind`` is per-facet MODE FIDELITY: the\ninteractive StatStage computes each facet slice independently and a\nviolin slice whose OWN ``/api/statplots/violin`` call failed degrades to\na box plot for just that slice (never fabricating a KDE) \u2014 an explicit\nper-facet ``kind`` reproduces that same mixed grid on export; omitted\nfalls back to the request's own top-level ``kind``.",
         "properties": {
+          "color_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Levels"
+          },
+          "connect_breaks": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "boolean"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connect Breaks"
+          },
           "data": {
             "items": {
               "items": {
@@ -11637,6 +12617,27 @@
               }
             ],
             "title": "Caveat"
+          },
+          "color_levels": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Color Levels"
           },
           "connect_breaks": {
             "anyOf": [
@@ -11782,6 +12783,20 @@
               }
             ],
             "title": "Labels"
+          },
+          "palette": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Palette"
           },
           "point_row_indices": {
             "anyOf": [
@@ -12062,6 +13077,19 @@
           "q_film"
         ],
         "title": "StrainRequest",
+        "type": "object"
+      },
+      "StructurePathRequest": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "StructurePathRequest",
         "type": "object"
       },
       "SubtractBgRequest": {
@@ -12389,6 +13417,87 @@
           "y"
         ],
         "title": "TwoSampleRequest",
+        "type": "object"
+      },
+      "UnitCell": {
+        "description": "Lengths in angstrom, angles in degrees; null when the CIF omits one.",
+        "properties": {
+          "a": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "A"
+          },
+          "alpha": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Alpha"
+          },
+          "b": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "B"
+          },
+          "beta": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beta"
+          },
+          "c": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "C"
+          },
+          "gamma": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gamma"
+          }
+        },
+        "required": [
+          "a",
+          "b",
+          "c",
+          "alpha",
+          "beta",
+          "gamma"
+        ],
+        "title": "UnitCell",
         "type": "object"
       },
       "ValidationError": {
@@ -12872,6 +13981,50 @@
           }
         },
         "summary": "Algebra",
+        "tags": [
+          "aggregate"
+        ]
+      }
+    },
+    "/api/aggregate/confidence-band": {
+      "post": {
+        "description": "Pointwise spread band across N datasets (utilities.confidenceBand).",
+        "operationId": "confidence_band_route_api_aggregate_confidence_band_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConfidenceBandRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Confidence Band Route Api Aggregate Confidence Band Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confidence Band Route",
         "tags": [
           "aggregate"
         ]
@@ -13630,6 +14783,48 @@
         "summary": "Sqlite Query",
         "tags": [
           "database"
+        ]
+      }
+    },
+    "/api/datasets/patch": {
+      "post": {
+        "description": "Clone a cached dataset, overwrite the given cells, and cache the result.",
+        "operationId": "patch_dataset_api_datasets_patch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatasetPatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasetHandleResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Patch Dataset",
+        "tags": [
+          "datasets"
         ]
       }
     },
@@ -15303,6 +16498,50 @@
         ]
       }
     },
+    "/api/fitting/bands": {
+      "post": {
+        "description": "Confidence and prediction bands around a fitted curve (fitting.fitBands).",
+        "operationId": "bands_api_fitting_bands_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BandsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Bands Api Fitting Bands Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Bands",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
     "/api/fitting/bootstrap": {
       "post": {
         "description": "Bootstrap parameter CIs for a registry-model fit (calc.fit_bootstrap).",
@@ -15386,6 +16625,94 @@
           }
         },
         "summary": "Bumps Fit",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/compare": {
+      "post": {
+        "description": "Fit two or more models to one selection and compare them.\n\nPer-candidate fit failures come back as ``error`` entries (curated fit\ndiagnostics, as for ``/scan`` -- see SECURITY.md); only invalid input is\na 422.",
+        "operationId": "compare_api_fitting_compare_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompareRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Compare Api Fitting Compare Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Compare",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/diagnostics": {
+      "post": {
+        "description": "Goodness-of-fit metrics and residual diagnostics for one fit.",
+        "operationId": "diagnostics_api_fitting_diagnostics_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiagnosticsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Diagnostics Api Fitting Diagnostics Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Diagnostics",
         "tags": [
           "fitting"
         ]
@@ -15565,6 +16892,94 @@
         ]
       }
     },
+    "/api/fitting/global": {
+      "post": {
+        "description": "Fit one model to several datasets with shared parameters (synchronous).",
+        "operationId": "global_fit_route_api_fitting_global_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GlobalFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Global Fit Route Api Fitting Global Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Global Fit Route",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/global/job": {
+      "post": {
+        "description": "Queue the global fit; poll ``GET /api/jobs/{id}`` and fetch ``/result``.\n\nProgress is the Nelder-Mead iteration (``fraction`` = iteration /\n``max_iter``, an upper bound). A cancel stops the fit at its next model\nevaluation and ends the job ``cancelled`` with no partial result.",
+        "operationId": "global_fit_job_api_fitting_global_job_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GlobalFitRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Global Fit Job Api Fitting Global Job Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Global Fit Job",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
     "/api/fitting/models": {
       "get": {
         "description": "Registry of fit models with their parameter names and defaults.",
@@ -15584,6 +16999,50 @@
           }
         },
         "summary": "List Models",
+        "tags": [
+          "fitting"
+        ]
+      }
+    },
+    "/api/fitting/odr": {
+      "post": {
+        "description": "Orthogonal distance (Deming) straight-line fit, errors in x and y.",
+        "operationId": "odr_api_fitting_odr_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OdrRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Odr Api Fitting Odr Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Odr",
         "tags": [
           "fitting"
         ]
@@ -16454,6 +17913,50 @@
           }
         },
         "summary": "Demag",
+        "tags": [
+          "magnetic"
+        ]
+      }
+    },
+    "/api/magnetic/demag-custom": {
+      "post": {
+        "description": "Demagnetizing factors Nz, Nxy, 4\u03c0Nz for a custom cylinder or spheroid.",
+        "operationId": "demag_custom_api_magnetic_demag_custom_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemagCustomRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Demag Custom Api Magnetic Demag Custom Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Demag Custom",
         "tags": [
           "magnetic"
         ]
@@ -18275,6 +19778,50 @@
           }
         },
         "summary": "Sld Profile Route",
+        "tags": [
+          "reflectivity"
+        ]
+      }
+    },
+    "/api/reflectivity/spline-sld": {
+      "post": {
+        "description": "Graded SLD(z) from spline knots, plus its (M, 4) microslab layer stack.\n\n``layers`` rows are ``[thickness, sld, sld_imag, roughness]`` (imaginary\nand roughness 0): a zero-thickness ambient row, one slab per grid step,\nand a zero-thickness substrate row.",
+        "operationId": "spline_sld_route_api_reflectivity_spline_sld_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplineSldRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Spline Sld Route Api Reflectivity Spline Sld Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spline Sld Route",
         "tags": [
           "reflectivity"
         ]
@@ -21747,6 +23294,90 @@
         "summary": "Youden Route",
         "tags": [
           "stats"
+        ]
+      }
+    },
+    "/api/structures/import": {
+      "post": {
+        "description": "Parse a server-visible ``.cif`` path (the desktop shell's native pick).",
+        "operationId": "import_structure_path_api_structures_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StructurePathRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrystalStructure"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Import Structure Path",
+        "tags": [
+          "structures"
+        ]
+      }
+    },
+    "/api/structures/upload": {
+      "post": {
+        "description": "Parse an uploaded ``.cif`` into its crystal structure.",
+        "operationId": "upload_structure_api_structures_upload_post",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_structure_api_structures_upload_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CrystalStructure"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload Structure",
+        "tags": [
+          "structures"
         ]
       }
     },

@@ -6,7 +6,7 @@
 
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { useRef, useState } from "react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import Library from "./Library";
 import LibraryWorkspace from "./LibraryWorkspace";
@@ -63,6 +63,12 @@ beforeEach(() => {
 });
 
 describe("Library — figures nested in the tree", () => {
+  // Bundle diet slice 13 moved lib/panelwindow + lib/facetGrid out of the
+  // eager set, so LibraryTree's lazy chunk resolves later under load than
+  // findByText's 1 s default: preload it (same fix as libraryFlatRowsSeam).
+  beforeAll(async () => {
+    await import("./LibraryTree");
+  });
   // PR C: LibraryTree is a lazy chunk (bundle-size budget, MAIN_PLAN #29 —
   // same idiom as EditableFiguresSection/PagesSection) — its content awaits
   // the Suspense resolve, so tree-content assertions use findBy* here.

@@ -25,11 +25,17 @@
 // Like the canvas, a ghost counts as a series: a lone series plus its ghost
 // gets a legend and loses its solo-axis title on screen AND in the export.
 //
-// NOT supported (the spec is returned unchanged, so a caller comparing the
-// two builds sees "no difference" and does not ask): a faceted request (the
-// faceted Stage grid never greys either — its panels are built from the
-// pruned view) and a Color/Symbol-encoded request (the encoded renderer
-// colours every split series by its level, which would repaint the ghosts).
+// An ENCODED (Color / Symbol / label-source) request is split server-side, so
+// ghost channels would be split and repainted by level. It carries the FULL
+// rows plus a per-row mask instead (`figureSpec.ts` sets `excluded_rows`), and
+// greying it only sets `grey_excluded`: the backend blanks those rows and draws
+// the companions itself (`calc/figure_excluded.py`), with the split's levels
+// over every row, as the window takes them.
+//
+// A FACETED request cannot grey: the Stage's facet grid is built from the
+// pruned view and never draws excluded rows. Its grey build is returned as an
+// unchanged copy tagged with the reason (`omitOnlyReason`, a symbol key that
+// never reaches the wire), so the export asks with only the honest option.
 
 import type { FigureSpec } from "./api/figures";
 import type { ExcludedRowsGhoster } from "./figureSpec";
@@ -41,6 +47,31 @@ import type { ExcludedDisplay } from "../store/useApp";
 
 /** How an export draws excluded/filter-dropped rows — chosen per export. */
 export type ExcludedRowsExport = "grey" | "omit";
+
+/** Why a figure with masked rows can only omit them (see the module header). */
+export const FACET_OMIT_REASON =
+  "Faceted figures cannot draw excluded rows greyed, so this export leaves them out.";
+const OMIT_ONLY = Symbol("excludedRowsOmitOnly");
+
+/** A copy of `spec` tagged with why it cannot grey (never serialized). */
+function omitOnly(spec: FigureSpec, reason: string): FigureSpec {
+  return Object.assign({ ...spec }, { [OMIT_ONLY]: reason });
+}
+
+/** The reason a grey build (a figure spec, or a page spec's panels) could not
+ *  grey rows its figure does mask, or null when nothing needs saying. */
+export function omitOnlyReason(built: unknown): string | null {
+  if (!built || typeof built !== "object") return null;
+  const own = (built as { [OMIT_ONLY]?: string })[OMIT_ONLY];
+  if (own) return own;
+  const panels = (built as { panels?: { figure?: unknown }[] }).panels;
+  if (!Array.isArray(panels)) return null;
+  for (const p of panels) {
+    const why = omitOnlyReason(p?.figure);
+    if (why) return why;
+  }
+  return null;
+}
 
 /** The ghost marker style. A literal on purpose: this is the colour of ink on
  *  the exported paper, not a themed screen colour (the canvas uses its own
@@ -65,7 +96,10 @@ export function withExcludedGhosts(
 ): FigureSpec {
   const n = data.time.length;
   const plotted = spec.y_keys;
-  if (dropped.size === 0 || spec.facets || spec.encoding || !plotted?.length) return spec;
+  if (dropped.size === 0) return spec;
+  if (spec.encoding) return spec.excluded_rows?.length ? { ...spec, grey_excluded: true } : spec;
+  if (spec.facets) return [...dropped].some((r) => r >= 0 && r < n) ? omitOnly(spec, FACET_OMIT_REASON) : spec;
+  if (!plotted?.length) return spec;
   if (plotted.some((k) => typeof k !== "number")) return spec;
   const kept = activeRowIndices(n, dropped);
   // The spec must be the pruned view of THIS data, or its rows do not line up.
@@ -123,5 +157,5 @@ export function ghosterFor(mode: ExcludedDisplay): ExcludedRowsGhoster | undefin
  *  or a shape that cannot grey them, means both builds are identical and the
  *  export goes ahead without a question. */
 export function excludedChoiceMatters(grey: FigureSpec, omit: FigureSpec): boolean {
-  return (grey.y_keys?.length ?? 0) !== (omit.y_keys?.length ?? 0);
+  return (grey.y_keys?.length ?? 0) !== (omit.y_keys?.length ?? 0) || !!grey.grey_excluded !== !!omit.grey_excluded;
 }

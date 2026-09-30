@@ -1,5 +1,5 @@
-// Calculators ▸ Magnetic tab — moment conversions / demagnetizing factors /
-// Curie-Weiss / Langevin / domain wall (calc.magnetic, ported from DiraCulator
+// Calculators ▸ Magnetic tab — moment conversions / demagnetizing factors
+// (preset shapes, or a custom geometry via lazy DemagCustomFields) / Curie-Weiss / Langevin / domain wall (calc.magnetic, ported from DiraCulator
 // buildMagneticTab). Distinct from the magnetometry hysteresis analysis.
 // Self-contained: owns its own local state so the shared useCalculators hook
 // stays under the ceiling.
@@ -7,6 +7,7 @@
 import { useState } from "react";
 
 import { magneticCurieWeiss, magneticDemag, magneticDomainWall, magneticLangevin, magneticMomentConvert, magneticCurieWeissFit } from "../../../lib/api/magnetic";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import {
   Button,
   Card,
@@ -27,6 +28,10 @@ const DEMAG_SHAPES = [
   "Long cylinder (axial)",
   "Long cylinder (transverse)",
 ];
+// Not a preset label: picks a geometry by its dimensions (DemagCustomFields).
+const CUSTOM_DEMAG = "Custom geometry";
+
+const DemagCustomFields = lazyRegion(() => import("./DemagCustomFields"), "Custom demag geometry");
 
 export default function MagneticTab() {
   // Card 1 — moment conversions.
@@ -124,25 +129,32 @@ export default function MagneticTab() {
             }}
             aria-label="shape"
           >
-            {DEMAG_SHAPES.map((s) => (
+            {[...DEMAG_SHAPES, CUSTOM_DEMAG].map((s) => (
               <option key={s} value={s}>
                 {s}
               </option>
             ))}
           </select>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() =>
-              void c2.run("Demagnetization factors", `shape=${shape}`, async () => {
-                const r = await magneticDemag(shape);
-                return dual`Nz = ${r.Nz} · Nxy = ${r.Nxy} · 4πNz = ${r.n_cgs}`;
-              })
-            }
-          >
-            Calculate
-          </Button>
+          {shape !== CUSTOM_DEMAG && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() =>
+                void c2.run("Demagnetization factors", `shape=${shape}`, async () => {
+                  const r = await magneticDemag(shape);
+                  return dual`Nz = ${r.Nz} · Nxy = ${r.Nxy} · 4πNz = ${r.n_cgs}`;
+                })
+              }
+            >
+              Calculate
+            </Button>
+          )}
         </div>
+        {shape === CUSTOM_DEMAG && (
+          <div style={{ marginTop: 8 }}>
+            <DemagCustomFields card={c2} />
+          </div>
+        )}
         {resultLine(c2.result)}
       </Card>
 

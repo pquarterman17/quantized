@@ -22,7 +22,7 @@ import {
   sanitizePanelDatasetIds,
   sanitizePanelLayout,
   type PanelLayout,
-} from "./panelwindow";
+} from "./panelWindowModel";
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
 import { boolViewFields, sanitizeLegendSize, sanitizeRegionShades, sanitizeStatMarksByMode, type StatMarksByMode } from "./plotviewSanitize";
 import { isString, keyedRecord } from "./sanitizeRecord";
@@ -32,7 +32,7 @@ import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisSca
 const VALID_TICK_MODES: readonly TickMode[] = ["auto", "fixed", "sci", "eng", "date", "time", "datetime"];
 
 // Re-exported: PlotWindow.panel (below) is the only reason this module
-// depends on panelwindow.ts at all — callers that just need the window-record
+// depends on panelWindowModel.ts at all — callers that just need the window-record
 // shape (store/panels.ts, PanelPlotWindow.tsx, lib/contextActions.ts) import
 // the type from HERE like every other PlotWindow-adjacent type, not the leaf
 // module.

@@ -39,7 +39,7 @@
 // WHAT IT MUST NOT IMPORT: nothing from `../components`, and no React — this
 // is store-layer code (architecture.test.ts's "store/ layering guard"
 // enforces it; the grandfathered set is three files and only shrinks). Only
-// `lib/` pure helpers (here: `lib/pipeline`'s step primitives) and the
+// `lib/` pure helpers (here: `lib/pipelineStep`'s step primitives) and the
 // `AppState` TYPE from ./useApp (type-only, so the runtime import graph
 // stays one-directional: useApp -> here).
 //
@@ -59,7 +59,7 @@ import {
   regenerateStep,
   type PipelineStep,
   type StepKind,
-} from "../lib/pipeline";
+} from "../lib/pipelineStep";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;

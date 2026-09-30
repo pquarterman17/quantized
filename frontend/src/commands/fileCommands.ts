@@ -373,6 +373,18 @@ export function buildFileCommands(s: StoreGet): Action[] {
           .then((m) => m.runExportOrigin(s, exportOrigin), onLoadFailure),
     },
     {
+      id: "export-origin-project",
+      group: "File",
+      label: "Export Origin project (.opj)…",
+      description: "Save the selected datasets, or all of them, as workbooks in one Origin project.",
+      keywords: "opj opju origin project workbook books export",
+      // Lazy body + client (commands/originProjectExport.ts); it registers its
+      // own cancellable op, hence `void` like "export-consolidated".
+      run: () =>
+        void runLazy("Loading Origin project export…", () => import("./originProjectExport"))
+          .then((m) => m.runExportOriginProject(s), onLoadFailure),
+    },
+    {
       id: "send-to-origin",
       group: "File",
       label: "Send to Origin (COM)…",

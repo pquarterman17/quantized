@@ -9,6 +9,7 @@ import { reflPresets, reflSimulate, reflSldProfile, type ReflLayer } from "../..
 import type { DataStruct, SldPreset } from "../../../lib/types";
 import { nextDatasetId, useApp } from "../../../store/useApp";
 import { resolveLayer } from "./reflFitModel";
+import { expandGraded, type GradedProfile } from "./reflGraded";
 
 export type Radiation = "xray" | "neutron";
 
@@ -21,6 +22,7 @@ export interface ModelLayer {
   sld: number; // manual SLD (Å⁻²), used only when preset === ""
   isld?: number; // manual absorption (Å⁻², POSITIVE = absorption), preset === "" only; default 0
   msld?: number; // magnetic SLD (Å⁻²), read only by polarised-neutron fits; default 0
+  graded?: GradedProfile; // film only: a spline SLD(z) profile instead of a slab (model-only)
 }
 
 export interface QGrid {
@@ -110,6 +112,8 @@ export function useReflectivity(): ReflectivityState {
     [layers, presets, radiation],
   );
 
+  const gradedCount = layers.filter((l) => l.graded).length;
+
   const setGrid = (patch: Partial<QGrid>): void =>
     setGridState((g) => ({ ...g, ...patch }));
 
@@ -131,7 +135,7 @@ export function useReflectivity(): ReflectivityState {
     setError(null);
     try {
       const res = await reflSimulate({
-        layers: toApiLayers(),
+        layers: await expandGraded(toApiLayers(), layers),
         q_min: grid.qMin,
         q_max: grid.qMax,
         n_points: grid.nPoints,
@@ -143,7 +147,7 @@ export function useReflectivity(): ReflectivityState {
         values: res.r.map((v) => [v ?? Number.NaN]),
         labels: ["Reflectivity"],
         units: ["a.u."],
-        metadata: { source: "reflectivity-sim", radiation, layers: layers.length },
+        metadata: { source: "reflectivity-sim", radiation, layers: layers.length, graded: gradedCount },
       };
       addDataset({ id: nextDatasetId(), name: `Reflectivity model ${n}`, data });
       setStatus(`simulated R(Q) — ${res.q.length} points`);
@@ -160,14 +164,14 @@ export function useReflectivity(): ReflectivityState {
     setBusy(true);
     setError(null);
     try {
-      const res = await reflSldProfile({ layers: toApiLayers() });
+      const res = await reflSldProfile({ layers: await expandGraded(toApiLayers(), layers) });
       const n = ++_simCounter;
       const data: DataStruct = {
         time: res.z,
         values: res.sld.map((v) => [v ?? Number.NaN]),
         labels: ["SLD"],
         units: ["Å⁻²"],
-        metadata: { source: "reflectivity-sld", radiation, layers: layers.length },
+        metadata: { source: "reflectivity-sld", radiation, layers: layers.length, graded: gradedCount },
       };
       addDataset({ id: nextDatasetId(), name: `SLD profile ${n}`, data });
       setStatus(`SLD profile — ${res.z.length} points`);

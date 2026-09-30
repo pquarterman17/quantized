@@ -9,7 +9,7 @@
 // actions (reset view, save PNG, copy data, …) over the same uPlot instance —
 // see `usePlotStageActions`.
 
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useMemo, useRef, useState } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
@@ -24,7 +24,9 @@ import {
 } from "../../lib/plotDecimate";
 import { classifyLimChange, type Lim } from "../../lib/plotLimApply";
 import { frameVarsPlugin } from "../../lib/uplotFrameVars";
+import type { LivePaintRef } from "../../lib/uplotLivePaint";
 import { buildOpts, xIsAscending, type BuildOptsArgs } from "../../lib/uplotOpts";
+import { useStableByEquality } from "../../lib/useStableByEquality";
 import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
 // loadPlotPerfPrefs is a plain localStorage read (like uplotOpts.ts's cssVar()
 // DOM read) — not a Zustand store subscription, so it doesn't break this
@@ -32,6 +34,7 @@ import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
 // PreferencesDialog.tsx documents for the store-independent prefs it reads).
 import { loadPlotPerfPrefs } from "../../store/prefs";
 import type { Accent, AnchorEditBridge, PeakWizardEditBridge, Theme } from "../../store/useApp";
+import { useLivePaint } from "./useLivePaint";
 
 export interface PlotViewportProps
   extends Omit<BuildOptsArgs, "width" | "height" | "peakWizardEdit" | "anchorEdit"> {
@@ -110,6 +113,26 @@ export default function PlotViewport(props: PlotViewportProps) {
   });
   const [rebuildEpoch, setRebuildEpoch] = useState(0);
 
+  // Display-only edits (legend hide, colour/width/dash) patch the live
+  // instance instead of rebuilding it (lib/uplotLivePaint.ts), so
+  // `hidden`/`seriesStyles`/`baseLineWidth` are NOT create-effect deps:
+  // useLivePaint rebuilds (via rebuildEpoch) when an edit turns out
+  // structural. `hidden` stays structural for a non-monotonic x, whose y
+  // range scan skips hidden series.
+  // A style edit also re-derives the per-series maps below as fresh
+  // identities with unchanged content (usePlotPayload), so they are held
+  // stable by content — otherwise every colour edit would still rebuild.
+  const seriesLabels = useStableByEquality(args.seriesLabels);
+  const errorBars = useStableByEquality(args.errorBars);
+  const errorSpans = useStableByEquality(args.errorSpans);
+  const colorByColumns = useStableByEquality(args.colorByColumns);
+  const paintRef = useRef<LivePaintRef["current"]>(null);
+  const xAscending = useMemo(
+    () => !displayPayload || xIsAscending(displayPayload.data[0] as (number | null)[]),
+    [displayPayload],
+  );
+  const hiddenKey = xAscending ? "" : (args.hidden ?? []).map(Number).join("");
+
   // Declared BEFORE the create/destroy effect so that within a single commit
   // where a lim change lands ALONGSIDE a genuine structural change (e.g. a
   // workspace restore that sets xLim and theme together), `limsRef` is
@@ -168,6 +191,10 @@ export default function PlotViewport(props: PlotViewportProps) {
     const curLims = limsRef.current;
     const opts = buildOpts(displayPayload, {
       ...args,
+      seriesLabels,
+      errorBars,
+      errorSpans,
+      colorByColumns,
       xLim: curLims.x,
       yLim: curLims.y,
       y2Lim: curLims.y2,
@@ -185,6 +212,7 @@ export default function PlotViewport(props: PlotViewportProps) {
         onRemove: anchorEdit.removeAnchor,
       },
     });
+    paintRef.current = args; // what useLivePaint patches from
     // Frame-rect bridge (decode #52): publish the plotting-area rect as CSS
     // vars on `.qzk-stage` so a frame-anchored PlotLegend can place itself via
     // calc(). Patched post-buildOpts (like `syncKey`) and only for the main
@@ -227,14 +255,14 @@ export default function PlotViewport(props: PlotViewportProps) {
       decimationEligible({
         seriesColumnCount: displayPayload.series.length,
         plottedCount: args.plotted?.length,
-        xAscending: xIsAscending(fullX),
+        xAscending,
         // M1: reads through the ONE shared predicate (lib/plotDecimate.ts)
         // every hasErrorBars/hasErrorSpans call site now uses — here it's
         // the trivial "already-precise Map" case, see that helper's doc.
-        hasErrorBars: hasErrorMapEntries(args.errorBars),
-        hasErrorSpans: hasErrorMapEntries(args.errorSpans),
+        hasErrorBars: hasErrorMapEntries(errorBars),
+        hasErrorSpans: hasErrorMapEntries(errorSpans),
         defaultTrace: args.defaultTrace,
-        hasColorByColumns: !!(args.colorByColumns && args.colorByColumns.size > 0),
+        hasColorByColumns: !!(colorByColumns && colorByColumns.size > 0),
       });
     let plotData = displayPayload.data;
     if (decimate) {
@@ -328,7 +356,6 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.showGrid,
     args.axisBox,
     args.fontSize,
-    args.baseLineWidth,
     args.defaultTrace,
     args.wheelZoom,
     args.title,
@@ -343,14 +370,13 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.shapeEdit,
     args.shapeDraw,
     args.regionShades,
-    args.seriesStyles,
     args.seriesCycle,
     args.plotted,
-    args.seriesLabels,
-    args.errorBars,
-    args.errorSpans,
-    args.colorByColumns,
-    args.hidden,
+    seriesLabels,
+    errorBars,
+    errorSpans,
+    colorByColumns,
+    hiddenKey,
     args.tool,
     args.integral,
     args.fwhmResult,
@@ -358,6 +384,9 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.bg,
     syncKey,
   ]);
+
+  // Display-only edits patch the live instance (after the create effect: see useLivePaint).
+  useLivePaint(plotRef, paintRef, displayPayload, args, xAscending, limsRef, () => setRebuildEpoch((e) => e + 1));
 
   return <div ref={hostRef} style={{ position: "absolute", inset: 8, top: insetTop ?? 8 }} />;
 }

@@ -9298,14 +9298,15 @@ see it half-built.
 
 ## Open follow-ups from the 2026-09-29 audit
 
-- [ ] `store/recode.ts` and `store/levelOrder.ts` rewrite values on a re-derived dataset without the `lib/rederived.ts` guard (the next recalc may drop them).
+- [x] `store/recode.ts` and `store/levelOrder.ts` rewrite values on a re-derived dataset without the `lib/rederived.ts` guard (the next recalc may drop them).
 - [ ] Graph Builder X well cannot pick the dataset's own X: a negative channel is passed straight through as a column index in `specToRender`, `plotEncoding.ts`, `plotSpecFigure.ts`, `useGraphBuilder` and `captureLiveBlocks`.
-- [ ] Peak batch fits never send `y_err` (the error-column choice is per active dataset).
-- [ ] Legend rows for selected-row highlight companions use the palette colour, not the accent the canvas draws.
-- [ ] Perf, measured but not yet done: cell-patch uploads instead of a full re-upload per edit, plus in-flight de-dupe across plot windows; JSON body parsing off the event loop; uPlot `setSeries`/redraw instead of rebuild for hide/colour; binary column transport for full-resolution plots; an encoding-active rename still refetches (`useStageEncoding` keyed on `active`).
+- [x] Peak batch fits never send `y_err` (the error-column choice is per active dataset).
+- [x] Legend rows for selected-row highlight companions use the palette colour, not the accent the canvas draws.
+- [ ] Perf, measured but not yet done: cell-patch uploads instead of a full re-upload per edit, plus in-flight de-dupe across plot windows; JSON body parsing off the event loop; uPlot `setSeries`/redraw instead of rebuild for hide/colour; binary column transport for full-resolution plots; ~~an encoding-active rename still refetches (`useStageEncoding` keyed on `active`)~~ (done 2026-09-29).
 
 ## Completed
 
+- 2026-09-29: Reorder levels refuses a re-derived dataset (the recalc drops `level_order`); recode stays allowed (its formula column survives the recalc). Selected-row legend rows draw a filled accent marker. An encoded Stage no longer refetches on a dataset rename. Peak batch sends each dataset's own error column as `y_err`.
 - 2026-09-29 — Worksheet: paste, fill-down, copy, cut and clear follow the visible (sorted/filtered) row order and never touch hidden rows; sort and filter reset on a dataset switch; paste maps categorical labels to level codes (unknown labels extend the table, one undo) and skips non-numeric or ambiguous ("1,5") text with a count; the stats footer sends finite values only and is debounced 300 ms; the exclusion Set is built once per call.
 - 2026-09-29 GUI audit layout fit: plot dock collapses overflowing groups into its "⋯" menu (every tool reachable at 125%/Graph Window/narrow); NE/NW legend sits below the dock; tool windows capped at the viewport, Graph Builder wells scroll with a pinned preview; Library names keep width, counts read "N pts · N ch"; QFB grid uses container queries; gradient chip named; QFB names the acquisition axis by its column name. Tests: `layout-fit.spec.ts`, `PlotToolbar.overflow.test.tsx`, `layoutFit.test.ts`.
 - 2026-09-29 — perf: `calc/decimate.py` vectorized (reduceat + first hit per bucket), index-identical to the old loop (`tests/test_calc_decimate_parity.py`); 100k-row decimated `/api/plot/series` 0.286 s -> 0.088 s.
@@ -9314,3 +9315,9 @@ see it half-built.
 - 2026-09-29: Quick-fit gadget pairs each result with the model that produced it (clear on ROI/model change and failure, latest-request sequence guard, commit names the producing model).
 - 2026-09-29: Weighted curve fit validates `dy` only over the rows the fit keeps (gap rows no longer refuse weighting).
 - 2026-09-29: `unit_convert` routes C/degC/F/degF through absolute kelvin (25 C -> mK = 298150; C -> eV uses 298.15 K) and refuses prefixed/compound C/F expressions.
+- 2026-09-30 — Excluded rows (F4.2c (a)), the paths PR #490 left out: the spatial Origin page, Send to report (both paths), the legacy Figure Builder, and encoded figures now ask "greyed or omitted?" on export when rows are masked, and draw the answer. Encoded requests send every row plus `excluded_rows`/`grey_excluded` (backend `calc/figure_excluded.py`), so the split keeps the window's levels (closes P1.4's levels-over-full-rows limit for encoded figures). Faceted figures ask with only "omit", and say why. The spatial grid and the legacy preview drew excluded rows as data; they now follow the app mode.
+- 2026-09-30 — File ▸ Export Origin project (.opj)… calls `/api/export/opj` (its first frontend caller): the multi-selection or every loaded dataset, resolved to full data, one workbook each; lazy body, cancellable. Ternary/field figure routes still have no frontend view to export from.
+- 2026-09-30 — Statistical tests workshop (Analyze ▸ Statistics, and "More tests…" in the Test chooser) wires 12 previously uncalled `/api/stats/*` routes (Anderson-Darling, KS normal, KS two-sample, sign test, Dunnett, Friedman, repeated-measures ANOVA, two-way ANOVA, multiple/stepwise regression, partial correlation, power) with a one-sentence interpretation, Copy/CSV/Report. The other 11 uncalled routes are deferred as low value or duplicates.
+- 2026-09-30: Reflectivity graded (spline) SLD layers: `POST /api/reflectivity/spline-sld` + a Model-mode "Graded (spline)" film option; model/simulate only (the fit engine varies slab fields, not knots).
+- 2026-09-30: Custom demagnetization geometry: `POST /api/magnetic/demag-custom` (calc `demag_factor`: cylinder L/d, prolate c/a, oblate a/c) + a lazy "Custom geometry" option in Calculators > Magnetic > Demagnetization factors.
+- 2026-09-30: Global (shared-parameter) fit wired end to end: `POST /api/fitting/global` (+ `/job`, cancellable) over `calc.global_curve_fit`, golden-checked at the route; Curve Fit "Global fit" mode (lazy) fits channels or label-matched datasets, marks parameters shared, overlays each series' curve on its own plot, and reports to the Library.

@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -20,7 +20,18 @@ vi.mock("../../overlays/ToolWindow", () => ({
   default: ({ children }: { children: ReactNode }) => <section>{children}</section>,
 }));
 vi.mock("./PlotSpecBar", () => ({ default: () => null }));
-vi.mock("./ZoneWell", () => ({ default: () => null }));
+// A well renders its options as buttons, so a test can see which well offers what.
+vi.mock("./ZoneWell", () => ({
+  default: ({ title, options, onAssign }: { title: string; options: { index: number; label: string }[]; onAssign: (c: number) => void }) => (
+    <div role="group" aria-label={`${title} well`}>
+      {options.map((o) => (
+        <button key={o.index} type="button" onClick={() => onAssign(o.index)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  ),
+}));
 vi.mock("./GraphPreview", () => ({ default: () => null }));
 vi.mock("../../primitives", () => ({
   Button: ({ variant, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: string }) => (
@@ -78,6 +89,7 @@ const builderState = {
   setStepMode: vi.fn(),
   render: {},
   options: [],
+  xOptions: [],
   encodingOptions: { color: [], symbol: [], label: [] },
   chips: () => [],
   assign: vi.fn(),
@@ -239,5 +251,20 @@ describe("Graph Builder step mark UI", () => {
     });
     render(<GraphBuilderPanel />);
     expect(screen.getByText("▤ step")).toBeInTheDocument();
+  });
+
+  it("offers the dataset's own X in the X well only, assigned as its negative channel", () => {
+    const assign = vi.fn();
+    vi.mocked(useGraphBuilder).mockReturnValue({
+      ...builderState,
+      assign,
+      options: [{ index: 0, label: "m" }],
+      xOptions: [{ index: -1, label: "Field (Oe)" }, { index: 0, label: "m" }],
+    });
+    render(<GraphBuilderPanel />);
+    const x = screen.getByRole("group", { name: "X well" });
+    expect(within(screen.getByRole("group", { name: "Y well" })).queryByText("Field (Oe)")).toBeNull();
+    fireEvent.click(within(x).getByRole("button", { name: "Field (Oe)" }));
+    expect(assign).toHaveBeenCalledWith("x", -1);
   });
 });

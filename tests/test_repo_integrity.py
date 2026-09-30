@@ -363,6 +363,7 @@ EXCLUDED_QUERIES = {"py/sql-injection", "py/stack-trace-exposure"}
 CODEQL_NOTE_SITES = {
     "io/sqlite_query.py": {"py/sql-injection"},
     "routes/fitting.py": {"py/stack-trace-exposure"},
+    "routes/fitting_stats.py": {"py/stack-trace-exposure"},
     "routes/peaks.py": {"py/stack-trace-exposure"},
     "routes/stats.py": {"py/stack-trace-exposure"},
 }

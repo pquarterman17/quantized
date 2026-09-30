@@ -56,13 +56,13 @@ describe("previewStatDraws — box / violin", () => {
     expect(pointRows(out.flat)).toEqual([lotRows(0, null), lotRows(1, null)]);
   });
 
-  it("faceted box: every panel's points carry its own ORIGINAL rows (facetSliceRowIds), no connect line", () => {
+  it("faceted box: every panel's points carry its own ORIGINAL rows (facetSliceRowIds), and its connect line", () => {
     const s = spec("box", true);
     const out = previewStatDraws(specToRender(s, [DS]), s, [DS], { box: { points: "all", connectMeans: true } });
     expect(out.facets?.map((f) => f.label)).toHaveLength(2);
     out.facets!.forEach((f, w) => {
       expect(pointRows(f.draw)).toEqual([lotRows(0, w), lotRows(1, w)]);
-      expect("marks" in f.draw && f.draw.marks).toMatchObject({ points: "all", connectMeans: false });
+      expect("marks" in f.draw && f.draw.marks).toMatchObject({ points: "all", connectMeans: true });
     });
     // The one recipe, not a re-derivation: the same rows facetSliceRowIds gives.
     const { data, rowIds } = analysisView(DS);

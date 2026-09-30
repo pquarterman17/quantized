@@ -35,11 +35,11 @@ from typing import Any
 import numpy as np
 
 from quantized.calc.figure import _plot_kwargs
+from quantized.calc.figure_facets_grid import _grid_setup, _new_grid_figure
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_overrides import apply_axis_shape_overrides
-from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
+from quantized.calc.figure_render import render_scope, savefig_bytes
 from quantized.calc.figure_scale import apply_axis_scale
-from quantized.calc.figure_styles import figure_style
 from quantized.calc.figure_ticks import apply_tick_formats
 from quantized.heavy_import import heavy_imports
 
@@ -51,30 +51,6 @@ __all__ = [
 ]
 
 _FORMATS = ("pdf", "svg", "png", "tiff")
-
-
-def _grid_shape(n: int) -> tuple[int, int]:
-    """(rows, cols) for `n` panels — the SAME `ceil(sqrt(n))`-column layout
-    `render_facets_figure` below already uses, and the screen's own CSS grid
-    formula (`Math.ceil(Math.sqrt(n))` columns, auto-wrapping rows —
-    `StatStage.tsx`/`GraphPreview.tsx`), so every faceted export tiles
-    identically to what's on screen."""
-    cols = int(np.ceil(np.sqrt(n)))
-    rows = int(np.ceil(n / cols))
-    return rows, cols
-
-
-def _new_grid_figure(n: int, figsize: tuple[float, float]) -> tuple[Any, list[Any]]:
-    """A fresh `_grid_shape(n)` subplot grid; returns the figure and its axes
-    flattened + trimmed to exactly `n` (unused trailing cells past `n` are
-    hidden, matching `render_facets_figure`'s own convention below)."""
-    rows, cols = _grid_shape(n)
-    fig = new_figure(figsize=figsize)
-    axes_grid = fig.subplots(rows, cols, squeeze=False)
-    flat = [ax for row in axes_grid for ax in row]
-    for j in range(n, len(flat)):
-        flat[j].set_visible(False)
-    return fig, flat[:n]
 
 
 def draw_facet_grid(
@@ -94,7 +70,9 @@ def draw_facet_grid(
     formats (``apply_tick_formats``), spines/box, grid, the R3 override
     subset (``apply_axis_shape_overrides``, ``x_lim`` only -- see this
     module's ``overrides`` doc on ``render_facets_figure``), legend, and
-    hides any trailing cells in ``axes`` past ``len(panels)``.
+    hides any trailing cells in ``axes`` past ``len(panels)``. A series'
+    optional ``"style"`` (P1.4 encodings, ``calc.plotting_encoded_facets``)
+    styles it as the flat renderer would, and its panel always has a legend.
 
     Returns the per-panel drawn series artists (FU-facet-hitmap), one list
     per panel in ``panels`` order, mirroring ``calc.figure.draw_series_axes``'s
@@ -124,7 +102,7 @@ def draw_facet_grid(
         series = panel.get("series", [])
         artists: list[Any] = []
         for si, s in enumerate(series):
-            kw = _plot_kwargs(st.line_width, st.marker_size, None)
+            kw = _plot_kwargs(st.line_width, st.marker_size, s.get("style"))  # P1.4 encoded
             (line,) = ax.plot(
                 x, np.asarray(s.get("y", []), dtype=float),
                 label=safe_mathtext_label(str(s.get("label", f"s{si}"))), **kw,
@@ -145,7 +123,7 @@ def draw_facet_grid(
         # _apply_overrides sequence. x_lim ONLY (no y_lim -- see
         # render_facets_figure's own `overrides` doc).
         apply_axis_shape_overrides(ax, st, ov, lim_keys=("x_lim",))
-        if len(series) > 1:
+        if len(series) > 1 or any(s.get("style") for s in series):  # an encoded key, always
             ax.legend(fontsize=max(6.0, st.legend_font_size - 2), frameon=st.legend_box)
     for j in range(n, len(axes)):
         axes[j].set_visible(False)
@@ -258,6 +236,7 @@ def render_stat_facets_figure(
     caveat: str | None = None,
     marks: dict[str, Any] | None = None,
     axis_style: dict[str, Any] | None = None,
+    show_connect_means: bool = False,
 ) -> bytes:
     """Faceted box/violin export (GUI_INTERACTION #12 slice 4b, StatStage's
     "facet by" grid). Each ``panels[i]`` is ``{"label": str, "kind": "box" |
@@ -281,6 +260,9 @@ def render_stat_facets_figure(
     ``"point_row_indices"`` (its groups' ORIGINAL rows, parallel to ``data``)
     draw its jittered points with the screen's hash; a panel without them
     shows no jittered points (``figure_stat_marks.facet_marks``).
+    ``show_connect_means`` joins each box / strip panel's own means, lifted
+    at its optional ``"connect_breaks"`` (the flat request's rule, per panel);
+    a panel's optional ``"colors"`` colours its glyphs (P1.4 Color-by).
     """
     with heavy_imports(
         "quantized.calc.figure_group_notes", "quantized.calc.figure_stat_marks",
@@ -295,24 +277,9 @@ def render_stat_facets_figure(
     if not panels:
         raise ValueError("panels must be non-empty")
 
-    st = figure_style(style)
-    resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
     n = len(panels)
-    rows, cols = _grid_shape(n)
-    figsize = (
-        width_in or st.fig_width_in * cols * 0.8,
-        height_in or st.fig_height_in * rows * 0.8,
-    )
-    fallback = "DejaVu Serif" if st.font_generic == "serif" else "DejaVu Sans"
-    rc: dict[str, Any] = {
-        "font.family": st.font_generic,
-        f"font.{st.font_generic}": [st.font_name, fallback],
-        "font.size": st.font_size,
-        "axes.labelsize": st.font_size,
-        "axes.titlesize": st.font_size,
-        "xtick.top": st.box_on,
-        "ytick.right": st.box_on,
-    }
+    st, figsize, rc = _grid_setup(style, n, width_in, height_in, box_ticks=True)
+    resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
 
     with render_scope(rc):
         # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
@@ -322,7 +289,8 @@ def render_stat_facets_figure(
         title = safe_mathtext_label(title)
         x_label = safe_mathtext_label(x_label)
         y_label = safe_mathtext_label(y_label)
-        prepared: list[tuple[str, str, Any, list[str] | None, Any, Any, list[str] | None, Any]] = []
+        Labels = list[str] | None
+        prepared: list[tuple[str, str, Any, Labels, Labels, dict[str, Any]]] = []
         for p in panels:
             label = safe_mathtext_label(str(p.get("label", "")))
             kind = p.get("kind") or default_kind
@@ -336,15 +304,14 @@ def render_stat_facets_figure(
             # ones (`_draw_statplot`'s own `raw_labels` doc).
             raw_flabels = [str(g) for g in flabels] if flabels else None
             flabels = [safe_mathtext_label(str(g)) for g in flabels] if flabels else flabels
-            prepared.append(
-                (label, kind, data, flabels, p.get("y_domain"), p.get("tiers"), raw_flabels,
-                 p.get("point_row_indices")),
-            )
+            prepared.append((label, kind, data, flabels, raw_flabels, p))
         fig, axes = _new_grid_figure(n, figsize)
         panel_rows = zip(axes, prepared, strict=True)
         any_outer = False
         for ax, panel in panel_rows:
-            label, kind, data, flabels, y_domain, panel_tiers, raw_flabels, rows = panel
+            label, kind, data, flabels, raw_flabels, p = panel
+            y_domain, panel_tiers = p.get("y_domain"), p.get("tiers")
+            rows = p.get("point_row_indices")
             # Review finding 4: a nested axis's [outer, inner] pairs are
             # PER-PANEL (each panel's own composite labels) -- never the
             # shared top-level `axis_style`, whose own `tiers` (if any) was
@@ -358,6 +325,8 @@ def render_stat_facets_figure(
                 ax, kind, data, flabels, dist, bins, fit, st, show_n=show_n,
                 marks=facet_marks(marks, kind, has_rows=rows is not None), axis_style=panel_style,
                 raw_labels=raw_flabels, point_row_indices=rows,
+                show_connect_means=show_connect_means, connect_breaks=p.get("connect_breaks"),
+                colors=p.get("colors"),
             )
             # Review finding 5: at least one panel drew a two-tier nested
             # axis (its own outer-level row) -- the shared x title/caveat
@@ -416,7 +385,8 @@ def render_categorical_facets_figure(
     the flat renderer's behaviour, via the same helpers. An optional
     per-panel ``"bar_marks"`` (``figure_stat_marks.overlay_bar_marks``'s
     keywords, that panel's own ``raw`` / ``raw_rows``) draws its points and
-    summary marker as the flat export does; stacked panels draw none.
+    summary marker as the flat export does; stacked panels draw none. An
+    optional per-panel ``"colors"`` colours its categories (P1.4 Color-by).
     """
     with heavy_imports("quantized.calc.figure_categorical", "quantized.calc.figure_group_notes"):
         from quantized.calc.figure_categorical import (
@@ -432,21 +402,8 @@ def render_categorical_facets_figure(
     if not panels:
         raise ValueError("panels must be non-empty")
 
-    st = figure_style(style)
     n = len(panels)
-    rows, cols = _grid_shape(n)
-    figsize = (
-        width_in or st.fig_width_in * cols * 0.8,
-        height_in or st.fig_height_in * rows * 0.8,
-    )
-    fallback = "DejaVu Serif" if st.font_generic == "serif" else "DejaVu Sans"
-    rc: dict[str, Any] = {
-        "font.family": st.font_generic,
-        f"font.{st.font_generic}": [st.font_name, fallback],
-        "font.size": st.font_size,
-        "axes.labelsize": st.font_size,
-        "axes.titlesize": st.font_size,
-    }
+    st, figsize, rc = _grid_setup(style, n, width_in, height_in, box_ticks=False)
 
     with render_scope(rc):
         # Rich-text labels (GOTO #5): de-math INVALID $...$ so savefig never
@@ -472,12 +429,13 @@ def render_categorical_facets_figure(
             errs = _to_error_matrix(p.get("errors"), len(groups), len(series))
             cnts = None if stacked else _to_counts(p.get("counts"), len(groups), len(series))
             marks = p.get("bar_marks")  # stacked panels draw none (_draw_categorical_bars)
-            prepared.append((label, groups, series, vals, errs, cnts, raw_groups, marks))
+            prepared.append((label, groups, series, vals, errs, cnts, raw_groups, marks, p))
         fig, axes = _new_grid_figure(n, figsize)
         cat_rows = zip(axes, prepared, strict=True)
-        for ax, (label, groups, series, vals, errs, cnts, raw_groups, bar_marks) in cat_rows:
+        for ax, (label, groups, series, vals, errs, cnts, raw_groups, bar_marks, p) in cat_rows:
             _draw_categorical_bars(
                 ax, groups, series, vals, errs, stacked, cnts, axis_style, raw_groups, bar_marks,
+                p.get("colors"),
             )
             ax.set_title(label, fontsize=st.font_size)
             if not st.box_on:

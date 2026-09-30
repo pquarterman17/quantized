@@ -11,6 +11,7 @@ import { useFitYByXStore } from "../store/fitYByX";
 import { useOutlierScreeningStore } from "../store/outlierScreening";
 import { openSimsDialog } from "../store/simsDialog";
 import { useMultivarStore } from "../store/multivar";
+import { useStatsTestsStore } from "../store/statsTests";
 import { useVariabilityStore } from "../store/variability";
 
 /** Build the Analyze-group curated palette actions against the live store
@@ -159,6 +160,15 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       description: "Choose and run a statistical test with its assumptions and recommendation explained.",
       keywords: "jmp t-test anova mann whitney which test assumptions hypothesis",
       run: () => s().setStatsChooserOpen(true),
+    },
+    {
+      id: "stats-tests",
+      group: "Analyze",
+      section: "Statistics",
+      label: "Statistical tests (normality · paired · Dunnett · regression · power)…",
+      description: "Run a chosen test on picked columns and read a one-sentence interpretation next to the results table, ready to copy, export, or report.",
+      keywords: "anderson darling kolmogorov smirnov ks normality sign test friedman repeated measures two-way anova dunnett control multiple regression stepwise partial correlation power sample size",
+      run: () => useStatsTestsStore.getState().setOpen(true),
     },
     {
       id: "outlier-screening",

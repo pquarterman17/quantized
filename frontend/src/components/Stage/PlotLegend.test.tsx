@@ -749,3 +749,31 @@ describe("PlotLegend greyed excluded rows (audit item 1)", () => {
     expect(ghost.querySelector("circle")).toHaveAttribute("stroke", "var(--ink-dim-on-light)");
   });
 });
+
+describe("PlotLegend selected-row highlight companions (audit follow-up)", () => {
+  // `highlightSelectedPayload` appends one "(selected)" companion per series.
+  // The canvas draws it as accent-filled 7px markers with no line
+  // (`buildOpts`' `s.selected` branch), so its legend row must match, never
+  // take the next palette colour.
+  const withSelected: PlotSeriesSpec[] = [
+    { label: "A", unit: "" },
+    { label: "B", unit: "" },
+    { label: "A (selected)", unit: "", kind: "points", selected: true },
+    { label: "B (selected)", unit: "", kind: "points", selected: true },
+  ];
+
+  it.each([true, false])("draws each selected companion as a filled accent circle (dark bg: %s)", (isDarkBg) => {
+    const { container } = render(<PlotLegend series={withSelected} plotted={[0, 1]} isDarkBg={isDarkBg} />);
+    const rows = [...container.querySelectorAll(".qzk-legend .it")];
+    expect(rows.map((r) => r.textContent)).toEqual(["A▲▼", "B▲▼", "A (selected)", "B (selected)"]);
+    for (const row of rows.slice(2)) {
+      const sample = row.querySelector(".qzk-legend-sample")!;
+      expect(sample).toHaveAttribute("data-line", "false");
+      expect(sample).toHaveAttribute("data-marker", "circle");
+      const dot = sample.querySelector("circle")!;
+      expect(dot).toHaveAttribute("stroke", "var(--accent)");
+      expect(dot).toHaveAttribute("fill", "var(--accent)");
+      expect(sample.outerHTML).not.toMatch(/--series-/);
+    }
+  });
+});

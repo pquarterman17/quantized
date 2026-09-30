@@ -54,6 +54,7 @@ import { compactOverrides, type FigureOverrides } from "./figureOverrides";
 import type { FigureDoc } from "./figuredoc";
 import type { EncodedSpec } from "./plotEncoding";
 import { specDatasetId, specErrorBindings, type AxesBlock, type DisplayBlock, type PlotSpec } from "./plotspec";
+import { specXKey } from "./plotspecGroupCol";
 import type { AxisScale, SeriesStyle } from "./types";
 
 export function plotSpecFigureReason(spec: PlotSpec): string | null {
@@ -162,7 +163,7 @@ export function plotSpecToFigureDoc(
     datasetId,
     live: true,
     config: {
-      xKey: spec.zones.x?.channel ?? null,
+      xKey: specXKey(spec), // own X (a negative channel) = an empty well, x_key omitted
       yKeys: spec.zones.y.map((r) => r.channel),
       groupCol,
       xScale,

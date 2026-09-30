@@ -17,6 +17,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { dropGapRows } from "../../../lib/api/finitePairs";
+import type { CrystalStructure } from "../../../lib/api/structures";
+import type { Cell, LatticePreset } from "../../../lib/crystalStructure";
 import { pawleyRefine } from "../../../lib/api/reductions";
 import { xAxisIsTwoThetaDegrees, xChannelIdentity } from "../../../lib/peakTableFit";
 import type { PawleyResult } from "../../../lib/reductionTypes";
@@ -67,6 +69,14 @@ export interface PawleyState {
   canCompute: boolean;
   compute: () => Promise<void>;
   toLibrary: () => void;
+  /** Fill the cell, tie and centering from a CIF's lattice preset. */
+  applyLattice: (p: LatticePreset, source: CrystalStructure) => void;
+}
+
+/** Which CIF a starting cell came from, recorded while the cell is unedited. */
+interface LatticeSource {
+  cell: Cell;
+  ref: { name: string; source_name: string; space_group: string };
 }
 
 /** Everything `toLibrary` needs, frozen at the moment the fit returned, so a
@@ -84,6 +94,7 @@ interface PawleyFitInput {
   wavelength: number;
   profileFwhm: number;
   refineCell: boolean;
+  startCellFrom: LatticeSource["ref"] | null;
   /** The source's own measured-wavelength keys, carried to the derived set. */
   measured: Record<string, unknown>;
 }
@@ -108,6 +119,7 @@ export function usePawley(): PawleyState {
   const [fitInput, setFitInput] = useState<PawleyFitInput | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [latticeSource, setLatticeSource] = useState<LatticeSource | null>(null);
 
   // Bumped on every dataset switch and every compute(); a completion whose
   // token is no longer current belongs to a dataset or click the user has
@@ -145,6 +157,17 @@ export function usePawley(): PawleyState {
       c: tie === "abc" && next !== "abc" ? f.a : f.c,
     }));
     setTieState(next);
+  };
+
+  const applyLattice = (p: LatticePreset, src: CrystalStructure): void => {
+    const c = p.cell;
+    setFields((f) => ({
+      ...f, a: String(c.a), b: String(c.b), c: String(c.c),
+      alpha: String(c.alpha), beta: String(c.beta), gamma: String(c.gamma),
+    }));
+    setTieState(p.tie);
+    if (p.centering) setSymmetry(p.centering);
+    setLatticeSource({ cell: c, ref: { name: src.name, source_name: src.source_name, space_group: src.space_group } });
   };
 
   const xIdentity = active ? xChannelIdentity(active.data, null) : null;
@@ -226,6 +249,9 @@ export function usePawley(): PawleyState {
         wavelength: n.wavelength,
         profileFwhm: n.fwhm,
         refineCell,
+        // Only while the refined start IS the preset's cell, untouched.
+        startCellFrom: latticeSource && (["a", "b", "c", "alpha", "beta", "gamma"] as const)
+          .every((k) => n[k] === latticeSource.cell[k]) ? latticeSource.ref : null,
         measured,
       });
     } catch (e) {
@@ -268,6 +294,7 @@ export function usePawley(): PawleyState {
           wavelength_a: f.wavelength,
           profile_fwhm_deg: f.profileFwhm,
           refine_cell: f.refineCell,
+          start_cell_from: f.startCellFrom,
           hkl_max: result.hkl_max,
           two_theta_range_deg: [f.range.min, f.range.max],
           rwp: result.rwp,
@@ -292,6 +319,6 @@ export function usePawley(): PawleyState {
     wavelengthFromFile,
     refineCell, setRefineCell,
     result, fitRange: fitInput?.range ?? null, fitRefined: fitInput?.refineCell ?? false,
-    busy, error, blockedReason, canCompute, compute, toLibrary,
+    busy, error, blockedReason, canCompute, compute, toLibrary, applyLattice,
   };
 }

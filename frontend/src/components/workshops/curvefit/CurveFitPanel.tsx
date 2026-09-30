@@ -12,6 +12,7 @@ import { Button, Select } from "../../primitives";
 import { reportEmit } from "../../../lib/api";
 import type { CustomFitModel } from "../../../lib/fitmodels";
 import { fmtNum as fmt } from "../../../lib/format";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { toast } from "../../../store/toasts";
 import { useApp } from "../../../store/useApp";
 import BumpsSection from "./BumpsSection";
@@ -25,6 +26,15 @@ import WeightingSection from "./WeightingSection";
 import { useCurveFit } from "./useCurveFit";
 import { useModelScan } from "./useModelScan";
 import { useSavedFitModels } from "./useSavedFitModels";
+import { xErrorChannel } from "./xErrorChannel";
+
+// Fit-statistics sections: each its own chunk, fetched only when shown.
+const FitBandsSection = lazyRegion(() => import("./FitBandsSection"), "Bands");
+const FitDiagnosticsSection = lazyRegion(() => import("./FitDiagnosticsSection"), "Diagnostics");
+const CompareModelsSection = lazyRegion(() => import("./CompareModelsSection"), "Compare models");
+const OdrSection = lazyRegion(() => import("./OdrSection"), "ODR");
+// Global (shared-parameter) fit mode: replaces the single-fit body while on.
+const GlobalFitSection = lazyRegion(() => import("./GlobalFitSection"), "Global fit");
 
 // Custom-model picker values are namespaced "custom:<name>"; the bare prefix
 // is the blank "type a new equation" entry (GOTO #1).
@@ -45,12 +55,14 @@ export default function CurveFitPanel() {
   const setOpen = useApp((s) => s.setCurveFitOpen);
   const addReport = useApp((s) => s.addReport);
   const [reporting, setReporting] = useState(false);
+  const [globalMode, setGlobalMode] = useState(false);
   const {
     active,
     models,
     modelName,
     setModelName,
     result,
+    fitData,
     guessOnly,
     busy,
     error,
@@ -178,17 +190,48 @@ export default function CurveFitPanel() {
           ["AIC", fmt(result.AIC)],
         ];
 
+  const modelPicker = (
+    <>
+      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between" }}>
+        <label className="qzk-field-lbl">Model</label>
+        <Button
+          size="sm"
+          variant={globalMode ? "primary" : "ghost"}
+          aria-pressed={globalMode}
+          title="Fit one model to several series with shared parameters"
+          onClick={() => setGlobalMode((v) => !v)}
+        >
+          Global fit
+        </Button>
+      </div>
+      <Select
+        aria-label="Model"
+        options={modelOptions}
+        value={modelName}
+        onChange={(e) => setModelName(e.target.value)}
+      />
+    </>
+  );
+
+  if (globalMode) {
+    const reg = models.find((m) => m.name === modelName);
+    const globalModel = currentCustom
+      ? { name: currentCustom.name, paramNames: currentCustom.params, p0: currentCustom.guesses, lb: currentCustom.lower, ub: currentCustom.upper, equation: currentCustom.equation }
+      : (reg ?? null);
+    return (
+      <ToolWindow id="curvefit" title="Curve Fit" width={360} onClose={close}>
+        {modelPicker}
+        <GlobalFitSection model={globalModel} />
+      </ToolWindow>
+    );
+  }
+
   // Custom-equation mode: same window + picker, the equation panel below
   // (new sub-component — the registry-model body stays untouched).
   if (isCustom) {
     return (
       <ToolWindow id="curvefit" title="Curve Fit" width={340} onClose={close}>
-        <label className="qzk-field-lbl">Model</label>
-        <Select
-          options={modelOptions}
-          value={modelName}
-          onChange={(e) => setModelName(e.target.value)}
-        />
+        {modelPicker}
         <EquationModelPanel
           key={modelName}
           initial={currentCustom}
@@ -200,12 +243,7 @@ export default function CurveFitPanel() {
 
   return (
     <ToolWindow id="curvefit" title="Curve Fit" width={340} onClose={close}>
-      <label className="qzk-field-lbl">Model</label>
-      <Select
-        options={modelOptions}
-        value={modelName}
-        onChange={(e) => setModelName(e.target.value)}
-      />
+      {modelPicker}
 
       {weighting}
       {fitParams}
@@ -300,8 +338,22 @@ export default function CurveFitPanel() {
           {result && !guessOnly && xRange && (
             <FindXYSection target={{ model: modelName, params, xMin: xRange.min, xMax: xRange.max }} />
           )}
+
+          {/* Confidence/prediction band and goodness-of-fit diagnostics. */}
+          {result && !guessOnly && active && fitData && (
+            <>
+              <FitBandsSection target={{ dataset: active, model: modelName, result, fitData }} />
+              <FitDiagnosticsSection result={result} fitData={fitData} />
+            </>
+          )}
         </>
       )}
+
+      {/* Fit 2+ models to this selection and compare them. */}
+      <CompareModelsSection options={modelOptions} current={modelName} customModels={customModels} />
+
+      {/* Errors in x and y: offered only with an X-error column. */}
+      {xErrorChannel(active) != null && <OdrSection />}
 
       {/* AICc quick-scan (GOTO #6) — rank all plausible models; click applies. */}
       <ModelScanSection state={modelScan} onApply={applyScanned} />

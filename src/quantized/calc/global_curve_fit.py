@@ -33,10 +33,14 @@ from .fitting import (
     _numerical_hessian,
 )
 
-__all__ = ["global_curve_fit"]
+__all__ = ["GlobalFitCancelled", "global_curve_fit", "share_groups"]
 
 _EPS = float(np.finfo(float).eps)
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
+
+
+class GlobalFitCancelled(Exception):
+    """Raised when ``abort_check`` asks a running global fit to stop."""
 
 # ASCII Greek-letter name aliases (port of globalCurveFit greekAliases).
 _GREEK = {
@@ -80,6 +84,26 @@ def _extract_xy(
     raise ValueError("each dataset must be a (x, y) pair or a DataStruct")
 
 
+def share_groups(
+    constraints: Sequence[dict[str, Any]] | None, param_names: Sequence[str], k: int
+) -> list[dict[str, Any]]:
+    """Resolve ``constraints`` to sharing groups ``{"param_idx", "param_name",
+    "datasets"}`` (sorted, 0-based). Raises ``ValueError`` on an unknown
+    parameter or an out-of-range dataset index; a group of fewer than two
+    datasets shares nothing and is dropped (as in MATLAB)."""
+    sharing: list[dict[str, Any]] = []
+    for c in constraints or []:
+        p_idx = _resolve_param(str(c["param_name"]), param_names)
+        ds_list = sorted({int(d) for d in c["datasets"]})
+        if any(d < 0 or d >= k for d in ds_list):
+            raise ValueError(f"constraint dataset indices must be in [0, {k - 1}]")
+        if len(ds_list) < 2:
+            continue  # only meaningful when 2+ datasets share
+        sharing.append({"param_idx": p_idx, "param_name": str(c["param_name"]),
+                        "datasets": ds_list})
+    return sharing
+
+
 def _per_dataset(
     arg: Sequence[Any] | None, k: int, p: int, default: NDArray[np.float64]
 ) -> list[NDArray[np.float64]]:
@@ -109,6 +133,8 @@ def global_curve_fit(
     tol_fun: float = 1e-12,
     tol_x: float = 1e-10,
     channel: int = 0,
+    progress_callback: Callable[[float, str], None] | None = None,
+    abort_check: Callable[[], bool] | None = None,
 ) -> dict[str, Any]:
     """Fit a model to ``datasets`` with named per-group shared parameters.
 
@@ -121,6 +147,14 @@ def global_curve_fit(
     optional list of K length-N weight vectors. Returns a dict with per-dataset
     ``params``/``errors``/``residuals``/``yFit``/``R2``/``RMSE``, a ``shared``
     summary list, ``chiSqRed``, ``covar``, ``nTotal``, ``nFree``, ``exitFlag``.
+
+    Long-run hooks (not in MATLAB; they never change the answer):
+    ``progress_callback(fraction, message)`` fires once per Nelder-Mead
+    iteration with ``fraction = iteration / max_iter`` (an upper bound on the
+    work left, not an ETA — the simplex usually converges far sooner).
+    ``abort_check()`` is polled before every cost evaluation, so it also covers
+    the error Hessian; ``True`` raises :class:`GlobalFitCancelled`. A progress
+    callback that raises (e.g. a job runner's cancel) propagates unchanged.
     """
     k = len(datasets)
     if k < 1:
@@ -156,17 +190,7 @@ def global_curve_fit(
     # Clamp p0 to bounds (MATLAB clamps after assembling).
     p0_cell = [np.clip(p0_cell[i], lb_cell[i], ub_cell[i]) for i in range(k)]
 
-    # ── sharing groups from constraints ──────────────────────────────────────
-    sharing: list[dict[str, Any]] = []
-    for c in constraints or []:
-        p_idx = _resolve_param(str(c["param_name"]), param_names)
-        ds_list = sorted({int(d) for d in c["datasets"]})
-        if any(d < 0 or d >= k for d in ds_list):
-            raise ValueError(f"constraint dataset indices must be in [0, {k - 1}]")
-        if len(ds_list) < 2:
-            continue  # only meaningful when 2+ datasets share
-        sharing.append({"param_idx": p_idx, "param_name": str(c["param_name"]),
-                        "datasets": ds_list})
+    sharing = share_groups(constraints, param_names, k)
     n_groups = len(sharing)
 
     is_shared = np.zeros((k, p), dtype=bool)
@@ -212,6 +236,8 @@ def global_curve_fit(
         return [np.array([sp[super_idx[ki, pi]] for pi in range(p)]) for ki in range(k)]
 
     def cost(pf: NDArray[np.float64]) -> float:
+        if abort_check is not None and abort_check():
+            raise GlobalFitCancelled("global fit cancelled")
         sp = from_free_all(pf)
         plist = expand(sp)
         total = 0.0
@@ -222,9 +248,18 @@ def global_curve_fit(
 
     pf0 = np.array([_bound_to_free(float(super_p0[s]), super_lb[s], super_ub[s])
                     for s in range(n_super)])
+    iteration = [0]
+
+    def on_iteration(_xk: NDArray[np.float64]) -> None:
+        iteration[0] += 1
+        if progress_callback is not None:
+            progress_callback(
+                min(iteration[0] / max_iter, 1.0), f"Nelder-Mead iteration {iteration[0]}"
+            )
+
     if n_super > 0:
         res = minimize(
-            cost, pf0, method="Nelder-Mead",
+            cost, pf0, method="Nelder-Mead", callback=on_iteration,
             options={"maxiter": max_iter, "maxfev": max_iter * 4,
                      "xatol": tol_x, "fatol": tol_fun},
         )

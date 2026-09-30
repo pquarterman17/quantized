@@ -6,6 +6,7 @@ import { fetchBookData } from "../lib/api";
 import { resetBookTransportForTests } from "../lib/bookData";
 import type { ComputedColumn, Dataset } from "../lib/types";
 import { activeRecodePreview, useRecode } from "./recode";
+import { useRecodePanel } from "./recodePanel";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
 
@@ -57,6 +58,35 @@ describe("openRecode", () => {
     useRecode.getState().openRecode("d1", 0);
     expect(useRecode.getState().open).toBe(false);
     expect(toast).toHaveBeenCalledWith(expect.stringMatching(/isn't categorical/), "danger");
+  });
+});
+
+// AppOverlays gates the lazy panel on store/recodePanel.ts, not on this store
+// (bundle headroom slice 13) — the mirror must track `open` through every path.
+describe("the recodePanel open-flag mirror", () => {
+  it("follows open, close, a refusal and a successful commit", () => {
+    expect(useRecodePanel.getState().open).toBe(false);
+    useRecode.getState().openRecode("d1", 0);
+    expect(useRecodePanel.getState().open).toBe(true);
+    useRecode.getState().closeRecode();
+    expect(useRecodePanel.getState().open).toBe(false);
+
+    useApp.setState({ datasets: [{ ...catDataset(), data: { ...catDataset().data, cat_levels: undefined } }] });
+    useRecode.getState().openRecode("d1", 0);
+    expect(useRecodePanel.getState().open).toBe(false);
+
+    useApp.setState({ datasets: [catDataset()] });
+    useRecode.getState().openRecode("d1", 0);
+    useRecode.getState().setGroup("Passing", ["Pass", "OK"]);
+    expect(useRecode.getState().commitRecode()).not.toBeNull();
+    expect(useRecodePanel.getState().open).toBe(false);
+  });
+
+  it("follows a direct setState too", () => {
+    useRecode.setState({ open: true });
+    expect(useRecodePanel.getState().open).toBe(true);
+    useRecode.setState({ open: false });
+    expect(useRecodePanel.getState().open).toBe(false);
   });
 });
 

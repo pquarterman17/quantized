@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { getConstants } from "../../../lib/api/reference";
 import { crystalDSpacing } from "../../../lib/api";
 import { crystalInterplanarAngle } from "../../../lib/api/crystallography";
+import { useCrystalStructures } from "../../../store/crystalStructures";
 import CalculatorsContent from "./CalculatorsContent";
 
 vi.mock("../../../lib/api", () => ({
@@ -209,5 +210,25 @@ describe("CrystalTab — interplanar angle", () => {
     openCrystalTab();
     fireEvent.click(screen.getAllByText("=")[2]);
     expect(await screen.findByText(/must not all be zero/)).toBeInTheDocument();
+  });
+});
+
+describe("CrystalTab — lattice preset from an imported CIF", () => {
+  it("sets the system and cell from the CIF, and d-spacing uses them", async () => {
+    useCrystalStructures.setState({
+      presets: [{
+        id: "cif-1", name: "GaN", source_name: "gan.cif", formula: "Ga N", space_group: "P 63 m c",
+        cell: { a: 3.189, b: 3.189, c: 5.185, alpha: 90, beta: 90, gamma: 120 }, atom_sites: [],
+      }],
+    });
+    vi.mocked(crystalDSpacing).mockResolvedValue({ d: 2.7618, system: "hexagonal" });
+    openCrystalTab();
+    fireEvent.change(screen.getByLabelText("lattice preset"), { target: { value: "cif-1" } });
+    expect(screen.getByLabelText("crystal system")).toHaveValue("hexagonal");
+    fireEvent.click(screen.getAllByText("=")[0]);
+    await screen.findByText(/2\.7618/);
+    expect(crystalDSpacing).toHaveBeenCalledWith(
+      expect.objectContaining({ system: "hexagonal", a: 3.189, c: 5.185, gamma: 120 }),
+    );
   });
 });

@@ -5,8 +5,12 @@ route-level coverage."""
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from fastapi.testclient import TestClient
+
+from quantized.calc import magnetic
 
 
 def test_curie_weiss_fit_recovers_synthetic_parameters(client: TestClient) -> None:
@@ -38,5 +42,43 @@ def test_langevin_extreme_finite_input_is_422_not_500(client: TestClient) -> Non
     r = client.post(
         "/api/magnetic/langevin",
         json={"mu": 1.0, "field_oe": 1e308, "temperature": 1e-308},
+    )
+    assert r.status_code == 422, r.text
+
+
+@pytest.mark.parametrize(
+    ("body", "kwargs"),
+    [
+        ({"shape": "cylinder", "length": 3.0, "diameter": 1.0}, {"length": 3.0, "diameter": 1.0}),
+        ({"shape": "prolate", "ratio": 5.0}, {"ratio": 5.0}),
+        ({"shape": "oblate", "ratio": 10.0}, {"ratio": 10.0}),
+    ],
+)
+def test_demag_custom_matches_calc(
+    client: TestClient, body: dict[str, Any], kwargs: dict[str, float]
+) -> None:
+    """Custom geometry (dimensions, not a preset label) -> calc.magnetic.demag_factor."""
+    r = client.post("/api/magnetic/demag-custom", json=body)
+    assert r.status_code == 200, r.text
+    expected = magnetic.demag_factor(str(body["shape"]), **kwargs)
+    out = r.json()
+    assert out["Nz"] == pytest.approx(expected["Nz"], rel=1e-12)
+    assert out["Nxy"] == pytest.approx(expected["Nxy"], rel=1e-12)
+    assert out["n_cgs"] == pytest.approx(expected["n_cgs"], rel=1e-12)
+    assert out["shape"] == body["shape"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        '{"shape": "prolate", "ratio": 1.0}',  # a spheroid needs ratio > 1
+        '{"shape": "cylinder", "length": 0.0, "diameter": 1.0}',
+        '{"shape": "cube", "ratio": 2.0}',  # preset labels go through /demag
+        '{"shape": "oblate", "ratio": Infinity}',
+    ],
+)
+def test_demag_custom_rejects_bad_geometry(client: TestClient, body: str) -> None:
+    r = client.post(
+        "/api/magnetic/demag-custom", content=body, headers={"content-type": "application/json"}
     )
     assert r.status_code == 422, r.text

@@ -44,6 +44,7 @@ import {
   BATCH_MAX_TOTAL_POINTS,
   BATCH_PREP_CONCURRENCY,
   batchChannels,
+  batchErrKeys,
   batchTotalDeadline,
   mapPool,
   prepareBatchItem,
@@ -99,6 +100,7 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
   const xKey = useApp((s) => s.xKey);
   const yKeys = useApp((s) => s.yKeys);
   const seriesOrder = useApp((s) => s.seriesOrder);
+  const errKeys = useApp((s) => s.errKeys);
   const resolveDataset = useApp((s) => s.resolveDataset);
   const addDataset = useApp((s) => s.addDataset);
 
@@ -165,7 +167,8 @@ export function usePeakBatch(recipes: readonly PeakRecipe[], initialRecipe: stri
         try {
           const ds = await resolveDataset(dsId);
           if (!ds) return { ok: false, error: "the dataset is no longer available" };
-          return await prepareBatchItem(ds, recipe, channels);
+          // Each dataset is weighted by its OWN error column (./peakBatchPrep batchErrKeys).
+          return await prepareBatchItem(ds, recipe, channels, batchErrKeys(ds, active?.id ?? null, errKeys));
         } catch (e) {
           return { ok: false, error: `could not load the dataset: ${e instanceof Error ? e.message : "unknown error"}` };
         }

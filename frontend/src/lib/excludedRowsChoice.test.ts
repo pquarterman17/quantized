@@ -21,6 +21,7 @@ import { useParamDialog } from "../store/paramDialog";
 import { usePendingOps } from "../store/pendingOps";
 import { useApp } from "../store/useApp";
 import { exportPreviewFigure } from "../components/workshops/figurebuilder/previewExport";
+import type { LegacyFigureState } from "../components/workshops/figurebuilder/legacyFigure";
 
 vi.mock("./api/figures", () => ({ exportFigure: vi.fn(), renderFigureBlob: vi.fn() }));
 vi.mock("./clipboard", () => ({
@@ -171,6 +172,8 @@ describe("Figure Builder's canonical Export asks about excluded rows (F4.2c (a))
       canonicalReadiness: { state: "ready", data: DATA, spec: { dataset: DATA } },
       canonicalDataset: ds,
       spec: null,
+      // The canonical path never reads the legacy inputs.
+      legacyState: {} as LegacyFigureState,
       frozenData: null,
       active: ds,
       fmt: "pdf",

@@ -26,6 +26,7 @@ import ToolWindow from "../../overlays/ToolWindow";
 import { askParams } from "../../overlays/ParamDialog";
 import { Button } from "../../primitives";
 import { reportEmit } from "../../../lib/api";
+import { lazyRegion } from "../../../lib/lazyRegion";
 import { fmtNum } from "../../../lib/format";
 import { manualEditCount, peakManualEditProblem } from "../../../lib/peakTableFit";
 import type { FittedPeak } from "../../../lib/types";
@@ -41,12 +42,16 @@ import { useApp } from "../../../store/useApp";
 // stable constant avoids entirely. Prefer it; don't rely on the backstop.
 const NO_FITTED_PEAKS: FittedPeak[] = [];
 
+// Opened on demand only: its chunk loads on the first "Batch integrate…".
+const BatchIntegrateWindow = lazyRegion(() => import("./BatchIntegrateWindow"), "Batch integrate");
+
 export default function PeaksPanel() {
   const setOpen = useApp((s) => s.setPeaksOpen);
   const setPeakOverlay = useApp((s) => s.setPeakOverlay);
   const addReport = useApp((s) => s.addReport);
   const [reporting, setReporting] = useState(false);
   const [labeling, setLabeling] = useState(false);
+  const [batchOpen, setBatchOpen] = useState(false);
   const [find, setFind] = useState<PeakFindRequest>({ params: { ...DEFAULT_PEAK_FIND }, seq: 0 });
   const {
     active,
@@ -242,6 +247,7 @@ export default function PeaksPanel() {
   const faint = { color: "var(--text-faint)" } as const;
 
   return (
+    <>
     <ToolWindow id="peaks" title="Peaks" width={360} onClose={close}>
       {!active && (
         <div className="qzk-ds-meta" style={faint}>
@@ -291,6 +297,12 @@ export default function PeaksPanel() {
           onFitEach={(opts) => void fitEach(opts)}
         />
       )}
+
+      <div style={{ marginTop: 6 }}>
+        <Button size="sm" title="Integrate windows across many datasets." onClick={() => setBatchOpen(true)}>
+          Batch integrate…
+        </Button>
+      </div>
 
       {fitError && (
         <div className="qzk-ds-meta" style={{ color: "var(--danger)", marginTop: 6 }}>
@@ -363,5 +375,8 @@ export default function PeaksPanel() {
         </div>
       )}
     </ToolWindow>
+    {/* A sibling, not a child: a window nested in this one's body would be clipped by it. */}
+    {batchOpen && <BatchIntegrateWindow seedPeaks={labelSource} onClose={() => setBatchOpen(false)} />}
+    </>
   );
 }

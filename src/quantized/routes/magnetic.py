@@ -5,10 +5,10 @@ Langevin / domain wall. Validate -> call the pure fn -> serialize.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from quantized.calc import magnetic
 from quantized.routes._errors import call_calc as _call
@@ -41,6 +41,16 @@ class MomentPerAtomRequest(BaseModel):
 
 class DemagRequest(BaseModel):
     shape: str  # GUI dropdown label (e.g. "Sphere", "Thin film (in-plane)")
+
+
+class DemagCustomRequest(BaseModel):
+    """A geometry by its dimensions: a cylinder's length and diameter (same
+    unit), or a spheroid's axis ratio (prolate c/a, oblate a/c, both > 1)."""
+
+    shape: Literal["cylinder", "prolate", "oblate"]
+    length: float = Field(default=1.0, allow_inf_nan=False)
+    diameter: float = Field(default=1.0, allow_inf_nan=False)
+    ratio: float = Field(default=2.0, allow_inf_nan=False)
 
 
 class CurieWeissRequest(BaseModel):
@@ -97,6 +107,14 @@ def moment_per_atom(req: MomentPerAtomRequest) -> dict[str, Any]:
 def demag(req: DemagRequest) -> dict[str, Any]:
     """Demagnetizing factors Nz, Nxy, 4πNz from a geometry label."""
     return _call(magnetic.demag_named, req.shape)
+
+
+@router.post("/demag-custom")
+def demag_custom(req: DemagCustomRequest) -> dict[str, Any]:
+    """Demagnetizing factors Nz, Nxy, 4πNz for a custom cylinder or spheroid."""
+    return _call(
+        magnetic.demag_factor, req.shape, length=req.length, diameter=req.diameter, ratio=req.ratio
+    )
 
 
 @router.post("/curie-weiss")

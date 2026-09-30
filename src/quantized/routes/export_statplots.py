@@ -98,6 +98,11 @@ class StatplotFacet(BaseModel):
     # `(row, category)` hash. None = no jittered points in this panel (the
     # rule before panels carried rows, `figure_stat_marks.facet_marks`).
     point_row_indices: list[list[int]] | None = None
+    # Where this panel's connect-means line lifts (the flat `connect_breaks`,
+    # per panel). The line itself is the request's `show_connect_means`.
+    connect_breaks: list[bool] | None = None
+    # P1.4 Color-by: this panel's groups' colour levels (the request's `palette`).
+    color_levels: list[int | None] | None = None
 
 
 class StatplotFigureRequest(BaseModel):
@@ -168,6 +173,11 @@ class StatplotFigureRequest(BaseModel):
     # domain (which deliberately spans hidden fliers/points so toggling a
     # mark never rescales the plot). None = today's autoscale behaviour.
     y_domain: tuple[float, float] | None = None
+    # P1.4 Color-by (`calc.figure_stat_colors`): each group's colour LEVEL,
+    # parallel to `data` (null: by position), and the client's palette as hex,
+    # indexed by level. None = the figure without a colour factor, unchanged.
+    color_levels: list[int | None] | None = None
+    palette: list[str] | None = None
 
     def marks(self) -> dict[str, Any] | None:
         fields = {
@@ -192,15 +202,18 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
         if req.facets:
             with heavy_imports(
                 "quantized.calc.figure_facets", "quantized.calc.figure_group_notes",
+                "quantized.calc.figure_stat_colors",
             ):
                 from quantized.calc.figure_facets import render_stat_facets_figure  # lazy
                 from quantized.calc.figure_group_notes import footnote_text
+                from quantized.calc.figure_stat_colors import level_colors
 
             panels: list[dict[str, Any]] = [
                 {
                     "label": f.label, "kind": f.kind, "data": f.data, "labels": f.labels,
                     "y_domain": f.y_domain, "tiers": f.tiers,
-                    "point_row_indices": f.point_row_indices,
+                    "point_row_indices": f.point_row_indices, "connect_breaks": f.connect_breaks,
+                    "colors": level_colors(f.color_levels, req.palette),
                 }
                 for f in req.facets
             ]
@@ -210,12 +223,15 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 fmt=req.fmt, style=req.style, dpi=dpi, show_n=req.show_n,
                 caveat=footnote_text(req.error_note, req.caveat),
                 marks=req.marks(), axis_style=_axis_style(req.axis_style),
+                show_connect_means=req.show_connect_means,
             )
         else:
             with heavy_imports(
                 "quantized.calc.figure_statplots", "quantized.calc.figure_group_notes",
+                "quantized.calc.figure_stat_colors",
             ):
                 from quantized.calc.figure_group_notes import footnote_text
+                from quantized.calc.figure_stat_colors import level_colors
                 from quantized.calc.figure_statplots import render_statplot_figure  # lazy
 
             data: Any = req.data
@@ -229,6 +245,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 show_n=req.show_n, caveat=footnote_text(req.error_note, req.caveat),
                 connect_breaks=req.connect_breaks,
                 marks=req.marks(), axis_style=_axis_style(req.axis_style), y_domain=req.y_domain,
+                colors=level_colors(req.color_levels, req.palette),
             )
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)
@@ -259,6 +276,8 @@ class CategoricalFacet(BaseModel):
     summary: Literal["none", "mean", "median"] | None = None
     raw: list[list[list[float]]] | None = None
     raw_rows: list[list[list[int]]] | None = None
+    # P1.4 Color-by: this panel's categories' colour levels (the request's `palette`).
+    color_levels: list[int | None] | None = None
 
     def bar_marks(self) -> dict[str, Any] | None:
         return _bar_marks(self.points, self.jitter_width, self.summary, self.raw, self.raw_rows)
@@ -319,6 +338,10 @@ class CategoricalFigureRequest(BaseModel):
     summary: Literal["none", "mean", "median"] | None = None
     raw: list[list[list[float]]] | None = None
     raw_rows: list[list[list[int]]] | None = None
+    # P1.4 Color-by: each CATEGORY's colour level (every series of it; null:
+    # by series) and the palette as hex -- see StatplotFigureRequest.
+    color_levels: list[int | None] | None = None
+    palette: list[str] | None = None
 
     def bar_marks(self) -> dict[str, Any] | None:
         return _bar_marks(self.points, self.jitter_width, self.summary, self.raw, self.raw_rows)
@@ -340,15 +363,17 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
         if req.facets:
             with heavy_imports(
                 "quantized.calc.figure_facets", "quantized.calc.figure_group_notes",
+                "quantized.calc.figure_stat_colors",
             ):
                 from quantized.calc.figure_facets import render_categorical_facets_figure  # lazy
                 from quantized.calc.figure_group_notes import footnote_text
+                from quantized.calc.figure_stat_colors import level_colors
 
             panels: list[dict[str, Any]] = [
                 {
                     "label": f.label, "groups": f.groups, "series": f.series,
                     "values": f.values, "errors": f.errors, "counts": f.counts,
-                    "bar_marks": f.bar_marks(),
+                    "bar_marks": f.bar_marks(), "colors": level_colors(f.color_levels, req.palette),
                 }
                 for f in req.facets
             ]
@@ -361,9 +386,11 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
         else:
             with heavy_imports(
                 "quantized.calc.figure_categorical", "quantized.calc.figure_group_notes",
+                "quantized.calc.figure_stat_colors",
             ):
                 from quantized.calc.figure_categorical import render_categorical_figure  # lazy
                 from quantized.calc.figure_group_notes import footnote_text
+                from quantized.calc.figure_stat_colors import level_colors
 
             img = render_categorical_figure(
                 req.groups, req.series, req.values, req.errors, stacked=req.stacked,
@@ -371,6 +398,7 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
                 y_label=req.y_label, dpi=dpi, counts=req.counts,
                 caveat=footnote_text(req.error_note, req.caveat),
                 axis_style=_axis_style(req.axis_style), bar_marks=req.bar_marks(),
+                colors=level_colors(req.color_levels, req.palette),
             )
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)

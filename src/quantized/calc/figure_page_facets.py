@@ -175,7 +175,8 @@ from typing import TYPE_CHECKING, Any
 
 from matplotlib.gridspec import GridSpec
 
-from quantized.calc.figure_facets import _grid_shape, draw_facet_grid
+from quantized.calc.figure_facets import draw_facet_grid
+from quantized.calc.figure_facets_grid import _grid_shape
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_scale import resolve_axis_scale
 

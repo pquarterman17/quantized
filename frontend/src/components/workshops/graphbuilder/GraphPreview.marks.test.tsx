@@ -4,9 +4,10 @@
 // draw and every facet cell's draw carry the store's `statMarks` for the
 // spec's mode and the points they need (`./previewMarks` pins the rows).
 
-import { render } from "@testing-library/react";
+import { render, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { statsViolin } from "../../../lib/api";
 import { specToRender, type PlotSpec } from "../../../lib/plotspec";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
@@ -20,6 +21,10 @@ vi.mock("../../Stage/StatStageCanvas", () => ({
     cells.push(data);
     return null;
   },
+}));
+vi.mock("../../../lib/api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../../../lib/api")>()),
+  statsViolin: vi.fn(),
 }));
 vi.mock("../../Stage/statRender", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../Stage/statRender")>()),
@@ -45,6 +50,7 @@ const spec = (mark: PlotSpec["mark"], facet: boolean): PlotSpec => ({
 beforeEach(() => {
   cells.length = 0;
   flat.length = 0;
+  vi.mocked(statsViolin).mockReset();
   useApp.setState({ datasets: [DS], statMarks: { box: { points: "all", summary: "mean" }, bar: { points: "all" } } });
 });
 
@@ -67,6 +73,33 @@ describe("GraphPreview — categorical marks reach the painters", () => {
       expect(d.marks?.points).toBe("all");
       expect(d.data.groups.every((g) => g.series[0].raw != null)).toBe(true);
     }
+  });
+
+  it("violin: the preview paints the KDE violin with the violin's marks, flat and per facet", async () => {
+    useApp.setState({ statMarks: { violin: { points: "all" } } });
+    vi.mocked(statsViolin).mockImplementation(async (data: number[]) => ({
+      x: [Math.min(...data), Math.max(...data)], density: [0.2, 0.4], bandwidth: 1, quartiles: [1, 2, 3], n: data.length,
+    }));
+    const s = spec("violin", false);
+    const { container } = render(<GraphPreview render={specToRender(s, [DS])} spec={s} />);
+    await waitFor(() => expect(flat.at(-1)?.mode).toBe("violin"));
+    const d = flat.at(-1);
+    if (d?.mode !== "violin") throw new Error("expected a violin draw");
+    expect(d.violins.map((v) => v.n)).toEqual([3, 3]);
+    expect(d.marks?.points).toBe("all");
+    expect(d.points?.map((g) => g.points.map((p) => p.rowIndex))).toEqual([[0, 1, 2], [3, 4, 5]]);
+    expect(container.textContent).not.toContain("violin preview shows box");
+    const f = spec("violin", true);
+    render(<GraphPreview render={specToRender(f, [DS])} spec={f} />);
+    await waitFor(() => expect(cells.slice(-2).map((c) => c.mode)).toEqual(["violin", "violin"]));
+  });
+
+  it("violin with no backend: the box stand-in and its note stay", async () => {
+    vi.mocked(statsViolin).mockRejectedValue(new Error("offline"));
+    const s = spec("violin", false);
+    const { findByText } = render(<GraphPreview render={specToRender(s, [DS])} spec={s} />);
+    expect(await findByText(/violin preview shows box/)).toBeTruthy();
+    expect(flat.at(-1)?.mode).toBe("box");
   });
 
   it("without a spec the preview paints the unmarked draw it always did", () => {

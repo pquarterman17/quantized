@@ -27,7 +27,7 @@ import {
   spatialPanelsOf,
   type Composition,
 } from "../../lib/composition";
-import { resolveSecondaryAxis, secondaryAxisFromPanel } from "../../lib/axisspec";
+import { secondaryAxisFromPanel } from "../../lib/axisspec";
 import { buildErrorColumns } from "../../lib/errorbars";
 import { sharedXDomain, sharedYDomain } from "../../lib/facet";
 import { effectiveChannels, fetchPlot, type PlotPayload } from "../../lib/plotdata";
@@ -40,7 +40,6 @@ import {
   facetGridSize,
   spatialGridSize,
   spatialCellStyling,
-  spatialPlottedChannels,
   splitPayload,
   xZoomSyncHook,
 } from "../../lib/multipanel";
@@ -60,9 +59,11 @@ import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts } from "../../lib/uplotOpts";
 import { frameVarsPlugin } from "../../lib/uplotFrameVars";
 import type { Readout } from "../../lib/uplotTools";
-import type { Accent, PlotTool, Theme } from "../../store/useApp";
+import type { Accent, ExcludedDisplay, PlotTool, Theme } from "../../store/useApp";
 import { renderBreakPanels, resizeBreakPanels } from "./breakPanelRender";
+import { fetchSpatialPanel, type SpatialFetch } from "./spatialPanelFetch";
 import { renderFacetGrid, resizeFacetGrid } from "./facetGridRender";
+import type { FacetEncodingRender } from "./useFacetEncoding";
 import { renderStackPanels, resizeStackPanels } from "./stackPanelRender";
 import type { SpatialLegendEntry } from "./SpatialPanelLegend";
 
@@ -77,13 +78,6 @@ const GRID_GAP = 8;
  *  (which depends on `seriesLabels`) for nothing. */
 const EMPTY_LABELS: Record<number, string> = {};
 
-/** One spatial panel's fetched series plus its own error-bar map (built at
- *  fetch time — needs the panel's full DataStruct, not just the plotted
- *  payload — see the fetch effect below). */
-interface SpatialFetch {
-  payload: PlotPayload;
-  errorBars: Map<number, (number | null)[]>;
-}
 
 export interface SpatialLegendPortal {
   key: string;
@@ -151,6 +145,8 @@ export interface MultiPanelStageParams {
   seriesLabels?: Record<number, string>;
   /** P3.3 dash/marker cycle — SPATIAL mode only; see `spatialCellStyling`. */
   autoSeriesStyles?: boolean;
+  /** F4.2c (a) excluded rows — SPATIAL mode only; see `spatialPanelFetch`. */
+  excludedDisplay?: ExcludedDisplay;
   xKey: number | null;
   yKeys: number[] | null;
   y2Keys: number[] | null;
@@ -162,6 +158,8 @@ export interface MultiPanelStageParams {
   errKeys: Record<number, number>;
   hiddenChannels: number[];
   seriesOrder: number[] | null;
+  /** P1.4 residual 3: the facet grid's encoding (`useFacetEncoding`), or null. */
+  encodedFacets?: FacetEncodingRender | null;
   /** The focused view passes the live plot tool; a background window passes
    *  the inert "zoom" default (Key Decision 2 — non-interactive). */
   tool: PlotTool;
@@ -205,12 +203,14 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     seriesStyles,
     seriesLabels = EMPTY_LABELS,
     autoSeriesStyles = false,
+    excludedDisplay = "hide",
     xKey,
     yKeys,
     y2Keys,
     errKeys,
     hiddenChannels,
     seriesOrder,
+    encodedFacets = null,
     tool,
     theme,
     accent,
@@ -353,51 +353,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         // panel's own book needs its own fetch trigger (#38), not just the
         // "active" one.
         if (ds?.pending) ensureBookData(ds.id);
-        if (!ds) return Promise.resolve(null);
-        // Item A (PNR.opj Book14 Graph11 repro): drop this panel's Origin-
-        // hidden channels (a "Y-error" column like dSA) from what's actually
-        // fetched/plotted — the spatial grid's decoded legend is static and
-        // cannot keep them toggle-able, unlike the single-plot path (see
-        // `multipanel.spatialPlottedChannels`'s doc). y2Keys is filtered the
-        // same way for consistency, though a hidden channel is never itself
-        // curve-bound to y2 in practice.
-        const plottedChannels = spatialPlottedChannels(p);
-        // #54 pass B: the plotted∩y2 intersection comes from the shared
-        // resolver, the same one both export paths use — `y2_keys` is a set
-        // membership marker on the wire (lib/plotdata's `new Set(y2Keys)`),
-        // so this is the identical selection expressed once instead of thrice.
-        const y2 =
-          resolveSecondaryAxis(plottedChannels, secondaryAxisFromPanel(p), {
-            scale: p.yLog ? "log" : "linear",
-            fmt: { mode: "auto", digits: 2 },
-          })?.keys ?? null;
-        // A panel carrying a merged y2 overlay (decode-plan #36 residual —
-        // `originFigures.resolveSpatialPanels`) passes its OWN y2Keys so the
-        // fetched payload tags those series `axis: 1`, same as the single-
-        // plot double-Y apply.
-        // P3.4: same size/error-bar/scatter gate as the plain-stack fetch
-        // above, evaluated per-panel (each panel owns its own dataset + err
-        // bindings). No overlay-companion concept here either.
-        const panelDecimateWidth =
-          ds.data.time.length > DECIMATE_MIN_POINTS &&
-          decimationRequestEligible({
-            defaultTrace,
-            hasErrorBars: Object.keys(p.errKeys ?? {}).length > 0,
-            hasErrorSpans: errorBindingsApplyToPlotted(ds.errorRoles, plottedChannels, { xErrorRenders: false }),
-            hasColorByColumns: false,
-          })
-            ? defaultDecimateWidthHint()
-            : null;
-        return fetchPlot(ds.data, p.yLog, p.xLog, plottedChannels, y2, p.xKey, panelDecimateWidth).then(
-          (fetched): SpatialFetch => ({
-            payload: fetched,
-            // Error-bar magnitudes for THIS panel's own dataset/designations
-            // (`originFigures.figureChannelSelection` populated `p.errKeys`),
-            // keyed to the SAME plottedChannels order the payload's series
-            // are in.
-            errorBars: buildErrorColumns(ds.data, plottedChannels, p.errKeys ?? {}),
-          }),
-        );
+        return ds ? fetchSpatialPanel(p, ds, defaultTrace, excludedDisplay) : Promise.resolve(null);
       }),
     ).then((ps) => {
       if (!cancelled) setSpatialPayloads(ps);
@@ -405,7 +361,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     return () => {
       cancelled = true;
     };
-  }, [spatial, panels, datasets, defaultTrace]); // eslint-disable-line react-hooks/exhaustive-deps -- `ensureBookData` deliberately excluded: stable store-action reference, see its param doc above (R9).
+  }, [spatial, panels, datasets, defaultTrace, excludedDisplay]); // eslint-disable-line react-hooks/exhaustive-deps -- `ensureBookData` deliberately excluded: stable store-action reference, see its param doc above (R9).
 
   useEffect(() => {
     const host = hostRef.current;
@@ -615,7 +571,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     }
 
     if (facet) {
-      const fPanels = facetPanels ?? [];
+      const fPanels = encodedFacets?.panels ?? facetPanels ?? [];
       if (fPanels.length === 0) {
         destroyAll();
         return;
@@ -625,18 +581,13 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       const box = { w: host.clientWidth || 600, h: host.clientHeight || 400 };
       plotsRef.current = renderFacetGrid(host, {
         panels: fPanels,
-        // BUG-014: the grid used to pass NO renames at all, so a renamed
-        // series read its derived "label (unit)" in every facet panel while
-        // the flat plot read the rename. `buildOpts` applies these the same
-        // way the flat path does, and `lib/figureSpecFacets.ts` applies the
-        // SAME map on the export side -- so screen and export agree.
+        // BUG-014: renames applied as the flat path and `lib/figureSpecFacets.ts` do.
         seriesLabels,
+        ...(encodedFacets ? { encoded: encodedFacets } : {}),
         grid: facetGrid,
         gap: GRID_GAP,
         syncKey,
-        // Same x-zoom/pan sync idiom as the plain per-channel stack below (one
-        // shared hook instance for the whole panel set — the x axis means the
-        // same thing in every facet panel too).
+        // The plain stack's x-zoom/pan sync idiom: one shared hook for the panel set.
         onSetScale: xZoomSyncHook(() => plotsRef.current),
         box,
         cell: {
@@ -698,6 +649,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     breakYLim,
     facet,
     facetPanels,
+    encodedFacets,
     facetGrid,
     facetXLim,
     payload,

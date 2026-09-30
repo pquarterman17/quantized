@@ -33,6 +33,7 @@ from quantized.routes import (
     corrections,
     crystallography,
     database,
+    datasets,
     diffusion,
     electrical,
     electrochemistry,
@@ -44,6 +45,8 @@ from quantized.routes import (
     export_statplots,
     fitting,
     fitting_bumps,
+    fitting_global,
+    fitting_stats,
     import_template,
     import_wizard,
     jobs_api,
@@ -57,6 +60,7 @@ from quantized.routes import (
     reductions,
     reference,
     reflectivity,
+    reflectivity_graded,
     report_export,
     rsm,
     samples,
@@ -69,6 +73,7 @@ from quantized.routes import (
     stats_design,
     stats_outliers,
     stats_varcomp,
+    structures,
     substrates,
     superconductor,
     thermal,
@@ -262,10 +267,13 @@ def create_app(*, dev_origins: Collection[str] | None = None) -> FastAPI:
     application.include_router(import_wizard.router)
     application.include_router(import_template.router)
     application.include_router(plot.router)
+    application.include_router(datasets.router)
     application.include_router(corrections.router)
     application.include_router(database.router)
     application.include_router(fitting.router)
     application.include_router(fitting_bumps.router)
+    application.include_router(fitting_global.router)
+    application.include_router(fitting_stats.router)
     application.include_router(jobs_api.router)
     application.include_router(baseline.router)
     application.include_router(stats.router)
@@ -286,11 +294,13 @@ def create_app(*, dev_origins: Collection[str] | None = None) -> FastAPI:
     application.include_router(peaks_batch.router)
     application.include_router(reductions.router)
     application.include_router(reflectivity.router)
+    application.include_router(reflectivity_graded.router)
     application.include_router(rsm.router)
     application.include_router(xray.router)
     application.include_router(sld.router)
     application.include_router(spectral.router)
     application.include_router(crystallography.router)
+    application.include_router(structures.router)
     application.include_router(electrical.router)
     application.include_router(optics.router)
     application.include_router(vacuum.router)

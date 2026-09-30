@@ -9,6 +9,7 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import { sameContent, useStableByEquality } from "./useStableByEquality";
 import { useStableByValue } from "./useStableValue";
 
 describe("useStableByValue", () => {
@@ -76,5 +77,52 @@ describe("useStableByValue", () => {
 
     rerender(null);
     expect(result.current).toBeNull(); // not still undefined
+  });
+});
+
+describe("sameContent", () => {
+  it("compares arrays, Maps and plain objects by content, recursively", () => {
+    expect(sameContent([1, null, undefined], [1, null, undefined])).toBe(true);
+    expect(sameContent(new Map([[1, [0.5, null]]]), new Map([[1, [0.5, null]]]))).toBe(true);
+    expect(sameContent({ axis: "y", plus: [1] }, { axis: "y", plus: [1] })).toBe(true);
+    expect(sameContent(new Map(), new Map())).toBe(true);
+    expect(sameContent([NaN], [NaN])).toBe(true);
+  });
+
+  it("reports a change in any element, key or size", () => {
+    expect(sameContent([1, 2], [1, 3])).toBe(false);
+    expect(sameContent([1], [1, 2])).toBe(false);
+    expect(sameContent(new Map([[1, [1]]]), new Map([[2, [1]]]))).toBe(false);
+    expect(sameContent({ a: 1 }, { a: 1, b: undefined })).toBe(false);
+    expect(sameContent([1], new Map())).toBe(false);
+  });
+
+  it("compares functions and class instances by identity", () => {
+    expect(sameContent(() => 1, () => 1)).toBe(false);
+    expect(sameContent(new Date(0), new Date(0))).toBe(false);
+  });
+});
+
+describe("useStableByEquality", () => {
+  it("keeps the first reference while the content is unchanged, and compares each new identity once", () => {
+    let reads = 0;
+    // A getter counts how often the content comparison reads this identity.
+    const copy = {
+      get x() {
+        reads += 1;
+        return 1;
+      },
+    };
+    const { result, rerender } = renderHook((v: { x: number }) => useStableByEquality(v), { initialProps: { x: 1 } });
+    const first = result.current;
+    rerender(copy);
+    expect(result.current).toBe(first);
+    rerender(copy); // the same content-equal identity again: already seen
+    expect(result.current).toBe(first);
+    expect(reads).toBe(1);
+
+    const changed = { x: 2 };
+    rerender(changed);
+    expect(result.current).toBe(changed);
   });
 });

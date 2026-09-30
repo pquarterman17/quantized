@@ -22,6 +22,8 @@ import { useLegendBox } from "./useLegendBox";
 
 /** The canvas' excluded companion: line-free 5px hollow circles. */
 const EXCLUDED_SAMPLE: SeriesStyle = { width: 0, marker: true, markerShape: "circle", markerSize: 5 };
+/** The canvas' selected-row companion: line-free 7px accent-filled circles. */
+const SELECTED_SAMPLE: SeriesStyle = { width: 0, marker: true, markerShape: "circle", markerSize: 7 };
 
 const LegendResizeHandles = lazyRegion(() => import("./LegendResizeHandles"), "Legend resize handles");
 
@@ -155,15 +157,22 @@ export default function PlotLegend({
         // A greyed "(excluded)" companion (`maskExcludedPayload`) is drawn in
         // the plot's dim ink as hollow markers, and exported as a grey marker
         // entry (`EXCLUDED_GHOST_STYLE`) — so its row is a dim marker, never
-        // the next palette colour.
-        const swatch = s.muted
-          ? `var(${isDarkBg ? "--ink-dim-on-dark" : "--ink-dim-on-light"})`
-          : override && !override.startsWith("--")
-            ? resolveDrawColor(override, isDarkBg, inkColor)
-            : override
-              ? `var(${override})`
-              : `var(--series-${(i % 8) + 1})`;
-        const sampleStyle = s.muted ? EXCLUDED_SAMPLE : resolveSeriesStyle(styleList?.[i], i, seriesCycle ?? null);
+        // the next palette colour. A "(selected)" companion
+        // (`highlightSelectedPayload`) is drawn in the accent, filled.
+        const swatch = s.selected
+          ? "var(--accent)"
+          : s.muted
+            ? `var(${isDarkBg ? "--ink-dim-on-dark" : "--ink-dim-on-light"})`
+            : override && !override.startsWith("--")
+              ? resolveDrawColor(override, isDarkBg, inkColor)
+              : override
+                ? `var(${override})`
+                : `var(--series-${(i % 8) + 1})`;
+        const sampleStyle = s.selected
+          ? SELECTED_SAMPLE
+          : s.muted
+            ? EXCLUDED_SAMPLE
+            : resolveSeriesStyle(styleList?.[i], i, seriesCycle ?? null);
         // Plotted channels are click-to-toggle + double-click-to-rename; overlays
         // (i ≥ plotted.length) are not. Refuse to hide the last visible series.
         const isChannel = i < plotted.length;
@@ -179,7 +188,7 @@ export default function PlotLegend({
         if (editing && editing.channel === channel) {
           return (
             <div className="it" key={s.label}>
-              <LegendSample color={swatch} style={sampleStyle} defaultTrace={defaultTrace} />
+              <LegendSample color={swatch} style={sampleStyle} defaultTrace={defaultTrace} filled={s.selected} />
               <input
                 className="qz-input"
                 autoFocus
@@ -247,7 +256,7 @@ export default function PlotLegend({
               textDecoration: isHidden ? "line-through" : "none",
             }}
           >
-            <LegendSample color={swatch} style={sampleStyle} defaultTrace={defaultTrace} />
+            <LegendSample color={swatch} style={sampleStyle} defaultTrace={defaultTrace} filled={s.selected} />
             {/* Rich-text rename support (GOTO #5): `$...$` renders as math. */}
             <RichText text={text} />
             {interactive && plotted.length > 1 && (

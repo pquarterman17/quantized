@@ -12,9 +12,10 @@ from quantized.calc.map import MapState, map_from_datastruct
 from quantized.calc.plotting import PlotState, build_series
 from quantized.routes._datasetcache import CachedDatasetRequest, resolve_or_409
 from quantized.routes._errors import CALC_ERRORS
+from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import jsonify, to_jsonable
 
-router = APIRouter(prefix="/api/plot", tags=["plot"])
+router = APIRouter(prefix="/api/plot", tags=["plot"], route_class=OffloopJSONRoute)
 
 
 class PlotRequest(CachedDatasetRequest):

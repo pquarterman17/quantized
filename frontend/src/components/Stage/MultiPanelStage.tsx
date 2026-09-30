@@ -71,6 +71,8 @@ import { resolveTemplate } from "../../lib/plotTemplates";
 import { canExportSpatialPage } from "../../lib/spatialPageExport";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { useActiveDataset, useApp } from "../../store/useApp";
+import { canvasGroupCol } from "../../lib/plotGroupSplit";
+import { useFacetEncoding } from "./useFacetEncoding";
 import { MULTIPANEL_SYNC_KEY, useMultiPanelStage } from "./useMultiPanelStage";
 import SpatialPanelLegend from "./SpatialPanelLegend";
 
@@ -112,6 +114,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   // header keeps it store-free (types only) so a background window can drive it
   // from its own snapshot. Only the SPATIAL mode acts on it; see the param doc.
   const autoSeriesStyles = useApp((s) => s.autoSeriesStyles);
+  const excludedDisplay = useApp((s) => s.excludedDisplay); // likewise SPATIAL-only
   const y2Keys = useApp((s) => s.y2Keys);
   const errKeys = useApp((s) => s.errKeys);
   const hiddenChannels = useApp((s) => s.hiddenChannels);
@@ -124,6 +127,13 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   const pageSetup = useApp((s) => s.pageSetup);
   const ensureBookData = useApp((s) => s.ensureBookData);
   const template = resolveTemplate(plotTemplate);
+  // P1.4 residual 3: the focused window's Color / Symbol / Label on its facet grid.
+  const facetKey = useApp((s) => s.facetKey);
+  const groupKey = useApp((s) => s.groupKey);
+  const picks = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document?.bindings.encoding);
+  const encodedFacets = useFacetEncoding(
+    active, picks, canvasGroupCol(groupKey, y2Keys), y2Keys, facetKey, xKey, yKeys, seriesLabels,
+  );
   const { hostRef, hostStyle, readout, tool, spatialLegends } = useMultiPanelStage({
     active,
     datasets,
@@ -145,12 +155,14 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
     seriesStyles,
     seriesLabels,
     autoSeriesStyles,
+    excludedDisplay,
     xKey,
     yKeys,
     y2Keys,
     errKeys,
     hiddenChannels,
     seriesOrder,
+    encodedFacets,
     tool: plotTool,
     theme,
     accent,

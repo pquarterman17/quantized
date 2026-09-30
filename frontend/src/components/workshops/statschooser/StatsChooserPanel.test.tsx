@@ -5,6 +5,7 @@ import StatsChooserPanel from "./StatsChooserPanel";
 import { resetBookTransportForTests } from "../../../lib/bookData";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
+import { useStatsTestsStore } from "../../../store/statsTests";
 
 const { recommendMock, runTestMock, emitMock, fetchBookDataMock } = vi.hoisted(() => ({
   recommendMock: vi.fn(),
@@ -192,6 +193,13 @@ describe("StatsChooserPanel", () => {
     await waitFor(() =>
       expect(screen.getByText(/at least 3 observations/)).toBeInTheDocument(),
     );
+  });
+
+  it("links to the Statistical tests workshop for tests it does not recommend", () => {
+    useStatsTestsStore.setState({ open: false });
+    render(<StatsChooserPanel />);
+    fireEvent.click(screen.getByRole("button", { name: "More tests…" }));
+    expect(useStatsTestsStore.getState().open).toBe(true);
   });
 
   it("prompts for a dataset when none is active", () => {

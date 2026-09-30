@@ -24,6 +24,7 @@ from quantized.calc.figure_group_notes import (
 )
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_render import new_figure, render_scope, savefig_bytes
+from quantized.calc.figure_stat_colors import check_aligned, color_boxes, color_violins
 from quantized.calc.figure_stat_marks import (
     draw_violin_inner,
     overlay_summary,
@@ -82,6 +83,7 @@ def render_statplot_figure(
     marks: dict[str, Any] | None = None,
     axis_style: dict[str, Any] | None = None,
     y_domain: tuple[float, float] | list[float] | None = None,
+    colors: list[str | None] | None = None,
 ) -> bytes:
     """Render a statistical plot to image bytes.
 
@@ -140,6 +142,10 @@ def render_statplot_figure(
     reconciling two different autoscale rules. ``None`` (default) = today's
     autoscale-to-drawn-artists behaviour, byte-identical.
 
+    ``colors`` (P1.4 Color-by, ``calc.figure_stat_colors.level_colors``;
+    grouped kinds, parallel to ``data``): each group's glyph colour -- the box
+    or violin body, fill and edge, and its points. ``None`` = unchanged.
+
     ``dpi`` defaults to the style preset's calibrated resolution when not
     given (``None``), same as ``calc.figure``'s ``resolved_dpi`` convention;
     the preset's box-tick convention (``xtick.top``/``ytick.right`` mirrored
@@ -188,7 +194,7 @@ def render_statplot_figure(
             show_points=show_points, point_row_indices=point_row_indices,
             show_mean_ci=show_mean_ci, show_connect_means=show_connect_means,
             show_n=show_n, connect_breaks=connect_breaks, marks=marks, axis_style=axis_style,
-            raw_labels=raw_labels,
+            raw_labels=raw_labels, colors=colors,
         )
         if y_domain is not None:
             ax.set_ylim(float(y_domain[0]), float(y_domain[1]))
@@ -292,6 +298,7 @@ def _draw_statplot(
     marks: dict[str, Any] | None = None,
     axis_style: dict[str, Any] | None = None,
     raw_labels: list[str] | None = None,
+    colors: list[str | None] | None = None,
 ) -> Any | None:
     """Draw one panel. Returns the outer-tier axis of a two-tier nested
     category axis (the x title goes on it), else ``None``.
@@ -305,6 +312,7 @@ def _draw_statplot(
         if not isinstance(data, list) or not data:
             raise ValueError(f"{kind} needs a non-empty list of groups")
         all_groups, all_idx = _clean_groups_with_indices(data, point_row_indices)
+        check_aligned(colors, len(all_groups), "group")
         all_ticks = list(range(1, len(all_groups) + 1))
         cat_labels = labels or [f"group {i + 1}" for i in range(len(all_groups))]
         empty = [g.size == 0 for g in all_groups]
@@ -316,13 +324,17 @@ def _draw_statplot(
         ticks = [all_ticks[i] for i in filled]
         row_indices = [all_idx[i] for i in filled]
         filled_labels = [cat_labels[i] for i in filled]
+        tint = [colors[i] for i in filled] if colors is not None else None  # P1.4 Color-by
         mk = resolve_marks(
             kind, show_points=show_points, show_mean_ci=show_mean_ci, **(marks or {}),
         )
         if kind == "box":
             # A caller-provided summary marker replaces boxplot's own tiny
             # mean-triangle (showmeans) -- one mean glyph, not two.
-            box_kw: dict[str, Any] = {"showmeans": mk.box_showmeans, "showfliers": mk.fliers}
+            box_kw: dict[str, Any] = {
+                "showmeans": mk.box_showmeans, "showfliers": mk.fliers,
+                "patch_artist": tint is not None,
+            }
             if mk.box_width is not None:
                 box_kw["widths"] = mk.box_width
             if any(empty):
@@ -331,21 +343,25 @@ def _draw_statplot(
                 # axis would get, so where the empty slots fall cannot change
                 # every box's width.
                 box_kw.setdefault("widths", float(np.clip(0.15 * (len(all_ticks) - 1), 0.15, 0.5)))
-                ax.boxplot(groups, positions=ticks, **box_kw)
+                parts = ax.boxplot(groups, positions=ticks, **box_kw)
                 ax.set_xticks(all_ticks)
                 ax.set_xticklabels(labels or [str(t) for t in all_ticks])
             else:
-                ax.boxplot(groups, tick_labels=labels, **box_kw)
+                parts = ax.boxplot(groups, tick_labels=labels, **box_kw)
+            if tint is not None:
+                color_boxes(parts, tint)
         elif kind == "violin":
             # A new-style request draws the screen's glyph width (the points'
             # jitter is scaled to it); matplotlib's own default is 0.5. Its
             # inner glyph is the box's (q1-q3 bar + median dot, drawn below
             # once the stats exist); only a legacy request keeps matplotlib's
             # mean + extrema lines.
-            ax.violinplot(
+            vparts = ax.violinplot(
                 groups, positions=ticks, widths=mk.box_width or 0.5,
                 showmeans=not mk.violin_quartiles, showextrema=not mk.violin_quartiles,
             )
+            if tint is not None:
+                color_violins(vparts, tint)
             if labels or any(empty):
                 ax.set_xticks(all_ticks)
                 ax.set_xticklabels(labels or [str(t) for t in all_ticks])
@@ -368,7 +384,7 @@ def _draw_statplot(
         box_stats_cache = [_box_stats(g) for g in groups] if need_stats and groups else None
         if inner and box_stats_cache is not None:
             draw_violin_inner(ax, ticks, box_stats_cache)
-        scatter_points(ax, groups, filled_labels, ticks, row_indices, mk, box_stats_cache)
+        scatter_points(ax, groups, filled_labels, ticks, row_indices, mk, box_stats_cache, tint)
         # Box, strip AND violin (P2.6 box 1): a legacy violin resolves to no
         # summary, so its output is unchanged.
         overlay_summary(ax, groups, ticks, mk, box_stats_cache)

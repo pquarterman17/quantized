@@ -5,6 +5,8 @@ interface LegendSampleProps {
   color: string;
   style?: SeriesStyle;
   defaultTrace?: DefaultTrace;
+  /** Fill the default circle with `color` (the canvas' selected-row companion). */
+  filled?: boolean;
 }
 
 const DASH: Record<string, string | undefined> = {
@@ -12,7 +14,7 @@ const DASH: Record<string, string | undefined> = {
   dotted: "1.5 3",
 };
 
-function marker(shape: MarkerShape, color: string, radius: number) {
+function marker(shape: MarkerShape, color: string, radius: number, filled = false) {
   const cx = 12;
   const cy = 6;
   const common = { stroke: color, strokeWidth: 1.5 };
@@ -35,7 +37,7 @@ function marker(shape: MarkerShape, color: string, radius: number) {
     }
     default:
       // Match uPlot's built-in circle: series-colour stroke with white fill.
-      return <circle cx={cx} cy={cy} r={radius} fill="#fff" {...common} />;
+      return <circle cx={cx} cy={cy} r={radius} fill={filled ? color : "#fff"} {...common} />;
   }
 }
 
@@ -65,7 +67,7 @@ function marker(shape: MarkerShape, color: string, radius: number) {
  *  expectation in `PlotLegend.test.tsx` ("the deliberate OFF-state change"), not
  *  filed under byte-identical — the 32-combination differential OFF proof beside
  *  it compares this component against ITSELF and structurally cannot see it. */
-export default function LegendSample({ color, style, defaultTrace = "Line" }: LegendSampleProps) {
+export default function LegendSample({ color, style, defaultTrace = "Line", filled }: LegendSampleProps) {
   const width = style?.width ?? (defaultTrace === "Scatter" ? 0 : 1.5);
   const showLine = width > 0;
   const { show: showMarker, shape, size } = markerDecision(style, defaultTrace);
@@ -90,7 +92,7 @@ export default function LegendSample({ color, style, defaultTrace = "Line" }: Le
           strokeDasharray={style?.line ? DASH[style.line] : undefined}
         />
       )}
-      {showMarker && marker(shape, color, radius)}
+      {showMarker && marker(shape, color, radius, filled)}
     </svg>
   );
 }

@@ -7,7 +7,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
-import type { FigureSpec } from "../../../lib/api/figures";
 import { appendErrorBinding, patchErrorBindingList, removeErrorBindingFromList } from "./canonicalErrors";
 import { toggleChannelPlotted, toggleChannelSecondary, type ChannelMembership } from "./canonicalChannels";
 import { withFacetKey, withoutFacet } from "./canonicalFacet";
@@ -18,7 +17,7 @@ import { regionShadeBindings } from "./canonicalRegionShades";
 import { deriveShapeRows, patchShapeList, removeShapeFromList } from "./canonicalShapes";
 import { selectSessionCyclesSeriesStyles, selectSessionLiveDrifted } from "./canonicalSession";
 import { FIGURE_STYLE_DPI } from "./figureOutputConstants";
-import { buildLegacyFigureDoc, buildLegacyFigureSpec, type LegacyFigureState } from "./legacyFigure";
+import { buildLegacyFigureDoc, buildLegacyPreviewSpec, type LegacyFigureState } from "./legacyFigure";
 import { dragPreviewElement } from "./previewDrag";
 import { exportPreviewFigure } from "./previewExport";
 import { editPreviewElementText, previewElementText, selectPreviewElement } from "./previewSelect";
@@ -46,6 +45,7 @@ export function useFigureBuilder() {
   const yKeys = useApp((s) => s.yKeys);
   const xKey = useApp((s) => s.xKey);
   const liveY2 = useApp(useShallow(secondaryAxisFromView)); // legacy mode mirrors the live y2 axis
+  const excludedDisplay = useApp((s) => s.excludedDisplay); // ...and greys excluded rows as it does
   const xScale = useApp((s) => s.xScale);
   const yScale = useApp((s) => s.yScale);
   const xFmt = useApp((s) => s.xFmt);
@@ -309,14 +309,14 @@ export function useFigureBuilder() {
   // "Save as figure" doc are built from the same picks by construction — see
   // legacyFigure.ts's module doc.
   const legacyState = useMemo<LegacyFigureState>(() => ({
-    data, xKey: effXKey, yKeys: effYKeys, xScale: effXScale, yScale: effYScale,
+    data, liveDataset: canonical || frozenData ? null : active, xKey: effXKey, yKeys: effYKeys, xScale: effXScale, yScale: effYScale,
     xFmt, yFmt, style, overrides, title, xLabel, yLabel, seriesStyles, docSeriesStyles, docGroupCol,
     y2: docScales === undefined ? liveY2 : null, // a re-opened FigureDoc carries no y2
   }), [
     data, effXKey, effYKeys, effXScale, effYScale, xFmt, yFmt, style, overrides, title, xLabel, yLabel,
-    seriesStyles, docSeriesStyles, docGroupCol, docScales, liveY2,
+    seriesStyles, docSeriesStyles, docGroupCol, docScales, liveY2, canonical, frozenData, active,
   ]);
-  const legacySpec = useMemo<FigureSpec | null>(() => buildLegacyFigureSpec(legacyState), [legacyState]);
+  const legacySpec = useMemo(() => buildLegacyPreviewSpec(legacyState, excludedDisplay), [legacyState, excludedDisplay]);
   // Item 2 / F2.1g: y2 min/max need a secondary axis to apply to (gateY2Overrides
   // drops y2_lim otherwise). Legacy reads the REQUEST, so controls and wire agree.
   const hasY2 = canonical ? (canonicalDocument?.bindings.y2Keys?.length ?? 0) > 0 : (legacySpec?.y2_keys?.length ?? 0) > 0;
@@ -395,7 +395,7 @@ export function useFigureBuilder() {
    *  live state. */
   const exportNow = (): Promise<void> =>
     exportPreviewFigure({
-      canonicalDocument, canonicalReadiness, canonicalDataset, spec, frozenData, active, fmt, dpi, autoSeriesStyles: cyclesStyles, setStatus,
+      canonicalDocument, canonicalReadiness, canonicalDataset, spec, legacyState, frozenData, active, fmt, dpi, autoSeriesStyles: cyclesStyles, setStatus,
     });
 
   return {

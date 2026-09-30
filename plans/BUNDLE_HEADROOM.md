@@ -1,6 +1,14 @@
 # Bundle headroom campaign
 
-**Current state (2026-09-29, after slice 12):** no seam — eight import
+**Current state (2026-09-30, after slice 13):** no seam — three import
+edges, the slice-12 method again. Taken on the batch-6 head (`01e2f252`),
+which measured **866,165 B**, 193 B under the pin, with the next batch still
+queued. Measured **859,599 B** (**−6,566 B**), with no behaviour or timing
+change: every byte that left is code only already-lazy modules call. The pin
+is NOT moved (**866,358 B**), so **6,759 B** of headroom is left. See
+"Slice 13".
+
+**Previous state (2026-09-29, after slice 12):** no seam — eight import
 edges, the slice-11 method generalised. Taken on PR #486's tree
 (`f277d2f4`, the Library explorer controls) to fund a queued batch that needs
 ~10.5 kB more eager. Measured **846,860 B** eager against that parent's
@@ -42,7 +50,7 @@ finding is not a seam: most of the "chunk-boundary tax" slices 3–5 kept
 measuring was Vite's preload lists naming already-loaded chunks, and removing
 them (build-time, runtime-neutral) recovered 10.7 kB by itself. See "Slice 8".
 
-**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4, 5, 6, 8, 9, 10, 11 and 12
+**Status:** measured 2026-08-30 on `af88f43`. **Slices 1, 3, 4, 5, 6, 8, 9, 10, 11, 12 and 13
 executed; slice 7 built and reverted, never on main** (slice 5 deliberately small — see its ruling on `PlotLegend`; slice
 6 ratchets the pin DOWN, the first slice authorized to) (see their sections
 below); slice 2 is partially done. Slice 5 is no longer the
@@ -2057,6 +2065,120 @@ never on first paint, but ~0.7 kB before chunk costs) and
 disqualified by the `PlotLegend` ruling). Command `description`/`keywords`
 strings are most of `commands/*.ts`'s bytes, but the ⌘K palette and Help
 search read them synchronously; not a candidate.
+
+### Slice 13 — three import edges, no seam — **DONE (2026-09-30)**
+
+**Measured net eager delta −6,566 B — pin NOT moved (866,358 B)**
+
+Brief: the batch-6 head `01e2f252` (main plus the global fit, live-plot
+patch, stats-tests workshop, Origin project export and dataset-patch upload
+work) measured 866,165 B, 193 B under the pin. Target: free ≥ 4 kB (aim 6+)
+without touching `EAGER_JS_BUDGET` or any pin. Exact bytes out of
+`dist/index.html` (entry + `modulepreload`), `npm ci` once, then
+`node_modules/.vite` wiped before EVERY build:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `01e2f252` (parent, batch-6 head) | 866,165 | — |
+| + AppOverlays gates Recode on `store/recodePanel.ts` | 862,123 | **−4,042** |
+| + panel window record half → `lib/panelWindowModel.ts` | 860,516 | **−1,607** |
+| + pipeline step model → `lib/pipelineStep.ts` | 859,599 | **−917** |
+
+Rows are MARGINAL (each on top of the rows above it), the slice-5
+distinction.
+
+#### How it was found
+
+What the batch added first: `b8365c73` (the batch's base) and `01e2f252`
+profiled side by side with `scripts/profile-eager-bundle.mjs` put the batch
+at about +4 kB attributed — `lib/api/datasetCache.ts` (+1,367 B, the
+shared-upload/cell-patch path every plot fetch goes through),
+`lib/uplotSeries.ts` (+1,351, offset by −1,085 in `lib/uplotOpts.ts`: the
+same per-series code, moved), `lib/useStableByEquality.ts` (+595, a plot
+render hook), command metadata for the new commands (+932 across
+`analysisCommands`/`fileCommands`) and `useLivePaint` (+356). All of it is
+on the plot-fetch or plot-render path or is palette metadata read
+synchronously, so none of it was a candidate; the fit, stats-tests, export
+and Origin-project additions were already lazy.
+
+So the bytes came from the older tree, by the slice-9/12 methods over the
+build's own module graph (a scratch Vite config dumping `getModuleInfo`):
+a dominator pass (the bytes each eager module alone keeps eager) and the
+slice-12 per-declaration pass (exports no eager module value-imports, priced
+by source line). Three edges came out:
+
+- **`store/recode.ts` (3,936 B), a whole store for one boolean.** Its only
+  eager importer was `AppOverlays.tsx`, reading `s.open` to gate the lazy
+  `RecodePanel`. The heavy store is unchanged; it now copies `open` into the
+  new dependency-free `store/recodePanel.ts` from a `subscribe` registered
+  when it evaluates, and AppOverlays reads that. This is the
+  `store/levelOrderPanel.ts` precedent with one difference: there the tiny
+  store is the source of truth, which moved the refusal check to panel mount.
+  Here the heavy store stays the source of truth, so `openRecode`'s
+  synchronous refusal toast and every other path are byte-unchanged. Only
+  `store/recode.ts` can make `open` true and it must be loaded to do so
+  (WorksheetPane's "Recode…" entry and the panel both import it), so the
+  mirror cannot disagree with it, and zustand runs the subscriber inside the
+  store's own `set`, so AppOverlays re-renders in the same tick it always
+  did.
+- **`lib/panelwindow.ts` (small eager half).** `lib/plotview.ts` needed its
+  `.dwk` sanitizers and `store/panels.ts` its title and reorder/remove list
+  edits; the grid shape, sync key, cell-drag codec, unit families and the
+  overlay payload builder serve only the lazy `PanelPlotWindow` tree. The
+  record half moved verbatim to the leaf `lib/panelWindowModel.ts`, which
+  `panelwindow.ts` re-exports. `lib/facetGrid.ts` left with it (only
+  `panelGridShape` reached it eagerly).
+- **`lib/pipeline.ts` (small eager half).** The macro recorder
+  (`store/macroPipeline.ts`, composed into useApp) needs `makeStep`,
+  `regenerateStep` and `moveStep` on every recorded action; the script
+  export, expression validation, param-form schema and `.dwk` sanitizer serve
+  only the lazy Pipeline panel, Macro card and codec. The step model moved
+  verbatim to the leaf `lib/pipelineStep.ts`, which `pipeline.ts`
+  re-exports — so `sanitizeSteps` and every recorder still share ONE
+  `makeStep` id counter.
+
+Replayed over the build graph: 426 → 425 eager modules (`recode`,
+`panelwindow`, `facetGrid`, `pipeline` out; the three leaves in).
+
+#### Why it qualifies under the `PlotLegend` ruling, and what it costs
+
+No function, value or control flow changed — every move is verbatim — and no
+`import()` was added, so no `Suspense`, fallback, focus or Escape path exists
+to regress, and no chunk fetch was put in front of any gesture: each module
+that left is imported STATICALLY by modules that were already lazy (the
+worksheet pane and Recode panel, the panel-window renderer, the Pipeline
+panel, Macro card and `.dwk` codec) and now arrives with the chunk they
+already fetch. None of them had top-level side effects apart from
+`store/recode.ts` creating its store, which now happens on the worksheet
+chunk's first load instead of at startup, before anything could read it.
+`preload-verify` passes on the emitted lists (179 sites, 0 violations). Not
+measured in a browser (no Playwright browser here).
+
+#### Guards and sabotage
+
+`architecture.test.ts`: `store/recode.ts`, `lib/panelwindow.ts`,
+`lib/facetGrid.ts` and `lib/pipeline.ts` are `DRAGGED_OUT` (each is still
+imported statically by lazy modules, so only reachability can hold them).
+`store/recode.test.ts` pins the mirror: it follows open, close, a refusal, a
+commit and a direct `setState`.
+
+| sabotage | result |
+|---|---|
+| AppOverlays imports `store/recode` again, `store/panels.ts` imports from `lib/panelwindow`, `store/macroPipeline.ts` from `lib/pipeline` | RED — `DRAGGED_OUT` arm names all four modules |
+| the recode subscriber stops copying `open` | RED — both mirror cases |
+
+#### Candidates found by the same scan, not taken
+
+Upper bounds, unmeasured, not needed for the target: `openRecentProject`
+(~1.4 kB; the palette command calls it, so it needs a `runLazy` seam, not an
+edge), `lib/foldertree.ts`'s lazy-only queries, drop geometry and `.dwk`
+parse (~1.9 kB, "large lazy half": eight lazy importers change paths),
+`lib/clipboard.ts`'s `copyImageAsync`/`copySvgAsync` (~0.7 kB, five test
+files mock them through `lib/clipboard`), `lib/desktopBridge.ts`'s save
+helpers (~0.8 kB; `store/workspaceIO.ts` is their only caller), and
+`store/relink.ts` (2.2 kB, three eager importers). `lib/contextActions.ts`'s
+dataset action lists look lazy-only to the per-declaration scan but are not:
+`datasetActions` composes them for the eager ⌘K palette.
 
 ## What this does NOT change
 

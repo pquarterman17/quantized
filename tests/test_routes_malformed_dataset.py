@@ -98,6 +98,15 @@ def _rsm_q_good() -> dict[str, Any]:
 
 RSM_Q_GOOD = _rsm_q_good()
 
+
+def _global_fit_body(ds: dict[str, Any]) -> dict[str, Any]:
+    """/api/fitting/global takes (x, y) series, not DataStructs: plant the
+    dataset's time as x and its first channel as y, so a malformed ``time``
+    reaches the series' x field exactly as a malformed dataset would."""
+    vals = ds["values"]
+    return {"model": "Linear", "datasets": [{"x": ds["time"], "y": [r[0] for r in vals]}] * 2}
+
+
 # (route, body-builder, good-payload) triples. The builder plants the given
 # dataset dict wherever the route's schema carries it (top level, nested item
 # list, or a nested figure payload); the third element is the dataset the
@@ -132,6 +141,11 @@ CASES = [
     (
         "/api/export/origin-project",
         lambda ds: {"datasets": [{"dataset": ds, "name": "a"}]},
+        GOOD_DATASET,
+    ),
+    (
+        "/api/aggregate/confidence-band",
+        lambda ds: {"datasets": [ds, GOOD_DATASET]},
         GOOD_DATASET,
     ),
     (
@@ -180,11 +194,18 @@ CASES = [
         lambda ds: {"dataset": ds, "x_min": 20.0, "x_max": 21.0, "y_min": 9.5, "y_max": 10.5},
         RSM_GOOD,
     ),
+    ("/api/fitting/global", _global_fit_body, GOOD_DATASET),
+    ("/api/fitting/global/job", _global_fit_body, GOOD_DATASET),
 ]
 
 # Routes the enumeration finds that the sweep deliberately does not probe.
 # Every entry needs a reason; a stale entry fails the completeness test.
 EXEMPT = {
+    "/api/datasets/patch": (
+        "takes a dataset_handle and cell patches, never a dataset payload, so "
+        "there is no dataset to malform; unknown handles (409) and out-of-range "
+        "cells (422) are covered in test_dataset_patch.py"
+    ),
     "/api/export/origin-com": (
         "the COM availability gate returns 409 before any dataset is parsed on "
         "non-Windows/CI machines, so the probe cannot reach from_dict here; "

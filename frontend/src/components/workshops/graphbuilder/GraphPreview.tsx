@@ -22,7 +22,9 @@
 // Categorical marks (JMP_GAP J5 residual, closed 2026-09-29): given the live
 // `spec`, box / violin / bar draw the window's `PlotView.statMarks` for that
 // mode — raw points on ORIGINAL rows, summary marker, error bars — flat and
-// per facet panel, as the Stat Stage it sends to does (`./previewMarks`).
+// per facet panel, as the Stat Stage it sends to does (`./previewMarks`). A
+// violin draws its KDE once the backend returns it (`./usePreviewViolins`);
+// the box stands in, with a note, until then or when it is unreachable.
 
 import { useEffect, useMemo, useRef } from "react";
 
@@ -38,6 +40,7 @@ import StatStageCanvas from "../../Stage/StatStageCanvas";
 import { draw as drawStat, type StatDrawData } from "../../Stage/statRender";
 import { drawFacetGrid, drawXY } from "./previewCanvas";
 import { previewStatDraws, type PreviewStatDraws } from "./previewMarks";
+import { usePreviewViolins } from "./usePreviewViolins";
 
 /** The single-panel canvas host (xy incl. its own facet grid, flat box/bar,
  *  message). Owns the ONE canvas + its paint effect — unchanged from before
@@ -148,10 +151,12 @@ export default function GraphPreview({
   const statMarks = useApp((s) => s.statMarks);
   // Faceted box/bar (#11): one small `StatStageCanvas` per facet level instead
   // of the single shared canvas `CanvasHost` paints.
-  const stat = useMemo<PreviewStatDraws>(
+  const marked = useMemo<PreviewStatDraws>(
     () => previewStatDraws(render, spec, datasets, statMarks ?? {}),
     [render, spec, datasets, statMarks],
   );
+  // A violin's KDE (J5 leftover): the box stands in until it arrives, or offline.
+  const { draws: stat, boxed } = usePreviewViolins(marked);
   // P1.4 residual 4: a gradient Color-by's points and colour scale.
   const colorBy = useMemo(
     () => (encoded?.gradient ? gradientColumns(encoded.gradient, encoded.styles) : undefined),
@@ -178,7 +183,7 @@ export default function GraphPreview({
           {render.message}
         </div>
       )}
-      {render.kind === "box" && render.violin && (
+      {render.kind === "box" && render.violin && (!marked.violin || boxed) && (
         <div className="qzk-graph-preview-approx">violin preview shows box · KDE renders in the editable plot</div>
       )}
     </div>

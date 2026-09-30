@@ -37,6 +37,7 @@ import {
   type GroupNotice,
 } from "../../lib/groupAxis";
 import { droppedRows } from "../../lib/rowstate";
+import { groupColorLevels, slotColorLevel, type StatColor } from "../../lib/statColor";
 import type { StatMode } from "../../lib/statstage";
 import type { DataStruct, Dataset } from "../../lib/types";
 import type { StatDrawData } from "./statRender";
@@ -64,6 +65,8 @@ export interface LevelsInput {
 export interface LevelsDisplay {
   hideEmpty: boolean;
   showN: boolean;
+  /** P1.4 Color-by: the factor whose level colours each glyph (`lib/statColor`). */
+  color?: StatColor | null;
 }
 
 const CATEGORICAL: readonly StatMode[] = ["box", "violin", "strip", "bar"];
@@ -207,21 +210,31 @@ export function decorateDraw(
   axis: GroupAxis | null,
   hideEmpty: boolean,
   showN: boolean,
+  color: StatColor | null = null,
 ): Decorated {
   const labels = groupLabels(draw);
   if (!labels) return { draw, aligned: null };
   const aligned = axis ? alignSlots(axis.slots, labels.length) : null;
   if (draw.mode === "bar") {
-    const data = aligned
-      ? padBarData(draw.data, visibleSlots(aligned, hideEmpty))
+    const shown = aligned ? visibleSlots(aligned, hideEmpty) : null;
+    const data = shown
+      ? padBarData(draw.data, shown)
       : { ...draw.data, groups: hideEmpty ? draw.data.groups.filter(hasData) : draw.data.groups };
     // `slots` (the drawn categories, keyed) is what the selection link reads;
-    // the bar renderer itself lays out from `data.groups` alone.
-    return { draw: { ...draw, data, showN, slots: aligned ? visibleSlots(aligned, hideEmpty) : null }, aligned };
+    // the bar renderer itself lays out from `data.groups` alone. Color-by reads
+    // each category's level off its slot key (`lib/statColor`).
+    const colorLevels = color && shown ? shown.map((s) => slotColorLevel(color, s.key)) : null;
+    return { draw: { ...draw, data, showN, slots: shown, ...(colorLevels ? { colorLevels } : {}) }, aligned };
   }
   if (draw.mode !== "box" && draw.mode !== "strip" && draw.mode !== "violin") return { draw, aligned: null };
   if (!aligned) return { draw: { ...draw, slots: null, showN }, aligned };
-  return { draw: { ...relabel(draw, aligned), slots: visibleSlots(aligned, hideEmpty), showN } as StatDrawData, aligned };
+  const colorLevels = color ? groupColorLevels(color, aligned, labels.length) : null;
+  return {
+    draw: {
+      ...relabel(draw, aligned), slots: visibleSlots(aligned, hideEmpty), showN, ...(colorLevels ? { colorLevels } : {}),
+    } as StatDrawData,
+    aligned,
+  };
 }
 
 /** What the notice counts for the caveat: every box-family group, or every
@@ -271,7 +284,7 @@ export function applyLevels(
     if (!fresh.facets) return { draw, drawFacets, notice: null };
     let allAligned = true;
     const panels = drawFacets.map((f) => {
-      const d = decorateDraw(f.draw, axes.panels?.get(f.label) ?? null, opts.hideEmpty, opts.showN);
+      const d = decorateDraw(f.draw, axes.panels?.get(f.label) ?? null, opts.hideEmpty, opts.showN, opts.color);
       if (!d.aligned) allAligned = false;
       return { ...f, draw: d.draw };
     });
@@ -292,7 +305,7 @@ export function applyLevels(
     return { draw, drawFacets: panels, notice };
   }
   if (!draw || !fresh.draw) return { draw, drawFacets, notice: null };
-  const { draw: decorated, aligned } = decorateDraw(draw, flat, opts.hideEmpty, opts.showN);
+  const { draw: decorated, aligned } = decorateDraw(draw, flat, opts.hideEmpty, opts.showN, opts.color);
   // When the draw could not be threaded onto the axis it renders closed up,
   // as before — so its empty levels are NOT on screen: "hidden", not "(n=0)".
   const notice = groupNotice({

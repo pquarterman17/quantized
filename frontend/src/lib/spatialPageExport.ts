@@ -52,7 +52,9 @@ import { spatialGridSize, spatialPlottedChannels, type SpatialPanel } from "./mu
 import { pageValidRects } from "./panelLayout";
 import { withPageGreyscale } from "./pageGreyscale";
 import { pageSizeInches, type PageSetup } from "./pagesetup";
-import { axisFmtParam, type AxisFormat, type DataStruct } from "./types";
+import { droppedRows } from "./rowstate";
+import { axisFmtParam, type AxisFormat, type DataStruct, type Dataset } from "./types";
+import type { ExcludedRowsGhoster } from "./figureSpec";
 import type { FigurePageSpec, PagePanelSpec } from "./api";
 import type { FigureSpec } from "./api/figures";
 
@@ -255,6 +257,7 @@ export function buildSpatialPageRequest(
   datasets: ReadonlyMap<string, DataStruct>,
   pageSetup: PageSetup | null,
   appearance?: SpatialPageAppearance,
+  greyPanel?: (figure: FigureSpec, datasetId: string) => FigureSpec,
 ): FigurePageSpec | null {
   if (panels.length === 0 || !pageSetup) return null;
   const rects = pageValidRects(panels);
@@ -264,8 +267,9 @@ export function buildSpatialPageRequest(
     const p = panels[i];
     const dataset = datasets.get(p.datasetId);
     if (!dataset) return null;
-    const figure = spatialPanelFigure(p, dataset, appearance);
-    if (!figure) return null;
+    const built = spatialPanelFigure(p, dataset, appearance);
+    if (!built) return null;
+    const figure = greyPanel ? greyPanel(built, p.datasetId) : built;
     const r = rects[i];
     panelSpecs.push({
       figure,
@@ -290,4 +294,20 @@ export function buildSpatialPageRequest(
   // PageDocument-rooted paths (panelResolve.ts, usePagePreviewExport.ts)
   // would drift.
   return withPageGreyscale(spec, appearance?.greyscale);
+}
+
+/** F4.2c (a): `figure` (built over `ds`'s analysis rows, as
+ *  `buildSpatialPageRequest` is handed them) with `ds`'s excluded and
+ *  filter-dropped rows added back as grey companions by `ghoster`, as the
+ *  spatial grid draws them in grey mode (`Stage/spatialPanelFetch.ts`). The
+ *  grid's legend is the decoded one and never lists a companion, so a
+ *  companion is kept out of the exported legend too. */
+export function withSpatialGhosts(figure: FigureSpec, ds: Dataset, ghoster: ExcludedRowsGhoster): FigureSpec {
+  const grey = ghoster(figure, ds.data, droppedRows(ds));
+  const n = figure.y_keys?.length ?? 0;
+  if (grey === figure || !grey.series_styles) return grey;
+  return {
+    ...grey,
+    series_styles: grey.series_styles.map((st, i) => (i < n || !st?.legend ? st : { ...st, legend: "_nolegend_" })),
+  };
 }

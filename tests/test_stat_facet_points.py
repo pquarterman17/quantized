@@ -183,3 +183,46 @@ def test_categorical_route_draws_faceted_bar_marks_and_validates_them() -> None:
                 {"points": "all", "raw": [[[1.0]]]}):
         r = client.post(url, json={**base, "facets": [_bar_facet(**bad)]})
         assert r.status_code == 422, bad
+
+
+# ── connect-means per panel (JMP_GAP J5 leftover, closed 2026-09-30) ─────────
+
+
+def _dashed(ax: Any) -> list[list[tuple[float, float]]]:
+    return [
+        [(float(x), float(y)) for x, y in zip(ln.get_xdata(), ln.get_ydata(), strict=True)]
+        for ln in ax.lines if ln.get_linestyle() == "--"
+    ]
+
+
+@pytest.mark.parametrize("kind", ["box", "strip"])
+def test_every_panel_joins_its_own_means(kind: str, figs: list[Any]) -> None:
+    render_stat_facets_figure(
+        [_P1, _P2], default_kind=kind, fmt="svg", marks=_MARKS, show_connect_means=True,
+    )
+    axes = [ax for ax in figs[-1].axes if ax.get_visible() and ax.get_title()]
+    for ax, panel in zip(axes, (_P1, _P2), strict=True):
+        means = [float(np.mean(g)) for g in panel["data"]]
+        assert _dashed(ax) == [[(1.0, means[0]), (2.0, means[1])]]
+
+
+def test_no_connect_line_unless_asked_and_a_break_splits_it(figs: list[Any]) -> None:
+    render_stat_facets_figure([_P1, _P2], default_kind="box", fmt="svg", marks=_MARKS)
+    assert all(_dashed(ax) == [] for ax in figs[-1].axes)
+    broken = dict(_P1, connect_breaks=[False, True])
+    render_stat_facets_figure(
+        [broken, _P2], default_kind="box", fmt="svg", marks=_MARKS, show_connect_means=True,
+    )
+    axes = [ax for ax in figs[-1].axes if ax.get_visible() and ax.get_title()]
+    assert _dashed(axes[0]) == []  # lifted between its only two groups
+    assert len(_dashed(axes[1])) == 1
+
+
+def test_statplot_route_draws_faceted_connect_lines() -> None:
+    url = "/api/export/statplot-figure"
+    body = {"kind": "box", "data": [[1.0]], "labels": ["x"], "fmt": "svg",
+            "facets": [_P1, dict(_P2, connect_breaks=[False, False])]}
+    plain = client.post(url, json=body)
+    joined = client.post(url, json={**body, "show_connect_means": True})
+    assert plain.status_code == joined.status_code == 200, joined.text
+    assert joined.text.count("stroke-dasharray") > plain.text.count("stroke-dasharray")

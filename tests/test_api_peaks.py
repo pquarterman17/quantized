@@ -202,6 +202,41 @@ def test_integrate_batch_bad_reference_is_422() -> None:
     assert resp.status_code == 422
 
 
+def test_integrate_batch_per_dataset_x_and_gaps() -> None:
+    """Each dataset may carry its own x (``xs``); a null (gap) cell is dropped
+    by the integrator rather than 422-ing the batch."""
+    x1 = np.linspace(0, 100, 401)
+    x2 = np.linspace(20, 80, 121)
+    def g(x: np.ndarray) -> list[float | None]:
+        return list(100.0 * np.exp(-0.5 * ((x - 50.0) / 4.0) ** 2) + 2.0)
+    y2 = g(x2)
+    y2[3] = None
+    resp = client.post(
+        "/api/peaks/integrate-batch",
+        json={"xs": [list(x1), list(x2)], "spectra": [g(x1), y2],
+              "regions": [[40.0, 60.0]], "labels": ["fine", "coarse"]},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["n_failed"] == 0
+    a1, a2 = (row[0] for row in body["area_matrix"])
+    assert abs(a1 - a2) / a1 < 5e-3
+
+
+def test_integrate_batch_needs_exactly_one_x_source() -> None:
+    both = client.post(
+        "/api/peaks/integrate-batch",
+        json={"x": [0, 1, 2, 3], "xs": [[0, 1, 2, 3]], "spectra": [[1, 2, 3, 4]],
+              "regions": [[0.0, 3.0]]},
+    )
+    assert both.status_code == 422
+    neither = client.post(
+        "/api/peaks/integrate-batch",
+        json={"spectra": [[1, 2, 3, 4]], "regions": [[0.0, 3.0]]},
+    )
+    assert neither.status_code == 422
+
+
 def test_find_background_method_is_selectable() -> None:
     """The find's internal background can be the robust polynomial instead of
     the default SNIP (calc.baseline.estimate_background's two methods)."""

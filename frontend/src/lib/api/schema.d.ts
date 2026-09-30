@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/aggregate/confidence-band": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confidence Band Route
+         * @description Pointwise spread band across N datasets (utilities.confidenceBand).
+         */
+        post: operations["confidence_band_route_api_aggregate_confidence_band_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/baseline/als": {
         parameters: {
             query?: never;
@@ -360,6 +380,26 @@ export interface paths {
         put?: never;
         /** Sqlite Query */
         post: operations["sqlite_query_api_database_sqlite_query_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/datasets/patch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Patch Dataset
+         * @description Clone a cached dataset, overwrite the given cells, and cache the result.
+         */
+        post: operations["patch_dataset_api_datasets_patch_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1237,6 +1277,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/bands": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Bands
+         * @description Confidence and prediction bands around a fitted curve (fitting.fitBands).
+         */
+        post: operations["bands_api_fitting_bands_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/bootstrap": {
         parameters: {
             query?: never;
@@ -1271,6 +1331,50 @@ export interface paths {
          * @description Fit a registry model with a bumps engine (sync) or queue a DREAM job.
          */
         post: operations["bumps_fit_api_fitting_bumps_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/compare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Compare
+         * @description Fit two or more models to one selection and compare them.
+         *
+         *     Per-candidate fit failures come back as ``error`` entries (curated fit
+         *     diagnostics, as for ``/scan`` -- see SECURITY.md); only invalid input is
+         *     a 422.
+         */
+        post: operations["compare_api_fitting_compare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/diagnostics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Diagnostics
+         * @description Goodness-of-fit metrics and residual diagnostics for one fit.
+         */
+        post: operations["diagnostics_api_fitting_diagnostics_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1362,6 +1466,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/fitting/global": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Global Fit Route
+         * @description Fit one model to several datasets with shared parameters (synchronous).
+         */
+        post: operations["global_fit_route_api_fitting_global_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/global/job": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Global Fit Job
+         * @description Queue the global fit; poll ``GET /api/jobs/{id}`` and fetch ``/result``.
+         *
+         *     Progress is the Nelder-Mead iteration (``fraction`` = iteration /
+         *     ``max_iter``, an upper bound). A cancel stops the fit at its next model
+         *     evaluation and ends the job ``cancelled`` with no partial result.
+         */
+        post: operations["global_fit_job_api_fitting_global_job_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/fitting/models": {
         parameters: {
             query?: never;
@@ -1376,6 +1524,26 @@ export interface paths {
         get: operations["list_models_api_fitting_models_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/fitting/odr": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Odr
+         * @description Orthogonal distance (Deming) straight-line fit, errors in x and y.
+         */
+        post: operations["odr_api_fitting_odr_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1812,6 +1980,26 @@ export interface paths {
          * @description Demagnetizing factors Nz, Nxy, 4πNz from a geometry label.
          */
         post: operations["demag_api_magnetic_demag_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/magnetic/demag-custom": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Demag Custom
+         * @description Demagnetizing factors Nz, Nxy, 4πNz for a custom cylinder or spheroid.
+         */
+        post: operations["demag_custom_api_magnetic_demag_custom_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2776,6 +2964,30 @@ export interface paths {
          * @description SLD(z) depth profile (error-function interfaces) for the layer stack.
          */
         post: operations["sld_profile_route_api_reflectivity_sld_profile_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/reflectivity/spline-sld": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Spline Sld Route
+         * @description Graded SLD(z) from spline knots, plus its (M, 4) microslab layer stack.
+         *
+         *     ``layers`` rows are ``[thickness, sld, sld_imag, roughness]`` (imaginary
+         *     and roughness 0): a zero-thickness ambient row, one slab per grid step,
+         *     and a zero-thickness substrate row.
+         */
+        post: operations["spline_sld_route_api_reflectivity_spline_sld_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4389,6 +4601,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/structures/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Import Structure Path
+         * @description Parse a server-visible ``.cif`` path (the desktop shell's native pick).
+         */
+        post: operations["import_structure_path_api_structures_import_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/structures/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Upload Structure
+         * @description Parse an uploaded ``.cif`` into its crystal structure.
+         */
+        post: operations["upload_structure_api_structures_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/substrates": {
         parameters: {
             query?: never;
@@ -5314,6 +5566,21 @@ export interface components {
             /** T */
             t: number;
         };
+        /** AtomSite */
+        AtomSite: {
+            /** Label */
+            label: string;
+            /** Occupancy */
+            occupancy: number | null;
+            /** Symbol */
+            symbol: string;
+            /** X */
+            x: number | null;
+            /** Y */
+            y: number | null;
+            /** Z */
+            z: number | null;
+        };
         /**
          * AucRequest
          * @description Request for AUC computation.
@@ -5324,7 +5591,33 @@ export interface components {
             /** Tpr */
             tpr: number[];
         };
-        /** BatchIntegrateRequest */
+        /** BandsRequest */
+        BandsRequest: {
+            /** Covar */
+            covar?: number[][] | null;
+            /** Dof */
+            dof: number;
+            /** Equation */
+            equation?: string | null;
+            /**
+             * Level
+             * @default 0.95
+             */
+            level?: number;
+            /** Model */
+            model?: string | null;
+            /** N Points */
+            n_points: number;
+            /** Params */
+            params: number[];
+            /** X */
+            x: number[];
+        };
+        /**
+         * BatchIntegrateRequest
+         * @description ``x`` is one grid shared by every spectrum; ``xs`` gives each spectrum
+         *     its own (datasets measured on different grids). Exactly one is required.
+         */
         BatchIntegrateRequest: {
             /**
              * Align
@@ -5349,9 +5642,11 @@ export interface components {
                 number
             ][];
             /** Spectra */
-            spectra: number[][];
+            spectra: (number | null)[][];
             /** X */
-            x: number[];
+            x?: number[] | null;
+            /** Xs */
+            xs?: (number | null)[][] | null;
         };
         /** BcsGapRequest */
         BcsGapRequest: {
@@ -5362,6 +5657,11 @@ export interface components {
         };
         /** Body_upload_file_api_parsers_upload_post */
         Body_upload_file_api_parsers_upload_post: {
+            /** File */
+            file: string;
+        };
+        /** Body_upload_structure_api_structures_upload_post */
+        Body_upload_structure_api_structures_upload_post: {
             /** File */
             file: string;
         };
@@ -5674,6 +5974,8 @@ export interface components {
          *     one category set.
          */
         CategoricalFacet: {
+            /** Color Levels */
+            color_levels?: (number | null)[] | null;
             /** Counts */
             counts?: number[][] | null;
             /** Errors */
@@ -5702,6 +6004,8 @@ export interface components {
             axis_style?: components["schemas"]["CategoryAxisStyle"] | null;
             /** Caveat */
             caveat?: string | null;
+            /** Color Levels */
+            color_levels?: (number | null)[] | null;
             /** Counts */
             counts?: number[][] | null;
             /**
@@ -5729,6 +6033,8 @@ export interface components {
             groups: string[];
             /** Jitter Width */
             jitter_width?: number | null;
+            /** Palette */
+            palette?: string[] | null;
             /** Points */
             points?: ("all" | "outliers" | "none") | null;
             /** Raw */
@@ -5804,6 +6110,22 @@ export interface components {
             ][] | null;
             /** Wrap */
             wrap?: number | null;
+        };
+        /**
+         * CellPatch
+         * @description One cell. ``col`` -1 is the time column; ``value`` null is NaN.
+         *
+         *     A TypedDict, not a model: pydantic validates a list of these ~8x faster
+         *     (measured 0.18 s vs 1.4 s for 350k patches), and validation runs on the
+         *     event loop.
+         */
+        CellPatch: {
+            /** Col */
+            col: number;
+            /** Row */
+            row: number;
+            /** Value */
+            value: number | null;
         };
         /** CellRequest */
         CellRequest: {
@@ -5900,10 +6222,54 @@ export interface components {
             /** Xi0 */
             xi0?: number | null;
         };
+        /** CompareEquation */
+        CompareEquation: {
+            /** Equation */
+            equation: string;
+            /** Guesses */
+            guesses?: number[] | null;
+            /** Name */
+            name: string;
+        };
+        /** CompareRequest */
+        CompareRequest: {
+            /** Equations */
+            equations?: components["schemas"]["CompareEquation"][] | null;
+            /** Models */
+            models?: string[] | null;
+            /** Reference */
+            reference?: string | null;
+            /** X */
+            x: number[];
+            /** Y */
+            y: number[];
+        };
         /** ConductivityRequest */
         ConductivityRequest: {
             /** Rho */
             rho: number;
+        };
+        /** ConfidenceBandRequest */
+        ConfidenceBandRequest: {
+            /**
+             * Channel
+             * @default 0
+             */
+            channel?: number;
+            /** Datasets */
+            datasets: {
+                [key: string]: unknown;
+            }[];
+            /**
+             * Method
+             * @default mean
+             */
+            method?: string;
+            /**
+             * N Points
+             * @default 0
+             */
+            n_points?: number;
         };
         /** ConsolidatedItem */
         ConsolidatedItem: {
@@ -6197,6 +6563,20 @@ export interface components {
              */
             nu?: number;
         };
+        /** CrystalStructure */
+        CrystalStructure: {
+            /** Atom Sites */
+            atom_sites: components["schemas"]["AtomSite"][];
+            cell: components["schemas"]["UnitCell"];
+            /** Formula */
+            formula: string;
+            /** Name */
+            name: string;
+            /** Source Name */
+            source_name: string;
+            /** Space Group */
+            space_group: string;
+        };
         /** CurieWeissFitRequest */
         CurieWeissFitRequest: {
             /** Fit Range */
@@ -6300,6 +6680,22 @@ export interface components {
             /** System */
             system: string;
         };
+        /**
+         * DatasetHandleResponse
+         * @description ``dataset_handle`` is null when the patched dataset is too large to
+         *     stay cached; the client then sends the full dataset instead.
+         */
+        DatasetHandleResponse: {
+            /** Dataset Handle */
+            dataset_handle: string | null;
+        };
+        /** DatasetPatchRequest */
+        DatasetPatchRequest: {
+            /** Dataset Handle */
+            dataset_handle: string;
+            /** Patches */
+            patches: components["schemas"]["CellPatch"][];
+        };
         /** DebyeLengthRequest */
         DebyeLengthRequest: {
             /** Epsilon R */
@@ -6325,6 +6721,33 @@ export interface components {
         DeletedResponse: {
             /** Deleted */
             deleted: boolean;
+        };
+        /**
+         * DemagCustomRequest
+         * @description A geometry by its dimensions: a cylinder's length and diameter (same
+         *     unit), or a spheroid's axis ratio (prolate c/a, oblate a/c, both > 1).
+         */
+        DemagCustomRequest: {
+            /**
+             * Diameter
+             * @default 1
+             */
+            diameter?: number;
+            /**
+             * Length
+             * @default 1
+             */
+            length?: number;
+            /**
+             * Ratio
+             * @default 2
+             */
+            ratio?: number;
+            /**
+             * Shape
+             * @enum {string}
+             */
+            shape: "cylinder" | "prolate" | "oblate";
         };
         /** DemagRequest */
         DemagRequest: {
@@ -6373,6 +6796,15 @@ export interface components {
         DescriptiveRequest: {
             /** X */
             x: number[];
+        };
+        /** DiagnosticsRequest */
+        DiagnosticsRequest: {
+            /** N Params */
+            n_params: number;
+            /** Residuals */
+            residuals: number[];
+            /** Y */
+            y: number[];
         };
         /** DielectricToRefractiveRequest */
         DielectricToRefractiveRequest: {
@@ -6745,8 +7177,12 @@ export interface components {
          *     unused on this branch, so a panel label has no second source here.
          */
         FigureFacet: {
+            /** Channels */
+            channels?: number[] | null;
             /** Label */
             label: string;
+            /** Rows */
+            rows?: number[] | null;
             /** Series */
             series: components["schemas"]["FigureFacetSeries"][];
             /** X */
@@ -6756,6 +7192,8 @@ export interface components {
         FigureFacetSeries: {
             /** Label */
             label: string;
+            /** Legend */
+            legend?: string | null;
             /** Y */
             y: (number | null)[];
         };
@@ -6847,6 +7285,11 @@ export interface components {
             error_spans?: ({
                 [key: string]: unknown;
             } | null)[] | null;
+            /**
+             * Excluded Rows
+             * @description Rows of `dataset` the plot window does not draw as data (excluded, or dropped by the Data Filter). With `encoding` only: the split takes its levels over every row, then these rows are blanked in each series.
+             */
+            excluded_rows?: number[] | null;
             /** Facets */
             facets?: components["schemas"]["FigureFacet"][] | null;
             /**
@@ -6859,6 +7302,12 @@ export interface components {
              * @default pdf
              */
             fmt?: string;
+            /**
+             * Grey Excluded
+             * @description With `excluded_rows`: also draw those rows as one grey, line-free '(excluded)' marker series per series, after all the series.
+             * @default false
+             */
+            grey_excluded?: boolean;
             /**
              * Greyscale
              * @default false
@@ -7190,6 +7639,43 @@ export interface components {
             alpha?: number;
             /** Predictors */
             predictors: number[][];
+            /** Y */
+            y: number[];
+        };
+        /** GlobalFitRequest */
+        GlobalFitRequest: {
+            /**
+             * Constraints
+             * @default []
+             */
+            constraints?: components["schemas"]["ShareGroup"][];
+            /** Datasets */
+            datasets: components["schemas"]["GlobalSeries"][];
+            /** Equation */
+            equation?: string | null;
+            /** Lower */
+            lower?: (number | null)[] | null;
+            /**
+             * Max Iter
+             * @default 20000
+             */
+            max_iter?: number;
+            /** Model */
+            model?: string | null;
+            /** P0 */
+            p0?: number[][] | number[] | null;
+            /** Upper */
+            upper?: (number | null)[] | null;
+        };
+        /**
+         * GlobalSeries
+         * @description One dataset of a global fit: its (x, y) pairs and optional 1-sigma dy.
+         */
+        GlobalSeries: {
+            /** Dy */
+            dy?: number[] | null;
+            /** X */
+            x: number[];
             /** Y */
             y: number[];
         };
@@ -7879,6 +8365,22 @@ export interface components {
             quantity: string;
             /** Value */
             value: number;
+        };
+        /** OdrRequest */
+        OdrRequest: {
+            /**
+             * Lambda
+             * @default 1
+             */
+            lambda?: number;
+            /** X */
+            x: number[];
+            /** X Error */
+            x_error?: number[] | null;
+            /** Y */
+            y: number[];
+            /** Y Error */
+            y_error?: number[] | null;
         };
         /** OhmicDropRequest */
         OhmicDropRequest: {
@@ -9169,6 +9671,16 @@ export interface components {
             /** Q Min */
             q_min: number;
         };
+        /**
+         * ShareGroup
+         * @description Parameter ``param_name`` takes ONE value across these datasets (0-based).
+         */
+        ShareGroup: {
+            /** Datasets */
+            datasets: number[];
+            /** Param Name */
+            param_name: string;
+        };
         /** SheetCarrierRequest */
         SheetCarrierRequest: {
             /** N */
@@ -9535,6 +10047,37 @@ export interface components {
             /** R Pp */
             r_pp: number[];
         };
+        /**
+         * SplineSldRequest
+         * @description Knots (z Å, SLD Å⁻²) interpolated onto ``n_points`` over ``z_range``
+         *     (default: 50 Å past each end knot); flat ambient/substrate outside.
+         */
+        SplineSldRequest: {
+            /**
+             * Method
+             * @default pchip
+             * @enum {string}
+             */
+            method?: "pchip" | "spline" | "makima" | "linear";
+            /**
+             * N Points
+             * @default 500
+             */
+            n_points?: number;
+            /** Sld Ambient */
+            sld_ambient?: number | null;
+            /** Sld Knots */
+            sld_knots: number[];
+            /** Sld Substrate */
+            sld_substrate?: number | null;
+            /** Z Knots */
+            z_knots: number[];
+            /** Z Range */
+            z_range?: [
+                number,
+                number
+            ] | null;
+        };
         /** SplomFigureRequest */
         SplomFigureRequest: {
             /**
@@ -9621,6 +10164,10 @@ export interface components {
          *     falls back to the request's own top-level ``kind``.
          */
         StatplotFacet: {
+            /** Color Levels */
+            color_levels?: (number | null)[] | null;
+            /** Connect Breaks */
+            connect_breaks?: boolean[] | null;
             /** Data */
             data: number[][];
             /** Kind */
@@ -9652,6 +10199,8 @@ export interface components {
             bins?: string | number;
             /** Caveat */
             caveat?: string | null;
+            /** Color Levels */
+            color_levels?: (number | null)[] | null;
             /** Connect Breaks */
             connect_breaks?: boolean[] | null;
             /** Data */
@@ -9687,6 +10236,8 @@ export interface components {
             kind: string;
             /** Labels */
             labels?: string[] | null;
+            /** Palette */
+            palette?: string[] | null;
             /** Point Row Indices */
             point_row_indices?: number[][] | null;
             /** Points */
@@ -9802,6 +10353,11 @@ export interface components {
                 number,
                 number
             ];
+        };
+        /** StructurePathRequest */
+        StructurePathRequest: {
+            /** Path */
+            path: string;
         };
         /** SubtractBgRequest */
         SubtractBgRequest: {
@@ -9958,6 +10514,24 @@ export interface components {
             x: number[];
             /** Y */
             y: number[];
+        };
+        /**
+         * UnitCell
+         * @description Lengths in angstrom, angles in degrees; null when the CIF omits one.
+         */
+        UnitCell: {
+            /** A */
+            a: number | null;
+            /** Alpha */
+            alpha: number | null;
+            /** B */
+            b: number | null;
+            /** Beta */
+            beta: number | null;
+            /** C */
+            c: number | null;
+            /** Gamma */
+            gamma: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -10166,6 +10740,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["AlgebraRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confidence_band_route_api_aggregate_confidence_band_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfidenceBandRequest"];
             };
         };
         responses: {
@@ -10769,6 +11378,39 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    patch_dataset_api_datasets_patch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DatasetPatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasetHandleResponse"];
                 };
             };
             /** @description Validation Error */
@@ -12133,6 +12775,41 @@ export interface operations {
             };
         };
     };
+    bands_api_fitting_bands_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BandsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     bootstrap_api_fitting_bootstrap_post: {
         parameters: {
             query?: never;
@@ -12178,6 +12855,76 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["BumpsFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    compare_api_fitting_compare_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompareRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    diagnostics_api_fitting_diagnostics_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiagnosticsRequest"];
             };
         };
         responses: {
@@ -12341,6 +13088,76 @@ export interface operations {
             };
         };
     };
+    global_fit_route_api_fitting_global_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GlobalFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    global_fit_job_api_fitting_global_job_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GlobalFitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_models_api_fitting_models_get: {
         parameters: {
             query?: never;
@@ -12359,6 +13176,41 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+        };
+    };
+    odr_api_fitting_odr_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OdrRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -13024,6 +13876,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DemagRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    demag_custom_api_magnetic_demag_custom_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DemagCustomRequest"];
             };
         };
         responses: {
@@ -14473,6 +15360,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SldProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    spline_sld_route_api_reflectivity_spline_sld_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SplineSldRequest"];
             };
         };
         responses: {
@@ -17251,6 +18173,72 @@ export interface operations {
                     "application/json": {
                         [key: string]: unknown;
                     };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    import_structure_path_api_structures_import_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StructurePathRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrystalStructure"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_structure_api_structures_upload_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_structure_api_structures_upload_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CrystalStructure"];
                 };
             };
             /** @description Validation Error */

@@ -134,7 +134,9 @@ describe("File menu — export commands register exactly one pending op (no doub
   // P3.4: "export-consolidated" joined once runExportConsolidated registered
   // its own cancellable op (runCancellable); before that, runAction's generic
   // cancel-less wrap was its only entry.
-  it.each(["export-csv", "export-hdf5", "export-origin", "export-figure", "export-consolidated"])(
+  // "export-origin-project" (File ▸ Export Origin project (.opj)…) runs the
+  // same runCancellable shape as export-consolidated.
+  it.each(["export-csv", "export-hdf5", "export-origin", "export-figure", "export-consolidated", "export-origin-project"])(
     "%s via runAction registers exactly one pendingOps entry, with a cancel callback",
     async (id) => {
       const cmd = buildFileCommands(useApp.getState).find((c) => c.id === id);

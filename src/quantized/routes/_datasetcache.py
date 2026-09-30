@@ -70,13 +70,15 @@ mutation and every read-with-LRU-touch below holds ``_lock``.
 
 from __future__ import annotations
 
+import copy
 import hashlib
 import json
 import threading
 from collections import OrderedDict
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from typing import Any
 
+import numpy as np
 from fastapi import HTTPException
 from pydantic import BaseModel, model_validator
 
@@ -85,10 +87,12 @@ from quantized.datastruct import DataStruct
 __all__ = [
     "CachedDatasetRequest",
     "DatasetHandleMiss",
+    "apply_cell_patches",
     "cache_dataset",
     "cache_stats",
     "clear_cache",
     "hash_dataset",
+    "patch_cached",
     "resolve_dataset",
     "resolve_or_409",
 ]
@@ -219,6 +223,54 @@ def resolve_dataset(handle: str) -> DataStruct:
             raise DatasetHandleMiss(handle)
         _cache.move_to_end(handle)
         return ds
+
+
+def apply_cell_patches(
+    ds: DataStruct, rows: Sequence[int], cols: Sequence[int], values: Sequence[float | None]
+) -> DataStruct:
+    """A copy of ``ds`` with ``values[k]`` written at ``(rows[k], cols[k])``.
+
+    Column ``-1`` is ``time``; ``None`` is NaN, the same decoding a full upload
+    gives a JSON ``null``. Everything but the two arrays is carried over as-is:
+    ``copy.copy`` skips ``__post_init__``, whose label de-duplication is not
+    idempotent (``a, a, a (2)`` becomes ``a, a (2), a (2) (2)`` once and
+    something else the second time), so re-running it could relabel a patched
+    dataset. Raises ``ValueError`` for a cell outside the grid. The client never
+    sends two patches for one cell; if one did, which value wins is unspecified.
+    """
+    n, m = ds.values.shape
+    r = np.asarray(rows, dtype=np.intp)
+    c = np.asarray(cols, dtype=np.intp)
+    v = np.array([np.nan if x is None else x for x in values], dtype=float)
+    if r.size and (int(r.min()) < 0 or int(r.max()) >= n):
+        raise ValueError(f"patch row out of range for {n} rows")
+    if c.size and (int(c.min()) < -1 or int(c.max()) >= m):
+        raise ValueError(f"patch column out of range for {m} channels (-1 is time)")
+    time = ds.time.copy()
+    grid = ds.values.copy()
+    on_time = c == -1
+    time[r[on_time]] = v[on_time]
+    grid[r[~on_time], c[~on_time]] = v[~on_time]
+    time.flags.writeable = False
+    grid.flags.writeable = False
+    out = copy.copy(ds)
+    object.__setattr__(out, "time", time)
+    object.__setattr__(out, "values", grid)
+    return out
+
+
+def patch_cached(
+    handle: str, rows: Sequence[int], cols: Sequence[int], values: Sequence[float | None]
+) -> str | None:
+    """Cache the cached dataset ``handle`` with cells overwritten; return the new
+    handle (``None`` when too large to stay resident, as ``cache_dataset``).
+
+    The new handle is the content hash, so it equals what a full upload of the
+    same child would get. The parent entry is not modified. Raises
+    :class:`DatasetHandleMiss` for an unknown handle and ``ValueError`` for a
+    cell outside the grid.
+    """
+    return cache_dataset(apply_cell_patches(resolve_dataset(handle), rows, cols, values))
 
 
 def clear_cache() -> None:

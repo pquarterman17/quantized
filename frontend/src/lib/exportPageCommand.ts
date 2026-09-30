@@ -29,10 +29,13 @@ import { spatialPanelsOf } from "./composition";
 import { cancelled, type StoreGet } from "./exportActive";
 import { GREYSCALE_FIELD } from "./exportFigureCommand";
 import { analysisData } from "./rowstate";
-import { buildSpatialPageRequest, canExportSpatialPage } from "./spatialPageExport";
+import { chooseExcludedRows, pageExcludedChoiceMatters } from "./excludedRowsChoice";
+import type { ExcludedRowsGhoster } from "./figureSpec";
+import { buildSpatialPageRequest, canExportSpatialPage, withSpatialGhosts } from "./spatialPageExport";
 import { beginOp, endOp } from "../store/pendingOps";
 import { toast } from "../store/toasts";
-import type { DataStruct } from "./types";
+import type { FigurePageSpec } from "./api/figurePage";
+import type { Dataset } from "./types";
 
 /** Resolve every panel's dataset to full data first (the #38 lazy-book
  *  discipline every other export path follows — a pending preview must
@@ -91,7 +94,7 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
     const entries = await Promise.all(
       panels!.map(async (p) => {
         const ds = await s().resolveDataset(p.datasetId);
-        return ds ? ([p.datasetId, analysisData(ds) ?? ds.data] as const) : null;
+        return ds ? ([p.datasetId, ds] as const) : null;
       }),
     );
     if (controller.signal.aborted) {
@@ -99,20 +102,34 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
       return;
     }
     const missing = entries.some((e) => e === null);
-    const datasets = new Map(
-      entries.filter((e): e is readonly [string, DataStruct] => e !== null),
-    );
+    const full = new Map(entries.filter((e): e is readonly [string, Dataset] => e !== null));
+    const datasets = new Map([...full].map(([id, ds]) => [id, analysisData(ds) ?? ds.data] as const));
     const live = s();
-    const spec = missing
-      ? null
-      : buildSpatialPageRequest(panels!, datasets, live.pageSetup, {
-          xFmt: live.xFmt,
-          yFmt: live.yFmt,
-          showGrid: live.showGrid,
-          showAxisBox: live.showAxisBox,
-          autoSeriesStyles: live.autoSeriesStyles,
-          greyscale: params.greyscale as boolean,
-        });
+    const build = (greyExcluded?: ExcludedRowsGhoster): FigurePageSpec | null =>
+      missing
+        ? null
+        : buildSpatialPageRequest(
+            panels!,
+            datasets,
+            live.pageSetup,
+            {
+              xFmt: live.xFmt,
+              yFmt: live.yFmt,
+              showGrid: live.showGrid,
+              showAxisBox: live.showAxisBox,
+              autoSeriesStyles: live.autoSeriesStyles,
+              greyscale: params.greyscale as boolean,
+            },
+            greyExcluded && ((figure, id) => withSpatialGhosts(figure, full.get(id)!, greyExcluded)),
+          );
+    // F4.2c (a): a page with excluded rows asks "greyed or omitted?", and
+    // the grid draws them the same way (`Stage/spatialPanelFetch.ts`).
+    const picked = await chooseExcludedRows(build, pageExcludedChoiceMatters, live.excludedDisplay);
+    if (!picked || controller.signal.aborted) {
+      cancelled(s, "export");
+      return;
+    }
+    const spec = picked.value;
     if (!spec) {
       const msg = "export page failed: a panel's dataset or page geometry is no longer available";
       s().setStatus(msg);

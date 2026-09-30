@@ -20,7 +20,7 @@ import {
   type BoxStat,
   type CategorySlot,
 } from "../../lib/statstage";
-import { seriesColor } from "../../lib/uplotOpts";
+import { glyphColor } from "../../lib/statColor";
 import {
   axisStyleOf,
   boxValueDomain,
@@ -233,7 +233,7 @@ export function drawBoxesWithMarks(
     const slot = slots[i];
     const cx = rect.x + slot.cx * rect.w;
     const hw = slot.halfWidth * rect.w;
-    const color = seriesColor(i);
+    const color = glyphColor(d.colorLevels, i);
 
     ctx.strokeStyle = color;
     ctx.lineWidth = 1.25;
@@ -314,7 +314,7 @@ export function drawStrip(
     const slot = slots[i];
     const cx = rect.x + slot.cx * rect.w;
     const hw = slot.halfWidth * rect.w;
-    const color = seriesColor(i);
+    const color = glyphColor(d.colorLevels, i);
 
     const b = d.boxes[i];
     drawJitteredPoints(ctx, g, cx, hw, vy, color, m.jitterWidth, d.selectedRows, m.points, b);

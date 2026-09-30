@@ -87,7 +87,7 @@ beforeEach(() => {
     }
     return json({ detail: `unexpected ${url}` }, 500);
   });
-  useApp.setState({ datasets: [A, B, C], activeId: "a", xKey: 0, yKeys: [1], seriesOrder: null, selectedIds: ["a", "b", "c"] });
+  useApp.setState({ datasets: [A, B, C], activeId: "a", xKey: 0, yKeys: [1], seriesOrder: null, errKeys: {}, selectedIds: ["a", "b", "c"] });
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -263,6 +263,23 @@ describe("PeakBatchView", () => {
     await waitFor(() => expect(status()).toHaveTextContent("done"));
     expect(posted[0].item_deadline_s).toBe(10);
     expect(posted[0].total_deadline_s).toBe(50);
+  });
+
+  it("weights each fit by that dataset's own error column, and leaves one without unweighted", async () => {
+    const withErr = (id: string, extra: Partial<Dataset> = {}): Dataset => ({ ...ds(id, ["2theta", "I", "dI"]), ...extra });
+    useApp.setState({
+      datasets: [
+        withErr("a"), // active: the live view's errKeys designate dI
+        withErr("b", { errorRoles: [{ channel: 2, target: 1, axis: "y", side: "both" }] }), // stored role
+        { ...ds("c", ["2theta", "I", "T"]), errorRoles: [] }, // none
+      ],
+      errKeys: { 1: 2 },
+    });
+    await runAll();
+    await waitFor(() => expect(status()).toHaveTextContent("done"));
+    const items = posted[0].items as unknown as { x: number[]; y_err?: number[] }[];
+    expect(items.map((i) => i.y_err?.length)).toEqual([items[0].x.length, items[1].x.length, undefined]);
+    expect(items[0].y_err!.every((v) => v > 0)).toBe(true);
   });
 
   it("says when the batch time limit cut the last fit short", async () => {

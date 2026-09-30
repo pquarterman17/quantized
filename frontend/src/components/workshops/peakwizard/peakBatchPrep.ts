@@ -18,13 +18,20 @@
 // COLUMN NAME (same-instrument files share names, not necessarily
 // positions). A dataset without that column is an error row naming it —
 // never a guess at another column (the repo's fail-closed rule).
+//
+// WEIGHTS. Each dataset's fit sends `y_err` from ITS OWN designated error
+// column for the fitted Y (`batchErrKeys`), through the single model fit's
+// `segmentYErr`, so the rules match: none designated, or a zero/invalid
+// sigma, fits that dataset unweighted.
 
 import { dropGapRows } from "../../../lib/api/finitePairs";
 import type { PeakBatchItem } from "../../../lib/api/peakBatch";
+import { errorRoleViewDefaults } from "../../../lib/errorbars";
 import { selectedFitData } from "../../../lib/fitselection";
 import { cutRange, subtractBaseline, type PeakRecipe } from "../../../lib/peakwizard";
 import { analysisData } from "../../../lib/rowstate";
 import type { Dataset } from "../../../lib/types";
+import { segmentYErr } from "./modelFitWeights";
 import { setupProblems } from "./modelSetupChecks";
 import { buildSetup, modelFitBody } from "./peakModelParams";
 import { recipeBaseline, recipeFind } from "./recipeSteps";
@@ -126,6 +133,22 @@ export interface BatchSegment {
   x: number[];
   y: number[];
   gapCount: number;
+  /** The Y column's index in this dataset. */
+  yIndex: number;
+  /** The analysis-view row of each segment point (how `dyForFit` indexes). */
+  kept: number[];
+}
+
+/** `ds`'s own Y-error pairings (channel -> its error column): the live view's
+ *  `errKeys` for the active dataset (what the curve fit and the single model
+ *  fit read), else the ones stored on the dataset — its error roles, Origin
+ *  designations and parser hints (`errorRoleViewDefaults`). */
+export function batchErrKeys(
+  ds: Dataset,
+  activeId: string | null,
+  liveErrKeys: Readonly<Record<number, number>>,
+): Readonly<Record<number, number>> {
+  return ds.id === activeId ? liveErrKeys : errorRoleViewDefaults(ds).errKeys;
 }
 
 /** `ds`'s analysis rows (exclusions and filters honoured) on the batch
@@ -149,7 +172,10 @@ export function batchSegment(ds: Dataset, ch: BatchChannels, range: PeakRecipe["
   if (pairs.x.length > BATCH_MAX_POINTS) {
     throw new Error(`${pairs.x.length} points in range; the fit takes at most ${BATCH_MAX_POINTS}`);
   }
-  return { x: pairs.x, y: pairs.y, gapCount: pairs.n - pairs.keep.length };
+  return {
+    x: pairs.x, y: pairs.y, gapCount: pairs.n - pairs.keep.length,
+    yIndex: yi, kept: pairs.keep.map((i) => cut.kept[i]!),
+  };
 }
 
 /** Why this recipe cannot run as a batch at all, or null. */
@@ -165,8 +191,14 @@ export type PreparedItem =
 
 /** One dataset's fit problem, prepared exactly as the wizard would on it:
  *  segment -> baseline -> find -> table (seed + the recipe's edits) -> body.
- *  Never throws: a dataset that cannot be prepared returns the reason. */
-export async function prepareBatchItem(ds: Dataset, recipe: PeakRecipe, ch: BatchChannels): Promise<PreparedItem> {
+ *  Never throws: a dataset that cannot be prepared returns the reason.
+ *  `errKeys` is THIS dataset's error pairing (`batchErrKeys`); absent = unweighted. */
+export async function prepareBatchItem(
+  ds: Dataset,
+  recipe: PeakRecipe,
+  ch: BatchChannels,
+  errKeys: Readonly<Record<number, number>> = {},
+): Promise<PreparedItem> {
   try {
     const seg = batchSegment(ds, ch, recipe.range);
     const baseline = await recipeBaseline(seg.y, recipe.baseline);
@@ -183,7 +215,8 @@ export async function prepareBatchItem(ds: Dataset, recipe: PeakRecipe, ch: Batc
     const problems = setupProblems(setup);
     if (problems.length > 0) return { ok: false, error: `parameter table: ${problems[0]}` };
     const notes = seg.gapCount > 0 ? [`${seg.gapCount} gap rows in range were excluded`] : [];
-    return { ok: true, item: modelFitBody(setup, seg.x, workingY), nPeaks: peaks.length, notes };
+    const yErr = segmentYErr(ds, seg.yIndex, errKeys[seg.yIndex], seg.kept);
+    return { ok: true, item: modelFitBody(setup, seg.x, workingY, yErr), nPeaks: peaks.length, notes };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "could not prepare this dataset" };
   }

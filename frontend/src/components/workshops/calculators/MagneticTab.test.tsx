@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { magneticCurieWeiss, magneticDemag, magneticDomainWall, magneticMomentConvert, magneticCurieWeissFit } from "../../../lib/api/magnetic";
+import { magneticCurieWeiss, magneticDemag, magneticDemagCustom, magneticDomainWall, magneticMomentConvert, magneticCurieWeissFit } from "../../../lib/api/magnetic";
 import MagneticTab from "./MagneticTab";
 
 
@@ -9,6 +9,7 @@ vi.mock("../../../lib/api/magnetic", () => ({
   magneticCurieWeissFit: vi.fn(),
   magneticMomentConvert: vi.fn(),
   magneticDemag: vi.fn(),
+  magneticDemagCustom: vi.fn(),
   magneticCurieWeiss: vi.fn(),
   magneticLangevin: vi.fn(),
   magneticDomainWall: vi.fn(),
@@ -48,6 +49,34 @@ describe("MagneticTab", () => {
     fireEvent.click(screen.getAllByText("Calculate")[0]);
     expect(await screen.findByText(/Nz = .* · Nxy = .* · 4πNz = .*/)).toBeInTheDocument();
     expect(magneticDemag).toHaveBeenCalledWith("Sphere");
+  });
+
+  it("computes demagnetizing factors for a custom cylinder from its dimensions", async () => {
+    vi.mocked(magneticDemagCustom).mockResolvedValue({ Nz: 0.1724, Nxy: 0.4138, shape: "cylinder", n_cgs: 2.166 });
+    render(<MagneticTab />);
+    fireEvent.change(screen.getByLabelText("shape"), { target: { value: "Custom geometry" } });
+
+    fireEvent.change(await screen.findByLabelText("cylinder length"), { target: { value: "3" } });
+    fireEvent.change(screen.getByLabelText("cylinder diameter"), { target: { value: "0.5" } });
+    fireEvent.click(screen.getAllByText("Calculate")[0]);
+
+    expect(await screen.findByText(/Nz = .* · Nxy = .* · 4πNz = .*/)).toBeInTheDocument();
+    expect(magneticDemagCustom).toHaveBeenCalledWith({ shape: "cylinder", length: 3, diameter: 0.5 });
+    expect(magneticDemag).not.toHaveBeenCalled();
+  });
+
+  it("computes a custom spheroid from its axis ratio", async () => {
+    vi.mocked(magneticDemagCustom).mockResolvedValue({ Nz: 0.0558, Nxy: 0.4721, shape: "prolate", n_cgs: 0.701 });
+    render(<MagneticTab />);
+    fireEvent.change(screen.getByLabelText("shape"), { target: { value: "Custom geometry" } });
+    fireEvent.change(await screen.findByLabelText("custom geometry"), { target: { value: "prolate" } });
+    expect(screen.queryByLabelText("cylinder length")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("axis ratio"), { target: { value: "5" } });
+    fireEvent.click(screen.getAllByText("Calculate")[0]);
+
+    expect(await screen.findByText(/Nz = .* · Nxy = .* · 4πNz = .*/)).toBeInTheDocument();
+    expect(magneticDemagCustom).toHaveBeenCalledWith({ shape: "prolate", ratio: 5 });
   });
 
   it("shows the magnetic-order type from Curie-Weiss", async () => {

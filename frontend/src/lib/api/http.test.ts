@@ -6,6 +6,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { postBlob, postDownload, postJSON } from "./http";
+import { plotSeries } from "./plot";
 import { saveBlob } from "../download";
 
 vi.mock("../download", async (orig) => ({
@@ -142,6 +143,21 @@ describe("postJSON dataset-cache dispatch", () => {
       } as unknown as Response),
     );
     await expect(postJSON("/api/x", {})).rejects.toThrow("502 Bad Gateway");
+  });
+
+  it("N concurrent plot fetches of the same dataset object upload it once", async () => {
+    // The focused plot plus every background plot window, all refetching the
+    // same freshly edited DataStruct in the same tick.
+    const dataset = { time: [1, 2], values: [[1], [2]], labels: ["a"], units: [""], metadata: {} };
+    const fetchMock = vi.fn(async (_path: string, _init: RequestInit) => fakeResponse({ ok: true }, { handle: "shared" }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await Promise.all([0, 1, 2, 3, 4].map((i) => plotSeries({ dataset, decimate_width: 800 + i })));
+
+    const bodies = fetchMock.mock.calls.map((c) => JSON.parse(c[1].body as string));
+    expect(bodies).toHaveLength(5);
+    expect(bodies.filter((b) => b.dataset !== undefined)).toHaveLength(1);
+    expect(bodies.filter((b) => b.dataset_handle === "shared")).toHaveLength(4);
   });
 
   it("still throws for a genuine (non-cache) error on a cache-eligible path", async () => {
