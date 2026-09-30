@@ -9,7 +9,8 @@
 import { renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
-import { sameContent, useStableByEquality, useStableByValue } from "./useStableValue";
+import { sameContent, useStableByEquality } from "./useStableByEquality";
+import { useStableByValue } from "./useStableValue";
 
 describe("useStableByValue", () => {
   it("keeps its reference across renders when serialize(value) is unchanged", () => {
@@ -104,17 +105,23 @@ describe("sameContent", () => {
 
 describe("useStableByEquality", () => {
   it("keeps the first reference while the content is unchanged, and compares each new identity once", () => {
-    const equal = vi.fn(sameContent);
-    const { result, rerender } = renderHook((v: number[]) => useStableByEquality(v, equal), { initialProps: [1, 2] });
+    let reads = 0;
+    // A getter counts how often the content comparison reads this identity.
+    const copy = {
+      get x() {
+        reads += 1;
+        return 1;
+      },
+    };
+    const { result, rerender } = renderHook((v: { x: number }) => useStableByEquality(v), { initialProps: { x: 1 } });
     const first = result.current;
-    const copy = [1, 2];
     rerender(copy);
     expect(result.current).toBe(first);
     rerender(copy); // the same content-equal identity again: already seen
     expect(result.current).toBe(first);
-    expect(equal).toHaveBeenCalledTimes(1);
+    expect(reads).toBe(1);
 
-    const changed = [1, 3];
+    const changed = { x: 2 };
     rerender(changed);
     expect(result.current).toBe(changed);
   });

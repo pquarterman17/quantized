@@ -64,6 +64,10 @@ export interface PanelCellProps {
 }
 
 const CELL_VIEW = defaultPlotView();
+// One empty list for the overlay props: they are PlotViewport rebuild deps,
+// so a fresh `[]` per render rebuilt every cell's plot on each re-render
+// (a drag highlight, a store write).
+const NONE: never[] = [];
 
 function isPanelCellDrag(dt: DataTransfer | null): boolean {
   return !!dt && Array.from(dt.types).includes(PANEL_CELL_DND);
@@ -187,9 +191,9 @@ export default function PanelCell({ dataset, syncKey, windowId, index }: PanelCe
           xAxisLabel={CELL_VIEW.xAxisLabel}
           yAxisLabel={CELL_VIEW.yAxisLabel}
           y2AxisLabel={CELL_VIEW.y2AxisLabel}
-          refLines={[]}
-          annotations={[]}
-          regionShades={[]}
+          refLines={NONE}
+          annotations={NONE}
+          regionShades={NONE}
           seriesStyles={styleList}
           plotted={plotted}
           seriesLabels={labelList}

@@ -7,7 +7,7 @@
 // BackgroundPlotWindow.test.tsx) — a NEW recorded instance is this file's
 // load-invariant proof that the create effect actually reran.
 
-import { act, render } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { createRef, type RefObject } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type uPlot from "uplot";
@@ -28,10 +28,13 @@ const { created, sizes, calls, MockUPlot } = vi.hoisted(() => {
     // fills defaults in place); the mock does the same so a test can read the
     // paint the NEXT draw would use straight off the instance.
     series: uPlot.Series[];
+    bands: uPlot.Band[];
     constructor(opts: uPlot.Options, data: unknown) {
       created.push({ opts, data });
       this.series = opts.series;
+      this.bands = opts.bands ?? [];
     }
+    setBand(bi: number, b: uPlot.Band): void { Object.assign(this.bands[bi], b); }
     destroy(): void {}
     setSize(size: { width: number; height: number }): void { sizes.push(size); }
     setScale(key: string, lim: { min: number; max: number }): void { calls.push(["setScale", key, lim]); }
@@ -135,78 +138,102 @@ const TWO: PlotPayload = {
   ],
 };
 
+/** Let the lazily loaded patch (useLivePaint's dynamic import) run: its
+ *  `then` was queued before this await on the same module promise. */
+async function settlePatch(): Promise<void> {
+  await act(async () => {
+    await import("../../lib/uplotLivePaint");
+  });
+}
+
 describe("PlotViewport — display-only changes patch the live instance", () => {
-  it("a legend hide toggle keeps the instance and calls setSeries on the offset index", () => {
+  it("a legend hide toggle keeps the instance and calls setSeries on the offset index", async () => {
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
     const props = { ...baseProps(), displayPayload: TWO };
     const { rerender } = render(<PlotViewport {...props} hidden={[false, false]} />);
     expect(created).toHaveLength(1);
 
     rerender(<PlotViewport {...props} hidden={[false, true]} />);
-    expect(created).toHaveLength(1); // no new uPlot
     const u = props.plotRef.current!;
-    expect(u.series[2].show).toBe(false); // uPlot index 2 = display series 1
+    await waitFor(() => expect(u.series[2].show).toBe(false)); // uPlot index 2 = display series 1
+    expect(created).toHaveLength(1); // no new uPlot
     expect(u.series[1].show).toBe(true);
     expect(calls).toContainEqual(["setSeries", 2, { show: false }]);
 
     rerender(<PlotViewport {...props} hidden={[false, false]} />);
+    await waitFor(() => expect(u.series[2].show).toBe(true));
     expect(created).toHaveLength(1);
-    expect(u.series[2].show).toBe(true);
   });
 
-  it("a hide toggle re-applies the committed y limit instead of autoscaling it away", () => {
+  it("a hide toggle re-applies the committed y limit instead of autoscaling it away", async () => {
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
     const props = { ...baseProps(), displayPayload: TWO, yLim: [0, 50] as [number, number] };
     const { rerender } = render(<PlotViewport {...props} />);
     rerender(<PlotViewport {...props} hidden={[true, false]} />);
+    await waitFor(() => expect(props.plotRef.current!.series[1].show).toBe(false));
     expect(created).toHaveLength(1);
     const i = calls.findIndex((c) => c[0] === "setSeries");
     expect(i).toBeGreaterThanOrEqual(0);
     expect(calls.slice(i)).toContainEqual(["setScale", "y", { min: 0, max: 50 }]);
   });
 
-  it("a colour/width/dash change keeps the instance and redraws with the new paint", () => {
+  it("a colour/width/dash change keeps the instance and redraws with the new paint", async () => {
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
     const props = baseProps();
     const { rerender } = render(<PlotViewport {...props} seriesStyles={[{ color: "#e03030" }]} />);
     expect(livePaint(props.plotRef, 0, "stroke")).toBe("#e03030");
 
     rerender(<PlotViewport {...props} seriesStyles={[{ color: "#30a0e0", width: 3, line: "dashed" }]} />);
+    await waitFor(() => expect(livePaint(props.plotRef, 0, "stroke")).toBe("#30a0e0"));
     expect(created).toHaveLength(1); // no new uPlot
     const u = props.plotRef.current!;
-    expect(livePaint(props.plotRef, 0, "stroke")).toBe("#30a0e0");
     expect(u.series[1].width).toBe(3);
     expect(u.series[1].dash).toEqual([8, 4]);
     expect(calls.some((c) => c[0] === "redraw")).toBe(true);
   });
 
-  it("a fill-under colour follows the stroke without a rebuild", () => {
+  it("a default line width change (baseLineWidth) patches the live width instead of rebuilding", async () => {
+    vi.stubGlobal("ResizeObserver", MockResizeObserver);
+    const props = baseProps();
+    const { rerender } = render(<PlotViewport {...props} baseLineWidth={1.5} />);
+    expect(props.plotRef.current!.series[1].width).toBe(1.5);
+
+    rerender(<PlotViewport {...props} baseLineWidth={3} />);
+    await waitFor(() => expect(props.plotRef.current!.series[1].width).toBe(3));
+    expect(created).toHaveLength(1);
+    expect(calls).toContainEqual(["redraw", true]); // width-sized gap clips rebuilt
+  });
+
+  it("a fill-under colour follows the stroke without a rebuild", async () => {
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
     const props = baseProps();
     const { rerender } = render(<PlotViewport {...props} seriesStyles={[{ color: "#e03030", fill: "under" }]} />);
     rerender(<PlotViewport {...props} seriesStyles={[{ color: "#30a0e0", fill: "under" }]} />);
+    await waitFor(() => expect(livePaint(props.plotRef, 0, "fill")).toContain("#30a0e0"));
     expect(created).toHaveLength(1);
-    expect(livePaint(props.plotRef, 0, "fill")).toContain("#30a0e0");
   });
 
-  it("a band fill (fill between two series) follows its series colour without a rebuild", () => {
+  it("a band fill (fill between two series) follows its series colour without a rebuild", async () => {
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
     const props = { ...baseProps(), displayPayload: TWO, plotted: [0, 1] };
     const { rerender } = render(<PlotViewport {...props} seriesStyles={[{ color: "#e03030", fill: { vs: 1 } }, undefined]} />);
     rerender(<PlotViewport {...props} seriesStyles={[{ color: "#30a0e0", fill: { vs: 1 } }, undefined]} />);
-    expect(created).toHaveLength(1);
     const u = props.plotRef.current!;
     const band = (created[0] as { opts: uPlot.Options }).opts.bands![0];
+    const bandFill = () => (typeof band.fill === "function" ? band.fill(u, 0, "") : band.fill);
+    await waitFor(() => expect(bandFill()).toContain("#30a0e0"));
+    expect(created).toHaveLength(1);
     expect(band.series).toEqual([1, 2]);
-    expect(typeof band.fill === "function" ? band.fill(u, 0, "") : band.fill).toContain("#30a0e0");
   });
 
-  it("a structural style change (markers on) still rebuilds", () => {
+  it("a structural style change (markers on) still rebuilds, with the new markers", async () => {
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
     const props = baseProps();
     const { rerender } = render(<PlotViewport {...props} seriesStyles={[{ color: "#e03030" }]} />);
     rerender(<PlotViewport {...props} seriesStyles={[{ color: "#e03030", marker: true, markerShape: "square" }]} />);
-    expect(created).toHaveLength(2);
+    await waitFor(() => expect(created).toHaveLength(2));
+    expect((created[1] as { opts: uPlot.Options }).opts.series[1].points?.show).toBe(true);
+    expect(calls).toEqual([]); // the live instance was not patched first
   });
 
   it("a series-count change rebuilds", () => {
@@ -227,11 +254,12 @@ describe("PlotViewport — display-only changes patch the live instance", () => 
     expect(created).toHaveLength(2);
   });
 
-  it("an identical-content hidden/styles array with a new identity does nothing", () => {
+  it("an identical-content hidden/styles array with a new identity does nothing", async () => {
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
     const props = baseProps();
     const { rerender } = render(<PlotViewport {...props} hidden={[false]} seriesStyles={[{ color: "#e03030" }]} />);
     rerender(<PlotViewport {...props} hidden={[false]} seriesStyles={[{ color: "#e03030" }]} />);
+    await settlePatch();
     expect(created).toHaveLength(1);
     expect(calls).toEqual([]);
   });

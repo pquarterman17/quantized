@@ -575,8 +575,8 @@ describe("display-only edits in a background window", () => {
     await waitFor(() => expect(created).toHaveLength(1));
 
     rerender(<BackgroundPlotWindow dataset={DATASET2} view={{ ...base, seriesStyles: { 0: { color: "#30a0e0" } } }} />);
+    await waitFor(() => expect(liveStroke(0)).toBe("#30a0e0"));
     expect(created).toHaveLength(1);
-    expect(liveStroke(0)).toBe("#30a0e0");
 
     rerender(
       <BackgroundPlotWindow
@@ -584,8 +584,8 @@ describe("display-only edits in a background window", () => {
         view={{ ...base, seriesStyles: { 0: { color: "#30a0e0" } }, hiddenChannels: [1] }}
       />,
     );
+    await waitFor(() => expect((created[0].opts as { series: { show?: boolean }[] }).series[2].show).toBe(false));
     expect(created).toHaveLength(1);
-    expect((created[0].opts as { series: { show?: boolean }[] }).series[2].show).toBe(false);
 
     rerender(<BackgroundPlotWindow dataset={DATASET2} view={{ ...base, yKeys: [0] }} />);
     // x + one channel, once the narrower payload lands (a plotted-only rebuild may come first).

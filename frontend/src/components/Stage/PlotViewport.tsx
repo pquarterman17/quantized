@@ -24,9 +24,9 @@ import {
 } from "../../lib/plotDecimate";
 import { classifyLimChange, type Lim } from "../../lib/plotLimApply";
 import { frameVarsPlugin } from "../../lib/uplotFrameVars";
-import { bindLivePaint, styleStructureKey, type LivePaintRef } from "../../lib/uplotLivePaint";
+import type { LivePaintRef } from "../../lib/uplotLivePaint";
 import { buildOpts, xIsAscending, type BuildOptsArgs } from "../../lib/uplotOpts";
-import { useStableByEquality } from "../../lib/useStableValue";
+import { useStableByEquality } from "../../lib/useStableByEquality";
 import { registerSyncPlot, windowXSyncHook } from "../../lib/windowsync";
 // loadPlotPerfPrefs is a plain localStorage read (like uplotOpts.ts's cssVar()
 // DOM read) — not a Zustand store subscription, so it doesn't break this
@@ -115,9 +115,10 @@ export default function PlotViewport(props: PlotViewportProps) {
 
   // Display-only edits (legend hide, colour/width/dash) patch the live
   // instance instead of rebuilding it (lib/uplotLivePaint.ts), so
-  // `hidden`/`seriesStyles` are NOT create-effect deps; these keys are, and
-  // change only on a STRUCTURAL edit. `hidden` stays structural for a
-  // non-monotonic x, whose y range is a full scan that skips hidden series.
+  // `hidden`/`seriesStyles`/`baseLineWidth` are NOT create-effect deps:
+  // useLivePaint rebuilds (via rebuildEpoch) when an edit turns out
+  // structural. `hidden` stays structural for a non-monotonic x, whose y
+  // range scan skips hidden series.
   // A style edit also re-derives the per-series maps below as fresh
   // identities with unchanged content (usePlotPayload), so they are held
   // stable by content — otherwise every colour edit would still rebuild.
@@ -130,7 +131,6 @@ export default function PlotViewport(props: PlotViewportProps) {
     () => !displayPayload || xIsAscending(displayPayload.data[0] as (number | null)[]),
     [displayPayload],
   );
-  const styleKey = styleStructureKey(args.seriesStyles, args.defaultTrace, args.baseLineWidth);
   const hiddenKey = xAscending ? "" : (args.hidden ?? []).map(Number).join("");
 
   // Declared BEFORE the create/destroy effect so that within a single commit
@@ -212,7 +212,7 @@ export default function PlotViewport(props: PlotViewportProps) {
         onRemove: anchorEdit.removeAnchor,
       },
     });
-    bindLivePaint(opts, paintRef); // colours read through paintRef from here on
+    paintRef.current = args; // what useLivePaint patches from
     // Frame-rect bridge (decode #52): publish the plotting-area rect as CSS
     // vars on `.qzk-stage` so a frame-anchored PlotLegend can place itself via
     // calc(). Patched post-buildOpts (like `syncKey`) and only for the main
@@ -356,7 +356,6 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.showGrid,
     args.axisBox,
     args.fontSize,
-    args.baseLineWidth,
     args.defaultTrace,
     args.wheelZoom,
     args.title,
@@ -371,7 +370,6 @@ export default function PlotViewport(props: PlotViewportProps) {
     args.shapeEdit,
     args.shapeDraw,
     args.regionShades,
-    styleKey,
     args.seriesCycle,
     args.plotted,
     seriesLabels,

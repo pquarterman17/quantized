@@ -8,7 +8,7 @@
 // cares about — the constructor is mocked to a lightweight recorder (the
 // WindowCanvas.test.tsx / BackgroundPlotWindow.test.tsx pattern).
 
-import { fireEvent, render, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
@@ -20,12 +20,24 @@ const { created, MockUPlot } = vi.hoisted(() => {
   const created: { opts: unknown; data: unknown }[] = [];
   class MockUPlot {
     scales = { x: { min: 0, max: 1 } };
-    constructor(opts: unknown, data: unknown) {
+    // The opts' own series stand in for uPlot's live ones, so a display-only
+    // patch (lib/uplotLivePaint.ts) is readable straight off `created`.
+    series: { width?: number; show?: boolean }[];
+    constructor(opts: { series: { width?: number }[] }, data: unknown) {
       created.push({ opts, data });
+      this.series = opts.series;
     }
     destroy(): void {}
     setSize(): void {}
     setScale(): void {}
+    setSeries(i: number, o: { show: boolean }): void {
+      this.series[i].show = o.show;
+    }
+    setBand(): void {}
+    redraw(): void {}
+    batch(fn: () => void): void {
+      fn();
+    }
   }
   return { created, MockUPlot };
 });
@@ -109,6 +121,35 @@ describe("PanelPlotWindow — row/column/grid layouts render N viewports", () =>
     );
     await waitFor(() => expect(created.length).toBe(2));
     expect(container.querySelectorAll(".qzk-panel-cell")).toHaveLength(2);
+  });
+});
+
+describe("PanelCell — display-only changes keep each cell's live uPlot", () => {
+  it("a drag highlight re-render does not rebuild the cells' plots", async () => {
+    const { container } = render(<PanelPlotWindow win={win({ panel: { datasetIds: ["a", "b"], layout: "row" } })} datasets={[A, B]} />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    const headers = container.querySelectorAll(".qzk-panel-cell-hd");
+    const dt = new FakeDataTransfer();
+    fireDrag(headers[0], "dragstart", dt);
+    fireDrag(headers[1], "dragover", dt);
+    expect(container.querySelectorAll(".qzk-panel-cell")[1]).toHaveClass("drop-target");
+    expect(created).toHaveLength(2);
+  });
+
+  it("a global default line width change repaints every cell without a rebuild", async () => {
+    const before = useApp.getState().defaultLineWidth;
+    try {
+      render(<PanelPlotWindow win={win({ panel: { datasetIds: ["a", "b"], layout: "row" } })} datasets={[A, B]} />);
+      await waitFor(() => expect(created).toHaveLength(2));
+      const widths = () => created.map((c) => (c.opts as { series: { width?: number }[] }).series[1].width);
+      expect(widths()).toEqual([1.5, 1.5]);
+
+      act(() => useApp.setState({ defaultLineWidth: 3 }));
+      await waitFor(() => expect(widths()).toEqual([3, 3]));
+      expect(created).toHaveLength(2); // the same two instances, repainted
+    } finally {
+      useApp.setState({ defaultLineWidth: before });
+    }
   });
 });
 

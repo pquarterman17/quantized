@@ -863,9 +863,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   const xAscending = xIsAscending(payload.data[0] as (number | null)[]);
   // This window's EFFECTIVE background (item 18) drives both the axis/grid/
   // ink colours below AND the contrast check on literal per-series colours
-  // (`resolveDrawColor` calls further down) — NOT the app's global theme,
+  // (`resolveDrawColor`, via buildSeriesDefs) — NOT the app's global theme,
   // since a per-window override can disagree with the surrounding chrome.
-  const { gridColor, inkColor, inkDimColor, isDark: isDarkBg } = resolvePlotBg(args.bg);
+  const { gridColor, inkColor, inkDimColor } = resolvePlotBg(args.bg);
   const axisColor = inkDimColor;
   const accentColor = cssVar("--accent") || "#8b5cf6";
   const accentSoftColor = cssVar("--accent-soft") || "rgba(139,92,246,0.18)";
@@ -1270,12 +1270,8 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     });
   }
 
-  const { series: seriesArr, bands } = buildSeriesDefs(payload, args, labels, xAscending, {
-    accentColor,
-    inkColor,
-    inkDimColor,
-    isDarkBg,
-  });
+  // The same colour read a live repaint uses (seriesColorsFor), so the two agree.
+  const { series: seriesArr, bands } = buildSeriesDefs(payload, args, labels, xAscending, seriesColorsFor(args.bg));
 
   return {
     width,

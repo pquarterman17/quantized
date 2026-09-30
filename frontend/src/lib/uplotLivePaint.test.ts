@@ -2,14 +2,14 @@
 // patched onto a live instance must draw exactly what a fresh `buildOpts`
 // with the same inputs would. The "instance" here is the opts' own series
 // objects (uPlot keeps them as its live series), driven through the same
-// setSeries/redraw/batch surface PlotViewport uses.
+// setSeries/setBand/redraw/batch surface PlotViewport uses.
 
 import type uPlot from "uplot";
 import { describe, expect, it, vi } from "vitest";
 
 import type { PlotPayload } from "./plotdata";
 import type { SeriesStyle } from "./types";
-import { applyLivePaint, bindLivePaint, livePaintOf, styleStructureKey, type LivePaintRef } from "./uplotLivePaint";
+import { livePatch, styleStructureKey, type LivePaintArgs, type LivePaintRef } from "./uplotLivePaint";
 import { buildOpts, seriesColorsFor, type BuildOptsArgs } from "./uplotOpts";
 import { buildSeriesDefs } from "./uplotSeries";
 
@@ -42,6 +42,7 @@ function liveOf(opts: uPlot.Options) {
     series: opts.series,
     scales: { x: { min: 0, max: 3 }, y: { min: 0, max: 50 } },
     batch: (fn: () => void) => fn(),
+    setBand: (bi: number, b: uPlot.Band) => Object.assign(opts.bands![bi], b),
     redraw: (rebuild?: boolean) => calls.push(["redraw", rebuild]),
     setScale: (k: string, v: unknown) => calls.push(["setScale", k, v]),
     setSeries: (i: number, o: { show: boolean }) => {
@@ -54,37 +55,39 @@ function liveOf(opts: uPlot.Options) {
 
 const val = (u: uPlot, v: unknown, i: number): unknown => (typeof v === "function" ? (v as (u: uPlot, i: number) => unknown)(u, i) : v);
 
-/** Every paint value the next draw of `u`'s series/bands would use. */
+/** Every paint value the next draw of `u`'s series/bands would use. A
+ *  marker with no stroke of its own draws with the series' (uPlot's
+ *  initSeries alias), and an unset fill draws none. */
 function drawnPaint(u: uPlot, series: uPlot.Series[], bands: uPlot.Band[]) {
   return {
     series: series.slice(1).map((s, k) => ({
       stroke: val(u, s.stroke, k + 1),
-      fill: val(u, s.fill, k + 1),
-      pStroke: val(u, s.points?.stroke, k + 1),
+      fill: val(u, s.fill, k + 1) ?? null,
+      pStroke: val(u, s.points?.stroke ?? s.stroke, k + 1),
       pFill: val(u, s.points?.fill, k + 1),
       width: s.width,
       dash: s.dash,
       show: s.show,
     })),
-    bands: bands.map((b, bi) => val(u, b.fill, bi)),
+    bands: bands.map((b, bi) => val(u, b.fill, bi) ?? null),
   };
 }
 
 function patch(from: Args, to: Args) {
-  const opts = buildOpts(THREE, fullArgs(from));
-  const ref: LivePaintRef = { current: null };
-  bindLivePaint(opts, ref);
+  const fromArgs = fullArgs(from);
+  const opts = buildOpts(THREE, fromArgs);
+  const ref: LivePaintRef = { current: fromArgs };
   const { u, calls } = liveOf(opts);
   const toArgs = fullArgs(to);
-  const { series, bands } = buildSeriesDefs(THREE, toArgs, [], true, seriesColorsFor(toArgs.bg));
-  const ok = applyLivePaint(u, ref, livePaintOf(series, bands), { y: [0, 50], y2: null });
-  return { ok, u, opts, calls, fresh: buildOpts(THREE, toArgs) };
+  const defsOf = (a: LivePaintArgs) => buildSeriesDefs(THREE, a, [], true, seriesColorsFor(a.bg));
+  const ok = livePatch(u, ref, toArgs, defsOf, { y: [0, 50], y2: null });
+  return { ok, u, opts, calls, ref, toArgs, fresh: buildOpts(THREE, toArgs) };
 }
 
 const RED: SeriesStyle = { color: "#e03030" };
 const BLUE: SeriesStyle = { color: "#30a0e0" };
 
-describe("applyLivePaint — a patched instance draws what a rebuild would", () => {
+describe("livePatch — a patched instance draws what a rebuild would", () => {
   const cases: [string, Args, Args][] = [
     ["line colour + width + dash", { seriesStyles: [RED] }, { seriesStyles: [{ ...BLUE, width: 3, line: "dotted" }] }],
     ["glyph marker colour", { seriesStyles: [{ ...RED, marker: true, markerShape: "square" }] }, { seriesStyles: [{ ...BLUE, marker: true, markerShape: "square" }] }],
@@ -120,6 +123,23 @@ describe("applyLivePaint — a patched instance draws what a rebuild would", () 
     expect(calls[0]).toEqual(["redraw", true]);
   });
 
+  it("a width edit on a series with drawn markers refuses: uPlot sized their outline from the old width", () => {
+    const marked = { ...RED, marker: true, markerShape: "square" as const };
+    const { ok, calls } = patch({ seriesStyles: [marked] }, { seriesStyles: [{ ...marked, width: 4 }] });
+    expect(ok).toBe(false);
+    expect(calls).toEqual([]);
+    // Colour on the same series still patches.
+    expect(patch({ seriesStyles: [marked] }, { seriesStyles: [{ ...marked, color: "#30a0e0" }] }).ok).toBe(true);
+  });
+
+  it("advances the ref to the patched args, and leaves it on a refusal", () => {
+    const done = patch({ seriesStyles: [RED] }, { seriesStyles: [BLUE] });
+    expect(done.ref.current).toBe(done.toArgs);
+    const refused = patch({ seriesStyles: [RED] }, { seriesStyles: [{ ...RED, marker: true }] });
+    expect(refused.ok).toBe(false);
+    expect(refused.ref.current).not.toBe(refused.toArgs);
+  });
+
   it("an unchanged paint does nothing at all", () => {
     const { ok, calls } = patch({ seriesStyles: [RED] }, { seriesStyles: [{ ...RED }] });
     expect(ok).toBe(true);
@@ -135,7 +155,8 @@ describe("applyLivePaint — a patched instance draws what a rebuild would", () 
 });
 
 describe("styleStructureKey", () => {
-  const key = (s: (SeriesStyle | undefined)[], trace?: "Line" | "Step" | "Scatter") => styleStructureKey(s, trace, 1.5);
+  const key = (s: (SeriesStyle | undefined)[], trace?: "Line" | "Step" | "Scatter") =>
+    styleStructureKey({ seriesStyles: s, defaultTrace: trace, baseLineWidth: 1.5 });
 
   it("ignores colour, width (while drawn) and dash", () => {
     expect(key([RED])).toBe(key([{ ...BLUE, width: 4, line: "dashed" }]));
@@ -150,7 +171,7 @@ describe("styleStructureKey", () => {
 
   it("reads no style, a paint-only style and a missing list as the same structure", () => {
     expect(key([undefined, undefined])).toBe(key([RED, { width: 3, line: "dashed" }]));
-    expect(styleStructureKey(undefined, "Line", 1.5)).toBe(key([RED]));
+    expect(styleStructureKey({ defaultTrace: "Line", baseLineWidth: 1.5 })).toBe(key([RED]));
     expect(key([undefined, { marker: true }])).not.toBe(key([{ marker: true }, undefined]));
   });
 

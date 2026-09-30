@@ -308,33 +308,40 @@ single-cell EDIT path at 1M rows, which the 2026-07-26 large-workspace run
 
 ## Display-only edits patch the live plot — 2026-09-30
 
-A legend hide toggle and a series colour / width / dash edit used to tear
-down and rebuild the whole uPlot instance (`hidden` and `seriesStyles` were
-create-effect deps in `PlotViewport.tsx`). They now patch the live instance:
-visibility through `u.setSeries`, colour through stroke/fill functions that
-read a ref (`lib/uplotLivePaint.ts`), width and dash assigned in place, then
+A legend hide toggle, a series colour / width / dash edit and a default
+line-width change used to tear down and rebuild the whole uPlot instance
+(`hidden`, `seriesStyles` and `baseLineWidth` were create-effect deps in
+`PlotViewport.tsx`). They now patch the live instance: visibility through
+`u.setSeries`, colour by swapping the live series' stroke/fill functions
+(uPlot calls them on every draw), width and dash assigned in place, then
 one `u.redraw`. The new paint comes from the same `buildSeriesDefs` a
 rebuild runs (`lib/uplotSeries.ts`), so screen and rebuild agree. Anything
-that changes series structure (count, markers, fill kind, step, scales)
-still rebuilds.
+that changes series structure (count, markers, fill kind, step, scales, a
+width edit on a series with drawn markers) still rebuilds. The patch code
+(`lib/uplotLivePaint.ts`) is a lazy chunk; eager JS grew 1,363 B (861,192
+to 862,555). `PanelCell` also passed fresh `[]` overlay lists every render,
+which rebuilt each cell's plot on any re-render (a drag highlight).
 
 Measured with a focused Chromium microbench (headless Chromium 141, software
-rendering, shared machine at load average ~16, so absolutes are noisy). Each
-row is a median of 25 edits, timed from the edit to the end of the frame's
-microtasks. "Before" is destroy + `buildOpts` + `new uPlot`, which is what the
-old path ran:
+rendering, shared machine at load average ~4-8, so absolutes are noisy).
+Each value is a median of 25 edits over two runs, timed from the edit to the
+end of the frame's microtasks. "Before" is destroy + `buildOpts` +
+`new uPlot`, which is what the old path ran:
 
 | Case | Rebuild (before) | Live patch (after) |
 |---|---|---|
-| 1M × 7, colour edit | 210–237 ms | 73–75 ms |
-| 1M × 7, legend hide | 212–263 ms | 172–178 ms |
-| 1M × 1, colour edit | 62–66 ms | 18–20 ms |
-| 1M × 1, legend hide | 39–45 ms | 21–27 ms |
-| 82k × 7 (decimated F1 scale), either edit | 50–59 ms | 40–55 ms |
+| 1M × 7, colour edit | 210–212 ms | 61 ms |
+| 1M × 7, legend hide | 198–203 ms | 152 ms |
+| 1M × 7, default width | 208–211 ms | 184–185 ms |
+| 1M × 1, colour edit | 63–64 ms | 22 ms |
+| 1M × 1, legend hide | 28–46 ms | 4–6 ms |
+| 82k × 7 (decimated F1 scale), colour edit | 58–59 ms | 34–37 ms |
+| 82k × 7, hide / width | 56–61 ms | 45–53 ms |
 
 A hide still costs a y re-autoscale and a full path rebuild, because uPlot's
-`setSeries` re-ranges that series' scale. At decimated scale, canvas drawing
-dominates both paths.
+`setSeries` re-ranges that series' scale; a width edit rebuilds the cached
+paths too (the gap clips are width-sized). At decimated scale, canvas
+drawing dominates both paths.
 
 ## Residuals (explicitly unmeasured — carry in P0.4)
 
