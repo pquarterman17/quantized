@@ -3416,6 +3416,40 @@
         "title": "DeletedResponse",
         "type": "object"
       },
+      "DemagCustomRequest": {
+        "description": "A geometry by its dimensions: a cylinder's length and diameter (same\nunit), or a spheroid's axis ratio (prolate c/a, oblate a/c, both > 1).",
+        "properties": {
+          "diameter": {
+            "default": 1.0,
+            "title": "Diameter",
+            "type": "number"
+          },
+          "length": {
+            "default": 1.0,
+            "title": "Length",
+            "type": "number"
+          },
+          "ratio": {
+            "default": 2.0,
+            "title": "Ratio",
+            "type": "number"
+          },
+          "shape": {
+            "enum": [
+              "cylinder",
+              "prolate",
+              "oblate"
+            ],
+            "title": "Shape",
+            "type": "string"
+          }
+        },
+        "required": [
+          "shape"
+        ],
+        "title": "DemagCustomRequest",
+        "type": "object"
+      },
       "DemagRequest": {
         "properties": {
           "shape": {
@@ -17318,6 +17352,50 @@
           }
         },
         "summary": "Demag",
+        "tags": [
+          "magnetic"
+        ]
+      }
+    },
+    "/api/magnetic/demag-custom": {
+      "post": {
+        "description": "Demagnetizing factors Nz, Nxy, 4\u03c0Nz for a custom cylinder or spheroid.",
+        "operationId": "demag_custom_api_magnetic_demag_custom_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DemagCustomRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Demag Custom Api Magnetic Demag Custom Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Demag Custom",
         "tags": [
           "magnetic"
         ]

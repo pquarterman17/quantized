@@ -8,6 +8,7 @@
 // MagneticTab imports everything directly from this path.
 
 import { postJSON } from "./http";
+import type { components } from "./schema";
 
 /** Moment → emu / A·m² / µ_B (+ magnetization & µ_B/atom when V, atoms given). */
 export function magneticMomentConvert(
@@ -31,6 +32,14 @@ export function magneticDemag(
   shape: string,
 ): Promise<{ Nz: number; Nxy: number; shape: string; n_cgs: number }> {
   return postJSON("/api/magnetic/demag", { shape });
+}
+
+/** Demagnetizing factors for a custom geometry: a cylinder's length and
+ *  diameter, or a prolate (c/a) / oblate (a/c) spheroid's axis ratio. */
+export function magneticDemagCustom(
+  body: components["schemas"]["DemagCustomRequest"],
+): Promise<{ Nz: number; Nxy: number; shape: string; n_cgs: number }> {
+  return postJSON("/api/magnetic/demag-custom", body);
 }
 
 /** µ_eff (µ_B) and order type from Curie constant C and Weiss temperature θ. */

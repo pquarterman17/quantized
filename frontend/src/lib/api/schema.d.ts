@@ -1922,6 +1922,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/magnetic/demag-custom": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Demag Custom
+         * @description Demagnetizing factors Nz, Nxy, 4πNz for a custom cylinder or spheroid.
+         */
+        post: operations["demag_custom_api_magnetic_demag_custom_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/magnetic/domain-wall": {
         parameters: {
             query?: never;
@@ -6599,6 +6619,33 @@ export interface components {
         DeletedResponse: {
             /** Deleted */
             deleted: boolean;
+        };
+        /**
+         * DemagCustomRequest
+         * @description A geometry by its dimensions: a cylinder's length and diameter (same
+         *     unit), or a spheroid's axis ratio (prolate c/a, oblate a/c, both > 1).
+         */
+        DemagCustomRequest: {
+            /**
+             * Diameter
+             * @default 1
+             */
+            diameter?: number;
+            /**
+             * Length
+             * @default 1
+             */
+            length?: number;
+            /**
+             * Ratio
+             * @default 2
+             */
+            ratio?: number;
+            /**
+             * Shape
+             * @enum {string}
+             */
+            shape: "cylinder" | "prolate" | "oblate";
         };
         /** DemagRequest */
         DemagRequest: {
@@ -13551,6 +13598,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["DemagRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    demag_custom_api_magnetic_demag_custom_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DemagCustomRequest"];
             };
         };
         responses: {
