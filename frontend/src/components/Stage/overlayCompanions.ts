@@ -23,6 +23,9 @@ export function hasOverlayCompanions(args: {
   if (args.peakOverlay?.datasetId === args.activeId) return true;
   if (args.derivOverlay?.datasetId === args.activeId) return true;
   if (args.selection?.datasetId === args.activeId) return true;
-  if (args.excludedDisplay === "grey" && args.dropped.size > 0) return true;
+  // Any dropped row, in EITHER mode: maskExcludedPayload blanks rows by their
+  // position in the fetched payload, which a server-decimated (reduced) payload
+  // no longer matches — "hide" would blank the wrong points.
+  if (args.dropped.size > 0) return true;
   return false;
 }
