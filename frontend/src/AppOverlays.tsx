@@ -82,6 +82,7 @@ import { useMetaFactorsDialog } from "./store/metaFactorsDialog";
 import { useTransformPreviewDialog } from "./store/transformPreviewDialog";
 import { useRecipeManager } from "./store/recipeManager";
 import { useWorkbookPropertiesDialog } from "./store/workbookPropertiesDialog";
+import { useAuxFigureStore } from "./components/workshops/ternary/auxFigureStore";
 import { lazyRegion } from "./lib/lazyRegion";
 
 /** Dynamically import a flag-gated workshop panel, wrapping it in its OWN
@@ -207,6 +208,11 @@ const LevelOrderPanel = lazyPanel(() => import("./components/workshops/levelorde
 // UX-007: invoked from the shared workbook menu registry, so its tiny store
 // keeps this dialog out of the eager Library renderer graph.
 const WorkbookPropertiesDialog = lazyPanel(() => import("./components/Library/WorkbookPropertiesDialog"), "WorkbookPropertiesDialog");
+// Origin gap #23 frontend: the ternary-diagram and vector-field workshops
+// (Plot ▸ Build & export) share one chunk and one tiny open-flag store, so
+// the eager bundle pays for the flags and a single stub; see
+// ternary/lazyMount.test.ts.
+const AuxFigurePanels = lazyPanel(() => import("./components/workshops/ternary/AuxFigurePanels"), "AuxFigurePanels");
 
 export default function AppOverlays() {
   const helpOpen = useHelp((s) => s.open);
@@ -275,6 +281,7 @@ export default function AppOverlays() {
   const recodeOpen = useRecodePanel((s) => s.open);
   const levelOrderOpen = useLevelOrderPanel((s) => s.open);
   const workbookPropertiesOpen = useWorkbookPropertiesDialog((s) => s.properties !== null);
+  const auxFigureOpen = useAuxFigureStore((s) => s.ternaryOpen || s.fieldOpen);
   // Heard while the dialog chunk is still unloaded -- the store owns the
   // listener so the Data command can dispatch before anything is mounted.
   useEffect(listenForSqliteQuery, []);
@@ -350,6 +357,7 @@ export default function AppOverlays() {
       {recodeOpen && <RecodePanel />}
       {levelOrderOpen && <LevelOrderPanel />}
       {workbookPropertiesOpen && <WorkbookPropertiesDialog />}
+      {auxFigureOpen && <AuxFigurePanels />}
       {/* LAST among the dialogs (R12): every dialog backdrop has the same
           z-index, so tree order is paint order, and the active modal is the
           one last in the document (lib/modalInert.ts). A confirmation or a

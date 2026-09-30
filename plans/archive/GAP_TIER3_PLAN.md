@@ -302,7 +302,7 @@ written below.
   passed, 3 skipped); frontend 1437 passed (was 1425); `npm run typecheck`
   and `npm run build` clean; `ruff`/`mypy`/`test_repo_integrity.py` clean.
 
-- ~~**#4 Ternary + quiver/streamline export (gap #23)**~~ (2026-07-08) — two new pure
+- ~~**#4 Ternary + quiver/streamline export (gap #23)**~~ (2026-07-08; frontend workshops 2026-09-30 — `workshops/ternary`, `workshops/fieldplot`, see BUGS_AND_ISSUES ## Completed) — two new pure
   modules: `calc/figure_ternary.py` (170 lines, hand-rolled barycentric transform,
   scatter with optional colorbar, 10% gridlines, corner labels), `calc/figure_field.py`
   (126 lines, quiver + streamline over gridded (x, y, u, v), shared dpi/preset

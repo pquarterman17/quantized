@@ -30,7 +30,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { ColorScatterSpec } from "../../lib/colorscatter";
-import { seriesDisplayLabel } from "../../lib/figureSpecSeries";
+import { seriesDisplayLabel } from "../../lib/seriesDisplayLabel";
 import type { PlotPayload } from "../../lib/plotdata";
 import { encodingSplits, windowEncoding, type FigureEncoding } from "../../lib/plotEncodingBinding";
 import { rowStateIdentity } from "../../lib/rowstate";

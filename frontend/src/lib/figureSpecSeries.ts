@@ -7,6 +7,13 @@
 // this path has to answer the same three questions in the same order, and
 // getting the SECOND one wrong is what BUG-015 was. Pure — view state and a
 // DataStruct in, plain arrays out; no store, no transport.
+//
+// LAZY-ONLY since 2026-09-30: `seriesDisplayLabel`, the one export the eager
+// encoding path needs, lives in `lib/seriesDisplayLabel.ts`. It was the only
+// eager import of this module, and Rollup places a module in its eager
+// importer's chunk whole, so the five lazy-only exports here (~1.2 kB) were
+// riding in first-paint JS for a one-line function. Keep it that way: an
+// eager importer of THIS module brings all of it back.
 
 import type { ErrorPair } from "./api";
 import { buildErrorSpans } from "./errorbars";
@@ -216,29 +223,6 @@ export function withSeriesLegends(
     out.push(legend === undefined ? style : { ...(style ?? {}), legend });
   }
   return out;
-}
-
-/**
- * The finished legend text for ONE series, by the BUG-014 product rule: a
- * rename is used VERBATIM (unit included or not, exactly as typed), and only
- * an un-renamed channel gets the derived `"label (unit)"` composition.
- *
- * This is the SAME resolution three other places already spell out —
- * `uplotOpts.buildOpts` (`args.seriesLabels?.[i] ?? (unit ? ... : label)`),
- * the backend's `calc.figure_labels.series_display_name`, and the flat
- * export path's `withSeriesLegends` + `series_styles[i].legend` pair. The
- * flat wire can defer the composition to the renderer because it ships the
- * data labels and the override separately; a FACET panel cannot — it ships
- * FINISHED strings (`FigureFacetSeries.label`) that no per-series field on
- * the request can reach — so it has to compose here, and it must compose the
- * same way or a renamed facet panel exports "Loop 1 (au)" while the screen
- * reads "Loop 1" (BUG-014's own symptom, which survived in the facet branch
- * until this existed).
- *
- * An EMPTY rename is honoured verbatim, matching `??` on the screen side.
- */
-export function seriesDisplayLabel(label: string, unit: string, legend: string | undefined): string {
-  return legend ?? (unit ? `${label} (${unit})` : label);
 }
 
 /** What a PINNED style array has to be re-cut against: the document display

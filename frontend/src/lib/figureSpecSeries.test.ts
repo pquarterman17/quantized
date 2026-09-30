@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { buildExportStyles, type ExportSeriesStyle } from "./exportStyles";
-import { resolveDisplaySeries, resolveSeriesPresentation, seriesDisplayLabel, withSeriesLegends } from "./figureSpecSeries";
+import { resolveDisplaySeries, resolveSeriesPresentation, withSeriesLegends } from "./figureSpecSeries";
+import { seriesDisplayLabel } from "./seriesDisplayLabel";
 import { installSeriesPalette, TEST_SERIES_PALETTE } from "./regressionMatrix.testkit";
 import type { DataStruct, SeriesStyle } from "./types";
 

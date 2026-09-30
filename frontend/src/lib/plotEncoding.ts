@@ -86,7 +86,7 @@ import { buildErrorSpans, type ErrorSpan } from "./errorbars";
 import type { ErrorBinding } from "./errorRoles";
 import { ENCODING_SLOTS, type FigureEncodingText } from "./figureEncoding";
 import { facetSlices, type FacetPanel, type FacetSlice } from "./facet";
-import { seriesDisplayLabel } from "./figureSpecSeries";
+import { seriesDisplayLabel } from "./seriesDisplayLabel";
 import { spatialCellStyling } from "./multipanel";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import {

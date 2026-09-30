@@ -32,7 +32,7 @@
 
 import type { FigureFacetSpec } from "./api/figures";
 import { facetPayloads, facetSliceRowIds, facetSlices } from "./facet";
-import { seriesDisplayLabel } from "./figureSpecSeries";
+import { seriesDisplayLabel } from "./seriesDisplayLabel";
 import { activeRowIndices, droppedRows, pruneToLiveDataset } from "./rowstate";
 import type { Dataset, DataStruct } from "./types";
 

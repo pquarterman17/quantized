@@ -13,6 +13,7 @@ import { openSimsDialog } from "../store/simsDialog";
 import { useMultivarStore } from "../store/multivar";
 import { useStatsTestsStore } from "../store/statsTests";
 import { useVariabilityStore } from "../store/variability";
+import { useAuxFigureStore } from "../components/workshops/ternary/auxFigureStore";
 
 /** Build the Analyze-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
@@ -197,6 +198,8 @@ export function buildAnalysisCommands(s: StoreGet): Action[] {
       keywords: "jmp plot spec scatter line box violin bar mark morph drop zone well facet drag wells x y group builder origin",
       run: () => s().setGraphBuilderOpen(true),
     },
+    { id: "ternary-figure", group: "Plot", section: "Build & export", label: "Ternary diagram…", description: "Plot three composition columns on a ternary diagram, optionally coloured by a fourth, previewed as the PDF/SVG/PNG export renders.", keywords: "ternary composition phase triangle barycentric alloy", run: () => useAuxFigureStore.getState().setTernaryOpen(true) },
+    { id: "field-figure", group: "Plot", section: "Build & export", label: "Vector field…", description: "Draw X, Y, U, V columns on a regular grid as quiver arrows or streamlines, previewed as the PDF/SVG/PNG export renders.", keywords: "vector field quiver streamline flow magnetization", run: () => useAuxFigureStore.getState().setFieldOpen(true) },
     {
       id: "peak-wizard",
       group: "Analyze",
