@@ -27,12 +27,24 @@ import { dyForFit } from "../../../lib/fitweights";
 import type { ByColumnOption } from "../useByPartition";
 import { useCurveFitByLevel, type CurveFitByLevelStart, type CurveFitLevelResult } from "./useCurveFitByLevel";
 
+/** The (x, y) pairs a completed fit ran on (gap rows dropped) and the
+ *  channels they came from. */
+export interface FittedData {
+  x: number[];
+  y: number[];
+  xKey: number | null;
+  yKey: number;
+}
+
 export interface CurveFitState {
   active: Dataset | null;
   models: FitModel[];
   modelName: string;
   setModelName: (name: string) => void;
   result: CalcResult | null;
+  /** The (x, y) pairs the last completed fit ran on — the rows its
+   *  `residuals`/`yFit` align to. Null after a guess or clear. */
+  fitData: FittedData | null;
   guessOnly: boolean;
   busy: boolean;
   error: string | null;
@@ -93,6 +105,7 @@ export function useCurveFit(): CurveFitState {
   // throw away work the user just did.
   const [paramRows, setParamRows] = useState<FitParamRow[]>([]);
   const [result, setResult] = useState<CalcResult | null>(null);
+  const [fitData, setFitData] = useState<FittedData | null>(null);
   const [guessOnly, setGuessOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -202,6 +215,7 @@ export function useCurveFit(): CurveFitState {
       if (kind === "guess") {
         const g = await autoGuess(modelName, pairs.x, pairs.y);
         setResult({ params: g.p0 });
+        setFitData(null);
         setGuessOnly(true);
       } else {
         // Resolve weighting -> dy over the SAME analysis rows as the fit; a
@@ -236,6 +250,7 @@ export function useCurveFit(): CurveFitState {
             : {}),
         });
         setResult(r);
+        setFitData({ x: pairs.x, y: pairs.y, xKey: state.xKey, yKey: localXy.yKey });
         setGuessOnly(false);
         // Durable fit spec (audit P1 #3): records the plotted channels + the
         // weighting ACTUALLY used (unweighted if dy couldn't resolve) so the
@@ -288,6 +303,7 @@ export function useCurveFit(): CurveFitState {
 
   function clear(): void {
     setResult(null);
+    setFitData(null);
     setGuessOnly(false);
     setError(null);
     setWeightNote(null);
@@ -344,6 +360,7 @@ export function useCurveFit(): CurveFitState {
     modelName,
     setModelName,
     result,
+    fitData,
     guessOnly,
     busy,
     error,
