@@ -16,7 +16,7 @@ import { useEffect, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 
 import { exportFigurePage, renderFigurePageBlob, type FigurePageSpec, type PagePanelSpec } from "../../../lib/api";
-import { clipboardImageSupported, copyImageAsync } from "../../../lib/clipboard";
+import { clipboardImageSupported, copyOfficeGraphicAsync } from "../../../lib/clipboard";
 import { chooseExcludedRows, pageExcludedChoiceMatters } from "../../../lib/excludedRowsChoice";
 import { ghosterFor } from "../../../lib/excludedRowsExport";
 import type { ExcludedRowsGhoster } from "../../../lib/figureSpec";
@@ -234,12 +234,13 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
     }
   }
 
-  /** F3.6 "clipboard copy for pages" (A7 convention): 300-DPI PNG straight to
-   *  the Office clipboard, through the SAME `buildSpec` preview/export share
+  /** F3.6 "clipboard copy for pages" (A7 convention): vector SVG plus a
+   *  300-DPI PNG fallback go to the Office clipboard through the SAME
+   *  `buildSpec` preview/export share
    *  — never a third ad-hoc render path. Mirrors copyFigureCommand.ts's
    *  gesture-preserving pattern: check capability BEFORE any async work (a
    *  render on a browser that can't accept it would be pure waste), then
-   *  hand the PENDING render to `copyImageAsync` rather than awaiting it
+   *  hand both PENDING renders to `copyOfficeGraphicAsync` rather than awaiting
    *  first, so the write stays inside the originating click. */
   async function copyNow(): Promise<void> {
     if (!clipboardImageSupported()) {
@@ -262,12 +263,19 @@ export function usePagePreviewExport(slots: PageSlot[], output: PagePreviewExpor
       return;
     }
     setStatus("rendering figure page for the clipboard…");
-    // P3.4: cancellable like Export. copyImageAsync reports an aborted render
+    // P3.4: cancellable like Export. copyOfficeGraphicAsync reports aborted renders
     // as `false`, so a refusal only counts when the signal was not aborted.
     // A Cancel that lands after the clipboard write went through cannot undo
     // it, and is reported as the copy it was (lib/exportActive.ts's rule).
     const done = await runCancellable("Copying figure page…", async (signal) => {
-      const ok = await copyImageAsync(renderFigurePageBlob({ ...spec, fmt: "png", dpi: COPY_PAGE_DPI }, signal), signal);
+      const ok = await copyOfficeGraphicAsync(
+        {
+          png: renderFigurePageBlob({ ...spec, fmt: "png", dpi: COPY_PAGE_DPI }, signal),
+          svg: renderFigurePageBlob({ ...spec, fmt: "svg", dpi: COPY_PAGE_DPI }, signal),
+          alt: "Quantized figure page",
+        },
+        signal,
+      );
       if (!ok) signal.throwIfAborted();
       return ok;
     });

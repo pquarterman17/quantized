@@ -23,8 +23,8 @@ vi.mock("../../../lib/api", () => ({
 }));
 vi.mock("../../../lib/clipboard", () => ({
   clipboardImageSupported: vi.fn(() => true),
-  copyImageAsync: vi.fn(async (p: Promise<Blob>) => {
-    await p;
+  copyOfficeGraphicAsync: vi.fn(async (source: { png: Promise<Blob>; svg: Promise<Blob> }) => {
+    await Promise.all([source.png, source.svg]);
     return true;
   }),
 }));

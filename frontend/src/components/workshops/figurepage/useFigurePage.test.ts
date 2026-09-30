@@ -2,7 +2,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigurePage, renderFigurePageBlob } from "../../../lib/api";
-import { clipboardImageSupported, copyImageAsync } from "../../../lib/clipboard";
+import { clipboardImageSupported, copyOfficeGraphicAsync } from "../../../lib/clipboard";
 import { createFigureDocument, type FigureDocument } from "../../../lib/figureDocument";
 import type { FigureDoc } from "../../../lib/figuredoc";
 import { createPageDocument } from "../../../lib/pageDocumentActions";
@@ -23,7 +23,7 @@ vi.mock("../../../lib/api", () => ({
 
 vi.mock("../../../lib/clipboard", () => ({
   clipboardImageSupported: vi.fn(() => true),
-  copyImageAsync: vi.fn().mockResolvedValue(true),
+  copyOfficeGraphicAsync: vi.fn().mockResolvedValue(true),
 }));
 
 const askConfirm = vi.fn();
@@ -990,7 +990,7 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
   beforeEach(() => {
     askConfirm.mockReset();
     vi.mocked(clipboardImageSupported).mockReturnValue(true);
-    vi.mocked(copyImageAsync).mockResolvedValue(true);
+    vi.mocked(copyOfficeGraphicAsync).mockResolvedValue(true);
     useApp.setState({ editableFigures: [], pages: [], pageDocSeed: null, figurePageOpen: false });
   });
 
@@ -1063,15 +1063,16 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
       await act(async () => {
         await result.current.copyNow();
       });
-      expect(copyImageAsync).toHaveBeenCalledTimes(1);
-      // copyImageAsync receives the PENDING render promise (not yet awaited)
+      expect(copyOfficeGraphicAsync).toHaveBeenCalledTimes(1);
+      // Both representations remain pending so clipboard.write starts inside
       // so the clipboard write stays inside the user gesture — resolve it to
       // inspect what was actually rendered.
-      const pending = vi.mocked(copyImageAsync).mock.calls[0][0];
-      await expect(pending).resolves.toBeInstanceOf(Blob);
-      const body = vi.mocked(renderFigurePageBlob).mock.calls.at(-1)![0];
-      expect(body.fmt).toBe("png");
-      expect(body.dpi).toBe(300);
+      const source = vi.mocked(copyOfficeGraphicAsync).mock.calls[0][0];
+      await expect(source.png).resolves.toBeInstanceOf(Blob);
+      await expect(source.svg).resolves.toBeInstanceOf(Blob);
+      const bodies = vi.mocked(renderFigurePageBlob).mock.calls.slice(-2).map((call) => call[0]);
+      expect(bodies.map((body) => body.fmt)).toEqual(["png", "svg"]);
+      expect(bodies.every((body) => body.dpi === 300)).toBe(true);
       expect(useApp.getState().status).toBe("figure page copied to clipboard");
     });
 
@@ -1083,7 +1084,7 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
       await act(async () => {
         await result.current.copyNow();
       });
-      expect(copyImageAsync).not.toHaveBeenCalled();
+      expect(copyOfficeGraphicAsync).not.toHaveBeenCalled();
       expect(renderFigurePageBlob).not.toHaveBeenCalled();
       expect(useApp.getState().status).toMatch(/clipboard image unavailable/);
     });
@@ -1097,7 +1098,7 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
       await act(async () => {
         await result.current.copyNow();
       });
-      expect(copyImageAsync).not.toHaveBeenCalled();
+      expect(copyOfficeGraphicAsync).not.toHaveBeenCalled();
       expect(useApp.getState().status).toMatch(/panel's source is missing/);
     });
 
@@ -1106,7 +1107,7 @@ describe("useFigurePage F3.6 unified export from PageDocument", () => {
       await act(async () => {
         await result.current.copyNow();
       });
-      expect(copyImageAsync).not.toHaveBeenCalled();
+      expect(copyOfficeGraphicAsync).not.toHaveBeenCalled();
       expect(useApp.getState().status).toBe("assign at least one panel to copy a figure page");
     });
   });
@@ -1196,7 +1197,10 @@ describe("useFigurePage page-wide greyscale (P3.3)", () => {
     await act(async () => {
       await result.current.copyNow();
     });
-    const body = vi.mocked(renderFigurePageBlob).mock.calls.at(-1)![0];
+    const body = vi.mocked(renderFigurePageBlob).mock.calls
+      .map((call) => call[0])
+      .filter((request) => request.fmt === "png")
+      .at(-1)!;
     expect(body.fmt).toBe("png");
     expect(body.panels[0].figure.greyscale).toBe(true);
   });
@@ -1301,8 +1305,8 @@ describe("figure page export/copy cancel (P3.4)", () => {
       rendering = signal;
       return hangUntilAborted(signal);
     });
-    vi.mocked(copyImageAsync).mockImplementationOnce(async (pending) => {
-      await pending.catch(() => null);
+    vi.mocked(copyOfficeGraphicAsync).mockImplementationOnce(async (source) => {
+      await Promise.allSettled([source.png, source.svg]);
       return false;
     });
     const { result } = renderHook(() => useFigurePage());
@@ -1318,7 +1322,7 @@ describe("figure page export/copy cancel (P3.4)", () => {
       await p;
     });
     expect(rendering?.aborted).toBe(true);
-    expect(vi.mocked(copyImageAsync).mock.calls[0][1]?.aborted).toBe(true);
+    expect(vi.mocked(copyOfficeGraphicAsync).mock.calls[0][1]?.aborted).toBe(true);
     expect(useApp.getState().status).toBe("copy cancelled");
     expect(useToasts.getState().toasts).toEqual([]);
     expect(usePendingOps.getState().ops).toEqual([]);

@@ -25,7 +25,7 @@ import { renderFigureBlob, type FigureSpec } from "./api/figures";
 import {
   clipboardImageSupported,
   clipboardSvgSupported,
-  copyImageAsync,
+  copyOfficeGraphicAsync,
   copySvgAsync,
 } from "./clipboard";
 import { exportActive, type StoreGet } from "./exportActive";
@@ -125,11 +125,21 @@ export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
       if (!spec) return false;
       // Progress feedback: a large multi-panel render is not instant, and a
       // silent pause reads as a broken button.
-      s().setStatus("rendering figure for the clipboard…");
-      // Hand the PENDING render to the clipboard rather than awaiting first —
-      // see copyImageAsync: awaiting can drop the user activation the
-      // Clipboard API requires, and the copy then fails invisibly.
-      const ok = await copyImageAsync(renderFigureBlob(spec, signal), signal);
+      s().setStatus("rendering Office-ready figure for the clipboard…");
+      // One ClipboardItem advertises the vector SVG (inside an Office-safe
+      // HTML image) and the publication PNG together.  The paste target picks
+      // the richest representation it understands; the PNG remains the
+      // guaranteed 300-DPI fallback. Both renders start before the first await
+      // so clipboard.write() stays in this click's activation task.
+      const svgSpec: FigureSpec = { ...spec, fmt: "svg" };
+      const ok = await copyOfficeGraphicAsync(
+        {
+          png: renderFigureBlob(spec, signal),
+          svg: renderFigureBlob(svgSpec, signal),
+          alt: spec.title || stem,
+        },
+        signal,
+      );
       s().setStatus("");
       if (!ok) throw new Error("clipboard write refused");
     },

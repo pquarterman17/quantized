@@ -1726,7 +1726,11 @@ Check these only with automated coverage plus an owner-visible desktop run.
       shows the pre-rearrange figure); reverted byte-identical. Owner
       desktop run still gates the checkbox.
 - [ ] **A7 Office clipboard:** Copy a 300-DPI image into PowerPoint and Word in
-      seconds and visually compare it with the internal figure.
+      seconds and visually compare it with the internal figure. **Code half
+      DONE 2026-09-29 (ChatGPT-Sol):** single figures and Figure Pages now
+      place SVG-in-HTML plus a 300-DPI PNG fallback in one clipboard item;
+      the plot toolbar invokes this publication path directly. The checkbox
+      remains open for the real Word/PowerPoint visual comparison.
 - [ ] **A8 Vector export:** Export SVG/PDF and compare limits, ticks, text,
       legend, errors, annotations, and panel placement. **Automated half DONE
       2026-09-13** — `tests/test_export_vector_structure.py`, against the real

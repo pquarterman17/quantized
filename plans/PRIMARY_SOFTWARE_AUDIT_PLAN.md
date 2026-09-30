@@ -9435,7 +9435,19 @@ was not raised.
   check: the actual OS-clipboard paste into Word/PowerPoint (Windows) or
   Keynote/Pages/Preview (macOS), i.e. whether the pasted bytes this route
   produces are what those apps actually accept and render from the system
-  clipboard.
+  clipboard. **Pipeline implemented 2026-09-29 (ChatGPT-Sol; owner platform
+  sign-off still keeps this box open):** ordinary **Copy Figure** now starts
+  the canonical SVG and 300-DPI PNG renders together and writes one
+  multi-format `ClipboardItem`: self-contained `text/html` carrying the SVG,
+  `image/png` as the fallback, and raw `image/svg+xml` when the browser
+  explicitly advertises it. Engines that reject the multi-format item retry
+  through the prior PNG-only path. Figure Page copy uses the same helper, and
+  the plot toolbar's one-click copy action now invokes this publication path
+  rather than the screen-resolution canvas snapshot. Automated coverage pins
+  pending-render/user-gesture timing, SVG failure -> PNG fallback, raw-SVG
+  capability gating, strict-engine fallback, cancellation, single-figure and
+  multi-panel parity. Final Word/PowerPoint and macOS paste behavior remains
+  the owner/platform acceptance check above.
 - [x] ~~Expected bounding box, transparency, fonts, and scale.~~ VERIFIED
   2026-09-28, server-side, against the real `POST /api/export/figure` route
   (`tests/test_export_copy_figure_raster.py` +

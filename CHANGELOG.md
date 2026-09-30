@@ -6,6 +6,14 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Plot copy and Office export
+
+- **Copy Figure** now places a vector SVG representation and a publication-
+  quality 300-DPI PNG fallback on the clipboard together, using the same
+  canonical renderer as file and report export. The one-click toolbar action
+  and multi-panel Figure Page copy use the same Office-ready pipeline, while
+  older browsers automatically retain the previous PNG-only behavior.
+
 ## [0.27.0] - 2026-09-27
 
 A **minor** release: the 87 merges since `v0.26.1` add a Report workflow with

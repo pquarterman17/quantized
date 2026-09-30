@@ -235,3 +235,133 @@ export async function copySvgAsync(pending: Promise<Blob | null>, signal?: Abort
     return false;
   }
 }
+
+/** Clipboard payload used by Word/PowerPoint/Keynote-style paste targets.
+ *
+ * Browsers generally refuse a bare `image/svg+xml` ClipboardItem even though
+ * the operating-system clipboard and Office understand vector artwork.  They
+ * do, however, allow `text/html`.  Putting the SAME SVG render in an HTML
+ * `<img>` and the publication PNG beside it gives paste targets a vector
+ * representation plus a standards-compliant 300-DPI fallback in one copy.
+ * A target that cannot consume the HTML/SVG simply selects `image/png`.
+ */
+export interface OfficeGraphicCopy {
+  png: Promise<Blob | null>;
+  svg: Promise<Blob | null>;
+  alt?: string;
+}
+
+function abortError(): DOMException {
+  return new DOMException("aborted", "AbortError");
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+  if (signal?.aborted) throw abortError();
+}
+
+/** Blob -> data URL without relying on object URLs that stop resolving once
+ * this page/window is gone.  A clipboard HTML fragment must be self-contained
+ * because Office reads it after Quantized has returned from the copy action. */
+function blobDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () =>
+      typeof reader.result === "string"
+        ? resolve(reader.result)
+        : reject(new Error("clipboard image encoding failed"));
+    reader.onerror = () => reject(new Error("clipboard image encoding failed"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function htmlAttr(text: string): string {
+  return text
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
+}
+
+async function officeHtml(
+  svg: Promise<Blob | null>,
+  png: Promise<Blob | null>,
+  alt: string,
+  signal?: AbortSignal,
+): Promise<Blob> {
+  const vector = await svg;
+  throwIfAborted(signal);
+  let src: string;
+  if (vector) {
+    const markup = await vector.text();
+    if (!/<svg(?:\s|>)/i.test(markup)) throw new Error("render produced invalid SVG");
+    // Percent encoding handles non-ASCII scientific labels correctly and is
+    // substantially smaller than base64 for matplotlib's text-heavy SVG.
+    src = `data:${SVG_MIME};charset=utf-8,${encodeURIComponent(markup)}`;
+  } else {
+    const raster = await png;
+    if (!raster) throw new Error("render produced no image");
+    src = await blobDataUrl(raster);
+  }
+  throwIfAborted(signal);
+  const body = `<img src="${src}" alt="${htmlAttr(alt)}">`;
+  return new Blob([`<!doctype html><html><body>${body}</body></html>`], { type: "text/html" });
+}
+
+/** Copy a publication graphic as an Office-friendly multi-format item.
+ *
+ * `text/html` carries the SVG vector render, while `image/png` is the 300-DPI
+ * fallback.  Where the browser explicitly accepts raw SVG we include that
+ * too.  Every value remains a promise so `clipboard.write()` begins in the
+ * click's activation task even though both server renders are still running.
+ *
+ * If an engine rejects a multi-format/promise-valued item, retry as PNG using
+ * the existing compatibility path.  That fallback may have lost transient
+ * activation, but it preserves the pre-feature behaviour on older engines.
+ */
+export async function copyOfficeGraphicAsync(
+  source: OfficeGraphicCopy,
+  signal?: AbortSignal,
+): Promise<boolean> {
+  if (!clipboardImageSupported()) {
+    await Promise.allSettled([source.png, source.svg]);
+    return false;
+  }
+
+  // Attach handlers immediately: an engine is allowed to resolve write()
+  // without reading every advertised representation, and neither unused
+  // render may then become an unhandled rejection.
+  const png = source.png.catch(() => null);
+  const svg = source.svg.catch(() => null);
+  const asPng = async (): Promise<Blob> => {
+    const value = await png;
+    if (!value) throw new Error("render produced no PNG");
+    throwIfAborted(signal);
+    return value;
+  };
+  const asSvg = async (): Promise<Blob> => {
+    const value = await svg;
+    if (!value) throw new Error("render produced no SVG");
+    throwIfAborted(signal);
+    return value;
+  };
+
+  const values: Record<string, Promise<Blob>> = {
+    // Put the vector-bearing HTML representation first. Paste targets remain
+    // free to select PNG, but Office sees the vector option before the raster.
+    "text/html": officeHtml(svg, png, source.alt ?? "Quantized figure", signal),
+    "image/png": asPng(),
+  };
+  if (clipboardSvgSupported()) values[SVG_MIME] = asSvg();
+  for (const value of Object.values(values)) value.catch(() => {});
+
+  try {
+    await navigator.clipboard.write([new ClipboardItem(values)]);
+    return true;
+  } catch {
+    try {
+      return await copyImage(await asPng());
+    } catch {
+      return false;
+    }
+  }
+}
