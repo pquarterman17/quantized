@@ -135,6 +135,11 @@ CASES = [
         GOOD_DATASET,
     ),
     (
+        "/api/aggregate/confidence-band",
+        lambda ds: {"datasets": [ds, GOOD_DATASET]},
+        GOOD_DATASET,
+    ),
+    (
         "/api/aggregate/algebra",
         lambda ds: {"dataset_a": ds, "dataset_b": GOOD_DATASET, "operation": "A+B"},
         GOOD_DATASET,
