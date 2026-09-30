@@ -92,6 +92,12 @@ const win = (over: Partial<PlotWindow> = {}): PlotWindow => ({
 // otherwise throw "ResizeObserver is not defined" from a stray PlotViewport
 // mount effect, misattributed to whatever test happened to run next.
 beforeAll(() => vi.stubGlobal("ResizeObserver", MockResizeObserver));
+// Bundle diet slice 13 moved lib/panelwindow + lib/facetGrid out of the eager
+// set; the background-window chunk now resolves later under load than
+// waitFor's 1 s default, so preload it before the ≥2-window cases.
+beforeAll(async () => {
+  await import("./BackgroundPlotWindow");
+});
 afterAll(() => vi.unstubAllGlobals());
 
 beforeEach(() => {
@@ -134,7 +140,7 @@ describe("WindowCanvas — ≥2 windows (MDI chrome + focused-window routing)", 
       focusedWindowId: "w1",
     });
     const { container } = render(<WindowCanvas />);
-    await waitFor(() => expect(created.length).toBe(2)); // one uPlot per window
+    await waitFor(() => expect(created.length).toBe(2), { timeout: 5000 }); // one uPlot per window
     const frames = container.querySelectorAll(".qzk-plotwin");
     expect(frames).toHaveLength(2);
     // Exactly one frame carries the "focused" highlight class + the full
