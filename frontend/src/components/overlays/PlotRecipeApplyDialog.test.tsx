@@ -14,16 +14,17 @@
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { spatialComposition } from "../../lib/composition";
 import { captureRecipe } from "../../lib/plotRecipe";
 import { defaultPlotView } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import PlotRecipeApplyDialog from "./PlotRecipeApplyDialog";
 
-function dataset(labels = ["2theta", "Signal", "Ierr"]): Dataset {
+function dataset(labels = ["2theta", "Signal", "Ierr"], id = "d1"): Dataset {
   return {
-    id: "d1",
-    name: "d1.xy",
+    id,
+    name: `${id}.xy`,
     data: {
       time: [0, 1, 2],
       values: [[10, 100, 1], [20, 200, 2], [30, 300, 3]],
@@ -131,5 +132,52 @@ describe("PlotRecipeApplyDialog — preview + actions", () => {
 
     expect(useApp.getState().editableFigures).toHaveLength(1);
     expect(useApp.getState().status).toContain("dropped 1 unmatched field");
+  });
+});
+
+// F4.4 SPATIAL half: a panel whose dataset (or column) is missing is NAMED
+// with a rebind control, not just listed -- the user picks the stand-in and
+// the staged resolution updates in place.
+describe("PlotRecipeApplyDialog — spatial panel rebind", () => {
+  async function stageSpatialPending(): Promise<void> {
+    reset(["2theta", "Intensity", "Ierr"]);
+    const d1 = dataset(["2theta", "Intensity", "Ierr"]);
+    const d2 = dataset(["2theta", "Intensity", "Ierr"], "d2");
+    const view = { ...defaultPlotView(), xKey: 0, yKeys: [1] };
+    const recipe = captureRecipe(
+      d1,
+      view,
+      spatialComposition([
+        { datasetId: "d1", xKey: 0, yKeys: [1], xLim: [0, 40], yLim: [1, 1000], xLog: false, yLog: true, row: 0, col: 0 },
+        { datasetId: "d2", xKey: 0, yKeys: [1], xLim: [0, 40], yLim: [1, 1000], xLog: false, yLog: false, row: 1, col: 0 },
+      ]),
+      { id: "r1", name: "Two-panel", appVersion: "0", datasets: [d1, d2] },
+    );
+    // d2 is gone; d9 is available as a stand-in.
+    useApp.setState({ plotRecipes: [recipe], datasets: [d1, dataset(["2theta", "Intensity", "Ierr"], "d9")] });
+    await useApp.getState().applyPlotRecipe("r1", "d1");
+  }
+
+  it("names the missing panel dataset with a picker; choosing a stand-in re-resolves to a clean apply", async () => {
+    await stageSpatialPending();
+    render(<PlotRecipeApplyDialog />);
+
+    expect(screen.getByText(/Missing panel bindings \(1\)/)).toBeInTheDocument();
+    const picker = screen.getByRole("combobox", { name: 'Panel 2 dataset ("d2.xy")' });
+    expect(screen.queryByText(/Unmatched fields/)).toBeNull(); // named once, with its control
+    expect(screen.getByRole("button", { name: /Apply mapped fields \(drops 1 unmatched\)/ })).toBeInTheDocument();
+
+    fireEvent.change(picker, { target: { value: "d9" } });
+    await waitFor(() => expect(useApp.getState().pendingRecipeApplication?.resolution.unmatched).toEqual([]));
+
+    expect(screen.queryByText(/Missing panel bindings/)).toBeNull();
+    expect(screen.getByRole("button", { name: "Apply" })).toBeInTheDocument();
+  });
+
+  it("still shows the recipe's preview thumbnail beside the panel prompt", async () => {
+    await stageSpatialPending();
+    render(<PlotRecipeApplyDialog />);
+    const thumb = screen.getByRole("img", { name: "Two-panel: preview" });
+    expect(thumb.querySelectorAll("polyline")).toHaveLength(1);
   });
 });

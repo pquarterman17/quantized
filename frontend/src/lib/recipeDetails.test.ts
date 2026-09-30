@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { saveGraphTemplate } from "./figuredoc";
 import { saveCustomModel } from "./fitmodels";
 import { makeStep } from "./pipeline";
-import { captureRecipe } from "./plotRecipe";
+import { captureRecipe, PLOT_RECIPE_SCHEMA_VERSION } from "./plotRecipe";
 import { defaultPlotView } from "./plotview";
 import { DEFAULT_RECIPE, saveRecipe as savePeakRecipe } from "./peakwizard";
 import type { RecipeDetails } from "./recipeDetails";
@@ -98,10 +98,10 @@ beforeEach(() => {
 });
 
 describe("recipeDetails — schema version is always visible", () => {
-  it("plot: versioned, shows the current version (v2)", () => {
+  it("plot: versioned, shows the current schema version", () => {
     const sources = buildSources();
     const details = recipeDetails(rowFor("plot", sources), sources);
-    expect(details && fieldValue(details, "Schema version")).toBe("v2");
+    expect(details && fieldValue(details, "Schema version")).toBe(`v${PLOT_RECIPE_SCHEMA_VERSION}`);
   });
 
   it("quickPlot: unversioned by construction", () => {

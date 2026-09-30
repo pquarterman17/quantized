@@ -9,8 +9,12 @@
 // the capture half; matching lives in `plotRecipeMatch.ts`, the untrusted
 // `.dwk`/import boundary in `plotRecipeIO.ts`).
 
+import type { ColormapName } from "./colormap";
 import type { CompositionKind } from "./composition";
 import type { ErrorSide } from "./errorRoles";
+import type { NormalizedFrameRect } from "./originPanels";
+import type { PageSetup } from "./pagesetup";
+import type { PanelFit } from "./panelFit";
 import type { LegendPos } from "./plotview";
 import type { PlotMark } from "./plotspec";
 import type { SignatureErrorRole } from "./quickPlotTemplates";
@@ -26,12 +30,13 @@ import type {
 } from "./types";
 
 /** v2 (F4.2 / audit P1.3 recipe gaps) added `preview`, `outlierPolicy` and
- *  `transform` -- see `PlotRecipe`. Older persisted recipes still load:
+ *  `transform`; v3 (F4.4's SPATIAL half) added `panels` and `map` -- see
+ *  `PlotRecipe`. Older persisted recipes still load:
  *  `lib/plotRecipeMigrate.ts` walks them forward one version at a time on
  *  every read boundary (`.dwk`, global localStorage, an imported file), so
  *  the rest of the app only ever sees the current shape. A recipe from a
  *  NEWER build is refused by name, never guessed at. */
-export const PLOT_RECIPE_SCHEMA_VERSION = 2 as const;
+export const PLOT_RECIPE_SCHEMA_VERSION = 3 as const;
 
 /** What role a captured channel plays in the recipe's mapping. `"error"`
  *  covers every error channel (its finer x/y/+/- classification lives in
@@ -163,13 +168,74 @@ export interface RecipeVisual {
   hiddenChannels: string[];
   decorations: RecipeDecorations;
   /** Which arrangement (`lib/composition.ts`'s `CompositionKind`) was active
-   *  at capture time, or null for a plain single-panel plot. The concrete
-   *  panels themselves (`SpatialPanel`/`FacetPanel`/`BreakPanel`) are
-   *  materialized render output tied to THIS dataset and are deliberately
-   *  NOT captured -- they carry nothing reusable across datasets; the
-   *  reusable knobs (which channel drives the facet/group) already live in
-   *  `RecipeMapping.facetId`/`groupId` above. */
+   *  at capture time, or null for a plain single-panel plot. FACET and BREAK
+   *  panels are materialized render output rebuilt from the durable knobs
+   *  (`RecipeMapping.facetId`, `axisBreaks` above) and are not captured;
+   *  SPATIAL panels have no such knob, so they are captured by name in
+   *  `PlotRecipe.panels` (v3). */
   compositionKind: CompositionKind | null;
+}
+
+/** One SPATIAL panel (`lib/multipanel.ts`'s `SpatialPanel`), expressed by
+ *  NAME rather than index so it can be rebuilt against a later dataset:
+ *  `dataset` is null for "the dataset the recipe is applied to" and the
+ *  source dataset's name otherwise (re-bound by name on apply, or by the
+ *  user's explicit choice in the apply dialog); every channel field is a
+ *  column LABEL, matched with the same exact/folded tiers a signature entry
+ *  gets (`lib/plotRecipePanels.ts`). Axis ranges are FIXED by construction
+ *  (a spatial panel always carries its own decoded/edited limits -- there is
+ *  no autoscale policy to record). `seriesStyles`/`seriesLabels`/`errKeys`
+ *  are keyed by label; `errKeys` maps a value label to its error label. */
+export interface RecipePanel {
+  dataset: string | null;
+  x: string | null;
+  y: string[];
+  y2: string[];
+  xLim: [number, number];
+  yLim: [number, number];
+  y2Lim: [number, number] | null;
+  xStep: number | null;
+  yStep: number | null;
+  y2Step: number | null;
+  xLog: boolean;
+  yLog: boolean;
+  y2Log: boolean;
+  xAxisLabel?: string | null;
+  yAxisLabel?: string;
+  y2AxisLabel?: string;
+  legendTitle?: string;
+  seriesStyles: Record<string, SeriesStyle>;
+  seriesLabels: Record<string, string>;
+  hiddenChannels: string[];
+  errKeys: Record<string, string>;
+  annotations: Annotation[];
+  regionShades: RegionShade[];
+  row: number;
+  col: number;
+  frameRect?: NormalizedFrameRect;
+  layoutAspect?: number;
+  pageRect?: NormalizedFrameRect;
+  pageAspect?: number;
+}
+
+/** v3: the spatial composition the recipe was saved from -- the panels plus
+ *  the two `PlotView` fields only a spatial view reads (`panelFit`,
+ *  `pageSetup`). Null when the source was not a spatial multi-panel window. */
+export interface RecipePanels {
+  panels: RecipePanel[];
+  panelFit: PanelFit;
+  pageSetup: PageSetup | null;
+}
+
+/** v3: the source dataset's durable 2-D map view decisions
+ *  (`lib/mapView.ts`'s colour scale, limits and colormap) -- captured only
+ *  when they differ from the default, applied to the target dataset's own
+ *  map view. Slices and map annotations are data-anchored and stay with the
+ *  source dataset. */
+export interface RecipeMapView {
+  colormap: ColormapName;
+  logZ: boolean;
+  colorLimits: [number, number] | null;
 }
 
 /** A captured, data-free preview of the plot the recipe was saved from:
@@ -241,4 +307,8 @@ export interface PlotRecipe {
   outlierPolicy: RecipeOutlierPolicy | null;
   /** v2. Null when the source dataset was not a transformation output. */
   transform: RecipeTransformRef | null;
+  /** v3. Null for a plain (non-spatial) source window or a migrated recipe. */
+  panels: RecipePanels | null;
+  /** v3. Null when the source dataset's map view was untouched, or migrated. */
+  map: RecipeMapView | null;
 }

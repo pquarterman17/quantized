@@ -798,8 +798,8 @@ preview+confirm dialog, an explicit "apply anyway, drop unmatched" opt-in
 (`confirmPendingRecipeApplicationPartial`), a "Save as Plot Recipe…" entry
 point on the focused plot window, and a subtle (never-auto-apply) post-import
 suggestion toast. See F4.2b in `FIGURE_AUTHORING_WORKFLOW_PLAN.md` for the
-itemized still-open gaps (SPATIAL composition rebuild, maps/panels,
-waterfall settings beyond the scalar offset). **2026-09-29 (F4.2c):** recipe
+itemized still-open gaps (waterfall settings beyond the scalar offset;
+the SPATIAL rebuild and maps/panels payload closed 2026-09-30 as schema v3). **2026-09-29 (F4.2c):** recipe
 schema v2 closed the preview-thumbnail, outlier-policy capture, version-
 migration and transformation/style-template-choice gaps — see F4.2c for the
 evidence and the three owner questions it leaves open.
@@ -808,10 +808,10 @@ Recipes should include:
 
 - [x] plot type and line/scatter/error mode;
 - [x] semantic X/Y/error matching by role, label, unit, and alias—not index;
-- [~] grouping, faceting, ordering, and legend-source metadata (ordering +
-  legend fields captured/applied; the group/facet BINDINGS are captured and
-  re-key correctly, but rebuilding the actual live composition/panels on
-  apply is a documented gap — F4.4);
+- [x] grouping, faceting, ordering, and legend-source metadata (ordering +
+  legend fields captured/applied; the group/facet BINDINGS re-key by label
+  and FACET/BREAK/SPATIAL compositions all rebuild on apply — F4.4, closed
+  2026-09-30 with schema v3's by-name `panels` payload);
 - [x] scales, autoscale policy, ranges, secondary axes, breaks, labels, units,
   tick formats, and outlier policy (2026-09-29, F4.2c: the excluded-row
   hide/grey policy is captured as `outlierPolicy`, shown in the Library's
@@ -819,9 +819,14 @@ Recipes should include:
   `plotRecipePreview.test.ts`, `recipeApplyChoices.test.ts`. It is recorded,
   not applied, because the preference is app-wide; whether it should become
   per-figure is F4.2c's owner question (a));
-- [~] style cycle, visibility/order, annotations/shapes, maps/panels (style
-  cycle/visibility/order/annotations/shapes are captured/applied; maps/panels
-  are not);
+- [x] style cycle, visibility/order, annotations/shapes, maps/panels
+  (2026-09-30, schema v3: `panels` captures a spatial multi-panel window by
+  dataset NAME + column label with per-panel axis state/styles/geometry and
+  `panelFit`/`pageSetup`; `map` captures the colormap/log/colour limits;
+  apply rebuilds the composition on the new figure and installs the map view
+  on the target dataset; a missing sibling dataset or column is named in the
+  apply dialog with a rebind picker — `lib/plotRecipePanels.test.ts`,
+  `store/plotRecipesSpatial.test.ts`, `PlotRecipeApplyDialog.test.tsx`);
 - [~] waterfall settings (only the scalar offset; no richer settings exist to
   capture);
 - [x] technique scope such as XRD, XRR, SIMS, or magnetometry;

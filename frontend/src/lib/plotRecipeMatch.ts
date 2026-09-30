@@ -34,8 +34,17 @@ import {
   type RecipeAxisRange,
   type RecipeChannelRole,
   type RecipeDecorations,
+  type RecipeMapView,
   type RecipeSignatureEntry,
 } from "./plotRecipe";
+import {
+  resolvePanels,
+  type RecipePanelIssue,
+  type ResolvedRecipePanels,
+  type ResolvePanelsOptions,
+} from "./plotRecipePanels";
+
+export type { RecipePanelBinding, RecipePanelIssue, ResolvedRecipePanels } from "./plotRecipePanels";
 
 /** The re-keyed mapping, ready to apply to `dataset` -- the `PlotView`/
  *  `FigureBindings` shape, but assembled fresh rather than a patch (the
@@ -87,11 +96,23 @@ export interface ResolvedRecipeVisual {
 export interface ResolvedRecipeApplication {
   mapping: ResolvedRecipeMapping;
   visual: ResolvedRecipeVisual;
+  /** v3: the rebuilt SPATIAL composition (`lib/plotRecipePanels.ts`), or
+   *  null for a plain recipe / when no panel resolved. */
+  panels: ResolvedRecipePanels | null;
+  /** v3: the map view to install on the target dataset, or null. */
+  map: RecipeMapView | null;
 }
 
+/** `panelIssues` is the structured twin of the panel entries in `unmatched`
+ *  -- what the apply dialog offers a rebind for. Always `[]` for a plain
+ *  recipe. */
 export type RecipeResolution =
-  | { resolved: ResolvedRecipeApplication; unmatched: string[]; warnings: string[] }
+  | { resolved: ResolvedRecipeApplication; unmatched: string[]; warnings: string[]; panelIssues: RecipePanelIssue[] }
   | { refused: string };
+
+/** The spatial-panel inputs (`lib/plotRecipePanels.ts`'s options): which
+ *  datasets a named panel may bind to, and the user's explicit rebinds. */
+export type ResolveRecipeOptions = ResolvePanelsOptions;
 
 const ROLE_LABEL: Record<RecipeChannelRole, string> = {
   x: "X axis",
@@ -152,9 +173,11 @@ function findChannel(labels: readonly string[], entry: RecipeSignatureEntry): Ch
   return { kind: "none" };
 }
 
-/** Resolve `recipe` against `dataset`. Pure -- never mutates either
- *  argument. See the module doc for the refusal-vs-unmatched split. */
-export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset): RecipeResolution {
+/** Resolve `recipe` against `dataset`. Pure -- never mutates any argument.
+ *  See the module doc for the refusal-vs-unmatched split. A v3 spatial
+ *  recipe's panels resolve through `resolvePanels` with `opts`; their misses
+ *  join `unmatched` (so they stage the same preview) and `panelIssues`. */
+export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset, opts: ResolveRecipeOptions = {}): RecipeResolution {
   // "generic" never matches anything (lib/techniqueViewMemory.ts's rule,
   // deliberately STRONGER here than a memory lookup's silent skip): there is
   // no meaningful similarity between two unclassified datasets to trade a
@@ -317,8 +340,13 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset): RecipeResol
     return out;
   };
 
+  const panelsResolution = recipe.panels ? resolvePanels(recipe.panels, dataset, opts) : null;
+  unmatched.push(...(panelsResolution?.unmatched ?? []));
+
   const resolved: ResolvedRecipeApplication = {
     mapping: { xKey, yKeys, y2Keys, groupKey, facetKey, errors },
+    panels: panelsResolution?.panels ?? null,
+    map: recipe.map ? { ...recipe.map, colorLimits: recipe.map.colorLimits ? [...recipe.map.colorLimits] : null } : null,
     visual: {
       mark: recipe.visual.mark,
       xScale: recipe.visual.xScale,
@@ -355,5 +383,5 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset): RecipeResol
     },
   };
 
-  return { resolved, unmatched, warnings };
+  return { resolved, unmatched, warnings, panelIssues: panelsResolution?.issues ?? [] };
 }

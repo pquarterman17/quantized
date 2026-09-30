@@ -554,12 +554,12 @@ with parent items P1.3 and P1.5.
         export/apply-to-a-chosen-dataset), an explicit "apply anyway, drop
         unmatched" opt-in, a "Save as Plot Recipe…" entry point on the
         focused plot window, and a subtle (never-auto-apply) post-import
-        suggestion toast. Still open: SPATIAL composition rebuild on apply
-        (F4.4 below — needs per-panel placement the resolve step can't
-        produce; FACET is closed by F4.4's durable `facetKey`, BREAK by
-        BUG-012's `axisBreaks` rebuild), a maps/panels payload, and waterfall
-        settings beyond the scalar offset. Transformations, style-template
-        choice, schema migration and preview thumbnails moved to F4.2c.
+        suggestion toast. FACET is closed by F4.4's durable `facetKey`,
+        BREAK by BUG-012's `axisBreaks` rebuild, and SPATIAL + the maps/panels
+        payload by schema v3 (2026-09-30, see F4.4's closing note). Still
+        open: waterfall settings beyond the scalar offset. Transformations,
+        style-template choice, schema migration and preview thumbnails moved
+        to F4.2c.
   - [x] **F4.2c Recipe schema v2: preview, outlier policy, transformation,
         migration; apply-time choices (Claude, 2026-09-29).**
         `PLOT_RECIPE_SCHEMA_VERSION` is 2. Evidence, each with a test that
@@ -697,7 +697,7 @@ with parent items P1.3 and P1.5.
       ambiguous match stages a preview+confirm dialog naming the mapping and
       unmatched fields rather than guessing; a clean or confirmed apply always
       creates a new figure, so an already-customized one is never touched.)
-- [~] **F4.4 Complete live grouping/faceting parity (Claude, 2026-08-23).**
+- [x] **F4.4 Complete live grouping/faceting parity (Claude, 2026-08-23; SPATIAL half closed 2026-09-30).**
       Grouped/faceted results must remain editable on Stage and survive
       save/reopen/export. GROUPING was already fully live (`groupKey` has
       always been a first-class, bindings-owned `PlotView` field reaching
@@ -1587,6 +1587,29 @@ with parent items P1.3 and P1.5.
       decoration-free is correct, the measured oracle bounds) — the
       round-by-round story stays here, in this log, not in the module
       header. Net effect: `figure_page_facets.py` 464 → 445 lines.
+
+      **2026-09-30 SPATIAL half (the last open item of (1) above), closed.**
+      Recipe schema v3 (`PLOT_RECIPE_SCHEMA_VERSION` 3; `2: v2ToV3` step,
+      frozen v2 literal in `plotRecipeMigrate.test.ts`, newer refused by
+      name as before) adds `panels` and `map`. `lib/plotRecipePanels.ts`
+      captures a spatial composition by NAME — each panel's dataset (`null`
+      = the recipe's own, else the dataset name), X/Y/Y2 column labels,
+      fixed axis limits/steps/log, per-label styles/labels/hidden/error
+      pairings, annotations/bands, grid cell + `frameRect`/`pageRect`, plus
+      the view's `panelFit`/`pageSetup` — and `resolvePanels` rebuilds real
+      `SpatialPanel`s against the target (self) and the named siblings with
+      the same exact-then-folded label tiers as a signature entry; a missing
+      dataset/column is NAMED (`unmatched` + structured `panelIssues`) and
+      the apply dialog offers a picker whose choice re-resolves in place
+      (`rebindPendingRecipePanel`, honoured by both confirms). `map` records
+      colormap/log/colour limits only when non-default and lands on the
+      TARGET dataset's own `mapViews` entry. `applyResolvedRecipe` installs
+      the rebuilt composition right after `focusWindow` (which clears the
+      ephemeral one), the way `applyOriginFigure` does. Sabotage-verified:
+      `lib/plotRecipePanels.test.ts`, `store/plotRecipesSpatial.test.ts`
+      (2-panel round trip with reordered columns, missing-sibling stage +
+      rebind + confirm, map view), `PlotRecipeApplyDialog.test.tsx`
+      (rebind picker, thumbnail still renders).
 
 **F4 exit:** The owner can manually save an XRD-specific recipe/template,
 choose it for later XRD data, and leave SIMS or customized plots untouched.

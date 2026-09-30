@@ -56,15 +56,21 @@
 // -- only `resolvedCandidates` (and, since the review round, the "recently
 // used" scope lookup in `applyResolvedRecipe` below) actually needs it.
 
+import { spatialComposition } from "../lib/composition";
 import { errKeysFromBindings } from "../lib/errorRoles";
 import { createFigureDocument } from "../lib/figureDocument";
+import { mapViewFor } from "../lib/mapView";
 import type { PlotRecipe } from "../lib/plotRecipe";
 import type {
+  RecipePanelBinding,
   RecipeResolution,
   ResolvedRecipeApplication,
   ResolvedRecipeMapping,
+  ResolvedRecipePanels,
   ResolvedRecipeVisual,
+  ResolveRecipeOptions,
 } from "../lib/plotRecipeMatch";
+import type { PendingPlotRecipeApplication } from "./pendingRecipeApplication";
 import { dedupeWindowTitle, defaultPlotView, type PlotView } from "../lib/plotview";
 import { techniqueOf } from "../lib/techniqueDefaults";
 import type { Dataset } from "../lib/types";
@@ -76,6 +82,14 @@ import { withPlotWindowDocument } from "./windowDocuments";
 
 export type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 export type SliceGet = () => AppState;
+export type ResolveRecipeFn = (recipe: PlotRecipe, dataset: Dataset, opts?: ResolveRecipeOptions) => RecipeResolution;
+
+/** The resolve inputs every apply/confirm/rebind path shares (F4.4 SPATIAL):
+ *  the live dataset list a named panel may bind to, and the pending entry's
+ *  explicit rebinds, if any. */
+export function resolveOptionsFor(get: SliceGet, pending?: Pick<PendingPlotRecipeApplication, "panelBindings">): ResolveRecipeOptions {
+  return { datasets: get().datasets, panelBindings: pending?.panelBindings };
+}
 
 /** Re-key a resolved recipe's mapping+visual into a fresh `PlotView` seed --
  *  the same "start from `defaultPlotView()`, overlay only what the source
@@ -83,9 +97,17 @@ export type SliceGet = () => AppState;
  *  uses. `errKeys` is the legacy symmetric-Y projection (the rich `errors`
  *  travel separately into the document via `createFigureDocument`'s own
  *  `errors` input, same split `createFigureDocument` itself makes). */
-export function viewFromResolved(mapping: ResolvedRecipeMapping, visual: ResolvedRecipeVisual): PlotView {
+export function viewFromResolved(
+  mapping: ResolvedRecipeMapping,
+  visual: ResolvedRecipeVisual,
+  panels: ResolvedRecipePanels | null = null,
+): PlotView {
   return {
     ...defaultPlotView(),
+    // F4.4 SPATIAL: a rebuilt composition reads these two PlotView fields
+    // (and renders only under `stackMode`) -- `applyResolvedRecipe` installs
+    // the panels themselves after focus, since `composition` is ephemeral.
+    ...(panels ? { stackMode: true, panelFit: panels.panelFit, pageSetup: panels.pageSetup } : {}),
     xKey: mapping.xKey,
     yKeys: mapping.yKeys,
     y2Keys: mapping.y2Keys,
@@ -166,7 +188,7 @@ export async function applyResolvedRecipe(
     set({ status: `Plot Recipe "${recipe.name}" unavailable: dataset not found` });
     return false;
   }
-  const seedView = viewFromResolved(resolved.mapping, resolved.visual);
+  const seedView = viewFromResolved(resolved.mapping, resolved.visual, resolved.panels);
   // Item 10's dedupe convention, against the Library's figure names (the
   // same set `createQuickFigureFromMapping` dedupes its own title against).
   const name = dedupeWindowTitle(recipe.name, state.editableFigures.map((f) => f.name));
@@ -202,8 +224,19 @@ export async function applyResolvedRecipe(
   // `plot.axisBreaks.x`, which `lib/facet.durableComposition` (the other half
   // of that same fallback) rebuilds into paneled x-breaks once this window is
   // focused -- see store/plotRecipes.test.ts's "applyPlotRecipe rebuilds a
-  // live paneled x-break" for the end-to-end pin. SPATIAL is still open.
+  // live paneled x-break" for the end-to-end pin. SPATIAL (v3 `panels`) has
+  // no durable field: `focusWindow` clears the ephemeral `composition`, so
+  // the rebuilt panels are installed right after it, the way
+  // `applyOriginFigure` installs a fresh spatial apply. The captured map
+  // view lands on the TARGET dataset's own entry (source untouched).
   get().focusWindow(windowId);
+  if (resolved.panels || resolved.map) {
+    const { panels, map } = resolved;
+    set((s) => ({
+      ...(panels ? { composition: spatialComposition(panels.panels), facetKey: null } : {}),
+      ...(map ? { mapViews: { ...s.mapViews, [dataset.id]: { ...mapViewFor(s.mapViews, dataset.id), ...map } } } : {}),
+    }));
+  }
   // P3.5 "recently used". This is the ONE commit seam every plot-recipe apply
   // entry point funnels through (`resolveApplyOrStage`'s clean-match branch
   // and both confirm paths — see this file's header), so recording here counts
@@ -254,7 +287,7 @@ export async function resolveApplyOrStage(
   get: SliceGet,
   recipe: PlotRecipe,
   datasetId: string,
-  resolveRecipe: (recipe: PlotRecipe, dataset: Dataset) => RecipeResolution,
+  resolveRecipe: ResolveRecipeFn,
 ): Promise<boolean> {
   const state = get();
   const dataset = state.datasets.find((d) => d.id === datasetId);
@@ -262,7 +295,7 @@ export async function resolveApplyOrStage(
     set({ status: `Plot Recipe "${recipe.name}" unavailable: dataset not found` });
     return false;
   }
-  const resolution = resolveRecipe(recipe, dataset);
+  const resolution = resolveRecipe(recipe, dataset, resolveOptionsFor(get));
   if ("refused" in resolution) {
     set({ status: `Plot Recipe "${recipe.name}" unavailable: ${resolution.refused}` });
     return false;
@@ -272,6 +305,38 @@ export async function resolveApplyOrStage(
     return false;
   }
   return applyResolvedRecipe(set, get, recipe, datasetId, resolution.resolved);
+}
+
+/** F4.4 SPATIAL: answer one missing panel binding on the STAGED apply --
+ *  merge `binding` into the pending entry's `panelBindings` and re-resolve
+ *  against the CURRENT dataset with them, replacing the staged resolution
+ *  (never applying). A fresh refusal clears the pending entry with a status,
+ *  exactly like a confirm's. No-op when nothing is pending. */
+export function rebindPendingPanel(
+  set: SliceSet,
+  get: SliceGet,
+  panel: number,
+  binding: RecipePanelBinding,
+  resolveRecipe: ResolveRecipeFn,
+): void {
+  const pending = get().pendingRecipeApplication;
+  if (!pending) return;
+  const dataset = get().datasets.find((d) => d.id === pending.datasetId);
+  if (!dataset) {
+    set({ pendingRecipeApplication: null, status: `Plot Recipe "${pending.recipe.name}" unavailable: dataset not found` });
+    return;
+  }
+  const prev = pending.panelBindings?.[panel];
+  const panelBindings = {
+    ...pending.panelBindings,
+    [panel]: { ...prev, ...binding, ...(prev?.channels || binding.channels ? { channels: { ...prev?.channels, ...binding.channels } } : {}) },
+  };
+  const resolution = resolveRecipe(pending.recipe, dataset, resolveOptionsFor(get, { panelBindings }));
+  if ("refused" in resolution) {
+    set({ pendingRecipeApplication: null, status: `Plot Recipe "${pending.recipe.name}" unavailable: ${resolution.refused}` });
+    return;
+  }
+  set({ pendingRecipeApplication: { ...pending, resolution, panelBindings } });
 }
 
 interface RecipeLibs {
@@ -328,8 +393,9 @@ export async function resolvedCandidates(get: SliceGet, dataset: Dataset): Promi
   if (pool.length === 0) return [];
   const { resolveRecipe } = await recipeLibs();
   const out: RecipeCandidate[] = [];
+  const opts = resolveOptionsFor(get);
   for (const recipe of pool) {
-    const resolution = resolveRecipe(recipe, dataset);
+    const resolution = resolveRecipe(recipe, dataset, opts);
     if ("refused" in resolution) continue;
     out.push({ recipe, resolution });
   }

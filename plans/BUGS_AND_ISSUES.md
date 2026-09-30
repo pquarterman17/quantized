@@ -9329,3 +9329,4 @@ see it half-built.
 - 2026-09-30: Graph window title bar reads "N pts · N ch" (points first), matching the Library rows and StatusBar (`PlotWindowFrame.test.tsx`).
 - 2026-09-30: Partial-outcome reports say how many succeeded and which failed and why: the ROI batch status line names each skipped/failed dataset with its reason (`useRoiBatch.test.ts`), and `recalcNow` ends a pass with failures on one "recalculated N of M — name: reason; …" status (`store/recalcDatasets.test.ts`).
 - 2026-09-30: Quick Plot on a recognized XYXYXY workbook now makes three correctly paired series (`lib/quickPlot.xyxyxy.test.ts`; LIBRARY_WORKBOOK_UX_PLAN acceptance scenario ticked).
+- 2026-09-30: Plot recipes rebuild SPATIAL multi-panel compositions (schema v3 `panels` + `map`, by dataset name/column label; missing bindings get a rebind picker in the apply dialog) — closes PRIMARY_SOFTWARE_AUDIT_PLAN P1.3 maps/panels + F4.2b/F4.4 spatial halves.

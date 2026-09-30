@@ -69,7 +69,9 @@ import {
   type RecipeTransformRef,
 } from "./plotRecipeSchema";
 import { sanitizeTransformRef } from "./plotRecipeMigrate";
+import { captureMapView, capturePanels } from "./plotRecipePanels";
 import { capturePreview } from "./plotRecipePreview";
+import type { MapViewState } from "./mapView";
 
 export * from "./plotRecipeSchema";
 
@@ -109,6 +111,13 @@ export interface CaptureRecipeOptions {
   /** The app-wide "Excluded rows" preference at save time -- recorded as the
    *  recipe's outlier policy (v2). Omitted = not recorded (null). */
   excludedDisplay?: RecipeOutlierPolicy["excludedDisplay"];
+  /** Every loaded dataset -- lets a SPATIAL composition's sibling panels be
+   *  captured by dataset NAME (v3 `panels`). Defaults to `[dataset]`, so a
+   *  caller without the list still captures the recipe's own panels. */
+  datasets?: readonly Dataset[];
+  /** The source dataset's durable 2-D map view (v3 `map`); recorded only
+   *  when it differs from the default. */
+  mapView?: MapViewState;
 }
 
 /** The transformation recipe a derived dataset came from -- `runTemplate.ts`
@@ -223,6 +232,8 @@ export function captureRecipe(
     preview: capturePreview(dataset, view),
     outlierPolicy: opts.excludedDisplay ? { excludedDisplay: opts.excludedDisplay } : null,
     transform: transformOf(dataset),
+    panels: capturePanels(composition, dataset.id, opts.datasets ?? [dataset], view),
+    map: captureMapView(opts.mapView),
     provenance: {
       sourceDatasetLabel: opts.sourceDatasetLabel ?? dataset.name,
       appVersion: opts.appVersion,

@@ -131,6 +131,8 @@ function oneYRecipe(opts: OneYRecipeOptions): PlotRecipe {
     preview: null,
     outlierPolicy: null,
     transform: null,
+    panels: null,
+    map: null,
     provenance: { sourceDatasetLabel: "", appVersion: BUILTIN_APP_VERSION },
     technique: opts.technique,
     signature: [
