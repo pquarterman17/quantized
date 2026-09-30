@@ -1,7 +1,7 @@
 // The floating glass tool-dock over the plot: tool picker (pointer/zoom/pan/
 // cursor/measure/stats/select) + region-analysis tools (integrate/FWHM/
 // gadget) + the shape-annotation flyout + whole-plot view actions (reset/
-// smart-scale/save-PNG/copy-data/snapshot) + alternate render modes (stack/
+// smart-scale/save-PNG/copy-data/publication-copy) + alternate render modes (stack/
 // inset/polar/stats). Reads the tool + mode flags from the store; the view
 // actions close over the live uPlot instance in PlotStage, so they come in
 // as props. Extracted from PlotStage to keep that component lean.
@@ -19,9 +19,9 @@
 // store/useApp.ts, which has zero ratchet headroom), toggled from the "…"
 // flyout at the end of the dock. Two buttons are disabled-with-reason off
 // real state: Reset View when there's nothing to reset (mirrors the "A" key's
-// own no-op guard in useGlobalShortcuts.ts), and Copy Image when the browser
+// own no-op guard in useGlobalShortcuts.ts), and Copy Figure when the browser
 // has no Clipboard image API (the exact condition usePlotStageActions'
-// snapshot() already falls back on).
+// publication-copy command would be unable to write its PNG fallback).
 //
 // GUI audit P1: when the stage is narrower than the dock (125% scaling, a
 // default Graph Window, a narrow window) the trailing groups collapse into the
@@ -34,7 +34,7 @@ import { keyForTool, RESET_VIEW_KEY } from "../../lib/plotToolKeys";
 import {
   ANALYZE_TOOLS,
   COPY_DATA,
-  COPY_IMAGE,
+  COPY_FIGURE,
   INSET_MODE,
   INSPECT_TOOLS,
   NAVIGATE_TOOLS,
@@ -60,9 +60,9 @@ interface Props {
   onSmartScale: () => void;
   onSavePng: () => void;
   onCopyData: () => void;
-  onSnapshot: () => void;
-  /** Item 11: freeze the current plot into a static compare window (the ⎘
-   *  clipboard snapshot's in-app sibling). */
+  onCopyFigure: () => void;
+  /** Item 11: freeze the current plot into a static in-app compare window
+   *  (the toolbar's in-app counterpart to the ⎘ Copy Figure clipboard copy). */
   onSnapshotWindow: () => void;
 }
 
@@ -102,7 +102,7 @@ export default function PlotToolbar({
   onSmartScale,
   onSavePng,
   onCopyData,
-  onSnapshot,
+  onCopyFigure,
   onSnapshotWindow,
 }: Props) {
   const tool = useApp((s) => s.plotTool);
@@ -224,10 +224,10 @@ export default function PlotToolbar({
       buttons: [
         actionBtn(SAVE_PNG, { onClick: onSavePng }),
         actionBtn(COPY_DATA, { onClick: onCopyData }),
-        actionBtn(COPY_IMAGE, {
+        actionBtn(COPY_FIGURE, {
           disabled: !canCopyImage,
           disabledReason: "Clipboard image copy isn't supported in this browser",
-          onClick: onSnapshot,
+          onClick: onCopyFigure,
         }),
         actionBtn(SNAPSHOT_WINDOW, { onClick: onSnapshotWindow }),
       ],

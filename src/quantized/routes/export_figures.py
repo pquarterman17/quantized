@@ -70,6 +70,7 @@ from quantized.routes.export_figures_labels import (
 from quantized.routes.export_figures_schema import (
     LOG_OFFSETS_DOC,
     SERIES_STYLES_DOC,
+    SVG_TEXT_AS_PATHS_DOC,
     WATERFALL_OFFSETS_DOC,
     FigureFacet,
     TickFormatSpec,
@@ -221,6 +222,7 @@ class FigureRequest(CachedDatasetRequest, ExcludedRowsFields):
         default=None, description=WATERFALL_OFFSETS_DOC
     )
     log_offsets: list[float] | None = Field(default=None, description=LOG_OFFSETS_DOC)
+    svg_text_as_paths: bool = Field(default=False, description=SVG_TEXT_AS_PATHS_DOC)
     # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
     # limits / margins / grid / annotations — validated in calc.
     overrides: dict[str, Any] | None = None
@@ -377,6 +379,7 @@ def render_figure_request(req: FigureRequest, *, fmt: str, dpi: int) -> bytes:
         y2_scale=req.y2_scale,
         y2_fmt=_tick_fmt(req.y2_fmt),
         y2_step=req.y2_step,
+        svg_text_as_paths=req.svg_text_as_paths,
     )
 
 

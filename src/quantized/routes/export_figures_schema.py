@@ -36,6 +36,7 @@ from pydantic import BaseModel
 
 __all__ = [
     "SERIES_STYLES_DOC",
+    "SVG_TEXT_AS_PATHS_DOC",
     "DOCUMENT_ONLY_STYLE_KEYS",
     "reject_document_only_style_keys",
     "WATERFALL_OFFSETS_DOC",
@@ -138,6 +139,19 @@ WATERFALL_OFFSETS_DOC = (
     "`facets` branch (which renders from its own panel payloads); the client "
     "omits it for both rather than sending an offset the renderer would "
     "mis-apply. See `calc.plotting.apply_waterfall_offsets`."
+)
+
+
+SVG_TEXT_AS_PATHS_DOC = (
+    "SVG only (ignored for pdf/png/tiff): write every glyph -- mathtext "
+    "included -- as a path outline instead of live `<text>` (matplotlib "
+    "`svg.fonttype = \"path\"` for this render; the default `false` keeps "
+    "the export-wide `\"none\"`, i.e. editable text). The outlined SVG needs "
+    "no installed font, which is what the Copy Figure clipboard SVG asks for: "
+    "a paste target lacking the render's fonts (DejaVu Sans, cmsy10) would "
+    "otherwise substitute its own. On `/api/export/figure-page` the PAGE "
+    "request's flag applies; a nested panel `figure`'s own flag is unused. "
+    "See `calc.figure_render.savefig_bytes`."
 )
 
 

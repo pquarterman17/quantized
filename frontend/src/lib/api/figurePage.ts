@@ -61,6 +61,9 @@ export interface FigurePageSpec {
   link_y?: boolean;
   align_labels?: boolean;
   resize_mode?: string; // constrained | tight | none
+  /** SVG only: glyphs as outlines (see FigureSpec.svg_text_as_paths). The
+   *  PAGE's flag applies; a panel figure's own flag is unused here. */
+  svg_text_as_paths?: boolean;
 }
 
 /** Compose N plots onto one publication page server-side and download it.

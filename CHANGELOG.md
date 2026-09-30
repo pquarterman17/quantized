@@ -6,6 +6,21 @@ project does not (yet) commit to Semantic Versioning guarantees pre-1.0.
 
 ## [Unreleased]
 
+### Plot copy and Office export
+
+- **Copy Figure** (plot toolbar and Figure Page) now places the 300-DPI
+  publication PNG on the clipboard together with an HTML image of that same
+  PNG, sized to paste into Word/PowerPoint at its physical size. Where the
+  browser advertises `image/svg+xml` it also adds a vector SVG with text
+  converted to outlines, so the paste needs no installed fonts. That SVG
+  costs a **second server render** per copy, so it is skipped when the
+  browser cannot take SVG (the copy then costs one render, as before) and
+  for figures over 20,000 plotted points. A failed SVG render does not
+  fail the copy; older browsers keep the previous PNG-only behavior.
+- `POST /api/export/figure` and `/api/export/figure-page` accept an optional
+  `svg_text_as_paths` (default `false`, output unchanged) that writes SVG
+  glyphs as path outlines instead of live text.
+
 ## [0.27.0] - 2026-09-27
 
 A **minor** release: the 87 merges since `v0.26.1` add a Report workflow with

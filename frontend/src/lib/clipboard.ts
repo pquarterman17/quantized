@@ -171,7 +171,7 @@ export async function copyTextAsync(pending: Promise<string>): Promise<boolean> 
 
 /** Synchronous capability check for the async Clipboard image API — the exact
  *  condition copyImage gates on above, exposed so the plot toolbar (#7) can
- *  disable its "Copy Image" button with a reason instead of clicking through
+ *  disable its "Copy Figure" button with a reason instead of clicking through
  *  to a failure toast on browsers that never support it (Firefox, insecure
  *  contexts). Not a substitute for copyImage's own try/catch: a runtime
  *  permission denial can still happen even when this returns true. */

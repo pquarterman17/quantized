@@ -41,7 +41,7 @@ const props = {
   onSmartScale: () => calls.push("smart"),
   onSavePng: () => calls.push("png"),
   onCopyData: () => calls.push("copy"),
-  onSnapshot: () => calls.push("snap"),
+  onCopyFigure: () => calls.push("copy-figure"),
   onSnapshotWindow: () => calls.push("snapwin"),
 };
 
@@ -83,7 +83,7 @@ describe("PlotToolbar — overflow menu (GUI audit P1)", () => {
     fireEvent.click(screen.getByRole("button", { name: "Toolbar Options" }));
     const menu = screen.getByRole("menu");
     // Toggles render as menuitemcheckbox, plain actions as menuitem: match text.
-    for (const name of ["Reset View", "Smart Auto-scale", "Stack Channels", "Magnifier Inset", "Polar Plot", "Statistics View", "Save PNG", "Copy Data", "Copy Image", "Snapshot Window"]) {
+    for (const name of ["Reset View", "Smart Auto-scale", "Stack Channels", "Magnifier Inset", "Polar Plot", "Statistics View", "Save PNG", "Copy Data", "Copy Figure", "Snapshot Window"]) {
       expect(within(menu).getByText(new RegExp(name))).toBeInTheDocument();
     }
     fireEvent.click(within(menu).getByText(/Save PNG/));

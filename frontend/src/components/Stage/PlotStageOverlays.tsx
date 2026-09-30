@@ -82,7 +82,7 @@ export default function PlotStageOverlays(p: PlotStageOverlaysProps) {
           onSmartScale={p.actions.smartScale}
           onSavePng={p.actions.savePng}
           onCopyData={p.actions.copyData}
-          onSnapshot={p.actions.snapshot}
+          onCopyFigure={p.actions.copyFigure}
           onSnapshotWindow={snapshotToNewWindow}
         />
       )}

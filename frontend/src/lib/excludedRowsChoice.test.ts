@@ -5,13 +5,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigure, renderFigureBlob } from "./api/figures";
-import { copyImageAsync, copySvgAsync } from "./clipboard";
+import { copySvgAsync } from "./clipboard";
 import { runCopyFigureCommand, runCopyFigureSvgCommand } from "./copyFigureCommand";
 import {
   askExcludedRows,
   EXCLUDED_GREY_OPTION,
   EXCLUDED_OMIT_OPTION,
 } from "./excludedRowsChoice";
+import { copyOfficeGraphicAsync } from "./officeClipboard";
 import { runExportFigureCommand } from "./exportFigureCommand";
 import { createFigureDocument } from "./figureDocument";
 import { defaultPlotView } from "./plotview";
@@ -26,9 +27,9 @@ vi.mock("./api/figures", () => ({ exportFigure: vi.fn(), renderFigureBlob: vi.fn
 vi.mock("./clipboard", () => ({
   clipboardImageSupported: vi.fn(() => true),
   clipboardSvgSupported: vi.fn(() => true),
-  copyImageAsync: vi.fn(async () => true),
   copySvgAsync: vi.fn(async () => true),
 }));
+vi.mock("./officeClipboard", () => ({ copyOfficeGraphicAsync: vi.fn(async () => true) }));
 
 const DATA: DataStruct = {
   time: [1, 2, 3],
@@ -125,7 +126,7 @@ describe("Copy figure asks about excluded rows (F4.2c (a))", () => {
     await answer("Excluded rows", null);
     await run;
     expect(renderFigureBlob).not.toHaveBeenCalled();
-    expect(copyImageAsync).not.toHaveBeenCalled();
+    expect(copyOfficeGraphicAsync).not.toHaveBeenCalled();
     expect(useApp.getState().status).toBe("copy cancelled");
   });
 });

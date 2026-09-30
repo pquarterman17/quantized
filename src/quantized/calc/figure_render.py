@@ -172,7 +172,9 @@ def new_figure(**kwargs: Any) -> Figure:
     return fig
 
 
-def savefig_bytes(fig: Figure, fmt: str, **kwargs: Any) -> bytes:
+def savefig_bytes(
+    fig: Figure, fmt: str, *, svg_text_as_paths: bool = False, **kwargs: Any
+) -> bytes:
     """``fig.savefig`` into an in-memory buffer, returning its bytes.
 
     Dedupes the ``BytesIO() + savefig(...) + buf.getvalue()`` boilerplate
@@ -180,7 +182,22 @@ def savefig_bytes(fig: Figure, fmt: str, **kwargs: Any) -> bytes:
     sweep, including ``figure_multivar``'s own local ``_savefig``). Must be
     called inside the caller's own ``render_scope`` -- ``savefig``, like
     every other figure operation, is not thread-safe on its own.
+
+    ``svg_text_as_paths`` (PR #492 "Copy Figure"): for ``fmt="svg"`` only,
+    save with ``svg.fonttype = "path"`` instead of ``BASE_RC``'s ``"none"``,
+    so every glyph (mathtext included) is written as a path outline and the
+    SVG depends on no installed font -- what a clipboard paste into an app
+    lacking the render's fonts (DejaVu Sans, cmsy10) needs. The SVG
+    backend reads that rcParam while drawing, i.e. inside this ``savefig``,
+    so scoping it here is enough. Ignored for every other format (raster and
+    PDF bytes are unchanged). Default ``False``: live, editable ``<text>``.
     """
     buf = BytesIO()
-    fig.savefig(buf, format=fmt, **kwargs)
+    if svg_text_as_paths and fmt == "svg":
+        # Nested inside the caller's render_scope (RENDER_LOCK held), so this
+        # rc_context is as safe as that scope's own.
+        with matplotlib.rc_context({"svg.fonttype": "path"}):
+            fig.savefig(buf, format=fmt, **kwargs)
+    else:
+        fig.savefig(buf, format=fmt, **kwargs)
     return buf.getvalue()
