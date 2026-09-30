@@ -4765,11 +4765,12 @@ violin, bar, strip, or summary plots.
   per option, the shared fixtures, route validation). Wire fixture
   `statplot_levels_export.json` gained the new fields. Eager bundle 858,336 ->
   858,810 B (+474, the sanitizer and the field); all UI in the lazy stage chunk.
-  **Not done:** in-stage level RENAME (use Recode); rotated-label depth is
-  estimated from character counts (both sides), not measured; an upright
-  unwrapped label wider than its slot overlaps its neighbour on BOTH sides
-  (wrap / rotation is the remedy); the Graph Builder preview shows no
-  error-bar footnote; no e2e spec. (Former entries done: a facet panel's
+  **Not done:** in-stage level RENAME (use Recode). (Former entries done:
+  rotated-label depth measured from each side's own text metrics, and a long
+  upright label wrapping or rotating on screen and in the export by ONE
+  fixture-pinned rule (`fit: "auto"`), `bd7f61af`; the Graph Builder
+  preview's error-bar footnote, `7325f4bf`; e2e
+  `stat-summary-long-labels.spec.ts`; a facet panel's
   connect-means line, on screen and in the export, `57e634ae`; the Graph
   Builder previewing a violin as a violin once the backend's KDE arrives, the
   box standing in with a note until then or offline, `efcfe17a`; the 14-char screen
@@ -5016,10 +5017,9 @@ violin, bar, strip, or summary plots.
   closed-up; the faceted exports lift the x title clear of the caveat
   footnote; background stat windows show the notice; the axis is planned once
   and only counted per panel, over the slices the compute already built.
-  **Not done:** the Graph Builder's own box/violin PREVIEW
-  (`lib/plotspec.specToRender`) still closes empty levels up — it is a
-  preview whose "send to stage" lands on the stage, which shows them; the
-  XY colour split (`calc.plotting.build_grouped_series` / `plotGroupSplit`)
+  **Not done:** nothing outstanding — the Graph Builder's own box/violin
+  PREVIEW (`lib/plotspec.specToRender`) keeps empty levels like the stage,
+  `8d55346f`; the XY colour split (`calc.plotting.build_grouped_series` / `plotGroupSplit`)
   has no category axis to leave a slot on, so it is unaffected by design.
 - [x] Summary table links to selected groups. (2026-09-27)
   **Survey (before):** the Statistics stage (box / violin / strip / bar) had
@@ -5066,11 +5066,12 @@ violin, bar, strip, or summary plots.
   841.9 kB. Tests: `statGroupSummary.test.ts`, `useStatGroupSelection.test.ts`,
   `statRenderSelection.test.ts`, `StatSummaryTable.test.tsx` (real stage +
   store).
-  **Not done:** the table's visibility is session-local (not persisted on
-  `PlotView` / `.dwk`); no column sorting; no drag-brush on the stat canvas
+  **Not done:** no column sorting; no drag-brush on the stat canvas
   (click-a-slot only); the table is not exported with the figure; Fit Y by X's
   oneway table and Tabulate are not linked; background (unfocused) stat
-  windows show no marks (the selection is the active dataset's); no e2e spec.
+  windows show no marks (the selection is the active dataset's). (Done since:
+  the table's visibility persists on `PlotView` / `.dwk` as
+  `statShowSummary`, `2d9f464c`; e2e `stat-summary-long-labels.spec.ts`.)
   **Review round 2 (independent review, 10 findings, all fixed with a
   sabotage-verified test each):** an empty slot's local pick is now scoped to
   the PANEL it was picked in (`GroupPick`/`PickedKeys` carry it) — the same
