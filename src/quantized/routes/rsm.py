@@ -14,9 +14,10 @@ from quantized.calc.rsm_analyze import rsm_analyze, rsm_grids_from_datastruct
 from quantized.calc.sectorcut import chi_profile, sector_profile
 from quantized.routes._datasetcache import CachedDatasetRequest, resolve_or_409
 from quantized.routes._errors import CALC_ERRORS, call_calc
+from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import DataStructResponse, datastruct_payload, to_jsonable
 
-router = APIRouter(prefix="/api/rsm", tags=["rsm"])
+router = APIRouter(prefix="/api/rsm", tags=["rsm"], route_class=OffloopJSONRoute)
 
 
 class StrainRequest(BaseModel):

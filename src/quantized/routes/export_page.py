@@ -26,11 +26,12 @@ from quantized.routes._export_common import (
     _attachment,
     _safe_name,
 )
+from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes.export_figures import FigureRequest, _figure_series
 from quantized.routes.export_figures_facets import _facet_panels
 from quantized.routes.export_figures_schema import _tick_fmt
 
-router = APIRouter(prefix="/api/export", tags=["export"])
+router = APIRouter(prefix="/api/export", tags=["export"], route_class=OffloopJSONRoute)
 
 # V5 (fix round 2, F4.4 follow-up): the ONLY override keys the facet
 # sub-grid renderer actually consumes -- calc.figure_facets.draw_facet_grid

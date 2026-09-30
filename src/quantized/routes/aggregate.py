@@ -16,9 +16,10 @@ from pydantic import BaseModel
 from quantized.calc.aggregate import confidence_band, dataset_algebra
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS, call_calc
+from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import DataStructResponse, datastruct_payload, to_jsonable
 
-router = APIRouter(prefix="/api/aggregate", tags=["aggregate"])
+router = APIRouter(prefix="/api/aggregate", tags=["aggregate"], route_class=OffloopJSONRoute)
 
 
 class AlgebraRequest(BaseModel):

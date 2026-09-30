@@ -53,6 +53,7 @@ from quantized.routes._export_common import (
     _attachment,
     _safe_name,
 )
+from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes.export_figures_encoded import (
     ExcludedRowsFields,
     FigureEncoding,
@@ -77,7 +78,7 @@ from quantized.routes.export_figures_schema import (
     reject_document_only_style_keys,
 )
 
-router = APIRouter(prefix="/api/export", tags=["export"])
+router = APIRouter(prefix="/api/export", tags=["export"], route_class=OffloopJSONRoute)
 
 
 class FigureRequest(CachedDatasetRequest, ExcludedRowsFields):

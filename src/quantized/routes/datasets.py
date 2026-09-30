@@ -18,8 +18,9 @@ from typing_extensions import TypedDict
 
 from quantized.routes._datasetcache import DatasetHandleMiss, patch_cached
 from quantized.routes._errors import CALC_ERRORS
+from quantized.routes._offloop import OffloopJSONRoute
 
-router = APIRouter(prefix="/api/datasets", tags=["datasets"])
+router = APIRouter(prefix="/api/datasets", tags=["datasets"], route_class=OffloopJSONRoute)
 
 
 class CellPatch(TypedDict):

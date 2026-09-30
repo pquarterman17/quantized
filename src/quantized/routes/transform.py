@@ -17,9 +17,10 @@ from pydantic import BaseModel, Field
 from quantized.calc.resample_align import align_resample
 from quantized.datastruct import DataStruct
 from quantized.routes._errors import CALC_ERRORS
+from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import DataStructResponse, datastruct_payload
 
-router = APIRouter(prefix="/api/transform", tags=["transform"])
+router = APIRouter(prefix="/api/transform", tags=["transform"], route_class=OffloopJSONRoute)
 
 
 class ResampleRequest(BaseModel):
