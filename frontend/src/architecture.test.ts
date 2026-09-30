@@ -836,7 +836,9 @@ const TS_MODULE_PINS: Record<string, number> = {
   // its own `channels` list, so `breakPanelRender.ts` projects the
   // channel-keyed renames per panel with no derivation to guard. Part of the
   // saving went back into the stack leg's payload/channel snapshot (N4).
-  "/components/Stage/useMultiPanelStage.ts": 753,
+  // 753 -> 705 (2026-09-29, F4.2c (a)): the spatial leg's per-panel fetch
+  // moved to `spatialPanelFetch.ts`, which also masks excluded rows.
+  "/components/Stage/useMultiPanelStage.ts": 705,
   // useStatStage.ts GRADUATED 2026-09-27 (pin was 546; P2.6 box 4): its
   // public types (params + the returned state) moved to
   // components/Stage/useStatStageTypes.ts, re-exported unchanged, which put

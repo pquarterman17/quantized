@@ -112,6 +112,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   // header keeps it store-free (types only) so a background window can drive it
   // from its own snapshot. Only the SPATIAL mode acts on it; see the param doc.
   const autoSeriesStyles = useApp((s) => s.autoSeriesStyles);
+  const excludedDisplay = useApp((s) => s.excludedDisplay); // likewise SPATIAL-only
   const y2Keys = useApp((s) => s.y2Keys);
   const errKeys = useApp((s) => s.errKeys);
   const hiddenChannels = useApp((s) => s.hiddenChannels);
@@ -145,6 +146,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
     seriesStyles,
     seriesLabels,
     autoSeriesStyles,
+    excludedDisplay,
     xKey,
     yKeys,
     y2Keys,

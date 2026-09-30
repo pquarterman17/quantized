@@ -3,9 +3,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { askParams } from "../components/overlays/ParamDialog";
 import { exportFigurePage } from "./api";
 import { spatialComposition } from "./composition";
+import { EXCLUDED_OMIT_OPTION } from "./excludedRowsChoice";
 import { GREYSCALE_FIELD } from "./exportFigureCommand";
 import { runExportSpatialPageCommand } from "./exportPageCommand";
 import { defaultPageSetup } from "./pagesetup";
+import { useParamDialog } from "../store/paramDialog";
 import { usePendingOps } from "../store/pendingOps";
 import { useApp } from "../store/useApp";
 
@@ -98,7 +100,9 @@ describe("runExportSpatialPageCommand", () => {
   // gap the single-figure flat path had -- this command used to resolve
   // each panel from the raw `ds.data`, so an excluded row could reach the
   // exported page even though the on-screen spatial grid never showed it.
-  it("prunes an excluded row from a panel's exported dataset, like the on-screen spatial grid", () => {
+  // F4.2c (a): a masked row now asks "greyed or omitted?" first
+  // (exportPageCommand.excluded.test.ts); "omitted" is this prune.
+  it("prunes an excluded row from a panel's exported dataset, like the on-screen spatial grid", async () => {
     useApp.setState({
       datasets: [
         {
@@ -116,11 +120,15 @@ describe("runExportSpatialPageCommand", () => {
       ],
     });
 
-    return runExportSpatialPageCommand(useApp.getState).then(() => {
-      const body = vi.mocked(exportFigurePage).mock.calls[0][0];
-      expect(body.panels[0].figure.dataset.time).toEqual([1]);
-      expect(body.panels[0].figure.dataset.values).toEqual([[2]]);
-    });
+    const run = runExportSpatialPageCommand(useApp.getState);
+    await vi.waitFor(() => expect(useParamDialog.getState().title).toBe("Excluded rows"));
+    const { resolve, close } = useParamDialog.getState();
+    close();
+    resolve!({ mode: EXCLUDED_OMIT_OPTION });
+    await run;
+    const body = vi.mocked(exportFigurePage).mock.calls[0][0];
+    expect(body.panels[0].figure.dataset.time).toEqual([1]);
+    expect(body.panels[0].figure.dataset.values).toEqual([[2]]);
   });
 });
 
