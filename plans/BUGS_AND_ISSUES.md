@@ -92,7 +92,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-009 | P2 | Pending-dataset contract | Mutating and outward analysis actions now resolve the complete Origin book and resume automatically; stale queued intent is cancelled rather than applied | ChatGPT-Sol | **FIXED 2026-09-21** — PRs #389–394 shipped; PR #398 closed the post-merge queued-replay race and failure-state gaps. **2026-09-28:** last refuse site (derived columns) routed through `withResolved`; failed loads offer Re-import, Relink re-points the fetch, Save names the book. Owner real-file acceptance remains open. |
 | BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal. Adversarial review round (2026-09-13) closed the one real gap the fix missed — File ▸ Open itself never joined the toast channel — plus doc/citation cleanup; see the entry |
 | BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review rounds 2/3 (2026-09-13) closed further regressions, finished the finding #5 fix, and widened the terminal-status fix to every `failed`/`cancelled` transition. Residual closed 2026-09-13: `store/workspaceIO.ts`'s Save/Save As now shares the identical post-await `pending` re-check (see the entry) — every explicit export path (Save, Save As, workbook transfer, Pack Project) now closes finding #2's window. Owner call on abort-vs-partial-pack still open |
-| FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
+| FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Claude (agent) | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry. **FIXED 2026-09-30**: styles are keyed by CHANNEL (one style per channel, applied in every panel, projected through each panel's own `channels`), on screen and on the wire together; pinned by `tests/fixtures/wire/facet_styles.json` over the differing-channel case |
 | BUG-012 | P2 | Figure export/reopen — axis breaks | A saved figure's x-axis break reaches export and survives reopen in the document, but nothing on screen ever renders it after reopen | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `Stage/useEffectiveComposition`'s durable fallback derives the paneled break from `plot.axisBreaks.x` via `lib/facet.durableComposition`, which wraps the SAME builder `breakAtGaps` uses (one construction site, no new persisted field). Divergence test inverted, `break` is a full matrix fixture again (screen ≡ export ≡ reopen + golden), facet-beats-break precedence defined and tested against the export path's own ordering. **Review round closed 2026-09-16** (F1-F5 + nits): panel x-ranges now come from the break BOUNDS so screen and export elide the same range for endpoints that are not data points; the stack toggle and a genuine dataset switch both clear the authored break; background windows panel it too; two residuals recorded. **Round 3 closed 2026-09-17**: the IMPORT rebind clears the break too (the third switch site), the no-break short-circuit is back in front of `analysisData`, the stack toggle no longer dirties the project when nothing changes, and the screen≡export claim is narrowed to in-extent non-empty breaks with the three diverging shapes recorded |
 | BUG-013 | P2 | Figure export — waterfall view | A waterfall view's per-series vertical offset is applied on screen but never reaches the export wire, so the exported figure draws overlaid, un-offset curves | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `FigureSpec`/`FigureRequest` grew `waterfall_offsets`, a per-plotted-series shift in Y data units resolved by the new `lib/waterfallOffset.ts` (the canvas' own step, keyed by DISPLAY position) and applied by `calc.plotting.apply_waterfall_offsets`. The divergence test is inverted and `waterfall` is a full matrix fixture (screen ≡ export ≡ reopen) |
 | BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-15** — the rename rides its own per-series presentation field (`series_styles[i].legend`), used VERBATIM by `calc.figure_labels.series_display_name`, and the wire `dataset` keeps the DATA's labels/units. The divergence test is inverted. **Review round 2026-09-16** closed the FACET branch, which still shipped `"Loop 1 (au)"` (and showed no rename at all on screen), and `lib/spatialPageExport.ts`'s decoded Origin captions; an EMPTY rename stays a named residual. **Review rounds 3-4 (2026-09-17)** closed the remaining screen/export splits: a background window's facet grid, then the plain per-channel stack and the paneled x-break panels (all three multi-panel legs show a rename in the panel's y-axis label now), and a non-string rename in a hand-edited `.dwk` is dropped at the sanitizer instead of crashing the canvas. **Round 5 (2026-09-17)** reverses a regression round 4 introduced: the x-break leg re-derived one channel list over the whole dataset and mislabeled panels whose own channel lists differ, so each `BreakPanel` now carries its `channels` and the renames project per panel; technique-memory keys stay numeric. **Review round 5 (2026-09-17)** closed CLEAN: fixed 2 low-severity `numKeyedRecord` findings (a blank/whitespace key silently relocating onto channel 0; a key collision resolving to the non-canonical spelling regardless of file order) and corrected the round-5 sabotage table's undercounted rows 6/7 |
@@ -6922,15 +6922,46 @@ this entry.
 
 #### Implementation
 
-- [ ] Product decision: one channel set per grid, or per-panel styles.
-- [ ] Screen and export together.
-- [ ] A fixture where panels WOULD resolve different channels, so whichever rule
-  is chosen is pinned against the case that broke the first two attempts.
+- [x] Product decision (2026-09-30): **styles are keyed by CHANNEL — one style
+  per channel, applied in every panel.** Neither of the two options above:
+  the grid does NOT pin one channel set (the screen keeps resolving a
+  default channel list per row-slice, so no panel grows an empty series),
+  and the wire carries no per-PANEL style list. Instead every consumer
+  projects the flat plot's channel-keyed `seriesStyles` through the panel's
+  OWN `channels` (`FacetPanel.channels`, the list BUG-014 already carried for
+  the renames): `Stage/facetGridRender.facetPanelStyles` on screen,
+  `lib/figureSpecFacets.buildFacetSpecs` for the export (each
+  `FigureFacetSeries` ships its channel's `style`, through the ONE
+  `series_styles` wire boundary under the grouped rule — a chosen colour is
+  sent, a palette-derived one never is, so both sides cycle an unstyled
+  series by the panel's own position). This sidesteps the `y_keys`-index trap
+  (finding 1) and the per-panel-default trap (finding 2) at once: a style is
+  matched by channel, never by position. Encoded and grouped grids lay the
+  encoding over the same channel style (`encodedFacetPanels`'s
+  `channelStyles` / `encoded_facet_panels`'s `channel_styles`), the flat
+  plot's own `encodedStyle(seriesStyles[channel], …)` rule.
+- [x] Screen and export together: `useMultiPanelStage`'s facet leg now passes
+  `seriesStyles` (the stack leg always had), and `figureSpec.ts` passes
+  `st.seriesStyles` to the panel builder; `draw_facet_grid` draws a series'
+  `style` for an unencoded panel too (a lone styled series still has no
+  legend — only an encoded panel, now marked `"key": True`, always keys).
+- [x] Fixture where panels resolve different channels:
+  `tests/fixtures/wire/facet_styles.json` — the QD-shaped case above (panel
+  "0" resolves `[level, M_DC]`, panel "1" `[level, M_AC]`, so the styled
+  channel sits at the SAME series index in both). `Stage/MultiPanelStage.
+  facetStyles.test.tsx` renders the real grid over a mocked uPlot and reads
+  each panel's `buildOpts` series (M_DC's colour/dash/width in panel 0, M_AC's
+  square markers and NO dash in panel 1), builds the export request, and pins
+  both; `tests/test_export_facet_styles.py` posts the request to the real
+  route and reads every line's colour, linestyle, width and marker back.
 
 #### Completion record
 
-_(empty — open. The reverted attempt is commit-logged; `docs/testing.md` kept
-the monkeypatch lesson it produced.)_
+- 2026-09-30 — fixed as recorded under Implementation. Red-first: the screen
+  test failed on the missing `facetPanelStyles` (and, with it stubbed to
+  `[]`, on the undashed M_DC) before the fix. `useMultiPanelStage.ts` stays
+  exactly at its 705-line pin (the argument and the effect dep share lines).
+  Eager JS growth measured in the commit message.
 
 ---
 

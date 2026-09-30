@@ -4711,6 +4711,18 @@
             ],
             "title": "Legend"
           },
+          "style": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style"
+          },
           "y": {
             "items": {
               "anyOf": [

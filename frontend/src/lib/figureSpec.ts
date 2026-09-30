@@ -238,7 +238,11 @@ function buildFigureSpecForView(
   //
   // F4.4: a durable facet binding renders the SAME grid Stage shows on
   // screen (built from st.xKey/yKeys, not plotted -- see resolveFacetsOrThrow's doc, C5/R4).
-  const facets = resolveFacetsOrThrow(data, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length, st.seriesLabels);
+  // FEATURE-001: the channel-keyed styles ride each panel series too (one
+  // style per channel, applied in every panel -- `figureSpecFacets`' doc).
+  const facets = resolveFacetsOrThrow(
+    data, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length, st.seriesLabels, st.seriesStyles,
+  );
 
   // The flat-path counterpart to C2's facet fix (FIGURE_AUTHORING_WORKFLOW_PLAN,
   // "a pre-existing gap noted while fixing C2"): a FLAT export's wire `dataset`

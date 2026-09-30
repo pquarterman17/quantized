@@ -581,8 +581,8 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       const box = { w: host.clientWidth || 600, h: host.clientHeight || 400 };
       plotsRef.current = renderFacetGrid(host, {
         panels: fPanels,
-        // BUG-014: renames applied as the flat path and `lib/figureSpecFacets.ts` do.
-        seriesLabels,
+        // BUG-014 / FEATURE-001: renames and styles applied per channel, as the flat path and `lib/figureSpecFacets.ts` do.
+        seriesLabels, seriesStyles,
         ...(encodedFacets ? { encoded: encodedFacets } : {}),
         grid: facetGrid,
         gap: GRID_GAP,
@@ -666,7 +666,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     refLines,
     styleList,
     labelList,
-    seriesLabels,
+    seriesLabels, seriesStyles, // FEATURE-001: the facet leg reads the channel-keyed map directly
     autoSeriesStyles,
     errorBarsList,
     tool,

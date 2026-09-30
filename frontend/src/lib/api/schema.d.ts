@@ -7194,6 +7194,10 @@ export interface components {
             label: string;
             /** Legend */
             legend?: string | null;
+            /** Style */
+            style?: {
+                [key: string]: unknown;
+            } | null;
             /** Y */
             y: (number | null)[];
         };

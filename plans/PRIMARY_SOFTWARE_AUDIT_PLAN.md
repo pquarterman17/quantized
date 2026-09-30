@@ -1258,10 +1258,15 @@ output, not a caught error).
     clean build, base `efcfe17a`).
     Known limits, not new classes: an encoded grid needs explicit Y channels
     (a default channel list can differ panel to panel — FEATURE-001 — so the
-    grid then stays unencoded on both sides); per-channel styles (the mark's
+    grid then stays unencoded on both sides); ~~per-channel styles (the mark's
     line/scatter shape included) still do not reach a facet panel on either
-    side (FEATURE-001); Group ALONE on a facet grid still splits nothing (it
-    joins the split once any encoding is set); on a dark plot the canvas
+    side (FEATURE-001)~~ — CLOSED 2026-09-30: styles are keyed by CHANNEL,
+    one per channel applied in every panel through each panel's own
+    `channels`, on screen and on the wire (`FigureFacetSeries.style`), an
+    encoding laid over them (FEATURE-001's entry has the decision; pinned by
+    `tests/fixtures/wire/facet_styles.json`); Group ALONE on a facet grid
+    still splits nothing (it joins the split once any encoding is set); on a
+    dark plot the canvas
     lifts a near-black palette colour to its ink colour for legibility
     (`resolveDrawColor`), which the white export does not.
   **Residuals — all five CLOSED (see the bullets above); the box is `[x]`

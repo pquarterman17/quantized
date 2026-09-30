@@ -34,6 +34,12 @@ export interface FigureFacetSeries {
   y: (number | null)[];
   /** With `FigureSpec.encoding` only: the channel's legend rename (BUG-014). */
   legend?: string;
+  /** FEATURE-001: the series' own CHANNEL's chosen style (one style per
+   *  channel, applied in every panel), through the same wire boundary as
+   *  `series_styles` (`exportStyles.toWireSeriesStyles`) under the grouped
+   *  rule -- never a palette-derived colour, so the panel's own cycle colours
+   *  an unstyled series on both sides. Absent = no styling. */
+  style?: ExportSeriesStyle | null;
 }
 
 export interface FigureFacetSpec {

@@ -31,10 +31,33 @@
 // `plans/FIGURE_AUTHORING_WORKFLOW_PLAN.md`'s F4.4 note.)
 
 import type { FigureFacetSpec } from "./api/figures";
-import { facetPayloads, facetSliceRowIds, facetSlices } from "./facet";
+import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
+import {
+  facetPayloads,
+  facetSliceRowIds,
+  facetSlices,
+  type FacetPanel,
+} from "./facet";
 import { seriesDisplayLabel } from "./seriesDisplayLabel";
 import { activeRowIndices, droppedRows, pruneToLiveDataset } from "./rowstate";
-import type { Dataset, DataStruct } from "./types";
+import type { Dataset, DataStruct, SeriesStyle } from "./types";
+
+/** FEATURE-001: one panel's wire styles -- the channel-keyed `styles`
+ *  projected through the panel's OWN `channels` (the screen's
+ *  `Stage/facetGridRender.facetPanelStyles`), then through the ONE wire
+ *  boundary every `series_styles` producer uses, under the GROUPED rule: a
+ *  chosen colour is sent, a palette-derived one never is (the panel's own
+ *  cycle colours an unstyled series on screen and in matplotlib alike, and a
+ *  facet series has no flat display position to derive one from). */
+export function facetPanelWireStyles(
+  panel: Pick<FacetPanel, "channels">,
+  styles: Record<number, SeriesStyle>,
+): ReturnType<typeof toWireSeriesStyles> {
+  return toWireSeriesStyles(
+    buildExportStyles(panel.channels, styles, null, false, true),
+    true,
+  );
+}
 
 /** Resolves `facetCol`'s row partition into wire-shaped panels. Returns
  *  `undefined` when the column has no finite levels to facet on -- mirrors
@@ -50,29 +73,35 @@ export function buildFacetSpecs(
   yKeys: number[] | null,
   liveDataset?: Dataset | null,
   seriesLabels: Record<number, string> = {},
+  seriesStyles: Record<number, SeriesStyle> = {},
 ): FigureFacetSpec[] | undefined {
   const view = pruneToLiveDataset(data, liveDataset);
   const panels = facetPayloads(view, facetCol, xKey, yKeys);
   if (panels.length === 0) return undefined;
-  return panels.map((p) => ({
-    label: p.label,
-    x: p.payload.data[0] as (number | null)[],
-    series: p.payload.series.map((s, i) => ({
-      // BUG-014 (review round): a panel ships a FINISHED string, so the
-      // rename rule has to be applied HERE -- the flat path can defer it to
-      // the renderer through `series_styles[i].legend`, and a facet panel has
-      // no per-series field on the request to defer to. `seriesDisplayLabel`
-      // IS that rule (rename verbatim, else "label (unit)"), shared with the
-      // flat export and matching `uplotOpts.buildOpts`' own resolution --
-      // which `Stage/facetGridRender.ts` now feeds the SAME `seriesLabels`,
-      // so the facet grid reads identically on screen and in the export.
-      // The channel behind series `i` comes from the panel itself
-      // (`FacetPanel.channels`): the default (null `yKeys`) channel list is
-      // resolved per row-slice and can legitimately differ panel to panel.
-      label: seriesDisplayLabel(s.label, s.unit, seriesLabels[p.channels[i]]),
-      y: p.payload.data[i + 1] as (number | null)[],
-    })),
-  }));
+  return panels.map((p) => {
+    const styles = facetPanelWireStyles(p, seriesStyles);
+    return {
+      label: p.label,
+      x: p.payload.data[0] as (number | null)[],
+      series: p.payload.series.map((s, i) => ({
+        // BUG-014 (review round): a panel ships a FINISHED string, so the
+        // rename rule has to be applied HERE -- the flat path can defer it to
+        // the renderer through `series_styles[i].legend`, and a facet panel has
+        // no per-series field on the request to defer to. `seriesDisplayLabel`
+        // IS that rule (rename verbatim, else "label (unit)"), shared with the
+        // flat export and matching `uplotOpts.buildOpts`' own resolution --
+        // which `Stage/facetGridRender.ts` now feeds the SAME `seriesLabels`,
+        // so the facet grid reads identically on screen and in the export.
+        // The channel behind series `i` comes from the panel itself
+        // (`FacetPanel.channels`): the default (null `yKeys`) channel list is
+        // resolved per row-slice and can legitimately differ panel to panel.
+        label: seriesDisplayLabel(s.label, s.unit, seriesLabels[p.channels[i]]),
+        y: p.payload.data[i + 1] as (number | null)[],
+        // FEATURE-001: the channel's style, by the same per-panel projection.
+        ...(styles[i] ? { style: styles[i] } : {}),
+      })),
+    };
+  });
 }
 
 /** `buildFigureSpecForView`'s single "do we even build facets" gate PLUS its
@@ -85,8 +114,8 @@ export function buildFacetSpecs(
  *  series (`plottedCount`) NOR a facet grid -- R4 lets an all-hidden
  *  FACETED view through, since the grid needs no flat series at all and the
  *  screen's own facet grid ignores `hiddenChannels` too. `data`/`xKey`/
- *  `yKeys`/`liveDataset`/`seriesLabels` mean exactly what `buildFacetSpecs`
- *  documents. */
+ *  `yKeys`/`liveDataset`/`seriesLabels`/`seriesStyles` mean exactly what
+ *  `buildFacetSpecs` documents. */
 export function resolveFacetsOrThrow(
   data: DataStruct,
   facetKey: number | null,
@@ -95,10 +124,22 @@ export function resolveFacetsOrThrow(
   liveDataset: Dataset | null | undefined,
   plottedCount: number,
   seriesLabels: Record<number, string> = {},
+  seriesStyles: Record<number, SeriesStyle> = {},
 ): FigureFacetSpec[] | undefined {
   const facets =
-    facetKey == null ? undefined : buildFacetSpecs(data, facetKey, xKey, yKeys, liveDataset, seriesLabels);
-  if (plottedCount === 0 && facets === undefined) throw new Error("no visible series to export");
+    facetKey == null
+      ? undefined
+      : buildFacetSpecs(
+          data,
+          facetKey,
+          xKey,
+          yKeys,
+          liveDataset,
+          seriesLabels,
+          seriesStyles,
+        );
+  if (plottedCount === 0 && facets === undefined)
+    throw new Error("no visible series to export");
   return facets;
 }
 
@@ -117,7 +158,9 @@ export function withFacetRows(
   liveDataset: Dataset | null | undefined,
   seriesLabels: Record<number, string>,
 ): FigureFacetSpec[] {
-  const kept = liveDataset ? activeRowIndices(data.time.length, droppedRows(liveDataset)) : null;
+  const kept = liveDataset
+    ? activeRowIndices(data.time.length, droppedRows(liveDataset))
+    : null;
   const slices = facetSlices(pruneToLiveDataset(data, liveDataset), facetCol);
   return facets.map((f, i) => ({
     ...f,

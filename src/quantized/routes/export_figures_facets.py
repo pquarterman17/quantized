@@ -79,11 +79,16 @@ def _facet_panels(req: FigureRequest) -> list[dict[str, Any]]:
     assert req.facets
     if req.encoding is not None and req.encoding.active():
         return _encoded_facet_panels(req)
+    # FEATURE-001: each series' own channel's style rides the panel (one
+    # style per channel, applied in every panel); absent = unstyled.
     return [
         {
             "label": f.label,
             "x": f.x,
-            "series": [{"label": s.label, "y": s.y} for s in f.series],
+            "series": [
+                {"label": s.label, "y": s.y, **({"style": s.style} if s.style else {})}
+                for s in f.series
+            ],
         }
         for f in req.facets
     ]

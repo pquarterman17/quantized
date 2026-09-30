@@ -1,0 +1,207 @@
+{
+  "styles": {
+    "request": {
+      "dataset": {
+        "time": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "values": [
+          [
+            0,
+            0,
+            1,
+            null
+          ],
+          [
+            1,
+            0,
+            1.5,
+            null
+          ],
+          [
+            2,
+            0,
+            1.2,
+            null
+          ],
+          [
+            0,
+            1,
+            null,
+            3
+          ],
+          [
+            1,
+            1,
+            null,
+            2.5
+          ],
+          [
+            2,
+            1,
+            null,
+            2.8
+          ]
+        ],
+        "labels": [
+          "B",
+          "level",
+          "M_DC",
+          "M_AC"
+        ],
+        "units": [
+          "T",
+          "",
+          "emu",
+          "emu"
+        ],
+        "metadata": {}
+      },
+      "x_key": 0,
+      "y_keys": [
+        1,
+        2,
+        3
+      ],
+      "x_scale": "linear",
+      "y_scale": "linear",
+      "x_step": null,
+      "y_step": null,
+      "facets": [
+        {
+          "label": "0",
+          "x": [
+            0,
+            1,
+            2
+          ],
+          "series": [
+            {
+              "label": "level",
+              "y": [
+                0,
+                0,
+                0
+              ]
+            },
+            {
+              "label": "M_DC (emu)",
+              "y": [
+                1,
+                1.5,
+                1.2
+              ],
+              "style": {
+                "color": "#ff8800",
+                "width": 3,
+                "line": "dashed"
+              }
+            }
+          ]
+        },
+        {
+          "label": "1",
+          "x": [
+            0,
+            1,
+            2
+          ],
+          "series": [
+            {
+              "label": "level",
+              "y": [
+                1,
+                1,
+                1
+              ]
+            },
+            {
+              "label": "M_AC (emu)",
+              "y": [
+                3,
+                2.5,
+                2.8
+              ],
+              "style": {
+                "marker": true,
+                "marker_shape": "square"
+              }
+            }
+          ]
+        }
+      ],
+      "fmt": "svg",
+      "style": "default",
+      "dpi": 100,
+      "title": "",
+      "series_styles": [
+        {
+          "color": "#0b6e4f"
+        },
+        {
+          "color": "#ff8800",
+          "width": 3,
+          "line": "dashed"
+        },
+        {
+          "color": "#2d3047",
+          "marker": true,
+          "marker_shape": "square"
+        }
+      ],
+      "overrides": {
+        "legend": {
+          "show": true,
+          "loc": "upper right"
+        },
+        "grid": true,
+        "spines": {
+          "top": true,
+          "right": true
+        }
+      },
+      "transparent": false,
+      "filename": "fs"
+    },
+    "screen": [
+      {
+        "label": "0",
+        "series": [
+          {
+            "label": "level",
+            "style": null
+          },
+          {
+            "label": "M_DC (emu)",
+            "style": {
+              "color": "#ff8800",
+              "line": "dashed",
+              "width": 3
+            }
+          }
+        ]
+      },
+      {
+        "label": "1",
+        "series": [
+          {
+            "label": "level",
+            "style": null
+          },
+          {
+            "label": "M_AC (emu)",
+            "style": {
+              "marker": true,
+              "markerShape": "square"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

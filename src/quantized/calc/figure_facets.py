@@ -71,8 +71,10 @@ def draw_facet_grid(
     subset (``apply_axis_shape_overrides``, ``x_lim`` only -- see this
     module's ``overrides`` doc on ``render_facets_figure``), legend, and
     hides any trailing cells in ``axes`` past ``len(panels)``. A series'
-    optional ``"style"`` (P1.4 encodings, ``calc.plotting_encoded_facets``)
-    styles it as the flat renderer would, and its panel always has a legend.
+    optional ``"style"`` (its channel's own, FEATURE-001; an encoding's,
+    ``calc.plotting_encoded_facets``) styles it as the flat renderer would
+    (``_plot_kwargs``). A panel has a legend when it draws more than one
+    series or carries ``"key": True`` (an encoded panel, always).
 
     Returns the per-panel drawn series artists (FU-facet-hitmap), one list
     per panel in ``panels`` order, mirroring ``calc.figure.draw_series_axes``'s
@@ -123,7 +125,7 @@ def draw_facet_grid(
         # _apply_overrides sequence. x_lim ONLY (no y_lim -- see
         # render_facets_figure's own `overrides` doc).
         apply_axis_shape_overrides(ax, st, ov, lim_keys=("x_lim",))
-        if len(series) > 1 or any(s.get("style") for s in series):  # an encoded key, always
+        if len(series) > 1 or panel.get("key"):
             ax.legend(fontsize=max(6.0, st.legend_font_size - 2), frameon=st.legend_box)
     for j in range(n, len(axes)):
         axes[j].set_visible(False)

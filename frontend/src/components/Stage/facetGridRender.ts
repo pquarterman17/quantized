@@ -14,6 +14,18 @@
 // handing it the panel's own channel-keyed renames is the whole fix — and it
 // is the exact rule `lib/figureSpecFacets.ts` applies on the export side
 // (`seriesDisplayLabel`), which is what makes the two legs agree.
+//
+// FEATURE-001 (per-channel STYLES, same shape as the renames): a style is per
+// CHANNEL too, and until the fix the facet grid passed no `seriesStyles` to
+// `buildOpts` at all, so a chosen dash / width / colour / marker stopped
+// mattering the moment a plot was faceted. The decision the entry asked for
+// is ONE style per channel, applied in every panel: the grid shares the flat
+// plot's channel-keyed `seriesStyles`, and `facetPanelStyles` projects it
+// through each panel's OWN `channels` list -- never a `y_keys`-index list,
+// because panels with default Y resolve their channels per row-slice and can
+// differ from each other (the trap that sank the first two attempts). The
+// export side (`lib/figureSpecFacets.buildFacetSpecs`) ships each panel
+// series' own channel's style by the same projection.
 
 import uPlot from "uplot";
 
@@ -37,6 +49,9 @@ export interface FacetGridArgs {
   /** Per-channel legend renames (the store's `seriesLabels`), projected onto
    *  each panel's own `channels` list. */
   seriesLabels: Record<number, string>;
+  /** Per-channel styles (the store's `seriesStyles`), projected the same way
+   *  (`facetPanelStyles`, FEATURE-001). */
+  seriesStyles: Record<number, SeriesStyle>;
   grid: { rows: number; cols: number };
   gap: number;
   /** uPlot cursor-sync group; see `MULTIPANEL_SYNC_KEY`. */
@@ -52,6 +67,15 @@ export interface FacetGridArgs {
   /** P1.4 residual 3: an ENCODED grid's per-panel series styles and finished
    *  legend text (`Stage/useFacetEncoding`), in place of the channel renames. */
   encoded?: { styles: readonly (readonly SeriesStyle[])[]; labels: readonly (readonly string[])[] };
+}
+
+/** The `buildOpts` style list of one UNENCODED facet panel: the channel-keyed
+ *  `styles` projected through the panel's own `channels` (FEATURE-001). */
+export function facetPanelStyles(
+  panel: Pick<FacetPanel, "channels">,
+  styles: Record<number, SeriesStyle>,
+): (SeriesStyle | undefined)[] {
+  return panel.channels.map((ch) => styles[ch]);
 }
 
 /** Build one uPlot per facet panel into `host` (which the caller has already
@@ -70,7 +94,7 @@ export function renderFacetGrid(host: HTMLDivElement, args: FacetGridArgs): uPlo
       // carried by the panel because the default (null `yKeys`) channel list
       // is resolved per row-slice and can differ panel to panel.
       seriesLabels: args.encoded ? [...args.encoded.labels[i]] : p.channels.map((ch) => args.seriesLabels[ch]),
-      ...(args.encoded ? { seriesStyles: [...args.encoded.styles[i]] } : {}),
+      seriesStyles: args.encoded ? [...args.encoded.styles[i]] : facetPanelStyles(p, args.seriesStyles),
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });

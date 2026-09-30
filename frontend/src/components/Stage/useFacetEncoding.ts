@@ -34,6 +34,7 @@ export interface FacetEncodingRender {
 }
 
 const EMPTY_LABELS: Record<number, string> = {};
+const EMPTY_STYLES: Record<number, SeriesStyle> = {};
 
 /** The grid's encoding (see the module doc), or null: no facet column, no
  *  explicit Y channels, no surviving pick, or the derivation not loaded yet. */
@@ -46,6 +47,7 @@ export function useFacetEncoding(
   xKey: number | null,
   yKeys: readonly number[] | null,
   seriesLabels: Record<number, string> = EMPTY_LABELS,
+  seriesStyles: Record<number, SeriesStyle> = EMPTY_STYLES,
 ): FacetEncodingRender | null {
   const stablePicks = useStableByValue(picks, (v) => JSON.stringify(v));
   const enc = useMemo(
@@ -62,7 +64,10 @@ export function useFacetEncoding(
     if (!view.data) return null;
     const slices = facetSlices(view.data, facetKey).map((s) => ({ ...s, rows: facetSliceRowIds(s, view.rowIds) }));
     const renames = yKeys.map((c) => seriesLabels[c]);
-    const panels = mod.encodedFacetPanels(mod.encodingData(active.data, enc), slices, xKey, yKeys, enc, renames);
+    // FEATURE-001: each series' encoding over its CHANNEL's own style.
+    const panels = mod.encodedFacetPanels(
+      mod.encodingData(active.data, enc), slices, xKey, yKeys, enc, renames, seriesStyles,
+    );
     return { panels, styles: panels.map((p) => p.styles), labels: panels.map((p) => p.labels) };
-  }, [enc, mod, active, facetKey, xKey, yKeys, seriesLabels]);
+  }, [enc, mod, active, facetKey, xKey, yKeys, seriesLabels, seriesStyles]);
 }
