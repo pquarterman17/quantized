@@ -70,6 +70,7 @@ import { useQuickPlotWithDialog } from "./store/quickPlotWithDialog";
 import { useFitYByXStore } from "./store/fitYByX";
 import { useOutlierScreeningStore } from "./store/outlierScreening";
 import { useMultivarStore } from "./store/multivar";
+import { useStatsTestsStore } from "./store/statsTests";
 import { useVariabilityStore } from "./store/variability";
 import { useRelink } from "./store/relink";
 import { useRecode } from "./store/recode";
@@ -124,6 +125,7 @@ const DistributionPanel = lazyPanel(() => import("./components/workshops/distrib
 const FitYByXPanel = lazyPanel(() => import("./components/workshops/fityx/FitYByXPanel"), "FitYByXPanel");
 const OutlierScreeningPanel = lazyPanel(() => import("./components/workshops/outliers/OutlierScreeningPanel"), "OutlierScreeningPanel");
 const MultivarPanel = lazyPanel(() => import("./components/workshops/multivar/MultivarPanel"), "MultivarPanel");
+const StatsTestsPanel = lazyPanel(() => import("./components/workshops/statstests/StatsTestsPanel"), "StatsTestsPanel");
 const VariabilityChartPanel = lazyPanel(() => import("./components/workshops/variability/VariabilityChartPanel"), "VariabilityChartPanel");
 const ReportPanel = lazyPanel(() => import("./components/workshops/report/ReportPanel"), "ReportPanel");
 const StatsChooserPanel = lazyPanel(() => import("./components/workshops/statschooser/StatsChooserPanel"), "StatsChooserPanel");
@@ -229,6 +231,7 @@ export default function AppOverlays() {
   const fitYByXOpen = useFitYByXStore((s) => s.open);
   const outlierScreeningOpen = useOutlierScreeningStore((s) => s.open);
   const multivarOpen = useMultivarStore((s) => s.open);
+  const statsTestsOpen = useStatsTestsStore((s) => s.open);
   const variabilityOpen = useVariabilityStore((s) => s.open);
   const dataFilterOpen = useApp((s) => s.dataFilterOpen);
   const columnSwitcherOpen = useApp((s) => s.columnSwitcherOpen);
@@ -320,6 +323,7 @@ export default function AppOverlays() {
       {fitYByXOpen && <FitYByXPanel />}
       {outlierScreeningOpen && <OutlierScreeningPanel />}
       {multivarOpen && <MultivarPanel />}
+      {statsTestsOpen && <StatsTestsPanel />}
       {variabilityOpen && <VariabilityChartPanel />}
       {dataFilterOpen && <DataFilterPanel />}
       {statsChooserOpen && <StatsChooserPanel />}

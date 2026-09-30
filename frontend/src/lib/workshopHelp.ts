@@ -45,6 +45,7 @@ export const WORKSHOP_HELP: Readonly<Record<string, string>> = {
   search: "Find in project",
   "sqlite-query": "SQLite",
   statschooser: "Test chooser",
+  "stats-tests": "Statistical tests",
   tabulate: "Tabulate",
   variability: "Variability chart",
 };
