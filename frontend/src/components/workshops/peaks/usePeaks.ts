@@ -26,7 +26,7 @@ import { peakOverlayArray } from "../../../lib/plotdata";
 import { rowStateIdentity } from "../../../lib/rowstate";
 import type { Dataset, FittedPeak, MultiFitResult, Peak } from "../../../lib/types";
 import { peakInputs } from "./peakInputs";
-import { nextLabelGroupId, rejectIfHistoryBatchRunning } from "./peakLabelGuards";
+import { labelFailureMessage, nextLabelGroupId, rejectIfHistoryBatchRunning } from "./peakLabelGuards";
 import { usePeakManualEdits } from "./usePeakManualEdits";
 import { finiteRange } from "./peakRanges";
 import { findOverrides, type PeakFindParams } from "./peakFindParams";
@@ -345,6 +345,13 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
     // surfacing pattern — every entry point calls this with `void`, so an
     // uncaught rejection here would fail utterly silently (no labels, no
     // toast, nothing).
+    //
+    // Partial outcome: a throw INSIDE withHistoryBatch lands after some
+    // labels are on the plot — `landed`/`total` feed `labelFailureMessage`.
+    let landed = 0;
+    let total = 0;
+    let historyLabel = "";
+    const seqBefore = useApp.getState().history.at(-1)?.seq;
     try {
       const template =
         typeof values.template === "string" && values.template.trim().length > 0
@@ -429,7 +436,8 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
       // for the run, the whole batch folded into ONE undo entry via
       // withHistoryBatch.
       const groupId = nextLabelGroupId();
-      const historyLabel = `label ${kept.length} peak${kept.length === 1 ? "" : "s"}`;
+      total = kept.length;
+      historyLabel = `label ${kept.length} peak${kept.length === 1 ? "" : "s"}`;
       // P4 review finding, round 6: the ONLY re-check that matters is the one
       // immediately before withHistoryBatch itself, with NO await between
       // check and call — resolveDataset above is a real async round trip
@@ -448,11 +456,17 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         for (let i = 0; i < kept.length; i++) {
           const pos = placements[i] ?? points[i];
           const id = store.addAnnotation(pos.x, pos.y, labels[i], token);
+          landed++;
           store.updateAnnotation(id, { groupId }, token);
         }
       });
     } catch (e: unknown) {
-      toast(e instanceof Error ? e.message : "labeling peaks failed", "danger");
+      // withHistoryBatch's `finally` has already recorded the batch entry (if
+      // any label landed) by the time the rejection reaches here, so whether
+      // Undo covers the partial run is read off the history, never assumed.
+      const top = useApp.getState().history.at(-1);
+      const undoable = top !== undefined && top.seq !== seqBefore && top.label === historyLabel;
+      toast(labelFailureMessage(e, landed, total, undoable), "danger");
     }
   }, [active, peaks, fitResult]);
 

@@ -1738,7 +1738,6 @@ const WEAK_WAIT_PINS: Record<string, number> = {
   "/components/Library/MultiSelectBar.test.tsx": 2,
   "/components/workshops/variability/useVariability.test.ts": 1,
   "/components/workshops/tabulate/TabulatePanel.test.tsx": 1,
-  "/components/workshops/peaks/usePeaks.test.ts": 1,
   "/components/workshops/curvefit/useModelScan.test.ts": 1,
   "/components/workshops/curvefit/useCurveFit.test.ts": 2,
   "/components/workshops/calculators/UnitsTab.test.tsx": 1,

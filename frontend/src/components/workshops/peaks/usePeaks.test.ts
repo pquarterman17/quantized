@@ -355,7 +355,18 @@ describe("usePeaks fitEach — per-peak progress + cancel (P0.4 feedback/cancel 
 
   it("cancel stops the loop before the next peak, keeping already-fit results", async () => {
     let resolve1!: (v: SinglePeakFit) => void;
-    vi.mocked(fitPeak).mockReturnValueOnce(new Promise((r) => (resolve1 = r)));
+    // The first fit's request is the signal that it is in flight: the mock
+    // settles `inFlight` the moment the loop reaches it and then holds the
+    // fit open until `resolve1`. Nothing in the hook's state changes between
+    // the resolveDataset() hop and this call (the pending op is registered
+    // before the hop), so this deferred — not a poll on the mock — is the
+    // deterministic wait (TEST_DETERMINISM_PLAN #5's standing rule).
+    let firstFitStarted!: () => void;
+    const inFlight = new Promise<void>((r) => (firstFitStarted = r));
+    vi.mocked(fitPeak).mockImplementationOnce(() => {
+      firstFitStarted();
+      return new Promise((r) => (resolve1 = r));
+    });
     const { result } = renderHook(() => usePeaks());
     await waitFor(() => expect(result.current.peaks).toHaveLength(2));
 
@@ -363,10 +374,9 @@ describe("usePeaks fitEach — per-peak progress + cancel (P0.4 feedback/cancel 
     act(() => {
       p = result.current.fitEach(OPTS);
     });
-    // Wait until the first peak's fit is actually in flight before cancelling
-    // — cancelling any earlier would race the still-pending resolveDataset()
+    // Cancelling any earlier would race the still-pending resolveDataset()
     // hop and stop the loop before it ever calls fitPeak.
-    await waitFor(() => expect(fitPeak).toHaveBeenCalledTimes(1));
+    await inFlight;
 
     usePendingOps.getState().ops[0].cancel!();
     resolve1(single(1.0, true));
@@ -695,6 +705,59 @@ describe("usePeaks labelPeaks — round-2 review: L3 error handling", () => {
     } finally {
       useApp.setState({ resolveDataset: original }); // never leak the broken mock into later tests
     }
+  });
+});
+
+describe("usePeaks labelPeaks — partial outcome (PRIMARY_SOFTWARE_AUDIT_PLAN 'labeling peaks failed')", () => {
+  it("a failure mid-batch says how many labels landed before it and that Undo removes them — and Undo does", async () => {
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    // The second annotation of the run throws inside withHistoryBatch, after
+    // the first has already landed.
+    const original = useApp.getState().addAnnotation;
+    let calls = 0;
+    useApp.setState({
+      addAnnotation: (x, y, text, token) => {
+        if (++calls === 2) throw new Error("store refused it");
+        return original(x, y, text, token);
+      },
+    });
+    try {
+      await act(async () => {
+        await result.current.labelPeaks();
+      });
+    } finally {
+      useApp.setState({ addAnnotation: original });
+    }
+
+    expect(useApp.getState().annotations).toHaveLength(1);
+    const msg = useToasts.getState().toasts.find((t) => t.kind === "danger")?.msg ?? "";
+    expect(msg).toBe("labeling peaks failed after 1 of 2 labels: store refused it — Undo removes the 1 that landed");
+    useApp.getState().undo();
+    expect(useApp.getState().annotations).toHaveLength(0);
+  });
+
+  it("a failure before any label landed says nothing was added", async () => {
+    vi.mocked(askParams).mockResolvedValue({ template: "{center}", precision: 2 });
+    const { result } = renderHook(() => usePeaks());
+    await waitFor(() => expect(result.current.peaks).toHaveLength(2));
+
+    const original = useApp.getState().resolveDataset;
+    useApp.setState({ resolveDataset: vi.fn().mockRejectedValue(new Error("network down")) });
+    try {
+      await act(async () => {
+        await result.current.labelPeaks();
+      });
+    } finally {
+      useApp.setState({ resolveDataset: original });
+    }
+
+    expect(useApp.getState().annotations).toHaveLength(0);
+    expect(useToasts.getState().toasts.find((t) => t.kind === "danger")?.msg).toBe(
+      "labeling peaks failed: network down — nothing was added",
+    );
   });
 });
 

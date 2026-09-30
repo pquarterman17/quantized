@@ -133,6 +133,13 @@ rule in task 4.
      and it appears in the inventory, fix its weak waits then. Wait on STATE
      (`await waitFor(() => expect(result.current.x).not.toBeNull())`), never on
      the mock. Lower the task-6 allowlist in the same commit.
+     - 2026-09-30, `peaks/usePeaks.test.ts` 1 -> 0 (applied while editing the
+       file for the "labeling peaks failed" partial-outcome message): the
+       fitEach-cancel test's `waitFor(() => expect(fitPeak).toHaveBeenCalledTimes(1))`
+       had no state to wait on (the pending op is registered BEFORE the
+       resolveDataset hop, so nothing flips between that hop and the first
+       fit), so the mock implementation itself now settles a deferred when the
+       loop reaches it — deterministic, no poll on the mock.
    - The bound on this problem is task 6, not task 5.
 
 ---

@@ -8929,6 +8929,9 @@ Original acceptance criteria (unchanged):
   result": the sync export routes still render to completion on a
   threadpool worker).
 - [~] Errors say what failed, whether data changed, and next action.
+  **2026-09-30:** one of the three REMAINING flow-change items below landed
+  (`usePeaks.ts`'s "labeling peaks failed" now reports its partial outcome);
+  two remain.
   **Audited 2026-09-14, census corrected in the 2026-09-14 review round** —
   intended as the whole user-facing failure surface, not a sample; the first
   pass fell short of that by construction (below), fixed in this pass.
@@ -9053,11 +9056,17 @@ Original acceptance criteria (unchanged):
   - `components/workshops/peaks/usePeaks.ts:466` — "labeling peaks failed" is
     raised from inside `withHistoryBatch`, where some annotations may already
     have been added; same shape, same reason it is not a rename.
+    **Done 2026-09-30:** the flow counts the labels that landed and reads the
+    history after the batch settles — `labeling peaks failed after N of M
+    labels: <why> — Undo removes the N that landed` / `…: <why> — nothing was
+    added` (`peakLabelGuards.ts`'s `labelFailureMessage`; `usePeaks.test.ts`
+    › "partial outcome", red-first).
   - `store/recalcDatasets.ts:107,122` — "derived worksheet recompute failed" /
     "recalculation failed" say nothing about which worksheets took the new
     values and which kept the old ones.
   All three need the operation to report its own partial outcome — a flow
-  change, and the shape `store/reimportAllRun.ts:410` already has.
+  change, and the shape `store/reimportAllRun.ts:410` already has (the
+  peaks one landed 2026-09-30, above; the other two stay open).
 - [x] Copyable diagnostic bundle excludes raw/private data by default.
   **Verified shipped 2026-09-14** (it landed with #267/#268 and their
   follow-up reviews; the box was simply never ticked). Help ▸ Copy diagnostics
