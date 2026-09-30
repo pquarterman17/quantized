@@ -86,6 +86,7 @@ to all 56 fields and is not repeated per row.
 | `statMode` | `plot.statMode` | `plot.view.statMode` | Setter `setStatMode` | no |
 | `statHideEmptyLevels` | `plot.stat.hideEmptyLevels` | `plot.view.statHideEmptyLevels` | Setter `setStatHideEmptyLevels` (`store/statLevelOptions.ts`) | no |
 | `statShowGroupN` | `plot.stat.showGroupN` | `plot.view.statShowGroupN` | Setter `setStatShowGroupN` (`store/statLevelOptions.ts`) | no |
+| `statShowSummary` | `plot.stat.showSummary` | `plot.view.statShowSummary` | Setter `setStatShowSummary` (`store/statLevelOptions.ts`) | no |
 | `statMarks` | `plot.stat.marks` | `plot.view.statMarks` | Setter `setStatMarks` (`store/statLevelOptions.ts`, per-mode merge) | no |
 | `xLim` | `axes.x.limits` | `plot.view.xLim` | Setter `setXLim` (clears `xStep`); Bulk | no |
 | `yLim` | `axes.y.limits` | `plot.view.yLim` | Setter `setYLim` (clears `yStep`); Bulk | no |

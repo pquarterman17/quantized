@@ -64,6 +64,7 @@ beforeEach(() => {
   useApp.setState({
     theme: "dark", accent: "violet", datasets: [DS, OTHER], activeId: "ds", selection: null,
     yKeys: [1], xKey: null, seriesOrder: null, statStageSeed: null, statHideEmptyLevels: false,
+    statShowSummary: false, // the table now opens from the persisted PlotView flag, so each test starts closed
     confirmRemove: false, // Delete would remove immediately if it fell through to useGlobalShortcuts
   });
 });

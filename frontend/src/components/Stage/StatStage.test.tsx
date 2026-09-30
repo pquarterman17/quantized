@@ -447,16 +447,18 @@ describe("StatStage — connect-means line (JMP_GAP J5 residual)", () => {
 
 describe("StatStage — missing levels / unbalanced groups (P2.6 box 2)", () => {
   beforeEach(() => {
-    useApp.setState({ statHideEmptyLevels: false, statShowGroupN: true });
+    useApp.setState({ statHideEmptyLevels: false, statShowGroupN: true, statShowSummary: false });
   });
 
-  it("the two options write the persisted PlotView fields", () => {
+  it("the three options write the persisted PlotView fields", () => {
     stateRef.current = makeState({ mode: "box" });
     render(<StatStage />);
     screen.getByText("empty levels").click();
     expect(useApp.getState().statHideEmptyLevels).toBe(true);
     screen.getByText("n").click();
     expect(useApp.getState().statShowGroupN).toBe(false);
+    screen.getByRole("checkbox", { name: "summary" }).click(); // by role: the "summary marker" select shares the text
+    expect(useApp.getState().statShowSummary).toBe(true);
   });
 
   it("offers both options for every categorical mode, neither for Q-Q / histogram", () => {

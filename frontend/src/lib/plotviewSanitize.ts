@@ -116,22 +116,24 @@ export function sanitizeStatMarksByMode(v: unknown): StatMarksByMode {
   return out;
 }
 
-/** The PlotView fields that are plain booleans. `satisfies` pins every name
- *  to a real PlotView key; `boolViewFields`' return type pins each to boolean. */
-const BOOL_VIEW_KEYS = [
-  "showGrid", "showLegend", "legendStatic", "showAxisBox", "stackMode", "insetMode",
-  "polarMode", "statMode", "statHideEmptyLevels", "statShowGroupN",
-] as const satisfies readonly (keyof PlotView)[];
-
-export type BoolViewKey = (typeof BOOL_VIEW_KEYS)[number];
+/** The PlotView fields that are plain booleans: every key whose type is
+ *  `boolean`, derived from the interface, so a new boolean field is covered
+ *  the moment it is declared, with no list to keep in step. */
+export type BoolViewKey = { [K in keyof PlotView]: PlotView[K] extends boolean ? K : never }[keyof PlotView];
 
 /** Each boolean field from a persisted view, or the fallback view's value when
  *  missing or not a boolean — the per-field-fallback discipline
- *  `sanitizePlotView` applies to every other field. Never throws. */
+ *  `sanitizePlotView` applies to every other field. The fallback view (a full
+ *  `defaultPlotView()`) is the runtime key list: exactly its boolean-valued
+ *  entries, the same set `BoolViewKey` names — no literal list of names (P2.6
+ *  box 4 leftover: what funded `statShowSummary`'s eager bytes). Never throws. */
 export function boolViewFields(o: Record<string, unknown>, fb: PlotView): Pick<PlotView, BoolViewKey> {
-  const out = {} as Pick<PlotView, BoolViewKey>;
-  for (const k of BOOL_VIEW_KEYS) out[k] = typeof o[k] === "boolean" ? (o[k] as boolean) : fb[k];
-  return out;
+  const out = {} as Record<string, boolean>;
+  for (const k in fb) {
+    const d = fb[k as keyof PlotView];
+    if (typeof d === "boolean") out[k] = typeof o[k] === "boolean" ? (o[k] as boolean) : d;
+  }
+  return out as Pick<PlotView, BoolViewKey>;
 }
 
 /** Validate a persisted region-shade list (F2.3j — decoded film-stack shades

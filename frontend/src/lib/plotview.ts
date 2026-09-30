@@ -133,11 +133,11 @@ export interface PlotView {
   insetMode: boolean;
   polarMode: boolean;
   statMode: boolean;
-  /** P2.6 — Stat Stage display options that persist with the plot (screen and
-   *  export both honour them): hide empty levels (default false: n=0 slots), the
-   *  per-group n captions (default true), box 1's marks (per mode: `StatMarksByMode`). */
+  /** P2.6 — Stat Stage options that persist with the plot (screen and export both honour
+   *  them): hide empty levels (default false: n=0 slots), n captions (true), box 4's summary table (false), box 1's marks. */
   statHideEmptyLevels: boolean;
   statShowGroupN: boolean;
+  statShowSummary: boolean;
   statMarks: StatMarksByMode;
   xLim: [number, number] | null;
   yLim: [number, number] | null;
@@ -209,7 +209,7 @@ export function defaultPlotView(): PlotView {
     insetMode: false,
     polarMode: false,
     statMode: false,
-    statHideEmptyLevels: false, statShowGroupN: true, statMarks: {},
+    statHideEmptyLevels: false, statShowGroupN: true, statShowSummary: false, statMarks: {},
     xLim: null,
     yLim: null,
     xStep: null,
