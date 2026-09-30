@@ -7100,6 +7100,11 @@ export interface components {
             error_spans?: ({
                 [key: string]: unknown;
             } | null)[] | null;
+            /**
+             * Excluded Rows
+             * @description Rows of `dataset` the plot window does not draw as data (excluded, or dropped by the Data Filter). With `encoding` only: the split takes its levels over every row, then these rows are blanked in each series.
+             */
+            excluded_rows?: number[] | null;
             /** Facets */
             facets?: components["schemas"]["FigureFacet"][] | null;
             /**
@@ -7112,6 +7117,12 @@ export interface components {
              * @default pdf
              */
             fmt?: string;
+            /**
+             * Grey Excluded
+             * @description With `excluded_rows`: also draw those rows as one grey, line-free '(excluded)' marker series per series, after all the series.
+             * @default false
+             */
+            grey_excluded?: boolean;
             /**
              * Greyscale
              * @default false
