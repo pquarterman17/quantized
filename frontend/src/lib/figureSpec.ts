@@ -251,8 +251,8 @@ function buildFigureSpecForView(
   // it (raw), matching the closed facet item byte-for-byte rather than
   // silently re-scoping it. `pruneToLiveDataset` is a no-op (`=== data`
   // fast-path) for a frozen/document-only call (`extras.liveDataset` absent),
-  // so that case is byte-identical to before this fix.
-  const wireDataset = facets === undefined ? pruneToLiveDataset(data, extras.liveDataset) : data;
+  // so that case is byte-identical to before this fix. `wireDataset` is built
+  // after the encoding gate below: an encoded request keeps every row.
 
   // P3.3 auto dash/marker cycle + the view it is decided from — resolved by
   // `figureSpecSeries.resolveSeriesCycle`, whose doc carries the whole rule.
@@ -289,6 +289,14 @@ function buildFigureSpecForView(
   const encoding = facets === undefined
     ? windowEncoding(extras.encoding, extras.liveDataset ?? { data }, groupCol, st.y2Keys)
     : null;
+  // F4.2c (a): an encoded request is split server-side, so it keeps EVERY row
+  // (the window takes the split's levels over all of them) and names the ones
+  // the window does not draw as data in `excluded_rows` -- the backend blanks
+  // them, or greys them (`excludedRowsExport.withExcludedGhosts`). This also
+  // closes P1.4's "levels over full rows, export prunes" limit.
+  const dropped = extras.liveDataset ? droppedRows(extras.liveDataset) : new Set<number>();
+  const excludedRows = [...dropped].filter((r) => r >= 0 && r < data.time.length).sort((a, b) => a - b);
+  const wireDataset = facets === undefined && encoding === null ? pruneToLiveDataset(data, extras.liveDataset) : data;
   // `overrides` was built before this function learned the plotted/y2 split —
   // gate the two fields that depend on it (a stale y2_lim; a log-scaled
   // secondary axis's minor ticks) now that the split is known.
@@ -328,6 +336,7 @@ function buildFigureSpecForView(
     ...secondaryAxisWire(y2Axis),
     ...(groupCol === null ? {} : { group_col: groupCol }),
     ...(encoding === null ? {} : { encoding: figureEncodingWire(encoding) }),
+    ...(encoding === null || excludedRows.length === 0 ? {} : { excluded_rows: excludedRows }),
     ...(facets === undefined ? {} : { facets }),
     fmt: o.fmt,
     style: o.style,
@@ -372,7 +381,7 @@ function buildFigureSpecForView(
     filename: extras.filename ?? stem,
   };
   // F4.2c (a): greyed excluded rows ride as extra series on the pruned wire.
-  return o.greyExcluded && extras.liveDataset ? o.greyExcluded(spec, data, droppedRows(extras.liveDataset)) : spec;
+  return o.greyExcluded && extras.liveDataset ? o.greyExcluded(spec, data, dropped) : spec;
 }
 
 /** Derive an export request directly from the canonical document. Frozen

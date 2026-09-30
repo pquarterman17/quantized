@@ -100,6 +100,12 @@ export interface FigureSpec {
    *  and colours/marks/labels each one as the Graph Builder preview does.
    *  Omit = today's behaviour, byte-identical. */
   encoding?: FigureEncodingSpec;
+  /** F4.2c (a), with `encoding` only (else 422): rows of the FULL `dataset`
+   *  the window does not draw as data. The split takes its levels over every
+   *  row, as the window does, then blanks these (`calc/figure_excluded.py`). */
+  excluded_rows?: number[];
+  /** With `excluded_rows`: also draw them as grey "(excluded)" companions. */
+  grey_excluded?: boolean;
   /** FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 (export half): one xy small-
    *  multiples panel per facet-column level -- present only when the source
    *  document/view carries a durable `facetKey` binding (`lib/figureSpec.ts`'s

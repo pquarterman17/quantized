@@ -188,12 +188,16 @@ describe("residuals 4 and 5 on the document: a gradient and text-column picks", 
     expect(sanitizeFigureEncoding({ text: ["C"] })).toBeUndefined();
   });
 
-  it("an excluded row leaves the wire dataset — the rows the Stage's colour scale is taken over", () => {
-    // Row 9 (T = 300) excluded: pruned from the wire, so the backend's scale
-    // tops out at 185, as the Stage's (Stage/usePlotEncoding, analysis rows).
+  it("an excluded row rides the wire as a mask — the backend scales over the kept rows", () => {
+    // Row 9 (T = 300) excluded. F4.2c (a): an encoded request keeps every row
+    // (the split's levels come from all of them, as on the Stage) and names
+    // row 9 in `excluded_rows`; the backend's scale then tops out at 185, as
+    // the Stage's (Stage/usePlotEncoding, kept rows) --
+    // tests/test_export_encoding_excluded.py pins that half.
     const excluded: Dataset = { ...GRADIENT_DS, excludedRows: [9] };
     const spec = buildFigureSpecFromDocument(gradDoc({ color: 1 }), excluded, "g", OPTS);
-    expect(spec.dataset.time).toHaveLength(9);
+    expect(spec.dataset.time).toHaveLength(10);
+    expect(spec.excluded_rows).toEqual([9]);
     expect(spec.encoding).toMatchObject({ gradient_col: 1 });
   });
 });
