@@ -286,6 +286,35 @@ describe("import / export", () => {
     expect(loadPeakRecipes()[0]).toEqual(original);
   });
 
+  // The detector's Advanced settings (lib/peakwizard's `PeakFindAdvanced`)
+  // are optional in a recipe; a file carrying them must keep them, or a
+  // batch run of the imported recipe silently finds with the defaults.
+  it("round-trips a recipe's Advanced find settings exactly through export/import", () => {
+    const original: PeakRecipe = {
+      ...DEFAULT_RECIPE,
+      name: "Advanced find",
+      find: {
+        snr_threshold: 4, min_prominence: 0.1, max_peaks: 7,
+        sensitivity: "high", min_separation: 0.2, min_width_deg: 0.05, max_width_deg: 1.5,
+        bg_method: "polynomial", max_window_deg: 3, bg_poly_degree: 4, bg_iterative: true,
+      },
+    };
+    savePeakRecipe(original);
+    const exported = exportNameKeyed("peak", original.name);
+    if (!exported.ok) throw new Error("export failed");
+    localStorage.clear();
+    expect(importNameKeyed("peak", exported.text)).toEqual({ ok: true, name: original.name });
+    expect(loadPeakRecipes()[0]).toEqual(original);
+  });
+
+  it("refuses an Advanced find field that is present but unusable, naming it", () => {
+    const file = (find: Record<string, unknown>) => JSON.stringify({ ...DEFAULT_RECIPE, name: "x", find: { ...DEFAULT_RECIPE.find, ...find } });
+    expect(importNameKeyed("peak", file({ sensitivity: "extreme" }))).toEqual({ ok: false, reason: "not a valid peak recipe file (find.sensitivity)" });
+    expect(importNameKeyed("peak", file({ bg_poly_degree: 2.5 }))).toEqual({ ok: false, reason: "not a valid peak recipe file (find.bg_poly_degree)" });
+    expect(importNameKeyed("peak", file({ bg_iterative: "yes" }))).toEqual({ ok: false, reason: "not a valid peak recipe file (find.bg_iterative)" });
+    expect(importNameKeyed("peak", file({ max_width_deg: -1 }))).toEqual({ ok: false, reason: "not a valid peak recipe file (find.max_width_deg)" });
+  });
+
   // Review #7: a stored record this app cannot read keeps its name.
   it("rename, duplicate and import treat an unreadable peak recipe's name as taken", () => {
     const future = { ...DEFAULT_RECIPE, name: "Later", version: 3 };

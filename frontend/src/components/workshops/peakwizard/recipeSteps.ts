@@ -24,14 +24,19 @@ export async function recipeBaseline(
   return res.baseline;
 }
 
-/** The recipe's peak find over the (baseline-corrected) working trace. */
+/** The recipe's peak find over the (baseline-corrected) working trace. The
+ *  Advanced fields (lib/peakwizard's `PeakFindAdvanced`) go on the wire only
+ *  when the recipe carries them — a recipe from before they existed sends
+ *  exactly what it always did, and the route's defaults stay in charge. */
 export async function recipeFind(x: number[], y: number[], find: PeakRecipe["find"]): Promise<Peak[]> {
+  const { snr_threshold, min_prominence, max_peaks, ...advanced } = find;
   const res = await findPeaks({
     x,
     y,
-    snr_threshold: find.snr_threshold,
-    ...(find.min_prominence > 0 ? { min_prominence: find.min_prominence } : {}),
-    max_peaks: find.max_peaks,
+    snr_threshold,
+    ...(min_prominence > 0 ? { min_prominence } : {}),
+    max_peaks,
+    ...advanced,
   });
   return res.peaks;
 }

@@ -78,7 +78,9 @@ export interface PeakWizardState {
   candidates: CandidatePeak[];
   findBusy: boolean;
   findError: string | null;
-  runFind: () => Promise<void>;
+  /** `find`: run with these settings instead of the recipe's (see
+   *  usePeakCandidates's `runFind`). */
+  runFind: (find?: PeakRecipe["find"]) => Promise<void>;
   togglePeak: (i: number) => void;
   removePeak: (i: number) => void;
   /** Delete the model's peak `k` (the k-th INCLUDED candidate). */

@@ -74,7 +74,7 @@ async function fit(res: PeakModelFitResponse) {
   render(<PeakWizardPanel />);
   step("Find peaks");
   fireEvent.click(screen.getByRole("button", { name: "Find peaks" }));
-  await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(2));
+  await waitFor(() => expect(screen.getAllByRole("checkbox", { name: /include peak/ })).toHaveLength(2));
   stubModelFit(res);
   step("Fit & review");
   fireEvent.click(screen.getByRole("button", { name: "Fit" }));
@@ -188,7 +188,7 @@ describe("Peak Analyzer — Publish to peak table", () => {
     expect(screen.getByRole("button", { name: "Re-fit" })).toBeDisabled();
     // A reset while the publish awaits: un-include a peak (the content key moves).
     step("Find peaks");
-    fireEvent.click(screen.getAllByRole("checkbox")[1]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "include peak 2" }));
     await act(async () => release());
     step("Fit & review");
     await screen.findByText(/not published — a newer fit, reset or dataset change superseded it/);
@@ -223,7 +223,7 @@ describe("Peak Analyzer — Publish to peak table", () => {
     await screen.findByText(/not published — the dataset's data changed since this fit/);
     // NOW a reset: un-include a peak (the key moves; the result goes).
     step("Find peaks");
-    fireEvent.click(screen.getAllByRole("checkbox")[1]);
+    fireEvent.click(screen.getByRole("checkbox", { name: "include peak 2" }));
     step("Fit & review");
     await waitFor(() => expect(screen.queryByLabelText("fit metrics")).not.toBeInTheDocument());
     expect(screen.getByText(/not published — the dataset's data changed since this fit/)).toBeInTheDocument();

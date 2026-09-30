@@ -5,23 +5,16 @@
 //
 // The "_deg" names are the route's: they are x-axis units, which are degrees
 // only for a 2θ scan — hence the panel labels them by role, not unit.
+//
+// The field set IS the Peak Analyzer recipe's `find` section with every
+// Advanced field present (lib/peakwizard.ts's `PeakFindAdvanced`), so the
+// wizard's step ② reuses `PeakFindAdvanced.tsx` over its recipe verbatim.
 
-export type PeakSensitivity = "low" | "medium" | "high";
-export type PeakFindBackground = "snip" | "polynomial";
+import type { PeakRecipe } from "../../../lib/peakwizard";
 
-export interface PeakFindParams {
-  sensitivity: PeakSensitivity;
-  snr_threshold: number;
-  min_prominence: number;
-  max_peaks: number;
-  min_separation: number;
-  min_width_deg: number;
-  max_width_deg: number;
-  bg_method: PeakFindBackground;
-  max_window_deg: number;
-  bg_poly_degree: number;
-  bg_iterative: boolean;
-}
+export type PeakFindParams = Required<PeakRecipe["find"]>;
+export type PeakSensitivity = PeakFindParams["sensitivity"];
+export type PeakFindBackground = PeakFindParams["bg_method"];
 
 /** Mirrors `routes/peaks.py`'s `FindPeaksRequest` defaults. */
 export const DEFAULT_PEAK_FIND: Readonly<PeakFindParams> = Object.freeze({
