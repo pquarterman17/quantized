@@ -400,6 +400,9 @@ export interface CategoryAxisStyleWire {
   rotation: 0 | 45 | 90;
   wrap: number | null;
   tiered: boolean;
+  /** "auto": the figure applies the wrap-or-rotate rule in its own geometry
+   *  (`calc.figure_category_axis.fit_category_labels`). */
+  fit?: "auto" | null;
 }
 
 /** Render a statistical plot (box/violin/Q-Q/histogram) server-side

@@ -99,7 +99,8 @@
             "lot = L2",
             "wafer = W2"
           ]
-        ]
+        ],
+        "fit": "auto"
       },
       "y_domain": [
         0.568,
@@ -175,7 +176,12 @@
       ],
       "show_n": true,
       "caveat": null,
-      "axis_style": null,
+      "axis_style": {
+        "rotation": 0,
+        "wrap": null,
+        "tiered": false,
+        "fit": "auto"
+      },
       "y_domain": null
     },
     "screen": {
@@ -246,7 +252,12 @@
         "#e84855",
         "#3e2f5b"
       ],
-      "axis_style": null,
+      "axis_style": {
+        "rotation": 0,
+        "wrap": null,
+        "tiered": false,
+        "fit": "auto"
+      },
       "stacked": false,
       "caveat": null,
       "error_note": "Error bars: SE of the mean",
@@ -464,7 +475,8 @@
       "axis_style": {
         "rotation": 0,
         "wrap": null,
-        "tiered": true
+        "tiered": true,
+        "fit": "auto"
       }
     },
     "screen": {

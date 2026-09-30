@@ -24,13 +24,28 @@
 //     whose `tight_layout` shrinks the axes instead — never needs;
 //   * `rotation` 45 / 90 turns the labels, anchored at their END on the tick,
 //     as matplotlib's `ha="right"` + `rotation_mode="anchor"` (45) and
-//     centred rotation (90) do.
+//     centred rotation (90) do;
+//   * `fit: "auto"` (the long-label leftover): with neither chosen, a label
+//     wider than its slot wraps, or rotates when it cannot wrap — ONE rule
+//     (`lib/statMarks.fitCategoryLabels`, the export's `fit_category_labels`,
+//     pinned by `tests/fixtures/wire/stat_label_fit.json`), each side over
+//     its OWN text metrics and slot pitch (`statLabelMetrics.labelWidth`
+//     here: the canvas's `measureText`; matplotlib's renderer there), so a
+//     label that would
+//     overlap its neighbour in that medium is the one that turns there.
 // The axis's DEPTH (`categoryAxisLayout`) is what the plot rect's bottom
 // margin is sized from, so the layout, the painter and the click hit-test
-// (`statRenderSelection`) cannot disagree about where the plot ends.
+// (`statRenderSelection`) cannot disagree about where the plot ends. A
+// rotated label's depth is measured from the same text metrics, not
+// estimated from its character count.
 
-import { LABEL_WRAP_WIDTH, MAX_WRAP_LINES, nestedTiers, wrapLabel, type TierRun } from "../../lib/statMarks";
+import {
+  fitCategoryLabels, LABEL_WRAP_WIDTH, MAX_WRAP_LINES, nestedTiers, wrapLabel, type TierRun,
+} from "../../lib/statMarks";
+import { CHAR_W, LABEL_FONT, labelWidth } from "./statLabelMetrics";
 import type { Rect } from "./statRender";
+
+export { labelWidth } from "./statLabelMetrics";
 
 /** Label options, as the draw carries them (absent = none). */
 export interface CategoryAxisStyle {
@@ -40,10 +55,12 @@ export interface CategoryAxisStyle {
    *  structurally nested (`StatDrawData.nestLabel`), null/absent otherwise
    *  — never inferred from the label text itself. */
   nestLabel?: string | null;
+  /** "auto": apply the wrap-or-rotate rule (module header) when neither
+   *  `rotation` nor `wrap` is set. Absent = the options as given. */
+  fit?: "auto";
 }
 
 const LINE = 11; // px per 10px label line
-const CHAR_W = 6; // JetBrains Mono 10px advance, px
 const TOP = 6; // tick-label offset below the plot rect
 const TIER = 14; // the outer tier's row
 const CAPTION = 13; // gap from the labels to the axis caption
@@ -68,11 +85,13 @@ export interface CategoryAxisLayout {
   /** The bottom margin the plot rect needs, px. */
   bottom: number;
   /** Review finding 7: the rotation ACTUALLY used — `style.rotation` unless
-   *  capping (`maxBottom`) dropped it to fit. The painter reads THIS, never
-   *  `style.rotation` directly, so a degraded layout's `depth`/`captionY`
-   *  and its own rotated-text drawing can never disagree about which
-   *  rotation the numbers above describe. */
+   *  capping (`maxBottom`) dropped it to fit, or `fit: "auto"` chose one.
+   *  The painter reads THIS, never `style.rotation` directly, so a degraded
+   *  layout's `depth`/`captionY` and its own rotated-text drawing can never
+   *  disagree about which rotation the numbers above describe. */
   rotation: 0 | 45 | 90;
+  /** Whether the labels are wrapped — `style.wrap`, or `fit: "auto"`'s choice. */
+  wrap: boolean;
 }
 
 /** One geometry attempt at (`wrap`, `maxLines`, `rotation`) — the pure inner
@@ -89,12 +108,13 @@ function buildLayout(
   const one = (t: string) => [fit === undefined ? t : truncateLabel(t, fit)];
   const lines = texts.map((t) => (wrap ? wrapLabel(t, LABEL_WRAP_WIDTH, maxLines) : one(t)));
   const nLines = Math.max(1, ...lines.map((l) => l.length));
-  const longest = Math.max(0, ...lines.flat().map((l) => Array.from(l).length));
+  // Measured, not counted: the widest line's own text width.
+  const longest = rot === 0 ? 0 : Math.max(0, ...lines.flat().map(labelWidth));
   const theta = (rot * Math.PI) / 180;
   const depth =
-    rot === 0 ? nLines * LINE : Math.ceil(longest * CHAR_W * Math.sin(theta) + nLines * LINE * Math.cos(theta));
+    rot === 0 ? nLines * LINE : Math.ceil(longest * Math.sin(theta) + nLines * LINE * Math.cos(theta));
   const captionY = TOP + depth + (tiered ? TIER : 0) + CAPTION;
-  return { lines, depth, captionY, bottom: Math.max(48, captionY + 18), rotation: rot };
+  return { lines, depth, captionY, bottom: Math.max(48, captionY + 18), rotation: rot, wrap };
 }
 
 /** The longest single line (in characters) a label rotated by `rot` can
@@ -110,12 +130,16 @@ function fitChars(maxBottom: number, rot: 0 | 45 | 90, tiered: boolean): number 
 }
 
 function computeCategoryAxisLayout(
-  labels: readonly string[], style: CategoryAxisStyle, maxBottom: number | undefined,
+  labels: readonly string[], style: CategoryAxisStyle, maxBottom: number | undefined, pitch: number | undefined,
 ): CategoryAxisLayout {
   const tiered = nestedTiers(labels, style.nestLabel);
   const texts = tiered ? tiered.inner : labels;
-  const wrap = style.wrap ?? false;
-  const rot = style.rotation ?? 0;
+  // The long-label rule, over THIS canvas's slot pitch and text widths.
+  const fit = style.fit === "auto" && pitch !== undefined
+    ? fitCategoryLabels(texts, style.rotation ?? 0, style.wrap ?? false, labelWidth, pitch, LINE)
+    : { rotation: style.rotation ?? 0, wrap: style.wrap ?? false };
+  const wrap = fit.wrap;
+  const rot = fit.rotation;
   let built = buildLayout(texts, wrap, MAX_WRAP_LINES, rot, tiered != null);
   if (maxBottom != null && built.bottom > maxBottom) {
     // Shorter wraps first, then ONE line cut to the characters the cap
@@ -156,7 +180,9 @@ let lastLayoutKey: string | null = null;
 let lastLayoutResult: CategoryAxisLayout | null = null;
 
 /** The whole axis's geometry for these labels and options — pure (memoized
- *  by its own inputs; see the module note above).
+ *  by its own inputs; see the module note above). `pitch` is one slot's
+ *  width, px (the plot rect's width over the slot count): what `fit:
+ *  "auto"` measures the labels against; absent, the options apply as given.
  *
  *  Review finding 7: `maxBottom` (the plot rect's own cap, `h * 0.45`) is
  *  optional so every EXISTING caller (canvas paint, hit-test, and every
@@ -172,14 +198,24 @@ let lastLayoutResult: CategoryAxisLayout | null = null;
  *  consistent (if tight) number rather than an uncapped one nothing else
  *  agrees with. */
 export function categoryAxisLayout(
-  labels: readonly string[], style: CategoryAxisStyle = {}, maxBottom?: number,
+  labels: readonly string[], style: CategoryAxisStyle = {}, maxBottom?: number, pitch?: number,
 ): CategoryAxisLayout {
-  const key = JSON.stringify([labels, style.rotation, style.wrap, style.nestLabel, maxBottom]);
+  // The measured widths are inputs too: a font that finishes loading
+  // between two paints changes the depth, and must change the key.
+  const key = JSON.stringify([
+    labels, style.rotation, style.wrap, style.nestLabel, style.fit, maxBottom, pitch, labels.map(labelWidth),
+  ]);
   if (key === lastLayoutKey && lastLayoutResult) return lastLayoutResult;
-  const result = computeCategoryAxisLayout(labels, style, maxBottom);
+  const result = computeCategoryAxisLayout(labels, style, maxBottom, pitch);
   lastLayoutKey = key;
   lastLayoutResult = result;
   return result;
+}
+
+/** One slot's pitch in `rect`, px — the ONE number `plotRect`, the painter
+ *  and the hit-test all hand the layout (they share the rect's width). */
+export function slotPitch(rect: Pick<Rect, "w">, count: number): number {
+  return rect.w / Math.max(1, count);
 }
 
 export function drawCategoryAxis(
@@ -195,10 +231,10 @@ export function drawCategoryAxis(
   // Review finding 7: `rect.maxBottom` (set by `plotRect`) — the SAME cap,
   // so a degraded layout here is the IDENTICAL one the rect's own margin
   // was sized from, never an uncapped one that overruns the canvas.
-  const layout = categoryAxisLayout(labels, style, rect.maxBottom);
+  const layout = categoryAxisLayout(labels, style, rect.maxBottom, slotPitch(rect, labels.length));
   const base = rect.y + rect.h + TOP;
-  const rot = layout.rotation; // NOT style.rotation -- capping may have dropped it
-  ctx.font = "10px 'JetBrains Mono', monospace";
+  const rot = layout.rotation; // NOT style.rotation -- capping may have dropped it, or auto-fit chose it
+  ctx.font = LABEL_FONT;
   ctx.fillStyle = muted;
   slots.forEach((s, i) => {
     const sx = rect.x + s.cx * rect.w;

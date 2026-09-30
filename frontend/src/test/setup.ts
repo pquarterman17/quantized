@@ -4,6 +4,14 @@ import { cleanup } from "@testing-library/react";
 import { JSDOM } from "jsdom";
 import { afterEach } from "vitest";
 
+import { monospaceEstimate, setLabelMeasurer } from "../components/Stage/statLabelMetrics";
+
+// node-canvas gives jsdom a REAL `measureText`, in whatever monospace font
+// this machine resolves — the Stat Stage's label metrics would then differ
+// per machine. Pin the count-based estimate so the axis layout tests pin
+// numbers; a test that wants to measure installs its own (see the module).
+setLabelMeasurer(monospaceEstimate);
+
 // Node 20+ ships its OWN `localStorage` global (experimental, file-backed).
 // It is an own accessor on globalThis, so vitest's jsdom environment skips
 // installing jsdom's Storage over it — and Node's getter returns `undefined`

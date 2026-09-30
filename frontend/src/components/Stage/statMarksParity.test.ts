@@ -176,7 +176,7 @@ describe("categorical marks — the canvas and the export carry the same options
     const spec = await exported(result);
     expect(spec.labels).toEqual(labels);
     expect(spec.axis_style).toEqual({
-      rotation: 0, wrap: null, tiered: true,
+      rotation: 0, wrap: null, tiered: true, fit: "auto",
       tiers: labels.map((l) => [l.slice(0, l.indexOf(" / ")), l.slice(l.indexOf(" / ") + 3)]),
     });
   });

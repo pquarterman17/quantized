@@ -65,6 +65,11 @@ class CategoryAxisStyle(BaseModel):
     wrap: int | None = Field(default=None, ge=4, le=60)
     tiered: bool = False
     tiers: list[tuple[str, str]] | None = None
+    # The long-label leftover: "auto" = with rotation 0 and no wrap, the
+    # figure wraps or rotates labels wider than their slot by the rule it
+    # shares with the canvas (`calc.figure_category_axis.fit_category_labels`),
+    # in its OWN geometry. None (a legacy request) applies the options as given.
+    fit: Literal["auto"] | None = None
 
 
 def _axis_style(style: CategoryAxisStyle | None) -> dict[str, Any] | None:

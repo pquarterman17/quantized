@@ -1,0 +1,18 @@
+{
+  "_comment": "P2.6 box 1 leftover: the wrap-or-rotate rule for long upright category labels, shared by calc.figure_category_axis.fit_category_labels and frontend lib/statMarks.fitCategoryLabels. Each case measures a label as char_w per code point and a line as line_h tall (the canvas's monospace estimate; each side substitutes its own text metrics at run time), against a slot `pitch` in the same unit. An explicit rotation/wrap wins; else upright when the widest label fits its slot; else wrapped (LABEL_WRAP_WIDTH 12, at most 3 lines, no line cut) when every wrapped line fits; else rotated 45 when the pitch is at least line_h*sqrt(2), 90 below that.",
+  "char_w": 6,
+  "line_h": 11,
+  "cases": [
+    { "name": "short labels stay upright", "labels": ["a", "b", "c"], "rotation": 0, "wrap": false, "pitch": 40, "fit": { "rotation": 0, "wrap": false } },
+    { "name": "a label exactly as wide as its slot fits", "labels": ["abcdefghij"], "rotation": 0, "wrap": false, "pitch": 60, "fit": { "rotation": 0, "wrap": false } },
+    { "name": "an explicit rotation is kept", "labels": ["Anneal 450 C under vacuum"], "rotation": 90, "wrap": false, "pitch": 20, "fit": { "rotation": 90, "wrap": false } },
+    { "name": "an explicit wrap is kept", "labels": ["Anneal 450 C under vacuum"], "rotation": 0, "wrap": true, "pitch": 300, "fit": { "rotation": 0, "wrap": true } },
+    { "name": "too wide, wraps within three lines that fit", "labels": ["Anneal temperature 450 C", "Anneal temperature 500 C"], "rotation": 0, "wrap": false, "pitch": 80, "fit": { "rotation": 0, "wrap": true } },
+    { "name": "a wrapped line still too wide: rotate 45", "labels": ["Anneal temperature 450 C", "Anneal temperature 500 C"], "rotation": 0, "wrap": false, "pitch": 60, "fit": { "rotation": 45, "wrap": false } },
+    { "name": "needs four lines to wrap: rotate 45", "labels": ["Anneal temperature under vacuum 450 C"], "rotation": 0, "wrap": false, "pitch": 100, "fit": { "rotation": 45, "wrap": false } },
+    { "name": "one long word hard-splits into three fitting lines", "labels": ["supercalifragilisticexpialidocious"], "rotation": 0, "wrap": false, "pitch": 72, "fit": { "rotation": 0, "wrap": true } },
+    { "name": "pitch just at line_h*sqrt2: 45", "labels": ["supercalifragilisticexpialidocious"], "rotation": 0, "wrap": false, "pitch": 16, "fit": { "rotation": 45, "wrap": false } },
+    { "name": "pitch under line_h*sqrt2: 90", "labels": ["Anneal temperature 450 C", "B"], "rotation": 0, "wrap": false, "pitch": 15, "fit": { "rotation": 90, "wrap": false } },
+    { "name": "no labels", "labels": [], "rotation": 0, "wrap": false, "pitch": 10, "fit": { "rotation": 0, "wrap": false } }
+  ]
+}

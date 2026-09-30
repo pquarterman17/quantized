@@ -201,14 +201,29 @@ export function plotRect(w: number, h: number, data: StatDrawData | null = null)
   // of this function clamping the NUMBER externally while the painter drew
   // an uncapped one nothing here agreed with.
   const maxBottom = Math.max(MARGIN.bottom, h * 0.45);
-  const bottom = labels.length ? categoryAxisLayout(labels, axisStyleOf(data), maxBottom).bottom : MARGIN.bottom;
+  const rectW = Math.max(1, w - MARGIN.left - MARGIN.right);
+  // The same pitch the painter's `slotPitch(rect, n)` computes from this rect.
+  const bottom = labels.length
+    ? categoryAxisLayout(labels, axisStyleOf(data), maxBottom, rectW / labels.length).bottom
+    : MARGIN.bottom;
   return {
     x: MARGIN.left,
     y: MARGIN.top,
-    w: Math.max(1, w - MARGIN.left - MARGIN.right),
+    w: rectW,
     h: Math.max(1, h - MARGIN.top - bottom),
     maxBottom,
   };
+}
+
+/** The category axis's rotation as painted on a `w` x `h` canvas — the
+ *  layout's OWN (`fit: "auto"` or the cap may have changed the option),
+ *  or null when `data` has no category axis. Published on the canvas host
+ *  as `data-axis-rotation` so the DOM (and an e2e run) can read it. */
+export function paintedAxisRotation(w: number, h: number, data: StatDrawData | null): 0 | 45 | 90 | null {
+  const labels = axisLabelsOf(data);
+  if (!labels.length) return null;
+  const rect = plotRect(w, h, data);
+  return categoryAxisLayout(labels, axisStyleOf(data), rect.maxBottom, rect.w / labels.length).rotation;
 }
 
 export function draw(canvas: HTMLCanvasElement, host: HTMLElement, data: StatDrawData | null) {
@@ -221,6 +236,11 @@ export function draw(canvas: HTMLCanvasElement, host: HTMLElement, data: StatDra
   canvas.height = Math.round(H * dpr);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, W, H);
+  const rotation = paintedAxisRotation(W, H, data);
+  if (host.dataset) {
+    if (rotation === null) delete host.dataset.axisRotation;
+    else host.dataset.axisRotation = String(rotation);
+  }
   if (!data) return;
 
   const ink = cssVar("--text", "#e6e6e6");
