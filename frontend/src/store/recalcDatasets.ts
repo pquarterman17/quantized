@@ -38,35 +38,44 @@
 
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import { rowsChangedGuard } from "./corrections";
+import { plural } from "../lib/plural";
 import { sortForRecalc } from "../lib/recalc";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
-/** Does `d` depend, directly, on a dataset that failed to re-derive this pass?
- *  Only the direct edges are checked because `sortForRecalc` guarantees an
- *  upstream-first walk: a failure two hops up has already propagated into
- *  `failed` via the intermediate node by the time we reach `d`. */
-function upstreamFailed(
+const message = (e: unknown): string => (e instanceof Error ? e.message : "error");
+
+/** The dataset `d` depends on, directly, that failed to re-derive this pass
+ *  (null when none did). Only the direct edges are checked because
+ *  `sortForRecalc` guarantees an upstream-first walk: a failure two hops up
+ *  has already propagated into `failed` via the intermediate node by the
+ *  time we reach `d`. */
+function failedUpstream(
   d: { bgRef?: { datasetId: string }; derivedFrom?: { datasetId: string } },
-  failed: ReadonlySet<string>,
-): boolean {
-  return (
-    (d.bgRef != null && failed.has(d.bgRef.datasetId)) ||
-    (d.derivedFrom != null && failed.has(d.derivedFrom.datasetId))
-  );
+  failed: ReadonlyMap<string, string>,
+): string | null {
+  if (d.bgRef != null && failed.has(d.bgRef.datasetId)) return d.bgRef.datasetId;
+  if (d.derivedFrom != null && failed.has(d.derivedFrom.datasetId)) return d.derivedFrom.datasetId;
+  return null;
 }
 
 /** Re-derive every stale dataset (bgRef corrections + derived-worksheet
  *  pipelines), clearing each from `staleDatasets` only on a genuine success.
  *  Called ONLY from useApp.ts's `recalcNow`, BEFORE `recomputeStaleFits` —
- *  corrections change the data fits consume, so datasets settle first. */
+ *  corrections change the data fits consume, so datasets settle first.
+ *  A pass with any failure ends with ONE status naming how many settled and
+ *  which datasets did not, and why (store/reimportAllRun.ts's summary shape)
+ *  — the per-dataset messages a walk emits overwrite each other, so a pass
+ *  that re-derived two and refused one used to read like it refused all. */
 export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Promise<void> {
-  // Ids that FAILED to re-derive in this pass. Anything downstream of one is
-  // left stale too — see `upstreamFailed` below.
-  const failed = new Set<string>();
-  for (const id of sortForRecalc(get().datasets, get().staleDatasets)) {
+  // Ids that FAILED to re-derive in this pass, with why. Anything downstream
+  // of one is left stale too — see `failedUpstream` below.
+  const failed = new Map<string, string>();
+  const nameOf = (id: string): string => get().datasets.find((x) => x.id === id)?.name ?? id;
+  const order = sortForRecalc(get().datasets, get().staleDatasets);
+  for (const id of order) {
     const d = get().datasets.find((x) => x.id === id);
     // REVIEW ROUND: clearing only the FAILING id was not enough — the same bug
     // this function exists to fix simply moved one hop downstream. With a->b->c,
@@ -75,8 +84,9 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
     // derived from data that no longer exists. Because `sortForRecalc` walks
     // upstream-first, every upstream of `id` has already been attempted by the
     // time we get here, so one membership test is enough — no second pass.
-    if (d && upstreamFailed(d, failed)) {
-      failed.add(id);
+    const source = d ? failedUpstream(d, failed) : null;
+    if (source) {
+      failed.set(id, `its source ${nameOf(source)} failed`);
       continue; // stays stale, and so does anything downstream of IT
     }
     // A derived worksheet (K2) recomputes through its OWN pipeline-against-
@@ -104,8 +114,7 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
         });
         if (statusMsg) get().setStatus(statusMsg);
       } catch (e) {
-        get().setStatus(`derived worksheet recompute failed: ${e instanceof Error ? e.message : "error"}`);
-        failed.add(id); /* stays stale, and so does anything downstream */
+        failed.set(id, `derived worksheet recompute failed: ${message(e)}`); /* stays stale, and so does anything downstream */
       }
     } else if (d?.corrections && d.raw) {
       // REVIEW ROUND: the per-item try/catch was dropped when this moved out of
@@ -115,19 +124,25 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
       // entirely, and surface as an unhandled rejection from auto mode's
       // `void recalcNow()`. One dataset failing must not silently cancel
       // everyone else's recalculation.
-      let ok = false;
+      // `applyCorrections` explains its own refusal through `setStatus`; that
+      // text is the reason the summary carries (never a status it did NOT set).
+      const before = get().status;
       try {
-        ok = await get().applyCorrections(id, d.corrections, d.bgRef);
+        if (await get().applyCorrections(id, d.corrections, d.bgRef)) {
+          set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));
+          continue;
+        }
+        failed.set(id, get().status === before ? "correction refused" : get().status); /* stays stale */
       } catch (e) {
-        get().setStatus(`recalculation failed: ${e instanceof Error ? e.message : "error"}`);
-      }
-      if (ok) {
-        set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));
-      } else {
-        failed.add(id); /* stays stale; applyCorrections already set a status */
+        failed.set(id, `recalculation failed: ${message(e)}`);
       }
     } else {
       set((s) => ({ staleDatasets: s.staleDatasets.filter((x) => x !== id) }));
     }
+  }
+  if (failed.size > 0) {
+    const n = order.length;
+    const why = [...failed].map(([id, reason]) => `${nameOf(id)}: ${reason}`).join("; ");
+    get().setStatus(`recalculated ${n - failed.size} of ${n} dataset${plural(n)} — ${why}`);
   }
 }

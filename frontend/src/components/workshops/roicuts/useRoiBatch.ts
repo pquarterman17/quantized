@@ -31,6 +31,7 @@ import { saveBlob } from "../../../lib/download";
 import { is2DMap } from "../../../lib/mapdata";
 import { hasQSpace } from "../../../lib/mapdataFetch";
 import { plotSelectedTogether } from "../../../lib/plotSelectedTogether";
+import { plural } from "../../../lib/plural";
 import { normalizeRect, roiBoxBody, roiStatsBody, type BoxCutOptions, type RoiRect } from "../../../lib/roi";
 import type { DataStruct } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
@@ -253,9 +254,12 @@ export function useRoiBatch(): RoiBatchState {
 
       setOutcome({ appliedCount: newIds.length, skipped, errored, statsErrored, newIds, plottedTogether, summaryLanded });
 
-      const skipNote = skipped.length ? `, skipped ${skipped.length}` : "";
-      const errorNote = errored.length ? `, ${errored.length} failed` : "";
-      useApp.getState().setStatus(`batch: applied to ${newIds.length}${skipNote}${errorNote}`);
+      // The one-line report names WHICH dataset and WHY (the `outcome` card
+      // is gone with the panel); pattern: store/reimportAllRun.ts's summary.
+      const problems = [...skipped, ...errored, ...statsErrored.map((e) => ({ ...e, reason: `stats: ${e.reason}` }))];
+      const why = problems.length ? ` — ${problems.map((p) => `${p.name}: ${p.reason}`).join("; ")}` : "";
+      const total = resolved.length;
+      useApp.getState().setStatus(`batch: applied to ${newIds.length} of ${total} dataset${plural(total)}${why}`);
     } catch (e) {
       // Per-dataset cut/stats failures are already caught above and reported
       // in `outcome` — this only catches something unexpected (a bug in
