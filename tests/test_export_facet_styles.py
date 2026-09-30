@@ -14,6 +14,15 @@ their own: a styled lone series still has no legend (only an encoded panel
 always keys), an encoded panel lays its encoding over the channel's style, and
 a leaked document-only key is a 422 on a facet series as it is on
 ``series_styles``.
+
+The fixture's second entry, ``group``, is Group ALONE on a facet grid (P1.4
+residual 3 follow-up): the same screen test records the split grid the Stage
+draws (one series per level in every panel, each in the channel's dash and
+width) and the request, which carries no ``encoding`` -- only ``group_col``
+and each panel's ``rows`` / ``channels`` -- and the route splits it the same
+way. Colour is the one thing not compared: like the flat grouped export
+(BUG-016), a grouped request sends no palette-derived colour, so matplotlib's
+own cycle colours the levels.
 """
 
 from __future__ import annotations
@@ -134,6 +143,66 @@ def test_a_styled_lone_series_still_has_no_legend(monkeypatch: pytest.MonkeyPatc
     axes = _panels(fig)
     assert all(ax.get_legend() is None for ax in axes)
     assert axes[0].get_lines()[0].get_linestyle() == "--"
+
+
+def _points(line: Any) -> list[list[float]]:
+    x, y = (np.asarray(v, dtype=float) for v in line.get_data())
+    keep = np.isfinite(x) & np.isfinite(y)
+    return [[float(a), float(b)] for a, b in zip(x[keep], y[keep], strict=True)]
+
+
+def test_group_alone_splits_every_panel_by_level(monkeypatch: pytest.MonkeyPatch) -> None:
+    fx = dict(json.loads(FIXTURE.read_text(encoding="utf-8"))["group"])
+    assert "encoding" not in fx["request"] and fx["request"]["group_col"] == 2
+    fig = _post_capturing(monkeypatch, fx["request"])
+    panels = _panels(fig)
+    assert [ax.get_title() for ax in panels] == [p["label"] for p in fx["screen"]]
+    for ax, want in zip(panels, fx["screen"], strict=True):
+        lines = ax.get_lines()
+        assert [ln.get_label() for ln in lines] == [s["label"] for s in want["series"]]
+        assert [_points(ln) for ln in lines] == [s["points"] for s in want["series"]]
+        # Every level wears the channel's dash and width (the flat plot's rule).
+        assert all(_drawn(ln)["linestyle"] == "--" and _drawn(ln)["width"] == 2.0 for ln in lines)
+        legend = ax.get_legend()
+        assert legend is not None, "a split panel always has its key"
+        assert [t.get_text() for t in legend.get_texts()] == [s["label"] for s in want["series"]]
+
+
+def test_an_older_grouped_request_without_rows_draws_the_unsplit_grid(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fx = json.loads(FIXTURE.read_text(encoding="utf-8"))["group"]
+    req = json.loads(json.dumps(fx["request"]))
+    for f in req["facets"]:
+        f.pop("rows")
+        f.pop("channels")
+    fig = _post_capturing(monkeypatch, req)
+    assert [len(ax.get_lines()) for ax in _panels(fig)] == [1, 1]
+
+
+def test_group_only_split_names_and_styles_levels_like_the_flat_plot() -> None:
+    # ch0 x, ch1 y, ch2 group (levels 0/1); the second panel lacks level 1.
+    values = np.array([[0, 1.0, 0], [1, 2.0, 1], [2, 3.0, 0], [3, 4.0, 0]], dtype=float)
+    ds = DataStruct(
+        time=np.arange(4, dtype=float), values=values, labels=("x", "y", "g"),
+        units=("", "V", ""), metadata={},
+    )
+    style = {"color": "#ff8800", "line": "dashed"}
+    panels = encoded_facet_panels(
+        ds, 0,
+        [
+            {"label": "P", "x": [0, 1], "rows": [0, 1], "channels": [1],
+             "series": [{"label": "y", "style": style}]},
+            {"label": "Q", "x": [2, 3], "rows": [2, 3], "channels": [1],
+             "series": [{"label": "y", "style": style}]},
+        ],
+        group_col=2, color_col=None, symbol_col=None, label_col=None, palette=None, markers=None,
+    )
+    labels = [[s["label"] for s in p["series"]] for p in panels]
+    assert labels == [["y (g=0) (V)", "y (g=1) (V)"], ["y (g=0) (V)"]]
+    # A chosen colour reaches every level (BUG-016); no palette is invented.
+    assert all(s["style"] == style for p in panels for s in p["series"])
+    assert all(p["key"] is True for p in panels)
 
 
 def _ds() -> DataStruct:

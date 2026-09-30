@@ -48,20 +48,40 @@ def _request_dataset(req: FigureRequest) -> DataStruct:
         raise ValueError("unknown or expired dataset_handle; send the dataset") from exc
 
 
+def _split_facets(req: FigureRequest) -> bool:
+    """Does the facet grid split its panels server-side: an active encoding,
+    or (P1.4 residual 3 follow-up) Group ALONE -- ``group_col`` with panels
+    that name their ``rows`` and ``channels`` (an older client's grouped
+    facet request carries neither and draws the unsplit grid it always
+    did)? The screen's rule is ``plotEncodingBinding.facetSplitEncoding``."""
+    assert req.facets
+    if req.encoding is not None and req.encoding.active():
+        return True
+    return req.group_col is not None and all(f.rows is not None and f.channels for f in req.facets)
+
+
 def _encoded_facet_panels(req: FigureRequest) -> list[dict[str, Any]]:
-    """P1.4 residual 3: an ENCODED facet grid. The panels are re-split by the
-    encoding over the request's dataset (``calc.plotting_encoded_facets``,
-    the port of ``lib/plotEncodingFacets.ts``); each panel's ``rows`` and
-    ``channels`` say which dataset rows and Y channels it plots."""
-    assert req.facets and req.encoding
+    """P1.4 residual 3: an ENCODED (or Group-only) facet grid. The panels are
+    re-split by the encoding and/or ``group_col`` over the request's dataset
+    (``calc.plotting_encoded_facets``, the port of
+    ``lib/plotEncodingFacets.ts``); each panel's ``rows`` and ``channels``
+    say which dataset rows and Y channels it plots. With no ``encoding``
+    (Group alone) the split has no colour / symbol / label factor and no
+    palette: a level takes the channel's chosen colour, else matplotlib's
+    cycle -- the flat grouped export's own rule (BUG-016)."""
+    assert req.facets
     enc = req.encoding
-    ds = append_text_factors(_request_dataset(req), enc.text_columns or [])
+    ds = append_text_factors(_request_dataset(req), (enc.text_columns if enc else None) or [])
     return encoded_facet_panels(
         ds,
         req.x_key,
         [f.model_dump() for f in req.facets],
-        group_col=req.group_col, color_col=enc.color_col, symbol_col=enc.symbol_col,
-        label_col=enc.label_col, palette=enc.palette, markers=enc.markers,
+        group_col=req.group_col,
+        color_col=enc.color_col if enc else None,
+        symbol_col=enc.symbol_col if enc else None,
+        label_col=enc.label_col if enc else None,
+        palette=enc.palette if enc else None,
+        markers=enc.markers if enc else None,
     )
 
 
@@ -77,7 +97,7 @@ def _facet_panels(req: FigureRequest) -> list[dict[str, Any]]:
     ``req.facets``' pydantic model instances into plain dicts -- exactly the
     route-layer job the calc/routes split reserves for routes/."""
     assert req.facets
-    if req.encoding is not None and req.encoding.active():
+    if _split_facets(req):
         return _encoded_facet_panels(req)
     # FEATURE-001: each series' own channel's style rides the panel (one
     # style per channel, applied in every panel); absent = unstyled.

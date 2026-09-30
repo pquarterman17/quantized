@@ -29,7 +29,7 @@ import { buildFigureSpecFromDocument } from "./figureSpec";
 import { withFacetRows } from "./figureSpecFacets";
 import { facetSplitChannels } from "./facet";
 import { encodedFacetPanels, encodeSpec } from "./plotEncoding";
-import { facetEncoding, type FigureEncoding } from "./plotEncodingBinding";
+import { facetEncoding, facetSplitEncoding, type FigureEncoding } from "./plotEncodingBinding";
 import type { PlotSpec } from "./plotspec";
 import { defaultPlotView } from "./plotview";
 import { SERIES_VARS } from "./seriesStyleCycle";
@@ -209,6 +209,41 @@ describe("Color / Symbol / Label on an xy facet grid — preview, Stage and expo
     ]);
     expect(encodingNotes(ds, { ...SPEC, zones: { ...zones, label: null } })).toEqual([]); // nothing assigned
     expect(encodingNotes(ds, { ...SPEC, zones: { ...zones, y: [r] } })).toEqual([]); // explicit Y
+  });
+
+  it("Group ALONE splits every panel by level, like the flat plot, on screen and in the request", async () => {
+    const groupOnly = { group: 2, color: null, symbol: null, label: null };
+    expect(facetSplitEncoding(null, 2)).toEqual(groupOnly);
+    expect(facetSplitEncoding(null, null)).toBeNull();
+    expect(facetSplitEncoding({ group: 2, color: null, symbol: null, label: null, gradient: 1 }, 2)).toEqual(groupOnly);
+    expect(facetSplitEncoding({ group: 2, color: 3, symbol: null, label: null }, 2)).toEqual({
+      group: 2, color: 3, symbol: null, label: null,
+    });
+    // Group by sample (S3, S1, S2 order): panel F1 has all three, F2 no S2.
+    const { result } = renderHook(() => useFacetEncoding(DS, undefined, 2, null, 5, 0, Y));
+    await waitFor(() => expect(result.current).not.toBeNull());
+    const stage = result.current!;
+    expect(stage.labels).toEqual([
+      ["Rxy (sample=S3) (Ohm)", "Rxy (sample=S1) (Ohm)", "Rxy (sample=S2) (Ohm)"],
+      ["Rxy (sample=S3) (Ohm)", "Rxy (sample=S1) (Ohm)"],
+    ]);
+    // A level keeps its WHOLE-split position colour in every panel.
+    expect(stage.styles.map((p) => p.map((st) => st.color))).toEqual([
+      [SERIES_VARS[0], SERIES_VARS[1], SERIES_VARS[2]], [SERIES_VARS[0], SERIES_VARS[1]],
+    ]);
+    // A secondary axis degrades the group away (`canvasGroupCol`), as on the flat plot.
+    const { result: y2 } = renderHook(() => useFacetEncoding(DS, undefined, null, [1], 5, 0, Y));
+    expect(y2.current).toBeNull();
+    // The request: no `encoding`, `group_col` as ever, the panels' rows and channels.
+    const doc = createFigureDocument({
+      id: "w", name: "w", datasetId: "fe", view: { ...defaultPlotView(), xKey: 0, yKeys: Y, facetKey: 5, groupKey: 2 },
+      facetKey: 5, groupKey: 2, mark: "scatter",
+    });
+    const request = buildFigureSpecFromDocument(doc, DS, "fe", OPTS);
+    expect(request.encoding).toBeUndefined();
+    expect(request.group_col).toBe(2);
+    expect(request.facets?.map((f) => f.rows)).toEqual([[0, 1, 2, 4, 5, 10, 11, 12], [6, 7, 8, 9]]);
+    expect(request.facets?.map((f) => f.channels)).toEqual([[1], [1]]);
   });
 
   it("no encoding with only a gradient, or with none: the grid is unchanged", async () => {

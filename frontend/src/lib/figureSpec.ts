@@ -301,7 +301,10 @@ function buildFigureSpecForView(
       ? facetSplitChannels(pruneToLiveDataset(data, extras.liveDataset), st.xKey, st.yKeys)
       : null;
   const encoding = facets === undefined ? gated : facetYKeys ? facetEncoding(gated) : null;
-  const wireFacets = facets && encoding && facetYKeys
+  // Group ALONE splits a facet grid too (`facetSplitEncoding`, the Stage's
+  // rule): the panels then carry rows and channels for the route's split, and
+  // the group rides `group_col` as ever -- `encoding` stays absent.
+  const wireFacets = facets && facetYKeys && (encoding || groupCol !== null)
     ? withFacetRows(facets, data, st.facetKey as number, facetYKeys, extras.liveDataset, st.seriesLabels)
     : facets;
   // F4.2c (a): an encoded request is split server-side, so it keeps EVERY row

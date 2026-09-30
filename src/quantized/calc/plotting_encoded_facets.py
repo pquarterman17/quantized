@@ -23,6 +23,12 @@ channel and the same in every panel (BUGS_AND_ISSUES FEATURE-001; the screen's
 The client ships each panel's rows (``rows``: the dataset row behind each
 ``x`` entry) and the channels it plots, so nothing here re-slices by the facet
 column -- the panel partition stays the screen's.
+
+Group ALONE (no colour / symbol / label factor) goes through the same split:
+one series per (channel, group level) in every panel, named as the flat
+grouped plot names them (``"{label} ({group}={level})"``), each level in its
+channel's chosen colour else the panel's cycle -- the flat plot's own rule
+(``lib/plotGroupSplit`` on screen, BUG-016 on the wire).
 """
 
 from __future__ import annotations

@@ -8,10 +8,15 @@
 // `channels` list, so panels that resolve DIFFERENT channel sets (the case that
 // broke the two reverted attempts) each still dress the right curve.
 //
+// The second case is Group ALONE on a facet grid (P1.4 residual 3 follow-up):
+// with no Color / Symbol / Label the grid still splits each panel's series by
+// group level, exactly as the flat plot does (`plotEncodingBinding.
+// facetSplitEncoding`), every level in its channel's chosen style.
+//
 // Request + screen are the committed wire fixture
-// `tests/fixtures/wire/facet_styles.json`, which the BACKEND half
-// (`tests/test_export_facet_styles.py`) posts to the real route and reads back
-// line by line. To regenerate after a DELIBERATE rule change:
+// `tests/fixtures/wire/facet_styles.json` (`styles` and `group`), which the
+// BACKEND half (`tests/test_export_facet_styles.py`) posts to the real route
+// and reads back line by line. To regenerate after a DELIBERATE rule change:
 //   GRAPH_ENCODING_FIXTURE_WRITE=1 npx vitest run src/components/Stage/MultiPanelStage.facetStyles.test.tsx
 
 import { render, waitFor } from "@testing-library/react";
@@ -37,12 +42,13 @@ function MultiPanelStage() {
 }
 
 type SeriesOpts = { label?: string; stroke?: unknown; width?: number; dash?: number[]; points?: { show?: boolean } };
+type Cols = readonly (readonly (number | null)[])[];
 const { created, MockUPlot } = vi.hoisted(() => {
-  const created: { opts: { series: SeriesOpts[] } }[] = [];
+  const created: { opts: { title?: string; series: SeriesOpts[] }; data: Cols }[] = [];
   class MockUPlot {
     scales = { x: { min: 0, max: 1 } };
-    constructor(opts: { series: SeriesOpts[] }) {
-      created.push({ opts });
+    constructor(opts: { title?: string; series: SeriesOpts[] }, data: Cols) {
+      created.push({ opts, data });
     }
     destroy(): void {}
     setSize(): void {}
@@ -157,5 +163,78 @@ describe("MultiPanelStage — per-channel styles on an unencoded facet grid (FEA
     const current = JSON.parse(JSON.stringify({ request, screen })) as unknown;
     written.styles = current;
     expect(current).toEqual(JSON.parse(readFileSync(FIXTURE, "utf-8")).styles);
+  });
+});
+
+// ch0 B (x), ch1 level (the facet column), ch2 g (the group, A/B), ch3 M.
+// Level 1 has NO B rows, so its panel keeps one series -- and that series keeps
+// A's WHOLE-split colour, not the panel-local first slot.
+const GROUP_ROWS = [
+  [0, 0, 0, 1.0], [1, 0, 0, 1.5], [2, 0, 0, 1.2],
+  [0, 0, 1, 2.0], [1, 0, 1, 2.5], [2, 0, 1, 2.2],
+  [0, 1, 0, 3.0], [1, 1, 0, 3.5],
+];
+const GROUP_DATA: DataStruct = {
+  time: GROUP_ROWS.map((_, i) => i),
+  values: GROUP_ROWS,
+  labels: ["B", "level", "g", "M"],
+  units: ["T", "", "", "emu"],
+  metadata: {},
+  cat_levels: { 2: ["A", "B"] },
+};
+const GROUP_DS: Dataset = { id: "fg", name: "group.csv", data: GROUP_DATA };
+const GROUP_STYLES: Record<number, SeriesStyle> = { 3: { line: "dashed", width: 2 } };
+
+/** The finite (x, y) points of panel column `j + 1`, in row order. */
+function points(data: Cols, j: number): [number, number][] {
+  return data[0].flatMap((x, r): [number, number][] => {
+    const y = data[j + 1][r];
+    return x === null || y === null || !Number.isFinite(y) ? [] : [[x, y]];
+  });
+}
+
+describe("MultiPanelStage — Group alone on a facet grid splits each panel by level", () => {
+  it("every panel draws one series per level in the channel's style, keyed like the flat plot", async () => {
+    useApp.setState({
+      datasets: [GROUP_DS], activeId: "fg", xKey: 0, yKeys: [3], groupKey: 2, seriesStyles: GROUP_STYLES,
+    });
+    useApp.getState().facetByColumn("fg", 1);
+    render(<MultiPanelStage />);
+    // The split loads lazily (`useFacetEncoding`): the unsplit grid draws
+    // first, then the SPLIT grid replaces it -- wait on the last two panels.
+    const labelsOf = () => created.slice(-2).map((c) => c.opts.series.slice(1).map((s) => s.label));
+    await waitFor(() => expect(labelsOf()).toEqual([["M (g=A) (emu)", "M (g=B) (emu)"], ["M (g=A) (emu)"]]));
+    const grid = created.slice(-2);
+    const [p0, p1] = grid.map((c) => c.opts.series.slice(1));
+    // Every level wears the CHANNEL's dash and width (the flat plot's
+    // edit-all rule); colours follow the level's position in the WHOLE split.
+    for (const s of [...p0, ...p1]) expect(s).toMatchObject({ width: 2, dash: [8, 4] });
+    expect(p0[0].stroke).toBe(PALETTE[0]);
+    expect(p0[1].stroke).toBe(PALETTE[1]);
+    expect(p1[0].stroke).toBe(PALETTE[0]);
+    const screen = grid.map((c) => ({
+      label: c.opts.title ?? "",
+      series: c.opts.series.slice(1).map((s, j) => ({ label: s.label, points: points(c.data, j) })),
+    }));
+    expect(screen[1].series[0].points).toEqual([[0, 3], [1, 3.5]]);
+
+    // The export: no `encoding` (nothing but the group), `group_col` as ever,
+    // and the panels name their rows and channels for the route's own split;
+    // the channel's style rides each panel series.
+    const view = { ...defaultPlotView(), xKey: 0, yKeys: [3], facetKey: 1, groupKey: 2, seriesStyles: GROUP_STYLES };
+    const doc = createFigureDocument({
+      id: "g", name: "g", datasetId: "fg", view, facetKey: 1, groupKey: 2, mark: "line",
+    });
+    const request = buildFigureSpecFromDocument(doc, GROUP_DS, "fg", OPTS);
+    expect(request.encoding).toBeUndefined();
+    expect(request.group_col).toBe(2);
+    expect(request.facets?.map((f) => [f.rows, f.channels])).toEqual([[[0, 1, 2, 3, 4, 5], [3]], [[6, 7], [3]]]);
+    expect(request.facets?.map((f) => f.series.map((s) => s.style))).toEqual([
+      [{ line: "dashed", width: 2 }], [{ line: "dashed", width: 2 }],
+    ]);
+
+    const current = JSON.parse(JSON.stringify({ request, screen })) as unknown;
+    written.group = current;
+    expect(current).toEqual(JSON.parse(readFileSync(FIXTURE, "utf-8")).group);
   });
 });

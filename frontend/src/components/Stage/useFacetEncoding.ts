@@ -2,7 +2,9 @@
 // xy FACET grid — focused (`MultiPanelStage`) and background
 // (`BackgroundStackWindow`) windows alike. The picks are the window's document
 // (`FigureBindings.encoding`), gated by the SAME `windowEncoding` the flat
-// Stage and the export use, less a gradient (`facetEncoding`), over the
+// Stage and the export use, less a gradient, or Group ALONE with no encoding
+// (`facetSplitEncoding` -- a grouped grid splits each panel's series by level
+// as the flat plot does), over the
 // window's explicit Y channels or, with none, the FLAT plot's default list
 // (`lib/facet.facetSplitChannels` — the same in every panel, as the split
 // needs) — the export's own gate (`figureSpec.ts`), so screen and PDF agree
@@ -21,7 +23,7 @@
 import { useMemo } from "react";
 
 import { facetSliceRowIds, facetSlices, facetSplitChannels, type FacetPanel } from "../../lib/facet";
-import { facetEncoding, windowEncoding, type FigureEncoding } from "../../lib/plotEncodingBinding";
+import { facetSplitEncoding, windowEncoding, type FigureEncoding } from "../../lib/plotEncodingBinding";
 import { analysisView } from "../../lib/rowstate";
 import type { Dataset, SeriesStyle } from "../../lib/types";
 import { useStableByValue } from "../../lib/useStableValue";
@@ -39,8 +41,8 @@ const EMPTY_LABELS: Record<number, string> = {};
 const EMPTY_STYLES: Record<number, SeriesStyle> = {};
 
 /** The grid's encoding (see the module doc), or null: no facet column, no Y
- *  channel (explicit or default), no surviving pick, or the derivation not
- *  loaded yet. */
+ *  channel (explicit or default), no surviving pick and no group, or the
+ *  derivation not loaded yet. */
 export function useFacetEncoding(
   active: Dataset | null | undefined,
   picks: FigureEncoding | undefined,
@@ -55,7 +57,9 @@ export function useFacetEncoding(
   const stablePicks = useStableByValue(picks, (v) => JSON.stringify(v));
   const enc = useMemo(
     () =>
-      active && facetKey != null ? facetEncoding(windowEncoding(stablePicks, active, groupCol, y2Keys)) : null,
+      active && facetKey != null
+        ? facetSplitEncoding(windowEncoding(stablePicks, active, groupCol, y2Keys), groupCol)
+        : null,
     [active, stablePicks, groupCol, y2Keys, facetKey],
   );
   const mod = useEncodingModule(enc !== null);

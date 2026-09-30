@@ -144,7 +144,8 @@ export function resolveFacetsOrThrow(
 }
 
 /** P1.4 residual 3: `facets` (`buildFacetSpecs`' panels for the same `data`,
- *  `facetCol` and `liveDataset`, in the same order) for an ENCODED request —
+ *  `facetCol` and `liveDataset`, in the same order) for an ENCODED or GROUPED
+ *  request (`plotEncodingBinding.facetSplitEncoding`) —
  *  each panel names the row of `data` behind each x entry and its Y channels
  *  (`yKeys`, the same in every panel), and each series its channel's rename,
  *  so the route re-splits the panel by the encoding

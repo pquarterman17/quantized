@@ -1269,9 +1269,17 @@ output, not a caught error).
     one per channel applied in every panel through each panel's own
     `channels`, on screen and on the wire (`FigureFacetSeries.style`), an
     encoding laid over them (FEATURE-001's entry has the decision; pinned by
-    `tests/fixtures/wire/facet_styles.json`); Group ALONE on a facet grid
-    still splits nothing (it joins the split once any encoding is set); on a
-    dark plot the canvas
+    `tests/fixtures/wire/facet_styles.json`); ~~Group ALONE on a facet grid
+    still splits nothing (it joins the split once any encoding is set)~~ —
+    CLOSED 2026-09-30: `plotEncodingBinding.facetSplitEncoding` treats Group
+    alone as a group-only split, so every panel draws one series per level in
+    the channel's style, named as the flat plot names them, on screen and in
+    the export (the request carries `group_col` plus the panels' `rows` /
+    `channels`, no `encoding`; the route splits it in
+    `calc/plotting_encoded_facets.py`); pinned by the `group` entry of
+    `tests/fixtures/wire/facet_styles.json`. Like the flat grouped export
+    (BUG-016), a level's colour is matplotlib's cycle unless the channel chose
+    one; on a dark plot the canvas
     lifts a near-black palette colour to its ink colour for legibility
     (`resolveDrawColor`), which the white export does not.
   **Residuals — all five CLOSED (see the bullets above); the box is `[x]`

@@ -211,9 +211,10 @@ class FigureFacet(BaseModel):
     label: str
     x: list[float | None]
     series: list[FigureFacetSeries]
-    # P1.4 residual 3 (with `FigureRequest.encoding` only): the dataset row
-    # behind each `x` entry and the Y channel behind each series, so the route
-    # re-splits the panel by the encoding (`calc.plotting_encoded_facets`).
+    # P1.4 residual 3 (with `FigureRequest.encoding`, or `group_col` alone):
+    # the dataset row behind each `x` entry and the Y channel behind each
+    # series, so the route re-splits the panel by the encoding and/or group
+    # (`calc.plotting_encoded_facets`).
     rows: list[int] | None = None
     channels: list[int] | None = None
 

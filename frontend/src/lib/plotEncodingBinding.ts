@@ -129,6 +129,23 @@ export function facetEncoding(enc: Encoding | null): Encoding | null {
   return rest.color === null && rest.symbol === null && rest.label === null ? null : rest;
 }
 
+/** The split an xy FACET grid draws: `facetEncoding(enc)`, or -- with no
+ *  surviving encoding -- Group ALONE (`groupCol`, the render's already-degraded
+ *  group channel) as a group-only encoding, so a grouped facet grid splits
+ *  each panel's series by level exactly as the flat plot does
+ *  (`lib/plotGroupSplit`: one series per (channel, level), named
+ *  `"label (group=level)"`, each level in its channel's chosen colour else the
+ *  panel's cycle). Null when nothing splits or names. Shared by the Stage
+ *  (`Stage/useFacetEncoding`) and the export (`figureSpec.ts`), whose wire
+ *  then carries the panel rows and channels for the route's own split
+ *  (`calc/plotting_encoded_facets.py`) with `group_col`, and `encoding` only
+ *  for a real encoding. */
+export function facetSplitEncoding(enc: Encoding | null, groupCol: number | null): Encoding | null {
+  const kept = facetEncoding(enc);
+  if (kept) return kept;
+  return groupCol === null ? null : { group: groupCol, color: null, symbol: null, label: null };
+}
+
 /** Does this encoding split the series (a group, colour or symbol factor)? A
  *  legend-source-only or gradient-only encoding keeps one series per Y channel. */
 export function encodingSplits(enc: Encoding): boolean {

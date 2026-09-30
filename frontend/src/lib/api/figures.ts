@@ -46,9 +46,10 @@ export interface FigureFacetSpec {
   label: string;
   x: (number | null)[];
   series: FigureFacetSeries[];
-  /** P1.4 residual 3, with `FigureSpec.encoding` only: the dataset row behind
-   *  each `x` entry and the Y channel behind each series, so the route
-   *  re-splits the panel by the encoding (`lib/figureSpecFacets.withFacetRows`). */
+  /** P1.4 residual 3, with `FigureSpec.encoding` or `group_col`: the dataset
+   *  row behind each `x` entry and the Y channel behind each series, so the
+   *  route re-splits the panel by the encoding and/or group
+   *  (`lib/figureSpecFacets.withFacetRows`). */
   rows?: number[];
   channels?: number[];
 }
