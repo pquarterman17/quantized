@@ -289,17 +289,22 @@ def encoded_series_styles(
     return out
 
 
-def gradient_spec(ds: DataStruct, gradient_col: int | str) -> dict[str, Any] | None:
+def gradient_spec(
+    ds: DataStruct, gradient_col: int | str, excluded: NDArray[np.bool_] | None = None
+) -> dict[str, Any] | None:
     """The style keys a gradient Color-by lays on every encoded series -- the
     port of ``lib/plotEncoding.ts``'s ``encodedGradient``: the column's per-row
     values (``color_by``), its finite range over the request's rows (the rows
     the screen keeps: ``color_lim``), the screen's colormap stops
     (:data:`quantized.calc.figure_colorscatter.GRADIENT_STOPS`) and the
     colour-scale label ``"name (unit)"``. ``None`` when the column has no
-    finite value, as the screen then colours nothing."""
+    finite value, as the screen then colours nothing. ``excluded`` rows (a
+    full-rows request's mask, ``calc.figure_excluded``) stay out of the range,
+    since the screen takes it over the kept rows."""
     col = _check(ds, gradient_col, "gradient_col")
     z = ds.values[:, col]
-    finite = z[np.isfinite(z)]
+    keep = np.isfinite(z) if excluded is None else np.isfinite(z) & ~excluded
+    finite = z[keep]
     if finite.size == 0:
         return None
     unit = ds.units[col]

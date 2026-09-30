@@ -13,9 +13,10 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from quantized.calc.encoding_text import append_text_factors
+from quantized.calc.figure_excluded import excluded_mask, with_excluded_rows
 from quantized.calc.plotting import resolve_style_channels
 from quantized.calc.plotting_encoded import (
     build_encoded_series,
@@ -26,7 +27,7 @@ from quantized.datastruct import DataStruct
 from quantized.routes.export_figures_labels import derived_axis_label, series_legends
 from quantized.routes.export_figures_schema import _ResolvedFigure
 
-__all__ = ["FigureEncoding", "resolve_encoded_figure"]
+__all__ = ["ExcludedRowsFields", "FigureEncoding", "resolve_encoded_figure"]
 
 
 class FigureEncoding(BaseModel):
@@ -73,6 +74,39 @@ class FigureEncoding(BaseModel):
         return any(c is not None for c in cols)
 
 
+class ExcludedRowsFields(BaseModel):
+    """``FigureRequest``'s per-row mask for excluded rows (F4.2c (a)). Only an
+    ENCODED request takes it: the backend splits that one, so it needs the
+    full rows to take the window's levels. Every other request already sends
+    the pruned rows plus any greyed companions as ordinary channels
+    (``lib/excludedRowsExport.ts``), so the field there is refused (422)."""
+
+    excluded_rows: list[int] | None = Field(
+        default=None,
+        description=(
+            "Rows of `dataset` the plot window does not draw as data (excluded, or dropped "
+            "by the Data Filter). With `encoding` only: the split takes its levels over "
+            "every row, then these rows are blanked in each series."
+        ),
+    )
+    grey_excluded: bool = Field(
+        default=False,
+        description=(
+            "With `excluded_rows`: also draw those rows as one grey, line-free "
+            "'(excluded)' marker series per series, after all the series."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _mask_needs_an_encoding(self) -> ExcludedRowsFields:
+        encoding = getattr(self, "encoding", None)
+        if self.excluded_rows and not (isinstance(encoding, FigureEncoding) and encoding.active()):
+            raise ValueError(
+                "excluded_rows needs an active encoding; other figures send the pruned rows"
+            )
+        return self
+
+
 def resolve_encoded_figure(
     ds: DataStruct,
     enc: FigureEncoding,
@@ -85,6 +119,7 @@ def resolve_encoded_figure(
     error_spans: Sequence[Mapping[str, Any] | None] | None,
     x_label: str | None,
     y_label: str | None,
+    excluded: ExcludedRowsFields | None = None,
 ) -> _ResolvedFigure:
     """The encoded branch of ``routes.export_figures._figure_series``.
 
@@ -98,7 +133,13 @@ def resolve_encoded_figure(
     the group split's own rule. ``series_styles`` is
     ``y_keys``-aligned and expanded per channel before the encoding is laid on
     top (``calc.plotting_encoded.encoded_series_styles``); a series name is its
-    label-source legend verbatim, else ``"label (unit)"`` -- BUG-014's rule."""
+    label-source legend verbatim, else ``"label (unit)"`` -- BUG-014's rule.
+
+    ``excluded`` (F4.2c (a)) carries the window's excluded rows. The split
+    and the label-source text still take every row, as the window does. The
+    rows are then blanked (and, greyed, drawn as companions) by
+    ``calc.figure_excluded.with_excluded_rows``, and a gradient's range covers
+    only the kept rows (the window's ``stageGradient``)."""
     if y2_keys:
         raise ValueError(
             "encoding cannot be combined with y2_keys -- every encoded series is "
@@ -106,6 +147,7 @@ def resolve_encoded_figure(
         )
     keys = list(y_keys) if y_keys is not None else list(range(ds.n_channels))
     ds = append_text_factors(ds, enc.text_columns or [])
+    mask = excluded_mask(ds.values.shape[0], excluded.excluded_rows if excluded else None)
     encoded = build_encoded_series(
         ds,
         x_key,
@@ -131,9 +173,14 @@ def resolve_encoded_figure(
         palette=enc.palette,
         markers=enc.markers,
         color_by_level=enc.color_col is not None,
-        gradient=None if enc.gradient_col is None else gradient_spec(ds, enc.gradient_col),
+        gradient=None if enc.gradient_col is None else gradient_spec(ds, enc.gradient_col, mask),
     )
     split = group_col is not None or enc.color_col is not None or enc.symbol_col is not None
+    spans = None if split else error_spans
+    if mask is not None:
+        series, styles, spans = with_excluded_rows(
+            series, styles, spans, mask, grey=bool(excluded and excluded.grey_excluded)
+        )
     return _ResolvedFigure(
         plot.x,
         series,
@@ -142,5 +189,5 @@ def resolve_encoded_figure(
         styles,
         [False] * len(series),
         "",
-        None if split else error_spans,
+        spans,
     )

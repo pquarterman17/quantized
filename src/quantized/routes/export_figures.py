@@ -53,7 +53,11 @@ from quantized.routes._export_common import (
     _attachment,
     _safe_name,
 )
-from quantized.routes.export_figures_encoded import FigureEncoding, resolve_encoded_figure
+from quantized.routes.export_figures_encoded import (
+    ExcludedRowsFields,
+    FigureEncoding,
+    resolve_encoded_figure,
+)
 from quantized.routes.export_figures_facets import _render_facets_bytes, _render_facets_map
 from quantized.routes.export_figures_labels import (
     apply_offset_disclosure_to_renames,
@@ -76,7 +80,7 @@ from quantized.routes.export_figures_schema import (
 router = APIRouter(prefix="/api/export", tags=["export"])
 
 
-class FigureRequest(CachedDatasetRequest):
+class FigureRequest(CachedDatasetRequest, ExcludedRowsFields):
     # `dataset`/`dataset_handle` come from CachedDatasetRequest; only
     # /figure-hitmap caches a posted dataset (see _request_dataset).
     x_key: int | str | None = None
@@ -276,7 +280,7 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
         return resolve_encoded_figure(
             ds, req.encoding, x_key=req.x_key, y_keys=req.y_keys, group_col=req.group_col,
             y2_keys=req.y2_keys, series_styles=req.series_styles, error_spans=req.error_spans,
-            x_label=req.x_label, y_label=req.y_label,
+            x_label=req.x_label, y_label=req.y_label, excluded=req,
         )
 
     if req.group_col is not None:
