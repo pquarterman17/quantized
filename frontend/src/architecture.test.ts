@@ -3291,6 +3291,21 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/components/Library/folderRowMenu.ts",
     "/lib/curveContextActions.ts",
     "/lib/quickPlotTemplatesSanitize.ts",
+    // SLICE 13 (2026-09-30): three more edges, no seam. AppOverlays gates the
+    // Recode panel on the tiny `store/recodePanel.ts` mirror instead of
+    // `store/recode.ts`; the window model and the panels slice import the
+    // panel window's record half from the leaf `lib/panelWindowModel.ts`
+    // (taking `lib/facetGrid.ts`, which only `panelGridShape` reached
+    // eagerly); the macro recorder imports the step model from the leaf
+    // `lib/pipelineStep.ts`. Each is still imported statically by lazy
+    // modules (WorksheetPane/RecodePanel, the PanelPlotWindow tree, the
+    // Pipeline panel and `.dwk` codec), so only reachability can hold them.
+    // Replayed over the build's own module graph: 426 -> 425 eager modules
+    // (these four out, the three leaves in).
+    "/store/recode.ts",
+    "/lib/panelwindow.ts",
+    "/lib/facetGrid.ts",
+    "/lib/pipeline.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

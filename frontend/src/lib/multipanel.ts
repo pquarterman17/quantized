@@ -148,8 +148,8 @@ export function spatialGridSize(panels: readonly SpatialPanel[]): { rows: number
 }
 
 // `facetGridSize` lives in the leaf lib/facetGrid.ts (bundle diet slice 12):
-// the panel-window model (lib/panelwindow.ts) needs it at startup, the rest
-// of this module only once a multi-panel stage renders. Re-exported so
+// the panel-window renderer (lib/panelwindow.ts) needs only it, the rest of
+// this module only once a multi-panel stage renders. Re-exported so
 // existing importers are unchanged.
 export { facetGridSize } from "./facetGrid";
 

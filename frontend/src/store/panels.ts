@@ -31,7 +31,7 @@ import {
   type PanelLayout,
   type PlotWindow,
 } from "../lib/plotview";
-import { panelWindowTitle, reorderPanelDatasetIds, removePanelDatasetId } from "../lib/panelwindow";
+import { panelWindowTitle, reorderPanelDatasetIds, removePanelDatasetId } from "../lib/panelWindowModel";
 import type { AppState } from "./useApp";
 import { maxZ, nextWindowId } from "./windows";
 

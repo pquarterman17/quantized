@@ -1,8 +1,10 @@
 // Facet-grid tiling, split out of lib/multipanel.ts (bundle diet slice 12,
-// plans/BUNDLE_HEADROOM.md) as a leaf: lib/panelwindow.ts (eager — the
+// plans/BUNDLE_HEADROOM.md) as a leaf: lib/panelwindow.ts (then eager — the
 // panel-window model) needs only this, while the rest of multipanel.ts is
 // reached from the lazy multi-panel stage renderers and exporters. Moved
-// verbatim; multipanel.ts re-exports it.
+// verbatim; multipanel.ts re-exports it. Since slice 13 only the lazy
+// panel-window renderer reaches it (the eager record half of panelwindow.ts
+// is lib/panelWindowModel.ts).
 
 /** Grid dimensions for tiling `n` HOMOGENEOUS small-multiples panels (facet
  *  grid, gap #21 residual) as close to square as possible. Unlike

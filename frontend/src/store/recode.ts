@@ -65,6 +65,7 @@ import {
 import type { ComputedColumn } from "../lib/types";
 import { toast } from "./toasts";
 import { resolvePendingEdit } from "./pendingEdit";
+import { useRecodePanel } from "./recodePanel";
 import { useApp } from "./useApp";
 
 let _savedSeq = 0;
@@ -301,6 +302,12 @@ export const useRecode = create<RecodeState>((set, get) => ({
     toast(`applied recode mapping "${saved.name}"`, "ok");
   },
 }));
+
+// AppOverlays gates the lazy panel on store/recodePanel.ts's copy of `open`
+// (see that file), so this module stays out of the eager bundle.
+useRecode.subscribe((s) => {
+  if (useRecodePanel.getState().open !== s.open) useRecodePanel.setState({ open: s.open });
+});
 
 /** Live preview for the currently-open panel (old -> new mapping table +
  *  resulting level count) — a thin wrapper so the view doesn't need to
