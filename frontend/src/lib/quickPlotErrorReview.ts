@@ -13,6 +13,13 @@ import type { ParamField } from "./params";
 import { quickPlotAvailability } from "./quickPlot";
 import type { DataStruct, Dataset } from "./types";
 
+// The per-series-X seed rides in THIS on-demand chunk rather than its own:
+// store/quickPlotRun.ts already loads this module for the gestures that
+// need more than the synchronous seed, and a second dynamic-import boundary
+// measurably costs eager bytes (chunk boilerplate; frontend/scripts/
+// check-bundle-size.mjs) without loading any less.
+export { quickPlotSeriesXSeed } from "./quickPlotSeriesX";
+
 /** `"err" → "R"` / `"xerr" → the X axis`: how a pairing reads in a prompt. */
 export function describePairing(data: DataStruct, b: ErrorBinding): string {
   const name = (ch: number) => `"${data.labels[ch] ?? `col ${ch}`}"`;

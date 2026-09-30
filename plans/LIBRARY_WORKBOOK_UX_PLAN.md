@@ -3261,8 +3261,17 @@ PR A acceptance gates:
   child. 2026-09-14: proven by the existing
   `components/Library/WorkbookRow.test.tsx` "double-click reopens the
   remembered child, not the first worksheet".
-- [ ] Right-click a recognized XYXYXY workbook and Quick Plot: three correctly
-  paired editable series are created.
+- [x] Right-click a recognized XYXYXY workbook and Quick Plot: three correctly
+  paired editable series are created. 2026-09-30: it did NOT -- every Y was
+  drawn against the first X (`.time`). New `lib/quickPlot.xyxyxy.test.ts`
+  ("the Library row's Quick Plot command: each Y is drawn against its own
+  preceding X, in row order", plus the seed, the untouched-worksheet/one-Undo
+  and the shared-X control cases) drives the real row action and reads back
+  the drawn (x, y) pairs; 4/4 red on the previous code. Fix: a DECLARED
+  multi-X book (`hasDesignatedSeriesX`, lib/quickPlot.ts) seeds through the
+  on-demand `lib/quickPlotSeriesX.ts` (Origin's nearest-preceding-X rule on
+  the Quick Figure Builder's own overlay) and the figure binds to a new
+  per-series-X overlay dataset, as the builder's create does.
 - [x] Right-click a recognized shared-X worksheet with Y error columns: errors
   attach to the correct series. 2026-09-28: Quick Plot's seed now opts into
   `datasetViewDefaults`' error-role layer (`lib/errorbars.ts`'s

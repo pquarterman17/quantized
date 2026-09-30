@@ -15,6 +15,7 @@ import { compareUnits } from "../lib/errorUnitEvidence";
 import { flatNorm } from "../lib/errorLabelCandidates";
 import { classifyErrorLabelInLabels } from "../lib/errorLabelClassify";
 import { figureSeedErrorBindings, isDeclaredBinding, type ErrorBinding } from "../lib/errorRoles";
+import { hasDesignatedSeriesX } from "../lib/quickPlot";
 import type { Dataset } from "../lib/types";
 import { useApp } from "./useApp";
 
@@ -38,22 +39,32 @@ export function seedIsSettled(ds: Pick<Dataset, "data" | "errorRoles">): boolean
 }
 
 /** Quick Plot `datasetId` from a user gesture; `onDone` runs only when a
- *  figure was actually created (a refusal has no plot to return the Stage to). */
+ *  figure was actually created (a refusal has no plot to return the Stage to).
+ *  A recognized shared-X worksheet with settled error seeds keeps the fully
+ *  synchronous path. Anything more -- the pairing review (unsettled seeds),
+ *  or the per-series-X seed for a declared X,Y,X,Y,... book
+ *  (`hasDesignatedSeriesX`) -- loads lib/quickPlotErrorReview.ts on demand. */
 export function runQuickPlot(datasetId: string, onDone?: () => void): void {
-  const create = (withhold?: readonly ErrorBinding[]): boolean => {
-    const ok = useApp.getState().quickPlotDataset(datasetId, withhold);
+  const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
+  type Extras = typeof import("../lib/quickPlotErrorReview");
+  const create = (withhold: readonly ErrorBinding[] = [], m?: Extras): boolean => {
+    const state = useApp.getState();
+    const now = state.datasets.find((d) => d.id === datasetId);
+    const seriesX = m && now && hasDesignatedSeriesX(now) ? m.quickPlotSeriesXSeed(now, state.techniqueViewMemory, withhold) : null;
+    const ok = state.quickPlotDataset(datasetId, withhold, seriesX);
     if (ok) onDone?.();
     return ok;
   };
-  const ds = useApp.getState().datasets.find((d) => d.id === datasetId);
-  // An unavailable dataset is refused by `quickPlotDataset`; the lazy review
-  // refuses it too before asking anything.
-  if (!ds || seedIsSettled(ds)) {
+  const settled = !ds || seedIsSettled(ds);
+  if (!ds || (settled && !hasDesignatedSeriesX(ds))) {
     create();
     return;
   }
   void import("../lib/quickPlotErrorReview").then(
-    (m) => m.reviewQuickPlotPairings(ds, create),
+    (m) => {
+      if (settled) create([], m);
+      else void m.reviewQuickPlotPairings(ds, (w) => create(w, m));
+    },
     () => useApp.setState({ status: "Quick Plot cancelled" }),
   );
 }

@@ -37,7 +37,10 @@ import type { ErrorBinding } from "../lib/errorRoles";
 import { createFigureDocument } from "../lib/figureDocument";
 import { dedupeWindowTitle } from "../lib/plotview";
 import { quickPlotAvailability, quickPlotFigureSeed } from "../lib/quickPlot";
+import type { QuickPlotSeriesXSeed } from "../lib/quickPlotSeriesX";
+import { quickFigureOverlayDataset } from "../lib/quickFigureSeriesX";
 import { nextFigureId } from "./figureLifecycle";
+import { nextDatasetId } from "./idSeq";
 import type { AppState } from "./useApp";
 import { withPlotWindowDocument } from "./windowDocuments";
 
@@ -53,13 +56,18 @@ export interface QuickPlotActionSlice {
    *  Callers gate a stage-return (`onStageOpen`) on the return value: a
    *  refused Quick Plot has nothing to return TO. `withhold` lists seeded
    *  error pairings to leave out -- ALREADY decided by the caller; the menu
-   *  path (store/quickPlotRun.ts) asks the user before calling this. */
-  quickPlotDataset: (datasetId: string, withhold?: readonly ErrorBinding[]) => boolean;
+   *  path (store/quickPlotRun.ts) asks the user before calling this.
+   *  `seriesX` is that path's seed for a DECLARED multi-X book (X,Y,X,Y,...;
+   *  lib/quickPlotSeriesX.ts, loaded on demand): the figure then binds to a
+   *  NEW per-series-X overlay dataset, exactly as the Quick Figure Builder's
+   *  create does (store/quickFigureCreate.ts), and the worksheet itself is
+   *  never touched. */
+  quickPlotDataset: (datasetId: string, withhold?: readonly ErrorBinding[], seriesX?: QuickPlotSeriesXSeed | null) => boolean;
 }
 
 export function createQuickPlotActionSlice(set: SliceSet, get: SliceGet): QuickPlotActionSlice {
   return {
-    quickPlotDataset: (datasetId, withhold) => {
+    quickPlotDataset: (datasetId, withhold, seriesX) => {
       const state = get();
       const dataset = state.datasets.find((d) => d.id === datasetId);
       if (!dataset) {
@@ -71,12 +79,17 @@ export function createQuickPlotActionSlice(set: SliceSet, get: SliceGet): QuickP
         set({ status: `Quick Plot unavailable for "${dataset.name}": ${availability.reason}` });
         return false;
       }
-      const seed = quickPlotFigureSeed(dataset, state.techniqueViewMemory, withhold);
+      const seed = seriesX ?? quickPlotFigureSeed(dataset, state.techniqueViewMemory, withhold);
+      // The overlay joins `datasets` in the SAME set() as the figure, after
+      // createWindow's snapshot, so the one undo removes it too.
+      const overlay = seriesX ? quickFigureOverlayDataset(nextDatasetId(), dataset, seriesX.overlay) : null;
+      const boundId = overlay?.id ?? dataset.id;
       const name = dedupeWindowTitle(seed.name, state.editableFigures.map((f) => f.name));
-      const windowId = state.createWindow(dataset.id, seed.view, name); // the gesture's one recordHistory
+      const windowId = state.createWindow(boundId, seed.view, name); // the gesture's one recordHistory
       const id = nextFigureId();
-      const document = createFigureDocument({ id, name, datasetId: dataset.id, view: seed.view, errors: seed.errors });
+      const document = createFigureDocument({ id, name, datasetId: boundId, view: seed.view, errors: seed.errors });
       set((current) => ({
+        ...(overlay ? { datasets: [...current.datasets, overlay] } : {}),
         editableFigures: [...current.editableFigures, document],
         plotWindows: current.plotWindows.map((w) =>
           w.id === windowId ? withPlotWindowDocument(w, document) : w,
