@@ -3,7 +3,7 @@
 // useCurveFit.test.ts; this just proves the panel actually surfaces the
 // hook's new by* fields end-to-end.
 
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { listFitModels } from "../../../lib/api/curvefit";
@@ -88,7 +88,8 @@ describe("CurveFitPanel — By grouping (JMP_GAP_PLAN J7 residual)", () => {
 // models in — wrote it.
 describe("CurveFitPanel — saved-model picker stays current", () => {
   const model = (name: string) => ({ version: 1 as const, name, equation: "y = a", params: ["a"], guesses: [1], lower: [null], upper: [null] });
-  const option = (name: string) => screen.queryByRole("option", { name: `ƒ ${name}` });
+  // Scoped to the model picker: Compare models lists the same options.
+  const option = (name: string) => within(screen.getByLabelText("Model")).queryByRole("option", { name: `ƒ ${name}` });
 
   beforeEach(() => localStorage.clear());
 
