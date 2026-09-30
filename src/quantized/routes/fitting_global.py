@@ -33,11 +33,12 @@ from quantized.calc.fitting import weights_from_dy
 from quantized.calc.global_curve_fit import GlobalFitCancelled, global_curve_fit, share_groups
 from quantized.jobs import AbortFn, JobCancelled, JobQueueFullError, ProgressFn, jobs
 from quantized.routes._errors import CALC_ERRORS
+from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes._payload import to_jsonable
 
 ModelFn = Callable[[NDArray[np.float64], NDArray[np.float64]], NDArray[np.float64]]
 
-router = APIRouter(prefix="/api/fitting", tags=["fitting"])
+router = APIRouter(prefix="/api/fitting", tags=["fitting"], route_class=OffloopJSONRoute)
 
 
 class GlobalSeries(BaseModel):
