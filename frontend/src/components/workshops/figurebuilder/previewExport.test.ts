@@ -10,6 +10,7 @@ import type { FigureDocument } from "../../../lib/figureDocument";
 import type { DataStruct } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
 import { useToasts } from "../../../store/toasts";
+import type { LegacyFigureState } from "./legacyFigure";
 import { exportPreviewFigure, type PreviewExportDeps } from "./previewExport";
 
 vi.mock("../../../lib/api/figures", () => ({ exportFigure: vi.fn() }));
@@ -20,6 +21,11 @@ vi.mock("../../../lib/figureSpec", () => ({
 const DATA: DataStruct = { time: [0, 1], values: [[1], [2]], labels: ["A"], units: [""], metadata: {} };
 const SPEC = { dataset: DATA } as unknown as FigureSpec;
 const DOC = { name: "doc.dat", output: { format: "svg" } } as unknown as FigureDocument;
+const LEGACY: LegacyFigureState = {
+  data: DATA, xKey: null, yKeys: [0], xScale: "linear", yScale: "linear",
+  xFmt: { mode: "auto", digits: 2 }, yFmt: { mode: "auto", digits: 2 }, style: "default", overrides: {},
+  title: "", xLabel: "", yLabel: "", seriesStyles: {}, docSeriesStyles: undefined, docGroupCol: null, y2: null,
+};
 
 /** A request that settles only when its signal aborts (as fetch does). */
 function hangUntilAborted(signal?: AbortSignal): Promise<never> {
@@ -33,6 +39,7 @@ function deps(over: Partial<PreviewExportDeps>): PreviewExportDeps & { statuses:
     canonicalReadiness: null,
     canonicalDataset: null,
     spec: SPEC,
+    legacyState: LEGACY,
     frozenData: null,
     active: { id: "d1", name: "scan.dat", data: DATA },
     fmt: "pdf",

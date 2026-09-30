@@ -20,7 +20,18 @@ import { resolveSecondaryAxis, secondaryAxisWire, type SecondaryAxisSpec } from 
 import { buildExportStyles, toWireSeriesStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
 import type { FigureDoc } from "../../../lib/figuredoc";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
-import { axisFmtParam, type AxisFormat, type AxisScale, type DataStruct, type SeriesStyle } from "../../../lib/types";
+import { ghosterFor } from "../../../lib/excludedRowsExport";
+import type { ExcludedRowsGhoster } from "../../../lib/figureSpec";
+import { droppedRows, pruneToLiveDataset } from "../../../lib/rowstate";
+import {
+  axisFmtParam,
+  type AxisFormat,
+  type AxisScale,
+  type DataStruct,
+  type Dataset,
+  type SeriesStyle,
+} from "../../../lib/types";
+import type { ExcludedDisplay } from "../../../store/useApp";
 
 export interface LegacyFigureState {
   /** A re-opened doc's frozen snapshot, else the active dataset's data. Null
@@ -51,6 +62,11 @@ export interface LegacyFigureState {
    *  preview-only field: "Save as figure" cannot persist it (known gap, see
    *  FIGURE_AUTHORING_WORKFLOW_PLAN F2.1g). */
   y2: SecondaryAxisSpec | null;
+  /** The live dataset `data` mirrors, whose excluded and filter-dropped rows
+   *  the canvas never draws as data (F4.2c (a)); null/absent for a frozen
+   *  doc's snapshot. The REQUEST drops those rows (or greys them, see
+   *  `buildLegacyFigureSpec`); "Save as figure" still keeps every row. */
+  liveDataset?: Dataset | null;
 }
 
 /** The channels a spec plots when `yKeys` is the "all channels" null sentinel. */
@@ -88,8 +104,14 @@ function exportStyles(
 }
 
 /** The request shared by the debounced PNG preview and the export at the
- *  chosen format/DPI. Null with no data -- the caller renders nothing. */
-export function buildLegacyFigureSpec(state: LegacyFigureState): FigureSpec | null {
+ *  chosen format/DPI. Null with no data -- the caller renders nothing.
+ *  F4.2c (a): the live dataset's dropped rows are pruned, as the canvas hides
+ *  them, and `greyExcluded` (the app mode for the preview, the user's answer
+ *  for the export) draws them as grey companions instead. */
+export function buildLegacyFigureSpec(
+  state: LegacyFigureState,
+  greyExcluded?: ExcludedRowsGhoster,
+): FigureSpec | null {
   if (!state.data) return null;
   // The document form -> the wire form: the grouped colour rule for a PINNED
   // array, and the provenance flag off, on every request (BUG-016 round 3).
@@ -104,8 +126,8 @@ export function buildLegacyFigureSpec(state: LegacyFigureState): FigureSpec | nu
   const y2Axis = state.y2 === null || state.docGroupCol !== null
     ? null
     : resolveSecondaryAxis(plottedChannels(state, state.data), state.y2, { scale: state.yScale, fmt: state.yFmt });
-  return {
-    dataset: state.data,
+  const spec: FigureSpec = {
+    dataset: pruneToLiveDataset(state.data, state.liveDataset),
     x_key: state.xKey ?? undefined,
     y_keys: state.yKeys ?? undefined,
     x_log: state.xScale === "log",
@@ -123,6 +145,34 @@ export function buildLegacyFigureSpec(state: LegacyFigureState): FigureSpec | nu
     group_col: state.docGroupCol ?? undefined,
     ...secondaryAxisWire(y2Axis),
   };
+  if (!state.liveDataset) return spec;
+  return stableWireDataset(
+    greyExcluded ? greyExcluded(spec, state.data, droppedRows(state.liveDataset)) : spec,
+    state.liveDataset,
+    state.data,
+    `${greyExcluded ? "grey" : "omit"}|${String(spec.x_key)}|${String(spec.y_keys)}`,
+  );
+}
+
+/** The last wire dataset built per live dataset. A pruned or greyed dataset is
+ *  a NEW object on every build, and the preview's dataset-handle cache
+ *  (`lib/api/datasetCache.ts`) is keyed on that object, so without this every
+ *  title keystroke would re-upload the whole dataset. Reused only while the
+ *  same live dataset, data and channel picks produced it. */
+const lastWire = new WeakMap<Dataset, { data: DataStruct; key: string; dataset: DataStruct }>();
+
+function stableWireDataset(spec: FigureSpec, live: Dataset, data: DataStruct, key: string): FigureSpec {
+  if (spec.dataset === data) return spec; // nothing dropped: already the stable object
+  const hit = lastWire.get(live);
+  if (hit && hit.data === data && hit.key === key) return { ...spec, dataset: hit.dataset };
+  lastWire.set(live, { data, key, dataset: spec.dataset });
+  return spec;
+}
+
+/** The preview's request: excluded rows drawn as the canvas draws them
+ *  (the app-wide "Excluded rows" mode). */
+export function buildLegacyPreviewSpec(state: LegacyFigureState, mode: ExcludedDisplay): FigureSpec | null {
+  return buildLegacyFigureSpec(state, ghosterFor(mode));
 }
 
 /** The named `FigureDoc` "Save as figure" persists (#12). A live doc
