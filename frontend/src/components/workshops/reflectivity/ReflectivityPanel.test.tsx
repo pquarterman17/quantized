@@ -49,6 +49,26 @@ describe("ReflectivityPanel", () => {
   });
 });
 
+describe("ReflectivityPanel — graded layers", () => {
+  it("keeps a graded layer out of the fit and says so", async () => {
+    useApp.setState({
+      datasets: [{
+        id: "xrr", name: "xrr.dat",
+        data: { time: [0.01, 0.02, 0.03], values: [[1], [0.5], [0.1]], labels: ["R"], units: [""], metadata: {} },
+      }],
+      activeId: "xrr",
+    });
+    render(<ReflectivityPanel />);
+    await waitFor(() => expect(screen.getAllByRole("option", { name: "Nickel" }).length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole("tab", { name: "Fit" }));
+    expect(screen.getByRole("button", { name: "Run fit" })).toBeEnabled();
+
+    fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "graded" } });
+    expect(screen.getByRole("button", { name: "Run fit" })).toBeDisabled();
+    expect(screen.getByRole("note")).toHaveTextContent("Graded layers are model-only: the fit varies slab layers.");
+  });
+});
+
 describe("ReflectivityPanel — Spin asym.", () => {
   const channel = (id: string, r: number[]) => ({
     id, name: `${id}.dat`,

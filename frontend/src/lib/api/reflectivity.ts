@@ -38,6 +38,19 @@ export function reflSldProfile(body: {
   return postJSON("/api/reflectivity/sld-profile", body);
 }
 
+/** Spline knot interpolation for a graded SLD layer (calc.sld.spline_sld). */
+export type SplineMethod = "pchip" | "spline" | "makima" | "linear";
+
+/** Graded SLD(z) from spline knots, plus its microslab stack (`layers`: an
+ *  ambient row, one [t, sld, 0, 0] slab per grid step, a substrate row). */
+export function reflSplineSld(body: components["schemas"]["SplineSldRequest"]): Promise<{
+  z: number[];
+  sld: (number | null)[];
+  layers: (number | null)[][];
+}> {
+  return postJSON("/api/reflectivity/spline-sld", body);
+}
+
 // ── fit a layer model to measured data (P2.2) ───────────────────────────────
 
 /** Request body for POST /api/reflectivity/fit (generated from the route's

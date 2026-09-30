@@ -11772,6 +11772,96 @@
         "title": "SpinAsymmetryRequest",
         "type": "object"
       },
+      "SplineSldRequest": {
+        "description": "Knots (z \u00c5, SLD \u00c5\u207b\u00b2) interpolated onto ``n_points`` over ``z_range``\n(default: 50 \u00c5 past each end knot); flat ambient/substrate outside.",
+        "properties": {
+          "method": {
+            "default": "pchip",
+            "enum": [
+              "pchip",
+              "spline",
+              "makima",
+              "linear"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "n_points": {
+            "default": 500,
+            "maximum": 2001.0,
+            "minimum": 2.0,
+            "title": "N Points",
+            "type": "integer"
+          },
+          "sld_ambient": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sld Ambient"
+          },
+          "sld_knots": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 64,
+            "minItems": 2,
+            "title": "Sld Knots",
+            "type": "array"
+          },
+          "sld_substrate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sld Substrate"
+          },
+          "z_knots": {
+            "items": {
+              "type": "number"
+            },
+            "maxItems": 64,
+            "minItems": 2,
+            "title": "Z Knots",
+            "type": "array"
+          },
+          "z_range": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Range"
+          }
+        },
+        "required": [
+          "z_knots",
+          "sld_knots"
+        ],
+        "title": "SplineSldRequest",
+        "type": "object"
+      },
       "SplomFigureRequest": {
         "properties": {
           "bins": {
@@ -19049,6 +19139,50 @@
           }
         },
         "summary": "Sld Profile Route",
+        "tags": [
+          "reflectivity"
+        ]
+      }
+    },
+    "/api/reflectivity/spline-sld": {
+      "post": {
+        "description": "Graded SLD(z) from spline knots, plus its (M, 4) microslab layer stack.\n\n``layers`` rows are ``[thickness, sld, sld_imag, roughness]`` (imaginary\nand roughness 0): a zero-thickness ambient row, one slab per grid step,\nand a zero-thickness substrate row.",
+        "operationId": "spline_sld_route_api_reflectivity_spline_sld_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SplineSldRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Spline Sld Route Api Reflectivity Spline Sld Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Spline Sld Route",
         "tags": [
           "reflectivity"
         ]

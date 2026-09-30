@@ -2886,6 +2886,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/reflectivity/spline-sld": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Spline Sld Route
+         * @description Graded SLD(z) from spline knots, plus its (M, 4) microslab layer stack.
+         *
+         *     ``layers`` rows are ``[thickness, sld, sld_imag, roughness]`` (imaginary
+         *     and roughness 0): a zero-thickness ambient row, one slab per grid step,
+         *     and a zero-thickness substrate row.
+         */
+        post: operations["spline_sld_route_api_reflectivity_spline_sld_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/report/emit": {
         parameters: {
             query?: never;
@@ -9809,6 +9833,37 @@ export interface components {
             /** R Pp */
             r_pp: number[];
         };
+        /**
+         * SplineSldRequest
+         * @description Knots (z Å, SLD Å⁻²) interpolated onto ``n_points`` over ``z_range``
+         *     (default: 50 Å past each end knot); flat ambient/substrate outside.
+         */
+        SplineSldRequest: {
+            /**
+             * Method
+             * @default pchip
+             * @enum {string}
+             */
+            method?: "pchip" | "spline" | "makima" | "linear";
+            /**
+             * N Points
+             * @default 500
+             */
+            n_points?: number;
+            /** Sld Ambient */
+            sld_ambient?: number | null;
+            /** Sld Knots */
+            sld_knots: number[];
+            /** Sld Substrate */
+            sld_substrate?: number | null;
+            /** Z Knots */
+            z_knots: number[];
+            /** Z Range */
+            z_range?: [
+                number,
+                number
+            ] | null;
+        };
         /** SplomFigureRequest */
         SplomFigureRequest: {
             /**
@@ -14945,6 +15000,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SldProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    spline_sld_route_api_reflectivity_spline_sld_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SplineSldRequest"];
             };
         };
         responses: {

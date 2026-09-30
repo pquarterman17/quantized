@@ -18,7 +18,8 @@ import type { ReflFitState } from "./useReflFit";
 
 const SECTION = { marginTop: 12, marginBottom: 6 } as const;
 
-export default function ReflFitView({ fit }: { fit: ReflFitState }) {
+/** `blocked`: why this model cannot be fitted (a graded layer), shown as a note. */
+export default function ReflFitView({ fit, blocked = null }: { fit: ReflFitState; blocked?: string | null }) {
   const lambdaMissing = fit.settings.xKind === "twotheta" && fit.lambda == null;
   const h = fit.history;
   const live = fit.result != null && (h.pickedId === null || h.pickedId === fit.liveRecord?.id);
@@ -38,7 +39,7 @@ export default function ReflFitView({ fit }: { fit: ReflFitState }) {
         <Button
           variant="primary"
           size="sm"
-          disabled={fit.busy || fit.channels.length === 0 || lambdaMissing}
+          disabled={fit.busy || fit.channels.length === 0 || lambdaMissing || blocked != null}
           onClick={() => void fit.run()}
         >
           {fit.busy ? "Fitting…" : "Run fit"}
@@ -47,6 +48,11 @@ export default function ReflFitView({ fit }: { fit: ReflFitState }) {
           Cancel
         </Button>
       </div>
+      {blocked && (
+        <div className="qzk-ds-meta qzk-msg" role="note" style={{ marginTop: 6, color: "var(--warn)" }}>
+          {blocked}
+        </div>
+      )}
 
       {fit.error && (
         <div className="qzk-ds-meta qzk-msg" role="alert" style={{ marginTop: 10, color: "var(--danger)" }}>
@@ -63,7 +69,7 @@ export default function ReflFitView({ fit }: { fit: ReflFitState }) {
           <FitResults result={fit.result} />
           {curves && <ReflFitPlots curves={curves} weighting={fit.result.weighting} />}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-            <Button size="sm" disabled={fit.applyBlocked != null} title={fit.applyBlocked ?? undefined} onClick={fit.applyToModel}>
+            <Button size="sm" disabled={fit.applyBlocked != null || blocked != null} title={fit.applyBlocked ?? blocked ?? undefined} onClick={fit.applyToModel}>
               Apply to model
             </Button>
             <Button size="sm" disabled={fit.curvesAdded} onClick={() => void fit.addCurves()}>

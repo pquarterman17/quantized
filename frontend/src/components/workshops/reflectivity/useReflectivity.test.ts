@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { reflPresets, reflSimulate, reflSldProfile } from "../../../lib/api/reflectivity";
+import { reflPresets, reflSimulate, reflSldProfile, reflSplineSld } from "../../../lib/api/reflectivity";
 import type { SldPreset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useReflectivity } from "./useReflectivity";
@@ -10,6 +10,7 @@ vi.mock("../../../lib/api/reflectivity", () => ({
   reflPresets: vi.fn(),
   reflSimulate: vi.fn(),
   reflSldProfile: vi.fn(),
+  reflSplineSld: vi.fn(),
 }));
 
 const PRESETS: SldPreset[] = [
@@ -141,5 +142,27 @@ describe("useReflectivity", () => {
 
     expect(result.current.error).toContain("q_max");
     expect(useApp.getState().datasets).toHaveLength(0);
+  });
+  it("simulates R(Q) and the SLD profile through a graded layer's microslabs", async () => {
+    vi.mocked(reflSplineSld).mockResolvedValue({
+      z: [0, 100, 200],
+      sld: [2e-6, 4e-6, 6e-6],
+      layers: [[0, 2e-6, 0, 0], [100, 3e-6, 0, 0], [100, 5e-6, 0, 0], [0, 6e-6, 0, 0]],
+    });
+    vi.mocked(reflSimulate).mockResolvedValue({ q: [0.01], r: [1] });
+    vi.mocked(reflSldProfile).mockResolvedValue({ z: [0], sld: [0] });
+    const { result } = await mountLoaded();
+    act(() => result.current.updateLayer(1, { graded: { knots: [2e-6, 6e-6], method: "linear" } }));
+
+    await act(async () => {
+      await result.current.simulate();
+      await result.current.sldProfile();
+    });
+
+    expect(reflSplineSld).toHaveBeenCalledWith(expect.objectContaining({ z_knots: [0, 200], z_range: [0, 200] }));
+    const expected = [[0, 0, 0, 0], [100, 3e-6, 0, 5], [100, 5e-6, 0, 0], [0, 2.007e-5, 0, 3]];
+    expect(vi.mocked(reflSimulate).mock.calls[0][0].layers).toEqual(expected);
+    expect(vi.mocked(reflSldProfile).mock.calls[0][0].layers).toEqual(expected);
+    expect(useApp.getState().datasets.map((d) => d.data.metadata?.graded)).toEqual([1, 1]);
   });
 });

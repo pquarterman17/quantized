@@ -58,6 +58,7 @@ from quantized.routes import (
     reductions,
     reference,
     reflectivity,
+    reflectivity_graded,
     report_export,
     rsm,
     samples,
@@ -289,6 +290,7 @@ def create_app(*, dev_origins: Collection[str] | None = None) -> FastAPI:
     application.include_router(peaks_batch.router)
     application.include_router(reductions.router)
     application.include_router(reflectivity.router)
+    application.include_router(reflectivity_graded.router)
     application.include_router(rsm.router)
     application.include_router(xray.router)
     application.include_router(sld.router)
