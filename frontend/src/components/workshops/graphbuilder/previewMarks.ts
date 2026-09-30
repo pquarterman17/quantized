@@ -14,9 +14,10 @@
 //   * the same columns as the render (`lib/plotspecGroupCol.specGroupCol`,
 //     the first Y as the value, every Y as a bar series).
 //
-// A violin previews as a box (the KDE needs the backend) drawn with the
-// VIOLIN's marks. No spec (or no dataset) = the unmarked draws the preview
-// always made.
+// A violin's box draw carries the violin's marks, plus its groups
+// (`violin`), from which `./usePreviewViolins` fetches the KDE the Stat Stage
+// draws; the box stands in until then, or when the backend is unreachable.
+// No spec (or no dataset) = the unmarked draws the preview always made.
 
 import { facetSlices, facetSliceRowIds, type FacetSlice } from "../../../lib/facet";
 import { specDatasetId, type PlotSpec, type SpecRender } from "../../../lib/plotspec";
@@ -24,7 +25,8 @@ import { specGroupCol } from "../../../lib/plotspecGroupCol";
 import type { StatMarksByMode } from "../../../lib/plotviewSanitize";
 import { analysisView } from "../../../lib/rowstate";
 import type { ResolvedStatMarks } from "../../../lib/statMarks";
-import { resolveGroupsIndexed, type IndexedGroupSpec } from "../../../lib/statstage";
+import type { GroupSpec } from "../../../lib/statschooser";
+import { resolveGroups, resolveGroupsIndexed, type IndexedGroupSpec } from "../../../lib/statstage";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { barCellPoints, needsBarRaw, withBarRaw } from "../../Stage/statBarMarks";
 import type { StatDrawData } from "../../Stage/statRender";
@@ -35,6 +37,9 @@ type StatRender = Extract<SpecRender, { kind: "box" | "bar" }>;
 export interface PreviewStatDraws {
   flat: StatDrawData | null;
   facets: { label: string; draw: StatDrawData }[] | null;
+  /** A violin render's groups — the KDE's input (`./usePreviewViolins`),
+   *  aligned with `flat` and `facets`. Absent for box / bar, or with no spec. */
+  violin?: { flat: GroupSpec[]; facets: GroupSpec[][] };
 }
 
 /** What one draw needs to resolve its raw points: the rows it was built
@@ -109,9 +114,15 @@ export function previewStatDraws(
   };
   const panelCtx = ctx && { ...ctx, m: facetMarks(ctx.m) };
   if (render.kind === "box") {
+    // A violin's KDE input: specToRender's own groups, per draw.
+    const groupsOf = (src: Source | null) =>
+      src && ctx ? resolveGroups(src.data, ctx.groupCol, ctx.yChannels[0], ctx.yChannels).filter((g) => g.values.length > 0) : [];
     return {
       flat: boxDraw(render, render.boxes, flatSrc, ctx),
       facets: render.facets?.map((f) => ({ label: f.label, draw: boxDraw(render, f.boxes, sliceSrc(f.label), panelCtx) })) ?? null,
+      ...(render.violin && ctx
+        ? { violin: { flat: groupsOf(flatSrc), facets: render.facets?.map((f) => groupsOf(sliceSrc(f.label))) ?? [] } }
+        : {}),
     };
   }
   return {
