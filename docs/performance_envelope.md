@@ -306,6 +306,36 @@ re-fetch itself for an unchanged dataset); #299 measures the worksheet's
 single-cell EDIT path at 1M rows, which the 2026-07-26 large-workspace run
 (`be40a69`, above) did not — that run covered mount/scroll only.
 
+## Display-only edits patch the live plot — 2026-09-30
+
+A legend hide toggle and a series colour / width / dash edit used to tear
+down and rebuild the whole uPlot instance (`hidden` and `seriesStyles` were
+create-effect deps in `PlotViewport.tsx`). They now patch the live instance:
+visibility through `u.setSeries`, colour through stroke/fill functions that
+read a ref (`lib/uplotLivePaint.ts`), width and dash assigned in place, then
+one `u.redraw`. The new paint comes from the same `buildSeriesDefs` a
+rebuild runs (`lib/uplotSeries.ts`), so screen and rebuild agree. Anything
+that changes series structure (count, markers, fill kind, step, scales)
+still rebuilds.
+
+Measured with a focused Chromium microbench (headless Chromium 141, software
+rendering, shared machine at load average ~16, so absolutes are noisy). Each
+row is a median of 25 edits, timed from the edit to the end of the frame's
+microtasks. "Before" is destroy + `buildOpts` + `new uPlot`, which is what the
+old path ran:
+
+| Case | Rebuild (before) | Live patch (after) |
+|---|---|---|
+| 1M × 7, colour edit | 210–237 ms | 73–75 ms |
+| 1M × 7, legend hide | 212–263 ms | 172–178 ms |
+| 1M × 1, colour edit | 62–66 ms | 18–20 ms |
+| 1M × 1, legend hide | 39–45 ms | 21–27 ms |
+| 82k × 7 (decimated F1 scale), either edit | 50–59 ms | 40–55 ms |
+
+A hide still costs a y re-autoscale and a full path rebuild, because uPlot's
+`setSeries` re-ranges that series' scale. At decimated scale, canvas drawing
+dominates both paths.
+
 ## Residuals (explicitly unmeasured — carry in P0.4)
 
 - Network/offline source transitions — unmeasurable today: no offline-vs-

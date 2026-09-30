@@ -34,12 +34,23 @@ const { created, MockUPlot, statDrawCalls } = vi.hoisted(() => {
   const statDrawCalls: unknown[] = [];
   class MockUPlot {
     scales = { x: { min: 0, max: 1 } };
-    constructor(opts: unknown, data: unknown) {
+    // uPlot keeps the opts' series objects as its live series; the mock does
+    // the same so a display-only patch (setSeries / redraw) is readable.
+    series: { show?: boolean }[];
+    constructor(opts: { series: { show?: boolean }[] }, data: unknown) {
       created.push({ opts, data });
+      this.series = opts.series;
     }
     destroy(): void {}
     setSize(): void {}
     setScale(): void {}
+    setSeries(i: number, o: { show?: boolean }): void {
+      if (o.show != null) this.series[i].show = o.show;
+    }
+    redraw(): void {}
+    batch(fn: () => void): void {
+      fn();
+    }
   }
   return { created, MockUPlot, statDrawCalls };
 });
@@ -544,5 +555,41 @@ describe("BackgroundPlotWindow — Sol review round: figure-scoped rich errors s
       await waitFor(() => expect(created).toHaveLength(1));
       expect(dashes()).toEqual([undefined, undefined]);
     });
+  });
+});
+
+// Display-only edits (legend hide, series colour) patch the live uPlot instead
+// of rebuilding it (lib/uplotLivePaint.ts). Driven through the window's real
+// usePlotPayload pipeline, whose per-series maps (colour-by, error bars,
+// labels) come back as fresh identities on every style edit.
+describe("display-only edits in a background window", () => {
+  const liveStroke = (i: number): unknown => {
+    const opts = created[0].opts as { series: { stroke?: unknown }[] };
+    const v = opts.series[i + 1].stroke; // uPlot index 0 is x
+    return typeof v === "function" ? (v as (u: unknown, i: number) => unknown)(null, i + 1) : v;
+  };
+
+  it("a series colour change and a legend hide keep the same uPlot; a new channel rebuilds", async () => {
+    const base = { ...noBoxView(), yKeys: [0, 1] };
+    const { rerender } = render(<BackgroundPlotWindow dataset={DATASET2} view={base} />);
+    await waitFor(() => expect(created).toHaveLength(1));
+
+    rerender(<BackgroundPlotWindow dataset={DATASET2} view={{ ...base, seriesStyles: { 0: { color: "#30a0e0" } } }} />);
+    expect(created).toHaveLength(1);
+    expect(liveStroke(0)).toBe("#30a0e0");
+
+    rerender(
+      <BackgroundPlotWindow
+        dataset={DATASET2}
+        view={{ ...base, seriesStyles: { 0: { color: "#30a0e0" } }, hiddenChannels: [1] }}
+      />,
+    );
+    expect(created).toHaveLength(1);
+    expect((created[0].opts as { series: { show?: boolean }[] }).series[2].show).toBe(false);
+
+    rerender(<BackgroundPlotWindow dataset={DATASET2} view={{ ...base, yKeys: [0] }} />);
+    // x + one channel, once the narrower payload lands (a plotted-only rebuild may come first).
+    await waitFor(() => expect((created.at(-1)!.opts as { series: unknown[] }).series).toHaveLength(2));
+    expect(created.length).toBeGreaterThanOrEqual(2);
   });
 });

@@ -60,3 +60,42 @@ export function useStableByValue<T>(value: T, serialize: (value: NonNullable<T>)
   }
   return ref.current;
 }
+
+/** Structural equality over plain data: primitives (`Object.is`), arrays,
+ *  Maps and plain objects, recursively. Anything else (a function, a class
+ *  instance) compares by identity, so an unknown shape errs toward "changed". */
+export function sameContent(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== "object" || typeof b !== "object" || a === null || b === null) return false;
+  if (Array.isArray(a)) {
+    if (!Array.isArray(b) || a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) if (!sameContent(a[i], b[i])) return false;
+    return true;
+  }
+  if (a instanceof Map) {
+    if (!(b instanceof Map) || a.size !== b.size) return false;
+    for (const [k, v] of a) if (!b.has(k) || !sameContent(v, b.get(k))) return false;
+    return true;
+  }
+  if (Object.getPrototypeOf(a) !== Object.prototype || Object.getPrototypeOf(b) !== Object.prototype) return false;
+  const ka = Object.keys(a);
+  if (ka.length !== Object.keys(b).length) return false;
+  const ra = a as Record<string, unknown>;
+  const rb = b as Record<string, unknown>;
+  return ka.every((k) => Object.hasOwn(rb, k) && sameContent(ra[k], rb[k]));
+}
+
+/** `useStableByValue` for values too large to serialize every render (a
+ *  row-length error-bar column): keeps the previous reference while `equal`
+ *  says the content is unchanged. `equal` runs only when the identity
+ *  changes, once per new identity — a content-equal value that keeps
+ *  arriving is remembered as seen, not re-compared on every render. */
+export function useStableByEquality<T>(value: T, equal: (a: T, b: T) => boolean = sameContent): T {
+  const held = useRef(value);
+  const seen = useRef(value);
+  if (value !== seen.current) {
+    seen.current = value;
+    if (!equal(held.current, value)) held.current = value;
+  }
+  return held.current;
+}
