@@ -228,15 +228,14 @@ describe("WindowCanvas — ≥2 windows (MDI chrome + focused-window routing)", 
     expect(frames[0]!.querySelector("canvas")).toBeNull(); // w1 is XY (mocked uPlot adds no DOM)
   });
 
-  it("shows a channel-count/rows badge (item 10) for a window bound to a live dataset", async () => {
+  it("shows a rows/channel-count badge (item 10, points first) for a window bound to a live dataset", async () => {
     useApp.setState({
       plotWindows: [win({ id: "w1", winState: "normal" }), win({ id: "w2", winState: "normal" })],
       focusedWindowId: "w1",
     });
     const { container } = render(<WindowCanvas />);
     await waitFor(() => expect(created.length).toBe(2));
-    expect(container.textContent).toContain("1ch");
-    expect(container.textContent).toContain("4pts");
+    expect(container.textContent).toContain("4 pts · 1 ch");
   });
 });
 

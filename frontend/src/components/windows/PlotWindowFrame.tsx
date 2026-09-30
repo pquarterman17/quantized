@@ -239,7 +239,7 @@ export default function PlotWindowFrame({
         {datasetName && <span className="qzk-plotwin-badge">{datasetName}</span>}
         {datasetMeta && (
           <Badge tone="accent" className="qzk-plotwin-meta">
-            {datasetMeta.channels}ch · {datasetMeta.rows}pts
+            {datasetMeta.rows} pts · {datasetMeta.channels} ch
           </Badge>
         )}
         <WindowTitleButtons win={win} />
