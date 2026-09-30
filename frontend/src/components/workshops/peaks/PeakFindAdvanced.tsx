@@ -4,7 +4,7 @@
 // are a local draft; "Find again" applies them (one request per apply, not
 // one per keystroke), "Defaults" restores the backend's and re-finds.
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import BufferedNumberField from "../../primitives/BufferedNumberField";
 import { Checkbox } from "../../primitives/Checkbox";
@@ -58,7 +58,16 @@ interface Props {
 
 export default function PeakFindAdvanced({ value, onApply, busy }: Props) {
   const [draft, setDraft] = useState<PeakFindParams>(value);
-  useEffect(() => setDraft(value), [value]);
+  // A new `value` (the caller applied or reset the settings) replaces the
+  // draft DURING the render that carries it, never from a post-commit
+  // effect: the effect form also ran once on mount, after the chunk's first
+  // commit, and an edit typed into that gap was silently reset (measured
+  // 1/20 under load in the Peak Analyzer's step ② test, 2026-09-30).
+  const [seen, setSeen] = useState(value);
+  if (value !== seen) {
+    setSeen(value);
+    setDraft(value);
+  }
   const set = <K extends keyof PeakFindParams>(k: K, v: PeakFindParams[K]) => setDraft((d) => ({ ...d, [k]: v }));
 
   const numRow = (s: NumSpec) => (

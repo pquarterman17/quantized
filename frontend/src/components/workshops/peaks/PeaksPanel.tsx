@@ -14,7 +14,6 @@
 
 import { useState } from "react";
 
-import PeakFindAdvanced from "./PeakFindAdvanced";
 import PeakFitControls from "./PeakFitControls";
 import PeakTable from "./PeakTable";
 import PeakValueCell from "./PeakValueCell";
@@ -44,6 +43,12 @@ const NO_FITTED_PEAKS: FittedPeak[] = [];
 
 // Opened on demand only: its chunk loads on the first "Batch integrate…".
 const BatchIntegrateWindow = lazyRegion(() => import("./BatchIntegrateWindow"), "Batch integrate");
+// Lazy for the same reason the Peak Analyzer's step ② loads it lazily
+// (peakwizard/StepFindAdvanced.tsx): the disclosure is rarely opened, and a
+// STATIC import here would make the module — shared with that lazy step — a
+// preload of this panel, i.e. one more chunk name in the entry's manifest
+// (measured +42 eager bytes, 2026-09-30).
+const PeakFindAdvanced = lazyRegion(() => import("./PeakFindAdvanced"), "Advanced");
 
 export default function PeaksPanel() {
   const setOpen = useApp((s) => s.setPeaksOpen);

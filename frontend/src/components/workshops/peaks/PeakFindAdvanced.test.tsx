@@ -56,7 +56,8 @@ describe("PeaksPanel ▸ Advanced peak-find settings", () => {
     await waitFor(() => expect(detectedRows()).toHaveLength(2));
     vi.mocked(findPeaks).mockResolvedValue({ peaks: [peak(3)], background: [] });
 
-    fireEvent.change(screen.getByLabelText("Max width"), { target: { value: "0.5" } });
+    // The disclosure is a lazy chunk: the first field access waits for it.
+    fireEvent.change(await screen.findByLabelText("Max width"), { target: { value: "0.5" } });
     fireEvent.change(screen.getByLabelText("Min width"), { target: { value: "0.05" } });
     fireEvent.change(screen.getByLabelText("Background"), { target: { value: "polynomial" } });
     fireEvent.change(screen.getByLabelText("Polynomial degree"), { target: { value: "2" } });
@@ -77,7 +78,7 @@ describe("PeaksPanel ▸ Advanced peak-find settings", () => {
     render(<PeaksPanel />);
     await waitFor(() => expect(detectedRows()).toHaveLength(2));
     vi.mocked(findPeaks).mockResolvedValue({ peaks: [peak(3)], background: [] });
-    fireEvent.change(screen.getByLabelText("SNIP window"), { target: { value: "0.3" } });
+    fireEvent.change(await screen.findByLabelText("SNIP window"), { target: { value: "0.3" } });
     fireEvent.click(screen.getByRole("button", { name: "Find again" }));
     await waitFor(() => expect(detectedRows()).toHaveLength(1));
     expect(vi.mocked(findPeaks).mock.calls.at(-1)![0]).toMatchObject({ max_window_deg: 0.3 });
