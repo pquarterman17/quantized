@@ -12,7 +12,8 @@
 // a recipe's JSON small and diffable. Pure; part of the lazy capture chunk.
 
 import { PREVIEW_MAX_POINTS, PREVIEW_MAX_SERIES } from "./plotRecipeMigrate";
-import type { RecipePreview } from "./plotRecipeSchema";
+import { facetGridSize } from "./facetGrid";
+import type { PlotRecipe, RecipePreview } from "./plotRecipeSchema";
 import { droppedRows } from "./rowstate";
 import type { PlotView } from "./plotview";
 import type { AxisScale, Dataset } from "./types";
@@ -45,6 +46,29 @@ const norm = (v: number, [lo, hi]: [number, number]): number => (hi > lo ? (v - 
 function downsample<T>(items: readonly T[], max: number): T[] {
   if (items.length <= max) return [...items];
   return Array.from({ length: max }, (_, i) => items[Math.round((i * (items.length - 1)) / (max - 1))]);
+}
+
+/** What the thumbnail draws besides the curves (Q6): the recipe's multi-panel
+ *  grid, if any, and whether it carries a map view. Derived at render time
+ *  from what the recipe recorded, so every v3 recipe gets it. */
+export interface PreviewGlyph {
+  grid: { rows: number; cols: number } | null;
+  map: boolean;
+}
+
+/** `grid` is a spatial composition's cell extent, or a composite panel
+ *  window's shape (`lib/panelwindow.ts`'s `panelGridShape`, mirrored here
+ *  so this chunk stays free of its render helpers); null for one plot,
+ *  including an overlay window. */
+export function previewGlyph(r: Pick<PlotRecipe, "panels" | "map" | "panelWindow">): PreviewGlyph {
+  let grid: PreviewGlyph["grid"] = null;
+  if (r.panels) {
+    grid = { rows: Math.max(...r.panels.panels.map((p) => p.row)) + 1, cols: Math.max(...r.panels.panels.map((p) => p.col)) + 1 };
+  } else if (r.panelWindow && r.panelWindow.layout !== "overlay") {
+    const n = r.panelWindow.datasets.length;
+    grid = r.panelWindow.layout === "row" ? { rows: 1, cols: n } : r.panelWindow.layout === "column" ? { rows: n, cols: 1 } : facetGridSize(n);
+  }
+  return { grid: grid && grid.rows * grid.cols > 1 ? grid : null, map: Boolean(r.map) };
 }
 
 /** The preview of `view` over `dataset`, or null when nothing is plottable. */

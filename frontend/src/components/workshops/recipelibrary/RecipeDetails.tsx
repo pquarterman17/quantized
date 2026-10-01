@@ -18,7 +18,7 @@ export function RecipeDetails({ id, details, label = "Recipe" }: { id: string; d
   return (
     <div id={id} className="qz-recipe-details">
       {/* Plot recipes only (F4.2): the thumbnail captured at save time. */}
-      {details.preview !== undefined && <RecipeThumbnail preview={details.preview} label={label} />}
+      {details.preview !== undefined && <RecipeThumbnail preview={details.preview} label={label} glyph={details.glyph} />}
       <dl className="qz-recipe-details-fields">
         {details.fields.map((f) => (
           <div className="qz-recipe-details-row" key={f.label}>

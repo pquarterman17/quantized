@@ -4,7 +4,8 @@
 import { describe, expect, it } from "vitest";
 
 import { captureRecipe } from "./plotRecipe";
-import { capturePreview } from "./plotRecipePreview";
+import { capturePreview, previewGlyph } from "./plotRecipePreview";
+import type { RecipePanel } from "./plotRecipeSchema";
 import { defaultPlotView, type PlotView } from "./plotview";
 import type { Dataset } from "./types";
 
@@ -94,5 +95,38 @@ describe("captureRecipe v2 fields", () => {
   it("ignores malformed transform provenance", () => {
     const bad = ds({}, { transform_recipe: { recipe: 42 } });
     expect(captureRecipe(bad, view(), null, opts).transform).toBeNull();
+  });
+});
+
+// Q6 (b): the thumbnail reflects a v3 recipe's multi-panel layout (a grid
+// glyph) and its map view, derived from what the recipe recorded.
+describe("previewGlyph", () => {
+  const panel = (row: number, col: number): RecipePanel => ({
+    dataset: null, x: "x", y: ["I"], y2: [], xLim: [0, 1], yLim: [0, 1], y2Lim: null,
+    xStep: null, yStep: null, y2Step: null, xLog: false, yLog: false, y2Log: false,
+    seriesStyles: {}, seriesLabels: {}, hiddenChannels: [], errKeys: {}, annotations: [], regionShades: [], row, col,
+  });
+  const none = { panels: null, map: null };
+
+  it("is a plain glyph for a single-panel recipe without a map", () => {
+    expect(previewGlyph(none)).toEqual({ grid: null, map: false });
+  });
+
+  it("sizes a spatial composition's grid from its panels' cells", () => {
+    const panels = { panels: [panel(0, 0), panel(0, 1), panel(1, 0)], panelFit: "frames" as const, pageSetup: null };
+    expect(previewGlyph({ ...none, panels })).toEqual({ grid: { rows: 2, cols: 2 }, map: false });
+  });
+
+  it("shapes a composite panel window like the window itself does", () => {
+    const pw = (layout: "row" | "column" | "grid" | "overlay", n: number) =>
+      previewGlyph({ ...none, panelWindow: { datasets: Array.from({ length: n }, (_, i) => (i ? `d${i}` : null)), layout } }).grid;
+    expect(pw("row", 3)).toEqual({ rows: 1, cols: 3 });
+    expect(pw("column", 2)).toEqual({ rows: 2, cols: 1 });
+    expect(pw("grid", 4)).toEqual({ rows: 2, cols: 2 });
+    expect(pw("overlay", 3)).toBeNull(); // one shared plot, no grid
+  });
+
+  it("flags a recorded map view", () => {
+    expect(previewGlyph({ ...none, map: { colormap: "magma", logZ: false, colorLimits: null } }).map).toBe(true);
   });
 });

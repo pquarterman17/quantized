@@ -39,12 +39,14 @@ import {
 } from "./plotRecipe";
 import {
   resolvePanels,
+  resolvePanelWindow,
   type RecipePanelIssue,
+  type ResolvedPanelWindow,
   type ResolvedRecipePanels,
   type ResolvePanelsOptions,
 } from "./plotRecipePanels";
 
-export type { RecipePanelBinding, RecipePanelIssue, ResolvedRecipePanels } from "./plotRecipePanels";
+export type { RecipePanelBinding, RecipePanelIssue, ResolvedPanelWindow, ResolvedRecipePanels } from "./plotRecipePanels";
 
 /** The re-keyed mapping, ready to apply to `dataset` -- the `PlotView`/
  *  `FigureBindings` shape, but assembled fresh rather than a patch (the
@@ -101,6 +103,9 @@ export interface ResolvedRecipeApplication {
   panels: ResolvedRecipePanels | null;
   /** v3: the map view to install on the target dataset, or null. */
   map: RecipeMapView | null;
+  /** v3 (Q6): the composite panel window to open instead of a plot window;
+   *  absent for every other recipe. */
+  panelWindow?: ResolvedPanelWindow;
 }
 
 /** `panelIssues` is the structured twin of the panel entries in `unmatched`
@@ -342,11 +347,15 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset, opts: Resolv
 
   const panelsResolution = recipe.panels ? resolvePanels(recipe.panels, dataset, opts) : null;
   unmatched.push(...(panelsResolution?.unmatched ?? []));
+  const windowResolution = recipe.panelWindow ? resolvePanelWindow(recipe.panelWindow, dataset, opts) : null;
+  unmatched.push(...(windowResolution?.unmatched ?? []));
+  const panelIssues = [...(panelsResolution?.issues ?? []), ...(windowResolution?.issues ?? [])];
 
   const resolved: ResolvedRecipeApplication = {
     mapping: { xKey, yKeys, y2Keys, groupKey, facetKey, errors },
     panels: panelsResolution?.panels ?? null,
     map: recipe.map ? { ...recipe.map, colorLimits: recipe.map.colorLimits ? [...recipe.map.colorLimits] : null } : null,
+    ...(windowResolution?.window ? { panelWindow: windowResolution.window } : {}),
     visual: {
       mark: recipe.visual.mark,
       xScale: recipe.visual.xScale,
@@ -383,5 +392,5 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset, opts: Resolv
     },
   };
 
-  return { resolved, unmatched, warnings, panelIssues: panelsResolution?.issues ?? [] };
+  return { resolved, unmatched, warnings, panelIssues };
 }

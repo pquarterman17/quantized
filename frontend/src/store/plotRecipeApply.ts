@@ -71,14 +71,14 @@ import type {
   ResolveRecipeOptions,
 } from "../lib/plotRecipeMatch";
 import type { PendingPlotRecipeApplication } from "./pendingRecipeApplication";
-import { dedupeWindowTitle, defaultPlotView, type PlotView } from "../lib/plotview";
+import { dedupeWindowTitle, defaultPlotView, snapshotView, type PlotView } from "../lib/plotview";
 import { techniqueOf } from "../lib/techniqueDefaults";
 import type { Dataset } from "../lib/types";
 import type { AppState } from "./useApp";
 import { nextFigureId } from "./figureLifecycle";
 import { nextRefLineId } from "./plotViewSettings";
 import { recordRecipeUse } from "./recordRecipeUse";
-import { withPlotWindowDocument } from "./windowDocuments";
+import { plotWindowDatasetId, withPlotWindowDocument } from "./windowDocuments";
 
 export type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 export type SliceGet = () => AppState;
@@ -188,6 +188,20 @@ export async function applyResolvedRecipe(
     set({ status: `Plot Recipe "${recipe.name}" unavailable: dataset not found` });
     return false;
   }
+  if (resolved.panelWindow) {
+    // Q6: a composite panel window opens a new composite window, exactly as
+    // the Library quick pick does (`focusWindow` only raises a panel window).
+    // The captured map view lands on the TARGET dataset, as below.
+    const { datasetIds, layout } = resolved.panelWindow;
+    const { map } = resolved;
+    get().focusWindow(state.createPanelWindow(datasetIds, layout));
+    set((s) => ({
+      status: `applied plot recipe "${recipe.name}"`,
+      ...(map ? { mapViews: { ...s.mapViews, [dataset.id]: { ...mapViewFor(s.mapViews, dataset.id), ...map } } } : {}),
+    }));
+    await recordApplied(get, recipe);
+    return true;
+  }
   const seedView = viewFromResolved(resolved.mapping, resolved.visual, resolved.panels);
   // Item 10's dedupe convention, against the Library's figure names (the
   // same set `createQuickFigureFromMapping` dedupes its own title against).
@@ -237,30 +251,21 @@ export async function applyResolvedRecipe(
       ...(map ? { mapViews: { ...s.mapViews, [dataset.id]: { ...mapViewFor(s.mapViews, dataset.id), ...map } } } : {}),
     }));
   }
-  // P3.5 "recently used". This is the ONE commit seam every plot-recipe apply
-  // entry point funnels through (`resolveApplyOrStage`'s clean-match branch
-  // and both confirm paths — see this file's header), so recording here counts
-  // each apply exactly once and cannot miss a route. Deliberately AFTER the
-  // early `return false` above: staging, refusing, or losing the dataset is
-  // not a use.
-  //
-  // FINDING 6 (code-review): scope is now decided by ACTUAL LIST MEMBERSHIP,
-  // never an `isBuiltinPlotRecipeId` id-prefix check. The old code skipped
-  // recording only for an id starting with the built-in `"builtin:"` prefix
-  // and otherwise blindly recorded PROJECT-or-GLOBAL by a truthiness check --
-  // two ways that went wrong: (a) a genuine user-saved recipe whose id
-  // happens to start with `"builtin:"` (nothing stops a `.qzrecipe.json`
-  // import from carrying one) was silently skipped even though it lives in
-  // a real list; (b) a project recipe DELETED between staging and this
-  // confirm no longer lives in `state.plotRecipes` at all, yet the old
-  // ternary's `false` branch recorded it as "global" anyway -- a phantom
-  // sidecar row for a recipe that no longer exists in that scope. Checking
-  // BOTH real lists directly (project first, matching `applyPlotRecipe`'s
-  // own lookup order) and recording nothing when the id is in neither closes
-  // both: a built-in (member of neither list, by construction -- see
-  // `lib/builtinPlotRecipes.ts`'s own module doc) still records nothing, but
-  // now because it genuinely isn't anywhere, not because of its id's
-  // spelling.
+  // Deliberately AFTER the early `return false` above: staging, refusing, or
+  // losing the dataset is not a use.
+  await recordApplied(get, recipe);
+  return true;
+}
+
+/** P3.5 "recently used". Every plot-recipe apply funnels through
+ *  `applyResolvedRecipe`, so recording here counts each apply exactly once.
+ *
+ *  FINDING 6 (code-review): scope is decided by ACTUAL LIST MEMBERSHIP, never
+ *  an `isBuiltinPlotRecipeId` id-prefix check -- a user recipe whose id
+ *  happens to start with `"builtin:"` is still recorded, and a project recipe
+ *  DELETED between staging and confirm records nothing (no phantom "global"
+ *  row). A built-in is in neither list, so it records nothing either. */
+async function recordApplied(get: SliceGet, recipe: PlotRecipe): Promise<void> {
   const inProject = get().plotRecipes.some((r) => r.id === recipe.id);
   const inGlobal = inProject
     ? false
@@ -268,7 +273,59 @@ export async function applyResolvedRecipe(
   if (inProject || inGlobal) {
     recordRecipeUse({ kind: "plot", scope: inProject ? "project" : "global", id: recipe.id });
   }
-  return true;
+}
+
+export interface SaveRecipeRequest {
+  name: string;
+  datasetId: string;
+  /** The window to capture; the focused plot window when omitted. */
+  windowId?: string;
+  id: string;
+  appVersion: string;
+}
+
+/** `saveAsPlotRecipe`'s body (store/plotRecipes.ts), moved here so it rides
+ *  the lazy chunk. Loads capture FIRST, then reads every piece of state in
+ *  one synchronous block, so a save/apply started during the load cannot
+ *  interleave with it and dedupe against a stale list. Fails closed (null,
+ *  no history entry) when the dataset is gone or the window does not show
+ *  it: a plot window must be bound to it, a composite panel window (Q6) must
+ *  hold it as one of its cells. */
+export async function saveRecipe(set: SliceSet, get: SliceGet, req: SaveRecipeRequest): Promise<string | null> {
+  const { captureRecipe } = await recipeLibs();
+  const state = get();
+  const dataset = state.datasets.find((d) => d.id === req.datasetId);
+  if (!dataset) {
+    set({ status: "Save Plot Recipe unavailable: dataset not found" });
+    return null;
+  }
+  const win = state.plotWindows.find((w) => w.id === (req.windowId ?? state.focusedWindowId));
+  const panel = win?.kind === "panel" ? win.panel : undefined;
+  const shows = panel ? panel.datasetIds.includes(req.datasetId) : win?.kind === "plot" && plotWindowDatasetId(win) === req.datasetId;
+  if (!win || !shows) {
+    set({ status: "Save Plot Recipe unavailable: no focused plot window showing this dataset" });
+    return null;
+  }
+  const name = dedupeWindowTitle(req.name.trim() || "Untitled Plot Recipe", state.plotRecipes.map((r) => r.name));
+  // The FOCUSED window's live view is the singleton PlotView fields on
+  // `state` (store/windows.ts's "focused-window facade") -- `snapshotView`
+  // reads it; any other window's own `.view` record is already current.
+  const focused = win.id === state.focusedWindowId;
+  const recipe = captureRecipe(dataset, focused ? snapshotView(state) : win.view, focused ? state.composition : null, {
+    id: req.id,
+    name,
+    appVersion: req.appVersion,
+    mark: win.document?.plot.mark,
+    errors: win.document?.bindings.errors,
+    axisBreaks: win.document?.plot.axisBreaks, // facetKey rides `view` (K4/K6)
+    excludedDisplay: state.excludedDisplay, // v2 outlier policy (recorded, never applied)
+    datasets: state.datasets, // v3 spatial panels / panel windows bind sibling datasets by NAME
+    mapView: state.mapViews[req.datasetId], // v3 map view (recorded only when non-default)
+    panelWindow: panel,
+  });
+  get().recordHistory("Save Plot Recipe");
+  set((s) => ({ plotRecipes: [...s.plotRecipes, recipe] }));
+  return recipe.id;
 }
 
 /** Resolve `recipe` against `datasetId`'s live dataset and either apply

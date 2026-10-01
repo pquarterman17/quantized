@@ -33,7 +33,9 @@ import {
   type RecipeOperation,
 } from "./recipeLibrary";
 import { expectationsText } from "./recipeExpect";
-import type { RecipePreview } from "./plotRecipeSchema";
+import type { PanelLayout } from "./panelWindowModel";
+import { previewGlyph, type PreviewGlyph } from "./plotRecipePreview";
+import type { PlotRecipe, RecipePreview } from "./plotRecipeSchema";
 import { resolveTemplate } from "./plotTemplates";
 import type { RecipeSourceInput } from "./recipeSources";
 import { loadTemplates, type AnalysisTemplate } from "./template";
@@ -58,6 +60,8 @@ export interface RecipeDetails {
   /** Plot recipes only (F4.2): the thumbnail captured at save time; null
    *  when none was saved. Absent for every other kind. */
   readonly preview?: RecipePreview | null;
+  /** Plot recipes only (Q6): the thumbnail's panel-grid / map glyph. */
+  readonly glyph?: PreviewGlyph;
 }
 
 // ── "Available actions", derived — never hardcoded per kind ────────────────
@@ -143,11 +147,34 @@ function plotDetails(row: RecipeDescriptor, r: RecipeSourceInput["plotProject"][
     { label: "Style template", value: resolveTemplate(r.visual.plotTemplate).label },
     { label: "Excluded rows", value: r.outlierPolicy ? `${r.outlierPolicy.excludedDisplay === "grey" ? "greyed" : "hidden"} when saved` : "not recorded" },
     { label: "Transformation", value: r.transform ? `${r.transform.name} (r${r.transform.revision})` : "none" },
+    ...panelFields(r),
   );
   if (r.description) fields.push({ label: "Description", value: r.description });
   fields.push(actionsField(row.kind));
   const channels = r.signature.map((s) => `${s.role} · ${s.label}${s.unit ? ` (${s.unit})` : ""}`);
-  return { fields, sections: [{ title: "Channels", items: channels }], preview: r.preview ?? null };
+  return { fields, sections: [{ title: "Channels", items: channels }], preview: r.preview ?? null, glyph: previewGlyph(r) };
+}
+
+/** The Library quick-pick names for a composite panel window's layout. */
+const PANEL_LAYOUT_LABEL: Record<PanelLayout, string> = { row: "side by side", column: "stacked", grid: "grid", overlay: "overlay" };
+
+/** Q6 (a): the v3 fields, stated as recorded -- the panel count and layout
+ *  (a spatial composition or a composite panel window) and the map view. */
+function panelFields(r: PlotRecipe): RecipeDetailsField[] {
+  const fields: RecipeDetailsField[] = [];
+  if (r.panels) {
+    fields.push({ label: "Panels", value: String(r.panels.panels.length), mono: true });
+    fields.push({ label: "Panel layout", value: `spatial, fit to ${r.panels.panelFit}` });
+  } else if (r.panelWindow) {
+    fields.push({ label: "Panels", value: String(r.panelWindow.datasets.length), mono: true });
+    fields.push({ label: "Panel layout", value: PANEL_LAYOUT_LABEL[r.panelWindow.layout] });
+  } else {
+    fields.push({ label: "Panels", value: "none" });
+  }
+  const m = r.map;
+  const limits = m?.colorLimits ? `, limits ${m.colorLimits[0]} – ${m.colorLimits[1]}` : "";
+  fields.push({ label: "Map", value: m ? `${m.colormap}${m.logZ ? ", log Z" : ""}${limits}` : "not recorded" });
+  return fields;
 }
 
 function quickPlotDetails(row: RecipeDescriptor, t: RecipeSourceInput["quickPlot"][number]): RecipeDetails {

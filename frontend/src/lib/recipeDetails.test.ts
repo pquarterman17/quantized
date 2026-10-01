@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { saveGraphTemplate } from "./figuredoc";
 import { saveCustomModel } from "./fitmodels";
 import { makeStep } from "./pipeline";
-import { captureRecipe, PLOT_RECIPE_SCHEMA_VERSION } from "./plotRecipe";
+import { captureRecipe, PLOT_RECIPE_SCHEMA_VERSION, type PlotRecipe, type RecipePanel } from "./plotRecipe";
 import { defaultPlotView } from "./plotview";
 import { DEFAULT_RECIPE, saveRecipe as savePeakRecipe } from "./peakwizard";
 import type { RecipeDetails } from "./recipeDetails";
@@ -349,5 +349,46 @@ describe("recipeDetails — plot recipe v2 fields (F4.2 / audit P1.3)", () => {
     const details = recipeDetails(rowFor("plot", sources), sources);
     expect(details && fieldValue(details, "Excluded rows")).toBe("not recorded");
     expect(details && fieldValue(details, "Transformation")).toBe("none");
+  });
+});
+
+// Q6 (a): a v3 recipe's spatial panels, composite panel window and map view
+// are named in Details -- the count, the layout, and the map decisions.
+describe("recipeDetails — plot recipe v3 fields (panels / map)", () => {
+  const panel = (row: number, col: number): RecipePanel => ({
+    dataset: null, x: "2theta", y: ["Intensity"], y2: [], xLim: [0, 1], yLim: [0, 1], y2Lim: null,
+    xStep: null, yStep: null, y2Step: null, xLog: false, yLog: false, y2Log: false,
+    seriesStyles: {}, seriesLabels: {}, hiddenChannels: [], errKeys: {}, annotations: [], regionShades: [], row, col,
+  });
+
+  function detailsFor(patch: Partial<PlotRecipe>): RecipeDetails | null {
+    const sources = buildSources();
+    const withV3 = { ...sources, plotProject: [{ ...sources.plotProject[0], ...patch }] };
+    return recipeDetails(rowFor("plot", withV3), withV3);
+  }
+
+  it("counts a spatial composition's panels, names its fit, and states the map view", () => {
+    const details = detailsFor({
+      panels: { panels: [panel(0, 0), panel(1, 0)], panelFit: "window", pageSetup: null },
+      map: { colormap: "magma", logZ: true, colorLimits: [1, 100] },
+    });
+    expect(details && fieldValue(details, "Panels")).toBe("2");
+    expect(details && fieldValue(details, "Panel layout")).toBe("spatial, fit to window");
+    expect(details && fieldValue(details, "Map")).toBe("magma, log Z, limits 1 – 100");
+    expect(details?.glyph).toEqual({ grid: { rows: 2, cols: 1 }, map: true });
+  });
+
+  it("counts a composite panel window's datasets and names its layout", () => {
+    const details = detailsFor({ panelWindow: { datasets: [null, "b.xy", "c.xy"], layout: "row" } });
+    expect(details && fieldValue(details, "Panels")).toBe("3");
+    expect(details && fieldValue(details, "Panel layout")).toBe("side by side");
+  });
+
+  it("says 'none' / 'not recorded' for a plain recipe instead of inventing panels or a map", () => {
+    const details = detailsFor({});
+    expect(details && fieldValue(details, "Panels")).toBe("none");
+    expect(details && fieldValue(details, "Panel layout")).toBeUndefined();
+    expect(details && fieldValue(details, "Map")).toBe("not recorded");
+    expect(details?.glyph).toEqual({ grid: null, map: false });
   });
 });

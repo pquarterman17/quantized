@@ -15,6 +15,7 @@ import type { ErrorSide } from "./errorRoles";
 import type { NormalizedFrameRect } from "./originPanels";
 import type { PageSetup } from "./pagesetup";
 import type { PanelFit } from "./panelFit";
+import type { PanelLayout } from "./panelWindowModel";
 import type { LegendPos } from "./plotview";
 import type { PlotMark } from "./plotspec";
 import type { SignatureErrorRole } from "./quickPlotTemplates";
@@ -227,6 +228,18 @@ export interface RecipePanels {
   pageSetup: PageSetup | null;
 }
 
+/** v3, additive (no version bump -- the `refLines`/`noAutoSuggest`
+ *  convention: absent reads as "not recorded", and an older v3 build simply
+ *  ignores the key): a COMPOSITE panel window (`PlotWindow.panel`, the
+ *  Library's "Panel: side by side / stacked / grid" quick picks) captured by
+ *  NAME. `datasets` is the window's cells in order -- null for the dataset
+ *  the recipe is applied to (exactly one), a source dataset's name
+ *  otherwise, re-bound like a `RecipePanel.dataset`. */
+export interface RecipePanelWindow {
+  datasets: (string | null)[];
+  layout: PanelLayout;
+}
+
 /** v3: the source dataset's durable 2-D map view decisions
  *  (`lib/mapView.ts`'s colour scale, limits and colormap) -- captured only
  *  when they differ from the default, applied to the target dataset's own
@@ -311,4 +324,7 @@ export interface PlotRecipe {
   panels: RecipePanels | null;
   /** v3. Null when the source dataset's map view was untouched, or migrated. */
   map: RecipeMapView | null;
+  /** v3, additive. Present only for a recipe saved from a composite panel
+   *  window -- see `RecipePanelWindow`. */
+  panelWindow?: RecipePanelWindow;
 }

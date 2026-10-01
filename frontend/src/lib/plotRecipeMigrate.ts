@@ -27,12 +27,14 @@ import type { ColormapName } from "./colormap";
 import type { NormalizedFrameRect } from "./originPanels";
 import { sanitizePageSetup } from "./pagesetup";
 import { PANEL_FITS, type PanelFit } from "./panelFit";
+import { PANEL_LAYOUTS, type PanelLayout } from "./panelWindowModel";
 import {
   PLOT_RECIPE_SCHEMA_VERSION,
   type RecipeMapView,
   type RecipeOutlierPolicy,
   type RecipePanel,
   type RecipePanels,
+  type RecipePanelWindow,
   type RecipePreview,
   type RecipeTransformRef,
 } from "./plotRecipeSchema";
@@ -204,6 +206,18 @@ export function sanitizePanels(v: unknown): RecipePanels | null {
     panelFit: (PANEL_FITS as readonly string[]).includes(o.panelFit as string) ? (o.panelFit as PanelFit) : "frames",
     pageSetup: sanitizePageSetup(o.pageSetup),
   };
+}
+
+/** A composite panel window (v3, additive): every cell a dataset name or the
+ *  one null apply-target slot, plus a known layout; anything else is not
+ *  recorded (undefined), never a guessed window. */
+export function sanitizePanelWindow(v: unknown): RecipePanelWindow | undefined {
+  if (typeof v !== "object" || v === null) return undefined;
+  const { datasets, layout } = v as Raw;
+  if (!Array.isArray(datasets) || !(PANEL_LAYOUTS as readonly unknown[]).includes(layout)) return undefined;
+  if (!datasets.every((d) => d === null || (typeof d === "string" && d !== ""))) return undefined;
+  if (datasets.filter((d) => d === null).length !== 1) return undefined;
+  return { datasets: [...(datasets as (string | null)[])], layout: layout as PanelLayout };
 }
 
 /** An unknown colormap or a non-boolean scale is not a view (both are the

@@ -37,6 +37,7 @@ import { useEffect, useRef, useState } from "react";
 
 import { BUILTIN_PLOT_RECIPES } from "../../../lib/builtinPlotRecipes";
 import type { PlotRecipe } from "../../../lib/plotRecipe";
+import { previewGlyph } from "../../../lib/plotRecipePreview";
 import { PLOT_TEMPLATES } from "../../../lib/plotTemplates";
 import { useGlobalPlotRecipes } from "../../../store/globalPlotRecipes";
 import { useRecipeManager } from "../../../store/recipeManager";
@@ -279,7 +280,7 @@ export default function RecipeManagerPanel() {
               <li key={key} style={ROW_STYLE}>
                 <div style={LINE_STYLE}>
                   <span className="qz-shortcut" style={{ width: 52, flexShrink: 0 }}>{SCOPE_LABEL[row.scope]}</span>
-                  <RecipeThumbnail preview={row.recipe.preview} label={row.recipe.name} summary={recipeSummary(row.recipe)} />
+                  <RecipeThumbnail preview={row.recipe.preview} label={row.recipe.name} summary={recipeSummary(row.recipe)} glyph={previewGlyph(row.recipe)} />
                   {renamingKey === key ? (
                     <input
                       autoFocus

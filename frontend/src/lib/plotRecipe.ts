@@ -69,7 +69,8 @@ import {
   type RecipeTransformRef,
 } from "./plotRecipeSchema";
 import { sanitizeTransformRef } from "./plotRecipeMigrate";
-import { captureMapView, capturePanels } from "./plotRecipePanels";
+import { captureMapView, capturePanels, capturePanelWindow } from "./plotRecipePanels";
+import type { PanelLayout } from "./panelWindowModel";
 import { capturePreview } from "./plotRecipePreview";
 import type { MapViewState } from "./mapView";
 
@@ -118,6 +119,9 @@ export interface CaptureRecipeOptions {
   /** The source dataset's durable 2-D map view (v3 `map`); recorded only
    *  when it differs from the default. */
   mapView?: MapViewState;
+  /** The composite panel window (`PlotWindow.panel`) the recipe is saved
+   *  from, if any -- captured by dataset NAME (v3 `panelWindow`, additive). */
+  panelWindow?: { datasetIds: readonly string[]; layout: PanelLayout };
 }
 
 /** The transformation recipe a derived dataset came from -- `runTemplate.ts`
@@ -221,6 +225,7 @@ export function captureRecipe(
 
   const now = opts.now ?? (() => new Date().toISOString());
   const timestamp = now();
+  const panelWindow = capturePanelWindow(opts.panelWindow, dataset.id, opts.datasets ?? [dataset]);
 
   return {
     id: opts.id,
@@ -234,6 +239,7 @@ export function captureRecipe(
     transform: transformOf(dataset),
     panels: capturePanels(composition, dataset.id, opts.datasets ?? [dataset], view),
     map: captureMapView(opts.mapView),
+    ...(panelWindow ? { panelWindow } : {}),
     provenance: {
       sourceDatasetLabel: opts.sourceDatasetLabel ?? dataset.name,
       appVersion: opts.appVersion,

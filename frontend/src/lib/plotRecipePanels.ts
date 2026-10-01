@@ -24,7 +24,8 @@ import { DEFAULT_MAP_VIEW } from "./mapView";
 import type { SpatialPanel } from "./multipanel";
 import type { PageSetup } from "./pagesetup";
 import type { PanelFit } from "./panelFit";
-import type { RecipeMapView, RecipePanel, RecipePanels } from "./plotRecipeSchema";
+import type { PanelLayout } from "./panelWindowModel";
+import type { RecipeMapView, RecipePanel, RecipePanels, RecipePanelWindow } from "./plotRecipeSchema";
 import type { PlotView } from "./plotview";
 import { normalizeLabel } from "./quickPlotTemplates";
 import type { Dataset } from "./types";
@@ -49,6 +50,13 @@ export interface ResolvedRecipePanels {
   panels: SpatialPanel[];
   panelFit: PanelFit;
   pageSetup: PageSetup | null;
+}
+
+/** A composite panel window to open (Q6): live dataset ids + layout, the
+ *  `PlotWindow.panel` shape `createPanelWindow` takes. */
+export interface ResolvedPanelWindow {
+  datasetIds: string[];
+  layout: PanelLayout;
 }
 
 export interface ResolvePanelsOptions {
@@ -161,34 +169,83 @@ function matchLabel(labels: readonly string[], label: string): number | null {
   return null;
 }
 
+/** Panel `i`'s dataset: the user's explicit rebind first, then `null` -> the
+ *  apply target, then a UNIQUE name match in the pool. A miss is named in
+ *  `unmatched` and as a dataset `issue` (the apply dialog's rebind picker). */
+function bindDataset(
+  saved: string | null,
+  i: number,
+  target: Dataset,
+  opts: ResolvePanelsOptions,
+  unmatched: string[],
+  issues: RecipePanelIssue[],
+): Dataset | undefined {
+  const pool = opts.datasets ?? [target];
+  const bound = opts.panelBindings?.[i]?.datasetId;
+  let ds: Dataset | undefined;
+  if (bound !== undefined) {
+    ds = pool.find((d) => d.id === bound) ?? (target.id === bound ? target : undefined);
+  } else if (saved === null) {
+    ds = target;
+  } else {
+    const named = pool.filter((d) => d.name === saved);
+    ds = named.length === 1 ? named[0] : undefined;
+  }
+  if (!ds) {
+    const name = saved ?? target.name;
+    unmatched.push(`Panel ${i + 1} dataset ("${name}")`);
+    issues.push({ panel: i, kind: "dataset", name });
+  }
+  return ds;
+}
+
+/** A composite panel window, captured by NAME (Q6): the source dataset's
+ *  cell is null, every other cell its dataset's name. Undefined when the
+ *  source is not one of the window's cells. */
+export function capturePanelWindow(
+  panel: { datasetIds: readonly string[]; layout: PanelLayout } | undefined,
+  sourceDatasetId: string,
+  datasets: readonly Dataset[],
+): RecipePanelWindow | undefined {
+  if (!panel?.datasetIds.includes(sourceDatasetId)) return undefined;
+  const names = panel.datasetIds.flatMap((id) => {
+    if (id === sourceDatasetId) return [null];
+    const ds = datasets.find((d) => d.id === id);
+    return ds ? [ds.name] : [];
+  });
+  return { datasets: names, layout: panel.layout };
+}
+
+/** Rebind a captured composite window's cells (the same tiers a spatial
+ *  panel's dataset gets, keyed by cell index). A missing cell is dropped and
+ *  named; null when no cell resolved. */
+export function resolvePanelWindow(
+  recipe: RecipePanelWindow,
+  target: Dataset,
+  opts: ResolvePanelsOptions = {},
+): { window: ResolvedPanelWindow | null; unmatched: string[]; issues: RecipePanelIssue[] } {
+  const unmatched: string[] = [];
+  const issues: RecipePanelIssue[] = [];
+  const datasetIds = recipe.datasets.flatMap((name, i) => {
+    const ds = bindDataset(name, i, target, opts, unmatched, issues);
+    return ds ? [ds.id] : [];
+  });
+  return { window: datasetIds.length > 0 ? { datasetIds, layout: recipe.layout } : null, unmatched, issues };
+}
+
 /** Rebuild `recipe`'s panels against `target` (the recipe's own dataset) and
  *  the named siblings in `opts.datasets`. Pure. A panel whose dataset, X, or
  *  every Y is missing is dropped and named; a style/label/hidden/error entry
  *  keyed to a missing label is silently omitted (nothing sane to key it to,
  *  the same rule `resolveRecipe` applies to visual overrides). */
 export function resolvePanels(recipe: RecipePanels, target: Dataset, opts: ResolvePanelsOptions = {}): PanelsResolution {
-  const pool = opts.datasets ?? [target];
   const unmatched: string[] = [];
   const issues: RecipePanelIssue[] = [];
   const panels: SpatialPanel[] = [];
   recipe.panels.forEach((p, i) => {
     const binding = opts.panelBindings?.[i];
-    let ds: Dataset | undefined;
-    if (binding?.datasetId !== undefined) {
-      ds = pool.find((d) => d.id === binding.datasetId) ?? (target.id === binding.datasetId ? target : undefined);
-    } else if (p.dataset === null) {
-      ds = target;
-    } else {
-      const named = pool.filter((d) => d.name === p.dataset);
-      ds = named.length === 1 ? named[0] : undefined;
-    }
-    if (!ds) {
-      const name = p.dataset ?? target.name;
-      unmatched.push(`Panel ${i + 1} dataset ("${name}")`);
-      issues.push({ panel: i, kind: "dataset", name });
-      return;
-    }
-    const dataset = ds;
+    const dataset = bindDataset(p.dataset, i, target, opts, unmatched, issues);
+    if (!dataset) return;
     const labels = dataset.data.labels;
     const find = (label: string): number | null => {
       const bound = binding?.channels?.[label];
