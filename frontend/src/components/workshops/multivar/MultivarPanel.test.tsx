@@ -111,7 +111,7 @@ describe("MultivarPanel", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
     const { container } = render(<MultivarPanel />);
     await waitFor(() => expect(statsCorrelation).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("tab", { name: "SPLOM" }));
+    fireEvent.click(screen.getByRole("radio", { name: "SPLOM" }));
     expect(await screen.findByText(/N = 6 complete rows/)).toBeInTheDocument();
     expect(container.querySelector("canvas")).toBeInTheDocument();
   });
@@ -119,7 +119,7 @@ describe("MultivarPanel", () => {
   it("switching to the PCA tab fetches PCA and renders the scree + canvas", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
     const { container } = render(<MultivarPanel />);
-    fireEvent.click(screen.getByRole("tab", { name: "PCA" }));
+    fireEvent.click(screen.getByRole("radio", { name: "PCA" }));
     await waitFor(() => expect(statsPCA).toHaveBeenCalled());
     expect(await screen.findByText("PC1")).toBeInTheDocument();
     expect(screen.getByText("PC2")).toBeInTheDocument();
@@ -130,7 +130,7 @@ describe("MultivarPanel", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
     render(<MultivarPanel />);
     await waitFor(() => expect(statsCorrelation).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("tab", { name: "Spearman" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Spearman" }));
     await waitFor(() => expect(statsCorrelation).toHaveBeenLastCalledWith(expect.anything(), "spearman"));
   });
 
@@ -168,7 +168,7 @@ describe("MultivarPanel — figure export (JMP_GAP #10 residual)", () => {
     useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
     render(<MultivarPanel />);
     await waitFor(() => expect(statsCorrelation).toHaveBeenCalled());
-    fireEvent.click(screen.getByRole("tab", { name: "SPLOM" }));
+    fireEvent.click(screen.getByRole("radio", { name: "SPLOM" }));
     fireEvent.click(await screen.findByRole("button", { name: "Export figure" }));
     await waitFor(() =>
       expect(exportSplomFigure).toHaveBeenCalledWith({
@@ -182,7 +182,7 @@ describe("MultivarPanel — figure export (JMP_GAP #10 residual)", () => {
   it("PCA tab's Export scree / Export figure buttons send the fetched PCA numbers", async () => {
     useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: DATA }], activeId: "d1" });
     render(<MultivarPanel />);
-    fireEvent.click(screen.getByRole("tab", { name: "PCA" }));
+    fireEvent.click(screen.getByRole("radio", { name: "PCA" }));
     await waitFor(() => expect(statsPCA).toHaveBeenCalled());
 
     fireEvent.click(screen.getByRole("button", { name: "Export scree" }));

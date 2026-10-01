@@ -35,7 +35,7 @@ describe("ReflectivityPanel", () => {
     await waitFor(() => expect(screen.getAllByRole("option", { name: "Nickel" }).length).toBeGreaterThan(0));
     expect(screen.getByRole("button", { name: "Simulate R(Q)" })).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Fit" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Fit" }));
     expect(screen.queryByRole("button", { name: "Simulate R(Q)" })).toBeNull();
     expect(screen.getByRole("button", { name: "Run fit" })).toBeDisabled(); // no dataset yet
     // the parameter table is generated from the same stack the Model mode edits
@@ -43,7 +43,7 @@ describe("ReflectivityPanel", () => {
     expect(thickness.value).toBe("200");
     fireEvent.change(thickness, { target: { value: "150" } });
 
-    fireEvent.click(screen.getByRole("tab", { name: "Model" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Model" }));
     // the layer table's film thickness field now reads the edited value
     expect(screen.getAllByRole("textbox").some((el) => (el as HTMLInputElement).value === "150")).toBe(true);
   });
@@ -60,7 +60,7 @@ describe("ReflectivityPanel — graded layers", () => {
     });
     render(<ReflectivityPanel />);
     await waitFor(() => expect(screen.getAllByRole("option", { name: "Nickel" }).length).toBeGreaterThan(0));
-    fireEvent.click(screen.getByRole("tab", { name: "Fit" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Fit" }));
     expect(screen.getByRole("button", { name: "Run fit" })).toBeEnabled();
   }
 
@@ -129,7 +129,7 @@ describe("ReflectivityPanel — Spin asym.", () => {
     useApp.setState({ datasets: [channel("up", [0.9, 0.5, 0.1]), channel("down", [0.7, 0.5, 0.3])], activeId: "up" });
     vi.mocked(spinAsymmetry).mockResolvedValue({ asymmetry: [0.125, 0, -0.5], d_asymmetry: [0.01, 0.01, 0.02], n_valid: 3 });
     render(<ReflectivityPanel />);
-    fireEvent.click(screen.getByRole("tab", { name: "Spin asym." }));
+    fireEvent.click(screen.getByRole("radio", { name: "Spin asym." }));
 
     expect(await screen.findByLabelText("R++ dataset")).toHaveValue("up");
     expect(screen.getByLabelText("R−− dataset")).toHaveValue("down");
@@ -152,7 +152,7 @@ describe("ReflectivityPanel — Spin asym.", () => {
     other.data.time = [0.01, 0.025, 0.03];
     useApp.setState({ datasets: [channel("up", [1, 1, 1]), other], activeId: "up" });
     render(<ReflectivityPanel />);
-    fireEvent.click(screen.getByRole("tab", { name: "Spin asym." }));
+    fireEvent.click(screen.getByRole("radio", { name: "Spin asym." }));
     fireEvent.click(await screen.findByRole("button", { name: "Spin asymmetry → Library" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("different Q grids");
     expect(spinAsymmetry).not.toHaveBeenCalled();

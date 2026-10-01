@@ -464,7 +464,7 @@ describe("ReflFitView", () => {
   it("disables Run and says why when 2θ data has no wavelength", async () => {
     useApp.setState({ activeId: "xrd" });
     render(<Harness />);
-    fireEvent.click(screen.getByRole("tab", { name: "2θ (deg)" }));
+    fireEvent.click(screen.getByRole("radio", { name: "2θ (deg)" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/wavelength is unknown/);
     expect(screen.getByRole("button", { name: "Run fit" })).toBeDisabled();
   });

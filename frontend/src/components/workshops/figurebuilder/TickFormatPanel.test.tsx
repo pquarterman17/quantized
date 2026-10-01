@@ -29,9 +29,9 @@ function renderPanel(overrides: Partial<Parameters<typeof TickFormatPanel>[0]> =
 describe("TickFormatPanel", () => {
   it("commits a mode change per axis", () => {
     const { onXFmt, onYFmt } = renderPanel();
-    fireEvent.click(screen.getAllByRole("tab", { name: "Sci" })[0]);
+    fireEvent.click(screen.getAllByRole("radio", { name: "Sci" })[0]);
     expect(onXFmt).toHaveBeenCalledWith({ mode: "sci", digits: 2 });
-    fireEvent.click(screen.getAllByRole("tab", { name: "Fixed" })[1]);
+    fireEvent.click(screen.getAllByRole("radio", { name: "Fixed" })[1]);
     expect(onYFmt).toHaveBeenCalledWith({ mode: "fixed", digits: 2 });
   });
 
@@ -73,7 +73,7 @@ describe("TickFormatPanel", () => {
     // The four numeric modes cannot represent "datetime"; falling back to Auto
     // is the honest display, and the date select beside it carries the truth.
     renderPanel({ xIsDate: true, xFmt: { mode: "date", digits: 2 } });
-    expect(screen.getAllByRole("tab", { name: "Auto" })[0]).toHaveAttribute("aria-selected", "true");
+    expect(screen.getAllByRole("radio", { name: "Auto" })[0]).toHaveAttribute("aria-checked", "true");
     expect(screen.getByLabelText("X date/time format")).toHaveValue("date");
   });
 

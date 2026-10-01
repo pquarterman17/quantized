@@ -60,13 +60,13 @@ vi.mock("../../primitives", () => ({
     value: T;
     onChange?: (v: T) => void;
   }) => (
-    <div role="tablist">
+    <div role="radiogroup">
       {options.map((opt) => (
         <button
           key={opt.value}
           type="button"
-          role="tab"
-          aria-selected={opt.value === value}
+          role="radio"
+          aria-checked={opt.value === value}
           onClick={() => onChange?.(opt.value)}
         >
           {opt.label}
@@ -206,7 +206,7 @@ describe("Graph Builder step mark UI", () => {
     vi.mocked(useGraphBuilder).mockReturnValue({ ...builderState, mark: "line", marks: ["scatter", "line", "step"] });
     render(<GraphBuilderPanel />);
     expect(screen.getByText("Markers")).toBeInTheDocument();
-    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(screen.queryByRole("radiogroup")).not.toBeInTheDocument();
   });
 
   it("shows both the Markers toggle and the pre/post/mid step select for a step mark", () => {
@@ -218,9 +218,9 @@ describe("Graph Builder step mark UI", () => {
     });
     render(<GraphBuilderPanel />);
     expect(screen.getByText("Markers")).toBeInTheDocument();
-    const tabs = screen.getByRole("tablist");
-    expect(tabs).toBeInTheDocument();
-    expect(screen.getByRole("tab", { name: "post" })).toHaveAttribute("aria-selected", "true");
+    const group = screen.getByRole("radiogroup");
+    expect(group).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "post" })).toHaveAttribute("aria-checked", "true");
   });
 
   it("wires the Markers checkbox and step select to their setters", () => {
@@ -239,7 +239,7 @@ describe("Graph Builder step mark UI", () => {
     fireEvent.click(screen.getByRole("checkbox"));
     expect(setShowMarkers).toHaveBeenCalledWith(true);
 
-    fireEvent.click(screen.getByRole("tab", { name: "mid" }));
+    fireEvent.click(screen.getByRole("radio", { name: "mid" }));
     expect(setStepMode).toHaveBeenCalledWith("mid");
   });
 

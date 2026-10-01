@@ -92,7 +92,7 @@ describe("SimsPanel — hidden tabs stop firing their debounced preview (finding
     expect(processSims).toHaveBeenCalledTimes(1);
 
     // Switch to Compare — Process is now hidden (still mounted, per `pane`).
-    fireEvent.click(screen.getByRole("tab", { name: "Compare" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Compare" }));
     await tick(300);
     expect(compareSims).toHaveBeenCalledTimes(1);
 
@@ -105,18 +105,18 @@ describe("SimsPanel — hidden tabs stop firing their debounced preview (finding
 
     // Switch back to Process — it becomes the visible tab again and its
     // (now-stale) form previews for real.
-    fireEvent.click(screen.getByRole("tab", { name: "Process" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Process" }));
     await tick(300);
     expect(processSims).toHaveBeenCalledTimes(2);
   });
 
   it("Region's preview does not fire while Compare is the visible tab", async () => {
     render(<SimsPanel />);
-    fireEvent.click(screen.getByRole("tab", { name: "Region" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Region" }));
     await tick(300);
     expect(measureSimsRegion).toHaveBeenCalledTimes(1); // Region defaults to a valid whole-profile request
 
-    fireEvent.click(screen.getByRole("tab", { name: "Compare" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Compare" }));
     await tick(300);
     const afterSwitch = vi.mocked(measureSimsRegion).mock.calls.length;
 

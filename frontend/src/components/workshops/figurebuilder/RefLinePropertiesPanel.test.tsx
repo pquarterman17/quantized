@@ -86,7 +86,7 @@ describe("RefLinePropertiesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(onAdd).toHaveBeenCalledWith("x", 250);
 
-    fireEvent.click(screen.getByRole("tab", { name: "Y" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Y" }));
     fireEvent.change(screen.getByLabelText("new reference line value"), { target: { value: "-8" } });
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(onAdd).toHaveBeenLastCalledWith("y", -8);

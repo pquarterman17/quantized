@@ -127,7 +127,7 @@ describe("FitYByXPanel", () => {
     await waitFor(() => expect(regressionMock).toHaveBeenCalled());
     expect(await screen.findByText(/confidence band/)).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("tab", { name: "Prediction" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Prediction" }));
     await waitFor(() =>
       expect(regressionMock).toHaveBeenLastCalledWith(expect.objectContaining({ band_interval: "prediction" })),
     );

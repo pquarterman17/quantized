@@ -100,7 +100,7 @@ describe("FieldPlotPanel", () => {
   it("switches to streamlines and exports that mode", async () => {
     render(<FieldPlotPanel />);
     await screen.findByAltText("Vector field preview");
-    fireEvent.click(screen.getByRole("tab", { name: "Streamline" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Streamline" }));
     await waitFor(() => expect(previewBodies().at(-1)?.kind).toBe("streamline"));
 
     fireEvent.click(screen.getByRole("button", { name: "Export" }));

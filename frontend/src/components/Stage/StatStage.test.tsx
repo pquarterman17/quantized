@@ -315,7 +315,7 @@ describe("StatStage — categorical marks controls (JMP_GAP J5, P2.6 box 1)", ()
   it("offers Strip as a mode option", () => {
     stateRef.current = makeState({ mode: "box" });
     render(<StatStage />);
-    expect(screen.getByRole("tab", { name: "Strip" })).toBeInTheDocument();
+    expect(screen.getByRole("radio", { name: "Strip" })).toBeInTheDocument();
   });
 
   it("box: points, summary and error bars; jitter only once every point is shown", () => {

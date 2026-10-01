@@ -22,6 +22,7 @@
 // still applies if the pref is "plot".)
 
 import { bookLabel, familyBooks, originBookFamilies, originSheetGroups, originSheetNumber } from "../../../lib/grouping";
+import { onTabListKeyDown } from "../../../lib/tabListKeys";
 import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 
@@ -56,7 +57,7 @@ export default function SheetTabs({ datasetId }: SheetTabsProps) {
   if (books.length <= 1 && !group) return null; // nothing to switch between
 
   return (
-    <div className="qzk-sheet-tabs" role="tablist" aria-label="Origin worksheet sheets">
+    <div className="qzk-sheet-tabs">
       {books.length > 1 && (
         <select
           className="qz-select qzk-book-switcher"
@@ -75,26 +76,34 @@ export default function SheetTabs({ datasetId }: SheetTabsProps) {
           ))}
         </select>
       )}
-      {group?.members.map((m) => {
-        const n = originSheetNumber(m);
-        const meta = m.data.metadata as Record<string, unknown> | undefined;
-        const long = String(meta?.["origin_book_long"] ?? "");
-        const active = m.id === datasetId;
-        return (
-          <button
-            key={m.id}
-            type="button"
-            role="tab"
-            aria-selected={active}
-            className={`qzk-sheet-tab${active ? " active" : ""}`}
-            title={long || m.name}
-            onClick={() => activateFromLibrary(m.id)}
-          >
-            <span className="qzk-sheet-tab-num">{n}</span>
-            <span className="qzk-sheet-tab-name">{long || `sheet ${n}`}</span>
-          </button>
-        );
-      })}
+      {/* Roving tablist, MANUAL activation (lib/tabListKeys): a switch re-renders
+          the whole grid (or rebinds the plot under the "plot" pref), so arrows
+          move focus only and Enter/Space selects. Holds ONLY the tabs. */}
+      {group && (
+        <div className="qzk-sheet-tablist" role="tablist" aria-label="Origin worksheet sheets" onKeyDown={(e) => onTabListKeyDown(e, false)}>
+          {group.members.map((m) => {
+            const n = originSheetNumber(m);
+            const meta = m.data.metadata as Record<string, unknown> | undefined;
+            const long = String(meta?.["origin_book_long"] ?? "");
+            const active = m.id === datasetId;
+            return (
+              <button
+                key={m.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                tabIndex={active ? 0 : -1}
+                className={`qzk-sheet-tab${active ? " active" : ""}`}
+                title={long || m.name}
+                onClick={() => activateFromLibrary(m.id)}
+              >
+                <span className="qzk-sheet-tab-num">{n}</span>
+                <span className="qzk-sheet-tab-name">{long || `sheet ${n}`}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
