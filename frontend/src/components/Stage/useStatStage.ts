@@ -52,10 +52,8 @@ import {
 import type { StatMarksByMode, StatMarksMode } from "../../lib/plotviewSanitize";
 import type { StatMarks } from "../../lib/statMarks";
 import { statColorOf } from "../../lib/statColor";
-import { runCancellable } from "../../store/pendingOps";
 import { needsBarRaw } from "./statBarMarks";
 import { figureErrorNote } from "./statErrorNote";
-import { exportStatStage } from "./statStageExport";
 import { applyLevels, levelAxes } from "./statStageLevels";
 import { needsPoints, stageMarks, withMarks, withNestLabel } from "./statStageMarks";
 import {
@@ -70,6 +68,7 @@ import {
   type FacetDraw,
 } from "./useStatStageCompute";
 import { useStatStageDraws } from "./useStatStageDraws";
+import { useStatStageExport } from "./useStatStageExport";
 import { useStatStagePicks } from "./useStatStagePicks";
 import type { StatColumn, StatStageState, UseStatStageParams } from "./useStatStageTypes";
 
@@ -439,16 +438,14 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   // P2.6 box 1: the error-bar footnote, from the SAME draws the screen shows.
   const errorNote = useMemo(() => figureErrorNote(shown.draw, shown.drawFacets), [shown]);
 
-  async function exportFigure(fmt: string): Promise<boolean> {
-    if (!data) return true;
-    const inputs = {
-      data, mode, draw: shown.draw, drawFacets: shown.drawFacets, groups, indexedGroups, valueCol,
-      valueLabel, groupLabel, barValueLabel, barStack, dist, bins, fit, marks: rm,
-      showN, caveat: levels.notice?.caveat ?? null, errorNote, nestLabel,
-    };
-    // P3.4: a StatusBar op whose Cancel aborts the render request.
-    return (await runCancellable("Exporting statistical plot…", (signal) => exportStatStage(fmt, inputs, signal))) !== null;
-  }
+  // Export reads ONE settled render: while the draw this mode reads is pending
+  // it waits for the fresh one (useStatStageExport.ts), never mixing the two.
+  const drawPending = effectiveFacetCol != null && marksMode ? !freshFacets : !freshDraw;
+  const exportFigure = useStatStageExport(drawPending, data ? {
+    data, mode, draw: shown.draw, drawFacets: shown.drawFacets, groups, indexedGroups, valueCol,
+    valueLabel, groupLabel, barValueLabel, barStack, dist, bins, fit, marks: rm,
+    showN, caveat: levels.notice?.caveat ?? null, errorNote, nestLabel,
+  } : null);
 
   return {
     hasData: !!active,
