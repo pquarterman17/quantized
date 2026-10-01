@@ -8,6 +8,8 @@ Recode workshop — SHIPPED; flipped `[ ]` → `[x]` at the item, with the
 same slice also closing PRIMARY P1.6b (worksheet C/O/N badge + categorical
 cell-edit guard). J1 stays `[~]` — recode riding on top of it does not by
 itself close J1's remaining open sub-item (user-settable level ORDER).
+(**Stale:** level order shipped, `frontend/src/store/levelOrder.ts`, and J1 is
+struck as of 2026-09-12; see Tier 1 #1.)
 Prior: 2026-08-19 (Day-5 sprint reconciliation, QA lane): J4 was still
 `[ ]` though PRIMARY P1.5 shipped its exact acceptance criteria on
 2026-08-18 (merged `440b0cb`) — flipped to `[x]` with evidence at the item.

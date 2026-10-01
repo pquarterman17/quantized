@@ -643,7 +643,11 @@ as a CSS-only tree redesign.
   opens; `lib/libraryTreeNav.spaceActivates`). Tests: `LibraryTree.aria`,
   `.scale`, `LibraryTree.test.tsx`, e2e `library-tree-keyboard.spec.ts`.
   **Still open:** the recovered-graph `role="group"` action strip sits
-  between treeitems; no type-ahead.
+  between treeitems; no type-ahead. **Both closed 2026-10-01** by commit
+  `27b24a23` (`lib/libraryTreeTypeahead.ts`; strip owned by its treeitem in
+  `FigureRow.tsx`). The box stays `[~]` for the Tree↔Details swap caveat,
+  reason (2) of the item above (`useLibraryViewTransition.ts:87-94` still
+  gives up on an off-window row).
   **Adversarial review round (2026-09-14).** Three findings, all fixed in the
   same commit: (1) `LibraryDetails.tsx`'s fallback predicate was keyed on
   `rovingKey` — non-null even with NOTHING ever focused (it falls back to the
@@ -2793,8 +2797,11 @@ build, and focused interaction coverage where appropriate.
     select-bar wiring (selecting worksheets across workbooks, rather than
     one workbook's own members) is deliberately deferred — booked here, not
     silently dropped — as a follow-up UI surface over the same store
-    actions. **Booked finding (G5 canonical-state review, 2026-08-17,
-    STILL OPEN):** a shape-changing reimport
+    actions. **Booked finding (G5 canonical-state review, 2026-08-17;
+    CLOSED by PR M — reimport now clears `groupKey`/`facetKey` too,
+    `lib/figureDocumentReimport.ts:103-104`, tested at
+    `figureDocumentReimport.test.ts:83-89`; the text below is the original
+    finding):** a shape-changing reimport
     resets a FigureDocument's `bindings.xKey/yKeys/y2Keys/errors` (and every
     channel-indexed `plot.view` field) to the safe null/empty sentinel, but
     deliberately leaves `bindings.groupKey`/`facetKey` untouched

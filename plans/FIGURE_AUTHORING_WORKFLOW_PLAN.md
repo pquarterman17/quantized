@@ -531,8 +531,10 @@ with parent items P1.3 and P1.5.
       uses — it never edits a live window's document in place, so a
       `PlotRecipe` can never be confused with, or silently become, a saved
       figure.)
-- [~] **F4.2 Add complete technique-scoped recipes.** Store plot type, roles,
+- [x] **F4.2 Add complete technique-scoped recipes.** Store plot type, roles,
       errors, groups/facets, transformations, axes, and style-template choice.
+      (Reconciled 2026-10-01: every subitem F4.2a-c below is `[x]` and its
+      owner questions are decided.)
   - [x] **F4.2a Plot-type + error designations (Claude, 2026-08-02).** The
         recipe now stores a step mark (pre/post/mid), a Line+Symbol markers
         toggle, and position-paired Y/X error wells with Origin-style

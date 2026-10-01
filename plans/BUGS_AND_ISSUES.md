@@ -3013,7 +3013,9 @@ follow-up commit closes:
   fresh state it receives and refuses if anything still is
   (`lib/workbookTransfer.ts:182-183`) — a re-check of its own, already
   closing this for workbook Copy/Duplicate. Only `store/workspaceIO.ts`'s
-  Save/Save As path is genuinely still open. `lib/workspaceSerialize.ts`'s
+  Save/Save As path is genuinely still open (**since closed:** a post-resolve
+  `pending` re-check refuses the save, `store/workspaceIO.ts:98-108`, tested in
+  `workspaceIO.test.ts`). `lib/workspaceSerialize.ts`'s
   comment is narrowed accordingly in round 2, below.
 - **Not attempted:** nit 2 ("Start pack's resolve can essentially never
   rescue a pack, only buy a better error code") and nit 6 (an unverifiable
@@ -4919,7 +4921,9 @@ rename; a null rename derives the label`, on top of `230a174a`:
   `seriesDisplayLabel("Signal", "au", null)` -> `"Signal (au)"` and a facet
   spec built with `seriesLabels: {1: null}` carrying the derived label in
   `figureSpecFacets.test.ts`.
-  **`sanitizePlotView` validation — residual, not fixed.** Whether
+  **`sanitizePlotView` validation — residual, not fixed** (**since closed,
+  BUG-014 round 4:** `plotview.ts:723` `keyedRecord(o.seriesLabels, isString)`,
+  tested at `plotview.test.ts:1084`). Whether
   `sanitizePlotView` should drop non-string `seriesLabels` entries: it
   should (the flat and facet legs both now degrade gracefully for a `null`
   *value* reaching `seriesDisplayLabel`, but a non-string *key-to-value* pair
@@ -9475,3 +9479,4 @@ of 2026-10-01; grep by content when they drift).
 - 2026-10-01 — BUG-012 residual (row exclusion collapses a break): the export sends `x_breaks` only when the screen's own rule (`facet.breakCompositionFromData`, two or more surviving panels over the analysis rows) draws a break (`lib/figureSpec.ts`); pinned in `regressionMatrix.test.ts`.
 - 2026-10-01 — BUG-014 finding 4 (empty rename): no plan text chose a side, so the screen now matches the export: an empty display name drops the legend row but keeps the series plotted (`Stage/PlotLegend.tsx`, `Stage/SpatialPanelLegend.tsx`; background windows draw no legend). Tests in `PlotLegend.test.tsx`, `SpatialPanelLegend.test.tsx`, `multipanel.test.ts`, `BackgroundPlotWindow.test.tsx`.
 - 2026-10-01 — An open Figure Page follows a Library rename of itself (title, Save and undo of the rename), pinned by `usePageLifecycle.rename.test.ts`. "Snapshot to New Window" on a polar/stats/stack/facet/break view now says why it did nothing (status + toast) instead of a silent no-op; a real snapshot of those views still needs a new snapshot kind.
+- 2026-10-01 — Auto style cycle shown where it is drawn: the Inspector Line/marker-shape pickers and the plot curve menu show the cycled dash/glyph marked "(auto)" (`lib/drawnSeriesStyle.ts`, the canvas' own resolver); picking a value still stores it. Library, folder and workbook menu Help now lands on new "Library items/folders/workbooks" topics (`lib/libraryHelp.ts`). Stale plan boxes reconciled with evidence (F4.2, BUG-002 note, Preferences tablist, default trace export, export cancel, J1 header, reimport groupKey/facetKey).
