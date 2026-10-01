@@ -204,8 +204,7 @@ export interface FigureSpec {
   log_offsets?: number[];
   /** Property-panel overrides (#11): fonts/legend/ticks/spines/limits/margins. */
   overrides?: FigureOverrides | null;
-  /** The axis titles' right-click Format (`PlotView.axisLabelStyles`): size in
-   *  CSS px, read as points (`routes/export_figures_axis_titles`). */
+  /** Axis-title Format (`PlotView.axisLabelStyles`); size in CSS px, read as points. */
   axis_label_styles?: Partial<Record<AxisKey, AxisLabelStyle>>;
   /** The axis titles' dragged offsets (`PlotView.axisLabelOffsets`), `[dx, dy]`
    *  CSS px, x right / y DOWN, read as points. */
