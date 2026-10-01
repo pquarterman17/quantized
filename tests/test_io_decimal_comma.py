@@ -49,7 +49,7 @@ def test_auto_converts_unambiguous_decimal_comma(tmp_path: Path, delim: str) -> 
     assert list(ds.units) == ["emu"]
     assert ds.metadata["x_column_name"] == "Temp"
     assert ds.metadata["decimal_separator"] == ","
-    assert ds.metadata["decimal_comma_columns"] == ["Temp (K)", "Moment (emu)"]
+    assert ds.metadata["decimal_comma_columns"] == ["Temp", "Moment"]  # as the dataset shows them
     assert any("decimal separator" in n for n in ds.metadata["notes"])
 
 

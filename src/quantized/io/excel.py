@@ -19,7 +19,7 @@ from openpyxl.utils.exceptions import InvalidFileException
 
 from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import _is_data_cell, _walk_back_gappy_rows
-from quantized.io.base import resolve_column
+from quantized.io.base import CORRUPT_ARCHIVE_ERRORS, resolve_column
 from quantized.io.delimited import _extract_units
 
 __all__ = ["import_excel"]
@@ -32,6 +32,7 @@ __all__ = ["import_excel"]
 # their uncompressed size is capped like a .brml scan document.
 MAX_CELLS = 1 << 25
 MAX_PART_BYTES = 256 << 20
+_UNREADABLE: tuple[type[Exception], ...] = (*CORRUPT_ARCHIVE_ERRORS, InvalidFileException, OSError)
 _MANIFEST = "[Content_Types].xml"
 _CT_NS = "http://schemas.openxmlformats.org/package/2006/content-types"
 _WORKSHEET_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"
@@ -131,15 +132,17 @@ def import_excel(
     try:
         _check_parts(path)
         workbook = openpyxl.load_workbook(path, data_only=True, read_only=True)
-    except (zipfile.BadZipFile, InvalidFileException, OSError) as exc:
-        # An empty / non-ZIP / truncated .xlsx raises BadZipFile or
-        # InvalidFileException (neither a ValueError) -> would 500 the import
-        # route. Reject cleanly instead.
+    except _UNREADABLE as exc:
+        # An empty / non-ZIP / truncated / damaged .xlsx raises BadZipFile,
+        # InvalidFileException, zlib or XML errors (none a ValueError) ->
+        # would 500 the import route. Reject cleanly instead.
         raise ValueError(f"{path.name} is not a readable .xlsx workbook: {exc}") from exc
     try:
         worksheet = workbook[sheet] if isinstance(sheet, str) else workbook.worksheets[sheet]
         sheet_name = worksheet.title
         grid = _read_grid(worksheet, path.name)
+    except CORRUPT_ARCHIVE_ERRORS as exc:  # the worksheet is streamed: damage shows up here
+        raise ValueError(f"{path.name}: damaged worksheet data ({exc})") from exc
     finally:
         workbook.close()
 
