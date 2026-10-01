@@ -23,10 +23,11 @@
 
 import { cloneDataStruct } from "../lib/dataset";
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
-import { recomputeFromBase } from "../lib/formulaInputs";
+import { recomputeFromBaseOrEmpty } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { CorrectionParams, Dataset } from "../lib/types";
+import { shiftForRemovedColumn } from "./derivedSheetShift";
 import { nextDatasetId } from "./idSeq";
 import type { AppState } from "./useApp";
 
@@ -87,8 +88,17 @@ function summarizePipeline(params: CorrectionParams): string {
  *  a dataset's own `.data` (which already carries its own stale computed
  *  columns) but wrong here, where those trailing columns are REAL source
  *  columns (e.g. the source's own computed column) that were never the
- *  sheet's formulas at all. See derivedWorksheets.test.ts's #4 probe. */
-export async function recomputeDerivedSheet(get: SliceGet, sheet: Dataset): Promise<Dataset> {
+ *  sheet's formulas at all. See derivedWorksheets.test.ts's #4 probe.
+ *
+ *  Also reports `removedCol`, the base column the sheet lost: a column the
+ *  source drops (a removed computed column) drops out of the sheet too and
+ *  every later column shifts down. The sheet's own formulas and
+ *  channel-indexed fields follow here (store/derivedSheetShift.ts); the caller
+ *  remaps the references held outside it (store/columnRemovalRefs.ts). */
+export async function recomputeDerivedSheet(
+  get: SliceGet,
+  sheet: Dataset,
+): Promise<{ sheet: Dataset; removedCol: number | null }> {
   const sourceId = sheet.derivedFrom?.datasetId;
   const source = sourceId ? get().datasets.find((d) => d.id === sourceId) : undefined;
   if (!source) throw new Error(`source dataset "${sourceId}" no longer exists`);
@@ -100,9 +110,13 @@ export async function recomputeDerivedSheet(get: SliceGet, sheet: Dataset): Prom
   // rowsChangedGuard — see store/corrections.ts) once it can see both the
   // old and new row counts and perform the actual `set()`; this function
   // stays a pure "compute the new Dataset" step, same shape as before.
-  if (!sheet.formulas?.length) return { ...sheet, data: corrected, raw: sourceData, formulaErrors: undefined };
-  const { data, errors } = recomputeFromBase(corrected, sheet.formulas);
-  return { ...sheet, data, raw: sourceData, formulaErrors: Object.keys(errors).length ? errors : undefined };
+  const own = sheet.formulas?.length ?? 0; // the sheet's own computed columns trail its base
+  const before = sheet.data.labels.slice(0, sheet.data.labels.length - own);
+  const { sheet: base, removedCol, forcedErrors } = shiftForRemovedColumn(sheet, before, corrected.labels);
+  const { data, formulaErrors } = recomputeFromBaseOrEmpty(corrected, base.formulas);
+  // A formula that named the removed column is an explicit error, never a guess.
+  const errors = forcedErrors ? { ...formulaErrors, ...forcedErrors } : formulaErrors;
+  return { sheet: { ...base, data, raw: sourceData, formulaErrors: errors }, removedCol };
 }
 
 // `set` unused here: both actions delegate to `get().addDataset(...)` (the
