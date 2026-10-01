@@ -374,7 +374,7 @@ describe("plot-view settings — reference lines", () => {
     const [a, b] = useApp.getState().refLines;
     expect(a).toMatchObject({ axis: "x", value: 1 });
     expect(b).toMatchObject({ axis: "y", value: 2 });
-    expect(a.id).toMatch(/^ref-\d+$/);
+    expect(a.id).toMatch(/^ref-[0-9a-z]+-\d+$/);
     expect(b.id).not.toBe(a.id);
     expect(labels()).toEqual(["add reference line", "add reference line"]);
   });
@@ -411,7 +411,7 @@ describe("plot-view settings — reference lines", () => {
 describe("plot-view settings — annotations", () => {
   it("addAnnotation returns the new id and pins the text at data coordinates", () => {
     const id = useApp.getState().addAnnotation(1, 2, "hi");
-    expect(id).toMatch(/^ann-\d+$/);
+    expect(id).toMatch(/^ann-[0-9a-z]+-\d+$/);
     expect(useApp.getState().annotations).toEqual([{ id, x: 1, y: 2, text: "hi" }]);
     expect(labels()).toEqual(["add annotation"]);
   });
