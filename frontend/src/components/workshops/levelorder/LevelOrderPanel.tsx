@@ -91,11 +91,11 @@ export default function LevelOrderPanel() {
     <ToolWindow id="level-order-workshop" title={`Reorder levels — ${ds.data.labels[live]}`} width={380} onClose={closeBoth}>
       <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
         {draft.length} level{draft.length === 1 ? "" : "s"}. Move up/down to set the display order used everywhere this
-        column is grouped, faceted, or axis-labeled — the underlying codes never change.
+        column is grouped, faceted, or axis-labeled — the underlying codes never change. Double-click a name to rename it.
       </div>
 
       <div style={{ maxHeight: 320, overflowY: "auto", marginTop: 8 }}>
-        <LevelOrderTable data={ds.data} channel={live} draft={draft} />
+        <LevelOrderTable datasetId={ds.id} data={ds.data} channel={live} draft={draft} />
       </div>
 
       <div style={{ display: "flex", gap: 6, marginTop: 10, justifyContent: "space-between" }}>

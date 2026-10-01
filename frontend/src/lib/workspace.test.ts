@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { isCategoricalChannel, levelLabel } from "./categorical";
 import { createFigureDocument } from "./figureDocument";
+import { renameLevelIn } from "./levelRename";
 import type { OriginFigureEntry } from "./originFigures";
 import type { OriginFidelityEntry } from "./originFidelity";
 import { createPageDocument } from "./pageDocumentActions";
@@ -2633,6 +2634,22 @@ describe("workspace level order (Group O-2)", () => {
     doc.datasets[0].data.level_order = { 1: [1, "x", null, 0], 2: "nope" };
     const [restored] = parse(JSON.stringify(doc));
     expect(restored.data.level_order).toEqual({ 1: [1, 0] });
+  });
+
+  it("a renamed level round-trips with its codes and order untouched (P2.6 level rename)", () => {
+    const ds = makeDataset("a", "categorical");
+    ds.data = {
+      ...ds.data,
+      values: [[10, 0], [20, 1], [30, 0]],
+      cat_levels: { 1: ["NbAu-1", "NbAu-2"] },
+      level_order: { 1: [1, 0] },
+    };
+    const r = renameLevelIn(ds.data, undefined, 1, 0, "NbAu-A");
+    if (!r.ok) throw new Error(r.reason);
+    const [restored] = parse(ser([{ ...ds, data: r.data }]));
+    expect(restored.data.cat_levels).toEqual({ 1: ["NbAu-A", "NbAu-2"] });
+    expect(restored.data.level_order).toEqual({ 1: [1, 0] });
+    expect(restored.data.values).toEqual([[10, 0], [20, 1], [30, 0]]);
   });
 });
 
