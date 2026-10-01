@@ -20,6 +20,7 @@ import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
 import { decimalsForIncrement, pow10 } from "./ticks";
+import { fullXExtents } from "./uplotXRange";
 import type { Annotation, AxisFormat, AxisScale, DefaultTrace, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
 import {
   annotationPlugin,
@@ -818,27 +819,6 @@ function fullYExtents(
   return [min - pad, max + pad];
 }
 
-/** Full-scan [min, max] of the finite x values, lightly padded — the X
- *  counterpart of fullYExtents. For non-monotonic x (a hysteresis loop sweeps
- *  field up then down, so it starts and ends near the SAME saturation), uPlot's
- *  binary-search autorange collapses the axis to [first, last] — a sliver near
- *  one end. Scanning restores the true sweep width. Log AND reciprocal
- *  consider positive x only. Null when nothing qualifies (leave uPlot's
- *  default alone). */
-function fullXExtents(xs: readonly (number | null)[], positiveOnly: boolean): [number, number] | null {
-  let min = Infinity;
-  let max = -Infinity;
-  for (const v of xs) {
-    if (v == null || !Number.isFinite(v) || (positiveOnly && v <= 0)) continue;
-    if (v < min) min = v;
-    if (v > max) max = v;
-  }
-  if (min > max) return null;
-  if (positiveOnly) return [min / 1.1, max * 1.1];
-  const pad = (max - min || Math.abs(max) || 1) * 0.02; // slim x margin, avoid edge clipping
-  return [min - pad, max + pad];
-}
-
 /** Whether `scale` requires positive-only data (log AND reciprocal share the
  *  domain restriction — see `reciprocalTransform`'s doc). */
 function isPositiveOnlyScale(scale: AxisScale): boolean {
@@ -1139,8 +1119,9 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     : null;
   // …and its x auto-range collapses to a sliver for the same reason — scan the
   // x column for the true sweep width (a range function, so zoom/xLim still win).
-  const loopX = !xAscending && !xLim
-    ? fullXExtents(payload.data[0] as (number | null)[], isPositiveOnlyScale(xScale))
+  // A waterfall X-offset layout always scans (its drawn points, `fullXExtents`).
+  const loopX = (!xAscending || payload.blockRows) && !xLim
+    ? fullXExtents(payload, args.hidden, isPositiveOnlyScale(xScale))
     : null;
   const scales: uPlot.Scales = {
     x: {

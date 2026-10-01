@@ -1,0 +1,490 @@
+{
+  "cases": [
+    {
+      "name": "hidden last series + excluded last row",
+      "request": {
+        "dataset": {
+          "time": [
+            10,
+            12,
+            14,
+            16
+          ],
+          "values": [
+            [
+              1,
+              5,
+              2
+            ],
+            [
+              3,
+              6,
+              4
+            ],
+            [
+              2,
+              9,
+              8
+            ],
+            [
+              4,
+              7,
+              5
+            ]
+          ],
+          "labels": [
+            "S1",
+            "S2",
+            "S3"
+          ],
+          "units": [
+            "a.u.",
+            "a.u.",
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "waterfall_x_offsets": [
+          0,
+          2
+        ],
+        "filename": "waterfall"
+      },
+      "x_domain": [
+        10,
+        18
+      ],
+      "x_lim": null
+    },
+    {
+      "name": "step past the span (ascending blocks), hidden last series",
+      "request": {
+        "dataset": {
+          "time": [
+            10,
+            12,
+            14,
+            16,
+            18
+          ],
+          "values": [
+            [
+              1,
+              5,
+              2
+            ],
+            [
+              3,
+              6,
+              4
+            ],
+            [
+              2,
+              9,
+              8
+            ],
+            [
+              4,
+              7,
+              5
+            ],
+            [
+              6,
+              8,
+              3
+            ]
+          ],
+          "labels": [
+            "S1",
+            "S2",
+            "S3"
+          ],
+          "units": [
+            "a.u.",
+            "a.u.",
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "waterfall_x_offsets": [
+          0,
+          10
+        ],
+        "filename": "waterfall"
+      },
+      "x_domain": [
+        10,
+        28
+      ],
+      "x_lim": null
+    },
+    {
+      "name": "negative step slides left",
+      "request": {
+        "dataset": {
+          "time": [
+            10,
+            12,
+            14,
+            16,
+            18
+          ],
+          "values": [
+            [
+              1,
+              5,
+              2
+            ],
+            [
+              3,
+              6,
+              4
+            ],
+            [
+              2,
+              9,
+              8
+            ],
+            [
+              4,
+              7,
+              5
+            ],
+            [
+              6,
+              8,
+              3
+            ]
+          ],
+          "labels": [
+            "S1",
+            "S2",
+            "S3"
+          ],
+          "units": [
+            "a.u.",
+            "a.u.",
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1,
+          2
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "waterfall_x_offsets": [
+          0,
+          -4,
+          -8
+        ],
+        "filename": "waterfall"
+      },
+      "x_domain": [
+        2,
+        18
+      ],
+      "x_lim": null
+    },
+    {
+      "name": "log X, negative step crossing zero",
+      "request": {
+        "dataset": {
+          "time": [
+            10,
+            12,
+            14,
+            16,
+            18
+          ],
+          "values": [
+            [
+              1,
+              5,
+              2
+            ],
+            [
+              3,
+              6,
+              4
+            ],
+            [
+              2,
+              9,
+              8
+            ],
+            [
+              4,
+              7,
+              5
+            ],
+            [
+              6,
+              8,
+              3
+            ]
+          ],
+          "labels": [
+            "S1",
+            "S2",
+            "S3"
+          ],
+          "units": [
+            "a.u.",
+            "a.u.",
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1,
+          2
+        ],
+        "x_scale": "log",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          },
+          "ticks": {
+            "minor": true
+          }
+        },
+        "transparent": false,
+        "waterfall_x_offsets": [
+          0,
+          -12,
+          -24
+        ],
+        "filename": "waterfall"
+      },
+      "x_domain": [
+        2,
+        18
+      ],
+      "x_lim": null
+    },
+    {
+      "name": "explicit x limits win",
+      "request": {
+        "dataset": {
+          "time": [
+            10,
+            12,
+            14,
+            16,
+            18
+          ],
+          "values": [
+            [
+              1,
+              5,
+              2
+            ],
+            [
+              3,
+              6,
+              4
+            ],
+            [
+              2,
+              9,
+              8
+            ],
+            [
+              4,
+              7,
+              5
+            ],
+            [
+              6,
+              8,
+              3
+            ]
+          ],
+          "labels": [
+            "S1",
+            "S2",
+            "S3"
+          ],
+          "units": [
+            "a.u.",
+            "a.u.",
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1,
+          2
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "x_lim": [
+            11,
+            15
+          ],
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "waterfall_x_offsets": [
+          0,
+          2,
+          4
+        ],
+        "filename": "waterfall"
+      },
+      "x_domain": null,
+      "x_lim": [
+        11,
+        15
+      ]
+    }
+  ]
+}

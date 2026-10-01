@@ -26,6 +26,14 @@
 // `blockRows` lets the brush map a block row back to its dataset row
 // (`waterfallOffset.waterfallSourceRows`).
 //
+// X AUTOSCALE. `blockRows` also tells `buildOpts` to range x over the points a
+// visible series draws (`uplotXRange.fullXExtents`), not the x column, which
+// holds hidden series' blocks too — the domain matplotlib autoscales the export
+// to. Like the Y step (its precedent), the X step is additive in data units on
+// any scale; unlike it, it may be negative, so on a log X it can push points to
+// x <= 0, which both renderers drop (`waterfallXDomainFixture.test.ts` pins
+// every case on both sides).
+//
 // LAZY. Only `Stage/useWaterfallX` imports this, dynamically and only once a
 // non-zero step is set — no eager cost for a plot that never uses it.
 

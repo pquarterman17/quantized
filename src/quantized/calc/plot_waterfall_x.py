@@ -17,6 +17,14 @@ the fraction the user sets is a share of the canvas' x-range. A missing or
 non-finite entry is 0; all-zero (or absent) is a pass-through, so a figure
 with no X offset renders byte-identically to before the field existed.
 Pure: numpy arrays and plain dicts in, new ones out -- nothing is mutated.
+
+No X-limit code is needed: matplotlib autoscales x over the finite points a
+line draws, so an auto X axis covers every shifted series (and, on a log X,
+only the positive ones -- a negative step can push points to x <= 0, which
+neither renderer can place). The canvas ranges x over the same drawn points
+(``frontend/src/lib/uplotXRange.ts``); ``tests/fixtures/wire/
+waterfall_x_domain.json`` pins the shared domain, and an explicit ``x_lim``
+override wins on both sides.
 """
 
 from __future__ import annotations
