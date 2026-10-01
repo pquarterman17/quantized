@@ -14,6 +14,7 @@ publication path; interactive 3-D is deferred (#22).
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import Any
 
 import matplotlib
@@ -83,6 +84,7 @@ def render_map_figure(
     dpi: int | None = None,
     view_elev: float = 30.0,
     view_azim: float = -60.0,
+    z_limits: Sequence[float] | None = None,
 ) -> bytes:
     """Render a 2-D map to image bytes in the chosen ``kind``.
 
@@ -115,6 +117,12 @@ def render_map_figure(
     (``None``), same as ``calc.figure``'s ``resolved_dpi`` convention; the
     preset's box-tick convention (``xtick.top``/``ytick.right`` mirrored
     when the preset draws a closed box) is honored too.
+
+    ``z_limits`` (``[lo, hi]``, ``lo < hi``) is the colour range: the colormap
+    and colourbar span it instead of the data's own extent -- the explicit
+    colour limits the canvas paints over, which may be wider than the data
+    (``tests/fixtures/wire/map_color_limits.json``). Contour LEVELS still come
+    from the data. ``None`` = the data's extent, as before.
     """
     if fmt not in _FORMATS:
         raise ValueError(f"fmt must be one of {_FORMATS}")
@@ -122,6 +130,7 @@ def render_map_figure(
         raise ValueError(f"kind must be one of {MAP_KINDS}")
     if contour_source not in _CONTOUR_SOURCES:
         raise ValueError(f"contour_source must be one of {_CONTOUR_SOURCES}")
+    clim = _z_limits(z_limits)
     st = figure_style(style)
     resolved_dpi = int(dpi) if dpi is not None else int(st.dpi)
 
@@ -194,6 +203,8 @@ def render_map_figure(
             ax, kind, x, y, z, z_min, z_max, cmap, levels, level_scale,
             label_contours, view_elev, view_azim, contour_source=contour_source,
         )
+        if clim is not None and mappable is not None:
+            mappable.set_clim(*clim)
         if title:
             ax.set_title(title)
         if x_label:
@@ -206,6 +217,16 @@ def render_map_figure(
             fig.colorbar(mappable, ax=ax, label=z_label or None, shrink=0.8)
         fig.tight_layout()
         return savefig_bytes(fig, fmt, dpi=resolved_dpi)
+
+
+def _z_limits(z_limits: Sequence[float] | None) -> tuple[float, float] | None:
+    """Validate ``z_limits``: two finite numbers, ascending, or ``None``."""
+    if z_limits is None:
+        return None
+    lim = [float(v) for v in z_limits]
+    if len(lim) != 2 or not all(np.isfinite(lim)) or not lim[0] < lim[1]:
+        raise ValueError("z_limits must be two finite numbers [lo, hi] with lo < hi")
+    return lim[0], lim[1]
 
 
 def _draw(
