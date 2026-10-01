@@ -5147,6 +5147,17 @@
             ],
             "title": "Overrides"
           },
+          "polar": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PolarFigureSpec"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Render a polar figure (x = angle, y = radius) instead of an XY plot. Only `/api/export/figure` renders it; XY-only fields are refused with it."
+          },
           "series_styles": {
             "anyOf": [
               {
@@ -9635,6 +9646,88 @@
           }
         },
         "title": "PlotRequest",
+        "type": "object"
+      },
+      "PolarFigureSpec": {
+        "description": "The polar canvas' geometry. Defaults are the canvas' own.",
+        "properties": {
+          "grid": {
+            "default": true,
+            "description": "Draw the rings and spokes (the grid toggle).",
+            "title": "Grid",
+            "type": "boolean"
+          },
+          "r_lim": {
+            "anyOf": [
+              {
+                "maxItems": 2,
+                "minItems": 2,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Radial range [centre, rim]; values outside are clamped, as on the canvas. None = the shared min/max of every plotted series ([0, 1] when degenerate).",
+            "title": "R Lim"
+          },
+          "r_ticks": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Radial grid rings; None = matplotlib's own.",
+            "title": "R Ticks"
+          },
+          "theta_direction": {
+            "default": "ccw",
+            "description": "Direction the angle increases.",
+            "enum": [
+              "ccw",
+              "cw"
+            ],
+            "title": "Theta Direction",
+            "type": "string"
+          },
+          "theta_unit": {
+            "default": "deg",
+            "description": "Unit of the angle column (the x channel, or `time`).",
+            "enum": [
+              "deg",
+              "rad"
+            ],
+            "title": "Theta Unit",
+            "type": "string"
+          },
+          "theta_zero": {
+            "default": "E",
+            "description": "Where 0 sits on the circle.",
+            "enum": [
+              "E",
+              "N",
+              "W",
+              "S"
+            ],
+            "title": "Theta Zero",
+            "type": "string"
+          }
+        },
+        "title": "PolarFigureSpec",
         "type": "object"
       },
       "PostHocRequest": {

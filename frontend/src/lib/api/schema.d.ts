@@ -7364,6 +7364,8 @@ export interface components {
             overrides?: {
                 [key: string]: unknown;
             } | null;
+            /** @description Render a polar figure (x = angle, y = radius) instead of an XY plot. Only `/api/export/figure` renders it; XY-only fields are refused with it. */
+            polar?: components["schemas"]["PolarFigureSpec"] | null;
             /**
              * Series Styles
              * @description Per-series style, aligned to the plotted `y_keys` order. Keys: `color`/`width`/`line`/`marker`/`marker_size`; `marker_shape` (a `MarkerShape` name -> `calc.figure._plot_kwargs`'s `_MARKER` table, falling back to "o" -- before it existed all eight on-screen marker shapes exported as filled circles while the canvas drew them correctly); `fill` ("under" or `{"vs": <channel>}`, MAIN #13); `color_by`/`colormap` (channel indices, MAIN #14 -- resolved against `dataset` by `calc.plotting.resolve_style_channels`, called from `_figure_series`); `step` ("pre"/"post"/"mid", GAP_PLOTTYPES' Graph Builder step mark -> matplotlib `drawstyle`); and `legend` (BUG-014), the user's legend rename for that series, rendered verbatim instead of having the channel's unit appended to it a second time. An entry is a loose dict (never a strict pydantic sub-model): a bad or unrecognized value in ANY key degrades gracefully -- dropped, or rendered with matplotlib's default -- rather than 422ing the whole export. Under `group_col` (BUG-016) each entry is expanded onto the synthetic per-level series its channel produces, so every level of a grouped channel draws with that channel's style, exactly as the canvas draws it; `color_by`/`colormap` are dropped and a `fill` reference is re-indexed there (see `calc.figure_group_styles`), and a client that wants the levels to keep cycling colours omits `color` rather than sending the channel's own palette slot.
@@ -9056,6 +9058,52 @@ export interface components {
              * @default false
              */
             y_log?: boolean;
+        };
+        /**
+         * PolarFigureSpec
+         * @description The polar canvas' geometry. Defaults are the canvas' own.
+         */
+        PolarFigureSpec: {
+            /**
+             * Grid
+             * @description Draw the rings and spokes (the grid toggle).
+             * @default true
+             */
+            grid?: boolean;
+            /**
+             * R Lim
+             * @description Radial range [centre, rim]; values outside are clamped, as on the canvas. None = the shared min/max of every plotted series ([0, 1] when degenerate).
+             */
+            r_lim?: [
+                number,
+                number
+            ] | null;
+            /**
+             * R Ticks
+             * @description Radial grid rings; None = matplotlib's own.
+             */
+            r_ticks?: number[] | null;
+            /**
+             * Theta Direction
+             * @description Direction the angle increases.
+             * @default ccw
+             * @enum {string}
+             */
+            theta_direction?: "ccw" | "cw";
+            /**
+             * Theta Unit
+             * @description Unit of the angle column (the x channel, or `time`).
+             * @default deg
+             * @enum {string}
+             */
+            theta_unit?: "deg" | "rad";
+            /**
+             * Theta Zero
+             * @description Where 0 sits on the circle.
+             * @default E
+             * @enum {string}
+             */
+            theta_zero?: "E" | "N" | "W" | "S";
         };
         /** PostHocRequest */
         PostHocRequest: {

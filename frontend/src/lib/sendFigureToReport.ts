@@ -32,6 +32,7 @@ import { FIGURE_STYLES, GREYSCALE_FIELD } from "./exportFigureCommand";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
+import { confirmScreenOnlyExport } from "./screenOnlyExport";
 import {
   appendFigureBlock,
   estimateJsonBytes,
@@ -282,7 +283,7 @@ async function sendActivePlot(s: StoreGet): Promise<void> {
         excludedChoiceMatters,
         s().excludedDisplay,
       );
-      if (!picked) return false;
+      if (!picked || !(await confirmScreenOnlyExport(s(), picked.value, "Send"))) return false;
       const block = figureBlockFromSpec(picked.value, stem, caption);
       addFigureToReport(
         s, targetId, block, stem, ds.id, newReportName, [{ kind: "dataset", id: ds.id, name: ds.name }],

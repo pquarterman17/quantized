@@ -25,3 +25,38 @@ export function radiusNorm(v: number, vmin: number, vmax: number): number {
   const t = (v - vmin) / (vmax - vmin);
   return t < 0 ? 0 : t > 1 ? 1 : t;
 }
+
+/** The canvas' angular convention, as the polar export wire spells it
+ *  (`routes/export_figures_polar.PolarFigureSpec`): the angle column is in
+ *  degrees, increases counter-clockwise, and 0 sits east — exactly what
+ *  `polarToXY` above draws. Sent verbatim on every polar export so the
+ *  renderer never assumes it. */
+export const POLAR_CANVAS = { theta_unit: "deg", theta_direction: "ccw", theta_zero: "E" } as const;
+
+/** The channels the polar view draws: `yKeys`, or every channel. No hidden or
+ *  X-channel filtering — the canvas has none. */
+export function polarChannels(yKeys: readonly number[] | null, nChannels: number): number[] {
+  return yKeys ? [...yKeys] : Array.from({ length: nChannels }, (_, i) => i);
+}
+
+/** The shared radial range every plotted channel is drawn against: [min, max]
+ *  of the finite values (min at the centre), or [0, 1] when there are none or
+ *  the range is degenerate. ONE rule for the canvas (`PolarStageCore`) and the
+ *  export (`lib/polarFigureSpec.ts`). */
+export function polarRadialRange(
+  values: readonly (readonly number[])[],
+  channels: readonly number[],
+): [number, number] {
+  let vmin = Infinity;
+  let vmax = -Infinity;
+  for (const ch of channels) {
+    for (const row of values) {
+      const v = row[ch];
+      if (Number.isFinite(v)) {
+        if (v < vmin) vmin = v;
+        if (v > vmax) vmax = v;
+      }
+    }
+  }
+  return !Number.isFinite(vmin) || vmax <= vmin ? [0, 1] : [vmin, vmax];
+}

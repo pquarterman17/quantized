@@ -24,6 +24,7 @@ import type { FigureOverrides } from "../figureOverrides";
 import type { FigureHitmap } from "../previewmap";
 import type { AxisFormat, AxisKey, AxisLabelStyle, AxisScale, DataStruct } from "../types";
 import type { ErrorPair } from "../api";
+import type { components } from "./schema";
 
 /** One xy small-multiples panel (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 --
  *  `FigureSpec.facets`'s own doc has the full contract). Mirrors
@@ -138,6 +139,8 @@ export interface FigureSpec {
    *  UNUSED server-side once `facets` is set (`x_key`/`y_keys`/`overrides`/
    *  `series_styles`/... are not applied to the facet-grid render path). */
   facets?: FigureFacetSpec[] | null;
+  /** A polar figure (x = angle, y = radius) in the canvas' geometry — `lib/polarFigureSpec.ts`. */
+  polar?: components["schemas"]["PolarFigureSpec"];
   fmt?: string;
   style?: string;
   dpi?: number;

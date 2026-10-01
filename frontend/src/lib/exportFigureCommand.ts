@@ -20,6 +20,7 @@ import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import { chooseExcludedRows } from "./excludedRowsChoice";
 import { excludedChoiceMatters } from "./excludedRowsExport";
+import { confirmScreenOnlyExport } from "./screenOnlyExport";
 import type { Dataset } from "./types";
 import { toast } from "../store/toasts";
 
@@ -126,6 +127,8 @@ export async function runExportFigureCommand(
       s().excludedDisplay,
     );
     if (!picked) return false;
+    // A stack/inset view the request cannot carry says so first (lib/screenOnlyExport.ts).
+    if (!buildSpec && !(await confirmScreenOnlyExport(s(), picked.value, "Export"))) return false;
     await exportFigure(picked.value, signal);
   });
 }

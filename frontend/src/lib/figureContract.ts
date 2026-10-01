@@ -193,6 +193,10 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
     "bindings.facet.channel",
     "F4.4 (export half): the resolved per-panel row partition of bindings.facet.channel, built at render time by lib/figureSpec.ts's buildFacetSpecs -- not a second source of the binding itself.",
   ),
+  polar: derived(
+    null,
+    "Built at request time from the live polar view (lib/polarFigureSpec.ts): the canvas' angle convention, radial range and rings. PlotView.polarMode is the only state; nothing here is stored on the document.",
+  ),
   excluded_rows: derived(
     null,
     "F4.2c (a): the live dataset's excluded and filter-dropped rows, read at render time from its row state (lib/rowstate.droppedRows) for an encoded request only -- the document stores no row mask.",

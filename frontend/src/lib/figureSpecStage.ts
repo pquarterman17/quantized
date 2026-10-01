@@ -13,6 +13,7 @@
 import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { buildFigureSpec, buildFigureSpecFromDocument, type FigureRenderOpts } from "./figureSpec";
+import { buildPolarFigureSpec } from "./polarFigureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { Dataset } from "./types";
 import { readLiveWaterfallSpan } from "./waterfallOffset";
@@ -72,6 +73,11 @@ export function buildStageFigureSpec(
   extra: { transparent?: boolean } = {},
 ): FigureSpec {
   const st = s();
+  // The polar canvas (PlotStage's first early return) exports as a polar figure, never as XY.
+  if (st.polarMode) {
+    const polar = buildPolarFigureSpec(st, ds, stem, o);
+    return extra.transparent === undefined ? polar : { ...polar, transparent: extra.transparent };
+  }
   const focused = st.windowsForSave().find((w) => w.id === st.focusedWindowId);
   const document = focused && focused.kind === "plot" ? focused.document : undefined;
   const canRouteThroughDocument =

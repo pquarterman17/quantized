@@ -14,7 +14,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { polarToXY, radiusNorm } from "../../lib/polar";
+import { polarChannels, polarRadialRange, polarToXY, radiusNorm } from "../../lib/polar";
 import { niceTicks } from "../../lib/ticks";
 import type { Dataset } from "../../lib/types";
 import { seriesColor } from "../../lib/uplotOpts";
@@ -103,24 +103,10 @@ function draw(
   const cy = H / 2;
   const radius = Math.max(10, Math.min(W, H) / 2 - 44);
   const angle = active.data.time;
-  const plotted = yKeys ?? active.data.labels.map((_, i) => i);
+  const plotted = polarChannels(yKeys, active.data.labels.length);
 
-  // Shared radial scale across all plotted channels.
-  let vmin = Infinity;
-  let vmax = -Infinity;
-  for (const ch of plotted) {
-    for (const row of active.data.values) {
-      const v = row[ch];
-      if (Number.isFinite(v)) {
-        if (v < vmin) vmin = v;
-        if (v > vmax) vmax = v;
-      }
-    }
-  }
-  if (!Number.isFinite(vmin) || vmax <= vmin) {
-    vmin = 0;
-    vmax = 1;
-  }
+  // Shared radial scale across all plotted channels — the export sends this same range.
+  const [vmin, vmax] = polarRadialRange(active.data.values, plotted);
 
   // Radial grid rings + value labels.
   ctx.strokeStyle = muted;
