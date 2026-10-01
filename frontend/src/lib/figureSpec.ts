@@ -48,7 +48,7 @@ import type { PlotView } from "./plotview";
 import { canvasGroupCol } from "./plotGroupSplit";
 import { encodingSplits, facetEncoding, figureEncodingWire, windowEncoding, type FigureEncoding } from "./plotEncodingBinding";
 import { droppedRows, pruneToLiveDataset } from "./rowstate";
-import { facetSplitChannels } from "./facet";
+import { breakCompositionFromData, facetSplitChannels } from "./facet";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
 // fund P3.3's threading against this file's 500-line ceiling. Imported, NOT
 // re-exported: a barrel here would make every importer of this module pull the
@@ -222,8 +222,10 @@ function buildFigureSpecForView(
         margins: marginFractions(ps),
       }) ?? undefined)
     : viewOverrides(st);
-  const withBreaks = extras.xBreaks?.length
-    ? (compactOverrides({ ...overrides, x_breaks: extras.xBreaks.map((range) => [...range] as [number, number]) }) ?? undefined)
+  // BUG-012: x breaks ride the wire only when the screen's rule (>= 2 surviving panels) draws them.
+  const xBreaks = breakCompositionFromData(pruneToLiveDataset(data, extras.liveDataset), extras.xBreaks, st.xKey, st.yKeys) && extras.xBreaks;
+  const withBreaks = xBreaks
+    ? (compactOverrides({ ...overrides, x_breaks: xBreaks.map((range) => [...range] as [number, number]) }) ?? undefined)
     : overrides;
 
   // Match the DISPLAY order, not the raw yKeys: seriesOrder and hidden legend

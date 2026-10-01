@@ -397,6 +397,19 @@ describe("P4.2 regression matrix: divergences found (D1 through D5 since FIXED, 
     );
   });
 
+  // BUG-012 residual (fixed): excluding every row above the break leaves one
+  // panel, so the screen draws an ordinary plot. The export used to send
+  // `x_breaks` anyway and draw a broken axis.
+  it("BUG-012: row exclusion that collapses the screen break drops x_breaks from the export too", () => {
+    const figure = matrixFixture("break");
+    const excluded: Dataset = { ...dataset, excludedRows: [3, 4, 5] };
+    expect(projectScreen(figure, excluded).xBreaks).toEqual([]);
+    expect(buildFigureSpecFromDocument(figure, excluded, figure.name).overrides?.x_breaks).toBeUndefined();
+    expect(projectExport(figure, excluded)).toEqual(projectScreen(figure, excluded));
+    // Non-vacuous: the same figure WITHOUT the exclusion still breaks on both legs.
+    expect(buildFigureSpecFromDocument(figure, dataset, figure.name).overrides?.x_breaks).toEqual([[2, 3]]);
+  });
+
   /** The `break` fixture with its endpoints moved OFF the sample grid. */
   const offGridBreakFigure = (): FigureDocument =>
     createFigureDocument({

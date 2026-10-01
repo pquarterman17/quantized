@@ -2336,15 +2336,17 @@ describe("useFigureBuilder", () => {
 
       expect(result.current.xBreaks).toEqual([[1, 2]]);
 
-      act(() => result.current.setXBreaks!([[3, 4]]));
+      // x runs 0..2 here, so the break must split it: one that leaves a single
+      // panel is not drawn on screen and is not exported either (BUG-012).
+      act(() => result.current.setXBreaks!([[0.5, 1.5]]));
       const draft = useApp.getState().figurePublicationSession!.draft;
-      expect(draft.plot.axisBreaks.x).toEqual([[3, 4]]);
+      expect(draft.plot.axisBreaks.x).toEqual([[0.5, 1.5]]);
       expect(draft.publication?.overrides?.x_breaks).toBeUndefined();
       expect(draft.publication?.overrides?.font_name).toBe("Times"); // untouched sibling key survives
 
       await waitFor(() => {
         const last = vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0];
-        expect(last?.overrides?.x_breaks).toEqual([[3, 4]]);
+        expect(last?.overrides?.x_breaks).toEqual([[0.5, 1.5]]);
       });
     });
 

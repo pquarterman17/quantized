@@ -745,10 +745,9 @@ describe("breakCompositionFromBreaks", () => {
 
   it("honors row exclusion (analysisData), same as a fresh breakAtGaps gesture", () => {
     // Every row above the break is excluded, so only one panel survives and
-    // the arrangement is refused -- the screen then draws an ORDINARY plot
-    // while an export of the same document still draws a broken axis
-    // (`lib/figureSpec.ts` sends `overrides.x_breaks` unconditionally). That
-    // divergence is recorded as a residual on BUG-012, not fixed here.
+    // the arrangement is refused -- the screen then draws an ORDINARY plot,
+    // and `lib/figureSpec.ts` gates `overrides.x_breaks` on this same rule so
+    // the export does too (`regressionMatrix.test.ts`'s BUG-012 row-exclusion case).
     const excluded: Dataset = { ...ds, excludedRows: [3, 4, 5] };
     expect(breakCompositionFromBreaks(excluded, [[2, 3]], null, [1])).toBeNull();
   });
