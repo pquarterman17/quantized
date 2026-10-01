@@ -86,6 +86,7 @@ export interface ResolvedRecipeVisual {
   legendStatic: boolean;
   stackMode: boolean;
   waterfall: number;
+  waterfallDx: number;
   plotTemplate: string;
   seriesStyles: Record<number, SeriesStyle>;
   seriesLabels: Record<number, string>;
@@ -379,6 +380,7 @@ export function resolveRecipe(recipe: PlotRecipe, dataset: Dataset, opts: Resolv
       legendStatic: recipe.visual.legendStatic,
       stackMode: recipe.visual.stackMode,
       waterfall: recipe.visual.waterfall,
+      waterfallDx: recipe.visual.waterfallDx ?? 0,
       plotTemplate: recipe.visual.plotTemplate,
       seriesStyles: pickRecord(recipe.visual.seriesStyles),
       seriesLabels: pickRecord(recipe.visual.seriesLabels),

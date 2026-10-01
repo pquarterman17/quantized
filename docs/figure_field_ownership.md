@@ -117,6 +117,7 @@ to all 56 fields and is not repeated per row.
 | `seriesOrder` | `series.order` | `plot.view.seriesOrder` | Setter `setSeriesOrder`; Bulk (Recipe) | no |
 | `hiddenChannels` | `series.hiddenChannels` | `plot.view.hiddenChannels` | Setter `toggleHidden`/`soloChannel`; Reset (`originHiddenChannels`); Bulk (Recipe) | no |
 | `waterfall` | `plot.waterfall.verticalOffset` | `plot.view.waterfall` | Setter `setWaterfall`; Bulk (Recipe) | no — but see BUG-013 note below (export has no wire field; not this doc's fix) |
+| `waterfallDx` | `plot.waterfall.horizontalOffset` | `plot.view.waterfallDx` | Setter `setWaterfallDx` (coalesced: one undo entry per typed value); Bulk (Recipe, optional field) | no — export reads it one way as `FigureSpec.waterfall_x_offsets` |
 | `panelFit` | `page.panelFit` | `plot.view.panelFit` | Setter `setPanelFit`/`cyclePanelFit`; Bulk (Origin spatial-layout apply) | no |
 | `pageSetup` | `page.setup` | `plot.view.pageSetup` | Setter `setPageSetup`; Bulk (Origin's `pageSetupFromDecoded`) | no |
 

@@ -159,12 +159,12 @@ describe("LibraryTree — keyboard traversal (Up/Down/Left/Right/Enter)", () => 
     expect(document.activeElement).toBe(workbookRow("w1"));
   });
 
-  it("Escape blurs the focused row", () => {
+  it("Escape on a row keeps focus on that row (V1: it used to blur to <body>)", () => {
     render(<Harness />);
     folderRow("f1").focus();
     expect(document.activeElement).toBe(folderRow("f1"));
     fireEvent.keyDown(folderRow("f1"), { key: "Escape" });
-    expect(document.activeElement).not.toBe(folderRow("f1"));
+    expect(document.activeElement).toBe(folderRow("f1"));
   });
 });
 

@@ -73,6 +73,7 @@ export default function EditableFiguresSection() {
             <button
               className="qz-btn qz-ghost qz-sm"
               style={{ minHeight: 24, minWidth: 24 }}
+              aria-label="Rename figure"
               title="rename editable figure"
               onClick={() => {
                 void runLazy("Loading rename dialog…", () => import("../overlays/ParamDialog")).then(
@@ -91,6 +92,7 @@ export default function EditableFiguresSection() {
             <button
               className="qz-btn qz-ghost qz-sm"
               style={{ minHeight: 24, minWidth: 24 }}
+              aria-label="Duplicate figure"
               title="duplicate editable figure"
               onClick={() => duplicate(document.id)}
             >
@@ -99,6 +101,7 @@ export default function EditableFiguresSection() {
             <button
               className="qz-btn qz-ghost qz-sm"
               style={{ minHeight: 24, minWidth: 24, marginLeft: 6 }}
+              aria-label="Delete figure"
               title="delete editable figure (undo available)"
               onClick={() => {
                 // F3.2 referential integrity: a Figure Page panel references

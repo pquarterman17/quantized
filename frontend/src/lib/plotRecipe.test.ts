@@ -311,3 +311,32 @@ describe("serializeRecipe", () => {
     expect(JSON.parse(text)).toEqual(r);
   });
 });
+
+// Waterfall X offset (Origin's waterfall X step): additive and optional on
+// the recipe's visual block — captured only when set, so an X-less recipe
+// serializes exactly as before; resolved (and so applied) as 0 when absent.
+describe("captureRecipe — waterfall X step", () => {
+  const ds = xrdDataset();
+  const opts = { id: "r1", name: "wf", appVersion: "0.0.0-test", now: () => "2026-10-01T00:00:00.000Z" };
+
+  async function appliedDx(r: PlotRecipe): Promise<number> {
+    const { resolveRecipe } = await import("./plotRecipeMatch");
+    const res = resolveRecipe(r, ds);
+    if (!("resolved" in res)) throw new Error("refused");
+    const { viewFromResolved } = await import("../store/plotRecipeApply");
+    return viewFromResolved(res.resolved.mapping, res.resolved.visual).waterfallDx;
+  }
+
+  it("captures a set X step beside the Y one and resolves it back", async () => {
+    const r = captureRecipe(ds, view({ xKey: 0, yKeys: [1, 2], waterfall: 0.2, waterfallDx: -0.05 }), null, opts);
+    expect(r.visual.waterfall).toBe(0.2);
+    expect(r.visual.waterfallDx).toBe(-0.05);
+    expect(await appliedDx(r)).toBe(-0.05);
+  });
+
+  it("an unset X step is not written, and an X-less recipe applies 0", async () => {
+    const r = captureRecipe(ds, view({ xKey: 0, yKeys: [1], waterfall: 0.2 }), null, opts);
+    expect("waterfallDx" in r.visual).toBe(false);
+    expect(await appliedDx(r)).toBe(0);
+  });
+});

@@ -44,8 +44,9 @@ export function keyOfRow(el: Element | null): string | null {
  *  of the row anchors is this container's to handle.
  *
  *  The anchor identity test runs FIRST and wins (P1 review fix): an
- *  ArtifactRow/FigureRow anchor is itself a `<button data-lib-row>`, so an
- *  element-kind test alone misclassified those anchors as nested controls —
+ *  ArtifactRow/FigureRow anchor was itself a `<button data-lib-row>` (a
+ *  `<div>` in the tree since V1), so an element-kind test alone
+ *  misclassified those anchors as nested controls —
  *  the container then ignored their arrows/Delete, which fell through to
  *  the GLOBAL dataset shortcuts and could remove an unrelated active
  *  worksheet. "Is the anchor" and "is interactive" are independent facts;

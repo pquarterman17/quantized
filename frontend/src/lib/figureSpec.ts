@@ -57,7 +57,7 @@ import { viewOverrides } from "./figureViewOverrides";
 import type { ErrorBinding } from "./errorRoles";
 import type { Dataset, DataStruct } from "./types";
 import { logOffsetWire } from "./logOffset";
-import { waterfallWire } from "./waterfallOffset";
+import { waterfallWire } from "./waterfallWire";
 import { axisFmtParam } from "./types";
 
 /** The render-time choices a caller supplies. Everything else about the spec
@@ -114,6 +114,8 @@ export interface FigureDocumentRenderOpts extends Partial<FigureRenderOpts> {
    *  readLiveWaterfallSpan`; absent everywhere else, and the step is then
    *  measured over the full DataStruct. See that module's header. */
   waterfallSpan?: number | null;
+  /** The X twin (`readLiveWaterfallSpan(id, "xSpan")`): the X step's x-span. */
+  waterfallXSpan?: number | null;
 }
 
 /** Resolve the data that a canonical document is allowed to render. A frozen
@@ -145,7 +147,7 @@ export function buildFigureSpec(
   ds: Dataset,
   stem: string,
   o: FigureRenderOpts,
-  extras: { autoSeriesStyles?: boolean; waterfallSpan?: number | null } = {},
+  extras: { autoSeriesStyles?: boolean; waterfallSpan?: number | null; waterfallXSpan?: number | null } = {},
 ): FigureSpec {
   const raw = s();
   // R7: `raw` is the live singleton, which a refocus-mid-export race can
@@ -156,6 +158,7 @@ export function buildFigureSpec(
     liveDataset: ds,
     autoSeriesStyles: extras.autoSeriesStyles,
     waterfallSpan: extras.waterfallSpan,
+    waterfallXSpan: extras.waterfallXSpan,
   });
 }
 
@@ -194,6 +197,7 @@ function buildFigureSpecForView(
     /** BUG-013 review round: the LIVE canvas' measured waterfall y-span —
      * see `FigureDocumentRenderOpts.waterfallSpan`. */
     waterfallSpan?: number | null;
+    waterfallXSpan?: number | null;
     /** P1.4: the document's Color / Symbol / Label picks (`bindings.encoding`). */
     encoding?: FigureEncoding;
   } = {},
@@ -395,6 +399,8 @@ function buildFigureSpecForView(
       fraction: st.waterfall,
       view: cycleView,
       span: extras.waterfallSpan,
+      xFraction: st.waterfallDx, // Origin's waterfall X step
+      xSpan: extras.waterfallXSpan,
       // The SAME degraded value this spec just emitted (or omitted) above as
       // `group_col` — REQUIRED (round 5), so this is the only place either
       // field can be resolved from, not a second, possibly-disagreeing read
@@ -459,6 +465,7 @@ export function buildFigureSpecFromDocument(
       // stagger by the LIVE canvas' span flung the second curve 25x the
       // snapshot's own y-range off the figure, and only on the Stage export.
       waterfallSpan: document.data.mode === "frozen" ? null : overrides.waterfallSpan,
+      waterfallXSpan: document.data.mode === "frozen" ? null : overrides.waterfallXSpan,
       liveDataset: document.data.mode === "frozen" ? null : (dataset ?? null), // C2
       encoding: document.bindings.encoding, // P1.4
     },

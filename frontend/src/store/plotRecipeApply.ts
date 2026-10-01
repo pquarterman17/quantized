@@ -134,6 +134,7 @@ export function viewFromResolved(
     legendStatic: visual.legendStatic,
     stackMode: visual.stackMode,
     waterfall: visual.waterfall,
+    waterfallDx: visual.waterfallDx,
     plotTemplate: visual.plotTemplate,
     seriesStyles: visual.seriesStyles,
     seriesLabels: visual.seriesLabels,

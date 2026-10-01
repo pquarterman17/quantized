@@ -189,6 +189,11 @@ export interface FigureSpec {
    *  and for the `group_col`/`facets` shapes whose renderer cannot align a
    *  `y_keys`-keyed list. */
   waterfall_offsets?: number[];
+  /** Origin's waterfall X step: per-series horizontal offset in X data units,
+   *  aligned to `y_keys` and resolved the same way (`lib/waterfallOffset.ts`).
+   *  The backend lays the series out one x block each
+   *  (`calc.plot_waterfall_x`), as the canvas does. Same omissions. */
+  waterfall_x_offsets?: number[];
   /** Per-series whole-DECADE offsets aligned to `y_keys` (audit P2.3): the
    *  backend draws series i at y · 10^k with " ×10^k" in its legend, exactly
    *  as the canvas does (`lib/logOffset.ts`). Omitted when nothing is offset,

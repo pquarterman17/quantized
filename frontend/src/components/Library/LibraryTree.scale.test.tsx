@@ -321,6 +321,31 @@ describe("LibraryTree — large-Library virtualization", () => {
       expect((document.activeElement as HTMLElement).matches("[data-lib-row], [data-ds-id]")).toBe(true);
     });
   });
+  // V1: the holder's Enter/Escape used to bubble straight to the window
+  // handlers. They are the tree's now: Enter opens the roving row, Escape
+  // brings the roving row back into view and focuses it. Both are consumed.
+  it("Enter and Escape on the scroll-out holder act on the roving row instead of passing through", async () => {
+    seedWide(5000);
+    useApp.setState({ librarySelection: null });
+    render(<Harness />);
+    const panel = document.querySelector(".qzk-lib-tree") as HTMLElement;
+    const focusedId = renderedRows()[3].getAttribute("data-ds-id")!;
+    const holdFocus = (): void => {
+      act(() => (document.querySelector(`[data-ds-id="${focusedId}"]`) as HTMLElement).focus());
+      fireEvent.scroll(panel, { target: { scrollTop: 40000 } });
+      expect(document.activeElement).toBe(panel);
+    };
+
+    holdFocus();
+    expect(fireEvent.keyDown(panel, { key: "Enter" })).toBe(false);
+    expect(useApp.getState().activeId).toBe(focusedId);
+
+    fireEvent.scroll(panel, { target: { scrollTop: 0 } });
+    holdFocus();
+    expect(fireEvent.keyDown(panel, { key: "Escape" })).toBe(false);
+    await waitFor(() => expect(document.activeElement?.getAttribute("data-ds-id")).toBe(focusedId));
+  });
+
   // U5 (WAI-ARIA tree): ONE roving tab stop must survive virtualization. The
   // stop is a model-level row; when a scroll unmounts it, the window's first
   // rendered row stands in (Details' `effectiveRovingKey` rule) so Tab can

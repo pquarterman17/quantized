@@ -118,6 +118,28 @@ describe("LibraryTree — WAI-ARIA tree semantics", () => {
     expect(d2).toHaveAttribute("aria-posinset", "2");
   });
 
+  it("artifact and graph anchors are not <button>s (ARIA-in-HTML bars treeitem on a button); Space selects, Enter opens", () => {
+    render(<Harness />);
+    expect(screen.getByRole("tree").querySelectorAll('button[role="treeitem"]')).toHaveLength(0);
+    const cases: Array<[string, { kind: string; id: string }]> = [
+      ["origin-figure:g1", { kind: "origin-figure", id: "g1" }],
+      ["editable-figure:fig1", { kind: "editable-figure", id: "fig1" }],
+    ];
+    for (const [key, selection] of cases) {
+      const anchor = row(key);
+      expect(anchor.tagName).not.toBe("BUTTON");
+      expect(anchor).toHaveAttribute("role", "treeitem");
+      anchor.focus();
+      expect(document.activeElement).toBe(anchor);
+      useApp.setState({ librarySelection: null });
+      // Consumed (returns false), as a button's Space is: no page scroll.
+      expect(fireEvent.keyDown(anchor, { key: " " })).toBe(false);
+      expect(useApp.getState().librarySelection).toEqual(selection);
+    }
+    fireEvent.keyDown(row("editable-figure:fig1"), { key: "Enter" });
+    expect(useApp.getState().workbookLastChild.w1).toBe("editable-figure:fig1");
+  });
+
   it("collapsing a folder flips its aria-expanded", () => {
     render(<Harness />);
     const folder = row("folder:f1");
@@ -179,6 +201,17 @@ describe("LibraryTree — one roving tab stop", () => {
 });
 
 describe("LibraryTree — Escape returns focus to the row", () => {
+  it("on the row itself: focus stays, and the key still reaches the app's Escape ladder (Details' model)", () => {
+    render(<Harness />);
+    for (const key of ["folder:f1", "worksheet:d1", "origin-figure:g1"]) {
+      const anchor = row(key);
+      anchor.focus();
+      // fireEvent returns false only when the keystroke was preventDefault()ed.
+      expect(fireEvent.keyDown(anchor, { key: "Escape" })).toBe(true);
+      expect(document.activeElement).toBe(anchor);
+    }
+  });
+
   it("from a nested control (the row's menu button)", () => {
     render(<Harness />);
     const sheet = row("worksheet:d1");

@@ -212,7 +212,7 @@ export function createLibraryPanelSlice(set: SliceSet, initialWidth: number): Li
     // onClick, today; anything added later) to remember to clear it itself.
     // The reverse direction (activating/selecting a dataset clears
     // librarySelection) lives at ITS OWN chokepoints: activateFromLibrary/
-    // toggleSelected/selectRange (useApp.ts) and focusedRebindPatch
+    // toggleSelected/selectRange (datasetSelection.ts) and focusedRebindPatch
     // (windows.ts, shared by setActive). Together the two directions close
     // the gap that let a stale worksheet selectedIds/activeId survive
     // alongside a freshly-selected workbook/folder — LibraryTree.tsx's own

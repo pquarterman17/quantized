@@ -6,20 +6,14 @@ import type { Notation } from "../lib/format";
 import { recomputeWithErrors } from "../lib/formula";
 import { asAlreadyComputed } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
-import { isOriginBookDataset } from "../lib/grouping";
 import type { WorkbookNode } from "../lib/workbooks";
 import { snapshotView, type PlotView } from "../lib/plotview";
 import { nextStageTab, type StageTab } from "../lib/stagetab";
 // The MDI window-management slice (MAIN_PLAN #2): state + actions live in
 // ./windows and are composed into THIS store instance below; the shared
-// rebind helpers are imported back for setActive/addDataset.
-import {
-  createWindowsSlice,
-  datasetViewDefaults,
-  focusedRebindPatch,
-  retargetPassiveRebind,
-  type WindowsSlice,
-} from "./windows";
+// rebind helpers are imported back for addDataset (setActive's live in
+// ./datasetSelection).
+import { createWindowsSlice, datasetViewDefaults, retargetPassiveRebind, type WindowsSlice } from "./windows";
 import { rebindFocusedPlotWindow } from "./windowDocuments";
 // Composed store slices (each documented in its own file) + workspace IO:
 import { createHistorySlice, type HistoryBatchToken, type HistorySlice } from "./history";
@@ -83,6 +77,7 @@ import { createWorkspaceHydrationSlice, type WorkspaceHydrationSlice } from "./w
 import { createMacroPipelineSlice, type MacroPipelineSlice } from "./macroPipeline";
 import { createWorkshopFlagsSlice, type WorkshopFlagsSlice } from "./workshopFlags";
 import { createDatasetListEditsSlice, type DatasetListEditsSlice } from "./datasetListEdits";
+import { createDatasetSelectionSlice, type DatasetSelectionSlice } from "./datasetSelection";
 import { toast } from "./toasts";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
 import { createOriginImportSlice, type OriginImportSlice } from "./originImport";
@@ -135,8 +130,8 @@ export { nextDatasetId, nextFolderId } from "./idSeq";
 // (mainWindow / focusTransientReset moved to store/windows.ts with the window
 // slice, then on to store/workspaceHydration.ts's loadWorkspace (P4.1's
 // fourth domain) — that module imports them directly now.
-// datasetViewDefaults / focusedRebindPatch / retargetPassiveRebind stay
-// imported above for the setActive/addDataset paths.)
+// datasetViewDefaults / retargetPassiveRebind stay imported above for
+// addDataset; setActive's focusedRebindPatch moved with it.)
 
 // Recalc scheduler internals (#1): a module-level debounce timer plus an
 // in-progress guard so the recalc's own applyCorrections calls never re-mark
@@ -192,19 +187,10 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice, DatasetSelectionSlice {
   datasets: Dataset[];
-  activeId: string | null;
-  // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
-  // "primary"; ctrl/shift-click extend `selectedIds` without changing the plot.
-  selectedIds: string[];
-  // WORKSHEET_PLAN item 15 ("origin book click opens…"): the Worksheet tab's
-  // dataset override, set by `activateFromLibrary`'s worksheet-intent path
-  // instead of `activeId` — `activeId` stays the FOCUSED plot window's bound
-  // dataset (PlotStage/Inspector/every workshop MUST keep reading it
-  // unchanged, per MULTI_PLOT_PLAN's facade). null = "no override"
-  // (`Worksheet.tsx` falls back to `activeId`); `setActive` clears it.
-  worksheetId: string | null;
+  // activeId / selectedIds / worksheetId: declared on DatasetSelectionSlice
+  // (store/datasetSelection.ts) with the actions that move them.
   // Report sheets (#36): named analysis reports (curve fits, peak tables,
   // stats) living in the library. `datasetId` ties one back to its source
   // dataset (nulled if that dataset is removed — the report itself stays, it
@@ -386,27 +372,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // loadWorkspace / appendWorkspace: see store/workspaceHydration.ts
   // (WorkspaceHydrationSlice) — composed exactly like plotViewSettings.ts,
   // reportsFigureDocs.ts and viewAppliers.ts.
-  setActive: (id: string) => void;
-  // WORKSHEET_PLAN item 15: the routed Library-click entry point — EVERY
-  // "click/select a row" site (DatasetRow's plain click + pre-menu select,
-  // the Library arrow-key nav, the worksheet's own sheet/book-switcher tabs)
-  // calls THIS, never `setActive` directly, so they all honor the
-  // `originBookClickOpens` preference the same way. Routes to a worksheet-
-  // intent path (sets `worksheetId`, switches to the Worksheet tab, leaves
-  // the focused plot window and its view untouched) for an Origin-project
-  // dataset when the pref is "worksheet" (default); falls through to
-  // `setActive` (unconditional plot-intent) for every non-Origin dataset,
-  // and for an Origin one when the pref is "plot". `setActive` itself stays
-  // the unconditional plot-intent primitive on purpose — explicit "Plot
-  // (make active)", figure apply, and the worksheet's own Plot-selection/
-  // Add-to-plot rebind (`lib/selectionplot` via `useWorksheetView.plotCols`)
-  // all call it directly.
-  activateFromLibrary: (id: string) => void;
-  toggleSelected: (id: string) => void;
-  selectRange: (id: string) => void;
-  // Replace the multi-selection with an explicit id list (folder bulk ops,
-  // item 8) — like ctrl-click, it never moves the plotted/active dataset.
-  selectIds: (ids: string[]) => void;
+  // setActive / activateFromLibrary / toggleSelected / selectRange /
+  // selectIds: see store/datasetSelection.ts (DatasetSelectionSlice).
   // removeDataset … renameDataset, the folder-tree and smart-folder actions:
   // see store/datasetListEdits.ts (DatasetListEditsSlice).
   // addFormula/removeFormula/updateFormula live on ComputedColumnsSlice
@@ -504,10 +471,8 @@ export const useApp = create<AppState>((set, get) => ({
   ...createMacroPipelineSlice(set),
   ...createWorkshopFlagsSlice(set),
   ...createDatasetListEditsSlice(set, get),
+  ...createDatasetSelectionSlice(set, get),
   datasets: [],
-  activeId: null,
-  worksheetId: null,
-  selectedIds: [],
   reports: [],
   openReportId: null,
   figureDocs: [],
@@ -688,78 +653,9 @@ export const useApp = create<AppState>((set, get) => ({
   // ./workspaceIOLazy (bundle headroom slice 9 — see that file's doc).
   saveWorkspaceToFile: () => runSaveWorkspaceToFile(get),
   saveWorkspace: () => runSaveWorkspace(get),
-  setActive: (id) => {
-    // Item 14 pin opt-out: a pinned focused window never follows a passive
-    // plot intent — retarget it first (focus swap, or a fresh window), then
-    // the normal focused-window rebind below lands on the new focus. The
-    // rebind itself lives in `focusedRebindPatch` (hoisted, module level) so
-    // `rebindWindow`'s explicit-drop path shares it verbatim.
-    retargetPassiveRebind(get(), id);
-    set((s) => focusedRebindPatch(s, id));
-    // ORIGIN_FILE_DECODE_PLAN #38: a plain click covers the common "activate
-    // a lazy book" path; the render-side hooks (PlotStage/WindowCanvas/
-    // MultiPanelStage/WorksheetPane) cover the rest (multi-panel siblings,
-    // whatever `addDataset` left active after a bulk import, a .dwk reload).
-    get().ensureBookData(id);
-  },
-  // WORKSHEET_PLAN item 15 ("origin book click opens…" — owner: "clicking the
-  // books tries to plot it all rather than open a spreadsheet like in
-  // Origin"). An Origin-project dataset (`isOriginBookDataset`) routes to a
-  // worksheet-intent activation — under the default pref: just switches the
-  // Worksheet tab to `id` and collapses the row selection, WITHOUT touching
-  // `activeId`, `plotWindows`, or any of the singleton view fields (Origin's
-  // own model: opening a workbook never touches your graphs). Everything
-  // else (a non-Origin dataset, or the pref set to "plot") falls through to
-  // `setActive` — the unconditional plot-intent activation, unchanged.
-  activateFromLibrary: (id) => {
-    const s = get();
-    const ds = s.datasets.find((d) => d.id === id);
-    if (ds && isOriginBookDataset(ds) && s.originBookClickOpens === "worksheet") {
-      set({
-        worksheetId: id,
-        selectedIds: [id], // plain click collapses the selection, same as setActive
-        stageTab: "worksheet", librarySelection: null, // L0.25: also exits folder/workbook selection
-      });
-      // #38: WorksheetPane's own pending-effect covers the render-side
-      // fetch once mounted; kick it here too (single-flight — harmless if
-      // it's already in flight) so Library/Inspector consumers keying off
-      // `pending` update without waiting for a mount.
-      get().ensureBookData(id);
-      return;
-    }
-    get().setActive(id);
-  },
-  // Ctrl/Cmd-click: add or remove a row from the multi-selection WITHOUT changing
-  // the plotted/active dataset (the plot only follows a plain click).
-  toggleSelected: (id) =>
-    set((s) => ({
-      selectedIds: s.selectedIds.includes(id) ? s.selectedIds.filter((x) => x !== id) : [...s.selectedIds, id],
-      librarySelection: null, // L0.25: also exits folder/workbook selection (selectRange/setActive do the same)
-    })),
-  // Shift-click: select the contiguous range from the anchor (activeId) to `id`
-  // in library order. Doesn't move the active selection (the plot stays put).
-  selectRange: (id) =>
-    set((s) => {
-      const order = s.datasets.map((d) => d.id);
-      const anchor = s.activeId ?? id;
-      const a = order.indexOf(anchor);
-      const b = order.indexOf(id);
-      if (a < 0 || b < 0) return { selectedIds: [id], librarySelection: null };
-      const [lo, hi] = a <= b ? [a, b] : [b, a];
-      return { selectedIds: order.slice(lo, hi + 1), librarySelection: null };
-    }),
-  // Explicit-list selection (folder "Select all" — item 8): de-duplicated and
-  // clamped to live datasets; the plotted/active dataset stays put.
-  selectIds: (ids) =>
-    set((s) => {
-      const live = new Set(s.datasets.map((d) => d.id));
-      const selectedIds = [...new Set(ids)].filter((id) => live.has(id));
-      // L0.25 coherence chokepoint (like activateFromLibrary/toggleSelected):
-      // a live dataset selection displaces the tree's librarySelection.
-      return { selectedIds, ...(selectedIds.length > 0 ? { librarySelection: null } : {}) };
-    }),
-  // (removeDataset … renameDataset and the folder/smart-folder bodies moved to
-  // createDatasetListEditsSlice, spread into this literal above.)
+  // (setActive … selectIds moved to createDatasetSelectionSlice; removeDataset
+  // … renameDataset and the folder/smart-folder bodies to
+  // createDatasetListEditsSlice — both spread into this literal above.)
   // Edit a single worksheet cell in place (col < 0 = the x/time column). Rebuilds
   // the dataset's arrays immutably (DataStruct stays frozen-by-contract) so the
   // plot + stats recompute live. Computed columns (the last `formulas.length`)

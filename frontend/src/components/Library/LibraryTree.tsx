@@ -12,7 +12,8 @@
 // open/select) keeps working completely unmodified. This container supplies
 // only the ACROSS-ROW part: Up/Down/Left/Right/Home/End/Enter, computed by
 // the pure lib/libraryTreeNav.ts against the flattened array, and Escape
-// (blur on a row; from a nested control or inline editor, back to the row).
+// (left alone on a row, which keeps focus; from a nested control, an inline
+// editor or the scroll-out holder, back to the row).
 //
 // U5 — WAI-ARIA tree: role="tree" here, role="treeitem" (level, set size,
 // position, expanded, selected) on each anchor via `treeItemProps`, and ONE
@@ -186,15 +187,17 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
   const onKeyDown = (e: React.KeyboardEvent) => {
     // The CONTAINER itself holds focus — the scroll-out fallback above put it
     // there. A nav key resumes from the roving row's model position (it is not
-    // a row, so `keyOfRow` would find nothing); every other key, Delete
-    // included, falls through to the guard below, which consumes it rather
-    // than let it reach the global dataset handlers.
-    const fromContainer = e.target === containerRef.current
-      && NAV_KEYS[e.key] != null && indexOfKey(rows, focusedKeyRef.current) >= 0;
+    // a row, so `keyOfRow` would find nothing), and Enter/Escape act on that
+    // row too (V1: they used to bubble to the window handlers); every other
+    // key, Delete included, falls through to the guard below, which consumes
+    // it rather than let it reach the global dataset handlers.
+    const rovingIdx = indexOfKey(rows, focusedKeyRef.current);
+    const fromContainer = e.target === containerRef.current && rovingIdx >= 0
+      && (NAV_KEYS[e.key] != null || e.key === "Enter" || e.key === "Escape");
     // P2 fix: a nested editor/control owns its own keystrokes — see
     // isEditorTarget's doc. Must run before Escape too: an editor's own
-    // Escape (rename input's onKeyDown) stays its own, never ALSO blurring
-    // the row out from under it. Retrospective-audit P1: a nested
+    // Escape (rename input's onKeyDown) stays its own, never ALSO treated as
+    // the row's own Escape below. Retrospective-audit P1: a nested
     // NON-EDITOR control (drag handle, "⋯"/reorder/figure buttons) doesn't
     // handle Delete or bare arrows itself, so those are consumed here —
     // never left to reach the global handlers and act on an unrelated
@@ -210,8 +213,13 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
       if (isDestructiveOrNav && !isTextEditorTarget(e.target as Element)) e.preventDefault();
       return;
     }
+    // V1: Escape on a row keeps focus there and goes on to the app's Escape
+    // ladder, as in Details. On the holder it is the tree's: back to the row.
     if (e.key === "Escape") {
-      (document.activeElement as HTMLElement | null)?.blur();
+      if (fromContainer) {
+        e.preventDefault();
+        focusRow(rows[rovingIdx], rovingIdx);
+      }
       return;
     }
     const key = fromContainer ? focusedKeyRef.current : keyOfRow(e.target as Element);

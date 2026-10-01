@@ -1,0 +1,118 @@
+{
+  "request": {
+    "dataset": {
+      "time": [
+        10,
+        12,
+        14,
+        18
+      ],
+      "values": [
+        [
+          1,
+          5,
+          2
+        ],
+        [
+          3,
+          6,
+          4
+        ],
+        [
+          2,
+          9,
+          8
+        ],
+        [
+          6,
+          8,
+          3
+        ]
+      ],
+      "labels": [
+        "S1",
+        "S2",
+        "S3"
+      ],
+      "units": [
+        "a.u.",
+        "a.u.",
+        "a.u."
+      ],
+      "metadata": {}
+    },
+    "y_keys": [
+      0,
+      2
+    ],
+    "x_scale": "linear",
+    "y_scale": "linear",
+    "x_step": null,
+    "y_step": null,
+    "fmt": "svg",
+    "style": "default",
+    "dpi": 300,
+    "title": "",
+    "series_styles": [
+      {
+        "color": "#8b5cf6"
+      },
+      {
+        "color": "#8b5cf6"
+      }
+    ],
+    "overrides": {
+      "legend": {
+        "show": true,
+        "loc": "upper right"
+      },
+      "grid": true,
+      "spines": {
+        "top": true,
+        "right": true
+      }
+    },
+    "transparent": false,
+    "waterfall_offsets": [
+      0,
+      4
+    ],
+    "waterfall_x_offsets": [
+      0,
+      2
+    ],
+    "filename": "waterfall"
+  },
+  "screen": [
+    {
+      "label": "S1",
+      "x": [
+        10,
+        12,
+        14,
+        18
+      ],
+      "y": [
+        1,
+        3,
+        2,
+        6
+      ]
+    },
+    {
+      "label": "S3",
+      "x": [
+        12,
+        14,
+        16,
+        20
+      ],
+      "y": [
+        6,
+        8,
+        12,
+        7
+      ]
+    }
+  ]
+}

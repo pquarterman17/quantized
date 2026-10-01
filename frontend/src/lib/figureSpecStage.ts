@@ -101,6 +101,7 @@ export function buildStageFigureSpec(
   // one dataset by another's span. `null` (no XY canvas on screen, or one
   // showing a different dataset) falls back to the full DataStruct.
   const waterfallSpan = readLiveWaterfallSpan(ds.id);
+  const waterfallXSpan = readLiveWaterfallSpan(ds.id, "xSpan"); // the X step's twin
   const spec = canRouteThroughDocument
     ? buildFigureSpecFromDocument(document, ds, stem, {
         fmt: o.fmt,
@@ -112,9 +113,10 @@ export function buildStageFigureSpec(
         filename: null,
         autoSeriesStyles,
         waterfallSpan,
+        waterfallXSpan,
         greyscale: o.greyscale,
         greyExcluded: o.greyExcluded,
       })
-    : buildFigureSpec(s, ds, stem, o, { autoSeriesStyles, waterfallSpan });
+    : buildFigureSpec(s, ds, stem, o, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
   return extra.transparent === undefined ? spec : { ...spec, transparent: extra.transparent };
 }

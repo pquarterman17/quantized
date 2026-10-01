@@ -3,14 +3,13 @@
 //
 // An icon-only control is announced by its CONTENT before its `title`, so a
 // glyph button with only a tooltip is read as "▤" — or as nothing. Every such
-// control outside components/Library now carries a short `aria-label`; this
-// guard keeps it that way. The scanner itself lives in
-// `test/accessibleNameScan.ts`, and the render-level half (real names, via
-// dom-accessibility-api) in `accessibleNames.render.test.tsx`.
+// control in the app carries a short `aria-label`; this guard keeps it that
+// way. The scanner itself lives in `test/accessibleNameScan.ts`, and the
+// render-level half (real names, via dom-accessibility-api) in
+// `accessibleNames.render.test.tsx`.
 //
-// components/Library is owned by a separate pass, so its count is PINNED at
-// today's value, not zero — same iron law as every other ratchet: the pin may
-// only go down, and a pin that is no longer met exactly must be lowered.
+// components/Library was pinned (23, then 21) until its own pass (V1) named
+// the rest, so the requirement is now zero app-wide with no exception.
 
 import { describe, expect, it } from "vitest";
 
@@ -22,14 +21,10 @@ const modules = import.meta.glob("./**/*.tsx", {
   eager: true,
 }) as Record<string, string>;
 
-const LIBRARY_DIR = "./components/Library/";
-/** components/Library's unnamed icon controls on 2026-10-01. Ratchet DOWN only. */
-const LIBRARY_UNNAMED_PIN = 21;
-
-function scan(inLibrary: boolean): string[] {
+function scan(): string[] {
   const hits: string[] = [];
   for (const [p, src] of Object.entries(modules)) {
-    if (/\.test\.tsx$/.test(p) || p.startsWith(LIBRARY_DIR) !== inLibrary) continue;
+    if (/\.test\.tsx$/.test(p)) continue;
     for (const h of findUnnamedControls(src)) hits.push(`${p}:${h.line} <${h.tag}> ${h.reason}`);
   }
   return hits.sort();
@@ -74,22 +69,11 @@ describe("accessible-name scanner (positive and negative controls)", () => {
   });
 });
 
-describe("accessible-name ratchet (U6)", () => {
-  it("no icon-only control outside components/Library is named by a glyph or by nothing", () => {
+describe("accessible-name ratchet (U6, Library V1)", () => {
+  it("no icon-only control anywhere in the app is named by a glyph or by nothing", () => {
     expect(
-      scan(false),
+      scan(),
       'add a short aria-label (one or two words, matching the title) — e.g. <button aria-label="Library" title="Toggle library">▤</button>',
     ).toEqual([]);
-  });
-
-  it(`components/Library stays at or under its pin (${LIBRARY_UNNAMED_PIN})`, () => {
-    const hits = scan(true);
-    expect(hits.length, `new unnamed Library controls:\n${hits.join("\n")}`).toBeLessThanOrEqual(
-      LIBRARY_UNNAMED_PIN,
-    );
-  });
-
-  it("the Library pin stays honest — fixed sites lower it (ratchet down)", () => {
-    expect(scan(true).length, "lower LIBRARY_UNNAMED_PIN to the current count").toBe(LIBRARY_UNNAMED_PIN);
   });
 });

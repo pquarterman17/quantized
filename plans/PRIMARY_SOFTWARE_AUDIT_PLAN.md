@@ -798,7 +798,7 @@ preview+confirm dialog, an explicit "apply anyway, drop unmatched" opt-in
 (`confirmPendingRecipeApplicationPartial`), a "Save as Plot Recipe…" entry
 point on the focused plot window, and a subtle (never-auto-apply) post-import
 suggestion toast. See F4.2b in `FIGURE_AUTHORING_WORKFLOW_PLAN.md` for the
-itemized still-open gaps (waterfall settings beyond the scalar offset;
+itemized gaps (waterfall X offset closed 2026-10-01;
 the SPATIAL rebuild and maps/panels payload closed 2026-09-30 as schema v3). **2026-09-29 (F4.2c):** recipe
 schema v2 closed the preview-thumbnail, outlier-policy capture, version-
 migration and transformation/style-template-choice gaps — see F4.2c for the
@@ -827,8 +827,12 @@ Recipes should include:
   on the target dataset; a missing sibling dataset or column is named in the
   apply dialog with a rebind picker — `lib/plotRecipePanels.test.ts`,
   `store/plotRecipesSpatial.test.ts`, `PlotRecipeApplyDialog.test.tsx`);
-- [~] waterfall settings (only the scalar offset; no richer settings exist to
-  capture);
+- [x] waterfall settings (2026-10-01: Origin's X step joins the Y offset —
+  `PlotView.waterfallDx`, an optional recipe `visual.waterfallDx`, the
+  Inspector's "X offset" field, and `FigureSpec.waterfall_x_offsets`; screen
+  == export per series is pinned by `tests/fixtures/wire/waterfall_x_offset.json`
+  (`waterfallXWireFixture.test.ts` / `test_export_waterfall_x.py`). Origin's
+  auto-offset and colour-by-Z waterfall variants are not modelled);
 - [x] technique scope such as XRD, XRR, SIMS, or magnetometry;
 - [x] provenance, schema version, description, and preview (2026-09-29,
   F4.2c: a numbers-only preview is captured at save time
@@ -7705,6 +7709,21 @@ that goes red without its fix.
   bars, menu/status bars, Appearance, every Preferences tab, map toolbar,
   digitizer). Still `[~]`: plots, trees, and the Library are not audited, and
   Preferences' tab strip is clickable `<div>`s with no role or keyboard path.
+  **Library pass (2026-10-01, V1):** its last 21 icon-only controls are named
+  (section ＋/✎/⚙/⧉/⤓/×, the header's new/demo/import/save-filter buttons),
+  so the ratchet now requires zero app-wide with no Library pin. Plot chrome and the
+  tab strips: see V2 below.
+  **Tablists + plot chrome (2026-10-01, V2).** Preferences, the Stage view
+  strip and Help are WAI-ARIA tablists (`lib/tabListKeys.ts`: roving tabindex,
+  Left/Right/Home/End, Up/Down when vertical; tabpanel labelled by the selected
+  tab). Preferences activates on focus (synchronous local panes); Stage and Help
+  are manual (a view switch mounts lazy chunks; Topics steals focus to search).
+  The dialog trap no longer counts `tabindex=-1` as a stop. Legend entries'
+  click-to-hide is now a named checkbox (Space/Enter; Shift+F10 menu renames). The render
+  half now covers the plot toolbar (+flyout, options menu), legend and Stage
+  strip. Not yet: `SheetTabs`, `SegmentedControl` (26 users; a choice control
+  wearing tab roles — radiogroup?) and the Peak Analyzer mode switch have tab
+  roles but no arrow keys or panel; the Library tree is done (U5/V1).
 - [~] Contrast and non-color encodings — **audited 2026-09-09; what exists and
   what does not, stated precisely instead of left as one unchecked line.**
 
@@ -9985,6 +10004,16 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   at `6dbdbb05` before the move and unchanged after. Sabotage-checked: extra
   writes in `renameDataset`, `removeSelected` and `moveDataset`, a dropped
   `recordHistory` in `moveFolder` and a toast in `addSmartFolder` each failed.
+  **Eighth domain (2026-10-01)**: `store/datasetSelection.characterization.test.ts`,
+  19 specs over the 5 selection/activation actions — the keys each writes,
+  no own undo step/toast/macro, the `ensureBookData` kicks, and `setActive`'s
+  window effects (focused-window rebind, re-activation keeps the view,
+  workbook disclosure, a pinned focused window retargeting to the top-z
+  unpinned window or a fresh one with its "create window" undo step). Green
+  at `9fb20d39` before the move and unchanged after. Sabotage-checked: a
+  dropped `retargetPassiveRebind`, a `recordHistory` in `setActive`, a
+  dropped worksheet-path kick, an extra write in `toggleSelected` and changed
+  `librarySelection` writes in `selectRange`/`selectIds` each failed.
 - [~] Split one owned domain per PR with unchanged behavior/contracts.
   **ONE domain extracted 2026-09-17**, characterization tests first: the
   singleton **PlotView writers** — axis scales/limits/steps/tick formats/
@@ -10451,6 +10480,20 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   functions), values identical apart from the window id.
   Eager bundle 860,080 → 860,104 B (+24 B, the creator wrapper), both after
   `npm ci`; `EAGER_JS_BUDGET` untouched.
+
+  **EIGHTH domain extracted 2026-10-01**: **selection/activation** —
+  `setActive`, `activateFromLibrary`, `toggleSelected`, `selectRange`,
+  `selectIds` (5 actions), with the `activeId`/`selectedIds`/`worksheetId`
+  fields — moved to the new `store/datasetSelection.ts` (165 lines,
+  `DatasetSelectionSlice`, an own-state slice like `datasetListEdits.ts`).
+  `store/useApp.ts` **920 → 816 lines (−104)**; `STORE_PINS` 921 → 817.
+  `setActive` still reaches into the windows slice, now from the new module
+  (`retargetPassiveRebind` + `focusedRebindPatch` from `windows.ts`);
+  `addDataset` stays in `useApp.ts` with its own `retargetPassiveRebind`
+  import. No exported type moved, so no importer changed. Composed initial
+  store unchanged: 602 keys (386 functions), values identical apart from the
+  window id. Eager bundle 854,580 → 854,616 B (+36 B), both after `npm ci`
+  and a `.vite` wipe; `EAGER_JS_BUDGET` untouched.
 - [x] Generate clients/types where it reduces drift. **Done** (`91583f9c`,
   2026-09-03): `npm run api:types` generates `src/lib/api/schema.d.ts` from
   the dumped OpenAPI document; `ci.yml`'s "Generated API types are up to

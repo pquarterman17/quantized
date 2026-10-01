@@ -18,7 +18,7 @@
 // PR gives the tree row its own menu.
 
 import type { LibraryNode } from "../../lib/libraryHierarchy";
-import type { TreeItemProps } from "../../lib/libraryTreeNav";
+import { spaceActivates, type TreeItemProps } from "../../lib/libraryTreeNav";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import { openLibraryNode } from "./libraryOpen";
@@ -104,15 +104,20 @@ export default function ArtifactRow({ node, depth, treeItem }: Props) {
   // carries artifact kinds), double-click — and Enter, via LibraryTree —
   // opens; right-click selects (its menu arrives with L0.39/L0.40).
   const select = () => useApp.getState().setLibrarySelection({ kind: node.kind, id: node.entityId });
+  // V1: in the tree the anchor is a <div role="treeitem"> (ARIA-in-HTML bars
+  // that role on a <button>), so Space selects here as a button's would;
+  // Enter stays LibraryTree's (open).
+  const Anchor = treeItem ? "div" : "button";
 
   return (
-    <button
+    <Anchor
       className={`qzk-fig-item${selected ? " selected" : ""}`}
       data-lib-row={node.key}
       style={depth ? { paddingLeft: 8 + depth * 14 } : undefined}
       title={openTitle(node)}
       {...treeItem}
       onClick={select}
+      onKeyDown={treeItem ? (e) => spaceActivates(e, select) : undefined}
       onDoubleClick={() => openLibraryNode(node)}
       onContextMenu={select}
     >
@@ -124,6 +129,6 @@ export default function ArtifactRow({ node, depth, treeItem }: Props) {
         {frozen && <span className="qzk-frozen-mark" title={FROZEN_TITLE}>{FROZEN_MARK}</span>}
       </span>
       <span className="qzk-fig-meta">{meta}</span>
-    </button>
+    </Anchor>
   );
 }

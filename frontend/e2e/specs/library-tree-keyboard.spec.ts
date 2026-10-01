@@ -32,6 +32,11 @@ test("Library tree: one roving tab stop, Home/End, and Tab leaves the tree @core
   await page.keyboard.press("Home");
   await expect(items.first()).toBeFocused();
   await expect(tree.locator('[role="treeitem"][tabindex="0"]')).toHaveCount(1);
+  // V1: Escape on a row keeps focus there (Details' model), never <body>.
+  await page.keyboard.press("Escape");
+  await expect(items.first()).toBeFocused();
+  // ARIA-in-HTML: no treeitem is a <button>.
+  await expect(tree.locator('button[role="treeitem"]')).toHaveCount(0);
 
   // Real Tab order: every stop until focus leaves the tree is the roving row's
   // own control — never another row — and it leaves within a handful of presses.

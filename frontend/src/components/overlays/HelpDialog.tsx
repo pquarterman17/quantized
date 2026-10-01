@@ -30,6 +30,7 @@ import { useApp } from "../../store/useApp";
 import { mergeCommands, useCommands, type Action } from "../../store/commands";
 import { useDialogFocus } from "./useDialogFocus";
 import { useEscapeSurface } from "../../lib/escapeStack";
+import { onTabListKeyDown } from "../../lib/tabListKeys";
 
 const IS_MAC = isMacPlatform();
 
@@ -115,13 +116,9 @@ export default function HelpDialog() {
     if (open && section === "search") inputRef.current?.focus();
   }, [open, section]);
 
-  // R1: focus-in, Tab trap, restore-to-opener, PLUS a deliberate landing spot
-  // for the other four tabs — this dialog renders its own tab chrome
-  // (`.qzk-help-tabs`), but unlike Preferences' the tab buttons here ARE real
-  // `role="tab"` `<button>`s, so the hook's plain default (first focusable
-  // element in DOM order) already lands on the "Topics" tab button — a
-  // meaningful, always-present, keyboard-operable control — whenever the
-  // search box isn't the one taking focus above.
+  // R1: focus-in, Tab trap, restore-to-opener. On the other four tabs the
+  // hook's plain default (first Tab stop in DOM order) is the SELECTED tab
+  // button — the strip's roving tabindex makes it the strip's only stop.
   useDialogFocus(dialogRef, open);
 
   // Snapshot the runtime command registry on open — the same non-reactive
@@ -169,12 +166,18 @@ export default function HelpDialog() {
         tabIndex={-1}
       >
         <h2 id={titleId}>Help</h2>
-        <div className="qzk-help-tabs" role="tablist">
+        {/* Roving tablist, MANUAL activation (lib/tabListKeys): selecting Topics
+            moves focus into its search box, which would end an arrow walk. */}
+        <div className="qzk-help-tabs" role="tablist" aria-label="Help sections" onKeyDown={(e) => onTabListKeyDown(e, false)}>
           {TABS.map((t) => (
             <button
               key={t.id}
+              type="button"
               role="tab"
+              id={`${titleId}${t.id}`}
               aria-selected={section === t.id}
+              aria-controls={`${titleId}panel`}
+              tabIndex={section === t.id ? 0 : -1}
               className={`qzk-help-tab${section === t.id ? " active" : ""}`}
               onClick={() => setSection(t.id)}
             >
@@ -183,17 +186,19 @@ export default function HelpDialog() {
           ))}
         </div>
 
-        {section === "search" ? (
-          <SearchTab query={query} setQuery={setQuery} results={results} inputRef={inputRef} />
-        ) : section === "importing" ? (
-          <ImportingTab />
-        ) : section === "origin" ? (
-          <OriginTab />
-        ) : section === "jmp" ? (
-          <JmpTab />
-        ) : (
-          <ShortcutsTab />
-        )}
+        <div role="tabpanel" id={`${titleId}panel`} aria-labelledby={`${titleId}${section}`}>
+          {section === "search" ? (
+            <SearchTab query={query} setQuery={setQuery} results={results} inputRef={inputRef} />
+          ) : section === "importing" ? (
+            <ImportingTab />
+          ) : section === "origin" ? (
+            <OriginTab />
+          ) : section === "jmp" ? (
+            <JmpTab />
+          ) : (
+            <ShortcutsTab />
+          )}
+        </div>
 
         <div className="qz-btn-row">
           <Button variant="primary" onClick={close}>

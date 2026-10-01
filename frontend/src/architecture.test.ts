@@ -536,7 +536,18 @@ const STORE_PINS: Record<string, number> = {
   // getState() diff, undo label and undo/redo identity round trip, no
   // toast/macro, per action and branch) was green before the move and is
   // unchanged after it.
-  "/store/useApp.ts": 921,
+  // 921 -> 817 (2026-10-01, P4.1 eighth domain): selection/activation —
+  // setActive, activateFromLibrary, toggleSelected, selectRange and
+  // selectIds, with the `activeId`/`selectedIds`/`worksheetId` fields they
+  // own — moved to the new store/datasetSelection.ts (DatasetSelectionSlice,
+  // an own-state slice like datasetListEdits.ts). setActive still reaches
+  // into the windows slice, now from there: it calls windows.ts's
+  // retargetPassiveRebind + focusedRebindPatch (addDataset keeps its own
+  // retargetPassiveRebind import here). store/datasetSelection.characterization.test.ts
+  // (poisoned whole-getState() diff per action and branch, the focused/pinned
+  // window rebind effects, no own undo step/toast/macro, the ensureBookData
+  // kicks) was green before the move and is unchanged after it.
+  "/store/useApp.ts": 817,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -1981,6 +1992,7 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   regionShades: "RegionShade[] pinned at data coordinates, not a column index",
   shapes: "Shape[] pinned at data/page coordinates, not a column index",
   waterfall: "numeric offset step, not a column index",
+  waterfallDx: "numeric X offset step (a fraction of the x-span), not a column index",
   panelFit: "layout-fit mode enum, not channel-indexed",
   pageSetup: "page geometry model, not channel-indexed",
 };
@@ -2965,6 +2977,13 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       module: "/store/importDatasets.ts",
       loader: "/store/importDatasetsLazy.ts",
       call: 'import("./importDatasets")',
+    },
+    // Waterfall X offset (2026-10-01): the X-block layout is loaded only once a
+    // plot shows a non-zero X step; born lazy rather than extracted.
+    {
+      module: "/lib/waterfallX.ts",
+      loader: "/components/Stage/useWaterfallX.ts",
+      call: 'import("../../lib/waterfallX")',
     },
   ];
 

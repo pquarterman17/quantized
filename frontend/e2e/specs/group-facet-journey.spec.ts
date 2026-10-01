@@ -320,8 +320,11 @@ async function legendSeriesLabels(page: Page): Promise<string[]> {
   const rows = page.locator(".qzk-legend .it").filter({ hasText: /\(Run=/ });
   return rows.evaluateAll((elements) =>
     elements.map((el) => {
+      // The series label sits in the row's keyboard toggle when the legend is
+      // interactive (Space/Enter hide-show checkbox), else directly in the row.
+      const host = el.querySelector(".qzk-legend-toggle") ?? el;
       let text = "";
-      for (const node of el.childNodes) {
+      for (const node of host.childNodes) {
         if (node.nodeType === Node.TEXT_NODE) text += node.textContent ?? "";
       }
       return text.trim();

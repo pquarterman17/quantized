@@ -173,6 +173,7 @@ export interface PlotView {
   seriesOrder: number[] | null;
   hiddenChannels: number[];
   waterfall: number;
+  waterfallDx: number; // waterfall X step per series, a fraction of the x-span (0 = off; lib/waterfallX.ts)
   /** How a spatial multi-panel composition fills the stage (#54): `"frames"`
    *  (letterbox the frames' bounding box — PR #47's default, and the
    *  back-compat value for a `.dwk` predating this field), `"window"` (fill
@@ -210,10 +211,8 @@ export function defaultPlotView(): PlotView {
     polarMode: false,
     statMode: false,
     statHideEmptyLevels: false, statShowGroupN: true, statShowSummary: false, statMarks: {},
-    xLim: null,
-    yLim: null,
-    xStep: null,
-    yStep: null,
+    xLim: null, yLim: null,
+    xStep: null, yStep: null,
     xFmt: { mode: "auto", digits: 2 },
     yFmt: { mode: "auto", digits: 2 },
     y2Fmt: null,
@@ -238,7 +237,7 @@ export function defaultPlotView(): PlotView {
     errKeys: {},
     seriesOrder: null,
     hiddenChannels: [],
-    waterfall: 0,
+    waterfall: 0, waterfallDx: 0,
     panelFit: "frames",
     pageSetup: null,
   };
@@ -729,6 +728,7 @@ export function sanitizePlotView(v: unknown): PlotView {
       ? o.hiddenChannels.filter((n): n is number => typeof n === "number")
       : [],
     waterfall: num(o.waterfall, fb.waterfall),
+    waterfallDx: num(o.waterfallDx, fb.waterfallDx), // additive: an older .dwk has none -> 0
     // Unknown/absent (a pre-#54 .dwk) -> "frames", the PR #47 letterbox default.
     panelFit: PANEL_FITS.includes(o.panelFit as PanelFit) ? (o.panelFit as PanelFit) : fb.panelFit,
     // null (absent = today's no-page behaviour) or a clamped page model.

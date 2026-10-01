@@ -196,6 +196,7 @@ function BackgroundXYWindow({
       encoding: document?.bindings.encoding, // P1.4: focus is not a styling input
       hiddenChannels: view.hiddenChannels,
       waterfall: view.waterfall,
+      waterfallDx: view.waterfallDx,
       excludedDisplay,
       // Tool overlays are focused-window-only (decision #2) — a background
       // window never shows a fit/baseline/peak/derivative curve.

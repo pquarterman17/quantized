@@ -635,12 +635,15 @@ as a CSS-only tree redesign.
   names ("Remove tag X", "Add tag"). Tests: `LibraryTree.aria.test.tsx`, the
   400-item case in `LibraryTree.scale.test.tsx`, `libraryTreeNav.test.ts`,
   e2e `library-tree-keyboard.spec.ts` (real Tab order). Eager +52 B (Tree and
-  DatasetRow are lazy chunks: +0.2 / +0.4 kB). **Still open:** Escape on a
-  row itself still blurs (to `<body>`); Enter/Escape on the holder still
-  bubble; Origin-figure/artifact anchors are `<button role="treeitem">`
-  (ARIA-in-HTML disallows that role on `button`; browsers honour it); the
-  recovered-graph `role="group"` action strip sits between treeitems; no
-  type-ahead.
+  DatasetRow are lazy chunks: +0.2 / +0.4 kB). **V1 (2026-10-01) closed three
+  of the residuals:** Escape on a row keeps focus there and still reaches the
+  app's Escape ladder (Details' model); the holder's Enter opens the roving
+  row and its Escape refocuses it (both consumed); Origin-figure/artifact
+  anchors are `<div role="treeitem">` in the tree (Space selects, Enter
+  opens; `lib/libraryTreeNav.spaceActivates`). Tests: `LibraryTree.aria`,
+  `.scale`, `LibraryTree.test.tsx`, e2e `library-tree-keyboard.spec.ts`.
+  **Still open:** the recovered-graph `role="group"` action strip sits
+  between treeitems; no type-ahead.
   **Adversarial review round (2026-09-14).** Three findings, all fixed in the
   same commit: (1) `LibraryDetails.tsx`'s fallback predicate was keyed on
   `rovingKey` — non-null even with NOTHING ever focused (it falls back to the

@@ -38,6 +38,7 @@ import type { AxisScale, BaselineOverlay, Dataset, DefaultTrace, FitOverlay, Pea
 import { useStableByValue } from "../../lib/useStableValue";
 import { useLogOffsetScaling, useOffsetErrorBars, useOffsetErrorSpans, useOffsetLabelList } from "./usePlotPayloadLogOffsets";
 import { useEncodedLists, useStageEncoding } from "./usePlotEncoding";
+import { useWaterfallX } from "./useWaterfallX";
 import type { FigureEncoding } from "../../lib/plotEncodingBinding";
 
 export interface PlotPayloadParams {
@@ -68,6 +69,7 @@ export interface PlotPayloadParams {
   encoding?: FigureEncoding;
   hiddenChannels: number[];
   waterfall: number;
+  waterfallDx?: number; // Origin's waterfall X step (Stage/useWaterfallX); absent = 0
   excludedDisplay: "hide" | "grey";
   fitOverlay: FitOverlay | null;
   baselineOverlay: BaselineOverlay | null;
@@ -474,18 +476,17 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   const errorSpans = useOffsetErrorSpans(
     active, plotted, grouped, useDocumentErrors ? documentErrors! : active?.errorRoles, p.seriesStyles, offsetsApply,
   );
+  // Waterfall X step: LAST, over the composed payload + its row-aligned companions; refused with a split, as on the wire.
+  const shown = useWaterfallX(displayPayload, payload?.series.length ?? 0, encoded || grouped ? 0 : (p.waterfallDx ?? 0), { errorBars, errorSpans, colorByColumns });
 
   return {
     payload,
     payloadDatasetId: fetched?.datasetId ?? null,
-    displayPayload,
     plotted,
     styleList: encodedLists?.styleList ?? styleList,
     labelList: encodedLists?.labelList ?? labelList,
     legendLabels: encodedLists?.labelList,
-    errorBars,
-    errorSpans,
-    colorByColumns,
     hidden,
+    ...shown, // displayPayload + errorBars/errorSpans/colorByColumns, X-offset laid out when set
   };
 }

@@ -162,6 +162,10 @@ export interface RecipeVisual {
   legendStatic: boolean;
   stackMode: boolean;
   waterfall: number;
+  /** Waterfall X step (`PlotView.waterfallDx`, a fraction of the x-span).
+   *  Additive and OPTIONAL (no schema bump): an older recipe lacks it and
+   *  applies as 0; captured only when non-zero. */
+  waterfallDx?: number;
   plotTemplate: string;
   seriesStyles: Record<string, SeriesStyle>;
   seriesLabels: Record<string, string>;
