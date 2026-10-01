@@ -44,8 +44,12 @@
 // incompleteness — the exact failure class the rest of this work exists to
 // remove — so the honest answer is that row-level full-text search over data
 // columns is a DIFFERENT feature needing an index, and is booked rather than
-// faked. What IS searched here is metadata ABOUT the file: the column roster,
-// the preamble, and the label rows (which is where sample ids live —
+// faked. (2026-10-01: that index now exists — `lib/projectSearchCells.ts`,
+// driven by the search workshop, one hit per (dataset, column) with a match
+// count. This module still does not scan cells, by design: it stays a pure
+// per-keystroke pass bounded by the header block.) What IS searched here is
+// metadata ABOUT the file: the column roster, the preamble, and the label
+// rows (which is where sample ids live —
 // `lib/labelRows.ts`'s header: "a four-row header left the user ... no way back
 // to the sample ids"), all bounded by the header block's size, not the data's.
 
