@@ -115,3 +115,38 @@ describe("fitting a graded layer", () => {
     expect(recordsFor(useApp.getState().datasets[0])[0].request).not.toHaveProperty("graded");
   });
 });
+
+describe("fitting a graded layer's absorption knots at custom positions", () => {
+  it("sends the isld knots and the positions, stores both, and applies fitted isld knots", async () => {
+    const fitted = [
+      ...FITTED,
+      { name: "L1.knot0.isld", value: 1e-8, stderr: null, vary: false, tie: null, at_bound: false },
+      { name: "L1.knot1.isld", value: 3.5e-8, stderr: 1e-9, vary: true, tie: null, at_bound: false },
+      { name: "L1.knot2.isld", value: 0, stderr: null, vary: false, tie: null, at_bound: false },
+    ];
+    vi.mocked(reflFit).mockResolvedValue(fitResponse({ parameters: fitted, free: ["L1.thickness", "L1.knot1.isld"] }));
+    const { result } = await gradedHook();
+    const graded = { knots: [2e-5, 5e-5, 3e-5], method: "pchip" as const, isld: [1e-8, 2e-8, 0], positions: [0, 0.2, 1] };
+    act(() => result.current.refl.updateLayer(1, { graded }));
+    act(() => result.current.fit.setParam("L1.knot1.isld", { vary: true, min: 0, max: 1e-7 }));
+    await act(async () => {
+      await result.current.fit.run();
+    });
+
+    const body = vi.mocked(reflFit).mock.calls[0][0];
+    expect(body.graded).toEqual([{ layer: 1, method: "pchip", slices: 100, positions: [0, 0.2, 1] }]);
+    expect(body.parameters.map((p) => p.name).filter((n) => n.includes(".knot") && n.endsWith(".isld"))).toEqual([
+      "L1.knot0.isld", "L1.knot1.isld", "L1.knot2.isld",
+    ]);
+    expect(body.parameters.find((p) => p.name === "L1.knot1.isld")).toEqual({
+      name: "L1.knot1.isld", value: 2e-8, vary: true, min: 0, max: 1e-7, tie: null,
+    });
+
+    const [saved] = recordsFor(useApp.getState().datasets[0]);
+    expect(saved.request.graded).toEqual(body.graded);
+    expect(saved.model.layers[1].graded).toEqual(graded);
+
+    act(() => result.current.fit.applyToModel());
+    expect(result.current.refl.layers[1].graded).toEqual({ ...graded, knots: [2e-5, 4.6e-5, 3e-5], isld: [1e-8, 3.5e-8, 0] });
+  });
+});

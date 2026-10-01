@@ -13,9 +13,10 @@
 // `isld` is POSITIVE = absorption everywhere (presets' `sldImag`, the route,
 // the fit); the backend converts to the Parratt engine's sign (BUG-029).
 //
-// A graded (spline) film layer offers its knots `L{i}.knot{j}.sld` in place of
-// `L{i}.sld`/`L{i}.isld` (calc/refl_graded.py); the request names the layer in
-// its `graded` list (reflGraded.ts `gradedSpecs`).
+// A graded (spline) film layer offers its knots `L{i}.knot{j}.sld` (and, with
+// absorption on, `L{i}.knot{j}.isld`) in place of `L{i}.sld`/`L{i}.isld`
+// (calc/refl_graded.py); the request names the layer in its `graded` list
+// (reflGraded.ts `gradedSpecs`).
 
 import type { ReflFitParamResult, ReflFitResult } from "../../../lib/api/reflectivity";
 import type { SldPreset } from "../../../lib/types";
@@ -33,6 +34,8 @@ export interface ResolvedLayer {
   msld: number;
   /** A graded row's SLD knots (Å⁻²), top to bottom. */
   knots?: number[];
+  /** A graded row's absorption knots (Å⁻², positive = absorption), if on. */
+  iknots?: number[];
 }
 
 /** What the user can set per parameter besides its value. `tie` "" = none. */
@@ -76,6 +79,7 @@ export function resolveLayer(row: ModelLayer, presets: SldPreset[], radiation: R
     roughness: row.roughness,
     msld: row.msld ?? 0,
     ...(row.graded ? { knots: row.graded.knots } : {}),
+    ...(row.graded?.isld ? { iknots: row.graded.isld } : {}),
   };
 }
 
@@ -90,16 +94,18 @@ export function parseParamName(name: string): { layer: number; field: LayerField
   return m ? { layer: Number(m[1]), field: m[2] as LayerField } : null;
 }
 
-/** A graded layer's knot parameter name, e.g. `L1.knot0.sld`. */
-export function knotName(layer: number, knot: number): string {
-  return `L${layer}.knot${knot}.sld`;
+export type KnotField = "sld" | "isld";
+
+/** A graded layer's knot parameter name, e.g. `L1.knot0.sld`, `L1.knot0.isld`. */
+export function knotName(layer: number, knot: number, field: KnotField = "sld"): string {
+  return `L${layer}.knot${knot}.${field}`;
 }
 
-const KNOT_NAME = /^L(\d+)\.knot(\d+)\.sld$/;
+const KNOT_NAME = /^L(\d+)\.knot(\d+)\.(sld|isld)$/;
 
-export function parseKnotName(name: string): { layer: number; knot: number } | null {
+export function parseKnotName(name: string): { layer: number; knot: number; field: KnotField } | null {
   const m = KNOT_NAME.exec(name);
-  return m ? { layer: Number(m[1]), knot: Number(m[2]) } : null;
+  return m ? { layer: Number(m[1]), knot: Number(m[2]), field: m[3] as KnotField } : null;
 }
 
 /** The fields that mean something for layer `i` of `n` (a graded layer's
@@ -167,8 +173,8 @@ function row(
 }
 
 /** Every parameter row for the stack: the meaningful layer fields in layer
- *  order (a graded film's knots after its thickness), then scale and
- *  background. */
+ *  order (a graded film's SLD knots, then its absorption knots, after its
+ *  thickness), then scale and background. */
 export function buildParamRows(
   layers: ResolvedLayer[],
   overrides: ParamOverrides,
@@ -184,6 +190,7 @@ export function buildParamRows(
       rows.push(row(name, i, f, l[f], by[name]));
       if (f !== "thickness" || !knots) continue;
       knots.forEach((k, j) => rows.push(row(knotName(i, j), i, "sld", k, by[knotName(i, j)])));
+      l.iknots?.forEach((k, j) => rows.push(row(knotName(i, j, "isld"), i, "isld", k, by[knotName(i, j, "isld")])));
     }
   });
   rows.push(row("scale", null, "scale", globals.scale, by.scale));
@@ -259,9 +266,11 @@ export function setLayerParam(
   const k = parseKnotName(name);
   if (k) {
     const g = layers[k.layer]?.graded;
-    if (!g || k.knot >= g.knots.length) return layers;
-    const knots = g.knots.map((v, j) => (j === k.knot ? value : v));
-    return layers.map((row, i) => (i === k.layer ? { ...row, graded: { ...g, knots } } : row));
+    const key = k.field === "sld" ? "knots" : "isld";
+    const old = g?.[key];
+    if (!g || !old || k.knot >= old.length) return layers;
+    const next = old.map((v, j) => (j === k.knot ? value : v));
+    return layers.map((row, i) => (i === k.layer ? { ...row, graded: { ...g, [key]: next } } : row));
   }
   const p = parseParamName(name);
   if (!p || p.layer >= layers.length) return layers;
@@ -276,9 +285,12 @@ export function setLayerParam(
  *  stack with the same signature — after a removed layer, `L2` is a
  *  different layer (the substrate, say), and after a radiation switch a
  *  preset's SLD is the other radiation's. A graded row is named by its knot
- *  count (`L1.knot3.sld` exists only with four or more). */
+ *  count (`L1.knot3.sld` exists only with four or more), whether it has
+ *  absorption knots (`L1.knot0.isld`), and its knot positions (a fitted knot
+ *  value means something only at the depth it was fitted at). */
 export function stackSignature(layers: ModelLayer[], radiation: Radiation): string {
-  return JSON.stringify([radiation, layers.map((l) => (l.graded ? l.graded.knots.length : l.preset))]);
+  const sig = ({ graded: g, preset }: ModelLayer) => (g ? [g.knots.length, g.isld != null, g.positions ?? null] : preset);
+  return JSON.stringify([radiation, layers.map(sig)]);
 }
 
 /** Why a result fitted against `basis` cannot be applied to the current
@@ -297,7 +309,8 @@ export function applyBlockedReason(
 
 /** Write fitted values back into the stack: thickness, roughness and msld as
  *  given; SLD/absorption keep the preset when they did not move, and switch
- *  the row to a manual SLD when they did; a graded row takes its fitted knots. */
+ *  the row to a manual SLD when they did; a graded row takes its fitted SLD
+ *  and absorption knots (its positions are fixed during a fit). */
 export function applyResults(
   layers: ModelLayer[],
   presets: SldPreset[],
