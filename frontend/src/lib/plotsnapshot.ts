@@ -70,11 +70,22 @@ export interface FrozenPlotBundle {
 // ── The live seam (written by PlotStage, read by the snapshot command) ──────
 
 let _live: LivePlotSnapshot | null = null;
+let _altMode = false;
 
 /** Publish (or clear, with null) the focused plot's current composed display
- *  bundle. Called from a `PlotStage` effect — the ONLY writer. */
-export function publishLivePlotSnapshot(s: LivePlotSnapshot | null): void {
+ *  bundle. Called from a `PlotStage` effect — the ONLY writer. `altMode` says
+ *  the bundle is null BECAUSE an alternate render mode (polar, stats, stacked,
+ *  faceted, broken-axis) is on screen, so the snapshot command can say why it
+ *  did nothing instead of failing silently. */
+export function publishLivePlotSnapshot(s: LivePlotSnapshot | null, altMode = false): void {
   _live = s;
+  _altMode = s === null && altMode;
+}
+
+/** True while an alternate render mode is showing — the frozen-XY snapshot
+ *  kind cannot represent those multi-panel / non-XY canvases. */
+export function livePlotSnapshotAltMode(): boolean {
+  return _altMode;
 }
 
 /** The bundle currently on screen, or null when no live XY plot is showing

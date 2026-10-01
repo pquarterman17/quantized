@@ -11,7 +11,7 @@ import { renderHook } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { useLiveSnapshotPublish, type LiveSnapshotArgs } from "./useLiveSnapshotPublish";
-import { publishLivePlotSnapshot, readLivePlotSnapshot } from "../../lib/plotsnapshot";
+import { livePlotSnapshotAltMode, publishLivePlotSnapshot, readLivePlotSnapshot } from "../../lib/plotsnapshot";
 import { publishLiveWaterfallSpan, readLiveWaterfallSpan } from "../../lib/waterfallOffset";
 import { displayPositions } from "../../lib/seriesStyleCycle";
 import type { PlotPayload } from "../../lib/plotdata";
@@ -84,6 +84,16 @@ describe("useLiveSnapshotPublish — the cycle is RESOLVED into the frozen bundl
     const stored: (SeriesStyle | undefined)[] = [{ color: "#f00" }, undefined];
     renderHook(() => useLiveSnapshotPublish(args(stored, null)));
     expect(readLivePlotSnapshot()?.styleList).toBe(stored);
+    expect(livePlotSnapshotAltMode()).toBe(false);
+  });
+
+  it("clears the alternate-mode flag on unmount (the Plot tab switching away)", () => {
+    const { unmount } = renderHook(() =>
+      useLiveSnapshotPublish({ ...args([undefined, undefined], null), statMode: true }),
+    );
+    expect(livePlotSnapshotAltMode()).toBe(true);
+    unmount();
+    expect(livePlotSnapshotAltMode()).toBe(false);
   });
 
   it("publishes nothing at all while an alternate render mode is showing", () => {
@@ -92,6 +102,8 @@ describe("useLiveSnapshotPublish — the cycle is RESOLVED into the frozen bundl
       useLiveSnapshotPublish({ ...args([undefined, undefined], displayPositions(true, 2)), polarMode: true }),
     );
     expect(readLivePlotSnapshot()).toBeNull();
+    // ...but says WHY, so the snapshot command can explain its no-op.
+    expect(livePlotSnapshotAltMode()).toBe(true);
     // BUG-013 review round: the waterfall span rides the SAME gate, so an
     // export taken while polar/stat/stacked is showing cannot pick up a span
     // measured for a canvas that is not on screen.

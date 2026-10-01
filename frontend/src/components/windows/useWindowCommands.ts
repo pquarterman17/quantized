@@ -20,9 +20,10 @@ import { useEffect } from "react";
 import { listenForAppShortcuts } from "../../lib/appShortcuts";
 import { isEditingTarget } from "../../lib/editingTarget";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
-import { freezePlotSnapshot, readLivePlotSnapshot } from "../../lib/plotsnapshot";
+import { freezePlotSnapshot, livePlotSnapshotAltMode, readLivePlotSnapshot } from "../../lib/plotsnapshot";
 import { cycleWindow, nextPlotBg, snapshotView, zOrderIds } from "../../lib/plotview";
 import { useCommands, type Action } from "../../store/commands";
+import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 import { closeFigureWindow, saveFigureAs } from "./figureLifecycleUi";
 
@@ -62,15 +63,29 @@ function saveFocusedFigureAs(): void {
   if (id) void saveFigureAs(id);
 }
 
+/** Why "Snapshot to New Window" did nothing on a polar/stats/stack/facet/
+ *  break view: a snapshot window renders ONE frozen XY payload through
+ *  PlotViewport (SnapshotPlotWindow), which cannot represent those canvases. */
+export const SNAPSHOT_ALT_MODE_REASON =
+  "Snapshot to New Window only freezes a single XY plot, not a polar, stats, stacked, faceted or broken-axis view.";
+const SNAPSHOT_EMPTY_REASON = "Nothing to snapshot: show a plot on the Plot tab first.";
+
 /** Snapshot to New Window (item 11): freeze the focused window's CURRENT
  *  composed display payload — read from the PlotStage seam
- *  (lib/plotsnapshot) — into a static kind:"snapshot" compare window. A
- *  no-op when no live XY payload is showing (no dataset, an alternate render
- *  mode, or the Plot tab isn't mounted). Exported so PlotToolbar's ⊞ button
- *  (next to the existing ⎘ raster snapshot) can trigger the same action. */
+ *  (lib/plotsnapshot) — into a static kind:"snapshot" compare window. When no
+ *  live XY payload is showing (no dataset, an alternate render mode, or the
+ *  Plot tab isn't mounted) it creates nothing and says why in the status bar
+ *  and a toast — the palette/menu command is always listed, so a silent no-op
+ *  looked broken. PlotToolbar's ⊞ button (next to the ⎘ raster snapshot) only
+ *  renders on the XY stage, where the bundle is always published. */
 export function snapshotToNewWindow(): void {
   const live = readLivePlotSnapshot();
-  if (!live) return;
+  if (!live) {
+    const reason = livePlotSnapshotAltMode() ? SNAPSHOT_ALT_MODE_REASON : SNAPSHOT_EMPTY_REASON;
+    useApp.getState().setStatus(reason);
+    toast(reason, "info");
+    return;
+  }
   useApp.getState().createSnapshotWindow(freezePlotSnapshot(live));
 }
 

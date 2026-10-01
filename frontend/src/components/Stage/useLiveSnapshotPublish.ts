@@ -119,6 +119,7 @@ export function useLiveSnapshotPublish(args: LiveSnapshotArgs): void {
       displayPayload && !alt
         ? { payload: displayPayload, styleList: resolvedStyles, labelList, errorBars, plotted, colorByColumns, hidden }
         : null,
+      alt,
     );
     return () => publishLivePlotSnapshot(null);
   }, [displayPayload, resolvedStyles, labelList, errorBars, plotted, colorByColumns, hidden, alt]);
