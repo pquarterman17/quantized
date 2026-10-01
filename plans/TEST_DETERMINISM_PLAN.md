@@ -133,7 +133,29 @@ rule in task 4.
      and it appears in the inventory, fix its weak waits then. Wait on STATE
      (`await waitFor(() => expect(result.current.x).not.toBeNull())`), never on
      the mock. Lower the task-6 allowlist in the same commit.
+     - 2026-09-30, `peaks/usePeaks.test.ts` 1 -> 0 (applied while editing the
+       file for the "labeling peaks failed" partial-outcome message): the
+       fitEach-cancel test's `waitFor(() => expect(fitPeak).toHaveBeenCalledTimes(1))`
+       had no state to wait on (the pending op is registered BEFORE the
+       resolveDataset hop, so nothing flips between that hop and the first
+       fit), so the mock implementation itself now settles a deferred when the
+       loop reaches it — deterministic, no poll on the mock.
    - The bound on this problem is task 6, not task 5.
+   - 2026-09-30, the `components/workshops/peakwizard` one-off: 20 runs of the
+     folder under a concurrent `npm run build` loop (24-79 s each, logs saved,
+     grepped `FAIL|AssertionError|Timeout`) reproduced ONE failure (run 8), and
+     it was in that day's NEW `StepFindAdvanced.test.tsx`, not the pre-existing
+     suite (0/20 for the other 196 tests, which bounds that one-off's rate at
+     only 3/20 per docs/testing.md — not disproved, not reproduced). Root
+     cause from the received values (only the FIRST typed field reverted to
+     its default): `findByLabelText` resolved on the lazy chunk's first
+     commit, the keystroke went into the draft, then the component's
+     mount-time `useEffect(() => setDraft(value), [value])` flushed and
+     clobbered it. Fixed structurally in `peaks/PeakFindAdvanced.tsx` — the
+     draft now resets during the render that carries a new `value` (no
+     post-commit effect exists to race), so the test needed no wait change.
+     Backstop only: 20 runs of the two Advanced-panel test files under the
+     same build load, 0 failures (3/20 bound; the fix is the evidence).
 
 ---
 

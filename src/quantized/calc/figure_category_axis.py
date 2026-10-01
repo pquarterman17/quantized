@@ -17,20 +17,35 @@ draws the same axis in both places:
   the two-tier nested layout: inner labels at the ticks, each outer level
   centred once under its run on a second tier, and a separator between runs.
   With every option off it touches nothing -- byte-identical output.
+* :func:`fit_category_labels` -- the long-label leftover: with neither a
+  rotation nor a wrap chosen (``fit="auto"`` on the wire), a label wider than
+  its slot wraps, or rotates when it cannot wrap. ONE rule with the canvas
+  (``lib/statMarks.fitCategoryLabels``), pinned by
+  ``tests/fixtures/wire/stat_label_fit.json``; each side applies it over its
+  OWN text metrics and slot pitch (here matplotlib's renderer, in points),
+  so a label that would overlap its neighbour in the figure is the one that
+  turns in the figure. The same metrics measure a rotated label's depth
+  (where the outer tier starts) instead of estimating it from character
+  counts.
 """
 
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from typing import Any
+
+import matplotlib as mpl
+from matplotlib.font_manager import FontProperties
 
 from quantized.calc.figure_group_notes import NESTED_LABEL_SEP
 from quantized.calc.figure_labels import safe_mathtext_label
 
 __all__ = [
     "LABEL_ROTATIONS",
+    "LABEL_WRAP_WIDTH",
     "MAX_WRAP_LINES",
+    "fit_category_labels",
     "nested_tiers",
     "style_category_axis",
     "wrap_label",
@@ -38,6 +53,10 @@ __all__ = [
 
 LABEL_ROTATIONS = (0, 45, 90)
 MAX_WRAP_LINES = 3
+#: Characters per wrapped line (``lib/statMarks.LABEL_WRAP_WIDTH``) -- what
+#: ``fit_category_labels`` wraps at; the wire's ``wrap`` carries it explicitly.
+LABEL_WRAP_WIDTH = 12
+_FITS = (None, "auto")
 _ELLIPSIS = "…"
 _SEPARATOR = "0.45"
 
@@ -170,20 +189,79 @@ def nested_tiers(labels: Sequence[str]) -> tuple[list[str], list[tuple[str, int,
     return inner, _runs_from_outers(outers)
 
 
-def _label_depth_pt(labels: Sequence[str], rotation: int, fontsize: float) -> float:
+def fit_category_labels(
+    labels: Sequence[str],
+    rotation: int,
+    wrap: bool,
+    measure: Callable[[str], float],
+    pitch: float,
+    line_height: float,
+) -> tuple[int, bool]:
+    """``(rotation, wrap)`` for these tick labels -- the wrap-or-rotate rule
+    (module doc), the twin of ``lib/statMarks.fitCategoryLabels``. An
+    explicit ``rotation`` or ``wrap`` is the caller's and comes back
+    untouched. Otherwise, in ONE unit (``measure``, ``pitch`` and
+    ``line_height``): every label no wider than its slot stays upright;
+    else, when every label wraps (:func:`wrap_label`, :data:`LABEL_WRAP_WIDTH`)
+    within :data:`MAX_WRAP_LINES` uncut AND every wrapped line fits the slot,
+    wrapped; else rotated -- 45 when the pitch keeps 45-degree lines a line
+    height apart (``pitch >= line_height * sqrt 2``), 90 otherwise."""
+    if rotation or wrap:
+        return rotation, wrap
+    if not labels or max(measure(s) for s in labels) <= pitch:
+        return 0, False
+
+    def wraps(s: str) -> bool:
+        lines = wrap_label(s, LABEL_WRAP_WIDTH, MAX_WRAP_LINES + 1)
+        return len(lines) <= MAX_WRAP_LINES and all(measure(ln) <= pitch for ln in lines)
+
+    if all(wraps(s) for s in labels):
+        return 0, True
+    return (45 if pitch >= line_height * math.sqrt(2) else 90), False
+
+
+def _axis_metrics(ax: Any, n_slots: int) -> tuple[Callable[[str], float], float, float]:
+    """``(measure, font size, slot pitch)`` for ``ax``'s tick labels, all in
+    points, from the figure's OWN renderer (``Figure._get_renderer``: the Agg
+    renderer ``new_figure`` attaches, or the one matplotlib makes for a bare
+    ``Figure``) -- ``measure(text)`` is that renderer's width for the tick
+    font, so a label's width is the width it is typeset at. The pitch is the
+    axes' current width over the slot count: before the caller's
+    ``tight_layout``, which only ever shrinks it (slightly over-estimated,
+    so a label the rule keeps upright is one that fit BEFORE the y labels
+    took their share). Without a renderer, the 0.6 em estimate."""
+    fig = ax.figure
+    prop = FontProperties(size=mpl.rcParams["xtick.labelsize"])
+    size = float(prop.get_size_in_points())
+    get = getattr(fig, "_get_renderer", None)
+    renderer = get() if callable(get) else None
+    if renderer is None:
+        width = float(ax.get_position().width * fig.get_figwidth() * 72.0)
+        return (lambda s: len(s) * size * 0.6), size, width / max(1, n_slots)
+    scale = 72.0 / float(fig.dpi)
+
+    def measure(text: str) -> float:
+        return float(renderer.get_text_width_height_descent(text, prop, False)[0]) * scale
+
+    return measure, size, float(ax.get_window_extent(renderer).width) * scale / max(1, n_slots)
+
+
+def _label_depth_pt(
+    labels: Sequence[str], rotation: int, fontsize: float, measure: Callable[[str], float],
+) -> float:
     """How far below the axis line the (possibly wrapped / rotated) tick
-    labels reach, in points -- where the outer tier starts. An estimate from
-    character counts (the renderer's own text metrics are not available
-    before the draw); the tick length + pad matplotlib puts above the first
-    line are included."""
+    labels reach, in points -- where the outer tier starts. The widest line
+    is MEASURED (``measure``, the renderer's own width for the tick font);
+    the tick length + pad matplotlib puts above the first line are
+    included."""
     lines = [s.split("\n") for s in labels] or [[""]]
     pad = 3.5 + 3.5 + 2.0
     if rotation == 0:
         return pad + max(len(ls) for ls in lines) * fontsize * 1.25
-    longest = max(len(line) for ls in lines for line in ls)
+    longest = max(measure(line) for ls in lines for line in ls)
     theta = math.radians(rotation)
     tall = max(len(ls) for ls in lines) * fontsize * 1.25
-    return pad + longest * fontsize * 0.6 * math.sin(theta) + tall * math.cos(theta)
+    return pad + longest * math.sin(theta) + tall * math.cos(theta)
 
 
 def style_category_axis(
@@ -196,11 +274,18 @@ def style_category_axis(
     tiered: bool = False,
     tiers: Sequence[Sequence[str]] | None = None,
     raw_labels: Sequence[str] | None = None,
+    fit: str | None = None,
 ) -> Any | None:
     """Apply the category-axis options to ``ax`` (whose ticks sit at
     ``ticks``, labelled ``labels``). Returns the outer-tier secondary axis
     when the two-tier nested layout was drawn -- the caller puts the x TITLE
     on it so the title clears the second tier -- else ``None``.
+
+    ``fit="auto"`` (the long-label leftover): with ``rotation`` 0 and no
+    ``wrap``, :func:`fit_category_labels` decides them over this figure's
+    own text metrics and slot pitch (:func:`_axis_metrics`); a set that
+    fits upright leaves the axis untouched exactly as before. ``None`` (a
+    legacy request) applies the options as given.
 
     ``tiered`` only takes effect when every label is nested; a flat axis
     ignores it. P2.6 review finding 4: ``tiers`` (``[[outer, inner], ...]``,
@@ -229,6 +314,8 @@ def style_category_axis(
     ``labels`` for the wrap too, byte-identical to before this fix."""
     if rotation not in LABEL_ROTATIONS:
         raise ValueError(f"label rotation must be one of {LABEL_ROTATIONS}")
+    if fit not in _FITS:
+        raise ValueError(f"label fit must be one of {_FITS}")
     raw = [str(s) for s in raw_labels] if raw_labels is not None else [str(s) for s in labels]
     if tiers is not None:
         pairs = [(str(o), str(i)) for o, i in tiers]
@@ -238,9 +325,14 @@ def style_category_axis(
     else:
         resolved = nested_tiers(raw) if tiered else None
     tiers_result = resolved
+    inner_raw = tiers_result[0] if tiers_result else raw
+    measure: Callable[[str], float] | None = None
+    if fit == "auto" and not rotation and not wrap:
+        measure, size, pitch = _axis_metrics(ax, len(ticks))
+        rotation, do_wrap = fit_category_labels(inner_raw, 0, False, measure, pitch, size * 1.25)
+        wrap = LABEL_WRAP_WIDTH if do_wrap else None
     if tiers_result is None and not wrap and not rotation:
         return None
-    inner_raw = tiers_result[0] if tiers_result else raw
     if wrap:
         wrapped = (_wrap_label_axis(s, wrap) for s in inner_raw)
         inner = ["\n".join(safe_mathtext_label(ln) for ln in lns) for lns in wrapped]
@@ -258,7 +350,9 @@ def style_category_axis(
     runs = tiers_result[1]
     tick_labels = ax.get_xticklabels()
     fontsize = float(tick_labels[0].get_fontsize()) if tick_labels else 10.0
-    depth = _label_depth_pt(inner, rotation, fontsize)
+    if measure is None:
+        measure = _axis_metrics(ax, len(ticks))[0]
+    depth = _label_depth_pt(inner, rotation, fontsize, measure)
     outer = ax.secondary_xaxis("bottom")
     outer.spines["bottom"].set_position(("outward", depth))
     outer.spines["bottom"].set_visible(False)

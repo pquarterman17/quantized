@@ -849,7 +849,7 @@ being measured on current `main` before anything is called a blocker.
 - [x] Complete J collision-safe combine/split and multi-source provenance. **(#174, #185, #186.)**
 - [x] Complete M impact preview and atomic reimport/delete transaction core. **(#179.)**
 - [x] Complete I small-package cross-instance round trip with fresh-ID rewrite. **(#184.)**
-- [ ] N atomic sidecar write/read/checksum and unavailable-vs-deleted states pass. **— DEFERRED WITH EVIDENCE** (see `LIBRARY_WORKBOOK_UX_PLAN.md` item 14; the sprint rule "N ships only if existing large-data evidence justifies it" was applied, and the evidence did not justify it).
+- [x] ~~N atomic sidecar write/read/checksum and unavailable-vs-deleted states pass.~~ **— DEFERRED WITH EVIDENCE** (not open work: the sanctioned closure of lane N, see the QA-lane note above) (see `LIBRARY_WORKBOOK_UX_PLAN.md` item 14; the sprint rule "N ships only if existing large-data evidence justifies it" was applied, and the evidence did not justify it).
 - **Gate:** failure injection is mandatory; happy-path-only PRs do not merge.
 
 ### Day 4 — platform and recovery
@@ -857,7 +857,7 @@ being measured on current `main` before anything is called a blocker.
 - [x] Finish I bounded large transfer cleanup and incompatible/expired handling. **(#184.)**
 - [x] Finish I2 read-only second open, Open as Copy, and guarded Take Over. **(#184.)**
 - [x] Finish M stale/frozen/dependent recovery and one-session Undo behavior. **(#179.)**
-- [ ] Finish N Relink Data, cleanup limits, and portable Pack Project. **— DEFERRED WITH EVIDENCE**, same closure as the Day-3 N row.
+- [x] ~~Finish N Relink Data, cleanup limits, and portable Pack Project.~~ **— DEFERRED WITH EVIDENCE**, same closure as the Day-3 N row (not open work).
 - [x] Finish P1.7 Relink/portability and P1.5 live grouping/facet behavior. **(#181 / #182.)**
 - [ ] ChatGPT-Sol reviews wording, menus, previews and recovery affordances. **— SOL, still open.**
 - **Gate:** Windows and macOS paths are required; Ubuntu is best-effort.

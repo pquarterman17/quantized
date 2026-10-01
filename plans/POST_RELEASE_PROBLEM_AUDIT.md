@@ -301,9 +301,11 @@ inexpensive model.
   outward analysis actions resolve the full Origin book before applying;
   queued actions require their own successful resolution and cancel stale
   intent. Owner real-file acceptance remains open in `BUGS_AND_ISSUES.md`.
-- [ ] **FEATURE-001 / P3:** faceted per-series styling remains deliberately
-  unresolved; do not reapply the reverted one-style-list patch without first
-  deciding whether styles are grid-wide or panel-specific.
+- [x] **FEATURE-001 / P3 (fixed 2026-09-30):** faceted per-series styling is
+  keyed by CHANNEL — one style per channel, applied in every panel through
+  each panel's own `channels` — on screen and in the export together; pinned
+  by `tests/fixtures/wire/facet_styles.json` over panels that resolve
+  different channel sets (see `BUGS_AND_ISSUES.md`).
 
 ## Recommended execution order
 

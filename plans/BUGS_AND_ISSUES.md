@@ -92,7 +92,7 @@ This is a working document, not a claim that every observation is already reprod
 | BUG-009 | P2 | Pending-dataset contract | Mutating and outward analysis actions now resolve the complete Origin book and resume automatically; stale queued intent is cancelled rather than applied | ChatGPT-Sol | **FIXED 2026-09-21** — PRs #389–394 shipped; PR #398 closed the post-merge queued-replay race and failure-state gaps. **2026-09-28:** last refuse site (derived columns) routed through `withResolved`; failed loads offer Re-import, Relink re-points the fetch, Save names the book. Owner real-file acceptance remains open. |
 | BUG-010 | P2 | Workspace load status | `migrationWarnings` are folded into the load status only on a plain File ▸ Open; crash recovery, silent autosave restore and Append Project each overwrite `status` one statement later, and workbook-package import never reads them at all | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge): one shared `notifyMigrationWarnings` toast from all four loaders, `duplicateWorkbook` a pinned structural non-goal. Adversarial review round (2026-09-13) closed the one real gap the fix missed — File ▸ Open itself never joined the toast channel — plus doc/citation cleanup; see the entry |
 | BUG-011 | P1 | Pack Project (portable export) | `serializeCurrentWorkspaceForPack` never resolved pending datasets before serializing, so packing a workspace with an unopened lazy Origin book shipped that book's downsampled PREVIEW rows (and a stray `pending` field) as the portable project's real data | Claude (agent) | Found 2026-09-13 reviewing Group AF; **fixed 2026-09-13** (commit pending merge) — both the preview and Start-pack paths resolve first and abort by name if a book can't be fetched; 5 sabotage-verified specs. Adversarial review round (2026-09-13) closed both CONFIRMED code findings (Start pack's own resolve window, a book turning pending mid-fetch) plus doc/nit cleanup. Review rounds 2/3 (2026-09-13) closed further regressions, finished the finding #5 fix, and widened the terminal-status fix to every `failed`/`cancelled` transition. Residual closed 2026-09-13: `store/workspaceIO.ts`'s Save/Save As now shares the identical post-await `pending` re-check (see the entry) — every explicit export path (Save, Save As, workbook transfer, Pack Project) now closes finding #2's window. Owner call on abort-vs-partial-pack still open |
-| FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Unassigned | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry |
+| FEATURE-001 | P3 | Faceted plots | Per-series styling (dash/width/colour/marker) is ignored by faceted plots on BOTH screen and export; panels can also resolve different channel sets, so one style list cannot serve the grid | Claude (agent) | Measured 2026-09-09; a fix was built, reviewed, and reverted — see the entry. **FIXED 2026-09-30**: styles are keyed by CHANNEL (one style per channel, applied in every panel, projected through each panel's own `channels`), on screen and on the wire together; pinned by `tests/fixtures/wire/facet_styles.json` over the differing-channel case |
 | BUG-012 | P2 | Figure export/reopen — axis breaks | A saved figure's x-axis break reaches export and survives reopen in the document, but nothing on screen ever renders it after reopen | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `Stage/useEffectiveComposition`'s durable fallback derives the paneled break from `plot.axisBreaks.x` via `lib/facet.durableComposition`, which wraps the SAME builder `breakAtGaps` uses (one construction site, no new persisted field). Divergence test inverted, `break` is a full matrix fixture again (screen ≡ export ≡ reopen + golden), facet-beats-break precedence defined and tested against the export path's own ordering. **Review round closed 2026-09-16** (F1-F5 + nits): panel x-ranges now come from the break BOUNDS so screen and export elide the same range for endpoints that are not data points; the stack toggle and a genuine dataset switch both clear the authored break; background windows panel it too; two residuals recorded. **Round 3 closed 2026-09-17**: the IMPORT rebind clears the break too (the third switch site), the no-break short-circuit is back in front of `analysisData`, the stack toggle no longer dirties the project when nothing changes, and the screen≡export claim is narrowed to in-extent non-empty breaks with the three diverging shapes recorded |
 | BUG-013 | P2 | Figure export — waterfall view | A waterfall view's per-series vertical offset is applied on screen but never reaches the export wire, so the exported figure draws overlaid, un-offset curves | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-14** — `FigureSpec`/`FigureRequest` grew `waterfall_offsets`, a per-plotted-series shift in Y data units resolved by the new `lib/waterfallOffset.ts` (the canvas' own step, keyed by DISPLAY position) and applied by `calc.plotting.apply_waterfall_offsets`. The divergence test is inverted and `waterfall` is a full matrix fixture (screen ≡ export ≡ reopen) |
 | BUG-014 | P3 | Figure export — legend rename | A legend rename replaces the whole on-screen label, but on export only the channel label is replaced and the backend re-appends the unit ("Loop 1" exports as "Loop 1 (au)") | Claude (agent) | Found by the P4.2 regression matrix (`1593cdee`); **FIXED 2026-09-15** — the rename rides its own per-series presentation field (`series_styles[i].legend`), used VERBATIM by `calc.figure_labels.series_display_name`, and the wire `dataset` keeps the DATA's labels/units. The divergence test is inverted. **Review round 2026-09-16** closed the FACET branch, which still shipped `"Loop 1 (au)"` (and showed no rename at all on screen), and `lib/spatialPageExport.ts`'s decoded Origin captions; an EMPTY rename stays a named residual. **Review rounds 3-4 (2026-09-17)** closed the remaining screen/export splits: a background window's facet grid, then the plain per-channel stack and the paneled x-break panels (all three multi-panel legs show a rename in the panel's y-axis label now), and a non-string rename in a hand-edited `.dwk` is dropped at the sanitizer instead of crashing the canvas. **Round 5 (2026-09-17)** reverses a regression round 4 introduced: the x-break leg re-derived one channel list over the whole dataset and mislabeled panels whose own channel lists differ, so each `BreakPanel` now carries its `channels` and the renames project per panel; technique-memory keys stay numeric. **Review round 5 (2026-09-17)** closed CLEAN: fixed 2 low-severity `numKeyedRecord` findings (a blank/whitespace key silently relocating onto channel 0; a key collision resolving to the non-canonical spelling regardless of file order) and corrected the round-5 sabotage table's undercounted rows 6/7 |
@@ -152,7 +152,7 @@ That default is wrong. The latter two columns describe uncertainty; they are not
 
 - [x] The NCNR Reductus parser currently maps Qz to the independent axis and puts every remaining file column into `DataStruct.values`.
 - [x] Unlike the NCNR refl1d-style parser, `import_ncnr_refl` supplies no `default_value_channels` or `error_channels` plotting hints.
-- [ ] ~~Generic label inference can recognize the standalone `uncertainty` label and associate it with the preceding measured channel.~~ **Corrected 2026-09-09 (Claude): this is not what happens for this file.** Measured against the fixture's own labels: `inferErrorBindings({labels: ["Intensity","uncertainty","resolution"]})` returns `[]`. The context-free classifier does return a spurious hit on `uncertainty` — it strips a leading `unc` and reports base `"ertainty"` — and the sibling-evidence gate then correctly rejects it, since no `ertainty` column exists. So no binding was produced by inference, and the roles had to come from the parser.
+- [x] ~~Generic label inference can recognize the standalone `uncertainty` label and associate it with the preceding measured channel.~~ **Corrected 2026-09-09 (Claude): this is not what happens for this file** (resolved: the claim was measured false and the roles come from the parser; box closed 2026-09-30). Measured against the fixture's own labels: `inferErrorBindings({labels: ["Intensity","uncertainty","resolution"]})` returns `[]`. The context-free classifier does return a spurious hit on `uncertainty` — it strips a leading `unc` and reports base `"ertainty"` — and the sibling-evidence gate then correctly rejects it, since no `ertainty` column exists. So no binding was produced by inference, and the roles had to come from the parser.
 - [x] Generic default channel selection does not hide inferred error-role channels from the initial plot.
 - [x] `resolution` is not a generic error token, so label inference does not identify its scientific role.
 - [x] The existing fixture declares columns `[Qz, Intensity, uncertainty, resolution]` with units `[1/Ang, counts, counts, 1/Ang]`, which provides a stable regression case.
@@ -6922,15 +6922,46 @@ this entry.
 
 #### Implementation
 
-- [ ] Product decision: one channel set per grid, or per-panel styles.
-- [ ] Screen and export together.
-- [ ] A fixture where panels WOULD resolve different channels, so whichever rule
-  is chosen is pinned against the case that broke the first two attempts.
+- [x] Product decision (2026-09-30): **styles are keyed by CHANNEL — one style
+  per channel, applied in every panel.** Neither of the two options above:
+  the grid does NOT pin one channel set (the screen keeps resolving a
+  default channel list per row-slice, so no panel grows an empty series),
+  and the wire carries no per-PANEL style list. Instead every consumer
+  projects the flat plot's channel-keyed `seriesStyles` through the panel's
+  OWN `channels` (`FacetPanel.channels`, the list BUG-014 already carried for
+  the renames): `Stage/facetGridRender.facetPanelStyles` on screen,
+  `lib/figureSpecFacets.buildFacetSpecs` for the export (each
+  `FigureFacetSeries` ships its channel's `style`, through the ONE
+  `series_styles` wire boundary under the grouped rule — a chosen colour is
+  sent, a palette-derived one never is, so both sides cycle an unstyled
+  series by the panel's own position). This sidesteps the `y_keys`-index trap
+  (finding 1) and the per-panel-default trap (finding 2) at once: a style is
+  matched by channel, never by position. Encoded and grouped grids lay the
+  encoding over the same channel style (`encodedFacetPanels`'s
+  `channelStyles` / `encoded_facet_panels`'s `channel_styles`), the flat
+  plot's own `encodedStyle(seriesStyles[channel], …)` rule.
+- [x] Screen and export together: `useMultiPanelStage`'s facet leg now passes
+  `seriesStyles` (the stack leg always had), and `figureSpec.ts` passes
+  `st.seriesStyles` to the panel builder; `draw_facet_grid` draws a series'
+  `style` for an unencoded panel too (a lone styled series still has no
+  legend — only an encoded panel, now marked `"key": True`, always keys).
+- [x] Fixture where panels resolve different channels:
+  `tests/fixtures/wire/facet_styles.json` — the QD-shaped case above (panel
+  "0" resolves `[level, M_DC]`, panel "1" `[level, M_AC]`, so the styled
+  channel sits at the SAME series index in both). `Stage/MultiPanelStage.
+  facetStyles.test.tsx` renders the real grid over a mocked uPlot and reads
+  each panel's `buildOpts` series (M_DC's colour/dash/width in panel 0, M_AC's
+  square markers and NO dash in panel 1), builds the export request, and pins
+  both; `tests/test_export_facet_styles.py` posts the request to the real
+  route and reads every line's colour, linestyle, width and marker back.
 
 #### Completion record
 
-_(empty — open. The reverted attempt is commit-logged; `docs/testing.md` kept
-the monkeypatch lesson it produced.)_
+- 2026-09-30 — fixed as recorded under Implementation. Red-first: the screen
+  test failed on the missing `facetPanelStyles` (and, with it stubbed to
+  `[]`, on the undashed M_DC) before the fix. `useMultiPanelStage.ts` stays
+  exactly at its 705-line pin (the argument and the effect dep share lines).
+  Eager JS growth measured in the commit message.
 
 ---
 
@@ -7598,11 +7629,15 @@ dialogs in open order, too. See R16 in `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md`.
       still calls `cancelReimportAll()` (coordinator-review G1), and
       `ConfirmDialog` keeps Enter's `e.repeat` safeguard on its own
       window-capture listener (only Escape moved)
-- [ ] UI wording/tooltips/accessibility included where relevant — **NOT done,
-      and deliberately out of scope here**: see R12 (two concurrent
+- [x] UI wording/tooltips/accessibility included where relevant — **NOT done
+      by this fix, and deliberately out of scope here**: see R12 (two concurrent
       `aria-modal` dialogs, and `aria-modal` hiding the toaster and status-bar
       live regions). This fix changes who gets the KEY, not the ARIA surface,
-      so R12's wording is unchanged by it
+      so R12's wording is unchanged by it. **Closed via R12 on 2026-09-25**
+      (`46ed0750`, hardened by `08b2902a`): `aria-modal` is gone from all 16
+      dialogs and `lib/modalInert.ts` makes the rest of the app inert behind
+      the open modal — see the PRIMARY P3.3 R12 entry and the 2026-09-25
+      change-log rows below
 
 #### Tests and acceptance
 
@@ -9299,13 +9334,67 @@ see it half-built.
 ## Open follow-ups from the 2026-09-29 audit
 
 - [x] `store/recode.ts` and `store/levelOrder.ts` rewrite values on a re-derived dataset without the `lib/rederived.ts` guard (the next recalc may drop them).
-- [ ] Graph Builder X well cannot pick the dataset's own X: a negative channel is passed straight through as a column index in `specToRender`, `plotEncoding.ts`, `plotSpecFigure.ts`, `useGraphBuilder` and `captureLiveBlocks`.
+- [x] Graph Builder X well cannot pick the dataset's own X: a negative channel is passed straight through as a column index in `specToRender`, `plotEncoding.ts`, `plotSpecFigure.ts`, `useGraphBuilder` and `captureLiveBlocks`. **Done 2026-09-29** (`d944669c`): the spec model reserves `OWN_X_CHANNEL` and every consumer resolves the plotted X through `specXKey` (`lib/plotspecGroupCol.ts`); pinned by `useGraphBuilder.ownX.test.ts`.
 - [x] Peak batch fits never send `y_err` (the error-column choice is per active dataset).
 - [x] Legend rows for selected-row highlight companions use the palette colour, not the accent the canvas draws.
-- [ ] Perf, measured but not yet done: cell-patch uploads instead of a full re-upload per edit, plus in-flight de-dupe across plot windows; JSON body parsing off the event loop; uPlot `setSeries`/redraw instead of rebuild for hide/colour; binary column transport for full-resolution plots; ~~an encoding-active rename still refetches (`useStageEncoding` keyed on `active`)~~ (done 2026-09-29).
+- [ ] Perf, measured but not yet done: ~~cell-patch uploads instead of a full re-upload per edit, plus in-flight de-dupe across plot windows~~ (done 2026-09-30, `6df85c8f`: `POST /api/datasets/patch` + `lib/api/datasetCache.ts`'s per-object `pending` WeakMap so every window shares one in-flight upload); ~~JSON body parsing off the event loop~~ (done 2026-09-30, `843bd4b8`: `routes/_offloop.py`, dataset bodies decoded in the threadpool); ~~uPlot `setSeries`/redraw instead of rebuild for hide/colour~~ (done 2026-09-30, `bed8f987`: `lib/uplotLivePaint.ts`); **binary column transport for full-resolution plots — still open, landing in a separate worktree**; ~~an encoding-active rename still refetches (`useStageEncoding` keyed on `active`)~~ (done 2026-09-29).
+
+## Owner-gated
+
+Open work that needs the owner's judgment, machine, data or MATLAB — not
+code. One line per category, with the plan boxes it covers (line numbers as
+of 2026-09-30; grep by content when they drift).
+
+- **Real-use sessions and timings** — `PRIMARY_SOFTWARE_AUDIT_PLAN.md` P0
+  representative-project rows (~300–317: pick the project, time
+  import-to-first-plot / production figure / routine fit, log every impulse
+  to open Origin/JMP) and the release-acceptance rows (~10691–10704);
+  `LIBRARY_WORKBOOK_UX_PLAN.md` ~3405 (revisit L0.44 after real cross-workbook
+  work); `ORIGIN_REPLACEMENT_ONE_WEEK_SPRINT.md` Day-4 SOL review row.
+- **Windows/macOS packaging and the Office paste check** — PRIMARY ~626
+  (packaged Windows/macOS E2E), ~8633 (scaling/high-DPI readability),
+  ~9515/~9763 (vector copy, 300-DPI fallback, EMF only on evidence),
+  ~10617–10623 (signing, notarization, fresh-machine install, updater);
+  BUGS BUG-030 residual (~8960: the `tauri://localhost` allowance can only be
+  removed after a packaged-app check).
+- **Real GPU / network measurements** — PRIMARY ~395 (network/offline source
+  transitions), ~403/~423 (direct-manipulation <100 ms on real hardware,
+  failed thresholds need profiles), ~5938 (regrid bottleneck on a real
+  4M-point map), ~10700 (large 2-D / long sessions); P3.3 R14 (~6936, needs
+  real IME hardware).
+- **Origin screenshot / visual review** — PRIMARY ~326–331 (the 62 paired
+  screenshots; graphic objects / >2 Y axes only on reviewed evidence),
+  ~10630–10633 (decode-plan #53/#54, `.opju` matrix edges, Rigaku/SPC/Oxford
+  wait for specimens), ~10483 (visual equivalence of the nine fixtures);
+  live-Origin COM send on the owner's Windows machine (`PORT_CHECKLIST.md`
+  COM row).
+- **Owner instrument data** — PRIMARY ~3602 / ~3661–3662 / ~3683 (validate
+  XRD phases, XRR/PNR fits and SIMS on representative owner instruments
+  against trusted reference fits), the Bruker RAW byte-624/632 decode
+  (~3390); BUGS BUG-001 ~176 (a second Reductus `.refl` variant before
+  broadening name matching).
+- **MATLAB goldens** — PRIMARY ~3394 (per-peak uncertainties for the legacy
+  `fit_multi_peak` / `fit_peak` producers and weighted Williamson-Hall need a
+  MATLAB freeze first); BUGS BUG-029 ~8918 (whether MATLAB `parrattRefl`
+  should change its imaginary-SLD sign — sibling repo, deliberate change
+  only).
+- **Decisions** — PRIMARY: CVD default-palette gap and the `tol-bright`
+  `#999933` 8th slot (~8232/~8326/~8364–8365); the raw-code data-export
+  question (~1416); F4.2c's per-figure outlier-policy question (~821/~858);
+  the SMB-timeout save policy (~617); P3.3 R10 (~6181/~6600, Escape-to-close
+  on the multi-plot document frame is a product call); BUGS UX-002 ~712/~716
+  (what lineage means across a copy boundary; "copy with dependents"),
+  BUG-030 ~8960 (drop the Tauri allowance); FIGURE F2.1f/g (BACKLOG owner
+  table D-1 auto-migrate, D-3 graph templates, D-4 retire legacy mode);
+  LIBRARY ~3405 (folder-level behaviour after real use).
+- [ ] Perf, measured but not yet done: cell-patch uploads instead of a full re-upload per edit, plus in-flight de-dupe across plot windows; JSON body parsing off the event loop; uPlot `setSeries`/redraw instead of rebuild for hide/colour; ~~binary column transport for full-resolution plots~~ (done 2026-09-30); ~~an encoding-active rename still refetches (`useStageEncoding` keyed on `active`)~~ (done 2026-09-29).
 
 ## Completed
 
+- 2026-09-30 — Plan reconciliation against `c74776d5`: the 2026-09-29 audit's Graph Builder own-X box and three of the perf clauses (cell patches, off-loop body decode, uPlot `setSeries`) ticked with commits; BUG-018's ARIA box closed via R12; BUG-001's struck-through inference box closed; PRIMARY's clients/types + growth-ratchet rows, the manual-peak-edit/batch-recipe row, PORT_CHECKLIST's Origin COM row, the sprint's two lane-N rows (deferred with evidence) and FIGURE F2.1 (restated blocked) / F4.4's stale `[~]` note reconciled; new "Owner-gated" section above lists everything that waits on the owner.
+- 2026-09-30: "Copy figure (vector)" sends `svg_text_as_paths: true` (clipboard only; the SVG file export keeps editable text). The canonical Publication Preview draws masked rows per the app's "Excluded rows" mode (greyed companions / hidden) exactly as its export does, with the wire dataset object reused across unrelated edits so the dataset-handle cache still hits (`canonicalReadiness.ts`).
+- 2026-09-30 — Facet grid encodings (P1.4 residual 3 follow-ups): an encoded xy facet grid with no explicit Y splits the flat plot's default channel list, the same in every panel, on screen and in the export (`lib/facet.facetSplitChannels`); a sheet with no default Y stays unencoded and the Graph Builder says why in one sentence.
+- 2026-09-30 — Facet grid encodings (P1.4 residual 3 follow-ups): an encoded xy facet grid with no explicit Y splits the flat plot's default channel list, the same in every panel, on screen and in the export (`lib/facet.facetSplitChannels`); a sheet with no default Y stays unencoded and the Graph Builder says why in one sentence. Group ALONE on a facet grid now splits each panel's series by level like the flat plot, on screen and in the export (`facetSplitEncoding`; `group_col` + panel `rows`/`channels` on the wire), pinned by the `group` entry of `tests/fixtures/wire/facet_styles.json`.
 - 2026-09-29: Reorder levels refuses a re-derived dataset (the recalc drops `level_order`); recode stays allowed (its formula column survives the recalc). Selected-row legend rows draw a filled accent marker. An encoded Stage no longer refetches on a dataset rename. Peak batch sends each dataset's own error column as `y_err`.
 - 2026-09-29 — Worksheet: paste, fill-down, copy, cut and clear follow the visible (sorted/filtered) row order and never touch hidden rows; sort and filter reset on a dataset switch; paste maps categorical labels to level codes (unknown labels extend the table, one undo) and skips non-numeric or ambiguous ("1,5") text with a count; the stats footer sends finite values only and is debounced 300 ms; the exclusion Set is built once per call.
 - 2026-09-29 GUI audit layout fit: plot dock collapses overflowing groups into its "⋯" menu (every tool reachable at 125%/Graph Window/narrow); NE/NW legend sits below the dock; tool windows capped at the viewport, Graph Builder wells scroll with a pinned preview; Library names keep width, counts read "N pts · N ch"; QFB grid uses container queries; gradient chip named; QFB names the acquisition axis by its column name. Tests: `layout-fit.spec.ts`, `PlotToolbar.overflow.test.tsx`, `layoutFit.test.ts`.
@@ -9316,8 +9405,17 @@ see it half-built.
 - 2026-09-29: Weighted curve fit validates `dy` only over the rows the fit keeps (gap rows no longer refuse weighting).
 - 2026-09-29: `unit_convert` routes C/degC/F/degF through absolute kelvin (25 C -> mK = 298150; C -> eV uses 298.15 K) and refuses prefixed/compound C/F expressions.
 - 2026-09-30 — Excluded rows (F4.2c (a)), the paths PR #490 left out: the spatial Origin page, Send to report (both paths), the legacy Figure Builder, and encoded figures now ask "greyed or omitted?" on export when rows are masked, and draw the answer. Encoded requests send every row plus `excluded_rows`/`grey_excluded` (backend `calc/figure_excluded.py`), so the split keeps the window's levels (closes P1.4's levels-over-full-rows limit for encoded figures). Faceted figures ask with only "omit", and say why. The spatial grid and the legacy preview drew excluded rows as data; they now follow the app mode.
-- 2026-09-30 — File ▸ Export Origin project (.opj)… calls `/api/export/opj` (its first frontend caller): the multi-selection or every loaded dataset, resolved to full data, one workbook each; lazy body, cancellable. Ternary/field figure routes still have no frontend view to export from.
+- 2026-09-30 — File ▸ Export Origin project (.opj)… calls `/api/export/opj` (its first frontend caller): the multi-selection or every loaded dataset, resolved to full data, one workbook each; lazy body, cancellable. ~~Ternary/field figure routes still have no frontend view to export from.~~ (2026-09-30: Plot ▸ Build & export ▸ Ternary diagram / Vector field workshops, below.)
 - 2026-09-30 — Statistical tests workshop (Analyze ▸ Statistics, and "More tests…" in the Test chooser) wires 12 previously uncalled `/api/stats/*` routes (Anderson-Darling, KS normal, KS two-sample, sign test, Dunnett, Friedman, repeated-measures ANOVA, two-way ANOVA, multiple/stepwise regression, partial correlation, power) with a one-sentence interpretation, Copy/CSV/Report. The other 11 uncalled routes are deferred as low value or duplicates.
 - 2026-09-30: Reflectivity graded (spline) SLD layers: `POST /api/reflectivity/spline-sld` + a Model-mode "Graded (spline)" film option; model/simulate only (the fit engine varies slab fields, not knots).
 - 2026-09-30: Custom demagnetization geometry: `POST /api/magnetic/demag-custom` (calc `demag_factor`: cylinder L/d, prolate c/a, oblate a/c) + a lazy "Custom geometry" option in Calculators > Magnetic > Demagnetization factors.
 - 2026-09-30: Global (shared-parameter) fit wired end to end: `POST /api/fitting/global` (+ `/job`, cancellable) over `calc.global_curve_fit`, golden-checked at the route; Curve Fit "Global fit" mode (lazy) fits channels or label-matched datasets, marks parameters shared, overlays each series' curve on its own plot, and reports to the Library.
+- 2026-09-30: Peak Analyzer step ② gains the Peaks panel's Advanced detector settings (lazy); they are optional in `PeakRecipe.find`, survive storage and export/import, and batch runs send them. Old recipes load unchanged.
+- 2026-09-30: "labeling peaks failed" says how many labels landed and whether Undo removes them; `usePeaks.test.ts` weak-wait pin 1 -> 0.
+- 2026-09-30: peakwizard one-off flake hunt (20 runs under build load): the pre-existing suite did not reproduce (0/20); the day's new step-② test raced 1/20 against `PeakFindAdvanced`'s mount-effect draft reset, fixed structurally (render-time reset), 0/20 after. `PeaksPanel` loads the Advanced panel lazily too, keeping the shared chunk out of the entry's preload manifest (eager entry 3 B under base).
+- 2026-09-30 — Plot ▸ Build & export ▸ Ternary diagram… / Vector field (quiver · streamline)… (`workshops/ternary`, `workshops/fieldplot`): first frontend callers of `/api/export/ternary-figure` and `/api/export/field-figure`. Column picks (+ colour-by / quiver–streamline) → a debounced, abortable server-rendered PNG preview of the exact body Export sends as PDF/SVG/PNG (screen == export); undrawable rows (non-finite, negative, all-zero; incomplete or duplicated grid) are counted out in one sentence; excluded rows are omitted (never greyed) and the export asks with only the omit option. Lazy-mounted as ONE chunk through `AppOverlays.lazyPanel` (`ternary/AuxFigurePanels.tsx`); eager cost is the open-flag store, one stub and two command entries (`ternary/lazyMount.test.ts`), paid for by moving `seriesDisplayLabel` out of `lib/figureSpecSeries.ts` into `lib/seriesDisplayLabel.ts` (its only eager import; the module is now lazy-only) — eager 846.0 → 844.8 kB, gate green.
+- 2026-09-30: Graph window title bar reads "N pts · N ch" (points first), matching the Library rows and StatusBar (`PlotWindowFrame.test.tsx`).
+- 2026-09-30: Partial-outcome reports say how many succeeded and which failed and why: the ROI batch status line names each skipped/failed dataset with its reason (`useRoiBatch.test.ts`), and `recalcNow` ends a pass with failures on one "recalculated N of M — name: reason; …" status (`store/recalcDatasets.test.ts`).
+- 2026-09-30: Quick Plot on a recognized XYXYXY workbook now makes three correctly paired series (`lib/quickPlot.xyxyxy.test.ts`; LIBRARY_WORKBOOK_UX_PLAN acceptance scenario ticked).
+- 2026-09-30: Plot recipes rebuild SPATIAL multi-panel compositions (schema v3 `panels` + `map`, by dataset name/column label; missing bindings get a rebind picker in the apply dialog) — closes PRIMARY_SOFTWARE_AUDIT_PLAN P1.3 maps/panels + F4.2b/F4.4 spatial halves.
+- 2026-09-30 — perf: opt-in binary column transport for `/api/plot/series` (`Accept: application/x-quantized-columns`; JSON header + LE float64 columns, NaN gaps); `plotSeries` uses it above 50k rows via a lazy decoder and falls back to JSON on any failure. 1M×7 full-res: route 1.089 s / 146.3 MB → 0.179 s / 64.0 MB; client decode best 830 → 376 ms. Numbers in `docs/performance_envelope.md`.

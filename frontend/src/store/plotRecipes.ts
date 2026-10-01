@@ -55,15 +55,11 @@
 // write chokepoint (architecture.test.ts's "FigureDocument write
 // chokepoint (F1)") -- this module never assigns `.document` directly.
 //
-// GAP (documented, not a bug -- narrowed by F4.4 2026-08-23 and again by
-// BUG-012 2026-09-14, to SPATIAL plus a LIVE `breakAtGaps`): `compositionKind`
-// records which arrangement was active at capture. FACET rebuilds with zero
-// code here (`store/plotRecipeApply.ts`'s `applyResolvedRecipe` doc), and so do
-// AUTHORED break RANGES (`visual.axisBreaks` -> `plot.axisBreaks.x`, rebuilt by
-// `lib/facet.durableComposition`). A LIVE `breakAtGaps` is NOT: it writes no
-// durable field (only the transient `composition`), so a recipe taken while one
-// shows records `"break"` with an EMPTY `visual.axisBreaks.x` and restores
-// nothing. SPATIAL is that gap by construction (`lib/plotRecipe.ts` says why).
+// COMPOSITIONS: FACET rebuilds from `facetKey`, authored break RANGES from
+// `visual.axisBreaks`, and SPATIAL (v3 `panels`, F4.4's last half) from the
+// by-name panel capture `store/plotRecipeApply.ts` installs after focus. The
+// one remaining gap: a LIVE `breakAtGaps` writes no durable field, so a recipe
+// taken while one shows records `"break"` with empty `axisBreaks.x`.
 //
 // PERSISTENCE: `plotRecipes` lives in memory only this lane (the
 // `store/quickPlotTemplates.ts` PR-H two-commit precedent) -- `setPlotRecipes`
@@ -118,6 +114,7 @@
 // `recipeLibs()`, which lives in that same sibling.
 
 import type { PlotRecipe } from "../lib/plotRecipe";
+import type { RecipePanelBinding } from "../lib/plotRecipeMatch";
 import type { PendingPlotRecipeApplication } from "./pendingRecipeApplication";
 import { dedupeWindowTitle, snapshotView } from "../lib/plotview";
 import type { Dataset } from "../lib/types";
@@ -246,6 +243,10 @@ export interface PlotRecipesSlice {
   confirmPendingRecipeApplicationPartial: () => Promise<boolean>;
   /** Discard the pending resolution without applying anything. */
   cancelPendingRecipeApplication: () => void;
+  /** F4.4 SPATIAL: answer a missing panel binding named by the staged
+   *  resolution's `panelIssues` -- re-resolves with the answer and replaces
+   *  the pending entry (never applies). No-op when nothing is pending. */
+  rebindPendingRecipePanel: (panel: number, binding: RecipePanelBinding) => Promise<void>;
   /** Every recipe scoped to `dataset`'s technique that `resolveRecipe`
    *  doesn't refuse, CLEAN matches (zero `unmatched`) first, then partial
    *  matches -- the ordering a suggestion surface (a later lane) renders
@@ -304,6 +305,8 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
         errors: focused.document?.bindings.errors,
         axisBreaks: focused.document?.plot.axisBreaks, // facetKey rides `view` (K4/K6)
         excludedDisplay: state.excludedDisplay, // v2 outlier policy (recorded, never applied)
+        datasets: state.datasets, // v3 spatial panels bind sibling datasets by NAME
+        mapView: state.mapViews[datasetId], // v3 map view (recorded only when non-default)
       });
       get().recordHistory("Save Plot Recipe");
       set((s) => ({ plotRecipes: [...s.plotRecipes, recipe] }));
@@ -386,19 +389,13 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
       // before applying anything.
       const dataset = get().datasets.find((d) => d.id === pending.datasetId);
       if (!dataset) {
-        set({
-          pendingRecipeApplication: null,
-          status: `Plot Recipe "${pending.recipe.name}" unavailable: dataset not found`,
-        });
+        set({ pendingRecipeApplication: null, status: `Plot Recipe "${pending.recipe.name}" unavailable: dataset not found` });
         return false;
       }
-      const { applyResolvedRecipe, resolveRecipe } = await applyCoreWithLibs();
-      const resolution = resolveRecipe(pending.recipe, dataset);
+      const { applyResolvedRecipe, resolveOptionsFor, resolveRecipe } = await applyCoreWithLibs();
+      const resolution = resolveRecipe(pending.recipe, dataset, resolveOptionsFor(get, pending));
       if ("refused" in resolution) {
-        set({
-          pendingRecipeApplication: null,
-          status: `Plot Recipe "${pending.recipe.name}" unavailable: ${resolution.refused}`,
-        });
+        set({ pendingRecipeApplication: null, status: `Plot Recipe "${pending.recipe.name}" unavailable: ${resolution.refused}` });
         return false;
       }
       if (resolution.unmatched.length > 0) {
@@ -438,19 +435,13 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
       // `pending.resolution` as-is, re-resolve against the CURRENT dataset.
       const dataset = get().datasets.find((d) => d.id === pending.datasetId);
       if (!dataset) {
-        set({
-          pendingRecipeApplication: null,
-          status: `Plot Recipe "${pending.recipe.name}" unavailable: dataset not found`,
-        });
+        set({ pendingRecipeApplication: null, status: `Plot Recipe "${pending.recipe.name}" unavailable: dataset not found` });
         return false;
       }
-      const { applyResolvedRecipe, resolveRecipe } = await applyCoreWithLibs();
-      const resolution = resolveRecipe(pending.recipe, dataset);
+      const { applyResolvedRecipe, resolveOptionsFor, resolveRecipe } = await applyCoreWithLibs();
+      const resolution = resolveRecipe(pending.recipe, dataset, resolveOptionsFor(get, pending));
       if ("refused" in resolution) {
-        set({
-          pendingRecipeApplication: null,
-          status: `Plot Recipe "${pending.recipe.name}" unavailable: ${resolution.refused}`,
-        });
+        set({ pendingRecipeApplication: null, status: `Plot Recipe "${pending.recipe.name}" unavailable: ${resolution.refused}` });
         return false;
       }
       // The one divergence from confirm: a still-non-empty `unmatched` here
@@ -471,6 +462,11 @@ export function createPlotRecipesSlice(set: SliceSet, get: SliceGet): PlotRecipe
       const cancelled = get().pendingRecipeApplication;
       set({ pendingRecipeApplication: null });
       cancelled?.onCancel?.(); // F4.2c: take back a transformation run only for this preview
+    },
+
+    rebindPendingRecipePanel: async (panel, binding) => {
+      const { rebindPendingPanel, resolveRecipe } = await applyCoreWithLibs();
+      rebindPendingPanel(set, get, panel, binding, resolveRecipe);
     },
 
     matchingPlotRecipes: async (dataset) => {

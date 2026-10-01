@@ -48,6 +48,7 @@ import type { PlotView } from "./plotview";
 import { canvasGroupCol } from "./plotGroupSplit";
 import { encodingSplits, facetEncoding, figureEncodingWire, windowEncoding, type FigureEncoding } from "./plotEncodingBinding";
 import { droppedRows, pruneToLiveDataset } from "./rowstate";
+import { facetSplitChannels } from "./facet";
 // The screen-parity override projection moved to lib/figureViewOverrides.ts to
 // fund P3.3's threading against this file's 500-line ceiling. Imported, NOT
 // re-exported: a barrel here would make every importer of this module pull the
@@ -238,7 +239,11 @@ function buildFigureSpecForView(
   //
   // F4.4: a durable facet binding renders the SAME grid Stage shows on
   // screen (built from st.xKey/yKeys, not plotted -- see resolveFacetsOrThrow's doc, C5/R4).
-  const facets = resolveFacetsOrThrow(data, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length, st.seriesLabels);
+  // FEATURE-001: the channel-keyed styles ride each panel series too (one
+  // style per channel, applied in every panel -- `figureSpecFacets`' doc).
+  const facets = resolveFacetsOrThrow(
+    data, st.facetKey, st.xKey, st.yKeys, extras.liveDataset, plotted.length, st.seriesLabels, st.seriesStyles,
+  );
 
   // The flat-path counterpart to C2's facet fix (FIGURE_AUTHORING_WORKFLOW_PLAN,
   // "a pre-existing gap noted while fixing C2"): a FLAT export's wire `dataset`
@@ -285,13 +290,21 @@ function buildFigureSpecForView(
   // with a secondary axis). The backend splits and styles (`calc/plotting_
   // encoded.py`, pinned to the frontend derivation by the shared wire fixture);
   // like the group split, an encoded figure carries no offsets or stagger. A
-  // facet grid (residual 3) takes it over explicit Y channels only, less a
-  // gradient (`facetEncoding`), as `Stage/useFacetEncoding` draws it; its
-  // panels then name their rows so the route re-splits each one.
+  // facet grid (residual 3) takes it less a gradient (`facetEncoding`) over
+  // the explicit Y channels or, with none, the flat plot's default list
+  // (`facetSplitChannels`, the same in every panel), as
+  // `Stage/useFacetEncoding` draws it; its panels then name their rows so
+  // the route re-splits each one.
   const gated = windowEncoding(extras.encoding, extras.liveDataset ?? { data }, groupCol, st.y2Keys);
-  const facetYKeys = facets !== undefined && st.facetKey != null && st.yKeys?.length ? st.yKeys : null;
+  const facetYKeys =
+    facets !== undefined && st.facetKey != null
+      ? facetSplitChannels(pruneToLiveDataset(data, extras.liveDataset), st.xKey, st.yKeys)
+      : null;
   const encoding = facets === undefined ? gated : facetYKeys ? facetEncoding(gated) : null;
-  const wireFacets = facets && encoding && facetYKeys
+  // Group ALONE splits a facet grid too (`facetSplitEncoding`, the Stage's
+  // rule): the panels then carry rows and channels for the route's split, and
+  // the group rides `group_col` as ever -- `encoding` stays absent.
+  const wireFacets = facets && facetYKeys && (encoding || groupCol !== null)
     ? withFacetRows(facets, data, st.facetKey as number, facetYKeys, extras.liveDataset, st.seriesLabels)
     : facets;
   // F4.2c (a): an encoded request is split server-side, so it keeps EVERY row

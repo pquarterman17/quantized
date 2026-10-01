@@ -150,6 +150,32 @@ describe("recipe v2 — migration, round trip, fail closed", () => {
     expect(loadRecipes()).toEqual([edited]);
   });
 
+  // The detector's Advanced settings (`PeakFindAdvanced`) are optional in
+  // `find`: a recipe that carries them keeps them, and one saved before they
+  // existed loads with exactly the three fields it always had — still v2, no
+  // warning — so the batch runner's `recipeFind` sends only what it always did.
+  it("a recipe's Advanced find settings round-trip exactly through storage", () => {
+    const advanced: PeakRecipe = {
+      ...DEFAULT_RECIPE,
+      name: "advanced",
+      find: {
+        snr_threshold: 4, min_prominence: 0.1, max_peaks: 7,
+        sensitivity: "high", min_separation: 0.2, min_width_deg: 0.05, max_width_deg: 1.5,
+        bg_method: "polynomial", max_window_deg: 3, bg_poly_degree: 4, bg_iterative: true,
+      },
+    };
+    saveRecipe(advanced);
+    expect(loadRecipes()).toEqual([advanced]);
+  });
+
+  it("a recipe saved before the Advanced find settings existed loads with its find section unchanged, silently", () => {
+    localStorage.setItem("qz.peakRecipes", JSON.stringify([{ ...edited, name: "pre-advanced" }]));
+    const { recipes, warnings } = loadRecipesChecked();
+    expect(warnings).toEqual([]);
+    expect(recipes[0].find).toEqual({ snr_threshold: 3, min_prominence: 0, max_peaks: 20 });
+    expect(Object.keys(recipes[0].find).sort()).toEqual(["max_peaks", "min_prominence", "snr_threshold"]);
+  });
+
   it("skips a structurally bad fit section or a newer version with a named warning — never deleting either", () => {
     const badFit = { ...edited, name: "bad", fit: { ...edited.fit, engine: "turbo" } };
     const future = { ...edited, name: "future", version: 3 };

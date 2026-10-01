@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import Field, model_validator
 
 from quantized.calc.decimate import decimate_columns, is_ascending, window_columns
 from quantized.calc.map import MapState, map_from_datastruct
 from quantized.calc.plotting import PlotState, build_series
+from quantized.routes._columns import COLUMNS_MEDIA_TYPE, encode_columns, wants_columns
 from quantized.routes._datasetcache import CachedDatasetRequest, resolve_or_409
 from quantized.routes._errors import CALC_ERRORS
 from quantized.routes._offloop import OffloopJSONRoute
@@ -68,8 +69,10 @@ class PlotRequest(CachedDatasetRequest):
         return self
 
 
-@router.post("/series")
-def plot_series(req: PlotRequest, response: Response) -> dict[str, Any]:
+@router.post("/series", response_model=dict[str, Any])
+def plot_series(
+    req: PlotRequest, request: Request, response: Response
+) -> dict[str, Any] | Response:
     """Build uPlot-ready series from a posted DataStruct."""
     try:
         ds, handle = resolve_or_409(req)
@@ -108,18 +111,31 @@ def plot_series(req: PlotRequest, response: Response) -> dict[str, Any]:
     if decimated and decimate_width is not None:
         x, values = decimate_columns(x, values, decimate_width)
 
-    # uPlot wants column-oriented data: [xValues, series1Values, series2Values, ...]
-    data = [jsonify(x)] + [jsonify(v) for v in values]
     if handle is not None:
         response.headers["X-Dataset-Handle"] = handle
-    return {
-        "data": data,
+    payload: dict[str, Any] = {
         "series": [{"label": s.label, "unit": s.unit, "axis": s.axis} for s in plot.series],
         "x": {"label": plot.x_label, "unit": plot.x_unit, "log": plot.x_log},
         "y": {"log": plot.y_log},
         "decimated": decimated,
         "window": window,
     }
+    # Opt-in binary transport (routes/_columns.py): a client that names the
+    # column media type in `Accept` gets the same payload with the columns as
+    # raw float64 instead of JSON text (1M x 7: 146 MB / ~1.2 s of encoding
+    # -> 56 MB / a memcpy). Only the framing differs -- the header IS the
+    # JSON payload minus `data`, gaps are NaN instead of null. Every error
+    # (422/409) above still returns JSON, and no `Accept` (or `*/*`) keeps
+    # the JSON body, so every pre-existing caller is unchanged.
+    if wants_columns(request.headers.get("accept")):
+        return Response(
+            content=encode_columns(payload, [x, *values]),
+            media_type=COLUMNS_MEDIA_TYPE,
+            headers=dict(response.headers),
+        )
+    # uPlot wants column-oriented data: [xValues, series1Values, series2Values, ...]
+    data = [jsonify(x)] + [jsonify(v) for v in values]
+    return {"data": data, **payload}
 
 
 class MapRequest(CachedDatasetRequest):

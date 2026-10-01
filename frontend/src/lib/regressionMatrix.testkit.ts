@@ -102,7 +102,7 @@
 //     real `buildOpts` options object it feeds.
 
 import { groupLevelLabel, levelOrderFor } from "./categorical";
-import { seriesDisplayLabel } from "./figureSpecSeries";
+import { seriesDisplayLabel } from "./seriesDisplayLabel";
 import { canvasGroupCol } from "./plotGroupSplit";
 import { facetPayloads } from "./facet";
 import type { ErrorSpan } from "./errorbars";

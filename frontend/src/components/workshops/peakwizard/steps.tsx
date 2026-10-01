@@ -13,6 +13,7 @@ import { NumberField } from "../../primitives/NumberField";
 import { Button, Select, StatusDot } from "../../primitives";
 import ModelFitStep from "./ModelFitStep";
 import ModelSetupView, { EngineSelect } from "./ModelSetupView";
+import StepFindAdvanced from "./StepFindAdvanced";
 import type { PeakWizardState } from "./usePeakWizard";
 
 const faint = { color: "var(--text-faint)" } as const;
@@ -171,6 +172,7 @@ export function StepFindPeaks({ w }: { w: PeakWizardState }) {
           {w.findError}
         </div>
       )}
+      <StepFindAdvanced w={w} />
       {w.candidates.length > 0 && (
         <div style={{ marginTop: 8, maxHeight: 180, overflowY: "auto" }}>
           <table className="qz-table">
@@ -187,7 +189,12 @@ export function StepFindPeaks({ w }: { w: PeakWizardState }) {
               {w.candidates.map((c, i) => (
                 <tr key={i} style={c.included ? undefined : { opacity: 0.45 }}>
                   <td>
-                    <Checkbox checked={c.included} onChange={() => w.togglePeak(i)} />
+                    <input
+                      type="checkbox"
+                      aria-label={`include peak ${i + 1}`}
+                      checked={c.included}
+                      onChange={() => w.togglePeak(i)}
+                    />
                   </td>
                   <td>{fmtNum(c.center)}</td>
                   <td>{fmtNum(c.height)}</td>

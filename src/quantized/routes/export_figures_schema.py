@@ -32,7 +32,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 __all__ = [
     "SERIES_STYLES_DOC",
@@ -174,6 +174,20 @@ class FigureFacetSeries(BaseModel):
     # P1.4 (with `FigureRequest.encoding` only): the channel's legend rename,
     # BUG-014's `series_styles[i].legend`, which an encoded name is built on.
     legend: str | None = None
+    # FEATURE-001: the series' own CHANNEL's chosen style -- `series_styles`'
+    # keys (`SERIES_STYLES_DOC`), sent under the grouped rule (a palette-
+    # derived colour never rides; `lib/exportStyles.toWireSeriesStyles`). One
+    # style per channel, applied in every panel: an unencoded panel draws it
+    # as the flat renderer would (`calc.figure_facets.draw_facet_grid`), an
+    # encoded or grouped one lays the encoding over it
+    # (`calc.plotting_encoded_facets`). Same document-only-key guard.
+    style: dict[str, Any] | None = None
+
+    @field_validator("style")
+    @classmethod
+    def _no_document_only_keys(cls, style: dict[str, Any] | None) -> dict[str, Any] | None:
+        reject_document_only_style_keys([style])
+        return style
 
 
 class FigureFacet(BaseModel):
@@ -197,9 +211,10 @@ class FigureFacet(BaseModel):
     label: str
     x: list[float | None]
     series: list[FigureFacetSeries]
-    # P1.4 residual 3 (with `FigureRequest.encoding` only): the dataset row
-    # behind each `x` entry and the Y channel behind each series, so the route
-    # re-splits the panel by the encoding (`calc.plotting_encoded_facets`).
+    # P1.4 residual 3 (with `FigureRequest.encoding`, or `group_col` alone):
+    # the dataset row behind each `x` entry and the Y channel behind each
+    # series, so the route re-splits the panel by the encoding and/or group
+    # (`calc.plotting_encoded_facets`).
     rows: list[int] | None = None
     channels: list[int] | None = None
 

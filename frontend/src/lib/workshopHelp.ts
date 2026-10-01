@@ -25,6 +25,7 @@ export const WORKSHOP_HELP: Readonly<Record<string, string>> = {
   curvefit: "Curve fit",
   datasetmath: "Dataset math",
   digitizer: "Graph digitizer",
+  fieldplot: "Vector field",
   graphbuilder: "Graph Builder",
   magtools: "Magnetometry",
   multivar: "Multivariate",
@@ -47,6 +48,7 @@ export const WORKSHOP_HELP: Readonly<Record<string, string>> = {
   statschooser: "Test chooser",
   "stats-tests": "Statistical tests",
   tabulate: "Tabulate",
+  ternary: "Ternary diagram",
   variability: "Variability chart",
 };
 

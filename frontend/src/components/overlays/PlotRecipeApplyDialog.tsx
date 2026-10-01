@@ -25,10 +25,19 @@
 // resolution's unmatched set is identical to the staged one -- see
 // plotRecipes.test.ts for that coverage. This dialog just never calls it.
 //
+// F4.4 SPATIAL: a v3 recipe's panel bindings that did not resolve (a sibling
+// dataset by name, or a column by label) are listed ONCE, each with a picker
+// -- choosing a stand-in calls `rebindPendingRecipePanel`, which re-resolves
+// and replaces the staged entry in place; the plain unmatched list below
+// then no longer names them. With nothing left unmatched the primary action
+// reads plainly "Apply".
+//
 // Modal-backdrop convention borrowed from QuickPlotWithDialog/SplitDatasetDialog.
 
 import { useId, useRef } from "react";
 
+import type { RecipePanelIssue } from "../../lib/plotRecipeMatch";
+import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { useDialogFocus } from "./useDialogFocus";
 import { Button } from "../primitives";
@@ -52,9 +61,52 @@ function mappingRows(
   return rows;
 }
 
+const PANEL_ROLE = { x: "X axis", y: "Y series", y2: "Y2 series" } as const;
+
+/** The same wording `lib/plotRecipePanels.ts` puts in `unmatched`, so a
+ *  rebind row and the plain list can never disagree on a field's name. */
+function issueName(issue: RecipePanelIssue): string {
+  return issue.kind === "dataset"
+    ? `Panel ${issue.panel + 1} dataset ("${issue.name}")`
+    : `Panel ${issue.panel + 1} ${PANEL_ROLE[issue.role]} ("${issue.label}")`;
+}
+
+function PanelRebindRow({ issue, datasets }: { issue: RecipePanelIssue; datasets: readonly Dataset[] }) {
+  const rebind = useApp((s) => s.rebindPendingRecipePanel);
+  const name = issueName(issue);
+  const options =
+    issue.kind === "dataset"
+      ? datasets.map((d) => ({ value: d.id, label: d.name }))
+      : (datasets.find((d) => d.id === issue.datasetId)?.data.labels ?? []).map((l, i) => ({ value: String(i), label: l }));
+  return (
+    <li style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 4 }}>
+      <span style={{ flex: 1 }}>{name}</span>
+      <select
+        aria-label={name}
+        value=""
+        title="Pick the dataset or column this panel should use instead"
+        onChange={(e) => {
+          const v = e.target.value;
+          if (!v) return;
+          void rebind(
+            issue.panel,
+            issue.kind === "dataset" ? { datasetId: v } : { channels: { [issue.label]: Number(v) } },
+          );
+        }}
+      >
+        <option value="">{issue.kind === "dataset" ? "Choose a dataset…" : "Choose a column…"}</option>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>{o.label}</option>
+        ))}
+      </select>
+    </li>
+  );
+}
+
 export default function PlotRecipeApplyDialog() {
   const pending = useApp((s) => s.pendingRecipeApplication);
-  const dataset = useApp((s) => (pending ? s.datasets.find((d) => d.id === pending.datasetId) : undefined));
+  const datasets = useApp((s) => s.datasets);
+  const dataset = pending ? datasets.find((d) => d.id === pending.datasetId) : undefined;
   const confirmPartial = useApp((s) => s.confirmPendingRecipeApplicationPartial);
   const cancel = useApp((s) => s.cancelPendingRecipeApplication);
   const dialogRef = useRef<HTMLDivElement | null>(null);
@@ -71,7 +123,10 @@ export default function PlotRecipeApplyDialog() {
 
   const labels = dataset?.data.labels ?? [];
   const rows = mappingRows(pending.resolution.resolved.mapping, labels);
-  const unmatched = pending.resolution.unmatched;
+  const panelIssues = pending.resolution.panelIssues;
+  const panelNames = new Set(panelIssues.map(issueName));
+  const unmatched = pending.resolution.unmatched.filter((m) => !panelNames.has(m));
+  const dropped = pending.resolution.unmatched.length;
   const warnings = pending.resolution.warnings;
 
   return (
@@ -103,6 +158,16 @@ export default function PlotRecipeApplyDialog() {
             </tbody>
           </table>
         )}
+        {panelIssues.length > 0 && (
+          <div style={{ marginTop: 8 }}>
+            <div className="qzk-ds-meta">Missing panel bindings ({panelIssues.length}):</div>
+            <ul style={{ margin: 0, paddingLeft: 18 }}>
+              {panelIssues.map((issue) => (
+                <PanelRebindRow key={issueName(issue)} issue={issue} datasets={datasets} />
+              ))}
+            </ul>
+          </div>
+        )}
         {unmatched.length > 0 && (
           <div style={{ marginTop: 8 }}>
             <div className="qzk-ds-meta">Unmatched fields ({unmatched.length}):</div>
@@ -124,10 +189,10 @@ export default function PlotRecipeApplyDialog() {
           <Button onClick={cancel}>Cancel</Button>
           <Button
             variant="primary"
-            title="Applies the recipe using only the fields that matched, dropping the rest -- data loss, use with care"
+            title={dropped > 0 ? "Applies the recipe using only the fields that matched, dropping the rest -- data loss, use with care" : "Applies the recipe as a new figure"}
             onClick={() => void confirmPartial()}
           >
-            Apply mapped fields (drops {unmatched.length} unmatched)
+            {dropped > 0 ? `Apply mapped fields (drops ${dropped} unmatched)` : "Apply"}
           </Button>
         </div>
       </div>

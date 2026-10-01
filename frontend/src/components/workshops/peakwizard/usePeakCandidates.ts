@@ -115,7 +115,10 @@ export function usePeakCandidates(inp: Inputs) {
   }, []);
 
   // ② Find peaks on the corrected segment; markers overlay on the full x.
-  const runFind = useCallback(async () => {
+  // `override`: the find settings to use INSTEAD of the recipe's — step ②'s
+  // Advanced "Find again" patches the recipe and finds in one gesture, and
+  // this closure still holds the pre-patch `find` at that moment.
+  const runFind = useCallback(async (override?: PeakRecipe["find"]) => {
     if (!active || !segment || !workingY) return;
     setFindBusy(true);
     setFindError(null);
@@ -125,7 +128,7 @@ export function usePeakCandidates(inp: Inputs) {
         toast(`${segment.gapCount} of ${segment.sourceCount} rows are gaps; they were excluded from peak analysis.`);
       }
       // Shared with the batch runner (./recipeSteps).
-      const found = await recipeFind(segment.x, workingY, find);
+      const found = await recipeFind(segment.x, workingY, override ?? find);
       commit(found.map((p: Peak) => ({
         id: nextCandidateId++,
         center: p.center, height: p.height, bg: p.bg, fwhm: p.fwhm, included: true, manual: false,

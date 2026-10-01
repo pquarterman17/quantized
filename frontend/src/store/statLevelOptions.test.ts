@@ -9,7 +9,7 @@ import { defaultPlotView, sanitizePlotView } from "../lib/plotview";
 import type { DataStruct } from "../lib/types";
 import { parseWorkspace } from "../lib/workspace";
 import { serializeWorkspace } from "../lib/workspaceSerialize";
-import { setStatHideEmptyLevels, setStatMarks, setStatShowGroupN } from "./statLevelOptions";
+import { setStatHideEmptyLevels, setStatMarks, setStatShowGroupN, setStatShowSummary } from "./statLevelOptions";
 import { useApp } from "./useApp";
 
 const raw: DataStruct = {
@@ -31,6 +31,7 @@ beforeEach(() => {
     activeId: "d1",
     statHideEmptyLevels: false,
     statShowGroupN: true,
+    statShowSummary: false,
     statMarks: {},
     history: [],
     future: [],
@@ -73,6 +74,42 @@ describe("Stat Stage level options (PlotView)", () => {
     // A file written before these fields existed opens with the defaults.
     const old = sanitizePlotView({ statMode: true });
     expect(old).toMatchObject({ statMode: true, statHideEmptyLevels: false, statShowGroupN: true });
+  });
+});
+
+// P2.6 box 4 leftover: the summary table's visibility was session-local
+// (`useState` in StatStage); it is now the third persisted option.
+describe("Stat Stage summary-table visibility (PlotView.statShowSummary)", () => {
+  it("default: the table is closed", () => {
+    expect(defaultPlotView().statShowSummary).toBe(false);
+    expect(useApp.getState().statShowSummary).toBe(false);
+  });
+
+  it("the setter is one undoable edit", () => {
+    setStatShowSummary(true);
+    expect(useApp.getState().statShowSummary).toBe(true);
+    expect(useApp.getState().history).toHaveLength(1);
+    useApp.getState().undo();
+    expect(useApp.getState().statShowSummary).toBe(false);
+    useApp.getState().redo();
+    expect(useApp.getState().statShowSummary).toBe(true);
+  });
+
+  it("survives a real .dwk save and reopen", () => {
+    useApp.getState().setStatMode(true);
+    setStatShowSummary(true);
+    const s = useApp.getState();
+    const text = serializeWorkspace({ ...s, plotWindows: s.windowsForSave() });
+    useApp.setState({ statShowSummary: false });
+    useApp.getState().loadWorkspace(parseWorkspace(text));
+    expect(useApp.getState().statShowSummary).toBe(true);
+  });
+
+  it("a junk or pre-field file opens with the table closed", () => {
+    expect(sanitizePlotView({ statShowSummary: "yes" }).statShowSummary).toBe(false);
+    expect(sanitizePlotView({ statShowSummary: 1 }).statShowSummary).toBe(false);
+    expect(sanitizePlotView({ statMode: true })).toMatchObject({ statMode: true, statShowSummary: false });
+    expect(sanitizePlotView({ statShowSummary: true }).statShowSummary).toBe(true);
   });
 });
 

@@ -39,7 +39,14 @@ import {
 } from "./plotRecipeSchema";
 import type { CompositionKind } from "./composition";
 import type { ErrorSide } from "./errorRoles";
-import { migrateRecipeObject, sanitizeOutlierPolicy, sanitizePreview, sanitizeTransformRef } from "./plotRecipeMigrate";
+import {
+  migrateRecipeObject,
+  sanitizeMapView,
+  sanitizeOutlierPolicy,
+  sanitizePanels,
+  sanitizePreview,
+  sanitizeTransformRef,
+} from "./plotRecipeMigrate";
 
 const ROLES: readonly RecipeChannelRole[] = ["x", "y", "y2", "group", "facet", "error"];
 const ERROR_ROLES: readonly SignatureErrorRole[] = [
@@ -379,6 +386,8 @@ function sanitizeRecipeEntry(v: unknown): PlotRecipe | null {
     preview: sanitizePreview(o.preview),
     outlierPolicy: sanitizeOutlierPolicy(o.outlierPolicy),
     transform: sanitizeTransformRef(o.transform),
+    panels: sanitizePanels(o.panels),
+    map: sanitizeMapView(o.map),
   };
 }
 

@@ -34,15 +34,22 @@ export interface FigureFacetSeries {
   y: (number | null)[];
   /** With `FigureSpec.encoding` only: the channel's legend rename (BUG-014). */
   legend?: string;
+  /** FEATURE-001: the series' own CHANNEL's chosen style (one style per
+   *  channel, applied in every panel), through the same wire boundary as
+   *  `series_styles` (`exportStyles.toWireSeriesStyles`) under the grouped
+   *  rule -- never a palette-derived colour, so the panel's own cycle colours
+   *  an unstyled series on both sides. Absent = no styling. */
+  style?: ExportSeriesStyle | null;
 }
 
 export interface FigureFacetSpec {
   label: string;
   x: (number | null)[];
   series: FigureFacetSeries[];
-  /** P1.4 residual 3, with `FigureSpec.encoding` only: the dataset row behind
-   *  each `x` entry and the Y channel behind each series, so the route
-   *  re-splits the panel by the encoding (`lib/figureSpecFacets.withFacetRows`). */
+  /** P1.4 residual 3, with `FigureSpec.encoding` or `group_col`: the dataset
+   *  row behind each `x` entry and the Y channel behind each series, so the
+   *  route re-splits the panel by the encoding and/or group
+   *  (`lib/figureSpecFacets.withFacetRows`). */
   rows?: number[];
   channels?: number[];
 }
@@ -393,6 +400,9 @@ export interface CategoryAxisStyleWire {
   rotation: 0 | 45 | 90;
   wrap: number | null;
   tiered: boolean;
+  /** "auto": the figure applies the wrap-or-rotate rule in its own geometry
+   *  (`calc.figure_category_axis.fit_category_labels`). */
+  fit?: "auto" | null;
 }
 
 /** Render a statistical plot (box/violin/Q-Q/histogram) server-side

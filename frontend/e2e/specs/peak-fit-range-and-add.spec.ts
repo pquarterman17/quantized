@@ -45,13 +45,17 @@ async function loadPinned(page: Page, lim: [number, number]) {
 
 /** Client pixel of data x on the stage plot, for a pinned [lo, hi] x range.
  *  Polls for the box: a new row selection adds a plotted series, and the plot
- *  is rebuilt — `.u-over` is briefly detached (measured: a null box). */
-async function pixelAt(page: Page, lim: [number, number], x: number): Promise<{ x: number; y: number }> {
+ *  is rebuilt — `.u-over` is briefly detached (measured: a null box).
+ *  `yFrac`: where in the plot's height to land (default mid). The Peak
+ *  Analyzer window floats over the plot's upper-left; with step ②'s Advanced
+ *  row it reaches past mid-height at 1360×900, so a click meant for the plot
+ *  goes low (the add-on-click seed uses x only — lib/peakSeed). */
+async function pixelAt(page: Page, lim: [number, number], x: number, yFrac = 0.5): Promise<{ x: number; y: number }> {
   const over = page.locator(".qzk-stage .u-over");
   let box: { x: number; y: number; width: number; height: number } | null = null;
   await expect.poll(async () => (box = await over.boundingBox()) !== null).toBe(true);
   const b = box!;
-  return { x: b.x + ((x - lim[0]) / (lim[1] - lim[0])) * b.width, y: b.y + b.height * 0.5 };
+  return { x: b.x + ((x - lim[0]) / (lim[1] - lim[0])) * b.width, y: b.y + b.height * yFrac };
 }
 
 const wizard = (page: Page) => page.locator(".qzk-win").filter({ has: page.getByText("Peak Analyzer", { exact: true }) });
@@ -122,7 +126,7 @@ test.describe("Peak Analyzer — Fit this range + direct add", () => {
     // ② click the plot just off the 44-deg apex: a data-seeded peak
     await panel.locator(".qzk-wizard-step", { hasText: "Find peaks" }).click();
     await expect(panel.getByText(/Click the plot to add a peak/)).toBeVisible();
-    const at = await pixelAt(page, lim, 44.08);
+    const at = await pixelAt(page, lim, 44.08, 0.85);
     await page.mouse.click(at.x, at.y);
     await expect(panel.getByRole("checkbox")).toHaveCount(2);
     const added = panel.locator("table.qz-table tbody tr").nth(1);

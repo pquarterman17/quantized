@@ -68,7 +68,12 @@
   "jitter_width": 0.7,
   "summary": "mean",
   "error_bars": "ci95",
-  "axis_style": null,
+  "axis_style": {
+    "rotation": 0,
+    "wrap": null,
+    "tiered": false,
+    "fit": "auto"
+  },
   "y_domain": [
     -3.739197493962633,
     25.73919749396263

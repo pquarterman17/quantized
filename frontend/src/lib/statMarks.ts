@@ -153,6 +153,44 @@ export function wrapLabel(text: string, width = LABEL_WRAP_WIDTH, maxLines = MAX
   return lines;
 }
 
+/** How a category axis's labels are drawn once the long-label rule below
+ *  has had its say: the rotation and whether they wrap. */
+export interface LabelFit {
+  rotation: 0 | 45 | 90;
+  wrap: boolean;
+}
+
+/** P2.6 box 1 leftover — the WRAP-OR-ROTATE rule for long upright labels,
+ *  shared with `calc.figure_category_axis.fit_category_labels` and pinned by
+ *  `tests/fixtures/wire/stat_label_fit.json`. An explicit rotation or wrap
+ *  is the user's and wins untouched. Otherwise, in ONE unit (`measure`,
+ *  `pitch` and `lineHeight` — px on the canvas, pt in the figure):
+ *    1. every label no wider than its slot (`pitch`) stays upright, whole;
+ *    2. else, if every label wraps (`wrapLabel`, `LABEL_WRAP_WIDTH`) within
+ *       `MAX_WRAP_LINES` uncut AND every wrapped line fits the slot, wrap;
+ *    3. else rotate — 45 when the slot pitch keeps 45-degree lines a line
+ *       height apart (`pitch >= lineHeight * sqrt 2`), 90 otherwise.
+ *  Each side measures its own text (canvas `measureText`, matplotlib's
+ *  renderer) and its own slot pitch, so a label that would overlap its
+ *  neighbour in THAT medium is the one that wraps or turns there. */
+export function fitCategoryLabels(
+  labels: readonly string[],
+  rotation: 0 | 45 | 90,
+  wrap: boolean,
+  measure: (text: string) => number,
+  pitch: number,
+  lineHeight: number,
+): LabelFit {
+  if (rotation !== 0 || wrap) return { rotation, wrap };
+  if (!labels.length || Math.max(0, ...labels.map(measure)) <= pitch) return { rotation: 0, wrap: false };
+  const wraps = labels.every((l) => {
+    const lines = wrapLabel(l, LABEL_WRAP_WIDTH, MAX_WRAP_LINES + 1);
+    return lines.length <= MAX_WRAP_LINES && lines.every((line) => measure(line) <= pitch);
+  });
+  if (wraps) return { rotation: 0, wrap: true };
+  return { rotation: pitch >= lineHeight * Math.SQRT2 ? 45 : 90, wrap: false };
+}
+
 /** One maximal run of equal outer levels on a nested axis. */
 export interface TierRun {
   label: string;
@@ -203,18 +241,19 @@ export function nestedTiers(
  *  `tiered` exactly when `nestLabel` says the axis IS nested (never sniffed
  *  off the label text — see `nestedTiers`), and `tiers` carries the actual
  *  [outer, inner] pairs so the backend never re-splits the composite string
- *  either. Null when nothing is set, so an untouched plot posts the request
- *  it always did. */
+ *  either. With no rotation or wrap chosen, `fit: "auto"` asks the figure
+ *  to apply `fitCategoryLabels` in ITS geometry, as the canvas does in its
+ *  own. */
 export function axisStyleWire(
   r: ResolvedStatMarks,
   labels: readonly string[],
   nestLabel: string | null | undefined,
-): { rotation: 0 | 45 | 90; wrap: number | null; tiered: boolean; tiers?: [string, string][] } | null {
+): { rotation: 0 | 45 | 90; wrap: number | null; tiered: boolean; tiers?: [string, string][]; fit?: "auto" } {
   const tiers = nestedTiers(labels, nestLabel);
-  const tiered = tiers !== null;
-  if (!tiered && !r.labelWrap && r.labelRotation === 0) return null;
+  const auto = !r.labelWrap && r.labelRotation === 0;
   return {
-    rotation: r.labelRotation, wrap: r.labelWrap ? LABEL_WRAP_WIDTH : null, tiered,
+    rotation: r.labelRotation, wrap: r.labelWrap ? LABEL_WRAP_WIDTH : null, tiered: tiers !== null,
     ...(tiers ? { tiers: tiers.pairs } : {}),
+    ...(auto ? { fit: "auto" as const } : {}),
   };
 }

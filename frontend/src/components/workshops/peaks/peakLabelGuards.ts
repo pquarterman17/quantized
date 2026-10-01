@@ -35,3 +35,16 @@ export function rejectIfHistoryBatchRunning(historySuppressed: boolean): boolean
   toast("Another operation is in progress — try Label peaks again in a moment.", "danger");
   return true;
 }
+
+/** The "Label peaks" failure notice, in the partial-outcome shape of
+ *  store/reimportAllRun.ts: what changed (how many of the run's labels were
+ *  on the plot before the throw) and whether Undo covers it. `undoable` is
+ *  what the caller READ off the history after `withHistoryBatch` settled —
+ *  its `finally` records the batch entry only when something was folded
+ *  into it. Nothing landed → "nothing was added". */
+export function labelFailureMessage(e: unknown, landed: number, total: number, undoable: boolean): string {
+  const why = e instanceof Error ? e.message : "unknown error";
+  if (landed === 0) return `labeling peaks failed: ${why} — nothing was added`;
+  const fate = undoable ? `Undo removes the ${landed} that landed` : `the ${landed} that landed stay (not undoable)`;
+  return `labeling peaks failed after ${landed} of ${total} labels: ${why} — ${fate}`;
+}

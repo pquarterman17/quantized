@@ -54,6 +54,7 @@ import {
   PEAK_LINK_MODES,
   PEAK_RECIPE_VERSION,
   PEAK_SHAPES,
+  type PeakFindAdvanced,
   type PeakRecipe,
   saveRecipe as savePeakRecipe,
   unreadablePeakRecipeNames,
@@ -153,6 +154,8 @@ const posInt = (v: unknown): v is number => positive(v) && Number.isInteger(v);
 
 const PEAK_BASELINE_METHODS = ["none", "als", "rollingball", "modpoly"] as const;
 const PEAK_REPORT_MODES = ["fit", "integrate"] as const;
+const PEAK_FIND_SENSITIVITIES = ["low", "medium", "high"] as const;
+const PEAK_FIND_BACKGROUNDS = ["snip", "polynomial"] as const;
 
 /** FIELD-LEVEL validation at the file boundary (review finding on #290).
  *  `isPeakRecipe` -- the storage-boundary guard -- only checks that the five
@@ -179,7 +182,11 @@ const PEAK_REPORT_MODES = ["fit", "integrate"] as const;
  *                   rollingball: radius integer >= 1; modpoly: order
  *                   integer >= 0
  *    find           snr_threshold >= 0; min_prominence >= 0;
- *                   max_peaks integer >= 1
+ *                   max_peaks integer >= 1; the OPTIONAL Advanced fields
+ *                   (lib/peakwizard's `PeakFindAdvanced`) only when
+ *                   present: enums by membership, widths/windows >= 0,
+ *                   bg_poly_degree integer >= 0, bg_iterative boolean —
+ *                   an absent one stays absent (the route's default)
  *    model          shape in PEAK_SHAPES; linkMode in PEAK_LINK_MODES;
  *                   bgDegree integer >= 0
  *    report         integrate: regionWidth > 0 (a width in x FWHM)
@@ -221,6 +228,28 @@ function parsePeakRecipeFile(text: string): NamedRecord {
   if (!nonneg(find.snr_threshold)) bad("find.snr_threshold");
   if (!nonneg(find.min_prominence)) bad("find.min_prominence");
   if (!posInt(find.max_peaks)) bad("find.max_peaks");
+  const advanced: Partial<PeakFindAdvanced> = {};
+  if (find.sensitivity !== undefined) {
+    if (!oneOf(find.sensitivity, PEAK_FIND_SENSITIVITIES)) bad("find.sensitivity");
+    advanced.sensitivity = find.sensitivity as PeakFindAdvanced["sensitivity"];
+  }
+  for (const k of ["min_separation", "min_width_deg", "max_width_deg", "max_window_deg"] as const) {
+    if (find[k] === undefined) continue;
+    if (!nonneg(find[k])) bad(`find.${k}`);
+    advanced[k] = find[k] as number;
+  }
+  if (find.bg_method !== undefined) {
+    if (!oneOf(find.bg_method, PEAK_FIND_BACKGROUNDS)) bad("find.bg_method");
+    advanced.bg_method = find.bg_method as PeakFindAdvanced["bg_method"];
+  }
+  if (find.bg_poly_degree !== undefined) {
+    if (!nonnegInt(find.bg_poly_degree)) bad("find.bg_poly_degree");
+    advanced.bg_poly_degree = find.bg_poly_degree as number;
+  }
+  if (find.bg_iterative !== undefined) {
+    if (typeof find.bg_iterative !== "boolean") bad("find.bg_iterative");
+    advanced.bg_iterative = find.bg_iterative as boolean;
+  }
   const model = o.model as Record<string, unknown>;
   if (!oneOf(model.shape, PEAK_SHAPES)) bad("model.shape");
   if (!oneOf(model.linkMode, PEAK_LINK_MODES)) bad("model.linkMode");
@@ -245,6 +274,7 @@ function parsePeakRecipeFile(text: string): NamedRecord {
       snr_threshold: find.snr_threshold as number,
       min_prominence: find.min_prominence as number,
       max_peaks: find.max_peaks as number,
+      ...advanced,
     },
     model: {
       shape: model.shape as string,

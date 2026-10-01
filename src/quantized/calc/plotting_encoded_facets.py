@@ -15,13 +15,20 @@ to those rows. A label-source legend is taken over the panel's rows of the
 combination. Colour is the colour factor's level, else the series' position
 in the WHOLE grid's split (so a series keeps one colour across panels); the
 glyph is the symbol factor's level
-(:func:`~quantized.calc.plotting_encoded.encoded_series_styles`). Per-channel
-styles never reach a facet panel, on screen or here (BUGS_AND_ISSUES
-FEATURE-001).
+(:func:`~quantized.calc.plotting_encoded.encoded_series_styles`), laid over
+the series' own CHANNEL's chosen style -- each wire series' ``style``, one per
+channel and the same in every panel (BUGS_AND_ISSUES FEATURE-001; the screen's
+``encodedStyle(channelStyles[channel], ...)``).
 
 The client ships each panel's rows (``rows``: the dataset row behind each
 ``x`` entry) and the channels it plots, so nothing here re-slices by the facet
 column -- the panel partition stays the screen's.
+
+Group ALONE (no colour / symbol / label factor) goes through the same split:
+one series per (channel, group level) in every panel, named as the flat
+grouped plot names them (``"{label} ({group}={level})"``), each level in its
+channel's chosen colour else the panel's cycle -- the flat plot's own rule
+(``lib/plotGroupSplit`` on screen, BUG-016 on the wire).
 """
 
 from __future__ import annotations
@@ -66,7 +73,9 @@ def encoded_facet_panels(
     """``calc.figure_facets``' panel dicts for an encoded facet grid (see the
     module doc). Each wire panel carries ``label``, ``x``, ``rows`` and
     ``channels`` (the same Y channels in every panel), and each of its series a
-    ``legend`` -- the channel's rename (BUG-014), or ``None``. Raises
+    ``legend`` -- the channel's rename (BUG-014), or ``None`` -- and a
+    ``style`` -- the channel's own (FEATURE-001), or ``None``. Every panel
+    carries ``"key": True`` (an encoded panel always has its legend). Raises
     ``ValueError`` (the route's 422) for panels that disagree on their
     channels or rows that do not line up with ``x``."""
     if not panels:
@@ -77,6 +86,9 @@ def encoded_facet_panels(
     first = panels[0].get("series") or []
     renames = [s.get("legend") if isinstance(s.get("legend"), str) else None for s in first]
     y_legends = renames if len(renames) == len(y_keys) else None
+    channel_styles = [
+        s.get("style") if isinstance(s.get("style"), Mapping) else None for s in first
+    ]
     encoded = build_encoded_series(
         ds, x_key, y_keys, group_col=group_col, color_col=color_col,
         symbol_col=symbol_col, label_col=label_col, y_legends=y_legends,
@@ -85,8 +97,8 @@ def encoded_facet_panels(
     # One style per series of the WHOLE grid, so a series keeps its colour
     # (level, else its position in the grid's split) in every panel.
     styles = encoded_series_styles(
-        encoded, None, len(y_keys), palette=palette, markers=markers,
-        color_by_level=color_col is not None,
+        encoded, channel_styles if len(channel_styles) == len(y_keys) else None, len(y_keys),
+        palette=palette, markers=markers, color_by_level=color_col is not None,
     )
     multi = len(y_keys) > 1
     out: list[dict[str, Any]] = []
@@ -109,5 +121,5 @@ def encoded_facet_panels(
                 "y": s.values[rows].tolist(),
                 "style": style or None,
             })
-        out.append({"label": p.get("label", ""), "x": p.get("x"), "series": series})
+        out.append({"label": p.get("label", ""), "x": p.get("x"), "series": series, "key": True})
     return out

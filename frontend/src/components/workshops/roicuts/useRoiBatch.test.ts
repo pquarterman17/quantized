@@ -239,6 +239,41 @@ describe("useRoiBatch — applyToSelected", () => {
     expect(names).toEqual(expect.arrayContaining(["alpha: box cut", "gamma: box cut"]));
   });
 
+  // The status line is the batch's one-line report (the `outcome` card is
+  // only on screen while the panel is): counts alone ("skipped 1, 1 failed")
+  // hide WHICH dataset and WHY. Pattern: store/reimportAllRun.ts's summary.
+  it("the status says how many of the selection succeeded and names each skipped or failed dataset with its reason", async () => {
+    setLibrary(
+      [
+        { id: "a", name: "alpha", data: angularMap() },
+        { id: "n", name: "not a map", data: NOT_MAP },
+        { id: "b", name: "beta", data: angularMap() },
+      ],
+      ["a", "n", "b"],
+    );
+    vi.mocked(rsmBoxCut).mockResolvedValueOnce(CUT_RESULT).mockRejectedValueOnce(new Error("backend exploded"));
+    const { result } = renderHook(() => useRoiBatch());
+
+    await act(async () => {
+      await result.current.applyToSelected(RECT);
+    });
+
+    expect(useApp.getState().status).toBe(
+      "batch: applied to 1 of 3 datasets — not a map: not a 2-D map; beta: backend exploded",
+    );
+  });
+
+  it("a clean batch reports only the count", async () => {
+    setLibrary([{ id: "a", name: "alpha", data: angularMap() }], ["a"]);
+    const { result } = renderHook(() => useRoiBatch());
+
+    await act(async () => {
+      await result.current.applyToSelected(RECT);
+    });
+
+    expect(useApp.getState().status).toBe("batch: applied to 1 of 1 dataset");
+  });
+
   it("'plot together' calls plotSelectedTogether with exactly the new ids", async () => {
     setLibrary(
       [

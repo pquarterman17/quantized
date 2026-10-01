@@ -1,5 +1,6 @@
-// The Stat Stage's two persisted display options (PRIMARY_SOFTWARE_AUDIT_PLAN
-// P2.6 box 2): hide empty category levels, and the per-group n annotation.
+// The Stat Stage's persisted display options (PRIMARY_SOFTWARE_AUDIT_PLAN
+// P2.6 box 2): hide empty category levels, and the per-group n annotation;
+// box 4's leftover: whether the per-group summary table is open.
 //
 // The FIELDS are ordinary PlotView state (`lib/plotview.ts`: declared on
 // `AppState`, defaulted in `defaultPlotView`, sanitized on load), so they ride
@@ -21,6 +22,13 @@ export function setStatHideEmptyLevels(statHideEmptyLevels: boolean): void {
 export function setStatShowGroupN(statShowGroupN: boolean): void {
   useApp.getState().recordHistory("toggle group n");
   useApp.setState({ statShowGroupN });
+}
+
+/** P2.6 box 4 leftover: the summary table's visibility persists with the plot
+ *  (it was session-local `useState` in StatStage), one undo entry per toggle. */
+export function setStatShowSummary(statShowSummary: boolean): void {
+  useApp.getState().recordHistory("toggle summary table");
+  useApp.setState({ statShowSummary });
 }
 
 /** P2.6 box 1: merge `patch` into the persisted categorical-plot marks —

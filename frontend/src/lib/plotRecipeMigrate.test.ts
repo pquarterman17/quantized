@@ -5,7 +5,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { parseRecipe, sanitizeRecipes } from "./plotRecipeIO";
-import { migrateRecipeObject, sanitizePreview } from "./plotRecipeMigrate";
+import { migrateRecipeObject, sanitizeMapView, sanitizePanels, sanitizePreview } from "./plotRecipeMigrate";
 import { PLOT_RECIPE_SCHEMA_VERSION } from "./plotRecipeSchema";
 import { loadGlobalPlotRecipes } from "./plotRecipeStorage";
 
@@ -31,8 +31,23 @@ function v1Recipe(): Record<string, unknown> {
   };
 }
 
+/** A recipe exactly as a v2 build wrote it (preview / outlierPolicy /
+ *  transform present, no panels / map keys) -- frozen, like `v1Recipe`. */
+function v2Recipe(): Record<string, unknown> {
+  return {
+    ...v1Recipe(),
+    id: "old-2",
+    name: "Two-panel XRD",
+    schemaVersion: 2,
+    preview: { series: [[[0, 0], [0.5, 0.5], [1, 1]]] },
+    outlierPolicy: { excludedDisplay: "grey" },
+    transform: { name: "Normalize", revision: 2 },
+    visual: { mark: "line", stackMode: true, compositionKind: "spatial" },
+  };
+}
+
 describe("migrateRecipeObject", () => {
-  it("walks a v1 object forward to the current version, adding the v2 fields as not-recorded", () => {
+  it("walks a v1 object forward to the current version, adding the v2 and v3 fields as not-recorded", () => {
     const out = migrateRecipeObject(v1Recipe());
     expect("ok" in out).toBe(true);
     if (!("ok" in out)) return;
@@ -40,7 +55,27 @@ describe("migrateRecipeObject", () => {
     expect(out.ok.preview).toBeNull();
     expect(out.ok.outlierPolicy).toBeNull();
     expect(out.ok.transform).toBeNull();
+    expect(out.ok.panels).toBeNull();
+    expect(out.ok.map).toBeNull();
     expect(out.ok.signature).toEqual(v1Recipe().signature);
+  });
+
+  // F4.4 SPATIAL: v3 added `panels` + `map`. A v2 recipe was never captured
+  // from a spatial window in a way that could be rebuilt, so both read as
+  // "not recorded" -- never invented from `compositionKind: "spatial"`.
+  it("walks a v2 object forward to v3, adding panels/map as not-recorded and keeping the v2 fields", () => {
+    const out = migrateRecipeObject(v2Recipe());
+    expect("ok" in out).toBe(true);
+    if (!("ok" in out)) return;
+    expect(out.ok.schemaVersion).toBe(PLOT_RECIPE_SCHEMA_VERSION);
+    expect(out.ok.panels).toBeNull();
+    expect(out.ok.map).toBeNull();
+    expect(out.ok.preview).toEqual(v2Recipe().preview);
+    expect(out.ok.outlierPolicy).toEqual({ excludedDisplay: "grey" });
+    expect(out.ok.transform).toEqual({ name: "Normalize", revision: 2 });
+    const [loaded] = sanitizeRecipes([v2Recipe()]);
+    expect(loaded).toMatchObject({ id: "old-2", schemaVersion: PLOT_RECIPE_SCHEMA_VERSION, panels: null, map: null });
+    expect(loaded.visual.compositionKind).toBe("spatial");
   });
 
   it("refuses a recipe from a newer build by name instead of guessing", () => {
@@ -75,6 +110,8 @@ describe("old recipes still load on every read boundary", () => {
       preview: null,
       outlierPolicy: null,
       transform: null,
+      panels: null,
+      map: null,
     });
     // Every v1 field survives the walk.
     expect(migrated.visual.mark).toBe("scatter");
@@ -132,5 +169,69 @@ describe("v2 field sanitizing", () => {
     ]);
     expect(ok.outlierPolicy).toEqual({ excludedDisplay: "grey" });
     expect(ok.transform).toEqual({ name: "Normalize", revision: 3 });
+  });
+});
+
+describe("v3 field sanitizing", () => {
+  const panel = {
+    dataset: null,
+    x: "2theta",
+    y: ["Intensity"],
+    y2: [],
+    xLim: [0, 40],
+    yLim: [1, 1000],
+    y2Lim: null,
+    xStep: 10,
+    yStep: null,
+    y2Step: null,
+    xLog: false,
+    yLog: true,
+    y2Log: false,
+    seriesStyles: {},
+    seriesLabels: { Intensity: "I" },
+    hiddenChannels: [],
+    errKeys: { Intensity: "Ierr" },
+    annotations: [],
+    regionShades: [],
+    row: 0,
+    col: 0,
+    frameRect: { left: 0, top: 0, width: 1, height: 0.5 },
+  };
+
+  it("keeps a well-formed panels payload and defaults its layout fields", () => {
+    expect(sanitizePanels({ panels: [panel] })).toEqual({ panels: [panel], panelFit: "frames", pageSetup: null });
+    expect(sanitizePanels({ panels: [panel], panelFit: "window" })?.panelFit).toBe("window");
+  });
+
+  it("drops a panel without a usable dataset binding, Y series, or limits, and reads no panels as null", () => {
+    expect(sanitizePanels({ panels: [{ ...panel, dataset: 3 }] })).toBeNull();
+    expect(sanitizePanels({ panels: [{ ...panel, y: [] }] })).toBeNull();
+    expect(sanitizePanels({ panels: [{ ...panel, xLim: [0, "40"] }] })).toBeNull();
+    expect(sanitizePanels({ panels: [{ ...panel, row: 1.5 }] })).toBeNull();
+    for (const v of [null, 4, {}, { panels: "no" }, { panels: [] }]) expect(sanitizePanels(v)).toBeNull();
+  });
+
+  it("degrades a bad optional panel field instead of dropping the panel", () => {
+    const out = sanitizePanels({ panels: [{ ...panel, xStep: "10", frameRect: { left: 0 }, seriesLabels: { Intensity: 4 } }] });
+    expect(out?.panels[0]).toMatchObject({ xStep: null, seriesLabels: {} });
+    expect(out?.panels[0].frameRect).toBeUndefined();
+  });
+
+  it("keeps a well-formed map view and refuses an unknown colormap", () => {
+    expect(sanitizeMapView({ colormap: "magma", logZ: true, colorLimits: [1, 100] })).toEqual({
+      colormap: "magma",
+      logZ: true,
+      colorLimits: [1, 100],
+    });
+    expect(sanitizeMapView({ colormap: "rainbow", logZ: false, colorLimits: null })).toBeNull();
+    expect(sanitizeMapView({ colormap: "gray", logZ: "yes", colorLimits: null })).toBeNull();
+    expect(sanitizeMapView({ colormap: "gray", logZ: false, colorLimits: [1] })?.colorLimits).toBeNull();
+  });
+
+  it("a malformed panels or map field degrades to null without dropping the recipe", () => {
+    const [out] = sanitizeRecipes([{ ...v2Recipe(), schemaVersion: 3, panels: { panels: "x" }, map: 7 }]);
+    expect(out.id).toBe("old-2");
+    expect(out.panels).toBeNull();
+    expect(out.map).toBeNull();
   });
 });

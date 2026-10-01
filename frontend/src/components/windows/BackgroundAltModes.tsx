@@ -147,7 +147,7 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null, e
   const instanceId = useId();
   const encodedFacets = useFacetEncoding(
     dataset, encoding, canvasGroupCol(view.groupKey, view.y2Keys), view.y2Keys, view.facetKey,
-    view.xKey, view.yKeys, view.seriesLabels,
+    view.xKey, view.yKeys, view.seriesLabels, view.seriesStyles,
   );
   const { hostRef, hostStyle } = useMultiPanelStage({
     active: dataset,

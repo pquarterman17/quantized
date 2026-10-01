@@ -75,7 +75,7 @@ async function findTwoPeaks() {
   render(<PeakWizardPanel />);
   step("Find peaks");
   fireEvent.click(screen.getByRole("button", { name: "Find peaks" }));
-  await waitFor(() => expect(screen.getAllByRole("checkbox")).toHaveLength(2));
+  await waitFor(() => expect(screen.getAllByRole("checkbox", { name: /include peak/ })).toHaveLength(2));
 }
 
 async function fitWith(res: PeakModelFitResponse | { detail: string }, status = 200) {
@@ -171,7 +171,7 @@ describe("Peak Analyzer — model engine setup (step 3)", () => {
     expect(screen.getByRole("textbox", { name: "#1 center start" })).toHaveValue("4");
     expect(screen.getByRole("textbox", { name: "#1 center min" })).toHaveValue("3.9");
     step("Find peaks");
-    expect(screen.getAllByRole("checkbox")).toHaveLength(1);
+    expect(screen.getAllByRole("checkbox", { name: /include peak/ })).toHaveLength(1);
   });
 });
 

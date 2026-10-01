@@ -6092,6 +6092,8 @@ export interface components {
          *     instead (a nested axis's pairs are per-panel data).
          */
         CategoryAxisStyle: {
+            /** Fit */
+            fit?: "auto" | null;
             /**
              * Rotation
              * @default 0
@@ -7194,6 +7196,10 @@ export interface components {
             label: string;
             /** Legend */
             legend?: string | null;
+            /** Style */
+            style?: {
+                [key: string]: unknown;
+            } | null;
             /** Y */
             y: (number | null)[];
         };

@@ -3,7 +3,9 @@
 // HTML `<img>` of that same PNG for Office, and — only where the browser
 // advertises `image/svg+xml` and the figure is under the point budget — a
 // text-as-paths SVG (lib/officeClipboard.ts says what each target receives,
-// lib/copySvgBudget.ts when the SVG is rendered).
+// lib/copySvgBudget.ts when the SVG is rendered). "Copy figure (vector)" is
+// that SVG alone, glyphs as paths too: every SVG that goes to the CLIPBOARD
+// is text-as-paths, and only an SVG FILE ("Export figure…") keeps live text.
 //
 // The gap this closes: the older snapshot composited the live uPlot canvas at
 // screen resolution, so what landed in PowerPoint disagreed with what the
@@ -72,7 +74,12 @@ async function pickCopySpec(
 /** MAIN #35: vector copy, offered only where the browser will actually take an
  *  SVG on the clipboard (see clipboardSvgSupported — the sanctioned MIME set
  *  excludes it almost everywhere today). Same spec, same renderer, same
- *  gesture-preserving write as the raster copy; only `fmt` differs. */
+ *  gesture-preserving write as the raster copy; only `fmt` differs — and,
+ *  like the raster copy's own SVG leg, the glyphs go as PATHS
+ *  (`svg_text_as_paths`): a paste target renders live `<text>` with whatever
+ *  fonts it has, which for Office is not the figure's. That is a clipboard
+ *  rule only — "Export figure…" writes an SVG FILE with editable text, since
+ *  a file is something the user may open in Inkscape/Illustrator to edit. */
 export async function runCopyFigureSvgCommand(s: StoreGet): Promise<void> {
   if (!clipboardSvgSupported()) {
     const msg = "this browser can't put SVG on the clipboard — use Export figure…";
@@ -93,7 +100,8 @@ export async function runCopyFigureSvgCommand(s: StoreGet): Promise<void> {
       });
       if (!spec) return false;
       s().setStatus("rendering vector figure for the clipboard…");
-      const ok = await copySvgAsync(renderFigureBlob(spec, signal), signal);
+      // Glyphs as outlines, as the raster copy's SVG leg asks (see the doc above).
+      const ok = await copySvgAsync(renderFigureBlob({ ...spec, svg_text_as_paths: true }, signal), signal);
       s().setStatus("");
       if (!ok) throw new Error("clipboard write refused");
     },

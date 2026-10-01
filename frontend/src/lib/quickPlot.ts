@@ -19,16 +19,21 @@
 // series (`defaultPlotView`/`datasetViewDefaults`'s `xKey: null` seed),
 // except error-role columns, which bind to their series as whiskers
 // instead (see quickPlotFigureSeed).
-// Per-column explicit-X or XYXY-paired layouts are NEVER re-inferred here;
-// that normalization already happened at IMPORT TIME (the parser puts the
-// resolved x axis in `.time`, one array, regardless of how the source file
-// laid its columns out) -- by the time a Dataset reaches this module, x
-// live in exactly one place. A genuinely AMBIGUOUS multi-column mapping
-// (more than one plausible x/y pairing, needing the user's own compact
-// confirmation -- L0.10) is explicitly OUT of bounds for this bounded
-// profile; it needs the Quick Figure Builder, which can ask. This module
-// only ever says "this technique's ONE canonical shape is a line plot" or
-// refuses with a reason -- it never offers a choice.
+// Per-column explicit-X or XYXY-paired layouts are NEVER inferred from
+// headers here; the parser puts the resolved x axis in `.time`. The ONE
+// exception is DECLARED: an Origin book designating further "X" columns
+// (X,Y,X,Y,X,Y). Origin's own rule pairs each Y with its nearest-preceding X
+// (`opj_curves.py`, mirrored by the Quick Figure Builder's inference), so
+// such a book plots on the builder's own per-series-X overlay instead of
+// drawing every loop against the first X -- `hasDesignatedSeriesX` is the
+// cheap gate, and the seed for that case lives in the LAZY sibling
+// `lib/quickPlotSeriesX.ts` (store/quickPlotRun.ts loads it on demand, the
+// way it loads the error review; the overlay builder is not eager code). A
+// genuinely AMBIGUOUS multi-column mapping (more than one plausible x/y
+// pairing, needing the user's own compact confirmation -- L0.10) stays OUT
+// of bounds for this bounded profile; it needs the Quick Figure Builder,
+// which can ask. This module only ever says "this technique's ONE canonical
+// shape is a line plot" or refuses with a reason -- it never offers a choice.
 //
 // `datasetViewDefaults` (store/windowDefaults.ts) is a store-adjacent PURE
 // function -- it takes a Dataset and returns a Partial<PlotView>, no
@@ -40,6 +45,7 @@
 // import in place (see the PR report for the exact command).
 
 import { datasetViewDefaults } from "../store/windowDefaults";
+import { columnMetaList } from "./columnmeta";
 import { figureSeedErrorBindings, type ErrorBinding } from "./errorRoles";
 import { legacyErrorBindings } from "./figureDocument";
 import type { LibraryNode } from "./libraryHierarchy";
@@ -205,16 +211,28 @@ export function pickQuickPlotWorksheet(
   workbookLastChild: Record<string, string>,
   workbookId: string,
 ): Dataset | null {
-  const rememberedKey = workbookLastChild[workbookId];
-  const remembered = rememberedKey ? children.find((c) => c.key === rememberedKey) : undefined;
-  if (remembered && remembered.kind === "worksheet") {
-    return quickPlotAvailability(remembered.entity).available ? remembered.entity : null;
-  }
-  for (const child of children) {
-    if (child.kind !== "worksheet") continue;
-    if (quickPlotAvailability(child.entity).available) return child.entity;
-  }
-  return null;
+  const remembered = rememberedWorksheet(children, workbookLastChild, workbookId);
+  if (remembered) return quickPlotAvailability(remembered).available ? remembered : null;
+  return worksheetsOf(children).find((w) => quickPlotAvailability(w).available) ?? null;
+}
+
+/** The workbook's remembered child (L0.6's `workbookLastChild`) when it is a
+ *  WORKSHEET; undefined when nothing is remembered or the remembered child
+ *  is another kind (a figure, a report). The one lookup every workbook-level
+ *  Quick Plot resolver starts from. */
+function rememberedWorksheet(
+  children: readonly LibraryNode[],
+  workbookLastChild: Record<string, string>,
+  workbookId: string,
+): Dataset | undefined {
+  const key = workbookLastChild[workbookId];
+  const node = key ? children.find((c) => c.key === key) : undefined;
+  return node?.kind === "worksheet" ? node.entity : undefined;
+}
+
+/** The workbook's worksheets, in source order (children already are). */
+function worksheetsOf(children: readonly LibraryNode[]): Dataset[] {
+  return children.flatMap((c) => (c.kind === "worksheet" ? [c.entity] : []));
 }
 
 /** Resolve the worksheet a workbook-level Configure Quick Plot action edits.
@@ -232,11 +250,7 @@ export function pickConfigureQuickPlotWorksheet(
   workbookLastChild: Record<string, string>,
   workbookId: string,
 ): Dataset | null {
-  const rememberedKey = workbookLastChild[workbookId];
-  const remembered = rememberedKey ? children.find((child) => child.key === rememberedKey) : undefined;
-  if (remembered?.kind === "worksheet") return remembered.entity;
-  return children.find((child): child is Extract<LibraryNode, { kind: "worksheet" }> =>
-    child.kind === "worksheet")?.entity ?? null;
+  return rememberedWorksheet(children, workbookLastChild, workbookId) ?? worksheetsOf(children)[0] ?? null;
 }
 
 /** The new editable figure's name + starting view: the app's normal fresh
@@ -298,6 +312,16 @@ export function quickPlotFigureSeed(
   }
 }
 
+/** Does this worksheet DECLARE a per-series X (a designated "X" column among
+ *  its `values`, i.e. an Origin X,Y,X,Y,... book)? Cheap: only the column
+ *  designations are read. True means store/quickPlotRun.ts must seed through
+ *  `lib/quickPlotSeriesX.ts`'s `quickPlotSeriesXSeed` (which may still
+ *  answer null -- e.g. every paired Y is hidden -- and then the plain seed
+ *  applies). */
+export function hasDesignatedSeriesX(dataset: Dataset): boolean {
+  return columnMetaList(dataset.data).some((c) => c?.designation === "X");
+}
+
 export interface QuickPlotWorkbookGate {
   enabled: boolean;
   /** "" when enabled -- only meaningful when `enabled` is false. */
@@ -321,21 +345,18 @@ export function quickPlotWorkbookGate(
   if (pickQuickPlotWorksheet(children, workbookLastChild, workbookId)) {
     return { enabled: true, reason: "" };
   }
-  const rememberedKey = workbookLastChild[workbookId];
-  const remembered = rememberedKey ? children.find((c) => c.key === rememberedKey) : undefined;
-  if (remembered && remembered.kind === "worksheet") {
-    const a = quickPlotAvailability(remembered.entity);
+  const remembered = rememberedWorksheet(children, workbookLastChild, workbookId);
+  if (remembered) {
+    const a = quickPlotAvailability(remembered);
     if (!a.available) return { enabled: false, reason: a.reason };
   }
-  const worksheets = children.filter(
-    (c): c is Extract<LibraryNode, { kind: "worksheet" }> => c.kind === "worksheet",
-  );
+  const worksheets = worksheetsOf(children);
   if (worksheets.length === 0) {
     return { enabled: false, reason: "this workbook has no worksheets" };
   }
   const reasons = new Set(
     worksheets.map((w) => {
-      const a = quickPlotAvailability(w.entity);
+      const a = quickPlotAvailability(w);
       return a.available ? "" : a.reason;
     }),
   );

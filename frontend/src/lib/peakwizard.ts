@@ -21,6 +21,25 @@ import { DEFAULT_FIT, parseRecipeFit, type PeakRecipeFit } from "./peakRecipeFit
 
 export const PEAK_RECIPE_VERSION = 2;
 
+/** The peak detector's Advanced settings — every other knob
+ *  `/api/peaks/find` takes beyond the three the wizard's step ② has always
+ *  shown. Each is OPTIONAL in a recipe: absent means the route's own default
+ *  (`peaks/peakFindParams.ts`'s `DEFAULT_PEAK_FIND` mirrors them), so a
+ *  recipe saved before these existed loads, runs and re-saves exactly as it
+ *  did — still v2, no migration. Only the wizard's / batch runner's
+ *  `recipeFind` sends the ones a recipe carries. The `_deg` names are the
+ *  route's: x-axis units, degrees only for a 2θ scan. */
+export interface PeakFindAdvanced {
+  sensitivity: "low" | "medium" | "high";
+  min_separation: number;
+  min_width_deg: number;
+  max_width_deg: number;
+  bg_method: "snip" | "polynomial";
+  max_window_deg: number;
+  bg_poly_degree: number;
+  bg_iterative: boolean;
+}
+
 export interface PeakRecipe {
   version: 2;
   name: string;
@@ -32,7 +51,7 @@ export interface PeakRecipe {
     radius: number; // rolling-ball radius (points)
     order: number; // modpoly order
   };
-  find: { snr_threshold: number; min_prominence: number; max_peaks: number };
+  find: { snr_threshold: number; min_prominence: number; max_peaks: number } & Partial<PeakFindAdvanced>;
   model: { shape: string; bgDegree: number; linkMode: string; constrain: boolean };
   report: { mode: "fit" | "integrate"; regionWidth: number }; // width in ×FWHM
   fit: PeakRecipeFit;

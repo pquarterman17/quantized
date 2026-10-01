@@ -378,7 +378,9 @@ export async function exportFacetedFigure(
     // NOT — dropped here so it can never be applied, uniformly and wrongly,
     // to every panel's own different label set (each panel's pairs ride
     // its own `StatplotFacetSpec.tiers` above instead).
-    axis_style: style ? { rotation: style.rotation, wrap: style.wrap, tiered: style.tiered } : null,
+    axis_style: style
+      ? { rotation: style.rotation, wrap: style.wrap, tiered: style.tiered, ...(style.fit ? { fit: style.fit } : {}) }
+      : null,
   };
   await exportStatplotFigure(spec, signal);
 }

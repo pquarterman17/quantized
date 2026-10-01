@@ -19,6 +19,7 @@ import {
   errorBarNote,
   errorBounds,
   errorHalfWidth,
+  fitCategoryLabels,
   nestedTiers,
   resolveStatMarks,
   wrapLabel,
@@ -156,23 +157,51 @@ describe("resolveStatMarks — per-mode defaults", () => {
   });
 });
 
+// P2.6 box 1 leftover: the wrap-or-rotate rule for long upright labels,
+// pinned to the backend's `fit_category_labels` by the shared fixture. The
+// fixture measures a label as `char_w` per code point (the canvas's own
+// estimate where nothing can measure); at run time each side measures.
+describe("fitCategoryLabels — the shared long-label rule", () => {
+  const FIT = load<{
+    char_w: number; line_h: number;
+    cases: { name: string; labels: string[]; rotation: 0 | 45 | 90; wrap: boolean; pitch: number;
+      fit: { rotation: 0 | 45 | 90; wrap: boolean } }[];
+  }>("stat_label_fit.json");
+  const measure = (t: string) => Array.from(t).length * FIT.char_w;
+  it.each(FIT.cases.map((c) => [c.name, c] as const))("%s", (_name, c) => {
+    expect(fitCategoryLabels(c.labels, c.rotation, c.wrap, measure, c.pitch, FIT.line_h)).toEqual(c.fit);
+  });
+  it("measures with the caller's metrics: a wide glyph wraps or turns what a count keeps upright", () => {
+    const wide = (t: string) => Array.from(t).length * 12;
+    // 17 code points: 102 px counted (fits a 144 px slot), 204 px measured (wraps: "abcde fghij" 132 px + "klmno").
+    expect(fitCategoryLabels(["abcde fghij klmno"], 0, false, measure, 144, 11)).toEqual({ rotation: 0, wrap: false });
+    expect(fitCategoryLabels(["abcde fghij klmno"], 0, false, wide, 144, 11)).toEqual({ rotation: 0, wrap: true });
+    // A 100 px slot cannot hold a 12-character wrapped line at 12 px per glyph: rotated.
+    expect(fitCategoryLabels(["abcde fghij"], 0, false, wide, 100, 11)).toEqual({ rotation: 45, wrap: false });
+  });
+});
+
 describe("axisStyleWire", () => {
   const r = resolveStatMarks("box", {});
-  it("is null for an untouched flat axis, so the request is unchanged", () => {
-    expect(axisStyleWire(r, ["a", "b"], null)).toBeNull();
+  it("asks the figure to fit long labels itself (fit: auto) when no rotation or wrap is chosen", () => {
+    expect(axisStyleWire(r, ["a", "b"], null)).toEqual({ rotation: 0, wrap: null, tiered: false, fit: "auto" });
   });
   it("carries tiers (the pairs, not just the bool) exactly when nestLabel says the axis IS nested", () => {
     expect(axisStyleWire(r, ["a = 1 / b = 1"], "b")).toEqual({
-      rotation: 0, wrap: null, tiered: true, tiers: [["a = 1", "b = 1"]],
+      rotation: 0, wrap: null, tiered: true, tiers: [["a = 1", "b = 1"]], fit: "auto",
     });
+    // An explicit choice is the user's: posted as given, no auto fit.
     expect(axisStyleWire({ ...r, labelRotation: 90, labelWrap: true }, ["a"], null)).toEqual({
       rotation: 90, wrap: 12, tiered: false,
     });
+    expect(axisStyleWire({ ...r, labelWrap: true }, ["a"], null)).toEqual({ rotation: 0, wrap: 12, tiered: false });
   });
   // Review finding 4: a flat category value containing " / " (no nest
   // column active) must never be sent as tiered.
   it("stays single-tier for a flat label that happens to contain \" / \"", () => {
-    expect(axisStyleWire(r, ["Co / Pt", "Fe / Ni"], null)).toBeNull();
+    expect(axisStyleWire(r, ["Co / Pt", "Fe / Ni"], null)).toEqual({
+      rotation: 0, wrap: null, tiered: false, fit: "auto",
+    });
     expect(axisStyleWire({ ...r, labelRotation: 45 }, ["Co / Pt"], null)).toEqual({
       rotation: 45, wrap: null, tiered: false,
     });

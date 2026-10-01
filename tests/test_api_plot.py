@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import pytest
 from fastapi.testclient import TestClient
 
@@ -461,3 +462,80 @@ def test_plot_series_handle_round_trip_reproduces_identical_result() -> None:
 # /api/plot/series -- see test_dataset_cache.py's CACHE_ELIGIBLE-
 # parametrized versions of both, which cover this route (and every other
 # cache-eligible one) instead of duplicating the assertions here.
+
+
+# --- opt-in binary column transport (routes/_columns.py) --------------------
+
+_COLUMNS = "application/x-quantized-columns"
+_GAPPY = {
+    "time": [0.0, 1.0, 2.0, 3.0],
+    "values": [[1.0, -0.0], [None, 2.0], [3.0, None], [4.0, 4.0]],
+    "labels": ["a", "b"],
+    "units": ["", ""],
+    "metadata": {},
+}
+
+
+def _decoded(resp: Any) -> dict[str, Any]:
+    from quantized.routes._columns import decode_columns
+
+    header, cols = decode_columns(resp.content)
+    header["data"] = [[None if np.isnan(v) else float(v) for v in c] for c in cols]
+    return header
+
+
+def test_columns_transport_is_opt_in_and_matches_json() -> None:
+    body = {"dataset": _GAPPY, "y2_keys": [1]}
+    as_json = client.post("/api/plot/series", json=body)
+    assert as_json.headers["content-type"].startswith("application/json")
+    resp = client.post("/api/plot/series", json=body, headers={"accept": _COLUMNS})
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == _COLUMNS
+    got = _decoded(resp)
+    assert got == as_json.json()
+    assert got["data"][2][0] == 0.0 and np.signbit(got["data"][2][0])
+
+
+def test_columns_transport_ignores_wildcard_accept() -> None:
+    resp = client.post("/api/plot/series", json={"dataset": _GAPPY}, headers={"accept": "*/*"})
+    assert resp.headers["content-type"].startswith("application/json")
+    assert resp.json()["data"][1] == [1.0, None, 3.0, 4.0]
+
+
+def test_columns_transport_carries_handle_window_and_decimated() -> None:
+    body = {"dataset": _GAPPY, "x_min": 0.5, "x_max": 2.5, "decimate_width": 100}
+    resp = client.post("/api/plot/series", json=body, headers={"accept": _COLUMNS})
+    assert resp.status_code == 200
+    handle = resp.headers.get("x-dataset-handle")
+    assert handle
+    got = _decoded(resp)
+    assert got["window"] == {"x_min": 0.5, "x_max": 2.5}
+    assert got["decimated"] is True
+    assert got["data"][0] == [1.0, 2.0]
+    # The handle earned through the binary path resolves on the JSON one too.
+    again = client.post(
+        "/api/plot/series", json={"dataset_handle": handle, "x_min": 0.5, "x_max": 2.5}
+    )
+    assert again.status_code == 200 and again.json()["data"][0] == [1.0, 2.0]
+
+
+def test_columns_transport_errors_stay_json() -> None:
+    bad = client.post(
+        "/api/plot/series", json={"dataset": _GAPPY, "x_key": 99}, headers={"accept": _COLUMNS}
+    )
+    assert bad.status_code == 422
+    assert bad.headers["content-type"].startswith("application/json")
+    miss = client.post(
+        "/api/plot/series", json={"dataset_handle": "nope"}, headers={"accept": _COLUMNS}
+    )
+    assert miss.status_code == 409
+    assert miss.headers["content-type"].startswith("application/json")
+
+
+def test_columns_transport_with_x_only_dataset() -> None:
+    ds = {"time": [1.0, 2.0], "values": [[], []], "labels": [], "units": [], "metadata": {}}
+    as_json = client.post("/api/plot/series", json={"dataset": ds})
+    resp = client.post("/api/plot/series", json={"dataset": ds}, headers={"accept": _COLUMNS})
+    assert resp.status_code == as_json.status_code
+    if resp.status_code == 200:
+        assert _decoded(resp) == as_json.json()

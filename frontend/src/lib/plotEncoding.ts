@@ -86,7 +86,7 @@ import { buildErrorSpans, type ErrorSpan } from "./errorbars";
 import type { ErrorBinding } from "./errorRoles";
 import { ENCODING_SLOTS, type FigureEncodingText } from "./figureEncoding";
 import { facetSlices, type FacetPanel, type FacetSlice } from "./facet";
-import { seriesDisplayLabel } from "./figureSpecSeries";
+import { seriesDisplayLabel } from "./seriesDisplayLabel";
 import { spatialCellStyling } from "./multipanel";
 import { buildColumns, type PlotPayload } from "./plotdata";
 import {
@@ -355,7 +355,9 @@ export function buildEncodedXY(
 
 /** An encoded xy FACET grid (see the module doc): `data` is the split's
  *  source, each slice's `rows` index it, and each slice's `data` gives the
- *  panel's x and Y columns. `yLegends` is the per-Y rename, as `encodedNames`. */
+ *  panel's x and Y columns. `yLegends` is the per-Y rename, as `encodedNames`;
+ *  `channelStyles` the channel-keyed styles each series' encoding is laid
+ *  over (`encodedStyle`, one style per channel in every panel -- FEATURE-001). */
 export function encodedFacetPanels(
   data: DataStruct,
   slices: readonly Pick<FacetSlice, "label" | "data" | "rows">[],
@@ -363,9 +365,10 @@ export function encodedFacetPanels(
   yChannels: readonly number[],
   enc: Encoding,
   yLegends?: readonly (string | undefined)[],
+  channelStyles?: Record<number, SeriesStyle>,
 ): EncodedFacetPanel[] {
   const whole = encodedSplit(data, yChannels, enc);
-  const styles = encodedNames(data, whole).series.map((s, i) => encodedStyle(undefined, s, i));
+  const styles = encodedNames(data, whole).series.map((s, i) => encodedStyle(channelStyles?.[s.channel], s, i));
   return slices.map((slice) => {
     const local = new Map(slice.rows.map((r, j) => [r, j]));
     const keep: number[] = [];

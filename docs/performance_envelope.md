@@ -343,6 +343,57 @@ A hide still costs a y re-autoscale and a full path rebuild, because uPlot's
 paths too (the gap clips are width-sized). At decimated scale, canvas
 drawing dominates both paths.
 
+## Binary column transport for full-resolution plots — 2026-09-30
+
+`/api/plot/series` gains an opt-in binary framing (`routes/_columns.py`,
+`lib/api/plotColumns.ts`): a client that names
+`application/x-quantized-columns` in `Accept` gets `"QZC1"`, a uint32 header
+length, the JSON payload minus `data` (space-padded to an 8-byte boundary),
+then `n_columns` × `n_rows` little-endian float64, with every non-finite
+value written as NaN where the JSON path writes `null` (`-0` survives on
+both). JSON stays the default: no `Accept` or `*/*` gets the old body, every
+422/409 is JSON, and the shared server-bytes fixture
+(`frontend/src/lib/api/__fixtures__/plotSeriesColumns.json`, kept current by
+`tests/test_routes_columns.py`) pins NaN / ±Inf / −0 / gap parity between the
+route's JSON answer and the frontend decoder. `plotSeries` asks for columns
+only above `COLUMNS_ROW_THRESHOLD` (50k dataset rows), through a lazy
+decoder chunk (1.72 kB; eager JS 859,807 → 860,140 B, +333 B); a chunk that
+fails to load, a JSON answer, or a body that will not decode all end on the
+JSON path, and the dataset-handle cache works unchanged through it. The
+request model did not change, so `frontend/api/openapi.json` and
+`schema.d.ts` are as before.
+
+Server side, 1M × 7 float64 (one column with a NaN every 1000th row), full
+resolution by dataset handle, in-process `TestClient`, best of 3:
+
+| Path | Route wall | Body |
+|---|---|---|
+| JSON (`jsonify` lists → FastAPI/pydantic_core serializer) | 1.089 s | 146.3 MB |
+| Columns (`encode_columns`) | **0.179 s** | **64.0 MB** |
+
+Pure encoder cost on the same columns, route excluded: `encode_columns`
+0.102 s (a `np.empty` fill + `tobytes`); the JSON lists through stdlib
+`json.dumps` 3.1–4.0 s, through `pydantic_core.to_json` (what the route
+actually uses) 0.48 s, plus `jsonify`'s chunked ndarray → list conversion.
+
+Client side, decoding those exact bodies into the `PlotSeriesResponse`
+shape (`(number | null)[][]`), Node 22.22 / V8 under vitest, machine shared
+with other agents at load average 5–9, so the medians carry that noise:
+
+| Decoder | Run 1 (n=5) best / median | Run 2 (n=11) best / median |
+|---|---|---|
+| `JSON.parse` (146 MB text) | 1062 / 1183 ms | 830 / 1015 ms |
+| `decodeColumns` (64 MB frame) | 495 / 1096 ms | **376 / 754 ms** |
+
+Parity of every value across the 7M cells held in both runs. Most of the
+decode cost is the output contract, not the bytes: a column that holds any
+`null` leaves V8's packed-double representation, so each finite value in it
+is boxed. Handing consumers a `Float64Array` with NaN gaps would make the
+decode a view (tens of ms), but changes what `plotdata.ts` and the overlays
+receive — a separate change. Not measured: a real browser (the bench is
+Node), and transfer over a socket rather than in-process (the 2.3× smaller
+body only helps there).
+
 ## Residuals (explicitly unmeasured — carry in P0.4)
 
 - Network/offline source transitions — unmeasurable today: no offline-vs-

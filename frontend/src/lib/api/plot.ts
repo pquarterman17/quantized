@@ -27,11 +27,35 @@ export interface PlotRequest {
   x_max?: number | null;
 }
 
+/** Datasets with more rows than this ask for the binary column transport
+ *  (`./plotColumns`) instead of JSON. Gated on the dataset's rows, not the
+ *  response's: the response never has more rows than the dataset, a
+ *  decimated one is cheap either way, and a windowed full-detail re-fetch
+ *  of a large dataset is exactly the case the transport exists for. Below
+ *  the threshold JSON is small enough that the decoder chunk's load and
+ *  the typed-array copy would not pay for themselves. */
+export const COLUMNS_ROW_THRESHOLD = 50_000;
+
 /** Build uPlot-ready series from a DataStruct + selection. `signal` lets a
  *  caller abort mid-request (P3.4 zoom-refetch: a newer committed view
  *  supersedes whatever windowed re-fetch was still in flight for a stale
- *  one) -- see importFile's doc for the same pattern. */
-export function plotSeries(req: PlotRequest, signal?: AbortSignal): Promise<PlotSeriesResponse> {
+ *  one) -- see importFile's doc for the same pattern.
+ *
+ *  Above `COLUMNS_ROW_THRESHOLD` rows the request goes through the lazily
+ *  loaded binary column transport, which decodes into this same response
+ *  shape; if that chunk fails to load, or the server answers in JSON, or a
+ *  binary body will not decode, the result is the JSON path's (see
+ *  `./plotColumns`). Every caller sees one contract either way. */
+export async function plotSeries(req: PlotRequest, signal?: AbortSignal): Promise<PlotSeriesResponse> {
+  if (req.dataset.time.length > COLUMNS_ROW_THRESHOLD) {
+    let columns: Pick<typeof import("./plotColumns"), "plotSeriesColumns"> | undefined;
+    try {
+      columns = await import("./plotColumns");
+    } catch {
+      columns = undefined; // chunk failed to load -- the JSON path below is always right
+    }
+    if (columns) return columns.plotSeriesColumns(req, signal);
+  }
   return postJSON<PlotSeriesResponse>("/api/plot/series", req, signal);
 }
 

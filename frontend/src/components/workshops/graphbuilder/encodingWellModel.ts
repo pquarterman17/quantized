@@ -11,10 +11,12 @@
 // (`ChannelRef.text`, channel -1), so no index can go stale.
 
 import { originTextColumnNames } from "../../../lib/columnmeta";
+import { facetSplitChannels } from "../../../lib/facet";
 import { isEncodingFactor } from "../../../lib/plotEncoding";
 import { isStatSpec, statEncodingRefusal } from "../../../lib/plotEncodingStat";
 import type { ChannelRef, PlotSpec } from "../../../lib/plotspec";
 import { rowsAreSampled } from "../../../lib/rowSidecars";
+import { analysisData } from "../../../lib/rowstate";
 import type { Dataset } from "../../../lib/types";
 import type { WellChip, WellOption } from "./ZoneWell";
 
@@ -43,6 +45,20 @@ export function encodingOptions(ds: Dataset | null, options: readonly WellOption
 
 /** The one sentence a gradient Color gets on an xy facet grid (residual 3). */
 export const FACET_GRADIENT_NOTE = "A gradient colours single points, so it does not apply while faceted.";
+/** The one sentence an encoded xy facet grid gets when it has no Y channel to
+ *  split: none explicit, and the plot's default list (`lib/facet.
+ *  facetSplitChannels`, the flat plot's own) names none either. */
+export const FACET_NO_Y_NOTE =
+  "Color, Symbol and Label need a Y channel on a facet grid, and this sheet has no default one to use.";
+
+/** Is `spec`'s xy facet grid encoded over NO Y channel at all (see
+ *  `FACET_NO_Y_NOTE`)? With explicit Y, or a default the flat plot would draw,
+ *  the grid splits that list in every panel. */
+function facetLacksY(spec: PlotSpec, ds: Dataset): boolean {
+  if (isStatSpec(spec) || !spec.zones.facet || spec.zones.y.length > 0) return false;
+  const x = spec.zones.x;
+  return facetSplitChannels(analysisData(ds) ?? ds.data, x && x.datasetId === ds.id ? x.channel : null, null) === null;
+}
 
 /** Why `spec` does not draw `ref` in `zone`, or null: a box / violin / bar
  *  refusal (`lib/plotEncodingStat`), or a gradient Color on an xy facet grid
@@ -91,9 +107,12 @@ export function encodingRef(ds: Dataset, zone: EncodingZone, channel: number, sp
  *  (empty when every assigned one applies). */
 export function encodingNotes(ds: Dataset | null, spec: PlotSpec): string[] {
   if (!ds) return [];
-  return (["color", "symbol", "label"] as const).flatMap((zone) => {
+  const notes = (["color", "symbol", "label"] as const).flatMap((zone) => {
     const ref = spec.zones[zone];
     const why = ref ? refusal(spec, ds, zone, ref) : null;
     return why ? [why] : [];
   });
+  const assigned = ENCODING_ZONES.some((zone) => spec.zones[zone] !== null && spec.zones[zone] !== undefined);
+  return assigned && facetLacksY(spec, ds) ? [...notes, FACET_NO_Y_NOTE] : notes;
 }
+const ENCODING_ZONES = ["color", "symbol", "label"] as const;

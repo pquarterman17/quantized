@@ -16,7 +16,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 
 import type { StatMode } from "../../lib/statstage";
-import { setStatHideEmptyLevels, setStatMarks, setStatShowGroupN } from "../../store/statLevelOptions";
+import { setStatHideEmptyLevels, setStatMarks, setStatShowGroupN, setStatShowSummary } from "../../store/statLevelOptions";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { Checkbox } from "../primitives/Checkbox";
 import { SegmentedControl } from "../primitives/SegmentedControl";
@@ -59,6 +59,7 @@ export default function StatStage() {
   // P2.6 box 2: persisted with the plot (PlotView), so they ride the .dwk.
   const hideEmptyLevels = useApp((s) => s.statHideEmptyLevels);
   const showGroupN = useApp((s) => s.statShowGroupN);
+  const showSummary = useApp((s) => s.statShowSummary); // box 4's table, persisted likewise
   const marks = useApp((s) => s.statMarks); // P2.6 box 1, persisted likewise
   const st = useStatStage({
     active,
@@ -75,8 +76,7 @@ export default function StatStage() {
   const categorical = st.mode === "box" || st.mode === "violin" || st.mode === "bar" || st.mode === "strip";
   // P2.6 box 4: the per-group summary table, linked both ways to the app's
   // row selection (useStatGroupSelection). The plot half of the link is on
-  // whenever the plot is categorical; the table is opt-in (session-local).
-  const [showSummary, setShowSummary] = useState(false);
+  // whenever the plot is categorical; the table is opt-in (`statShowSummary`).
   // P2.6 review finding 6: only compute the table's per-group stats while
   // it's actually open — the plot half of the link needs only rows/keys.
   const sel = useStatGroupSelection(active, st.axes, hideEmptyLevels, showSummary);
@@ -286,7 +286,7 @@ export default function StatStage() {
           </Checkbox>
         )}
         {categorical && (
-          <Checkbox checked={showSummary} onChange={setShowSummary} title="Per-group summary table, linked to the row selection">
+          <Checkbox checked={showSummary} onChange={setStatShowSummary} title="Per-group summary table, linked to the row selection">
             summary
           </Checkbox>
         )}

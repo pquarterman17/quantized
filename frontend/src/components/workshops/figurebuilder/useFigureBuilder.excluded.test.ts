@@ -10,6 +10,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigure, renderFigureHitmap, type FigureSpec } from "../../../lib/api/figures";
 import { EXCLUDED_GREY_OPTION, EXCLUDED_OMIT_OPTION } from "../../../lib/excludedRowsChoice";
+import { createFigureDocument } from "../../../lib/figureDocument";
+import { defaultPlotView } from "../../../lib/plotview";
 import type { DataStruct, Dataset } from "../../../lib/types";
 import { useParamDialog } from "../../../store/paramDialog";
 import { usePendingOps } from "../../../store/pendingOps";
@@ -135,5 +137,79 @@ describe("the legacy wire dataset stays one object across unrelated edits", () =
     expect(buildLegacyFigureSpec({ ...state, yKeys: null })!.dataset).not.toBe(first.dataset);
     const grey = buildLegacyFigureSpec(state, (spec) => ({ ...spec, dataset: { ...spec.dataset } }))!;
     expect(grey.dataset).not.toBe(first.dataset);
+  });
+});
+
+// The CANONICAL (FigureDocument draft) preview used to omit masked rows
+// unconditionally while its Export asked "greyed or omitted?" with the app
+// mode pre-selected — so the default answer exported companions the preview
+// never showed. The preview now follows the app mode exactly as the legacy
+// path above does, and for the same choice preview == export.
+describe("canonical Publication Preview honours excluded rows", () => {
+  function seedCanonical(excludedRows?: number[]) {
+    seed(excludedRows);
+    const document = createFigureDocument({
+      id: "figure-w1", name: "Canonical", datasetId: "d1", view: { ...defaultPlotView(), yKeys: [0] },
+    });
+    useApp.setState({
+      figurePublicationSession: { target: "window", windowId: "w1", baseline: structuredClone(document), draft: structuredClone(document) },
+    });
+  }
+  /** Everything but the two fields that legitimately differ between the
+   *  screen-resolution preview and a file export. */
+  const comparable = (spec: FigureSpec | undefined) => {
+    const { dpi: _dpi, filename: _filename, ...rest } = spec ?? ({} as FigureSpec);
+    return rest;
+  };
+
+  it("the preview follows the app mode: greyed companions by default, hidden under hide", async () => {
+    seedCanonical([1]);
+    const { result } = renderHook(() => useFigureBuilder());
+    await waitFor(() => expect(result.current.preview).not.toBeNull());
+    expect(result.current.canonical).toBe(true);
+    expect(lastPreview()?.dataset.labels).toEqual(["M", "M (excluded)"]);
+    expect(lastPreview()?.dataset.time).toEqual([0, 2, 3, 1]);
+    expect(lastPreview()?.y_keys).toEqual([0, 1]);
+
+    act(() => useApp.getState().setPref("excludedDisplay", "hide"));
+    await waitFor(() => expect(lastPreview()?.dataset.time).toEqual([0, 2, 3]));
+    expect(lastPreview()?.y_keys).toEqual([0]);
+  });
+
+  it.each([
+    ["grey", EXCLUDED_GREY_OPTION, [0, 2, 3, 1]],
+    ["hide", EXCLUDED_OMIT_OPTION, [0, 2, 3]],
+  ] as const)("under %s the preview request IS the export request for the matching answer", async (mode, answer, time) => {
+    useApp.getState().setPref("excludedDisplay", mode);
+    seedCanonical([1]);
+    const { result } = renderHook(() => useFigureBuilder());
+    await waitFor(() => expect(lastPreview()?.dataset.time).toEqual(time));
+    let run!: Promise<void>;
+    act(() => {
+      run = result.current.exportNow();
+    });
+    await answerExcluded(answer);
+    await act(async () => run);
+    expect(lastExport()?.dataset.time).toEqual(time);
+    expect(comparable(lastExport())).toEqual(comparable(lastPreview()));
+  });
+
+  it("reuses the wire dataset object across a title edit, rebuilds it on a mode change", async () => {
+    // The preview's dataset-handle cache (`lib/api/datasetCache.ts`) is keyed
+    // on the request's dataset OBJECT; a fresh greyed copy per keystroke would
+    // re-upload every row on every edit.
+    seedCanonical([1]);
+    const { result } = renderHook(() => useFigureBuilder());
+    await waitFor(() => expect(result.current.preview).not.toBeNull());
+    const first = lastPreview()?.dataset;
+    expect(first?.labels).toEqual(["M", "M (excluded)"]);
+
+    act(() => result.current.setTitle("Loop"));
+    await waitFor(() => expect(lastPreview()?.title).toBe("Loop"));
+    expect(lastPreview()?.dataset).toBe(first);
+
+    act(() => useApp.getState().setPref("excludedDisplay", "hide"));
+    await waitFor(() => expect(lastPreview()?.dataset.time).toEqual([0, 2, 3]));
+    expect(lastPreview()?.dataset).not.toBe(first);
   });
 });

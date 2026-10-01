@@ -39,11 +39,14 @@ export function drawMarks(d: Categorical): DrawMarks {
   return { ...resolveStatMarks(d.mode, null), legacyFliers: false };
 }
 
-/** The category-axis label options `d` is drawn with. */
+/** The category-axis label options `d` is drawn with. With neither a
+ *  rotation nor wrapping chosen, the long-label rule applies (`fit: "auto"`,
+ *  `statRenderAxes` header) — the same request `axisStyleWire` posts. */
 export function axisStyleOf(d: StatDrawData | null): CategoryAxisStyle {
   const nestLabel = d && "nestLabel" in d ? d.nestLabel : null;
   if (!d || !("marks" in d) || !d.marks) return { nestLabel };
-  return { rotation: d.marks.labelRotation, wrap: d.marks.labelWrap, nestLabel };
+  const auto = d.marks.labelRotation === 0 && !d.marks.labelWrap;
+  return { rotation: d.marks.labelRotation, wrap: d.marks.labelWrap, nestLabel, ...(auto ? { fit: "auto" as const } : {}) };
 }
 
 /** The tick labels `d` draws, one per AXIS slot (empty slots included). */

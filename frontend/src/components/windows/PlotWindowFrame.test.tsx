@@ -436,13 +436,13 @@ describe("PlotWindowFrame", () => {
     expect(useApp.getState().plotWindows.find((w) => w.id === "w1")?.title).toBe("Old Name");
   });
 
-  it("renders the item-10 channel-count/rows badge when `datasetMeta` is given", () => {
+  it("renders the item-10 rows/channel-count badge (points first, matching the Library rows and StatusBar) when `datasetMeta` is given", () => {
     const { container } = render(
       <PlotWindowFrame win={win({ id: "w1" })} focused datasetName="ds1" datasetMeta={{ channels: 3, rows: 120 }}>
         <div>content</div>
       </PlotWindowFrame>,
     );
-    expect(container.querySelector(".qzk-plotwin-meta")?.textContent).toBe("3ch · 120pts");
+    expect(container.querySelector(".qzk-plotwin-meta")?.textContent).toBe("120 pts · 3 ch");
   });
 
   // ── Item 12: edge/sibling snapping while dragging ─────────────────────────

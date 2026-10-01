@@ -132,7 +132,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   const groupKey = useApp((s) => s.groupKey);
   const picks = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document?.bindings.encoding);
   const encodedFacets = useFacetEncoding(
-    active, picks, canvasGroupCol(groupKey, y2Keys), y2Keys, facetKey, xKey, yKeys, seriesLabels,
+    active, picks, canvasGroupCol(groupKey, y2Keys), y2Keys, facetKey, xKey, yKeys, seriesLabels, seriesStyles,
   );
   const { hostRef, hostStyle, readout, tool, spatialLegends } = useMultiPanelStage({
     active,

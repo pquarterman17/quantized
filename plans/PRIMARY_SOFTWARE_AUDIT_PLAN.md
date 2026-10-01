@@ -798,8 +798,8 @@ preview+confirm dialog, an explicit "apply anyway, drop unmatched" opt-in
 (`confirmPendingRecipeApplicationPartial`), a "Save as Plot Recipe…" entry
 point on the focused plot window, and a subtle (never-auto-apply) post-import
 suggestion toast. See F4.2b in `FIGURE_AUTHORING_WORKFLOW_PLAN.md` for the
-itemized still-open gaps (SPATIAL composition rebuild, maps/panels,
-waterfall settings beyond the scalar offset). **2026-09-29 (F4.2c):** recipe
+itemized still-open gaps (waterfall settings beyond the scalar offset;
+the SPATIAL rebuild and maps/panels payload closed 2026-09-30 as schema v3). **2026-09-29 (F4.2c):** recipe
 schema v2 closed the preview-thumbnail, outlier-policy capture, version-
 migration and transformation/style-template-choice gaps — see F4.2c for the
 evidence and the three owner questions it leaves open.
@@ -808,10 +808,10 @@ Recipes should include:
 
 - [x] plot type and line/scatter/error mode;
 - [x] semantic X/Y/error matching by role, label, unit, and alias—not index;
-- [~] grouping, faceting, ordering, and legend-source metadata (ordering +
-  legend fields captured/applied; the group/facet BINDINGS are captured and
-  re-key correctly, but rebuilding the actual live composition/panels on
-  apply is a documented gap — F4.4);
+- [x] grouping, faceting, ordering, and legend-source metadata (ordering +
+  legend fields captured/applied; the group/facet BINDINGS re-key by label
+  and FACET/BREAK/SPATIAL compositions all rebuild on apply — F4.4, closed
+  2026-09-30 with schema v3's by-name `panels` payload);
 - [x] scales, autoscale policy, ranges, secondary axes, breaks, labels, units,
   tick formats, and outlier policy (2026-09-29, F4.2c: the excluded-row
   hide/grey policy is captured as `outlierPolicy`, shown in the Library's
@@ -819,9 +819,14 @@ Recipes should include:
   `plotRecipePreview.test.ts`, `recipeApplyChoices.test.ts`. It is recorded,
   not applied, because the preference is app-wide; whether it should become
   per-figure is F4.2c's owner question (a));
-- [~] style cycle, visibility/order, annotations/shapes, maps/panels (style
-  cycle/visibility/order/annotations/shapes are captured/applied; maps/panels
-  are not);
+- [x] style cycle, visibility/order, annotations/shapes, maps/panels
+  (2026-09-30, schema v3: `panels` captures a spatial multi-panel window by
+  dataset NAME + column label with per-panel axis state/styles/geometry and
+  `panelFit`/`pageSetup`; `map` captures the colormap/log/colour limits;
+  apply rebuilds the composition on the new figure and installs the map view
+  on the target dataset; a missing sibling dataset or column is named in the
+  apply dialog with a rebind picker — `lib/plotRecipePanels.test.ts`,
+  `store/plotRecipesSpatial.test.ts`, `PlotRecipeApplyDialog.test.tsx`);
 - [~] waterfall settings (only the scalar offset; no richer settings exist to
   capture);
 - [x] technique scope such as XRD, XRR, SIMS, or magnetometry;
@@ -1251,12 +1256,30 @@ output, not a caught error).
     glyph, points and legend text read back, the always-key rule, 422s).
     18 sabotages, each failing a test. Eager JS 841.8 → 842.2 kB (`npm ci` +
     clean build, base `efcfe17a`).
-    Known limits, not new classes: an encoded grid needs explicit Y channels
+    Known limits, not new classes: ~~an encoded grid needs explicit Y channels
     (a default channel list can differ panel to panel — FEATURE-001 — so the
-    grid then stays unencoded on both sides); per-channel styles (the mark's
+    grid then stays unencoded on both sides)~~ — CLOSED 2026-09-30: with no
+    explicit Y the grid splits the FLAT plot's default list, the same in
+    every panel (`lib/facet.facetSplitChannels`, shared by
+    `Stage/useFacetEncoding` and `figureSpec.ts`); only a sheet with no
+    default Y at all stays unencoded, and the Graph Builder's wells say so in
+    one sentence (`FACET_NO_Y_NOTE`); ~~per-channel styles (the mark's
     line/scatter shape included) still do not reach a facet panel on either
-    side (FEATURE-001); Group ALONE on a facet grid still splits nothing (it
-    joins the split once any encoding is set); on a dark plot the canvas
+    side (FEATURE-001)~~ — CLOSED 2026-09-30: styles are keyed by CHANNEL,
+    one per channel applied in every panel through each panel's own
+    `channels`, on screen and on the wire (`FigureFacetSeries.style`), an
+    encoding laid over them (FEATURE-001's entry has the decision; pinned by
+    `tests/fixtures/wire/facet_styles.json`); ~~Group ALONE on a facet grid
+    still splits nothing (it joins the split once any encoding is set)~~ —
+    CLOSED 2026-09-30: `plotEncodingBinding.facetSplitEncoding` treats Group
+    alone as a group-only split, so every panel draws one series per level in
+    the channel's style, named as the flat plot names them, on screen and in
+    the export (the request carries `group_col` plus the panels' `rows` /
+    `channels`, no `encoding`; the route splits it in
+    `calc/plotting_encoded_facets.py`); pinned by the `group` entry of
+    `tests/fixtures/wire/facet_styles.json`. Like the flat grouped export
+    (BUG-016), a level's colour is matplotlib's cycle unless the channel chose
+    one; on a dark plot the canvas
     lifts a near-black palette colour to its ink colour for legibility
     (`resolveDrawColor`), which the white export does not.
   **Residuals — all five CLOSED (see the bullets above); the box is `[x]`
@@ -3488,7 +3511,7 @@ a plan edit.
   The peak emitters moved to `calc/report_emit_peaks.py` (500-line ceiling).
   A classic table's request and report are unchanged, pinned by a
   whole-sheet test.
-- [~] Manual peak edits and reviewed batch recipe. **2026-09-23 slice:** fitted
+- [x] Manual peak edits and reviewed batch recipe. **2026-09-23 slice:** fitted
   peak rows can now be selected, edited (center/FWHM/height/area), or removed
   directly in the Peaks workshop. The durable `PeakTable` is the source of
   truth, so edits survive save/reopen and feed downstream consumers such as
@@ -3514,7 +3537,16 @@ a plan edit.
   column in the peak-fit report. Recording every writer matters because undo
   snapshots the whole dataset list: an unrecorded write made after a recorded
   one is rolled back by undoing it (an unrecorded re-fit was lost this way).
-  Batch recipe remains open, as does direct manual peak creation.
+  ~~Batch recipe remains open, as does direct manual peak creation.~~
+  **Closed 2026-09-30:** both landed in the Peak Analyzer (the slice above
+  is the legacy Peaks workshop's fitted-row editing). Direct manual peak
+  creation: `addPeakAt` (`peakwizard/usePeakCandidates.ts`, reached from a
+  plot click in `peakwizard/steps.tsx`). Reviewed batch recipe: the Batch
+  mode (`peakwizard/PeakBatchView.tsx`, `usePeakBatch`) runs a saved recipe
+  over the chosen datasets as one queued job through the same
+  `recipeSteps.ts` baseline/find functions the wizard uses, with the
+  uncertainty-diagnostic table (`PeakBatchView.test.tsx`,
+  `PeakBatchView.limits.test.tsx`).
 - [x] Technique-specific plot recipe is manually chosen, never auto-overwrites.
   **2026-09-28:** three built-in Plot Recipes (`lib/builtinPlotRecipes.ts`) on
   the existing P1.3 `PlotRecipe` schema, no new schema version — XRD θ–2θ (log
@@ -4742,11 +4774,12 @@ violin, bar, strip, or summary plots.
   per option, the shared fixtures, route validation). Wire fixture
   `statplot_levels_export.json` gained the new fields. Eager bundle 858,336 ->
   858,810 B (+474, the sanitizer and the field); all UI in the lazy stage chunk.
-  **Not done:** in-stage level RENAME (use Recode); rotated-label depth is
-  estimated from character counts (both sides), not measured; an upright
-  unwrapped label wider than its slot overlaps its neighbour on BOTH sides
-  (wrap / rotation is the remedy); the Graph Builder preview shows no
-  error-bar footnote; no e2e spec. (Former entries done: a facet panel's
+  **Not done:** in-stage level RENAME (use Recode). (Former entries done:
+  rotated-label depth measured from each side's own text metrics, and a long
+  upright label wrapping or rotating on screen and in the export by ONE
+  fixture-pinned rule (`fit: "auto"`), `bd7f61af`; the Graph Builder
+  preview's error-bar footnote, `7325f4bf`; e2e
+  `stat-summary-long-labels.spec.ts`; a facet panel's
   connect-means line, on screen and in the export, `57e634ae`; the Graph
   Builder previewing a violin as a violin once the backend's KDE arrives, the
   box standing in with a note until then or offline, `efcfe17a`; the 14-char screen
@@ -4993,10 +5026,9 @@ violin, bar, strip, or summary plots.
   closed-up; the faceted exports lift the x title clear of the caveat
   footnote; background stat windows show the notice; the axis is planned once
   and only counted per panel, over the slices the compute already built.
-  **Not done:** the Graph Builder's own box/violin PREVIEW
-  (`lib/plotspec.specToRender`) still closes empty levels up — it is a
-  preview whose "send to stage" lands on the stage, which shows them; the
-  XY colour split (`calc.plotting.build_grouped_series` / `plotGroupSplit`)
+  **Not done:** nothing outstanding — the Graph Builder's own box/violin
+  PREVIEW (`lib/plotspec.specToRender`) keeps empty levels like the stage,
+  `8d55346f`; the XY colour split (`calc.plotting.build_grouped_series` / `plotGroupSplit`)
   has no category axis to leave a slot on, so it is unaffected by design.
 - [x] Summary table links to selected groups. (2026-09-27)
   **Survey (before):** the Statistics stage (box / violin / strip / bar) had
@@ -5043,11 +5075,12 @@ violin, bar, strip, or summary plots.
   841.9 kB. Tests: `statGroupSummary.test.ts`, `useStatGroupSelection.test.ts`,
   `statRenderSelection.test.ts`, `StatSummaryTable.test.tsx` (real stage +
   store).
-  **Not done:** the table's visibility is session-local (not persisted on
-  `PlotView` / `.dwk`); no column sorting; no drag-brush on the stat canvas
+  **Not done:** no column sorting; no drag-brush on the stat canvas
   (click-a-slot only); the table is not exported with the figure; Fit Y by X's
   oneway table and Tabulate are not linked; background (unfocused) stat
-  windows show no marks (the selection is the active dataset's); no e2e spec.
+  windows show no marks (the selection is the active dataset's). (Done since:
+  the table's visibility persists on `PlotView` / `.dwk` as
+  `statShowSummary`, `2d9f464c`; e2e `stat-summary-long-labels.spec.ts`.)
   **Review round 2 (independent review, 10 findings, all fixed with a
   sabotage-verified test each):** an empty slot's local pick is now scoped to
   the PANEL it was picked in (`GroupPick`/`PickedKeys` carry it) — the same
@@ -8929,6 +8962,9 @@ Original acceptance criteria (unchanged):
   result": the sync export routes still render to completion on a
   threadpool worker).
 - [~] Errors say what failed, whether data changed, and next action.
+  **2026-09-30:** one of the three REMAINING flow-change items below landed
+  (`usePeaks.ts`'s "labeling peaks failed" now reports its partial outcome);
+  two remain.
   **Audited 2026-09-14, census corrected in the 2026-09-14 review round** —
   intended as the whole user-facing failure surface, not a sample; the first
   pass fell short of that by construction (below), fixed in this pass.
@@ -9053,11 +9089,17 @@ Original acceptance criteria (unchanged):
   - `components/workshops/peaks/usePeaks.ts:466` — "labeling peaks failed" is
     raised from inside `withHistoryBatch`, where some annotations may already
     have been added; same shape, same reason it is not a rename.
+    **Done 2026-09-30:** the flow counts the labels that landed and reads the
+    history after the batch settles — `labeling peaks failed after N of M
+    labels: <why> — Undo removes the N that landed` / `…: <why> — nothing was
+    added` (`peakLabelGuards.ts`'s `labelFailureMessage`; `usePeaks.test.ts`
+    › "partial outcome", red-first).
   - `store/recalcDatasets.ts:107,122` — "derived worksheet recompute failed" /
     "recalculation failed" say nothing about which worksheets took the new
     values and which kept the old ones.
   All three need the operation to report its own partial outcome — a flow
-  change, and the shape `store/reimportAllRun.ts:410` already has.
+  change, and the shape `store/reimportAllRun.ts:410` already has (the
+  peaks one landed 2026-09-30, above; the other two stay open).
 - [x] Copyable diagnostic bundle excludes raw/private data by default.
   **Verified shipped 2026-09-14** (it landed with #267/#268 and their
   follow-up reviews; the box was simply never ticked). Help ▸ Copy diagnostics
@@ -9522,6 +9564,9 @@ was not raised.
   "copy cancelled". No test compares copied pixels with exported pixels, and
   nothing here exercises a real browser clipboard. Final Word/PowerPoint and
   macOS paste behavior remains the owner/platform acceptance check above.
+  **2026-09-30:** "Copy figure (vector)" now also requests
+  `svg_text_as_paths` (clipboard only; Export figure… still writes an SVG
+  file with editable text), pinned in `copyFigureCommand.test.ts`.
 - [x] ~~Expected bounding box, transparency, fonts, and scale.~~ VERIFIED
   2026-09-28, server-side, against the real `POST /api/export/figure` route
   (`tests/test_export_copy_figure_raster.py` +
@@ -10324,8 +10369,15 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   gap. LOW (confirmed): this note's own "the two plain boolean
   flip-setters (`startMacro`/`stopMacro`/`setPipelineRunning`)" named three,
   not two — corrected to "three" above.
-- [ ] Generate clients/types where it reduces drift.
-- [ ] Add a growth ratchet, not an arbitrary rewrite.
+- [x] Generate clients/types where it reduces drift. **Done** (`91583f9c`,
+  2026-09-03): `npm run api:types` generates `src/lib/api/schema.d.ts` from
+  the dumped OpenAPI document; `ci.yml`'s "Generated API types are up to
+  date" step regenerates and fails on a diff, and
+  `tests/test_openapi_snapshot.py` pins the backend schema.
+- [x] Add a growth ratchet, not an arbitrary rewrite. **Done**: the eager-JS
+  budget in `frontend/scripts/check-bundle-size.mjs` (fails the build when
+  the bundle grows past `EAGER_JS_BUDGET`, ratcheted down on every diet
+  slice) plus `architecture.test.ts`'s `STORE_PINS` per-store line ceilings.
 - [x] ~~Profile the eager graph and lazy-load the next coherent heavy
   boundary~~ SHIPPED 2026-07-26 (`95bf0b2`): profiling found `main.tsx`'s
   STATIC import of `CalcOnlyApp` (the `?view=calc` DiraCulator launcher)
