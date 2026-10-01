@@ -16,8 +16,8 @@
 // the two actions that mint from them, so nothing else can draw from them.
 //
 // WHAT IT DOES NOT OWN, deliberately:
-//   - the FIELDS themselves. They stay declared (and initialized) on
-//     `AppState` in store/useApp.ts, because the actions that RESET them on a
+//   - the FIELDS themselves. They are declared (and initialized) on
+//     store/plotViewFields.ts's state-only slice, because the actions that RESET them on a
 //     dataset switch (`setActive`/`addDataset`/`duplicateDataset`) and the
 //     ones that bulk-apply them (`loadWorkspace`, `applyOriginFigure`,
 //     `facetByColumn`/`breakAtGaps`) are not part of this cluster. Same shape as
@@ -134,7 +134,7 @@ export interface PlotViewSettingsSlice {
   setWaterfall: (waterfall: number) => void;
   /** Origin's waterfall X step: series i slides right by i·dx·(x-span).
    *  Declared and initialized HERE, unlike its `waterfall` sibling (which
-   *  predates this module and stays on `AppState` in useApp.ts): a PlotView
+   *  predates this module and lives in store/plotViewFields.ts): a PlotView
    *  field, so the view swap/history/.dwk paths carry it through `VIEW_KEYS`
    *  with no per-field line in useApp.ts. */
   waterfallDx: number;

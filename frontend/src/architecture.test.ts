@@ -547,7 +547,20 @@ const STORE_PINS: Record<string, number> = {
   // (poisoned whole-getState() diff per action and branch, the focused/pinned
   // window rebind effects, no own undo step/toast/macro, the ensureBookData
   // kicks) was green before the move and is unchanged after it.
-  "/store/useApp.ts": 817,
+  // 817 -> 623 (2026-10-01, P4.1 ninth + tenth domains): the recalc engine —
+  // setRecalcMode/touchDataset/recalcNow/setFitSpec, the recalcMode/
+  // staleDatasets/staleFits fields and the module-level debounce/guard/
+  // pending state — moved to store/recalcEngine.ts (RecalcEngineSlice); and
+  // the declarations + initial values of the live PlotView fields (yScale …
+  // waterfall; showGrid still seeded from the defaultGrid pref) moved to the
+  // state-only store/plotViewFields.ts (PlotViewFieldsSlice) — their writers
+  // were already in plotViewSettings.ts. store/recalcEngine.characterization.test.ts
+  // (whole-getState() diff per action, the 400 ms debounce, the mid-pass
+  // touch guard and follow-up pass) and store/plotViewFields.characterization.test.ts
+  // (every initial value, every PlotView key present, snapshotView of the
+  // initial store == defaultPlotView(), the defaultGrid seed) were green
+  // before the move and are unchanged after it.
+  "/store/useApp.ts": 623,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
