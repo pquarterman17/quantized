@@ -144,8 +144,10 @@ export interface PackProjectState {
    *  Legal only from `awaiting_confirmation`; `approvedManifest` must be
    *  reference-identical to `preview.manifest` (see
    *  packProjectRun.ts's `runStartPackProject` for the full stale-preview
-   *  rule) or this rejects locally without ever calling the bridge. */
-  startPackProject: (approvedManifest: PortableManifest) => Promise<void>;
+   *  rule) or this rejects locally without ever calling the bridge.
+   *  `includeFlagged` is the user's explicit confirm to pack the sources
+   *  the preview flagged as needing attention; omitted, they stay out. */
+  startPackProject: (approvedManifest: PortableManifest, includeFlagged?: boolean) => Promise<void>;
   /** Idempotent: a no-op from `idle` or a terminal phase; returns directly
    *  to `idle`-adjacent `cancelled` from any pre-`packing` active phase;
    *  from `packing`/`cancelling` asks the backend to cancel and lets the
@@ -227,7 +229,7 @@ export const usePackProject = create<PackProjectState>((set, get) => ({
     await runPreviewPackProject(set, destination);
   },
 
-  startPackProject: async (approvedManifest) => {
+  startPackProject: async (approvedManifest, includeFlagged = false) => {
     const phase = get().phase;
     if (phase !== "awaiting_confirmation" || startInFlight) {
       reject(set, phase, "startPackProject");
@@ -237,7 +239,7 @@ export const usePackProject = create<PackProjectState>((set, get) => ({
     const myEpoch = ++startEpoch; // this attempt's own token -- see the flag's doc above
     try {
       const { runStartPackProject } = await import("./packProjectRun");
-      await runStartPackProject(get, set, approvedManifest);
+      await runStartPackProject(get, set, approvedManifest, includeFlagged);
     } finally {
       // Round 3 finding #1: only clear the flag if THIS attempt still owns
       // it -- a reset/cancel (or a newer start) that ran while this one was

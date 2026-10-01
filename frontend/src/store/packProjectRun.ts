@@ -397,7 +397,12 @@ function startPolling(get: Get, set: Set): void {
  *  goes to `pack_start` — byte-identical to what `pack_preview` sent,
  *  which is what lets the backend's own `sha256(content)` check pass
  *  trivially rather than racing a live `savedAt` stamp. */
-export async function runStartPackProject(get: Get, set: Set, approvedManifest: PortableManifest): Promise<void> {
+export async function runStartPackProject(
+  get: Get,
+  set: Set,
+  approvedManifest: PortableManifest,
+  includeFlagged = false,
+): Promise<void> {
   const preview = get().preview;
   if (preview === null || approvedManifest !== preview.manifest) {
     noteFailed(set, [packError("stale_preview", "the reviewed plan is no longer current — preview again")]);
@@ -431,7 +436,7 @@ export async function runStartPackProject(get: Get, set: Set, approvedManifest: 
   }
 
   set({ phase: "packing" });
-  const result = await packStart(preview.token, preview.content);
+  const result = await packStart(preview.token, preview.content, includeFlagged);
   if (result === null) {
     noteFailed(set, [packError("bridge_unavailable", "the desktop bridge is unavailable")]);
     return;

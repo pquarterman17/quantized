@@ -74,6 +74,16 @@ export interface PortableSourceRow {
   /** Present only once a source has actually been staged (PR 2/3) — a
    *  dry-run preview's rows never carry this field at all. */
   packed?: { checksum: string; bytes: number } | null;
+  /** Why a packable source needs the user's attention (outside the data
+   *  folders, or not a data file type) — `pack_start` leaves it out unless
+   *  `includeFlagged`. Empty or absent = nothing to flag. */
+  attention?: PortableAttention[];
+}
+
+export interface PortableAttention {
+  code: "outside_data_roots" | "unrecognised_extension";
+  /** Short, path-free reason for the UI. */
+  reason: string;
 }
 
 /** One row of `manifest.datasets` — one entry PER DATASET (unlike
@@ -102,6 +112,8 @@ export interface PortableManifestSummary {
   shared: number;
   total_bytes: number;
   warnings: number;
+  /** Rows carrying a non-empty `attention` list. */
+  attention?: number;
   /** Present only on a FINALIZED (`dry_run: false`) manifest. */
   packed?: number;
 }
@@ -257,12 +269,13 @@ export async function packPreview(
 /** Start the actual copy/publish pipeline. `token` must be the EXACT token
  *  `packPreview` returned, and `content` must be byte-identical to what
  *  was previewed — any mismatch is `stale_preview`, never a silent re-plan
- *  against different data. `null` = no usable bridge. */
-export async function packStart(token: string, content: string): Promise<{ ok: boolean; error?: { code: string; message?: string } } | null> {
+ *  against different data. Flagged sources are left out unless
+ *  `includeFlagged` is the user's explicit confirm. `null` = no usable bridge. */
+export async function packStart(token: string, content: string, includeFlagged = false): Promise<{ ok: boolean; error?: { code: string; message?: string } } | null> {
   const bridge = api();
   if (!bridge?.pack_start) return null;
   try {
-    return (await bridge.pack_start(token, content)) as { ok: boolean; error?: { code: string; message?: string } };
+    return (await bridge.pack_start(token, content, includeFlagged)) as { ok: boolean; error?: { code: string; message?: string } };
   } catch {
     return null;
   }

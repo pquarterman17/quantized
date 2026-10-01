@@ -18,6 +18,7 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from pydantic import BaseModel
 
+from quantized.data_roots import allowed_data_roots
 from quantized.datastruct import DataStruct
 from quantized.desktop_consent import consented_path
 from quantized.io import import_auto
@@ -62,16 +63,9 @@ class ImportRequest(BaseModel):
 def _allowed_roots() -> tuple[str, ...]:
     """Real (symlink-resolved) absolute paths ``/import`` may read from: the
     user's home, the current working directory, and the system temp dir — widen
-    with the ``QZ_DATA_ROOTS`` env var (os.pathsep-separated)."""
-    raw = [Path.home(), Path.cwd(), Path(tempfile.gettempdir())]
-    raw += [Path(p) for p in os.environ.get("QZ_DATA_ROOTS", "").split(os.pathsep) if p.strip()]
-    roots: list[str] = []
-    for r in raw:
-        try:
-            roots.append(os.path.realpath(r))
-        except OSError:
-            continue
-    return tuple(roots)
+    with the ``QZ_DATA_ROOTS`` env var (os.pathsep-separated). The list itself
+    lives in ``quantized.data_roots`` so Pack Project shares it."""
+    return allowed_data_roots()
 
 
 def _allowed_prefixes() -> tuple[str, ...]:

@@ -107,7 +107,7 @@ interface PyWebviewApi {
   project_lock_release?: (path: string, token: string) => Promise<Record<string, unknown>>;
   pick_pack_destination?: (directory?: string) => Promise<Record<string, unknown>>;
   pack_preview?: (content: string, projectName: string, destinationParent: string) => Promise<Record<string, unknown>>;
-  pack_start?: (token: string, content: string) => Promise<Record<string, unknown>>;
+  pack_start?: (token: string, content: string, includeFlagged?: boolean) => Promise<Record<string, unknown>>;
   pack_status?: () => Promise<Record<string, unknown>>;
   pack_cancel?: () => Promise<Record<string, unknown>>;
   pack_reset?: () => Promise<Record<string, unknown>>;
