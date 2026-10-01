@@ -135,7 +135,9 @@ export async function executeSteps(
         case "correction": {
           const params = (step.params.params ?? {}) as CorrectionParams;
           const bg = step.params.bg as { datasetId: string; interp: string } | undefined;
-          await store().applyCorrections(target, params, bg);
+          // applyCorrections reports failure by returning false with the
+          // reason on the status line — never log that as "ok".
+          if (!(await store().applyCorrections(target, params, bg))) throw new Error(store().status);
           log[step.id] = { status: "ok" };
           break;
         }
