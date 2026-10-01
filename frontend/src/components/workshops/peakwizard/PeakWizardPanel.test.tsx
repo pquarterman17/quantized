@@ -255,3 +255,33 @@ describe("PeakWizardPanel — the step ② Escape pause is scoped (R11)", () => 
     expect(useApp.getState().peakWizardOpen).toBe(true);
   });
 });
+
+// The Wizard/Batch switch is a WAI-ARIA tablist (lib/tabListKeys) with
+// AUTOMATIC activation: switching is cheap and the batch view stays mounted.
+describe("PeakWizardPanel mode tabs", () => {
+  const selected = () => screen.getAllByRole("tab").find((t) => t.getAttribute("aria-selected") === "true");
+
+  it("roves the tab stop to the selected mode", () => {
+    render(<PeakWizardPanel />);
+    expect(screen.getByRole("tablist", { name: "Peak Analyzer mode" })).toBeInTheDocument();
+    expect(screen.getAllByRole("tab").map((t) => t.tabIndex)).toEqual([0, -1]);
+  });
+
+  it("arrows and Home/End move focus AND select, wrapping", () => {
+    render(<PeakWizardPanel />);
+    const wizard = screen.getByRole("tab", { name: "Wizard" });
+    const batch = screen.getByRole("tab", { name: "Batch" });
+    wizard.focus();
+    expect(fireEvent.keyDown(wizard, { key: "ArrowRight" })).toBe(false); // consumed
+    expect(document.activeElement).toBe(batch);
+    expect(selected()).toBe(batch);
+    expect(screen.getAllByRole("tab").map((t) => t.tabIndex)).toEqual([-1, 0]);
+    fireEvent.keyDown(batch, { key: "ArrowRight" }); // wraps
+    expect(selected()).toBe(wizard);
+    fireEvent.keyDown(wizard, { key: "End" });
+    expect(selected()).toBe(batch);
+    fireEvent.keyDown(batch, { key: "Home" });
+    expect(selected()).toBe(wizard);
+    expect(document.activeElement).toBe(wizard);
+  });
+});

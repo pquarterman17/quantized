@@ -12,12 +12,12 @@
 // legend/grid/axis-box flags, stack mode + panel fit + page setup, the
 // x/y/y2/group channel keys, reference lines, annotations, the per-channel
 // series styles/labels/error pairings, the explicit draw order, hidden/solo
-// channels, and the waterfall offset. The `ref-`/`ann-` id counters move with
-// the two actions that mint from them, so nothing else can draw from them.
+// channels, and the waterfall offset. The `ref-`/`ann-` ids come from
+// store/idSeq.ts's `nextPlotObjectId`, which a reopened project cannot collide with.
 //
 // WHAT IT DOES NOT OWN, deliberately:
-//   - the FIELDS themselves. They stay declared (and initialized) on
-//     `AppState` in store/useApp.ts, because the actions that RESET them on a
+//   - the FIELDS themselves. They are declared (and initialized) on
+//     store/plotViewFields.ts's state-only slice, because the actions that RESET them on a
 //     dataset switch (`setActive`/`addDataset`/`duplicateDataset`) and the
 //     ones that bulk-apply them (`loadWorkspace`, `applyOriginFigure`,
 //     `facetByColumn`/`breakAtGaps`) are not part of this cluster. Same shape as
@@ -53,15 +53,11 @@ import { nextPanelFit, type PanelFit } from "../lib/panelFit";
 import { effectiveChannels } from "../lib/plotdata";
 import type { AxisFormat, AxisScale, SeriesStyle } from "../lib/types";
 import type { HistoryBatchToken } from "./history";
+import { nextPlotObjectId } from "./idSeq";
 import type { AppState, LegendPos } from "./useApp";
 import { clearFocusedXBreaks } from "./windowDocuments";
 
-/** Reference-line and annotation id sequences. Module-level (not per-slice) so
- *  the ids stay unique for the process, exactly as they were in useApp.ts. */
-let _refSeq = 0;
-let _annSeq = 0;
-
-/** Mint the next reference-line id -- the ONE counter both `addRefLine`
+/** Mint the next reference-line id -- the ONE minter both `addRefLine`
  *  below and `store/plotRecipeApply.ts`'s recipe-apply seed path draw from,
  *  so an id assigned to an applied recipe's refLine and an id assigned by a
  *  later `addRefLine` click can never collide (code-review finding 4).
@@ -69,7 +65,7 @@ let _annSeq = 0;
  *  second caller -- see its own comment for why a captured/fixed id must be
  *  re-minted rather than kept verbatim. */
 export function nextRefLineId(): string {
-  return `ref-${++_refSeq}`;
+  return nextPlotObjectId("ref");
 }
 
 export interface PlotViewSettingsSlice {
@@ -134,7 +130,7 @@ export interface PlotViewSettingsSlice {
   setWaterfall: (waterfall: number) => void;
   /** Origin's waterfall X step: series i slides right by i·dx·(x-span).
    *  Declared and initialized HERE, unlike its `waterfall` sibling (which
-   *  predates this module and stays on `AppState` in useApp.ts): a PlotView
+   *  predates this module and lives in store/plotViewFields.ts): a PlotView
    *  field, so the view swap/history/.dwk paths carry it through `VIEW_KEYS`
    *  with no per-field line in useApp.ts. */
   waterfallDx: number;
@@ -248,7 +244,7 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
     updateRefLine: (id, value) => { get().recordHistory("move reference line"); set((s) => ({ refLines: s.refLines.map((r) => (r.id === id ? { ...r, value } : r)) })); },
     // Returns the new id (MAIN #27's "text box" flyout opens its text dialog).
     addAnnotation: (x, y, text, historyToken) => {
-      const id = `ann-${++_annSeq}`;
+      const id = nextPlotObjectId("ann");
       get().recordHistory("add annotation", historyToken);
       set((s) => ({ annotations: [...s.annotations, { id, x, y, text }] }));
       return id;

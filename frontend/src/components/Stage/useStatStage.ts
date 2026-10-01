@@ -444,7 +444,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     const inputs = {
       data, mode, draw: shown.draw, drawFacets: shown.drawFacets, groups, indexedGroups, valueCol,
       valueLabel, groupLabel, barValueLabel, barStack, dist, bins, fit, marks: rm,
-      showN, caveat: levels.notice?.caveat ?? null, errorNote,
+      showN, caveat: levels.notice?.caveat ?? null, errorNote, nestLabel,
     };
     // P3.4: a StatusBar op whose Cancel aborts the render request.
     return (await runCancellable("Exporting statistical plot…", (signal) => exportStatStage(fmt, inputs, signal))) !== null;

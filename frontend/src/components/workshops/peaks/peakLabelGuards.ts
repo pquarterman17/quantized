@@ -7,7 +7,7 @@ import { toast } from "../../../store/toasts";
 // Local id sequence for a "Label peaks" run's shared `Annotation.groupId`
 // (MY RULING 2) — same `Date.now().toString(36)` + module-scoped counter
 // shape as every other id generator in the store (e.g. useApp.ts's
-// `nextFigureId`/`_annSeq`), kept local here since group ids for this
+// `nextFigureId`, store/idSeq.ts), kept local here since group ids for this
 // feature are minted nowhere else.
 let _labelGroupSeq = 0;
 export function nextLabelGroupId(): string {

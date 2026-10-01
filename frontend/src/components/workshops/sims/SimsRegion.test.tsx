@@ -66,7 +66,7 @@ const store = useApp.getState;
 describe("SIMS Region tab", () => {
   it("measures the whole profile by default, then exports the CSV and adds a report", async () => {
     render(<SimsPanel />);
-    fireEvent.click(screen.getByRole("tab", { name: "Region" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Region" }));
     expect((screen.getByRole("textbox", { name: "Region from" }) as HTMLInputElement).value).toBe("0");
     expect((screen.getByRole("textbox", { name: "Region to" }) as HTMLInputElement).value).toBe("40");
     fireEvent.click(within(screen.getByRole("group", { name: "Region species" })).getByRole("checkbox", { name: "Si" }));
@@ -109,7 +109,7 @@ describe("SIMS Region tab", () => {
   it("measures the ANALYSIS rows and says so in the CSV provenance when rows were excluded", async () => {
     useApp.setState({ datasets: [{ id: "s1", name: "implant.csv", data: profile, excludedRows: [4] }] });
     render(<SimsPanel />);
-    fireEvent.click(screen.getByRole("tab", { name: "Region" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Region" }));
     await screen.findByRole("group", { name: "Region measures" });
     const body = vi.mocked(measureSimsRegion).mock.calls.at(-1)?.[0];
     expect(body?.dataset.time).toEqual([0, 10, 20, 30]);

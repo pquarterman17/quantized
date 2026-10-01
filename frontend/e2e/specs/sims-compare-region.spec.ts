@@ -55,7 +55,7 @@ test.describe("SIMS compare + region (P2.3 slice 2)", () => {
 
     await runPaletteCommand(page, "SIMS depth profile…");
     const panel = page.locator(".qzk-win").filter({ hasText: "SIMS depth profile" });
-    await panel.getByRole("tab", { name: "Compare" }).click();
+    await panel.getByRole("radio", { name: "Compare" }).click();
     await panel.getByRole("group", { name: "Species" }).getByRole("checkbox", { name: "Si" }).uncheck();
     await panel.getByRole("textbox", { name: "Stagger (decades per trace)" }).fill("1");
     const preview = panel.getByRole("group", { name: "Comparison preview" });
@@ -102,7 +102,7 @@ test.describe("SIMS compare + region (P2.3 slice 2)", () => {
     expect(text).toContain("B — sampleA (atoms/cm3)");
 
     // Region measures on sample A, from the real backend.
-    await panel.getByRole("tab", { name: "Region" }).click();
+    await panel.getByRole("radio", { name: "Region" }).click();
     await panel.getByRole("combobox", { name: "Region profile" }).selectOption({ label: "sampleA.csv" });
     await panel.getByRole("group", { name: "Region species" }).getByRole("checkbox", { name: "Si" }).uncheck();
     const measures = panel.getByRole("group", { name: "Region measures" });

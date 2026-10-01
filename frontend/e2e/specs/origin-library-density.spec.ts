@@ -69,7 +69,8 @@ test("dense recovered Origin graphs stay inside the Library and reveal one actio
   await expect(actions.first()).toHaveCSS("visibility", "visible");
   await expect(actions.nth(1)).toHaveCSS("visibility", "hidden");
 
-  await rows.first().locator(".qzk-fig-item").focus();
+  // The whole row (name + action strip) is the graph's treeitem.
+  await rows.first().focus();
   await expect(actions.first()).toHaveCSS("visibility", "visible");
   await page.keyboard.press("Tab");
   await expect(actions.first().getByTitle("Open in a new graph window")).toBeFocused();

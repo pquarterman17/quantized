@@ -107,7 +107,7 @@ describe("clean up", () => {
   it("lists keys with coverage, previews a synonym merge and the refused unit parse, writes only on Apply", async () => {
     open();
     render(<MetaFactorsPanel />);
-    fireEvent.click(screen.getByRole("tab", { name: "Clean up metadata" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Clean up metadata" }));
     const keys = within(screen.getByRole("table", { name: "Metadata keys" })).getAllByRole("row").slice(1);
     expect(keys.map((r) => r.textContent)).toEqual(["sample2/2", "T_set1/2 — not in a.dat", "Temp1/2 — not in b.dat"]);
 
@@ -140,7 +140,7 @@ describe("clean up", () => {
   it("renders the coverage counts and the Before/After values in JetBrains Mono (finding #10)", () => {
     open();
     render(<MetaFactorsPanel />);
-    fireEvent.click(screen.getByRole("tab", { name: "Clean up metadata" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Clean up metadata" }));
     const coverageCell = within(screen.getByRole("table", { name: "Metadata keys" })).getAllByRole("row")[1].children[2] as HTMLElement;
     expect(coverageCell.style.fontFamily).toBe("var(--font-mono)");
 

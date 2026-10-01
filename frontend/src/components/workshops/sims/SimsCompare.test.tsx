@@ -82,7 +82,7 @@ beforeEach(() => {
 const store = useApp.getState;
 const openCompare = () => {
   render(<SimsPanel />);
-  fireEvent.click(screen.getByRole("tab", { name: "Compare" }));
+  fireEvent.click(screen.getByRole("radio", { name: "Compare" }));
 };
 
 describe("SIMS Compare tab", () => {
@@ -127,9 +127,9 @@ describe("SIMS Compare tab", () => {
   it("keeps a tab's half-filled form across a tab switch", () => {
     openCompare();
     fireEvent.change(screen.getByRole("textbox", { name: "Stagger (decades per trace)" }), { target: { value: "3" } });
-    fireEvent.click(screen.getByRole("tab", { name: "Process" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Process" }));
     expect(screen.getByRole("textbox", { name: "Stagger (decades per trace)", hidden: true })).not.toBeVisible();
-    fireEvent.click(screen.getByRole("tab", { name: "Compare" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Compare" }));
     expect((screen.getByRole("textbox", { name: "Stagger (decades per trace)" }) as HTMLInputElement).value).toBe("3");
   });
 

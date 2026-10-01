@@ -17,9 +17,8 @@
 // remove half `Inspector/RegionShadesCard.tsx` needs.
 
 import type { RegionShade } from "../lib/types";
+import { nextPlotObjectId } from "./idSeq";
 import type { AppState } from "./useApp";
-
-let _shadeSeq = 0;
 
 export interface RegionShadesSlice {
   /** Filled rectangular regions pinned at data coordinates (Origin `Rect*`
@@ -42,7 +41,7 @@ export function createRegionShadesSlice(set: SliceSet, get: SliceGet): RegionSha
   return {
     regionShades: [],
     addRegionShade: (shade) => {
-      const id = `shade-${++_shadeSeq}`;
+      const id = nextPlotObjectId("shade");
       get().recordHistory("add region shade");
       set((s) => ({ regionShades: [...s.regionShades, { ...shade, id }] }));
       return id;

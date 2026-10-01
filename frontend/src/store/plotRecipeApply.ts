@@ -144,17 +144,11 @@ export function viewFromResolved(
     shapes: visual.decorations.shapes,
     regionShades: visual.decorations.regionShades,
     // FINDING 4 (code-review): every incoming refLine is RE-MINTED a fresh id
-    // from `store/plotViewSettings.ts`'s own `nextRefLineId()` -- the SAME
-    // counter `addRefLine` draws from -- rather than keeping whatever id the
-    // recipe happened to capture. A captured project/global recipe's
-    // refLines carry "ref-N" ids minted by a PAST session's `_refSeq`; that
-    // counter restarts at 0 every session, so applying such a recipe and
-    // then clicking "add reference line" in the SAME (fresh) session could
-    // mint the identical "ref-1" a second time -- two lines sharing one id,
-    // which `removeRefLine`/`updateRefLine` (both keyed by id) can no longer
-    // tell apart. Reminting here closes that off structurally: every applied
-    // line and every later `addRefLine` call draw from the one counter, so
-    // two ids can never coincide within a session.
+    // from `store/plotViewSettings.ts`'s `nextRefLineId()` -- the same source
+    // `addRefLine` draws from -- rather than keeping whatever id the recipe
+    // captured. Ids are timestamped (store/idSeq.ts `nextPlotObjectId`), so a
+    // reminted line can never share an id with one already on the plot, which
+    // `removeRefLine`/`updateRefLine` (both keyed by id) rely on.
     refLines: visual.refLines.map((r) => ({ ...r, id: nextRefLineId() })),
   };
 }

@@ -57,13 +57,13 @@ describe("RegionShadePropertiesPanel — rows", () => {
     // Both the row AND the Add form carry a "Y"/"Y2" segmented control, so
     // the row's is the FIRST of each pair (rows render before the Add form).
     const { onPatch } = renderPanel([SHADE_1]);
-    fireEvent.click(screen.getAllByRole("tab", { name: "Y2" })[0]);
+    fireEvent.click(screen.getAllByRole("radio", { name: "Y2" })[0]);
     expect(onPatch).toHaveBeenCalledWith("sh1", { axis: 1 });
   });
 
   it("toggling axis: 1 back to Y commits the explicit primary value 0", () => {
     const { onPatch } = renderPanel([SHADE_2]);
-    fireEvent.click(screen.getAllByRole("tab", { name: "Y" })[0]);
+    fireEvent.click(screen.getAllByRole("radio", { name: "Y" })[0]);
     expect(onPatch).toHaveBeenCalledWith("sh2", { axis: 0 });
   });
 
@@ -117,7 +117,7 @@ describe("RegionShadePropertiesPanel — Add form", () => {
     fireEvent.change(screen.getByLabelText("new shade x2"), { target: { value: "30" } });
     fireEvent.change(screen.getByLabelText("new shade y2"), { target: { value: "40" } });
     fireEvent.change(screen.getByLabelText("new shade fill"), { target: { value: "#ff0000" } });
-    fireEvent.click(screen.getByRole("tab", { name: "Y2" }));
+    fireEvent.click(screen.getByRole("radio", { name: "Y2" }));
     fireEvent.click(screen.getByRole("button", { name: "Add" }));
     expect(onAdd).toHaveBeenCalledWith({ x1: 10, y1: 20, x2: 30, y2: 40, fill: "#ff0000", axis: 1 });
   });

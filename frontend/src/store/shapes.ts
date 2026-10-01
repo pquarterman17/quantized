@@ -13,14 +13,13 @@
 //
 // `drawShapeKind`/`selectedShapeId` are transient tool state (like
 // `selectedAnnotationId`) — NOT PlotView fields and NOT undo-recorded, NOT
-// reset on window/dataset focus switch (ids are drawn from the module-local
-// `_shapeSeq`, never reused, so a stale id simply matches nothing). The
+// reset on window/dataset focus switch (ids come from idSeq's
+// `nextPlotObjectId`, never reused, so a stale id simply matches nothing). The
 // persistent `shapes` array itself participates in edit history.
 
 import type { Annotation, Shape } from "../lib/types";
+import { nextPlotObjectId } from "./idSeq";
 import type { AppState } from "./useApp";
-
-let _shapeSeq = 0;
 
 export interface ShapesSlice {
   /** Drawn shapes (MAIN #27). A `PlotView` field — swapped per-window,
@@ -70,7 +69,7 @@ export function createShapesSlice(set: SliceSet, get: SliceGet): ShapesSlice {
     selectedShapeId: null,
     setSelectedShapeId: (selectedShapeId) => set({ selectedShapeId }),
     addShape: (shape) => {
-      const id = `shape-${++_shapeSeq}`;
+      const id = nextPlotObjectId("shape");
       get().recordHistory("add shape");
       set((s) => ({ shapes: [...s.shapes, { ...shape, id }] }));
       return id;

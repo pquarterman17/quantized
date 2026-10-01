@@ -87,10 +87,10 @@ export function refLineIdForHit(lines: readonly RefLine[], hitIndex: number): st
 /** Id prefix for lines created inside a Publication Preview draft.
  *
  *  Deliberately NOT the store's `ref-` prefix. `store/plotViewSettings.ts`
- *  mints those from a module-global `_refSeq` counter that knows nothing about
+ *  mints those from a module-global counter (store/idSeq.ts) that knows nothing about
  *  a detached draft;
  *  if this module also emitted `ref-N`, a draft could create `ref-5`, Apply it
- *  into the window document, and then a later Stage "Add" -- with `_refSeq`
+ *  into the window document, and then a later Stage "Add" -- with the counter
  *  still at 2 -- would mint `ref-3`, `ref-4`, `ref-5` and collide with it.
  *  Ids only have to be unique within one array, so a separate namespace is
  *  the whole fix. */

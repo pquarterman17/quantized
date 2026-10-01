@@ -7,7 +7,7 @@ import { recomputeWithErrors } from "../lib/formula";
 import { asAlreadyComputed } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import type { WorkbookNode } from "../lib/workbooks";
-import { snapshotView, type PlotView } from "../lib/plotview";
+import { snapshotView } from "../lib/plotview";
 import { nextStageTab, type StageTab } from "../lib/stagetab";
 // The MDI window-management slice (MAIN_PLAN #2): state + actions live in
 // ./windows and are composed into THIS store instance below; the shared
@@ -40,12 +40,10 @@ import { createWorkbookActionsSlice, type WorkbookActionsSlice } from "./workboo
 import { createWorkbookCombineSlice, type WorkbookCombineSlice } from "./workbookCombine";
 import { createWorkbookSeparateSlice, type WorkbookSeparateSlice } from "./workbookSeparate";
 import { createWorkbookTransferSlice, type WorkbookTransferSlice } from "./workbookTransfer";
-import { recomputeStaleFits } from "./recalcFits";
-import { recomputeStaleDatasets } from "./recalcDatasets";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createProjectSlice, type ProjectSlice } from "./project";
 import { createTrashSlice, type TrashSlice } from "./trash";
-import { createComputedColumnsSlice, refreshFitRefsLater, type ComputedColumnsSlice } from "./computedColumns";
+import { createComputedColumnsSlice, type ComputedColumnsSlice } from "./computedColumns";
 import { createDerivedWorksheetsSlice, type DerivedWorksheetsSlice } from "./derivedWorksheets";
 import { createCorrectionsSlice, type CorrectionsSlice } from "./corrections";
 import { createFigureLifecycleSlice, type FigureLifecycleSlice } from "./figureLifecycle";
@@ -62,14 +60,11 @@ import { createPageDocumentsSlice, type PageDocumentSlice } from "./pageDocument
 import { createRoisSlice, type RoisSlice } from "./rois";
 // RSM_CUTS_PLAN item 8: just the ToolWindow's open flag — see the file header.
 import { createRoiCutsPanelSlice, type RoiCutsPanelSlice } from "./roiCutsPanel";
-import type { Composition } from "../lib/composition";
 import type { ReportEntry } from "../lib/report";
 import type { PanelFit } from "../lib/panelLayout";
-import type { PageSetup } from "../lib/pagesetup";
 import type { FwhmResult } from "../lib/peakwidth";
 import type { IntegralResult } from "../lib/plotRangeSelection";
 import type { FigureDoc } from "../lib/figuredoc";
-import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
 import { nextDatasetId } from "./idSeq";
 import { createReportsFigureDocsSlice, type ReportsFigureDocsSlice } from "./reportsFigureDocs";
 import { createViewAppliersSlice, type ViewAppliersSlice } from "./viewAppliers";
@@ -78,23 +73,15 @@ import { createMacroPipelineSlice, type MacroPipelineSlice } from "./macroPipeli
 import { createWorkshopFlagsSlice, type WorkshopFlagsSlice } from "./workshopFlags";
 import { createDatasetListEditsSlice, type DatasetListEditsSlice } from "./datasetListEdits";
 import { createDatasetSelectionSlice, type DatasetSelectionSlice } from "./datasetSelection";
+import { createRecalcEngineSlice, type RecalcEngineSlice } from "./recalcEngine";
+import { createPlotViewFieldsSlice, type PlotViewFieldsSlice } from "./plotViewFields";
 import { toast } from "./toasts";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
 import { createOriginImportSlice, type OriginImportSlice } from "./originImport";
 import { createRecipeFidelitySlice, type RecipeFidelitySlice } from "./recipeFidelity";
 import { createOriginFallbackSlice, type OriginFallbackSlice } from "./originFallbackLazy";
 import { createPlotViewSettingsSlice, type PlotViewSettingsSlice } from "./plotViewSettings";
-import type {
-  Annotation,
-  AxisFormat, AxisScale,
-  ChannelRole,
-  Dataset,
-  DataStruct, DefaultTrace,
-  FitSpec,
-  ModelingType,
-  RefLine,
-  SeriesStyle,
-} from "../lib/types";
+import type { ChannelRole, Dataset, DataStruct, DefaultTrace, ModelingType } from "../lib/types";
 /** Recompute a dataset's computed columns from its current base (no-op without
  *  formulas). Routed through after any base-data mutation (cell edit, corrections).
  *  Exported for store/corrections.ts (nextDatasetId/split.ts precedent) — the
@@ -133,12 +120,7 @@ export { nextDatasetId, nextFolderId } from "./idSeq";
 // datasetViewDefaults / retargetPassiveRebind stay imported above for
 // addDataset; setActive's focusedRebindPatch moved with it.)
 
-// Recalc scheduler internals (#1): a module-level debounce timer plus an
-// in-progress guard so the recalc's own applyCorrections calls never re-mark
-// or re-schedule (the loop would otherwise feed itself).
-let _recalcTimer: ReturnType<typeof setTimeout> | null = null;
-let _recalcInProgress = false;
-let _recalcPending = false; // #3: request mid-pass -> follow-up pass, not a no-op
+// (the recalc scheduler's timer/guard state moved to store/recalcEngine.ts.)
 
 // (the quick-fit debounce timer moved to store/gadget.ts with the slice.)
 
@@ -187,7 +169,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice, DatasetSelectionSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice, DatasetSelectionSlice, RecalcEngineSlice, PlotViewFieldsSlice {
   datasets: Dataset[];
   // activeId / selectedIds / worksheetId: declared on DatasetSelectionSlice
   // (store/datasetSelection.ts) with the actions that move them.
@@ -201,14 +183,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // Legacy publication-preview documents; canonical editable figures live in FigureLifecycleSlice.
   figureDocs: FigureDoc[];
   figureDocSeed: FigureDoc | null;
-  // Recalc engine (#1): auto re-runs downstream corrections/fits when data
-  // changes; manual only flips staleness (#4 badges); off does neither.
-  recalcMode: RecalcMode;
-  // Dirty nodes awaiting recalculation (dataset ids). A dataset is stale when
-  // its corrections need re-deriving (its bg source changed); a fit is stale
-  // when its dataset's data changed under a saved fitSpec.
-  staleDatasets: string[];
-  staleFits: string[];
+  // recalcMode / staleDatasets / staleFits: declared on RecalcEngineSlice
+  // (store/recalcEngine.ts) with the actions that move them.
   // folders / expandedFolders / smartFolders: declared on DatasetListEditsSlice
   // (store/datasetListEdits.ts) with the actions that edit them.
   // Library workbooks (LIBRARY_WORKBOOK_UX_PLAN L0.1's folder -> workbook ->
@@ -247,81 +223,10 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // (frames = aspect-preserving letterbox, window = fill). Read at apply time,
   // mirroring how `defaultGrid` seeds `showGrid`.
   defaultPanelFit: PanelFit;
-  yScale: AxisScale; // Y axis scale (MAIN #12: linear/log/reciprocal)
-  xScale: AxisScale; // X axis scale
-  showGrid: boolean; // draw the plot grid lines
-  showLegend: boolean; // show the floating legend overlay
-  legendPos: LegendPos; // which corner the floating legend pins to
-  legendStatic: boolean; // clean read-only legend (Origin apply, decode #52)
-  legendTitle: string | null; // legend header text (Origin apply, decode #52)
-  plotTemplate: string; // on-screen publication template (base font + line width)
-  showAxisBox: boolean; // full frame on all four sides of the plot area (on by default)
-  stackMode: boolean; // multi-panel: one stacked sub-plot per channel
-  panelFit: PanelFit; // #54: how a spatial multi-panel view fills the stage (PlotView field)
-  pageSetup: PageSetup | null; // #54: this window's physical page model (PlotView field; null = none)
-  // How the stage is arranged into panels (#54 pass A): ONE discriminated
-  // union replacing the former parallel `spatialPanels`/`facetPanels`/
-  // `breakPanels` nullable arrays, whose mutual exclusion every assigning
-  // `set()` had to re-enforce by hand. `null` = no multi-panel arrangement.
-  // Set by `applyOriginFigure` (spatial), `facetByColumn` (facet) and
-  // `breakAtGaps` (break); cleared by `setStackMode` and `setActive` so a
-  // manual toggle or a different dataset never shows a stale arrangement.
-  // EPHEMERAL — never persisted directly; a `.dwk` restore/focus switch
-  // nulls it. For FACET specifically (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4)
-  // this is no longer a durability gap: `facetKey` below is the durable
-  // binding (bindings-owned, survives save/reopen/recipe-apply exactly like
-  // `groupKey`), and `MultiPanelStage.tsx` rebuilds this field on demand from
-  // it (`lib/facet.facetCompositionFromBinding`) whenever it's null — see
-  // that component's own doc. Spatial/break stay genuinely ephemeral (no
-  // binding to rebuild from). Each kind's panel shape, why the three differ,
-  // and the reference-stable accessors: `lib/composition.ts`.
-  composition: Composition | null;
-  insetMode: boolean; // show a magnifier inset over the plot
-  polarMode: boolean; // render the active series in polar (angle vs radius)
-  statMode: boolean; statHideEmptyLevels: boolean; statShowGroupN: boolean; statShowSummary: boolean; statMarks: PlotView["statMarks"]; // Statistics stage (gap #16) + its P2.6 options
-  xLim: [number, number] | null; // explicit X range (null = autoscale)
-  yLim: [number, number] | null; // explicit Y range (null = autoscale)
-  // Origin's decoded major-tick increment for a FIXED log axis (plot-fidelity
-  // fix #2) — only meaningful alongside xLim/yLim/y2Lim; see
-  // `lib/uplotOpts.fixedLogAxisSplits`'s doc. null = undecoded (falls back to
-  // a "nice number" step). Reset whenever the paired *Lim is reset/replaced
-  // by anything other than an Origin figure apply, so a stale step never
-  // leaks onto an unrelated manual range.
-  xStep: number | null;
-  yStep: number | null;
-  xFmt: AxisFormat; // X-axis tick number format
-  yFmt: AxisFormat; // Y-axis tick number format (default source for y2Fmt when null)
-  y2Fmt: AxisFormat | null; // secondary-axis tick format; null = inherit yFmt (default)
-  plotTitle: string; // chart title rendered above the plot ("" = none)
-  xAxisLabel: string; // override for the x-axis label ("" = auto from data)
-  yAxisLabel: string; // override for the primary y-axis label ("" = auto)
-  xKey: number | null; // value channel used as the plot x-axis (null = .time)
-  yKeys: number[] | null; // which value channels to plot (null = all)
-  groupKey: number | null; // P1.5 "Group" well channel — splits each plotted Y into one series per level
-  // F4.4: the durable facet-by-column binding (bindings-owned like groupKey
-  // — see `composition`'s doc above). `facetByColumn` sets it; a genuine
-  // dataset switch resets it (`store/windowDefaults.ts`'s
-  // `datasetViewDefaults`, same treatment as groupKey).
-  facetKey: number | null;
-  y2Keys: number[] | null; // channels drawn on the secondary (right) Y axis
-  y2Lim: [number, number] | null; // fixed secondary-Y range (Origin double-Y apply)
-  y2Scale: AxisScale | null; // secondary-Y scale (null = inherit yScale)
-  y2Step: number | null; // decoded major-tick increment for y2Lim (see xStep/yStep)
-  y2AxisLabel: string; // override for the secondary y-axis label ("" = auto)
-  refLines: RefLine[]; // fixed X/Y marker lines on the plot
-  annotations: Annotation[]; // text labels pinned at data coordinates
-  // regionShades: declared by RegionShadesSlice (store/regionShades.ts) —
-  // owns the array + its create/edit/remove actions (F2.3j).
-  seriesStyles: Record<number, SeriesStyle>; // per-channel color/width/line overrides
-  seriesLabels: Record<number, string>; // per-channel display-name overrides (legend rename)
-  errKeys: Record<number, number>; // y-channel index → channel holding its ± error (error bars)
-  seriesOrder: number[] | null; // explicit plotted-channel draw order (null = natural/yKeys order)
-  hiddenChannels: number[]; // channels toggled off via the interactive legend (kept in payload, not drawn)
-  waterfall: number; // waterfall offset as a fraction of the y-span (0 = off)
-  // plotWindows / focusedWindowId / plotCanvasBounds live in the WindowsSlice
-  // this interface extends (store/windows.ts). The PlotView singleton fields
-  // ABOVE this line are the FOCUSED window's LIVE view — see the facade doc
-  // on WindowsSlice.
+  // yScale … waterfall — the FOCUSED window's live PlotView fields (see the
+  // facade doc on WindowsSlice) — are declared on PlotViewFieldsSlice
+  // (store/plotViewFields.ts); plotWindows / focusedWindowId /
+  // plotCanvasBounds on WindowsSlice (store/windows.ts).
   plotTool: PlotTool;
   // On-plot analysis results (∫ / ∩ tools). Persist drawn until cleared via the
   // result chip or a dataset change (reset alongside the per-dataset view state).
@@ -363,12 +268,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // P1.2 box 1: "Save" (Ctrl+S) — writes to the known project path with no
   // dialog when one exists; otherwise identical to saveWorkspaceToFile.
   saveWorkspace: () => Promise<void>;
-  // Recalc engine (#1): mark everything downstream of a data change, run the
-  // dirty set now, and record/clear a dataset's re-runnable fit spec.
-  setRecalcMode: (mode: RecalcMode) => void;
-  touchDataset: (id: string) => void;
-  recalcNow: () => Promise<void>;
-  setFitSpec: (id: string, spec: FitSpec | null) => void;
+  // setRecalcMode / touchDataset / recalcNow / setFitSpec: see
+  // store/recalcEngine.ts (RecalcEngineSlice).
   // loadWorkspace / appendWorkspace: see store/workspaceHydration.ts
   // (WorkspaceHydrationSlice) — composed exactly like plotViewSettings.ts,
   // reportsFigureDocs.ts and viewAppliers.ts.
@@ -472,14 +373,13 @@ export const useApp = create<AppState>((set, get) => ({
   ...createWorkshopFlagsSlice(set),
   ...createDatasetListEditsSlice(set, get),
   ...createDatasetSelectionSlice(set, get),
+  ...createRecalcEngineSlice(set, get),
+  ...createPlotViewFieldsSlice(_initialPrefs.defaultGrid),
   datasets: [],
   reports: [],
   openReportId: null,
   figureDocs: [],
   figureDocSeed: null,
-  recalcMode: "auto",
-  staleDatasets: [],
-  staleFits: [],
   workbooks: [],
   leftCollapsed: false,
   rightCollapsed: false,
@@ -493,49 +393,7 @@ export const useApp = create<AppState>((set, get) => ({
   // is re-assigned here with the IDENTICAL value `createLibraryPanelSlice`
   // above was already constructed from, so the order of the two is immaterial.
   ..._initialPrefs,
-  yScale: "linear",
-  xScale: "linear",
-  showGrid: _initialPrefs.defaultGrid,
-  showLegend: true,
-  legendPos: "ne",
-  legendStatic: false,
-  legendTitle: null,
-  plotTemplate: "screen",
-  showAxisBox: true,
-  stackMode: false,
-  panelFit: "frames",
-  pageSetup: null,
-  composition: null,
-  insetMode: false,
-  polarMode: false,
-  statMode: false, statHideEmptyLevels: false, statShowGroupN: true, statShowSummary: false, statMarks: {},
-  xLim: null,
-  yLim: null,
-  xStep: null,
-  yStep: null,
-  xFmt: { mode: "auto", digits: 2 },
-  yFmt: { mode: "auto", digits: 2 },
-  y2Fmt: null,
-  plotTitle: "",
-  xAxisLabel: "",
-  yAxisLabel: "",
-  xKey: null,
-  yKeys: null,
-  groupKey: null,
-  facetKey: null,
-  y2Keys: null,
-  y2Lim: null,
-  y2Scale: null,
-  y2Step: null,
-  y2AxisLabel: "",
-  refLines: [],
-  annotations: [],
-  seriesStyles: {},
-  seriesLabels: {},
-  errKeys: {},
-  seriesOrder: null,
-  hiddenChannels: [],
-  waterfall: 0,
+  // (yScale … waterfall: initialized by createPlotViewFieldsSlice above.)
   plotTool: "pointer",
   integral: null,
   fwhmResult: null,
@@ -746,60 +604,8 @@ export const useApp = create<AppState>((set, get) => ({
   setFwhmResult: (fwhmResult) => set({ fwhmResult }),
   // (setPrefsOpen, setCmdk … setContourScale bodies moved to
   // createWorkshopFlagsSlice, spread into this literal above.)
-  // ── Recalc engine (#1; K3/K5c/K5d generalize it over derived worksheets) ──
-  // `downstreamOf` (lib/recalc.ts) now walks the WIDENED ds/col/sheet/fit
-  // graph internally, so a dataset with `derivedFrom` set (K2, L0.50) already
-  // lands in `down.datasets`/`down.fits` here exactly like a bgRef-chained
-  // one — no separate sheet-marking path needed. That satisfies K5c's "no
-  // automatic recompute on source edit beyond stale-marking" for free: this
-  // action only ever ADDS ids to `staleDatasets`/`staleFits`, never mutates
-  // data, whether the auto-mode debounce below fires or not. `recalcNow`
-  // below is the actual "async stale-marked scheduler path" a sheet
-  // recalculates through — today a stale sheet with no `corrections` simply
-  // clears (the honest no-op: no pipeline EXECUTOR exists yet, that's
-  // LIBRARY_WORKBOOK_UX_PLAN PR K slice 2), and because `down.fits` was
-  // populated from the SAME graph walk, a downstream fit on a sheet is
-  // already stale in this SAME call — recalcNow's existing two-phase order
-  // (datasets, then `recomputeStaleFits`) processes a ds→sheet→fit chain in
-  // the right order inside one pass without further changes here.
-  setRecalcMode: (recalcMode) => set({ recalcMode }),
-  touchDataset: (id) => {
-    if (_recalcInProgress) return; // the recalc's own writes never re-mark
-    const s = get();
-    if (s.recalcMode === "off") return;
-    const down = downstreamOf(s.datasets, id);
-    const staleDatasets = markStale(s.staleDatasets, down.datasets);
-    const staleFits = markStale(s.staleFits, down.fits);
-    if (staleDatasets !== s.staleDatasets || staleFits !== s.staleFits) {
-      set({ staleDatasets, staleFits });
-    }
-    if (s.recalcMode === "auto" && (staleDatasets.length || staleFits.length)) {
-      // Debounced: a burst of cell edits triggers ONE downstream pass.
-      if (_recalcTimer) clearTimeout(_recalcTimer);
-      _recalcTimer = setTimeout(() => {
-        _recalcTimer = null;
-        void get().recalcNow();
-      }, 400);
-    }
-  },
-  recalcNow: async () => {
-    // #3: a request that arrives mid-pass (refreshFitRefsFor's own call,
-    // reached from inside recomputeStaleFits below) sets the pending flag
-    // for a follow-up pass below, rather than the silent no-op it used to be.
-    if (_recalcInProgress) return void (_recalcPending = true);
-    _recalcInProgress = true;
-    try {
-      await recomputeStaleDatasets(set, get);
-      await recomputeStaleFits(set, get);
-    } finally {
-      _recalcInProgress = false;
-      if (_recalcPending) void ((_recalcPending = false), get().recalcNow());
-    }
-  },
-  setFitSpec: (id, spec) => {
-    set((s) => ({ datasets: s.datasets.map((d) => (d.id === id ? { ...d, fitSpec: spec ?? undefined } : d)) }));
-    refreshFitRefsLater(id, get); // P2.5: fit() columns follow the fit
-  },
+  // (setRecalcMode/touchDataset/recalcNow/setFitSpec + the scheduler state
+  // moved to createRecalcEngineSlice, spread into this literal above.)
   // (startMacro … setPipelineRunning bodies moved to
   // createMacroPipelineSlice, spread into this literal above.)
   setStatus: (status) => set({ status }),

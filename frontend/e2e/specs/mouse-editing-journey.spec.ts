@@ -131,12 +131,12 @@ test("line/scatter, color, width, errors, scale, limits, legend, and label edits
   await row0.locator("summary").click();
   await expect(row0).toBeVisible();
 
-  await row0.getByRole("tab", { name: "Scatter" }).click();
+  await row0.getByRole("radio", { name: "Scatter" }).click();
   await expect
     .poll(() => page.evaluate(() => (window as unknown as { __qz: { useApp: { getState: () => { seriesStyles: Record<number, { width?: number; marker?: boolean }> } } } }).__qz.useApp.getState().seriesStyles[0]))
     .toEqual({ width: 0, marker: true }); // line -> scatter really happened
 
-  await row0.getByRole("tab", { name: "Both" }).click(); // scatter -> line+symbol (see header)
+  await row0.getByRole("radio", { name: "Both" }).click(); // scatter -> line+symbol (see header)
   const widthField = row0.locator('input[placeholder="1.5"]');
   await widthField.fill("4");
   await widthField.blur();

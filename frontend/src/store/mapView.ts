@@ -56,16 +56,11 @@ import {
 } from "../lib/mapView";
 import type { ColormapName } from "../lib/colormap";
 import type { CutSpace } from "../lib/mapcuts";
+import { nextPlotObjectId } from "./idSeq";
 import type { AppState } from "./useApp";
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
-
-/** Slice/annotation id sequences. Module-level (not per-store) so ids stay
- *  unique for the process, the same convention `store/rois.ts`'s `_roiSeq` and
- *  `store/plotViewSettings.ts`'s `_refSeq`/`_annSeq` already use. */
-let _sliceSeq = 0;
-let _annSeq = 0;
 
 export interface MapViewSlice {
   /** See lib/mapView.ts. ONE entry per dataset id; an absent entry IS
@@ -219,7 +214,7 @@ export function createMapViewSlice(set: SliceSet, get: SliceGet): MapViewSlice {
 
     addMapSlice: (datasetId, def) => {
       if (!datasetId) return null;
-      const id = `mslice-${++_sliceSeq}`;
+      const id = nextPlotObjectId("mslice");
       edit(datasetId, "add map slice", (v) => ({ ...v, slices: [...v.slices, { ...def, id }] }));
       return id;
     },
@@ -233,7 +228,7 @@ export function createMapViewSlice(set: SliceSet, get: SliceGet): MapViewSlice {
 
     addMapAnnotation: (datasetId, x, y, text, space) => {
       if (!datasetId) return null;
-      const id = `mann-${++_annSeq}`;
+      const id = nextPlotObjectId("mann");
       edit(datasetId, "add map annotation", (v) => ({
         ...v,
         annotations: [...v.annotations, { id, x, y, text, space }],

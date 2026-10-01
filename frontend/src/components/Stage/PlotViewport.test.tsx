@@ -254,6 +254,18 @@ describe("PlotViewport — display-only changes patch the live instance", () => 
     expect(created).toHaveLength(2);
   });
 
+  it("a hide toggle on a waterfall X-offset layout rebuilds, since its x range covers visible series only", () => {
+    vi.stubGlobal("ResizeObserver", MockResizeObserver);
+    // Ascending blocks (a step past the span): uPlot's own x range would apply.
+    const blocks: PlotPayload = { ...TWO, data: [[0, 1, 5, 6], [1, 2, null, null], [null, null, 3, 4]], blockRows: 2 };
+    const props = { ...baseProps(), displayPayload: blocks };
+    const { rerender } = render(<PlotViewport {...props} hidden={[false, false]} />);
+    rerender(<PlotViewport {...props} hidden={[false, true]} />);
+    expect(created).toHaveLength(2);
+    const range = (created[1] as { opts: uPlot.Options }).opts.scales?.x?.range as () => [number, number];
+    expect(range()[1]).toBeLessThan(5); // the hidden series' block is not covered
+  });
+
   it("an identical-content hidden/styles array with a new identity does nothing", async () => {
     vi.stubGlobal("ResizeObserver", MockResizeObserver);
     const props = baseProps();

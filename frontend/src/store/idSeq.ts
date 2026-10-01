@@ -42,3 +42,9 @@ export const nextReportId = (): string => `rep-${Date.now().toString(36)}-${++_i
 export const nextFigureDocId = (): string => `figd-${Date.now().toString(36)}-${++_idSeq}`;
 /** Likewise for `addSmartFolder`, which stays in useApp.ts. */
 export const nextSmartFolderId = (): string => `smf-${Date.now().toString(36)}-${++_idSeq}`;
+/** Plot objects (reference lines, annotations, shapes, region shades, map
+ *  slices and map annotations). They persist with their ids verbatim, so the
+ *  bare `prefix-N` counters they used restarted on every page load and
+ *  reminted a reopened project's ids: one delete then removed two objects
+ *  (BUG-020's class). The timestamp keeps a past session's id unreachable. */
+export const nextPlotObjectId = (prefix: string): string => `${prefix}-${Date.now().toString(36)}-${++_idSeq}`;

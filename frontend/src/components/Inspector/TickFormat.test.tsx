@@ -21,10 +21,10 @@ describe("TickFormat", () => {
   it("offers Auto/Fixed/Sci/Eng on both the X and Y rows", () => {
     const { getByText, container } = render(<TickFormat />);
     expect(getByText("Tick format")).toBeTruthy();
-    const groups = container.querySelectorAll('[role="tablist"]');
+    const groups = container.querySelectorAll('[role="radiogroup"]');
     expect(groups).toHaveLength(2);
     for (const group of Array.from(groups)) {
-      const labels = Array.from(group.querySelectorAll('[role="tab"]')).map((b) => b.textContent);
+      const labels = Array.from(group.querySelectorAll('[role="radio"]')).map((b) => b.textContent);
       expect(labels).toEqual(["Auto", "Fixed", "Sci", "Eng"]);
     }
   });
@@ -36,8 +36,8 @@ describe("TickFormat", () => {
 
   it("selecting Eng on the Y row writes yFmt.mode through to the store and reveals the digits field", () => {
     const { container } = render(<TickFormat />);
-    const [, yGroup] = container.querySelectorAll('[role="tablist"]');
-    fireEvent.click(Array.from(yGroup.querySelectorAll('[role="tab"]')).find((b) => b.textContent === "Eng")!);
+    const [, yGroup] = container.querySelectorAll('[role="radiogroup"]');
+    fireEvent.click(Array.from(yGroup.querySelectorAll('[role="radio"]')).find((b) => b.textContent === "Eng")!);
     expect(useApp.getState().yFmt).toEqual({ mode: "eng", digits: 2 });
     expect(useApp.getState().xFmt.mode).toBe("auto"); // untouched
     expect(container.querySelectorAll("input")).toHaveLength(1);
@@ -45,8 +45,8 @@ describe("TickFormat", () => {
 
   it("selecting Eng on the X row writes xFmt.mode through to the store", () => {
     const { container } = render(<TickFormat />);
-    const [xGroup] = container.querySelectorAll('[role="tablist"]');
-    fireEvent.click(Array.from(xGroup.querySelectorAll('[role="tab"]')).find((b) => b.textContent === "Eng")!);
+    const [xGroup] = container.querySelectorAll('[role="radiogroup"]');
+    fireEvent.click(Array.from(xGroup.querySelectorAll('[role="radio"]')).find((b) => b.textContent === "Eng")!);
     expect(useApp.getState().xFmt).toEqual({ mode: "eng", digits: 2 });
     expect(useApp.getState().yFmt.mode).toBe("auto"); // untouched
   });
@@ -100,9 +100,9 @@ describe("TickFormat", () => {
   it("reflects an eng mode already set in the store", () => {
     useApp.setState({ xFmt: { mode: "eng", digits: 1 }, yFmt: { mode: "sci", digits: 3 } });
     const { container } = render(<TickFormat />);
-    const [xGroup, yGroup] = container.querySelectorAll('[role="tablist"]');
-    expect(xGroup.querySelector('[aria-selected="true"]')?.textContent).toBe("Eng");
-    expect(yGroup.querySelector('[aria-selected="true"]')?.textContent).toBe("Sci");
+    const [xGroup, yGroup] = container.querySelectorAll('[role="radiogroup"]');
+    expect(xGroup.querySelector('[aria-checked="true"]')?.textContent).toBe("Eng");
+    expect(yGroup.querySelector('[aria-checked="true"]')?.textContent).toBe("Sci");
   });
 
   it("hides the Y2 row entirely when no y2 channel is plotted", () => {
@@ -116,7 +116,7 @@ describe("TickFormat", () => {
     expect(getByText("Y2")).toBeTruthy();
     const checkbox = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
     expect(checkbox.checked).toBe(true);
-    expect(container.querySelectorAll('[role="tablist"]')).toHaveLength(2); // X, Y only — no Y2 controls yet
+    expect(container.querySelectorAll('[role="radiogroup"]')).toHaveLength(2); // X, Y only — no Y2 controls yet
   });
 
   it("unchecking 'inherits Y' sets y2Fmt to the current yFmt and reveals its own controls", () => {
@@ -125,14 +125,14 @@ describe("TickFormat", () => {
     const checkbox = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
     fireEvent.click(checkbox);
     expect(useApp.getState().y2Fmt).toEqual({ mode: "sci", digits: 3 });
-    expect(container.querySelectorAll('[role="tablist"]')).toHaveLength(3); // X, Y, Y2
+    expect(container.querySelectorAll('[role="radiogroup"]')).toHaveLength(3); // X, Y, Y2
   });
 
   it("changing the Y2 mode writes y2Fmt independently, leaving yFmt untouched", () => {
     useApp.setState({ y2Keys: [1], y2Fmt: { mode: "auto", digits: 2 } });
     const { container } = render(<TickFormat />);
-    const [, , y2Group] = container.querySelectorAll('[role="tablist"]');
-    fireEvent.click(Array.from(y2Group.querySelectorAll('[role="tab"]')).find((b) => b.textContent === "Fixed")!);
+    const [, , y2Group] = container.querySelectorAll('[role="radiogroup"]');
+    fireEvent.click(Array.from(y2Group.querySelectorAll('[role="radio"]')).find((b) => b.textContent === "Fixed")!);
     expect(useApp.getState().y2Fmt).toEqual({ mode: "fixed", digits: 2 });
     expect(useApp.getState().yFmt.mode).toBe("auto"); // untouched
   });

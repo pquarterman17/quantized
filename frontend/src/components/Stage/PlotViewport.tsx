@@ -131,7 +131,7 @@ export default function PlotViewport(props: PlotViewportProps) {
     () => !displayPayload || xIsAscending(displayPayload.data[0] as (number | null)[]),
     [displayPayload],
   );
-  const hiddenKey = xAscending ? "" : (args.hidden ?? []).map(Number).join("");
+  const hiddenKey = xAscending && !displayPayload?.blockRows ? "" : (args.hidden ?? []).map(Number).join("");
 
   // Declared BEFORE the create/destroy effect so that within a single commit
   // where a lim change lands ALONGSIDE a genuine structural change (e.g. a

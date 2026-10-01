@@ -547,7 +547,20 @@ const STORE_PINS: Record<string, number> = {
   // (poisoned whole-getState() diff per action and branch, the focused/pinned
   // window rebind effects, no own undo step/toast/macro, the ensureBookData
   // kicks) was green before the move and is unchanged after it.
-  "/store/useApp.ts": 817,
+  // 817 -> 623 (2026-10-01, P4.1 ninth + tenth domains): the recalc engine —
+  // setRecalcMode/touchDataset/recalcNow/setFitSpec, the recalcMode/
+  // staleDatasets/staleFits fields and the module-level debounce/guard/
+  // pending state — moved to store/recalcEngine.ts (RecalcEngineSlice); and
+  // the declarations + initial values of the live PlotView fields (yScale …
+  // waterfall; showGrid still seeded from the defaultGrid pref) moved to the
+  // state-only store/plotViewFields.ts (PlotViewFieldsSlice) — their writers
+  // were already in plotViewSettings.ts. store/recalcEngine.characterization.test.ts
+  // (whole-getState() diff per action, the 400 ms debounce, the mid-pass
+  // touch guard and follow-up pass) and store/plotViewFields.characterization.test.ts
+  // (every initial value, every PlotView key present, snapshotView of the
+  // initial store == defaultPlotView(), the defaultGrid seed) were green
+  // before the move and are unchanged after it.
+  "/store/useApp.ts": 623,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -3421,6 +3434,61 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       [...SEAMS.map((s) => s.module), ...DRAGGED_OUT].filter((m) => eager.has(m)),
       "these ship inside a lazy seam's chunk; a static import from an eagerly reachable module folds them back into the entry chunk",
     ).toEqual([]);
+  });
+
+  /** SLICE 15 (2026-10-01): lazy-only halves moved verbatim out of an EAGER
+   *  module and re-exported from it with `export *` — the
+   *  `lib/desktopRelinkBridge.ts` precedent — so no importer or test mock
+   *  changed. Rollup only bundles a re-exported module whose names some
+   *  importer uses, so each half ships with the lazy chunks that import them.
+   *  The walk above cannot hold that line: it follows the `export *` and
+   *  calls the half eager. This arm checks what decides it instead: no eager
+   *  module but the parent imports the half, and no eager module imports one
+   *  of the half's value names (or a namespace) from the parent. */
+  const REEXPORTED_LAZY_HALVES = [
+    { parent: "/lib/foldertree.ts", half: "/lib/foldertreeQueries.ts" },
+    { parent: "/lib/desktopBridge.ts", half: "/lib/desktopSaveBridge.ts" },
+    { parent: "/lib/clipboard.ts", half: "/lib/clipboardExtras.ts" },
+  ];
+
+  it("no eager module reaches a re-exported lazy half", () => {
+    const byPath = new Map(sources().map(([p, src]) => [p.replace(/^\./, ""), src]));
+    const resolve = (importer: string, spec: string): string | null => {
+      const base = resolveFrom(importer, spec);
+      if (base === null) return null;
+      return [`${base}.ts`, `${base}.tsx`, base].find((c) => byPath.has(c)) ?? null;
+    };
+    const clause = /\b(?:import|export)\s+((?:[\w$]+\s*,\s*)?(?:\{[^}]*\}|\*(?:\s+as\s+[\w$]+)?)|[\w$]+)\s*from\s*["']([^"']+)["']/g;
+    const eager = eagerlyReachable();
+    const offenders: string[] = [];
+    for (const { parent, half } of REEXPORTED_LAZY_HALVES) {
+      const halfSrc = byPath.get(half);
+      expect(halfSrc, `${half} not found`).toBeDefined();
+      const names = new Set(
+        [...stripComments(halfSrc ?? "").matchAll(/^export\s+(?:async\s+)?(?:function|const|let|class)\s+([\w$]+)/gm)].map((m) => m[1]),
+      );
+      expect(names.size, `${half} exports no values — the guard would be vacuous`).toBeGreaterThan(0);
+      const base = half.split("/").pop()?.replace(/\.ts$/, "") ?? "";
+      expect(byPath.get(parent) ?? "", `${parent} must re-export ${half}`).toContain(`export * from "./${base}";`);
+      for (const m of eager) {
+        if (m === half) continue;
+        for (const [, what, spec] of valueImportsOnly(byPath.get(m) ?? "").matchAll(clause)) {
+          const target = resolve(m, spec);
+          if (target === half && !(m === parent && what === "*")) offenders.push(`${m} -> ${half}`);
+          if (target !== parent) continue;
+          const braces = /\{([^}]*)\}/.exec(what);
+          if (!braces) {
+            offenders.push(`${m} -> ${parent} (${what.trim()})`);
+            continue;
+          }
+          for (const raw of braces[1].split(",")) {
+            const name = raw.trim().split(/\s+as\s+/)[0];
+            if (!name.startsWith("type ") && names.has(name)) offenders.push(`${m} -> ${parent} { ${name} }`);
+          }
+        }
+      }
+    }
+    expect(offenders, "each of these folds a lazy-only half back into the eager bundle").toEqual([]);
   });
 
   /** The regression test the round-2 review asked for. A scanner whose

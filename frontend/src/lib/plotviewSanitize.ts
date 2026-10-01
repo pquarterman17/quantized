@@ -15,6 +15,8 @@
 import type { PlotView } from "./plotview";
 import type { RegionShade } from "./types";
 
+export { uniqueIds } from "./uniqueIds";
+
 /** Persisted legend pixel dimensions. Clamp edited/stale workspaces to a
  * useful range while preserving the user's exact size inside it. */
 export function sanitizeLegendSize(v: unknown): [number, number] | null {

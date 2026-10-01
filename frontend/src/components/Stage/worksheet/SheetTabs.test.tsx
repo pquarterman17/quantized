@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { Dataset } from "../../../lib/types";
@@ -159,5 +159,58 @@ describe("SheetTabs book switcher (item 9)", () => {
     render(<SheetTabs datasetId="a1" />);
     expect(screen.getByLabelText("switch book")).toBeInTheDocument();
     expect(screen.getAllByRole("tab")).toHaveLength(2); // a1's own sheet group (Book4, Book4@2)
+  });
+});
+
+// WAI-ARIA tablist keyboard model (lib/tabListKeys), MANUAL activation: the
+// arrows move focus only, so walking the strip never re-renders the grid.
+describe("SheetTabs keyboard", () => {
+  const threeSheets = () =>
+    useApp.setState({
+      datasets: [sheet("s1", "XRD:Book4", "Book4"), sheet("s2", "XRD:Book4@2", "Book4@2"), sheet("s3", "XRD:Book4@3", "Book4@3")],
+      activeId: "s1",
+      worksheetId: "s2",
+      originBookClickOpens: "worksheet",
+    });
+
+  it("roves the tab stop to the selected sheet", () => {
+    threeSheets();
+    render(<SheetTabs datasetId="s2" />);
+    expect(screen.getAllByRole("tab").map((t) => t.tabIndex)).toEqual([-1, 0, -1]);
+  });
+
+  it("arrows and Home/End move focus (wrapping) without switching sheets", () => {
+    threeSheets();
+    render(<SheetTabs datasetId="s2" />);
+    const tabs = screen.getAllByRole("tab");
+    tabs[1].focus();
+    expect(fireEvent.keyDown(tabs[1], { key: "ArrowRight" })).toBe(false); // consumed
+    expect(document.activeElement).toBe(tabs[2]);
+    fireEvent.keyDown(tabs[2], { key: "ArrowRight" });
+    expect(document.activeElement).toBe(tabs[0]); // wraps
+    fireEvent.keyDown(tabs[0], { key: "ArrowLeft" });
+    expect(document.activeElement).toBe(tabs[2]);
+    fireEvent.keyDown(tabs[2], { key: "Home" });
+    expect(document.activeElement).toBe(tabs[0]);
+    fireEvent.keyDown(tabs[0], { key: "End" });
+    expect(document.activeElement).toBe(tabs[2]);
+    expect(useApp.getState().worksheetId).toBe("s2"); // manual activation: nothing switched
+  });
+
+  it("the tablist owns only the sheet tabs, never the book dropdown", () => {
+    useApp.setState({
+      datasets: [sheet("a1", "XRD:Book4", "Book4"), sheet("a2", "XRD:Book4@2", "Book4@2"), sheet("b1", "XRD:Book7", "Book7")],
+    });
+    render(<SheetTabs datasetId="a1" />);
+    const list = screen.getByRole("tablist", { name: "Origin worksheet sheets" });
+    expect(within(list).queryByRole("combobox")).toBeNull();
+    expect(within(list).getAllByRole("tab")).toHaveLength(2);
+  });
+
+  it("renders no empty tablist when only the book dropdown applies", () => {
+    useApp.setState({ datasets: [sheet("b1", "XRD:Book1", "Book1"), sheet("b2", "XRD:Book2", "Book2")] });
+    render(<SheetTabs datasetId="b1" />);
+    expect(screen.getByLabelText("switch book")).toBeInTheDocument();
+    expect(screen.queryByRole("tablist")).toBeNull();
   });
 });
