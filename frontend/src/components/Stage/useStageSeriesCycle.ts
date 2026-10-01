@@ -76,16 +76,9 @@ export function useWindowSeriesCycle(
   doc: FigureDocument | undefined,
   count: number,
 ): SeriesCycle {
-  const on = useWindowCycles(view, doc);
-  return useMemo(() => displayPositions(on, count), [on, count]);
-}
-
-/** Does the plot window drawing `view` (with `doc` behind it) cycle? The
- *  boolean half of `useWindowSeriesCycle`, for a canvas that keys the cycle by
- *  channel rather than by its own series index (`useBreakSeriesStyles`). */
-export function useWindowCycles(view: CycleView, doc: FigureDocument | undefined): boolean {
   const autoSeriesStyles = useApp((s) => s.autoSeriesStyles);
-  return windowCyclesSeriesStyles(autoSeriesStyles, view, doc);
+  const on = windowCyclesSeriesStyles(autoSeriesStyles, view, doc);
+  return useMemo(() => displayPositions(on, count), [on, count]);
 }
 
 /** The FOCUSED Stage's opt-in: `seriesStyleCycle.windowCyclesSeriesStyles` over

@@ -23,9 +23,24 @@
 import { useMemo } from "react";
 
 import { breakPanelsOf, type Composition } from "../../lib/composition";
+import type { FigureDocument } from "../../lib/figureDocument";
 import { effectiveChannels } from "../../lib/plotdata";
-import { displayPositions, resolveSeriesStyle } from "../../lib/seriesStyleCycle";
+import {
+  displayPositions,
+  resolveSeriesStyle,
+  windowCyclesSeriesStyles,
+  type CycleView,
+} from "../../lib/seriesStyleCycle";
 import type { Dataset, SeriesStyle } from "../../lib/types";
+import { useApp } from "../../store/useApp";
+
+/** Does the plot window drawing `view` (with `doc` behind it) cycle? The same
+ *  `windowCyclesSeriesStyles` call `useStageSeriesCycle.useWindowSeriesCycle`
+ *  makes, as a boolean — for a BACKGROUND window's break panels. Lives here,
+ *  not beside it, so the eager bundle does not carry it. */
+export function useWindowCycles(view: CycleView, doc: FigureDocument | undefined): boolean {
+  return windowCyclesSeriesStyles(useApp((s) => s.autoSeriesStyles), view, doc);
+}
 
 /** `styles` with every channel of the flat canvas list `channels` resolved
  *  through the cycle at its display position (first occurrence wins). */

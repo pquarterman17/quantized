@@ -34,11 +34,10 @@ import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import PolarStageCore from "../Stage/PolarStageCore";
 import StatStagePlot from "../Stage/StatStagePlot";
-import { useBreakSeriesStyles } from "../Stage/useBreakSeriesStyles";
+import { useBreakSeriesStyles, useWindowCycles } from "../Stage/useBreakSeriesStyles";
 import { useFacetEncoding } from "../Stage/useFacetEncoding";
 import { useGreyedFacets } from "../Stage/useGreyedFacets";
 import { useMultiPanelStage } from "../Stage/useMultiPanelStage";
-import { useWindowCycles } from "../Stage/useStageSeriesCycle";
 import { useStatStage } from "../Stage/useStatStage";
 
 export interface BackgroundModeProps {

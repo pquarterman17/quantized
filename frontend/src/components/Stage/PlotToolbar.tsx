@@ -217,7 +217,7 @@ export default function PlotToolbar({
         actionBtn(SMART_SCALE, { onClick: onSmartScale }),
         actionBtn(STACK_MODE, {
           active: stackOn,
-          ...(stackOn ? { desc: "Return to a single overlaid plot" } : {}),
+          desc: stackOn ? "Return to a single overlaid plot" : STACK_MODE.desc,
           onClick: toggleStackLayout,
         }),
         actionBtn(INSET_MODE, { active: insetMode, onClick: () => setInsetMode(!insetMode) }),

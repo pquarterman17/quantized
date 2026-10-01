@@ -139,11 +139,9 @@ export interface PlotViewSettingsSlice {
  *  mount their panels WITHOUT `stackMode` (`Stage/useEffectiveComposition.
  *  multiPanelShowing`; a plot recipe applies facets that way), so the Stack
  *  toggle reads this rather than `stackMode` alone. */
-export function stackLayoutOn(s: AppState): boolean {
-  if (s.stackMode || s.facetKey !== null || s.composition !== null) return true;
-  const w = s.plotWindows.find((x) => x.id === s.focusedWindowId);
-  return w?.kind === "plot" && (w.document?.plot.axisBreaks.x.length ?? 0) > 0;
-}
+export const stackLayoutOn = (s: AppState): boolean =>
+  s.stackMode || s.facetKey !== null || s.composition !== null ||
+  s.plotWindows.some((w) => w.id === s.focusedWindowId && w.kind === "plot" && !!w.document?.plot.axisBreaks.x.length);
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
