@@ -461,3 +461,32 @@ describe("useDistribution — By grouping (JMP_GAP_PLAN J7)", () => {
     expect(useApp.getState().reports).toHaveLength(1);
   });
 });
+
+// The report titles itself from the CURRENT column, so it must never ship a
+// result computed for the previous one while the new column recomputes.
+describe("useDistribution — report while recomputing", () => {
+  it("does not report the previous column's stats under the new column's title", async () => {
+    const { result } = renderHook(() => useDistribution());
+    await waitFor(() => expect(result.current.desc).not.toBeNull());
+    vi.mocked(statsDescriptive).mockReturnValue(new Promise(() => {}));
+    act(() => result.current.setCol(-1));
+    expect(result.current.desc).toBeNull();
+    expect(result.current.hist).toBeNull();
+    await act(async () => result.current.toReport());
+    expect(reportEmit).not.toHaveBeenCalled();
+  });
+
+  it("does not report the previous column's per-level stats while By is active", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1" });
+    const { result } = renderHook(() => useDistribution());
+    act(() => result.current.setCol(1));
+    act(() => result.current.setByCol(0));
+    await waitFor(() => expect(result.current.byResults).toHaveLength(3));
+    vi.mocked(statsDescriptive).mockReturnValue(new Promise(() => {}));
+    act(() => result.current.setCol(-1));
+    expect(result.current.byCol).toBe(0);
+    expect(result.current.byResults).toEqual([]);
+    await act(async () => result.current.toReport());
+    expect(reportEmit).not.toHaveBeenCalled();
+  });
+});

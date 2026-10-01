@@ -551,10 +551,6 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         // projected per panel through `BreakPanel.channels`.
         seriesLabels, seriesStyles: breakSeriesStyles, hiddenChannels: breakHidden ?? [],
         syncKey,
-        // Same x-zoom/pan sync idiom as the plain per-channel stack — a break
-        // panel's x axis still means "this series' x", so zooming one seam
-        // should pan/zoom the others together.
-        onSetScale: xZoomSyncHook(() => plotsRef.current),
         box,
         cell: {
           yScale, xScale, yLim: breakYLim, xFmt, yFmt, showGrid,

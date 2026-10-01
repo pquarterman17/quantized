@@ -9,7 +9,7 @@
 // useApp.ts can shed a self-contained block here post-merge with main's
 // #7/#10/#14 slices, rather than raise the ratchet pin):
 //   - `libraryPanelWidth` — the resizable Library panel's width. Its VALUE
-//     rides the qz.prefs blob (store/prefs.ts owns load/save; useApp.ts's
+//     rides the qz.prefs blob (store/prefs.ts owns load/save; appearancePrefs.ts's
 //     generic `setPref` already covers writes — see `PrefKey`), so this
 //     slice only contributes the field's TYPE + initial value, mirroring how
 //     `legendXY` lives on pointerTool.ts even though it's a genuine

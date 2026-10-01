@@ -70,7 +70,10 @@ describe("PreferencesDialog", () => {
 describe("PreferencesDialog focus-in / Tab trap / Escape / restore (P3.3 R1)", () => {
   afterEach(() => useApp.getState().setPrefsOpen(false));
 
-  afterEach(() => useApp.getState().setTheme("dark"));
+  afterEach(() => {
+    useApp.getState().setTheme("dark");
+    useApp.getState().setPref("wheelZoom", true);
+  });
 
   it("moves focus into the ACTIVE PANE on open, onto Theme — not the raw first-in-DOM Close button", () => {
     useApp.getState().setPrefsOpen(true);
@@ -79,13 +82,11 @@ describe("PreferencesDialog focus-in / Tab trap / Escape / restore (P3.3 R1)", (
     expect(screen.getByRole("radio", { name: "Dark" })).toHaveFocus();
   });
 
-  // Round 8 (review NIT 3). Both themes, because the landing spot is only
-  // ever WRONG in the theme the shipped test did not cover: before
-  // `SegmentedControl` had a roving `tabindex`, "first focusable in DOM order"
-  // was always "Dark", which under `theme: "light"` is an unselected option
-  // — a screen reader announced "Dark, tab, not selected" as the entry point
-  // and Enter/Space there flipped the theme. The landing spot must be the
-  // option that is actually SELECTED.
+  // Round 8 (review NIT 3). Both themes, because a landing spot that ignored
+  // the selection would only be WRONG under `light`: "Dark" is the first
+  // option, and landing there announced an unselected option as the entry
+  // point (Enter/Space flipped the theme). It now holds because the
+  // segmented control's roving tab stop sits on the CHECKED option.
   it.each([
     ["dark" as const, "Dark"],
     ["light" as const, "Light"],
@@ -99,6 +100,27 @@ describe("PreferencesDialog focus-in / Tab trap / Escape / restore (P3.3 R1)", (
     // the CURRENT value. A regression to first-in-DOM makes this false under
     // `light` while still landing on a `role="radio"`.
     expect(landed).toHaveAttribute("aria-checked", "true");
+  });
+
+  // Each pane, reopened on that pane: focus lands on its first control at its
+  // CURRENT value. Interaction's "Off" is the SECOND option, so landing on
+  // the first option would fail here as it would under `light` above.
+  it.each([
+    ["Appearance", () => screen.getByRole("radio", { name: "Light" })],
+    ["Plot", () => screen.getByRole("combobox", { name: "Default trace" })],
+    ["Interaction", () => within(screen.getByRole("tabpanel")).getByRole("radio", { name: "Off" })],
+    ["Numbers", () => screen.getByRole("slider", { name: "Significant figures" })],
+  ])("reopened on the %s pane, lands on its first control's selected option", (tab, expected) => {
+    useApp.getState().setTheme("light");
+    useApp.getState().setPref("wheelZoom", false);
+    useApp.getState().setPrefsOpen(true);
+    render(<PreferencesDialog />);
+    fireEvent.click(screen.getByRole("tab", { name: tab }));
+    act(() => useApp.getState().setPrefsOpen(false));
+    act(() => useApp.getState().setPrefsOpen(true));
+    const landed = expected();
+    expect(landed).toHaveFocus();
+    if (landed.getAttribute("role") === "radio") expect(landed).toHaveAttribute("aria-checked", "true");
   });
 
   it("Tab traps at the dialog's real boundary (the Close button first, Done last), even though focus-in skipped past Close", async () => {

@@ -491,3 +491,36 @@ describe("useFitYByX — By grouping (JMP_GAP_PLAN J7)", () => {
     expect(result.current.error).toMatch(/service unavailable/i);
   });
 });
+
+// The report titles itself from the CURRENT picks, so it must never ship a
+// result computed for the previous ones while the leg recomputes.
+describe("useFitYByX — report while recomputing", () => {
+  it("does not report the previous X's ANOVA under the new X's title", async () => {
+    vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } });
+    const { result } = renderHook(() => useFitYByX());
+    await waitFor(() => expect(result.current.oneway).not.toBeNull());
+    vi.mocked(statsAnova).mockReturnValue(new Promise(() => {}));
+    act(() => result.current.setXCol(1)); // ycat — still a oneway leg
+    expect(result.current.kind).toBe("oneway");
+    expect(result.current.oneway).toBeNull();
+    await act(async () => result.current.toReport());
+    expect(reportEmit).not.toHaveBeenCalled();
+  });
+
+  it("does not report the previous By column's per-level fits under the new By title", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1" });
+    vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } });
+    const { result } = renderHook(() => useFitYByX());
+    act(() => {
+      result.current.setXCol(-1); // time x yval -> bivariate
+      result.current.setYCol(2);
+    });
+    act(() => result.current.setByCol(0));
+    await waitFor(() => expect(result.current.byResults).toHaveLength(3));
+    vi.mocked(statsRegression).mockReturnValue(new Promise(() => {}));
+    act(() => result.current.setByCol(1));
+    expect(result.current.byResults).toEqual([]);
+    await act(async () => result.current.toReport());
+    expect(reportEmit).not.toHaveBeenCalled();
+  });
+});

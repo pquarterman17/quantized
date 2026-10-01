@@ -70,6 +70,8 @@ export interface DistributionByLevelsState {
   busy: boolean;
 }
 
+const NO_RESULTS: DistributionLevelResult[] = [];
+
 /** Column values as a plain number array; `index < 0` means the x/time axis. */
 export const colValues = (data: DataStruct, index: number): number[] =>
   index < 0 ? data.time : data.values.map((row) => row[index]);
@@ -100,7 +102,11 @@ export function useDistributionByLevels(
   col: number,
 ): DistributionByLevelsState {
   const byPartition = useByPartition(active, data, columns);
-  const [results, setResults] = useState<DistributionLevelResult[]>([]);
+  // Stamped with the levels + column they were computed for and read back only
+  // while both are current, so a column or By change mid-compute never shows
+  // (or reports) the previous pick's per-level numbers.
+  const [landed, setLanded] = useState<{ levels: ByLevel[]; col: number; results: DistributionLevelResult[] } | null>(null);
+  const results = landed?.levels === byPartition.levels && landed.col === col ? landed.results : NO_RESULTS;
   const [busy, setBusy] = useState(false);
 
   // A By column picked before `col` changed underneath it (now colliding
@@ -116,11 +122,12 @@ export function useDistributionByLevels(
   // (useByPartition already partitioned the analysis view).
   useEffect(() => {
     if (byPartition.levels.length === 0) {
-      setResults([]);
+      setLanded(null);
       setBusy(false);
       return;
     }
     let cancelled = false;
+    const levels = byPartition.levels;
     setBusy(true);
     void Promise.all(
       byPartition.levels.map(async (lvl): Promise<DistributionLevelResult> => {
@@ -150,7 +157,7 @@ export function useDistributionByLevels(
       }),
     )
       .then((r) => {
-        if (!cancelled) setResults(r);
+        if (!cancelled) setLanded({ levels, col, results: r });
       })
       .finally(() => {
         if (!cancelled) setBusy(false);

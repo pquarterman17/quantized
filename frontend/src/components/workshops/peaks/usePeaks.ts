@@ -5,18 +5,14 @@
 // per peak). Re-runs find — and clears any fit — when the active dataset changes.
 //
 // fitEach per-peak progress + cancel (P0.4 feedback/cancel audit tail,
-// 2026-07-26): a serial loop of N sequential round-trips had one static
-// "Fitting…" for the whole batch and no way to stop it. It now registers ONE
-// pendingOps entry (store/pendingOps.ts) whose label ticks "Fitting peak
-// i/N…" per iteration — StatusBar renders that label AND, because a `cancel`
-// callback is attached, a Cancel affordance next to it automatically (no new
-// UI here). Cancel semantics mirror the import batch (store/importDatasets.ts
-// `runImport`, P3.4 slice 1): it stops the loop before the NEXT peak starts,
-// peaks already fit keep their results — never a rollback, never an abort of
-// the in-flight request (each per-peak fit is a small windowed NLLS call, not
-// worth wiring an AbortSignal through `fitPeak` for).
+// 2026-07-26): ONE pendingOps entry (store/pendingOps.ts) whose label ticks
+// "Fitting peak i/N…"; its `cancel` callback makes StatusBar show a Cancel
+// affordance. Cancel mirrors the import batch (store/importDatasets.ts
+// `runImport`, P3.4 slice 1): the loop stops before the NEXT peak, peaks
+// already fit keep their results — never a rollback, never an abort of the
+// in-flight request (a small windowed NLLS call, not worth an AbortSignal).
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { findPeaks, fitMultiPeak, fitPeak, type PeakSeed } from "../../../lib/api/peaks";
 import { placeLabels, renderLabelTemplate, DEFAULT_LABEL_TEMPLATE } from "../../../lib/peakLabels";
@@ -104,6 +100,9 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
   const [fitResult, setFitResult] = useState<MultiFitResult | null>(null);
   const [fitting, setFitting] = useState(false);
   const [fitError, setFitError] = useState<string | null>(null);
+  // Fit-run sequence: a dataset/data/find change below (or a newer fit) bumps
+  // it, so a fit still in flight can never land on what the user moved to.
+  const fitRunRef = useRef(0);
 
   // The auto-detect effect's REAL inputs (audit P2.1). It used to depend on the
   // whole `active` object, so ANY write to ANY dataset field re-ran peak
@@ -125,10 +124,12 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
 
   useEffect(() => {
     let cancelled = false;
+    fitRunRef.current++;
     setPeaks([]);
     setError(null);
     setFitResult(null);
     setFitError(null);
+    setFitting(false);
     if (!activeId) {
       setPeakOverlay(null);
       return;
@@ -203,28 +204,31 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
       }
       const go = confirmPeaksRefit(active.id, peaks.length); // a model fit's errors: ask first
       if (go !== true && !(await go)) return;
+      const run = ++fitRunRef.current;
+      const stale = () => run !== fitRunRef.current;
       setFitting(true);
       setFitError(null);
       try {
         // #38 deferred edge: resolve the active dataset's full data before
         // fitting (a no-op if it isn't pending).
         const ds = await useApp.getState().resolveDataset(active.id);
-        if (!ds) return;
+        if (!ds || stale()) return;
         const st = useApp.getState();
         const { x, y, fullX, xKeyUsed } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
         const res = await fitMultiPeak({
           x, y, peaks: seedsFrom(peaks), model: opts.model,
           bg_degree: opts.bgDegree, constrain: opts.constrain, link_mode: opts.linkMode,
         });
+        if (stale()) return;
         setFitResult(res);
         // P2.1: the fit becomes this dataset's durable peak table (survives a
         // panel close, a dataset switch, and a `.dwk` save/reopen).
         publishFitResult(ds.id, res, "simultaneous", { ...opts, xKey: xKeyUsed });
         overlayFitted(ds, res.peaks, fullX);
       } catch (e: unknown) {
-        setFitError(e instanceof Error ? e.message : "simultaneous fit failed");
+        if (!stale()) setFitError(e instanceof Error ? e.message : "simultaneous fit failed");
       } finally {
-        setFitting(false);
+        if (!stale()) setFitting(false);
       }
     },
     [active, peaks, overlayFitted],
@@ -238,6 +242,8 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
       }
       const go = confirmPeaksRefit(active.id, peaks.length); // a model fit's errors: ask first
       if (go !== true && !(await go)) return;
+      const run = ++fitRunRef.current;
+      const stale = () => run !== fitRunRef.current;
       setFitting(true);
       setFitError(null);
       const total = peaks.length;
@@ -250,12 +256,12 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
         // #38 deferred edge: resolve the active dataset's full data before
         // fitting (a no-op if it isn't pending).
         const ds = await useApp.getState().resolveDataset(active.id);
-        if (!ds) return;
+        if (!ds || stale()) return;
         const st = useApp.getState();
         const { x, y, fullX, xKeyUsed } = peakInputs(ds, st.xKey, st.yKeys, st.seriesOrder);
         const fitted: FittedPeak[] = [];
         for (let i = 0; i < peaks.length; i++) {
-          if (cancelled) break;
+          if (cancelled || stale()) break;
           updateOp(opId, label(i));
           const p = peaks[i];
           const half = (Number.isFinite(p.fwhm) && p.fwhm > 0 ? p.fwhm : 1) * 3;
@@ -270,6 +276,7 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
             });
           }
         }
+        if (stale()) return;
         const result: MultiFitResult = {
           peaks: fitted, bgCoeffs: [], R2: null, rmse: null,
           nPeaks: fitted.length, model: opts.model,
@@ -285,10 +292,10 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
           setFitError("No peaks could be fit individually.");
         }
       } catch (e: unknown) {
-        setFitError(e instanceof Error ? e.message : "per-peak fit failed");
+        if (!stale()) setFitError(e instanceof Error ? e.message : "per-peak fit failed");
       } finally {
         endOp(opId);
-        setFitting(false);
+        if (!stale()) setFitting(false);
       }
     },
     [active, peaks, overlayFitted],

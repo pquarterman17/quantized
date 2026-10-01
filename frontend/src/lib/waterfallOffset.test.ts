@@ -8,7 +8,11 @@ import {
   waterfallApplies,
   waterfallSpan,
   waterfallStep,
+  waterfallXFetchWindow,
+  waterfallXSpanOf,
+  withFullXSpan,
 } from "./waterfallOffset";
+import type { PlotPayload } from "./plotdata";
 import { waterfallWire } from "./waterfallWire";
 import type { CycleView } from "./seriesStyleCycle";
 import type { DataStruct } from "./types";
@@ -294,5 +298,36 @@ describe("waterfallWire honours the live canvas' span", () => {
     expect(readLiveWaterfallSpan("d2")).toBeNull();
     publishLiveWaterfallSpan(null);
     expect(readLiveWaterfallSpan("d1")).toBeNull();
+  });
+});
+
+describe("waterfallXFetchWindow — a zoom in shifted x, fetched as raw x", () => {
+  const payload = (series: number, xs: number[]): PlotPayload => ({
+    data: [xs, ...Array.from({ length: series }, () => xs.map(() => 1))] as unknown as PlotPayload["data"],
+    series: Array.from({ length: series }, (_, i) => ({ label: `s${i}`, unit: "" })),
+    xLabel: "x",
+    xUnit: "",
+  });
+  /** x-span 10; with `fullXSpan`, a windowed payload cut from a base of that span. */
+  const base = (series: number, fullXSpan?: number): PlotPayload =>
+    fullXSpan == null ? payload(series, [0, 10]) : withFullXSpan(payload(series, [0, 10]), payload(series, [0, fullXSpan]));
+
+  it("widens by the farthest slot's offset, on the side the stagger points away from", () => {
+    // step 0.1 × span 10 = 1; slot 2 draws x + 2, so it needs raw [lo − 2, hi − 2].
+    expect(waterfallXFetchWindow(base(3), [4, 6], 0.1)).toEqual([2, 6]);
+    expect(waterfallXFetchWindow(base(3), [4, 6], -0.1)).toEqual([4, 8]);
+  });
+
+  it("measures the step over the full-range span a windowed payload carries", () => {
+    expect(waterfallXSpanOf(base(2, 100))).toBe(100);
+    expect(waterfallXSpanOf(base(2))).toBe(10);
+    expect(waterfallXFetchWindow(base(2, 100), [4, 6], 0.1)).toEqual([-6, 6]);
+  });
+
+  it("is the committed window itself without a stagger (every non-waterfall plot)", () => {
+    expect(waterfallXFetchWindow(base(3), [4, 6], 0)).toEqual([4, 6]);
+    expect(waterfallXFetchWindow(base(1), [4, 6], 0.1)).toEqual([4, 6]);
+    expect(waterfallXFetchWindow(base(3), [4, 6], Number.NaN)).toEqual([4, 6]);
+    expect(waterfallXFetchWindow(base(3), [4, 6], 1e308)).toEqual([4, 6]); // an overflowing step
   });
 });

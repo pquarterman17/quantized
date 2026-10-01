@@ -36,33 +36,13 @@ const NOTATION_OPTS = [
   { value: "fixed", label: "Fixed" },
 ];
 
-/** Where focus lands when Preferences opens: the first focusable control in
- *  the active pane — except that when that control is one option of a
- *  `role="tablist"` group, the SELECTED option is taken instead.
- *
- *  Round 8 (review NIT 3). `SegmentedControl` renders every option as a plain
- *  focusable `<button role="tab">` with no roving `tabindex`, so "first
- *  focusable in DOM order" is always the FIRST option, never the current one.
- *  On the Appearance pane that is the Theme control, whose first option is
- *  "Dark": measured with `theme: "light"` active, the landing spot was the
- *  "Dark" button carrying `aria-selected="false"`. A screen-reader user
- *  opening Preferences was told "Dark, tab, not selected" as their entry
- *  point, and Enter/Space there flipped the theme — the opposite of what
- *  landing on "the setting they came for" was meant to buy. The shipped test
- *  only covered the default dark theme, where first-in-DOM and selected
- *  coincide, so the light case was unpinned; both are pinned now.
- *
- *  Only the group the landing control actually belongs to is consulted, and
- *  only when its selected option is itself focusable — otherwise this returns
- *  the plain DOM-order default, which is what every non-tablist pane wants. */
+/** Where focus lands when Preferences opens: the active pane's first Tab
+ *  stop. `SegmentedControl` is a radio group with a roving tab stop on the
+ *  CHECKED option, and `focusablesIn` skips `tabindex="-1"`, so for a
+ *  segmented control that first stop is already its current value — never an
+ *  unselected option a stray Enter/Space would apply (round 8 NIT 3). */
 function landingSpotIn(pane: HTMLElement | null): HTMLElement | null {
-  const focusables = focusablesIn(pane);
-  const first = focusables[0] ?? null;
-  if (!first) return null;
-  const group = first.closest('[role="tablist"]');
-  if (!group) return first;
-  const selected = group.querySelector<HTMLElement>('[aria-selected="true"]');
-  return selected && focusables.includes(selected) ? selected : first;
+  return focusablesIn(pane)[0] ?? null;
 }
 
 function PrefRow({

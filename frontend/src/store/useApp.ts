@@ -1,8 +1,6 @@
 // Central app store (Zustand). Mirrors fermiviewer's single-hook convention.
 // Holds loaded datasets, the active selection, panel + theme view state.
 import { create } from "zustand";
-import { uploadFile } from "../lib/api";
-import type { Notation } from "../lib/format";
 import { recomputeWithErrors } from "../lib/formula";
 import { asAlreadyComputed } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
@@ -61,11 +59,9 @@ import { createRoisSlice, type RoisSlice } from "./rois";
 // RSM_CUTS_PLAN item 8: just the ToolWindow's open flag — see the file header.
 import { createRoiCutsPanelSlice, type RoiCutsPanelSlice } from "./roiCutsPanel";
 import type { ReportEntry } from "../lib/report";
-import type { PanelFit } from "../lib/panelLayout";
 import type { FwhmResult } from "../lib/peakwidth";
 import type { IntegralResult } from "../lib/plotRangeSelection";
 import type { FigureDoc } from "../lib/figuredoc";
-import { nextDatasetId } from "./idSeq";
 import { createReportsFigureDocsSlice, type ReportsFigureDocsSlice } from "./reportsFigureDocs";
 import { createViewAppliersSlice, type ViewAppliersSlice } from "./viewAppliers";
 import { createWorkspaceHydrationSlice, type WorkspaceHydrationSlice } from "./workspaceHydration";
@@ -75,13 +71,14 @@ import { createDatasetListEditsSlice, type DatasetListEditsSlice } from "./datas
 import { createDatasetSelectionSlice, type DatasetSelectionSlice } from "./datasetSelection";
 import { createRecalcEngineSlice, type RecalcEngineSlice } from "./recalcEngine";
 import { createPlotViewFieldsSlice, type PlotViewFieldsSlice } from "./plotViewFields";
-import { toast } from "./toasts";
-import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
+import { loadPrefs, syncPrefs } from "./prefs";
+import { createAppearancePrefsSlice, type AppearancePrefsSlice } from "./appearancePrefs";
+import { createImportAppendSlice, type ImportAppendSlice } from "./importAppend";
 import { createOriginImportSlice, type OriginImportSlice } from "./originImport";
 import { createRecipeFidelitySlice, type RecipeFidelitySlice } from "./recipeFidelity";
 import { createOriginFallbackSlice, type OriginFallbackSlice } from "./originFallbackLazy";
 import { createPlotViewSettingsSlice, type PlotViewSettingsSlice } from "./plotViewSettings";
-import type { ChannelRole, Dataset, DataStruct, DefaultTrace, ModelingType } from "../lib/types";
+import type { ChannelRole, Dataset, ModelingType } from "../lib/types";
 /** Recompute a dataset's computed columns from its current base (no-op without
  *  formulas). Routed through after any base-data mutation (cell edit, corrections).
  *  Exported for store/corrections.ts (nextDatasetId/split.ts precedent) — the
@@ -124,22 +121,12 @@ export { nextDatasetId, nextFolderId } from "./idSeq";
 
 // (the quick-fit debounce timer moved to store/gadget.ts with the slice.)
 
-export type Theme = "dark" | "light";
-export type Accent = "violet" | "teal" | "ocean" | "amber" | "rose";
-export type Density = "compact" | "regular" | "comfy";
+// Theme … PrefKey moved with the pref fields to store/appearancePrefs.ts.
+export type { Accent, Density, ExcludedDisplay, OriginBookClickOpens, PrefKey, Theme } from "./appearancePrefs";
 // Stage-tab routing lives in lib/stagetab (MAIN_PLAN #2 — the window slice
 // needs it without a runtime cycle); re-exported so existing imports hold.
 export { nextStageTab, plotIntentStageTab } from "../lib/stagetab";
 export type { StageTab } from "../lib/stagetab";
-/** How excluded/filtered rows (#50/#53) render on the plot: "hide" drops them
- *  (gaps); "grey" draws them as muted markers. Fits exclude them either way. */
-export type ExcludedDisplay = "hide" | "grey";
-/** WORKSHEET_PLAN item 15 ("origin book click opens…"): what a Library click
- *  on an Origin-project dataset does — "worksheet" (default, Origin's own
- *  model: opening a workbook never touches your graphs) or "plot" (the
- *  pre-item-12 behavior — restores the unconditional plot-intent activation
- *  for every dataset, Origin or not). See `useApp.activateFromLibrary`. */
-export type OriginBookClickOpens = "worksheet" | "plot";
 export type PlotTool =
   | "pointer"
   | "zoom"
@@ -160,16 +147,11 @@ export type { IntegralResult };
 export type { AnchorEditBridge, PeakWizardEditBridge, ReflectivitySeed, StatStageSeed } from "./workshopFlags";
 
 export type LegendPos = "ne" | "nw" | "se" | "sw";
-// Keys the Preferences dialog can set through the generic setPref action.
-// DERIVED from `Prefs` rather than restated: the hand-maintained union had
-// to be edited in lockstep with prefs.ts for every new preference, which is
-// drift waiting to happen (and 18 lines of it). `keyof` cannot go stale.
-export type PrefKey = keyof Prefs;
 
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice, DatasetSelectionSlice, RecalcEngineSlice, PlotViewFieldsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice, DatasetSelectionSlice, RecalcEngineSlice, PlotViewFieldsSlice, ImportAppendSlice, AppearancePrefsSlice {
   datasets: Dataset[];
   // activeId / selectedIds / worksheetId: declared on DatasetSelectionSlice
   // (store/datasetSelection.ts) with the actions that move them.
@@ -197,32 +179,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   leftCollapsed: boolean;
   rightCollapsed: boolean;
   stageTab: StageTab;
-  theme: Theme;
-  accent: Accent;
-  density: Density;
-  palette: string; // series colour-cycle preset (overrides --series-1..8)
-  // P3.3: the non-colour half of that cycle — auto dash/marker by series
-  // position, opt-in. Full rationale on `Prefs.autoSeriesStyles` (prefs.ts).
-  autoSeriesStyles: boolean;
-  // Behavioural prefs (Preferences dialog). reduceMotion + sigFigs/notation apply
-  // live; defaultGrid seeds showGrid at startup; the rest persist for later use.
-  reduceMotion: boolean;
-  wheelZoom: boolean;
-  defaultTrace: DefaultTrace;
-  defaultLineWidth: number;
-  defaultGrid: boolean;
-  /** MAIN #35: Copy figure background — transparent vs the preset's opaque. */
-  copyFigureTransparent: boolean;
-  antialias: boolean;
-  sigFigs: number;
-  notation: Notation;
-  confirmRemove: boolean;
-  excludedDisplay: ExcludedDisplay;
-  originBookClickOpens: OriginBookClickOpens;
-  // #54: app-wide default fit a fresh Origin multi-panel apply starts from
-  // (frames = aspect-preserving letterbox, window = fill). Read at apply time,
-  // mirroring how `defaultGrid` seeds `showGrid`.
-  defaultPanelFit: PanelFit;
+  // theme … defaultPanelFit — every Prefs key — and their writers (setTheme
+  // … setPref): declared on AppearancePrefsSlice (store/appearancePrefs.ts).
   // yScale … waterfall — the FOCUSED window's live PlotView fields (see the
   // facade doc on WindowsSlice) — are declared on PlotViewFieldsSlice
   // (store/plotViewFields.ts); plotWindows / focusedWindowId /
@@ -252,12 +210,7 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
    *  every other call site (paste/merge/demo/derived-worksheet/etc.), which
    *  keep recording their own independent entry exactly as before. */
   addDataset: (ds: Dataset, historyToken?: HistoryBatchToken) => void;
-  // Import ≥2 files and concatenate them row-wise into ONE dataset (gap #47) —
-  // the alternative to importFiles' N-separate-datasets result, for same-shape
-  // multi-file series (e.g. a scan split across daily files). Falls back to
-  // importFiles (separate datasets + a toast) on a shape mismatch or an Origin
-  // multi-workbook file, so it never produces a dead import.
-  importFilesAppended: (files: File[]) => Promise<void>;
+  // importFilesAppended: see store/importAppend.ts (ImportAppendSlice).
   // ensureBookData / resolvePendingDatasets / resolveDataset / resolveDatasets
   // / pasteDataFromClipboard: see store/dataIntake.ts (DataIntakeSlice).
   // "Save workspace (.dwk)…" (App.tsx's File menu command): resolves every
@@ -284,12 +237,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   toggleLeft: () => void;
   toggleRight: () => void;
   setStageTab: (tab: StageTab) => void;
-  setTheme: (theme: Theme) => void;
-  setAccent: (accent: Accent) => void;
-  setDensity: (density: Density) => void;
-  setPalette: (palette: string) => void;
-  // Generic pref setter (used by the Preferences dialog); applies + persists.
-  setPref: (key: PrefKey, value: string | number | boolean) => void;
   // (setYScale … setErrKey and setSeriesOrder/toggleHidden/soloChannel/
   //  setWaterfall — every writer of singleton PlotView state — are declared
   //  on PlotViewSettingsSlice; see store/plotViewSettings.ts.)
@@ -375,6 +322,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createDatasetSelectionSlice(set, get),
   ...createRecalcEngineSlice(set, get),
   ...createPlotViewFieldsSlice(_initialPrefs.defaultGrid),
+  ...createImportAppendSlice(get),
   datasets: [],
   reports: [],
   openReportId: null,
@@ -384,15 +332,8 @@ export const useApp = create<AppState>((set, get) => ({
   leftCollapsed: false,
   rightCollapsed: false,
   stageTab: "plot",
-  // Every `Prefs` key IS an AppState field of the same name — that is how
-  // `prefsOf(s)` reads them straight back out — so the persisted blob seeds
-  // them in ONE spread instead of a hand-maintained line per preference that
-  // every new pref had to remember to add (the same anti-drift move
-  // `PrefKey = keyof Prefs` made for the key union; #35's note above records
-  // the 18 lines that union cost before it was derived). `libraryPanelWidth`
-  // is re-assigned here with the IDENTICAL value `createLibraryPanelSlice`
-  // above was already constructed from, so the order of the two is immaterial.
-  ..._initialPrefs,
+  // Every Prefs key + setTheme … setPref (store/appearancePrefs.ts).
+  ...createAppearancePrefsSlice(set, get, _initialPrefs),
   // (yScale … waterfall: initialized by createPlotViewFieldsSlice above.)
   plotTool: "pointer",
   integral: null,
@@ -446,66 +387,7 @@ export const useApp = create<AppState>((set, get) => ({
     }));
   },
 
-  // Upload + parse each picked/dropped file; add to the library (continues on a
-  // per-file error so one bad file doesn't abort the batch).
-
-  // Upload every file, then concatenate them row-wise into ONE dataset instead
-  // of importFiles' N separate ones (gap #47) — for a same-shape multi-file
-  // series (e.g. a scan split across daily files). An Origin multi-workbook
-  // file (`data.books`) or a column-count mismatch (mergeDatasets's guard)
-  // can't append cleanly, so either degrades to importFiles (N separate
-  // datasets) with an explanatory toast — never a dead/half-finished import.
-  importFilesAppended: async (files) => {
-    if (files.length < 2) {
-      toast("append needs ≥2 files — use Import data… for one", "danger");
-      return;
-    }
-    get().setStatus(`importing ${files.length} files to append…`);
-    const uploaded: { name: string; size: number; data: DataStruct }[] = [];
-    let failReason = "";
-    for (const file of files) {
-      try {
-        const data = await uploadFile(file);
-        if (data.books && data.books.length > 1) {
-          failReason = `${file.name} is a multi-workbook Origin project — can't append`;
-          break;
-        }
-        uploaded.push({ name: file.name, size: file.size, data });
-      } catch (e) {
-        failReason = `${file.name}: ${e instanceof Error ? e.message : "error"}`;
-        break;
-      }
-    }
-    if (!failReason && uploaded.length === files.length) {
-      try {
-        // lazy (bundle ratchet); reviews unit/label mismatches first (P2.5) —
-        // declining lands the files as separate datasets below.
-        const merged = await (await import("../lib/transformRun")).reviewedAppend(
-          uploaded.map((u) => u.data),
-          uploaded.map((u) => u.name),
-        );
-        if (!merged) throw new Error("append cancelled at the unit/name review");
-        const id = nextDatasetId();
-        const name = `${uploaded[0].name} +${uploaded.length - 1} more (appended)`;
-        get().addDataset({ id, name, data: merged });
-        for (const u of uploaded) get().pushRecent(u.name, u.size);
-        get().recordMacro(
-          `Import (append) ${uploaded.length} files`,
-          `qz.importAppended(${lit(uploaded.map((u) => u.name))})`,
-          { kind: "import", params: { names: uploaded.map((u) => u.name) } },
-        );
-        const msg = `appended ${uploaded.length} files → ${merged.time.length} rows`;
-        get().setStatus(msg);
-        toast(msg, "ok");
-        return;
-      } catch (e) {
-        failReason = e instanceof Error ? e.message : "append failed (column-count mismatch)";
-      }
-    }
-    // Degrade to N separate datasets rather than a dead import (bypassGuard: "import-append" already holds it).
-    toast(`${failReason} — importing separately instead`, failReason.startsWith("append cancelled") ? "info" : "danger");
-    await get().importFiles(files, { bypassGuard: true });
-  },
+  // (importFilesAppended moved to createImportAppendSlice, spread above.)
 
   // Body lives in ./workspaceIO, fetched on the first save by
   // ./workspaceIOLazy (bundle headroom slice 9 — see that file's doc).
@@ -525,26 +407,7 @@ export const useApp = create<AppState>((set, get) => ({
   toggleLeft: () => set((s) => ({ leftCollapsed: !s.leftCollapsed })),
   toggleRight: () => set((s) => ({ rightCollapsed: !s.rightCollapsed })),
   setStageTab: (stageTab) => set({ stageTab }),
-  setTheme: (theme) => {
-    set({ theme });
-    syncPrefs(get());
-  },
-  setAccent: (accent) => {
-    set({ accent });
-    syncPrefs(get());
-  },
-  setDensity: (density) => {
-    set({ density });
-    syncPrefs(get());
-  },
-  setPalette: (palette) => {
-    set({ palette });
-    syncPrefs(get());
-  },
-  setPref: (key, value) => {
-    set({ [key]: value } as Partial<AppState>);
-    syncPrefs(get());
-  },
+  // (setTheme … setPref moved to createAppearancePrefsSlice, spread above.)
   // (the PlotView-settings action implementations moved to
   // store/plotViewSettings.ts — composed via createPlotViewSettingsSlice
   // at the top of this literal.)

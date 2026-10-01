@@ -38,6 +38,7 @@ import type { AxisScale, BaselineOverlay, Dataset, DefaultTrace, FitOverlay, Pea
 import { useStableByValue } from "../../lib/useStableValue";
 import { useLogOffsetScaling, useOffsetErrorBars, useOffsetErrorSpans, useOffsetLabelList } from "./usePlotPayloadLogOffsets";
 import { useEncodedLists, useStageEncoding } from "./usePlotEncoding";
+import { waterfallXFetchWindow, withFullXSpan } from "../../lib/waterfallOffset";
 import { useWaterfallX } from "./useWaterfallX";
 import type { FigureEncoding } from "../../lib/plotEncodingBinding";
 
@@ -224,6 +225,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     [fetchChannels, groupCodes, encoded],
   );
   const waterfall = encoded ? 0 : p.waterfall;
+  const waterfallDx = encoded || grouped ? 0 : (p.waterfallDx ?? 0); // the X step: refused with a split, as on the wire
 
   const { offsetsApply, offsetsKey, scaledFitOverlay, scaledBaselineOverlay, scaledPeakOverlay, scaledDerivOverlay } =
     useLogOffsetScaling({ // P2.3 decade offsets -- see usePlotPayloadLogOffsets.ts
@@ -439,7 +441,9 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       return;
     }
     if (!data || activeId === undefined || !shouldRefetchWindow(p.xLim, baseDecimated)) return;
-    const [xMin, xMax] = p.xLim;
+    const base = basePayloadRef.current; // the full-range fetch; null only mid-invalidation
+    // The zoom is in SHIFTED x, the route windows raw x: widen by the X stagger (identity without one).
+    const [xMin, xMax] = base ? waterfallXFetchWindow(base, p.xLim, waterfallDx) : p.xLim;
     let cancelled = false;
     const controller = new AbortController();
     fetchPlot(
@@ -456,7 +460,8 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     )
       .then((raw) => {
         if (cancelled) return;
-        setFetched({ payload: categoricalXPayload(raw, data, p.xKey, xType), datasetId: activeId });
+        const windowed = categoricalXPayload(raw, data, p.xKey, xType); // keeps the full-range X step basis:
+        setFetched({ payload: base ? withFullXSpan(windowed, base) : windowed, datasetId: activeId });
       })
       .catch(() => {
         // Aborted (superseded by a newer commit) or a genuine network error
@@ -469,7 +474,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     };
     // `payload` is read but NOT listed — see this effect's header comment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.xLim, data, activeId, xType, fetchChannels, p.y2Keys, p.xKey, p.yScale, p.xScale, baseDecimated]);
+  }, [p.xLim, data, activeId, xType, fetchChannels, p.y2Keys, p.xKey, p.yScale, p.xScale, baseDecimated, waterfallDx]);
 
   // #36 / G4: the canonical-role error spans -- see usePlotPayloadLogOffsets.ts's
   // `useOffsetErrorSpans` for the document-vs-dataset authority rule.
@@ -477,7 +482,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     active, plotted, grouped, useDocumentErrors ? documentErrors! : active?.errorRoles, p.seriesStyles, offsetsApply,
   );
   // Waterfall X step: LAST, over the composed payload + its row-aligned companions; refused with a split, as on the wire.
-  const shown = useWaterfallX(displayPayload, payload?.series.length ?? 0, encoded || grouped ? 0 : (p.waterfallDx ?? 0), { errorBars, errorSpans, colorByColumns });
+  const shown = useWaterfallX(displayPayload, payload, waterfallDx, { errorBars, errorSpans, colorByColumns });
 
   return {
     payload,

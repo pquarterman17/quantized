@@ -4,6 +4,12 @@
 // uPlot's matchMedia init. Stages pass these into buildOpts.
 import uPlot from "uplot";
 
+import { provideUplotRanges } from "./uplotErrorRange";
+
+// The error-bar autoscale hands its widened domain back to uPlot's own range
+// rule (`lib/uplotErrorRange.ts`); this is the uPlot-runtime module that can.
+provideUplotRanges(uPlot);
+
 /** Step-after ("post") builder — the "Step" default-trace preference AND
  *  the Graph Builder "step" mark's default alignment (GAP_PLOTTYPES). uPlot's
  *  `align: 1` holds a point's Y value until the NEXT x, then jumps — see

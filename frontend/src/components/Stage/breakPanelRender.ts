@@ -36,7 +36,6 @@ import uPlot from "uplot";
 
 import type { BreakPanel } from "../../lib/facet";
 import { breakPanelWidths } from "../../lib/multipanel";
-import type { xZoomSyncHook } from "../../lib/multipanel";
 import type { SeriesStyle } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
@@ -68,9 +67,6 @@ export interface BreakPanelsArgs {
   hiddenChannels: readonly number[];
   /** uPlot cursor-sync group; see `MULTIPANEL_SYNC_KEY`. */
   syncKey: string;
-  /** The shared x-zoom/pan propagation hook — one instance for the whole
-   *  panel set, created by the caller so it can read the live instance list. */
-  onSetScale: ReturnType<typeof xZoomSyncHook>;
   /** The host box to lay the row out in (the caller's `clientWidth || 600` /
    *  `clientHeight || 400`), reused as the resize fallback. */
   box: { w: number; h: number };
@@ -116,7 +112,8 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       pointsPaths: POINTS_PATHS,
     });
     opts.cursor = { ...opts.cursor, sync: { key: args.syncKey } };
-    opts.hooks = { setScale: [args.onSetScale] };
+    // No x-zoom sync: each panel shows its OWN x-slice, so copying one
+    // panel's x domain onto another would show the wrong slice there.
     return new uPlot(opts, p.payload.data, div);
   });
 }

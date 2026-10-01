@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { COLORMAPS } from "../../lib/colormap";
 import { cutSpaceForKeys } from "../../lib/mapcuts";
 import { mapViewFor } from "../../lib/mapView";
-import { fetchMap, hasQSpace, rsmAxisKeys, type MapPayload } from "../../lib/mapdataFetch";
+import { hasQSpace, rsmAxisKeys } from "../../lib/mapdataFetch";
 import type { Dataset } from "../../lib/types";
 import { askAnnotationText } from "../../store/annotationTextDialog";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -20,6 +20,7 @@ import { armExclusively, routedTool } from "./mapToolArming";
 import { fmt } from "./mapRender";
 import { runMapExport } from "./mapFigureExport";
 import { useMapPaint } from "./useMapPaint";
+import { useMapPayload } from "./useMapPayload";
 import { useMapCuts } from "./useMapCuts";
 import { useMapPointer } from "./useMapPointer";
 import { useMapRoi } from "./useMapRoi";
@@ -46,7 +47,6 @@ export default function MapStage({ dataset }: MapStageProps) {
   const rsmPeaks = useApp((s) => s.rsmPeaks);
   const hostRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [payload, setPayload] = useState<MapPayload | null>(null);
   // Audit P2.8: the colormap, the linear/log colour scale, the explicit colour
   // limits, the committed H/V/segment slices and the map annotations are ONE
   // durable record PER DATASET in the store (store/mapView.ts) instead of this
@@ -88,6 +88,8 @@ export default function MapStage({ dataset }: MapStageProps) {
 
   const labels = active?.data.labels ?? [];
   const enoughChannels = labels.length >= 3;
+  // Fetch + regrid on dataset/channel changes; `fresh` gates the export.
+  const { payload, fresh: payloadFresh } = useMapPayload(active, enoughChannels, keys, method, res, setStatus);
 
   // RSM (XRDML 2D) datasets carry Qx/Qz columns -> offer an angular⇄Q toggle.
   const axis1Name = String(active?.data.metadata?.axis1_name ?? "Omega");
@@ -153,31 +155,6 @@ export default function MapStage({ dataset }: MapStageProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
 
-  // Fetch + regrid on dataset/channel changes. AbortController (item 16)
-  // cancels a SUPERSEDED request outright instead of only discarding its
-  // result, so the 2θ/ω ⇄ Q toggle stops racing itself; an abort never
-  // triggers the offline fallback/status (see fetchMap's doc).
-  useEffect(() => {
-    let cancelled = false;
-    if (!active || !enoughChannels) {
-      setPayload(null);
-      return;
-    }
-    const controller = new AbortController();
-    const opts = { method, nx: res, ny: res };
-    fetchMap(active.data, keys[0], keys[1], keys[2], opts, controller.signal)
-      .then((p) => {
-        if (cancelled) return;
-        setPayload(p);
-        if (p.fallback) setStatus(`backend unavailable — offline grid, ${p.fallback.nx}×${p.fallback.ny}`);
-      })
-      .catch(() => {}); // aborted (superseded) -- nothing to show
-    return () => {
-      cancelled = true;
-      controller.abort();
-    };
-  }, [active, enoughChannels, keys, method, res, setStatus]);
-
   // Box, ruler, and the sector wedge take precedence over the cut tool while
   // armed — all four drive the same canvas pointer gestures, so only one may
   // own them at a time (armExclusively's invariant). `routedTool` picks
@@ -230,6 +207,7 @@ export default function MapStage({ dataset }: MapStageProps) {
     void runMapExport({
       canvas: canvasRef.current,
       payload,
+      loading: !payloadFresh,
       view: { cmap, logZ, colorLimits: mapView.colorLimits, contour: { on: contourOn, levelCount: contourLevelCount, scale: contourScale } },
       stem: active?.name.replace(/\.[^.]+$/, "") ?? "map",
       setStatus,

@@ -90,6 +90,8 @@ export interface FitYByXState {
   byBusy: boolean;
 }
 
+const NO_RESULTS: FitYByXLevelResult[] = [];
+
 function mean(xs: number[]): number {
   return xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : NaN;
 }
@@ -158,7 +160,6 @@ export function useFitYByX(): FitYByXState {
   // (every level would just re-derive one X group).
   const byColumns = useMemo(() => columns.filter((c) => c.index !== xCol && c.index !== yCol), [columns, xCol, yCol]);
   const byPartition = useByPartition(active, data, byColumns);
-  const [byResults, setByResults] = useState<FitYByXLevelResult[]>([]);
   const [byBusy, setByBusy] = useState(false);
 
   // A By column picked before X/Y changed underneath it (now colliding with
@@ -181,15 +182,23 @@ export function useFitYByX(): FitYByXState {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [oneway, setOneway] = useState<OnewayResult | null>(null);
-  const [bivariate, setBivariate] = useState<BivariateResult | null>(null);
-  const [contingency, setContingency] = useState<ContingencyResult | null>(null);
+  // Each result is stamped with the inputs object it was computed for and
+  // read back only while that object is current. "→ Report" titles itself from
+  // the current picks, so a pick change mid-compute must never ship the
+  // previous pick's numbers (the useVariability pattern).
+  const legKey = useMemo(() => ({ data, kind, xCol, yCol, order, bandInterval }), [data, kind, xCol, yCol, order, bandInterval]);
+  const byKey = useMemo(() => ({ legKey, levels: byPartition.levels }), [legKey, byPartition.levels]);
+  const [legFor, setLegFor] = useState<{ key: object; leg: Awaited<ReturnType<typeof runLeg>> } | null>(null);
+  const [byFor, setByFor] = useState<{ key: object; results: FitYByXLevelResult[] } | null>(null);
+  const leg = legFor?.key === legKey ? legFor.leg : null;
+  const oneway = leg?.oneway ?? null;
+  const bivariate = leg?.bivariate ?? null;
+  const contingency = leg?.contingency ?? null;
+  const byResults = byFor?.key === byKey ? byFor.results : NO_RESULTS;
 
   useEffect(() => {
     if (!data || kind === "unsupported") {
-      setOneway(null);
-      setBivariate(null);
-      setContingency(null);
+      setLegFor(null);
       setError(
         kind === "unsupported"
           ? "categorical Y against a continuous X isn't supported here (JMP maps that to a logistic fit)"
@@ -201,18 +210,13 @@ export function useFitYByX(): FitYByXState {
     setBusy(true);
     setError(null);
     runLeg(data, kind, xCol, yCol, order, bandInterval)
-      .then((leg) => {
-        if (cancelled) return;
-        setOneway(leg.oneway ?? null);
-        setBivariate(leg.bivariate ?? null);
-        setContingency(leg.contingency ?? null);
+      .then((landed) => {
+        if (!cancelled) setLegFor({ key: legKey, leg: landed });
       })
       .catch((e: unknown) => {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : "analysis failed");
-        setOneway(null);
-        setBivariate(null);
-        setContingency(null);
+        setLegFor(null);
       })
       .finally(() => {
         if (!cancelled) setBusy(false);
@@ -220,14 +224,14 @@ export function useFitYByX(): FitYByXState {
     return () => {
       cancelled = true;
     };
-  }, [data, kind, xCol, yCol, order, bandInterval]);
+  }, [legKey, data, kind, xCol, yCol, order, bandInterval]);
 
   // JMP_GAP J7 — the SAME dispatch, once per By level. A level too small
   // for this leg (runLeg's thrown "need at least …" errors) reports an
   // honest "not enough data" line instead of surfacing as an error.
   useEffect(() => {
     if (byPartition.levels.length === 0 || kind === "unsupported") {
-      setByResults([]);
+      setByFor(null);
       setByBusy(false);
       return;
     }
@@ -249,11 +253,11 @@ export function useFitYByX(): FitYByXState {
       }),
     )
       .then((results) => {
-        if (!cancelled) setByResults(results);
+        if (!cancelled) setByFor({ key: byKey, results });
       })
       .catch((e: unknown) => {
         if (!cancelled) {
-          setByResults([]);
+          setByFor(null);
           setError(e instanceof Error ? e.message : "analysis failed");
         }
       })
@@ -263,7 +267,7 @@ export function useFitYByX(): FitYByXState {
     return () => {
       cancelled = true;
     };
-  }, [byPartition.levels, kind, xCol, yCol, order, bandInterval]);
+  }, [byKey, byPartition.levels, kind, xCol, yCol, order, bandInterval]);
 
   const reportKey = JSON.stringify({
     datasetId: active?.id ?? null,

@@ -35,10 +35,10 @@ let _idSeq = 0;
 export const nextDatasetId = (): string => `ds-${Date.now().toString(36)}-${++_idSeq}`;
 export const nextFolderId = (): string => `fld-${Date.now().toString(36)}-${++_idSeq}`;
 export const nextReportId = (): string => `rep-${Date.now().toString(36)}-${++_idSeq}`;
-/** The `figd-` mint that `duplicateFigureDoc` used to spell inline in
- *  useApp.ts. Named (not inlined into store/reportsFigureDocs.ts) only so the
- *  counter can stay in ONE module; the produced string is character-for-
- *  character the template it replaced. */
+/** The `figd-` mint for `duplicateFigureDoc` (store/reportsFigureDocs.ts) and
+ *  the Figure Builder's "Save as figure". The builder once kept its own
+ *  counter, which restarted beside this one and minted the same id in the
+ *  same millisecond; one sequence makes that impossible. */
 export const nextFigureDocId = (): string => `figd-${Date.now().toString(36)}-${++_idSeq}`;
 /** Likewise for `addSmartFolder`, which stays in useApp.ts. */
 export const nextSmartFolderId = (): string => `smf-${Date.now().toString(36)}-${++_idSeq}`;

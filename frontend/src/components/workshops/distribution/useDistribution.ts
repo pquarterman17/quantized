@@ -197,15 +197,16 @@ export function useDistribution(): DistributionState {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hist, setHist] = useState<HistBins | null>(null);
-  const [desc, setDesc] = useState<CalcResult | null>(null);
-  const [norm, setNorm] = useState<Normality | null>(null);
-  const [normNote, setNormNote] = useState<string | null>(null);
+  // Results are stamped with the `finite` values they were computed for and
+  // read back only while those are current: "→ Report" titles itself from the
+  // current column, so a column change mid-compute must never ship the
+  // previous column's numbers (the useVariability pattern).
+  const [landed, setLanded] = useState<{ finite: number[]; hist: HistBins | null; desc: CalcResult | null; norm: Normality | null } | null>(null);
 
   const [fitDist, setFitDist] = useState<FitPick>("none");
   const [fitBusy, setFitBusy] = useState(false);
   const [fitError, setFitError] = useState<string | null>(null);
-  const [fits, setFits] = useState<DistFitAllResponse | null>(null);
+  const [fitsFor, setFitsFor] = useState<{ finite: number[]; res: DistFitAllResponse } | null>(null);
 
   const [compareOpen, setCompareOpen] = useState(false);
   const [percentileInput, setPercentileInput] = useState(90);
@@ -218,18 +219,21 @@ export function useDistribution(): DistributionState {
     if (!data) return [];
     return colValues(data, col).filter((v) => Number.isFinite(v));
   }, [data, col]);
+  const current = landed?.finite === finite ? landed : null;
+  const hist = current?.hist ?? null;
+  const desc = current?.desc ?? null;
+  const norm = current?.norm ?? null;
+  const normNote = current && !norm ? normalityNote(finite.length) : null;
+  const fits = fitsFor?.finite === finite ? fitsFor.res : null;
 
   useEffect(() => {
     if (!data) {
-      setHist(null);
-      setDesc(null);
-      setNorm(null);
+      setLanded(null);
       return;
     }
     let cancelled = false;
     setBusy(true);
     setError(null);
-    setNormNote(null);
     void Promise.allSettled([
       statsHistogram(finite),
       statsDescriptive(finite),
@@ -237,24 +241,17 @@ export function useDistribution(): DistributionState {
     ]).then(([h, d, s]) => {
       if (cancelled) return;
       setBusy(false);
-      if (h.status === "fulfilled") {
-        setHist({
-          counts: numArr(h.value.counts),
-          centers: numArr(h.value.centers),
-          edges: numArr(h.value.edges),
-        });
-        setError(null);
-      } else {
-        setHist(null);
-        setError("too few finite values to bin");
-      }
-      setDesc(d.status === "fulfilled" ? d.value : null);
-      if (s.status === "fulfilled" && Number.isFinite(Number(s.value.p))) {
-        setNorm({ W: Number(s.value.W), p: Number(s.value.p), N: Number(s.value.N) });
-      } else {
-        setNorm(null);
-        setNormNote(normalityNote(finite.length));
-      }
+      setError(h.status === "fulfilled" ? null : "too few finite values to bin");
+      setLanded({
+        finite,
+        hist: h.status === "fulfilled"
+          ? { counts: numArr(h.value.counts), centers: numArr(h.value.centers), edges: numArr(h.value.edges) }
+          : null,
+        desc: d.status === "fulfilled" ? d.value : null,
+        norm: s.status === "fulfilled" && Number.isFinite(Number(s.value.p))
+          ? { W: Number(s.value.W), p: Number(s.value.p), N: Number(s.value.N) }
+          : null,
+      });
     });
     return () => {
       cancelled = true;
@@ -276,7 +273,7 @@ export function useDistribution(): DistributionState {
   // which one is picked; the Compare table re-ranks these by AICc below.
   useEffect(() => {
     if ((fitDist === "none" && !compareOpen) || !data) {
-      setFits(null);
+      setFitsFor(null);
       setFitError(null);
       setFitBusy(false);
       return;
@@ -286,12 +283,11 @@ export function useDistribution(): DistributionState {
     setFitError(null);
     statsFitDistributions(finite)
       .then((res) => {
-        if (cancelled) return;
-        setFits(res);
+        if (!cancelled) setFitsFor({ finite, res });
       })
       .catch((e: unknown) => {
         if (cancelled) return;
-        setFits(null);
+        setFitsFor(null);
         setFitError(e instanceof Error ? e.message : "distribution fit failed");
       })
       .finally(() => {
@@ -396,6 +392,7 @@ export function useDistribution(): DistributionState {
       let title: string;
       let records: Record<string, unknown>[];
       if (by.levels.length > 0) {
+        if (by.results.length === 0) return; // still computing for the current picks
         title = `${label} distribution by ${byLabel ?? "level"}`;
         records = by.results.map((r) => ({
           level: r.label,

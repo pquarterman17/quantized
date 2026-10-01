@@ -148,17 +148,27 @@ export function useVariability(): VariabilityState {
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [anova, setAnova] = useState<NestedAnovaResponse | null>(null);
-  const [varComp, setVarComp] = useState<VarianceComponentsResponse | null>(null);
-  const [varCompNote, setVarCompNote] = useState<string | null>(null);
-  const [summary, setSummary] = useState<VariabilitySummaryResponse | null>(null);
+  // All three results land TOGETHER, stamped with the `levels` they were
+  // computed for, and read back only while those are still the current
+  // levels. "→ Report" titles itself from the current picks, so a pick
+  // change mid-compute must never ship the previous grouping's numbers, nor
+  // a new ANOVA beside the previous grouping's variance components.
+  const [computed, setComputed] = useState<{
+    levels: VariabilityFactorLevel[];
+    anova: NestedAnovaResponse;
+    summary: VariabilitySummaryResponse;
+    varComp: VarianceComponentsResponse | null;
+    varCompNote: string | null;
+  } | null>(null);
+  const current = computed?.levels === levels ? computed : null;
+  const anova = current?.anova ?? null;
+  const summary = current?.summary ?? null;
+  const varComp = current?.varComp ?? null;
+  const varCompNote = current?.varCompNote ?? null;
 
   useEffect(() => {
     if (tooFewLevels) {
-      setAnova(null);
-      setVarComp(null);
-      setVarCompNote(null);
-      setSummary(null);
+      setComputed(null);
       setError("need at least 2 non-empty levels of the Factor A column");
       setBusy(false);
       return;
@@ -174,24 +184,22 @@ export function useVariability(): VariabilityState {
           statsVariabilitySummary(groups),
         ]);
         if (cancelled) return;
-        setAnova(anovaRes);
-        setSummary(summaryRes);
-        if (anovaRes.b_within_a_estimable && anovaRes.error_estimable) {
-          setVarCompNote(null);
-          const vc = await statsVarianceComponents(groups);
-          if (!cancelled) setVarComp(vc);
-        } else {
-          setVarComp(null);
-          setVarCompNote(
-            "variance components need >=1 Factor-A level with >=2 Factor-B subgroups and >=1 cell with >=2 replicates",
-          );
-        }
+        const estimable = anovaRes.b_within_a_estimable && anovaRes.error_estimable;
+        const vc = estimable ? await statsVarianceComponents(groups) : null;
+        if (cancelled) return;
+        setComputed({
+          levels,
+          anova: anovaRes,
+          summary: summaryRes,
+          varComp: vc,
+          varCompNote: estimable
+            ? null
+            : "variance components need >=1 Factor-A level with >=2 Factor-B subgroups and >=1 cell with >=2 replicates",
+        });
       } catch (e) {
         if (cancelled) return;
         setError(errMsg(e, "variability analysis failed"));
-        setAnova(null);
-        setVarComp(null);
-        setSummary(null);
+        setComputed(null);
       } finally {
         if (!cancelled) setBusy(false);
       }
