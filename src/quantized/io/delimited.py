@@ -16,6 +16,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
 from quantized.io._delimited_fast import (
     LazyTokenRows,
@@ -171,9 +172,13 @@ def import_csv(
     *,
     time_column: int | str = 0,
     data_columns: Sequence[int | str] | None = None,
+    decimal: str = "auto",
     _force_slow: bool = False,
 ) -> DataStruct:
     """Import a generic delimited text file (first column = x-axis by default).
+
+    ``decimal`` is the decimal separator: ``"auto"``, ``"."`` or ``","`` (see
+    :mod:`quantized.io._decimal_comma`).
 
     ``_force_slow`` is an internal, test-only escape hatch (P0.4-perf4):
     skips the `_delimited_fast` bulk-parse attempt and always takes the
@@ -184,10 +189,12 @@ def import_csv(
     there is no environment-variable equivalent.
     """
     path = Path(filepath)
-    raw_lines, comment_lines = _split_lines(read_text(path))
+    text = read_text(path)
+    raw_lines, comment_lines = _split_lines(text)
     if not raw_lines:
         raise ValueError(f"file empty or only comments: {path.name}")
     delim = layout._detect_delimiter(raw_lines)
+    comma_path = dc.uses_decimal_path(dc.check_decimal(decimal, delim), delim, "," in text)
 
     # P0.4-perf4: layout detection scores rows in fixed-size chunks
     # (`_delimited_layout._SCORE_CHUNK_ROWS`, 4096) and stops at the first
@@ -200,7 +207,9 @@ def import_csv(
     # where the header ends.
     lazy_tokens = LazyTokenRows(raw_lines, delim)
     try:
-        header_row, data_start, units_row = layout._detect_layout(lazy_tokens)
+        header_row, data_start, units_row = layout._detect_layout(
+            dc.layout_rows(lazy_tokens) if comma_path else lazy_tokens
+        )
     except ValueError as exc:  # header-only file
         raise ValueError(f"{exc} ({path.name})") from exc
     n_data_cols = len(lazy_tokens[data_start])
@@ -247,7 +256,12 @@ def import_csv(
         # built lazily -- assign it directly rather than wrapping it, since
         # it is already a `Sequence[Sequence[str]]`.
         data_tokens = data_tokens_list
-    if delim != ",":  # with a comma delimiter, "1,5" is already two cells
+    comma_cols: list[int] = []
+    if comma_path:
+        comma_cols = dc.resolve_decimal_columns(
+            path.name, col_headers, matrix, data_tokens, decimal=decimal
+        )
+    elif delim != ",":  # with a comma delimiter, "1,5" is already two cells
         layout.reject_comma_numbers(path.name, col_headers, matrix, data_tokens)
 
     if isinstance(time_column, int) and time_column < 0:
@@ -441,6 +455,10 @@ def import_csv(
     if time_is_datetime:
         metadata.update({"time_is_datetime": True, "time_timezone": "UTC"})
     notes: list[str] = []
+    if comma_cols:
+        decimal_meta, decimal_note = dc.decimal_metadata([col_headers[c] for c in comma_cols])
+        metadata.update(decimal_meta)
+        notes.append(decimal_note)
     if time_promoted:
         if time_idx in categorical_idx:
             notes.append(

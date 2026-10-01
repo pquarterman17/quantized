@@ -59,13 +59,15 @@ function stableWireDataset(spec: FigureSpec, live: Dataset, data: DataStruct, ke
  *
  *  `excludedDisplay` is the app-wide "Excluded rows" mode the preview follows
  *  (see the module header); absent, masked rows are omitted. `defaultTrace` is
- *  the Preferences trace the Export draws unstyled series in. */
+ *  the Preferences trace the Export draws unstyled series in, `defaultLineWidth`
+ *  the Preferences line width (`FigureRenderOpts.defaultLineWidth`). */
 export function computeCanonicalReadiness(
   document: FigureDocument | null,
   dataset: Dataset | null,
   autoSeriesStyles = false,
   excludedDisplay?: ExcludedDisplay,
   defaultTrace?: DefaultTrace,
+  defaultLineWidth?: number,
 ): CanonicalReadiness | null {
   if (!document) return null;
   if (document.data.mode !== "frozen" && document.bindings.datasetId !== null && !dataset) {
@@ -91,6 +93,7 @@ export function computeCanonicalReadiness(
       autoSeriesStyles,
       greyExcluded: ghosterFor(mode),
       defaultTrace,
+      defaultLineWidth,
     });
     // A frozen document renders its own snapshot and never prunes, so only a
     // live one has a masked wire dataset worth keeping stable.

@@ -166,6 +166,32 @@ describe("ImportWizardPanel", () => {
     expect(importParseMock).toHaveBeenCalledWith(expect.any(String), SETTINGS);
   });
 
+  it("sends the chosen decimal separator to preview and import", async () => {
+    importParseMock.mockResolvedValue(DS);
+    render(<ImportWizardPanel />);
+    pickFile();
+    await waitFor(() => expect(screen.getByDisplayValue("Temp")).toBeInTheDocument());
+    const select = screen.getByLabelText("Decimal separator");
+    expect(select).toHaveValue("auto");
+
+    importPreviewMock.mockResolvedValue({ ...PREVIEW, rows: [[1.5, 0.0012]] });
+    fireEvent.change(select, { target: { value: "," } });
+    // Wait on the re-previewed table, not on the mock call.
+    expect(await screen.findByText("1.5")).toBeInTheDocument();
+    expect(importPreviewMock).toHaveBeenLastCalledWith(
+      expect.any(String),
+      expect.objectContaining({ decimal: "," }),
+      30,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Import" }));
+    await waitFor(() => expect(useApp.getState().datasets).toHaveLength(1));
+    expect(importParseMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ decimal: "," }),
+    );
+  });
+
   it("surfaces a 422 parse error inline", async () => {
     importParseMock.mockRejectedValue(new Error("no y/error columns selected to import"));
     render(<ImportWizardPanel />);

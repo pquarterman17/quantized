@@ -7,8 +7,10 @@
 // exported as lines, and a default-trace marker came out at the style
 // preset's size instead of the canvas' 5 px -- as did any marker with no
 // explicit size, under every trace (`exportStyles.toWireSeriesStyles` rule 3
-// now names it; see `marker_size_rule` in the fixture). Each case states what every
-// DRAWN series looks like (a connecting line? markers, at what size? a step?)
+// now names it; see `marker_size_rule` in the fixture). A line with no explicit
+// width likewise came out at the preset's `line_width` instead of the plot
+// template's (`exportLineWidth`; `line_width_rule`). Each case states what every
+// DRAWN series looks like (a connecting line, how wide? markers, at what size? a step?)
 // and the canvas half reads that back out of the real `buildOpts` options
 // object; the request half asserts the exact request the Stage sends says the
 // same (a flat, facet or encoded request); the backend half
@@ -45,6 +47,7 @@ import { markSeriesStyle, type PlotMark } from "./plotspec";
 import { defaultPlotView, sanitizePlotView, type PlotView } from "./plotview";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { Dataset, DefaultTrace, SeriesStyle } from "./types";
+import { canvasLineWidth } from "./plotTemplates";
 import { buildOpts } from "./uplotOpts";
 
 const FIXTURE = join(
@@ -84,6 +87,8 @@ interface Drawn {
   /** Marker size (CSS px on the canvas, points on paper); null without one. */
   size: number | null;
   step: "post" | null;
+  /** Line width (CSS px on the canvas, points on paper); null without a line. */
+  width: number | null;
 }
 
 interface Case {
@@ -92,16 +97,18 @@ interface Case {
   view: Partial<PlotView>;
   /** The export's style preset (default: "default"). */
   style?: string;
+  /** Preferences "Default line width" (default: the pref's own 1.5). */
+  lineWidthPref?: number;
   /** A split request: a facet grid (`facetKey`) or a Color-by encoding. */
   split?: { facetKey?: number; encoding?: FigureEncoding };
   /** One entry per DRAWN series, in display order (facet panels in turn). */
   drawn: Drawn[];
 }
 
-const LINE: Drawn = { line: true, marker: false, size: null, step: null };
-const DOTS: Drawn = { line: false, marker: true, size: 5, step: null };
-const BOTH: Drawn = { line: true, marker: true, size: 5, step: null };
-const STEP: Drawn = { line: true, marker: false, size: null, step: "post" };
+const LINE: Drawn = { line: true, marker: false, size: null, step: null, width: 1.5 };
+const DOTS: Drawn = { line: false, marker: true, size: 5, step: null, width: null };
+const BOTH: Drawn = { line: true, marker: true, size: 5, step: null, width: 1.5 };
+const STEP: Drawn = { line: true, marker: false, size: null, step: "post", width: 1.5 };
 
 /** The style a Graph Builder mark commits to a fresh series (`markSeriesStyle`). */
 function mark(m: PlotMark, showMarkers?: boolean): SeriesStyle {
@@ -117,7 +124,7 @@ const CASES: Case[] = [
     name: "Scatter: an explicit width keeps its line",
     trace: "Scatter",
     view: { yKeys: [0, 1], seriesStyles: { 1: { width: 2 } } },
-    drawn: [DOTS, BOTH],
+    drawn: [DOTS, { ...BOTH, width: 2 }],
   },
   { name: "Line + markers", trace: "Line + markers", view: { yKeys: [0, 1] }, drawn: [BOTH, BOTH] },
   {
@@ -224,6 +231,51 @@ const CASES: Case[] = [
     split: { encoding: { color: 2 } },
     drawn: [BOTH, BOTH],
   },
+  // A line with no explicit width draws at the plot template's width (or, under
+  // the Screen template, the Preferences default), so it exports at that many
+  // points, not the style preset's `line_width` (`fresh().line_width_rule`).
+  {
+    name: "Line: an unstyled line is the Screen template's 1.5 px, not the preset's 1.2 pt",
+    trace: "Line",
+    view: { yKeys: [0] },
+    drawn: [LINE],
+  },
+  {
+    name: "Line: the Screen template follows the Preferences default line width",
+    trace: "Line",
+    view: { yKeys: [0, 1] },
+    style: "aps",
+    lineWidthPref: 2.5,
+    drawn: [{ ...LINE, width: 2.5 }, { ...LINE, width: 2.5 }],
+  },
+  {
+    name: "Line: a non-Screen plot template's width, on a different preset",
+    trace: "Line",
+    view: { yKeys: [0, 1], plotTemplate: "aps" },
+    style: "poster",
+    lineWidthPref: 2.5,
+    drawn: [{ ...LINE, width: 1 }, { ...LINE, width: 1 }],
+  },
+  {
+    name: "Line: an explicit width wins over the template",
+    trace: "Line",
+    view: { yKeys: [0, 1], plotTemplate: "nature", seriesStyles: { 1: { width: 3 } } },
+    drawn: [{ ...LINE, width: 1.2 }, { ...LINE, width: 3 }],
+  },
+  {
+    name: "Facet grid: the template width in every panel",
+    trace: "Line",
+    view: { yKeys: [0, 1], plotTemplate: "presentation" },
+    split: { facetKey: 2 },
+    drawn: Array.from({ length: 4 }, () => ({ ...LINE, width: 2.5 })),
+  },
+  {
+    name: "Color-by encoding: the template width on every level",
+    trace: "Line",
+    view: { yKeys: [0], plotTemplate: "report" },
+    split: { encoding: { color: 2 } },
+    drawn: [{ ...LINE, width: 1.75 }, { ...LINE, width: 1.75 }],
+  },
 ];
 
 const STEP_POST = (() => undefined) as unknown as uPlot.Series.PathBuilder;
@@ -247,6 +299,7 @@ function canvas(c: Case): Drawn[] {
     width: 600, height: 400, xScale: "linear", yScale: "linear", tool: "cursor", onReadout: () => {},
     seriesStyles: channels.map((ch) => view.seriesStyles[ch]),
     hidden, plotted: channels, defaultTrace: c.trace, steppedPaths: STEP_POST,
+    baseLineWidth: canvasLineWidth(view.plotTemplate, c.lineWidthPref),
   });
   return channels.flatMap((_ch, i) => {
     const s = opts.series[i + 1];
@@ -257,6 +310,7 @@ function canvas(c: Case): Drawn[] {
       marker: points?.show === true,
       size: points?.show === true ? (points.size ?? null) : null,
       step: s.paths === STEP_POST ? "post" as const : null,
+      width: (s.width ?? 1) > 0 ? (s.width ?? null) : null,
     }];
   });
 }
@@ -278,6 +332,7 @@ function request(c: Case): FigureSpec {
     windowsForSave: () => [{ id: "w1", kind: "plot", document }],
     autoSeriesStyles: false,
     defaultTrace: c.trace,
+    defaultLineWidth: c.lineWidthPref,
   })) as unknown as StoreGet;
   return buildStageFigureSpec(get, datasetOf(c), "trace", {
     fmt: "svg", style: c.style ?? "default", dpi: 300, title: "", xLabel: "", yLabel: "",
@@ -286,11 +341,13 @@ function request(c: Case): FigureSpec {
 
 /** What one wire style asks matplotlib to draw (size null = the preset's). */
 function drawnOf(st: ExportSeriesStyle | null | undefined): Drawn {
+  const line = st?.line !== "none" && (st?.width == null || st.width > 0);
   return {
-    line: st?.line !== "none" && (st?.width == null || st.width > 0),
+    line,
     marker: st?.marker === true,
     size: st?.marker === true ? (st.marker_size ?? null) : null,
     step: st?.step === "post" ? "post" : null,
+    width: line ? (st?.width ?? null) : null,
   };
 }
 
@@ -308,10 +365,12 @@ function wire(spec: FigureSpec): Drawn[] {
 function otherBuilders(c: Case): [string, FigureSpec | null][] {
   const ds = datasetOf(c);
   const doc = documentOf(c);
-  const ready = computeCanonicalReadiness(doc, ds, false, "hide", c.trace);
+  const ready = computeCanonicalReadiness(doc, ds, false, "hide", c.trace, c.lineWidthPref);
   const builders: [string, FigureSpec | null][] = [
     // A saved document, a page panel, a report figure, the Figure Builder's Export.
-    ["document", buildFigureSpecFromDocument(doc, ds, "trace", { style: c.style, defaultTrace: c.trace })],
+    ["document", buildFigureSpecFromDocument(doc, ds, "trace", {
+      style: c.style, defaultTrace: c.trace, defaultLineWidth: c.lineWidthPref,
+    })],
     ["Figure Builder preview", ready?.state === "ready" ? ready.spec : null],
   ];
   // The Figure Builder's live-plot mirror: it plots every PICKED channel (no
@@ -322,6 +381,7 @@ function otherBuilders(c: Case): [string, FigureSpec | null][] {
       data: ds.data, xKey: null, yKeys: view.yKeys, xScale: "linear", yScale: "linear",
       xFmt: view.xFmt, yFmt: view.yFmt, style: c.style ?? "default", overrides: {}, title: "", xLabel: "", yLabel: "",
       seriesStyles: view.seriesStyles, docSeriesStyles: undefined, docGroupCol: null, y2: null, defaultTrace: c.trace,
+      plotTemplate: view.plotTemplate, defaultLineWidth: c.lineWidthPref,
     })]);
   }
   return builders;
@@ -333,6 +393,11 @@ function fresh() {
       "A marker with no explicit size exports at the canvas' DEFAULT_MARKER_PX (5 px, sent as 5 pt), never the "
       + "style preset's marker_size, the px-as-points rule an explicit width or marker size already follows. "
       + "The preset value stays the backend default only for a request that names no size (an API or CLI caller).",
+    line_width_rule:
+      "A line with no explicit width exports at the width the canvas draws it (the plot template's lineWidth, or "
+      + "the Preferences default line width under the Screen template; px sent as pt), never the style preset's "
+      + "line_width. The preset value stays the backend default only for a request that names no width (an API "
+      + "or CLI caller).",
     cases: CASES.map((c) => ({ name: c.name, trace: c.trace, request: request(c), drawn: c.drawn })),
   };
 }
@@ -358,7 +423,9 @@ describe("the default trace, screen == export", () => {
   it.each(CASES.filter((c) => c.name.includes("Graph Builder")))("save/reopen: $name", (c) => {
     const doc = deserializeFigureDocument(serializeFigureDocument(documentOf(c)));
     expect(doc).not.toBeNull();
-    const spec = buildFigureSpecFromDocument(doc!, datasetOf(c), "trace", { style: c.style, defaultTrace: c.trace });
+    const spec = buildFigureSpecFromDocument(doc!, datasetOf(c), "trace", {
+      style: c.style, defaultTrace: c.trace, defaultLineWidth: c.lineWidthPref,
+    });
     expect(wire(spec)).toEqual(c.drawn);
     const view = sanitizePlotView(JSON.parse(JSON.stringify(viewOf(c))));
     expect(view.seriesStyles).toEqual(viewOf(c).seriesStyles);

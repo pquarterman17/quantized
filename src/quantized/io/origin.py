@@ -24,6 +24,8 @@ from quantized.datastruct import DataStruct
 __all__ = ["GraphSpec", "format_origin_project_script", "format_origin_script"]
 
 _ERR_KEYWORDS = ("err", "dr", "std", "sigma")
+# C0/C1 controls plus the Unicode line/paragraph separators (see _escape_lt).
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f-\x9f\u2028\u2029]")
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,7 +60,13 @@ def _meta_get(meta: dict[str, Any], *keys: str, default: Any = None) -> Any:
 
 
 def _escape_lt(text: str) -> str:
-    """Escape double-quotes for a LabTalk string literal."""
+    """Escape double-quotes for a LabTalk string literal.
+
+    Control characters become spaces first: a newline in a file-derived label
+    would end the statement's line and run the rest as LabTalk (``run -e``
+    starts a program) when the user runs the script (security audit
+    2026-10-01)."""
+    text = _CONTROL_CHARS.sub(" ", text)
     return text.replace('"', '\\"')
 
 

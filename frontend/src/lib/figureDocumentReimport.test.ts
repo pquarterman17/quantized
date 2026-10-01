@@ -169,7 +169,7 @@ describe("resetFigureDocumentForReshape", () => {
     });
     const dsBefore: Dataset = { id: "d1", name: "s", data: before };
     const specBefore = buildFigureSpecFromDocument(document, dsBefore, "fig");
-    expect(specBefore.series_styles).toEqual([{ color: "#ff0000" }]);
+    expect(specBefore.series_styles).toEqual([{ color: "#ff0000", width: 1.5 }]); // + the canvas' line width
     expect(specBefore.y_keys).toEqual([1]);
 
     const reset = resetFigureDocumentForReshape(document);
@@ -183,6 +183,6 @@ describe("resetFigureDocumentForReshape", () => {
     // ...and the user's red never lands on "temp" (channel 0) or anywhere
     // else — it derives fresh from the (also-reset) view instead of
     // replaying the stale document.publication array.
-    expect(specAfter.series_styles).not.toContainEqual({ color: "#ff0000" });
+    expect(specAfter.series_styles?.map((st) => st?.color)).not.toContain("#ff0000");
   });
 });

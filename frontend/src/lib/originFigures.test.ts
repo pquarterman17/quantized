@@ -5,16 +5,15 @@ import { describe, expect, it } from "vitest";
 // their shared fixtures stay verbatim — the split moved code between modules,
 // not behaviour, and a test file that moved at the same time would have hidden
 // that. Eager half: `./originFigures`. Lazy apply half:
-// `./originFigureSelection` + `./originSpatialPanels`.
+// `./originFigureSelection` + `./originSpatialPanels` + `./originCurveText`
+// (slice 18).
+import { curveDisplayName, originCurveSeriesStyle, resolveLegendTemplate } from "./originCurveText";
 import {
   buildOriginFigureEntries,
-  curveDisplayName,
   figureLabel,
   figureLayerFamily,
-  originCurveSeriesStyle,
   type OriginFigureEntry,
   resolveFigureDataset,
-  resolveLegendTemplate,
 } from "./originFigures";
 import {
   doubleYPartner,

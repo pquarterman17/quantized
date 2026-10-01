@@ -83,7 +83,10 @@
                 1,
                 1.5,
                 1.2
-              ]
+              ],
+              "style": {
+                "width": 1.5
+              }
             }
           ],
           "rows": [
@@ -106,7 +109,10 @@
                 3,
                 2.5,
                 2.8
-              ]
+              ],
+              "style": {
+                "width": 1.5
+              }
             }
           ],
           "rows": [
@@ -122,7 +128,8 @@
       "title": "",
       "series_styles": [
         {
-          "color": "#8b5cf6"
+          "color": "#8b5cf6",
+          "width": 1.5
         }
       ],
       "overrides": {
@@ -328,7 +335,10 @@
                 1.5,
                 1.2,
                 1.4
-              ]
+              ],
+              "style": {
+                "width": 1.5
+              }
             }
           ],
           "rows": [
@@ -357,7 +367,10 @@
                 2.5,
                 2.8,
                 2.6
-              ]
+              ],
+              "style": {
+                "width": 1.5
+              }
             }
           ],
           "rows": [
@@ -376,7 +389,9 @@
       "dpi": 100,
       "title": "",
       "series_styles": [
-        null
+        {
+          "width": 1.5
+        }
       ],
       "overrides": {
         "legend": {
@@ -585,7 +600,10 @@
                 1.5,
                 1.2,
                 1.4
-              ]
+              ],
+              "style": {
+                "width": 1.5
+              }
             }
           ],
           "rows": [
@@ -614,7 +632,10 @@
                 2.5,
                 2.8,
                 2.6
-              ]
+              ],
+              "style": {
+                "width": 1.5
+              }
             }
           ],
           "rows": [
@@ -633,7 +654,9 @@
       "dpi": 100,
       "title": "",
       "series_styles": [
-        null
+        {
+          "width": 1.5
+        }
       ],
       "overrides": {
         "legend": {

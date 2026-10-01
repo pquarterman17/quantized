@@ -33,6 +33,11 @@ _DUP = {"S": 1, "T": 2, "U": 3, "V": 4, "W": 5, "X": 6, "Y": 7, "Z": 8, "s": 9}
 # Token modes.
 _ABS, _DIFF, _DUPL = "ABS", "DIF", "DUP"
 
+# Hostile-input bound (security audit 2026-10-01): a DUP token is a run
+# length, so ``s9999999`` alone is ~100M ordinates from nine bytes. Real
+# spectra are far below 2**24 points.
+MAX_ORDINATES = 1 << 24
+
 
 class DifCheckError(ValueError):
     """A DIF Y-value check failed (a line's leading value != previous last)."""
@@ -81,7 +86,11 @@ def _tokenize(line: str) -> list[tuple[str, float]]:
 
 
 def decode_xydata(
-    data_lines: list[str], *, ycheck: bool = True, ytol: float = 1e-6
+    data_lines: list[str],
+    *,
+    ycheck: bool = True,
+    ytol: float = 1e-6,
+    max_points: int | None = None,
 ) -> list[float]:
     """Decode ASDF ``(X++(Y..Y))`` lines into a flat list of raw ordinates.
 
@@ -91,7 +100,11 @@ def decode_xydata(
         Verify DIF-mode Y-value checks; raise :class:`DifCheckError` on mismatch.
     ytol
         Absolute tolerance for the Y-value check (raw ordinate units).
+    max_points
+        Refuse (ValueError) a DUP run that would pass this many ordinates
+        (the file's ``##NPOINTS``); never more than ``MAX_ORDINATES``.
     """
+    limit = MAX_ORDINATES if max_points is None else min(max_points, MAX_ORDINATES)
     y: list[float] = []
     last = 0.0
     prev_mode, prev_val = _ABS, 0.0
@@ -106,6 +119,10 @@ def decode_xydata(
         first = True
         for mode, val in ords:
             if mode == _DUPL:
+                if len(y) + int(val) - 1 > limit:
+                    raise ValueError(
+                        f"line {li + 1}: DUP run of {int(val)} passes {limit} ordinates"
+                    )
                 for _ in range(int(val) - 1):
                     if prev_mode == _DIFF:
                         last += prev_val

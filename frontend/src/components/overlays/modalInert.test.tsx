@@ -105,8 +105,8 @@ describe("R12 — the live regions stay out of the inert subtree", () => {
   it("a toast raised while a dialog is open is not inert, and stays that way when another dialog opens", async () => {
     render(<Shell />);
     await act(async () => useApp.getState().setPrefsOpen(true));
-    // The toast stack renders nothing until there is a toast, so this is the
-    // real sequence: dialog first, announcement second.
+    // Dialog first, announcement second. The (empty) toast stack is mounted
+    // from the start, so the toast lands inside an already-exempt region.
     await act(async () => toast("Export finished"));
 
     const toaster = document.querySelector(".qzk-toaster")!;
@@ -116,10 +116,10 @@ describe("R12 — the live regions stay out of the inert subtree", () => {
     // Still the live region it has to be for the announcement to happen at all.
     expect(toaster).toHaveAttribute("aria-live", "polite");
 
-    // Both halves are discriminating now. The toast stack is a NEW node in the
-    // background, which the MutationObserver re-walks for (R12 hypothesis b),
-    // so without the exemption the first half goes red; the next full walk —
-    // a second dialog over the first — is where it is load-bearing again.
+    // Both halves are discriminating: without the exemption the dialog's own
+    // walk marks the stack, and the next full walk (a second dialog over the
+    // first) would mark it again. The MutationObserver path for live regions
+    // that mount mid-dialog is pinned in modalInertMutations.test.tsx.
     await act(async () => useApp.getState().setShortcutsOpen(true));
     expect(toaster).not.toHaveAttribute("inert");
     expect(inertAncestor(toaster)).toBeNull();
@@ -145,7 +145,10 @@ describe("R12 — the live regions stay out of the inert subtree", () => {
     // than skipping it whole, so the rest of the status bar is still inert.
     const footer = document.querySelector(".qzk-statusbar")!;
     expect(footer).not.toHaveAttribute("inert");
-    expect(footer.querySelector(".qzk-conn")).toHaveAttribute("inert");
+    // `.qzk-conn` now holds the status-message region too, so the walk
+    // descends into it as well and marks its connection dot alone.
+    expect(footer.querySelector(".qzk-conn")!.firstElementChild).toHaveAttribute("inert");
+    expect(inertAncestor(screen.getByRole("status", { name: "Status message" }))).toBeNull();
   });
 
   it("no dialog carries aria-modal, which would hide the live regions whatever inert says", async () => {

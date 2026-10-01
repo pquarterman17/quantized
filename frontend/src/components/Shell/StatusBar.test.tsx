@@ -126,9 +126,23 @@ describe("StatusBar pending-op live region (accessibility gap)", () => {
   // asserts on the region itself.
   it("keeps the live region mounted while idle, so the first op is announced", () => {
     render(<StatusBar />);
-    const region = document.querySelector('[role="status"][aria-live="polite"]');
-    expect(region).not.toBeNull();
-    expect(region!.textContent).toBe(""); // present, but announcing nothing yet
+    const region = screen.getByRole("status", { name: "Background operations" });
+    expect(region).toHaveAttribute("aria-live", "polite");
+    expect(region.textContent).toBe(""); // present, but announcing nothing yet
+  });
+
+  // Dialog-basics audit: the status MESSAGE (setStatus, ~330 call sites — the
+  // result of most commands) was plain text, so a screen-reader user heard
+  // none of it. Same rule as above: the region exists before its text does.
+  it("announces the status message through its own polite live region", () => {
+    act(() => useApp.setState({ status: "" }));
+    render(<StatusBar />);
+    const region = screen.getByRole("status", { name: "Status message" });
+    expect(region).toHaveAttribute("aria-live", "polite");
+    expect(region).toHaveAttribute("data-live-region");
+    act(() => useApp.setState({ status: "loaded 120 rows" }));
+    expect(screen.getByRole("status", { name: "Status message" })).toBe(region);
+    expect(region).toHaveTextContent("loaded 120 rows");
   });
 
   it("exposes the pending-op indicator as a polite live region", () => {

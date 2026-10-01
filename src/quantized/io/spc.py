@@ -364,6 +364,13 @@ def import_spc(filepath: str | Path) -> DataStruct:
         # In TXYXYS mode fnpts is the directory offset (0 = no directory) and
         # each subfile carries its own count — 0 is legal there.
         raise ValueError(f"empty SPC file (fnpts={fnpts}, fnsub={fnsub}): {path.name}")
+    if not flags["txyxys"] and 2 * fnpts > len(raw) - _HEAD_SIZE:
+        # fnpts sizes the shared x axis allocated below, before any subfile is
+        # read; each point needs at least 2 bytes (security audit 2026-10-01).
+        raise ValueError(
+            f"header claims {fnpts} points but the file holds at most "
+            f"{(len(raw) - _HEAD_SIZE) // 2}: {path.name}"
+        )
 
     pos = _HEAD_SIZE
     # Subfile data may not run into the trailing subfile directory (TXYXYS,

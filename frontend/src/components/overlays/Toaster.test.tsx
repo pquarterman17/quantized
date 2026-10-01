@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import Toaster from "./Toaster";
@@ -11,9 +11,18 @@ describe("Toaster", () => {
   });
   afterEach(() => vi.useRealTimers());
 
-  it("renders nothing when the queue is empty", () => {
+  it("keeps an EMPTY live region mounted, so the first toast is announced", () => {
+    // Screen readers commonly skip a live region that enters the DOM together
+    // with its first text (the StatusBar's region documents the same rule).
     const { container } = render(<Toaster />);
-    expect(container.querySelector(".qzk-toaster")).toBeNull();
+    const region = container.querySelector(".qzk-toaster");
+    expect(region).toHaveAttribute("aria-live", "polite");
+    expect(region).toBeEmptyDOMElement();
+    act(() => {
+      useToasts.getState().push("first");
+    });
+    expect(container.querySelector(".qzk-toaster")).toBe(region);
+    expect(region).toHaveTextContent("first");
   });
 
   it("renders queued toasts with their kind class", () => {

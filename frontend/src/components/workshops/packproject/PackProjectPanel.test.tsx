@@ -14,6 +14,7 @@ import { EMPTY_PACK_PROGRESS, usePackProject } from "../../../store/packProject"
 import { usePackProjectPanel } from "../../../store/packProjectPanel";
 import PackProjectPanel from "./PackProjectPanel";
 import { askConfirm } from "../../overlays/ConfirmDialog";
+import { staticDialogIssues } from "../../../test/dialogA11y";
 
 vi.mock("../../overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
 
@@ -129,7 +130,11 @@ describe("PackProjectPanel — phase rendering", () => {
       preview: { ...fakePreview(), destination: { bundleDir: "/dest/demo-portable", exists: true } },
     });
     render(<PackProjectPanel />);
-    expect(screen.getByRole("button", { name: "Pack Project" })).toBeDisabled();
+    const pack = screen.getByRole("button", { name: "Pack Project" });
+    expect(pack).toBeDisabled();
+    // A disabled button is not a Tab stop: the reason has to be linked to it.
+    expect(pack).toHaveAccessibleDescription(/already exists at the destination/);
+    expect(staticDialogIssues(screen.getByRole("dialog", { name: "Pack Project" }), { modal: false })).toEqual([]);
   });
 
   it("says a single blocked source keeps its original absolute path (singular copy)", () => {

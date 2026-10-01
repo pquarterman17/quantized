@@ -20,11 +20,13 @@ its own — callers hand in text.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Sequence
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 import numpy as np
 
+from quantized.io import _decimal_comma as dc
 from quantized.io import _delimited_layout as layout
 from quantized.io.delimited import _extract_units
 
@@ -60,6 +62,8 @@ class _Parsed:
     # Every line, delimiter-split (P1.6: label_line lookup + preamble capture
     # both need lines ABOVE data_start, which `data_tokens` excludes).
     all_tokens: list[list[str]]
+    # Raw column indices read with a decimal comma (`_decimal_comma`).
+    decimal_columns: list[int] = field(default_factory=list)
 
 
 def _split(line: str, delim: str) -> list[str]:
@@ -85,6 +89,14 @@ def _effective_ncols(rows: list[list[str]]) -> int:
                 last = k + 1
         best = max(best, last)
     return best
+
+
+def _scoring_rows(text: str, tokens: list[list[str]], delim: str) -> Sequence[Sequence[str]]:
+    """The rows `guess_settings` scores: comma numbers count as numbers
+    (`decimal="auto"`), so a European file's header is not taken for data."""
+    if dc.uses_decimal_path("auto", delim, "," in text):
+        return dc.layout_rows(tokens)
+    return tokens
 
 
 def _resolve_delim(lines: list[str], setting: str) -> str:
@@ -133,7 +145,13 @@ def _parse_core(text: str, settings: ImportSettings) -> _Parsed:
     for i, row in enumerate(data_tokens):
         for k in range(min(len(row), n_cols)):
             matrix[i, k] = layout._to_float(row[k])
-    return _Parsed(lines, delim, names, units, roles, matrix, ds, data_tokens, tokens)
+    decimal = dc.check_decimal(settings.decimal, delim)
+    comma_cols: list[int] = []
+    if dc.uses_decimal_path(decimal, delim, "," in text):
+        comma_cols = dc.resolve_decimal_columns(
+            "this file", names, matrix, data_tokens, decimal=decimal
+        )
+    return _Parsed(lines, delim, names, units, roles, matrix, ds, data_tokens, tokens, comma_cols)
 
 
 def _label_row_overrides(p: _Parsed, settings: ImportSettings, n_cols: int) -> list[str] | None:

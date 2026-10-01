@@ -8,7 +8,7 @@
 // to survive a close/reopen). Opened from the worksheet's column context
 // menu (WorksheetPane.tsx, "Recode…", categorical columns only).
 
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { Button } from "../../primitives";
@@ -32,6 +32,7 @@ export default function RecodePanel() {
   const closeRecode = useRecode((s) => s.closeRecode);
   const ds = useApp((s) => (datasetId != null ? s.datasets.find((d) => d.id === datasetId) : undefined));
 
+  const newColumnId = useId();
   const [find, setFind] = useState("");
   const [replace, setReplace] = useState("");
   const [caseSensitive, setCaseSensitive] = useState(true);
@@ -56,6 +57,7 @@ export default function RecodePanel() {
           className="qz-input"
           style={{ flex: 1 }}
           placeholder="find"
+          aria-label="Find"
           value={find}
           onChange={(e) => setFind(e.target.value)}
         />
@@ -63,6 +65,7 @@ export default function RecodePanel() {
           className="qz-input"
           style={{ flex: 1 }}
           placeholder="replace with"
+          aria-label="Replace with"
           value={replace}
           onChange={(e) => setReplace(e.target.value)}
         />
@@ -79,8 +82,9 @@ export default function RecodePanel() {
       </div>
 
       <div style={{ display: "flex", gap: 6, marginTop: 10, alignItems: "center" }}>
-        <span style={{ color: "var(--text-dim)", flexShrink: 0 }}>New column</span>
+        <span id={newColumnId} style={{ color: "var(--text-dim)", flexShrink: 0 }}>New column</span>
         <input
+          aria-labelledby={newColumnId}
           className="qz-input"
           style={{ flex: 1 }}
           value={newColumnName}

@@ -189,10 +189,12 @@ def test_comma_decimal_numbers_fail_closed(tmp_path: Path, delim: str) -> None:
     # "1,5" is one-and-a-half in a European export -- or 15 / 1,500 with a
     # thousands separator. Either way it is not text: importing the column as
     # categorical level codes 0,1,2 replaced every number with its row rank.
+    # decimal="." keeps this refusal; the default "auto" now reads such an
+    # unambiguous column (tests/test_io_decimal_comma.py).
     rows = ["Time", "Value"], ["1,5", "2,25"], ["3,5", "4,75"], ["5,5", "6,75"]
     text = "\n".join(delim.join(r) for r in rows) + "\n"
     with pytest.raises(ValueError, match="comma"):
-        import_csv(_write(tmp_path, "eu.csv", text.encode()))
+        import_csv(_write(tmp_path, "eu.csv", text.encode()), decimal=".")
 
 
 def test_text_column_in_semicolon_file_is_still_categorical(tmp_path: Path) -> None:

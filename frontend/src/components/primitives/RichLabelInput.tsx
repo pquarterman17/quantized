@@ -13,7 +13,7 @@
 // the empty token with the cursor placed inside the braces (unchanged
 // palette-click behaviour, reused as-is).
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { hasMarkup, validateRichText } from "../../lib/richtext";
 import RichText from "./RichText";
@@ -30,11 +30,14 @@ interface RichLabelInputProps {
   value: string;
   onCommit: (v: string) => void;
   placeholder?: string;
+  /** id of the visible caption that names the field (a placeholder does not). */
+  labelledBy?: string;
   /** Commit on every keystroke (FigureBuilder) instead of blur/Enter. */
   live?: boolean;
 }
 
-export default function RichLabelInput({ value, onCommit, placeholder, live = false }: RichLabelInputProps) {
+export default function RichLabelInput({ value, onCommit, placeholder, labelledBy, live = false }: RichLabelInputProps) {
+  const previewId = useId();
   const [draft, setDraft] = useState(value);
   const [palette, setPalette] = useState<{ x: number; y: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -100,6 +103,11 @@ export default function RichLabelInput({ value, onCommit, placeholder, live = fa
           style={{ flex: 1, minWidth: 0 }}
           value={draft}
           placeholder={placeholder}
+          aria-labelledby={labelledBy}
+          // The preview line doubles as the validation message: linked so a
+          // screen reader hears why the markup is rejected.
+          aria-invalid={check.ok ? undefined : true}
+          aria-describedby={hasMarkup(draft) ? previewId : undefined}
           onChange={(e) => update(e.target.value)}
           onBlur={() => {
             if (!live) commit(draft);
@@ -153,6 +161,7 @@ export default function RichLabelInput({ value, onCommit, placeholder, live = fa
       </div>
       {hasMarkup(draft) && (
         <div
+          id={previewId}
           style={{
             marginTop: 2,
             fontSize: "var(--font-size-sm)",

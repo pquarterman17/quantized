@@ -1,13 +1,8 @@
 import { describe, expect, it } from "vitest";
 
 import { originErrKeys, originHiddenChannels } from "./errorbars";
-import {
-  buildOverlayDataset,
-  buildSelectionOverlay,
-  overlayBooks,
-  overlayCurveLabels,
-  overlayCurveStyles,
-} from "./originOverlay";
+import { buildSelectionOverlay } from "./originOverlay";
+import { buildOverlayDataset, overlayBooks, overlayCurveLabels, overlayCurveStyles } from "./originOverlayFigure";
 import type { Dataset, OriginFigure } from "./types";
 
 const figure = (curves: OriginFigure["curves"]): OriginFigure => ({

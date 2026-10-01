@@ -29,8 +29,14 @@ export interface ImportErrorBindingWire {
 
 /** How to read a delimited file — mirrors `quantized.io.import_preview.
  *  ImportSettings.to_dict()` exactly (also the persistable import-filter shape). */
+/** Decimal separator (`io._decimal_comma`): "auto" reads an unambiguous
+ *  decimal-comma column ("1,5") and refuses an ambiguous one ("1,500"). */
+export type ImportDecimal = "auto" | "." | ",";
+
 export interface ImportSettingsWire {
   delimiter: string;
+  /** Absent on settings saved before the option existed (= "auto"). */
+  decimal?: ImportDecimal;
   header_line: number | null;
   units_line: number | null;
   label_line: number | null; // P1.6: legend-label row's cells override each channel's display label; null = header-derived name stands

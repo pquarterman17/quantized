@@ -58,6 +58,8 @@ import type { ErrorBinding } from "./errorRoles";
 import type { Dataset, DataStruct, DefaultTrace } from "./types";
 import { axisTitleWire } from "./exportAxisTitles";
 import { withDefaultTrace } from "./exportDefaultTrace";
+import { withCanvasLineWidth } from "./exportLineWidth";
+import { canvasLineWidth } from "./plotTemplates";
 import { logOffsetWire } from "./logOffset";
 import { waterfallWire } from "./waterfallWire";
 import { axisFmtParam } from "./types";
@@ -87,6 +89,10 @@ export interface FigureRenderOpts {
   /** The Preferences default trace the canvas draws unstyled series in, laid
    *  over the request by `exportDefaultTrace.withDefaultTrace`. Absent = Line. */
   defaultTrace?: DefaultTrace;
+  /** The Preferences default line width the canvas draws unstyled lines at
+   *  under the Screen template (`plotTemplates.canvasLineWidth`; absent = its
+   *  1.5 px), named on the request by `exportLineWidth.withCanvasLineWidth`. */
+  defaultLineWidth?: number;
 }
 
 /** See `FigureRenderOpts.greyExcluded`. `facet` is the view's facet binding
@@ -418,7 +424,12 @@ function buildFigureSpecForView(
   };
   // F4.2c (a): greyed excluded rows ride as extra series on the pruned wire.
   const facet = st.facetKey != null ? { col: st.facetKey, yKeys: st.yKeys } : undefined;
-  const traced = withDefaultTrace(spec, o.defaultTrace, st.seriesStyles);
+  // A document whose publication styles are explicitly `null` asked for
+  // matplotlib's own styling, so it keeps the preset's line width too.
+  const traced = withCanvasLineWidth(
+    withDefaultTrace(spec, o.defaultTrace, st.seriesStyles),
+    extras.publicationSeriesStyles === null ? undefined : canvasLineWidth(st.plotTemplate, o.defaultLineWidth),
+  );
   return o.greyExcluded && extras.liveDataset ? o.greyExcluded(traced, data, dropped, facet) : traced;
 }
 
@@ -458,6 +469,7 @@ export function buildFigureSpecFromDocument(
       greyscale: overrides.greyscale,
       greyExcluded: overrides.greyExcluded,
       defaultTrace: overrides.defaultTrace,
+      defaultLineWidth: overrides.defaultLineWidth,
     },
     {
       groupKey: document.bindings.groupKey,

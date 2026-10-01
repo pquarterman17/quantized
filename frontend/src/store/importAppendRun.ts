@@ -11,6 +11,7 @@ import type { uploadFile } from "../lib/api";
 import { lit } from "../lib/macro";
 import type { DataStruct } from "../lib/types";
 import { nextDatasetId } from "./idSeq";
+import { notifyParserNotes, parserNotes } from "./importNotes";
 import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 
@@ -61,6 +62,7 @@ export async function runImportFilesAppended(
       const msg = `appended ${uploaded.length} files → ${merged.time.length} rows`;
       get().setStatus(msg);
       toast(msg, "ok");
+      notifyParserNotes(uploaded.map((u) => ({ name: u.name, notes: parserNotes(u.data) })));
       return;
     } catch (e) {
       failReason = e instanceof Error ? e.message : "append failed (column-count mismatch)";

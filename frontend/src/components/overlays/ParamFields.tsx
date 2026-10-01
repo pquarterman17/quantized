@@ -1,6 +1,14 @@
 // Ported from fermiviewer frontend/src/components/overlays/ParamFields.tsx.
 // Presentational parameter-field row used by ParamDialog. Number fields coerce
 // on blur (a non-finite entry reverts to the field default).
+//
+// Every control is labelled by the row's visible caption (`aria-labelledby`)
+// and carries the field's hint as its `title`, which becomes its accessible
+// description. The caption used to be a bare <span>, so every askParams
+// prompt (Export figure / page / map, Page setup, the rename and tag prompts)
+// read its fields as unnamed controls.
+
+import { useId } from "react";
 
 import type { ParamField } from "../../lib/params";
 
@@ -16,13 +24,16 @@ export function ParamFieldRow({
   autoFocus?: boolean;
 }) {
   const f = field;
+  const labelId = useId();
+  const a11y = { "aria-labelledby": labelId, title: f.hint };
   return (
     <div className="qz-ws-row">
-      <span className="k" title={f.hint}>
+      <span className="k" id={labelId} title={f.hint}>
         {f.label}
       </span>
       {f.type === "number" && (
         <input
+          {...a11y}
           autoFocus={autoFocus}
           value={String(value ?? "")}
           onChange={(e) => onChange(e.target.value)}
@@ -34,6 +45,7 @@ export function ParamFieldRow({
       )}
       {f.type === "text" && (
         <input
+          {...a11y}
           autoFocus={autoFocus}
           style={{ flex: 1 }}
           value={String(value ?? "")}
@@ -41,7 +53,7 @@ export function ParamFieldRow({
         />
       )}
       {f.type === "select" && (
-        <select value={String(value)} onChange={(e) => onChange(e.target.value)}>
+        <select {...a11y} value={String(value)} onChange={(e) => onChange(e.target.value)}>
           {(f.options ?? []).map((o) => (
             <option key={o}>{o}</option>
           ))}
@@ -50,6 +62,7 @@ export function ParamFieldRow({
       {f.type === "boolean" && (
         <label className="qz-check">
           <input
+            {...a11y}
             type="checkbox"
             checked={Boolean(value)}
             onChange={(e) => onChange(e.target.checked)}

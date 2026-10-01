@@ -12,7 +12,14 @@
 
 import { useRef, useState } from "react";
 
-import { defaultFilterName, defaultGlob, DELIMITER_OPTIONS, parseLineField } from "../../../lib/importwizard";
+import {
+  DECIMAL_OPTIONS,
+  defaultFilterName,
+  defaultGlob,
+  DELIMITER_OPTIONS,
+  parseLineField,
+} from "../../../lib/importwizard";
+import type { ImportDecimal } from "../../../lib/importTypes";
 import type { ImportColumnRole } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { askParams } from "../../overlays/ParamDialog";
@@ -114,6 +121,14 @@ export default function ImportWizardPanel() {
                 options={DELIMITER_OPTIONS}
                 value={w.settings?.delimiter ?? "auto"}
                 onChange={(e) => w.patchSettings({ delimiter: e.target.value })}
+              />
+            </label>
+            <label className="qzk-field" title="Auto reads 1,5 as 1.5 unless a value like 1,500 is ambiguous.">
+              <span>Decimal separator</span>
+              <Select
+                options={DECIMAL_OPTIONS}
+                value={w.settings?.decimal ?? "auto"}
+                onChange={(e) => w.patchSettings({ decimal: e.target.value as ImportDecimal })}
               />
             </label>
             <label className="qzk-field">

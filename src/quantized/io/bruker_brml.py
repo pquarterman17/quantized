@@ -41,6 +41,12 @@ __all__ = ["import_bruker_brml", "is_bruker_brml"]
 
 _UNIT_MAP = {"°": "deg", "deg": "deg", "Degree": "deg", "": ""}
 
+# Hostile-input bound (security audit 2026-10-01): the scan XML is read whole,
+# and deflate packs ~1000:1, so a 1.5 MB .brml can expand to gigabytes. A real
+# 1-D RawData document is a few MB. zipfile never returns more than the
+# member's declared size, so checking that size bounds the read.
+MAX_XML_BYTES = 256 << 20
+
 
 def _raw_data_members(names: list[str]) -> list[str]:
     """ZIP members matching ``Experiment*/RawData*.xml`` (the scan documents)."""
@@ -103,6 +109,12 @@ def import_bruker_brml(filepath: str | Path) -> DataStruct:
             raise ValueError(
                 f"multi-scan .brml detected ({len(members)} scans) -- reciprocal-space "
                 f"maps are not supported by the 1-D parser: {path.name}"
+            )
+        size = zf.getinfo(members[0]).file_size
+        if size > MAX_XML_BYTES:
+            raise ValueError(
+                f"scan document is {size} bytes uncompressed "
+                f"(limit {MAX_XML_BYTES}): {path.name}"
             )
         xml_text = zf.read(members[0]).decode("utf-8", "replace")
 

@@ -21,6 +21,8 @@ import { buildExportStyles, toWireSeriesStyles, type ExportSeriesStyle } from ".
 import type { FigureDoc } from "../../../lib/figuredoc";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
 import { traceSeriesStyles } from "../../../lib/exportDefaultTrace";
+import { lineWidthSeriesStyles } from "../../../lib/exportLineWidth";
+import { canvasLineWidth } from "../../../lib/plotTemplates";
 import { ghosterFor } from "../../../lib/excludedRowsExport";
 import type { ExcludedRowsGhoster } from "../../../lib/figureSpec";
 import { droppedRows, pruneToLiveDataset } from "../../../lib/rowstate";
@@ -72,6 +74,10 @@ export interface LegacyFigureState {
   /** The Preferences trace the canvas draws unstyled series in; the REQUEST
    *  draws them the same way (`exportDefaultTrace`), the saved doc does not. */
   defaultTrace?: DefaultTrace;
+  /** The live plot's template and Preferences line width: the REQUEST names the
+   *  width the canvas draws an unstyled line at (`exportLineWidth`). */
+  plotTemplate?: string;
+  defaultLineWidth?: number;
 }
 
 /** The channels a spec plots when `yKeys` is the "all channels" null sentinel. */
@@ -127,7 +133,12 @@ export function buildLegacyFigureSpec(
   const raw = state.docSeriesStyles === undefined
     ? state.seriesStyles
     : Object.fromEntries(plotted.map((ch, i) => [ch, docStyles?.[i] ?? undefined]));
-  const styles = traceSeriesStyles(wireStyles, plotted, state.defaultTrace, raw);
+  // The canvas' line width, except on a doc that explicitly carries no styles.
+  const styles = lineWidthSeriesStyles(
+    traceSeriesStyles(wireStyles, plotted, state.defaultTrace, raw),
+    plotted,
+    docStyles === null ? undefined : canvasLineWidth(state.plotTemplate ?? "screen", state.defaultLineWidth),
+  );
   // F2.1g's legacy y2 placebo: the hook enabled y2-limit controls off the live
   // y2Keys while this request never declared `y2_keys`, so the server dropped
   // every `y2_lim` they wrote. The hook now reads `hasY2` off THIS field, so a

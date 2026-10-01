@@ -69,7 +69,8 @@
         "title": "",
         "series_styles": [
           {
-            "color": "#8b5cf6"
+            "color": "#8b5cf6",
+            "width": 1.5
           }
         ],
         "error_spans": [
@@ -198,7 +199,8 @@
         "title": "",
         "series_styles": [
           {
-            "color": "#8b5cf6"
+            "color": "#8b5cf6",
+            "width": 1.5
           }
         ],
         "overrides": {
@@ -295,7 +297,8 @@
         "title": "",
         "series_styles": [
           {
-            "color": "#8b5cf6"
+            "color": "#8b5cf6",
+            "width": 1.5
           }
         ],
         "error_spans": [
@@ -424,7 +427,8 @@
         "title": "",
         "series_styles": [
           {
-            "color": "#8b5cf6"
+            "color": "#8b5cf6",
+            "width": 1.5
           }
         ],
         "error_spans": [
@@ -553,7 +557,8 @@
         "title": "",
         "series_styles": [
           {
-            "color": "#8b5cf6"
+            "color": "#8b5cf6",
+            "width": 1.5
           }
         ],
         "error_spans": [
