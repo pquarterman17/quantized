@@ -4,7 +4,8 @@
 // background / parameter-table edits, lib/peakRecipeFit.ts) as plain diffable
 // JSON: saved recipes re-run the whole flow on another dataset, and the shape
 // is designed to drop into the future pipeline (#6) as a step's params
-// verbatim. Pure (no React / store / fetch).
+// verbatim. Pure (no React / app store / fetch); a refused storage write
+// toasts through lib/storageWarning.ts.
 //
 // VERSIONS. v1 had no `fit`; it migrates to v2 with `DEFAULT_FIT`, which is
 // exactly how the wizard treated every v1 recipe (model engine, shapes from
@@ -18,6 +19,7 @@
 // (`saveRecipe` throws) and rename / duplicate / import dedupe around it.
 
 import { DEFAULT_FIT, parseRecipeFit, type PeakRecipeFit } from "./peakRecipeFit";
+import { warnStorageRefused } from "./storageWarning";
 
 export const PEAK_RECIPE_VERSION = 2;
 
@@ -266,7 +268,7 @@ function writeRaw(raw: unknown[]): PeakRecipe[] {
   try {
     localStorage.setItem(KEY, JSON.stringify(raw));
   } catch {
-    /* storage full/unavailable */
+    warnStorageRefused("peak recipe"); // stays session-local
   }
   return upgradeAll(raw, null);
 }

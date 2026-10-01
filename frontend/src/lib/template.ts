@@ -2,7 +2,8 @@
 // version tag + the ordered typed steps + declared outputs (the fit parameters
 // a batch run extracts into its summary sheet). Text/JSON and diffable (the
 // "analysis is code" differentiator); persists like peak recipes
-// (localStorage) and exports/imports as a standalone .json file. Pure.
+// (localStorage) and exports/imports as a standalone .json file. Pure, bar
+// the lib/storageWarning.ts toast on a refused storage write.
 //
 // A SAVED TRANSFORMATION RECIPE (P2.5 box 4) is the same record with three
 // additive-optional fields: a `description`, a `revision` (1 on first save,
@@ -14,6 +15,7 @@
 
 import { makeStep, STEP_KINDS, type PipelineStep, type StepKind } from "./pipeline";
 import { sanitizeExpectations, type RecipeExpectations } from "./recipeExpect";
+import { warnStorageRefused } from "./storageWarning";
 import { TEMPLATES_KEY } from "./templateKey";
 import type { CalcResult, DataStruct } from "./types";
 
@@ -158,7 +160,7 @@ export function saveTemplates(list: AnalysisTemplate[]): AnalysisTemplate[] {
   try {
     localStorage.setItem(KEY, JSON.stringify(list));
   } catch {
-    /* storage unavailable — template stays session-local */
+    warnStorageRefused("analysis template"); // stays session-local
   }
   announce();
   return list;
@@ -169,7 +171,7 @@ export function deleteTemplate(name: string): AnalysisTemplate[] {
   try {
     localStorage.setItem(KEY, JSON.stringify(list));
   } catch {
-    /* ignore */
+    warnStorageRefused("analysis template");
   }
   announce();
   return list;
