@@ -5,18 +5,29 @@
 //     the snapshot. A facet rebuilds from the durable `facetKey`; a break has
 //     no such binding, so redo brought back `stackMode` without the panels,
 //     and undoing ANY later edit wiped a live break. The snapshot now carries
-//     the break composition (and only that kind) by reference.
+//     the break composition by reference.
+//     The same holds for an Origin multi-panel (spatial) apply: its placed
+//     panels exist only in `composition`, so the snapshot carries a spatial
+//     composition too. Facets stay excluded (they rebuild from `facetKey`).
 //  2. `openReportId` is UI state outside the snapshot. Undoing "add report"
 //     removed the report the viewer was showing and left the id dangling, so
 //     the viewer opened on nothing. Restore now drops an id whose report is gone.
 
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { breakPanelsOf, facetPanelsOf } from "../lib/composition";
+import { breakPanelsOf, facetPanelsOf, spatialPanelsOf } from "../lib/composition";
 import type { ReportSheet } from "../lib/report";
 import type { Dataset, DataStruct } from "../lib/types";
 import { snapshotOf } from "./historySnapshot";
+import { loadOriginApplyLibs } from "./originApplyLibs";
 import { useApp } from "./useApp";
+
+vi.mock("../components/overlays/ConfirmDialog", () => ({ askConfirm: vi.fn() }));
+
+// Warm the lazy Origin-apply chunk so `applyOriginFigure` runs synchronously.
+beforeAll(async () => {
+  await loadOriginApplyLibs();
+});
 
 /** Two clusters of x with a wide gap — `suggestBreaks` finds one break. */
 const gapped: DataStruct = {
@@ -83,7 +94,7 @@ describe("break at gaps survives undo/redo", () => {
   it("a facet is NOT carried — it rebuilds from facetKey instead", () => {
     app().facetByColumn("g1", 1);
     expect(facetPanelsOf(app().composition)).not.toBeNull();
-    expect(snapshotOf(app()).breakComposition).toBeNull();
+    expect(snapshotOf(app()).carriedComposition).toBeNull();
 
     app().setShowGrid(false);
     app().undo();
@@ -99,6 +110,75 @@ describe("break at gaps survives undo/redo", () => {
     app().undo();
     expect(app().composition).toBeNull();
     expect(app().facetKey).toBe(1);
+  });
+});
+
+/** One Origin book: x column "A", value columns "B".."D". */
+const book = (name: string): DataStruct => ({
+  time: [1, 2, 3],
+  values: [[10, 1, 1000], [20, 1, 2000], [30, 2, 3000]],
+  labels: ["ch0", "ch1", "ch2"],
+  units: ["", "", ""],
+  metadata: { origin_book: name, x_column_name: "A", origin_column_names: ["B", "C", "D"] },
+});
+
+/** Two same-window layers bound to DIFFERENT datasets — the spatial apply. */
+const spatialEntry = (id: string, layer: number, datasetId: string, bookName: string) => ({
+  id,
+  stem: "SI",
+  datasetId,
+  siblingIds: ["p1", "p2"],
+  figure: {
+    name: "Graph6",
+    layer,
+    x_from: 0,
+    x_to: 10,
+    x_log: false,
+    y_from: 0,
+    y_to: 100 * layer,
+    y_log: false,
+    n_curves: 1,
+    annotations: [] as string[],
+    curves: [{ book: bookName, x: "A", y: "B" }],
+    frame: null,
+  },
+});
+
+describe("Origin multi-panel (spatial) apply survives undo/redo", () => {
+  beforeEach(() => {
+    useApp.setState({
+      datasets: [{ id: "p1", name: "SI:Book1", data: book("Book1") }, { id: "p2", name: "SI:Book2", data: book("Book2") }],
+      activeId: null,
+      originFigures: [spatialEntry("fig-sp-1", 1, "p1", "Book1"), spatialEntry("fig-sp-2", 2, "p2", "Book2")],
+    });
+  });
+
+  it("apply → undo → redo shows the SAME panels again", () => {
+    app().applyOriginFigure("fig-sp-1");
+    const placed = app().composition;
+    expect(spatialPanelsOf(placed)).toHaveLength(2);
+
+    app().undo();
+    expect(app().composition).toBeNull();
+
+    app().redo();
+    expect(app().stackMode).toBe(true);
+    expect(app().composition).toBe(placed);
+  });
+
+  it("undoing a LATER edit keeps the spatial layout on screen", () => {
+    app().applyOriginFigure("fig-sp-1");
+    const placed = app().composition;
+    expect(app().showGrid).toBe(false); // the Origin apply turns the grid off
+    app().setShowGrid(true);
+
+    app().undo();
+    expect(app().showGrid).toBe(false);
+    expect(app().composition).toBe(placed);
+
+    app().redo();
+    expect(app().showGrid).toBe(true);
+    expect(app().composition).toBe(placed);
   });
 });
 

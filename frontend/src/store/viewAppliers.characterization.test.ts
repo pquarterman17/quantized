@@ -629,7 +629,7 @@ describe("breakAtGaps — the x-break applier", () => {
     expect(undone.facetKey).toBe(pre.facetKey);
     expect(undone.activeId).toBe("g1");
     // Redo restores the bindings AND the break panels: the snapshot carries a
-    // break composition (`HistorySnapshot.breakComposition`), since a break has
+    // break composition (`HistorySnapshot.carriedComposition`), since a break has
     // no durable binding to rebuild from (a facet has `facetKey`).
     useApp.getState().redo();
     expect(useApp.getState().stackMode).toBe(post.stackMode);
