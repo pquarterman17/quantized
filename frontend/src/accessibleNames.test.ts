@@ -24,7 +24,7 @@ const modules = import.meta.glob("./**/*.tsx", {
 
 const LIBRARY_DIR = "./components/Library/";
 /** components/Library's unnamed icon controls on 2026-10-01. Ratchet DOWN only. */
-const LIBRARY_UNNAMED_PIN = 23;
+const LIBRARY_UNNAMED_PIN = 21;
 
 function scan(inLibrary: boolean): string[] {
   const hits: string[] = [];
