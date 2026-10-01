@@ -15,6 +15,7 @@
 import { expect, test, type Page } from "@playwright/test";
 
 import { dropFileOnto } from "../utils/dnd";
+import { chooseFiles } from "../utils/fileChooser";
 import { fixturePath } from "../utils/fixtures";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
 import { runPaletteCommand } from "../utils/palette";
@@ -89,11 +90,11 @@ test("a grouped box plot's summary table stays open across a reload", async ({ p
   // non-empty and opening a file confirms with Replace, deterministically.
   await waitForDatasetCount(page, 1);
   await page.locator(".qzk-menubar").getByText("File", { exact: true }).click();
-  const [fileChooser] = await Promise.all([
-    page.waitForEvent("filechooser"),
-    page.getByText("Open workspace (.dwk)…", { exact: true }).click(),
-  ]);
-  await fileChooser.setFiles(savedPath!);
+  await chooseFiles(
+    page,
+    () => page.getByText("Open workspace (.dwk)…", { exact: true }).click(),
+    savedPath!,
+  );
   await page.getByRole("button", { name: "Replace", exact: true }).click();
   await waitForDatasetCount(page, 1);
   await expect(page.getByTestId("stat-summary-dock")).toBeVisible();

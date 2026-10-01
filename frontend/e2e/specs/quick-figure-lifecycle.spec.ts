@@ -25,6 +25,7 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
 
 import { dropFileOnto } from "../utils/dnd";
+import { chooseFiles } from "../utils/fileChooser";
 import { fixturePath } from "../utils/fixtures";
 import { gotoApp, waitForDatasetCount } from "../utils/harness";
 
@@ -240,11 +241,11 @@ test("Quick Figure survives create -> edit -> save/close -> reopen -> project sa
 
   // ── Reload it through the real "Open workspace" file picker ────────────
   await page.locator(".qzk-menubar").getByText("File", { exact: true }).click();
-  const [fileChooser] = await Promise.all([
-    page.waitForEvent("filechooser"),
-    page.getByText("Open workspace (.dwk)…", { exact: true }).click(),
-  ]);
-  await fileChooser.setFiles(savedPath!);
+  await chooseFiles(
+    page,
+    () => page.getByText("Open workspace (.dwk)…", { exact: true }).click(),
+    savedPath!,
+  );
   // Replacing a non-empty workspace confirms first (hasWorkspaceContent).
   await page.getByRole("button", { name: "Replace", exact: true }).click();
 
