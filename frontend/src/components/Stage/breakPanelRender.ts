@@ -26,12 +26,18 @@
 // axis, so a multi-channel break panel (no legend, no solo axis label) still
 // shows no series name on screen while the export carries the rename — a
 // recorded residual, not something this projection closes.
+//
+// `seriesStyles` rides the SAME per-panel projection (R1, the regression
+// matrix's S2): the leg used to pass none, so an explicit width / colour /
+// dash fell back to the defaults on every break panel (a width-2 line drew at
+// 1.5) while the export — the flat figure — carried them.
 
 import uPlot from "uplot";
 
 import type { BreakPanel } from "../../lib/facet";
 import { breakPanelWidths } from "../../lib/multipanel";
 import type { xZoomSyncHook } from "../../lib/multipanel";
+import type { SeriesStyle } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS } from "../../lib/uplotPaths";
 import { buildOpts, type BuildOptsArgs } from "../../lib/uplotOpts";
 
@@ -40,11 +46,11 @@ const BREAK_GLYPH_W = 20;
 
 /** Everything a break panel's `buildOpts` call needs that is the SAME for
  *  every panel. `width`/`height` (the computed panel box), `xLim` (the
- *  panel's own x-segment) and `seriesLabels` are per-panel and supplied by
- *  `renderBreakPanels` itself. */
+ *  panel's own x-segment), `seriesLabels` and `seriesStyles` are per-panel and
+ *  supplied by `renderBreakPanels` itself. */
 export type BreakCellOpts = Omit<
   BuildOptsArgs,
-  "width" | "height" | "xLim" | "seriesLabels" | "linearPaths" | "pointsPaths"
+  "width" | "height" | "xLim" | "seriesLabels" | "seriesStyles" | "linearPaths" | "pointsPaths"
 >;
 
 export interface BreakPanelsArgs {
@@ -53,6 +59,9 @@ export interface BreakPanelsArgs {
    *  `channels` list below. `{}` (every pre-BUG-014 break view) leaves every
    *  panel reading its derived "label (unit)". */
   seriesLabels: Record<number, string>;
+  /** The store's per-CHANNEL styles (the flat plot's `seriesStyles`),
+   *  projected onto each panel's `channels` the same way. */
+  seriesStyles: Record<number, SeriesStyle>;
   /** uPlot cursor-sync group; see `MULTIPANEL_SYNC_KEY`. */
   syncKey: string;
   /** The shared x-zoom/pan propagation hook — one instance for the whole
@@ -97,6 +106,7 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       // channel it was made for even when this panel's channel list differs
       // from its neighbour's.
       seriesLabels: p.channels.map((ch) => args.seriesLabels[ch]),
+      seriesStyles: p.channels.map((ch) => args.seriesStyles[ch]),
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });

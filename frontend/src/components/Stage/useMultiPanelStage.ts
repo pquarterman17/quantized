@@ -546,10 +546,10 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
       plotsRef.current = renderBreakPanels(host, {
         panels: bPanels,
         // BUG-014: a break view's only visible label slot is the panel's
-        // y-axis label, and its EXPORT carries the rename — so the renames
-        // belong here for the same reason they belong on the facet leg below.
-        // Channel-keyed, projected per panel through `BreakPanel.channels`.
-        seriesLabels,
+        // y-axis label, and its EXPORT carries the rename (and, R1, the styles)
+        // — so both belong here as on the facet leg below. Channel-keyed,
+        // projected per panel through `BreakPanel.channels`.
+        seriesLabels, seriesStyles,
         syncKey,
         // Same x-zoom/pan sync idiom as the plain per-channel stack — a break
         // panel's x axis still means "this series' x", so zooming one seam
