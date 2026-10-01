@@ -115,6 +115,12 @@ export default function PlotLegend({
       : [];
 
   const defaultLabel = (s: PlotSeriesSpec) => (s.unit ? `${s.label} (${s.unit})` : s.label);
+  // A row's finished text. An EMPTY one has no legend row (the series stays
+  // plotted), exactly as the export's matplotlib legend drops a zero-length label.
+  const rowText = (s: PlotSeriesSpec, i: number) =>
+    i < plotted.length ? (labels?.[i] ?? seriesLabels[plotted[i]] ?? defaultLabel(s)) : defaultLabel(s);
+  // Static mode omits hidden rows too (below), so they do not count.
+  const anyRow = series.some((s, i) => rowText(s, i) !== "" && !(legendStatic && (hidden?.[i] ?? false)));
   const commit = () => {
     if (editing) setSeriesLabel(editing.channel, editing.value);
     setEditing(null);
@@ -128,6 +134,9 @@ export default function PlotLegend({
     [order[i], order[j]] = [order[j], order[i]];
     setSeriesOrder(order);
   };
+
+  // No rows, no title, no colour scale: no box, as the export draws no legend.
+  if (!anyRow && !legendTitle && colorScales.length === 0) return null;
 
   return (
     <div
@@ -190,9 +199,7 @@ export default function PlotLegend({
         // the error/secondary-X columns it doesn't draw (decode #52).
         if (legendStatic && isHidden) return null;
         const visibleCount = plotted.filter((c) => !hiddenChannels.includes(c)).length;
-        const text = isChannel ? (labels?.[i] ?? seriesLabels[channel] ?? defaultLabel(s)) : defaultLabel(s);
-        // An EMPTY display name has no legend row (the series stays plotted),
-        // exactly as the export's matplotlib legend drops a zero-length label.
+        const text = rowText(s, i);
         if (text === "") return null;
 
         if (editing && editing.channel === channel) {
