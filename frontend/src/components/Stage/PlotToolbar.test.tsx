@@ -152,6 +152,19 @@ describe("PlotToolbar — disabled-with-reason (GUI_INTERACTION_PLAN #7)", () =>
     const btn = screen.getByRole("button", { name: "Reset View" });
     expect(btn).not.toBeDisabled();
     expect(btn).toHaveAttribute("data-tip-desc", "Restore the default zoom and pan");
+    expect(btn).not.toHaveAttribute("aria-describedby");
+  });
+
+  it("links each disabled button's reason as its accessible description", () => {
+    // A disabled button is not a Tab stop: a reason only in the tooltip is
+    // out of a keyboard or screen-reader user's reach.
+    render(<PlotToolbar {...props} />);
+    expect(screen.getByRole("button", { name: "Reset View" })).toHaveAccessibleDescription(
+      "Nothing to reset — the view is already at its default extents",
+    );
+    expect(screen.getByRole("button", { name: "Copy Figure" })).toHaveAccessibleDescription(
+      "Clipboard image copy isn't supported in this browser",
+    );
   });
 
   it("disables Copy Figure when the browser has no Clipboard image API (jsdom's default)", () => {

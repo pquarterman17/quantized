@@ -5,7 +5,7 @@
 // workspace owns the state, materializes it into the look the preview and the
 // created figure share, and hands this panel the setters.
 
-import type { ReactNode } from "react";
+import { useId, type ReactNode } from "react";
 
 import { axisDisplayName } from "../../../lib/quickFigureMapping";
 import type { QuickFigureMapping } from "../../../lib/quickFigureMapping";
@@ -40,16 +40,17 @@ function Field({ label, children, reason }: { label: string; children: ReactNode
   );
 }
 
-function Check({ label, checked, onChange, disabled, reason }: {
+function Check({ label, checked, onChange, disabled, reason, describedBy }: {
   label: string;
   checked: boolean;
   onChange: (checked: boolean) => void;
   disabled?: boolean;
   reason?: string;
+  describedBy?: string;
 }) {
   return (
     <label className="qzk-quick-setup-check" title={reason}>
-      <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
+      <input type="checkbox" checked={checked} disabled={disabled} aria-describedby={describedBy} onChange={(event) => onChange(event.target.checked)} />
       <span>{label}</span>
     </label>
   );
@@ -68,8 +69,20 @@ export default function QuickFigureSetupPanel({ dataset, mapping, style, onStyle
     : grouped
       ? "A grouped figure draws no error bars."
       : undefined;
+  const paletteReason = grouped ? "A grouped figure keeps the theme colour cycle so every level stays distinct." : undefined;
+  // A disabled control is not a Tab stop, so each reason is also linked as its
+  // description (hidden text: the label's tooltip still shows it visually).
+  const ids = useId();
+  const reasons = [
+    { id: `${ids}-palette`, text: paletteReason },
+    { id: `${ids}-line`, text: lineReason },
+    { id: `${ids}-marker`, text: markerReason },
+    { id: `${ids}-error`, text: errorReason },
+  ];
+  const by = (i: number) => (reasons[i].text ? reasons[i].id : undefined);
   return (
     <div className="qzk-quick-setup">
+      {reasons.map((r) => r.text && <span key={r.id} id={r.id} hidden>{r.text}</span>)}
       <div className="qzk-quick-setup-series" aria-label="Detected series">
         <span>Detected series</span>
         {mapping.yKeys.length === 0 ? (
@@ -90,28 +103,28 @@ export default function QuickFigureSetupPanel({ dataset, mapping, style, onStyle
             <option value="line-symbol">Line + symbol</option>
           </select>
         </Field>
-        <Field label="Colour preset" reason={grouped ? "A grouped figure keeps the theme colour cycle so every level stays distinct." : undefined}>
-          <select value={setup.palette} disabled={grouped} onChange={(event) => onSetup({ palette: event.target.value })}>
+        <Field label="Colour preset" reason={paletteReason}>
+          <select value={setup.palette} disabled={grouped} aria-describedby={by(0)} onChange={(event) => onSetup({ palette: event.target.value })}>
             {PALETTES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
         </Field>
         <Field label="Line width" reason={lineReason}>
-          <select value={setup.lineWidth} disabled={noLines} onChange={(event) => onSetup({ lineWidth: Number(event.target.value) })}>
+          <select value={setup.lineWidth} disabled={noLines} aria-describedby={by(1)} onChange={(event) => onSetup({ lineWidth: Number(event.target.value) })}>
             {LINE_WIDTHS.map((w) => <option key={w} value={w}>{w} px</option>)}
           </select>
         </Field>
         <Field label="Line style" reason={lineReason}>
-          <select value={setup.lineStyle} disabled={noLines} onChange={(event) => onSetup({ lineStyle: event.target.value as QuickFigureSetup["lineStyle"] })}>
+          <select value={setup.lineStyle} disabled={noLines} aria-describedby={by(1)} onChange={(event) => onSetup({ lineStyle: event.target.value as QuickFigureSetup["lineStyle"] })}>
             {LINE_STYLES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
         <Field label="Marker" reason={markerReason}>
-          <select value={setup.markerShape} disabled={noMarkers} onChange={(event) => onSetup({ markerShape: event.target.value as QuickFigureSetup["markerShape"] })}>
+          <select value={setup.markerShape} disabled={noMarkers} aria-describedby={by(2)} onChange={(event) => onSetup({ markerShape: event.target.value as QuickFigureSetup["markerShape"] })}>
             {MARKER_SHAPES.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </Field>
         <Field label="Marker size" reason={markerReason}>
-          <select value={setup.markerSize} disabled={noMarkers} onChange={(event) => onSetup({ markerSize: Number(event.target.value) })}>
+          <select value={setup.markerSize} disabled={noMarkers} aria-describedby={by(2)} onChange={(event) => onSetup({ markerSize: Number(event.target.value) })}>
             {MARKER_SIZES.map((s) => <option key={s} value={s}>{s} px</option>)}
           </select>
         </Field>
@@ -146,6 +159,7 @@ export default function QuickFigureSetupPanel({ dataset, mapping, style, onStyle
             checked={setup.errorBars && hasErrors && !grouped}
             disabled={errorReason !== undefined}
             reason={errorReason}
+            describedBy={by(3)}
             onChange={(errorBars) => onSetup({ errorBars })}
           />
         </div>

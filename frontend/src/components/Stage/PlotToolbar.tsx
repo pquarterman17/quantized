@@ -27,7 +27,7 @@
 // default Graph Window, a narrow window) the trailing groups collapse into the
 // "⋯" menu instead of being clipped (plotToolbarOverflow.ts).
 
-import { Fragment, useRef, useState, type ReactNode } from "react";
+import { Fragment, useId, useRef, useState, type ReactNode } from "react";
 
 import { clipboardImageSupported } from "../../lib/clipboard";
 import { keyForTool, RESET_VIEW_KEY } from "../../lib/plotToolKeys";
@@ -81,20 +81,31 @@ interface BtnSpec {
 }
 
 function ToolButton({ glyph, name, desc, shortcut, active, disabled, disabledReason, onClick }: BtnSpec) {
-  const tipDesc = disabled && disabledReason ? disabledReason : desc;
+  const reason = disabled && disabledReason ? disabledReason : undefined;
+  const reasonId = useId();
+  // A disabled button is not a Tab stop, so its reason is also linked as the
+  // description (hidden text: the tooltip still shows it visually).
   return (
-    <button
-      className={`qzk-tool-btn${active ? " active" : ""}`}
-      aria-label={name}
-      aria-pressed={active}
-      disabled={disabled}
-      data-tip={name}
-      data-tip-desc={tipDesc}
-      data-tip-key={shortcut ?? undefined}
-      onClick={onClick}
-    >
-      {glyph}
-    </button>
+    <>
+      <button
+        className={`qzk-tool-btn${active ? " active" : ""}`}
+        aria-label={name}
+        aria-pressed={active}
+        aria-describedby={reason ? reasonId : undefined}
+        disabled={disabled}
+        data-tip={name}
+        data-tip-desc={reason ?? desc}
+        data-tip-key={shortcut ?? undefined}
+        onClick={onClick}
+      >
+        {glyph}
+      </button>
+      {reason && (
+        <span id={reasonId} hidden>
+          {reason}
+        </span>
+      )}
+    </>
   );
 }
 
