@@ -36,10 +36,16 @@ export interface ToastOptions {
   ttlMs?: number;
 }
 
+/** Why a toast's timer is held: the pointer is over it, or focus is in it. */
+export type ToastHold = "hover" | "focus";
+
 interface ToastsState {
   toasts: Toast[];
   push: (msg: string, kind?: ToastKind, opts?: ToastOptions) => void;
   dismiss: (id: number) => void;
+  /** Pause (`on`) or resume a toast's auto-dismiss. It runs again, for the
+   *  time it had left, only once no hold remains (WCAG 2.2.1). */
+  hold: (id: number, why: ToastHold, on: boolean) => void;
 }
 
 /** P3.4 diagnostics — three monotonic, content-free counters, incremented
@@ -108,6 +114,21 @@ export const TOAST_ACTION_TTL = 6000;
 /** Cap concurrent toasts so a burst can't cover the screen. */
 const MAX = 4;
 
+/** Each live toast's auto-dismiss: the running timeout (null while held),
+ *  the time it has left as of `since`, and what is holding it. */
+interface Timer {
+  handle: ReturnType<typeof setTimeout> | null;
+  left: number;
+  since: number;
+  holds: Set<ToastHold>;
+}
+const timers = new Map<number, Timer>();
+
+function arm(id: number, t: Timer): void {
+  t.since = Date.now();
+  t.handle = setTimeout(() => useToasts.getState().dismiss(id), t.left);
+}
+
 export const useToasts = create<ToastsState>((set, get) => ({
   toasts: [],
   push: (msg, kind = "info", opts) => {
@@ -117,15 +138,38 @@ export const useToasts = create<ToastsState>((set, get) => ({
       errorCount += 1;
       lastErrorAt = Date.now();
     }
-    set((s) => ({
-      toasts: [...s.toasts, { id, msg, kind, action: opts?.action }].slice(-MAX),
-    }));
+    const toasts = [...get().toasts, { id, msg, kind, action: opts?.action }].slice(-MAX);
+    // A toast pushed off the stack may be held, and so would never time out.
+    for (const old of timers.keys()) if (!toasts.some((t) => t.id === old)) get().dismiss(old);
+    set({ toasts });
     // An action toast lives long enough to act on even when the caller does not
     // say so (BUG-009's Re-import offer relies on this: importing the constant
     // there broke the many suites that `vi.mock` this module with `toast` alone).
-    setTimeout(() => get().dismiss(id), opts?.ttlMs ?? (opts?.action ? TOAST_ACTION_TTL : TOAST_TTL));
+    const left = opts?.ttlMs ?? (opts?.action ? TOAST_ACTION_TTL : TOAST_TTL);
+    const t: Timer = { handle: null, left, since: 0, holds: new Set() };
+    timers.set(id, t);
+    arm(id, t);
   },
-  dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  dismiss: (id) => {
+    const t = timers.get(id);
+    if (t?.handle != null) clearTimeout(t.handle);
+    timers.delete(id);
+    set((s) => ({ toasts: s.toasts.filter((x) => x.id !== id) }));
+  },
+  hold: (id, why, on) => {
+    const t = timers.get(id);
+    if (!t) return;
+    if (on) {
+      if (t.handle != null) {
+        clearTimeout(t.handle);
+        t.handle = null;
+        t.left = Math.max(0, t.left - (Date.now() - t.since));
+      }
+      t.holds.add(why);
+    } else if (t.holds.delete(why) && t.holds.size === 0) {
+      arm(id, t);
+    }
+  },
 }));
 
 /** Imperative helper for non-component call sites (store actions, callbacks). */

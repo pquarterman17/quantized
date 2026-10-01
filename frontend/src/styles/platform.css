@@ -302,6 +302,17 @@
   align-items: center;
   gap: 6px;
 }
+/* The always-mounted assertive region for danger toasts: a column of its own;
+   while empty it cancels the stack gap it would otherwise add. */
+.qzk-toast-alerts {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.qzk-toast-alerts:empty {
+  margin-top: -6px;
+}
 .qzk-toast {
   background: var(--glass);
   backdrop-filter: blur(14px);
