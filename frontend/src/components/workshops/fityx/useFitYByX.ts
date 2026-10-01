@@ -32,6 +32,7 @@ import { useActiveDataset, useApp } from "../../../store/useApp";
 import { colValues, groupsForOneway, InsufficientDataError, runLeg } from "./runLeg";
 import type { BivariateResult, ContingencyResult, FitYByXKind, OnewayResult } from "./runLeg";
 import { type ByColumnOption, type ByLevel, useByPartition } from "../useByPartition";
+import { useFollowColumnPicks } from "../useFollowColumnPicks";
 
 export type { BivariateResult, ContingencyResult, FitYByXKind, OnewayGroup, OnewayResult } from "./runLeg";
 
@@ -152,6 +153,13 @@ export function useFitYByX(): FitYByXState {
 
   const [xCol, setXCol] = useState<number>(() => firstCategorical(active) ?? 0);
   const [yCol, setYCol] = useState<number>(() => firstContinuous(active, firstCategorical(active) ?? 0));
+  // A column added/removed under a pick follows it by label (../useFollowColumnPicks).
+  useFollowColumnPicks(active, (follow) => {
+    const x = follow(xCol) ?? firstCategorical(active) ?? 0;
+    const y = follow(yCol) ?? firstContinuous(active, x);
+    if (x !== xCol) setXCol(x);
+    if (y !== yCol) setYCol(y);
+  });
 
   // JMP_GAP J7 — By-column partitioning. `data` is already the analysis
   // view (guard #11), so every level below is post-exclusion/-filter too.

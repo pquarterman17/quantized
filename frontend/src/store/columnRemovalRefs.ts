@@ -1,5 +1,6 @@
 // Everything OUTSIDE a dataset that names one of its columns by index, remapped
-// after `removedCol` disappears from dataset `id`: its bound plot windows, its
+// after `removedCol` disappears from dataset `id` (or, as a `ColumnShift`
+// insertion, appears in it — a derived sheet whose source gained a column): its bound plot windows, its
 // saved editable figures, its live legacy FigureDocs, saved Graph Builder specs,
 // and the live view when it is the active dataset. (`graphBuilderSeed` is
 // consumed on the open it is set with, so no removal can land in between.)
@@ -9,6 +10,7 @@
 // dataset's OWN fields (`remapDatasetChannels`, formulas) stay with each caller.
 
 import {
+  type ColumnShift,
   remapFigureBindings,
   remapFigureViewChannels,
   remapViewChannels,
@@ -22,7 +24,7 @@ import { syncDatasetWindowDocuments } from "./windowDocuments";
 export function columnRemovalRefsPatch(
   s: AppState,
   id: string,
-  removedCol: number,
+  removedCol: ColumnShift,
   datasets: readonly Dataset[],
 ): Partial<AppState> {
   return {

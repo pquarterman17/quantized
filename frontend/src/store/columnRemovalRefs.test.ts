@@ -6,7 +6,9 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 
+import { remapLegacyFigureConfig } from "../lib/channelRemapDocs";
 import type { ErrorBinding } from "../lib/errorRoles";
+import { resetLegacyFigureConfig, resetPlotSpecRefs } from "../lib/figureDocumentReimport";
 import type { FigureConfig, FigureDoc } from "../lib/figuredoc";
 import { emptySpec, type PlotSpec, type SavedPlotSpec } from "../lib/plotspec";
 import type { ComputedColumn, Dataset } from "../lib/types";
@@ -159,5 +161,25 @@ describe("removeFormula: a saved Graph Builder spec follows the shift", () => {
     useApp.setState({ datasets: [ds(), ds("b")], savedPlotSpecs: [entry] });
     useApp.getState().removeFormula("a", 0);
     expect(useApp.getState().savedPlotSpecs[0].spec).toBe(spec);
+  });
+});
+
+describe("an inserted column, and a reimport's reset (pure helpers)", () => {
+  const style = { color: "#000" } as unknown as NonNullable<FigureConfig["seriesStyles"]>[number];
+
+  it("an insertion shifts a legacy config and gives the new column an unstyled slot", () => {
+    expect(remapLegacyFigureConfig(cfg({ xKey: 2, yKeys: [1, 3] }), { inserted: 2 })).toMatchObject({ xKey: 3, yKeys: [1, 4] });
+    const all = remapLegacyFigureConfig(cfg({ seriesStyles: [style, style] }), { inserted: 1 });
+    expect(all.seriesStyles).toEqual([style, null, style]);
+  });
+
+  it("a reset clears every channel-indexed legacy field and spec ref to that dataset", () => {
+    const c = resetLegacyFigureConfig(cfg({ xKey: 1, yKeys: [2], groupCol: 3, seriesStyles: [style], errors: [] }));
+    expect(c).toMatchObject({ xKey: null, yKeys: null, groupCol: null, seriesStyles: null });
+    expect(c).not.toHaveProperty("errors");
+    const ref = (channel: number, datasetId = "a") => ({ datasetId, channel });
+    const spec: PlotSpec = { ...emptySpec(), zones: { ...emptySpec().zones, x: ref(0), y: [ref(1, "b"), ref(2)], yErr: [ref(3, "b"), ref(0)] } };
+    const z = resetPlotSpecRefs(spec, "a").zones;
+    expect([z.x, z.y, z.yErr]).toEqual([null, [ref(1, "b")], [ref(3, "b")]]);
   });
 });

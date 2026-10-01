@@ -39,6 +39,11 @@ describe("shiftLetter", () => {
   it("passes a non-letter name through untouched (never a live case in practice)", () => {
     expect(shiftLetter("x", 0)).toEqual({ letter: "x", removed: false });
   });
+  it("increments a letter at or after an inserted column, never flagging it", () => {
+    expect(shiftLetter("B", { inserted: 1 })).toEqual({ letter: "C", removed: false });
+    expect(shiftLetter("A", { inserted: 1 })).toEqual({ letter: "A", removed: false });
+    expect(rewriteFormulaExpr("A + C", { inserted: 2 })).toEqual({ ok: true, expr: "A + D" });
+  });
 });
 
 describe("rewriteFormulaExpr", () => {

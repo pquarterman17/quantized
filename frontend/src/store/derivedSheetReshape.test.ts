@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createFigureDocument } from "../lib/figureDocument";
 import { defaultPlotView } from "../lib/plotview";
 import type { ComputedColumn, Dataset, DataStruct } from "../lib/types";
-import { singleRemovedColumn } from "./derivedSheetShift";
+import { detectColumnShift, singleRemovedColumn } from "./derivedSheetShift";
 import { useApp } from "./useApp";
 import { plotWindowView, syncPlotWindow } from "./windowDocuments";
 
@@ -167,5 +167,38 @@ describe("derived worksheet: the live view and the detector", () => {
     expect(singleRemovedColumn(["A", "B"], ["A", "B", "C"])).toBeNull(); // an append
     expect(singleRemovedColumn(["A", "B", "C"], ["A", "X"])).toBeNull(); // a rename too
     expect(singleRemovedColumn(["A", "B", "B"], ["A", "B"])).toBeNull(); // which B?
+  });
+
+  it("detectColumnShift reports one removal or one insertion, else null", () => {
+    expect(detectColumnShift(["A", "B", "C"], ["A", "C"])).toBe(1);
+    expect(detectColumnShift(["A", "B"], ["A", "N", "B"])).toEqual({ inserted: 1 });
+    expect(detectColumnShift(["A", "B"], ["A", "B", "C"])).toEqual({ inserted: 2 }); // an append
+    expect(detectColumnShift(["A", "B"], ["A", "B", "B"])).toBeNull(); // which B?
+    expect(detectColumnShift(["A", "B"], ["X", "B", "C"])).toBeNull(); // a rename and an add
+    expect(detectColumnShift(["A", "B"], ["A", "B", "C", "D"])).toBeNull(); // two added
+  });
+});
+
+describe("derived worksheet: a source column ADDED reaches the sheet's references", () => {
+  it("the sheet's own formula letters, fit spec and window follow their columns up", async () => {
+    // A second own formula H = D * 2 reads G (col 3); the fit and a window are on G too.
+    const d = derived();
+    const values = d.data.values.map((r) => [...r, r[3] * 2]);
+    const data = { ...d.data, values, labels: [...d.data.labels, "H"], units: [...d.data.units, ""] };
+    const formulas = [...d.formulas!, { name: "H", expr: "D * 2", deps: ["D"] }];
+    useApp.setState({ datasets: [source(), { ...d, data, formulas, fitSpec: { model: "linear", xKey: 0, yKey: 3, params: [1, 0] } }] });
+    const wid = derivedWindowOnF2();
+    useApp.setState((s) => ({
+      plotWindows: s.plotWindows.map((w) => (w.id === wid ? syncPlotWindow(w, { ...plotWindowView(w), yKeys: [3] }) : w)),
+    }));
+    useApp.getState().addFormula("src", "F3", "A * 1000");
+    await useApp.getState().recalcNow();
+    const s = useApp.getState();
+    const der = s.datasets.find((x) => x.id === "der")!;
+    expect(der.data.labels).toEqual(["A", "F1", "F2", "F3", "G", "H"]);
+    expect(der.formulas!.map((f) => f.expr)).toEqual(["C + 1", "E * 2"]);
+    expect(der.data.values.map((r) => r[5])).toEqual([202, 402]); // still 2 * G
+    expect(der.fitSpec?.yKey).toBe(4);
+    expect(plotWindowView(s.plotWindows.find((w) => w.id === wid)!).yKeys).toEqual([4]);
   });
 });

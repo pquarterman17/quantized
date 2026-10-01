@@ -21,6 +21,7 @@ import {
 import type { CalcResult, Dataset } from "../../../lib/types";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useFollowColumnPicks } from "../useFollowColumnPicks";
 
 export type ChooserMode = "columns" | "groupby";
 
@@ -80,6 +81,15 @@ export function useStatsChooser(): StatsChooserState {
     firstContinuous(active, firstCategorical(active) ?? 0),
   );
   const [paired, setPaired] = useState(false);
+  // A column added/removed under a pick follows it by label (../useFollowColumnPicks).
+  useFollowColumnPicks(active, (follow) => {
+    const next = cols.map(follow).filter((c): c is number => c !== null);
+    const by = follow(byCol) ?? firstCategorical(active) ?? 0;
+    const value = follow(valueCol) ?? firstContinuous(active, by);
+    if (next.join() !== cols.join()) setCols(next);
+    if (by !== byCol) setByCol(by);
+    if (value !== valueCol) setValueCol(value);
+  });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rec, setRec] = useState<Recommendation | null>(null);

@@ -55,6 +55,7 @@ import {
   numArr,
   useDistributionByLevels,
 } from "./useDistributionByLevels";
+import { useFollowColumnPicks } from "../useFollowColumnPicks";
 
 // Re-exported so the panel components (HistogramStrip, DistributionLevelSection)
 // and their tests keep one import site for the hook and its result shapes.
@@ -185,6 +186,11 @@ export function useDistribution(): DistributionState {
 
   // Default to the first channel (a value column), else x.
   const [col, setCol] = useState<number>(() => (active && active.data.labels.length ? 0 : -1));
+  // A column added/removed under a pick follows it by label (../useFollowColumnPicks).
+  useFollowColumnPicks(active, (follow) => {
+    const next = follow(col);
+    if (next !== col) setCol(next ?? (active?.data.labels.length ? 0 : -1));
+  });
 
   // JMP_GAP J7 — By-column partitioning (./useDistributionByLevels). `data`
   // is already the analysis view (guard #11), so every level is

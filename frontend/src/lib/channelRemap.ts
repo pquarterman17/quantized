@@ -73,11 +73,17 @@ import type { FigureBindings, FigureViewState } from "./figureDocument";
 import type { FigureEncoding } from "./figureEncoding";
 import type { ChannelRole, ColumnFilter, FitSpec, ModelingType, SeriesStyle } from "./types";
 
-/** Shift one channel index down past a removed column. `null` = the index WAS
- *  the removed column and the caller must drop it. */
-export function remapChannel(c: number, removedCol: number): number | null {
-  if (c === removedCol) return null;
-  return c > removedCol ? c - 1 : c;
+/** One column-count change: a plain number is the REMOVED column (every
+ *  helper below was written for that case); `{ inserted }` is a column added
+ *  AT that index, which shifts every later one up and drops nothing. */
+export type ColumnShift = number | { readonly inserted: number };
+
+/** Shift one channel index past a removed (down) or inserted (up) column.
+ *  `null` = the index WAS the removed column and the caller must drop it. */
+export function remapChannel(c: number, shift: ColumnShift): number | null {
+  if (typeof shift !== "number") return c >= shift.inserted ? c + 1 : c;
+  if (c === shift) return null;
+  return c > shift ? c - 1 : c;
 }
 
 /** Remap a `Record<number, T>` keyed by column index, dropping the removed
@@ -85,7 +91,7 @@ export function remapChannel(c: number, removedCol: number): number | null {
  *  store's "absent rather than empty" convention for these optional fields. */
 export function remapKeyedRecord<T>(
   rec: Record<number, T> | undefined,
-  removedCol: number,
+  removedCol: ColumnShift,
 ): Record<number, T> | undefined {
   if (!rec) return rec;
   const out: Record<number, T> = {};
@@ -98,7 +104,7 @@ export function remapKeyedRecord<T>(
 
 /** Same, but keeping an empty record rather than collapsing to `undefined` --
  *  the VIEW fields are non-optional (`seriesStyles` is always an object). */
-function remapKeyedRecordDense<T>(rec: Record<number, T>, removedCol: number): Record<number, T> {
+function remapKeyedRecordDense<T>(rec: Record<number, T>, removedCol: ColumnShift): Record<number, T> {
   const out: Record<number, T> = {};
   for (const [k, v] of Object.entries(rec)) {
     const c = remapChannel(Number(k), removedCol);
@@ -108,7 +114,7 @@ function remapKeyedRecordDense<T>(rec: Record<number, T>, removedCol: number): R
 }
 
 /** Remap an index LIST, dropping the removed column. */
-export function remapChannelList(list: number[], removedCol: number): number[] {
+export function remapChannelList(list: number[], removedCol: ColumnShift): number[] {
   return list.map((c) => remapChannel(c, removedCol)).filter((c): c is number => c !== null);
 }
 
@@ -128,7 +134,7 @@ export function remapChannelList(list: number[], removedCol: number): number[] {
  *  for a dataset that had deliberately opted out of it. */
 export function remapErrorRoles(
   roles: readonly ErrorBinding[] | undefined,
-  removedCol: number,
+  removedCol: ColumnShift,
 ): ErrorBinding[] | undefined {
   if (!roles) return undefined;
   const out: ErrorBinding[] = [];
@@ -160,7 +166,7 @@ export function remapErrorRoles(
  *  fall back to the time axis), so the whole `weight` is dropped -- the fit
  *  reverts to unweighted rather than silently reading whatever shifted into
  *  that slot. */
-export function remapFitSpec(spec: FitSpec | undefined, removedCol: number): FitSpec | undefined {
+export function remapFitSpec(spec: FitSpec | undefined, removedCol: ColumnShift): FitSpec | undefined {
   if (!spec) return undefined;
   if (spec.yKey === undefined) return spec;
   const yKey = remapChannel(spec.yKey, removedCol);
@@ -189,11 +195,12 @@ export interface DatasetChannelState {
 
 export function remapDatasetChannels(
   d: DatasetChannelState,
-  removedCol: number,
+  removedCol: ColumnShift,
 ): DatasetChannelState {
-  const filter = d.filter
-    ?.filter((f) => f.col !== removedCol)
-    .map((f) => (f.col > removedCol ? { ...f, col: f.col - 1 } : f));
+  const filter = d.filter?.flatMap((f) => {
+    const col = remapChannel(f.col, removedCol);
+    return col === null ? [] : [col === f.col ? f : { ...f, col }];
+  });
   return {
     channelRoles: remapKeyedRecord(d.channelRoles, removedCol),
     channelTypes: remapKeyedRecord(d.channelTypes, removedCol),
@@ -211,7 +218,7 @@ export function remapDatasetChannels(
  *  here unlike `remapFitSpec`'s `xKey`); `yKeys`/`y2Keys` drop the removed
  *  entry via `remapChannelList`; `errors` reuses `remapErrorRoles` (the same
  *  `ErrorBinding` shape as `Dataset.errorRoles` above). */
-export function remapFigureBindings(b: FigureBindings, removedCol: number): FigureBindings {
+export function remapFigureBindings(b: FigureBindings, removedCol: ColumnShift): FigureBindings {
   // P1.4: each encoding pick follows the same null-on-removed rule; the key is
   // omitted when none survives (`FigureBindings.encoding`'s own contract).
   const { encoding: picks, ...rest } = b;
@@ -228,7 +235,7 @@ export function remapFigureBindings(b: FigureBindings, removedCol: number): Figu
   };
 }
 
-function remapEncoding(e: FigureEncoding | undefined, removedCol: number): FigureEncoding | undefined {
+function remapEncoding(e: FigureEncoding | undefined, removedCol: ColumnShift): FigureEncoding | undefined {
   if (!e) return undefined;
   // Text-column picks are by name, so a channel removal leaves them as they are.
   const out: FigureEncoding = e.text ? { text: { ...e.text } } : {};
@@ -264,7 +271,7 @@ export interface ViewChannelState {
  *  field docs) and follow the exact same null-on-removed pattern. `errKeys`
  *  is remapped on BOTH sides -- its keys are Y channels and its values are
  *  error channels, so a removed column can invalidate either end. */
-export function remapViewChannels(v: ViewChannelState, removedCol: number): ViewChannelState {
+export function remapViewChannels(v: ViewChannelState, removedCol: ColumnShift): ViewChannelState {
   const errKeys: Record<number, number> = {};
   for (const [k, val] of Object.entries(v.errKeys)) {
     const key = remapChannel(Number(k), removedCol);
@@ -297,7 +304,7 @@ export function remapViewChannels(v: ViewChannelState, removedCol: number): View
  *  than re-deriving the same four rules a second time. Severity here is
  *  cosmetic -- a style/hidden/label/order entry follows the shifted column,
  *  unlike `fitSpec`'s or `errorRoles`' silent-wrong-data class above. */
-export function remapFigureViewChannels(view: FigureViewState, removedCol: number): FigureViewState {
+export function remapFigureViewChannels(view: FigureViewState, removedCol: ColumnShift): FigureViewState {
   const remapped = remapViewChannels(
     {
       xKey: null,
@@ -332,7 +339,7 @@ export function remapFigureViewChannels(view: FigureViewState, removedCol: numbe
 export function remapWindowViews<W extends { datasetId: string | null; view: ViewChannelState }>(
   windows: readonly W[],
   datasetId: string,
-  removedCol: number,
+  removedCol: ColumnShift,
 ): W[] {
   return windows.map((w) =>
     w.datasetId === datasetId

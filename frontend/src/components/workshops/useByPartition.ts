@@ -19,6 +19,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { type ByColumnOption, type ByLevel, byColumnOptions, partitionByColumn } from "../../lib/byPartition";
 import type { Dataset, DataStruct } from "../../lib/types";
+import { useFollowColumnPicks } from "./useFollowColumnPicks";
 
 // Re-exported so the two workshop hooks (useDistribution/useFitYByX) have a
 // single import site for both the hook and its types.
@@ -56,6 +57,11 @@ export function useByPartition(
   useEffect(() => {
     setByCol(null);
   }, [active?.id]);
+  // A column added/removed under the pick follows it by label (./useFollowColumnPicks).
+  useFollowColumnPicks(active, (follow) => {
+    const next = byCol === null ? null : follow(byCol);
+    if (next !== byCol) setByCol(next);
+  });
 
   const byOptions = useMemo(() => byColumnOptions(active, columns), [active, columns]);
 

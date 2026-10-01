@@ -43,6 +43,15 @@ describe("remapChannel", () => {
     expect(remapChannel(4, 3)).toBe(3);
     expect(remapChannel(2, 3)).toBe(2);
   });
+
+  it("an insertion shifts the column at it and every later one up, dropping none", () => {
+    expect(remapChannel(3, { inserted: 3 })).toBe(4);
+    expect(remapChannel(2, { inserted: 3 })).toBe(2);
+    expect(remapChannelList([1, 3, 5], { inserted: 2 })).toEqual([1, 4, 6]);
+    expect(remapDatasetChannels({ filter: [{ col: 4, kind: "range", min: 0, max: 1 }] }, { inserted: 0 }).filter).toEqual([
+      { col: 5, kind: "range", min: 0, max: 1 },
+    ]);
+  });
 });
 
 describe("remapChannelList / remapKeyedRecord", () => {

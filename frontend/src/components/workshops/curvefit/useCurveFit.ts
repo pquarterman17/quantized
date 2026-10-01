@@ -26,6 +26,7 @@ import {
 import { dyForFit } from "../../../lib/fitweights";
 import type { ByColumnOption } from "../useByPartition";
 import { useCurveFitByLevel, type CurveFitByLevelStart, type CurveFitLevelResult } from "./useCurveFitByLevel";
+import { useFollowColumnPicks } from "../useFollowColumnPicks";
 
 /** The (x, y) pairs a completed fit ran on (gap rows dropped) and the
  *  channels they came from. */
@@ -123,6 +124,11 @@ export function useCurveFit(): CurveFitState {
   const [cornerBusy, setCornerBusy] = useState(false);
   const [weightMode, setWeightMode] = useState<WeightMode>("none");
   const [manualKey, setManualKey] = useState<number | null>(null);
+  // The manual weight column follows its label too (../useFollowColumnPicks).
+  useFollowColumnPicks(active, (follow) => {
+    const next = manualKey === null ? null : follow(manualKey);
+    if (next !== manualKey) setManualKey(next);
+  });
   const [weightNote, setWeightNote] = useState<string | null>(null);
 
   /** The weighting choice for a given primary channel: `yerr` resolves its

@@ -22,6 +22,7 @@ import type { ModelingType } from "../../../lib/types";
 import { buildNestedLevels, toWireGroups, type VariabilityFactorLevel } from "../../../lib/variability";
 import { toast } from "../../../store/toasts";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useFollowColumnPicks } from "../useFollowColumnPicks";
 
 export interface VariabilityColumn {
   index: number;
@@ -133,6 +134,15 @@ export function useVariability(): VariabilityState {
     setResponseCol(firstContinuous(active, [a ?? -99, b]));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
+  // A column added/removed under a pick follows it by label (../useFollowColumnPicks).
+  useFollowColumnPicks(active, (follow) => {
+    const a = follow(factorACol) ?? firstCategorical(active, []) ?? 0;
+    const b = follow(factorBCol) ?? secondCategorical(active, a);
+    const r = follow(responseCol) ?? firstContinuous(active, [a, b]);
+    if (a !== factorACol) setFactorACol(a);
+    if (b !== factorBCol) setFactorBCol(b);
+    if (r !== responseCol) setResponseCol(r);
+  });
 
   const labelOf = (i: number) => columns.find((c) => c.index === i)?.label ?? (i < 0 ? "x" : `col ${i}`);
   const responseLabel = labelOf(responseCol);
