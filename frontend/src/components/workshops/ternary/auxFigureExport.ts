@@ -4,10 +4,12 @@
 // the request from the ANALYSIS view and send it through the figure route.
 //
 // Excluded rows are OMITTED here, never greyed: these routes take bare
-// compositions / a bare grid and have no per-row style channel, so — like
-// the faceted xy export (lib/excludedRowsExport.FACET_OMIT_REASON) — the
+// compositions / a bare grid and have no per-row style channel, so the
 // export still asks, with only the omit option and the reason, so rows are
-// never dropped without saying so. The preview draws the same pruned view.
+// never dropped without saying so (the faceted xy export greys them since
+// 2026-10-01; a misaligned facet grid is the one that still omits, with
+// lib/excludedRowsExport.FACET_OMIT_REASON). The preview draws the same
+// pruned view.
 
 import { askExcludedRows } from "../../../lib/excludedRowsChoice";
 import { exportActive } from "../../../lib/exportActive";

@@ -8429,7 +8429,14 @@ that goes red without its fix.
       plotted quantity, not a categorical distinction, so forcing it grey
       would delete information rather than make the figure print-safe; this
       is a deliberate, documented residual, not an oversight.
-    - **RESIDUAL — facets stay a no-op, honestly.** A faceted small-
+    - **CLOSED 2026-10-01 (batch 12, U2):** facet grids now grey —
+      `calc.figure_greyscale.greyscale_facet_panels` keys each series once
+      across the grid (channel label, or the encoded `grey_slot`) and runs the
+      flat `apply_greyscale`; the no-op pins were flipped to
+      `test_figure_facets_greyscale_renders_achromatic_strokes` /
+      `test_figure_page_facet_panel_greyscale_renders_achromatic_strokes`, plus
+      `tests/test_export_facet_greyscale.py`. Historical note below.
+    - **(Historical) RESIDUAL — facets stay a no-op, honestly.** A faceted small-
       multiples request (`FigureRequest.facets`) renders through
       `calc.figure_facets`, which never resolves per-series colour at all
       today (FEATURE-001, `plans/BUGS_AND_ISSUES.md` — the screen's own
