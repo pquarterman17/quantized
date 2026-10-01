@@ -23,6 +23,7 @@ import {
 } from "../../lib/importFormats";
 import { ORIGIN_TIPS, tipToHelpItem as originTipToHelpItem } from "../../lib/originTips";
 import { JMP_TIPS, tipToHelpItem as jmpTipToHelpItem } from "../../lib/jmpTips";
+import { LIBRARY_HELP_ITEMS } from "../../lib/libraryHelp";
 import { isMacPlatform, shortcutGroupsFor } from "../../lib/shortcuts";
 import { Button } from "../primitives";
 import { useHelp, type HelpSection } from "../../store/help";
@@ -50,7 +51,7 @@ const COMMAND_HELP_ITEMS = CURATED_ACTIONS.filter((action) => action.description
 );
 
 // The static part of the searchable index — every curated command, formats,
-// Origin tips, and JMP tips. Registry-published commands (relink-sources,
+// Origin tips, JMP tips, and Library topics. Registry-published commands (relink-sources,
 // paste-workbook, take-over-editing, open-as-copy, and any future command
 // published the same way) are NOT curated — see `registryHelpItems` in the
 // component below, merged in live from `useCommands` the same way
@@ -61,6 +62,7 @@ const STATIC_SEARCH_ITEMS = [
   ...IMPORT_FORMATS.map(formatToHelpItem),
   ...ORIGIN_TIPS.map(originTipToHelpItem),
   ...JMP_TIPS.map(jmpTipToHelpItem),
+  ...LIBRARY_HELP_ITEMS,
 ];
 
 /** Formats grouped by category, in first-appearance order (for the browse tab). */

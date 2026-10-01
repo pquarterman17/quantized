@@ -42,7 +42,9 @@ const EXEMPT: Readonly<Record<string, string>> = {
 // hits were fuzzy-title noise ("Tables > Join", "Graph Builder").
 const QUERY_TOP: Readonly<Record<string, string>> = {
   dataset: "Join datasets by key",
-  "library panel": "Toggle library panel",
+  "library items": "Library items",
+  "library folders": "Library folders",
+  "library workbooks": "Library workbooks",
   "graph window": "Graph windows saved in the project",
   plot: "Show plot",
   worksheet: "Transpose worksheet",
@@ -83,6 +85,19 @@ describe("context-menu Help coverage", () => {
     useHelp.getState().openTopic(query);
     const { container } = render(createElement(HelpDialog));
     expect(container.querySelector(".qzk-help-title")?.textContent).toBe(top);
+  });
+
+  // PRIMARY ~6040: the Library, folder and workbook footers used to land on
+  // "Toggle library panel" because Help had no Library topic at all.
+  it.each([
+    ["library", "Library items"],
+    ["folder", "Library folders"],
+    ["workbook", "Library workbooks"],
+  ])("Help search %j finds the %j topic", (query, title) => {
+    useHelp.getState().openTopic(query);
+    const { container } = render(createElement(HelpDialog));
+    const titles = [...container.querySelectorAll(".qzk-help-title")].map((el) => el.textContent);
+    expect(titles).toContain(title);
   });
 });
 

@@ -4,10 +4,15 @@
 // Colors are stored either as a palette-token name ("--series-3", re-themeable)
 // or a literal hex from the custom picker. Renders for any dataset (≥1 channel).
 
+import { useMemo } from "react";
+
+import { drawnSeriesStyle } from "../../lib/drawnSeriesStyle";
 import { defaultErrKeys } from "../../lib/errorbars";
 import { MARKER_SHAPES } from "../../lib/markers";
+import { effectiveChannels } from "../../lib/plotdata";
 import type { Dataset, LineStyle, MarkerShape, SeriesStyle } from "../../lib/types";
 import { useApp } from "../../store/useApp";
+import { selectFocusedWindowCycles } from "../Stage/useStageSeriesCycle";
 import { Checkbox } from "../primitives/Checkbox";
 import { IconButton } from "../primitives/IconButton";
 import { NumberField } from "../primitives/NumberField";
@@ -22,6 +27,16 @@ const LINE_OPTS: { value: LineStyle; label: string }[] = [
   { value: "dashed", label: "╌╌" },
   { value: "dotted", label: "···" },
 ];
+const LINE_NAMES: Record<LineStyle, string> = { solid: "Solid", dashed: "Dashed", dotted: "Dotted" };
+const shapeLabel = (s: MarkerShape) => MARKER_SHAPES.find((m) => m.value === s)?.label ?? s;
+
+/** Where the focused canvas draws each channel: its position in the plotted
+ *  list (`effectiveChannels`, the call `usePlotPayload` makes) when the window
+ *  cycles, else nothing — so the pickers show the DRAWN dash/glyph (P3.3). */
+interface CycleSlot {
+  channels: readonly number[];
+  on: boolean;
+}
 
 type TraceMode = "line" | "scatter" | "both";
 const TRACE_OPTS: { value: TraceMode; label: string }[] = [
@@ -35,8 +50,10 @@ function StyleRow({
   label,
   labels,
   naturalErr,
+  cycle,
 }: {
   channel: number;
+  cycle: CycleSlot;
   label: string;
   /** Every channel's label, dataset-channel-index order — the fill `vs`
    *  channel picker's source (SeriesFillColorControls). */
@@ -50,6 +67,9 @@ function StyleRow({
   const setErrKey = useApp((s) => s.setErrKey);
   const endHistoryRun = useApp((s) => s.endHistoryRun);
 
+  const drawn = drawnSeriesStyle(style, cycle.channels.indexOf(channel), cycle.channels.length, cycle.on);
+  const drawnLine = drawn.style.line ?? "solid";
+  const autoShape = drawn.autoMarkerShape ? drawn.style.markerShape : undefined;
   const overridden = Object.values(style).some((v) => v !== undefined);
   const customHex = style.color && !style.color.startsWith("--") ? style.color : "#8b5cf6";
 
@@ -170,16 +190,19 @@ function StyleRow({
           <span className="qzk-field-lbl" style={{ margin: 0 }}>
             Line
           </span>
-          {/* The STORED choice, not the drawn one: with P3.3's auto cycle on,
-              an unstyled series reads "solid" here while the canvas draws its
-              cycled dash. Known gap, recorded in PRIMARY_SOFTWARE_AUDIT_PLAN
-              P3.3 — picking an entry still does exactly what it says, and the
-              stored value then wins over the cycle everywhere. */}
+          {/* The DRAWN dash (P3.3 auto cycle resolved), marked "(auto)" when
+              the cycle chose it; picking any entry stores it explicitly. */}
           <SegmentedControl<LineStyle>
             options={LINE_OPTS}
-            value={style.line ?? "solid"}
+            aria-label="Line style"
+            value={drawnLine}
             onChange={(v) => setSeriesStyle(channel, { line: v })}
           />
+          {drawn.autoLine && (
+            <span className="qzk-field-lbl" style={{ margin: 0 }} title="Set by the automatic style cycle.">
+              {LINE_NAMES[drawnLine]} (auto)
+            </span>
+          )}
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
@@ -191,11 +214,19 @@ function StyleRow({
           </Checkbox>
           {style.marker && (
             <>
+              {/* An auto glyph gets its own leading "(auto)" entry, so picking
+                  that same shape below still stores it explicitly. */}
               <Select
-                options={MARKER_SHAPES}
-                value={style.markerShape ?? "circle"}
+                options={
+                  autoShape
+                    ? [{ value: "", label: `${shapeLabel(autoShape)} (auto)` }, ...MARKER_SHAPES]
+                    : MARKER_SHAPES
+                }
+                value={autoShape ? "" : (style.markerShape ?? "circle")}
                 title="Marker shape"
-                onChange={(e) => setSeriesStyle(channel, { markerShape: e.target.value as MarkerShape })}
+                onChange={(e) => {
+                  if (e.target.value) setSeriesStyle(channel, { markerShape: e.target.value as MarkerShape });
+                }}
               />
               <NumberField
                 value={style.markerSize != null ? String(style.markerSize) : ""}
@@ -226,6 +257,16 @@ function StyleRow({
 
 export default function SeriesStyleCard({ active }: { active: Dataset | null }) {
   const styled = useApp((s) => Object.keys(s.seriesStyles).length);
+  const on = useApp(selectFocusedWindowCycles);
+  const xKey = useApp((s) => s.xKey);
+  const yKeys = useApp((s) => s.yKeys);
+  const seriesOrder = useApp((s) => s.seriesOrder);
+  const data = active?.data;
+  const roles = active?.channelRoles;
+  const cycle = useMemo<CycleSlot>(
+    () => ({ on, channels: on && data ? effectiveChannels(data, yKeys, xKey, roles, seriesOrder) : [] }),
+    [on, data, roles, yKeys, xKey, seriesOrder],
+  );
   if (!active || active.data.labels.length === 0) return null;
 
   // Default error pairing per series (Origin Y-error / parser hint) so the
@@ -245,6 +286,7 @@ export default function SeriesStyleCard({ active }: { active: Dataset | null }) 
           label={lab}
           labels={active.data.labels}
           naturalErr={natErr[i]}
+          cycle={cycle}
         />
       ))}
     </Card>
