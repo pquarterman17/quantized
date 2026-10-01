@@ -560,7 +560,18 @@ const STORE_PINS: Record<string, number> = {
   // (every initial value, every PlotView key present, snapshotView of the
   // initial store == defaultPlotView(), the defaultGrid seed) were green
   // before the move and are unchanged after it.
-  "/store/useApp.ts": 623,
+  // 623 -> 486 (2026-10-01, P4.1 eleventh + twelfth domains): the multi-file
+  // append import (importFilesAppended, gap #47) moved to store/importAppend.ts
+  // (ImportAppendSlice); and every Prefs key as a store field, its
+  // initial-from-qz.prefs seed, setTheme/setAccent/setDensity/setPalette/
+  // setPref and the pref-value types (Theme … PrefKey, re-exported here)
+  // moved to store/appearancePrefs.ts (AppearancePrefsSlice).
+  // store/importAppend.characterization.test.ts (toasts, status, undo step,
+  // macro step, recents, every degrade path's importFiles call) and
+  // store/appearancePrefs.characterization.test.ts (poisoned whole-getState()
+  // diff per writer and per setPref key, persist + <html> apply, the
+  // persisted seed) were green before the move and are unchanged after it.
+  "/store/useApp.ts": 486,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

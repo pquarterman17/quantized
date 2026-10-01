@@ -384,7 +384,7 @@ describe("round-trip: an import-created state survives serialize -> parse identi
 });
 
 describe("importFilesAppended's merged dataset self-heals on next save/reopen (PR A4 owns the merge path itself)", () => {
-  // useApp.ts's importFilesAppended (off-limits to this PR — a parallel PR
+  // importFilesAppended (now store/importAppend.ts; off-limits to this PR — a parallel PR
   // owns append/merge reference integrity) strips incoming workbookId today
   // (PR A2's documented interim behaviour), so a freshly-appended dataset is
   // workbook-LESS, not dangling. Prove the self-heal at the parseWorkspace

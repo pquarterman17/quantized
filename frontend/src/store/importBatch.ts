@@ -11,7 +11,7 @@
 // (importFiles/importPaths both route through it). `commands/fileCommands.ts`
 // reads it for its pre-flight check (so "Import…" does not even pop a file
 // dialog while a batch runs) and sets/clears it around "import-append", whose
-// implementation (`importFilesAppended`) lives in useApp.ts. Every OTHER import
+// implementation (`importFilesAppended`) lives in importAppend.ts. Every OTHER import
 // entry point (⌘O, the command palette, the Library toolbar button, drag-drop,
 // the Recent-files list) calls `importFiles`/`importPaths` directly or through
 // `lib/importEntry.ts`'s `chooseAndImport`, so guarding those two actions

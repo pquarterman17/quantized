@@ -37,8 +37,8 @@ import { nextDatasetId } from "../store/useApp";
 // commands get an EXTRA pre-flight check so clicking "Import…" while a batch
 // runs doesn't even pop a file dialog first; "import-append" additionally
 // needs the guard applied here because `importFilesAppended` lives in
-// useApp.ts (out of bounds for this slice — see importDatasets.ts's own
-// comment on the same guard).
+// store/importAppend.ts, outside the guarded runImport path (see
+// importDatasets.ts's own comment on the same guard).
 // `runLazy` / `onLoadFailure` moved to lib/runLazy.ts (P3.4 residual,
 // 2026-09-29) once components and App.tsx needed them too; re-exported here
 // so the command modules and fileCommands.test.ts keep their import path.
@@ -83,12 +83,11 @@ export function buildFileCommands(s: StoreGet): Action[] {
         if (rejectIfImportRunning()) return;
         openFilePicker((files) => {
           if (files.length === 0) return;
-          // importFilesAppended lives in useApp.ts (this slice's off-limits
-          // file), so its busy state is set/cleared HERE rather than inside
-          // the action itself — see the guard comment above. withOp gives it
+          // importFilesAppended (store/importAppend.ts) does not take the
+          // guard itself, so its busy state is set/cleared HERE rather than
+          // inside the action — see the guard comment above. withOp gives it
           // the same StatusBar presence importFiles/importPaths get (no
-          // cancel: the underlying upload loop has no AbortController, since
-          // adding one means touching useApp.ts).
+          // cancel: the underlying upload loop has no AbortController).
           useImportBatch.setState({ running: true });
           void withOp(`Importing ${files.length} files to append…`, () =>
             s().importFilesAppended(files),
