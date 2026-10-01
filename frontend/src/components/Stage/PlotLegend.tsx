@@ -191,6 +191,9 @@ export default function PlotLegend({
         if (legendStatic && isHidden) return null;
         const visibleCount = plotted.filter((c) => !hiddenChannels.includes(c)).length;
         const text = isChannel ? (labels?.[i] ?? seriesLabels[channel] ?? defaultLabel(s)) : defaultLabel(s);
+        // An EMPTY display name has no legend row (the series stays plotted),
+        // exactly as the export's matplotlib legend drops a zero-length label.
+        if (text === "") return null;
 
         if (editing && editing.channel === channel) {
           return (

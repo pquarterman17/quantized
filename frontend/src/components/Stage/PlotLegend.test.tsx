@@ -86,6 +86,32 @@ describe("PlotLegend — P1.4 encoded legend text", () => {
   });
 });
 
+// BUGS_AND_ISSUES BUG-014 finding 4: the export drops a zero-length legend
+// label (matplotlib's rule, `test_an_empty_rename_drops_the_series_from_the_
+// rendered_legend`). The screen now does the same: an empty display name hides
+// the ROW, never the series, so the plot and its hidden state are untouched.
+describe("PlotLegend — empty display name (matches the export)", () => {
+  it("an empty rename drops that series' legend row but leaves it plotted", () => {
+    useApp.setState({ seriesLabels: { 1: "" } });
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    const rows = container.querySelectorAll(".qzk-legend .it");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain("A");
+    expect(container.querySelectorAll(".qzk-legend-sample")).toHaveLength(1);
+    expect(useApp.getState().hiddenChannels).toEqual([]);
+  });
+
+  it("an empty ENCODED label drops the row too, in static mode as well", () => {
+    useApp.setState({ legendStatic: true });
+    const { container } = render(
+      <PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} labels={["", "B"]} />,
+    );
+    const rows = container.querySelectorAll(".qzk-legend .it");
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).toContain("B");
+  });
+});
+
 describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
   beforeEach(() => {
     // jsdom's requestAnimationFrame never fires on its own (no paint loop) —

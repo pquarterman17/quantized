@@ -36,12 +36,14 @@ function swatchColor(
 }
 
 export default function SpatialPanelLegend({
-  entries,
+  entries: allEntries,
   title,
   frameXY,
   isDarkBg = true,
   inkColor,
 }: SpatialPanelLegendProps) {
+  // An empty label has no row, as in PlotLegend and the export's legend.
+  const entries = allEntries.filter((entry) => entry.label !== "");
   if (!title && entries.length === 0) return null;
   return (
     <div
