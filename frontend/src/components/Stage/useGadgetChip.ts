@@ -107,7 +107,8 @@ export function useGadgetChip(): GadgetChipState {
   }
 
   async function report(): Promise<void> {
-    if (!active || !roi) return;
+    // Busy means the shown result is not (yet) the current region's.
+    if (!active || !roi || busy) return;
     setReporting(true);
     try {
       if (mode === "fit" && fitResult) {

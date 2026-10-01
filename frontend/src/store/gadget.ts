@@ -103,6 +103,9 @@ export interface GadgetSlice {
   clearQfit: () => void;
 }
 
+/** The modes whose compute is an async request (busy through the debounce). */
+const ASYNC_GADGET_MODES: ReadonlySet<GadgetMode> = new Set(["integrate", "stats", "fft"]);
+
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
@@ -110,8 +113,9 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
   // Quick-fit gadget internals (#33): a module-level debounce timer, mirroring
   // the recalc scheduler in useApp.ts — a burst of ROI-drag moves triggers ONE fit.
   let qfitTimer: ReturnType<typeof setTimeout> | null = null;
-  // Fit-request sequence: bumped by every ROI/model change and every request,
-  // so only the LATEST request's response may land (a slow earlier one can't).
+  // Region-request sequence (fit AND the async gadget modes): bumped by every
+  // ROI/model/mode change and every request, so only the LATEST request's
+  // response may land (a slow earlier one can't).
   let qfitSeq = 0;
   // Drop the current fit result — and the overlay only if this gadget drew it.
   const dropQfitResult = (s: AppState): Partial<AppState> => ({
@@ -119,6 +123,22 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
     qfitResultModel: null,
     fitOverlay: s.qfitResult != null ? null : s.fitOverlay,
   });
+
+  // One async region-mode request: only the LATEST may land, and a stale one
+  // (ROI/mode moved, gadget cleared, dataset switched) leaves busy to its successor.
+  const runRegion = async <T>(
+    activeId: string, call: () => Promise<T>, apply: (r: T) => Partial<AppState>, what: string,
+  ): Promise<void> => {
+    set({ gadgetBusy: true, gadgetError: null });
+    const seq = ++qfitSeq;
+    const stale = () => seq !== qfitSeq || get().activeId !== activeId || !get().qfitRoi;
+    try {
+      const r = await call();
+      if (!stale()) set({ ...apply(r), gadgetBusy: false });
+    } catch (e) {
+      if (!stale()) set({ gadgetBusy: false, gadgetError: e instanceof Error ? e.message : `${what} failed` });
+    }
+  };
 
   return {
     qfitRoi: null,
@@ -151,6 +171,13 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
         qfitRoiFor: roi === null ? null
           : roi === s.qfitRoi && s.qfitRoiFor ? s.qfitRoiFor : { datasetId: s.activeId, xKey: s.xKey },
         ...dropQfitResult(s),
+        // The old region's numbers must never show (or report/commit) under the
+        // new region's caption: drop them, and stay busy through the debounce.
+        gadgetIntegrateResult: null,
+        gadgetStatsResult: null,
+        gadgetFftPreview: null,
+        gadgetError: null,
+        gadgetBusy: roi !== null && ASYNC_GADGET_MODES.has(s.gadgetMode),
       }));
       if (qfitTimer) {
         clearTimeout(qfitTimer);
@@ -165,13 +192,8 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
         set((s) => ({
           qfitBusy: false,
           qfitError: null,
-          gadgetBusy: false,
-          gadgetError: null,
-          gadgetIntegrateResult: null,
-          gadgetStatsResult: null,
           gadgetDerivResult: null,
           derivOverlay: s.gadgetDerivResult != null ? null : s.derivOverlay,
-          gadgetFftPreview: null,
         }));
         return;
       }
@@ -272,7 +294,7 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
     runGadgetIntegrate: async () => {
       const s = get();
       const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-      if (!active || !s.qfitRoi) return;
+      if (!active || !s.qfitRoi) return set({ gadgetBusy: false }); // nothing to compute: never stuck busy
       const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
       const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
       const sel = selectRoiRows(active, s.qfitRoi, col);
@@ -282,20 +304,17 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
       }
       const lo = Math.min(s.qfitRoi[0], s.qfitRoi[1]);
       const hi = Math.max(s.qfitRoi[0], s.qfitRoi[1]);
-      set({ gadgetBusy: true, gadgetError: null });
-      try {
-        const r = await peaksIntegrate({ x: sel.x, y: sel.y, regions: [[lo, hi]], baseline: "linear" });
-        const cur = get();
-        if (cur.activeId !== active.id || !cur.qfitRoi) return;
-        set({ gadgetIntegrateResult: r, gadgetBusy: false });
-      } catch (e) {
-        set({ gadgetBusy: false, gadgetError: e instanceof Error ? e.message : "integrate failed" });
-      }
+      await runRegion(
+        active.id,
+        () => peaksIntegrate({ x: sel.x, y: sel.y, regions: [[lo, hi]], baseline: "linear" }),
+        (r) => ({ gadgetIntegrateResult: r }),
+        "integrate",
+      );
     },
     runGadgetStats: async () => {
       const s = get();
       const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-      if (!active || !s.qfitRoi) return;
+      if (!active || !s.qfitRoi) return set({ gadgetBusy: false }); // nothing to compute: never stuck busy
       const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
       const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
       const sel = selectRoiRows(active, s.qfitRoi, col);
@@ -303,15 +322,7 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
         set({ gadgetError: "not enough points in the selected region", gadgetBusy: false, gadgetStatsResult: null });
         return;
       }
-      set({ gadgetBusy: true, gadgetError: null });
-      try {
-        const r = await statsDescriptive(sel.y);
-        const cur = get();
-        if (cur.activeId !== active.id || !cur.qfitRoi) return;
-        set({ gadgetStatsResult: r, gadgetBusy: false });
-      } catch (e) {
-        set({ gadgetBusy: false, gadgetError: e instanceof Error ? e.message : "stats failed" });
-      }
+      await runRegion(active.id, () => statsDescriptive(sel.y), (r) => ({ gadgetStatsResult: r }), "stats");
     },
     // Synchronous (client-side central differences) — no busy state, but shares
     // `gadgetError` with the async modes for a consistent chip error slot.
@@ -334,7 +345,7 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
     runGadgetFft: async () => {
       const s = get();
       const active = s.datasets.find((d) => d.id === s.activeId) ?? null;
-      if (!active || !s.qfitRoi) return;
+      if (!active || !s.qfitRoi) return set({ gadgetBusy: false }); // nothing to compute: never stuck busy
       const plotted = effectiveChannels(active.data, s.yKeys, s.xKey, active.channelRoles, s.seriesOrder);
       const col = firstVisiblePlottedChannel(plotted, (c) => s.hiddenChannels.includes(c));
       const sel = selectRoiRows(active, s.qfitRoi, col);
@@ -346,15 +357,7 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
       // arrive in acquisition order, which may not be monotonic (loops/swept-
       // back scans) — sort before sending (same discipline as differentiate).
       const sorted = sortByX(sel.x, sel.y);
-      set({ gadgetBusy: true, gadgetError: null });
-      try {
-        const r = await fftSpectral({ x: sorted.x, y: sorted.y });
-        const cur = get();
-        if (cur.activeId !== active.id || !cur.qfitRoi) return;
-        set({ gadgetFftPreview: r, gadgetBusy: false });
-      } catch (e) {
-        set({ gadgetBusy: false, gadgetError: e instanceof Error ? e.message : "FFT failed" });
-      }
+      await runRegion(active.id, () => fftSpectral({ x: sorted.x, y: sorted.y }), (r) => ({ gadgetFftPreview: r }), "FFT");
     },
     // Ending action for FFT mode: the live preview becomes a new library dataset
     // (there's no fitSpec-like durable slot for a spectrum) — mirrors "Commit"

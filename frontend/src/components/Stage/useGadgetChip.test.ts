@@ -148,6 +148,35 @@ describe("useGadgetChip — integrate mode (gap #34)", () => {
     );
     expect(useApp.getState().reports).toHaveLength(1);
   });
+
+  it("moving the ROI hides the old region's result and blocks report() through the debounce", async () => {
+    vi.useFakeTimers(); // hold the 350 ms debounce: the new region's compute never starts
+    try {
+      vi.mocked(reportEmit).mockResolvedValue({ report: { title: "t", sections: [] } });
+      const { result } = renderHook(() => useGadgetChip());
+      act(() => useApp.getState().setQfitRoi([2, 3]));
+      expect(result.current.roi).toEqual([2, 3]);
+      expect(result.current.integrateResult).toBeNull();
+      expect(result.current.busy).toBe(true);
+      await act(async () => {
+        await result.current.report();
+      });
+      expect(reportEmit).not.toHaveBeenCalled();
+      expect(useApp.getState().reports).toHaveLength(0);
+    } finally {
+      act(() => useApp.getState().clearQfit());
+      vi.useRealTimers();
+    }
+  });
+
+  it("report() refuses while a compute is in flight, even with a result still showing", async () => {
+    useApp.setState({ gadgetBusy: true });
+    const { result } = renderHook(() => useGadgetChip());
+    await act(async () => {
+      await result.current.report();
+    });
+    expect(reportEmit).not.toHaveBeenCalled();
+  });
 });
 
 describe("useGadgetChip — stats mode (gap #34)", () => {
