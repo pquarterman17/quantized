@@ -13,7 +13,7 @@ import { createPageDocument } from "../../../lib/pageDocumentActions";
 import { defaultPlotView } from "../../../lib/plotview";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
-import { buildPageSpecFromDocument, panelFigure } from "./panelResolve";
+import { buildPageSpecFromDocument, panelFigure, panelRenderInputs } from "./panelResolve";
 
 const DATA: DataStruct = {
   time: [0, 1, 2],
@@ -213,5 +213,34 @@ describe("panelFigure — figdoc kind", () => {
     const spec = await panelFigure({ kind: "figdoc", id: "doc-errors", name: "Errored doc" });
     expect(spec!.error_spans).toBeDefined();
     expect(spec!.error_spans![0]).not.toBeNull();
+  });
+});
+
+// A page panel draws each source's unstyled series in the Preferences default
+// trace, as that source's canvas does (`lib/exportDefaultTrace.ts`).
+describe("the default trace on page panels", () => {
+  const SCATTER = { width: 0, marker: true, marker_size: 5 };
+
+  beforeEach(() => {
+    useApp.setState({ defaultTrace: "Scatter", editableFigures: [LIVE] });
+    return () => useApp.setState({ defaultTrace: "Line", editableFigures: [] });
+  });
+
+  it("a session panel exports markers at the canvas' 5 px, no line", async () => {
+    const spec = await panelFigure({ kind: "figure", id: "figure-live", name: "Live loop" });
+    expect(spec?.series_styles?.[0]).toMatchObject(SCATTER);
+  });
+
+  it("a saved page exported from the Library does too", async () => {
+    const page = createPageDocument({ id: "p", name: "P", panels: [{ figureId: "figure-live", label: null, title: null }] });
+    const spec = await buildPageSpecFromDocument(page, [LIVE]);
+    expect(spec?.panels[0].figure.series_styles?.[0]).toMatchObject(SCATTER);
+  });
+
+  it("the preview re-renders when the trace changes", () => {
+    const slots = [{ source: { kind: "figure" as const, id: "figure-live", name: "Live loop" } }];
+    const before = panelRenderInputs(slots, useApp.getState());
+    useApp.setState({ defaultTrace: "Line" });
+    expect(panelRenderInputs(slots, useApp.getState())).not.toEqual(before);
   });
 });

@@ -51,6 +51,9 @@ export interface HistorySnapshot {
   // recordHistory("delete folder"), and without this field an undone folder
   // delete restored the folder COLLAPSED — the exact half-restored-state
   // failure this file's header warns about (the savedRois incident).
+  // Undo-coverage audit (2026-10-01): expand/collapse itself is view state and
+  // records nothing, so `restorePatch` keeps the LIVE expand state and reads
+  // this field only for folders the restore brings back (`restoredExpandedFolders`).
   expandedFolders: AppState["expandedFolders"];
   // LIBRARY_WORKBOOK_UX_PLAN PR A2 — persistent Library organization, same
   // class as `folders` right above it (not yet mutated by any action; wired
@@ -154,6 +157,7 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
     // pointing at bounds that are no longer live. Navigation is undone with
     // Alt+left/right, edits with Ctrl+Z; this keeps that split intact.
     ...navigationView(s),
+    expandedFolders: restoredExpandedFolders(s, snap),
     selection: s.selection && live.has(s.selection.datasetId) ? s.selection : null,
     // L0.25 on undo/redo (hardening review fix — undo was a SEVENTH
     // invariant violator): the snapshot restores `selectedIds` verbatim, so
@@ -180,4 +184,26 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
     ),
     ...focusTransientReset(),
   };
+}
+
+/** Folder disclosure is view state, like zoom/pan above: a toggle records
+ *  nothing, so undo/redo keep the LIVE expand state rather than one captured
+ *  with an older edit. Two exceptions keep it coherent with the restored tree:
+ *  a folder the restore brings back (an undone delete) reopens as the snapshot
+ *  had it, and a folder the restore removes drops out (as `folderDeletePatch`
+ *  prunes going forward). Returns an existing array when nothing differs. */
+function restoredExpandedFolders(s: AppState, snap: HistorySnapshot): string[] {
+  const liveFolders = new Set(s.folders.map((f) => f.id));
+  const snapFolders = new Set(snap.folders.map((f) => f.id));
+  const liveOpen = new Set(s.expandedFolders);
+  const back = snap.expandedFolders.filter(
+    (id) => liveOpen.has(id) || (snapFolders.has(id) && !liveFolders.has(id)),
+  );
+  const seen = new Set(back);
+  const next = [
+    ...back,
+    ...s.expandedFolders.filter((id) => !seen.has(id) && !(liveFolders.has(id) && !snapFolders.has(id))),
+  ];
+  const same = (a: readonly string[]): boolean => a.length === next.length && a.every((id, i) => id === next[i]);
+  return same(s.expandedFolders) ? s.expandedFolders : same(snap.expandedFolders) ? snap.expandedFolders : next;
 }

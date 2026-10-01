@@ -20,6 +20,7 @@ import { resolveSecondaryAxis, secondaryAxisWire, type SecondaryAxisSpec } from 
 import { buildExportStyles, toWireSeriesStyles, type ExportSeriesStyle } from "../../../lib/exportStyles";
 import type { FigureDoc } from "../../../lib/figuredoc";
 import { compactOverrides, type FigureOverrides } from "../../../lib/figureOverrides";
+import { traceSeriesStyles } from "../../../lib/exportDefaultTrace";
 import { ghosterFor } from "../../../lib/excludedRowsExport";
 import type { ExcludedRowsGhoster } from "../../../lib/figureSpec";
 import { droppedRows, pruneToLiveDataset } from "../../../lib/rowstate";
@@ -29,6 +30,7 @@ import {
   type AxisScale,
   type DataStruct,
   type Dataset,
+  type DefaultTrace,
   type SeriesStyle,
 } from "../../../lib/types";
 import type { ExcludedDisplay } from "../../../store/useApp";
@@ -67,6 +69,9 @@ export interface LegacyFigureState {
    *  doc's snapshot. The REQUEST drops those rows (or greys them, see
    *  `buildLegacyFigureSpec`); "Save as figure" still keeps every row. */
   liveDataset?: Dataset | null;
+  /** The Preferences trace the canvas draws unstyled series in; the REQUEST
+   *  draws them the same way (`exportDefaultTrace`), the saved doc does not. */
+  defaultTrace?: DefaultTrace;
 }
 
 /** The channels a spec plots when `yKeys` is the "all channels" null sentinel. */
@@ -116,7 +121,13 @@ export function buildLegacyFigureSpec(
   // The document form -> the wire form: the grouped colour rule for a PINNED
   // array, and the provenance flag off, on every request (BUG-016 round 3).
   const docStyles = exportStyles(state, state.data);
-  const styles = docStyles === null ? null : toWireSeriesStyles(docStyles, state.docGroupCol !== null);
+  const wireStyles = docStyles === null ? null : toWireSeriesStyles(docStyles, state.docGroupCol !== null);
+  // The default trace reads each series' RAW line: a saved doc's own entry, else the live style.
+  const plotted = plottedChannels(state, state.data);
+  const raw = state.docSeriesStyles === undefined
+    ? state.seriesStyles
+    : Object.fromEntries(plotted.map((ch, i) => [ch, docStyles?.[i] ?? undefined]));
+  const styles = traceSeriesStyles(wireStyles, plotted, state.defaultTrace, raw);
   // F2.1g's legacy y2 placebo: the hook enabled y2-limit controls off the live
   // y2Keys while this request never declared `y2_keys`, so the server dropped
   // every `y2_lim` they wrote. The hook now reads `hasY2` off THIS field, so a
@@ -125,7 +136,7 @@ export function buildLegacyFigureSpec(
   // grouped request cannot carry y2 at all (the backend 422s the pair).
   const y2Axis = state.y2 === null || state.docGroupCol !== null
     ? null
-    : resolveSecondaryAxis(plottedChannels(state, state.data), state.y2, { scale: state.yScale, fmt: state.yFmt });
+    : resolveSecondaryAxis(plotted, state.y2, { scale: state.yScale, fmt: state.yFmt });
   const spec: FigureSpec = {
     dataset: pruneToLiveDataset(state.data, state.liveDataset),
     x_key: state.xKey ?? undefined,

@@ -274,7 +274,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createReductionsSlice(set),
   ...createReimportSlice(set, get),
   ...createReimportAllSlice(set, get),
-  ...createPanelsSlice(set),
+  ...createPanelsSlice(set, get),
   ...createPointerToolSlice(set, get),
   ...createSplitSlice(set, get),
   ...createShapesSlice(set, get),

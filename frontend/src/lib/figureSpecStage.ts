@@ -11,9 +11,9 @@
 // the Stage routing into the graph of every importer of the builders.
 
 import type { FigureSpec } from "./api/figures";
-import { withDefaultTrace } from "./exportDefaultTrace";
 import type { StoreGet } from "./exportActive";
 import { buildFigureSpec, buildFigureSpecFromDocument, type FigureRenderOpts } from "./figureSpec";
+import { buildPolarFigureSpec } from "./polarFigureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
 import type { Dataset } from "./types";
 import { readLiveWaterfallSpan } from "./waterfallOffset";
@@ -73,6 +73,11 @@ export function buildStageFigureSpec(
   extra: { transparent?: boolean } = {},
 ): FigureSpec {
   const st = s();
+  // The polar canvas (PlotStage's first early return) exports as a polar figure, never as XY.
+  if (st.polarMode) {
+    const polar = buildPolarFigureSpec(st, ds, stem, o);
+    return extra.transparent === undefined ? polar : { ...polar, transparent: extra.transparent };
+  }
   const focused = st.windowsForSave().find((w) => w.id === st.focusedWindowId);
   const document = focused && focused.kind === "plot" ? focused.document : undefined;
   const canRouteThroughDocument =
@@ -103,6 +108,9 @@ export function buildStageFigureSpec(
   // showing a different dataset) falls back to the full DataStruct.
   const waterfallSpan = readLiveWaterfallSpan(ds.id);
   const waterfallXSpan = readLiveWaterfallSpan(ds.id, "xSpan"); // the X step's twin
+  // The Preferences default trace the focused canvas draws in (Scatter / Line +
+  // markers / Step), read like `autoSeriesStyles` from the live store.
+  const defaultTrace = st.defaultTrace;
   const spec = canRouteThroughDocument
     ? buildFigureSpecFromDocument(document, ds, stem, {
         fmt: o.fmt,
@@ -117,10 +125,8 @@ export function buildStageFigureSpec(
         waterfallXSpan,
         greyscale: o.greyscale,
         greyExcluded: o.greyExcluded,
+        defaultTrace,
       })
-    : buildFigureSpec(s, ds, stem, o, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
-  // The Preferences default trace the focused canvas draws in (Scatter / Line +
-  // markers / Step), read like `autoSeriesStyles` from the live store.
-  const traced = withDefaultTrace(spec, st.defaultTrace, st.seriesStyles);
-  return extra.transparent === undefined ? traced : { ...traced, transparent: extra.transparent };
+    : buildFigureSpec(s, ds, stem, { ...o, defaultTrace }, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
+  return extra.transparent === undefined ? spec : { ...spec, transparent: extra.transparent };
 }

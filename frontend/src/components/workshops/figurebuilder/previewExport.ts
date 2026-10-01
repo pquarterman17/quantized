@@ -68,7 +68,9 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
         const stem = (dataset?.name ?? canonicalDocument.name).replace(/\.[^.]+$/, "");
         // F4.2c (a): a figure with excluded rows asks "greyed or omitted?".
         const picked = await chooseExcludedRows(
-          (greyExcluded) => buildFigureSpecFromDocument(canonicalDocument, dataset, stem, { autoSeriesStyles, greyExcluded }),
+          (greyExcluded) => buildFigureSpecFromDocument(canonicalDocument, dataset, stem, {
+            autoSeriesStyles, greyExcluded, defaultTrace: useApp.getState().defaultTrace,
+          }),
           excludedChoiceMatters,
           useApp.getState().excludedDisplay,
         );

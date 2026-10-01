@@ -117,3 +117,16 @@ describe.each(SENDS)("Send to report from %s honours the excluded-rows choice", 
     expect(useApp.getState().status).toBe("send cancelled");
   });
 });
+
+describe.each(SENDS)("Send to report from %s draws the Preferences default trace", (_name, send) => {
+  afterEach(() => useApp.getState().setPref("defaultTrace", "Line"));
+
+  it("an unstyled series sends as the canvas draws it: markers at 5 px, no line", async () => {
+    seed();
+    useApp.getState().setPref("defaultTrace", "Scatter");
+    const run = send();
+    await answer("Send figure to report", { target: NEW_REPORT });
+    await run;
+    expect(sentSpec()?.series_styles?.[0]).toMatchObject({ width: 0, marker: true, marker_size: 5 });
+  });
+});

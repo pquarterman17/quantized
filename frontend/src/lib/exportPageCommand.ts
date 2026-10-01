@@ -117,6 +117,7 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
               showGrid: live.showGrid,
               showAxisBox: live.showAxisBox,
               autoSeriesStyles: live.autoSeriesStyles,
+              defaultTrace: live.defaultTrace,
               greyscale: params.greyscale as boolean,
             },
             greyExcluded && ((figure, id) => withSpatialGhosts(figure, full.get(id)!, greyExcluded)),

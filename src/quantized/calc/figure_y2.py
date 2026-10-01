@@ -27,6 +27,7 @@ import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure import _apply_fill, _plot_kwargs, draw_series_axes
+from quantized.calc.figure_axis_titles import apply_axis_titles
 from quantized.calc.figure_decor import _apply_region_shades, _split_region_shades_by_axis
 from quantized.calc.figure_overrides import legend_kwargs
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
@@ -267,6 +268,7 @@ def render_with_secondary_axis(
         minor_ticks=minor_ticks,
     )
     ax2.spines["right"].set_visible(True)
+    apply_axis_titles(fig, {"y2": ax2}, ov.get("axis_titles"))  # the y2 title's Format + drag
     _apply_region_shades(ax2, secondary_shades)
     y2_lim = ov.get("y2_lim")
     if y2_lim is not None:

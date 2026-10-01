@@ -6,9 +6,11 @@
 //
 // This is NOT a duplicate of undo. Undo is a session-scoped edit history that
 // dies with the tab; trash is the answer to "I deleted that yesterday and only
-// noticed today". Different guarantee, different lifetime. `removeReport` and
-// `removeFigureDoc` in particular record NO undo entry at all (see their own
-// comments) — trash is their ONLY recovery path.
+// noticed today". Different guarantee, different lifetime. Every delete that
+// trashes ALSO records an undo step first (datasets, figures and, since the
+// undo audit, reports and legacy figure docs), so an undo brings the item back
+// while its entry stays here; restoring that entry later only consumes it
+// (store/trashRestore.ts's "came back some other way" guard).
 //
 // BOUNDED BY CONSTRUCTION, because #32 explicitly wants recovery storage that
 // cannot grow forever: capped by entry count, by age, AND by total serialized
@@ -366,18 +368,23 @@ export function createTrashSlice(set: SliceSet, get: SliceGet): TrashSlice {
   };
 }
 
-/** `removeReport`/`removeFigureDoc` (useApp.ts) both record NO undo entry —
- *  Trash is their ONLY recovery path — and are otherwise identical
- *  "capture, then filter it out" shapes. Homed here (not useApp.ts, at its
- *  own size ratchet) since both are pure trash-capture bookkeeping. */
+/** `removeReport`/`removeFigureDoc`: the dataset model
+ *  (`removeDatasetsWithTrash`): record one undo step, capture to trash, then
+ *  remove. Both collections live in the undo snapshot, so a delete that
+ *  recorded nothing let an undo of any OLDER edit resurrect the item (undo
+ *  audit). An unknown id records, trashes and writes nothing. */
 export function removeReportWithTrash(get: SliceGet, set: SliceSet, id: string): void {
   const report = get().reports.find((r) => r.id === id);
-  if (report) get().sendEntriesToTrash([{ kind: "report", at: Date.now(), bytes: byteSize(report), report }]);
+  if (!report) return;
+  get().recordHistory("delete report");
+  get().sendEntriesToTrash([{ kind: "report", at: Date.now(), bytes: byteSize(report), report }]);
   set((s) => ({ reports: s.reports.filter((r) => r.id !== id), openReportId: s.openReportId === id ? null : s.openReportId }));
 }
 
 export function removeFigureDocWithTrash(get: SliceGet, set: SliceSet, id: string): void {
   const doc = get().figureDocs.find((f) => f.id === id);
-  if (doc) get().sendEntriesToTrash([{ kind: "figureDoc", at: Date.now(), bytes: figureDocByteEstimate(doc), doc }]);
+  if (!doc) return;
+  get().recordHistory("delete figure");
+  get().sendEntriesToTrash([{ kind: "figureDoc", at: Date.now(), bytes: figureDocByteEstimate(doc), doc }]);
   set((s) => ({ figureDocs: s.figureDocs.filter((f) => f.id !== id) }));
 }

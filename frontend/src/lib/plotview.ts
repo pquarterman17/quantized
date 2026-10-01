@@ -24,7 +24,7 @@ import {
   type PanelLayout,
 } from "./panelWindowModel";
 import { sanitizeFrozenBundle, type FrozenPlotBundle } from "./plotsnapshot";
-import { boolViewFields, sanitizeLegendSize, sanitizeRegionShades, sanitizeStatMarksByMode, uniqueIds, type StatMarksByMode } from "./plotviewSanitize";
+import { boolViewFields, sanitizeLegendSize, sanitizeRegionShades, sanitizeStatMarksByMode, sanitizeStatPicks, uniqueIds, type StatMarksByMode, type StatPicks } from "./plotviewSanitize";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import type { FigureDocument } from "./figureDocument";
 import type { Annotation, AxisFormat, AxisLabelOffsets, AxisLabelStyles, AxisScale, RefLine, RegionShade, SeriesStyle, Shape, TickMode } from "./types";
@@ -138,7 +138,7 @@ export interface PlotView {
   statHideEmptyLevels: boolean;
   statShowGroupN: boolean;
   statShowSummary: boolean;
-  statMarks: StatMarksByMode;
+  statMarks: StatMarksByMode; statPicks: StatPicks; // + plot type / columns / dist / bins / fit / stacking (2026-10-01)
   xLim: [number, number] | null;
   yLim: [number, number] | null;
   xStep: number | null;
@@ -210,7 +210,7 @@ export function defaultPlotView(): PlotView {
     insetMode: false,
     polarMode: false,
     statMode: false,
-    statHideEmptyLevels: false, statShowGroupN: true, statShowSummary: false, statMarks: {},
+    statHideEmptyLevels: false, statShowGroupN: true, statShowSummary: false, statMarks: {}, statPicks: {},
     xLim: null, yLim: null,
     xStep: null, yStep: null,
     xFmt: { mode: "auto", digits: 2 },
@@ -682,7 +682,7 @@ export function sanitizePlotView(v: unknown): PlotView {
     yScale: axisScaleOrDefault(o.yScale, o.yLog, fb.yScale),
     xScale: axisScaleOrDefault(o.xScale, o.xLog, fb.xScale),
     ...boolViewFields(o, fb),
-    statMarks: sanitizeStatMarksByMode(o.statMarks),
+    statMarks: sanitizeStatMarksByMode(o.statMarks), statPicks: sanitizeStatPicks(o.statPicks),
     legendPos: LEGEND_POS.includes(o.legendPos as LegendPos) ? (o.legendPos as LegendPos) : fb.legendPos,
     legendXY: legendXYOrNull(o.legendXY),
     legendSize: sanitizeLegendSize(o.legendSize),

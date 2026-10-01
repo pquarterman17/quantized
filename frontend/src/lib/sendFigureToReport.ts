@@ -32,6 +32,7 @@ import { FIGURE_STYLES, GREYSCALE_FIELD } from "./exportFigureCommand";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
+import { confirmScreenOnlyExport } from "./screenOnlyExport";
 import {
   appendFigureBlock,
   estimateJsonBytes,
@@ -43,6 +44,7 @@ import {
 } from "./reportBlocks";
 import { beginOp, endOp } from "../store/pendingOps";
 import { TOAST_ACTION_TTL, toast } from "../store/toasts";
+import { asOneEditStep } from "../store/undoStep";
 
 /** The "make a new report" choice in the Report picker. */
 export const NEW_REPORT = "New report";
@@ -209,13 +211,14 @@ export function addFigureToReport(
 ): void {
   const st = s();
   if (targetId === null) {
-    // `addReport` itself records no history (none of the report-library
-    // actions do); the send is still one user gesture, so it is one undo step.
-    st.recordHistory(SEND_UNDO_LABEL);
-    st.addReport(
-      newReportName,
-      withSourceRefs(newFigureReport(newReportName, { ...block, name: stem }), refs),
-      datasetId,
+    // `addReport` records its own "add report" step; fold it into ONE step
+    // under the send's label, so both targets undo the same way.
+    asOneEditStep(s, SEND_UNDO_LABEL, () =>
+      st.addReport(
+        newReportName,
+        withSourceRefs(newFigureReport(newReportName, { ...block, name: stem }), refs),
+        datasetId,
+      ),
     );
     return;
   }
@@ -280,7 +283,7 @@ async function sendActivePlot(s: StoreGet): Promise<void> {
         excludedChoiceMatters,
         s().excludedDisplay,
       );
-      if (!picked) return false;
+      if (!picked || !(await confirmScreenOnlyExport(s(), picked.value, "Send"))) return false;
       const block = figureBlockFromSpec(picked.value, stem, caption);
       addFigureToReport(
         s, targetId, block, stem, ds.id, newReportName, [{ kind: "dataset", id: ds.id, name: ds.name }],
@@ -420,7 +423,9 @@ export async function runSendEditableFigureToReport(s: StoreGet, figureId: strin
         // F4.2c (a): a figure with excluded rows asks "greyed or omitted?".
         picked = await chooseExcludedRows(
           (greyExcluded) =>
-            buildFigureSpecFromDocument(doc, dataset, stem, { ...choice.opts, dpi: REPORT_FIGURE_DPI, greyExcluded }),
+            buildFigureSpecFromDocument(doc, dataset, stem, {
+              ...choice.opts, dpi: REPORT_FIGURE_DPI, greyExcluded, defaultTrace: s().defaultTrace,
+            }),
           excludedChoiceMatters,
           s().excludedDisplay,
         );

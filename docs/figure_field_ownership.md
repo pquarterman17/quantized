@@ -88,6 +88,7 @@ to all 56 fields and is not repeated per row.
 | `statShowGroupN` | `plot.stat.showGroupN` | `plot.view.statShowGroupN` | Setter `setStatShowGroupN` (`store/statLevelOptions.ts`) | no |
 | `statShowSummary` | `plot.stat.showSummary` | `plot.view.statShowSummary` | Setter `setStatShowSummary` (`store/statLevelOptions.ts`) | no |
 | `statMarks` | `plot.stat.marks` | `plot.view.statMarks` | Setter `setStatMarks` (`store/statLevelOptions.ts`, per-mode merge) | no |
+| `statPicks` | `plot.stat.picks` | `plot.view.statPicks` | Setter `setStatPicks` (`store/statLevelOptions.ts`, via the Stat Stage's pickers and "send to stage" seed; columns saved as `[index, label]`) | no |
 | `xLim` | `axes.x.limits` | `plot.view.xLim` | Setter `setXLim` (clears `xStep`); Bulk | no |
 | `yLim` | `axes.y.limits` | `plot.view.yLim` | Setter `setYLim` (clears `yStep`); Bulk | no |
 | `xStep` | `axes.x.step` | `plot.view.xStep` | No direct setter, cleared by `setXLim`; Bulk (Recipe, Origin tick-spacing decode) only writer | no |

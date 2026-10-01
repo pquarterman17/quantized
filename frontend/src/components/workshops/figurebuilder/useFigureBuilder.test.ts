@@ -68,6 +68,7 @@ beforeEach(() => {
     figurePublicationSession: null,
     figureBuilderOpen: false,
     autoSeriesStyles: false, // P3.3 default; the cycle block below opts in per test
+    defaultTrace: "Line",
     polarMode: false, // ditto: one cycle case drives the live view into polar
     status: "",
   });
@@ -201,6 +202,18 @@ describe("useFigureBuilder", () => {
     expect(vi.mocked(exportFigure).mock.calls.at(-1)?.[0].series_styles).toEqual([
       { color: "#123456", line: "none", marker: true },
     ]);
+  });
+
+  // The live-plot mirror draws an unstyled series in the Preferences default
+  // trace, as the canvas does: markers at the canvas' 5 px, no line.
+  it("draws unstyled series in the default trace, preview and export alike", async () => {
+    useApp.setState({ yKeys: [0], defaultTrace: "Scatter" });
+    const { result } = renderHook(() => useFigureBuilder());
+    await waitFor(() => expect(result.current.preview).not.toBeNull());
+    const scatter = { width: 0, marker: true, marker_size: 5 };
+    expect(vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0].series_styles?.[0]).toMatchObject(scatter);
+    await act(async () => result.current.exportNow());
+    expect(vi.mocked(exportFigure).mock.calls.at(-1)?.[0].series_styles?.[0]).toMatchObject(scatter);
   });
 
   // GUI_INTERACTION #12 Slice 5: a grouped FigureDoc (the Graph Builder

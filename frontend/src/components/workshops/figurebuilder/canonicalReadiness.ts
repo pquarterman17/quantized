@@ -17,7 +17,7 @@ import type { FigureSpec } from "../../../lib/api/figures";
 import { ghosterFor } from "../../../lib/excludedRowsExport";
 import type { FigureDocument } from "../../../lib/figureDocument";
 import { buildFigureSpecFromDocument, resolveFigureDocumentData } from "../../../lib/figureSpec";
-import type { DataStruct, Dataset } from "../../../lib/types";
+import type { DataStruct, Dataset, DefaultTrace } from "../../../lib/types";
 import type { ExcludedDisplay } from "../../../store/useApp";
 
 export type CanonicalReadiness =
@@ -58,12 +58,14 @@ function stableWireDataset(spec: FigureSpec, live: Dataset, data: DataStruct, ke
  *  through the generic catch below unchanged.
  *
  *  `excludedDisplay` is the app-wide "Excluded rows" mode the preview follows
- *  (see the module header); absent, masked rows are omitted. */
+ *  (see the module header); absent, masked rows are omitted. `defaultTrace` is
+ *  the Preferences trace the Export draws unstyled series in. */
 export function computeCanonicalReadiness(
   document: FigureDocument | null,
   dataset: Dataset | null,
   autoSeriesStyles = false,
   excludedDisplay?: ExcludedDisplay,
+  defaultTrace?: DefaultTrace,
 ): CanonicalReadiness | null {
   if (!document) return null;
   if (document.data.mode !== "frozen" && document.bindings.datasetId !== null && !dataset) {
@@ -88,6 +90,7 @@ export function computeCanonicalReadiness(
     const built = buildFigureSpecFromDocument(document, dataset, "preview", {
       autoSeriesStyles,
       greyExcluded: ghosterFor(mode),
+      defaultTrace,
     });
     // A frozen document renders its own snapshot and never prunes, so only a
     // live one has a masked wire dataset worth keeping stable.

@@ -36,6 +36,7 @@ import { excludedChoiceMatters } from "./excludedRowsExport";
 import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import { copyOfficeGraphicAsync } from "./officeClipboard";
+import { confirmScreenOnlyExport } from "./screenOnlyExport";
 import { toast } from "../store/toasts";
 import type { Dataset } from "./types";
 
@@ -68,7 +69,9 @@ async function pickCopySpec(
     excludedChoiceMatters,
     s().excludedDisplay,
   );
-  return picked?.value ?? null;
+  const spec = picked?.value ?? null;
+  // A stack/inset view the request cannot carry says so first (lib/screenOnlyExport.ts).
+  return spec && (await confirmScreenOnlyExport(s(), spec, "Copy")) ? spec : null;
 }
 
 /** MAIN #35: vector copy, offered only where the browser will actually take an

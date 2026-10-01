@@ -17,6 +17,7 @@ import type { Dataset, FolderNode } from "../../lib/types";
 import { runCancellable } from "../../store/pendingOps";
 import { ACCENTS } from "../../store/prefs";
 import { toast } from "../../store/toasts";
+import { asOneEditStep } from "../../store/undoStep";
 import { nextDatasetId, useApp } from "../../store/useApp";
 import { askParams, type ParamField } from "../overlays/ParamDialog";
 import { runTemplateOnDataset } from "../workshops/pipeline/runTemplate";
@@ -43,7 +44,8 @@ export function selectFolderContents(folder: FolderNode): void {
  *  `runTemplateOnFolder`/the smart-folder save button already use) rather
  *  than a bespoke dialog component. `renameFolder` still owns the name (it
  *  has its own blank-name guard); this only patches notes/color/
- *  defaultTemplate via the new `updateFolder` store action. */
+ *  defaultTemplate via the `updateFolder` store action. Both land as ONE
+ *  undo step. */
 export async function openFolderProperties(folder: FolderNode): Promise<void> {
   const templates = loadTemplates();
   const NONE = "(none)";
@@ -69,13 +71,16 @@ export async function openFolderProperties(folder: FolderNode): Promise<void> {
 
   const s = useApp.getState();
   const name = String(picked.name).trim();
-  if (name) s.renameFolder(folder.id, name);
-  s.updateFolder(folder.id, {
-    notes: String(picked.notes).trim() || undefined,
-    color: picked.color === NONE ? undefined : String(picked.color),
-    ...(templates.length
-      ? { defaultTemplate: picked.defaultTemplate === NONE ? undefined : String(picked.defaultTemplate) }
-      : {}),
+  // One dialog, one undo step: the rename and the properties fold together.
+  asOneEditStep(useApp.getState, "edit folder properties", () => {
+    if (name) s.renameFolder(folder.id, name);
+    s.updateFolder(folder.id, {
+      notes: String(picked.notes).trim() || undefined,
+      color: picked.color === NONE ? undefined : String(picked.color),
+      ...(templates.length
+        ? { defaultTemplate: picked.defaultTemplate === NONE ? undefined : String(picked.defaultTemplate) }
+        : {}),
+    });
   });
   toast(`updated "${name || folder.name}" properties`);
 }

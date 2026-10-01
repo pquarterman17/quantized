@@ -62,7 +62,7 @@ export interface PlotViewFieldsSlice {
   composition: Composition | null;
   insetMode: boolean; // show a magnifier inset over the plot
   polarMode: boolean; // render the active series in polar (angle vs radius)
-  statMode: boolean; statHideEmptyLevels: boolean; statShowGroupN: boolean; statShowSummary: boolean; statMarks: PlotView["statMarks"]; // Statistics stage (gap #16) + its P2.6 options
+  statMode: boolean; statHideEmptyLevels: boolean; statShowGroupN: boolean; statShowSummary: boolean; statMarks: PlotView["statMarks"]; statPicks: PlotView["statPicks"]; // Statistics stage (gap #16) + its P2.6 options + its picks
   xLim: [number, number] | null; // explicit X range (null = autoscale)
   yLim: [number, number] | null; // explicit Y range (null = autoscale)
   // Origin's decoded major-tick increment for a FIXED log axis (plot-fidelity
@@ -120,7 +120,7 @@ export function createPlotViewFieldsSlice(defaultGrid: boolean): PlotViewFieldsS
     composition: null,
     insetMode: false,
     polarMode: false,
-    statMode: false, statHideEmptyLevels: false, statShowGroupN: true, statShowSummary: false, statMarks: {},
+    statMode: false, statHideEmptyLevels: false, statShowGroupN: true, statShowSummary: false, statMarks: {}, statPicks: {},
     xLim: null,
     yLim: null,
     xStep: null,

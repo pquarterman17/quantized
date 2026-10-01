@@ -22,7 +22,7 @@
 //     ones that bulk-apply them (`loadWorkspace`, `applyOriginFigure`,
 //     `facetByColumn`/`breakAtGaps`) are not part of this cluster. Same shape as
 //     store/corrections.ts, which mutates the shared `datasets` field without
-//     owning it, and store/libraryPanel.ts's `updateFolder`.
+//     owning it, and store/datasetListEdits.ts's `updateFolder`.
 //   - `setChannelRole`/`setChannelType`. Those write per-DATASET channel
 //     config (`Dataset.channelRoles`/`channelTypes`, which round-trip the
 //     `.dwk`), not view state, so they stay in useApp.ts beside the other

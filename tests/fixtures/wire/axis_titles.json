@@ -1,0 +1,411 @@
+{
+  "cases": [
+    {
+      "name": "plain titles",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              60
+            ],
+            [
+              3,
+              55
+            ],
+            [
+              4,
+              70
+            ]
+          ],
+          "labels": [
+            "M",
+            "T"
+          ],
+          "units": [
+            "emu",
+            "K"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 100,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "titles"
+      },
+      "drawn": {
+        "x": {
+          "size": null,
+          "bold": false,
+          "italic": false,
+          "offset": [
+            0,
+            0
+          ]
+        },
+        "y": {
+          "size": null,
+          "bold": false,
+          "italic": false,
+          "offset": [
+            0,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "Format: a bold 20 px y title and an italic 16 px x title",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              60
+            ],
+            [
+              3,
+              55
+            ],
+            [
+              4,
+              70
+            ]
+          ],
+          "labels": [
+            "M",
+            "T"
+          ],
+          "units": [
+            "emu",
+            "K"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 100,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "axis_label_styles": {
+          "x": {
+            "size": 16,
+            "italic": true
+          },
+          "y": {
+            "size": 20,
+            "bold": true
+          }
+        },
+        "transparent": false,
+        "filename": "titles"
+      },
+      "drawn": {
+        "x": {
+          "size": 16,
+          "bold": false,
+          "italic": true,
+          "offset": [
+            0,
+            0
+          ]
+        },
+        "y": {
+          "size": 20,
+          "bold": true,
+          "italic": false,
+          "offset": [
+            0,
+            0
+          ]
+        }
+      }
+    },
+    {
+      "name": "Drag: both titles moved",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              60
+            ],
+            [
+              3,
+              55
+            ],
+            [
+              4,
+              70
+            ]
+          ],
+          "labels": [
+            "M",
+            "T"
+          ],
+          "units": [
+            "emu",
+            "K"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 100,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "axis_label_offsets": {
+          "x": [
+            24,
+            -6
+          ],
+          "y": [
+            -8,
+            30
+          ]
+        },
+        "transparent": false,
+        "filename": "titles"
+      },
+      "drawn": {
+        "x": {
+          "size": null,
+          "bold": false,
+          "italic": false,
+          "offset": [
+            24,
+            -6
+          ]
+        },
+        "y": {
+          "size": null,
+          "bold": false,
+          "italic": false,
+          "offset": [
+            -8,
+            30
+          ]
+        }
+      }
+    },
+    {
+      "name": "Secondary axis: the y2 title formatted and moved",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              60
+            ],
+            [
+              3,
+              55
+            ],
+            [
+              4,
+              70
+            ]
+          ],
+          "labels": [
+            "M",
+            "T"
+          ],
+          "units": [
+            "emu",
+            "K"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y2_keys": [
+          1
+        ],
+        "y2_scale": "linear",
+        "y2_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 100,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "axis_label_styles": {
+          "y2": {
+            "size": 18,
+            "bold": true,
+            "italic": true
+          }
+        },
+        "axis_label_offsets": {
+          "y2": [
+            10,
+            -20
+          ]
+        },
+        "transparent": false,
+        "filename": "titles"
+      },
+      "drawn": {
+        "x": {
+          "size": null,
+          "bold": false,
+          "italic": false,
+          "offset": [
+            0,
+            0
+          ]
+        },
+        "y": {
+          "size": null,
+          "bold": false,
+          "italic": false,
+          "offset": [
+            0,
+            0
+          ]
+        },
+        "y2": {
+          "size": 18,
+          "bold": true,
+          "italic": true,
+          "offset": [
+            10,
+            -20
+          ]
+        }
+      }
+    }
+  ]
+}

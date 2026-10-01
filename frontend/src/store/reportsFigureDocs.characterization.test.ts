@@ -6,8 +6,8 @@
 // the two library-document collections — `reports`/`openReportId` and
 // `figureDocs`/`figureDocSeed` — through the REAL composed store: which fields
 // each one writes (and, with a poisoned snapshot, which it does NOT), whether
-// it pushes an undo entry (renames, duplicate and figure save do; add/remove
-// of a report and removing a figure do not — undo-coverage audit), whether it
+// it pushes an undo entry (every edit does; the undo audit later added one to
+// add/remove of a report and removing a figure, and updated those pins), whether it
 // records a macro step, what it sends to the trash, and one edge case each
 // (empty store, unknown id, missing dataset, frozen doc, a session already
 // open). They are the safety net for moving this cluster out of
@@ -192,17 +192,16 @@ describe("report sheets — addReport", () => {
     expect(useApp.getState().reports[0].datasetId).toBeNull();
   });
 
-  it("records NO undo entry and NO macro step (reports are artifacts, not view state)", () => {
+  it("records ONE undo entry and NO macro step (undo audit: its own step)", () => {
     const codes = withMacro(() => useApp.getState().addReport("a", sheet()));
-    expect(labels()).toEqual([]);
+    expect(labels()).toEqual(["add report"]);
     expect(codes).toEqual([]);
-    expect(useApp.getState().projectDirty).toBe(false);
   });
 
-  it("writes ONLY reports/openReportId/status", () => {
+  it("writes ONLY reports/openReportId/status plus its own undo entry", () => {
     const before = poisonedSnapshot();
     useApp.getState().addReport("a", sheet());
-    expect(changedKeys(before)).toEqual(["openReportId", "reports", "status"]);
+    expect(changedKeys(before)).toEqual(["future", "history", "openReportId", "reports", "status"]);
   });
 });
 
@@ -246,18 +245,18 @@ describe("report sheets — removeReport", () => {
     expect(useApp.getState().trash).toEqual([]);
   });
 
-  it("records no undo entry — the trash IS the recovery path", () => {
+  it("records one undo entry AND trashes (undo audit: the dataset model)", () => {
     useApp.getState().addReport("a", sheet());
     useApp.setState({ history: [], future: [] });
     useApp.getState().removeReport(useApp.getState().reports[0].id);
-    expect(labels()).toEqual([]);
+    expect(labels()).toEqual(["delete report"]);
   });
 
-  it("writes ONLY reports and trash (the filter re-creates the array either way)", () => {
+  it("writes ONLY reports and trash plus its own undo entry", () => {
     useApp.getState().addReport("a", sheet());
     const before = poisonedSnapshot();
     useApp.getState().removeReport(useApp.getState().reports[0].id);
-    expect(changedKeys(before)).toEqual(["reports", "trash"]);
+    expect(changedKeys(before)).toEqual(["future", "history", "reports", "trash"]);
   });
 });
 
@@ -278,6 +277,7 @@ describe("report sheets — renameReport / setOpenReport", () => {
 
   it("renameReport writes ONLY reports plus its own undo entry", () => {
     useApp.getState().addReport("a", sheet());
+    useApp.setState({ history: [], future: [] });
     const before = poisonedSnapshot();
     useApp.getState().renameReport(useApp.getState().reports[0].id, "b");
     expect(changedKeys(before)).toEqual(["future", "history", "reports"]);
@@ -401,11 +401,13 @@ describe("figure documents — removeFigureDoc", () => {
     expect(useApp.getState().figureDocSeed).toBe(d);
   });
 
-  it("writes ONLY figureDocs and trash", () => {
+  it("writes ONLY figureDocs and trash plus its own undo entry", () => {
     useApp.getState().addFigureDoc(fdoc("f1"));
+    useApp.setState({ history: [], future: [] });
     const before = poisonedSnapshot();
     useApp.getState().removeFigureDoc("f1");
-    expect(changedKeys(before)).toEqual(["figureDocs", "trash"]);
+    expect(changedKeys(before)).toEqual(["figureDocs", "future", "history", "trash"]);
+    expect(labels()).toEqual(["delete figure"]);
   });
 });
 
@@ -691,8 +693,9 @@ describe("figure documents — openFigureDocInWindow", () => {
         "yFmt",
         // P2.6 box 1: an object-valued PlotView field, so the fresh window's
         // view (`defaultPlotView().statMarks`, a new `{}`) changes its identity
-        // exactly as it does xFmt / yFmt's.
+        // exactly as it does xFmt / yFmt's. `statPicks` likewise.
         "statMarks",
+        "statPicks",
       ].sort(),
     );
   });

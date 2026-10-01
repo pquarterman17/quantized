@@ -5,7 +5,7 @@
 // here, so its importers are unchanged.
 
 import type { GroupNotice } from "../../lib/groupAxis";
-import type { StatMarksByMode, StatMarksMode } from "../../lib/plotviewSanitize";
+import type { StatMarksByMode, StatMarksMode, StatPicks } from "../../lib/plotviewSanitize";
 import type { ResolvedStatMarks, StatMarks } from "../../lib/statMarks";
 import type { StatMode } from "../../lib/statstage";
 import type { Dataset } from "../../lib/types";
@@ -46,6 +46,11 @@ export interface UseStatStageParams {
    *  itself (not persisted). */
   marks?: StatMarksByMode | null;
   onMarksChange?: (mode: StatMarksMode, patch: StatMarks, label?: string) => void;
+  /** The window's persisted `PlotView.statPicks` (plot type, columns, Q-Q /
+   *  histogram / bar options) and its writer — see `useStatStagePicks`.
+   *  Both absent = the hook keeps the picks itself (not persisted). */
+  picks?: StatPicks | null;
+  onPicksChange?: (update: (p: StatPicks) => StatPicks, label?: string) => void;
 }
 
 export interface StatStageState {
@@ -87,8 +92,8 @@ export interface StatStageState {
   marks: ResolvedStatMarks;
   setMarks: (patch: StatMarks, label?: string) => void;
   /** Box/Violin/Strip/Bar "facet by" column (GUI_INTERACTION #11) — null = no
-   *  facet (the ordinary single-panel draw). Internal picker state, not a
-   *  hook param: background windows never seed or set one (see the module
+   *  facet (the ordinary single-panel draw). A persisted pick
+   *  (`PlotView.statPicks`); background windows drop it (see the module
    *  doc). */
   facetCol: number | null;
   setFacetCol: (i: number | null) => void;

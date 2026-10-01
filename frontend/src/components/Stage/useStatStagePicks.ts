@@ -1,35 +1,44 @@
-// Stat Stage — WHICH COLUMNS are picked, and the three rules that govern them:
-// how they default per dataset, how a cross-panel "send to stage" overrides
-// them, and how a pick goes stale.
+// Stat Stage — WHAT IS PICKED: the plot type, the five column picks (group,
+// nested second group, value, facet, colour-by) and the Q-Q / histogram / bar
+// options, plus the three rules that govern the columns: how they default per
+// dataset, how a cross-panel "send to stage" overrides them, and how a pick
+// goes stale.
 //
 // Extracted from `useStatStage.ts` (Group R) because that hook sat exactly at
 // its 704-line pin and this is the cohesive unit the nested second factor
-// touches. The rules belong together because they all govern the SAME four
-// picks, and the first two are ORDER-DEPENDENT:
+// touches.
 //
-//   * the per-dataset reset must be declared BEFORE the seed effect, so a
-//     "send to stage" targeting the SAME dataset wins (both fire in the same
-//     commit; the later effect's writes land last). That ordering was a
-//     deliberate choice in the original hook and is preserved verbatim here —
-//     which is most of why the two moved together rather than one at a time.
-//   * the staleness mask then reads over the top of whatever they left. It is
+// PERSISTED PER WINDOW (2026-10-01). The picks are the window's
+// `PlotView.statPicks` (sanitized on load by `lib/plotviewSanitize`), so they
+// ride every window snapshot, undo entry and `.dwk`. They used to be
+// `useState` here, and File ▸ Save workspace + reopen came back in box mode
+// with default columns. The caller passes the saved picks and a writer (the
+// focused stage: the live store field and `store/statLevelOptions.
+// setStatPicks`; a background window: its own view's picks, no writer).
+// With neither, the hook keeps them itself (a bare hook in a test).
+//
+// The columns are DERIVED, not reset. They used to be reset to the dataset's
+// defaults by an effect on `active?.id`, which also ran on the first render
+// after a reopen and would have wiped what the file restored. Now a saved
+// column is `[index, label]`, and `lib/statPicks.resolveStatCols` resolves the
+// set against whatever dataset is showing: kept while every saved column is
+// still there, the dataset's defaults otherwise (and while nothing is saved).
+// The reset's own reason (an index from another dataset names a different
+// column) is exactly the case the label check catches.
+//
+//   * the seed: a "send to stage" writes ALL the column picks at once,
+//     labelled from the dataset showing when it lands, so it always wins.
+//   * the staleness mask then reads over the top of the resolved picks. It is
 //     pure and writes nothing (`lib/statstage.maskStaleCategoricalPicks`),
 //     which is exactly why the RAW picks survive an override being reverted.
 //
-// `mode` lives here too, because the seed sets it in the same breath as the
-// columns and splitting them would put half of one write in each file.
-//
-// NOT extracted: `dist`/`bins`/`fit`/`barStack` and the box/strip mark toggles.
-// Those are per-mode display options that no reset, seed, or mask touches.
+// NOT here: the box/strip mark toggles (`PlotView.statMarks`, per mode).
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import {
-  categoricalChannels,
-  firstValueChannel,
-  maskStaleCategoricalPicks,
-  type StatMode,
-} from "../../lib/statstage";
+import type { StatPicks } from "../../lib/plotviewSanitize";
+import { defaultStatCols, resolveStatCols, statColRef, statColRefs, type StatCols } from "../../lib/statPicks";
+import { maskStaleCategoricalPicks, type StatMode } from "../../lib/statstage";
 import type { Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
 
@@ -54,6 +63,14 @@ export interface StatStagePicks {
   effectiveGroupCol: number | null;
   effectiveGroup2Col: number | null;
   effectiveFacetCol: number | null;
+  dist: string;
+  setDist: (d: string) => void;
+  bins: string;
+  setBins: (b: string) => void;
+  fit: string | null;
+  setFit: (f: string | null) => void;
+  barStack: boolean;
+  setBarStack: (s: boolean) => void;
 }
 
 export interface UseStatStagePicksParams {
@@ -64,53 +81,69 @@ export interface UseStatStagePicksParams {
   categoricalCols: readonly { index: number }[];
   seed: StatStageSeed | null;
   onSeedConsumed: () => void;
+  /** The window's saved picks, and the writer that maps them to the next
+   *  (persisted + one undo entry). Both absent = hook-local picks. */
+  picks?: StatPicks | null;
+  onPicksChange?: (update: (p: StatPicks) => StatPicks, label?: string) => void;
 }
 
 export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePicks {
-  const { active, categoricalCols, seed, onSeedConsumed } = params;
+  const { active, categoricalCols, seed, onSeedConsumed, onPicksChange } = params;
 
-  const [mode, setMode] = useState<StatMode>("box");
-  const [groupCol, setGroupColState] = useState<number | null>(null);
-  // Nested second factor (Group R) — internal picker state like `facetCol`,
-  // never a hook param: background windows have no picker and never set one.
-  const [group2Col, setGroup2ColState] = useState<number | null>(null);
-  const [valueCol, setValueCol] = useState<number>(0);
-  // Facet column (GUI_INTERACTION #11) — internal picker state, NOT a hook
-  // param: background windows (params.seed === null) have no facet Picker
-  // and never call setFacetCol, so they simply never facet.
-  const [facetCol, setFacetColState] = useState<number | null>(null);
-  const [colorCol, setColorCol] = useState<number | null>(null);
+  const [localPicks, setLocalPicks] = useState<StatPicks>({});
+  const picks = params.picks ?? localPicks;
+  // A write that changes nothing hands back the SAME object, which both
+  // writers treat as a no-op (no re-render, no undo entry): the seed effect
+  // re-runs whenever its callback identity changes, and must settle.
+  const write = useCallback(
+    (update: (p: StatPicks) => StatPicks, label?: string) => {
+      const settled = (p: StatPicks) => {
+        const next = update(p);
+        return JSON.stringify(next) === JSON.stringify(p) ? p : next;
+      };
+      if (onPicksChange) onPicksChange(settled, label);
+      else setLocalPicks(settled);
+    },
+    [onPicksChange],
+  );
 
-  // Re-derive the default picks whenever the active dataset changes — a
-  // channel index from the PREVIOUS dataset would silently mis-group.
-  useEffect(() => {
-    const cats = categoricalChannels(active);
-    const g = cats[0] ?? null;
-    setGroupColState(g);
-    setValueCol(firstValueChannel(active, g ?? -999));
-    setGroup2ColState(null);
-    setFacetColState(null);
-    setColorCol(null);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active?.id]);
+  // The defaults are fixed per dataset ID, as the old reset fixed them: a
+  // channelTypes override on the same dataset must leave the default group
+  // alone for the staleness mask below to hide, not move it to another column.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const defaults = useMemo(() => defaultStatCols(active), [active?.id]);
+  const cols = useMemo(() => resolveStatCols(active, picks.cols, defaults), [active, picks.cols, defaults]);
+
+  // One column pick: re-resolve the CURRENT saved set (not this render's) so
+  // two picks in one tick compose, then save all five labelled from `active`.
+  const setCol = (key: keyof StatCols) => (i: number | null) =>
+    write((p) => {
+      const now = statColRefs(active, resolveStatCols(active, p.cols, defaults));
+      return { ...p, cols: { ...now, [key]: i == null ? null : statColRef(active, i) } };
+    }, "pick statistics column");
+  const setPick = <K extends "mode" | "dist" | "bins" | "fit" | "barStack">(key: K) => (v: StatPicks[K]) =>
+    write((p) => ({ ...p, [key]: v }), "change statistics plot");
 
   // Cross-panel hook: the Graph Builder hands over the mode + pickers for a
-  // box/violin/bar spec it "sent to stage" (mirrors the reflectivity SLD
-  // seed). Declared AFTER the active-id reset so a same-dataset send wins.
+  // box/violin/bar spec it "sent to stage" (mirrors the reflectivity SLD seed).
   useEffect(() => {
     if (!seed) return;
-    setMode(seed.mode);
-    setGroupColState(seed.groupCol);
-    setValueCol(seed.valueCol);
     // CLEARED unless sent, not left alone: a `StatStageSeed` fully specifies
     // its grouping. Its only second factor is a Color pick on another column
     // (P1.4), which nests the plot by that column; leaving a previously picked
     // nest in place would split the sent plot by a column the sender never named.
-    setGroup2ColState(seed.group2Col ?? null);
-    setFacetColState(seed.facetCol ?? null);
-    setColorCol(seed.colorCol ?? null);
+    const sent: StatCols = {
+      group: seed.groupCol,
+      group2: seed.group2Col ?? null,
+      value: seed.valueCol,
+      facet: seed.facetCol ?? null,
+      color: seed.colorCol ?? null,
+    };
+    write((p) => ({ ...p, mode: seed.mode, cols: statColRefs(active, sent) }), "send to statistics");
     onSeedConsumed();
-  }, [seed, onSeedConsumed]);
+    // `active` only labels the sent columns: a dataset change must not re-send.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [seed, onSeedConsumed, write]);
 
   // BUG-004 (BUGS_AND_ISSUES.md): mask a stale groupCol/group2Col pick back to
   // null once its column stops reading as categorical (a channelTypes override
@@ -118,23 +151,31 @@ export function useStatStagePicks(params: UseStatStagePicksParams): StatStagePic
   // and the grouping math, not display-only. `facetCol` is deliberately NOT
   // masked. See lib/statstage.ts's maskStaleCategoricalPicks for the full
   // reasoning, including why the two behave differently.
-  const effective = maskStaleCategoricalPicks(groupCol, facetCol, categoricalCols, group2Col);
+  const effective = maskStaleCategoricalPicks(cols.group, cols.facet, categoricalCols, cols.group2);
 
   return {
-    mode,
-    setMode,
-    groupCol,
-    setGroupCol: setGroupColState,
-    group2Col,
-    setGroup2Col: setGroup2ColState,
-    valueCol,
-    setValueCol,
-    facetCol,
-    setFacetCol: setFacetColState,
-    colorCol,
-    setColorCol,
+    mode: picks.mode ?? "box",
+    setMode: setPick("mode"),
+    groupCol: cols.group,
+    setGroupCol: setCol("group"),
+    group2Col: cols.group2,
+    setGroup2Col: setCol("group2"),
+    valueCol: cols.value,
+    setValueCol: setCol("value"),
+    facetCol: cols.facet,
+    setFacetCol: setCol("facet"),
+    colorCol: cols.color,
+    setColorCol: setCol("color"),
     effectiveGroupCol: effective.groupCol,
     effectiveGroup2Col: effective.group2Col,
     effectiveFacetCol: effective.facetCol,
+    dist: picks.dist ?? "norm",
+    setDist: setPick("dist"),
+    bins: picks.bins ?? "fd",
+    setBins: setPick("bins"),
+    fit: picks.fit ?? null,
+    setFit: setPick("fit"),
+    barStack: picks.barStack ?? false,
+    setBarStack: setPick("barStack"),
   };
 }

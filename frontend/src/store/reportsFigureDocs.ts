@@ -49,12 +49,14 @@
 //
 // Characterization tests: store/reportsFigureDocs.characterization.test.ts
 // pins every action below — the fields written (and, against a poisoned
-// snapshot, the ones NOT written), that none of the twelve pushes an undo
-// entry, the single macro step, what reaches the trash, and an edge case each.
-// They were written and run GREEN against the pre-extraction code in
-// useApp.ts, and pass BYTE-UNCHANGED against this module. The thirteenth,
-// `updateReportSheet` (P3.6, added after the extraction), DOES record one undo
-// entry by design — pinned in store/reportFigureBlocks.test.ts.
+// snapshot, the ones NOT written), which push an undo entry, the single macro
+// step, what reaches the trash, and an edge case each. They were written and
+// run GREEN against the pre-extraction code in useApp.ts, and passed
+// BYTE-UNCHANGED against this module. `updateReportSheet` (P3.6, added after
+// the extraction) records one undo entry, pinned in
+// store/reportFigureBlocks.test.ts; the undo audit later made `addReport`,
+// `removeReport` and `removeFigureDoc` record one too, pinned in
+// store/reportsFigureDocsUndo.test.ts.
 
 import { docRenderable, type FigureDoc } from "../lib/figuredoc";
 import { lit } from "../lib/macro";
@@ -77,8 +79,7 @@ export interface ReportsFigureDocsSlice {
    *  figure sent from the plot, a block moved or removed in the viewer).
    *  `edit` runs against the store's live sheet, never a caller's stale
    *  copy, so back-to-back edits compose. Records history, like the
-   *  renames, duplicate and figure save below; add and remove do not (a
-   *  removed report is recovered from the trash). Returns
+   *  renames, duplicate, figure save, add and remove below. Returns
    *  whether anything changed: an unknown id, or `edit` returning `null`
    *  (nothing to do), writes and records nothing. */
   updateReportSheet: (
@@ -111,7 +112,9 @@ export function createReportsFigureDocsSlice(set: SliceSet, get: SliceGet): Repo
   return {
     // Report sheets (#36). Adding opens the viewer on the new report so the
     // producing workshop's "→ Report" lands somewhere visible immediately.
-    addReport: (name, report, datasetId) =>
+    // Its own undo step (undo audit): without one, Ctrl+Z after a send
+    // reverted the PREVIOUS edit and took the new report with it.
+    addReport: (name, report, datasetId) => (get().recordHistory("add report"),
       set((s) => {
         const entry: ReportEntry = {
           id: nextReportId(),
@@ -124,7 +127,7 @@ export function createReportsFigureDocsSlice(set: SliceSet, get: SliceGet): Repo
           openReportId: entry.id,
           status: `report "${name}" created`,
         };
-      }),
+      })),
     removeReport: (id) => removeReportWithTrash(get, set, id),
     renameReport: (id, name) => (get().recordHistory("rename report"),
       set((s) => ({

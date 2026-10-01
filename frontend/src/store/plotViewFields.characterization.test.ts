@@ -44,6 +44,7 @@ const INITIAL = {
   statShowGroupN: true,
   statShowSummary: false,
   statMarks: {},
+  statPicks: {},
   xLim: null,
   yLim: null,
   xStep: null,

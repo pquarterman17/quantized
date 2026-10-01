@@ -96,6 +96,10 @@ export function markerPaths(
   };
 }
 
+/** The canvas' marker size (CSS px) when a series names none. The export sends
+ *  it verbatim as `marker_size` for a default-trace marker. */
+export const DEFAULT_MARKER_PX = 5;
+
 /**
  * Whether a series draws markers, and WHICH GLYPH — the one rule the canvas
  * (`seriesPoints` below) and the legend swatch (`Stage/LegendSample.tsx`) both
@@ -108,12 +112,10 @@ export function markerPaths(
  * The publication export is NOT a third caller, and stating it as one would
  * overstate the agreement. `exportStyles.buildExportStyles` shares only the
  * EXPLICIT half of this rule (`if (st?.marker)`); it has no `defaultTrace` to
- * consult. The LIVE Stage export (Export / Copy figure) lays the trace over its
- * request afterwards (`exportDefaultTrace.withDefaultTrace`) as a plain circle;
- * every other export path (saved documents, pages, the Figure Builder) still
- * draws an ambient `Scatter` / `Line + markers` series without markers. That is
- * WHY the default-trace branch below must not cycle a glyph: the wire carries
- * no glyph for it to follow.
+ * consult. Every export builder lays the trace over its request afterwards
+ * (`exportDefaultTrace.withDefaultTrace`) as a plain circle of
+ * `DEFAULT_MARKER_PX`. That is WHY the default-trace branch below must not
+ * cycle a glyph: the wire carries no glyph for it to follow.
  *
  * The two branches are SEPARATE on purpose. An explicit `marker` honours
  * `markerShape`/`markerSize` — and, via `seriesStyleCycle.resolveSeriesStyle`,
@@ -131,9 +133,9 @@ export function markerDecision(
   trace: DefaultTrace,
 ): { show: boolean; shape: MarkerShape; size: number } {
   if (style?.marker) {
-    return { show: true, shape: style.markerShape ?? "circle", size: style.markerSize ?? 5 };
+    return { show: true, shape: style.markerShape ?? "circle", size: style.markerSize ?? DEFAULT_MARKER_PX };
   }
-  return { show: trace === "Scatter" || trace === "Line + markers", shape: "circle", size: 5 };
+  return { show: trace === "Scatter" || trace === "Line + markers", shape: "circle", size: DEFAULT_MARKER_PX };
 }
 
 /**

@@ -299,16 +299,16 @@ describe("deleteEditableFigure — captures into trash", () => {
   });
 });
 
-describe("removeFigureDoc — captures into trash (records no undo entry)", () => {
+describe("removeFigureDoc — captures into trash and records one undo step", () => {
   beforeEach(() => {
     useApp.setState({ datasets: [ds("d1")], figureDocs: [legacyDoc("g1", "d1")], trash: [], history: [], future: [] });
   });
 
-  it("moves the deleted doc into trash and out of the library, without touching undo history", () => {
+  it("moves the deleted doc into trash and out of the library as one undo step", () => {
     useApp.getState().removeFigureDoc("g1");
     expect(useApp.getState().figureDocs).toHaveLength(0);
     expect(trashEntryId(useApp.getState().trash[0])).toBe("figureDoc:g1");
-    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().history.map((h) => h.label)).toEqual(["delete figure"]);
   });
 });
 
@@ -510,11 +510,11 @@ describe("restoreFromTrash — report", () => {
     id: "rep-1", name: "Report", datasetId: "d1", report: { title: "R", sections: [] },
   });
 
-  it("captures a removed report (no undo entry) and restores it as-is", async () => {
+  it("captures a removed report (one undo step) and restores it as-is", async () => {
     useApp.setState({ reports: [rep()], openReportId: "rep-1", trash: [], history: [], future: [] });
     useApp.getState().removeReport("rep-1");
     expect(useApp.getState().reports).toHaveLength(0);
-    expect(useApp.getState().history).toHaveLength(0);
+    expect(useApp.getState().history.map((h) => h.label)).toEqual(["delete report"]);
     expect(trashEntryId(useApp.getState().trash[0])).toBe("report:rep-1");
 
     await expect(useApp.getState().restoreFromTrash("report:rep-1")).resolves.toEqual({ ok: true });

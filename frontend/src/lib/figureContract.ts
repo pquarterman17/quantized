@@ -72,6 +72,10 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   statShowGroupN: canonical("plot.stat.showGroupN"),
   statShowSummary: canonical("plot.stat.showSummary"),
   statMarks: canonical("plot.stat.marks"),
+  statPicks: canonical(
+    "plot.stat.picks",
+    "Plot type, columns (saved as [index, label] and re-checked against the dataset on read) and Q-Q/histogram/bar options.",
+  ),
   xLim: canonical("axes.x.limits"),
   yLim: canonical("axes.y.limits"),
   xStep: canonical("axes.x.step"),
@@ -189,6 +193,10 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
     "bindings.facet.channel",
     "F4.4 (export half): the resolved per-panel row partition of bindings.facet.channel, built at render time by lib/figureSpec.ts's buildFacetSpecs -- not a second source of the binding itself.",
   ),
+  polar: derived(
+    null,
+    "Built at request time from the live polar view (lib/polarFigureSpec.ts): the canvas' angle convention, radial range and rings. PlotView.polarMode is the only state; nothing here is stored on the document.",
+  ),
   excluded_rows: derived(
     null,
     "F4.2c (a): the live dataset's excluded and filter-dropped rows, read at render time from its row state (lib/rowstate.droppedRows) for an encoded request only -- the document stores no row mask.",
@@ -220,6 +228,8 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
     "P2.3: each plotted series' whole-decade offset, read at render time from its canonical series style (SeriesStyle.logOffset, lib/logOffset.ts) -- not a second copy of it. Nothing here is stored on the document.",
   ),
   overrides: derived(null, "Flatten canonical axes, legend, decor, and page state only at render time."),
+  axis_label_styles: derived("axes.labelStyles"),
+  axis_label_offsets: derived("axes.labelOffsets"),
   filename: output("output.filename"),
   greyscale: unsupported(
     "P3.3 review (F9): unlike its closest analogue transparent (also export-only, but classified output/output.transparent above), greyscale is deliberately kept OUT of FigureDocument.output -- re-chosen every export rather than saved with the document, so a print-safe PDF and the coloured screen view it came from never disagree about which one 'the' figure is. This is a deliberate CHOICE not to add an output.greyscale field, not an inherent property of export-only fields in general -- reclassify as output('output.greyscale') if that choice is ever revisited.",

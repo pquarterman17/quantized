@@ -51,6 +51,7 @@ from quantized.routes._export_common import (
     _safe_name,
 )
 from quantized.routes._offloop import OffloopJSONRoute
+from quantized.routes.export_figures_axis_titles import AxisTitleFields, request_overrides
 from quantized.routes.export_figures_encoded import (
     ExcludedRowsFields,
     FigureEncoding,
@@ -68,6 +69,7 @@ from quantized.routes.export_figures_labels import (
     series_names,
     solo_axis_label,
 )
+from quantized.routes.export_figures_polar import PolarFields, refuse_polar, render_polar_request
 from quantized.routes.export_figures_schema import (
     LOG_OFFSETS_DOC,
     SERIES_STYLES_DOC,
@@ -84,7 +86,7 @@ from quantized.routes.export_figures_schema import (
 router = APIRouter(prefix="/api/export", tags=["export"], route_class=OffloopJSONRoute)
 
 
-class FigureRequest(CachedDatasetRequest, ExcludedRowsFields):
+class FigureRequest(CachedDatasetRequest, ExcludedRowsFields, AxisTitleFields, PolarFields):
     # `dataset`/`dataset_handle` come from CachedDatasetRequest; only
     # /figure-hitmap caches a posted dataset (see _request_dataset).
     x_key: int | str | None = None
@@ -266,6 +268,7 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
     never assigns a grouped series to the secondary axis, so there's no
     sound semantic to invent for the combination). ``ds`` is the already-
     resolved dataset when the caller has one (the preview route)."""
+    refuse_polar(req)  # no polar renderer on /figure-hitmap or a page panel
     if ds is None:
         ds = _request_dataset(req)
 
@@ -352,6 +355,8 @@ def render_figure_request(req: FigureRequest, *, fmt: str, dpi: int) -> bytes:
     SVG of one spec). Raises the ``CALC_ERRORS_WITH_LOCK`` family; the caller
     maps them (``/figure`` -> 422/503, the report -> a named placeholder)."""
     dpi = max(_DPI_MIN, min(_DPI_MAX, dpi))
+    if req.polar is not None:  # calc.figure_polar, not an XY figure
+        return render_polar_request(req, fmt=fmt, dpi=dpi)
     if req.facets:
         return _render_facets_bytes(req, _figure_series(req), dpi=dpi, fmt=fmt)
     with heavy_imports("quantized.calc.figure"):
@@ -377,7 +382,7 @@ def render_figure_request(req: FigureRequest, *, fmt: str, dpi: int) -> bytes:
         dpi=dpi,
         transparent=req.transparent,
         greyscale=req.greyscale,
-        overrides=req.overrides,
+        overrides=request_overrides(req),
         x_fmt=_tick_fmt(req.x_fmt),
         y_fmt=_tick_fmt(req.y_fmt),
         x_step=req.x_step,
@@ -480,7 +485,7 @@ def _figure_hitmap(req: FigureRequest, response: Response, gone: threading.Event
                 series_styles=resolved.styles,
                 dpi=dpi,
                 greyscale=req.greyscale,
-                overrides=req.overrides,
+                overrides=request_overrides(req),
                 x_fmt=_tick_fmt(req.x_fmt),
                 y_fmt=_tick_fmt(req.y_fmt),
                 x_step=req.x_step,

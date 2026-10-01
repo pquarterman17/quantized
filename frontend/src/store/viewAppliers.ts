@@ -97,7 +97,8 @@ export interface ViewAppliersSlice {
   // `lib/facet.breakPayloads`) instead of partitioning by a category column.
   // `breaks` is an explicit `[lo,hi]` override list; when omitted (or empty),
   // auto-detects via `lib/facet.suggestBreaks(xs, gapFactor)`. Activates
-  // `datasetId`, turns on `stackMode`, and replaces any prior `composition`.
+  // `datasetId`, turns on `stackMode`, and replaces any prior `composition`,
+  // as ONE "break at gaps" undo step.
   // No-op (with a toast) when the dataset is missing, has no
   // rows in the analysis view, or no qualifying gap/override breaks exist.
   breakAtGaps: (datasetId: string, breaks?: [number, number][], gapFactor?: number) => void;
@@ -433,15 +434,21 @@ export function createViewAppliersSlice(set: SliceSet, get: SliceGet): ViewAppli
         toast("not enough data on both sides of a break to panel", "danger");
         return;
       }
-      get().setActive(datasetId);
-      // F4.4 review L1: clear the durable `facetKey` binding too -- a prior
-      // `facetByColumn` on this SAME dataset leaves it set, and `setActive`
-      // only resets it on a genuine dataset switch (`datasetViewDefaults`),
-      // never when re-targeting the dataset that's already active. Without
-      // this, a later focus round-trip resurrects the REPLACED facet grid
-      // instead of this break arrangement (`useEffectiveComposition`'s
-      // fallback reads facetKey whenever `composition` itself is null again).
-      set({ stackMode: true, composition, facetKey: null });
+      // ONE undo step, like `facetByColumn`: record before the rebind so the
+      // entry snapshots the pre-break state, and fold `setActive`'s own
+      // possible "create window" push (pinned focused window) into it.
+      asOneEditStep(get, "break at gaps", () => {
+        get().recordHistory("break at gaps");
+        get().setActive(datasetId);
+        // F4.4 review L1: clear the durable `facetKey` binding too -- a prior
+        // `facetByColumn` on this SAME dataset leaves it set, and `setActive`
+        // only resets it on a genuine dataset switch (`datasetViewDefaults`),
+        // never when re-targeting the dataset that's already active. Without
+        // this, a later focus round-trip resurrects the REPLACED facet grid
+        // instead of this break arrangement (`useEffectiveComposition`'s
+        // fallback reads facetKey whenever `composition` itself is null again).
+        set({ stackMode: true, composition, facetKey: null });
+      });
       get().recordMacro(`Break x-axis at gaps`, `qz.breakAtGaps(${lit(datasetId)})`);
     },
   };

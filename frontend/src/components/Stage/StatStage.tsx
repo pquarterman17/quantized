@@ -16,7 +16,7 @@ import type { ReactNode } from "react";
 import { useState } from "react";
 
 import type { StatMode } from "../../lib/statstage";
-import { setStatHideEmptyLevels, setStatMarks, setStatShowGroupN, setStatShowSummary } from "../../store/statLevelOptions";
+import { setStatHideEmptyLevels, setStatMarks, setStatPicks, setStatShowGroupN, setStatShowSummary } from "../../store/statLevelOptions";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { Checkbox } from "../primitives/Checkbox";
 import { SegmentedControl } from "../primitives/SegmentedControl";
@@ -61,6 +61,7 @@ export default function StatStage() {
   const showGroupN = useApp((s) => s.statShowGroupN);
   const showSummary = useApp((s) => s.statShowSummary); // box 4's table, persisted likewise
   const marks = useApp((s) => s.statMarks); // P2.6 box 1, persisted likewise
+  const picks = useApp((s) => s.statPicks); // plot type, columns, options — persisted likewise
   const st = useStatStage({
     active,
     yKeys,
@@ -72,6 +73,8 @@ export default function StatStage() {
     showGroupN,
     marks,
     onMarksChange: setStatMarks,
+    picks,
+    onPicksChange: setStatPicks,
   });
   const categorical = st.mode === "box" || st.mode === "violin" || st.mode === "bar" || st.mode === "strip";
   // P2.6 box 4: the per-group summary table, linked both ways to the app's
