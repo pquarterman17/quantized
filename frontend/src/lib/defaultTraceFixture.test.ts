@@ -5,7 +5,9 @@
 // The canvas draws each series with no explicit style in the default trace;
 // every export used to ignore the preference, so an ambient Scatter plot
 // exported as lines, and a default-trace marker came out at the style
-// preset's size instead of the canvas' 5 px. Each case states what every
+// preset's size instead of the canvas' 5 px -- as did any marker with no
+// explicit size, under every trace (`exportStyles.toWireSeriesStyles` rule 3
+// now names it; see `marker_size_rule` in the fixture). Each case states what every
 // DRAWN series looks like (a connecting line? markers, at what size? a step?)
 // and the canvas half reads that back out of the real `buildOpts` options
 // object; the request half asserts the exact request the Stage sends says the
@@ -102,8 +104,10 @@ const BOTH: Drawn = { line: true, marker: true, size: 5, step: null };
 const STEP: Drawn = { line: true, marker: false, size: null, step: "post" };
 
 /** The style a Graph Builder mark commits to a fresh series (`markSeriesStyle`). */
-function mark(m: PlotMark): SeriesStyle {
-  return markSeriesStyle({ version: 1, mark: m, zones: { x: null, y: [], group: null, facet: null, yErr: [], xErr: null } });
+function mark(m: PlotMark, showMarkers?: boolean): SeriesStyle {
+  return markSeriesStyle({
+    version: 1, mark: m, showMarkers, zones: { x: null, y: [], group: null, facet: null, yErr: [], xErr: null },
+  });
 }
 
 const CASES: Case[] = [
@@ -179,6 +183,46 @@ const CASES: Case[] = [
     view: { yKeys: [0] },
     split: { encoding: { color: 2 } },
     drawn: [DOTS, DOTS],
+  },
+  // A marker with no `markerSize` (the Inspector's Markers box, its Scatter
+  // trace, a Graph Builder mark with markers) draws at the canvas' 5 px on any
+  // preset, so it exports at 5 pt too (`fresh().marker_size_rule`).
+  {
+    name: "Line: a sizeless Inspector marker is the canvas' 5 px on a smaller-marker preset",
+    trace: "Line",
+    view: { yKeys: [0, 1], seriesStyles: { 0: { marker: true }, 1: { width: 0, marker: true } } },
+    style: "aps",
+    drawn: [BOTH, DOTS],
+  },
+  {
+    name: "Line: an explicit marker size wins",
+    trace: "Line",
+    view: { yKeys: [0], seriesStyles: { 0: { marker: true, markerSize: 9 } } },
+    style: "aps",
+    drawn: [{ ...BOTH, size: 9 }],
+  },
+  {
+    name: "Line: Graph Builder Line + markers and Scatter marks are the canvas' 5 px",
+    trace: "Line",
+    view: { yKeys: [0, 1], seriesStyles: { 0: mark("line", true), 1: mark("scatter") } },
+    style: "poster",
+    drawn: [BOTH, DOTS],
+  },
+  {
+    name: "Facet grid: a sizeless Inspector marker in every panel",
+    trace: "Line",
+    view: { yKeys: [0, 1], seriesStyles: { 0: { marker: true } } },
+    style: "aps",
+    split: { facetKey: 2 },
+    drawn: [BOTH, LINE, BOTH, LINE],
+  },
+  {
+    name: "Color-by encoding: a sizeless Inspector marker on every level",
+    trace: "Line",
+    view: { yKeys: [0], seriesStyles: { 0: { marker: true } } },
+    style: "aps",
+    split: { encoding: { color: 2 } },
+    drawn: [BOTH, BOTH],
   },
 ];
 
@@ -285,6 +329,10 @@ function otherBuilders(c: Case): [string, FigureSpec | null][] {
 
 function fresh() {
   return {
+    marker_size_rule:
+      "A marker with no explicit size exports at the canvas' DEFAULT_MARKER_PX (5 px, sent as 5 pt), never the "
+      + "style preset's marker_size, the px-as-points rule an explicit width or marker size already follows. "
+      + "The preset value stays the backend default only for a request that names no size (an API or CLI caller).",
     cases: CASES.map((c) => ({ name: c.name, trace: c.trace, request: request(c), drawn: c.drawn })),
   };
 }

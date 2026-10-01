@@ -195,12 +195,12 @@ describe("useFigureBuilder", () => {
     const { result } = renderHook(() => useFigureBuilder());
     await waitFor(() => expect(result.current.preview).not.toBeNull());
     const preview = vi.mocked(renderFigureHitmap).mock.calls.at(-1)?.[0];
-    expect(preview?.series_styles).toEqual([{ color: "#123456", line: "none", marker: true }]);
+    expect(preview?.series_styles).toEqual([{ color: "#123456", line: "none", marker: true, marker_size: 5 }]);
     expect(useApp.getState().figureDocSeed).toBeNull();
 
     await act(async () => result.current.exportNow());
     expect(vi.mocked(exportFigure).mock.calls.at(-1)?.[0].series_styles).toEqual([
-      { color: "#123456", line: "none", marker: true },
+      { color: "#123456", line: "none", marker: true, marker_size: 5 },
     ]);
   });
 

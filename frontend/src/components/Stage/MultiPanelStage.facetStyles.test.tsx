@@ -156,7 +156,7 @@ describe("MultiPanelStage — per-channel styles on an unencoded facet grid (FEA
     const request = buildFigureSpecFromDocument(doc, DS, "fs", OPTS);
     expect(request.facets?.map((f) => f.series.map((s) => s.style ?? null))).toEqual([
       [null, { color: "#ff8800", line: "dashed", width: 3 }],
-      [null, { marker: true, marker_shape: "square" }],
+      [null, { marker: true, marker_shape: "square", marker_size: 5 }],
     ]);
     expect(request.encoding).toBeUndefined();
 

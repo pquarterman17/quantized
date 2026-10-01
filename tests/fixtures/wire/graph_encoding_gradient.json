@@ -129,7 +129,8 @@
     "series_styles": [
       {
         "line": "none",
-        "marker": true
+        "marker": true,
+        "marker_size": 5
       }
     ],
     "overrides": {

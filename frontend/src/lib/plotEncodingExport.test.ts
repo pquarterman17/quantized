@@ -134,7 +134,7 @@ describe("Graph Builder encoded export — screen parity", () => {
     const req = encodedFigureSpec(encodeSpec(SPEC, [DS])!, SPEC, "encoding", OPTS);
     expect(req.encoding).toMatchObject({ color_col: 1, symbol_col: 2, label_col: 3, markers: [...AUTO_MARKER_CYCLE] });
     expect(req.group_col).toBeUndefined();
-    expect(req.series_styles).toEqual([{ line: "none", marker: true }]);
+    expect(req.series_styles).toEqual([{ line: "none", marker: true, marker_size: 5 }]);
     expect(req.y_keys).toEqual([0]);
     expect(req.x_key).toBeUndefined();
   });

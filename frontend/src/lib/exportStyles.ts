@@ -4,6 +4,7 @@
 // straight from the per-channel overrides. Aligns 1:1 with the route's y_keys.
 
 import { resolveToHex } from "./color";
+import { DEFAULT_MARKER_PX } from "./markers";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { SeriesStyle } from "./types";
 import { resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
@@ -122,7 +123,7 @@ export function buildExportStyles(
  * array through this: `figureSpecSeries.resolveSeriesPresentation` (the
  * canonical document path, both the derived and the PINNED branch),
  * `figurebuilder/legacyFigure.buildLegacyFigureSpec`, and
- * `spatialPageExport`. It does two things, and the first is why it exists.
+ * `spatialPageExport`. It does three things, and the first is why it exists.
  *
  * 1. A GROUPED request never sends a DERIVED colour. The backend expands each
  *    `y_keys`-aligned entry onto one synthetic series per LEVEL of the group
@@ -174,6 +175,18 @@ export function buildExportStyles(
  * do NOT retire it: the sanitizers deliberately add nothing
  * (`publicationStyles.sanitizeExportSeriesStyles`).
  *
+ * 3. A marker with no `marker_size` (an Inspector "Markers" box or Scatter
+ *    trace, a Graph Builder Line + markers / Scatter mark, a pinned or imported
+ *    array) is sent at `markers.DEFAULT_MARKER_PX`, the size the canvas draws
+ *    it, instead of leaving the backend to fall back to the style preset's
+ *    `marker_size` (4 pt on "aps", 10 on "poster"). Screen px are read as
+ *    points, the rule an explicit width or marker size already follows, and
+ *    the rule `exportDefaultTrace` applies to a default-trace marker. Done here,
+ *    not in `buildExportStyles`, so a stored document keeps "no size" and
+ *    every producer of the wire field gets it. A `color_by` entry is left
+ *    alone (a colour-mapped scatter, sized by its own path on both sides).
+ *    Shared fixture: `tests/fixtures/wire/default_trace.json`.
+ *
  * Every OTHER array reaching this boundary was minted by a producer that
  * records provenance: `buildExportStyles` above (so the Figure Builder pin,
  * the Graph Builder handoff through `plotSpecFigure.stylesForMark`,
@@ -198,11 +211,14 @@ export function toWireSeriesStyles(
     // rule is deliberately the same for a flag that was never written and one
     // that was dropped as malformed: neither is the document's word.
     const dropColor = grouped && style.color !== undefined && (provenance ?? true);
-    if (provenance === undefined && !dropColor) return style;
+    // Rule 3: a sizeless marker is named at the canvas' size.
+    const sizeless = style.marker === true && style.marker_size == null && style.color_by == null;
+    if (provenance === undefined && !dropColor && !sizeless) return style;
     changed = true;
     const rest: ExportSeriesStyle = { ...style };
     delete rest.colorDerived;
     if (dropColor) delete rest.color;
+    if (sizeless) rest.marker_size = DEFAULT_MARKER_PX;
     // An emptied entry collapses to `null`, not `{}` — `buildExportStyles`'
     // own trailing rule, and the shape the backend reads as "no styling".
     return Object.keys(rest).length > 0 ? rest : null;

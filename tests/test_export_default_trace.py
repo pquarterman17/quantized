@@ -5,8 +5,9 @@ export, the BACKEND half.
 drawn series looks like on the canvas (connecting line, markers and their
 size, step-after) beside the exact request the live Stage export sends -- a
 flat, facet-grid or Color-by request. matplotlib must draw each exported
-series the same way: a default-trace marker at the canvas' size, not the style
-preset's.
+series the same way: a default-trace marker, and any marker with no explicit
+size (Inspector, Graph Builder mark), at the canvas' size, not the style
+preset's (the fixture's ``marker_size_rule``).
 """
 
 from __future__ import annotations
