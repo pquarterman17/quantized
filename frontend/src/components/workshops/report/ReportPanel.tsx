@@ -239,11 +239,11 @@ export default function ReportPanel() {
         <span style={{ flex: 1 }} />
         <Button
           onClick={() => {
-            // A saved report is accumulated analysis output and
-            // `removeReport` records no undo entry.
+            // A saved report is accumulated analysis output; `removeReport`
+            // records one undo step and moves it to the Trash.
             void askConfirm(
               `Delete report "${entry.name}"?`,
-              "This can't be undone.",
+              "It moves to the Trash, and Undo brings it back.",
               "Delete",
               true,
             ).then((ok) => {
