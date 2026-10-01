@@ -18,7 +18,8 @@ from numpy.typing import NDArray
 
 from quantized.calc.dream_seed import DreamCancelled
 from quantized.calc.refl_fit import channel_model
-from quantized.calc.refl_model import ReflChannel, ReflParams, layer_stack
+from quantized.calc.refl_graded import ReflStack
+from quantized.calc.refl_model import ReflChannel, ReflParams
 from quantized.calc.sld import sld_profile
 
 __all__ = ["PERCENTILES", "posterior_bands"]
@@ -38,7 +39,7 @@ def _percentile_rows(stack: NDArray[np.float64]) -> dict[str, list[float]]:
 
 
 def posterior_bands(
-    params: ReflParams, chans: list[ReflChannel], masks: list[NDArray[np.bool_]], n_layers: int,
+    params: ReflParams, chans: list[ReflChannel], masks: list[NDArray[np.bool_]], stack: ReflStack,
     xs: NDArray[np.float64], sld_points: int, progress_callback: ProgressFn | None,
     abort_check: AbortFn | None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -54,9 +55,9 @@ def posterior_bands(
             progress_callback(0.95 + 0.04 * j / max(1, len(xs)))
         v = params.full(x)
         for c, m, acc in zip(chans, masks, models, strict=True):
-            acc.append(channel_model(c, params, v, n_layers, m))
+            acc.append(channel_model(c, params, v, stack, m))
         for s in spins:
-            z, sld = sld_profile(layer_stack(params, v, n_layers, s), n_points=sld_points)
+            z, sld = sld_profile(stack.build(params, v, s), n_points=sld_points)
             profiles[s].append((np.asarray(z, dtype=float), np.asarray(sld, dtype=float)))
     r_bands = [{
         "label": c.label, "spin": c.spin_label,
@@ -71,7 +72,7 @@ def posterior_bands(
         grid = np.linspace(lo, hi, sld_points)
         # Outside a draw's own range its profile is flat (ambient / substrate),
         # which is exactly what np.interp's end-value hold gives.
-        stack = np.vstack([np.interp(grid, z, sld) for z, sld in profiles[s]])
+        on_grid = np.vstack([np.interp(grid, z, sld) for z, sld in profiles[s]])
         sld_bands.append({"spin": {0: None, 1: "+", -1: "-"}[s], "z": grid.tolist(),
-                          **_percentile_rows(stack)})
+                          **_percentile_rows(on_grid)})
     return r_bands, sld_bands

@@ -71,7 +71,8 @@ from numpy.typing import NDArray
 from quantized.calc.dream_seed import DreamCancelled, seed_reproducible, seeded_dream
 from quantized.calc.refl_dream_bands import PERCENTILES, posterior_bands
 from quantized.calc.refl_fit import channel_model, channel_residuals
-from quantized.calc.refl_model import ReflChannel, ReflParams, validate_model
+from quantized.calc.refl_graded import ReflStack, model_stack
+from quantized.calc.refl_model import ReflChannel, ReflParams
 from quantized.heavy_import import heavy_imports
 
 __all__ = [
@@ -116,8 +117,8 @@ class _Posterior:
     """The bumps.dream model protocol: ``labels``, ``bounds`` and ``map``."""
 
     def __init__(self, params: ReflParams, chans: list[ReflChannel],
-                 masks: list[NDArray[np.bool_]], n_layers: int) -> None:
-        self.params, self.chans, self.masks, self.n_layers = params, chans, masks, n_layers
+                 masks: list[NDArray[np.bool_]], stack: ReflStack) -> None:
+        self.params, self.chans, self.masks, self.stack = params, chans, masks, stack
         n = len(params.free)
         self.labels = [params.names[i] for i in params.free]
         self.bounds = np.array([np.zeros(n), np.ones(n)])
@@ -131,7 +132,7 @@ class _Posterior:
         self.n_evaluations += 1
         v = self.params.full(x)
         return np.concatenate([
-            channel_residuals(c, channel_model(c, self.params, v, self.n_layers, m), m, "dr")
+            channel_residuals(c, channel_model(c, self.params, v, self.stack, m), m, "dr")
             for c, m in zip(self.chans, self.masks, strict=True)
         ])
 
@@ -178,7 +179,8 @@ class _Setup:
 
     def __init__(self, parameters: list[dict[str, Any]], channels: list[dict[str, Any]],
                  centre: dict[str, float] | None, weighting: str, samples: int, burn: int,
-                 pop: int, thin: int, band_draws: int) -> None:
+                 pop: int, thin: int, band_draws: int,
+                 graded: list[dict[str, Any]] | None = None) -> None:
         if weighting != "dr":
             raise ValueError(
                 "DREAM needs dR weighting: the log-weighted objective is not a chi-square, "
@@ -190,7 +192,7 @@ class _Setup:
                 raise ValueError(f"{name} must be an integer >= {least}")
         if not channels:
             raise ValueError("need at least one data channel")
-        self.n_layers = validate_model(parameters, channels)
+        self.stack = model_stack(parameters, channels, graded)
         self.params = params = ReflParams(parameters)
         self.chans = [ReflChannel(c, i) for i, c in enumerate(channels)]
         self.masks = [c.points("dr") for c in self.chans]
@@ -241,6 +243,7 @@ def plan_sampling(
     pop: int = 10,
     thin: int = 1,
     band_draws: int = 200,
+    graded: list[dict[str, Any]] | None = None,
 ) -> dict[str, int]:
     """Validate a sampling request without running it, and size it.
 
@@ -249,7 +252,8 @@ def plan_sampling(
     before queueing it. Returns the free-parameter, chain, generation and
     (upper-bound) model-evaluation counts the run would make.
     """
-    s = _Setup(parameters, channels, centre, weighting, samples, burn, pop, thin, band_draws)
+    s = _Setup(parameters, channels, centre, weighting, samples, burn, pop, thin, band_draws,
+               graded)
     return {"n_free": s.n_free, "n_chains": s.n_chains, "n_generations": burn + s.steps,
             "n_evaluations": s.n_evaluations}
 
@@ -270,8 +274,12 @@ def sample_reflectivity(
     sld_points: int = 400,
     progress_callback: ProgressFn | None = None,
     abort_check: AbortFn | None = None,
+    graded: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Sample the posterior of a layer-model fit with DREAM.
+
+    ``graded`` declares graded (spline) layers as for ``fit_reflectivity``;
+    their knots are sampled like any other parameter.
 
     ``centre`` maps parameter names to the fitted values the population starts
     about (free parameters only; others are ignored, and a free parameter it
@@ -297,11 +305,12 @@ def sample_reflectivity(
             from bumps.dream.gelman import gelman
     except ImportError as exc:
         raise ValueError(_INSTALL_HINT) from exc
-    s = _Setup(parameters, channels, centre, weighting, samples, burn, pop, thin, band_draws)
-    params, chans, masks, n_layers = s.params, s.chans, s.masks, s.n_layers
+    s = _Setup(parameters, channels, centre, weighting, samples, burn, pop, thin, band_draws,
+               graded)
+    params, chans, masks, stack = s.params, s.chans, s.masks, s.stack
     n_free, n_points, x0, n_chains, steps = s.n_free, s.n_points, s.x0, s.n_chains, s.steps
     total_gens = burn + steps
-    target = _Posterior(params, chans, masks, n_layers)
+    target = _Posterior(params, chans, masks, stack)
     stopped = {"why": "completed"}
     clock: dict[str, float | None] = {"end": None}
 
@@ -423,7 +432,7 @@ def sample_reflectivity(
     pool = kept.reshape(-1, n_free)
     pick = np.sort(np.random.default_rng(seed).choice(
         pool.shape[0], size=min(band_draws, pool.shape[0]), replace=False))
-    r_bands, sld_bands = posterior_bands(params, chans, masks, n_layers, pool[pick], sld_points,
+    r_bands, sld_bands = posterior_bands(params, chans, masks, stack, pool[pick], sld_points,
                                 progress_callback, abort_check)
 
     completed = stopped["why"] == "completed"

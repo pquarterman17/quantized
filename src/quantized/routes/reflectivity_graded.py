@@ -4,8 +4,9 @@ Wraps ``calc.sld.spline_sld`` (knot interpolation, golden vs MATLAB
 splineSLD) and ``calc.sld.profile_to_layers`` (SLD(z) -> midpoint slabs,
 golden vs profileToLayers). The Reflectivity workshop models a graded layer
 by splicing the returned slabs into its stack, then simulating as usual.
-The fit engine (``calc.refl_fit``) varies slab fields only, so a graded layer
-is model/simulate only. No physics here: validate, call calc, serialize.
+Fitting a graded layer goes through ``/fit`` with a ``graded`` spec, whose
+knots are parameters (``calc.refl_graded`` builds the same slabs). No physics
+here: validate, call calc, serialize.
 """
 
 from __future__ import annotations
