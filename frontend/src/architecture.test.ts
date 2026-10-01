@@ -2358,7 +2358,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   contourScale: "contour scale; view setting outside PlotView",
 
   // pre-existing exclusions preserved as-is by the guard widening (status-quo; review deliberately deferred)
-  composition: "multi-panel render cache; a facet rebuilds from view.facetKey, and a break (no durable binding) is carried as HistorySnapshot.breakComposition",
+  composition: "multi-panel render cache; a facet rebuilds from view.facetKey, and a break or spatial arrangement (no durable binding) is carried as HistorySnapshot.carriedComposition",
 
   // parser false positives (nested inline object types inside AppState)
   selection: "worksheet row selection; deliberately outside the verbatim snapshot — restorePatch liveness-filters it specially on undo/redo",
@@ -3012,6 +3012,20 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       loader: "/components/Stage/useWaterfallX.ts",
       call: 'import("../../lib/waterfallX")',
     },
+    // ── SLICE 16 (2026-10-01, plans/BUNDLE_HEADROOM.md) ───────────────────
+    // The append-import body (the action was already async: it uploads every
+    // file first) and the Separate plan builder (its only caller is the lazy
+    // dataset-row menu). Each slice keeps its cheap checks eager.
+    {
+      module: "/store/importAppendRun.ts",
+      loader: "/store/importAppend.ts",
+      call: 'import("./importAppendRun")',
+    },
+    {
+      module: "/lib/workbookSeparate.ts",
+      loader: "/store/workbookSeparate.ts",
+      call: 'import("../lib/workbookSeparate")',
+    },
   ];
 
   /** Strip line and block comments FIRST (2026-09-15 review, finding 5): the
@@ -3463,6 +3477,10 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     { parent: "/lib/foldertree.ts", half: "/lib/foldertreeQueries.ts" },
     { parent: "/lib/desktopBridge.ts", half: "/lib/desktopSaveBridge.ts" },
     { parent: "/lib/clipboard.ts", half: "/lib/clipboardExtras.ts" },
+    // SLICE 16 (2026-10-01): three more, the same method.
+    { parent: "/lib/recode.ts", half: "/lib/recodeMappings.ts" },
+    { parent: "/lib/rowSidecars.ts", half: "/lib/rowSidecarsConcat.ts" },
+    { parent: "/lib/datafilter.ts", half: "/lib/datafilterSanitize.ts" },
   ];
 
   it("no eager module reaches a re-exported lazy half", () => {

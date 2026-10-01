@@ -155,8 +155,16 @@ export function useRsm(): RsmState {
   async function peakCut(peak: RsmPeak, kind: PeakCutKind): Promise<void> {
     if (!active || !isRsm) return;
     // #38 deferred edge, same as analyze() above: resolve the full dataset
-    // (peaks were fitted against it, but `active` may be a lazy stub).
-    const ds = await useApp.getState().resolveDataset(active.id);
+    // (peaks were fitted against it, but `active` may be a lazy stub). The
+    // buttons fire this as `void …`, so a rejected resolve must reach the
+    // error line or it is invisible (silent-failure audit 2026-10-01).
+    let ds: Dataset | undefined;
+    try {
+      ds = await useApp.getState().resolveDataset(active.id);
+    } catch (e) {
+      setError(`couldn't load the full dataset — ${e instanceof Error ? e.message : "error"}`);
+      return;
+    }
     if (!ds) return;
     const ruler = buildPeakRuler(ds.data, peak, kind);
     if (!ruler) {

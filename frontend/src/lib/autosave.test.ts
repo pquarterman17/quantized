@@ -119,6 +119,18 @@ describe("autosave round-trip (pre-#32 behaviour, preserved)", () => {
     expect(await listAutosaveGenerations()).toEqual([]);
   });
 
+  it("clearAutosave reports a failed clear instead of swallowing it", async () => {
+    // Silent-failure audit (2026-10-01): a refused clear was ignored, so the
+    // command claimed the snapshot was gone while it would still be offered.
+    await saveAutosave({ datasets: [ds("a", "first")] }, 1);
+    setAutosaveBackend({ ...memoryBackend(), clear: () => Promise.reject(new Error("blocked")) });
+    expect(await clearAutosave()).toBe("blocked");
+  });
+
+  it("clearAutosave resolves null on success", async () => {
+    expect(await clearAutosave()).toBeNull();
+  });
+
   it("degrades to false on a storage error rather than throwing", async () => {
     setAutosaveBackend(failingBackend());
     expect(await saveAutosave({ datasets: [ds("a", "first")] })).toBe(false);

@@ -135,7 +135,14 @@ export function markerDecision(
   if (style?.marker) {
     return { show: true, shape: style.markerShape ?? "circle", size: style.markerSize ?? DEFAULT_MARKER_PX };
   }
-  return { show: trace === "Scatter" || trace === "Line + markers", shape: "circle", size: DEFAULT_MARKER_PX };
+  const t = seriesTrace(style, trace);
+  return { show: t === "Scatter" || t === "Line + markers", shape: "circle", size: DEFAULT_MARKER_PX };
+}
+
+/** The trace that fills a series' UNSET style fields: the Preferences default
+ *  trace, or none ("Line") for an `explicit` style (`SeriesStyle.explicit`). */
+export function seriesTrace(style: Pick<SeriesStyle, "explicit"> | null | undefined, trace: DefaultTrace): DefaultTrace {
+  return style?.explicit === true ? "Line" : trace;
 }
 
 /**

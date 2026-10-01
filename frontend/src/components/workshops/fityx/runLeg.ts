@@ -28,7 +28,12 @@ export interface OnewayResult {
   /** null when only 2 levels (Tukey needs >2 to be more than a t-test). */
   tukey: CalcResult | null;
   recommend: Recommendation | null;
+  /** Why an optional sub-test that RAN came back empty, keyed by test — so
+   *  the view can say "<test> failed: <reason>" instead of dropping it. */
+  failed?: SubtestFailures<"levene" | "tukey" | "recommend">;
 }
+
+export type SubtestFailures<K extends string> = Partial<Record<K, string>>;
 
 export interface BivariateResult {
   x: number[];
@@ -48,6 +53,7 @@ export interface ContingencyResult {
   chiSquare: CalcResult;
   /** null unless the table is 2x2 (Fisher exact's only valid shape). */
   fisher: CalcResult | null;
+  failed?: SubtestFailures<"fisher">;
 }
 
 /** One leg's landed result — exactly one of the three is set, matching
@@ -57,6 +63,18 @@ export interface LegResult {
   bivariate?: BivariateResult;
   contingency?: ContingencyResult;
 }
+
+/** Run an optional sub-test: a rejection becomes null (the leg still lands)
+ *  but its reason is recorded in `failed` (silent-failure audit 2026-10-01). */
+function optional<K extends string, T>(failed: SubtestFailures<K>, key: K, p: Promise<T>): Promise<T | null> {
+  return p.catch((e: unknown) => {
+    failed[key] = e instanceof Error ? e.message : String(e);
+    return null;
+  });
+}
+
+const withFailures = <K extends string>(failed: SubtestFailures<K>): { failed?: SubtestFailures<K> } =>
+  Object.keys(failed).length ? { failed } : {};
 
 /** Only local minimum-sample validation is safe to omit from a By report. */
 export class InsufficientDataError extends Error {}
@@ -113,13 +131,14 @@ export async function runLeg(
     const groups = groupsForOneway(data, xCol, yCol).filter((g) => g.values.length > 0);
     if (groups.length < 2) throw new InsufficientDataError("need at least 2 non-empty levels for oneway");
     const valueArrays = groups.map((g) => g.values);
+    const failed: SubtestFailures<"levene" | "tukey" | "recommend"> = {};
     const [anova, levene, recommend] = await Promise.all([
       statsAnova(valueArrays),
-      valueArrays.every((g) => g.length >= 2) ? statsLevene(valueArrays).catch(() => null) : Promise.resolve(null),
-      statsRecommend({ groups: valueArrays }).catch(() => null),
+      valueArrays.every((g) => g.length >= 2) ? optional(failed, "levene", statsLevene(valueArrays)) : Promise.resolve(null),
+      optional(failed, "recommend", statsRecommend({ groups: valueArrays })),
     ]);
-    const tukey = groups.length > 2 ? await statsTukey(valueArrays).catch(() => null) : null;
-    return { oneway: { groups, anova, levene, tukey, recommend } };
+    const tukey = groups.length > 2 ? await optional(failed, "tukey", statsTukey(valueArrays)) : null;
+    return { oneway: { groups, anova, levene, tukey, recommend, ...withFailures(failed) } };
   }
 
   if (kind === "bivariate") {
@@ -165,8 +184,10 @@ export async function runLeg(
       table[ri][ci] += 1;
     }
     const chiSquare = await statsChiSquareIndependence(table);
-    const fisher = xLevels.length === 2 && yLevels.length === 2 ? await statsFisherExact(table).catch(() => null) : null;
-    return { contingency: { rowLabels, colLabels, table, chiSquare, fisher } };
+    const failed: SubtestFailures<"fisher"> = {};
+    const fisher =
+      xLevels.length === 2 && yLevels.length === 2 ? await optional(failed, "fisher", statsFisherExact(table)) : null;
+    return { contingency: { rowLabels, colLabels, table, chiSquare, fisher, ...withFailures(failed) } };
   }
 
   return {};

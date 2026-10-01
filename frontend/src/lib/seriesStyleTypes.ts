@@ -85,4 +85,10 @@ export interface SeriesStyle {
    *  at y · 10^k (a whole number k, |k| ≤ 30) and its legend says " ×10^k";
    *  the data are untouched. `lib/logOffset.ts` owns the rule. */
   logOffset?: number;
+  /** A COMPLETE style (a Graph Builder mark, `plotspec.markSeriesStyle`): the
+   *  Preferences default trace fills nothing, so an unset `width` draws a line,
+   *  an unset `marker` none and an unset `step` a straight line. Absent (every
+   *  older saved style) = the default trace fills what is unset, as before.
+   *  Read through `markers.seriesTrace` on the canvas, legend and export. */
+  explicit?: boolean;
 }

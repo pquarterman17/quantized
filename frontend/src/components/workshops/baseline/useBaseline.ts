@@ -306,13 +306,25 @@ export function useBaseline(): BaselineState {
     return () => clearTimeout(t);
   }, [method, anchors, params.anchorMethod, active, setBaselineOverlay]);
 
-  async function subtract(): Promise<void> {
-    if (!active || !baseline || !estimateBinding) return;
-    const ds = await useApp.getState().resolveDataset(active.id);
-    if (!ds) return;
+  // The panel fires subtract/applyAnchors as `void …`: a rejected full-data
+  // resolve must reach the error line or it is invisible (audit 2026-10-01).
+  async function resolveActive(id: string): Promise<Dataset | undefined> {
+    try {
+      return await useApp.getState().resolveDataset(id);
+    } catch (e) {
+      setError(`couldn't load the full dataset — ${e instanceof Error ? e.message : "error"}`);
+      return undefined;
+    }
+  }
+
+  /** Subtract into a new dataset; false when nothing was written. */
+  async function subtractInto(): Promise<boolean> {
+    if (!active || !baseline || !estimateBinding) return false;
+    const ds = await resolveActive(active.id);
+    if (!ds) return false;
     if (estimateBinding.datasetId !== ds.id || baseline.length !== ds.data.values.length) {
       setError("the baseline no longer matches this dataset; recompute it before subtracting");
-      return;
+      return false;
     }
     const src = ds.data;
     const yKey = estimateBinding.yKey;
@@ -339,6 +351,11 @@ export function useBaseline(): BaselineState {
     const stem = ds.name.replace(/\.[^.]+$/, "");
     addDataset({ id: nextDatasetId(), name: `${stem} (bg-sub)`, data });
     setStatus(`subtracted ${method} baseline`);
+    return true;
+  }
+
+  async function subtract(): Promise<void> {
+    await subtractInto();
   }
 
   // Anchor apply (#2): merge bgAnchors into the dataset's corrections and run
@@ -346,7 +363,7 @@ export function useBaseline(): BaselineState {
   // Corrections card, the pipeline step executor, and the recalc DAG use.
   async function applyAnchors(): Promise<void> {
     if (!active || anchors.length < 2) return;
-    const ds = await useApp.getState().resolveDataset(active.id);
+    const ds = await resolveActive(active.id);
     if (!ds) return;
     // The established correction-DAG anchor step operates on time + values[0].
     // For any other plotted pair, subtract the exact plotted-channel preview
@@ -356,7 +373,7 @@ export function useBaseline(): BaselineState {
         setError("wait for the selected-channel preview, then Apply again");
         return;
       }
-      await subtract();
+      if (!(await subtractInto())) return;
       setAnchors([]);
       setStatus("subtracted selected-channel anchor baseline (new dataset)");
       return;
@@ -382,7 +399,7 @@ export function useBaseline(): BaselineState {
       c.isMag === true;
     if (displayTransformed) {
       if (baseline) {
-        await subtract();
+        if (!(await subtractInto())) return;
         setAnchors([]);
         setStatus("subtracted anchor baseline (new dataset - prior corrections active)");
       } else {

@@ -45,6 +45,20 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-10-01 (bundle diet slice 16, `plans/BUNDLE_HEADROOM.md`) - pin
+ *  LOWERED 863,207 -> 858,608, by exactly the measured saving, so the
+ *  headroom left on this tree (3,954 B) is unchanged. Two async load seams
+ *  (the append-import body, the Separate plan builder) and three more
+ *  re-exported lazy halves (`lib/recodeMappings.ts`,
+ *  `lib/rowSidecarsConcat.ts`, `lib/datafilterSanitize.ts`).
+ *  Exact bytes, `npm ci`-fresh, `.vite` wiped before each build:
+ *    `97932150` (parent)                                859,253
+ *    + append-import body seam                          858,283  (-970)
+ *    + Separate plan-builder seam                       856,870  (-1,413)
+ *    + recode and row-sidecar lazy halves               855,209  (-1,661)
+ *    + datafilter sanitize half                         854,654  (-555)
+ *  Net: -4,599 B.
+ *
  *  2026-10-01 (bundle diet slice 15, `plans/BUNDLE_HEADROOM.md`) - pin
  *  LOWERED 866,358 -> 863,207, by exactly the measured saving, so the
  *  headroom slices 10-14 banked is unchanged (9,932 B on this tree). Three
@@ -1749,7 +1763,7 @@ import { fileURLToPath } from "node:url";
  * modulepreloads. A clipboard-import split was also measured at 858.5 kB and
  * rejected. All three changes were reverted.
  */
-const EAGER_JS_BUDGET = 863_207;
+const EAGER_JS_BUDGET = 858_608;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

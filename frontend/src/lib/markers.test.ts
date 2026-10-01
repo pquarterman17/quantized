@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { FILLED_SHAPES, markerDecision, markerPaths, markerSubpaths, MARKER_SHAPES } from "./markers";
+import { FILLED_SHAPES, markerDecision, markerPaths, markerSubpaths, MARKER_SHAPES, seriesTrace } from "./markers";
 import type { DefaultTrace } from "./types";
 
 describe("markerSubpaths", () => {
@@ -93,6 +93,17 @@ describe("markerDecision — the shared marker rule", () => {
         shape: "circle",
         size: 5,
       });
+    }
+  });
+
+  it("an `explicit` style is filled by no trace: no marker unless it sets one", () => {
+    for (const trace of traces) {
+      expect(seriesTrace({ explicit: true }, trace)).toBe("Line");
+      expect(markerDecision({ explicit: true }, trace).show).toBe(false);
+      expect(markerDecision({ explicit: true, marker: true }, trace).show).toBe(true);
+      // Older saved styles carry no flag and keep the default trace.
+      expect(seriesTrace({}, trace)).toBe(trace);
+      expect(seriesTrace({ explicit: false }, trace)).toBe(trace);
     }
   });
 

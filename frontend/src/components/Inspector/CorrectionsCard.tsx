@@ -191,7 +191,10 @@ export default function CorrectionsCard({ active }: { active: Dataset | null }) 
         prior.bgAnchors && prior.bgAnchors.length >= 2
           ? { bgAnchors: prior.bgAnchors, bgAnchorMethod: prior.bgAnchorMethod }
           : {};
-      await applyCorrections(active.id, { ...buildParams(form), ...anchorFields }, bg);
+      const ok = await applyCorrections(active.id, { ...buildParams(form), ...anchorFields }, bg);
+      // A failed apply already put its reason on the status line; relabelling
+      // now would make the axes claim a rescale that never happened.
+      if (!ok) return;
       // MAIN #37: relabel in the SAME operation, so a rescaled axis never
       // keeps a unit string that no longer matches the numbers. Blank = leave
       // it alone. These are the same store overrides the axis-label menu and

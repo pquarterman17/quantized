@@ -8,6 +8,10 @@ longer matches the PNG or the exported file. "Copy Figure" therefore asks for
 ``svg_text_as_paths=true`` on the raw ``image/svg+xml`` representation it puts
 on the clipboard: every glyph becomes a path and the SVG depends on no fonts.
 
+The stat stage's "Copy figure (vector)" posts the same flag to the stat
+routes (``/api/export/statplot-figure`` and ``/api/export/categorical-figure``,
+flat and faceted), so its clipboard SVG is outlined like the XY copy's.
+
 What this pins, per route that the copy commands POST to:
 
 * the flag removes every ``<text>`` element (plain labels AND mathtext);
@@ -61,6 +65,39 @@ def _page(fmt: str, **extra: Any) -> dict[str, Any]:
     return {"rows": 1, "cols": 2, "panels": panels, "fmt": fmt, **extra}
 
 
+def _statplot(fmt: str, **extra: Any) -> dict[str, Any]:
+    groups = [[1.0, 2.0, 3.0, 4.0, 5.0], [2.0, 3.0, 4.0, 6.0, 7.0]]
+    return {
+        "kind": "box", "data": groups, "labels": ["A", "B"], "fmt": fmt,
+        "title": "Moment", "y_label": r"$\mu_0 H$ (T)", **extra,
+    }
+
+
+def _statplot_facets(fmt: str, **extra: Any) -> dict[str, Any]:
+    facets = [
+        {"label": lvl, "data": [[1.0, 2.0, 3.0], [2.0, 4.0, 5.0]], "labels": ["A", "B"]}
+        for lvl in ("x", "y")
+    ]
+    return _statplot(fmt, facets=facets, **extra)
+
+
+def _categorical(fmt: str, **extra: Any) -> dict[str, Any]:
+    return {
+        "groups": ["A", "B"], "series": ["s1", "s2"],
+        "values": [[1.0, 2.0], [3.0, 4.0]], "errors": [[0.1, 0.2], [0.3, 0.4]],
+        "fmt": fmt, "title": "Bars", "y_label": "M (emu)", **extra,
+    }
+
+
+def _categorical_facets(fmt: str, **extra: Any) -> dict[str, Any]:
+    facets = [
+        {"label": lvl, "groups": ["A", "B"], "series": ["s1"], "values": [[1.0], [2.0]],
+         "errors": [[0.1], [0.2]]}
+        for lvl in ("x", "y")
+    ]
+    return _categorical(fmt, facets=facets, **extra)
+
+
 def _post(route: str, body: dict[str, Any]) -> bytes:
     resp = client.post(route, json=body)
     assert resp.status_code == 200, resp.text
@@ -75,6 +112,10 @@ _CASES = [
         id="figure-facets",
     ),
     pytest.param("/api/export/figure-page", _page, id="figure-page"),
+    pytest.param("/api/export/statplot-figure", _statplot, id="statplot"),
+    pytest.param("/api/export/statplot-figure", _statplot_facets, id="statplot-facets"),
+    pytest.param("/api/export/categorical-figure", _categorical, id="categorical"),
+    pytest.param("/api/export/categorical-figure", _categorical_facets, id="categorical-facets"),
 ]
 
 

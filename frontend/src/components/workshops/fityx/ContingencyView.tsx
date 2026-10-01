@@ -9,10 +9,11 @@ import { fmtNum } from "../../../lib/format";
 import { DataTable } from "../../primitives/DataTable";
 import { StatusDot } from "../../primitives";
 import MosaicPlot from "./MosaicPlot";
+import SubtestFailedNote from "./SubtestFailedNote";
 import type { ContingencyResult } from "./useFitYByX";
 
 export default function ContingencyView({ result }: { result: ContingencyResult }) {
-  const { rowLabels, colLabels, table, chiSquare, fisher } = result;
+  const { rowLabels, colLabels, table, chiSquare, fisher, failed } = result;
   const expected = (chiSquare.expected as number[][] | undefined) ?? [];
   const rowTotals = table.map((row) => row.reduce((a, b) => a + b, 0));
   const colTotals = colLabels.map((_, j) => table.reduce((a, row) => a + row[j], 0));
@@ -77,6 +78,7 @@ export default function ContingencyView({ result }: { result: ContingencyResult 
           />
         </div>
       )}
+      <SubtestFailedNote test="Fisher's exact" reason={failed?.fisher} />
     </>
   );
 }

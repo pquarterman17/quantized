@@ -236,10 +236,12 @@ export function buildFileCommands(s: StoreGet): Action[] {
       group: "File",
       label: "Clear autosaved workspace…",
       description: "Delete the recovery snapshot while leaving the currently open workspace unchanged.",
-      run: () => {
-        void clearAutosave();
-        s().setStatus("autosaved workspace cleared (current library unchanged)");
-      },
+      run: () =>
+        void clearAutosave().then((failed) => {
+          if (failed === null) return s().setStatus("autosaved workspace cleared (current library unchanged)");
+          s().setStatus(`couldn't clear the autosaved workspace — ${failed}`);
+          toast(`couldn't clear the autosaved workspace — ${failed}`, "danger");
+        }),
     },
     {
       id: "remove-all",

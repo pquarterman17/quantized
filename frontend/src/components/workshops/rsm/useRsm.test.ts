@@ -240,6 +240,24 @@ describe("useRsm — peak-anchored radial/transverse cuts", () => {
     expect(result.current.error).toContain("reciprocal-space centre");
   });
 
+  it("reports a failed full-data load instead of rejecting silently", async () => {
+    // Silent-failure audit (2026-10-01): the cut buttons fire `void radialCut()`,
+    // so a rejected resolve (pending book, source moved) did nothing visible.
+    const original = useApp.getState().resolveDataset;
+    useApp.setState({ resolveDataset: () => Promise.reject(new Error("source moved")) });
+    try {
+      const { result } = renderHook(() => useRsm());
+      await act(async () => {
+        await expect(result.current.radialCut(peak(2, "film", [0.4, 3.8]))).resolves.toBeUndefined();
+      });
+      expect(result.current.error).toBe("couldn't load the full dataset — source moved");
+    } finally {
+      useApp.setState({ resolveDataset: original });
+    }
+    expect(rsmBoxCut).not.toHaveBeenCalled();
+    expect(useApp.getState().mapRuler).toBeNull();
+  });
+
   it("exposes the default cut target and a live disabled reason as peaks are found", async () => {
     vi.mocked(analyzeRsm).mockResolvedValue({
       peaks: [peak(1, "substrate", [0.5, 4.0]), peak(2, "film", [0.4, 3.8])],

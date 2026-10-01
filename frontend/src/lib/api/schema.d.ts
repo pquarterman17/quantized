@@ -6071,6 +6071,12 @@ export interface components {
             /** Summary */
             summary?: ("none" | "mean" | "median") | null;
             /**
+             * Svg Text As Paths
+             * @description SVG only (ignored for pdf/png/tiff): write every glyph -- mathtext included -- as a path outline instead of live `<text>` (matplotlib `svg.fonttype = "path"` for this render; the default `false` keeps the export-wide `"none"`, i.e. editable text). The outlined SVG needs no installed font, which is what the Copy Figure clipboard SVG asks for: a paste target lacking the render's fonts (DejaVu Sans, cmsy10) would otherwise substitute its own. On `/api/export/figure-page` the PAGE request's flag applies; a nested panel `figure`'s own flag is unused. See `calc.figure_render.savefig_bytes`.
+             * @default false
+             */
+            svg_text_as_paths?: boolean;
+            /**
              * Title
              * @default
              */
@@ -10388,6 +10394,12 @@ export interface components {
             style?: string;
             /** Summary */
             summary?: ("none" | "mean" | "median") | null;
+            /**
+             * Svg Text As Paths
+             * @description SVG only (ignored for pdf/png/tiff): write every glyph -- mathtext included -- as a path outline instead of live `<text>` (matplotlib `svg.fonttype = "path"` for this render; the default `false` keeps the export-wide `"none"`, i.e. editable text). The outlined SVG needs no installed font, which is what the Copy Figure clipboard SVG asks for: a paste target lacking the render's fonts (DejaVu Sans, cmsy10) would otherwise substitute its own. On `/api/export/figure-page` the PAGE request's flag applies; a nested panel `figure`'s own flag is unused. See `calc.figure_render.savefig_bytes`.
+             * @default false
+             */
+            svg_text_as_paths?: boolean;
             /**
              * Title
              * @default

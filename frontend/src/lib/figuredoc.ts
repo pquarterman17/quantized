@@ -6,7 +6,8 @@
 // opened (the builder reads live datasets, which the recalc graph keeps
 // fresh); frozen docs carry their own data snapshot. A user graph template
 // (#15) is the style half of a doc — preset + overrides + per-series styles —
-// saved standalone and appliable to any figure. Pure.
+// saved standalone and appliable to any figure. Pure, bar the
+// lib/storageWarning.ts toast on a refused storage write.
 
 import type { ErrorBinding } from "./errorRoles";
 import type { FigureOverrides } from "./figureOverrides";
@@ -18,6 +19,7 @@ import { isAxisScale, scaleFromLog } from "./plotview";
 // sanitizers below call `sanitizeExportSeriesStyles` without pulling the
 // export BUILDERS and the wire boundary into this module's runtime graph.
 import { sanitizeExportSeriesStyles, type ExportSeriesStyle } from "./publicationStyles";
+import { warnStorageRefused } from "./storageWarning";
 import type { AxisScale, DataStruct } from "./types";
 
 /** The builder configuration a FigureDoc restores (and a run re-exports). */
@@ -226,7 +228,7 @@ export function saveGraphTemplate(t: GraphTemplate): GraphTemplate[] {
   try {
     localStorage.setItem(KEY, JSON.stringify(list));
   } catch {
-    /* storage unavailable — template stays session-local */
+    warnStorageRefused("graph template"); // stays session-local
   }
   return list;
 }
@@ -236,7 +238,7 @@ export function deleteGraphTemplate(name: string): GraphTemplate[] {
   try {
     localStorage.setItem(KEY, JSON.stringify(list));
   } catch {
-    /* ignore */
+    warnStorageRefused("graph template");
   }
   return list;
 }

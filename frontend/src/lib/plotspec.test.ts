@@ -240,27 +240,40 @@ describe("cycleMark", () => {
 });
 
 // ── markSeriesStyle (GAP_PLOTTYPES: the mark → Stage style bridge) ──────────
+// Every xy mark commits a COMPLETE style: `explicit` keeps the Preferences
+// default trace from filling it, and explicit `undefined`s clear what an
+// earlier mark set (toStrictEqual pins those keys).
 describe("markSeriesStyle", () => {
+  const off = { width: undefined, marker: undefined, step: undefined };
+
   it("scatter: zero width + markers on — the SeriesStyle 'no line' mechanism", () => {
-    expect(markSeriesStyle(spec(ref(0), [ref(1)], "scatter"))).toEqual({ width: 0, marker: true });
+    expect(markSeriesStyle(spec(ref(0), [ref(1)], "scatter"))).toStrictEqual({
+      explicit: true, width: 0, marker: true, step: undefined,
+    });
   });
 
-  it("line with no showMarkers: nothing to override", () => {
-    expect(markSeriesStyle(spec(ref(0), [ref(1)], "line"))).toEqual({});
+  it("line with no showMarkers: an explicit line, markers and step cleared", () => {
+    expect(markSeriesStyle(spec(ref(0), [ref(1)], "line"))).toStrictEqual({ explicit: true, ...off });
   });
 
   it("line with showMarkers: markers on, line width untouched (Origin's Line + Symbol)", () => {
     const s: PlotSpec = { ...spec(ref(0), [ref(1)], "line"), showMarkers: true };
-    expect(markSeriesStyle(s)).toEqual({ marker: true });
+    expect(markSeriesStyle(s)).toStrictEqual({ explicit: true, ...off, marker: true });
   });
 
   it("step with no stepMode defaults to post, no markers", () => {
-    expect(markSeriesStyle(spec(ref(0), [ref(1)], "step"))).toEqual({ step: "post" });
+    expect(markSeriesStyle(spec(ref(0), [ref(1)], "step"))).toStrictEqual({ explicit: true, ...off, step: "post" });
   });
 
   it("step honors an explicit stepMode + showMarkers", () => {
     const s: PlotSpec = { ...spec(ref(0), [ref(1)], "step"), stepMode: "mid", showMarkers: true };
-    expect(markSeriesStyle(s)).toEqual({ step: "mid", marker: true });
+    expect(markSeriesStyle(s)).toStrictEqual({ explicit: true, width: undefined, step: "mid", marker: true });
+  });
+
+  it("a line over an earlier scatter clears its zero width but keeps a custom one", () => {
+    const line = spec(ref(0), [ref(1)], "line");
+    expect(markSeriesStyle(line, { width: 0, marker: true }).width).toBeUndefined();
+    expect(markSeriesStyle(line, { width: 2.5, marker: true })).toStrictEqual({ explicit: true, ...off, width: 2.5 });
   });
 
   it("box/violin/bar: nothing to override (not an xy mark)", () => {

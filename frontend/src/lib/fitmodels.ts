@@ -3,7 +3,8 @@
 // templates (lib/template.ts) and peak recipes: a localStorage list, upsert
 // by name, malformed entries dropped on load. Saved models appear in the fit
 // workshop's model picker alongside registry models and prefill the equation
-// panel when chosen. Pure — no store imports.
+// panel when chosen. No app-store imports; a refused storage write toasts
+// through lib/storageWarning.ts.
 //
 // VERSIONS (audit P2.7 slice 3). v1 is the original record. v2 adds an
 // optional free-text `description` and optional per-parameter `units`
@@ -21,6 +22,8 @@
 // project open, which leaves a damaged slot untouched (`appendCustomModels`).
 // An imported FILE gets no such leniency (lib/nameKeyedRecipes'
 // `parseFitModelFile`).
+
+import { warnStorageRefused } from "./storageWarning";
 
 export const CUSTOM_FIT_MODEL_VERSION = 2;
 
@@ -299,7 +302,7 @@ function writeSlot(damaged: string | null, raw: unknown[]): void {
     }
     localStorage.setItem(KEY, JSON.stringify(raw));
   } catch {
-    /* storage unavailable — the change stays session-local */
+    warnStorageRefused("custom fit model"); // stays session-local
   }
 }
 

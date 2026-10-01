@@ -47,15 +47,19 @@ describe("SeparateWorksheetsDialog — visibility", () => {
 });
 
 describe("SeparateWorksheetsDialog — affected-item preview", () => {
-  it("shows the previewed plan's items with their move/stay verdict before commit", () => {
-    useApp.getState().previewSeparateWorksheets(["d1"]);
+  it("shows the previewed plan's items with their move/stay verdict before commit", async () => {
+    await act(async () => {
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
+    });
     render(<SeparateWorksheetsDialog />);
     expect(screen.getByText("A.dat")).toBeInTheDocument();
     expect(screen.getByText("selected for separation")).toBeInTheDocument();
   });
 
-  it("Cancel discards the preview with zero mutation", () => {
-    useApp.getState().previewSeparateWorksheets(["d1"]);
+  it("Cancel discards the preview with zero mutation", async () => {
+    await act(async () => {
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
+    });
     render(<SeparateWorksheetsDialog />);
     const before = useApp.getState();
     fireEvent.click(screen.getByText("Cancel"));
@@ -65,8 +69,10 @@ describe("SeparateWorksheetsDialog — affected-item preview", () => {
     expect(useApp.getState().history).toHaveLength(0);
   });
 
-  it("Separate commits exactly the previewed plan and closes", () => {
-    useApp.getState().previewSeparateWorksheets(["d1"]);
+  it("Separate commits exactly the previewed plan and closes", async () => {
+    await act(async () => {
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
+    });
     render(<SeparateWorksheetsDialog />);
     fireEvent.click(screen.getByText("Separate"));
     expect(useApp.getState().separatePreview).toBeNull();
@@ -76,8 +82,10 @@ describe("SeparateWorksheetsDialog — affected-item preview", () => {
     expect(s.history).toHaveLength(1);
   });
 
-  it("a stale preview fails closed with a clear message, surfaced in the dialog rather than swallowed", () => {
-    useApp.getState().previewSeparateWorksheets(["d1"]);
+  it("a stale preview fails closed with a clear message, surfaced in the dialog rather than swallowed", async () => {
+    await act(async () => {
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
+    });
     render(<SeparateWorksheetsDialog />);
     // Race: d1 vanishes after the preview opened, before commit.
     useApp.setState((s) => ({ datasets: s.datasets.filter((d) => d.id !== "d1") }));
@@ -92,8 +100,10 @@ describe("SeparateWorksheetsDialog — affected-item preview", () => {
 // document.activeElement (not fireEvent.keyDown on the box) — the class of
 // bug this closes is "the handler exists but the key never reaches it".
 describe("SeparateWorksheetsDialog focus-in / Escape / restore (P3.3 R1)", () => {
-  it("moves focus into the dialog on open, onto the Name field", () => {
-    useApp.getState().previewSeparateWorksheets(["d1"]);
+  it("moves focus into the dialog on open, onto the Name field", async () => {
+    await act(async () => {
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
+    });
     render(<SeparateWorksheetsDialog />);
     expect(screen.getByLabelText("Workbook name")).toHaveFocus();
   });
@@ -109,7 +119,9 @@ describe("SeparateWorksheetsDialog focus-in / Escape / restore (P3.3 R1)", () =>
     const opener = screen.getByRole("button", { name: "opener" });
     opener.focus();
 
-    act(() => useApp.getState().previewSeparateWorksheets(["d1"]));
+    await act(async () => {
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
+    });
     expect(opener).not.toHaveFocus();
 
     await user.keyboard("{Escape}");
@@ -123,7 +135,9 @@ describe("SeparateWorksheetsDialog focus-in / Escape / restore (P3.3 R1)", () =>
   // mechanism that actually ships (`lib/escapeStack.ts`'s `modal` layer, which
   // listens on `window` in the BUBBLE phase).
   it("Escape dispatched at the window closes the dialog (reachability)", async () => {
-    useApp.getState().previewSeparateWorksheets(["d1"]);
+    await act(async () => {
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
+    });
     render(<SeparateWorksheetsDialog />);
     fireEvent.keyDown(window, { key: "Escape" });
     await waitFor(() => expect(useApp.getState().separatePreview).toBeNull());
@@ -136,7 +150,9 @@ describe("SeparateWorksheetsDialog focus-in / Escape / restore (P3.3 R1)", () =>
   it("Escape from the Name field — the landing spot — still closes it", async () => {
     const user = userEvent.setup();
     render(<SeparateWorksheetsDialog />);
-    act(() => useApp.getState().previewSeparateWorksheets(["d1"]));
+    await act(async () => {
+      await useApp.getState().previewSeparateWorksheets(["d1"]);
+    });
     expect(screen.getByLabelText("Workbook name")).toHaveFocus();
 
     await user.keyboard("{Escape}");
