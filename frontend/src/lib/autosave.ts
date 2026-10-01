@@ -171,12 +171,15 @@ async function withLegacyGeneration(generations: Generation[], parseWorkspace: P
   return [{ at: 0, text: legacy }];
 }
 
-/** Wipe every autosaved generation ("Clear autosaved workspace"). */
-export async function clearAutosave(): Promise<void> {
+/** Wipe every autosaved generation ("Clear autosaved workspace"). Resolves
+ *  null on success, else the failure's reason — the snapshot is then still
+ *  there, so the caller must say so (silent-failure audit 2026-10-01). */
+export async function clearAutosave(): Promise<string | null> {
   try {
     await backend.clear();
     health = { savedAt: null, error: null, count: 0 };
-  } catch {
-    /* storage unavailable — nothing to clear */
+    return null;
+  } catch (e) {
+    return e instanceof Error ? e.message : "storage unavailable";
   }
 }
