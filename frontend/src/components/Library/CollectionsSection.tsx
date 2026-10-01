@@ -63,6 +63,7 @@ export default function CollectionsSection({ hierarchy, onShowInLibrary }: Props
         </span>
         <button
           className="qz-btn qz-ghost qz-sm"
+          aria-label="New collection"
           title="New Collection…"
           onClick={() => {
             void askParams("New Collection", [
@@ -94,6 +95,7 @@ export default function CollectionsSection({ hierarchy, onShowInLibrary }: Props
               </button>
               <button
                 className="qz-btn qz-ghost qz-sm"
+                aria-label="Rename collection"
                 title="Rename Collection…"
                 onClick={() => {
                   void askParams("Rename Collection", [{ key: "name", label: "Name", type: "text", default: c.name }])
@@ -104,6 +106,7 @@ export default function CollectionsSection({ hierarchy, onShowInLibrary }: Props
               </button>
               <button
                 className="qz-btn qz-ghost qz-sm"
+                aria-label="Edit filter"
                 title="Edit Collection filter…"
                 onClick={() => {
                   void askParams("Edit Collection filter", [
@@ -115,6 +118,7 @@ export default function CollectionsSection({ hierarchy, onShowInLibrary }: Props
               </button>
               <button
                 className="qz-btn qz-ghost qz-sm"
+                aria-label="Delete collection"
                 title="Delete Collection (its members are untouched — L0.48)"
                 onClick={() => removeRowSafely(containerRef.current, () => removeCollection(c.id))}
               >

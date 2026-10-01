@@ -146,6 +146,7 @@ export default function SavedFiguresSection() {
               <button
                 className="qz-btn qz-ghost qz-sm"
                 style={{ minHeight: 24, minWidth: 24 }}
+                aria-label="Duplicate figure"
                 title="duplicate figure"
                 onClick={() => duplicateFigureDoc(d.id)}
               >
@@ -154,6 +155,7 @@ export default function SavedFiguresSection() {
               <button
                 className="qz-btn qz-ghost qz-sm"
                 style={{ minHeight: 24, minWidth: 24, marginLeft: 6 }}
+                aria-label="Delete figure"
                 title="delete figure"
                 onClick={() => {
                   // A saved figure doc is authoring work (config + optional

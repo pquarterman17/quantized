@@ -106,6 +106,7 @@ export default function PagesSection() {
           <button
             className="qz-btn qz-ghost qz-sm"
             style={{ minHeight: 24, minWidth: 24 }}
+            aria-label="Rename page"
             title="rename saved page"
             onClick={() => {
               void runLazy("Loading rename dialog…", () => import("../overlays/ParamDialog")).then(
@@ -124,6 +125,7 @@ export default function PagesSection() {
           <button
             className="qz-btn qz-ghost qz-sm"
             style={{ minHeight: 24, minWidth: 24 }}
+            aria-label="Duplicate page"
             title="duplicate saved page"
             onClick={() => duplicate(page.id)}
           >
@@ -132,6 +134,7 @@ export default function PagesSection() {
           <button
             className="qz-btn qz-ghost qz-sm"
             style={{ minHeight: 24, minWidth: 24 }}
+            aria-label="Export page"
             title={`export "${page.name}" without reopening it`}
             onClick={() => void exportSavedPage(page)}
           >
@@ -140,6 +143,7 @@ export default function PagesSection() {
           <button
             className="qz-btn qz-ghost qz-sm"
             style={{ minHeight: 24, minWidth: 24, marginLeft: 6 }}
+            aria-label="Delete page"
             title="delete saved page (undo available)"
             onClick={() => {
               void askConfirm(

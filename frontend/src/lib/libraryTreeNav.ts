@@ -122,3 +122,12 @@ export function treeItemProps(
 export function innerTabIndex(item: TreeItemProps | undefined): -1 | undefined {
   return item && item.tabIndex < 0 ? -1 : undefined;
 }
+
+/** Space on a tree anchor that is not a `<button>` (V1: ARIA-in-HTML bars
+ *  role="treeitem" on one) does what the button's Space did — `activate`,
+ *  with the page scroll prevented. Enter stays LibraryTree's (open). */
+export function spaceActivates(e: { key: string; preventDefault: () => void }, activate: () => void): void {
+  if (e.key !== " ") return;
+  e.preventDefault();
+  activate();
+}

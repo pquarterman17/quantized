@@ -7705,6 +7705,10 @@ that goes red without its fix.
   bars, menu/status bars, Appearance, every Preferences tab, map toolbar,
   digitizer). Still `[~]`: plots, trees, and the Library are not audited, and
   Preferences' tab strip is clickable `<div>`s with no role or keyboard path.
+  **Library pass (2026-10-01, V1):** its last 21 icon-only controls are named
+  (section ＋/✎/⚙/⧉/⤓/×, the header's new/demo/import/save-filter buttons),
+  so the ratchet now requires zero app-wide with no Library pin. Plots and
+  Preferences' tab strip are still open.
 - [~] Contrast and non-color encodings — **audited 2026-09-09; what exists and
   what does not, stated precisely instead of left as one unchecked line.**
 

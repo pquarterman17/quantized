@@ -72,6 +72,7 @@ export default function SmartFoldersSection({ onFilterTag }: Props) {
         </span>
         <button
           className="qz-btn qz-ghost qz-sm"
+          aria-label="New smart folder"
           title="New smart folder…"
           onClick={() => {
             void promptSmartFolder("New smart folder", "", "").then((r) => {
@@ -103,6 +104,7 @@ export default function SmartFoldersSection({ onFilterTag }: Props) {
               </button>
               <button
                 className="qz-btn qz-ghost qz-sm"
+                aria-label="Edit smart folder"
                 title="Edit smart folder…"
                 onClick={() => {
                   void promptSmartFolder("Edit smart folder", sf.name, sf.query).then((r) => {
@@ -114,6 +116,7 @@ export default function SmartFoldersSection({ onFilterTag }: Props) {
               </button>
               <button
                 className="qz-btn qz-ghost qz-sm"
+                aria-label="Delete smart folder"
                 title="Delete smart folder (datasets are untouched)"
                 onClick={() => removeRowSafely(containerRef.current, () => removeSmartFolder(sf.id))}
               >

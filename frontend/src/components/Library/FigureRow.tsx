@@ -19,7 +19,7 @@ import { originPreviewDataUrl } from "../../lib/originPreview";
 import { resolveOriginFigureSources } from "../../lib/originSources";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
-import { innerTabIndex, type TreeItemProps } from "../../lib/libraryTreeNav";
+import { innerTabIndex, spaceActivates, type TreeItemProps } from "../../lib/libraryTreeNav";
 import { lazyRegion } from "../../lib/lazyRegion";
 
 /** The saved-preview ToolWindow renders only after the "▣" button is clicked,
@@ -72,6 +72,9 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
   const siblingDatasets = datasets.filter((ds) => entry.siblingIds.includes(ds.id));
   const resolved = entry.datasetId != null;
   const inner = innerTabIndex(treeItem);
+  // V1: the tree's anchor is a <div role="treeitem"> (ARIA-in-HTML bars that
+  // role on a <button>); Space selects as the button's did, Enter is the tree's.
+  const Anchor = treeItem ? "div" : "button";
   const n = entry.figure.n_curves;
   const fidelity = entry.figure.fidelity;
   const fidelityText = fidelity
@@ -86,7 +89,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
         className={`qzk-fig-row${treeMode ? " qzk-fig-row-tree" : ""}${selected ? " selected" : ""}${!resolved ? " unresolved" : ""}`}
         style={treeMode && depth ? { paddingLeft: depth * 14 } : undefined}
       >
-        <button
+        <Anchor
           className={`qzk-fig-item${selected ? " selected" : ""}`}
           data-lib-row={`origin-figure:${entry.id}`}
           // In the tree an unresolved graph stays FOCUSABLE (aria-disabled, U5):
@@ -97,6 +100,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
           title={title}
           style={!treeMode && depth ? { marginLeft: depth * 14 } : undefined}
           onClick={() => (treeMode ? select() : openAndRemember())}
+          onKeyDown={treeItem ? (e) => spaceActivates(e, select) : undefined}
           onDoubleClick={treeMode ? () => openAndRemember() : undefined}
           onContextMenu={treeMode ? select : undefined}
           {...treeItem}
@@ -111,7 +115,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem
           <span className="qzk-fig-meta">
             {entry.stem}{fidelity ? ` · ${fidelity.status === "exact" ? "=" : "≈"}` : ""}
           </span>
-        </button>
+        </Anchor>
         <div className="qzk-origin-figure-actions" role="group" aria-label="Recovered graph actions">
           <button
             className="qz-icon-btn"

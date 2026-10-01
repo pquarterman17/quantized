@@ -270,6 +270,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
         <div style={{ display: "flex", gap: 4 }}>
           <button
             className="qz-icon-btn"
+            aria-label="New folder"
             title="New folder"
             onClick={() => createFolder(null, "New Folder")}
           >
@@ -278,10 +279,10 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
              *  instead of a literal ▦ that no longer means "folder"). */}
             {LIBRARY_NODE_GLYPH.folder}
           </button>
-          <button className="qz-icon-btn" title="Add demo dataset" onClick={onDemo}>
+          <button className="qz-icon-btn" aria-label="Add demo" title="Add demo dataset" onClick={onDemo}>
             ✚
           </button>
-          <button className="qz-icon-btn" title="Import data…" onClick={onImport}>
+          <button className="qz-icon-btn" aria-label="Import data" title="Import data…" onClick={onImport}>
             ⊞
           </button>
         </div>
@@ -300,6 +301,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
         {query.trim() !== "" && (
           <button
             className="qz-icon-btn"
+            aria-label="Save smart folder"
             title="Save this filter as a smart folder…"
             onClick={() => {
               void askParams("Save filter as smart folder", [
@@ -319,6 +321,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
         {query.trim() !== "" && (
           <button
             className="qz-icon-btn"
+            aria-label="Save collection"
             title="Save this filter as a Collection…"
             onClick={() => {
               void askParams("Save filter as Collection", [
