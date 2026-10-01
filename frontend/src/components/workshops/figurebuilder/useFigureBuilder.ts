@@ -31,9 +31,8 @@ import { inferErrorBindings, type ErrorBinding, type ErrorSide } from "../../../
 import { defaultDenseChannels, effectiveChannels } from "../../../lib/plotdata";
 import { xAxisIsDate } from "../../../lib/tickFormat";
 import type { AxisFormat, AxisScale, DataStruct, RefLine, Shape, SeriesStyle } from "../../../lib/types";
+import { nextFigureDocId } from "../../../store/idSeq";
 import { useActiveDataset, useApp } from "../../../store/useApp";
-
-let _docSeq = 0;
 
 // Output format/style/DPI constants live in figureOutputConstants.ts (pure
 // data, extracted to fund F2.4e's shape-drag addition) — re-exported here so
@@ -358,7 +357,7 @@ export function useFigureBuilder() {
   function saveAsFigure(name: string, live: boolean): void {
     const doc = buildLegacyFigureDoc(
       legacyState,
-      { id: `figd-${Date.now().toString(36)}-${++_docSeq}`, name, datasetId: active?.id ?? null, live },
+      { id: nextFigureDocId(), name, datasetId: active?.id ?? null, live },
       { fmt, dpi },
     );
     if (doc) addFigureDoc(doc);
