@@ -315,6 +315,7 @@ export default function FolderRow({ folder, depth, count, expanded, onFocus, tre
       {rename != null ? (
         <input
           className="qz-input qzk-folder-rename"
+          aria-label={`Rename "${folder.name}"`}
           autoFocus
           value={rename}
           onClick={(e) => e.stopPropagation()}

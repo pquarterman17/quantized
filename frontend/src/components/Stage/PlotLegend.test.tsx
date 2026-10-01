@@ -160,6 +160,14 @@ describe("PlotLegend free position (MAIN #18 — pointer-mode drag)", () => {
     expect(useApp.getState().legendXY).toBeNull();
   });
 
+  it("the inline label editor is named for the series it relabels", () => {
+    const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    fireEvent.doubleClick(container.querySelectorAll(".qzk-legend .it")[1]);
+    const input = container.querySelector(".qzk-legend input");
+    expect(input).toHaveAttribute("placeholder", "B");
+    expect(input).toHaveAccessibleName("Legend label for B");
+  });
+
   it("double-click on the box background resets to the nearest corner and clears legendXY", () => {
     useApp.setState({ legendXY: [0.9, 0.1], legendPos: "sw" }); // near the top-right -> "ne"
     const { container } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);

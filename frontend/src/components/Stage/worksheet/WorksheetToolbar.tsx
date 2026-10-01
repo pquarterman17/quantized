@@ -102,6 +102,7 @@ export default function WorksheetToolbar({
       </span>
       <input
         className="qz-input"
+        aria-label="Formula"
         placeholder="2*A + sqrt(B)"
         title={FORMULA_HELP}
         value={formula}
@@ -111,6 +112,7 @@ export default function WorksheetToolbar({
       />
       <input
         className="qz-input"
+        aria-label="New column name"
         placeholder="column name"
         value={colName}
         onChange={(e) => setColName(e.target.value)}

@@ -7,6 +7,8 @@
 // saved model; kept as its own sub-component + hook (useEquationFit) so
 // edits to the shared workshop files stay minimal.
 
+import { useId } from "react";
+
 import { DataTable } from "../../primitives/DataTable";
 import { Button } from "../../primitives";
 import { fmtNum as fmt } from "../../../lib/format";
@@ -27,6 +29,7 @@ interface Props {
 // library notifies its subscribers (CurveFitPanel's `useSavedFitModels`).
 export default function EquationModelPanel({ initial }: Props) {
   const eq = useEquationFit(initial);
+  const modelNameId = useId();
 
   const doSave = () => {
     eq.save();
@@ -141,11 +144,12 @@ export default function EquationModelPanel({ initial }: Props) {
         />
       )}
 
-      <label className="qzk-field-lbl" style={{ marginTop: 12 }}>
+      <label className="qzk-field-lbl" style={{ marginTop: 12 }} htmlFor={modelNameId}>
         Save as model
       </label>
       <div style={{ display: "flex", gap: 6 }}>
         <input
+          id={modelNameId}
           className="qz-input"
           style={{ flex: 1 }}
           placeholder="model name"

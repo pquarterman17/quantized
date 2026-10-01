@@ -343,6 +343,7 @@ export default function GridViewport({
           catLevels={(col) => categoricalLevels(data, col)}
           onEditCategoricalCell={onEditCategoricalCell}
           onEditCell={onEditCell}
+          colName={(col) => (col < 0 ? xName : data.labels[col] ?? `column ${col + 1}`)}
         />
       ))}
       {trailingRowSpacer > 0 && <div style={{ height: trailingRowSpacer }} aria-hidden="true" />}

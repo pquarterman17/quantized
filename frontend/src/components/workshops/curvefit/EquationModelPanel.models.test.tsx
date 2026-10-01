@@ -103,7 +103,8 @@ describe("saved model description + units (P2.7 slice 3)", () => {
     render(<EquationModelPanel initial={null} />);
     fireEvent.change(screen.getByLabelText("Equation"), { target: { value: "a*exp(-x/t)" } });
     fireEvent.change(await screen.findByLabelText("unit t"), { target: { value: "s" } });
-    fireEvent.change(screen.getByPlaceholderText("model name"), { target: { value: "Mine" } });
+    // Named by its visible caption, not by its placeholder alone.
+    fireEvent.change(screen.getByRole("textbox", { name: "Save as model" }), { target: { value: "Mine" } });
     fireEvent.change(screen.getByLabelText("model description"), { target: { value: "my decay" } });
     fireEvent.click(screen.getByRole("button", { name: "Save" }));
     expect(loadCustomModels()).toEqual([

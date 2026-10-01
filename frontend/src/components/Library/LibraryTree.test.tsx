@@ -9,7 +9,7 @@
 // mirrors that exact wiring so the test exercises the real reactive path
 // (expansion toggles re-flattening the hierarchy) instead of a frozen array.
 
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import LibraryTree from "./LibraryTree";
@@ -314,6 +314,15 @@ describe("LibraryTree — keyboard hijack guard: nested controls own their own k
     fireEvent.click(screen.getByText("Rename…"));
     return document.querySelector(".qzk-folder-rename") as HTMLInputElement;
   };
+
+  it("each rename input is named for what it renames, not left unnamed", () => {
+    useApp.setState({ folders: [fld("f1")] });
+    render(<Harness />);
+    expect(openRename()).toHaveAccessibleName('Rename "w1"');
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
+    fireEvent.doubleClick(within(folderRow("f1")).getByText("f1"));
+    expect(screen.getByRole("textbox", { name: 'Rename "f1"' })).toHaveValue("f1");
+  });
 
   it("Enter inside a rename input commits the rename WITHOUT also opening the row", () => {
     render(<Harness />);

@@ -145,6 +145,7 @@ describe("Library — focused project exploration", () => {
     await focusBookA();
 
     const input = screen.getByPlaceholderText(/Filter/);
+    expect(input).toHaveAccessibleName("Filter library"); // not by its placeholder alone
     fireEvent.change(input, { target: { value: "Sheet B" } });
     expect(await screen.findByText("Sheet B")).toBeInTheDocument();
     expect(screen.getByText("Searching project")).toBeInTheDocument();

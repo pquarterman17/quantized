@@ -379,6 +379,14 @@ describe("Worksheet computed columns (recompute)", () => {
     expect(useApp.getState().datasets[0].formulas).toBeUndefined();
   });
 
+  it("names the formula and column-name fields (not by placeholder, not by the help text)", () => {
+    render(<Worksheet />);
+    const formula = screen.getByRole("textbox", { name: "Formula" });
+    expect(formula).toHaveAttribute("placeholder", "2*A + sqrt(B)");
+    expect(formula).toHaveAccessibleDescription(/^Operators:/); // the help stays, as the description
+    expect(screen.getByRole("textbox", { name: "New column name" })).toHaveAttribute("placeholder", "column name");
+  });
+
   it("two rapid Enters add only ONE column, not two (review finding 6)", async () => {
     render(<Worksheet />);
     const input = screen.getByPlaceholderText("2*A + sqrt(B)");
