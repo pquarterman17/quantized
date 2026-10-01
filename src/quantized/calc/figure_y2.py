@@ -28,6 +28,7 @@ from numpy.typing import ArrayLike, NDArray
 
 from quantized.calc.figure import _apply_fill, _plot_kwargs, draw_series_axes
 from quantized.calc.figure_decor import _apply_region_shades, _split_region_shades_by_axis
+from quantized.calc.figure_overrides import legend_kwargs
 from quantized.calc.figure_scale import apply_axis_scale, resolve_axis_scale
 from quantized.calc.figure_styles import FigureStyle
 from quantized.calc.figure_ticks import apply_tick_formats, apply_tick_steps
@@ -201,11 +202,10 @@ def render_with_secondary_axis(
     primary-only request for its own subset -- title/labels/spines/grid/
     the override sweep/x_lim/y_lim all still apply to it there), draw the
     y2 subset via :func:`draw_secondary_axes` on a fresh ``ax.twinx()``,
-    then -- when a legend is warranted (more than one series total and no
-    explicit ``legend`` override, the SAME condition ``draw_series_axes``
-    uses for its own subset) -- REBUILD one combined legend on the primary
-    axes from both axes' handles+labels, in request order (primary artists
-    first, then y2's -- matching today's single-axes draw order).
+    then REBUILD one combined legend on the primary axes from both axes'
+    series, in display (``y_keys``) order -- the canvas legend's order -- under
+    the ``legend`` override's placement/title when there is one, else when
+    there is more than one series (see :func:`_combined_legend`).
 
     ``ov["y2_lim"]`` (fail-soft: absent = autoscale), when present, fixes
     the secondary axis range the SAME way ``x_lim``/``y_lim`` fix the
@@ -272,14 +272,51 @@ def render_with_secondary_axis(
     if y2_lim is not None:
         lo, hi = y2_lim
         ax2.set_ylim(None if lo is None else float(lo), None if hi is None else float(hi))
-    if len(series) > 1 and "legend" not in ov:
-        h1, l1 = ax.get_legend_handles_labels()
-        h2, l2 = ax2.get_legend_handles_labels()
-        existing = ax.get_legend()
-        if existing is not None:
-            existing.remove()
-        ax.legend(
-            h1 + h2, l1 + l2,
-            frameon=st.legend_box, fontsize=st.legend_font_size, loc=st.legend_location,
-        )
+    _combined_legend(fig, ax, st, ov, artists, y2_artists, y2_mask, n_series=len(series))
     return artists + y2_artists
+
+
+def _display_order(primary: list[Any], secondary: list[Any], y2_mask: Sequence[bool]) -> list[Any]:
+    """Interleave the two axes' per-series artists back into request (display)
+    order -- the order the canvas legend lists them in. Falls back to primary
+    then secondary if the counts do not line up with the mask."""
+    if len(primary) + len(secondary) != len(y2_mask) or sum(map(bool, y2_mask)) != len(secondary):
+        return primary + secondary
+    p, s = iter(primary), iter(secondary)
+    return [next(s) if on_y2 else next(p) for on_y2 in y2_mask]
+
+
+def _combined_legend(
+    fig: Any,
+    ax: Any,
+    st: FigureStyle,
+    ov: Mapping[str, Any],
+    primary: list[Any],
+    secondary: list[Any],
+    y2_mask: Sequence[bool],
+    *,
+    n_series: int,
+) -> None:
+    """ONE legend on the primary axes listing every series of BOTH axes, in
+    display order. With a ``legend`` override (every app request carries one)
+    it keeps that override's placement/title/show -- before, the override path
+    built the legend from the primary axes alone and the y2 series vanished
+    from it, while the canvas legend lists them (``tests/fixtures/wire/
+    y2_legend.json``). Without one, the preset legend for more than one series."""
+    legend = ov.get("legend")
+    if legend is None:
+        if n_series <= 1:
+            return
+        kw: dict[str, Any] | None = {
+            "frameon": st.legend_box, "fontsize": st.legend_font_size, "loc": st.legend_location,
+        }
+    else:
+        kw = legend_kwargs(fig, ax, st, legend, n_series=n_series)
+    existing = ax.get_legend()
+    if existing is not None:
+        existing.remove()
+    if kw is None:
+        return
+    ordered = _display_order(primary, secondary, y2_mask)
+    handles = [h for h in ordered if not str(h.get_label()).startswith("_")]
+    ax.legend(handles, [h.get_label() for h in handles], **kw)

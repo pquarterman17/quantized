@@ -25,7 +25,7 @@ from quantized.calc.figure_decor import (
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_shapes import _apply_shapes, _validate_shapes
 
-__all__ = ["_apply_overrides", "_validate_overrides", "apply_axis_shape_overrides"]
+__all__ = ["_apply_overrides", "_validate_overrides", "apply_axis_shape_overrides", "legend_kwargs"]
 
 _LEGEND_LOCS = frozenset({
     "best", "upper right", "upper left", "lower left", "lower right",
@@ -105,6 +105,54 @@ def apply_axis_shape_overrides(
         ax.grid(bool(ov["grid"]), which="both", alpha=st.grid_alpha or 0.3)
 
 
+def legend_kwargs(
+    fig: Any, ax: Any, st: Any, legend: Mapping[str, Any], *, n_series: int
+) -> dict[str, Any] | None:
+    """The ``ax.legend`` keyword arguments a ``legend`` override asks for, or
+    ``None`` when it asks for no legend. Shared with ``calc.figure_y2``, which
+    rebuilds ONE legend over both axes with this same placement and title."""
+    show = legend.get("show")
+    # A legend TITLE (Origin's bold legend header, decode-plan #52) forces
+    # the legend on even for a single series — the header is the point.
+    title = legend.get("title")
+    if not ((show is None and (n_series > 1 or title)) or show):
+        return None
+    frame = bool(legend.get("frame", st.legend_box))
+    loc = str(legend.get("loc", "best"))
+    kw: dict[str, Any] = {"frameon": frame, "fontsize": st.legend_font_size}
+    if title:
+        kw["title"] = str(title)
+    if loc == "outside right":
+        kw.update(loc="center left", bbox_to_anchor=(1.02, 0.5))
+    elif loc == "outside top":
+        kw.update(loc="lower center", bbox_to_anchor=(0.5, 1.02), ncols=max(1, n_series))
+    elif loc == "custom":
+        # #14 drag-to-place: anchor is a figure-fraction (fx, fy).
+        anchor = legend.get("anchor") or (0.5, 0.5)
+        kw.update(
+            loc="center",
+            bbox_to_anchor=(float(anchor[0]), float(anchor[1])),
+            bbox_transform=fig.transFigure,
+        )
+    elif loc == "axes":
+        # decode-plan #52: a frame-anchored Origin legend. The anchor is
+        # an AXES fraction -- Origin's legend frame fraction IS the axes
+        # fraction, so this is EXACT (ax.transAxes), not the lossy
+        # figure-space conversion "custom" uses. It is the box TOP-LEFT
+        # with fy measured DOWN from the top (screen convention, see
+        # PlotView.legendFrameXY) -> flip to matplotlib's bottom-origin
+        # axes fraction and pin the legend's upper-left corner there.
+        anchor = legend.get("anchor") or (0.0, 0.0)
+        kw.update(
+            loc="upper left",
+            bbox_to_anchor=(float(anchor[0]), 1.0 - float(anchor[1])),
+            bbox_transform=ax.transAxes,
+        )
+    else:
+        kw["loc"] = loc
+    return kw
+
+
 def _apply_overrides(
     fig: Any, ax: Any, st: Any, ov: Mapping[str, Any], *, n_series: int
 ) -> None:
@@ -113,44 +161,8 @@ def _apply_overrides(
     direction/length) are folded into the rc context by the caller."""
     legend = ov.get("legend")
     if legend is not None:
-        show = legend.get("show")
-        # A legend TITLE (Origin's bold legend header, decode-plan #52) forces
-        # the legend on even for a single series — the header is the point.
-        title = legend.get("title")
-        if (show is None and (n_series > 1 or title)) or show:
-            frame = bool(legend.get("frame", st.legend_box))
-            loc = str(legend.get("loc", "best"))
-            kw: dict[str, Any] = {"frameon": frame, "fontsize": st.legend_font_size}
-            if title:
-                kw["title"] = str(title)
-            if loc == "outside right":
-                kw.update(loc="center left", bbox_to_anchor=(1.02, 0.5))
-            elif loc == "outside top":
-                kw.update(loc="lower center", bbox_to_anchor=(0.5, 1.02), ncols=max(1, n_series))
-            elif loc == "custom":
-                # #14 drag-to-place: anchor is a figure-fraction (fx, fy).
-                anchor = legend.get("anchor") or (0.5, 0.5)
-                kw.update(
-                    loc="center",
-                    bbox_to_anchor=(float(anchor[0]), float(anchor[1])),
-                    bbox_transform=fig.transFigure,
-                )
-            elif loc == "axes":
-                # decode-plan #52: a frame-anchored Origin legend. The anchor is
-                # an AXES fraction -- Origin's legend frame fraction IS the axes
-                # fraction, so this is EXACT (ax.transAxes), not the lossy
-                # figure-space conversion "custom" uses. It is the box TOP-LEFT
-                # with fy measured DOWN from the top (screen convention, see
-                # PlotView.legendFrameXY) -> flip to matplotlib's bottom-origin
-                # axes fraction and pin the legend's upper-left corner there.
-                anchor = legend.get("anchor") or (0.0, 0.0)
-                kw.update(
-                    loc="upper left",
-                    bbox_to_anchor=(float(anchor[0]), 1.0 - float(anchor[1])),
-                    bbox_transform=ax.transAxes,
-                )
-            else:
-                kw["loc"] = loc
+        kw = legend_kwargs(fig, ax, st, legend, n_series=n_series)
+        if kw is not None:
             ax.legend(**kw)
         elif ax.get_legend() is not None:
             ax.get_legend().remove()

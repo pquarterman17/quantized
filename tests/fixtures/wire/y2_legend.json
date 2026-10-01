@@ -1,0 +1,1201 @@
+{
+  "cases": [
+    {
+      "name": "y2 series after the primary",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              0,
+              2,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              0,
+              0,
+              300
+            ],
+            [
+              0.5,
+              2.25,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              1,
+              0,
+              296
+            ],
+            [
+              1,
+              2.5,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              2,
+              0,
+              292
+            ],
+            [
+              1.5,
+              2.75,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              0,
+              1,
+              288
+            ],
+            [
+              2,
+              3,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              1,
+              1,
+              284
+            ],
+            [
+              2.5,
+              3.25,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              2,
+              1,
+              280
+            ]
+          ],
+          "labels": [
+            "Signal",
+            "Reference",
+            "dSignal",
+            "dRefPlus",
+            "dRefMinus",
+            "dX",
+            "Batch",
+            "Site",
+            "Temp"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au",
+            "au",
+            "au",
+            "au",
+            "",
+            "",
+            "K"
+          ],
+          "metadata": {
+            "x_column_long": "Index",
+            "x_column_unit": ""
+          },
+          "cat_levels": {
+            "6": [
+              "A",
+              "B",
+              "C"
+            ],
+            "7": [
+              "north",
+              "south"
+            ]
+          },
+          "level_order": {
+            "6": [
+              2,
+              0,
+              1
+            ]
+          }
+        },
+        "y_keys": [
+          0,
+          8
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y2_keys": [
+          8
+        ],
+        "y2_scale": "linear",
+        "y2_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "y2legend"
+      },
+      "legend": [
+        "Signal (au)",
+        "Temp (K)"
+      ],
+      "legend_title": null
+    },
+    {
+      "name": "y2 series first in display order",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              0,
+              2,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              0,
+              0,
+              300
+            ],
+            [
+              0.5,
+              2.25,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              1,
+              0,
+              296
+            ],
+            [
+              1,
+              2.5,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              2,
+              0,
+              292
+            ],
+            [
+              1.5,
+              2.75,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              0,
+              1,
+              288
+            ],
+            [
+              2,
+              3,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              1,
+              1,
+              284
+            ],
+            [
+              2.5,
+              3.25,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              2,
+              1,
+              280
+            ]
+          ],
+          "labels": [
+            "Signal",
+            "Reference",
+            "dSignal",
+            "dRefPlus",
+            "dRefMinus",
+            "dX",
+            "Batch",
+            "Site",
+            "Temp"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au",
+            "au",
+            "au",
+            "au",
+            "",
+            "",
+            "K"
+          ],
+          "metadata": {
+            "x_column_long": "Index",
+            "x_column_unit": ""
+          },
+          "cat_levels": {
+            "6": [
+              "A",
+              "B",
+              "C"
+            ],
+            "7": [
+              "north",
+              "south"
+            ]
+          },
+          "level_order": {
+            "6": [
+              2,
+              0,
+              1
+            ]
+          }
+        },
+        "y_keys": [
+          8,
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y2_keys": [
+          8
+        ],
+        "y2_scale": "linear",
+        "y2_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "y2legend"
+      },
+      "legend": [
+        "Temp (K)",
+        "Signal (au)"
+      ],
+      "legend_title": null
+    },
+    {
+      "name": "legend title",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              0,
+              2,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              0,
+              0,
+              300
+            ],
+            [
+              0.5,
+              2.25,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              1,
+              0,
+              296
+            ],
+            [
+              1,
+              2.5,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              2,
+              0,
+              292
+            ],
+            [
+              1.5,
+              2.75,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              0,
+              1,
+              288
+            ],
+            [
+              2,
+              3,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              1,
+              1,
+              284
+            ],
+            [
+              2.5,
+              3.25,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              2,
+              1,
+              280
+            ]
+          ],
+          "labels": [
+            "Signal",
+            "Reference",
+            "dSignal",
+            "dRefPlus",
+            "dRefMinus",
+            "dX",
+            "Batch",
+            "Site",
+            "Temp"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au",
+            "au",
+            "au",
+            "au",
+            "",
+            "",
+            "K"
+          ],
+          "metadata": {
+            "x_column_long": "Index",
+            "x_column_unit": ""
+          },
+          "cat_levels": {
+            "6": [
+              "A",
+              "B",
+              "C"
+            ],
+            "7": [
+              "north",
+              "south"
+            ]
+          },
+          "level_order": {
+            "6": [
+              2,
+              0,
+              1
+            ]
+          }
+        },
+        "y_keys": [
+          0,
+          8
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y2_keys": [
+          8
+        ],
+        "y2_scale": "linear",
+        "y2_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left",
+            "title": "Run 4"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "y2legend"
+      },
+      "legend": [
+        "Signal (au)",
+        "Temp (K)"
+      ],
+      "legend_title": "Run 4"
+    },
+    {
+      "name": "a hidden primary series",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              0,
+              2,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              0,
+              0,
+              300
+            ],
+            [
+              0.5,
+              2.25,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              1,
+              0,
+              296
+            ],
+            [
+              1,
+              2.5,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              2,
+              0,
+              292
+            ],
+            [
+              1.5,
+              2.75,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              0,
+              1,
+              288
+            ],
+            [
+              2,
+              3,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              1,
+              1,
+              284
+            ],
+            [
+              2.5,
+              3.25,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              2,
+              1,
+              280
+            ]
+          ],
+          "labels": [
+            "Signal",
+            "Reference",
+            "dSignal",
+            "dRefPlus",
+            "dRefMinus",
+            "dX",
+            "Batch",
+            "Site",
+            "Temp"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au",
+            "au",
+            "au",
+            "au",
+            "",
+            "",
+            "K"
+          ],
+          "metadata": {
+            "x_column_long": "Index",
+            "x_column_unit": ""
+          },
+          "cat_levels": {
+            "6": [
+              "A",
+              "B",
+              "C"
+            ],
+            "7": [
+              "north",
+              "south"
+            ]
+          },
+          "level_order": {
+            "6": [
+              2,
+              0,
+              1
+            ]
+          }
+        },
+        "y_keys": [
+          0,
+          8
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y2_keys": [
+          8
+        ],
+        "y2_scale": "linear",
+        "y2_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "y2legend"
+      },
+      "legend": [
+        "Signal (au)",
+        "Temp (K)"
+      ],
+      "legend_title": null
+    },
+    {
+      "name": "a renamed y2 series",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              0,
+              2,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              0,
+              0,
+              300
+            ],
+            [
+              0.5,
+              2.25,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              1,
+              0,
+              296
+            ],
+            [
+              1,
+              2.5,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              2,
+              0,
+              292
+            ],
+            [
+              1.5,
+              2.75,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              0,
+              1,
+              288
+            ],
+            [
+              2,
+              3,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              1,
+              1,
+              284
+            ],
+            [
+              2.5,
+              3.25,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              2,
+              1,
+              280
+            ]
+          ],
+          "labels": [
+            "Signal",
+            "Reference",
+            "dSignal",
+            "dRefPlus",
+            "dRefMinus",
+            "dX",
+            "Batch",
+            "Site",
+            "Temp"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au",
+            "au",
+            "au",
+            "au",
+            "",
+            "",
+            "K"
+          ],
+          "metadata": {
+            "x_column_long": "Index",
+            "x_column_unit": ""
+          },
+          "cat_levels": {
+            "6": [
+              "A",
+              "B",
+              "C"
+            ],
+            "7": [
+              "north",
+              "south"
+            ]
+          },
+          "level_order": {
+            "6": [
+              2,
+              0,
+              1
+            ]
+          }
+        },
+        "y_keys": [
+          0,
+          8
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y2_keys": [
+          8
+        ],
+        "y2_scale": "linear",
+        "y2_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6",
+            "legend": "T"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper left"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "y2legend"
+      },
+      "legend": [
+        "Signal (au)",
+        "T"
+      ],
+      "legend_title": null
+    },
+    {
+      "name": "a free-placed legend",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              0,
+              2,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              0,
+              0,
+              300
+            ],
+            [
+              0.5,
+              2.25,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              1,
+              0,
+              296
+            ],
+            [
+              1,
+              2.5,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              2,
+              0,
+              292
+            ],
+            [
+              1.5,
+              2.75,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              0,
+              1,
+              288
+            ],
+            [
+              2,
+              3,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              1,
+              1,
+              284
+            ],
+            [
+              2.5,
+              3.25,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              2,
+              1,
+              280
+            ]
+          ],
+          "labels": [
+            "Signal",
+            "Reference",
+            "dSignal",
+            "dRefPlus",
+            "dRefMinus",
+            "dX",
+            "Batch",
+            "Site",
+            "Temp"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au",
+            "au",
+            "au",
+            "au",
+            "",
+            "",
+            "K"
+          ],
+          "metadata": {
+            "x_column_long": "Index",
+            "x_column_unit": ""
+          },
+          "cat_levels": {
+            "6": [
+              "A",
+              "B",
+              "C"
+            ],
+            "7": [
+              "north",
+              "south"
+            ]
+          },
+          "level_order": {
+            "6": [
+              2,
+              0,
+              1
+            ]
+          }
+        },
+        "y_keys": [
+          0,
+          1,
+          8
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y2_keys": [
+          8
+        ],
+        "y2_scale": "linear",
+        "y2_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "custom",
+            "anchor": [
+              0.3,
+              0.4
+            ]
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "y2legend"
+      },
+      "legend": [
+        "Signal (au)",
+        "Reference (au)",
+        "Temp (K)"
+      ],
+      "legend_title": null
+    },
+    {
+      "name": "legend off",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5
+          ],
+          "values": [
+            [
+              0,
+              2,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              0,
+              0,
+              300
+            ],
+            [
+              0.5,
+              2.25,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              1,
+              0,
+              296
+            ],
+            [
+              1,
+              2.5,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              2,
+              0,
+              292
+            ],
+            [
+              1.5,
+              2.75,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              0,
+              1,
+              288
+            ],
+            [
+              2,
+              3,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              1,
+              1,
+              284
+            ],
+            [
+              2.5,
+              3.25,
+              0.1,
+              0.2,
+              0.05,
+              0.15,
+              2,
+              1,
+              280
+            ]
+          ],
+          "labels": [
+            "Signal",
+            "Reference",
+            "dSignal",
+            "dRefPlus",
+            "dRefMinus",
+            "dX",
+            "Batch",
+            "Site",
+            "Temp"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au",
+            "au",
+            "au",
+            "au",
+            "",
+            "",
+            "K"
+          ],
+          "metadata": {
+            "x_column_long": "Index",
+            "x_column_unit": ""
+          },
+          "cat_levels": {
+            "6": [
+              "A",
+              "B",
+              "C"
+            ],
+            "7": [
+              "north",
+              "south"
+            ]
+          },
+          "level_order": {
+            "6": [
+              2,
+              0,
+              1
+            ]
+          }
+        },
+        "y_keys": [
+          0,
+          8
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "y2_keys": [
+          8
+        ],
+        "y2_scale": "linear",
+        "y2_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": false
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "y2legend"
+      },
+      "legend": null,
+      "legend_title": null
+    }
+  ]
+}
