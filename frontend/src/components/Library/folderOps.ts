@@ -137,8 +137,11 @@ export async function applyActiveCorrectionsToFolder(folder: FolderNode): Promis
   if (!src?.corrections) return; // menu item is gated on this — belt and braces
   const ids = folderContents(folder.id).map((d) => d.id);
   if (ids.length === 0) return;
-  await s.applyCorrectionsToMany(src.id, ids);
-  toast(`applied corrections to ${ids.length} dataset(s) in "${folder.name}"`);
+  const applied = await s.applyCorrectionsToMany(src.id, ids);
+  // A partial failure was already toasted (danger) by the store action.
+  if (applied === ids.filter((id) => id !== src.id).length) {
+    toast(`applied corrections to ${applied} dataset(s) in "${folder.name}"`);
+  }
 }
 
 /** Ask which saved analysis template to run, then run it over every dataset in
