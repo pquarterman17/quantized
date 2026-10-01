@@ -45,6 +45,18 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-10-01 (bundle diet slice 15, `plans/BUNDLE_HEADROOM.md`) - pin
+ *  LOWERED 866,358 -> 863,207, by exactly the measured saving, so the
+ *  headroom slices 10-14 banked is unchanged (9,932 B on this tree). Three
+ *  lazy-only halves moved verbatim behind `export *` re-exports
+ *  (`lib/foldertreeQueries.ts`, `lib/desktopSaveBridge.ts`,
+ *  `lib/clipboardExtras.ts`); no importer, call or timing changed.
+ *  Exact bytes, `npm ci`-fresh, `.vite` wiped before each build:
+ *    `06a1a9ca` (parent)                                856,426
+ *    + foldertree lazy half                             854,602  (-1,824)
+ *    + desktopBridge save half, clipboard extras        853,275  (-1,327)
+ *  Net: -3,151 B.
+ *
  *  2026-09-25 (bundle diet slice 9, `plans/BUNDLE_HEADROOM.md`) - react and
  *  react-dom 19.2.8 -> 19.3.0 taken, FUNDED rather than raised; pin then
  *  LOWERED 868,308 -> 866,358 (`measured + 1,024`, rule 3's diet-pass path).
@@ -1737,7 +1749,7 @@ import { fileURLToPath } from "node:url";
  * modulepreloads. A clipboard-import split was also measured at 858.5 kB and
  * rejected. All three changes were reverted.
  */
-const EAGER_JS_BUDGET = 866_358;
+const EAGER_JS_BUDGET = 863_207;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

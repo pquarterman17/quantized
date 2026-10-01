@@ -1,6 +1,12 @@
 # Bundle headroom campaign
 
-**Current state (2026-10-01, after slice 14):** two click-time seams, both
+**Current state (2026-10-01, after slice 15):** three lazy-only halves split
+off behind `export *` re-exports, no seam. Parent `06a1a9ca` measured
+**856,426 B**; after, **853,275 B** (**−3,151 B**). The pin was LOWERED by
+that same amount, **866,358 → 863,207 B**, so the banked headroom is
+unchanged (**9,932 B**). See "Slice 15".
+
+**Previous state (2026-10-01, after slice 14):** two click-time seams, both
 `runLazy`, no render seam. Taken on the batch-11 head (`6dbdbb05`), which
 measured **860,080 B**, 6,278 B under the pin. Measured **854,211 B**
 (**−5,869 B**): the relink store leaves the entry chunk behind a tiny open-flag
@@ -2272,6 +2278,54 @@ body in `beforeAll`; `relinkCommands.test.ts` waits on the store's state.
 Slice 13's list minus these two, unchanged: `lib/foldertree.ts`'s lazy-only
 queries and `.dwk` parse (~1.9 kB), `lib/desktopBridge.ts`'s save helpers
 (~0.8 kB), `lib/clipboard.ts`'s `copyImageAsync`/`copySvgAsync` (~0.7 kB).
+
+### Slice 15 — three re-exported lazy halves, pin ratcheted DOWN — **DONE (2026-10-01)**
+
+**Measured net eager delta −3,151 B — pin LOWERED 866,358 → 863,207 B**
+
+The three candidates slices 13 and 14 left. Exact bytes, `npm ci`, then
+`node_modules/.vite` wiped before every build:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `06a1a9ca` (parent) | 856,426 | — |
+| + `lib/foldertree.ts` lazy half → `lib/foldertreeQueries.ts` | 854,602 | **−1,824** |
+| + `lib/desktopBridge.ts` save half → `lib/desktopSaveBridge.ts`, `lib/clipboard.ts` extras → `lib/clipboardExtras.ts` | 853,275 | **−1,327** |
+
+The last row is two moves measured together. Sourcemap attribution splits it
+roughly 1,025 B (desktopBridge, 2,013 → 988) and 442 B (clipboard, 1,576 →
+1,134). The method is the one `lib/desktopRelinkBridge.ts` already used:
+move the code only lazy modules call verbatim into a sibling and re-export it
+from the parent with `export *`. Rollup bundles a re-exported module only
+where its names are used, so each half ships with the lazy chunks that call
+it. No importer, test mock, call or timing changed, and no `import()` was
+added. That means there is no seam and no load-failure path to test.
+`preload-verify` passes (186 wrapped sites, 0 violations).
+
+- **foldertree:** the eager store slices need only the mutations
+  (`createFolder` … `migrateGroupsToFolders`) and `folderPath`. The tree
+  counts, captions, import reveal, drag-and-drop geometry and `.dwk` parse
+  serve only the Library tree, the rows, the Inspector, import and the codec.
+- **desktopBridge:** the eager app uses the shell check, the import picker,
+  the project open dialog and `pathState`. `readProject`, the save dialog
+  and write, the refusal helpers and `LOCK_LOST` serve only
+  `store/workspaceIO.ts` and `commands/recentProjectReopen.ts`.
+- **clipboard:** `tableToTSV`, `copyImageAsync` and `copySvgAsync` serve only
+  the worksheet view and the Copy Figure command.
+
+**Guard:** `DRAGGED_OUT`'s walk follows `export *`, so it would call each
+half eager. The new `REEXPORTED_LAZY_HALVES` arm in `architecture.test.ts`
+checks two things. No eager module except the parent imports a half, and no
+eager module imports a half's value name, or a namespace, from the parent.
+The guard went RED before the halves existed. Sabotage turned it RED on all
+three: `store/libraryPanel.ts` importing `parseFolders`, `App.tsx`
+importing `desktopSaveBridge` directly, and `commands/uiCommands.ts`
+importing `copySvgAsync`.
+
+**Pin:** lowered by exactly the measured saving, not to `measured + 1,024`.
+That keeps the headroom slices 10–14 banked for queued work (9,932 B on
+this tree) and locks in this slice's gain. Nothing is left on the
+slice-13 candidate list.
 
 ## What this does NOT change
 
