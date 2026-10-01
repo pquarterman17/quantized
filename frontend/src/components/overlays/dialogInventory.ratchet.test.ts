@@ -23,7 +23,8 @@ const sources = import.meta.glob("../../**/*.tsx", {
 
 /** Dialog surfaces that legitimately skip the shared focus hooks. */
 const OWN_FOCUS_CONTRACT: Record<string, string> = {
-  // Eager: must not import the lazy hook seam; traps Tab and restores itself.
+  // Eager: must not import the lazy hook seam; traps Tab and restores itself,
+  // and loads lib/modalInert on first open for the background inert.
   "CommandPalette.tsx": "eager palette with its own Tab trap and opener restore",
   // Non-modal: takes focus and restores it (useOpenerRestore), traps nothing.
   "ToolWindow.tsx": "non-modal workshop host",

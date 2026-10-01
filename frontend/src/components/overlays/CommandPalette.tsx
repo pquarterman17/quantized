@@ -8,7 +8,7 @@
 // `store/commands.ts`'s MAIN #9 note for the "keep in sync, document
 // divergences" precedent this follows.
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { contextPaletteActions } from "../../lib/paletteContextActions";
 import { fuzzy } from "../../lib/fuzzy";
@@ -22,6 +22,19 @@ export type { Action };
 // Resolved once at module load — the host platform does not change.
 const IS_MAC = isMacPlatform();
 
+// The background-`inert` registry every other modal uses (lib/modalInert.ts,
+// via the lazy `useDialogFocus`). Loaded on the first open rather than
+// imported: this component is eager and must not pull it into the entry
+// chunk. Once loaded it is held here, so every later open registers in the
+// same layout phase the other modals do.
+type ModalInert = typeof import("../../lib/modalInert");
+let modalInert: ModalInert | null = null;
+let modalInertLoad: Promise<ModalInert> | null = null;
+function loadModalInert(): Promise<ModalInert> {
+  modalInertLoad ??= import("../../lib/modalInert").then((m) => (modalInert = m));
+  return modalInertLoad;
+}
+
 export default function CommandPalette({ actions }: { actions: Action[] }) {
   const open = useApp((s) => s.cmdkOpen);
   const setCmdk = useApp((s) => s.setCmdk);
@@ -29,6 +42,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
   const [cursor, setCursor] = useState(0);
   const [menuCmds, setMenuCmds] = useState<Action[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   // R2 (PRIMARY_SOFTWARE_AUDIT_PLAN): give focus back to whatever opened the
   // palette. Without it every close dropped focus on <body>, where the global
@@ -51,7 +65,27 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `opener` is a ref
   }, [open]);
+  // The page behind goes inert while the palette is open. A failed chunk
+  // load only costs that: Tab is trapped here and the backdrop takes clicks.
+  useLayoutEffect(() => {
+    if (!open) return;
+    let live = true;
+    if (modalInert) modalInert.registerModal(dialogRef);
+    else
+      loadModalInert().then(
+        (m) => {
+          if (live) m.registerModal(dialogRef);
+        },
+        () => {},
+      );
+    return () => {
+      live = false;
+      modalInert?.releaseModal(dialogRef);
+    };
+  }, [open]);
   const close = () => {
+    // Lift the inert first: focus() into an inert background is refused.
+    modalInert?.releaseModal(dialogRef);
     restoreOpener();
     setCmdk(false);
   };
@@ -127,7 +161,14 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
     e.stopPropagation();
   };
 
-  let lastGroup = "";
+  // Consecutive matches of one group form a labelled `group` (the header is
+  // its name, not an option); a group can recur after a better-scoring match.
+  const runs: { group: string; items: { a: Action; m: (typeof matches)[number]["m"]; i: number }[] }[] = [];
+  matches.forEach(({ a, m }, i) => {
+    const last = runs[runs.length - 1];
+    if (last?.group === a.group) last.items.push({ a, m, i });
+    else runs.push({ group: a.group, items: [{ a, m, i }] });
+  });
 
   return (
     <div
@@ -142,6 +183,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
       {/* A headingless dialog, so named by aria-label; the input is an
           ARIA 1.2 combobox driving the listbox by aria-activedescendant. */}
       <div
+        ref={dialogRef}
         className="qzk-glass qz-cmdk"
         role="dialog"
         aria-label={PALETTE_LABEL.replace("…", "")}
@@ -165,16 +207,14 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
           {matches.length === 0 && (
             <div className="qz-cmdk-empty">No matching commands</div>
           )}
-          {matches.map(({ a, m }, i) => {
-            const header =
-              a.group !== lastGroup ? (
-                <div className="qz-cmdk-group">{a.group}</div>
-              ) : null;
-            lastGroup = a.group;
-            return (
-              <div key={a.id}>
-                {header}
+          {runs.map((grp, r) => (
+            <div key={`${r}-${grp.group}`} role="group" aria-labelledby={`${listId}-g${r}`}>
+              <div id={`${listId}-g${r}`} className="qz-cmdk-group" role="presentation">
+                {grp.group}
+              </div>
+              {grp.items.map(({ a, m, i }) => (
                 <div
+                  key={a.id}
                   id={`${listId}-${i}`}
                   role="option"
                   aria-selected={i === cursor}
@@ -190,9 +230,9 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
                   </span>
                   {a.shortcut && <span className="qz-shortcut">{formatShortcut(a.shortcut, IS_MAC)}</span>}
                 </div>
-              </div>
-            );
-          })}
+              ))}
+            </div>
+          ))}
         </div>
       </div>
     </div>
