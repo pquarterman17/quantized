@@ -50,7 +50,7 @@ const BREAK_GLYPH_W = 20;
  *  supplied by `renderBreakPanels` itself. */
 export type BreakCellOpts = Omit<
   BuildOptsArgs,
-  "width" | "height" | "xLim" | "seriesLabels" | "seriesStyles" | "linearPaths" | "pointsPaths"
+  "width" | "height" | "xLim" | "seriesLabels" | "seriesStyles" | "hidden" | "linearPaths" | "pointsPaths"
 >;
 
 export interface BreakPanelsArgs {
@@ -62,6 +62,10 @@ export interface BreakPanelsArgs {
   /** The store's per-CHANNEL styles (the flat plot's `seriesStyles`),
    *  projected onto each panel's `channels` the same way. */
   seriesStyles: Record<number, SeriesStyle>;
+  /** The window's hidden CHANNELS. A hidden channel stays in its panel's
+   *  payload with `show: false`, as on the flat canvas, so it is not drawn
+   *  while the export (which drops it) is matched series for series. */
+  hiddenChannels: readonly number[];
   /** uPlot cursor-sync group; see `MULTIPANEL_SYNC_KEY`. */
   syncKey: string;
   /** The shared x-zoom/pan propagation hook — one instance for the whole
@@ -107,6 +111,7 @@ export function renderBreakPanels(host: HTMLDivElement, args: BreakPanelsArgs): 
       // from its neighbour's.
       seriesLabels: p.channels.map((ch) => args.seriesLabels[ch]),
       seriesStyles: p.channels.map((ch) => args.seriesStyles[ch]),
+      hidden: p.channels.map((ch) => args.hiddenChannels.includes(ch)),
       linearPaths: LINEAR_PATHS,
       pointsPaths: POINTS_PATHS,
     });

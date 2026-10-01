@@ -4,6 +4,9 @@
 // display position (BUG-015's canvas positions, hidden series included). A
 // panel holding [B, C] used to paint B in `--series-1`, while the export drew it
 // in `--series-2`.
+//
+// A HIDDEN channel is not drawn on any break panel either (the export drops
+// it); it stays in the panel's payload with `show: false`, as on the flat canvas.
 
 import { render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,7 +24,7 @@ function MultiPanelStage() {
   return <RealMultiPanelStage composition={useEffectiveComposition(active)} />;
 }
 
-type SeriesOpts = { label?: string; stroke?: string };
+type SeriesOpts = { label?: string; stroke?: string; show?: boolean };
 const { created, MockUPlot } = vi.hoisted(() => {
   const created: { opts: { series: SeriesOpts[] } }[] = [];
   class MockUPlot {
@@ -159,6 +162,18 @@ describe("MultiPanelStage — break panels colour series by flat position (T2)",
     expect(exported.get("C")).toBe(PAINT[2]);
     expectScreenMatchesExport(exported);
     expect(screenStrokes()[1].find(([l]) => l === "C")?.[1]).toBe(PAINT[2]);
+  });
+
+  it("a hidden channel draws on no panel, so the drawn set is the export's", async () => {
+    const data = gapData(true);
+    reopenedBreakView(data, [1]);
+    await renderBreak();
+    const exported = [...exportColors(data).keys()];
+    expect(exported).toEqual(["A", "C"]);
+    for (const c of created) {
+      const drawn = c.opts.series.slice(1).filter((s) => s.show !== false).map((s) => s.label?.trim());
+      expect(drawn).toEqual(exported);
+    }
   });
 
   it("an explicit colour still wins on every panel", async () => {

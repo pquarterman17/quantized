@@ -245,10 +245,10 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   const spatial = panels.length > 0;
   const grid = useMemo(() => spatialGridSize(panels), [panels]);
 
-  // Paneled x-breaks (gap #21 residual) and facet grid. No precedence guard
-  // needed: the union makes the kinds exclusive, and a composition is never
-  // constructed around an EMPTY panel list — so a non-null array IS the mode.
+  // Paneled x-breaks (gap #21 residual) and facet grid. No precedence guard: the union makes
+  // the kinds exclusive and never wraps an EMPTY panel list — a non-null array IS the mode.
   const breakMode = breakPanels !== null;
+  const breakHidden = breakMode ? hiddenChannels : null; // break-only, so a hide never rebuilds the other legs
   const facet = facetPanels !== null;
   const facetGrid = useMemo(() => facetGridSize(facetPanels?.length ?? 0), [facetPanels]);
   // The explicit store xLim (a manual override / prior zoom) wins; otherwise
@@ -549,7 +549,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         // y-axis label, and its EXPORT carries the rename (and, R1, the styles)
         // — so both belong here as on the facet leg below. Channel-keyed,
         // projected per panel through `BreakPanel.channels`.
-        seriesLabels, seriesStyles: breakSeriesStyles,
+        seriesLabels, seriesStyles: breakSeriesStyles, hiddenChannels: breakHidden ?? [],
         syncKey,
         // Same x-zoom/pan sync idiom as the plain per-channel stack — a break
         // panel's x axis still means "this series' x", so zooming one seam
@@ -666,7 +666,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     refLines,
     styleList,
     labelList,
-    seriesLabels, seriesStyles, breakSeriesStyles, // FEATURE-001: the facet leg reads the channel-keyed map directly
+    seriesLabels, seriesStyles, breakSeriesStyles, breakHidden, // FEATURE-001: the facet leg reads the channel-keyed map directly
     autoSeriesStyles,
     errorBarsList,
     tool,
