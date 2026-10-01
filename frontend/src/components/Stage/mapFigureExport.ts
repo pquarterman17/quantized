@@ -90,6 +90,9 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
 export interface RunMapExportArgs {
   canvas: HTMLCanvasElement | null;
   payload: MapPayload | null;
+  /** The map is regridding: `payload` (and the canvas) still show the
+   *  PREVIOUS dataset/channels, so neither may go out under `stem`/`view`. */
+  loading?: boolean;
   view: MapExportView;
   /** Filename stem (the dataset name without its extension). */
   stem: string;
@@ -98,7 +101,11 @@ export interface RunMapExportArgs {
 
 /** Ask for format/style/title, then export: vector through the backend, PNG
  *  from the canvas. A cancelled dialog does nothing. */
-export async function runMapExport({ canvas, payload, view, stem, setStatus }: RunMapExportArgs): Promise<void> {
+export async function runMapExport({ canvas, payload, loading, view, stem, setStatus }: RunMapExportArgs): Promise<void> {
+  if (loading) {
+    setStatus("map export waits — the map is still loading");
+    return;
+  }
   const params = await askParams("Export map", [
     {
       key: "fmt",
