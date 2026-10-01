@@ -20,9 +20,12 @@
 
 type SelectionLib = typeof import("../lib/originFigureSelection");
 type SpatialLib = typeof import("../lib/originSpatialPanels");
+// Slice 18: the apply BODY itself (store/originApplyRun.ts) rides the same
+// load, so the action only ever runs it synchronously, as before.
+type RunLib = typeof import("./originApplyRun");
 
 /** Everything `applyOriginFigure` needs beyond the eager `lib/originFigures`. */
-export type OriginApplyLibs = SelectionLib & SpatialLib;
+export type OriginApplyLibs = SelectionLib & SpatialLib & RunLib;
 
 let cached: OriginApplyLibs | null = null;
 let inflight: Promise<OriginApplyLibs> | null = null;
@@ -42,9 +45,10 @@ export function loadOriginApplyLibs(): Promise<OriginApplyLibs> {
   inflight ??= Promise.all([
     import("../lib/originFigureSelection"),
     import("../lib/originSpatialPanels"),
+    import("./originApplyRun"),
   ])
-    .then(([selection, spatial]) => {
-      cached = { ...selection, ...spatial };
+    .then(([selection, spatial, run]) => {
+      cached = { ...selection, ...spatial, ...run };
       return cached;
     })
     .finally(() => {

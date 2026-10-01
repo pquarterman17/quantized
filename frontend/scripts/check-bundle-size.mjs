@@ -45,6 +45,19 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-10-01 (bundle diet slice 18, `plans/BUNDLE_HEADROOM.md`) - pin
+ *  LOWERED 854,029 -> 848,245, by exactly the measured saving, so the
+ *  headroom left on this tree (931 B) is unchanged. The Origin-figure apply
+ *  body (`store/originApplyRun.ts`) now arrives with the apply libraries
+ *  the action already loaded on demand, taking two lazy-only halves with
+ *  it (`lib/originOverlayFigure.ts`, `lib/originCurveText.ts`).
+ *  Exact bytes, `npm ci`-fresh, `.vite` wiped before each build:
+ *    `26110411` (parent)                                853,098
+ *    + apply body rides the apply-libs load             849,838  (-3,260)
+ *    + figure overlay half of `lib/originOverlay.ts`    848,113  (-1,725)
+ *    + curve style/legend half of `lib/originFigures`   847,314  (-799)
+ *  Net: -5,784 B.
+ *
  *  2026-10-01 (bundle diet slice 17, `plans/BUNDLE_HEADROOM.md`) - pin
  *  LOWERED 858,608 -> 854,029, by exactly the measured saving, so the
  *  headroom left on this tree (1,724 B) is unchanged. Three async load
@@ -1777,7 +1790,7 @@ import { fileURLToPath } from "node:url";
  * modulepreloads. A clipboard-import split was also measured at 858.5 kB and
  * rejected. All three changes were reverted.
  */
-const EAGER_JS_BUDGET = 854_029;
+const EAGER_JS_BUDGET = 848_245;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

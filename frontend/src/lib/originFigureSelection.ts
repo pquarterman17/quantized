@@ -9,17 +9,12 @@
 // ANY of its importers' chunks land, so one such import folds the whole thing
 // back into the entry chunk. `src/architecture.test.ts` guards that with an
 // allowlist of importers known to be lazy themselves. The eager half (Library
-// labels, import-time entry construction, legend templates) stays in
-// `./originFigures`.
+// labels, import-time entry construction) stays in `./originFigures`; the
+// curve style and legend-template helpers are `./originCurveText` (slice 18).
 
 import { originErrKeys, originHiddenChannels } from "./errorbars";
-import {
-  curveDisplayName,
-  figureLayerFamily,
-  originCurveSeriesStyle,
-  resolveLegendTemplate,
-  type OriginFigureEntry,
-} from "./originFigures";
+import { curveDisplayName, originCurveSeriesStyle, resolveLegendTemplate } from "./originCurveText";
+import { figureLayerFamily, type OriginFigureEntry } from "./originFigures";
 import type {
   Annotation,
   Dataset,

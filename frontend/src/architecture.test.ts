@@ -2744,6 +2744,13 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       call: 'import("./projectLockRun")',
     },
     {
+      // SLICE 18: the Origin-figure apply body. It rides the apply-libs load,
+      // so `applyOriginFigure` still runs it synchronously once loaded.
+      module: "/store/originApplyRun.ts",
+      loader: "/store/originApplyLibs.ts",
+      call: 'import("./originApplyRun")',
+    },
+    {
       module: "/components/Library/OriginSavedPreviewWindow.tsx",
       loader: "/components/Library/FigureRow.tsx",
       call: 'import("./OriginSavedPreviewWindow")',
@@ -3423,6 +3430,14 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // which only it reached eagerly).
     "/lib/openWorkspaceReplace.ts",
     "/store/projectLockLifecycle.ts",
+    // SLICE 18 (2026-10-01): the two halves only the Origin-apply modules
+    // call. `lib/originOverlayFigure.ts` is the figure overlay builder (the
+    // apply body imports it) and `lib/originCurveText.ts` the curve style and
+    // legend-text helpers (the body's overlay half and the selection lib
+    // import it). Neither is re-exported from its old home: an `export *`
+    // kept the overlay half in `lib/originOverlay.ts`'s eager chunk.
+    "/lib/originOverlayFigure.ts",
+    "/lib/originCurveText.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

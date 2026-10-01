@@ -1,6 +1,13 @@
 # Bundle headroom campaign
 
-**Current state (2026-10-01, after slice 17):** three async load seams, each
+**Current state (2026-10-01, after slice 18):** the Origin-figure apply body
+now arrives with the apply libraries the action already loaded on demand, and
+takes two lazy-only halves with it. Parent `26110411` measured **853,098 B**
+(931 B under the pin after later batches); after, **847,314 B**
+(**−5,784 B**). The pin was LOWERED by that same amount, **854,029 →
+848,245 B**, so the headroom is unchanged (**931 B**). See "Slice 18".
+
+**Previous state (2026-10-01, after slice 17):** three async load seams, each
 behind a user action (open workspace, workbook Paste/Duplicate, the
 project-lock commands). Parent `482f4569` measured **856,884 B** (1,724 B
 under the pin after later batches); after, **852,305 B** (**−4,579 B**). The
@@ -2516,6 +2523,117 @@ passes (190 wrapped sites, 0 violations).
 
 **Pin:** lowered by exactly the measured saving, the slice-15 convention. That
 locks in the gain and keeps the 1,724 B of headroom this tree had.
+
+### Slice 18 — the Origin apply body rides the apply-libs load, pin ratcheted DOWN — **DONE (2026-10-01)**
+
+**Measured net eager delta −5,784 B — pin LOWERED 854,029 → 848,245 B**
+
+Later batches had taken the tree to 853,098 B, 931 B under the pin.
+Exact bytes, `npm ci`, then `node_modules/.vite` wiped before every build.
+Rows are cumulative; the parent and the last row were reproduced after a
+second `npm ci`:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `26110411` (parent) | 853,098 | — |
+| + `applyOriginFigure`'s body → `store/originApplyRun.ts`, loaded with the apply libs | 849,838 | **−3,260** |
+| + figure overlay half of `lib/originOverlay.ts` → `lib/originOverlayFigure.ts` | 848,113 | **−1,725** |
+| + curve style/legend half of `lib/originFigures.ts` → `lib/originCurveText.ts` | 847,314 | **−799** |
+
+**How the candidates were found.** A dominator walk over the static import
+graph (TypeScript AST imports, type-only edges dropped) gave, for each eager
+module, the attributed bytes of everything that leaves the eager graph if its
+static importers are cut. The top of that list is shell, plot and store
+slices. Below them, `store/viewAppliers.ts` (6,640 B with what it alone
+reaches) stood out: most of it was the 240-line `applyOriginFigure` body,
+which already sat behind slice 1's lazy apply-libs preflight.
+
+#### The seam
+
+Slice 1 left `applyOriginFigure` synchronous on purpose. When
+`originApplyLibs()` is still null, the third preflight
+(`deferOriginApplyLibs`) loads the apply libraries and re-enters, and the
+body then runs synchronously, one undo step and one macro step. The body
+itself stayed eager. It now lives in `store/originApplyRun.ts`, moved
+verbatim, and `loadOriginApplyLibs` fetches it in the same `Promise.all` as
+`lib/originFigureSelection` and `lib/originSpatialPanels`. The action keeps
+its preflights and calls `libs.runOriginFigureApply(...)`.
+
+Nothing changes for the user or the callers. The first apply of a session
+already waited for that load, and the body is one more chunk in the same
+parallel fetch. Every later apply runs synchronously, as before. The action's
+signature, the one-edit-step wrapper and the macro text are unchanged. A body
+chunk that will not load rejects the same `Promise.all`, so it lands in the
+preflight's existing failure path: `couldn't apply Origin figure — …` as
+status and a danger toast, with nothing applied and no undo or macro entry.
+The failed load is not cached, so the next apply retries.
+
+#### The two halves, and why neither is re-exported
+
+With the body lazy, two groups of helpers had only lazy callers:
+
+- **`lib/originOverlayFigure.ts`:** `buildOverlayDataset`,
+  `originOverlayDataset`, `overlayBooks` and the style/label read-backs.
+  `lib/originOverlay.ts` keeps `buildSelectionOverlay` (eager, through
+  `lib/plotSelectedTogether.ts`), the shared `assembleOverlay` core (now
+  exported for the half) and `ORIGIN_OVERLAY_VERSION`.
+- **`lib/originCurveText.ts`:** `originCurveSeriesStyle`, `curveDisplayName`
+  and `resolveLegendTemplate`. Only the overlay half and
+  `lib/originFigureSelection.ts` call them.
+
+**The slice-15 method did not work here.** With the half re-exported from its
+parent by `export *`, the build left it in the parent's eager `originOverlay`
+chunk. The result was the same whether the lazy body imported the half
+directly or through the parent: 849,838 B, a saving of 0. Without the
+re-export, the half moved into the body's lazy chunk (−1,725 B). The
+parent's chunk is shared by eager and lazy importers, which is the likely
+difference from slice 15's halves; the cause was not pinned down further. So
+both halves are imported by path, and the two test files that named the moved
+functions now import them from the new modules. **Before pinning a half,
+check which chunk its sourcemap `sources` land in, not only the walk.**
+
+#### The boundary tax, measured again
+
+The first step split `lib/plotview.ts` out of the eager `figureEncoding` chunk
+into its own (78 → 79 eager chunks). The two chunks together went
+18,268 → 18,215 B, so the split itself cost nothing. Passing the three
+`plotview` helpers into the body through a context object, instead of
+importing them, measured **+137 B** worse and kept 79 chunks. It was dropped.
+
+#### Guards and tests
+
+`architecture.test.ts`: `store/originApplyRun.ts` is a `SEAMS` entry (loader
+`store/originApplyLibs.ts`). The two halves are `DRAGGED_OUT` entries, since
+lazy modules import them statically. Sabotage turned every arm RED.
+`store/viewAppliers.ts` value-importing `runOriginFigureApply` failed the
+static-import and reachability arms. `lib/originFigures.ts` re-exporting
+`./originCurveText` and `lib/plotSelectedTogether.ts` importing
+`overlayBooks` from the overlay half failed the reachability arm, naming both
+halves. `store/originApplyRun.lazyFail.test.ts` pins the load-failure
+contract and the retry. It was RED before the change, and RED again under the
+static-import sabotage. The existing apply specs warm the load in
+`beforeAll`, so they run unchanged. `preload-verify` passes (191 wrapped
+sites, 0 violations). Not measured in a browser (no Playwright browser here).
+
+#### Candidates still not taken
+
+- **The ROI-gadget compute bodies** (`store/gadget.ts`, 6,448 B with what it
+  alone reaches). `runQuickFit`, `runGadgetIntegrate`, `runGadgetStats` and
+  `runGadgetFft` are already async network calls behind a 350 ms debounce,
+  and each reads its state when it runs, so a seam would not change what it
+  computes. `runGadgetDifferentiate` is synchronous and would become async.
+  Estimated 2.5–3 kB.
+- **`confirmPendingRecipeApplication` and its Partial variant**
+  (`store/plotRecipes.ts`). They already await the lazy apply core. Their
+  early refusals must stay synchronous, so only the tail can move. Estimated
+  under 1 kB.
+- **Not candidates:** `facetByColumn`/`breakAtGaps` and `store/cellEdit.ts`
+  are synchronous actions with synchronous callers.
+  `lib/figureOverridesSanitize.ts` runs during the startup workspace
+  hydration.
+
+**Pin:** lowered by exactly the measured saving, the slice-15 convention. That
+locks in the gain and keeps the 931 B of headroom this tree had.
 
 ## What this does NOT change
 
