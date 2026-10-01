@@ -50,6 +50,7 @@ import {
   type ZoneName,
 } from "../../../lib/plotspec";
 import { toast } from "../../../store/toasts";
+import { asOneEditStep } from "../../../store/undoStep";
 import { plotIntentStageTab, useActiveDataset, useApp } from "../../../store/useApp";
 import { withFocusedEncoding } from "../../../store/windowDocuments";
 import { askConfirm } from "../../overlays/ConfirmDialog";
@@ -421,8 +422,8 @@ export function useGraphBuilder(): GraphBuilderState {
     );
   }
 
-  const createNewPlot = (): void => commitToPlot("new");
-  const applyToCurrent = (): void => commitToPlot("current");
+  const createNewPlot = (): void => asOneEditStep(useApp.getState, "apply graph", () => commitToPlot("new")); // ONE undo step
+  const applyToCurrent = (): void => asOneEditStep(useApp.getState, "apply graph", () => commitToPlot("current"));
 
   async function openInFigureBuilder(): Promise<void> {
     if (!ds) return;

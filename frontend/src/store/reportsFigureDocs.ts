@@ -76,9 +76,9 @@ export interface ReportsFigureDocsSlice {
    *  labelled `label` — the single write path for block-level edits (a
    *  figure sent from the plot, a block moved or removed in the viewer).
    *  `edit` runs against the store's live sheet, never a caller's stale
-   *  copy, so back-to-back edits compose. The ONLY report action here that
-   *  records history: those edits are small, easy to fumble, and have no
-   *  trash entry of their own (the others stay as they were). Returns
+   *  copy, so back-to-back edits compose. Records history, like the
+   *  renames, duplicate and figure save below; add and remove do not (a
+   *  removed report is recovered from the trash). Returns
    *  whether anything changed: an unknown id, or `edit` returning `null`
    *  (nothing to do), writes and records nothing. */
   updateReportSheet: (
@@ -126,10 +126,10 @@ export function createReportsFigureDocsSlice(set: SliceSet, get: SliceGet): Repo
         };
       }),
     removeReport: (id) => removeReportWithTrash(get, set, id),
-    renameReport: (id, name) =>
+    renameReport: (id, name) => (get().recordHistory("rename report"),
       set((s) => ({
         reports: s.reports.map((r) => (r.id === id ? { ...r, name } : r)),
-      })),
+      }))),
     updateReportSheet: (id, edit, label) => {
       const entry = get().reports.find((r) => r.id === id);
       const report = entry ? edit(entry.report) : null;
@@ -140,14 +140,16 @@ export function createReportsFigureDocsSlice(set: SliceSet, get: SliceGet): Repo
     },
     setOpenReport: (openReportId) => set({ openReportId }),
     // ── Figure documents (#12) ──────────────────────────────────────────────
-    addFigureDoc: (doc) => set((s) => ({
+    addFigureDoc: (doc) => (get().recordHistory("save figure"), set((s) => ({
       figureDocs: [...s.figureDocs, doc], status: `figure "${doc.name}" saved`,
-    })),
+    }))),
     removeFigureDoc: (id) => removeFigureDocWithTrash(get, set, id),
-    renameFigureDoc: (id, name) => set((s) => ({
+    renameFigureDoc: (id, name) => (get().recordHistory("rename figure"), set((s) => ({
         figureDocs: s.figureDocs.map((f) => (f.id === id ? { ...f, name } : f)),
-    })),
-    duplicateFigureDoc: (id) =>
+    }))),
+    duplicateFigureDoc: (id) => {
+      if (!get().figureDocs.some((f) => f.id === id)) return;
+      get().recordHistory("duplicate figure");
       set((s) => {
         const src = s.figureDocs.find((f) => f.id === id);
         if (!src) return {};
@@ -157,7 +159,8 @@ export function createReportsFigureDocsSlice(set: SliceSet, get: SliceGet): Repo
           name: `${src.name} copy`,
         };
         return { figureDocs: [...s.figureDocs, copy] };
-    }),
+      });
+    },
     openFigureDraft: (doc) => {
       if (get().figurePublicationSession) { toast("finish or cancel the current Publication Preview first", "danger"); set({ status: "finish or cancel the current Publication Preview first" }); return; } if (!doc || !docRenderable(doc, new Set(get().datasets.map((dataset) => dataset.id)))) return;
       if (doc.live && doc.datasetId) get().setActive(doc.datasetId);

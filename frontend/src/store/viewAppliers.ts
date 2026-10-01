@@ -63,7 +63,10 @@ import { nextDatasetId } from "./idSeq";
 import { originApplyLibs } from "./originApplyLibs"; // apply-only half: lazy chunk
 import { confirmOriginReapplyDiscard, deferOriginApplyLibs, deferOriginFigureApply } from "./originFigureApply";
 import { toast } from "./toasts";
+import { asOneEditStep } from "./undoStep";
 import type { AppState } from "./useApp";
+
+const ORIGIN_APPLY_LABEL = "apply Origin figure";
 
 // Origin figures apply boxed + gridless (item 4; grid undecodable) — Origin's clean look, ticks still draw, user re-enables.
 // Origin figures apply gridless + boxed + a clean read-only legend (decode
@@ -101,7 +104,7 @@ export interface ViewAppliersSlice {
 }
 
 export function createViewAppliersSlice(set: SliceSet, get: SliceGet): ViewAppliersSlice {
-  return {
+  const slice: ViewAppliersSlice = {
     applyOriginFigure: (id, opts) => {
       const entry = get().originFigures.find((f) => f.id === id);
       if (!entry?.datasetId) return;
@@ -112,6 +115,9 @@ export function createViewAppliersSlice(set: SliceSet, get: SliceGet): ViewAppli
       // synchronous path on the second pass (see store/originApplyLibs.ts).
       const libs = originApplyLibs();
       if (!libs) return deferOriginApplyLibs(get, id, opts);
+      // Past every preflight: the apply happens now, as ONE undo step (the
+      // wrapper below folds a new window's and a new overlay's own entries in).
+      get().recordHistory(ORIGIN_APPLY_LABEL);
       // Item 9: open a NEW window for this figure instead of overwriting the
       // focused one. Creating (bound to the figure's dataset) then focusing
       // BEFORE any of the apply logic below runs means every `setActive`/
@@ -439,4 +445,6 @@ export function createViewAppliersSlice(set: SliceSet, get: SliceGet): ViewAppli
       get().recordMacro(`Break x-axis at gaps`, `qz.breakAtGaps(${lit(datasetId)})`);
     },
   };
+  const applyOriginFigure = slice.applyOriginFigure;
+  return { ...slice, applyOriginFigure: (id, opts) => asOneEditStep(get, ORIGIN_APPLY_LABEL, () => applyOriginFigure(id, opts)) };
 }
