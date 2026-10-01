@@ -23,7 +23,7 @@ import uPlot from "uplot";
 
 import type { HalfLim } from "../../lib/axisLim";
 import { limOr } from "../../lib/axisLimFields";
-import { resolveCanvasLims } from "../../lib/canvasLims";
+import { drawableLim, resolveCanvasLims } from "../../lib/canvasLims";
 
 import {
   breakPanelsOf,
@@ -258,14 +258,14 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   // The explicit store xLim (a manual override / prior zoom) wins; otherwise
   // the union domain across every facet panel — one shared horizontal scale.
   const facetXLim = useMemo(
-    () => (facet ? limOr(xLim, sharedXDomain(facetPanels!)) : null),
-    [facet, facetPanels, xLim],
+    () => (facet ? limOr(drawableLim(xLim, xScale), sharedXDomain(facetPanels!)) : null), // log: a side <= 0 is auto
+    [facet, facetPanels, xLim, xScale],
   );
   // Break panels share ONE y-domain instead (each keeps its own x-range) — an
   // honest axis break only elides x, never y.
   const breakYLim = useMemo(
-    () => (breakMode ? limOr(yLim, sharedYDomain(breakPanels!, breakHidden ?? [])) : null),
-    [breakMode, breakPanels, yLim, breakHidden],
+    () => (breakMode ? limOr(drawableLim(yLim, yScale), sharedYDomain(breakPanels!, breakHidden ?? [])) : null),
+    [breakMode, breakPanels, yLim, yScale, breakHidden],
   );
 
   // Channels actually drawn (y selection minus the x-axis channel), in order
