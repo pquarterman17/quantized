@@ -6,7 +6,7 @@
 // each request carries a sequence number and only the latest one applies, and
 // commit uses the model that PRODUCED the result.
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { CalcResult, DataStruct } from "../lib/types";
 import { useApp } from "./useApp";
@@ -34,6 +34,13 @@ function deferredFits() {
   );
   return pending;
 }
+
+// The compute bodies load on the first ROI compute (bundle diet slice 19).
+// Warm that load once, so the fake-timer specs below see the debounce run the
+// body on the same tick it always did.
+beforeAll(async () => {
+  await useApp.getState().runQuickFit();
+});
 
 beforeEach(() => {
   vi.clearAllMocks();

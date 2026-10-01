@@ -1,6 +1,12 @@
 # Bundle headroom campaign
 
-**Current state (2026-10-01, after slice 18):** the Origin-figure apply body
+**Current state (2026-10-01, after slice 19):** the five ROI-gadget region
+computes load on the first debounced compute. Batch 24's head `1d88745f`
+measured **848,804 B**, 559 B OVER the pin; after, **846,002 B**
+(**−2,802 B**). The pin was LOWERED to `measured + 1,000`, **848,245 →
+847,002 B**, leaving **1,000 B** of headroom. See "Slice 19".
+
+**Previous state (2026-10-01, after slice 18):** the Origin-figure apply body
 now arrives with the apply libraries the action already loaded on demand, and
 takes two lazy-only halves with it. Parent `26110411` measured **853,098 B**
 (931 B under the pin after later batches); after, **847,314 B**
@@ -2634,6 +2640,91 @@ sites, 0 violations). Not measured in a browser (no Playwright browser here).
 
 **Pin:** lowered by exactly the measured saving, the slice-15 convention. That
 locks in the gain and keeps the 931 B of headroom this tree had.
+
+### Slice 19 — the ROI-gadget computes behind `import()`, pin ratcheted DOWN — **DONE (2026-10-01)**
+
+**Measured net eager delta −2,802 B — pin LOWERED 848,245 → 847,002 B**
+
+Batch 24 had taken the tree to 848,804 B, 559 B OVER the pin. Exact bytes,
+`npm ci`, then `node_modules/.vite` wiped before every build:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `1d88745f` (parent) | 848,804 | — |
+| + the five ROI-gadget region computes → `store/gadgetRun.ts`, behind `import()` | 846,002 | **−2,802** |
+
+**The brief's batch-24 candidates were checked first and left alone.**
+`lib/axisLim.ts` (390 B), `lib/canvasLims.ts` (262 B) and
+`components/Stage/useResolvedLims.ts` (286 B) resolve the plot's limits on
+every render. `lib/plotsnapshot.ts` (2,368 B) is reached by
+`lib/plotview.ts` and by `useLiveSnapshotPublish`, which `PlotStage` runs on
+every render. `lib/drawnSeriesStyle.ts` and `lib/libraryHelp.ts` are not in
+the eager chunks at all: the sourcemap attribution has no bytes for them.
+
+#### The seam
+
+Slice 18 left the gadget computes as a candidate. `store/gadget.ts` keeps
+the slice: its state, `setQfitRoi`, `setQfitModel`, `setGadgetMode`, the
+350 ms debounce, the `runGadget` dispatch, the cursors readout and both
+Commit actions. `runQuickFit`, `runGadgetIntegrate`, `runGadgetStats`,
+`runGadgetDifferentiate`, `runGadgetFft` and the shared `runRegion` moved
+verbatim to `store/gadgetRun.ts`. The slice passes the store, the request
+sequence and `dropQfitResult` in a context object, so the sequence still
+lives in one place. The bodies take `lib/differentiate.ts` and
+`lib/api/statsDescriptive.ts` with them.
+
+The computes run after the debounce, and each reads its state when it runs,
+so loading first changes when a compute runs, not what it computes. The
+first compute of a session waits for one small chunk. After that the loaded
+runner is cached and every compute starts as it did before.
+`runGadgetDifferentiate` now returns a `Promise`. Its only caller is the
+already-async `runGadget`.
+
+A body that will not load ends the compute in the mode's own error slot,
+like a failed request: `ROI gadget failed to load: …` in `qfitError` (fit)
+or `gadgetError` (the other modes), busy cleared, and nothing requested or
+drawn. If the region moved or was cleared while the chunk loaded, the
+failure is dropped silently, just as a stale response is. The failed load is
+not cached, so the next ROI move fetches again.
+
+**The boundary tax.** `lib/measure.ts` split out of the eager `quickfit`
+chunk into its own (78 → 79 eager chunks). The two chunks together went
+1,771 → 1,774 B, so the split cost 3 B. The entry grew 82 B for the loader.
+
+#### Guards and tests
+
+`architecture.test.ts`: `store/gadgetRun.ts` is a `SEAMS` entry (loader
+`store/gadget.ts`). `lib/differentiate.ts` and `lib/api/statsDescriptive.ts`
+are `DRAGGED_OUT` entries. Sabotage turned every arm RED.
+`store/gadget.ts` value-importing `createGadgetRun` failed the static-import
+and reachability arms. Value imports of `centralDifference` and of
+`statsDescriptive` in the same file failed the reachability arm, naming each
+module. Changing the loader's call to `import("./gadgetRun.ts")` failed the
+dynamic-import arm. `store/gadgetRun.lazyFail.test.ts` pins the load-failure
+contract for the fit, async and differentiate modes, the silent drop for a
+cleared region, and the retry. Four of its five cases were RED before the
+change; the silent-drop case also holds on the eager code. The file fails
+again under the static-import sabotage. `store/gadget.test.ts`,
+`store/gadgetStale.test.ts`, `store/quickfit.test.ts` and
+`store/quickfitRace.test.ts` warm the load in `beforeAll`, so their
+fake-timer specs run unchanged. `preload-verify`
+passes (195 wrapped sites, 0 violations). Not measured in a browser (no
+Playwright browser here).
+
+#### Candidates still not taken
+
+- **`commitGadgetFft` and `commitQfit`.** Both are synchronous user
+  actions, and the tests and chip call them synchronously. Each needs a
+  result only a loaded compute can produce, so the cached runner could carry
+  them. That would need the tests that seed `qfitResult` or
+  `gadgetFftPreview` by `setState` to warm the load first. Estimated under
+  1 kB together.
+- **`confirmPendingRecipeApplication` and its Partial variant**
+  (`store/plotRecipes.ts`), as slice 18 recorded. Estimated under 1 kB.
+
+**Pin:** the tree started over the pin, so it could not keep "the headroom
+this tree had". It was lowered to `measured + 1,000` instead, which leaves
+1,000 B for queued work and locks in the rest of the gain.
 
 ## What this does NOT change
 

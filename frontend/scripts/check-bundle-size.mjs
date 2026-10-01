@@ -45,6 +45,16 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-10-01 (bundle diet slice 19, `plans/BUNDLE_HEADROOM.md`) - pin
+ *  LOWERED 848,245 -> 847,002 (`measured + 1,000`). Batch 24 had taken the
+ *  tree 559 B OVER the pin. The five ROI-gadget region computes
+ *  (`store/gadgetRun.ts`) now load on the first debounced compute, taking
+ *  `lib/differentiate.ts` and `lib/api/statsDescriptive.ts` with them.
+ *  Exact bytes, `npm ci`-fresh, `.vite` wiped before each build:
+ *    `1d88745f` (parent)                                848,804
+ *    + ROI-gadget computes behind `import()`            846,002  (-2,802)
+ *  Net: -2,802 B, leaving 1,000 B of headroom.
+ *
  *  2026-10-01 (bundle diet slice 18, `plans/BUNDLE_HEADROOM.md`) - pin
  *  LOWERED 854,029 -> 848,245, by exactly the measured saving, so the
  *  headroom left on this tree (931 B) is unchanged. The Origin-figure apply
@@ -1790,7 +1800,7 @@ import { fileURLToPath } from "node:url";
  * modulepreloads. A clipboard-import split was also measured at 858.5 kB and
  * rejected. All three changes were reverted.
  */
-const EAGER_JS_BUDGET = 848_245;
+const EAGER_JS_BUDGET = 847_002;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to
