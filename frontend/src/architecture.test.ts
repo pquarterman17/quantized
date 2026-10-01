@@ -512,7 +512,18 @@ const STORE_PINS: Record<string, number> = {
   // and a recorded pipeline step, and `clearAll` (literally loadWorkspace
   // with an empty workspace) moved beside loadWorkspace in
   // store/workspaceHydration.ts; ratcheted down with the extraction.
-  "/store/useApp.ts": 1340,
+  // 1340 -> 1135 (2026-10-01, P4.1 sixth domain): the workshop flags —
+  // prefsOpen + 25 workshop/dialog open flags, the reflectivity/stat-stage
+  // seeds, the fit/peak/baseline overlays, the peak/anchor edit bridges and
+  // the map/contour settings (38 fields, 40 one-line setters, plus the four
+  // seed/bridge types, re-exported from here so no importer changed) — moved
+  // to the new store/workshopFlags.ts (WorkshopFlagsSlice, an own-state
+  // slice like macroPipeline.ts). None of the 40 writes `datasets`, records
+  // history or toasts; the one cross-domain write is `seedStatStage`'s
+  // `statMode: true`. store/workshopFlags.characterization.test.ts (poisoned
+  // whole-getState() diff per setter and branch + the initial values) was
+  // green before the move and is unchanged after it.
+  "/store/useApp.ts": 1135,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).

@@ -226,7 +226,12 @@ function decodeLayer(v: unknown): ModelLayer {
   if (v.graded !== undefined) {
     const g = v.graded;
     if (!isObj(g)) throw new Bad("graded");
-    layer.graded = { knots: nums(g.knots), method: oneOf<SplineMethod>(g.method, SPLINE_METHODS) };
+    layer.graded = {
+      knots: nums(g.knots),
+      method: oneOf<SplineMethod>(g.method, SPLINE_METHODS),
+      ...(g.isld !== undefined ? { isld: nums(g.isld) } : {}),
+      ...(g.positions !== undefined ? { positions: nums(g.positions) } : {}),
+    };
   }
   return layer;
 }
@@ -237,6 +242,7 @@ function decodeGradedSpec(v: unknown): GradedFitSpec {
     layer: need(index(v.layer), "layer"),
     method: oneOf<SplineMethod>(v.method, SPLINE_METHODS),
     slices: need(index(v.slices), "slices"),
+    ...(v.positions !== undefined ? { positions: nums(v.positions) } : {}),
   };
 }
 

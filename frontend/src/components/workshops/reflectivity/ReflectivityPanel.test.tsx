@@ -92,6 +92,28 @@ describe("ReflectivityPanel — graded layers", () => {
     expect(screen.getByRole("button", { name: "Run fit" })).toBeDisabled();
     expect(screen.getByRole("note")).toHaveTextContent("Graded layer 1 needs a thickness above 0 Å to fit.");
   });
+
+  it("offers isld knot rows once the layer's absorption is on", async () => {
+    await openFit();
+    fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "graded" } });
+    expect(screen.queryByRole("textbox", { name: "L1.knot0.isld value" })).toBeNull();
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Layer 1 absorption" }));
+    for (const k of ["L1.knot0.isld", "L1.knot1.isld"]) {
+      expect(screen.getByRole("textbox", { name: `${k} value` })).toBeInTheDocument();
+      expect(screen.getByRole("checkbox", { name: `vary ${k}` })).not.toBeChecked();
+    }
+    // A value typed in the table is the model's absorption knot.
+    fireEvent.change(screen.getByRole("textbox", { name: "L1.knot1.isld value" }), { target: { value: "2e-8" } });
+    expect(screen.getByRole("textbox", { name: "Layer 1 absorption knots" })).toHaveValue("0, 0.02");
+  });
+
+  it("refuses positions the backend would refuse, with the same one-line reason", async () => {
+    await openFit();
+    fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "graded" } });
+    fireEvent.change(await screen.findByRole("textbox", { name: "Layer 1 knot positions" }), { target: { value: "0.6, 0.3" } });
+    expect(screen.getByRole("button", { name: "Run fit" })).toBeDisabled();
+    expect(screen.getByRole("note")).toHaveTextContent("Layer 1's knot positions must be strictly increasing.");
+  });
 });
 
 describe("ReflectivityPanel — Spin asym.", () => {

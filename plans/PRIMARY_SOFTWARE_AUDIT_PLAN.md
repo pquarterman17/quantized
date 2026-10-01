@@ -9957,6 +9957,11 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   "clears" a field back to its own default still shows as a diff). Still
   `[~]` because the practice is per-domain and `store/useApp.ts` has more
   domains left.
+  **Sixth domain (2026-10-01)**: `store/workshopFlags.characterization.test.ts`,
+  107 specs over the 40 workshop-flag/seed/overlay/map setters plus the 38
+  initial values, green at `36439baf` before the move and unchanged after.
+  Sabotage-checked: an extra field write in `setMapRes` and a
+  `recordHistory` call in `setShortcutsOpen` each failed their specs.
 - [~] Split one owned domain per PR with unchanged behavior/contracts.
   **ONE domain extracted 2026-09-17**, characterization tests first: the
   singleton **PlotView writers** — axis scales/limits/steps/tick formats/
@@ -10388,6 +10393,24 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   gap. LOW (confirmed): this note's own "the two plain boolean
   flip-setters (`startMacro`/`stopMacro`/`setPipelineRunning`)" named three,
   not two — corrected to "three" above.
+
+  **SIXTH domain extracted 2026-10-01**: the **workshop flags** — `prefsOpen`
+  and 25 workshop/dialog open flags, the `reflectivitySeed`/`statStageSeed`
+  one-shot seeds, the fit/peak/baseline overlays, the peak-marker and
+  baseline-anchor edit bridges, and the map/contour settings (38 fields, 40
+  one-line setters, plus the four seed/bridge types, re-exported from
+  `useApp.ts` so no importer changed) — moved to the new
+  `store/workshopFlags.ts` (268 lines, `WorkshopFlagsSlice`, an own-state
+  slice like `macroPipeline.ts`). `store/useApp.ts` **1,339 → 1,135 lines
+  (−204)**; `STORE_PINS` 1,340 → 1,135. No setter writes `datasets`,
+  records history or toasts; the one cross-domain write is
+  `seedStatStage`'s `statMode: true`. Other slices still write some of these
+  fields inside their own gestures (figure builder open/close, page composer,
+  `fitOverlay` from the gadget and fit recalc, the `.dwk` overlay reset); this
+  module owns the one-field setters. Composed initial store unchanged: 601
+  keys (386 functions), values identical apart from the time-based window id.
+  Eager bundle 860,011 → 860,043 B (+32 B, the creator wrapper), both built
+  after `npm ci` and a `.vite` wipe; `EAGER_JS_BUDGET` untouched.
 - [x] Generate clients/types where it reduces drift. **Done** (`91583f9c`,
   2026-09-03): `npm run api:types` generates `src/lib/api/schema.d.ts` from
   the dumped OpenAPI document; `ci.yml`'s "Generated API types are up to

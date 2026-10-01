@@ -66,3 +66,63 @@ describe("LayerTable — graded (spline) layers", () => {
     expect(onUpdate).not.toHaveBeenCalled();
   });
 });
+
+const withGraded = (graded: NonNullable<ModelLayer["graded"]>) => LAYERS.map((l, i) => (i === 1 ? { ...l, graded } : l));
+const THREE = { knots: [2e-6, 4e-6, 6e-6], method: "pchip" as const };
+
+describe("LayerTable — graded absorption and knot positions", () => {
+  it("switches absorption on with one value per knot, and off again", async () => {
+    const onUpdate = mount(withGraded(THREE));
+    const toggle = await screen.findByRole("checkbox", { name: "Layer 1 absorption" });
+    expect(toggle).not.toBeChecked();
+    expect(screen.queryByRole("textbox", { name: "Layer 1 absorption knots" })).toBeNull();
+    fireEvent.click(toggle);
+    expect(onUpdate).toHaveBeenLastCalledWith(1, { graded: { ...THREE, isld: [0, 0, 0] } });
+  });
+
+  it("edits the absorption knots (10⁻⁶ Å⁻²) and switches them off", async () => {
+    const onUpdate = mount(withGraded({ ...THREE, isld: [0, 0, 0] }));
+    const field = await screen.findByRole("textbox", { name: "Layer 1 absorption knots" });
+    expect(field).toHaveValue("0, 0, 0");
+    fireEvent.change(field, { target: { value: "0.01, 0, 0.02" } });
+    expect(onUpdate).toHaveBeenLastCalledWith(1, { graded: { ...THREE, isld: [1e-8, 0, 2e-8] } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Layer 1 absorption" }));
+    expect(onUpdate).toHaveBeenLastCalledWith(1, { graded: THREE });
+  });
+
+  it("defaults to evenly spaced knots and takes custom fractional positions", async () => {
+    const onUpdate = mount(withGraded(THREE));
+    const field = await screen.findByRole("textbox", { name: "Layer 1 knot positions" });
+    expect(field).toHaveValue("");
+    expect(field).toHaveAttribute("placeholder", "evenly spaced");
+    expect(screen.getByRole("button", { name: "Layer 1 evenly spaced" })).toBeDisabled();
+    fireEvent.change(field, { target: { value: "0, 0.25, 1" } });
+    expect(onUpdate).toHaveBeenLastCalledWith(1, { graded: { ...THREE, positions: [0, 0.25, 1] } });
+  });
+
+  it("resets custom positions to evenly spaced", async () => {
+    const onUpdate = mount(withGraded({ ...THREE, positions: [0, 0.25, 1] }));
+    expect(await screen.findByRole("textbox", { name: "Layer 1 knot positions" })).toHaveValue("0, 0.25, 1");
+    fireEvent.click(screen.getByRole("button", { name: "Layer 1 evenly spaced" }));
+    expect(onUpdate).toHaveBeenLastCalledWith(1, { graded: THREE });
+  });
+
+  it("keeps a position list that is not numbers local and says why", async () => {
+    const onUpdate = mount(withGraded(THREE));
+    const field = await screen.findByRole("textbox", { name: "Layer 1 knot positions" });
+    fireEvent.change(field, { target: { value: "0, half, 1" } });
+    expect(field).toHaveValue("0, half, 1");
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter positions as numbers from 0 to 1.");
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ positions: [0, 0.6, 0.3] }, "Layer 1's knot positions must be strictly increasing."],
+    [{ positions: [0, 0.5, 1.5] }, "Layer 1's knot positions must lie within 0 to 1."],
+    [{ positions: [0, 1] }, "Layer 1 needs one knot position per knot (3)."],
+    [{ isld: [0, 1e-8] }, "Layer 1 needs an absorption value for every knot or for none."],
+  ])("says what the backend would refuse: %o", async (extra, message) => {
+    mount(withGraded({ ...THREE, ...extra }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(message);
+  });
+});

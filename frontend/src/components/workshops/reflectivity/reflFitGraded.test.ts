@@ -5,6 +5,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SldPreset } from "../../../lib/types";
+import { parseWorkspace, serializeWorkspace } from "../../../lib/workspace";
 import {
   applyBlockedReason,
   applyResults,
@@ -16,7 +17,8 @@ import {
   validateRows,
   type ParamOverrides,
 } from "./reflFitModel";
-import { decodeRecord, encodeRecord, REFL_FIT_RECORD_VERSION, type ReflFitRecord } from "./reflFitRecord";
+import { decodeRecord, encodeRecord, recordsFor, REFL_FIT_RECORD_VERSION, withFitRecord, type ReflFitRecord } from "./reflFitRecord";
+import { xrrDataset } from "./reflFit.testkit";
 import { gradedFitBlock, gradedSpecs } from "./reflGraded";
 import type { ModelLayer } from "./useReflectivity";
 
@@ -143,5 +145,115 @@ describe("a saved graded fit", () => {
     const stored = JSON.parse(JSON.stringify(encodeRecord(record)));
     stored.model.layers[1].graded = { knots: ["x"], method: "pchip" };
     expect(decodeRecord(stored)).toBeNull();
+  });
+});
+
+// Absorption (imaginary-SLD) knots and custom knot positions.
+const ABSORBING: ModelLayer = {
+  ...GRADED,
+  graded: { knots: [2e-6, 5e-6, 3e-6], method: "pchip", isld: [1e-8, 0, 2e-8], positions: [0, 0.3, 1] },
+};
+const ABS_STACK: ModelLayer[] = [STACK[0], ABSORBING, STACK[2]];
+const absRows = (over: ParamOverrides = NONE) => rows(over, ABS_STACK);
+
+describe("graded absorption knots in the fit", () => {
+  it("offers an isld row per knot after the SLD knots, only when absorption is on", () => {
+    const names = absRows().map((r) => r.name).filter((n) => n.startsWith("L1."));
+    expect(names).toEqual([
+      "L1.thickness",
+      "L1.knot0.sld", "L1.knot1.sld", "L1.knot2.sld",
+      "L1.knot0.isld", "L1.knot1.isld", "L1.knot2.isld",
+      "L1.roughness",
+    ]);
+    expect(rows().some((r) => r.name.includes(".knot") && r.name.endsWith(".isld"))).toBe(false);
+  });
+
+  it("gives an isld knot an absorption's controls and bounds (never negative)", () => {
+    const k = absRows().find((r) => r.name === "L1.knot1.isld")!;
+    expect(k).toMatchObject({ layer: 1, field: "isld", value: 0, vary: false, tie: "" });
+    expect([k.min, k.max]).toEqual(defaultBounds("isld", 0));
+    expect(k.min).toBeGreaterThanOrEqual(0);
+    const over: ParamOverrides = { layerCount: 3, byName: { "L1.knot2.isld": { vary: true, min: 0, max: 5e-8, tie: "" } } };
+    expect(toRequestParams(absRows(over)).find((p) => p.name === "L1.knot2.isld")).toEqual({
+      name: "L1.knot2.isld", value: 2e-8, vary: true, min: 0, max: 5e-8, tie: null,
+    });
+  });
+
+  it("sends the custom positions in the graded spec", () => {
+    expect(gradedSpecs(ABS_STACK)).toEqual([{ layer: 1, method: "pchip", slices: 60, positions: [0, 0.3, 1] }]);
+  });
+
+  it("edits and applies isld knots back into the model, keeping the positions", () => {
+    const edited = setLayerParam(ABS_STACK, PRESETS, "neutron", "L1.knot1.isld", 4e-9);
+    expect(edited[1].graded?.isld).toEqual([1e-8, 4e-9, 2e-8]);
+    // An isld knot on a layer without absorption changes nothing.
+    expect(setLayerParam(STACK, PRESETS, "neutron", "L1.knot0.isld", 1e-8)).toEqual(STACK);
+    const out = applyResults(ABS_STACK, PRESETS, "neutron", [
+      { name: "L1.knot0.isld", value: 1.5e-8 },
+      { name: "L1.knot1.sld", value: 4.5e-6 },
+    ]);
+    expect(out[1].graded).toEqual({ knots: [2e-6, 4.5e-6, 3e-6], method: "pchip", isld: [1.5e-8, 0, 2e-8], positions: [0, 0.3, 1] });
+  });
+
+  it("refuses to apply once absorption or the knot positions changed since the fit", () => {
+    expect(applyBlockedReason({ layers: STACK, radiation: "neutron" }, ABS_STACK, "neutron")).toMatch(/layer stack changed/);
+    // Fitted knot values mean something only at the positions they were fitted at.
+    const moved = ABS_STACK.map((l, i) => (i === 1 ? { ...l, graded: { ...l.graded!, positions: [0, 0.5, 1] } } : l));
+    expect(applyBlockedReason({ layers: ABS_STACK, radiation: "neutron" }, moved, "neutron")).toMatch(/layer stack changed/);
+    expect(applyBlockedReason({ layers: ABS_STACK, radiation: "neutron" }, ABS_STACK, "neutron")).toBeNull();
+  });
+
+  it("blocks a partial absorption profile before the fit runs", () => {
+    const partial = ABS_STACK.map((l, i) => (i === 1 ? { ...l, graded: { ...l.graded!, isld: [1e-8, 0] } } : l));
+    expect(gradedFitBlock(partial)).toBe("Layer 1 needs an absorption value for every knot or for none.");
+  });
+});
+
+describe("a saved graded fit with absorption and custom positions", () => {
+  const sent = toRequestParams(absRows());
+  const record: ReflFitRecord = {
+    version: REFL_FIT_RECORD_VERSION,
+    id: "rfit-2",
+    seq: 1,
+    fittedAt: "2026-10-01T00:00:00.000Z",
+    request: {
+      parameters: sent,
+      channels: [{
+        datasetId: "xrr", rCol: 0, drCol: null, dqCol: null, dqIsFwhm: false, spin: "none",
+        datasetName: "xrr.dat", rLabel: "R", drLabel: null, dqLabel: null, lambda: null, digest: "abc",
+      }],
+      settings: { xKind: "q", lambda: null, qMin: null, qMax: null, weighting: "dr", resolution: 0 },
+      weighting: "dr",
+      graded: gradedSpecs(ABS_STACK),
+    },
+    model: { layers: ABS_STACK, radiation: "neutron" },
+    result: {
+      parameters: [{ name: "L1.knot2.isld", value: 2.5e-8, stderr: 1e-9, vary: true, tie: null, at_bound: false }],
+      free: ["L1.knot2.isld"],
+      correlation: [[1]],
+      chi2: 10, reduced_chi2: 1, sum_sq_log: null, reduced_sum_sq_log: null,
+      n_points: 11, n_free: 1, success: true, message: "", n_evaluations: 5, weighting: "dr", warnings: [],
+      objective: { label: "reduced χ²", value: 1 },
+    },
+  };
+
+  it("keeps the isld knots and positions through a .dwk save and reopen", () => {
+    const [reopened] = parseWorkspace(serializeWorkspace({ datasets: withFitRecord([xrrDataset("xrr")], record) })).datasets;
+    const [back] = recordsFor(reopened);
+    expect(back.model.layers[1].graded).toEqual(ABSORBING.graded);
+    expect(back.request.graded).toEqual([{ layer: 1, method: "pchip", slices: 60, positions: [0, 0.3, 1] }]);
+    expect(back.request.parameters.filter((p) => p.name.includes(".knot") && p.name.endsWith(".isld")).map((p) => p.value)).toEqual([1e-8, 0, 2e-8]);
+    expect(back.result.parameters[0]).toMatchObject({ name: "L1.knot2.isld", value: 2.5e-8 });
+  });
+
+  it("skips a record whose positions or absorption knots are malformed", () => {
+    const bad = (patch: (s: { model: { layers: { graded: Record<string, unknown> }[] }; request: { graded: Record<string, unknown>[] } }) => void) => {
+      const stored = JSON.parse(JSON.stringify(encodeRecord(record)));
+      patch(stored);
+      return decodeRecord(stored);
+    };
+    expect(bad((s) => { s.model.layers[1].graded.positions = ["x"]; })).toBeNull();
+    expect(bad((s) => { s.model.layers[1].graded.isld = "none"; })).toBeNull();
+    expect(bad((s) => { s.request.graded[0].positions = [0, "y", 1]; })).toBeNull();
   });
 });
