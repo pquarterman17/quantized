@@ -31,8 +31,8 @@
 //               AND with the UI gesture's `stackMode: true`.
 //   S2 break  — FIXED (R1): break panels were built without the view's
 //               `seriesStyles`, so an explicit width 2 drew at the default 1.5.
-//   S3 decor  — the interactive legend shows no `legendTitle`; only the static
-//               (Origin) legend renders one.
+//   S3 decor  — FIXED (R2): the interactive legend now renders `legendTitle`
+//               as its heading, as the static legend and the export do.
 // Untagged (no canvas hit-testing): runs at the 100% project only.
 
 import { expect, test, type Page } from "@playwright/test";
@@ -262,7 +262,7 @@ test.describe("P4.2 regression matrix — screen canvas", () => {
     expect(g.waterfallOffset, "a non-zero offset is under test").toBeGreaterThan(0);
   });
 
-  test("decor: explicit styles, markers, step, fill, annotations, lines, shapes, shade (S3 pinned)", async ({ page }) => {
+  test("decor: explicit styles, markers, step, fill, annotations, lines, shapes, shade, legend title (S3)", async ({ page }) => {
     const { s, ax, lines, g } = await checkFlat(page, "decor");
     const p = s.panels[0];
     const [fx, fy] = [toPx(ax.x), toPx(ax.y)];
@@ -302,9 +302,9 @@ test.describe("P4.2 regression matrix — screen canvas", () => {
     // legend: corner, explicit swatches, dashed samples, the square marker
     expect(s.legend!.rows.map((r) => r.marker)).toEqual(["square", "none"]);
     expect(s.legend!.rows.every((r) => r.dash !== null)).toBe(true);
-    // S3: the interactive legend renders no title.
+    // S3 (fixed, R2): the interactive legend heads its rows with the title.
     expect(g.decor.legend.title).toBe("Runs");
-    expect(s.legend!.title, "S3 pin").toBeNull();
+    expect(s.legend!.title, "S3 legend title").toBe("Runs");
   });
 
   test("hidden: the hidden channel is not drawn and the others keep their slots", async ({ page }) => {

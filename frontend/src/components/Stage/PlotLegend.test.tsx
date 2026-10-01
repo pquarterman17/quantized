@@ -373,13 +373,29 @@ describe("PlotLegend static mode (decode #52 — applied Origin figure)", () => 
     expect(title?.textContent).toContain("Nb/Au");
   });
 
-  it("does not render a title header without legendStatic, or without a title", () => {
-    useApp.setState({ legendStatic: false, legendTitle: "Nb/Au" });
-    const a = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
-    expect(a.container.querySelector(".qzk-legend-title")).toBeNull();
-    useApp.setState({ legendStatic: true, legendTitle: null });
-    const b = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
-    expect(b.container.querySelector(".qzk-legend-title")).toBeNull();
+  it("renders the title as the interactive legend's heading and accessible name (R2)", () => {
+    useApp.setState({ legendStatic: false, legendTitle: "Runs" });
+    const { container, getByRole } = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+    const title = container.querySelector(".qzk-legend-title");
+    expect(title?.textContent).toBe("Runs");
+    // The heading sits first INSIDE the content wrapper, so content-driven
+    // (fit-to-contents) sizing and scrolling include it.
+    expect(container.querySelector(".qzk-legend-content")?.firstElementChild).toBe(title);
+    expect(getByRole("group", { name: "Runs" })).toBe(container.querySelector(".qzk-legend"));
+    // The rows stay interactive beside the heading.
+    expect(container.querySelectorAll(".qzk-legend-content > .it:not(.qzk-legend-title)")).toHaveLength(2);
+  });
+
+  it("renders no heading for a null, empty or blank title", () => {
+    for (const legendTitle of [null, "", "  "]) {
+      for (const legendStatic of [false, true]) {
+        useApp.setState({ legendStatic, legendTitle });
+        const r = render(<PlotLegend series={series} plotted={[0, 1]} hidden={[false, false]} />);
+        expect(r.container.querySelector(".qzk-legend-title")).toBeNull();
+        expect(r.getByRole("group", { name: "Plot legend" })).toBe(r.container.querySelector(".qzk-legend"));
+        r.unmount();
+      }
+    }
   });
 
   it("keeps the box draggable in pointer mode even when static", () => {
