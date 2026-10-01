@@ -6,8 +6,11 @@
 // What the body carries from the view, so the figure reads like the canvas:
 //   * the colormap, translated to matplotlib's name and orientation (the
 //     canvas' `rdbu` runs blue -> red, which matplotlib calls `RdBu_r`);
-//   * explicit colour limits, as a clamp of z — the canvas saturates there,
-//     and the route has no clim field;
+//   * explicit colour limits, as a clamp of z (the canvas saturates there)
+//     PLUS `z_limits`, the exact pair the canvas paints over
+//     (`mapRender.effectiveColorLimits`) -- a clamp alone left matplotlib
+//     normalising over the clamped data, so limits wider than the data
+//     exported the full colormap (`tests/fixtures/wire/map_color_limits.json`);
 //   * the log colour scale, as log10(z) with the colorbar label saying so —
 //     the heatmap kind has no log norm; non-positive cells become gaps,
 //     exactly as the canvas leaves them unpainted;
@@ -22,6 +25,7 @@ import type { MapPayload } from "../../lib/mapdataFetch";
 import { exportCanvasPng } from "../../lib/plotExport";
 import { runCancellable } from "../../store/pendingOps";
 import { askParams } from "../overlays/ParamDialog";
+import { effectiveColorLimits, minPositive } from "./mapRender";
 import { FIGURE_STYLES } from "../workshops/figurebuilder/figureOutputConstants";
 
 const MPL_CMAP: Record<ColormapName, string> = {
@@ -59,9 +63,24 @@ function zCell(v: number | null, view: MapExportView): number | null {
   return view.logZ ? Math.log10(z) : z;
 }
 
+/** The colour range the canvas paints for explicit limits, in the body's z
+ *  units (log10 under a log colour scale); null for auto. `mapRender.draw`'s
+ *  own `effectiveColorLimits` call, so the two cannot disagree. */
+function zLimits(p: MapPayload, view: MapExportView): [number, number] | null {
+  if (!view.colorLimits) return null;
+  const lim = effectiveColorLimits(
+    [view.colorLimits[0], view.colorLimits[1]],
+    view.logZ ? minPositive(p.zGrid) : p.zMin,
+    p.zMax,
+    view.logZ,
+  );
+  return lim && view.logZ ? [Math.log10(lim[0]), Math.log10(lim[1])] : lim;
+}
+
 /** The /api/export/map-figure body for what this map is showing. Pure. */
 export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOptions): MapFigureSpec {
   const zLabel = withUnit(p.zLabel, p.zUnit);
+  const limits = zLimits(p, view);
   const contour = view.contour.on
     ? {
         kind: "contourf",
@@ -75,6 +94,7 @@ export function mapFigureBody(p: MapPayload, view: MapExportView, o: MapExportOp
     x_axis: p.xAxis,
     y_axis: p.yAxis,
     z_grid: p.zGrid.map((row) => row.map((v) => zCell(v, view))),
+    ...(limits ? { z_limits: limits } : {}),
     ...contour,
     fmt: o.fmt,
     style: o.style,

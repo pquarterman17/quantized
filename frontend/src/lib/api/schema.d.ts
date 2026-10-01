@@ -8141,6 +8141,8 @@ export interface components {
              * @default
              */
             z_label?: string;
+            /** Z Limits */
+            z_limits?: number[] | null;
             /** Z Values */
             z_values?: number[] | null;
         };

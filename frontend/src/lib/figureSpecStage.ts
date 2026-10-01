@@ -11,6 +11,7 @@
 // the Stage routing into the graph of every importer of the builders.
 
 import type { FigureSpec } from "./api/figures";
+import { withDefaultTrace } from "./exportDefaultTrace";
 import type { StoreGet } from "./exportActive";
 import { buildFigureSpec, buildFigureSpecFromDocument, type FigureRenderOpts } from "./figureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
@@ -118,5 +119,8 @@ export function buildStageFigureSpec(
         greyExcluded: o.greyExcluded,
       })
     : buildFigureSpec(s, ds, stem, o, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
-  return extra.transparent === undefined ? spec : { ...spec, transparent: extra.transparent };
+  // The Preferences default trace the focused canvas draws in (Scatter / Line +
+  // markers / Step), read like `autoSeriesStyles` from the live store.
+  const traced = withDefaultTrace(spec, st.defaultTrace, st.seriesStyles);
+  return extra.transparent === undefined ? traced : { ...traced, transparent: extra.transparent };
 }

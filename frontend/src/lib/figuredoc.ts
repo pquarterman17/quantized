@@ -10,6 +10,7 @@
 
 import type { ErrorBinding } from "./errorRoles";
 import type { FigureOverrides } from "./figureOverrides";
+import { decodeCell } from "./nonFiniteCells";
 import { isAxisScale, scaleFromLog } from "./plotview";
 // The wire-style type AND its persistence sanitizer, both from the module that
 // owns them. It used to be a type-only import from `lib/exportStyles` (which
@@ -140,11 +141,25 @@ export function sanitizeFigureDocs(v: unknown, dsIds: ReadonlySet<string>): Figu
       live: o.live !== false,
     };
     if (!doc.live && typeof o.dataSnapshot === "object" && o.dataSnapshot !== null) {
-      doc.dataSnapshot = o.dataSnapshot as DataStruct;
+      doc.dataSnapshot = decodeSnapshotCells(o.dataSnapshot as DataStruct);
     }
     out.push(doc);
   }
   return out;
+}
+
+/** The save boundary (`encodePersistedCells`) writes NaN/±Infinity/-0 in a
+ *  frozen snapshot as sentinel strings, and a pre-sentinel file wrote NaN as
+ *  `null`. Read both back as numbers, the contract `figureDocument.ts`'s frozen
+ *  snapshot already keeps; anything else is left exactly as it was read. */
+function decodeSnapshotCells(snap: DataStruct): DataStruct {
+  const row = (cells: unknown): unknown =>
+    Array.isArray(cells) ? cells.map((c) => (c === null ? Number.NaN : (decodeCell(c) ?? c))) : cells;
+  return {
+    ...snap,
+    time: row(snap.time) as number[],
+    values: (Array.isArray(snap.values) ? snap.values.map(row) : snap.values) as number[][],
+  };
 }
 
 /** A FigureDoc can render only from its exact live source or its frozen

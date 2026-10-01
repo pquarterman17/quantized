@@ -71,6 +71,9 @@ class MapFigureRequest(BaseModel):
     cmap: str = "viridis"
     levels: int | list[float] = 12
     level_scale: str = "linear"  # linear|log
+    # [lo, hi] colour range (MapStage's explicit colour limits, in z_grid's
+    # units); None = the data's own extent. See calc.figure_map.render_map_figure.
+    z_limits: list[float] | None = None
     label_contours: bool = True
     colorbar: bool = True
     title: str = ""
@@ -108,7 +111,7 @@ def export_map_figure(req: MapFigureRequest) -> Response:
         label_contours=req.label_contours, colorbar=req.colorbar,
         title=req.title, x_label=req.x_label, y_label=req.y_label, z_label=req.z_label,
         width_in=req.width_in, height_in=req.height_in,
-        view_elev=req.view_elev, view_azim=req.view_azim,
+        view_elev=req.view_elev, view_azim=req.view_azim, z_limits=req.z_limits,
     )
     return Response(
         content=data,

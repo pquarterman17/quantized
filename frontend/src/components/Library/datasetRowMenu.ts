@@ -66,7 +66,7 @@ export function buildDatasetRowMenu(
   const moveIds = selected && selectedCount > 1 ? selectedIds : [d.id];
   const moveLabel = (dest: string) =>
     moveIds.length > 1 ? `Move ${moveIds.length} selected to ${dest}` : `Move to ${dest}`;
-  const moveToFolder = useApp.getState().moveDatasetToFolder;
+  const moveToFolder = useApp.getState().moveDatasetsToFolder; // one undo step for the whole selection
 
   return [
     // withQuickPlot (lib/quickPlotActions.ts): L0.38's ordering splices
@@ -81,7 +81,7 @@ export function buildDatasetRowMenu(
     ...folders.map(
       (f): ContextMenuItem => ({
         label: moveLabel(`"${f.name}"`),
-        run: () => moveIds.forEach((id) => moveToFolder(id, f.id)),
+        run: () => moveToFolder(moveIds, f.id),
         disabled: moveIds.length === 1 && d.folderId === f.id,
       }),
     ),
@@ -89,7 +89,7 @@ export function buildDatasetRowMenu(
       ? [
           {
             label: moveLabel("top level"),
-            run: () => moveIds.forEach((id) => moveToFolder(id, null)),
+            run: () => moveToFolder(moveIds, null),
           } as ContextMenuItem,
         ]
       : []),

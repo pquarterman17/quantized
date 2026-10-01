@@ -7148,6 +7148,20 @@
             "title": "Z Label",
             "type": "string"
           },
+          "z_limits": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Limits"
+          },
           "z_values": {
             "anyOf": [
               {

@@ -14,6 +14,7 @@ import {
 } from "../../lib/plotObjectLayout";
 import { effectiveChannels } from "../../lib/plotdata";
 import type { Annotation, Shape } from "../../lib/types";
+import { nextPlotObjectId } from "../../store/idSeq";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { IconButton } from "../primitives/IconButton";
 import { Button } from "../primitives";
@@ -122,7 +123,9 @@ export default function PlotObjectsCard() {
 
   const groupSelection = () => {
     if (selection.size < 2) return setStatus("Select at least two objects to group");
-    const groupId = `object-group-${Date.now().toString(36)}`;
+    // Persisted with the objects: drawn from the shared sequence so two
+    // groups made in one millisecond never merge.
+    const groupId = nextPlotObjectId("object-group");
     const annotationPatches: Record<string, Partial<Omit<Annotation, "id">>> = {};
     const shapePatches: Record<string, Partial<Omit<Shape, "id">>> = {};
     for (const key of selection) {

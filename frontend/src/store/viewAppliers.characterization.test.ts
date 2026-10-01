@@ -19,6 +19,9 @@
 //      exact hole review finding F4 found in the plotViewSettings pins), and
 //   2. the observable results — the applied axis/channel/composition values,
 //      the undo label pushed (or that none is), and the macro step recorded.
+//      (Undo-coverage audit, 2026-10-01: every applyOriginFigure branch now
+//      pushes ONE "apply Origin figure" entry, so `history`/`future` join each
+//      of its key sets.)
 //
 // The no-op branches are pinned the same way, with an EMPTY changed set: a
 // missing dataset, an empty analysis view, a column with no finite levels, no
@@ -764,8 +767,10 @@ describe("applyOriginFigure — cross-book overlay branch", () => {
         "composition",
         "datasets",
         "facetKey",
+        "future",
         "gadgetBusy",
         "gadgetError",
+        "history",
         "legendFrameXY",
         "legendStatic",
         "legendTitle",
@@ -790,14 +795,14 @@ describe("applyOriginFigure — cross-book overlay branch", () => {
       ]);
     });
 
-    it("rebuilds the overlay in place (no add-dataset toast, no undo entry) and still clears facetKey", () => {
+    it("rebuilds the overlay in place (no add-dataset toast, ONE undo entry) and still clears facetKey", () => {
       useApp.getState().applyOriginFigure("fig-ov");
       const s = useApp.getState();
       expect(s.activeId).toBe("d-ov");
       expect(s.datasets).toHaveLength(3);
       expect(s.facetKey).toBeNull();
       expect(toastTexts()).toEqual([]);
-      expect(labels()).toEqual([]);
+      expect(labels()).toEqual(["apply Origin figure"]);
     });
   });
 });
@@ -833,9 +838,11 @@ describe("applyOriginFigure — single-layer branch", () => {
       "composition",
       "errKeys",
       "facetKey",
+      "future",
       "gadgetBusy",
       "gadgetError",
       "hiddenChannels",
+      "history",
       "legendFrameXY",
       "legendStatic",
       "legendTitle",
@@ -871,8 +878,10 @@ describe("applyOriginFigure — single-layer branch", () => {
       "annotations",
       "composition",
       "facetKey",
+      "future",
       "gadgetBusy",
       "gadgetError",
+      "history",
       "legendFrameXY",
       "legendStatic",
       "legendTitle",
@@ -914,9 +923,11 @@ describe("applyOriginFigure — single-layer branch", () => {
       "composition",
       "errKeys",
       "facetKey",
+      "future",
       "gadgetBusy",
       "gadgetError",
       "hiddenChannels",
+      "history",
       "legendFrameXY",
       "legendStatic",
       "legendTitle",
@@ -963,7 +974,7 @@ describe("applyOriginFigure — single-layer branch", () => {
     expect(s.regionShades).toEqual([]);
   });
 
-  it("records the macro step and pushes no undo entry of its own", () => {
+  it("records the macro step and pushes ONE undo entry (undo-coverage audit)", () => {
     useApp.setState({ macroRecording: true, macroSteps: [] });
     useApp.getState().applyOriginFigure("fig-single");
     expect(macroCodes()).toEqual(['qz.applyFigure("fig-single")']);
@@ -971,7 +982,7 @@ describe("applyOriginFigure — single-layer branch", () => {
     // previously unpinned across all three applyOriginFigure branches.
     expect(macroLabels()).toEqual(['Apply figure "Graph1"']);
     useApp.setState({ macroRecording: false, macroSteps: [] });
-    expect(labels()).toEqual([]);
+    expect(labels()).toEqual(["apply Origin figure"]);
   });
 
   it("newWindow opens and focuses a fresh window before applying", () => {
@@ -1001,9 +1012,11 @@ describe("applyOriginFigure — double-Y branch (2 layers, same dataset)", () =>
       "composition",
       "errKeys",
       "facetKey",
+      "future",
       "gadgetBusy",
       "gadgetError",
       "hiddenChannels",
+      "history",
       "legendFrameXY",
       "legendStatic",
       "legendTitle",
@@ -1061,9 +1074,11 @@ describe("applyOriginFigure — spatial multi-panel branch", () => {
       "composition",
       "errKeys",
       "facetKey",
+      "future",
       "gadgetBusy",
       "gadgetError",
       "hiddenChannels",
+      "history",
       "legendStatic",
       // F3: the spatial branch's `pageSetup: pageSetupFromDecoded(...)` write
       // resolves to `null` for this fixture (no decoded page) — the SAME

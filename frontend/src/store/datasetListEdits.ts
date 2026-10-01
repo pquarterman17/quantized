@@ -96,6 +96,8 @@ export interface DatasetListEditsSlice {
   deleteFolder: (id: string, mode?: "reparent" | "cascade") => void;
   moveFolder: (id: string, newParentId: string | null, beforeId?: string) => void;
   moveDatasetToFolder: (id: string, folderId: string | null, beforeId?: string) => void;
+  /** Move a multi-selection into `folderId` (null = top level) as ONE undo step. */
+  moveDatasetsToFolder: (ids: readonly string[], folderId: string | null) => void;
   toggleFolderExpanded: (id: string) => void;
   // updateFolder (Properties: notes/colour/defaultTemplate) lives on
   // LibraryPanelSlice (store/libraryPanel.ts) — ratchet headroom.
@@ -247,6 +249,11 @@ export function createDatasetListEditsSlice(set: SliceSet, get: SliceGet): Datas
     deleteFolder: (id, mode = "reparent") => deleteFolderWithTrash(get, set, id, mode),
     moveFolder: (id, newParentId, beforeId) => (get().recordHistory("move folder"), set((s) => ({ folders: treeMoveFolder(s.folders, id, newParentId, beforeId) }))),
     moveDatasetToFolder: (id, folderId, beforeId) => (get().recordHistory("move dataset"), set((s) => ({ datasets: treeMoveDatasetToFolder(s.datasets, id, folderId, beforeId) }))),
+    moveDatasetsToFolder: (ids, folderId) => {
+      if (ids.length === 0) return;
+      get().recordHistory(ids.length > 1 ? "move datasets" : "move dataset");
+      set((s) => ({ datasets: ids.reduce((next, id) => treeMoveDatasetToFolder(next, id, folderId), s.datasets) }));
+    },
     toggleFolderExpanded: (id) =>
       set((s) => ({
         expandedFolders: s.expandedFolders.includes(id)

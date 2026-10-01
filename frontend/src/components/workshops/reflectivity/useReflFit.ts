@@ -387,8 +387,11 @@ export function useReflFit(model: ReflModelHandle): ReflFitState {
     if (presentIds(curveIds, datasets)) return curveIds;
     // Named for, placed with, and pointing back at the fit's record
     // (reflFitCurves.ts); a fit whose record could not be stored (its datasets
-    // deleted mid-fit) names them generically.
-    const ids = curveDatasets(liveCurves(result), liveRecord, datasets, { weighting: result.weighting, radiation }).map((c) => {
+    // deleted mid-fit) names them generically, with the fit's OWN radiation —
+    // the Model-mode pick may have changed since.
+    const fitRadiation = basis?.radiation ?? radiation;
+    const fallback = { weighting: result.weighting, radiation: fitRadiation };
+    const ids = curveDatasets(liveCurves(result), liveRecord, datasets, fallback).map((c) => {
       const id = nextDatasetId();
       addDataset({ id, name: c.name, data: c.data, ...c.placement });
       return id;

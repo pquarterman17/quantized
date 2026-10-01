@@ -1,25 +1,26 @@
 // Perf validation at Origin-project scale (WORKSHEET_PLAN item 10): measure,
 // don't assume. A synthetic 100k-row × 200-column dataset through the REAL
 // virtualized grid, with a real (non-degenerate) measured viewport —
-// asserting the invariant that actually matters (rendered DOM node count
-// stays bounded regardless of data size) plus GENEROUS wall-clock ceilings
-// (CI, especially Windows, runs several times slower than a dev machine —
-// see the repo's other perf-test precedent for this discipline) so this is a
-// regression guard, not a tight micro-benchmark. Measured numbers from a
-// real run are logged via console.info and also recorded in
-// plans/WORKSHEET_PLAN.md's item 10 write-up.
+// asserting only LOAD-INVARIANT properties (rendered DOM node count stays
+// bounded regardless of data size; the window follows the scroll; the stats
+// fan-out has every request in flight at once). No assertion reads a clock:
+// wall time on a shared machine does not scale predictably with load
+// (docs/testing.md). Measured numbers are still logged via console.info as
+// telemetry and recorded in plans/WORKSHEET_PLAN.md's item 10 write-up.
 //
 // The stats-footer fan-out (one `/api/stats/descriptive` call per column —
-// 201 requests at 200 columns, flagged as a risk in the plan) is measured
-// separately below: `Promise.all` already parallelizes every call, so wall
-// time should track the SLOWEST single call, not the sum — this test proves
-// that with a mocked artificial per-call latency, so the un-batched fan-out
-// is not itself a source of serialized slowdown. The plan's escape valve (a
-// batched endpoint) is only warranted if a REAL deployment shows otherwise
-// (browser per-origin connection limits, not JS-side serialization).
+// 201 requests at 200 columns, flagged as a risk in the plan) is checked
+// separately below. The claim: `Promise.all` issues every call before any one
+// resolves, so wall time tracks the SLOWEST call, not the sum. It is asserted
+// as a load-invariant COUNT — each mocked request is held on a deferred, and
+// all 201 must be in flight at once before the first is released. The old
+// wall-clock bound on the same claim flaked under machine load (2.3–2.4 s
+// against 2 s at load ~18–20) and is gone. The plan's escape valve (a batched
+// endpoint) is only warranted if a REAL deployment shows otherwise (browser
+// per-origin connection limits, not JS-side serialization).
 
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { statsDescriptive } from "../../../lib/api/statsDescriptive";
 import type { DataStruct } from "../../../lib/types";
@@ -148,7 +149,11 @@ describe("GridViewport perf validation at scale (item 10)", () => {
     const scrollMs = performance.now() - t0;
 
     console.info(`[perf/item10] scroll re-window at 100k rows: ${scrollMs.toFixed(1)}ms`);
-    // The invariant that matters: still virtualized after the scroll.
+    // The invariants that matter: the window MOVED to the scrolled position
+    // (row 20834 = 500,000 px / 24 px rows, 1-based) and is still bounded.
+    const rowNums = screen.getAllByRole("rowheader").map((h) => h.textContent);
+    expect(rowNums).toContain("20834");
+    expect(rowNums).not.toContain("1");
     expect(screen.getAllByRole("row").length).toBeLessThan(60); // still windowed after the jump
     // Wall-clock assertion removed (TEST_DETERMINISM_PLAN, task 3): the
     // node-count assertion above is the load-invariant claim (virtualization
@@ -210,31 +215,56 @@ describe("GridViewport perf validation at scale (item 10)", () => {
     // CI or parallel agents — never tighten this back into a timing benchmark.
   }, 120_000);
 
-  it("the stats-footer fan-out (201 requests at 200 columns) parallelizes — wall time tracks the SLOWEST call, not the sum", async () => {
-    const LATENCY_MS = 15;
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("the stats-footer fan-out (201 requests at 200 columns) parallelizes — all 201 are in flight before any resolves", async () => {
+    // Every request is held on a deferred, so "parallel" is a count, not a
+    // clock: a serialized fan-out (await each call in turn) never has more
+    // than one in flight while none has resolved.
+    const release: (() => void)[] = [];
+    let inFlight = 0;
+    let peakInFlight = 0;
     vi.mocked(statsDescriptive).mockImplementation(
       (col: number[]) =>
-        new Promise((resolve) =>
-          setTimeout(() => resolve({ mean: col[0] ?? 0, std: 0, min: 0, max: 0, median: 0, N: col.length }), LATENCY_MS),
-        ),
+        new Promise((resolve) => {
+          inFlight += 1;
+          peakInFlight = Math.max(peakInFlight, inFlight);
+          const mean = col.reduce((a, b) => a + b, 0) / col.length;
+          release.push(() => {
+            inFlight -= 1;
+            resolve({ mean, std: 0, min: 0, max: 0, median: 0, N: col.length });
+          });
+        }),
     );
     const data = makeWideData(50, 200); // row count doesn't matter here, only column fan-out
     useApp.setState({ datasets: [{ id: "d1", name: "wide.dat", data }], activeId: "d1", status: "" });
 
-    render(<Worksheet />);
-    const t0 = performance.now();
+    // Fake timers only to step past the hook's 300 ms debounce exactly,
+    // rather than polling for it on a loaded machine.
+    vi.useFakeTimers();
+    const { container } = render(<Worksheet />);
     fireEvent.click(screen.getByRole("button", { name: /Stats/ }));
-    await waitFor(() => expect(statsDescriptive).toHaveBeenCalledTimes(201)); // x + 200 channels
-    const fanoutMs = performance.now() - t0;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(300);
+    });
 
-    console.info(`[perf/item10] stats fan-out (201 parallel calls @ ${LATENCY_MS}ms simulated latency): ${fanoutMs.toFixed(1)}ms`);
-    // If the 201 calls were serialized (a bug), this would be >= 201*15 = 3015ms.
-    // Promise.all already parallelizes them client-side (measured ~120ms on a
-    // dev machine). Under full-suite parallel vitest workers the wall clock
-    // inflates ~8x regardless of parallelism (876ms was measured at the old
-    // 5ms latency / 700ms bound — a load flake, not a serialization). 2000ms
-    // stays 33% below the serialized floor while giving that inflation 2.5x
-    // headroom, so the assertion still only trips on real serialization.
-    expect(fanoutMs).toBeLessThan(2000);
+    // The invariant: x + 200 channels all issued, none released yet.
+    expect(statsDescriptive).toHaveBeenCalledTimes(201);
+    expect(inFlight).toBe(201);
+    expect(peakInFlight).toBe(201);
+    const footer = container.querySelector(".qzk-grid-footer") as HTMLElement;
+    expect(within(footer).getAllByText("…").length).toBeGreaterThan(0); // still pending
+
+    // Release every call: the resolved x-column mean (time 0..49 → 24.5)
+    // reaches the footer — the fan-out's result landed in state, not just the mock.
+    await act(async () => {
+      for (const r of release.splice(0)) r();
+      await vi.runAllTimersAsync();
+    });
+    expect(inFlight).toBe(0);
+    expect(within(footer).getByText("24.5")).toBeInTheDocument();
+    expect(within(footer).queryByText("…")).toBeNull();
   });
 });

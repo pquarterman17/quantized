@@ -128,6 +128,22 @@ describe("the live fit and the stored history stay in step", () => {
     expect(useApp.getState().history.map((h) => h.label)).not.toContain("reflectivity fit");
   });
 
+  it("record-less fit curves carry the fit's radiation, not one picked after it", async () => {
+    const { result, finish } = await startHeldFit();
+    expect(result.current.refl.radiation).toBe("xray");
+    act(() => useApp.setState({ datasets: [] }));
+    await finish(fitResponse());
+    expect(result.current.fit.liveRecord).toBeNull();
+    act(() => result.current.refl.setRadiation("neutron"));
+    let ids: string[] = [];
+    act(() => {
+      ids = result.current.fit.addCurves();
+    });
+    expect(ids.length).toBeGreaterThan(0);
+    const added = useApp.getState().datasets.filter((d) => ids.includes(d.id));
+    expect(added.map((d) => d.data.metadata.radiation)).toEqual(ids.map(() => "xray"));
+  });
+
   it("a malformed stored history in a .dwk does not break the next fit", async () => {
     for (const junk of [{ "0": 1 }, "abc", 7]) {
       const doc = JSON.parse(serializeWorkspace({ datasets: [xrrDataset("xrr")] }));

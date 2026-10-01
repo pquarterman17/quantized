@@ -8,9 +8,10 @@
 //                (lib/contextActions.ts's datasetMultiSelectActions).
 //   - Move    -> a minimal folder-picker prompt (askParams select, same
 //                pattern folderOps.runTemplateOnFolder already uses), then
-//                moveDatasetToFolder per id — the same store action the
-//                per-row "Move to…" menu items call. No existing standalone
-//                picker component exists to reuse (checked DatasetRow's menu
+//                moveDatasetsToFolder (ONE undo entry) — the same store
+//                action the per-row "Move N selected to…" items call. No
+//                existing standalone picker component exists to reuse
+//                (checked DatasetRow's menu
 //                and folderOps.ts first), so this is that "minimal dialog".
 //   - Tag     -> batchEditDatasetMetadata (PR L, L0.56 — ONE undo entry for
 //                the whole selection; the row's own ➕ tag chip still calls
@@ -60,8 +61,7 @@ export default function MultiSelectBar() {
     if (!picked) return;
     const dest = String(picked.folder);
     const target = dest === ROOT ? null : (folders.find((f) => f.name === dest)?.id ?? null);
-    const move = useApp.getState().moveDatasetToFolder;
-    selectedIds.forEach((id) => move(id, target));
+    useApp.getState().moveDatasetsToFolder(selectedIds, target);
     toast(`moved ${n} dataset(s) to ${dest === ROOT ? "top level" : `"${dest}"`}`);
   };
 

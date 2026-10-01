@@ -1,0 +1,572 @@
+{
+  "cases": [
+    {
+      "name": "Line: plain lines",
+      "trace": "Line",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              5,
+              9
+            ],
+            [
+              2,
+              6,
+              8
+            ],
+            [
+              3,
+              7,
+              7
+            ],
+            [
+              4,
+              8,
+              6
+            ]
+          ],
+          "labels": [
+            "A",
+            "B",
+            "C"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "trace"
+      },
+      "drawn": [
+        {
+          "line": true,
+          "marker": false,
+          "step": null
+        },
+        {
+          "line": true,
+          "marker": false,
+          "step": null
+        }
+      ]
+    },
+    {
+      "name": "Scatter: markers, no line",
+      "trace": "Scatter",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              5,
+              9
+            ],
+            [
+              2,
+              6,
+              8
+            ],
+            [
+              3,
+              7,
+              7
+            ],
+            [
+              4,
+              8,
+              6
+            ]
+          ],
+          "labels": [
+            "A",
+            "B",
+            "C"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 0,
+            "marker": true
+          },
+          {
+            "color": "#8b5cf6",
+            "width": 0,
+            "marker": true
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "trace"
+      },
+      "drawn": [
+        {
+          "line": false,
+          "marker": true,
+          "step": null
+        },
+        {
+          "line": false,
+          "marker": true,
+          "step": null
+        }
+      ]
+    },
+    {
+      "name": "Scatter: an explicit width keeps its line",
+      "trace": "Scatter",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              5,
+              9
+            ],
+            [
+              2,
+              6,
+              8
+            ],
+            [
+              3,
+              7,
+              7
+            ],
+            [
+              4,
+              8,
+              6
+            ]
+          ],
+          "labels": [
+            "A",
+            "B",
+            "C"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 0,
+            "marker": true
+          },
+          {
+            "color": "#8b5cf6",
+            "width": 2,
+            "marker": true
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "trace"
+      },
+      "drawn": [
+        {
+          "line": false,
+          "marker": true,
+          "step": null
+        },
+        {
+          "line": true,
+          "marker": true,
+          "step": null
+        }
+      ]
+    },
+    {
+      "name": "Line + markers",
+      "trace": "Line + markers",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              5,
+              9
+            ],
+            [
+              2,
+              6,
+              8
+            ],
+            [
+              3,
+              7,
+              7
+            ],
+            [
+              4,
+              8,
+              6
+            ]
+          ],
+          "labels": [
+            "A",
+            "B",
+            "C"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "marker": true
+          },
+          {
+            "color": "#8b5cf6",
+            "marker": true
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "trace"
+      },
+      "drawn": [
+        {
+          "line": true,
+          "marker": true,
+          "step": null
+        },
+        {
+          "line": true,
+          "marker": true,
+          "step": null
+        }
+      ]
+    },
+    {
+      "name": "Step: an explicit line style is not stepped",
+      "trace": "Step",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              5,
+              9
+            ],
+            [
+              2,
+              6,
+              8
+            ],
+            [
+              3,
+              7,
+              7
+            ],
+            [
+              4,
+              8,
+              6
+            ]
+          ],
+          "labels": [
+            "A",
+            "B",
+            "C"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "step": "post"
+          },
+          {
+            "color": "#8b5cf6",
+            "line": "dashed"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "trace"
+      },
+      "drawn": [
+        {
+          "line": true,
+          "marker": false,
+          "step": "post"
+        },
+        {
+          "line": true,
+          "marker": false,
+          "step": null
+        }
+      ]
+    },
+    {
+      "name": "Scatter with a hidden series",
+      "trace": "Scatter",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              5,
+              9
+            ],
+            [
+              2,
+              6,
+              8
+            ],
+            [
+              3,
+              7,
+              7
+            ],
+            [
+              4,
+              8,
+              6
+            ]
+          ],
+          "labels": [
+            "A",
+            "B",
+            "C"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          2
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "width": 0,
+            "marker": true
+          },
+          {
+            "color": "#8b5cf6",
+            "width": 0,
+            "marker": true
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "trace"
+      },
+      "drawn": [
+        {
+          "line": false,
+          "marker": true,
+          "step": null
+        },
+        {
+          "line": false,
+          "marker": true,
+          "step": null
+        }
+      ]
+    }
+  ]
+}

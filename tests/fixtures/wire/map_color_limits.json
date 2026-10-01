@@ -1,0 +1,303 @@
+{
+  "cases": [
+    {
+      "name": "auto: the data's own extent",
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2
+        ],
+        "y_axis": [
+          10,
+          20
+        ],
+        "z_grid": [
+          [
+            20,
+            32,
+            44
+          ],
+          [
+            56,
+            68,
+            80
+          ]
+        ],
+        "kind": "heatmap",
+        "fmt": "svg",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "2Theta (deg)",
+        "y_label": "Omega (deg)",
+        "z_label": "I (cts)",
+        "filename": "scan_map"
+      },
+      "clim": [
+        20,
+        80
+      ]
+    },
+    {
+      "name": "limits wider than the data",
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2
+        ],
+        "y_axis": [
+          10,
+          20
+        ],
+        "z_grid": [
+          [
+            20,
+            32,
+            44
+          ],
+          [
+            56,
+            68,
+            80
+          ]
+        ],
+        "z_limits": [
+          0,
+          100
+        ],
+        "kind": "heatmap",
+        "fmt": "svg",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "2Theta (deg)",
+        "y_label": "Omega (deg)",
+        "z_label": "I (cts)",
+        "filename": "scan_map"
+      },
+      "clim": [
+        0,
+        100
+      ]
+    },
+    {
+      "name": "limits inside the data",
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2
+        ],
+        "y_axis": [
+          10,
+          20
+        ],
+        "z_grid": [
+          [
+            30,
+            32,
+            44
+          ],
+          [
+            56,
+            60,
+            60
+          ]
+        ],
+        "z_limits": [
+          30,
+          60
+        ],
+        "kind": "heatmap",
+        "fmt": "svg",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "2Theta (deg)",
+        "y_label": "Omega (deg)",
+        "z_label": "I (cts)",
+        "filename": "scan_map"
+      },
+      "clim": [
+        30,
+        60
+      ]
+    },
+    {
+      "name": "limits past one end only",
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2
+        ],
+        "y_axis": [
+          10,
+          20
+        ],
+        "z_grid": [
+          [
+            20,
+            32,
+            44
+          ],
+          [
+            50,
+            50,
+            50
+          ]
+        ],
+        "z_limits": [
+          0,
+          50
+        ],
+        "kind": "heatmap",
+        "fmt": "svg",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "2Theta (deg)",
+        "y_label": "Omega (deg)",
+        "z_label": "I (cts)",
+        "filename": "scan_map"
+      },
+      "clim": [
+        0,
+        50
+      ]
+    },
+    {
+      "name": "log colour scale, wider limits",
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2
+        ],
+        "y_axis": [
+          10,
+          20
+        ],
+        "z_grid": [
+          [
+            1,
+            2.3180633349627615,
+            2.6085260335771943
+          ],
+          [
+            2.7810369386211318,
+            2.9041743682841634,
+            3
+          ]
+        ],
+        "z_limits": [
+          0,
+          4
+        ],
+        "kind": "heatmap",
+        "fmt": "svg",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "2Theta (deg)",
+        "y_label": "Omega (deg)",
+        "z_label": "log₁₀ I (cts)",
+        "filename": "scan_map"
+      },
+      "clim": [
+        0,
+        4
+      ]
+    },
+    {
+      "name": "log colour scale, non-positive lo",
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2
+        ],
+        "y_axis": [
+          10,
+          20
+        ],
+        "z_grid": [
+          [
+            1,
+            2.3180633349627615,
+            2.6085260335771943
+          ],
+          [
+            2.7810369386211318,
+            2.9041743682841634,
+            3
+          ]
+        ],
+        "z_limits": [
+          1,
+          4
+        ],
+        "kind": "heatmap",
+        "fmt": "svg",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "2Theta (deg)",
+        "y_label": "Omega (deg)",
+        "z_label": "log₁₀ I (cts)",
+        "filename": "scan_map"
+      },
+      "clim": [
+        1,
+        4
+      ]
+    },
+    {
+      "name": "contour overlay, wider limits",
+      "request": {
+        "x_axis": [
+          0,
+          1,
+          2
+        ],
+        "y_axis": [
+          10,
+          20
+        ],
+        "z_grid": [
+          [
+            20,
+            32,
+            44
+          ],
+          [
+            56,
+            68,
+            80
+          ]
+        ],
+        "z_limits": [
+          0,
+          100
+        ],
+        "kind": "contourf",
+        "levels": 6,
+        "level_scale": "linear",
+        "fmt": "svg",
+        "style": "default",
+        "cmap": "viridis",
+        "title": "",
+        "x_label": "2Theta (deg)",
+        "y_label": "Omega (deg)",
+        "z_label": "I (cts)",
+        "filename": "scan_map"
+      },
+      "clim": [
+        0,
+        100
+      ]
+    }
+  ]
+}

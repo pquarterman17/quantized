@@ -6,7 +6,8 @@
 // the two library-document collections — `reports`/`openReportId` and
 // `figureDocs`/`figureDocSeed` — through the REAL composed store: which fields
 // each one writes (and, with a poisoned snapshot, which it does NOT), whether
-// it pushes an undo entry (none of them do — pinned deliberately), whether it
+// it pushes an undo entry (renames, duplicate and figure save do; add/remove
+// of a report and removing a figure do not — undo-coverage audit), whether it
 // records a macro step, what it sends to the trash, and one edge case each
 // (empty store, unknown id, missing dataset, frozen doc, a session already
 // open). They are the safety net for moving this cluster out of
@@ -275,11 +276,12 @@ describe("report sheets — renameReport / setOpenReport", () => {
     expect(useApp.getState().reports.map((r) => r.name)).toEqual(["a"]);
   });
 
-  it("renameReport writes ONLY reports", () => {
+  it("renameReport writes ONLY reports plus its own undo entry", () => {
     useApp.getState().addReport("a", sheet());
     const before = poisonedSnapshot();
     useApp.getState().renameReport(useApp.getState().reports[0].id, "b");
-    expect(changedKeys(before)).toEqual(["reports"]);
+    expect(changedKeys(before)).toEqual(["future", "history", "reports"]);
+    expect(labels()).toEqual(["rename report"]);
   });
 
   // F7 (2026-09-17 review): the specs above only ever check the field that
@@ -334,15 +336,15 @@ describe("figure documents — addFigureDoc / renameFigureDoc", () => {
     expect(useApp.getState().figureDocSeed).toBeNull();
   });
 
-  it("addFigureDoc writes ONLY figureDocs and status", () => {
+  it("addFigureDoc writes ONLY figureDocs and status plus its own undo entry", () => {
     const before = poisonedSnapshot();
     useApp.getState().addFigureDoc(fdoc("f1"));
-    expect(changedKeys(before)).toEqual(["figureDocs", "status"]);
+    expect(changedKeys(before)).toEqual(["figureDocs", "future", "history", "status"]);
   });
 
-  it("addFigureDoc records no undo entry and no macro step", () => {
+  it("addFigureDoc records one undo entry and no macro step", () => {
     const codes = withMacro(() => useApp.getState().addFigureDoc(fdoc("f1")));
-    expect(labels()).toEqual([]);
+    expect(labels()).toEqual(["save figure"]);
     expect(codes).toEqual([]);
   });
 
@@ -361,11 +363,13 @@ describe("figure documents — addFigureDoc / renameFigureDoc", () => {
     expect(useApp.getState().figureDocs.map((f) => f.name)).toEqual(["keep"]);
   });
 
-  it("renameFigureDoc writes ONLY figureDocs (status is untouched)", () => {
+  it("renameFigureDoc writes ONLY figureDocs plus its own undo entry (status is untouched)", () => {
     useApp.getState().addFigureDoc(fdoc("f1"));
+    useApp.setState({ history: [], future: [] });
     const before = poisonedSnapshot();
     useApp.getState().renameFigureDoc("f1", "new");
-    expect(changedKeys(before)).toEqual(["figureDocs"]);
+    expect(changedKeys(before)).toEqual(["figureDocs", "future", "history"]);
+    expect(labels()).toEqual(["rename figure"]);
   });
 });
 
@@ -439,18 +443,18 @@ describe("figure documents — duplicateFigureDoc", () => {
     expect(changedKeys(before)).toEqual([]);
   });
 
-  it("writes ONLY figureDocs (no status line, unlike addFigureDoc)", () => {
+  it("writes ONLY figureDocs plus its own undo entry (no status line, unlike addFigureDoc)", () => {
     useApp.getState().addFigureDoc(fdoc("f1"));
     const before = poisonedSnapshot();
     useApp.getState().duplicateFigureDoc("f1");
-    expect(changedKeys(before)).toEqual(["figureDocs"]);
+    expect(changedKeys(before)).toEqual(["figureDocs", "future", "history"]);
   });
 
-  it("records no undo entry and no macro step", () => {
+  it("records one undo entry and no macro step", () => {
     useApp.getState().addFigureDoc(fdoc("f1"));
     useApp.setState({ history: [], future: [] });
     const codes = withMacro(() => useApp.getState().duplicateFigureDoc("f1"));
-    expect(labels()).toEqual([]);
+    expect(labels()).toEqual(["duplicate figure"]);
     expect(codes).toEqual([]);
   });
 });
