@@ -26,10 +26,10 @@ function MultiPanelStage() {
 
 type SeriesOpts = { label?: string; stroke?: string; show?: boolean };
 const { created, MockUPlot } = vi.hoisted(() => {
-  const created: { opts: { series: SeriesOpts[] } }[] = [];
+  const created: { opts: { series: SeriesOpts[]; scales?: { y?: { range?: unknown } } } }[] = [];
   class MockUPlot {
     scales = { x: { min: 0, max: 1 } };
-    constructor(opts: { series: SeriesOpts[] }) {
+    constructor(opts: { series: SeriesOpts[]; scales?: { y?: { range?: unknown } } }) {
       created.push({ opts });
     }
     destroy(): void {}
@@ -187,5 +187,23 @@ describe("MultiPanelStage — break panels colour series by flat position (T2)",
     expect(p1[0][1]).toBe("#c08020");
     expect(p1[1][1]).toBe(PAINT[2]);
     expectScreenMatchesExport(exported);
+  });
+});
+
+describe("MultiPanelStage — the break panels' shared y-range skips hidden channels", () => {
+  it("matches the export, whose autoscale never sees the hidden outlier", async () => {
+    // B (hidden) is an outlier at 1000+; A and C span 1..100.
+    const data = gapData(true);
+    const outlier: DataStruct = { ...data, values: data.values.map(([a, b, c]) => [a, b + 1000, c]) };
+    reopenedBreakView(outlier, [1]);
+    await renderBreak();
+    const spec = buildStageFigureSpec(useApp.getState, { id: "d1", name: "ds1", data: outlier }, "fig", RENDER_OPTS);
+    expect(spec.overrides?.x_breaks).toEqual([[20, 90]]);
+    // No fixed y-limit: matplotlib autoscales the shared y over the y_keys series only.
+    expect(spec.overrides?.y_lim).toBeUndefined();
+    const ys = (spec.y_keys ?? []).flatMap((ch) => outlier.values.map((row) => row[Number(ch)]));
+    const exportExtent = [Math.min(...ys), Math.max(...ys)];
+    expect(exportExtent).toEqual([1, 100]); // non-vacuous: B's 1050..1060 is out
+    for (const c of created) expect(c.opts.scales?.y?.range).toEqual(exportExtent);
   });
 });

@@ -260,8 +260,8 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
   // Break panels share ONE y-domain instead (each keeps its own x-range) — an
   // honest axis break only elides x, never y.
   const breakYLim = useMemo(
-    () => (breakMode ? (yLim ?? sharedYDomain(breakPanels!)) : null),
-    [breakMode, breakPanels, yLim],
+    () => (breakMode ? (yLim ?? sharedYDomain(breakPanels!, breakHidden ?? [])) : null),
+    [breakMode, breakPanels, yLim, breakHidden],
   );
 
   // Channels actually drawn (y selection minus the x-axis channel), in order

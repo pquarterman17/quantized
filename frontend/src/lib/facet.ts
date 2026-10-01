@@ -315,12 +315,18 @@ export function breakPayloads(
 /** Union y-domain across every series of a set of break panels — the fixed
  *  `yLim` `MultiPanelStage`'s x-break mode applies to EVERY panel so the
  *  break reads honestly (a real axis break must keep one y-scale; only x is
- *  discontinuous). Null when no panel has any finite y value anywhere. */
-export function sharedYDomain(panels: readonly BreakPanel[]): [number, number] | null {
+ *  discontinuous). Null when no panel has any finite y value anywhere.
+ *  Series of a `hidden` channel are skipped: the export drops them before
+ *  matplotlib autoscales, so counting them would stretch only the screen. */
+export function sharedYDomain(
+  panels: readonly BreakPanel[],
+  hidden: readonly number[] = [],
+): [number, number] | null {
   let min = Infinity;
   let max = -Infinity;
   for (const p of panels) {
     for (let s = 1; s < p.payload.data.length; s++) {
+      if (hidden.includes(p.channels[s - 1])) continue;
       for (const v of p.payload.data[s] as (number | null)[]) {
         if (v == null || !Number.isFinite(v)) continue;
         if (v < min) min = v;
