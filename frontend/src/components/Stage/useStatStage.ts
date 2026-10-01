@@ -245,6 +245,14 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
 
   useEffect(() => {
     let cancelled = false;
+    // A rejected compute still settles BOTH draws for these picks (empty), so a
+    // waiting Export ends on the error instead of waiting forever.
+    const failed = (e: unknown) => {
+      if (cancelled) return;
+      setDrawData(null);
+      setDrawFacets(null);
+      setError(e instanceof Error ? e.message : "statistics computation failed");
+    };
     setError(null);
     setNote(null);
     if (!data) {
@@ -296,7 +304,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
         wantPoints ? { rowIds } : null,
       )
         .then(finishFacets)
-        .finally(() => !cancelled && setBusy(false));
+        .catch(failed).finally(() => !cancelled && setBusy(false));
       return () => {
         cancelled = true;
       };
@@ -326,7 +334,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
             setDrawData(withNestLabel(draw, nestLabel));
             if (degraded) setNote("backend unavailable — computed locally");
           })
-          .finally(() => !cancelled && setBusy(false));
+          .catch(failed).finally(() => !cancelled && setBusy(false));
       } else if (mode === "strip") {
         void computeStripDraw(finiteGroups, finiteIndexedGroups, valueLabel, groupLabel)
           .then(({ draw, degraded }) => {
@@ -334,7 +342,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
             setDrawData(withNestLabel(draw, nestLabel));
             if (degraded) setNote("backend unavailable — computed locally");
           })
-          .finally(() => !cancelled && setBusy(false));
+          .catch(failed).finally(() => !cancelled && setBusy(false));
       } else {
         // Never fabricate a KDE offline — computeViolinDraw itself degrades
         // to the exact same box stats Box mode would show for these groups
@@ -346,7 +354,7 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
             setDrawData(withNestLabel(withPoints, nestLabel));
             if (draw.mode === "box") setNote("violin (KDE) unavailable — showing box plot");
           })
-          .finally(() => !cancelled && setBusy(false));
+          .catch(failed).finally(() => !cancelled && setBusy(false));
       }
     } else if (mode === "bar") {
       // Local/synchronous — no backend call, so no busy/cancelled bookkeeping.
@@ -439,13 +447,14 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
   const errorNote = useMemo(() => figureErrorNote(shown.draw, shown.drawFacets), [shown]);
 
   // Export reads ONE settled render: while the draw this mode reads is pending
-  // it waits for the fresh one (useStatStageExport.ts), never mixing the two.
+  // it waits for the fresh one (useStatStageExport.ts), never mixing the two;
+  // a box/violin/strip/bar `error` ends it unexported (Q-Q/histogram re-derive).
   const drawPending = effectiveFacetCol != null && marksMode ? !freshFacets : !freshDraw;
   const exportFigure = useStatStageExport(drawPending, data ? {
     data, mode, draw: shown.draw, drawFacets: shown.drawFacets, groups, indexedGroups, valueCol,
     valueLabel, groupLabel, barValueLabel, barStack, dist, bins, fit, marks: rm,
     showN, caveat: levels.notice?.caveat ?? null, errorNote, nestLabel,
-  } : null);
+  } : null, marksMode ? error : null);
 
   return {
     hasData: !!active,

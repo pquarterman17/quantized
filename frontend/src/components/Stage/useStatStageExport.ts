@@ -14,6 +14,13 @@
 // The inputs are read from a ref updated after every commit, never from the
 // clicked render's closure, so a handler bound during a pending render still
 // exports what the screen shows once it settles.
+//
+// A compute that FAILS, or picks that group to nothing, still settle the draws
+// (empty, under the current picks — useStatStage's `failed`), so the wait
+// always ends; the settled render's `error` then rejects the export with that
+// message (the stage's status line shows it) and nothing is posted. The caller
+// passes `error` only for the modes whose export reads the draw (box/violin/
+// strip/bar); a Q-Q/histogram export is rebuilt from the raw values server-side.
 
 import { useCallback, useEffect, useRef } from "react";
 
@@ -25,17 +32,20 @@ interface Latest {
   pending: boolean;
   /** Null: no dataset, nothing to export. */
   inputs: StatStageExportInputs | null;
+  /** The stage's compute error for these picks (no draw to export). */
+  error: string | null;
 }
 
 export function useStatStageExport(
   pending: boolean,
   inputs: StatStageExportInputs | null,
+  error: string | null = null,
 ): (fmt: string) => Promise<boolean> {
-  const latest = useRef<Latest>({ pending, inputs });
+  const latest = useRef<Latest>({ pending, inputs, error });
   const waiters = useRef(new Set<(err?: Error) => void>());
 
   useEffect(() => {
-    latest.current = { pending, inputs };
+    latest.current = { pending, inputs, error };
     if (pending) return;
     const ws = [...waiters.current];
     waiters.current.clear();
@@ -69,7 +79,8 @@ export function useStatStageExport(
         signal.throwIfAborted();
         await settled(signal);
       }
-      const now = latest.current.inputs;
+      const { inputs: now, error: failure } = latest.current;
+      if (failure) throw new Error(failure);
       if (now) await exportStatStage(fmt, now, signal);
     });
     return r !== null;
