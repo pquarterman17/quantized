@@ -24,12 +24,23 @@ import { gotoApp, waitForDatasetCount } from "../utils/harness";
 test("import via the Command Palette, then open + act on a row's context menu, all by keyboard", async ({
   page,
 }) => {
+  // Arm the file-chooser listener BEFORE loading the app. The listener's
+  // interception request is fire-and-forget, and Enter opens the chooser in
+  // the same keydown. Armed just before Enter, it lost that race in 35-55% of
+  // runs: the dialog opened un-intercepted, headless Chromium cancelled it,
+  // and the event never came. Forcing the race (Enter sent before the
+  // listener) failed 19/20, every failure with a native `cancel` on the
+  // input. The app was right every time: correct option highlighted, picker
+  // click() under user activation.
+  const fileChooserPromise = page.waitForEvent("filechooser");
   await gotoApp(page);
 
   await page.keyboard.press("Control+k");
   await page.getByPlaceholder("Type a command…").fill("Import data");
+  // Wait on STATE: the highlighted row is the one Enter runs.
+  const commands = page.getByRole("listbox", { name: "Commands" });
+  await expect(commands.getByRole("option", { selected: true })).toContainText("Import data…");
 
-  const fileChooserPromise = page.waitForEvent("filechooser");
   await page.keyboard.press("Enter"); // runs the highlighted "Import data…" command
   const fileChooser = await fileChooserPromise;
   await fileChooser.setFiles(fixturePath("linear-ramp.csv"));
