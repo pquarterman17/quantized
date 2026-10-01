@@ -400,28 +400,25 @@ export function withInferredMark(spec: PlotSpec, ctx: MarkContext): PlotSpec {
   return mark === spec.mark ? spec : { ...spec, mark };
 }
 
-/** Translate a spec's `mark` (+ `stepMode`/`showMarkers`) into the per-Y-
- *  channel `SeriesStyle` patch the Stage understands — the Graph Builder
- *  "commit to plot" bridge (GAP_PLOTTYPES). The Stage has no `line: "none"`
- *  field; a ZERO `width` IS "no line" (marker-only), which is exactly the
- *  mechanism the Inspector's own trace toggle already uses (see
- *  `components/Inspector/SeriesStyleCard.tsx`'s `setTrace`):
- *
- *    "scatter"        → { width: 0, marker: true }         (always markers)
- *    "step"           → { step, ...(showMarkers && marker) } (nonzero width)
- *    "line" (default) → { } or { marker: true } when showMarkers
- *
- *  Returns `{}` for a plain line with no markers — the caller should treat
- *  an empty result as "nothing to override" (today's ambient defaults still
- *  apply) rather than skip the call outright; either is safe since
- *  `setSeriesStyle` merges. Pure — no store/React import, unit-testable
- *  standalone like every other function in this module. */
-export function markSeriesStyle(spec: PlotSpec): Partial<SeriesStyle> {
-  if (spec.mark === "scatter") return { width: 0, marker: true };
-  if (spec.mark === "step") {
-    return { step: spec.stepMode ?? "post", ...(spec.showMarkers ? { marker: true } : {}) };
-  }
-  return spec.showMarkers ? { marker: true } : {};
+/** Translate an xy spec's `mark` (+ `stepMode`/`showMarkers`) into the per-Y-
+ *  channel `SeriesStyle` patch the Stage merges — the Graph Builder "commit to
+ *  plot" bridge (GAP_PLOTTYPES), drawn as `graphbuilder/previewCanvas` draws
+ *  it. The patch is COMPLETE: `explicit` keeps the Preferences default trace
+ *  from filling its unset fields, and explicit `undefined`s clear what an
+ *  earlier mark or the Inspector set. A zero `width` is "no line" (the
+ *  Inspector's `setTrace` mechanism); a line keeps `prev`'s nonzero width:
+ *    "scatter" → width 0, markers;   "line" → line, markers iff showMarkers;
+ *    "step"    → stepped line (stepMode, default post), markers iff showMarkers.
+ *  `{}` for a categorical mark. Pure, like every function in this module. */
+export function markSeriesStyle(spec: PlotSpec, prev?: SeriesStyle): Partial<SeriesStyle> {
+  const m = spec.mark;
+  if (m !== "scatter" && m !== "line" && m !== "step") return {};
+  return {
+    explicit: true,
+    width: m === "scatter" ? 0 : prev?.width || undefined,
+    marker: m === "scatter" || spec.showMarkers === true ? true : undefined,
+    step: m === "step" ? (spec.stepMode ?? "post") : undefined,
+  };
 }
 
 // ── Live-context builder (resolves types + monotonicity from real datasets) ──

@@ -497,7 +497,7 @@ describe("useGraphBuilder — mark reaches the Stage (GAP_PLOTTYPES)", () => {
     act(() => result.current.assign("y", 1));
     expect(result.current.mark).toBe("scatter"); // sanity: this assign sequence's sticky default
     act(() => result.current.createNewPlot());
-    expect(useApp.getState().seriesStyles[1]).toEqual({ width: 0, marker: true });
+    expect(useApp.getState().seriesStyles[1]).toEqual({ explicit: true, width: 0, marker: true });
   });
 
   it("applies the same override to EVERY plotted Y channel", () => {
@@ -507,18 +507,28 @@ describe("useGraphBuilder — mark reaches the Stage (GAP_PLOTTYPES)", () => {
     act(() => result.current.assign("y", 2));
     act(() => result.current.applyToCurrent());
     const s = useApp.getState().seriesStyles;
-    expect(s[1]).toEqual({ width: 0, marker: true });
-    expect(s[2]).toEqual({ width: 0, marker: true });
+    expect(s[1]).toEqual({ explicit: true, width: 0, marker: true });
+    expect(s[2]).toEqual({ explicit: true, width: 0, marker: true });
   });
 
-  it("a plain line mark (no showMarkers) makes no seriesStyles call at all", () => {
+  it("a plain line mark commits an explicit line: no default-trace markers, no zero width", () => {
     const { result } = renderHook(() => useGraphBuilder());
     act(() => result.current.assign("x", 0));
     act(() => result.current.assign("y", 1));
     act(() => result.current.cycle()); // scatter -> line
     expect(result.current.mark).toBe("line");
     act(() => result.current.applyToCurrent());
-    expect(useApp.getState().seriesStyles).toEqual({});
+    expect(useApp.getState().seriesStyles).toEqual({ 1: { explicit: true } });
+  });
+
+  it("a line mark applied over an earlier scatter turns the line on and the markers off", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.applyToCurrent()); // scatter
+    act(() => result.current.cycle()); // scatter -> line
+    act(() => result.current.applyToCurrent());
+    expect(useApp.getState().seriesStyles[1]).toEqual({ explicit: true });
   });
 
   it("line + showMarkers (Origin's Line + Symbol): markers on, no forced zero width", () => {
@@ -528,7 +538,7 @@ describe("useGraphBuilder — mark reaches the Stage (GAP_PLOTTYPES)", () => {
     act(() => result.current.cycle()); // scatter -> line
     act(() => result.current.setShowMarkers(true));
     act(() => result.current.applyToCurrent());
-    expect(useApp.getState().seriesStyles[1]).toEqual({ marker: true });
+    expect(useApp.getState().seriesStyles[1]).toEqual({ explicit: true, marker: true });
   });
 
   it("step mark: defaults to post with no markers", () => {
@@ -540,7 +550,7 @@ describe("useGraphBuilder — mark reaches the Stage (GAP_PLOTTYPES)", () => {
     expect(result.current.mark).toBe("step");
     expect(result.current.stepMode).toBe("post");
     act(() => result.current.applyToCurrent());
-    expect(useApp.getState().seriesStyles[1]).toEqual({ step: "post" });
+    expect(useApp.getState().seriesStyles[1]).toEqual({ explicit: true, step: "post" });
   });
 
   it("step mark honors an explicit stepMode + showMarkers", () => {
@@ -552,7 +562,7 @@ describe("useGraphBuilder — mark reaches the Stage (GAP_PLOTTYPES)", () => {
     act(() => result.current.setStepMode("mid"));
     act(() => result.current.setShowMarkers(true));
     act(() => result.current.applyToCurrent());
-    expect(useApp.getState().seriesStyles[1]).toEqual({ step: "mid", marker: true });
+    expect(useApp.getState().seriesStyles[1]).toEqual({ explicit: true, step: "mid", marker: true });
   });
 
   it("a saved spec's own captured per-series style still wins over the mark default", () => {
@@ -570,6 +580,21 @@ describe("useGraphBuilder — mark reaches the Stage (GAP_PLOTTYPES)", () => {
     act(() => result.current.openSpec(id));
     act(() => result.current.applyToCurrent());
     expect(useApp.getState().seriesStyles[1]).toMatchObject({ color: "#ff0000", width: 5 });
+  });
+
+  it("a saved line spec's captured style keeps the mark explicit on reopen", () => {
+    const { result } = renderHook(() => useGraphBuilder());
+    act(() => result.current.assign("x", 0));
+    act(() => result.current.assign("y", 1));
+    act(() => result.current.cycle()); // scatter -> line
+    act(() => useApp.setState({ seriesStyles: { 1: { color: "#ff0000" } } }));
+    act(() => result.current.saveAs("Styled line"));
+    const id = result.current.activeSpec!.id;
+    act(() => useApp.setState({ seriesStyles: { 1: { width: 0, marker: true } } }));
+    act(() => result.current.openSpec(id));
+    act(() => result.current.applyToCurrent());
+    // Reset + rebuilt from the mark, then the captured colour: no default-trace fill.
+    expect(useApp.getState().seriesStyles[1]).toEqual({ explicit: true, color: "#ff0000" });
   });
 
   it("showMarkers/setShowMarkers and stepMode/setStepMode read/write the live spec", () => {
@@ -1332,7 +1357,7 @@ describe("useGraphBuilder — apply saved blocks on a plot action (GUI_INTERACTI
     // GAP_PLOTTYPES: the scatter mark's own style override (width:0,
     // marker:true) MERGES onto channel 1's pre-existing color — never a
     // full-record replace (setSeriesStyle patches per-field).
-    expect(s.seriesStyles).toEqual({ 1: { color: "#ff0000", width: 0, marker: true } });
+    expect(s.seriesStyles).toEqual({ 1: { color: "#ff0000", explicit: true, width: 0, marker: true } });
     expect(s.hiddenChannels).toEqual(snapshot.hiddenChannels);
     expect(s.y2Keys).toEqual(snapshot.y2Keys);
     expect(s.seriesOrder).toEqual(snapshot.seriesOrder);

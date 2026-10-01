@@ -46,7 +46,8 @@
 //
 // The Preferences default trace is NOT laid on here: the Graph Builder canvas
 // draws the spec's mark, never the trace, so `stylesForMark` is the whole
-// series styling (see `exportDefaultTrace.ts`' header for the residual).
+// series styling (the Stage gets the same mark as an explicit style; see
+// `exportDefaultTrace.ts`' header).
 
 import type { ErrorBinding } from "./errorRoles";
 import { buildExportStyles, type ExportSeriesStyle } from "./exportStyles";

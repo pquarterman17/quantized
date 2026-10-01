@@ -852,6 +852,556 @@
       ]
     },
     {
+      "name": "Scatter: a Graph Builder Line mark keeps its line, no markers",
+      "trace": "Scatter",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              5,
+              9
+            ],
+            [
+              2,
+              6,
+              8
+            ],
+            [
+              3,
+              7,
+              7
+            ],
+            [
+              4,
+              8,
+              6
+            ]
+          ],
+          "labels": [
+            "A",
+            "B",
+            "C"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6",
+            "width": 0,
+            "marker": true,
+            "marker_size": 5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "trace"
+      },
+      "drawn": [
+        {
+          "line": true,
+          "marker": false,
+          "size": null,
+          "step": null
+        },
+        {
+          "line": false,
+          "marker": true,
+          "size": 5,
+          "step": null
+        }
+      ]
+    },
+    {
+      "name": "Scatter: a Graph Builder Step mark is a stepped line, no markers",
+      "trace": "Scatter",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              5,
+              9
+            ],
+            [
+              2,
+              6,
+              8
+            ],
+            [
+              3,
+              7,
+              7
+            ],
+            [
+              4,
+              8,
+              6
+            ]
+          ],
+          "labels": [
+            "A",
+            "B",
+            "C"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6",
+            "step": "post"
+          },
+          {
+            "color": "#8b5cf6",
+            "width": 0,
+            "marker": true,
+            "marker_size": 5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "trace"
+      },
+      "drawn": [
+        {
+          "line": true,
+          "marker": false,
+          "size": null,
+          "step": "post"
+        },
+        {
+          "line": false,
+          "marker": true,
+          "size": 5,
+          "step": null
+        }
+      ]
+    },
+    {
+      "name": "Line + markers: a Graph Builder Line mark draws no markers",
+      "trace": "Line + markers",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              5,
+              9
+            ],
+            [
+              2,
+              6,
+              8
+            ],
+            [
+              3,
+              7,
+              7
+            ],
+            [
+              4,
+              8,
+              6
+            ]
+          ],
+          "labels": [
+            "A",
+            "B",
+            "C"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6",
+            "marker": true,
+            "marker_size": 5
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "trace"
+      },
+      "drawn": [
+        {
+          "line": true,
+          "marker": false,
+          "size": null,
+          "step": null
+        },
+        {
+          "line": true,
+          "marker": true,
+          "size": 5,
+          "step": null
+        }
+      ]
+    },
+    {
+      "name": "Step: a Graph Builder Line mark is not stepped",
+      "trace": "Step",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              5,
+              9
+            ],
+            [
+              2,
+              6,
+              8
+            ],
+            [
+              3,
+              7,
+              7
+            ],
+            [
+              4,
+              8,
+              6
+            ]
+          ],
+          "labels": [
+            "A",
+            "B",
+            "C"
+          ],
+          "units": [
+            "au",
+            "au",
+            "au"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6",
+            "step": "post"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "trace"
+      },
+      "drawn": [
+        {
+          "line": true,
+          "marker": false,
+          "size": null,
+          "step": null
+        },
+        {
+          "line": true,
+          "marker": false,
+          "size": null,
+          "step": "post"
+        }
+      ]
+    },
+    {
+      "name": "Facet grid: Graph Builder Line marks under Scatter",
+      "trace": "Scatter",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              5,
+              0
+            ],
+            [
+              2,
+              6,
+              1
+            ],
+            [
+              3,
+              7,
+              0
+            ],
+            [
+              4,
+              8,
+              1
+            ]
+          ],
+          "labels": [
+            "A",
+            "B",
+            "G"
+          ],
+          "units": [
+            "au",
+            "au",
+            ""
+          ],
+          "metadata": {},
+          "cat_levels": {
+            "2": [
+              "p",
+              "q"
+            ]
+          }
+        },
+        "y_keys": [
+          0,
+          1
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "facets": [
+          {
+            "label": "p",
+            "x": [
+              0,
+              2
+            ],
+            "series": [
+              {
+                "label": "A (au)",
+                "y": [
+                  1,
+                  3
+                ],
+                "style": null
+              },
+              {
+                "label": "B (au)",
+                "y": [
+                  5,
+                  7
+                ],
+                "style": null
+              }
+            ]
+          },
+          {
+            "label": "q",
+            "x": [
+              1,
+              3
+            ],
+            "series": [
+              {
+                "label": "A (au)",
+                "y": [
+                  2,
+                  4
+                ],
+                "style": null
+              },
+              {
+                "label": "B (au)",
+                "y": [
+                  6,
+                  8
+                ],
+                "style": null
+              }
+            ]
+          }
+        ],
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          },
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "trace"
+      },
+      "drawn": [
+        {
+          "line": true,
+          "marker": false,
+          "size": null,
+          "step": null
+        },
+        {
+          "line": true,
+          "marker": false,
+          "size": null,
+          "step": null
+        },
+        {
+          "line": true,
+          "marker": false,
+          "size": null,
+          "step": null
+        },
+        {
+          "line": true,
+          "marker": false,
+          "size": null,
+          "step": null
+        }
+      ]
+    },
+    {
       "name": "Color-by encoding: Scatter on every level",
       "trace": "Scatter",
       "request": {

@@ -341,9 +341,9 @@ export function useGraphBuilder(): GraphBuilderState {
       // per-series styles (the display block below) still WIN — setSeriesStyle
       // merges by field, and applyDisplayBlock's reset+rebuild for a channel
       // that HAS a captured entry fully supersedes whatever this set first.
-      const markStyle = markSeriesStyle(spec);
-      if (Object.keys(markStyle).length > 0) {
-        for (const y of spec.zones.y) useApp.getState().setSeriesStyle(y.channel, markStyle);
+      for (const y of spec.zones.y) {
+        const prev = useApp.getState().seriesStyles[y.channel];
+        useApp.getState().setSeriesStyle(y.channel, markSeriesStyle(spec, prev));
       }
       // Error wells (#51 phase 3): translate to the canonical ErrorBinding[]
       // and write through the SAME dataset-level action the Inspector's

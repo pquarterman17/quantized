@@ -29,14 +29,20 @@ import { buildLegacyFigureSpec } from "../components/workshops/figurebuilder/leg
 import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { withDefaultTrace } from "./exportDefaultTrace";
-import { createFigureDocument, type FigureDocument } from "./figureDocument";
+import {
+  createFigureDocument,
+  deserializeFigureDocument,
+  serializeFigureDocument,
+  type FigureDocument,
+} from "./figureDocument";
 import type { FigureEncoding } from "./figureEncoding";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import { buildColumns, effectiveChannels } from "./plotdata";
-import { defaultPlotView, type PlotView } from "./plotview";
+import { markSeriesStyle, type PlotMark } from "./plotspec";
+import { defaultPlotView, sanitizePlotView, type PlotView } from "./plotview";
 import type { ExportSeriesStyle } from "./publicationStyles";
-import type { Dataset, DefaultTrace } from "./types";
+import type { Dataset, DefaultTrace, SeriesStyle } from "./types";
 import { buildOpts } from "./uplotOpts";
 
 const FIXTURE = join(
@@ -95,6 +101,11 @@ const DOTS: Drawn = { line: false, marker: true, size: 5, step: null };
 const BOTH: Drawn = { line: true, marker: true, size: 5, step: null };
 const STEP: Drawn = { line: true, marker: false, size: null, step: "post" };
 
+/** The style a Graph Builder mark commits to a fresh series (`markSeriesStyle`). */
+function mark(m: PlotMark): SeriesStyle {
+  return markSeriesStyle({ version: 1, mark: m, zones: { x: null, y: [], group: null, facet: null, yErr: [], xErr: null } });
+}
+
 const CASES: Case[] = [
   { name: "Line: plain lines", trace: "Line", view: { yKeys: [0, 1] }, drawn: [LINE, LINE] },
   { name: "Scatter: markers, no line", trace: "Scatter", view: { yKeys: [0, 1] }, drawn: [DOTS, DOTS] },
@@ -130,6 +141,37 @@ const CASES: Case[] = [
     view: { yKeys: [0, 1] },
     split: { facetKey: 2 },
     drawn: [BOTH, BOTH, BOTH, BOTH],
+  },
+  {
+    name: "Scatter: a Graph Builder Line mark keeps its line, no markers",
+    trace: "Scatter",
+    view: { yKeys: [0, 1], seriesStyles: { 0: mark("line") } },
+    drawn: [LINE, DOTS],
+  },
+  {
+    name: "Scatter: a Graph Builder Step mark is a stepped line, no markers",
+    trace: "Scatter",
+    view: { yKeys: [0, 1], seriesStyles: { 0: mark("step") } },
+    drawn: [STEP, DOTS],
+  },
+  {
+    name: "Line + markers: a Graph Builder Line mark draws no markers",
+    trace: "Line + markers",
+    view: { yKeys: [0, 1], seriesStyles: { 0: mark("line") } },
+    drawn: [LINE, BOTH],
+  },
+  {
+    name: "Step: a Graph Builder Line mark is not stepped",
+    trace: "Step",
+    view: { yKeys: [0, 1], seriesStyles: { 0: mark("line") } },
+    drawn: [LINE, STEP],
+  },
+  {
+    name: "Facet grid: Graph Builder Line marks under Scatter",
+    trace: "Scatter",
+    view: { yKeys: [0, 1], seriesStyles: { 0: mark("line"), 1: mark("line") } },
+    split: { facetKey: 2 },
+    drawn: [LINE, LINE, LINE, LINE],
   },
   {
     name: "Color-by encoding: Scatter on every level",
@@ -261,6 +303,17 @@ describe("the default trace, screen == export", () => {
       expect(spec, builder).not.toBeNull();
       expect(wire(spec as FigureSpec), builder).toEqual(c.drawn);
     }
+  });
+
+  // `SeriesStyle.explicit` (a Graph Builder mark) survives a saved document and
+  // a `.dwk` view, so a reopened figure draws and exports the mark, not the trace.
+  it.each(CASES.filter((c) => c.name.includes("Graph Builder")))("save/reopen: $name", (c) => {
+    const doc = deserializeFigureDocument(serializeFigureDocument(documentOf(c)));
+    expect(doc).not.toBeNull();
+    const spec = buildFigureSpecFromDocument(doc!, datasetOf(c), "trace", { style: c.style, defaultTrace: c.trace });
+    expect(wire(spec)).toEqual(c.drawn);
+    const view = sanitizePlotView(JSON.parse(JSON.stringify(viewOf(c))));
+    expect(view.seriesStyles).toEqual(viewOf(c).seriesStyles);
   });
 
   it("leaves a gradient encoding alone: its series are colour-mapped scatters on both sides", () => {

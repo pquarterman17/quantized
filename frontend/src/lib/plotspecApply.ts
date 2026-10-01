@@ -56,10 +56,15 @@
 // stays action-only, no `useApp.ts` edits).
 
 import type { StoreGet } from "./exportActive";
-import type { AxesBlock, DecorBlock, DisplayBlock, PageBlock, PlotSpec } from "./plotspec";
+import { markSeriesStyle, type AxesBlock, type DecorBlock, type DisplayBlock, type PageBlock, type PlotSpec } from "./plotspec";
 import type { Annotation, SeriesStyle } from "./types";
 
-function applyDisplayBlock(display: DisplayBlock | undefined, s: StoreGet): void {
+function applyDisplayBlock(
+  display: DisplayBlock | undefined,
+  s: StoreGet,
+  mark: Partial<SeriesStyle>,
+  yChannels: ReadonlySet<number>,
+): void {
   if (!display) return;
   const state = s();
   const currentHidden = state.hiddenChannels;
@@ -96,7 +101,9 @@ function applyDisplayBlock(display: DisplayBlock | undefined, s: StoreGet): void
     // reset seriesStyles depending on whether the dataset switch was
     // genuine — resetSeriesStyle makes the outcome deterministic either way).
     state.resetSeriesStyle(channel);
-    const patch: Partial<SeriesStyle> = {};
+    // A Y channel restarts from its mark's complete style, so the captured
+    // fields override the mark without the default trace filling the rest.
+    const patch: Partial<SeriesStyle> = yChannels.has(channel) ? { ...mark } : {};
     if (sd.color !== undefined) patch.color = sd.color;
     if (sd.width !== undefined) patch.width = sd.width;
     if (sd.marker !== undefined) patch.marker = sd.marker;
@@ -219,7 +226,7 @@ export function applySpecBlocks(spec: PlotSpec, s: StoreGet): void {
   // Display FIRST, axes SECOND — see the module doc's ORDERING note. Decor
   // and page are independent of both — see the same note for why their
   // position doesn't matter functionally.
-  applyDisplayBlock(spec.display, s);
+  applyDisplayBlock(spec.display, s, markSeriesStyle(spec), new Set(spec.zones.y.map((r) => r.channel)));
   applyAxesBlock(spec.axes, s);
   applyPageBlock(spec.page, s);
   applyDecorBlock(spec.decor, s);

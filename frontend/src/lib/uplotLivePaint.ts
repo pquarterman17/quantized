@@ -34,6 +34,7 @@
 
 import type uPlot from "uplot";
 
+import { seriesTrace } from "./markers";
 import type { Lim } from "./plotLimApply";
 import type { SeriesStyle } from "./types";
 import type { BuildOptsArgs } from "./uplotOpts";
@@ -201,8 +202,9 @@ export function styleStructureKey({
   const trace = defaultTrace ?? "Line";
   const keyOf = (st: SeriesStyle): string => {
     const rest = Object.fromEntries(Object.entries(st).filter(([k]) => !PAINT_FIELDS.has(k)));
-    const drawn = (st.width ?? (trace === "Scatter" ? 0 : (baseLineWidth ?? 1.5))) > 0;
-    return JSON.stringify([rest, drawn, trace === "Step" ? st.line !== undefined : null]);
+    const t = seriesTrace(st, trace); // an explicit style opts out, as on the canvas
+    const drawn = (st.width ?? (t === "Scatter" ? 0 : (baseLineWidth ?? 1.5))) > 0;
+    return JSON.stringify([rest, drawn, t === "Step" ? st.line !== undefined : null]);
   };
   // A series with no style, or a paint-only one, is structurally the default:
   // only the entries that differ from it are keyed, so a first colour edit

@@ -1,4 +1,4 @@
-import { markerDecision } from "../../lib/markers";
+import { markerDecision, seriesTrace } from "../../lib/markers";
 import type { DefaultTrace, MarkerShape, SeriesStyle } from "../../lib/types";
 
 interface LegendSampleProps {
@@ -68,7 +68,7 @@ function marker(shape: MarkerShape, color: string, radius: number, filled = fals
  *  filed under byte-identical — the 32-combination differential OFF proof beside
  *  it compares this component against ITSELF and structurally cannot see it. */
 export default function LegendSample({ color, style, defaultTrace = "Line", filled }: LegendSampleProps) {
-  const width = style?.width ?? (defaultTrace === "Scatter" ? 0 : 1.5);
+  const width = style?.width ?? (seriesTrace(style, defaultTrace) === "Scatter" ? 0 : 1.5);
   const showLine = width > 0;
   const { show: showMarker, shape, size } = markerDecision(style, defaultTrace);
   const radius = Math.max(2, Math.min(4.5, size / 2));

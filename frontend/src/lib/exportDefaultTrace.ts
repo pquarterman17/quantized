@@ -25,25 +25,27 @@
 // draws the spec's mark (scatter / line / step, markers per `showMarkers`) and
 // never reads the preference, so its encoded Export and the Publication Preview
 // seed send the mark (`plotSpecFigure.stylesForMark`). Its xy Export applies the
-// spec to the Stage and exports that, trace included, as the Stage draws it.
-// Residual: a Line or Step mark commits a partial style (`plotspec.
-// markSeriesStyle`), so the trace still fills the rest on the Stage and in the
-// Figure Builder; SeriesStyle cannot say "no marker" to pin it.
+// spec to the Stage and exports that as the Stage draws it: the mark commits an
+// EXPLICIT style (`plotspec.markSeriesStyle`, `SeriesStyle.explicit`), which the
+// trace leaves alone here as the canvas does (`markers.seriesTrace`). A facet
+// panel series reads `explicit` off its channel when the panel names its
+// channels, else off the plotted set as a whole (a mark styles every Y at once).
 
 import type { FigureSpec } from "./api/figures";
-import { DEFAULT_MARKER_PX } from "./markers";
+import { DEFAULT_MARKER_PX, seriesTrace } from "./markers";
 import type { ExportSeriesStyle } from "./publicationStyles";
 import type { DefaultTrace, SeriesStyle } from "./types";
 
-/** The one style field the Step rule reads off a series' RAW style. */
-type RawLine = Pick<ExportSeriesStyle, "line"> | Pick<SeriesStyle, "line"> | undefined;
+/** The style fields the rule reads off a series' RAW style: its own `line`
+ *  (the Step rule) and `explicit` (no trace at all). */
+type RawLine = { line?: unknown; explicit?: boolean } | null | undefined;
 
 function traced(
   entry: ExportSeriesStyle | null | undefined,
   raw: RawLine,
   trace: DefaultTrace,
 ): ExportSeriesStyle | null {
-  if (entry?.color_by != null || entry?.line === "none") return entry ?? null;
+  if (seriesTrace(raw, trace) === "Line" || entry?.color_by != null || entry?.line === "none") return entry ?? null;
   const out: ExportSeriesStyle = { ...entry };
   if (trace === "Scatter" && out.width == null) out.width = 0;
   if ((trace === "Scatter" || trace === "Line + markers") && !out.marker) {
@@ -77,12 +79,18 @@ export function withDefaultTrace(
   if (!trace || trace === "Line" || spec.encoding?.gradient_col != null) return spec;
   if (spec.facets) {
     // A panel series' style IS its channel's raw style (FEATURE-001, no cycle),
-    // so its own `line` is the raw one the Step rule reads.
+    // so its own `line` is the raw one the Step rule reads; `explicit` does not
+    // ride the wire, so it comes from the channel (see the module header).
+    const own = (k: number | string | undefined) => typeof k === "number" && rawStyles[k]?.explicit === true;
+    const allOwn = (spec.y_keys?.length ?? 0) > 0 && (spec.y_keys ?? []).every(own);
     return {
       ...spec,
       facets: spec.facets.map((panel) => ({
         ...panel,
-        series: panel.series.map((s) => ({ ...s, style: traced(s.style, s.style ?? undefined, trace) })),
+        series: panel.series.map((s, i) => {
+          const explicit = panel.channels ? own(panel.channels[i]) : allOwn;
+          return { ...s, style: traced(s.style, { line: s.style?.line, explicit }, trace) };
+        }),
       })),
     };
   }

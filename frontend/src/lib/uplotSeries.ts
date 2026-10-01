@@ -8,7 +8,7 @@
 import type uPlot from "uplot";
 
 import { resolveDrawColor } from "./contrastColor";
-import { seriesPoints } from "./markers";
+import { seriesPoints, seriesTrace } from "./markers";
 import type { PlotPayload } from "./plotdata";
 import { DASH, resolveSeriesStyle, seriesColor } from "./seriesStyleCycle";
 import { resolveFillBands, seriesFillProps } from "./uplotFill";
@@ -117,7 +117,7 @@ export function buildSeriesDefs(
       }
       // Default trace shape (Preferences) when the series has no explicit style:
       // Scatter = markers, no line; Line + markers = both; Step = stepped line.
-      const trace = args.defaultTrace ?? "Line";
+      const trace = seriesTrace(style, args.defaultTrace ?? "Line"); // an explicit style opts out
       const width = style?.width ?? (trace === "Scatter" ? 0 : (args.baseLineWidth ?? 1.5));
       const dash = style?.line ? DASH[style.line] : undefined;
       // Markers: glyph + size for an explicit `marker` style, or the plain 5px
