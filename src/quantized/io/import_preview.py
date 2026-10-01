@@ -38,6 +38,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io._decimal_comma import decimal_metadata
 from quantized.io._delimited_layout import (
     _looks_like_units_row,
     _numeric_score,
@@ -70,6 +71,7 @@ from quantized.io.import_parse import (
     _Parsed,
     _resolve_delim,
     _resolve_names,
+    _scoring_rows,
     _split,
 )
 
@@ -101,6 +103,8 @@ class ImportSettings:
     """How to read a delimited file (also the persistable import-filter shape)."""
 
     delimiter: str = "auto"
+    # Decimal separator: "auto", "." or "," (see `io._decimal_comma`).
+    decimal: str = "auto"
     header_line: int | None = None
     units_line: int | None = None
     # P1.6: the "default legend-label row" -- its per-column cells (aligned
@@ -153,6 +157,8 @@ class ImportSettings:
         # no special-casing here -- each becomes a plain dict automatically.
         out = asdict(self)
         out.pop("malformed_error_bindings", None)  # in-memory diagnostic, never persisted
+        if out["decimal"] == "auto":  # the default: keep the pre-option wire shape
+            del out["decimal"]
         return out
 
     @classmethod
@@ -210,7 +216,8 @@ def guess_settings(text: str) -> ImportSettings:
     lines = text.splitlines()
     delim = _resolve_delim(lines, "auto")
     tokens = [_split(ln, delim) for ln in lines]
-    scores = [_numeric_score(t) if ln.strip() else 0.0 for t, ln in zip(tokens, lines, strict=True)]
+    scored = _scoring_rows(text, tokens, delim)
+    scores = [_numeric_score(t) if ln.strip() else 0.0 for t, ln in zip(scored, lines, strict=True)]
     data_start = next((i for i, s in enumerate(scores) if s > 0.5), 0)
 
     header_line: int | None = None
@@ -450,6 +457,9 @@ def parse_import(text: str, settings: ImportSettings) -> DataStruct:
         "all_column_names": p.names,
         "import_settings": settings.to_dict(),
     }
+    if p.decimal_columns:
+        decimal_meta, decimal_note = decimal_metadata([p.names[k] for k in p.decimal_columns])
+        metadata.update(decimal_meta, notes=[decimal_note])
     label_cols = [k for k in range(n_cols) if p.roles[k] == "label"]
     if label_cols:
         metadata["text_columns"] = {

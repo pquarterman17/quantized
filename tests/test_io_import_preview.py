@@ -112,7 +112,11 @@ def test_explicit_delimiter_overrides_autodetect() -> None:
     text = "x|y\n1,5|2\n3,5|4"
     pv = preview_import(text, ImportSettings(delimiter="pipe", header_line=0, data_start_line=1))
     assert pv["columns"][0]["name"] == "x"
-    assert pv["rows"][0] == [None, 2.0]  # "1,5" isn't a float -> NaN -> None
+    # decimal="auto" reads the "1,5" column as a decimal comma; "." keeps the
+    # old reading ("1,5" isn't a float -> NaN -> None).
+    assert pv["rows"][0] == [1.5, 2.0]
+    point = ImportSettings(delimiter="pipe", header_line=0, data_start_line=1, decimal=".")
+    assert preview_import(text, point)["rows"][0] == [None, 2.0]
 
 
 def test_trailing_delimiter_does_not_add_phantom_column() -> None:

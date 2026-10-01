@@ -2,6 +2,7 @@
 // separate from the state hook so the array-alignment / label-composition
 // logic is unit-testable without React.
 
+import type { ImportDecimal } from "./importTypes";
 import type {
   ImportColumnRole,
   ImportFilterWire,
@@ -41,6 +42,13 @@ export const DELIMITER_OPTIONS: { value: string; label: string }[] = [
   { value: "semicolon", label: "semicolon  ;" },
   { value: "pipe", label: "pipe  |" },
   { value: "whitespace", label: "whitespace" },
+];
+
+/** Decimal-separator choices — mirrors `io._decimal_comma.DECIMAL_CHOICES`. */
+export const DECIMAL_OPTIONS: { value: ImportDecimal; label: string }[] = [
+  { value: "auto", label: "Auto" },
+  { value: ".", label: "Point (.)" },
+  { value: ",", label: "Comma (,)" },
 ];
 
 /** A fresh starting `ImportSettings` before any file is picked (unused by the
