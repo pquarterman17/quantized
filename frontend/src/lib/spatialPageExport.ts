@@ -46,6 +46,7 @@ import {
   secondaryAxisWire,
 } from "./axisspec";
 import { traceSeriesStyles } from "./exportDefaultTrace";
+import { lineWidthSeriesStyles } from "./exportLineWidth";
 import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
 import { withSeriesLegends } from "./figureSpecSeries";
 import { compactOverrides, gateY2Overrides, type FigureOverrides } from "./figureOverrides";
@@ -80,6 +81,10 @@ export interface SpatialPageAppearance {
   /** The Preferences default trace each cell canvas draws unstyled series in
    *  (`exportDefaultTrace`); absent = Line. */
   defaultTrace?: DefaultTrace;
+  /** The width each cell canvas draws a widthless line at
+   *  (`plotTemplates.canvasLineWidth`, as `MultiPanelStage` passes it), sent on
+   *  every such series (`exportLineWidth`); absent = the preset's `line_width`. */
+  lineWidth?: number;
   /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 residual close: one page-level "print
    *  safe" choice, applied to EVERY panel's own `FigureSpec.greyscale` (the
    *  backend's `PagePanel.greyscale` is genuinely per-panel, but this
@@ -217,14 +222,18 @@ function spatialPanelFigure(
     // records (BUG-016 round 3). The colours themselves are untouched.
     series_styles:
       withSeriesLegends(
-        traceSeriesStyles(
-          toWireSeriesStyles(
-            buildExportStyles(plotted, panel.seriesStyles ?? {}, null, appearance?.autoSeriesStyles ?? false),
-            false,
+        lineWidthSeriesStyles(
+          traceSeriesStyles(
+            toWireSeriesStyles(
+              buildExportStyles(plotted, panel.seriesStyles ?? {}, null, appearance?.autoSeriesStyles ?? false),
+              false,
+            ),
+            plotted,
+            appearance?.defaultTrace,
+            panel.seriesStyles ?? {},
           ),
           plotted,
-          appearance?.defaultTrace,
-          panel.seriesStyles ?? {},
+          appearance?.lineWidth,
         ) ?? null,
         legends,
       ) ?? undefined,

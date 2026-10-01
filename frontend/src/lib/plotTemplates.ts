@@ -39,3 +39,8 @@ export function canvasLineWidth(plotTemplate: string, defaultLineWidth?: number)
     ? (defaultLineWidth ?? DEFAULT_LINE_WIDTH_PX)
     : resolveTemplate(plotTemplate).lineWidth;
 }
+
+/** The Graph Builder preview's stroke width (CSS px): fixed, whatever the
+ *  template or Preferences. Its encoded export draws the preview's series, so
+ *  it sends this width (lib/plotEncodingExport.ts). */
+export const GRAPH_PREVIEW_LINE_PX = 1.5;

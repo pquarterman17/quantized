@@ -33,6 +33,10 @@ export function radiusNorm(v: number, vmin: number, vmax: number): number {
  *  renderer never assumes it. */
 export const POLAR_CANVAS = { theta_unit: "deg", theta_direction: "ccw", theta_zero: "E" } as const;
 
+/** The stroke width (CSS px) the polar canvas draws EVERY series at: a series'
+ *  own width and the plot template are ignored. The export sends it as points. */
+export const POLAR_LINE_PX = 1.5;
+
 /** The channels the polar view draws: `yKeys`, or every channel. No hidden or
  *  X-channel filtering — the canvas has none. */
 export function polarChannels(yKeys: readonly number[] | null, nChannels: number): number[] {

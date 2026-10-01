@@ -46,7 +46,7 @@ import {
   PANEL_CELL_DND,
 } from "../../lib/panelwindow";
 import { defaultPlotView } from "../../lib/plotview";
-import { resolveTemplate } from "../../lib/plotTemplates";
+import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
 import type { Dataset } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
 import { useApp } from "../../store/useApp";
@@ -179,7 +179,7 @@ export default function PanelCell({ dataset, syncKey, windowId, index }: PanelCe
           showGrid={CELL_VIEW.showGrid}
           axisBox={CELL_VIEW.showAxisBox}
           fontSize={resolveTemplate(CELL_VIEW.plotTemplate).fontSize}
-          baseLineWidth={defaultLineWidth}
+          baseLineWidth={canvasLineWidth(CELL_VIEW.plotTemplate, defaultLineWidth)}
           defaultTrace={defaultTrace}
           steppedPaths={STEPPED_PATHS}
           steppedPathsPre={STEPPED_PATHS_PRE}

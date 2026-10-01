@@ -16,6 +16,7 @@ import type { FacetPanel } from "../../../lib/facet";
 import { FILLED_SHAPES, markerSubpaths } from "../../../lib/markers";
 import type { PlotPayload } from "../../../lib/plotdata";
 import type { StepMode } from "../../../lib/plotspec";
+import { GRAPH_PREVIEW_LINE_PX } from "../../../lib/plotTemplates";
 import { finiteDomain } from "../../../lib/statstage";
 import type { MarkerShape, SeriesStyle } from "../../../lib/types";
 import { seriesColor } from "../../../lib/uplotOpts";
@@ -160,7 +161,7 @@ function drawXYIntoRect(
     const glyph: MarkerShape = style?.marker ? (style.markerShape ?? "circle") : "circle";
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = GRAPH_PREVIEW_LINE_PX; // what the encoded export sends (lib/plotEncodingExport)
     const mapped = colorBy?.get(i + 1);
     // P1.4 gradient Color-by: each point in its own row's colour through the
     // Stage's rule (`colorScatterFill`), no line — MAIN #14's colour-mapped

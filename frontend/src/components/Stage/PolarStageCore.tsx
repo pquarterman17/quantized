@@ -14,7 +14,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { polarChannels, polarRadialRange, polarToXY, radiusNorm } from "../../lib/polar";
+import { POLAR_LINE_PX, polarChannels, polarRadialRange, polarToXY, radiusNorm } from "../../lib/polar";
 import { niceTicks } from "../../lib/ticks";
 import type { Dataset } from "../../lib/types";
 import { seriesColor } from "../../lib/uplotOpts";
@@ -149,7 +149,7 @@ function draw(
   // Series curves.
   plotted.forEach((ch, i) => {
     ctx.strokeStyle = seriesColor(i, seriesStyles[ch]);
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = POLAR_LINE_PX;
     ctx.beginPath();
     let started = false;
     for (let k = 0; k < angle.length; k++) {

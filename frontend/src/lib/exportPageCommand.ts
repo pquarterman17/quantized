@@ -28,6 +28,7 @@ import { exportFigurePage } from "./api";
 import { spatialPanelsOf } from "./composition";
 import { cancelled, type StoreGet } from "./exportActive";
 import { GREYSCALE_FIELD } from "./exportFigureCommand";
+import { canvasLineWidth } from "./plotTemplates";
 import { analysisData } from "./rowstate";
 import { chooseExcludedRows, pageExcludedChoiceMatters } from "./excludedRowsChoice";
 import type { ExcludedRowsGhoster } from "./figureSpec";
@@ -118,6 +119,7 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
               showAxisBox: live.showAxisBox,
               autoSeriesStyles: live.autoSeriesStyles,
               defaultTrace: live.defaultTrace,
+              lineWidth: canvasLineWidth(live.plotTemplate, live.defaultLineWidth),
               greyscale: params.greyscale as boolean,
             },
             greyExcluded && ((figure, id) => withSpatialGhosts(figure, full.get(id)!, greyExcluded)),

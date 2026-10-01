@@ -12,7 +12,7 @@ import type uPlot from "uplot";
 
 import type { Measurement } from "../../lib/measure";
 import type { RegionStats } from "../../lib/regionStats";
-import { resolveTemplate } from "../../lib/plotTemplates";
+import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
 import { useStageSeriesCycle } from "./useStageSeriesCycle";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
@@ -298,7 +298,7 @@ export default function PlotStage() {
         fontSize={resolveTemplate(plotTemplate).fontSize}
         // A publication template sets its own line width; the "screen" default
         // defers to the user's Preferences default line width.
-        baseLineWidth={plotTemplate === "screen" ? defaultLineWidth : resolveTemplate(plotTemplate).lineWidth}
+        baseLineWidth={canvasLineWidth(plotTemplate, defaultLineWidth)}
         defaultTrace={defaultTrace}
         steppedPaths={STEPPED_PATHS}
         steppedPathsPre={STEPPED_PATHS_PRE}

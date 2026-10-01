@@ -16,8 +16,11 @@
 // `line: "none"`, a colour-mapped (`color_by`) entry, a GRADIENT encoding,
 // whose series are colour-mapped scatters on both sides, and a document whose
 // publication styles are explicitly `null` (matplotlib's own styling).
-// Not yet covered: a spatial page (`spatialPageExport`), the Graph Builder's
-// encoded export and the polar figure, whose canvases size lines separately.
+// The paths whose canvases size lines separately apply the same rule with
+// their canvas' width (`tests/fixtures/wire/line_width_paths.json`): a spatial
+// page (`spatialPageExport`, `canvasLineWidth` like the Stage), the Graph
+// Builder's encoded export (`plotEncodingExport`, the preview's fixed width) and
+// the polar figure (`polarFigureSpec`, the polar canvas' fixed width).
 
 import type { FigureSpec } from "./api/figures";
 import type { ExportSeriesStyle } from "./publicationStyles";
