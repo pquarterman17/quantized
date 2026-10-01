@@ -19,6 +19,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from quantized.calc.encoding_text import append_text_factors
+from quantized.calc.figure_facets_excluded import facet_panels_with_excluded
 from quantized.calc.plotting_encoded_facets import encoded_facet_panels
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
@@ -101,7 +102,7 @@ def _facet_panels(req: FigureRequest) -> list[dict[str, Any]]:
         return _encoded_facet_panels(req)
     # FEATURE-001: each series' own channel's style rides the panel (one
     # style per channel, applied in every panel); absent = unstyled.
-    return [
+    panels: list[dict[str, Any]] = [
         {
             "label": f.label,
             "x": f.x,
@@ -109,9 +110,15 @@ def _facet_panels(req: FigureRequest) -> list[dict[str, Any]]:
                 {"label": s.label, "y": s.y, **({"style": s.style} if s.style else {})}
                 for s in f.series
             ],
+            **({"rows": f.rows} if req.excluded_rows else {}),
         }
         for f in req.facets
     ]
+    if not req.excluded_rows:
+        return panels
+    # F4.2c (a): a greyed grid's panels carry their full level rows and the
+    # dataset `rows` behind them; blank the mask, and grey it as the Stage does.
+    return facet_panels_with_excluded(panels, req.excluded_rows, grey=req.grey_excluded)
 
 
 def _render_facets_bytes(

@@ -145,7 +145,7 @@ export interface MultiPanelStageParams {
   seriesLabels?: Record<number, string>;
   /** P3.3 dash/marker cycle — SPATIAL mode only; see `spatialCellStyling`. */
   autoSeriesStyles?: boolean;
-  /** F4.2c (a) excluded rows — SPATIAL mode only; see `spatialPanelFetch`. */
+  /** F4.2c (a) excluded rows — SPATIAL only (`spatialPanelFetch`); callers grey facets (`useGreyedFacets`). */
   excludedDisplay?: ExcludedDisplay;
   xKey: number | null;
   yKeys: number[] | null;

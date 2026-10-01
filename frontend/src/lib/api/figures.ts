@@ -49,7 +49,8 @@ export interface FigureFacetSpec {
   /** P1.4 residual 3, with `FigureSpec.encoding` or `group_col`: the dataset
    *  row behind each `x` entry and the Y channel behind each series, so the
    *  route re-splits the panel by the encoding and/or group
-   *  (`lib/figureSpecFacets.withFacetRows`). */
+   *  (`lib/figureSpecFacets.withFacetRows`). `rows` alone, with
+   *  `excluded_rows`: a greyed unsplit panel (`lib/facetExcluded.ts`). */
   rows?: number[];
   channels?: number[];
 }
@@ -114,9 +115,11 @@ export interface FigureSpec {
    *  and colours/marks/labels each one as the Graph Builder preview does.
    *  Omit = today's behaviour, byte-identical. */
   encoding?: FigureEncodingSpec;
-  /** F4.2c (a), with `encoding` only (else 422): rows of the FULL `dataset`
-   *  the window does not draw as data. The split takes its levels over every
-   *  row, as the window does, then blanks these (`calc/figure_excluded.py`). */
+  /** F4.2c (a), with `encoding` or unsplit `facets` only (else 422): rows of
+   *  the FULL `dataset` the window does not draw as data. The split takes its
+   *  levels over every row, as the window does, then blanks these
+   *  (`calc/figure_excluded.py`); a facet panel blanks those among its `rows`
+   *  (`calc/figure_facets_excluded.py`). */
   excluded_rows?: number[];
   /** With `excluded_rows`: also draw them as grey "(excluded)" companions. */
   grey_excluded?: boolean;
