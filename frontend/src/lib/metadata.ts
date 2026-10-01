@@ -47,13 +47,20 @@ export function isHiddenMetadataKey(key: string): boolean {
   return HIDDEN_METADATA_KEYS.has(key);
 }
 
+/** A parser's `notes` (one sentence per import problem, e.g. dropped rows —
+ *  store/importNotes.ts) read as prose, not as a JSON array. */
+function formatRowValue(key: string, v: unknown): string {
+  if (key === "notes" && Array.isArray(v) && v.every((n) => typeof n === "string")) return v.join(" ");
+  return formatMetaValue(v);
+}
+
 /** Flatten a metadata record into sorted [key, formattedValue] rows, dropping
  *  the wiring/provenance keys `isHiddenMetadataKey` names (module doc above). */
 export function metadataRows(metadata: Record<string, unknown>): [string, string][] {
   return Object.keys(metadata)
     .filter((k) => !isHiddenMetadataKey(k))
     .sort((a, b) => a.localeCompare(b))
-    .map((k) => [k, formatMetaValue(metadata[k])]);
+    .map((k) => [k, formatRowValue(k, metadata[k])]);
 }
 
 /** Tab-separated `key\tvalue` lines for the "Copy metadata" button. */

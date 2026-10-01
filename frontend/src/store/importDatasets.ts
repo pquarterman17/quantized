@@ -45,6 +45,7 @@ import { presentBatchOutcome } from "./importBatchOffers";
 import { createErrorRolesActions, seedErrorRoles, type ErrorRolesActions } from "./importErrorRoles";
 import type { StructurePreset } from "./crystalStructures";
 import { loadPath, loadUpload, pathBasename, presentStructures, type ImportLoad, type ImportOrigin } from "./importLoaders";
+import { notifyParserNotes, parserNotes } from "./importNotes";
 import { resolveImportTargetFolderId } from "./importTargetFolder";
 import { beginOp, endOp, updateOp, type OpId } from "./pendingOps";
 import { toast } from "./toasts";
@@ -375,6 +376,7 @@ async function runImport<T>(
   let cancelled = false;
   const createdIds: string[] = [];
   const structures: StructurePreset[] = []; // .cif: lattice presets, not datasets
+  const noted: { name: string; notes: string[] }[] = []; // parser notes (importNotes.ts)
   try {
     for (let i = 0; i < items.length; i++) {
       if (controller.signal.aborted) {
@@ -387,7 +389,10 @@ async function runImport<T>(
       try {
         const loaded = await load(item, controller.signal);
         if ("structure" in loaded) structures.push(loaded.structure);
-        else createdIds.push(...addFromPayload(set, get, loaded.data, loaded.origin, targetFolderId, historyToken));
+        else {
+          noted.push({ name: describe(item), notes: parserNotes(loaded.data) });
+          createdIds.push(...addFromPayload(set, get, loaded.data, loaded.origin, targetFolderId, historyToken));
+        }
         added += 1;
       } catch (e) {
         // A rejection that lands after cancel() was called is the abort,
@@ -410,6 +415,7 @@ async function runImport<T>(
     const summary = `import cancelled — ${added}/${items.length} completed`;
     get().setStatus(summary);
     toast(summary, "info");
+    notifyParserNotes(noted);
     return createdIds; // files already fully imported STAY — see this function's own doc
   }
 
@@ -440,6 +446,7 @@ async function runImport<T>(
   // the stage — named only the broken file. Reuses `summary`, already built
   // above to this exact string, rather than re-interpolating it.
   if (lastError) toast(summary, "danger");
+  notifyParserNotes(noted);
   return createdIds;
 }
 
