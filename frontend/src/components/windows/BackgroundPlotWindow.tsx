@@ -139,6 +139,7 @@ export default function BackgroundPlotWindow({
     return (
       <BackgroundStackWindow
         dataset={dataset} view={view} bg={bg} composition={composition} encoding={document?.bindings.encoding}
+        document={document}
       />
     );
   return (

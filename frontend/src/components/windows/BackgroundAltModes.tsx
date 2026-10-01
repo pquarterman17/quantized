@@ -25,6 +25,7 @@
 import { useId } from "react";
 
 import type { Composition } from "../../lib/composition";
+import type { FigureDocument } from "../../lib/figureDocument";
 import type { FigureEncoding } from "../../lib/figureEncoding";
 import { canvasGroupCol } from "../../lib/plotGroupSplit";
 import { resolveTemplate } from "../../lib/plotTemplates";
@@ -33,9 +34,11 @@ import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import PolarStageCore from "../Stage/PolarStageCore";
 import StatStagePlot from "../Stage/StatStagePlot";
+import { useBreakSeriesStyles } from "../Stage/useBreakSeriesStyles";
 import { useFacetEncoding } from "../Stage/useFacetEncoding";
 import { useGreyedFacets } from "../Stage/useGreyedFacets";
 import { useMultiPanelStage } from "../Stage/useMultiPanelStage";
+import { useWindowCycles } from "../Stage/useStageSeriesCycle";
 import { useStatStage } from "../Stage/useStatStage";
 
 export interface BackgroundModeProps {
@@ -129,13 +132,15 @@ export interface BackgroundStackWindowProps extends BackgroundModeProps {
   composition?: Composition | null;
   /** P1.4 residual 3: the window's document encodings, drawn on its facet grid. */
   encoding?: FigureEncoding;
+  /** The window's document — decides whether its x-break panels cycle (S1 b). */
+  document?: FigureDocument;
 }
 
 /** Per-channel stack (or, with a facet binding or saved x-breaks, that
  *  arrangement) from the window's own view (focused twin: `MultiPanelStage`,
  *  which can additionally show the SPATIAL arrangement — that one stays
  *  focused-only, see the module doc). */
-export function BackgroundStackWindow({ dataset, view, bg, composition = null, encoding }: BackgroundStackWindowProps) {
+export function BackgroundStackWindow({ dataset, view, bg, composition = null, encoding, document }: BackgroundStackWindowProps) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
   const ensureBookData = useApp((s) => s.ensureBookData);
@@ -153,6 +158,7 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null, e
   // F4.2c (a): the app-wide "Excluded rows" mode greys the facet grid here too.
   const excludedDisplay = useApp((s) => s.excludedDisplay);
   const shown = useGreyedFacets(composition, dataset, view.facetKey, view.xKey, excludedDisplay);
+  const breakSeriesStyles = useBreakSeriesStyles(useWindowCycles(view, document), composition, dataset, view);
   const { hostRef, hostStyle } = useMultiPanelStage({
     active: dataset,
     datasets: NO_DATASETS,
@@ -170,6 +176,7 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null, e
     defaultTrace,
     refLines: view.refLines,
     seriesStyles: view.seriesStyles,
+    breakSeriesStyles,
     seriesLabels: view.seriesLabels,
     xKey: view.xKey,
     yKeys: view.yKeys,

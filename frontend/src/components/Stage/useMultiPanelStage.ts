@@ -78,7 +78,6 @@ const GRID_GAP = 8;
  *  (which depends on `seriesLabels`) for nothing. */
 const EMPTY_LABELS: Record<number, string> = {};
 
-
 export interface SpatialLegendPortal {
   key: string;
   target: HTMLDivElement;
@@ -127,6 +126,7 @@ export interface MultiPanelStageParams {
   defaultTrace?: DefaultTrace;
   refLines: RefLine[];
   seriesStyles: Record<number, SeriesStyle>;
+  breakSeriesStyles?: Record<number, SeriesStyle>; // x-break leg only: `seriesStyles` with the P3.3 cycle resolved (`useBreakSeriesStyles`)
   /** Per-channel legend renames, keyed by dataset channel index (BUG-014).
    *  Honoured by the plain stack, the paneled x-break and the facet grid
    *  alike (round 4): `buildOpts` sets `legend: { show: false }` and
@@ -200,7 +200,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     baseLineWidth,
     defaultTrace,
     refLines,
-    seriesStyles,
+    seriesStyles, breakSeriesStyles = seriesStyles,
     seriesLabels = EMPTY_LABELS,
     autoSeriesStyles = false,
     excludedDisplay = "hide",
@@ -549,7 +549,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
         // y-axis label, and its EXPORT carries the rename (and, R1, the styles)
         // — so both belong here as on the facet leg below. Channel-keyed,
         // projected per panel through `BreakPanel.channels`.
-        seriesLabels, seriesStyles,
+        seriesLabels, seriesStyles: breakSeriesStyles,
         syncKey,
         // Same x-zoom/pan sync idiom as the plain per-channel stack — a break
         // panel's x axis still means "this series' x", so zooming one seam
@@ -666,7 +666,7 @@ export function useMultiPanelStage(params: MultiPanelStageParams): MultiPanelSta
     refLines,
     styleList,
     labelList,
-    seriesLabels, seriesStyles, // FEATURE-001: the facet leg reads the channel-keyed map directly
+    seriesLabels, seriesStyles, breakSeriesStyles, // FEATURE-001: the facet leg reads the channel-keyed map directly
     autoSeriesStyles,
     errorBarsList,
     tool,
