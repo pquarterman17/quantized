@@ -193,6 +193,7 @@ def render_categorical_figure(
     width_in: float | None = None,
     height_in: float | None = None,
     dpi: int = 200,
+    svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
 ) -> bytes:
     """Render a grouped or stacked bar chart to image bytes.
 
@@ -277,4 +278,4 @@ def render_categorical_figure(
         if st.grid_alpha > 0:
             ax.grid(True, alpha=st.grid_alpha, axis="y")
         fig.tight_layout(rect=layout_rect)  # None = the default layout
-        return savefig_bytes(fig, fmt, dpi=dpi)
+        return savefig_bytes(fig, fmt, dpi=dpi, svg_text_as_paths=svg_text_as_paths)

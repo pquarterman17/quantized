@@ -140,6 +140,22 @@ describe("Copy figure in stat mode", () => {
     expect(await vi.mocked(copySvgAsync).mock.calls[0]?.[0]).toBe(svg);
   });
 
+  it("Copy figure (vector) asks for glyph outlines, as the XY vector copy does", async () => {
+    await runCopyFigureSvgCommand(useApp.getState);
+    expect(postBlob).toHaveBeenCalledWith(
+      "/api/export/statplot-figure",
+      expect.objectContaining({ fmt: "svg", svg_text_as_paths: true }),
+      expect.anything(),
+    );
+  });
+
+  it("the PNG copy sends no outline flag", async () => {
+    await runCopyFigureCommand(useApp.getState);
+    const body = vi.mocked(postBlob).mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(body.fmt).toBe("png");
+    expect(body).not.toHaveProperty("svg_text_as_paths");
+  });
+
   it("with no stat stage to route to, asks before copying XY", async () => {
     unregister?.();
     vi.mocked(askConfirm).mockResolvedValueOnce(false);

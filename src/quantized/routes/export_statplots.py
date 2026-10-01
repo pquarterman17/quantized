@@ -40,6 +40,7 @@ from quantized.routes._export_common import (
     _attachment,
     _safe_name,
 )
+from quantized.routes.export_figures_schema import SVG_TEXT_AS_PATHS_DOC
 
 router = APIRouter(prefix="/api/export", tags=["export"])
 
@@ -183,6 +184,8 @@ class StatplotFigureRequest(BaseModel):
     # indexed by level. None = the figure without a colour factor, unchanged.
     color_levels: list[int | None] | None = None
     palette: list[str] | None = None
+    # The stat stage's "Copy figure (vector)" sends this, as the XY copy does.
+    svg_text_as_paths: bool = Field(default=False, description=SVG_TEXT_AS_PATHS_DOC)
 
     def marks(self) -> dict[str, Any] | None:
         fields = {
@@ -229,6 +232,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 caveat=footnote_text(req.error_note, req.caveat),
                 marks=req.marks(), axis_style=_axis_style(req.axis_style),
                 show_connect_means=req.show_connect_means,
+                svg_text_as_paths=req.svg_text_as_paths,
             )
         else:
             with heavy_imports(
@@ -251,6 +255,7 @@ def export_statplot_figure(req: StatplotFigureRequest) -> Response:
                 connect_breaks=req.connect_breaks,
                 marks=req.marks(), axis_style=_axis_style(req.axis_style), y_domain=req.y_domain,
                 colors=level_colors(req.color_levels, req.palette),
+                svg_text_as_paths=req.svg_text_as_paths,
             )
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)
@@ -347,6 +352,7 @@ class CategoricalFigureRequest(BaseModel):
     # by series) and the palette as hex -- see StatplotFigureRequest.
     color_levels: list[int | None] | None = None
     palette: list[str] | None = None
+    svg_text_as_paths: bool = Field(default=False, description=SVG_TEXT_AS_PATHS_DOC)
 
     def bar_marks(self) -> dict[str, Any] | None:
         return _bar_marks(self.points, self.jitter_width, self.summary, self.raw, self.raw_rows)
@@ -387,6 +393,7 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
                 y_label=req.y_label, fmt=req.fmt, style=req.style, dpi=dpi,
                 caveat=footnote_text(req.error_note, req.caveat),
                 axis_style=_axis_style(req.axis_style),
+                svg_text_as_paths=req.svg_text_as_paths,
             )
         else:
             with heavy_imports(
@@ -404,6 +411,7 @@ def export_categorical_figure(req: CategoricalFigureRequest) -> Response:
                 caveat=footnote_text(req.error_note, req.caveat),
                 axis_style=_axis_style(req.axis_style), bar_marks=req.bar_marks(),
                 colors=level_colors(req.color_levels, req.palette),
+                svg_text_as_paths=req.svg_text_as_paths,
             )
     except CALC_ERRORS_WITH_LOCK as exc:
         raise_calc_error(exc)

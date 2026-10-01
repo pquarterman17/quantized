@@ -246,6 +246,7 @@ def render_stat_facets_figure(
     marks: dict[str, Any] | None = None,
     axis_style: dict[str, Any] | None = None,
     show_connect_means: bool = False,
+    svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
 ) -> bytes:
     """Faceted box/violin export (GUI_INTERACTION #12 slice 4b, StatStage's
     "facet by" grid). Each ``panels[i]`` is ``{"label": str, "kind": "box" |
@@ -358,7 +359,7 @@ def render_stat_facets_figure(
         if y_label:
             fig.supylabel(y_label)
         fig.tight_layout(rect=add_caveat(fig, caveat, tiered=any_outer))  # None = default layout
-        return savefig_bytes(fig, fmt, dpi=resolved_dpi)
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi, svg_text_as_paths=svg_text_as_paths)
 
 
 def render_categorical_facets_figure(
@@ -375,6 +376,7 @@ def render_categorical_facets_figure(
     dpi: int = 200,
     caveat: str | None = None,
     axis_style: dict[str, Any] | None = None,
+    svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
 ) -> bytes:
     """Faceted grouped/stacked bar export (GUI_INTERACTION #12 slice 4b,
     StatStage's bar-mode "facet by" grid). Each ``panels[i]`` is
@@ -464,4 +466,4 @@ def render_categorical_facets_figure(
         if y_label:
             fig.supylabel(y_label)
         fig.tight_layout(rect=add_caveat(fig, caveat))  # None = default layout
-        return savefig_bytes(fig, fmt, dpi=dpi)
+        return savefig_bytes(fig, fmt, dpi=dpi, svg_text_as_paths=svg_text_as_paths)

@@ -84,6 +84,7 @@ def render_statplot_figure(
     axis_style: dict[str, Any] | None = None,
     y_domain: tuple[float, float] | list[float] | None = None,
     colors: list[str | None] | None = None,
+    svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
 ) -> bytes:
     """Render a statistical plot to image bytes.
 
@@ -209,7 +210,7 @@ def render_statplot_figure(
             ax.spines["top"].set_visible(False)
             ax.spines["right"].set_visible(False)
         fig.tight_layout(rect=layout_rect)  # None = the default layout
-        return savefig_bytes(fig, fmt, dpi=resolved_dpi)
+        return savefig_bytes(fig, fmt, dpi=resolved_dpi, svg_text_as_paths=svg_text_as_paths)
 
 
 def _clean_groups_with_indices(

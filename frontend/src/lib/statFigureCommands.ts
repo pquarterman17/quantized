@@ -5,16 +5,14 @@
 // focused stat stage registered one (lib/statStageBridge.ts), comes here:
 //   - Export figure… downloads the stage's own export (Stage/statStageExport.ts)
 //     in the dialog's format, style and DPI;
-//   - the copies put the stat renderer's own PNG / SVG on the clipboard;
+//   - the copies put the stat renderer's own PNG / SVG on the clipboard (the
+//     SVG with glyphs as outlines, `svg_text_as_paths`, like the XY copy);
 //   - Send embeds the stat renderer's PNG as the report block's `image` (a
 //     report `spec` is an XY `/api/export/figure` body and cannot carry a stat
 //     plot; the report exporter embeds an attached PNG in every format, which
 //     an attached SVG it cannot do for Office, so the send is always PNG).
 // No stat stage to route to (it has not mounted yet) falls through to the XY
 // path, whose screen-only confirm says so first (lib/screenOnlyExport.ts).
-//
-// Known gap: the stat routes have no `svg_text_as_paths`, so a vector copy of
-// a stat plot keeps live SVG text, unlike the XY copy's outlined glyphs.
 // Imported only by lazily-loaded command modules.
 
 import { copySvgAsync } from "./clipboard";
@@ -41,15 +39,16 @@ export async function exportStatFigure(
   }
 }
 
-/** Copy the stat renderer's PNG (Office-ready) or SVG. The render starts before
- *  the first await, so the clipboard write keeps this click's activation. */
+/** Copy the stat renderer's PNG (Office-ready) or SVG (glyphs as outlines, so
+ *  the paste needs no installed font). The render starts before the first
+ *  await, so the clipboard write keeps this click's activation. */
 export async function copyStatFigure(
   exporter: StatStageExporter,
   fmt: "png" | "svg",
   out: StatExportOut & { dpi: number; signal: AbortSignal },
   alt: string,
 ): Promise<void> {
-  const blob = renderStatFigureBlob(exporter, fmt, out);
+  const blob = renderStatFigureBlob(exporter, fmt, out, fmt === "svg");
   const ok =
     fmt === "svg"
       ? await copySvgAsync(blob, out.signal)

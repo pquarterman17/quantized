@@ -59,13 +59,20 @@ const ROUTE_PATH = {
 } as const;
 
 /** Render the stat figure through its own route and return the bytes, for
- *  the paths that need an image rather than a download (copy, report). */
-export async function renderStatFigureBlob(exporter: StatStageExporter, fmt: string, out: StatExportOut): Promise<Blob> {
+ *  the paths that need an image rather than a download (copy, report).
+ *  `outlines` asks for SVG glyphs as paths (`svg_text_as_paths`). */
+export async function renderStatFigureBlob(
+  exporter: StatStageExporter,
+  fmt: string,
+  out: StatExportOut,
+  outlines = false,
+): Promise<Blob> {
   const got: { blob: Blob | null } = { blob: null };
   const done = await exporter(fmt, {
     ...out,
     deliver: async (req, signal) => {
-      got.blob = await postBlob(ROUTE_PATH[req.route], req.spec, signal);
+      const body = outlines ? { ...req.spec, svg_text_as_paths: true } : req.spec;
+      got.blob = await postBlob(ROUTE_PATH[req.route], body, signal);
     },
   });
   if (!done) throw new DOMException("cancelled", "AbortError");
