@@ -638,11 +638,15 @@ with parent items P1.3 and P1.5.
           saved-page export, and the Figure Builder's canonical Export
           (`excludedRowsChoice.test.ts`,
           `usePagePreviewExport.excluded.test.ts`, `PagesSection.test.tsx`).
-          **Not covered** (still omit, no question): the spatial Origin
-          "Export page…", "Send figure to report…", the Figure Builder's
+          **Not covered** at the time (still omit, no question): the spatial
+          Origin "Export page…", "Send figure to report…", the Figure Builder's
           legacy (non-canonical) live-plot export, and faceted or
-          Color/Symbol-encoded figures (the faceted grid never greys on screen
-          either; the encoded renderer would recolour the ghosts).
+          Color/Symbol-encoded figures. **Since closed:** batch 6 (PR #493)
+          added Send to report, the spatial page, the legacy builder and
+          encoded figures; 2026-10-01 plain facet grids grey on screen and in
+          export (`lib/facetExcluded.ts`, `calc/figure_facets_excluded.py`,
+          fixture `facet_excluded.json`). Facet grids split by
+          Color/Symbol/Label/Group still ask omit-only, with that reason.
         (b) **DECIDED (owner, 2026-09-29): "Rejection with notice."** *When a
         chosen transformation succeeds but the Plot Recipe then refuses its
         output (technique/column mismatch)*, the transformation is rolled

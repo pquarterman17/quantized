@@ -9338,7 +9338,7 @@ see it half-built.
 - [x] Peak batch fits never send `y_err` (the error-column choice is per active dataset).
 - [x] Legend rows for selected-row highlight companions use the palette colour, not the accent the canvas draws.
 - [x] Perf, measured but not yet done: ~~cell-patch uploads instead of a full re-upload per edit, plus in-flight de-dupe across plot windows~~ (done 2026-09-30, `6df85c8f`: `POST /api/datasets/patch` + `lib/api/datasetCache.ts`'s per-object `pending` WeakMap so every window shares one in-flight upload); ~~JSON body parsing off the event loop~~ (done 2026-09-30, `843bd4b8`: `routes/_offloop.py`, dataset bodies decoded in the threadpool); ~~uPlot `setSeries`/redraw instead of rebuild for hide/colour~~ (done 2026-09-30, `bed8f987`: `lib/uplotLivePaint.ts`); ~~binary column transport for full-resolution plots~~ (done 2026-09-30, `5e7a2365`: `routes/_columns.py` + `lib/api/plotColumns.ts`); ~~an encoding-active rename still refetches (`useStageEncoding` keyed on `active`)~~ (done 2026-09-29).
-- [ ] Graph Builder preview: a Group-alone faceted spec is unsplit (`lib/plotEncoding.ts` `encodeSpec` still uses `facetEncoding`); Stage/export split it.
+- [x] Graph Builder preview: a Group-alone faceted spec is unsplit (`lib/plotEncoding.ts` `encodeSpec` still uses `facetEncoding`); Stage/export split it. **Done 2026-10-01** (`6e85b5ff`): `encodeSpec` goes through `facetSplitEncoding` with the group channel, pinned by the `group` entry of `facet_styles.json`.
 
 ## Owner-gated
 
