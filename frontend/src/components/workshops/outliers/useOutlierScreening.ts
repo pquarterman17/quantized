@@ -25,6 +25,7 @@ import { channelModelingType, isCategorical } from "../../../lib/modeling";
 import { activeRowIndices, analysisData, droppedRows } from "../../../lib/rowstate";
 import type { DataStruct } from "../../../lib/types";
 import { useActiveDataset, useApp } from "../../../store/useApp";
+import { useFollowColumnPicks } from "../useFollowColumnPicks";
 
 export type OutlierMethod = "grubbs" | "rosner" | "dixon-q" | "mad";
 
@@ -124,6 +125,11 @@ export function useOutlierScreening(): OutlierScreeningState {
     setError(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active?.id]);
+  // A column added/removed under a pick follows it by label (../useFollowColumnPicks).
+  useFollowColumnPicks(active, (follow) => {
+    const next = follow(col);
+    if (next !== col) setCol(next ?? firstContinuous(active));
+  });
 
   const values = useMemo(() => (data ? colValues(data, col) : []), [data, col]);
 

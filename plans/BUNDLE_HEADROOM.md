@@ -1,6 +1,13 @@
 # Bundle headroom campaign
 
-**Current state (2026-10-01, after slice 16):** two async load seams and
+**Current state (2026-10-01, after slice 17):** three async load seams, each
+behind a user action (open workspace, workbook Paste/Duplicate, the
+project-lock commands). Parent `482f4569` measured **856,884 B** (1,724 B
+under the pin after later batches); after, **852,305 B** (**−4,579 B**). The
+pin was LOWERED by that same amount, **858,608 → 854,029 B**, so the headroom
+is unchanged (**1,724 B**). See "Slice 17".
+
+**Previous state (2026-10-01, after slice 16):** two async load seams and
 three more re-exported lazy halves. Parent `97932150` measured **859,253 B**
 (3,954 B under the pin after later batches); after, **854,654 B**
 (**−4,599 B**). The pin was LOWERED by that same amount, **863,207 →
@@ -2421,6 +2428,94 @@ dialog and row-menu tests now await the preview, or wait on its state.
 
 **Pin:** lowered by exactly the measured saving, the slice-15 convention. That
 locks in the gain and keeps the 3,954 B of headroom this tree had.
+
+### Slice 17 — three async seams behind user actions, pin ratcheted DOWN — **DONE (2026-10-01)**
+
+**Measured net eager delta −4,579 B — pin LOWERED 858,608 → 854,029 B**
+
+Later batches had taken the tree to 856,884 B, 1,724 B under the pin.
+Exact bytes, `npm ci`, then `node_modules/.vite` wiped before every build.
+Rows are cumulative; the last one was reproduced by `npm run build` after a
+second `npm ci`:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `482f4569` (parent) | 856,884 | — |
+| + open-workspace replace half (`lib/openWorkspaceReplace.ts`) behind `import()` | 854,621 | **−2,263** |
+| + workbook Paste/Duplicate bodies → `store/workbookTransferRun.ts` | 852,954 | **−1,667** |
+| + Take Over Editing / Open as Copy bodies → `commands/projectLockRun.ts` | 852,305 | **−649** |
+
+**The brief's candidates were checked first and left alone.**
+`store/columnRemovalRefs.ts`, `lib/channelRemapDocs.ts` and
+`store/derivedSheetShift.ts` are the cross-reference remap files other lanes
+are editing (together 1,582 B attributed). `store/historySnapshot.ts` runs on
+every `recordHistory`. The `lib/formula*.ts` engine is imported by the eager
+recalc path (`store/useApp.ts`, `lib/recalc.ts`), and `lib/formulaRename.ts`
+is reached through `store/computedColumns.ts` and the remap files.
+`lib/storageWarning.ts` is 117 B. `lib/exportStyles.ts` is not eager. The three seams below are the
+largest eager code whose every entry point is an already-async user action.
+They were found with a dominator walk over the static import graph (the bytes
+each module would take with it), checked against the sourcemap attribution.
+
+#### The three seams
+
+- **Open workspace.** `commands/fileCommands.ts` loads the replace-and-confirm
+  half once a picked `.dwk` has parsed. It takes `store/projectLockLifecycle.ts`
+  with it. `openWorkspaceCommand` already chained `dispatch` inside its
+  `.then`. The dispatches now return the load's promise, so a half that will
+  not load lands in the same "open failed: …" / "append failed: …" status a
+  parse failure does. Nothing is replaced, appended or asked. The append
+  dispatch loads before it merges, so a failed load cannot append without
+  recording the Recent Projects entry. The click still reaches
+  `openFilePicker` in its own task, so the picker rule that kept
+  `lib/openWorkspaceCommand.ts` eager is untouched.
+- **Workbook Paste/Duplicate.** Both actions were already async and already
+  loaded the transfer core. They now load `store/workbookTransferRun.ts`
+  instead, which holds their bodies, the id generators, the merge and the
+  success report, and imports the core statically. The slice keeps the steps
+  that run before the core (the clipboard read, the pending-worksheet resolve),
+  so every refusal keeps its order and wording. Copy is unchanged: its
+  clipboard write must start in the click's own task.
+- **Project-lock commands.** The two run bodies moved verbatim.
+  `run()` returns the load's promise, the Pack Project shape, so `runAction`
+  shows the busy label and toasts a load failure naming the command.
+
+**The boundary tax, measured again.** The first cut of the transfer seam saved
+only −486 B. The lazy body imported `fail` from `store/workbookTransfer.ts` and
+`nextFigureId` from `store/figureLifecycle.ts`, and Rolldown split both into
+eager chunks of their own (77 → 79 chunks). Passing them in a `TransferCtx`
+recovered +1,181 B. Static imports of modules that were already separate eager
+chunks (`store/toasts.ts`, `store/idSeq.ts`, `store/workbookIds.ts`,
+`lib/plural.ts`) cost nothing. Before you pin a seam, check the chunk count as
+well as the total.
+
+**Tried and dropped:** `lib/figuredoc.ts`'s `.dwk` sanitizer
+(`sanitizeFigureDocs` and its helpers) as a re-exported half saved **0 B**.
+Its only caller is the lazy codec, but the parse worker reaches it as well, and
+Rolldown emitted it into the eager `workspaceMerge` chunk. That chunk holds
+code shared by the main graph and the worker. A codec-only half is not lazy if
+the worker also reaches it.
+
+#### Guards and tests
+
+`architecture.test.ts`: `store/workbookTransferRun.ts` replaces
+`lib/workbookTransfer.ts` as the `SEAMS` entry. The core moved to
+`DRAGGED_OUT` because the run module imports it statically.
+`commands/projectLockRun.ts` is a new `SEAMS` entry, and
+`lib/openWorkspaceReplace.ts` and `store/projectLockLifecycle.ts` are
+`DRAGGED_OUT`, since lazy modules import them statically. Sabotage turned
+each arm RED: `fileCommands.ts` value-importing `recordNativeOpen`,
+`projectLockCommands.ts` value-importing `openAsCopy`, and
+`store/workbookTransfer.ts` value-importing `canPasteText`.
+`commands/openWorkspace.lazyFail.test.ts` and
+`commands/projectLockCommands.lazyFail.test.ts` pin the load-failure contracts
+and the retry. Two new cases in `store/workbookTransferLazy.test.ts` cover the
+Paste and Duplicate bodies. All were RED before their change.
+`commands/projectLockCommands.test.ts` now awaits `run()`. `preload-verify`
+passes (190 wrapped sites, 0 violations).
+
+**Pin:** lowered by exactly the measured saving, the slice-15 convention. That
+locks in the gain and keeps the 1,724 B of headroom this tree had.
 
 ## What this does NOT change
 

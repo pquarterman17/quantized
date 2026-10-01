@@ -40,7 +40,8 @@
 // (store/figureLifecycle.ts's `editableFigures`, added later than this file's
 // original staleness handling) — its bindings/view can index the OLD columns
 // too. lib/figureDocumentReimport.ts's `resetFigureDocumentForReshape` mirrors
-// the live-view/window reset below field-for-field; see its module doc.
+// the live-view/window reset below field-for-field; see its module doc. A live
+// legacy FigureDoc and a saved Graph Builder spec reset with it.
 //
 // Corrections (`Dataset.corrections`/`raw`) re-apply to the FRESH raw through
 // the same `applyCorrectionsApi` chokepoint store/useApp.ts's own
@@ -65,9 +66,9 @@ import { hasDesktopShell, pathState } from "../lib/desktopBridge";
 // (below, inside computeReimportMerge -- the async staging phase, never
 // the synchronous commit) so it never joins the eager bundle; this is a
 // TYPE-ONLY import, erased at compile time, giving applyReimportMerge a
-// typed reference to the already-resolved function without importing
-// the module's VALUE here.
-import type { resetFigureDocumentForReshape } from "../lib/figureDocumentReimport";
+// typed reference to the already-resolved module without importing its
+// VALUE here.
+import type * as FigureReshape from "../lib/figureDocumentReimport";
 import { applyFormulas } from "../lib/formula";
 import { parentDirectory } from "../lib/importEntry";
 import { lit } from "../lib/macro";
@@ -104,7 +105,7 @@ export interface ReimportMerge {
   shapeChanged: boolean;
   columnsChanged: boolean;
   viewReset: Partial<PlotView> | null;
-  /** `lib/figureDocumentReimport.ts`'s reset function, already resolved via
+  /** `lib/figureDocumentReimport.ts`'s reset functions, already resolved via
    *  a dynamic `import()` during THIS async staging phase (perf: keeps the
    *  module out of the eager bundle) -- `null` when `!columnsChanged`, the
    *  only case `applyReimportMerge` would ever call it. Resolving it here
@@ -112,7 +113,7 @@ export interface ReimportMerge {
    *  synchronous, which `store/reimportAllRun.ts`'s batch loop depends on
    *  (see its own module doc: every `applyReimportMerge` call there is
    *  synchronous, back-to-back, for one atomic multi-dataset commit). */
-  resetFigureDocumentForReshape: typeof resetFigureDocumentForReshape | null;
+  reshape: typeof FigureReshape | null;
 }
 
 /** Validate + stage a re-import of `ds` with freshly-read `freshRaw`: re-runs
@@ -140,10 +141,8 @@ export async function computeReimportMerge(get: SliceGet, ds: Dataset, freshRaw:
   const viewReset = shapeChanged ? datasetViewDefaults({ ...ds, data: newData }) : null;
   // perf(reimport): only fetched when actually needed, during this async
   // staging phase -- never on the synchronous commit path (applyReimportMerge).
-  const resetFigureDocumentForReshape = columnsChanged
-    ? (await import("../lib/figureDocumentReimport")).resetFigureDocumentForReshape
-    : null;
-  return { newData, freshRaw, shapeChanged, columnsChanged, viewReset, resetFigureDocumentForReshape };
+  const reshape = columnsChanged ? await import("../lib/figureDocumentReimport") : null;
+  return { newData, freshRaw, shapeChanged, columnsChanged, viewReset, reshape };
 }
 
 /** Commit an already-staged `merge` (from `computeReimportMerge`) for `ds`:
@@ -160,7 +159,7 @@ export function applyReimportMerge(
   merge: ReimportMerge,
   historyToken?: HistoryBatchToken,
 ): void {
-  const { newData, shapeChanged, columnsChanged, viewReset, resetFigureDocumentForReshape } = merge;
+  const { newData, shapeChanged, columnsChanged, viewReset, reshape } = merge;
   get().recordHistory("re-import dataset", historyToken);
   // PR M booked finding (G5 canonical-state review): resetFigureDocumentForReshape
   // now clears a stale groupKey (see its module doc) — capture whether any
@@ -168,7 +167,8 @@ export function applyReimportMerge(
   // only fires when grouping was genuinely lost, never on every reshape.
   const hadGroupedFigure =
     columnsChanged &&
-    get().editableFigures.some((doc) => doc.bindings.datasetId === ds.id && doc.bindings.groupKey !== null);
+    (get().editableFigures.some((doc) => doc.bindings.datasetId === ds.id && doc.bindings.groupKey !== null) ||
+      get().figureDocs.some((f) => f.live && f.datasetId === ds.id && f.config.groupCol != null));
   set((s) => ({
     datasets: s.datasets.map((d) => {
       if (d.id !== ds.id) return d;
@@ -272,9 +272,14 @@ export function applyReimportMerge(
           // `null` when `!columnsChanged` (interface doc).
           editableFigures: s.editableFigures.map((document) =>
             document.bindings.datasetId === ds.id
-              ? resetFigureDocumentForReshape!(document)
+              ? reshape!.resetFigureDocumentForReshape(document)
               : document,
           ),
+          // A frozen legacy doc carries its own snapshot; a live one re-renders.
+          figureDocs: s.figureDocs.map((f) =>
+            f.live && f.datasetId === ds.id ? { ...f, config: reshape!.resetLegacyFigureConfig(f.config) } : f,
+          ),
+          savedPlotSpecs: s.savedPlotSpecs.map((p) => ({ ...p, spec: reshape!.resetPlotSpecRefs(p.spec, ds.id) })),
         }
       : {}),
   }));

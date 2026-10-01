@@ -15,7 +15,7 @@
 // function every caller already funnels through, including `lib/api.ts`'s
 // pinned-shrink-only rsm* wrappers, which must never be edited to opt in.
 
-import { postJSONDatasetAware, isDatasetCachePath } from "./datasetCache";
+import { postJSONDatasetAware, isDatasetCachePath, rememberHandle } from "./datasetCache";
 import { filenameFromDisposition, saveBlob } from "../download";
 import type { paths } from "./schema";
 
@@ -116,6 +116,15 @@ export async function unwrap<T>(res: Response): Promise<T> {
  *  standalone upload clients (lib/originTemplate). `signal` — see postJSON. */
 export async function postForm<T>(path: string, form: FormData, signal?: AbortSignal): Promise<T> {
   return unwrap<T>(await fetch(path, { method: "POST", body: form, signal }));
+}
+
+/** POST to an import route -> the parsed DataStruct, remembering the
+ *  `X-Dataset-Handle` it came with (see `rememberHandle`). */
+export async function postImport<T extends object>(path: string, init: RequestInit): Promise<T> {
+  const res = await ensureOk(await fetch(path, { method: "POST", ...init }));
+  const value = (await res.json()) as T;
+  rememberHandle(value, res.headers.get("X-Dataset-Handle"));
+  return value;
 }
 
 /** Throws the same `AbortError` `fetch` itself would throw for `signal` — the

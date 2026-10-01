@@ -270,7 +270,7 @@ def test_opj_import_filters_nonactionable_figure_records(
         ],
     )
 
-    body = parsers_mod._import_with_books(project)
+    body, _ = parsers_mod._import_with_books(project)
 
     assert [f["name"] for f in body["figures"]] == ["Graph1"]
     assert body["figures"][0]["fidelity"]["status"] == "best_effort"

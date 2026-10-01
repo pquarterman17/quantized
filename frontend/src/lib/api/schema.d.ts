@@ -2374,15 +2374,8 @@ export interface paths {
          *     cannot be used to read system files (e.g. ``/etc/passwd``) through path
          *     traversal.
          *
-         *     Returns a pre-built ``DataStructResponse`` (see ``_import_response``'s
-         *     docstring on ``upload_file`` for why: a plain ``dict`` return goes
-         *     through FastAPI's own encoding on the event loop even for a route whose
-         *     OWN body Starlette already runs in a threadpool). ``response_model``
-         *     documents the real body shape for OpenAPI (this function's return
-         *     annotation, a bare ``Response``, would otherwise produce an empty
-         *     schema); ``response_class`` is set to the same type for consistency,
-         *     though it has no runtime effect once a ``Response`` instance is
-         *     returned directly.
+         *     Returns a pre-built ``DataStructResponse`` (why: ``_import_response``'s
+         *     docstring); ``response_model`` only documents the body shape for OpenAPI.
          */
         post: operations["import_file_api_parsers_import_post"];
         delete?: never;
@@ -2404,14 +2397,8 @@ export interface paths {
          * Upload File
          * @description Import an uploaded data file (browser file-picker / drag-drop).
          *
-         *     ``response_model=dict[str, Any]`` is DOCUMENTATION ONLY here: the actual
-         *     return value is a pre-serialized ``Response`` (see below), which FastAPI
-         *     passes straight through with no validation against this model at
-         *     runtime -- it exists purely so the OpenAPI schema (and the frontend's
-         *     generated types, ``frontend/api/openapi.json`` / ``schema.d.ts``) still
-         *     describes this endpoint's real body shape (the same import payload
-         *     ``import_file``/``/import`` returns) instead of the empty schema a bare
-         *     ``Response`` return type would otherwise produce.
+         *     ``response_model`` is documentation only (OpenAPI / ``schema.d.ts``): the
+         *     pre-serialized ``Response`` returned below passes through unvalidated.
          *
          *     The bytes are streamed to disk in bounded chunks (``_uploadstream``,
          *     ROBUSTNESS_PLAN #3) rather than read whole into memory, under the

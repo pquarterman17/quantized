@@ -68,6 +68,14 @@ export type RawFetchJSON = <T>(
 // every call after the first.
 const handles = new WeakMap<object, string>();
 
+/** Remember the handle an import route (`/api/parsers/import|upload`) sent for
+ *  the dataset it just returned: the server already holds what it parsed, so
+ *  the first plot sends the handle, not every row (1M x 6: ~5 s of JSON). A
+ *  later 409 falls back to the full upload like any other stale handle. */
+export function rememberHandle(dataset: object, handle: string | null): void {
+  if (handle) handles.set(dataset, handle);
+}
+
 /** Paths that opt into the handle cache -- a narrow allowlist, not "any
  *  body with a `dataset` field": /api/corrections/apply, most /api/export/* and
  *  others also carry a `dataset` field for unrelated reasons (one-shot

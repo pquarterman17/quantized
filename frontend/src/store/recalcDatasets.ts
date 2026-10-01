@@ -98,7 +98,7 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
     // own stale cache instead of the source's current data.
     if (d?.derivedFrom) {
       try {
-        const { sheet: updated, removedCol } = await recomputeDerivedSheet(get, d);
+        const { sheet: updated, shift } = await recomputeDerivedSheet(get, d);
         // #50/#53 guard (P1-2 review fix): a row-count-changing recompute
         // invalidates excludedRows + the four overlays — the SAME shared
         // helper applyCorrections uses, so the two call sites can't drift.
@@ -112,9 +112,9 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
             datasets,
             staleDatasets: s.staleDatasets.filter((x) => x !== id),
             ...guard.statePatch,
-            // The source lost a column, so this sheet did too: every window,
-            // figure and saved spec on the sheet follows the shift.
-            ...(removedCol !== null && columnRemovalRefsPatch(s, id, removedCol, datasets)),
+            // The source lost or gained a column, so this sheet did too: every
+            // window, figure and saved spec on the sheet follows the shift.
+            ...(shift !== null && columnRemovalRefsPatch(s, id, shift, datasets)),
           };
         });
         if (statusMsg) get().setStatus(statusMsg);

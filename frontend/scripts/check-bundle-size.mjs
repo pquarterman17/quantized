@@ -45,6 +45,20 @@ import { fileURLToPath } from "node:url";
 
 /** Eager JS budget in bytes: entry + modulepreloads.
  *
+ *  2026-10-01 (bundle diet slice 17, `plans/BUNDLE_HEADROOM.md`) - pin
+ *  LOWERED 858,608 -> 854,029, by exactly the measured saving, so the
+ *  headroom left on this tree (1,724 B) is unchanged. Three async load
+ *  seams, all behind user actions: the open-workspace replace half
+ *  (`lib/openWorkspaceReplace.ts`), the workbook Paste/Duplicate bodies
+ *  (`store/workbookTransferRun.ts`) and the project-lock command bodies
+ *  (`commands/projectLockRun.ts`).
+ *  Exact bytes, `npm ci`-fresh, `.vite` wiped before each build:
+ *    `482f4569` (parent)                                856,884
+ *    + open-workspace replace half                      854,621  (-2,263)
+ *    + Paste/Duplicate bodies                           852,954  (-1,667)
+ *    + Take Over Editing / Open as Copy bodies          852,305  (-649)
+ *  Net: -4,579 B.
+ *
  *  2026-10-01 (bundle diet slice 16, `plans/BUNDLE_HEADROOM.md`) - pin
  *  LOWERED 863,207 -> 858,608, by exactly the measured saving, so the
  *  headroom left on this tree (3,954 B) is unchanged. Two async load seams
@@ -1763,7 +1777,7 @@ import { fileURLToPath } from "node:url";
  * modulepreloads. A clipboard-import split was also measured at 858.5 kB and
  * rejected. All three changes were reverted.
  */
-const EAGER_JS_BUDGET = 858_608;
+const EAGER_JS_BUDGET = 854_029;
 
 /** Lower the pin once the measurement drops more than this far below it —
  *  otherwise a real extraction silently leaves headroom for the next one to

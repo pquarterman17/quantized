@@ -15,13 +15,6 @@ import { chooseAndImport } from "../lib/importEntry";
 import { rejectIfImportRunning } from "../lib/importRunningGuard";
 import { IMPORT_ACCEPT, openFilePicker } from "../lib/openFilePicker";
 import { openWorkspaceCommand } from "../lib/openWorkspaceCommand";
-import {
-  hasWorkspaceContent,
-  recordNativeOpen,
-  replaceConfirmMessage,
-  replaceWorkspace,
-  replaceWorkspaceSafely,
-} from "../lib/openWorkspaceReplace";
 import { importOriginTemplateFiles, TEMPLATE_ACCEPT } from "../lib/originTemplate";
 import { snapshotView } from "../lib/plotview";
 import type { Action } from "../store/commands";
@@ -51,11 +44,16 @@ let demoCounter = 0;
 // replaceConfirmMessage — the "open workspace" replace-and-confirm helpers
 // shared by both open commands below — live in lib/openWorkspaceReplace.ts
 // (this module's own size ratchet, RSM_CUTS_PLAN #20's general ceiling).
+// Bundle diet slice 17: that half loads once a picked `.dwk` has parsed.
+// `openWorkspaceCommand` chains the returned promise, so a load failure lands
+// in the same "<verb> failed: …" status a parse failure does, before anything
+// is replaced, appended or asked.
 // `openWorkspaceCommand` itself — the shared pick/native-open + parse flow
 // both "open-workspace"/"open-workspace-safe" and "append-workspace" call
 // below — lives in lib/openWorkspaceCommand.ts for the identical reason
 // (P1.1 C3's native-open wiring pushed this module over the ceiling; see
 // that file's header for the extraction note).
+const replaceHalf = () => import("../lib/openWorkspaceReplace");
 
 /** Build the File-group curated palette actions against the live store
  *  handle (`useApp.getState`) — store setters are stable, so callers build
@@ -184,12 +182,14 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // restore, which must never prompt). P3.4 slice 4: `replaceWorkspace`
       // stages every restored window except the active/linked ones behind a
       // placeholder until its drain turn, instead of mounting all at once.
-      run: openWorkspaceCommand(s, "open", (ws, native) => {
-        if (!hasWorkspaceContent(s)) return replaceWorkspace(s, ws, native);
-        void askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length), "Replace", true).then(
-          (ok) => ok && replaceWorkspace(s, ws, native),
-        );
-      }),
+      run: openWorkspaceCommand(s, "open", (ws, native) =>
+        replaceHalf().then(({ hasWorkspaceContent, replaceConfirmMessage, replaceWorkspace }) => {
+          if (!hasWorkspaceContent(s)) return void replaceWorkspace(s, ws, native);
+          void askConfirm("Replace the current workspace?", replaceConfirmMessage(s().datasets.length), "Replace", true).then(
+            (ok) => ok && replaceWorkspace(s, ws, native),
+          );
+        }),
+      ),
     },
     {
       id: "open-workspace-safe",
@@ -199,16 +199,18 @@ export function buildFileCommands(s: StoreGet): Action[] {
       keywords: "safe recovery layout skip windows corrupted crash",
       // Same replace-and-confirm flow as "open-workspace" above, via
       // replaceWorkspaceSafely (skipLayout: true).
-      run: openWorkspaceCommand(s, "open", (ws, native) => {
-        if (!hasWorkspaceContent(s)) return replaceWorkspaceSafely(s, ws, native);
-        const extra = " The saved window layout will be skipped — everything opens in one default window.";
-        void askConfirm(
-          "Replace the current workspace?",
-          replaceConfirmMessage(s().datasets.length, extra),
-          "Replace",
-          true,
-        ).then((ok) => ok && replaceWorkspaceSafely(s, ws, native));
-      }),
+      run: openWorkspaceCommand(s, "open", (ws, native) =>
+        replaceHalf().then(({ hasWorkspaceContent, replaceConfirmMessage, replaceWorkspaceSafely }) => {
+          if (!hasWorkspaceContent(s)) return void replaceWorkspaceSafely(s, ws, native);
+          const extra = " The saved window layout will be skipped — everything opens in one default window.";
+          void askConfirm(
+            "Replace the current workspace?",
+            replaceConfirmMessage(s().datasets.length, extra),
+            "Replace",
+            true,
+          ).then((ok) => ok && replaceWorkspaceSafely(s, ws, native));
+        }),
+      ),
     },
     {
       id: "append-workspace",
@@ -226,10 +228,12 @@ export function buildFileCommands(s: StoreGet): Action[] {
       // over-record; it just can't share openWorkspaceReplace.ts's
       // `replaceWorkspace` chokepoint (append doesn't call it) so it gets
       // its own push at its own commit point instead.
-      run: openWorkspaceCommand(s, "append", (ws, native) => {
-        s().appendWorkspace(ws);
-        recordNativeOpen(native);
-      }),
+      run: openWorkspaceCommand(s, "append", (ws, native) =>
+        replaceHalf().then(({ recordNativeOpen }) => {
+          s().appendWorkspace(ws);
+          recordNativeOpen(native);
+        }),
+      ),
     },
     {
       id: "clear-autosave",

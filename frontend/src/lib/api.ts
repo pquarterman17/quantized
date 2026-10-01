@@ -30,7 +30,7 @@
 // sibling from the start — never here — even if it feels like a natural
 // extension of a function that's still (rightly) in this file.
 
-import { getJSON, postDownload, postForm, postJSON } from "./api/http";
+import { getJSON, postDownload, postImport, postJSON } from "./api/http";
 import type { BookSource, CalcResult, CorrectionParams, DataStruct } from "./types";
 
 // The transport helpers the standalone clients already import from "./api"
@@ -75,15 +75,16 @@ export async function health(): Promise<{ status: string; app?: string; version?
  *  a caller abort mid-request (P3.4 slice 1 import cancel) — the backend may
  *  still finish parsing server-side; the client just stops waiting. */
 export function importFile(path: string, signal?: AbortSignal): Promise<DataStruct> {
-  return postJSON<DataStruct>("/api/parsers/import", { path }, signal);
+  const init = { headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }), signal };
+  return postImport<DataStruct>("/api/parsers/import", init);
 }
 
 /** Upload a file's bytes from the browser (file-picker / drag-drop) → DataStruct.
- *  `signal` — see importFile. */
+ *  `signal` — see importFile. Both remember the parsed dataset's handle. */
 export async function uploadFile(file: File, signal?: AbortSignal): Promise<DataStruct> {
   const form = new FormData();
   form.append("file", file, file.name);
-  return postForm<DataStruct>("/api/parsers/upload", form, signal);
+  return postImport<DataStruct>("/api/parsers/upload", { body: form, signal });
 }
 
 /** Fetch one Origin book's full data (ORIGIN_FILE_DECODE_PLAN #38 — the lazy

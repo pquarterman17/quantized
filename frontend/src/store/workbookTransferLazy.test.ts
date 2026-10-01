@@ -167,6 +167,51 @@ describe("workbook transfer — chunk-deferred core", () => {
   });
 });
 
+// Bundle diet slice 17: Paste and Duplicate load their bodies
+// (store/workbookTransferRun.ts) rather than the bare core. A body that will
+// not load refuses through the slice's own `fail()`, exactly like the core.
+describe("workbook transfer — chunk-deferred Paste/Duplicate bodies", () => {
+  afterEach(() => {
+    vi.doUnmock("./workbookTransferRun");
+  });
+
+  const failRun = () =>
+    vi.doMock("./workbookTransferRun", () => {
+      throw new Error("network error");
+    });
+
+  it("refuses a paste whose body will not load, leaving the project untouched", async () => {
+    await useApp.getState().copyWorkbookToClipboard("w1");
+    useToasts.setState({ toasts: [] });
+    const before = useApp.getState();
+    failRun();
+
+    await useApp.getState().pasteWorkbookFromClipboard();
+
+    expect(useApp.getState().status).toMatch(/^paste workbook failed: .+/);
+    expect(dangerToasts()).toEqual([useApp.getState().status]);
+    expect(useApp.getState().workbooks).toBe(before.workbooks);
+    expect(useApp.getState().datasets).toBe(before.datasets);
+    expect(useApp.getState().history).toBe(before.history);
+  });
+
+  it("refuses a duplicate whose body will not load, then retries on the next one", async () => {
+    const before = useApp.getState();
+    failRun();
+
+    expect(await useApp.getState().duplicateWorkbook("w1")).toBeNull();
+    expect(useApp.getState().status).toMatch(/^duplicate "run1" failed: .+/);
+    expect(dangerToasts()).toEqual([useApp.getState().status]);
+    expect(useApp.getState().workbooks).toBe(before.workbooks);
+    expect(useApp.getState().history).toBe(before.history);
+
+    vi.doUnmock("./workbookTransferRun");
+    vi.resetModules();
+    expect(await useApp.getState().duplicateWorkbook("w1")).not.toBeNull();
+    expect(useApp.getState().workbooks.map((w) => w.name)).toEqual(["run1", "run1 copy"]);
+  });
+});
+
 // 2026-09-15 review, finding 1. Copy is the ONE action in this slice that
 // cannot simply `await` the core: `navigator.clipboard.write` has to be
 // reached inside the click's own task, or the transient user activation is

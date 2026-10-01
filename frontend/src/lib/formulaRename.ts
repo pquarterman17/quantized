@@ -28,6 +28,7 @@
 // disappearing must not overwrite an in-progress broken edit; that formula
 // keeps whatever error `lib/formula.ts` already reports for it.
 
+import type { ColumnShift } from "./channelRemap";
 import { channelLetter, compileFormula, referencedColumns, tokenize } from "./formula";
 import type { Tok } from "./formulaTypes";
 import type { ComputedColumn } from "./types";
@@ -46,10 +47,14 @@ export function channelIndexOf(letter: string): number | null {
 
 /** How one column-letter shifts when `removedCol` (0-based, full column
  *  space) disappears: unchanged before it, decremented by one after it, or
- *  flagged `removed` when it WAS that column. */
-export function shiftLetter(letter: string, removedCol: number): { letter: string; removed: boolean } {
+ *  flagged `removed` when it WAS that column. An insertion (`{ inserted }`)
+ *  increments every letter at or after it and never removes one. */
+export function shiftLetter(letter: string, removedCol: ColumnShift): { letter: string; removed: boolean } {
   const idx = channelIndexOf(letter);
   if (idx === null) return { letter, removed: false };
+  if (typeof removedCol !== "number") {
+    return { letter: idx >= removedCol.inserted ? channelLetter(idx + 1) : letter, removed: false };
+  }
   if (idx === removedCol) return { letter, removed: true };
   return { letter: idx > removedCol ? channelLetter(idx - 1) : letter, removed: false };
 }
@@ -64,7 +69,7 @@ const serializeTok = (t: Tok): string =>
  *  broken, left alone" `ok: true` case. */
 export function rewriteFormulaExpr(
   expr: string,
-  removedCol: number,
+  removedCol: ColumnShift,
 ): { ok: true; expr: string } | { ok: false; reason: string } {
   const before = referencedColumns(expr);
   if (!before.valid) return { ok: true, expr }; // pre-existing break, not this removal's concern
@@ -101,7 +106,7 @@ export function rewriteFormulaExpr(
  *  still fire as a backstop if this override were ever skipped). */
 export function remapSurvivingFormulas(
   formulas: readonly ComputedColumn[],
-  removedCol: number,
+  removedCol: ColumnShift,
 ): { formulas: ComputedColumn[]; forcedErrors: Record<string, string> } {
   const forcedErrors: Record<string, string> = {};
   const out = formulas.map((f) => {

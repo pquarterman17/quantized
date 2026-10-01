@@ -64,7 +64,14 @@
 // intends. Cleared to `undefined` here — the sibling `overrides` field has
 // no channel-position fields of its own (grid/margins/ticks/annotations use
 // fixed axes coordinates, never a channel index) and is left alone.
+//
+// The same reshape leaves the two plain-index holders behind it stale too: a
+// live legacy FigureDoc's `config` and a saved Graph Builder spec's zones
+// (`resetLegacyFigureConfig` / `resetPlotSpecRefs` below).
+import { mapPlotSpecRefs } from "./channelRemapDocs";
 import type { FigureDocument } from "./figureDocument";
+import type { FigureConfig } from "./figuredoc";
+import type { PlotSpec } from "./plotspec";
 
 /**
  * Reset `document`'s channel-indexed state after its bound dataset's column
@@ -118,4 +125,18 @@ export function resetFigureDocumentForReshape(document: FigureDocument): FigureD
       ? {}
       : { publication: { ...document.publication, seriesStyles: undefined } }),
   };
+}
+
+/** The same reset for a live legacy FigureDoc's `config`: every channel-indexed
+ *  field (xKey/yKeys/groupCol/errors and the POSITIONAL seriesStyles) back to
+ *  its "automatic" sentinel. Never mutates. */
+export function resetLegacyFigureConfig(c: FigureConfig): FigureConfig {
+  const { errors: _errors, ...rest } = c;
+  return { ...rest, xKey: null, yKeys: null, seriesStyles: null, ...(c.groupCol == null ? {} : { groupCol: null }) };
+}
+
+/** Drop every channel ref a saved Graph Builder spec holds into `datasetId`
+ *  (a by-name text-column pick stays); `yErr` is cut with its paired Y. */
+export function resetPlotSpecRefs(spec: PlotSpec, datasetId: string): PlotSpec {
+  return mapPlotSpecRefs(spec, datasetId, () => null);
 }

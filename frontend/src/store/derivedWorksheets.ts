@@ -27,7 +27,8 @@ import { recomputeFromBaseOrEmpty } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { CorrectionParams, Dataset } from "../lib/types";
-import { shiftForRemovedColumn } from "./derivedSheetShift";
+import type { ColumnShift } from "../lib/channelRemap";
+import { shiftForColumnChange } from "./derivedSheetShift";
 import { nextDatasetId } from "./idSeq";
 import type { AppState } from "./useApp";
 
@@ -90,15 +91,15 @@ function summarizePipeline(params: CorrectionParams): string {
  *  columns (e.g. the source's own computed column) that were never the
  *  sheet's formulas at all. See derivedWorksheets.test.ts's #4 probe.
  *
- *  Also reports `removedCol`, the base column the sheet lost: a column the
- *  source drops (a removed computed column) drops out of the sheet too and
- *  every later column shifts down. The sheet's own formulas and
+ *  Also reports `shift`, the one base column the sheet lost or gained: a
+ *  column the source drops (a removed computed column) drops out of the sheet
+ *  too and every later column shifts down; one it gains shifts them up. The sheet's own formulas and
  *  channel-indexed fields follow here (store/derivedSheetShift.ts); the caller
  *  remaps the references held outside it (store/columnRemovalRefs.ts). */
 export async function recomputeDerivedSheet(
   get: SliceGet,
   sheet: Dataset,
-): Promise<{ sheet: Dataset; removedCol: number | null }> {
+): Promise<{ sheet: Dataset; shift: ColumnShift | null }> {
   const sourceId = sheet.derivedFrom?.datasetId;
   const source = sourceId ? get().datasets.find((d) => d.id === sourceId) : undefined;
   if (!source) throw new Error(`source dataset "${sourceId}" no longer exists`);
@@ -112,11 +113,11 @@ export async function recomputeDerivedSheet(
   // stays a pure "compute the new Dataset" step, same shape as before.
   const own = sheet.formulas?.length ?? 0; // the sheet's own computed columns trail its base
   const before = sheet.data.labels.slice(0, sheet.data.labels.length - own);
-  const { sheet: base, removedCol, forcedErrors } = shiftForRemovedColumn(sheet, before, corrected.labels);
+  const { sheet: base, shift, forcedErrors } = shiftForColumnChange(sheet, before, corrected.labels);
   const { data, formulaErrors } = recomputeFromBaseOrEmpty(corrected, base.formulas);
   // A formula that named the removed column is an explicit error, never a guess.
   const errors = forcedErrors ? { ...formulaErrors, ...forcedErrors } : formulaErrors;
-  return { sheet: { ...base, data, raw: sourceData, formulaErrors: errors }, removedCol };
+  return { sheet: { ...base, data, raw: sourceData, formulaErrors: errors }, shift };
 }
 
 // `set` unused here: both actions delegate to `get().addDataset(...)` (the

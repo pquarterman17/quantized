@@ -6,17 +6,24 @@
 // out-of-range index). Same rules as `channelRemap.ts`: shift what survives,
 // drop what was the removed column. Pure — no store import.
 
-import { remapChannel, remapChannelList, remapErrorRoles } from "./channelRemap";
+import { type ColumnShift, remapChannel, remapChannelList, remapErrorRoles } from "./channelRemap";
 import type { FigureConfig } from "./figuredoc";
 import type { ChannelRef, PlotSpec, PlotZones } from "./plotspec";
 
 /** Remap a legacy `FigureConfig`. `seriesStyles` is POSITIONAL against the
  *  plotted channels (`yKeys ?? every column`), so the removed column's entry
- *  is spliced out with it — otherwise each later series inherits its
- *  neighbour's style. */
-export function remapLegacyFigureConfig(c: FigureConfig, removedCol: number): FigureConfig {
-  const pos = c.yKeys ? c.yKeys.indexOf(removedCol) : removedCol;
-  const seriesStyles = c.seriesStyles && pos >= 0 ? c.seriesStyles.filter((_, i) => i !== pos) : c.seriesStyles;
+ *  is spliced out with it (an inserted one gets an unstyled slot when every
+ *  column plots) — otherwise each later series inherits its neighbour's style. */
+export function remapLegacyFigureConfig(c: FigureConfig, removedCol: ColumnShift): FigureConfig {
+  const styles = c.seriesStyles;
+  let seriesStyles = styles;
+  if (styles && typeof removedCol !== "number") {
+    const at = removedCol.inserted;
+    if (!c.yKeys && at <= styles.length) seriesStyles = [...styles.slice(0, at), null, ...styles.slice(at)];
+  } else if (styles && typeof removedCol === "number") {
+    const pos = c.yKeys ? c.yKeys.indexOf(removedCol) : removedCol;
+    if (pos >= 0) seriesStyles = styles.filter((_, i) => i !== pos);
+  }
   return {
     ...c,
     xKey: c.xKey === null ? null : remapChannel(c.xKey, removedCol),
@@ -31,11 +38,17 @@ export function remapLegacyFigureConfig(c: FigureConfig, removedCol: number): Fi
  *  when nothing points there. A text-column pick (`channel < 0`) is by name and
  *  stays. `yErr` is position-paired with `y`, so it is cut at the first pair
  *  that loses either end — a later error never slides onto a different Y. */
-export function remapPlotSpecRefs(spec: PlotSpec, datasetId: string, removedCol: number): PlotSpec {
+export function remapPlotSpecRefs(spec: PlotSpec, datasetId: string, removedCol: ColumnShift): PlotSpec {
+  return mapPlotSpecRefs(spec, datasetId, (c) => remapChannel(c, removedCol));
+}
+
+/** `remapPlotSpecRefs` with any channel map; `() => null` drops every
+ *  channel ref to `datasetId` (a column-changing reimport's reset). */
+export function mapPlotSpecRefs(spec: PlotSpec, datasetId: string, map: (c: number) => number | null): PlotSpec {
   const z = spec.zones;
   if (!Object.values(z).flat().some((r) => r?.datasetId === datasetId)) return spec;
   const one = (r: ChannelRef | null): ChannelRef | null => {
-    const c = r && r.datasetId === datasetId && r.channel >= 0 ? remapChannel(r.channel, removedCol) : -1;
+    const c = r && r.datasetId === datasetId && r.channel >= 0 ? map(r.channel) : -1;
     return c === -1 ? r : c === null ? null : { ...r!, channel: c };
   };
   // The first pair to lose either end; every error from there on is dropped.

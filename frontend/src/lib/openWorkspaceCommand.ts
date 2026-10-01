@@ -70,7 +70,10 @@ export function openWorkspaceCommand(
   // at the exact moment the replace happens — never before a confirm gate a
   // caller might still say no to. Undefined on the browser-picker path
   // (there is no durable path to adopt).
-  dispatch: (ws: LoadedWorkspace, native?: ProjectIdentity) => void,
+  // A returned promise is chained, so its rejection (fileCommands.ts's
+  // lazily loaded replace half, bundle diet slice 17) reports as "<verb>
+  // failed: …" exactly like a parse failure.
+  dispatch: (ws: LoadedWorkspace, native?: ProjectIdentity) => void | Promise<void>,
 ): () => void {
   const label = verb === "open" ? "Opening workspace…" : "Appending workspace…";
   const viaPicker = () =>

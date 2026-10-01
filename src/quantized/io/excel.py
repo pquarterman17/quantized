@@ -17,6 +17,7 @@ import openpyxl
 from openpyxl.utils.exceptions import InvalidFileException
 
 from quantized.datastruct import DataStruct
+from quantized.io._delimited_layout import _is_data_cell, _walk_back_gappy_rows
 from quantized.io.base import resolve_column
 from quantized.io.delimited import _extract_units
 
@@ -29,6 +30,22 @@ def _cell_to_float(value: Any) -> float:
     if isinstance(value, (int, float)):
         return float(value)
     return float("nan")
+
+
+def _cell_token(value: Any) -> str:
+    """A cell as the text token ``_walk_back_gappy_rows`` classifies.
+
+    The sheet is typed, so only a real number is data: a text cell that
+    merely LOOKS numeric (a ``"2019"`` year header) or a date is mapped to a
+    placeholder that is neither a number nor a missing-value spelling.
+    """
+    if value is None:
+        return ""
+    if not isinstance(value, bool) and isinstance(value, (int, float)):
+        return repr(float(value))
+    if isinstance(value, str) and not _is_data_cell(value.strip()):
+        return value
+    return "#text"
 
 
 def _header_str(value: Any, col: int) -> str:
@@ -77,7 +94,15 @@ def import_excel(
         (float(np.count_nonzero(~np.isnan(num_mat[i]))) / n_cols) if n_cols else 0.0
         for i in range(len(grid))
     ]
-    first_data = next((i for i, s in enumerate(scores) if s > 0.5), 0)
+    first_data = next((i for i, s in enumerate(scores) if s > 0.5), -1)
+    if first_data < 0:
+        first_data = 0
+    else:
+        # A 2-column row with one blank cell scores exactly 0.5, so leading
+        # gappy data rows (and the header above them) were dropped silently.
+        # Same positive-evidence walk-back the delimited parser uses.
+        tokens = [[_cell_token(v) for v in row] for row in grid[: first_data + 1]]
+        first_data = _walk_back_gappy_rows(tokens, first_data)
     header_row = first_data - 1 if first_data >= 1 and scores[first_data - 1] < 0.5 else -1
 
     if header_row >= 0:

@@ -199,7 +199,10 @@ def import_csv(
     # (measured ~2.8s of a 7.3s import on a 1M-row file) just to find
     # where the header ends.
     lazy_tokens = LazyTokenRows(raw_lines, delim)
-    header_row, data_start, units_row = layout._detect_layout(lazy_tokens)
+    try:
+        header_row, data_start, units_row = layout._detect_layout(lazy_tokens)
+    except ValueError as exc:  # header-only file
+        raise ValueError(f"{exc} ({path.name})") from exc
     n_data_cols = len(lazy_tokens[data_start])
     if header_row >= 0:
         col_headers = [c.strip() for c in lazy_tokens[header_row]]

@@ -1,8 +1,10 @@
-// OPEN cross-reference gaps (multi-window consistency audit, 2026-10-01). Each
-// is a documented, expected failure (`it.fails`, the seriesPalette.cvd
-// precedent): the body asserts the SANE outcome, so a real fix turns it into a
-// suite failure until the `it.fails` is flipped back to `it`. Fixed siblings
-// live in columnRemovalRefs.test.ts and derivedSheetReshape.test.ts.
+// Cross-reference gaps from the multi-window consistency audit (2026-10-01),
+// first pinned here as `it.fails` and now fixed: a source column INSERT under a
+// derived sheet (store/derivedSheetShift.ts), a column-changing reimport vs
+// legacy FigureDocs/saved specs (store/reimport.ts), and workshop column picks
+// (components/workshops/useFollowColumnPicks.ts). Siblings live in
+// columnRemovalRefs.test.ts, derivedSheetReshape.test.ts and
+// useFollowColumnPicks.test.ts.
 
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -12,6 +14,7 @@ import { importFile } from "../lib/api";
 import type { FigureConfig, FigureDoc } from "../lib/figuredoc";
 import { emptySpec, type SavedPlotSpec } from "../lib/plotspec";
 import type { ComputedColumn, Dataset, DataStruct } from "../lib/types";
+import { toast } from "./toasts";
 import { useApp } from "./useApp";
 import { plotWindowView, syncPlotWindow } from "./windowDocuments";
 
@@ -58,12 +61,11 @@ beforeEach(() => {
   });
 });
 
-describe("OPEN: a derived sheet whose source GAINS a column", () => {
+describe("a derived sheet whose source GAINS a column", () => {
   // Source A, F1; the sheet adds its own G = B + 1 (F1 + 1) after them. A new
   // source column lands BEFORE G in the sheet, so every index on G is stale.
-  // Only a single REMOVAL is remapped (singleRemovedColumn); an insertion has
-  // no remap primitive yet (lib/channelRemap.ts is removal-only).
-  it.fails("a window on the sheet's own column keeps plotting it", async () => {
+  // A single insertion is detected by label (detectColumnShift) and remapped.
+  it("a window on the sheet's own column keeps plotting it", async () => {
     const formulas: ComputedColumn[] = [{ name: "F1", expr: "A * 10", deps: ["A"] }];
     const src: Dataset = { id: "src", name: "src", data: table(["A", "F1"], [[1, 10], [2, 20]]), formulas };
     const der: Dataset = {
@@ -85,13 +87,13 @@ describe("OPEN: a derived sheet whose source GAINS a column", () => {
     useApp.getState().addFormula("src", "F2", "A * 3");
     await useApp.getState().recalcNow();
     const view = plotWindowView(useApp.getState().plotWindows.find((w) => w.id === wid)!);
-    expect(labelsOf("der", view.yKeys)).toEqual(["G"]); // today: ["F2"]
+    expect(labelsOf("der", view.yKeys)).toEqual(["G"]); // was: ["F2"]
   });
 });
 
-describe("OPEN: a column-changing re-import", () => {
+describe("a column-changing re-import", () => {
   // store/reimport.ts resets the live view, bound windows and editable figures
-  // on `columnsChanged`, but not the two holders columnRemovalRefsPatch added.
+  // on `columnsChanged`, and now the two holders columnRemovalRefsPatch added.
   function seed(config: Partial<FigureConfig>, spec?: SavedPlotSpec) {
     const doc: FigureDoc = {
       id: "fd",
@@ -111,28 +113,34 @@ describe("OPEN: a column-changing re-import", () => {
     vi.mocked(importFile).mockResolvedValue(table(["T", "m"], [[300, 1], [301, 2]]));
   }
 
-  it.fails("a live legacy FigureDoc no longer plots the column that moved into its slot", async () => {
+  it("a live legacy FigureDoc no longer plots the column that moved into its slot", async () => {
     seed({ yKeys: [0] });
     await useApp.getState().reimportDataset("d1");
     const c = useApp.getState().figureDocs[0].config;
-    expect(c.yKeys === null || labelsOf("d1", c.yKeys).join() === "m").toBe(true); // today: ["T"]
+    expect(c.yKeys === null || labelsOf("d1", c.yKeys).join() === "m").toBe(true); // was: ["T"]
   });
 
-  it.fails("a saved Graph Builder spec no longer plots the column that moved into its slot", async () => {
+  it("a saved Graph Builder spec no longer plots the column that moved into its slot", async () => {
     const spec = { ...emptySpec(), zones: { ...emptySpec().zones, y: [{ datasetId: "d1", channel: 0 }] } };
     seed({}, { id: "p", name: "p", createdAt: "t", modifiedAt: "t", spec });
     await useApp.getState().reimportDataset("d1");
     const y = useApp.getState().savedPlotSpecs[0].spec.zones.y;
-    expect(y.length === 0 || labelsOf("d1", y.map((r) => r.channel)).join() === "m").toBe(true); // today: ["T"]
+    expect(y.length === 0 || labelsOf("d1", y.map((r) => r.channel)).join() === "m").toBe(true); // was: ["T"]
+  });
+
+  it("a grouped legacy FigureDoc loses its grouping column with a notice", async () => {
+    seed({ yKeys: [0], groupCol: 0 });
+    await useApp.getState().reimportDataset("d1");
+    expect(useApp.getState().figureDocs[0].config.groupCol).toBeNull();
+    expect(vi.mocked(toast)).toHaveBeenCalledWith(expect.stringContaining("grouping column no longer exists"), "info");
   });
 });
 
-describe("OPEN: a workshop's column pick when a column is removed under it", () => {
-  // useOutlierScreening (and its siblings: useFitYByX, useVariability,
-  // useStatsChooser, useDistribution) re-derive their pick only when the
-  // active dataset's ID changes, so a removed column shifts the pick onto the
-  // next column with no notice.
-  it.fails("Outlier Screening keeps screening F2 after F1 is removed", () => {
+describe("a workshop's column pick when a column is removed under it", () => {
+  // useOutlierScreening (and its siblings) re-derived their pick only when the
+  // active dataset's ID changed, so a removed column shifted the pick onto the
+  // next column with no notice; picks now follow by label.
+  it("Outlier Screening keeps screening F2 after F1 is removed", () => {
     const formulas: ComputedColumn[] = [
       { name: "F1", expr: "A * 1", deps: ["A"] },
       { name: "F2", expr: "A * 2", deps: ["A"] },
@@ -144,6 +152,6 @@ describe("OPEN: a workshop's column pick when a column is removed under it", () 
     act(() => result.current.setCol(2)); // F2
     act(() => useApp.getState().removeFormula("a", 0));
     const picked = result.current.columns.find((c) => c.index === result.current.col)?.label;
-    expect(picked).toBe("F2"); // today: "F3"
+    expect(picked).toBe("F2"); // was: "F3"
   });
 });

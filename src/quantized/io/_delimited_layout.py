@@ -430,6 +430,13 @@ def _detect_layout(tokens: Sequence[Sequence[str]]) -> tuple[int, int, int]:
             (i for i, s in enumerate(computed) if i > 0 and s > computed[0] and s > 0),
             0,
         )
+        # A header with nothing under it (or only a units row) used to come
+        # back as ONE categorical data row made of the column names.
+        if not any(computed) and (
+            len(computed) == 1
+            or (len(computed) == 2 and _looks_like_units_row(tokens[1], len(tokens[0])))
+        ):
+            raise ValueError("no data rows: the file holds only a header")
     scores = computed
     header_row = -1
     units_row = -1
