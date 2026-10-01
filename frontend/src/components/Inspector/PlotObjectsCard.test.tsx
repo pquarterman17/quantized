@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useApp } from "../../store/useApp";
 import PlotObjectsCard from "./PlotObjectsCard";
@@ -24,6 +24,10 @@ beforeEach(() => {
     history: [],
     future: [],
   });
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe("PlotObjectsCard", () => {
@@ -85,6 +89,37 @@ describe("PlotObjectsCard", () => {
     useApp.getState().undo();
     expect(useApp.getState().shapes[0].stroke).toBeUndefined();
     expect(useApp.getState().annotations[0].groupId).toBeTruthy();
+  });
+
+  it("two groups made in the same millisecond get distinct group ids", () => {
+    // Group ids persist with the objects, and a shared id merges the groups:
+    // selecting one would select both, and Ungroup would split both.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-01T12:00:00Z"));
+    useApp.setState({
+      annotations: [{ id: "a1", x: 0, y: 1, text: "peak" }, { id: "a2", x: 2, y: 1, text: "dip" }],
+      shapes: [
+        { id: "s1", kind: "line", x1: 0, y1: 0, x2: 1, y2: 1 },
+        { id: "s2", kind: "rect", x1: 2, y1: 0, x2: 3, y2: 1 },
+      ],
+    });
+    render(<PlotObjectsCard />);
+    fireEvent.click(screen.getByText("Plot objects"));
+    const pick = (name: string) => fireEvent.click(screen.getByRole("checkbox", { name }));
+    pick("Select annotation peak");
+    pick("Select line shape");
+    fireEvent.click(screen.getByRole("button", { name: "Group" }));
+    pick("Select annotation peak");
+    pick("Select line shape");
+    pick("Select annotation dip");
+    pick("Select rect shape");
+    fireEvent.click(screen.getByRole("button", { name: "Group" }));
+
+    const { annotations, shapes } = useApp.getState();
+    const [g1, g2] = annotations.map((a) => a.groupId);
+    expect(g1).toBeTruthy();
+    expect(shapes.map((sh) => sh.groupId)).toEqual([g1, g2]);
+    expect(g2).not.toBe(g1);
   });
 
   it("recolors an annotation that ALREADY has a frame (shared style)", () => {
