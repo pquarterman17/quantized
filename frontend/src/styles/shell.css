@@ -108,7 +108,7 @@ body {
 .qzk-prefs-x:hover { background: var(--surface-3); color: var(--text); }
 .qzk-prefs-body { display: grid; grid-template-columns: 148px 1fr; min-height: 320px; }
 .qzk-prefs-nav { border-right: 1px solid var(--border-soft); padding: 8px; display: flex; flex-direction: column; gap: 2px; background: var(--surface-0); }
-.qzk-prefs-tab { padding: 6px 10px; border-radius: var(--radius-sm); font-size: var(--font-size-sm); color: var(--text-dim); cursor: default; }
+.qzk-prefs-tab { padding: 6px 10px; border: 0; border-radius: var(--radius-sm); background: none; font: inherit; font-size: var(--font-size-sm); text-align: left; color: var(--text-dim); cursor: default; }
 .qzk-prefs-tab:hover { background: var(--surface-2); color: var(--text); }
 .qzk-prefs-tab.active { background: var(--accent-soft); color: var(--accent-text); }
 .qzk-prefs-pane { padding: 16px 18px; overflow-y: auto; }
@@ -657,7 +657,9 @@ body {
 /* ── stage ── */
 .qzk-stage-cell { display: flex; flex-direction: column; min-width: 0; min-height: 0; position: relative; }
 .qzk-tabs { display: flex; align-items: center; gap: 2px; background: var(--surface-1); border-bottom: 1px solid var(--border-soft); padding: 0 var(--pad); height: 30px; }
-.qzk-tab { padding: 4px 12px; font-size: var(--font-size-sm); color: var(--text-faint); border-bottom: 2px solid transparent; cursor: default; margin-bottom: -1px; }
+.qzk-tab { padding: 4px 12px; font: inherit; font-size: var(--font-size-sm); color: var(--text-faint); background: none; border: 0; border-bottom: 2px solid transparent; cursor: default; margin-bottom: -1px; }
+.qzk-tab:focus-visible, .qzk-prefs-tab:focus-visible, .qzk-help-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.qzk-stage-panel { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; }
 .qzk-tab:hover { color: var(--text-dim); }
 .qzk-tab.active { color: var(--text); border-bottom-color: var(--accent); }
 .qzk-stage { position: relative; flex: 1; background: var(--axes-bg); min-height: 0; overflow: hidden; }
@@ -842,6 +844,8 @@ body {
    (was 11px @ regular) to --font-size (13px @ regular / 12 compact / 14
    comfy) — still density-aware, no new preference. */
 .qzk-legend .it { display: flex; align-items: center; gap: 7px; font-size: var(--font-size); color: var(--text-dim); }
+.qzk-legend-toggle { display: inline-flex; align-items: center; gap: 7px; min-width: 0; border-radius: var(--radius-sm); }
+.qzk-legend-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 /* R2: the floating legend's title heading (the per-panel spatial legend keeps its own). */
 .qzk-legend:not(.qzk-spatial-legend) .qzk-legend-title { font-weight: 700; color: var(--text); }
 .qzk-legend .ln { width: 16px; height: 3px; border-radius: 2px; }

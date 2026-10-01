@@ -263,9 +263,24 @@ export default function PlotLegend({
               textDecoration: isHidden ? "line-through" : "none",
             }}
           >
-            <LegendSample color={swatch} style={sampleStyle} defaultTrace={defaultTrace} filled={s.selected} />
-            {/* Rich-text rename support (GOTO #5): `$...$` renders as math. */}
-            <RichText text={text} />
+            {/* The show/hide toggle as a keyboard control: a checkbox named by
+                its series. Space/Enter run the row's click (same last-visible
+                guard); Shift+F10 opens the row's menu, where Rename lives. */}
+            <span
+              className="qzk-legend-toggle"
+              role={interactive ? "checkbox" : undefined}
+              aria-checked={interactive ? !isHidden : undefined}
+              tabIndex={interactive ? 0 : undefined}
+              onKeyDown={(e) => {
+                if (e.key !== " " && e.key !== "Enter") return;
+                e.preventDefault();
+                onClick?.();
+              }}
+            >
+              <LegendSample color={swatch} style={sampleStyle} defaultTrace={defaultTrace} filled={s.selected} />
+              {/* Rich-text rename support (GOTO #5): `$...$` renders as math. */}
+              <RichText text={text} />
+            </span>
             {interactive && plotted.length > 1 && (
               <span style={{ marginLeft: 6, display: "inline-flex", gap: 2 }}>
                 <button

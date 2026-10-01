@@ -54,8 +54,13 @@ const FOCUSABLE = [
   "summary",
   "audio[controls]",
   "video[controls]",
-  '[tabindex]:not([tabindex="-1"])',
-].join(",");
+  "[tabindex]",
+]
+  // A roving-tabindex strip (the tablists, lib/tabListKeys) leaves its
+  // unselected tabs at -1: not Tab stops, so the trap must not count them as
+  // its wrap ends either — Shift+Tab from the selected tab escaped otherwise.
+  .map((s) => `${s}:not([tabindex="-1"])`)
+  .join(",");
 
 /** True when `el` — or anything between it and `root` — is hidden by
  *  attribute. Round 2 (review NIT 9): the first cut asked only the element

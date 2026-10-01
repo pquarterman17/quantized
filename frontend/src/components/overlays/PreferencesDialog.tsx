@@ -22,6 +22,7 @@ import {
 import { useApp } from "../../store/useApp";
 import { focusablesIn, useDialogFocus } from "./useDialogFocus";
 import { useEscapeSurface } from "../../lib/escapeStack";
+import { onTabListKeyDown } from "../../lib/tabListKeys";
 
 const IS_MAC = isMacPlatform();
 
@@ -120,25 +121,15 @@ export default function PreferencesDialog() {
     open,
   );
 
-  // R1: focus-in, Tab trap, restore-to-opener, PLUS a deliberate landing spot
-  // — this dialog renders its own tab chrome (`.qzk-prefs-nav`), and that nav
-  // is a row of plain `<div>`s with no `tabindex` (a pre-existing, separate
-  // gap this slice does not touch: they were mouse-only before this pass and
-  // are mouse-only after it — the trap changes nothing about their
-  // reachability either way). Landing on the shared hook's raw default (the
-  // FIRST focusable element in DOM order) would put focus on the "✕" close
-  // button, which works but tells a keyboard/screen-reader user nothing about
-  // what this dialog is actually for. Instead, this effect focuses the
-  // meaningful control INSIDE THE ACTIVE PANE (`.qzk-prefs-pane`) — the
-  // setting a user opening Preferences almost certainly came for, at its
-  // CURRENT value rather than at whichever option happens to be first in DOM
-  // order (`landingSpotIn` above, round 8 review NIT 3) — and runs
-  // BEFORE `useDialogFocus` below so its own default is already satisfied and
-  // skips (same "already inside `ref`" rule ParamDialog's `autoFocus` and
-  // HelpDialog's search-box focus rely on). The Keyboard tab has no focusable
-  // content at all (a static shortcut table), so there `focusablesIn` finds
-  // nothing and this is a no-op — `useDialogFocus` then falls back to the
-  // close button, which is the correct behaviour for that one pane.
+  // R1: focus-in, Tab trap, restore-to-opener, PLUS a deliberate landing spot.
+  // The shared hook's raw default (first focusable in DOM order) is the "✕"
+  // close button, which says nothing about what this dialog is for, so this
+  // effect focuses the meaningful control INSIDE THE ACTIVE PANE at its
+  // CURRENT value (`landingSpotIn`, round 8 NIT 3). It runs BEFORE
+  // `useDialogFocus` so that hook's default sees focus already inside and
+  // skips (the rule ParamDialog's `autoFocus` relies on). The Keyboard pane
+  // has no focusable content, so there this is a no-op and the hook falls
+  // back to the close button — correct for that one pane.
   useEffect(() => {
     if (!open) return;
     landingSpotIn(paneRef.current)?.focus();
@@ -165,18 +156,39 @@ export default function PreferencesDialog() {
           </button>
         </div>
         <div className="qzk-prefs-body">
-          <nav className="qzk-prefs-nav">
+          {/* Vertical tablist, AUTOMATIC activation (lib/tabListKeys): a pane is
+              local state rendered synchronously, so selecting on focus is free. */}
+          <div
+            className="qzk-prefs-nav"
+            role="tablist"
+            aria-label="Preferences sections"
+            aria-orientation="vertical"
+            onKeyDown={(e) => onTabListKeyDown(e, true)}
+          >
             {TABS.map((t) => (
-              <div
+              <button
                 key={t}
+                type="button"
+                role="tab"
+                id={`${titleId}${t}`}
+                aria-selected={tab === t}
+                aria-controls={`${titleId}pane`}
+                tabIndex={tab === t ? 0 : -1}
                 className={`qzk-prefs-tab${tab === t ? " active" : ""}`}
                 onClick={() => setTab(t)}
               >
                 {t}
-              </div>
+              </button>
             ))}
-          </nav>
-          <div className="qzk-prefs-pane" ref={paneRef}>
+          </div>
+          <div
+            className="qzk-prefs-pane"
+            ref={paneRef}
+            role="tabpanel"
+            id={`${titleId}pane`}
+            aria-labelledby={`${titleId}${tab}`}
+            tabIndex={tab === "Keyboard" ? 0 : undefined}
+          >
             {tab === "Appearance" && (
               <>
                 <PrefRow label="Theme">

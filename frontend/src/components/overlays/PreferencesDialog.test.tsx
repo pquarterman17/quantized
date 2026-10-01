@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
@@ -39,9 +39,11 @@ describe("PreferencesDialog", () => {
     render(<PreferencesDialog />);
     fireEvent.click(screen.getByText("Interaction"));
     expect(useApp.getState().originBookClickOpens).toBe("worksheet");
-    const worksheetBtn = screen.getByRole("tab", { name: "Worksheet" });
+    // Scoped to the pane: the section strip has its own "Plot" tab.
+    const pane = within(screen.getByRole("tabpanel"));
+    const worksheetBtn = pane.getByRole("tab", { name: "Worksheet" });
     expect(worksheetBtn).toHaveAttribute("aria-selected", "true");
-    fireEvent.click(screen.getByRole("tab", { name: "Plot" }));
+    fireEvent.click(pane.getByRole("tab", { name: "Plot" }));
     expect(useApp.getState().originBookClickOpens).toBe("plot");
     fireEvent.click(worksheetBtn);
     expect(useApp.getState().originBookClickOpens).toBe("worksheet");
@@ -114,7 +116,10 @@ describe("PreferencesDialog focus-in / Tab trap / Escape / restore (P3.3 R1)", (
     const done = screen.getByRole("button", { name: "Done" });
     expect(dark).toHaveFocus();
 
-    // Backward off the landing spot reaches Close — its DOM predecessor.
+    // Backward off the landing spot reaches the section strip's ONE stop (the
+    // selected tab — roving tabindex), then Close, its DOM predecessor.
+    await user.tab({ shift: true });
+    expect(screen.getByRole("tab", { name: "Appearance", selected: true })).toHaveFocus();
     await user.tab({ shift: true });
     expect(closeBtn).toHaveFocus();
 

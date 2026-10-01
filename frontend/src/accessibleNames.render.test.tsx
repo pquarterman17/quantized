@@ -22,11 +22,19 @@ import StatusBar from "./components/Shell/StatusBar";
 import TitleBar from "./components/Shell/TitleBar";
 import PreferencesDialog from "./components/overlays/PreferencesDialog";
 import MapToolbar, { type MapToolbarProps } from "./components/Stage/MapToolbar";
+import PlotLegend from "./components/Stage/PlotLegend";
+import PlotToolbar from "./components/Stage/PlotToolbar";
+import Stage from "./components/Stage/Stage";
 import DigitizerView from "./components/workshops/digitizer/DigitizerView";
 import { useConnection } from "./lib/lifecycle";
 import type { Action } from "./store/commands";
 import { useApp } from "./store/useApp";
 import { isWordLikeName } from "./test/accessibleNameScan";
+
+// The Stage's views are heavy canvases; only its tab strip is under test here.
+vi.mock("./components/windows/WindowCanvas", () => ({ default: () => <div>plot-canvas</div> }));
+vi.mock("./components/windows/useWindowCommands", () => ({ useWindowCommands: () => {} }));
+vi.mock("./components/history/useHistoryCommands", () => ({ useHistoryCommands: () => {} }));
 
 const CONTROLS = [
   "button",
@@ -126,5 +134,46 @@ describe("rendered controls are named in words (U6)", () => {
     const pick = vi.spyOn(input, "click").mockImplementation(() => {});
     fireEvent.click(screen.getByRole("button", { name: "Load image" }));
     expect(pick).toHaveBeenCalledTimes(1);
+  });
+
+  it("the plot toolbar, with its drawing-tool flyout open", () => {
+    const noop = vi.fn();
+    const { baseElement } = render(
+      <PlotToolbar
+        onReset={noop} onSmartScale={noop} onSavePng={noop}
+        onCopyData={noop} onCopyFigure={noop} onSnapshotWindow={noop}
+      />,
+    );
+    expect(unnamedControls(baseElement), FIX).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Choose drawing tool" }));
+    expect(unnamedControls(baseElement), `drawing flyout: ${FIX}`).toEqual([]);
+    fireEvent.click(screen.getByRole("button", { name: "Toolbar Options" }));
+    expect(screen.getByRole("menuitemcheckbox", { name: "Group labels" })).toBeInTheDocument();
+    expect(unnamedControls(baseElement), `options menu: ${FIX}`).toEqual([]);
+  });
+
+  it("the plot legend, whose show/hide entries are named, checkable controls", () => {
+    useApp.setState({ hiddenChannels: [1], legendPos: "ne", plotTool: "pointer" });
+    const { container } = render(
+      <PlotLegend series={[{ label: "Moment", unit: "" }, { label: "Field", unit: "" }]} plotted={[0, 1]} hidden={[false, true]} />,
+    );
+    expect(unnamedControls(container), FIX).toEqual([]);
+    // A mouse-only click target is invisible to the name scan above, so ask
+    // for the entries by role: each one is a focusable checkbox named by its series.
+    const entries = screen.getAllByRole("checkbox");
+    expect(entries.map((e) => [computeAccessibleName(e), e.getAttribute("aria-checked"), e.tabIndex])).toEqual([
+      ["Moment", "true", 0],
+      ["Field", "false", 0],
+    ]);
+  });
+
+  it("the Stage tab strip", () => {
+    const data = { time: [0, 1], values: [[1], [2]], labels: ["c"], units: [""], metadata: {} };
+    useApp.setState({ datasets: [{ id: "d1", name: "d.dat", data }], activeId: "d1", stageTab: "plot" });
+    const { container } = render(<Stage />);
+    const strip = screen.getByRole("tablist", { name: "Stage view" });
+    expect(screen.getAllByRole("tab").map((t) => computeAccessibleName(t))).toEqual(["Plot", "Worksheet"]);
+    expect(strip).toContainElement(screen.getByRole("tab", { name: "Plot" }));
+    expect(unnamedControls(container), FIX).toEqual([]);
   });
 });

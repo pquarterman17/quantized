@@ -372,11 +372,11 @@ describe("HelpDialog focus-in / Escape / restore (P3.3 R1)", () => {
     expect(screen.getByLabelText("Search help")).toHaveFocus();
   });
 
-  it("falls back to the shared hook's default — the first tab button — on any OTHER tab, since nothing else claims focus there", () => {
+  it("falls back to the shared hook's default — the first Tab stop, the SELECTED tab (roving tabindex) — on any OTHER tab", () => {
     useHelp.setState({ open: false, section: "shortcuts", query: "" });
     render(<HelpDialog />);
     act(() => useHelp.setState({ open: true }));
-    expect(screen.getByRole("tab", { name: "Topics" })).toHaveFocus();
+    expect(screen.getByRole("tab", { name: "Keyboard & mouse" })).toHaveFocus();
   });
 
   it("Escape (via the keyboard) closes it and gives focus back to the opener", async () => {

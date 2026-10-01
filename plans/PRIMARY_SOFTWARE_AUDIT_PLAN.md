@@ -7707,8 +7707,19 @@ that goes red without its fix.
   Preferences' tab strip is clickable `<div>`s with no role or keyboard path.
   **Library pass (2026-10-01, V1):** its last 21 icon-only controls are named
   (section ＋/✎/⚙/⧉/⤓/×, the header's new/demo/import/save-filter buttons),
-  so the ratchet now requires zero app-wide with no Library pin. Plots and
-  Preferences' tab strip are still open.
+  so the ratchet now requires zero app-wide with no Library pin. Plot chrome and the
+  tab strips: see V2 below.
+  **Tablists + plot chrome (2026-10-01, V2).** Preferences, the Stage view
+  strip and Help are WAI-ARIA tablists (`lib/tabListKeys.ts`: roving tabindex,
+  Left/Right/Home/End, Up/Down when vertical; tabpanel labelled by the selected
+  tab). Preferences activates on focus (synchronous local panes); Stage and Help
+  are manual (a view switch mounts lazy chunks; Topics steals focus to search).
+  The dialog trap no longer counts `tabindex=-1` as a stop. Legend entries'
+  click-to-hide is now a named checkbox (Space/Enter; Shift+F10 menu renames). The render
+  half now covers the plot toolbar (+flyout, options menu), legend and Stage
+  strip. Not yet: `SheetTabs`, `SegmentedControl` (26 users; a choice control
+  wearing tab roles — radiogroup?) and the Peak Analyzer mode switch have tab
+  roles but no arrow keys or panel; the Library tree is done (U5/V1).
 - [~] Contrast and non-color encodings — **audited 2026-09-09; what exists and
   what does not, stated precisely instead of left as one unchecked line.**
 

@@ -27,6 +27,7 @@ import { useEffect } from "react";
 
 import { canRenderMap } from "../../lib/mapdata";
 import { lazyRegion } from "../../lib/lazyRegion";
+import { onTabListKeyDown } from "../../lib/tabListKeys";
 import { useActiveDataset, useApp } from "../../store/useApp";
 import { useRecentProjectsCommands } from "../../commands/recentProjectsCommands";
 import { useRelinkCommands } from "../../commands/relinkCommands";
@@ -86,29 +87,33 @@ export default function Stage() {
   // mounted. Do not key this on `active`: focusing a frozen snapshot clears
   // activeId, and a snapshot-only workspace remains fully renderable.
   if (!hasRenderableContent) return <EmptyProjectStage />;
+  // The view actually on screen: a stranded Map (pre-fallback) shows the plot.
+  const shown = stageTab === "map" && !mappable ? "plot" : stageTab;
 
   return (
     <section className="qzk-stage-cell">
-      <div className="qzk-tabs">
+      {/* WAI-ARIA tablist, MANUAL activation (lib/tabListKeys): showing a view
+          mounts a lazy chunk and tears down the plot windows, so arrowing
+          across the strip moves focus only and Enter/Space selects. */}
+      <div className="qzk-tabs" role="tablist" aria-label="Stage view" onKeyDown={(e) => onTabListKeyDown(e, false)}>
         {tabs.map((t) => (
-          <span
+          <button
             key={t.id}
-            className={`qzk-tab${stageTab === t.id ? " active" : ""}`}
+            role="tab"
+            id={`qz-stage-${t.id}`}
+            aria-selected={shown === t.id}
+            aria-controls="qz-stage-panel"
+            tabIndex={shown === t.id ? 0 : -1}
+            className={`qzk-tab${shown === t.id ? " active" : ""}`}
             onClick={() => setStageTab(t.id)}
           >
             {t.label}
-          </span>
+          </button>
         ))}
       </div>
-      {stageTab === "plot" ? (
-        <WindowCanvas />
-      ) : stageTab === "map" && mappable ? (
-        <MapStage />
-      ) : stageTab === "worksheet" ? (
-        <Worksheet />
-      ) : (
-        <WindowCanvas />
-      )}
+      <div className="qzk-stage-panel" role="tabpanel" id="qz-stage-panel" aria-labelledby={`qz-stage-${shown}`}>
+        {shown === "map" ? <MapStage /> : shown === "worksheet" ? <Worksheet /> : <WindowCanvas />}
+      </div>
     </section>
   );
 }

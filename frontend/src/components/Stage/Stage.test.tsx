@@ -2,7 +2,8 @@
 // produce a map, so a permanent Map tab was an invitation to a screen that only
 // apologises.
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import Stage from "./Stage";
@@ -111,5 +112,55 @@ describe("stranded-tab fallback", () => {
     useApp.setState({ datasets: [ds(3)], activeId: "d1", stageTab: "map" });
     render(<Stage />);
     expect(await screen.findByText("map-canvas")).toBeInTheDocument();
+  });
+});
+
+describe("Stage view tabs are a WAI-ARIA tablist (manual activation)", () => {
+  // Manual: activating a view mounts a lazy chunk and tears down the plot
+  // windows, so arrowing across the strip must not switch views on the way.
+  it("is a named strip of tabs controlling a panel labelled by the selected one", () => {
+    useApp.setState({ datasets: [ds(3)], activeId: "d1" });
+    render(<Stage />);
+    const tabs = within(screen.getByRole("tablist", { name: "Stage view" })).getAllByRole("tab");
+    expect(tabs.map((t) => t.textContent)).toEqual(["Plot", "Map", "Worksheet"]);
+    const panel = screen.getByRole("tabpanel", { name: "Plot" });
+    expect(panel).toHaveTextContent("plot-canvas");
+    for (const t of tabs) expect(t).toHaveAttribute("aria-controls", panel.id);
+    expect(tabs.map((t) => [t.getAttribute("aria-selected"), t.tabIndex])).toEqual([
+      ["true", 0], ["false", -1], ["false", -1],
+    ]);
+  });
+
+  it("arrows and Home/End move focus only; Enter or Space selects", async () => {
+    const user = userEvent.setup();
+    useApp.setState({ datasets: [ds(3)], activeId: "d1" });
+    render(<Stage />);
+    const tabs = screen.getAllByRole("tab");
+    tabs[0].focus();
+    fireEvent.keyDown(tabs[0], { key: "ArrowRight" });
+    expect(tabs[1]).toHaveFocus();
+    fireEvent.keyDown(tabs[1], { key: "End" });
+    expect(tabs[2]).toHaveFocus();
+    fireEvent.keyDown(tabs[2], { key: "ArrowRight" });
+    expect(tabs[0]).toHaveFocus();
+    fireEvent.keyDown(tabs[0], { key: "ArrowLeft" });
+    expect(tabs[2]).toHaveFocus();
+    expect(useApp.getState().stageTab).toBe("plot");
+    await user.keyboard("{Enter}");
+    expect(useApp.getState().stageTab).toBe("worksheet");
+    expect(await screen.findByText("worksheet")).toBeInTheDocument();
+    expect(screen.getByRole("tabpanel", { name: "Worksheet" })).toHaveTextContent("worksheet");
+    fireEvent.keyDown(screen.getByRole("tab", { name: "Worksheet" }), { key: "Home" });
+    await user.keyboard(" ");
+    expect(useApp.getState().stageTab).toBe("plot");
+  });
+
+  it("leaves Up/Down to the app's previous/next-dataset keys", () => {
+    useApp.setState({ datasets: [ds(3)], activeId: "d1" });
+    render(<Stage />);
+    const plot = screen.getByRole("tab", { name: "Plot" });
+    plot.focus();
+    expect(fireEvent.keyDown(plot, { key: "ArrowDown" })).toBe(true); // not defaultPrevented
+    expect(plot).toHaveFocus();
   });
 });
