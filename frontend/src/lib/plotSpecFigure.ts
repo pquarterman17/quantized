@@ -43,6 +43,10 @@
 // half the Graph Builder's Export sends (`plotEncodingExport.encodedFigureSpec`)
 // — preview == export, pinned to the shared wire fixture by
 // `plotSpecFigureEncoding.test.ts`.
+//
+// The Preferences default trace is NOT laid on here: the Graph Builder canvas
+// draws the spec's mark, never the trace, so `stylesForMark` is the whole
+// series styling (see `exportDefaultTrace.ts`' header for the residual).
 
 import type { ErrorBinding } from "./errorRoles";
 import { buildExportStyles, type ExportSeriesStyle } from "./exportStyles";

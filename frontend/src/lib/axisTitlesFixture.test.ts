@@ -12,6 +12,12 @@
 // sends says the same; the backend half (`tests/test_export_axis_titles.py`)
 // asserts matplotlib draws it, px read as points.
 //
+// An x-axis BREAK view draws plain titles: its panels build without the
+// Format/drag bridge (`Stage/breakPanelRender`), so the break renderer skips
+// the fields (`calc/figure_break.py`). Its canvas half is
+// `Stage/MultiPanelStage.breakTitles.test.tsx`; its request half pins that the
+// request takes that path (`x_breaks`).
+//
 // Regenerate only after a DELIBERATE rule change:
 //   AXIS_TITLES_FIXTURE_WRITE=1 npx vitest run src/lib/axisTitlesFixture.test.ts
 
@@ -74,6 +80,8 @@ interface Title {
 interface Case {
   name: string;
   view: Partial<PlotView>;
+  /** An x-axis break the window's document carries (a break view). */
+  breaks?: [number, number][];
   /** One entry per DRAWN axis title. */
   drawn: Partial<Record<AxisKey, Title>>;
 }
@@ -104,7 +112,20 @@ const CASES: Case[] = [
     },
     drawn: { x: PLAIN, y: PLAIN, y2: { size: 18, bold: true, italic: true, offset: [10, -20] } },
   },
+  {
+    name: "x-axis break: formatted and moved titles draw plain on the panels",
+    view: {
+      yKeys: [0],
+      axisLabelStyles: { y: { size: 20, bold: true }, x: { size: 16, italic: true } },
+      axisLabelOffsets: { x: [24, -6], y: [-8, 30] },
+    },
+    breaks: [[1.2, 1.8]],
+    drawn: { x: PLAIN, y: PLAIN },
+  },
 ];
+
+const FLAT = CASES.filter((c) => !c.breaks);
+const BROKEN = CASES.filter((c) => c.breaks);
 
 function viewOf(c: Case): PlotView {
   return { ...defaultPlotView(), ...c.view };
@@ -197,7 +218,9 @@ function canvas(c: Case): Partial<Record<AxisKey, Title>> {
 /** The request the focused Stage window's Export figure / Copy figure sends. */
 function request(c: Case): FigureSpec {
   const view = viewOf(c);
-  const document = createFigureDocument({ id: "w1-doc", name: "Titles", datasetId: "d1", view });
+  const document = createFigureDocument({
+    id: "w1-doc", name: "Titles", datasetId: "d1", view, ...(c.breaks ? { axisBreaks: { x: c.breaks } } : {}),
+  });
   const get = (() => ({
     ...view,
     focusedWindowId: "w1",
@@ -229,12 +252,16 @@ function fresh() {
 }
 
 describe("axis-title Format + drag, screen == export", () => {
-  it.each(CASES)("canvas: $name", (c) => {
+  it.each(FLAT)("canvas: $name", (c) => {
     expect(canvas(c)).toEqual(c.drawn);
   });
 
-  it.each(CASES)("request: $name", (c) => {
+  it.each(FLAT)("request: $name", (c) => {
     expect(wire(request(c), Object.keys(c.drawn) as AxisKey[])).toEqual(c.drawn);
+  });
+
+  it.each(BROKEN)("request: $name takes the break renderer's path", (c) => {
+    expect(request(c).overrides?.x_breaks).toEqual(c.breaks);
   });
 
   it("a facet grid sends neither: its canvas draws plain titles", () => {

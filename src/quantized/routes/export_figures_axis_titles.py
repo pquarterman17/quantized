@@ -6,8 +6,9 @@ The canvas draws each axis title with its right-click Format choices
 :func:`request_overrides` folds them into the override bag as the one
 ``axis_titles`` map ``calc.figure_axis_titles`` applies (the flat figure, its
 secondary axis, and a page panel). A faceted request never sends them: the
-Stage's facet grid draws neither. Split out of ``export_figures.py`` for its
-500-line ceiling, as a mixin like ``ExcludedRowsFields``.
+Stage's facet grid draws neither. A broken-x figure ignores them, as its
+canvas panels do (``calc.figure_break``). Split out of ``export_figures.py``
+for its 500-line ceiling, as a mixin like ``ExcludedRowsFields``.
 """
 
 from __future__ import annotations
