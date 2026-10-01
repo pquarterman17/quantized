@@ -2,19 +2,11 @@
 // Holds loaded datasets, the active selection, panel + theme view state.
 import { create } from "zustand";
 import { uploadFile } from "../lib/api";
-import { cloneDataStruct } from "../lib/dataset";
 import type { Notation } from "../lib/format";
 import { recomputeWithErrors } from "../lib/formula";
 import { asAlreadyComputed } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
-import {
-  createFolder as treeCreateFolder,
-  moveDatasetToFolder as treeMoveDatasetToFolder,
-  moveFolder as treeMoveFolder,
-  renameFolder as treeRenameFolder,
-} from "../lib/foldertree";
 import { isOriginBookDataset } from "../lib/grouping";
-import type { SmartFolder } from "../lib/smartfolders";
 import type { WorkbookNode } from "../lib/workbooks";
 import { snapshotView, type PlotView } from "../lib/plotview";
 import { nextStageTab, type StageTab } from "../lib/stagetab";
@@ -49,7 +41,6 @@ import { createGadgetSlice, type GadgetSlice } from "./gadget";
 import { createDatasetMetaSlice, type DatasetMetaSlice } from "./datasetMeta";
 import { createDataIntakeSlice, type DataIntakeSlice } from "./dataIntake";
 import { createRowStateSlice, type RowStateSlice } from "./rowState";
-import { deleteFolderWithTrash } from "./folderDelete";
 import { createImportSlice, type ImportSlice } from "./importDatasetsLazy";
 import { createWorkbookActionsSlice, type WorkbookActionsSlice } from "./workbookActions";
 import { createWorkbookCombineSlice, type WorkbookCombineSlice } from "./workbookCombine";
@@ -57,7 +48,6 @@ import { createWorkbookSeparateSlice, type WorkbookSeparateSlice } from "./workb
 import { createWorkbookTransferSlice, type WorkbookTransferSlice } from "./workbookTransfer";
 import { recomputeStaleFits } from "./recalcFits";
 import { recomputeStaleDatasets } from "./recalcDatasets";
-import { removeDatasetsWithTrash } from "./removeDatasets";
 import { createRecentsSlice, type RecentsSlice } from "./recents";
 import { createProjectSlice, type ProjectSlice } from "./project";
 import { createTrashSlice, type TrashSlice } from "./trash";
@@ -86,14 +76,14 @@ import type { FwhmResult } from "../lib/peakwidth";
 import type { IntegralResult } from "../lib/plotRangeSelection";
 import type { FigureDoc } from "../lib/figuredoc";
 import { downstreamOf, markStale, type RecalcMode } from "../lib/recalc";
-import { nextDatasetId, nextFolderId, nextSmartFolderId } from "./idSeq";
+import { nextDatasetId } from "./idSeq";
 import { createReportsFigureDocsSlice, type ReportsFigureDocsSlice } from "./reportsFigureDocs";
 import { createViewAppliersSlice, type ViewAppliersSlice } from "./viewAppliers";
 import { createWorkspaceHydrationSlice, type WorkspaceHydrationSlice } from "./workspaceHydration";
 import { createMacroPipelineSlice, type MacroPipelineSlice } from "./macroPipeline";
 import { createWorkshopFlagsSlice, type WorkshopFlagsSlice } from "./workshopFlags";
+import { createDatasetListEditsSlice, type DatasetListEditsSlice } from "./datasetListEdits";
 import { toast } from "./toasts";
-import { openTransformPreview, seedIds } from "./transformPreviewDialog";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
 import { createOriginImportSlice, type OriginImportSlice } from "./originImport";
 import { createRecipeFidelitySlice, type RecipeFidelitySlice } from "./recipeFidelity";
@@ -106,7 +96,6 @@ import type {
   Dataset,
   DataStruct, DefaultTrace,
   FitSpec,
-  FolderNode,
   ModelingType,
   RefLine,
   SeriesStyle,
@@ -203,7 +192,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice, DatasetListEditsSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -234,9 +223,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // when its dataset's data changed under a saved fitSpec.
   staleDatasets: string[];
   staleFits: string[];
-  // Library folder tree (project-organization plan, Approach B): pure
-  // organization over `datasets[]` (`Dataset.folderId`); never gates row-state.
-  folders: FolderNode[];
+  // folders / expandedFolders / smartFolders: declared on DatasetListEditsSlice
+  // (store/datasetListEdits.ts) with the actions that edit them.
   // Library workbooks (LIBRARY_WORKBOOK_UX_PLAN L0.1's folder -> workbook ->
   // worksheet/figure/analysis/note hierarchy, PR A2). Membership rides on
   // `Dataset.workbookId`, same design as `folders`/`folderId` above; this
@@ -244,13 +232,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // see that action's doc for why the explicit fallback matters) until PR
   // A3/A4 add mutating actions.
   workbooks: WorkbookNode[];
-  // Expanded folder ids (Library tree UI state); persisted so a project reopens
-  // with the same folders open. Round-trips .dwk v2.
-  expandedFolders: string[];
-  // Smart folders (item 9): saved tag/name/format queries rendered as
-  // cross-cutting Library sections. Membership is DERIVED at render time
-  // (lib/smartfolders) — only the queries persist (.dwk).
-  smartFolders: SmartFolder[];
   leftCollapsed: boolean;
   rightCollapsed: boolean;
   stageTab: StageTab;
@@ -426,39 +407,10 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // Replace the multi-selection with an explicit id list (folder bulk ops,
   // item 8) — like ctrl-click, it never moves the plotted/active dataset.
   selectIds: (ids: string[]) => void;
-  removeDataset: (id: string) => void;
-  removeSelected: () => void;
-  // Bulk-remove by explicit id list (item 17's book-family filter dialog) —
-  // distinct from removeSelected. `{permanent}` (P3.7) bypasses Trash.
-  removeDatasets: (ids: string[], opts?: { permanent?: boolean }) => void;
-  // clearAll: see store/workspaceHydration.ts (WorkspaceHydrationSlice).
-  // Open the previewed append (Reshape & combine) on the selection (P2.5).
-  // Its Create resolves any still-pending picks first (#38) — a batch of
-  // arbitrary selected datasets is exactly the "never activated" risk case.
-  mergeSelected: () => Promise<void>;
-  // Resolves a still-pending source first (#38): `pending` isn't copied onto
-  // the clone, so without this the copy would silently become a SEPARATE
-  // dataset permanently stuck on the small preview (nothing would ever
-  // trigger its own fetch).
-  duplicateDataset: (id: string) => Promise<void>;
-  moveDataset: (id: string, dir: -1 | 1) => void;
-  renameDataset: (id: string, name: string) => void;
+  // removeDataset … renameDataset, the folder-tree and smart-folder actions:
+  // see store/datasetListEdits.ts (DatasetListEditsSlice).
   // addFormula/removeFormula/updateFormula live on ComputedColumnsSlice
   // (store/computedColumns.ts) — see AppState's extends list.
-  // Folder tree (project-organization plan item 1). Thin wrappers over
-  // lib/foldertree; datasets stay a flat array (membership is Dataset.folderId).
-  createFolder: (parentId: string | null, name?: string) => string;
-  renameFolder: (id: string, name: string) => void;
-  deleteFolder: (id: string, mode?: "reparent" | "cascade") => void;
-  moveFolder: (id: string, newParentId: string | null, beforeId?: string) => void;
-  moveDatasetToFolder: (id: string, folderId: string | null, beforeId?: string) => void;
-  toggleFolderExpanded: (id: string) => void;
-  // updateFolder (Properties: notes/colour/defaultTemplate) lives on
-  // LibraryPanelSlice (store/libraryPanel.ts) — ratchet headroom.
-  // Smart folders (item 9): saved queries only — membership is derived.
-  addSmartFolder: (name: string, query: string) => void;
-  updateSmartFolder: (id: string, name: string, query: string) => void;
-  removeSmartFolder: (id: string) => void;
   // applyCorrections/resetCorrections/applyCorrectionsToMany live on
   // CorrectionsSlice (store/corrections.ts) — see AppState's extends list.
   toggleLeft: () => void;
@@ -551,6 +503,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createWorkspaceHydrationSlice(set, get),
   ...createMacroPipelineSlice(set),
   ...createWorkshopFlagsSlice(set),
+  ...createDatasetListEditsSlice(set, get),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -562,10 +515,7 @@ export const useApp = create<AppState>((set, get) => ({
   recalcMode: "auto",
   staleDatasets: [],
   staleFits: [],
-  folders: [],
   workbooks: [],
-  expandedFolders: [],
-  smartFolders: [],
   leftCollapsed: false,
   rightCollapsed: false,
   stageTab: "plot",
@@ -808,130 +758,8 @@ export const useApp = create<AppState>((set, get) => ({
       // a live dataset selection displaces the tree's librarySelection.
       return { selectedIds, ...(selectedIds.length > 0 ? { librarySelection: null } : {}) };
     }),
-  // DELEGATES to removeDatasets (like removeSelected below) rather than
-  // repeating its ~25 lines of reference pruning — the single-id path had
-  // drifted into its own near-identical copy of the same block; this was the
-  // fourth copy removeSelected's own delegation was meant to head off. The
-  // only observable difference is the recordHistory label ("remove datasets"
-  // instead of "remove dataset"), which no test asserts on.
-  removeDataset: (id) => get().removeDatasets([id]),
-  // Delete key: remove every selected dataset (falling back to the active one
-  // if nothing is multi-selected); reselect the first survivor so the plot
-  // recovers. DELEGATES to removeDatasets rather than repeating its ~25 lines
-  // of reference pruning (origin figures, fidelity, reports, figure docs, plot
-  // windows) — that block had drifted into three near-identical copies, and a
-  // new prune target had to be remembered in all of them. The only behaviour
-  // this adds on top is the reselect.
-  removeSelected: () => {
-    const s = get();
-    const ids = s.selectedIds.length ? s.selectedIds : s.activeId ? [s.activeId] : [];
-    if (ids.length === 0) return;
-    get().removeDatasets(ids);
-    const activeId = get().activeId;
-    set({ selectedIds: activeId ? [activeId] : [] });
-  },
-  // Bulk-remove by explicit id list (item 17's "manage books" dialog) — unlike
-  // removeSelected, this doesn't touch/depend on the transient row selection.
-  removeDatasets: (ids, opts) => removeDatasetsWithTrash(get, set, ids, opts),
-
-  // clearAll: see store/workspaceHydration.ts (it is loadWorkspace(empty)).
-
-  // Open the Reshape & combine workshop's append on the selection (P2.5).
-  // EAGER, not a lazy lib/transformRun import (finding 8) — Create lazy-loads that chunk.
-  mergeSelected: async () => { openTransformPreview("merge", seedIds(get)); },
-
-  // Deep-copy a dataset (incl. raw/corrections/bgRef) as an independent "(copy)"
-  // — for trying different corrections/formulas while keeping the original.
-  // Lands right after the source and becomes active, resetting per-dataset view.
-  duplicateDataset: async (id) => {
-    await get().resolveDataset(id);
-    get().recordHistory("duplicate dataset");
-    set((s) => {
-      const idx = s.datasets.findIndex((d) => d.id === id);
-      if (idx < 0) return {};
-      const src = s.datasets[idx];
-      const clone: Dataset = {
-        id: nextDatasetId(),
-        name: `${src.name} (copy)`,
-        data: cloneDataStruct(src.data),
-        ...(src.raw ? { raw: cloneDataStruct(src.raw) } : {}),
-        ...(src.corrections ? { corrections: { ...src.corrections } } : {}),
-        ...(src.bgRef ? { bgRef: { ...src.bgRef } } : {}),
-        ...(src.notes ? { notes: src.notes } : {}),
-        ...(src.tags?.length ? { tags: [...src.tags] } : {}),
-        ...(src.group ? { group: src.group } : {}),
-        ...(src.formulas?.length ? { formulas: src.formulas.map((f) => ({ ...f })) } : {}),
-        ...(src.channelRoles ? { channelRoles: { ...src.channelRoles } } : {}),
-        ...(src.channelTypes ? { channelTypes: { ...src.channelTypes } } : {}),
-        ...(src.errorRoles ? { errorRoles: [...src.errorRoles] } : {}), // F5: [] is truthy, carries the O1 marker too
-      };
-      const datasets = [...s.datasets];
-      datasets.splice(idx + 1, 0, clone);
-      return {
-        datasets,
-        activeId: clone.id,
-        worksheetId: null, // item 15: the clone becomes the plot AND worksheet target
-        selectedIds: [clone.id],
-        librarySelection: null, // L0.25 coherence (retrospective-audit fix)
-        stageTab: nextStageTab(clone, s.stageTab),
-        xKey: null,
-        yKeys: null,
-        groupKey: null,
-        facetKey: null,
-        y2Keys: null,
-      y2Lim: null,
-      y2Scale: null,
-      y2Step: null,
-      y2AxisLabel: "",
-        seriesStyles: {},
-        errKeys: {},
-        hiddenChannels: [],
-        xLim: null,
-        yLim: null,
-        xStep: null,
-        yStep: null,
-        composition: null, // #54 — the clone becomes active, not an arrangement
-        rsmPeaks: null,
-        integral: null,
-        fwhmResult: null,
-        qfitRoi: null,
-        qfitResult: null,
-        qfitBusy: false,
-        qfitError: null,
-        gadgetBusy: false,
-        gadgetError: null,
-        gadgetIntegrateResult: null,
-        gadgetStatsResult: null,
-        gadgetDerivResult: null,
-        gadgetFftPreview: null,
-        gadgetCursors: null,
-        gadgetCursorResult: null,
-      };
-    });
-    refreshFitRefsLater(get().activeId ?? "", get); // P2.5: the clone has no saved fit of its own
-  },
-  // Reorder the library by swapping a dataset with its neighbor (dir -1 = up,
-  // +1 = down). No-op at the ends or for an unknown id. Order drives the list and
-  // the consolidated-export column order; the active selection is unaffected.
-  moveDataset: (id, dir) => {
-    get().recordHistory("reorder datasets");
-    set((s) => {
-      const i = s.datasets.findIndex((d) => d.id === id);
-      const j = i + dir;
-      if (i < 0 || j < 0 || j >= s.datasets.length) return {};
-      const datasets = [...s.datasets];
-      [datasets[i], datasets[j]] = [datasets[j], datasets[i]];
-      return { datasets };
-    });
-  },
-  renameDataset: (id, name) => {
-    get().recordHistory("rename dataset");
-    set((s) => ({
-      datasets: s.datasets.map((d) =>
-        d.id === id ? { ...d, name: name.trim() || d.name } : d,
-      ),
-    }));
-  },
+  // (removeDataset … renameDataset and the folder/smart-folder bodies moved to
+  // createDatasetListEditsSlice, spread into this literal above.)
   // Edit a single worksheet cell in place (col < 0 = the x/time column). Rebuilds
   // the dataset's arrays immutably (DataStruct stays frozen-by-contract) so the
   // plot + stats recompute live. Computed columns (the last `formulas.length`)
@@ -940,48 +768,6 @@ export const useApp = create<AppState>((set, get) => ({
   // original is via Duplicate.
   // addFormula/removeFormula/updateFormula live on ComputedColumnsSlice
   // (store/computedColumns.ts) — see AppState's extends list.
-  // ── Folder tree (project-organization plan item 1) ──────────────────────
-  // All five delegate to the pure lib/foldertree ops; the store only supplies
-  // ids and threads state. deleteFolder re-homes datasets (never destroys them).
-  createFolder: (parentId, name = "New Folder") => {
-    const id = nextFolderId();
-    get().recordHistory("create folder");
-    set((s) => ({ folders: treeCreateFolder(s.folders, parentId, name, id) }));
-    return id;
-  },
-  renameFolder: (id, name) => (get().recordHistory("rename folder"), set((s) => ({ folders: treeRenameFolder(s.folders, id, name) }))),
-  deleteFolder: (id, mode = "reparent") => deleteFolderWithTrash(get, set, id, mode),
-  moveFolder: (id, newParentId, beforeId) => (get().recordHistory("move folder"), set((s) => ({ folders: treeMoveFolder(s.folders, id, newParentId, beforeId) }))),
-  moveDatasetToFolder: (id, folderId, beforeId) => (get().recordHistory("move dataset"), set((s) => ({ datasets: treeMoveDatasetToFolder(s.datasets, id, folderId, beforeId) }))),
-  toggleFolderExpanded: (id) =>
-    set((s) => ({
-      expandedFolders: s.expandedFolders.includes(id)
-        ? s.expandedFolders.filter((x) => x !== id)
-        : [...s.expandedFolders, id],
-    })),
-
-  // ── Smart folders (project-organization plan item 9) ────────────────────
-  // Saved queries, nothing else — members are derived per render by
-  // lib/smartfolders, so there is no membership state to keep in sync.
-  addSmartFolder: (name, query) => {
-    if (!name.trim()) return;
-    get().recordHistory("add smart folder");
-    set((s) => {
-      const nm = name.trim();
-      return {
-        smartFolders: [
-          ...s.smartFolders,
-          { id: nextSmartFolderId(), name: nm, query: query.trim() },
-        ],
-      };
-    });
-  },
-  updateSmartFolder: (id, name, query) => (get().recordHistory("edit smart folder"), set((s) => ({
-      smartFolders: s.smartFolders.map((f) =>
-        f.id === id ? { ...f, name: name.trim() || f.name, query: query.trim() } : f,
-      ),
-    }))),
-  removeSmartFolder: (id) => (get().recordHistory("remove smart folder"), set((s) => ({ smartFolders: s.smartFolders.filter((f) => f.id !== id) }))),
   toggleLeft: () => set((s) => ({ leftCollapsed: !s.leftCollapsed })),
   toggleRight: () => set((s) => ({ rightCollapsed: !s.rightCollapsed })),
   setStageTab: (stageTab) => set({ stageTab }),

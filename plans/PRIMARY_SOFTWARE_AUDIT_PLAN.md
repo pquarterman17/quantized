@@ -9962,6 +9962,13 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   initial values, green at `36439baf` before the move and unchanged after.
   Sabotage-checked: an extra field write in `setMapRes` and a
   `recordHistory` call in `setShortcutsOpen` each failed their specs.
+  **Seventh domain (2026-10-01)**: `store/datasetListEdits.characterization.test.ts`,
+  34 specs over the 16 dataset-list/folder/smart-folder actions — the keys
+  each writes, its undo label, an undo/redo identity round trip, no toast or
+  macro step, and the remove-the-active/selected/window-bound paths. Green
+  at `6dbdbb05` before the move and unchanged after. Sabotage-checked: extra
+  writes in `renameDataset`, `removeSelected` and `moveDataset`, a dropped
+  `recordHistory` in `moveFolder` and a toast in `addSmartFolder` each failed.
 - [~] Split one owned domain per PR with unchanged behavior/contracts.
   **ONE domain extracted 2026-09-17**, characterization tests first: the
   singleton **PlotView writers** — axis scales/limits/steps/tick formats/
@@ -10411,6 +10418,23 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   keys (386 functions), values identical apart from the time-based window id.
   Eager bundle 860,011 → 860,043 B (+32 B, the creator wrapper), both built
   after `npm ci` and a `.vite` wipe; `EAGER_JS_BUDGET` untouched.
+
+  **SEVENTH domain extracted 2026-10-01**: the **dataset-list edits** —
+  `removeDataset`/`removeSelected`/`removeDatasets`, `mergeSelected`,
+  `duplicateDataset`, `moveDataset`, `renameDataset`, the six folder-tree
+  actions and the three smart-folder actions (16 actions), with the
+  `folders`/`expandedFolders`/`smartFolders` fields — moved to the new
+  `store/datasetListEdits.ts` (281 lines, `DatasetListEditsSlice`, an
+  own-state slice like `workshopFlags.ts`). `store/useApp.ts` **1,134 → 920
+  lines (−214)**; `STORE_PINS` 1,135 → 921. These do write `datasets` and
+  record undo steps; the heavy bodies stay in `removeDatasets.ts` and
+  `folderDelete.ts`. The selection/activation group (`setActive` …
+  `selectIds`) stays in `useApp.ts` because it reaches into the windows
+  slice. The `mergeSelected` eager-open guard in `architecture.test.ts` now
+  reads the new module. Composed initial store unchanged: 602 keys (386
+  functions), values identical apart from the window id.
+  Eager bundle 860,080 → 860,104 B (+24 B, the creator wrapper), both after
+  `npm ci`; `EAGER_JS_BUDGET` untouched.
 - [x] Generate clients/types where it reduces drift. **Done** (`91583f9c`,
   2026-09-03): `npm run api:types` generates `src/lib/api/schema.d.ts` from
   the dumped OpenAPI document; `ci.yml`'s "Generated API types are up to
