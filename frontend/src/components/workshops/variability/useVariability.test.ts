@@ -2,7 +2,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { statsNestedAnova, statsVarianceComponents, statsVariabilitySummary, type NestedAnovaResponse, type VarianceComponentsResponse, type VariabilitySummaryResponse } from "../../../lib/api";
+import { reportEmit, statsNestedAnova, statsVarianceComponents, statsVariabilitySummary, type NestedAnovaResponse, type VarianceComponentsResponse, type VariabilitySummaryResponse } from "../../../lib/api";
 import type { DataStruct } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 import { useVariability } from "./useVariability";
@@ -173,5 +173,35 @@ describe("useVariability — dataset switch", () => {
     expect(result.current.factorACol).toBe(0);
     expect(result.current.factorBCol).toBe(1);
     expect(result.current.responseCol).toBe(2);
+  });
+});
+
+// The report titles itself from the CURRENT picks, so it must never ship a
+// result computed for the previous ones (the stat-export nest-flag bug class).
+describe("useVariability — report while recomputing", () => {
+  it("does not report the previous grouping's ANOVA under the new factor labels", async () => {
+    const { result } = renderHook(() => useVariability());
+    await waitFor(() => expect(result.current.anova).not.toBeNull());
+    vi.mocked(statsNestedAnova).mockReturnValue(new Promise(() => {}));
+    act(() => {
+      result.current.setFactorACol(1);
+      result.current.setFactorBCol(0);
+    });
+    expect(result.current.anova).toBeNull();
+    await act(async () => result.current.toReport());
+    expect(reportEmit).not.toHaveBeenCalled();
+  });
+
+  it("does not pair a new ANOVA with the previous grouping's variance components", async () => {
+    const { result } = renderHook(() => useVariability());
+    await waitFor(() => expect(result.current.varComp).not.toBeNull());
+    vi.mocked(statsVarianceComponents).mockReturnValue(new Promise(() => {}));
+    act(() => {
+      result.current.setFactorACol(1);
+      result.current.setFactorBCol(0);
+    });
+    await act(async () => {}); // the new ANOVA + summary land; components stay pending
+    await act(async () => result.current.toReport());
+    expect(reportEmit).not.toHaveBeenCalled();
   });
 });
