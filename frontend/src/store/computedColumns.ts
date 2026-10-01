@@ -19,15 +19,9 @@ import { remapSurvivingFormulas } from "../lib/formulaRename";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { ComputedColumn, DataStruct } from "../lib/types";
-import {
-  remapDatasetChannels,
-  remapFigureBindings,
-  remapFigureViewChannels,
-  remapViewChannels,
-  remapWindowViews,
-} from "../lib/channelRemap";
+import { remapDatasetChannels } from "../lib/channelRemap";
+import { columnRemovalRefsPatch } from "./columnRemovalRefs";
 import { resolvePendingEdit } from "./pendingEdit";
-import { syncDatasetWindowDocuments } from "./windowDocuments";
 import type { AppState } from "./useApp";
 
 export interface ComputedColumnsSlice {
@@ -252,48 +246,10 @@ export function createComputedColumnsSlice(set: SliceSet, get: SliceGet): Comput
             ...remapDatasetChannels(d, removedCol),
           };
         });
-        const remappedWindows = remapWindowViews(s.plotWindows, id, removedCol);
-        const remappedDataset = datasets.find((dataset) => dataset.id === id);
-        return {
-          datasets,
-          // Finding 2 (independent review, round 2): a SAVED editable figure
-          // is neither the live view nor a bound plotWindows entry -- it
-          // needs its own remap of the same channel-indexed bindings.
-          // Task 3 (SILENT_STATE_CORRUPTION_PLAN): the SAME document's
-          // `plot.view` still carries its own copy of seriesOrder/
-          // hiddenChannels/seriesStyles/seriesLabels -- remap those too.
-          editableFigures: s.editableFigures.map((doc) =>
-            doc.bindings.datasetId === id
-              ? {
-                  ...doc,
-                  bindings: remapFigureBindings(doc.bindings, removedCol),
-                  plot: { ...doc.plot, view: remapFigureViewChannels(doc.plot.view, removedCol) },
-                }
-              : doc,
-          ),
-          ...(s.activeId === id
-            ? {
-                ...remapViewChannels(s, removedCol),
-                // Finding 3 (independent review, round 2): `composition` is
-                // an EPHEMERAL render cache that `useEffectiveComposition`
-                // prefers over the durable `facetKey` binding above -- left
-                // alone, the pre-removal facet panels it holds keep
-                // rendering even though `facetKey` was just correctly
-                // remapped. Nulling it is NOT "drop the facet": that hook is
-                // `rawComposition ?? facetCompositionFromBinding(active,
-                // facetKey, xKey, yKeys)`, so the grid re-derives from the
-                // corrected `facetKey` on the very next render. This is the
-                // established lifecycle for this field -- its own doc lists
-                // a focus switch, a workspace reopen and a resolved recipe's
-                // freshly-focused window as the other moments it goes back
-                // to null and `facetKey` becomes what's left to render from.
-                // (When `facetKey` WAS the removed column, `remapViewChannels`
-                // has already set it null, and the facet correctly ends.)
-                composition: null,
-              }
-            : {}),
-          plotWindows: syncDatasetWindowDocuments(remappedWindows, id, remappedDataset?.errorRoles),
-        };
+        // Every holder outside the dataset (windows, saved/legacy figures,
+        // saved graph specs, the live view) — shared with the derived-sheet
+        // recalc, whose columns shift when its source loses one.
+        return { datasets, ...columnRemovalRefsPatch(s, id, removedCol, datasets) };
       });
       get().touchDataset(id); // recalc graph (#1): data changed
       refreshFitRefsLater(id, get); // P2.5: removing the fit's own column drops the fit (remapFitSpec)
