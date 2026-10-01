@@ -127,6 +127,18 @@ describe("applyActiveCorrectionsToFolder", () => {
     expect(params).toEqual([{ xOff: 5 }, { xOff: 5 }]);
   });
 
+  it("never toasts success for a member whose correction failed", async () => {
+    useToasts.setState({ toasts: [] });
+    useApp.setState({
+      datasets: [ds("d1", "grp"), ds("d2", "sub"), ds("d3", undefined, { corrections: { xOff: 5 }, raw })],
+    });
+    vi.mocked(applyCorrectionsApi).mockResolvedValueOnce(raw).mockRejectedValueOnce(new Error("boom"));
+    await applyActiveCorrectionsToFolder(fld("grp"));
+    const toasts = useToasts.getState().toasts;
+    expect(toasts.some((t) => t.kind === "danger" && t.msg.includes("1 of 2"))).toBe(true);
+    expect(toasts.some((t) => t.msg.includes("applied corrections to 2"))).toBe(false);
+  });
+
   it("does nothing when the active dataset has no corrections", async () => {
     await applyActiveCorrectionsToFolder(fld("grp"));
     expect(applyCorrectionsApi).not.toHaveBeenCalled();

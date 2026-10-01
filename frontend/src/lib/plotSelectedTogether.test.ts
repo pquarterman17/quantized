@@ -83,4 +83,19 @@ describe("plotSelectedTogether (PLOT_WORKFLOW_PLAN #3)", () => {
     expect(msg).toBeDefined();
     expect(msg).toContain("skipped 1 map dataset (RSM scan): maps don't overlay");
   });
+
+  it("toasts a failed full-data load instead of rejecting silently", async () => {
+    // Silent-failure audit (2026-10-01): every entry point fires this as
+    // `void plotSelectedTogether(...)`, so a rejected resolve (a pending
+    // book whose fetch failed) did nothing visible.
+    const original = useApp.getState().resolveDatasets;
+    useApp.setState({ resolveDatasets: () => Promise.reject(new Error("book fetch failed")) });
+    try {
+      await expect(plotSelectedTogether(["a", "b"])).resolves.toBeUndefined();
+    } finally {
+      useApp.setState({ resolveDatasets: original });
+    }
+    const t = useToasts.getState().toasts.find((x) => x.msg.includes("book fetch failed"));
+    expect(t?.kind).toBe("danger");
+  });
 });

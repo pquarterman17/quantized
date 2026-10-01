@@ -22,6 +22,9 @@ which harvests pixel boxes off a single axes. Same scope limit for MAIN
 #13/#14: a `series_styles` entry's `fill`/`color_by` keys are silently
 ignored here (each panel draws a plain line) -- fill-under/-between and
 colour-mapped scatter are single-axes features, like the rest of gap #11.
+The axis-title Format + drag (``ov["axis_titles"]``, ``calc.figure_axis_titles``)
+is skipped on purpose: the canvas' break panels build without that bridge and
+draw plain titles (``tests/fixtures/wire/axis_titles.json``' break case).
 """
 
 from __future__ import annotations

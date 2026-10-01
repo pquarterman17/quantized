@@ -39,6 +39,7 @@ import { recomputeFromBaseOrEmpty } from "../lib/formulaInputs";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
 import type { CorrectionParams } from "../lib/types";
+import { toast } from "./toasts";
 import type { AppState } from "./useApp";
 
 export interface CorrectionsSlice {
@@ -50,7 +51,9 @@ export interface CorrectionsSlice {
   resetCorrections: (id: string) => void;
   // Copy `sourceId`'s correction params (+ bg reference) onto every target id,
   // re-deriving each from its own raw. Batch parity with MATLAB "Apply to All".
-  applyCorrectionsToMany: (sourceId: string, targetIds: string[]) => Promise<void>;
+  // Resolves to how many targets actually applied (a failed one is named in
+  // the status + a danger toast, never counted).
+  applyCorrectionsToMany: (sourceId: string, targetIds: string[]) => Promise<number>;
 }
 
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
@@ -274,10 +277,11 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
       const src = get().datasets.find((d) => d.id === sourceId);
       if (!src?.corrections) {
         get().setStatus("no corrections on the source dataset to copy");
-        return;
+        return 0;
       }
       const bg = src.bgRef ? { datasetId: src.bgRef.datasetId, interp: src.bgRef.interp } : undefined;
       let n = 0;
+      const failed: string[] = [];
       for (const id of targetIds) {
         if (id === sourceId) continue;
         // Don't subtract a dataset from itself if it's the shared bg reference.
@@ -285,10 +289,20 @@ export function createCorrectionsSlice(set: SliceSet, get: SliceGet): Correction
         const transferable = { ...src.corrections }; // anchors are hand-traced on the SOURCE curve - not transferable
         delete transferable.bgAnchors;
         delete transferable.bgAnchorMethod;
-        await get().applyCorrections(id, transferable, useBg);
-        n += 1;
+        // Silent-failure audit (2026-10-01): a target that failed or was
+        // refused is never counted as applied, and the summary below names
+        // it rather than overwriting its own "corrections failed" status.
+        if (await get().applyCorrections(id, transferable, useBg)) n += 1;
+        else failed.push(get().datasets.find((d) => d.id === id)?.name ?? id);
       }
-      get().setStatus(`applied ${src.name}'s corrections to ${n} dataset${plural(n)}`);
+      if (failed.length === 0) {
+        get().setStatus(`applied ${src.name}'s corrections to ${n} dataset${plural(n)}`);
+        return n;
+      }
+      const msg = `applied ${src.name}'s corrections to ${n} of ${n + failed.length} datasets — failed: ${failed.join(", ")}`;
+      get().setStatus(msg);
+      toast(msg, "danger");
+      return n;
     },
   };
 }

@@ -20,6 +20,15 @@
 // all three; the backend expands it per level) and a facet grid (each panel
 // series' own `style`). A GRADIENT encoding is left alone: its series are
 // colour-mapped scatters on both sides, which the trace does not reach.
+//
+// NOT the Graph Builder's own requests: its canvas (`graphbuilder/previewCanvas`)
+// draws the spec's mark (scatter / line / step, markers per `showMarkers`) and
+// never reads the preference, so its encoded Export and the Publication Preview
+// seed send the mark (`plotSpecFigure.stylesForMark`). Its xy Export applies the
+// spec to the Stage and exports that, trace included, as the Stage draws it.
+// Residual: a Line or Step mark commits a partial style (`plotspec.
+// markSeriesStyle`), so the trace still fills the rest on the Stage and in the
+// Figure Builder; SeriesStyle cannot say "no marker" to pin it.
 
 import type { FigureSpec } from "./api/figures";
 import { DEFAULT_MARKER_PX } from "./markers";

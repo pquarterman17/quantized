@@ -9,6 +9,11 @@ read as points (``calc.figure_axis_titles``): a moved title sits exactly
 ``offset`` points from where the same request without offsets puts it,
 measured against its own axes so a ``tight_layout`` reflow cannot hide it.
 A page panel embedding the same request draws the same titles.
+
+An x-axis BREAK case draws plain titles on both sides: the canvas' break
+panels build without the Format/drag bridge, and ``calc.figure_break`` skips
+the fields like the other single-axes overrides. A figure page rejects
+``x_breaks``, so that case has no page half.
 """
 
 from __future__ import annotations
@@ -28,6 +33,14 @@ client = TestClient(app)
 
 FIXTURE = Path(__file__).parent / "fixtures" / "wire" / "axis_titles.json"
 CASES = json.loads(FIXTURE.read_text(encoding="utf-8"))["cases"]
+
+
+def _broken(case: dict[str, Any]) -> bool:
+    return bool((case["request"].get("overrides") or {}).get("x_breaks"))
+
+
+FLAT = [c for c in CASES if not _broken(c)]
+BROKEN = [c for c in CASES if _broken(c)]
 
 
 def _figure(monkeypatch: pytest.MonkeyPatch, url: str, body: dict[str, Any]) -> Any:
@@ -89,7 +102,7 @@ def _check(fig: Any, home: Any, drawn: dict[str, Any], style: str) -> None:
         assert (x - hx, y - hy) == pytest.approx((dx, -dy), abs=0.05), axis
 
 
-@pytest.mark.parametrize("case", CASES, ids=[c["name"] for c in CASES])
+@pytest.mark.parametrize("case", FLAT, ids=[c["name"] for c in FLAT])
 def test_each_axis_title_is_drawn_as_the_canvas_draws_it(
     monkeypatch: pytest.MonkeyPatch, case: dict[str, Any]
 ) -> None:
@@ -100,7 +113,7 @@ def test_each_axis_title_is_drawn_as_the_canvas_draws_it(
     _check(fig, home, case["drawn"], body["style"])
 
 
-@pytest.mark.parametrize("case", CASES, ids=[c["name"] for c in CASES])
+@pytest.mark.parametrize("case", FLAT, ids=[c["name"] for c in FLAT])
 def test_a_page_panel_draws_the_same_titles(
     monkeypatch: pytest.MonkeyPatch, case: dict[str, Any]
 ) -> None:
@@ -113,6 +126,40 @@ def test_a_page_panel_draws_the_same_titles(
     fig = _figure(monkeypatch, "/api/export/figure-page", page(body))
     home = _figure(monkeypatch, "/api/export/figure-page", page(home_body))
     _check(fig, home, case["drawn"], "default")
+
+
+def _break_titles(fig: Any) -> dict[str, Any]:
+    """A broken figure's titles: the x title is the figure's own (``supxlabel``)
+    under every panel, the y title the first panel's."""
+    supx = [t for t in fig.texts if t.get_text() == fig.get_supxlabel()]
+    assert len(supx) == 1, "the break figure has one x title"
+    return {"x": (supx[0], fig.axes[0]), "y": (fig.axes[0].yaxis.label, fig.axes[0])}
+
+
+@pytest.mark.parametrize("case", BROKEN, ids=[c["name"] for c in BROKEN])
+def test_a_break_figure_draws_each_title_as_its_panels_do(
+    monkeypatch: pytest.MonkeyPatch, case: dict[str, Any]
+) -> None:
+    body = case["request"]
+    assert body.get("axis_label_styles") or body.get("axis_label_offsets"), "non-vacuous"
+    title_fields = ("axis_label_styles", "axis_label_offsets")
+    plain_body = {k: v for k, v in body.items() if k not in title_fields}
+    fig = _figure(monkeypatch, "/api/export/figure", body)
+    plain = _figure(monkeypatch, "/api/export/figure", plain_body)
+    assert len(fig.axes) >= 2, "the break renderer drew it"
+    titles, plain_titles = _break_titles(fig), _break_titles(plain)
+    assert set(case["drawn"]) == set(titles)
+    for axis, want in case["drawn"].items():
+        label, ax = titles[axis]
+        home = plain_titles[axis][0]
+        size = want["size"] if want["size"] is not None else home.get_fontsize()
+        assert label.get_fontsize() == pytest.approx(size), axis
+        assert (label.get_fontweight() == "bold") is want["bold"], axis
+        assert (label.get_fontstyle() == "italic") is want["italic"], axis
+        x, y = _anchor_pt(fig, axis, label, ax)
+        hx, hy = _anchor_pt(plain, axis, home, plain_titles[axis][1])
+        dx, dy = want["offset"]
+        assert (x - hx, y - hy) == pytest.approx((dx, -dy), abs=0.05), axis
 
 
 def test_a_malformed_title_size_is_refused() -> None:

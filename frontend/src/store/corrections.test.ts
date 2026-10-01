@@ -18,6 +18,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { applyCorrections as applyCorrectionsApi } from "../lib/api";
 import type { CorrectionsRequest } from "../lib/api";
 import { rowsChangedGuard } from "./corrections";
+import { toast } from "./toasts";
 import { peakTableFromFit } from "../lib/peakTableFit";
 import type { CorrectionParams, DataStruct, Dataset } from "../lib/types";
 import { parseWorkspace, serializeWorkspace } from "../lib/workspace";
@@ -349,5 +350,46 @@ describe("rowsChangedGuard — the SHARED contract its other callers consume", (
     expect(
       Object.keys(rowsChangedGuard(useApp.getState(), "d1", false, [0]).datasetPatch),
     ).toEqual([]);
+  });
+});
+
+describe("applyCorrectionsToMany — a failed target is never reported as applied", () => {
+  // Silent-failure audit (2026-10-01): each target's `applyCorrections`
+  // returned `false` on a backend error or a refused derived worksheet, the
+  // batch ignored it, counted the target anyway and OVERWROTE the per-target
+  // "corrections failed" status with "applied … to N datasets".
+  it("counts only the targets that applied and says which failed", async () => {
+    vi.mocked(applyCorrectionsApi).mockImplementation((req: CorrectionsRequest) =>
+      req.dataset.values[0][0] === 99 ? Promise.reject(new Error("backend down")) : fakeCorrections(req),
+    );
+    useApp.setState({
+      datasets: [
+        { id: "src", name: "source", data: base, raw: base, corrections: { yOff: 1 } },
+        { id: "ok", name: "good", data: base },
+        { id: "bad", name: "broken", data: { ...base, values: [[99], [99], [99]] } },
+      ],
+    });
+
+    const applied = await useApp.getState().applyCorrectionsToMany("src", ["ok", "bad"]);
+
+    expect(applied).toBe(1);
+    const status = useApp.getState().status;
+    expect(status).toContain("1 of 2");
+    expect(status).toContain("broken");
+    expect(toast).toHaveBeenCalledWith(expect.stringContaining("broken"), "danger");
+  });
+
+  it("does not count a refused derived worksheet as applied", async () => {
+    useApp.setState({
+      datasets: [
+        { id: "src", name: "source", data: base, raw: base, corrections: { yOff: 1 } },
+        { id: "der", name: "derived", data: base, derivedFrom: { datasetId: "src", pipeline: "p" } },
+      ],
+    });
+
+    const applied = await useApp.getState().applyCorrectionsToMany("src", ["der"]);
+
+    expect(applied).toBe(0);
+    expect(useApp.getState().status).toContain("0 of 1");
   });
 });

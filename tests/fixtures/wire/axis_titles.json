@@ -406,6 +406,121 @@
           ]
         }
       }
+    },
+    {
+      "name": "x-axis break: formatted and moved titles draw plain on the panels",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              1,
+              50
+            ],
+            [
+              2,
+              60
+            ],
+            [
+              3,
+              55
+            ],
+            [
+              4,
+              70
+            ]
+          ],
+          "labels": [
+            "M",
+            "T"
+          ],
+          "units": [
+            "emu",
+            "K"
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 100,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          },
+          "x_breaks": [
+            [
+              1.2,
+              1.8
+            ]
+          ]
+        },
+        "axis_label_styles": {
+          "x": {
+            "size": 16,
+            "italic": true
+          },
+          "y": {
+            "size": 20,
+            "bold": true
+          }
+        },
+        "axis_label_offsets": {
+          "x": [
+            24,
+            -6
+          ],
+          "y": [
+            -8,
+            30
+          ]
+        },
+        "transparent": false,
+        "filename": "titles"
+      },
+      "drawn": {
+        "x": {
+          "size": null,
+          "bold": false,
+          "italic": false,
+          "offset": [
+            0,
+            0
+          ]
+        },
+        "y": {
+          "size": null,
+          "bold": false,
+          "italic": false,
+          "offset": [
+            0,
+            0
+          ]
+        }
+      }
     }
   ]
 }

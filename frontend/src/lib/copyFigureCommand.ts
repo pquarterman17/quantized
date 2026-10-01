@@ -37,6 +37,8 @@ import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import { copyOfficeGraphicAsync } from "./officeClipboard";
 import { confirmScreenOnlyExport } from "./screenOnlyExport";
+import { copyStatFigure } from "./statFigureCommands";
+import { activeStatExporter } from "./statStageBridge";
 import { toast } from "../store/toasts";
 import type { Dataset } from "./types";
 
@@ -93,6 +95,9 @@ export async function runCopyFigureSvgCommand(s: StoreGet): Promise<void> {
   await exportActive(
     s,
     async (stem, ds, signal) => {
+      // Stat mode: the stat renderer's own SVG (lib/statFigureCommands.ts).
+      const stat = activeStatExporter(s());
+      if (stat) return copyStatFigure(stat, "svg", { style: COPY_FIGURE_STYLE, dpi: COPY_FIGURE_DPI, signal }, stem);
       const spec = await pickCopySpec(s, ds, stem, {
         fmt: "svg",
         style: COPY_FIGURE_STYLE,
@@ -126,6 +131,9 @@ export async function runCopyFigureCommand(s: StoreGet): Promise<void> {
   await exportActive(
     s,
     async (stem, ds, signal) => {
+      // Stat mode: the stat renderer's own PNG (lib/statFigureCommands.ts).
+      const stat = activeStatExporter(s());
+      if (stat) return copyStatFigure(stat, "png", { style: COPY_FIGURE_STYLE, dpi: COPY_FIGURE_DPI, signal }, stem);
       const spec = await pickCopySpec(s, ds, stem, {
         fmt: COPY_FIGURE_FMT,
         style: COPY_FIGURE_STYLE,

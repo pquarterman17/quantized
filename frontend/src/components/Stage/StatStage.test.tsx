@@ -8,6 +8,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { resolveStatMarks } from "../../lib/statMarks";
+import { activeStatExporter } from "../../lib/statStageBridge";
 import { useApp } from "../../store/useApp";
 import StatStage from "./StatStage";
 import type { StatDrawData } from "./statRender";
@@ -489,5 +490,16 @@ describe("StatStage — missing levels / unbalanced groups (P2.6 box 2)", () => 
     const notice = screen.getByTestId("stat-group-notice");
     expect(notice).toHaveTextContent("1 empty level (n=0)");
     expect(notice).toHaveAttribute("title", "grp = C: n=0, 2 non-finite");
+  });
+});
+
+describe("StatStage — the app's figure commands route to its export", () => {
+  it("registers the stage's exporter while mounted, and only then", () => {
+    const exportFigure = vi.fn().mockResolvedValue(true);
+    stateRef.current = makeState({ exportFigure });
+    const { unmount } = render(<StatStage />);
+    expect(activeStatExporter({ statMode: true, polarMode: false })).toBe(exportFigure);
+    unmount();
+    expect(activeStatExporter({ statMode: true, polarMode: false })).toBeNull();
   });
 });

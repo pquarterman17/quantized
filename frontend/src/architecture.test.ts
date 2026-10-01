@@ -2358,7 +2358,7 @@ const HISTORY_EXCLUDED: Record<string, string> = {
   contourScale: "contour scale; view setting outside PlotView",
 
   // pre-existing exclusions preserved as-is by the guard widening (status-quo; review deliberately deferred)
-  composition: "multi-panel facet/break arrangement; cleared on dataset switch today — if arrangements become persistent, revisit undo coverage",
+  composition: "multi-panel render cache; a facet rebuilds from view.facetKey, and a break (no durable binding) is carried as HistorySnapshot.breakComposition",
 
   // parser false positives (nested inline object types inside AppState)
   selection: "worksheet row selection; deliberately outside the verbatim snapshot — restorePatch liveness-filters it specially on undo/redo",

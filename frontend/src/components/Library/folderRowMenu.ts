@@ -10,6 +10,7 @@
 
 import { buildMenuItems, type ContextAction, type MenuEntry } from "../../lib/contextActions";
 import { isSelfOrDescendant } from "../../lib/foldertree";
+import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import { TEMPLATES_KEY } from "../../lib/templateKey";
 import type { Dataset, FolderNode } from "../../lib/types";
 import { toast } from "../../store/toasts";
@@ -25,7 +26,9 @@ import type { ContextMenuItem } from "../overlays/ContextMenu";
 
 // folderOps (and the pipeline runner + template libs it pulls in) load on
 // the click, not at launch: every use is inside a `run` (bundle-size ratchet).
-const folderOps = () => import("./folderOps");
+// Through runLazy, so a failed chunk load toasts instead of doing nothing
+// (silent-failure audit 2026-10-01; MultiSelectBar's Export already did).
+const folderOps = () => runLazy("Loading folder actions…", () => import("./folderOps"));
 
 /** Whether any analysis template is saved, WITHOUT importing lib/template.ts,
  *  whose parser (and P2.5's transformation-recipe fields) stays in the lazy
@@ -76,7 +79,7 @@ export const folderCoreActions: ContextAction<FolderActionTarget>[] = [
     },
   },
   { id: "folder.rename", label: "Rename…", run: (t) => t.onRename() },
-  { id: "folder.properties", label: "Properties…", run: (t) => void folderOps().then((m) => m.openFolderProperties(t.folder)) },
+  { id: "folder.properties", label: "Properties…", run: (t) => void folderOps().then((m) => m.openFolderProperties(t.folder), onLoadFailure) },
 ];
 
 // ── bulk ops over the whole subtree (project-organization plan item 8) ──
@@ -85,25 +88,25 @@ export const folderBulkActions: ContextAction<FolderActionTarget>[] = [
     id: "folder.selectAll",
     label: (t) => `Select all in folder (${t.count})`,
     enabled: (t) => t.count > 0,
-    run: (t) => void folderOps().then((m) => m.selectFolderContents(t.folder)),
+    run: (t) => void folderOps().then((m) => m.selectFolderContents(t.folder), onLoadFailure),
   },
   {
     id: "folder.exportCsv",
     label: "Export folder as consolidated CSV",
     enabled: (t) => t.count > 0,
-    run: (t) => void folderOps().then((m) => m.exportFolderCsv(t.folder)),
+    run: (t) => void folderOps().then((m) => m.exportFolderCsv(t.folder), onLoadFailure),
   },
   {
     id: "folder.applyActiveCorrections",
     label: (t) => `Apply active corrections to folder (${t.count})`,
     hidden: (t) => t.count === 0 || !activeDataset()?.corrections,
-    run: (t) => void folderOps().then((m) => m.applyActiveCorrectionsToFolder(t.folder)),
+    run: (t) => void folderOps().then((m) => m.applyActiveCorrectionsToFolder(t.folder), onLoadFailure),
   },
   {
     id: "folder.runTemplate",
     label: "Run analysis template on folder…",
     hidden: (t) => t.count === 0 || !hasSavedTemplates(),
-    run: (t) => void folderOps().then((m) => m.runTemplateOnFolder(t.folder)),
+    run: (t) => void folderOps().then((m) => m.runTemplateOnFolder(t.folder), onLoadFailure),
   },
 ];
 
@@ -128,7 +131,7 @@ export const folderDeleteActions: ContextAction<FolderActionTarget>[] = [
       message: "This can't be undone.",
       confirmLabel: "Delete",
     }),
-    run: (t) => void folderOps().then((m) => m.removeFolderWithDatasets(t.folder)),
+    run: (t) => void folderOps().then((m) => m.removeFolderWithDatasets(t.folder), onLoadFailure),
   },
 ];
 

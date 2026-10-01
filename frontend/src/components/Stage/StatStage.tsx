@@ -26,6 +26,7 @@ import StatStagePlot from "./StatStagePlot";
 import StatSummaryTable from "./StatSummaryTable";
 import { useStatGroupSelection } from "./useStatGroupSelection";
 import { BIN_RULES, DISTRIBUTIONS, useStatStage } from "./useStatStage";
+import { useRegisterStatStageExporter } from "./useStatStageExport";
 
 const MODE_OPTIONS: { value: StatMode; label: string }[] = [
   { value: "box", label: "Box" },
@@ -76,6 +77,7 @@ export default function StatStage() {
     picks,
     onPicksChange: setStatPicks,
   });
+  useRegisterStatStageExporter(st.exportFigure); // the app's Export / Copy / Send figure route here
   const categorical = st.mode === "box" || st.mode === "violin" || st.mode === "bar" || st.mode === "strip";
   // P2.6 box 4: the per-group summary table, linked both ways to the app's
   // row selection (useStatGroupSelection). The plot half of the link is on

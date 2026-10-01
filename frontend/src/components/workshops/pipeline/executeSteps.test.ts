@@ -15,9 +15,10 @@ import { executeSteps } from "./executeSteps";
 vi.mock("../../../lib/api", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../../lib/api")>()),
   fitModel: vi.fn(),
+  applyCorrections: vi.fn(),
 }));
 
-import { fitModel } from "../../../lib/api";
+import { applyCorrections, fitModel } from "../../../lib/api";
 
 const data = (): DataStruct => ({
   time: [0, 1, 2, 3],
@@ -148,5 +149,19 @@ describe("executeSteps fit replay (#6)", () => {
   it("surfaces R² in the step log note", async () => {
     const { entry } = await runFit(fitStep({ model: "Linear", xKey: 0, yKey: 1 }));
     expect(entry).toEqual({ status: "ok", note: "fit R²=0.9000" });
+  });
+});
+
+describe("executeSteps correction replay", () => {
+  // Silent-failure audit (2026-10-01): `applyCorrections` reports failure by
+  // RETURNING false (status line only), and this step ignored the result —
+  // a template batch logged the correction "ok" and its fit ran on
+  // uncorrected data with no flag on the row.
+  it("logs a failed correction as failed, with the store's reason", async () => {
+    vi.mocked(applyCorrections).mockRejectedValue(new Error("backend down"));
+    const step = makeStep("correction", "Corrections", "qz.applyCorrections()", { params: { yOff: 1 } });
+    const { log } = await executeSteps([step], "a");
+    expect(log[step.id].status).toBe("failed");
+    expect(log[step.id].note).toContain("backend down");
   });
 });

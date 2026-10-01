@@ -21,6 +21,8 @@ import { buildStageFigureSpec } from "./figureSpecStage";
 import { chooseExcludedRows } from "./excludedRowsChoice";
 import { excludedChoiceMatters } from "./excludedRowsExport";
 import { confirmScreenOnlyExport } from "./screenOnlyExport";
+import { exportStatFigure } from "./statFigureCommands";
+import { activeStatExporter } from "./statStageBridge";
 import type { Dataset } from "./types";
 import { toast } from "../store/toasts";
 
@@ -41,6 +43,34 @@ export const GREYSCALE_FIELD: ParamField = {
  *  figure to report…" (lib/sendFigureToReport.ts) offers the SAME list. */
 export const FIGURE_STYLES = ["default", "aps", "nature", "thesis", "report", "web", "presentation", "poster"];
 
+/** Format, style and DPI — the dialog's first three fields, and all a stat
+ *  plot's export takes (its titles come from the stage). */
+const OUTPUT_FIELDS: ParamField[] = [
+  {
+    key: "fmt",
+    label: "Format",
+    type: "select",
+    default: "pdf",
+    options: ["pdf", "svg", "png", "tiff"],
+    hint: "PDF / SVG are vector; PNG / TIFF are raster",
+  },
+  {
+    key: "style",
+    label: "Style",
+    type: "select",
+    default: "default",
+    options: FIGURE_STYLES,
+    hint: "Publication preset: sets font, size, line width, grid",
+  },
+  {
+    key: "dpi",
+    label: "DPI (raster)",
+    type: "number",
+    default: 300,
+    hint: "Resolution for PNG / TIFF (50–1200); ignored by vector",
+  },
+];
+
 /** `buildSpec` replaces the focused Stage plot as the figure's source while
  *  keeping this dialog and `exportActive`'s chokepoint — the Graph Builder's
  *  encoded export (`lib/plotEncodingExport.ts`) is its one caller. */
@@ -56,30 +86,15 @@ export async function runExportFigureCommand(
     toast(msg, "info");
     return;
   }
+  // Stat mode exports the stat plot on screen through the stage's own export.
+  const stat = buildSpec ? null : activeStatExporter(s());
+  if (stat) {
+    const p = await askParams("Export figure", OUTPUT_FIELDS);
+    if (p) await exportStatFigure(s, stat, String(p.fmt), { style: String(p.style), dpi: Number(p.dpi) });
+    return;
+  }
   const params = await askParams("Export figure", [
-    {
-      key: "fmt",
-      label: "Format",
-      type: "select",
-      default: "pdf",
-      options: ["pdf", "svg", "png", "tiff"],
-      hint: "PDF / SVG are vector; PNG / TIFF are raster",
-    },
-    {
-      key: "style",
-      label: "Style",
-      type: "select",
-      default: "default",
-      options: FIGURE_STYLES,
-      hint: "Publication preset: sets font, size, line width, grid",
-    },
-    {
-      key: "dpi",
-      label: "DPI (raster)",
-      type: "number",
-      default: 300,
-      hint: "Resolution for PNG / TIFF (50–1200); ignored by vector",
-    },
+    ...OUTPUT_FIELDS,
     GREYSCALE_FIELD,
     { key: "title", label: "Title", type: "text", default: s().plotTitle },
     {

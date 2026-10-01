@@ -5,7 +5,9 @@
 // ride in the screen's own CSS px; the backend reads them as points, the rule
 // an annotation's `size` and a marker's `marker_size` already follow
 // (`calc/figure_axis_titles.py`). A facet grid sends neither: the Stage's
-// facet canvas draws plain titles.
+// facet canvas draws plain titles. An x-axis break view still sends both (the
+// backend may decline the break and draw the flat figure), and the break
+// renderer skips them, as the break panels do.
 
 import type { FigureSpec } from "./api/figures";
 import type { PlotView } from "./plotview";
