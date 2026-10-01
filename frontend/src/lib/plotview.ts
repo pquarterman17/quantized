@@ -146,7 +146,7 @@ export interface PlotView {
   xFmt: AxisFormat;
   yFmt: AxisFormat;
   /** Secondary-axis tick format override; null = inherit `yFmt` (the
-   *  compatibility default — see store/useApp.ts's own y2Fmt doc). */
+   *  compatibility default — see store/plotViewFields.ts's own y2Fmt doc). */
   y2Fmt: AxisFormat | null;
   plotTitle: string;
   xAxisLabel: string;
