@@ -10545,6 +10545,10 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   documented gap carried over unchanged from the structural matrix: no
   first-class 2-D/heatmap figure exists to build a ninth-plus fixture from
   (`regressionMatrixFixtures.testkit.ts`'s own header note).
+  **2026-10-01: the automated SCREEN-canvas structural half is done**
+  (`frontend/e2e/specs/regression-matrix-screen.spec.ts`, all nine fixtures
+  against their goldens via recorded canvas draw calls); the box stays open
+  for the owner's visual review.
 - [x] ~~Migration fixtures for supported contract/workspace versions.~~ SHIPPED
   2026-09-28. Inventory of every persisted-format version this app still
   claims to LOAD (via `git log -S` on each version constant + its

@@ -143,6 +143,7 @@ evidence for WKWebView, not proof.
 | l | `peak-model-fit.spec.ts` — Peak Analyzer on `two-peaks.csv`: find peaks, per-peak shapes (Gaussian + Lorentzian), a real `/api/peaks/model-fit` fit (centres, ± errors, SSR label, model curve on the plot), report via the `peak_model_fit` emitter (audit P2.4) | 100% only |
 | m | `peak-fit-range-and-add.spec.ts` — plot right-click "Peak Fitting ▸ Fit this range" (disabled with a reason, then on a Select Rows brush: the analyzer opens on step 2 with the range applied and its peak found); delete a peak from the model table, click the plot to add it back (data-seeded centre/FWHM), and fit both (audit P2.4 slice 3) | 100% only |
 | n | `peak-batch.spec.ts` — Peak Analyzer "Batch": a saved v2 recipe (range + a stored per-peak Lorentzian) over `two-peaks.csv`, `two-peaks-shifted.csv` and `two-peaks-counts.csv` (no "Intensity" column → an isolated error row); one real `/api/peaks/model-fit-batch` job polled to done; centres ± errors, shapes, SSR label; "Add as table" lands a library dataset naming the recipe and all three sources (audit P2.4 slice 4). The two new fixtures reuse `two-peaks.csv`'s own background + ripple with different peaks | 100% only |
+| o | `regression-matrix-screen.spec.ts` — the nine P4.2 matrix fixtures reopened on the real canvas; drawn series, ticks, titles, decorations, panels and legend checked against the committed goldens via recorded draw calls (`utils/canvasRecorder.ts`) | 100% only |
 
 ## Residuals (booked, not shipped here)
 
