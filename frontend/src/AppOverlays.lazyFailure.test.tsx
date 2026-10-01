@@ -45,7 +45,11 @@ describe("AppOverlays panel family survives a failed chunk fetch (UX-003)", () =
     });
 
     expect(await screen.findByText("⚠ ShortcutsDialog failed to load.")).toBeInTheDocument();
-    expect(screen.getByText("Point at a highlighted control to see what it does")).toBeInTheDocument();
+    // WhatIsThis is its own lazy chunk: wait for it rather than assume it
+    // resolved before the failing panel did. A 300 ms delay on its import
+    // made the old synchronous getByText fail exactly as the 2026-10-01
+    // full-suite flake did; findByText passes under the same delay.
+    expect(await screen.findByText("Point at a highlighted control to see what it does")).toBeInTheDocument();
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 
     shortcutsShouldFail = false;
