@@ -12,11 +12,10 @@
 // / move / move-a-dataset / expand) and the smart folders (add / edit /
 // remove). 16 actions. The three folder collections (`folders`,
 // `expandedFolders`, `smartFolders`) are declared and initialized HERE (an
-// own-state slice, store/gadget.ts's shape); `datasets`, `activeId`,
-// `selectedIds` and `worksheetId` stay on AppState — every slice writes them.
-// The selection/activation group (setActive, activateFromLibrary,
-// toggleSelected, selectRange, selectIds) stays in useApp.ts: it reaches into
-// the windows slice's rebind helpers.
+// own-state slice, store/gadget.ts's shape); `datasets` stays on AppState —
+// every slice writes it. The selection/activation group (setActive,
+// activateFromLibrary, toggleSelected, selectRange, selectIds) and its
+// `activeId`/`selectedIds`/`worksheetId` fields live in ./datasetSelection.
 //
 // Not exclusive write access: other slices still write the folder fields as
 // part of their own gestures (libraryPanel.ts's updateFolder, splitRun.ts's

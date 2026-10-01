@@ -13,8 +13,8 @@
 //
 // The shared rebind helpers (`datasetViewDefaults`, `focusedRebindPatch`,
 // `retargetPassiveRebind`, `focusTransientReset`, `mainWindow`) live here —
-// they are window-shaped — and are exported for useApp's own `setActive`/
-// `addDataset`/`loadWorkspace` paths. Only TYPE imports cross back into
+// they are window-shaped — and are exported for `setActive` (./datasetSelection),
+// `addDataset` (./useApp) and `loadWorkspace`. Only TYPE imports cross back into
 // useApp (no runtime cycle).
 
 import { captureTechniqueView, type TechniqueViewMemoryMap } from "../lib/techniqueViewMemory";

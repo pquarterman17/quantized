@@ -9989,6 +9989,16 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   at `6dbdbb05` before the move and unchanged after. Sabotage-checked: extra
   writes in `renameDataset`, `removeSelected` and `moveDataset`, a dropped
   `recordHistory` in `moveFolder` and a toast in `addSmartFolder` each failed.
+  **Eighth domain (2026-10-01)**: `store/datasetSelection.characterization.test.ts`,
+  19 specs over the 5 selection/activation actions — the keys each writes,
+  no own undo step/toast/macro, the `ensureBookData` kicks, and `setActive`'s
+  window effects (focused-window rebind, re-activation keeps the view,
+  workbook disclosure, a pinned focused window retargeting to the top-z
+  unpinned window or a fresh one with its "create window" undo step). Green
+  at `9fb20d39` before the move and unchanged after. Sabotage-checked: a
+  dropped `retargetPassiveRebind`, a `recordHistory` in `setActive`, a
+  dropped worksheet-path kick, an extra write in `toggleSelected` and changed
+  `librarySelection` writes in `selectRange`/`selectIds` each failed.
 - [~] Split one owned domain per PR with unchanged behavior/contracts.
   **ONE domain extracted 2026-09-17**, characterization tests first: the
   singleton **PlotView writers** — axis scales/limits/steps/tick formats/
@@ -10455,6 +10465,20 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   functions), values identical apart from the window id.
   Eager bundle 860,080 → 860,104 B (+24 B, the creator wrapper), both after
   `npm ci`; `EAGER_JS_BUDGET` untouched.
+
+  **EIGHTH domain extracted 2026-10-01**: **selection/activation** —
+  `setActive`, `activateFromLibrary`, `toggleSelected`, `selectRange`,
+  `selectIds` (5 actions), with the `activeId`/`selectedIds`/`worksheetId`
+  fields — moved to the new `store/datasetSelection.ts` (165 lines,
+  `DatasetSelectionSlice`, an own-state slice like `datasetListEdits.ts`).
+  `store/useApp.ts` **920 → 816 lines (−104)**; `STORE_PINS` 921 → 817.
+  `setActive` still reaches into the windows slice, now from the new module
+  (`retargetPassiveRebind` + `focusedRebindPatch` from `windows.ts`);
+  `addDataset` stays in `useApp.ts` with its own `retargetPassiveRebind`
+  import. No exported type moved, so no importer changed. Composed initial
+  store unchanged: 602 keys (386 functions), values identical apart from the
+  window id. Eager bundle 854,580 → 854,616 B (+36 B), both after `npm ci`
+  and a `.vite` wipe; `EAGER_JS_BUDGET` untouched.
 - [x] Generate clients/types where it reduces drift. **Done** (`91583f9c`,
   2026-09-03): `npm run api:types` generates `src/lib/api/schema.d.ts` from
   the dumped OpenAPI document; `ci.yml`'s "Generated API types are up to
