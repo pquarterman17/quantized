@@ -20,7 +20,8 @@ import { isPreviewExpanded, setPreviewExpanded } from "../../lib/libraryPreviewP
 import type { Dataset } from "../../lib/types";
 import Sparkline from "./Sparkline";
 
-export default function DatasetRowPreview({ dataset: d }: { dataset: Dataset }) {
+/** `tabIndex`: -1 inside LibraryTree on a non-roving row (U5). */
+export default function DatasetRowPreview({ dataset: d, tabIndex }: { dataset: Dataset; tabIndex?: number }) {
   const [expanded, setExpanded] = useState(() => isPreviewExpanded(d.id));
   // A still-pending dataset only carries the small downsampled preview on
   // `.data` until first opened (DatasetRow's "#38" comment) — that preview
@@ -37,6 +38,7 @@ export default function DatasetRowPreview({ dataset: d }: { dataset: Dataset }) 
     <>
       <button
         type="button"
+        tabIndex={tabIndex}
         // UX-004 density: this toggle used to be the one control still painted
         // at rest on every worksheet row — the most numerous row by far in an
         // imported Origin project. It now follows the SAME resting-cue recipe

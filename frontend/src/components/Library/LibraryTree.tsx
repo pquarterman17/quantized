@@ -10,14 +10,20 @@
 // "logical" focus state), so each row's own already-implemented mouse/
 // keyboard handling (DatasetRow/FolderRow's context-menu key, WorkbookRow's
 // open/select) keeps working completely unmodified. This container supplies
-// only the ACROSS-ROW part: Up/Down/Left/Right/Enter, computed by the pure
-// lib/libraryTreeNav.ts against the flattened array, and Escape (blur —
-// no established "return focus to the stage" affordance exists yet to
-// match, per the plan's C brief).
+// only the ACROSS-ROW part: Up/Down/Left/Right/Home/End/Enter, computed by
+// the pure lib/libraryTreeNav.ts against the flattened array, and Escape
+// (blur on a row; from a nested control or inline editor, back to the row).
+//
+// U5 — WAI-ARIA tree: role="tree" here, role="treeitem" (level, set size,
+// position, expanded, selected) on each anchor via `treeItemProps`, and ONE
+// roving tab stop: the focused row, else the selected row, else the first,
+// clamped to the rendered window so virtualization never leaves the tree
+// with no stop. Only that row's own controls stay tabbable (innerTabIndex).
 
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 
 import { buildArtifactMenu, deleteArtifactConfirmed, isArtifactNode, type ArtifactNode } from "./artifactContextActions";
+import { isEditorTarget, isTextEditorTarget, keyOfRow, NAV_KEYS, rowSelector } from "./libraryTreeDom";
 import LibraryTreeRow from "./LibraryTreeRow";
 import { isSelected, openLibraryNode, selectLibraryNode } from "./libraryOpen";
 import { focusRowWhenRendered, useListVirtualization } from "./useListVirtualization";
@@ -27,70 +33,11 @@ import { folderDeleteActions } from "./folderRowMenu";
 import { requestDatasetRemoval } from "../../lib/datasetRemoval";
 import { needsScrollOutFocusFallback, scrollOutFocusProps } from "../../lib/scrollOutFocus";
 import type { FlatLibraryNode, LibraryNode } from "../../lib/libraryHierarchy";
-import { indexOfKey, navigate, type NavDirection } from "../../lib/libraryTreeNav";
+import { indexOfKey, navigate, treeItemProps, treePositions } from "../../lib/libraryTreeNav";
 import { workbookDeleteActions } from "../../lib/workbookContextActions";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import ContextMenu from "../overlays/ContextMenu";
-
-const NAV_KEYS: Record<string, NavDirection> = {
-  ArrowDown: "down",
-  ArrowUp: "up",
-  ArrowRight: "right",
-  ArrowLeft: "left",
-};
-
-/** The DOM selector for a row's own focusable anchor. Worksheets reuse
- *  DatasetRow's existing `data-ds-id`; every other kind carries the new
- *  uniform `data-lib-row`. */
-function rowSelector(row: FlatLibraryNode): string {
-  if (row.node.kind === "worksheet") return `[data-ds-id="${CSS.escape(row.node.entityId)}"]`;
-  return `[data-lib-row="${CSS.escape(row.node.key)}"]`;
-}
-
-/** The canonical key of the row a DOM element belongs to, or null when it
- *  isn't inside a row anchor at all (e.g. a click landed on the container
- *  background). */
-function keyOfRow(el: Element | null): string | null {
-  const row = el?.closest("[data-lib-row], [data-ds-id]");
-  if (!row) return null;
-  const lib = row.getAttribute("data-lib-row");
-  if (lib) return lib;
-  const dsId = row.getAttribute("data-ds-id");
-  return dsId ? `worksheet:${dsId}` : null;
-}
-
-/** P2 fix — keyboard hijack: true when `el` is a nested editable control
- *  (rename/tag input, the "⋯" menu button, the drag handle, …) or any other
- *  descendant that ISN'T the row's own anchor element itself. `keyOfRow`'s
- *  `.closest()` resolves ANY descendant (including a nested rename
- *  `<input>`) to its ancestor row, which is what let Enter in a rename
- *  input both commit AND open the row, and let arrow keys escape a text
- *  editor as roving-focus navigation. Only a keystroke whose target IS one
- *  of the row anchors is this container's to handle.
- *
- *  The anchor identity test runs FIRST and wins (P1 review fix): an
- *  ArtifactRow/FigureRow anchor is itself a `<button data-lib-row>`, so an
- *  element-kind test alone misclassified those anchors as nested controls —
- *  the container then ignored their arrows/Delete, which fell through to
- *  the GLOBAL dataset shortcuts and could remove an unrelated active
- *  worksheet. "Is the anchor" and "is interactive" are independent facts;
- *  only a non-anchor interactive descendant is someone else's keystroke. */
-function isEditorTarget(el: Element | null): boolean {
-  if (!el) return true;
-  if (el.hasAttribute("data-lib-row") || el.hasAttribute("data-ds-id")) return false;
-  return true; // nested control or non-row target — never this container's
-}
-
-/** A genuine text-editing control, whose Delete/Backspace/arrows are native
- *  editing keys the container must never touch. Distinct from a nested
- *  BUTTON/drag-handle (retrospective-audit P1): those don't handle Delete or
- *  arrows at all, so an unconsumed keystroke on them bubbles to the global
- *  selection-based handlers and can remove or switch an UNRELATED dataset. */
-function isTextEditorTarget(el: Element): boolean {
-  return el.matches("input, textarea, select, [contenteditable='true']");
-}
-
 
 function toggleExpand(node: LibraryNode): void {
   const s = useApp.getState();
@@ -122,6 +69,9 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
   const datasets = useApp((s) => s.datasets);
   const containerRef = useRef<HTMLDivElement>(null);
   const focusedKeyRef = useRef<string | null>(null);
+  // The last row that held focus — the roving tab stop's first choice. Unlike
+  // the ref it is never cleared, so Tab back into the tree returns there.
+  const [focusKey, setFocusKey] = useState<string | null>(null);
   const prevRowsRef = useRef(rows);
   // Set by the focus-recovery effect to claim the scroll window for one render,
   // so the selection effect below cannot override it (review round).
@@ -133,6 +83,8 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const virt = useListVirtualization(rows.length, panelRef, containerRef, "[data-lib-row], [data-ds-id]");
   const rendered = virt.virtualized ? rows.slice(virt.start, virt.end) : rows;
+  const offset = virt.virtualized ? virt.start : 0;
+  const positions = useMemo(() => treePositions(rows), [rows]);
 
   const focusRow = (row: FlatLibraryNode | undefined, index: number, fromSelector?: string): void => {
     if (!row) return;
@@ -196,6 +148,8 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
   // render.
   const selectedRow = rows.find((r) => isSelected(r.node, selectedIdSet, librarySelection));
   const selectedKey = selectedRow?.node.key ?? null;
+  const modelStop = (indexOfKey(rows, focusKey) >= 0 ? focusKey : null) ?? selectedKey ?? rows[0]?.node.key ?? null;
+  const tabStopKey = rendered.some((r) => r.node.key === modelStop) ? modelStop : rendered[0]?.node.key ?? null;
   useEffect(() => {
     if (recoveringRef.current) {
       recoveringRef.current = false;
@@ -212,6 +166,21 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
     // handed focus to stand in for, rather than clearing it to null.
     if (e.target === containerRef.current) return;
     focusedKeyRef.current = keyOfRow(e.target as Element);
+    if (focusedKeyRef.current != null) setFocusKey(focusedKeyRef.current);
+  };
+
+  // Hands focus back to row `key`'s anchor. `afterUnmount`: an inline editor
+  // closing on this very keystroke unmounts on the next render, orphaning
+  // focus to <body> — wait a frame, and only reclaim focus nobody else took.
+  const refocusRow = (key: string | null, afterUnmount: boolean): void => {
+    const row = rows[indexOfKey(rows, key)];
+    if (!row) return;
+    const focus = (): void => {
+      if (afterUnmount && document.activeElement !== document.body) return;
+      (containerRef.current?.querySelector(rowSelector(row)) as HTMLElement | null)?.focus();
+    };
+    if (afterUnmount) requestAnimationFrame(focus);
+    else focus();
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -231,6 +200,11 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
     // never left to reach the global handlers and act on an unrelated
     // dataset. Enter/Space/Tab pass untouched (button activation).
     if (!fromContainer && isEditorTarget(e.target as Element)) {
+      // U5: Escape from a nested control, or Escape/Enter closing an inline
+      // editor (whose own handler already cancelled/committed), returns
+      // focus to the row rather than leaving it on <body>.
+      const text = isTextEditorTarget(e.target as Element);
+      if (e.key === "Escape" || (text && e.key === "Enter")) refocusRow(keyOfRow(e.target as Element), text);
       const isDestructiveOrNav =
         e.key === "Delete" || e.key === "Backspace" || e.key === "ArrowUp" || e.key === "ArrowDown";
       if (isDestructiveOrNav && !isTextEditorTarget(e.target as Element)) e.preventDefault();
@@ -332,6 +306,9 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
   return (
     <div
       className="qzk-lib-tree"
+      role="tree"
+      aria-label="Library"
+      aria-multiselectable="true"
       {...scrollOutFocusProps}
       onKeyDown={onKeyDown}
       onFocusCapture={onFocusCapture}
@@ -346,8 +323,17 @@ export default function LibraryTree({ rows, onFilterTag, panelRef, onFocusContai
       ref={containerRef}
       style={virt.virtualized ? { paddingTop: virt.padTop, paddingBottom: virt.padBottom } : undefined}
     >
-      {rendered.map((row) => (
-        <LibraryTreeRow key={row.node.key} row={row} activeId={activeId} selectedIds={selectedIdSet} folderCounts={folderCounts} onFilterTag={onFilterTag} onFocusContainer={onFocusContainer} />
+      {rendered.map((row, i) => (
+        <LibraryTreeRow
+          key={row.node.key}
+          row={row}
+          treeItem={treeItemProps(row, offset + i, positions, isSelected(row.node, selectedIdSet, librarySelection), row.node.key === tabStopKey)}
+          activeId={activeId}
+          selectedIds={selectedIdSet}
+          folderCounts={folderCounts}
+          onFilterTag={onFilterTag}
+          onFocusContainer={onFocusContainer}
+        />
       ))}
       {artifactMenu && (
         <ContextMenu

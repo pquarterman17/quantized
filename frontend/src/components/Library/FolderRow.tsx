@@ -64,6 +64,7 @@ import type { FolderNode } from "../../lib/types";
 import { ACCENT_SWATCHES } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
+import { innerTabIndex, type TreeItemProps } from "../../lib/libraryTreeNav";
 
 /** The floating drop-outcome label's text for the given zone (sub-item 3). */
 function dropLabelText(zone: DropZone3, name: string): string {
@@ -77,9 +78,11 @@ interface Props {
   count: number;
   expanded: boolean;
   onFocus?: () => void;
+  /** Set inside LibraryTree: treeitem semantics + the roving tab stop (U5). */
+  treeItem?: TreeItemProps;
 }
 
-export default function FolderRow({ folder, depth, count, expanded, onFocus }: Props) {
+export default function FolderRow({ folder, depth, count, expanded, onFocus, treeItem }: Props) {
   const toggle = useApp((s) => s.toggleFolderExpanded);
   const selection = useLibraryStore((s) => s.librarySelection);
   const renameFolder = useApp((s) => s.renameFolder);
@@ -155,6 +158,7 @@ export default function FolderRow({ folder, depth, count, expanded, onFocus }: P
       style={{ paddingLeft: 6 + depth * 14 }}
       data-lib-row={`folder:${folder.id}`}
       tabIndex={0}
+      {...treeItem}
       // L0.25 (PR #139 review): a body click SELECTS only — disclosure is
       // the caret's alone (below, same isolation as WorkbookRow's); a body
       // double-click is the folder's "open" (toggle). Right-click selects
@@ -242,7 +246,8 @@ export default function FolderRow({ folder, depth, count, expanded, onFocus }: P
       <span
         className="qzk-drag-handle"
         draggable={rename == null}
-        tabIndex={0}
+        // A drag can't be started from the keyboard: never a tree tab stop.
+        tabIndex={treeItem ? -1 : 0}
         role="button"
         aria-label="Drag to move"
         title="Drag to move"
@@ -261,6 +266,7 @@ export default function FolderRow({ folder, depth, count, expanded, onFocus }: P
        *  the identical menu the header's own right-click does. */}
       <button
         className="qzk-menu-btn"
+        tabIndex={innerTabIndex(treeItem)}
         title="More actions"
         aria-label="More actions"
         onClick={(e) => {

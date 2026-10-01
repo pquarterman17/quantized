@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { indexOfKey, navigate } from "./libraryTreeNav";
+import { indexOfKey, navigate, treePositions } from "./libraryTreeNav";
 import type { FlatLibraryNode, LibraryNode } from "./libraryHierarchy";
 
 // Minimal fixture rows — only the fields navigate()/indexOfKey() read.
@@ -25,6 +25,11 @@ describe("navigate", () => {
 
   it("down is a no-op past the last row", () => {
     expect(navigate(rows, 2, "down")).toEqual({ focusIndex: null, toggleIndex: null });
+  });
+
+  it("home/end jump to the first and last visible rows from anywhere", () => {
+    expect(navigate(rows, 1, "home")).toEqual({ focusIndex: 0, toggleIndex: null });
+    expect(navigate(rows, 0, "end")).toEqual({ focusIndex: 2, toggleIndex: null });
   });
 
   it("up moves to the previous row", () => {
@@ -78,5 +83,18 @@ describe("indexOfKey", () => {
 
   it("returns -1 for a null key", () => {
     expect(indexOfKey(rows, null)).toBe(-1);
+  });
+});
+
+describe("treePositions", () => {
+  it("numbers each row among its visible siblings and reports the sibling count", () => {
+    const rows = [
+      row("folder:f1", null, true, true),
+      row("workbook:w1", "folder:f1"),
+      row("workbook:w2", "folder:f1"),
+      row("workbook:w3", "folder:f1"),
+      row("folder:f2", null),
+    ];
+    expect(treePositions(rows)).toEqual({ pos: [1, 1, 2, 3, 2], size: [2, 3, 3, 3, 2] });
   });
 });

@@ -4,9 +4,12 @@ import FigureRow from "./FigureRow";
 import FolderRow from "./FolderRow";
 import WorkbookRow from "./WorkbookRow";
 import type { FlatLibraryNode, LibraryNode } from "../../lib/libraryHierarchy";
+import type { TreeItemProps } from "../../lib/libraryTreeNav";
 
 interface Props {
   row: FlatLibraryNode;
+  /** WAI-ARIA treeitem attributes for the row's anchor (LibraryTree, U5). */
+  treeItem: TreeItemProps;
   activeId: string | null;
   selectedIds: ReadonlySet<string>;
   folderCounts: ReadonlyMap<string, number>;
@@ -15,18 +18,18 @@ interface Props {
 }
 
 /** Kind dispatch kept out of LibraryTree's keyboard/virtualization controller. */
-export default function LibraryTreeRow({ row, activeId, selectedIds, folderCounts, onFilterTag, onFocusContainer }: Props) {
+export default function LibraryTreeRow({ row, treeItem, activeId, selectedIds, folderCounts, onFilterTag, onFocusContainer }: Props) {
   const { node, expanded, hasChildren } = row;
   switch (node.kind) {
     case "folder":
-      return <FolderRow folder={node.entity} depth={node.depth} count={folderCounts.get(node.entityId) ?? 0} expanded={expanded} onFocus={onFocusContainer ? () => onFocusContainer(node) : undefined} />;
+      return <FolderRow folder={node.entity} depth={node.depth} count={folderCounts.get(node.entityId) ?? 0} expanded={expanded} treeItem={treeItem} onFocus={onFocusContainer ? () => onFocusContainer(node) : undefined} />;
     case "workbook":
-      return <WorkbookRow node={node} depth={node.depth} expanded={expanded} hasChildren={hasChildren} onFocus={onFocusContainer ? () => onFocusContainer(node) : undefined} />;
+      return <WorkbookRow node={node} depth={node.depth} expanded={expanded} hasChildren={hasChildren} treeItem={treeItem} onFocus={onFocusContainer ? () => onFocusContainer(node) : undefined} />;
     case "worksheet":
-      return <DatasetRow dataset={node.entity} active={node.entity.id === activeId} selected={selectedIds.has(node.entity.id)} showReorder={false} canMoveUp={false} canMoveDown={false} onFilterTag={onFilterTag} depth={node.depth} treeMode />;
+      return <DatasetRow dataset={node.entity} active={node.entity.id === activeId} selected={selectedIds.has(node.entity.id)} showReorder={false} canMoveUp={false} canMoveDown={false} onFilterTag={onFilterTag} depth={node.depth} treeMode treeItem={treeItem} />;
     case "origin-figure":
-      return <FigureRow entry={node.entity} depth={node.depth} treeMode />;
+      return <FigureRow entry={node.entity} depth={node.depth} treeMode treeItem={treeItem} />;
     default:
-      return <ArtifactRow node={node} depth={node.depth} />;
+      return <ArtifactRow node={node} depth={node.depth} treeItem={treeItem} />;
   }
 }

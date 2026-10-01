@@ -19,6 +19,7 @@ import { originPreviewDataUrl } from "../../lib/originPreview";
 import { resolveOriginFigureSources } from "../../lib/originSources";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
+import { innerTabIndex, type TreeItemProps } from "../../lib/libraryTreeNav";
 import { lazyRegion } from "../../lib/lazyRegion";
 
 /** The saved-preview ToolWindow renders only after the "▣" button is clicked,
@@ -33,7 +34,7 @@ import { lazyRegion } from "../../lib/lazyRegion";
  *  session. Measured: 917,136 -> 912,461 B eager. */
 const OriginSavedPreviewWindow = lazyRegion(() => import("./OriginSavedPreviewWindow"), "Preview");
 
-export default function FigureRow({ entry, depth = 0, treeMode = false }: {
+export default function FigureRow({ entry, depth = 0, treeMode = false, treeItem }: {
   entry: OriginFigureEntry;
   depth?: number;
   /** L0.25 (PR #139 review) — set by LibraryTree only: single click SELECTS
@@ -42,6 +43,9 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
    *  click-applies behavior is unchanged. The ⊞/▤/G/▣ buttons keep their
    *  one-click actions in both modes — they're commands, not the row. */
   treeMode?: boolean;
+  /** LibraryTree's treeitem semantics + roving tab stop (U5); the action
+   *  buttons leave the Tab sequence unless this is the roving row. */
+  treeItem?: TreeItemProps;
 }) {
   const applyOriginFigure = useApp((s) => s.applyOriginFigure);
   const openOriginFigureSource = useApp((s) => s.openOriginFigureSource);
@@ -67,6 +71,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
     : "Open saved Origin preview for comparison";
   const siblingDatasets = datasets.filter((ds) => entry.siblingIds.includes(ds.id));
   const resolved = entry.datasetId != null;
+  const inner = innerTabIndex(treeItem);
   const n = entry.figure.n_curves;
   const fidelity = entry.figure.fidelity;
   const fidelityText = fidelity
@@ -84,12 +89,17 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
         <button
           className={`qzk-fig-item${selected ? " selected" : ""}`}
           data-lib-row={`origin-figure:${entry.id}`}
-          disabled={!resolved}
+          // In the tree an unresolved graph stays FOCUSABLE (aria-disabled, U5):
+          // a disabled button can't take focus, so arrows would skip it and it
+          // could never hold the tree's one tab stop. Open is a no-op for it.
+          disabled={!resolved && !treeMode}
+          aria-disabled={!resolved && treeMode ? true : undefined}
           title={title}
           style={!treeMode && depth ? { marginLeft: depth * 14 } : undefined}
           onClick={() => (treeMode ? select() : openAndRemember())}
           onDoubleClick={treeMode ? () => openAndRemember() : undefined}
           onContextMenu={treeMode ? select : undefined}
+          {...treeItem}
         >
           {/* Node-type glyph (UX-001), from the one shared vocabulary
            *  (UX-004) every Library view now reads. */}
@@ -105,6 +115,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
         <div className="qzk-origin-figure-actions" role="group" aria-label="Recovered graph actions">
           <button
             className="qz-icon-btn"
+            tabIndex={inner}
             title="Open in a new graph window"
             aria-label="Open in a new graph window"
             disabled={!resolved}
@@ -116,6 +127,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
             <button
               key={source.datasetId}
               className="qz-icon-btn"
+              tabIndex={inner}
               title={`Open source workbook ${source.book}; select X/Y/error columns`}
               aria-label={`Open source workbook ${source.book}`}
               onClick={() => void openOriginFigureSource(entry.id, source.datasetId)}
@@ -129,6 +141,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
           ))}
           <button
             className="qz-icon-btn"
+            tabIndex={inner}
             title={sourceResolution.sources.length
               ? `Remake in Graph Builder${sourceResolution.unresolved.length ? ` (${sourceResolution.unresolved.length} unresolved binding${plural(sourceResolution.unresolved.length)})` : ""}`
               : `No decoded bindings; Origin hint: ${entry.figure.source_hint || "unknown"}`}
@@ -141,6 +154,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
           {savedPreviewSrc && (
             <button
               className="qz-icon-btn"
+              tabIndex={inner}
               title={previewActionLabel}
               aria-label={previewActionLabel}
               aria-pressed={showSavedPreview}
@@ -152,6 +166,7 @@ export default function FigureRow({ entry, depth = 0, treeMode = false }: {
           {sourceResolution.unresolved.length > 0 && siblingDatasets.length > 0 && (
             <select
               className="qz-select"
+              tabIndex={inner}
               aria-label={`Choose source workbook for ${figureLabel(entry)}`}
               title={`Unresolved Origin binding: ${sourceResolution.unresolved.map((item) => `${item.book}:${item.x},${item.y}`).join("; ")}`}
               defaultValue=""

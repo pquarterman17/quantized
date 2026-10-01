@@ -18,6 +18,7 @@
 // PR gives the tree row its own menu.
 
 import type { LibraryNode } from "../../lib/libraryHierarchy";
+import type { TreeItemProps } from "../../lib/libraryTreeNav";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
 import { openLibraryNode } from "./libraryOpen";
@@ -36,6 +37,7 @@ type ArtifactNode = Extract<
 interface Props {
   node: ArtifactNode;
   depth: number;
+  treeItem?: TreeItemProps;
 }
 
 /** name -> Dataset, for the two kinds (editable figure, report) whose meta
@@ -88,7 +90,7 @@ function openTitle(node: ArtifactNode): string {
   }
 }
 
-export default function ArtifactRow({ node, depth }: Props) {
+export default function ArtifactRow({ node, depth, treeItem }: Props) {
   const datasetId =
     node.kind === "editable-figure" ? node.entity.bindings.datasetId
       : node.kind === "report" ? node.entity.datasetId
@@ -109,6 +111,7 @@ export default function ArtifactRow({ node, depth }: Props) {
       data-lib-row={node.key}
       style={depth ? { paddingLeft: 8 + depth * 14 } : undefined}
       title={openTitle(node)}
+      {...treeItem}
       onClick={select}
       onDoubleClick={() => openLibraryNode(node)}
       onContextMenu={select}
