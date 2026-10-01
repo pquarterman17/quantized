@@ -444,15 +444,27 @@ describe("useStatStage — faceting (GUI_INTERACTION #11)", () => {
     expect(result.current.draw).toBeNull();
   });
 
-  it("facetCol resets to null when the active dataset changes", () => {
+  // The picks are saved as [index, label] (`lib/statPicks`): a dataset whose
+  // channel 2 is a DIFFERENT column must not inherit the pick (it would facet
+  // by the wrong column), while one with the same column keeps it.
+  it("facetCol resets to null when the active dataset no longer has the picked column", () => {
     const { result, rerender } = renderHook((p: UseStatStageParams) => useStatStage(p), {
       initialProps: baseParams(),
     });
     act(() => result.current.setFacetCol(2));
     expect(result.current.facetCol).toBe(2);
-    const DS2: Dataset = { id: "d2", name: "other.dat", data: DATA };
+    const DS2: Dataset = { id: "d2", name: "other.dat", data: { ...DATA, labels: ["grp", "y", "site"] } };
     rerender(baseParams({ active: DS2 }));
     expect(result.current.facetCol).toBeNull();
+  });
+
+  it("facetCol is kept when the new active dataset has the same column", () => {
+    const { result, rerender } = renderHook((p: UseStatStageParams) => useStatStage(p), {
+      initialProps: baseParams(),
+    });
+    act(() => result.current.setFacetCol(2));
+    rerender(baseParams({ active: { id: "d2", name: "other.dat", data: DATA } }));
+    expect(result.current.facetCol).toBe(2);
   });
 
   it("a Graph Builder seed with facetCol seeds the picker and is consumed once", () => {
@@ -934,7 +946,7 @@ describe("useStatStage — nested second factor (Group R)", () => {
     await waitFor(() => expect(lastBoxCall().labels).toEqual(["lot = 0", "lot = 1"]));
   });
 
-  it("resets to null when the active dataset changes", () => {
+  it("resets to null when the active dataset no longer has the picked column", () => {
     // Same reason groupCol/facetCol reset: a channel index from the PREVIOUS
     // dataset names a different column here, so it would silently mis-group.
     const { result, rerender } = renderHook((p: UseStatStageParams) => useStatStage(p), {
@@ -943,7 +955,8 @@ describe("useStatStage — nested second factor (Group R)", () => {
     act(() => result.current.setGroup2Col(2));
     expect(result.current.group2Col).toBe(2);
 
-    rerender(baseParams({ active: { ...NEST_DS, id: "n2" } }));
+    const labels = ["lot", "thickness", "die", "site"];
+    rerender(baseParams({ active: { ...NEST_DS, id: "n2", data: { ...NEST_DATA, labels } } }));
 
     expect(result.current.group2Col).toBeNull();
   });

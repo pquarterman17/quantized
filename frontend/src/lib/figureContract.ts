@@ -72,6 +72,10 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   statShowGroupN: canonical("plot.stat.showGroupN"),
   statShowSummary: canonical("plot.stat.showSummary"),
   statMarks: canonical("plot.stat.marks"),
+  statPicks: canonical(
+    "plot.stat.picks",
+    "Plot type, columns (saved as [index, label] and re-checked against the dataset on read) and Q-Q/histogram/bar options.",
+  ),
   xLim: canonical("axes.x.limits"),
   yLim: canonical("axes.y.limits"),
   xStep: canonical("axes.x.step"),

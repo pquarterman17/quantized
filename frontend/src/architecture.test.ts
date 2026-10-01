@@ -1998,6 +1998,8 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   statShowGroupN: "display toggle (P2.6 box 2), not channel-indexed",
   statShowSummary: "display toggle (P2.6 box 4: the summary table), not channel-indexed",
   statMarks: "display options (P2.6 box 1: points/jitter/summary/error bars/labels), not channel-indexed",
+  statPicks:
+    "Stat Stage column picks saved as [index, LABEL] hints; every read re-resolves them by label and falls back to the dataset's defaults on a mismatch (lib/statPicks.resolveStatCols) -- the reflFits precedent",
   xLim: "x-axis range [min, max], not a column index",
   yLim: "y-axis range [min, max], not a column index",
   xStep: "x-axis tick step, not a column index",

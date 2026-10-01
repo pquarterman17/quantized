@@ -1,6 +1,7 @@
 // The Stat Stage's persisted display options (PRIMARY_SOFTWARE_AUDIT_PLAN
 // P2.6 box 2): hide empty category levels, and the per-group n annotation;
-// box 4's leftover: whether the per-group summary table is open.
+// box 4's leftover: whether the per-group summary table is open; and the
+// stage's picks (plot type, columns, Q-Q/histogram/bar options).
 //
 // The FIELDS are ordinary PlotView state (`lib/plotview.ts`: declared on
 // `AppState`, defaulted in `defaultPlotView`, sanitized on load), so they ride
@@ -11,7 +12,7 @@
 // adding to first paint (the `store/levelOrder.ts` shape: plain functions over
 // `useApp.getState()` with one `recordHistory` per edit).
 
-import type { StatMarks, StatMarksMode } from "../lib/plotviewSanitize";
+import type { StatMarks, StatMarksMode, StatPicks } from "../lib/plotviewSanitize";
 import { useApp } from "./useApp";
 
 export function setStatHideEmptyLevels(statHideEmptyLevels: boolean): void {
@@ -41,4 +42,16 @@ export function setStatMarks(mode: StatMarksMode, patch: StatMarks, label = "cha
   const st = useApp.getState();
   st.recordHistory(label);
   useApp.setState({ statMarks: { ...st.statMarks, [mode]: { ...st.statMarks[mode], ...patch } } });
+}
+
+/** The Stat Stage's picks — plot type, columns, Q-Q/histogram/bar options —
+ *  persisted on `PlotView.statPicks` (they were React state, lost on save +
+ *  reopen). `update` maps the current picks to the next (the same object =
+ *  no change); one undo entry per edit. */
+export function setStatPicks(update: (picks: StatPicks) => StatPicks, label = "change statistics plot"): void {
+  const st = useApp.getState();
+  const statPicks = update(st.statPicks);
+  if (statPicks === st.statPicks) return; // unchanged: no undo entry
+  st.recordHistory(label);
+  useApp.setState({ statPicks });
 }

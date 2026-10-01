@@ -18,12 +18,12 @@
 // (`windows/BackgroundAltModes.tsx`). ZERO store value imports (types only).
 //
 // Faceting (GUI_INTERACTION #11 residual): Box/Violin/Strip/Bar can facet by a
-// second categorical column (`facetCol`, internal picker state — see its
-// declaration below). When set, `drawFacets` holds one draw per facet-column
+// second categorical column (`facetCol`, a persisted pick — see
+// useStatStagePicks.ts). When set, `drawFacets` holds one draw per facet-column
 // level (`lib/facet.facetSlices` re-runs the SAME group/bar pipeline per
 // slice) and the flat `draw` goes null; `drawFacets` is null the rest of the
-// time. Background windows never facet (no Picker, no seed field reaches
-// them) — see the param docs below.
+// time. Background windows never facet (`BackgroundAltModes` drops a saved
+// facet pick: it draws one flat panel).
 //
 // Faceted export (GUI_INTERACTION #12 slice 4b): `exportFigure` renders a
 // small-multiples figure server-side (`calc.figure_facets`, the SAME
@@ -75,8 +75,7 @@ import type { StatColumn, StatStageState, UseStatStageParams } from "./useStatSt
 export type { FacetDraw } from "./useStatStageCompute";
 export type { StatColumn, StatStageState, UseStatStageParams } from "./useStatStageTypes";
 
-export const DISTRIBUTIONS = ["norm", "logistic", "laplace", "uniform"] as const;
-export const BIN_RULES = ["fd", "sturges", "scott", "rice", "sqrt", "auto"] as const;
+export { BIN_RULES, DISTRIBUTIONS } from "../../lib/plotviewSanitize";
 
 export function useStatStage(params: UseStatStageParams): StatStageState {
   const { active, yKeys, xKey, seriesOrder, seed, onSeedConsumed } = params;
@@ -106,10 +105,9 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     [active, yKeys, xKey, seriesOrder],
   );
 
-  // Column picks + their defaults/seed/staleness rules — see
-  // useStatStagePicks.ts. Declared HERE, at the position the state and the two
-  // effects used to occupy, so its effects keep running before the compute
-  // effect below.
+  // The picks (persisted per window) + the columns' defaults/seed/staleness
+  // rules — see useStatStagePicks.ts. Declared before the compute effect so
+  // its seed effect runs first.
   //
   // Only the MASKED picks are destructured: this hook's math and its returned
   // state both use them (the raw values exist so the mask can be reverted, and
@@ -120,12 +118,8 @@ export function useStatStage(params: UseStatStageParams): StatStageState {
     valueCol, setValueCol,
     setFacetCol, colorCol, setColorCol,
     effectiveGroupCol, effectiveGroup2Col, effectiveFacetCol,
-  } = useStatStagePicks({ active, categoricalCols, seed, onSeedConsumed });
-
-  const [dist, setDist] = useState("norm");
-  const [bins, setBins] = useState<string>("fd");
-  const [fit, setFit] = useState<string | null>(null);
-  const [barStack, setBarStack] = useState(false);
+    dist, setDist, bins, setBins, fit, setFit, barStack, setBarStack,
+  } = useStatStagePicks({ active, categoricalCols, seed, onSeedConsumed, picks: params.picks, onPicksChange: params.onPicksChange });
   // P2.6 box 1: the categorical marks (points / jitter / summary / error bars
   // / connect-means / labels) are the window's persisted `PlotView.statMarks`
   // when the caller passes them (focused stage + background windows), else

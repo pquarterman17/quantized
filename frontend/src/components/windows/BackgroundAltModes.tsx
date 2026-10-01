@@ -17,12 +17,11 @@
 // `lib/rowstate.analysisData` (inside `useStatStage`); polar and the plain
 // stack read the dataset raw, exactly as their focused counterparts do.
 //
-// Stat picker state (box/violin/…, group/value columns) is LOCAL to
-// `useStatStage`, not part of `PlotView` — a background stat window therefore
-// shows the dataset's DEFAULT statistical view, the same reset the focused
-// stage undergoes when it unmounts and remounts today.
+// The stat picks (box/violin/…, group/value columns, …) are the window's own
+// `PlotView.statPicks`, so a background stat window shows the plot it was
+// left on — minus a facet pick: it draws one flat panel, never a facet grid.
 
-import { useId } from "react";
+import { useId, useMemo } from "react";
 
 import type { Composition } from "../../lib/composition";
 import type { FigureDocument } from "../../lib/figureDocument";
@@ -71,6 +70,8 @@ const noSeedConsumed = () => {};
 export function BackgroundStatWindow({ dataset, view }: BackgroundModeProps) {
   const theme = useApp((s) => s.theme);
   const accent = useApp((s) => s.accent);
+  const saved = view.statPicks;
+  const picks = useMemo(() => (saved.cols ? { ...saved, cols: { ...saved.cols, facet: null } } : saved), [saved]);
   const st = useStatStage({
     active: dataset,
     yKeys: view.yKeys,
@@ -81,6 +82,7 @@ export function BackgroundStatWindow({ dataset, view }: BackgroundModeProps) {
     hideEmptyLevels: view.statHideEmptyLevels,
     showGroupN: view.statShowGroupN,
     marks: view.statMarks,
+    picks,
   });
   return (
     <>

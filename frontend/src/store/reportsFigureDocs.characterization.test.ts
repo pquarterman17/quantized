@@ -693,8 +693,9 @@ describe("figure documents — openFigureDocInWindow", () => {
         "yFmt",
         // P2.6 box 1: an object-valued PlotView field, so the fresh window's
         // view (`defaultPlotView().statMarks`, a new `{}`) changes its identity
-        // exactly as it does xFmt / yFmt's.
+        // exactly as it does xFmt / yFmt's. `statPicks` likewise.
         "statMarks",
+        "statPicks",
       ].sort(),
     );
   });

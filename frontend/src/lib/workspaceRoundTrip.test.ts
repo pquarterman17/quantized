@@ -39,6 +39,10 @@ function everyFieldChanged(): PlotView {
     plotTemplate: "aps", showAxisBox: false, stackMode: true, insetMode: true, polarMode: true, statMode: true,
     statHideEmptyLevels: true, statShowGroupN: false, statShowSummary: true,
     statMarks: { box: { points: "none", jitterWidth: 0.5 } },
+    statPicks: {
+      mode: "violin", dist: "logistic", bins: "scott", fit: "laplace", barStack: true,
+      cols: { group: [0, "a"], group2: [2, "c"], value: [1, "b"], facet: [2, "c"], color: [0, "a"] },
+    },
     xLim: [1, 2], yLim: [3, 4], xStep: 0.5, yStep: 2,
     xFmt: { mode: "sci", digits: 3 }, yFmt: { mode: "eng", digits: 1 }, y2Fmt: { mode: "fixed", digits: 4 },
     plotTitle: "Ti", xAxisLabel: "X", yAxisLabel: "Y",
@@ -78,6 +82,38 @@ describe("PlotView: every field survives a document-backed window save/reopen", 
     expect(back.view).toEqual(view);
     const { view: _v, document: _d, ...chrome } = win;
     expect(back).toMatchObject(chrome);
+  });
+});
+
+// The Stat Stage picks (`PlotView.statPicks`) were React state until
+// 2026-10-01, so a .dwk written before then has no such key in any view.
+describe("PlotView.statPicks: an older file without it opens as today", () => {
+  const win = (view: PlotView): PlotWindow => ({
+    id: "w1", kind: "plot", title: "W", datasetId: "d1", geometry: { x: 1, y: 2, w: 300, h: 200 },
+    z: 1, winState: "normal", view, bg: "theme", linkGroup: null, pinned: false,
+  });
+  const savedDoc = (view: PlotView) =>
+    JSON.parse(serializeWorkspace({ datasets: [ds], plotWindows: [win(view)] })) as {
+      plotWindows: { view: Record<string, unknown> }[];
+    };
+
+  it("a saved view with no statPicks key reopens with the default (empty) picks", () => {
+    const doc = savedDoc({ ...defaultPlotView(), statMode: true });
+    expect("statPicks" in doc.plotWindows[0].view).toBe(true); // today's writer emits it
+    delete doc.plotWindows[0].view.statPicks;
+    const back = parseWorkspace(JSON.stringify(doc), VIEWPORT).plotWindows[0];
+    expect(back.view.statPicks).toEqual({});
+    expect(back.view.statMode).toBe(true);
+  });
+
+  it("junk picks drop field by field; a malformed column ref drops the whole column set", () => {
+    const doc = savedDoc(defaultPlotView());
+    doc.plotWindows[0].view.statPicks = {
+      mode: "pie", dist: "norm", bins: 7, fit: null, barStack: "yes",
+      cols: { group: [0, "a"], group2: null, value: "b", facet: null, color: null },
+    };
+    const back = parseWorkspace(JSON.stringify(doc), VIEWPORT).plotWindows[0];
+    expect(back.view.statPicks).toEqual({ dist: "norm", fit: null });
   });
 });
 

@@ -13,6 +13,7 @@
 //     fields' eager bytes (measured with `scripts/profile-eager-bundle.mjs`).
 
 import type { PlotView } from "./plotview";
+import type { StatMode } from "./statstage";
 import type { RegionShade } from "./types";
 
 export { uniqueIds } from "./uniqueIds";
@@ -87,8 +88,8 @@ const FLAT_MARK_KEYS = [...Object.keys(STAT_MARK_VALUES), "jitterWidth"];
  *  or new (per-mode) shape alike -- never throws.
  *
  *  MIGRATION (documented, per the review's own two options — "the mode
- *  active when saved" is not this one): `useStatStagePicks`'s `mode` is
- *  plain component state, never itself persisted on `PlotView` / `.dwk` —
+ *  active when saved" is not this one): a file with the flat shape predates
+ *  `PlotView.statPicks` (the mode is persisted only since 2026-10-01), so
  *  there is no durable record of which mode a flat `statMarks` was last
  *  edited under, so that option is not available here. The safe fallback
  *  the review names instead — "to all only where safe" — is what this
@@ -115,6 +116,56 @@ export function sanitizeStatMarksByMode(v: unknown): StatMarksByMode {
   }
   const out: StatMarksByMode = {};
   for (const m of STAT_MARKS_MODES) if (m in o) out[m] = sanitizeStatMarks(o[m]);
+  return out;
+}
+
+/** The Q-Q / histogram-fit distributions and the histogram bin rules the Stat
+ *  Stage offers (its pickers' option lists, re-exported by `useStatStage`). */
+export const DISTRIBUTIONS = ["norm", "logistic", "laplace", "uniform"] as const;
+export const BIN_RULES = ["fd", "sturges", "scott", "rice", "sqrt", "auto"] as const;
+
+/** A Stat Stage column pick as saved: `[channel index, its label]`, so a
+ *  reopen can tell whether the column is still there (`lib/statPicks`). */
+export type StatColRef = [number, string];
+export interface StatPickCols {
+  group: StatColRef | null;
+  group2: StatColRef | null;
+  value: StatColRef;
+  facet: StatColRef | null;
+  color: StatColRef | null;
+}
+/** The Stat Stage's picks, persisted SPARSE on `PlotView.statPicks` (absent =
+ *  default; `cols` absent = the dataset's default columns). They were React
+ *  state until 2026-10-01, so an older file simply has none. */
+export interface StatPicks {
+  mode?: StatMode;
+  dist?: string;
+  bins?: string;
+  fit?: string | null;
+  barStack?: boolean;
+  cols?: StatPickCols;
+}
+
+const STAT_PICK_VALUES: Record<string, readonly unknown[]> = {
+  mode: ["box", "violin", "qq", "histogram", "bar", "strip"], dist: DISTRIBUTIONS, bins: BIN_RULES,
+  fit: [null, ...DISTRIBUTIONS], barStack: [true, false],
+};
+const isColRef = (r: unknown): r is StatColRef =>
+  Array.isArray(r) && r.length === 2 && Number.isInteger(r[0]) && typeof r[1] === "string";
+
+/** A persisted `statPicks`: each well-formed field kept, the rest dropped (=
+ *  default). The five column refs are kept or dropped TOGETHER — a partial
+ *  set would pair a saved column with a default one. Never throws. */
+export function sanitizeStatPicks(v: unknown): StatPicks {
+  const out: Record<string, unknown> = {};
+  if (typeof v !== "object" || v === null) return out;
+  const o = v as Record<string, unknown>;
+  for (const k in STAT_PICK_VALUES) if (STAT_PICK_VALUES[k].includes(o[k])) out[k] = o[k];
+  const c = o.cols as Record<string, unknown> | null;
+  const keys = ["group", "group2", "value", "facet", "color"];
+  if (typeof c === "object" && c && isColRef(c.value) && keys.every((k) => c[k] === null || isColRef(c[k]))) {
+    out.cols = Object.fromEntries(keys.map((k) => [k, c[k]]));
+  }
   return out;
 }
 
