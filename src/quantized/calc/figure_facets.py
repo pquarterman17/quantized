@@ -36,6 +36,7 @@ import numpy as np
 
 from quantized.calc.figure import _plot_kwargs
 from quantized.calc.figure_facets_grid import _grid_setup, _new_grid_figure
+from quantized.calc.figure_greyscale import greyscale_facet_panels
 from quantized.calc.figure_labels import safe_mathtext_label
 from quantized.calc.figure_overrides import apply_axis_shape_overrides
 from quantized.calc.figure_render import render_scope, savefig_bytes
@@ -63,6 +64,7 @@ def draw_facet_grid(
     x_fmt: Mapping[str, Any] | None = None,
     y_fmt: Mapping[str, Any] | None = None,
     overrides: Mapping[str, Any] | None = None,
+    greyscale: bool = False,
 ) -> list[list[Any]]:
     """The shared per-panel facet drawing core (F4.4 follow-up): draws
     ``panels`` INTO caller-provided ``axes`` -- line plot, facet-level title
@@ -75,6 +77,8 @@ def draw_facet_grid(
     ``calc.plotting_encoded_facets``) styles it as the flat renderer would
     (``_plot_kwargs``). A panel has a legend when it draws more than one
     series or carries ``"key": True`` (an encoded panel, always).
+    ``greyscale`` (P3.3 print-safe export, U2) greys every series' style once
+    over the whole grid first (``calc.figure_greyscale.greyscale_facet_panels``).
 
     Returns the per-panel drawn series artists (FU-facet-hitmap), one list
     per panel in ``panels`` order, mirroring ``calc.figure.draw_series_axes``'s
@@ -96,6 +100,8 @@ def draw_facet_grid(
     ``render_facets_figure``'s own trailing-cell convention.
     """
     ov = dict(overrides or {})
+    if greyscale:
+        panels = greyscale_facet_panels(panels)
     n = len(panels)
     panel_artists: list[list[Any]] = []
     for i, panel in enumerate(panels):
@@ -175,6 +181,7 @@ def render_facets_figure(
     # path does) would render things the screen's facet grid never shows.
     overrides: Mapping[str, Any] | None = None,
     svg_text_as_paths: bool = False,  # glyphs as outlines -- see savefig_bytes
+    greyscale: bool = False,  # P3.3 print-safe -- see draw_facet_grid
 ) -> bytes:
     """Render one small-multiples panel per facet level.
 
@@ -212,7 +219,7 @@ def render_facets_figure(
         panels, x_log=x_log, y_log=y_log, x_scale=x_scale, y_scale=y_scale,
         title=title, x_label=x_label, y_label=y_label, style=style,
         width_in=width_in, height_in=height_in, x_fmt=x_fmt, y_fmt=y_fmt,
-        overrides=overrides,
+        overrides=overrides, greyscale=greyscale,
     ) as built:
         return savefig_bytes(
             built.fig, fmt, dpi=dpi, transparent=transparent, svg_text_as_paths=svg_text_as_paths

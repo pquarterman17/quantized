@@ -307,18 +307,20 @@ def test_figure_facets_pdf_and_png_render() -> None:
         assert resp.content[: len(magic)] == magic
 
 
-def test_figure_facets_greyscale_is_a_no_op() -> None:
-    # PRIMARY_SOFTWARE_AUDIT_PLAN P3.3: a facet panel never resolves
-    # per-series colour (FEATURE-001, plans/BUGS_AND_ISSUES.md), so the route
-    # never threads `greyscale` into the facet renderer at all -- a faceted
-    # export renders BYTE-IDENTICAL whether or not `greyscale` is requested,
-    # rather than silently doing nothing while looking wired. PNG (not
-    # PDF/SVG): deterministic, no embedded timestamp to strip.
-    base = {"dataset": _xrd_dataset(), "fmt": "png", "facets": _xy_facets()}
+def test_figure_facets_greyscale_renders_achromatic_strokes() -> None:
+    # PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 / U2: a facet grid has per-series
+    # styles since FEATURE-001, so `greyscale` now greys every panel's
+    # series (calc.figure_greyscale.greyscale_facet_panels) instead of being
+    # the byte-identical no-op this test used to pin. The full contract
+    # (distinct series, cross-panel consistency, encoded levels, hitmap and
+    # page paths) lives in tests/test_export_facet_greyscale.py.
+    base = {"dataset": _xrd_dataset(), "fmt": "svg", "facets": _xy_facets()}
     colour = client.post("/api/export/figure", json=base)
     grey = client.post("/api/export/figure", json={**base, "greyscale": True})
     assert colour.status_code == grey.status_code == 200
-    assert colour.content == grey.content
+    with pytest.raises(AssertionError, match="non-achromatic"):
+        _assert_only_achromatic_strokes(colour.content.decode("utf-8", "ignore"))
+    _assert_only_achromatic_strokes(grey.content.decode("utf-8", "ignore"))
 
 
 def test_figure_facets_title_and_labels_apply_figure_wide() -> None:
@@ -510,10 +512,9 @@ def test_map_figure_waterfall_has_no_greyscale_field_and_ignores_the_key() -> No
     # same "colour IS the plotted quantity" case `FigureRequest.greyscale`
     # already leaves untouched for a `color_by` scatter. An unrecognized
     # `greyscale` key in the JSON body is silently ignored by pydantic's
-    # default `extra="ignore"` -- byte-identical to never having sent it,
-    # the same no-op contract `test_figure_facets_greyscale_is_a_no_op` pins
-    # for the (very different) facets case. PNG: deterministic, no embedded
-    # timestamp to strip.
+    # default `extra="ignore"` -- byte-identical to never having sent it.
+    # (Facets once shared this no-op; they grey since U2.) PNG:
+    # deterministic, no embedded timestamp to strip.
     base = {**_demo_map(), "kind": "waterfall", "fmt": "png"}
     plain = client.post("/api/export/map-figure", json=base)
     with_key = client.post("/api/export/map-figure", json={**base, "greyscale": True})
@@ -1872,7 +1873,7 @@ def test_figure_page_panel_with_y2_keys_renders_a_real_twinx() -> None:
 # P3.3 review (F1): `PagePanelSpec.figure` IS a `FigureRequest`, so
 # `greyscale` was already part of the figure-page OpenAPI schema and 200'd,
 # but `export_figure_page` never read `f.greyscale` and `PagePanel` had no
-# such field -- a silent no-op, unlike the DOCUMENTED facets no-op above.
+# such field -- a silent no-op, unlike the then-DOCUMENTED facets no-op.
 # Fixed: threaded PER PANEL (calc.figure_page.PagePanel.greyscale), applied
 # in `_draw_panel` before either the flat or the y2-twinx draw path.
 def test_figure_page_panel_greyscale_produces_different_bytes() -> None:
@@ -1935,31 +1936,30 @@ def test_figure_page_can_mix_a_greyscale_panel_with_a_coloured_one() -> None:
     assert "#ff00ff" in svg
 
 
-def test_figure_page_facet_panel_greyscale_is_a_no_op() -> None:
-    # N4 (round-2 review): mirrors test_figure_facets_greyscale_is_a_no_op
-    # (the standalone `/figure` route), at the figure-page route -- a
-    # faceted panel here goes through calc.figure_page_facets.
-    # draw_facet_panel_cell, which never reads `PagePanel.greyscale`
-    # (export_page.py's facet branch above never even sets it), so the
-    # exported page must render BYTE-IDENTICAL whether or not the panel's
-    # `greyscale` key is set. PNG (not SVG): deterministic, no embedded
-    # timestamp to strip.
+def test_figure_page_facet_panel_greyscale_renders_achromatic_strokes() -> None:
+    # Mirrors test_figure_facets_greyscale_renders_achromatic_strokes (the
+    # standalone `/figure` route) at the figure-page route: a faceted panel
+    # goes through calc.figure_page_facets.draw_facet_panel_cell, which now
+    # honours `PagePanel.greyscale` (U2; it used to be a byte-identical
+    # no-op). A page-wide check, so the facet panel is the only one here.
     base_panel = {
-        "figure": {"dataset": _xrd_dataset(), "fmt": "png", "facets": _xy_facets()},
+        "figure": {"dataset": _xrd_dataset(), "fmt": "svg", "facets": _xy_facets()},
         "row": 0,
         "col": 0,
     }
     colour = client.post(
         "/api/export/figure-page",
-        json={"rows": 1, "cols": 1, "panels": [base_panel], "fmt": "png"},
+        json={"rows": 1, "cols": 1, "panels": [base_panel], "fmt": "svg"},
     )
     grey_panel = {**base_panel, "figure": {**base_panel["figure"], "greyscale": True}}
     grey = client.post(
         "/api/export/figure-page",
-        json={"rows": 1, "cols": 1, "panels": [grey_panel], "fmt": "png"},
+        json={"rows": 1, "cols": 1, "panels": [grey_panel], "fmt": "svg"},
     )
     assert colour.status_code == grey.status_code == 200
-    assert colour.content == grey.content
+    with pytest.raises(AssertionError, match="non-achromatic"):
+        _assert_only_achromatic_strokes(colour.content.decode("utf-8", "ignore"))
+    _assert_only_achromatic_strokes(grey.content.decode("utf-8", "ignore"))
 
 
 # ── F4.4 follow-up (2026-08-24): routes/export_page.py used to render a

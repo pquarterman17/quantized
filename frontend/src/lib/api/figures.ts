@@ -153,8 +153,8 @@ export interface FigureSpec {
    *  coloured export. An EXPORT-ONLY divergence from the canvas (the on-
    *  screen plot stays coloured either way) -- a user-chosen export
    *  transform, not a derived style, so it does not affect the P3.3 style-
-   *  parity invariant `series_styles` exists to satisfy. No-op once
-   *  `facets` is set (see this route's own doc). This SAME `FigureSpec` is
+   *  parity invariant `series_styles` exists to satisfy. With `facets` set,
+   *  every panel's series greys alike across the grid. This SAME `FigureSpec` is
    *  also embedded per-panel in a `/api/export/figure-page` request
    *  (`PagePanelSpec.figure`, `lib/api/figurePage.ts`) -- review fix P3.3-F1
    *  threads it into `calc.figure_page.PagePanel.greyscale` there too,

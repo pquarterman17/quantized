@@ -79,6 +79,7 @@ def _facet_grid(
     x_fmt: Mapping[str, Any] | None,
     y_fmt: Mapping[str, Any] | None,
     overrides: Mapping[str, Any] | None,
+    greyscale: bool = False,
 ) -> Iterator[_BuiltFacetGrid]:
     """The figure-building core shared by ``figure_facets
     .render_facets_figure`` (savefig only) and ``render_facets_figure_map``
@@ -133,7 +134,7 @@ def _facet_grid(
         panel_artists = draw_facet_grid(
             flat, panels, st=st,
             resolved_x_scale=resolved_x_scale, resolved_y_scale=resolved_y_scale,
-            x_fmt=x_fmt, y_fmt=y_fmt, overrides=ov,
+            x_fmt=x_fmt, y_fmt=y_fmt, overrides=ov, greyscale=greyscale,
         )
 
         # J2: capture the real Text artists `fig.suptitle`/`supxlabel`/
@@ -166,6 +167,7 @@ def render_facets_figure_map(
     x_fmt: Mapping[str, Any] | None = None,
     y_fmt: Mapping[str, Any] | None = None,
     overrides: Mapping[str, Any] | None = None,
+    greyscale: bool = False,
 ) -> dict[str, Any]:
     """Render the facet grid AND its per-panel element hit-map
     (FU-facet-hitmap): base64 PNG + one axes entry per panel (pixel rect +
@@ -208,7 +210,7 @@ def render_facets_figure_map(
         panels, x_log=x_log, y_log=y_log, x_scale=x_scale, y_scale=y_scale,
         title=title, x_label=x_label, y_label=y_label, style=style,
         width_in=width_in, height_in=height_in, x_fmt=x_fmt, y_fmt=y_fmt,
-        overrides=overrides,
+        overrides=overrides, greyscale=greyscale,
     ) as built:
         resolved_x_scale = resolve_axis_scale(x_scale, x_log)
         resolved_y_scale = resolve_axis_scale(y_scale, y_log)

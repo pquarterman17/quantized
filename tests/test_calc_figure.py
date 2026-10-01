@@ -942,20 +942,26 @@ def test_greyscale_explicit_line_style_is_kept() -> None:
     assert not _DASHARRAY.findall(cycle_default)
 
 
-def test_facets_renderer_has_no_greyscale_hook() -> None:
-    # FEATURE-001 (plans/BUGS_AND_ISSUES.md): a facet panel never resolves
-    # per-series colour at all -- `calc.figure_facets.draw_facet_grid` always
-    # passes `spec=None` to `_plot_kwargs` -- so there is nothing for
-    # `greyscale` to act on there, and `render_facets_figure` doesn't even
-    # accept the keyword. The route-level no-op contract (a faceted
-    # `/api/export/figure` request renders byte-identically whether or not
-    # `greyscale` is set) is pinned in test_api_export.py, next to the rest
-    # of the facets route tests.
-    import inspect
-
+def test_facets_renderer_greyscale_strokes_are_achromatic() -> None:
+    # U2: since FEATURE-001 a facet series has its channel's style, so
+    # `render_facets_figure(greyscale=True)` greys it (it used to have no
+    # greyscale hook at all). Route-level coverage: test_api_export.py and
+    # test_export_facet_greyscale.py.
     from quantized.calc.figure_facets import render_facets_figure
 
-    assert "greyscale" not in inspect.signature(render_facets_figure).parameters
+    panels = [
+        {"label": f"L{i}", "x": [0.0, 1.0], "series": [
+            {"label": "a", "y": [0.0, 1.0], "style": {"color": "#d62728"}},
+            {"label": "b", "y": [1.0, 0.0], "style": {"color": "#2ca02c"}},
+        ]}
+        for i in range(2)
+    ]
+    svg = render_facets_figure(panels, fmt="svg", greyscale=True).decode("utf-8", "ignore")
+    assert "#d62728" not in svg and "#2ca02c" not in svg
+    hexes = [h for h in _STROKE_HEX.findall(svg) if h.lower() not in ("ffffff", "000000")]
+    assert len(set(hexes)) >= 2  # two series, two greys
+    for h in hexes:
+        assert h[0:2].lower() == h[2:4].lower() == h[4:6].lower(), f"non-achromatic #{h}"
 
 
 def test_greyscale_applies_when_series_styles_is_none() -> None:

@@ -247,7 +247,7 @@ def _draw_grid_cell(
     draw_facet_grid(
         sub_axes, p.facets, st=st,
         resolved_x_scale=resolved_x_scale, resolved_y_scale=resolved_y_scale,
-        x_fmt=p.x_fmt, y_fmt=p.y_fmt, overrides=p.overrides,
+        x_fmt=p.x_fmt, y_fmt=p.y_fmt, overrides=p.overrides, greyscale=p.greyscale,
     )
     if x_label:
         sf.supxlabel(x_label)
@@ -328,7 +328,7 @@ def _draw_inset_cell(
     draw_facet_grid(
         sub_axes, p.facets, st=st,
         resolved_x_scale=resolved_x_scale, resolved_y_scale=resolved_y_scale,
-        x_fmt=p.x_fmt, y_fmt=p.y_fmt, overrides=p.overrides,
+        x_fmt=p.x_fmt, y_fmt=p.y_fmt, overrides=p.overrides, greyscale=p.greyscale,
     )
 
     # V2 fallback: hide x tick labels on every sub-axis NOT in the grid's

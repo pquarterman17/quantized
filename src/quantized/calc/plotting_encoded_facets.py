@@ -115,11 +115,15 @@ def encoded_facet_panels(
             y_label = rename if rename is not None else ds.labels[y_keys[c]]
             legend = None if text is None else f"{y_label} ({text})" if multi else text
             default = f"{s.label} ({s.unit})" if s.unit else s.label
-            style = {k: v for k, v in (styles[i] or {}).items() if k != GREY_SLOT_KEY}  # never grey
+            style = {k: v for k, v in (styles[i] or {}).items() if k != GREY_SLOT_KEY}
             series.append({
                 "label": legend if legend is not None else default,
                 "y": s.values[rows].tolist(),
                 "style": style or None,
+                # Greyscale key (U2, `greyscale_facet_panels`): the colour
+                # level's slot, else the series' place in the WHOLE split --
+                # the flat greyscale's own rule, applied grid-wide.
+                GREY_SLOT_KEY: (styles[i] or {}).get(GREY_SLOT_KEY, i),
             })
         out.append({"label": p.get("label", ""), "x": p.get("x"), "series": series, "key": True})
     return out
