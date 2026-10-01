@@ -399,6 +399,17 @@ describe("auto dash/marker cycle — spatial page export (P3.3)", () => {
       undefined,
     ]);
   });
+
+  it("each cell's unstyled series draw in the Preferences default trace, explicit styles win", () => {
+    const spec = buildSpatialPageRequest(
+      [panel({ yKeys: [1, 2], seriesStyles: { 2: { width: 2 } } })], new Map([["ds1", ds()]]), defaultPageSetup(),
+      { ...appearance, defaultTrace: "Scatter" },
+    );
+    expect(spec!.panels[0].figure.series_styles).toMatchObject([
+      { width: 0, marker: true, marker_size: 5 },
+      { width: 2, marker: true, marker_size: 5 },
+    ]);
+  });
 });
 
 // PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 residual close: `appearance.greyscale` is

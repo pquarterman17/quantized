@@ -55,7 +55,9 @@ import { facetSplitChannels } from "./facet";
 // projection in whether it uses it or not.
 import { viewOverrides } from "./figureViewOverrides";
 import type { ErrorBinding } from "./errorRoles";
-import type { Dataset, DataStruct } from "./types";
+import type { Dataset, DataStruct, DefaultTrace } from "./types";
+import { axisTitleWire } from "./exportAxisTitles";
+import { withDefaultTrace } from "./exportDefaultTrace";
 import { logOffsetWire } from "./logOffset";
 import { waterfallWire } from "./waterfallWire";
 import { axisFmtParam } from "./types";
@@ -82,6 +84,9 @@ export interface FigureRenderOpts {
    *  not imported, so its code stays in the lazy export chunks. Absent = those
    *  rows omitted, byte-identical to before. */
   greyExcluded?: ExcludedRowsGhoster;
+  /** The Preferences default trace the canvas draws unstyled series in, laid
+   *  over the request by `exportDefaultTrace.withDefaultTrace`. Absent = Line. */
+  defaultTrace?: DefaultTrace;
 }
 
 /** See `FigureRenderOpts.greyExcluded`. `facet` is the view's facet binding
@@ -386,6 +391,8 @@ function buildFigureSpecForView(
       ? { error_spans: exportErrorSpans(wireDataset, plotted, errors) }
       : {}),
     overrides: gatedOverrides,
+    // The axis titles' Format + drag -- not on a facet grid, whose canvas draws plain titles.
+    ...(wireFacets === undefined ? axisTitleWire(st) : {}),
     ...(extras.transparent === undefined ? {} : { transparent: extras.transparent }),
     ...(o.greyscale ? { greyscale: true } : {}),
     // P2.3: the canvas' per-series decade offsets (log-y comparison) — see
@@ -411,7 +418,8 @@ function buildFigureSpecForView(
   };
   // F4.2c (a): greyed excluded rows ride as extra series on the pruned wire.
   const facet = st.facetKey != null ? { col: st.facetKey, yKeys: st.yKeys } : undefined;
-  return o.greyExcluded && extras.liveDataset ? o.greyExcluded(spec, data, dropped, facet) : spec;
+  const traced = withDefaultTrace(spec, o.defaultTrace, st.seriesStyles);
+  return o.greyExcluded && extras.liveDataset ? o.greyExcluded(traced, data, dropped, facet) : traced;
 }
 
 /** Derive an export request directly from the canonical document. Frozen
@@ -449,6 +457,7 @@ export function buildFigureSpecFromDocument(
       yLabel: overrides.yLabel ?? view.yAxisLabel,
       greyscale: overrides.greyscale,
       greyExcluded: overrides.greyExcluded,
+      defaultTrace: overrides.defaultTrace,
     },
     {
       groupKey: document.bindings.groupKey,

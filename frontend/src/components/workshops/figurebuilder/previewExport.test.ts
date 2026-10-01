@@ -7,9 +7,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { exportFigure, type FigureSpec } from "../../../lib/api/figures";
 import type { FigureDocument } from "../../../lib/figureDocument";
+import { buildFigureSpecFromDocument } from "../../../lib/figureSpec";
 import type { DataStruct } from "../../../lib/types";
 import { usePendingOps } from "../../../store/pendingOps";
 import { useToasts } from "../../../store/toasts";
+import { useApp } from "../../../store/useApp";
 import type { LegacyFigureState } from "./legacyFigure";
 import { exportPreviewFigure, type PreviewExportDeps } from "./previewExport";
 
@@ -101,5 +103,21 @@ describe("exportPreviewFigure cancel (P3.4)", () => {
     await exportPreviewFigure(d);
     expect(d.statuses).toEqual(["export failed: render crashed"]);
     expect(usePendingOps.getState().ops).toEqual([]);
+  });
+});
+
+describe("exportPreviewFigure draws the Preferences default trace", () => {
+  it("the canonical export builds its request in the store's default trace", async () => {
+    useApp.setState({ defaultTrace: "Scatter" });
+    vi.mocked(exportFigure).mockResolvedValueOnce(undefined);
+    const d = deps({
+      canonicalDocument: DOC,
+      canonicalReadiness: { state: "ready" as const, data: DATA, spec: SPEC },
+      canonicalDataset: { id: "d1", name: "scan.dat", data: DATA },
+    });
+    await exportPreviewFigure(d);
+    useApp.setState({ defaultTrace: "Line" });
+    expect(d.statuses).toEqual(["exported scan.svg"]);
+    expect(vi.mocked(buildFigureSpecFromDocument).mock.calls.at(-1)?.[3]).toMatchObject({ defaultTrace: "Scatter" });
   });
 });

@@ -422,7 +422,9 @@ export async function runSendEditableFigureToReport(s: StoreGet, figureId: strin
         // F4.2c (a): a figure with excluded rows asks "greyed or omitted?".
         picked = await chooseExcludedRows(
           (greyExcluded) =>
-            buildFigureSpecFromDocument(doc, dataset, stem, { ...choice.opts, dpi: REPORT_FIGURE_DPI, greyExcluded }),
+            buildFigureSpecFromDocument(doc, dataset, stem, {
+              ...choice.opts, dpi: REPORT_FIGURE_DPI, greyExcluded, defaultTrace: s().defaultTrace,
+            }),
           excludedChoiceMatters,
           s().excludedDisplay,
         );

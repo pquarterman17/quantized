@@ -22,7 +22,7 @@ import { postBlob, postDownload, postJSON } from "./http";
 import type { ExportSeriesStyle } from "../exportStyles";
 import type { FigureOverrides } from "../figureOverrides";
 import type { FigureHitmap } from "../previewmap";
-import type { AxisFormat, AxisScale, DataStruct } from "../types";
+import type { AxisFormat, AxisKey, AxisLabelStyle, AxisScale, DataStruct } from "../types";
 import type { ErrorPair } from "../api";
 
 /** One xy small-multiples panel (FIGURE_AUTHORING_WORKFLOW_PLAN F4.4 --
@@ -201,6 +201,12 @@ export interface FigureSpec {
   log_offsets?: number[];
   /** Property-panel overrides (#11): fonts/legend/ticks/spines/limits/margins. */
   overrides?: FigureOverrides | null;
+  /** The axis titles' right-click Format (`PlotView.axisLabelStyles`): size in
+   *  CSS px, read as points (`routes/export_figures_axis_titles`). */
+  axis_label_styles?: Partial<Record<AxisKey, AxisLabelStyle>>;
+  /** The axis titles' dragged offsets (`PlotView.axisLabelOffsets`), `[dx, dy]`
+   *  CSS px, x right / y DOWN, read as points. */
+  axis_label_offsets?: Partial<Record<AxisKey, [number, number]>>;
   filename?: string;
 }
 

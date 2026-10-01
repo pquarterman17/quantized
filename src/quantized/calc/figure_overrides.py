@@ -16,6 +16,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
+from quantized.calc.figure_axis_titles import apply_axis_titles, validate_axis_titles
 from quantized.calc.figure_decor import (
     _apply_ref_lines,
     _apply_region_shades,
@@ -75,6 +76,7 @@ def _validate_overrides(ov: Mapping[str, Any]) -> None:
                 raise ValueError("x_breaks entries must be sorted and non-overlapping")
             prev_hi = hi
     _validate_shapes(ov.get("shapes"))
+    validate_axis_titles(ov.get("axis_titles"))
     _validate_ref_lines(ov.get("ref_lines"))
     _validate_region_shades(ov.get("region_shades"))
 
@@ -172,6 +174,9 @@ def _apply_overrides(
         ax.minorticks_on()
 
     apply_axis_shape_overrides(ax, st, ov, lim_keys=("x_lim", "y_lim"))
+    # The axis titles' Format + drag (calc.figure_axis_titles); a twinx's own
+    # y2 title is styled by calc.figure_y2, which owns that axes.
+    apply_axis_titles(fig, {"x": ax, "y": ax}, ov.get("axis_titles"))
 
     # Export-fidelity gap (2026-08-11): region shades paint first (they must
     # sit BEHIND the grid/data -- see figure_decor's zorder doc), then

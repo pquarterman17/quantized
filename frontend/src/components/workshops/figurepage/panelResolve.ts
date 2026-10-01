@@ -114,6 +114,7 @@ export async function panelFigure(
   greyExcluded?: ExcludedRowsGhoster, // F4.2c (a): greyed vs omitted excluded rows
 ): Promise<FigureSpec | null> {
   const s = useApp.getState();
+  const defaultTrace = s.defaultTrace; // the trace each source's canvas draws in
   if (source.kind === "figure") {
     const document = s.editableFigures.find((f) => f.id === source.id);
     if (!document) return null;
@@ -130,7 +131,7 @@ export async function panelFigure(
     // grouped+secondary-axis combination) — any such failure is exactly a
     // "this source can no longer render" case, same as a dead window/figdoc.
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded });
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace });
       return { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
     } catch {
       return null;
@@ -154,7 +155,7 @@ export async function panelFigure(
       : undefined;
     if (!dataset) return null;
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded });
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace });
       return { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
     } catch {
       return null;
@@ -182,7 +183,7 @@ export async function panelFigure(
       : undefined;
   if (document.data.mode === "live" && !dataset) return null;
   try {
-    const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded });
+    const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace });
     return { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
   } catch {
     return null;
@@ -225,7 +226,7 @@ export async function panelFigure(
  *  code used, extended with the fields the canonical adapter now also reads
  *  (error bindings, hidden/reordered series, secondary axis). */
 export function panelRenderInputs(slots: { source: PanelSource | null }[], s: AppState): unknown[] {
-  const parts: unknown[] = [];
+  const parts: unknown[] = [s.defaultTrace]; // every panel's series draw in it
   for (const { source } of slots) {
     if (!source) continue;
     if (source.kind === "window") {
@@ -258,6 +259,8 @@ export function panelRenderInputs(slots: { source: PanelSource | null }[], s: Ap
           s.y2Scale,
           s.y2Step,
           s.y2AxisLabel,
+          s.axisLabelStyles,
+          s.axisLabelOffsets,
         );
       } else {
         parts.push(
@@ -317,6 +320,7 @@ export async function buildPageSpecFromDocument(
   greyExcluded?: ExcludedRowsGhoster, // F4.2c (a): greyed vs omitted excluded rows
 ): Promise<FigurePageSpec | null> {
   const labels = pagePanelLabels(pageDoc.panels, pageDoc.output.labelFormat);
+  const defaultTrace = useApp.getState().defaultTrace;
   const panels: PagePanelSpec[] = [];
   for (let i = 0; i < pageDoc.panels.length; i++) {
     const panel = pageDoc.panels[i];
@@ -336,7 +340,7 @@ export async function buildPageSpecFromDocument(
     }
     let figure: FigureSpec;
     try {
-      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded });
+      const spec = buildFigureSpecFromDocument(document, dataset, document.name, { greyExcluded, defaultTrace });
       figure = { ...spec, overrides: stripPageIncompatibleOverrides(spec.overrides) };
     } catch (e) {
       throw new Error(

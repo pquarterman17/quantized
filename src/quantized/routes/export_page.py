@@ -28,6 +28,7 @@ from quantized.routes._export_common import (
 )
 from quantized.routes._offloop import OffloopJSONRoute
 from quantized.routes.export_figures import FigureRequest, _figure_series
+from quantized.routes.export_figures_axis_titles import request_overrides
 from quantized.routes.export_figures_facets import _facet_panels
 from quantized.routes.export_figures_schema import SVG_TEXT_AS_PATHS_DOC, _tick_fmt
 
@@ -186,7 +187,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                     x_step=f.x_step,
                     y_step=f.y_step,
                     series_styles=resolved.styles,
-                    overrides=f.overrides,
+                    overrides=request_overrides(f),  # + the axis-title Format/drag
                     label=spec.label,
                     page_rect=spec.page_rect,
                     # GUI_INTERACTION #12 slice 4c: a page panel with a

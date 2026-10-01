@@ -5591,6 +5591,21 @@ export interface components {
             /** Tpr */
             tpr: number[];
         };
+        /**
+         * AxisLabelStyle
+         * @description One axis title's Format choices; an absent field keeps the preset's.
+         */
+        AxisLabelStyle: {
+            /** Bold */
+            bold?: boolean | null;
+            /** Italic */
+            italic?: boolean | null;
+            /**
+             * Size
+             * @description Font size: the screen's CSS px, read as points (the annotation `size` rule).
+             */
+            size?: number | null;
+        };
         /** BandsRequest */
         BandsRequest: {
             /** Covar */
@@ -7275,6 +7290,23 @@ export interface components {
         };
         /** FigureRequest */
         FigureRequest: {
+            /**
+             * Axis Label Offsets
+             * @description Per-axis dragged title offset `[dx, dy]` in screen CSS px (x right, y DOWN), read as points like every other screen-px size on this request.
+             */
+            axis_label_offsets?: {
+                [key: string]: [
+                    number,
+                    number
+                ];
+            } | null;
+            /**
+             * Axis Label Styles
+             * @description Per-axis title Format (size / bold / italic), as the canvas draws it.
+             */
+            axis_label_styles?: {
+                [key: string]: components["schemas"]["AxisLabelStyle"];
+            } | null;
             /** Dataset */
             dataset?: {
                 [key: string]: unknown;

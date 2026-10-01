@@ -11,7 +11,6 @@
 // the Stage routing into the graph of every importer of the builders.
 
 import type { FigureSpec } from "./api/figures";
-import { withDefaultTrace } from "./exportDefaultTrace";
 import type { StoreGet } from "./exportActive";
 import { buildFigureSpec, buildFigureSpecFromDocument, type FigureRenderOpts } from "./figureSpec";
 import { windowCyclesSeriesStyles } from "./seriesStyleCycle";
@@ -103,6 +102,9 @@ export function buildStageFigureSpec(
   // showing a different dataset) falls back to the full DataStruct.
   const waterfallSpan = readLiveWaterfallSpan(ds.id);
   const waterfallXSpan = readLiveWaterfallSpan(ds.id, "xSpan"); // the X step's twin
+  // The Preferences default trace the focused canvas draws in (Scatter / Line +
+  // markers / Step), read like `autoSeriesStyles` from the live store.
+  const defaultTrace = st.defaultTrace;
   const spec = canRouteThroughDocument
     ? buildFigureSpecFromDocument(document, ds, stem, {
         fmt: o.fmt,
@@ -117,10 +119,8 @@ export function buildStageFigureSpec(
         waterfallXSpan,
         greyscale: o.greyscale,
         greyExcluded: o.greyExcluded,
+        defaultTrace,
       })
-    : buildFigureSpec(s, ds, stem, o, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
-  // The Preferences default trace the focused canvas draws in (Scatter / Line +
-  // markers / Step), read like `autoSeriesStyles` from the live store.
-  const traced = withDefaultTrace(spec, st.defaultTrace, st.seriesStyles);
-  return extra.transparent === undefined ? traced : { ...traced, transparent: extra.transparent };
+    : buildFigureSpec(s, ds, stem, { ...o, defaultTrace }, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
+  return extra.transparent === undefined ? spec : { ...spec, transparent: extra.transparent };
 }

@@ -45,6 +45,7 @@ import {
   secondaryAxisIsLog,
   secondaryAxisWire,
 } from "./axisspec";
+import { traceSeriesStyles } from "./exportDefaultTrace";
 import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
 import { withSeriesLegends } from "./figureSpecSeries";
 import { compactOverrides, gateY2Overrides, type FigureOverrides } from "./figureOverrides";
@@ -53,7 +54,7 @@ import { pageValidRects } from "./panelLayout";
 import { withPageGreyscale } from "./pageGreyscale";
 import { pageSizeInches, type PageSetup } from "./pagesetup";
 import { droppedRows } from "./rowstate";
-import { axisFmtParam, type AxisFormat, type DataStruct, type Dataset } from "./types";
+import { axisFmtParam, type AxisFormat, type DataStruct, type Dataset, type DefaultTrace } from "./types";
 import type { ExcludedRowsGhoster } from "./figureSpec";
 import type { FigurePageSpec, PagePanelSpec } from "./api";
 import type { FigureSpec } from "./api/figures";
@@ -76,6 +77,9 @@ export interface SpatialPageAppearance {
    *  its page panel get the same dash. Absent/false = no cycle, byte-identical
    *  to before the cycle existed. */
   autoSeriesStyles?: boolean;
+  /** The Preferences default trace each cell canvas draws unstyled series in
+   *  (`exportDefaultTrace`); absent = Line. */
+  defaultTrace?: DefaultTrace;
   /** PRIMARY_SOFTWARE_AUDIT_PLAN P3.3 residual close: one page-level "print
    *  safe" choice, applied to EVERY panel's own `FigureSpec.greyscale` (the
    *  backend's `PagePanel.greyscale` is genuinely per-panel, but this
@@ -213,10 +217,15 @@ function spatialPanelFigure(
     // records (BUG-016 round 3). The colours themselves are untouched.
     series_styles:
       withSeriesLegends(
-        toWireSeriesStyles(
-          buildExportStyles(plotted, panel.seriesStyles ?? {}, null, appearance?.autoSeriesStyles ?? false),
-          false,
-        ),
+        traceSeriesStyles(
+          toWireSeriesStyles(
+            buildExportStyles(plotted, panel.seriesStyles ?? {}, null, appearance?.autoSeriesStyles ?? false),
+            false,
+          ),
+          plotted,
+          appearance?.defaultTrace,
+          panel.seriesStyles ?? {},
+        ) ?? null,
         legends,
       ) ?? undefined,
     overrides: gateY2Overrides(panelOverrides(panel, appearance), {

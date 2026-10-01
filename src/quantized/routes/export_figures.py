@@ -51,6 +51,7 @@ from quantized.routes._export_common import (
     _safe_name,
 )
 from quantized.routes._offloop import OffloopJSONRoute
+from quantized.routes.export_figures_axis_titles import AxisTitleFields, request_overrides
 from quantized.routes.export_figures_encoded import (
     ExcludedRowsFields,
     FigureEncoding,
@@ -84,7 +85,7 @@ from quantized.routes.export_figures_schema import (
 router = APIRouter(prefix="/api/export", tags=["export"], route_class=OffloopJSONRoute)
 
 
-class FigureRequest(CachedDatasetRequest, ExcludedRowsFields):
+class FigureRequest(CachedDatasetRequest, ExcludedRowsFields, AxisTitleFields):
     # `dataset`/`dataset_handle` come from CachedDatasetRequest; only
     # /figure-hitmap caches a posted dataset (see _request_dataset).
     x_key: int | str | None = None
@@ -377,7 +378,7 @@ def render_figure_request(req: FigureRequest, *, fmt: str, dpi: int) -> bytes:
         dpi=dpi,
         transparent=req.transparent,
         greyscale=req.greyscale,
-        overrides=req.overrides,
+        overrides=request_overrides(req),
         x_fmt=_tick_fmt(req.x_fmt),
         y_fmt=_tick_fmt(req.y_fmt),
         x_step=req.x_step,
@@ -480,7 +481,7 @@ def _figure_hitmap(req: FigureRequest, response: Response, gone: threading.Event
                 series_styles=resolved.styles,
                 dpi=dpi,
                 greyscale=req.greyscale,
-                overrides=req.overrides,
+                overrides=request_overrides(req),
                 x_fmt=_tick_fmt(req.x_fmt),
                 y_fmt=_tick_fmt(req.y_fmt),
                 x_step=req.x_step,

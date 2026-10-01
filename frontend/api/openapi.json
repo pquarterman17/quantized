@@ -429,6 +429,49 @@
         "title": "AucRequest",
         "type": "object"
       },
+      "AxisLabelStyle": {
+        "description": "One axis title's Format choices; an absent field keeps the preset's.",
+        "properties": {
+          "bold": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bold"
+          },
+          "italic": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Italic"
+          },
+          "size": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 200.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Font size: the screen's CSS px, read as points (the annotation `size` rule).",
+            "title": "Size"
+          }
+        },
+        "title": "AxisLabelStyle",
+        "type": "object"
+      },
       "BandsRequest": {
         "properties": {
           "covar": {
@@ -4891,6 +4934,60 @@
       },
       "FigureRequest": {
         "properties": {
+          "axis_label_offsets": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "maxItems": 2,
+                  "minItems": 2,
+                  "prefixItems": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "number"
+                    }
+                  ],
+                  "type": "array"
+                },
+                "propertyNames": {
+                  "enum": [
+                    "x",
+                    "y",
+                    "y2"
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-axis dragged title offset `[dx, dy]` in screen CSS px (x right, y DOWN), read as points like every other screen-px size on this request.",
+            "title": "Axis Label Offsets"
+          },
+          "axis_label_styles": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "$ref": "#/components/schemas/AxisLabelStyle"
+                },
+                "propertyNames": {
+                  "enum": [
+                    "x",
+                    "y",
+                    "y2"
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-axis title Format (size / bold / italic), as the canvas draws it.",
+            "title": "Axis Label Styles"
+          },
           "dataset": {
             "anyOf": [
               {

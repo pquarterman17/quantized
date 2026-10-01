@@ -44,7 +44,7 @@ export function useFigureBuilder() {
   const yKeys = useApp((s) => s.yKeys);
   const xKey = useApp((s) => s.xKey);
   const liveY2 = useApp(useShallow(secondaryAxisFromView)); // legacy mode mirrors the live y2 axis
-  const excludedDisplay = useApp((s) => s.excludedDisplay); // both modes grey/hide excluded rows as the canvas does
+  const { excludedDisplay, defaultTrace } = useApp(useShallow((s) => ({ excludedDisplay: s.excludedDisplay, defaultTrace: s.defaultTrace })));
   const xScale = useApp((s) => s.xScale);
   const yScale = useApp((s) => s.yScale);
   const xFmt = useApp((s) => s.xFmt);
@@ -138,8 +138,8 @@ export function useFigureBuilder() {
   // F2.3c: readiness resolution itself lives in canonicalReadiness.ts (a pure
   // function of document + dataset + the app's excluded-rows mode) -- this hook just memoizes the call.
   const canonicalReadiness = useMemo<CanonicalReadiness | null>(
-    () => computeCanonicalReadiness(canonicalDocument, canonicalDataset, cyclesStyles, excludedDisplay),
-    [canonicalDocument, canonicalDataset, cyclesStyles, excludedDisplay],
+    () => computeCanonicalReadiness(canonicalDocument, canonicalDataset, cyclesStyles, excludedDisplay, defaultTrace),
+    [canonicalDocument, canonicalDataset, cyclesStyles, excludedDisplay, defaultTrace],
   );
   const canonicalData = canonicalReadiness?.state === "missing-source" ? null : canonicalReadiness?.data ?? null;
   const patchCanonical = (patch: (document: NonNullable<typeof canonicalDocument>) => NonNullable<typeof canonicalDocument>) => {
@@ -309,11 +309,11 @@ export function useFigureBuilder() {
   // legacyFigure.ts's module doc.
   const legacyState = useMemo<LegacyFigureState>(() => ({
     data, liveDataset: canonical || frozenData ? null : active, xKey: effXKey, yKeys: effYKeys, xScale: effXScale, yScale: effYScale,
-    xFmt, yFmt, style, overrides, title, xLabel, yLabel, seriesStyles, docSeriesStyles, docGroupCol,
+    xFmt, yFmt, style, overrides, title, xLabel, yLabel, seriesStyles, docSeriesStyles, docGroupCol, defaultTrace,
     y2: docScales === undefined ? liveY2 : null, // a re-opened FigureDoc carries no y2
   }), [
     data, effXKey, effYKeys, effXScale, effYScale, xFmt, yFmt, style, overrides, title, xLabel, yLabel,
-    seriesStyles, docSeriesStyles, docGroupCol, docScales, liveY2, canonical, frozenData, active,
+    seriesStyles, docSeriesStyles, docGroupCol, docScales, liveY2, canonical, frozenData, active, defaultTrace,
   ]);
   const legacySpec = useMemo(() => buildLegacyPreviewSpec(legacyState, excludedDisplay), [legacyState, excludedDisplay]);
   // Item 2 / F2.1g: y2 min/max need a secondary axis to apply to (gateY2Overrides

@@ -92,6 +92,8 @@ function fakeGet(over: Record<string, unknown> = {}) {
     shapes: [],
     refLines: [],
     regionShades: [],
+    axisLabelStyles: {},
+    axisLabelOffsets: {},
     pageSetup: null,
     copyFigureTransparent: false,
     focusedWindowId: null as string | null,
