@@ -115,6 +115,8 @@ export function usePageLifecycle(
   // old name back over the rename. Follow only a CHANGE of the stored name for
   // the same id — a switch of id (reopen, Save As) or a missing entry just
   // re-baselines. `modifiedAt` follows too, so a clean session stays clean.
+  // A name typed in the session and not yet saved is the user's pending edit:
+  // it is kept (only a session still showing the old stored name follows).
   const storedName = pages.find((p) => p.id === draft.id)?.name;
   const seenName = useRef<{ id: string; name: string | undefined }>({ id: draft.id, name: storedName });
   useEffect(() => {
@@ -125,7 +127,7 @@ export function usePageLifecycle(
     const stored = useApp.getState().pages.find((p) => p.id === draft.id);
     if (!stored) return;
     setDraft((d) =>
-      d.id !== stored.id || (d.name === stored.name && d.modifiedAt === stored.modifiedAt)
+      d.id !== stored.id || d.name !== prev.name
         ? d
         : { ...d, name: stored.name, modifiedAt: stored.modifiedAt },
     );

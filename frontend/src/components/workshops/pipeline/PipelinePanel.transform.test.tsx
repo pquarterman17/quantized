@@ -114,6 +114,17 @@ describe("PipelinePanel — editing transform step params", () => {
     expect(useApp.getState().macroSteps[0].params.aggregate).toBe("first");
   });
 
+  it("a second Apply of the same params (a double-click) is not a second undo step", async () => {
+    await recordUnstack();
+    render(<PipelinePanel />);
+    await editAggregate("first");
+    const depth = useApp.getState().history.length;
+    fireEvent.click(await screen.findByRole("button", { name: "Apply" }));
+    expect(useApp.getState().history).toHaveLength(depth);
+    act(() => useApp.getState().undo());
+    expect(useApp.getState().macroSteps[0].params.aggregate).toBe("mean");
+  });
+
   it("an edited step survives a .dwk save and reopen and replays the edit", async () => {
     await recordUnstack();
     render(<PipelinePanel />);

@@ -142,6 +142,8 @@ export function createGadgetSlice(set: SliceSet, get: SliceGet): GadgetSlice {
         else set({ gadgetBusy: false, gadgetError: msg });
         return;
       }
+      // Superseded while it loaded: whatever bumped the sequence runs its own.
+      if (seq !== qfitSeq) return;
       await call(runner);
     };
 
