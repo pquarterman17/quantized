@@ -1,0 +1,625 @@
+{
+  "cases": [
+    {
+      "name": "x and y error bars widen both axes",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              10,
+              1,
+              0.5,
+              11,
+              100
+            ],
+            [
+              11,
+              5,
+              0.5,
+              12,
+              100
+            ],
+            [
+              12,
+              1,
+              2,
+              11,
+              100
+            ],
+            [
+              13,
+              1,
+              0.5,
+              12,
+              100
+            ]
+          ],
+          "labels": [
+            "S1",
+            "dS1",
+            "dX",
+            "S2",
+            "dS2"
+          ],
+          "units": [
+            "a.u.",
+            "a.u.",
+            "a.u.",
+            "a.u.",
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "error_spans": [
+          {
+            "y": {
+              "plus": [
+                1,
+                5,
+                1,
+                1
+              ],
+              "minus": [
+                1,
+                5,
+                1,
+                1
+              ]
+            },
+            "x": {
+              "plus": [
+                0.5,
+                0.5,
+                2,
+                0.5
+              ],
+              "minus": [
+                0.5,
+                0.5,
+                2,
+                0.5
+              ]
+            }
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "errors"
+      },
+      "x_domain": [
+        -0.5,
+        4
+      ],
+      "y_domain": [
+        6,
+        16
+      ],
+      "x_lim": null,
+      "y_lim": null
+    },
+    {
+      "name": "no error bars: the data alone",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              10,
+              1,
+              0.5,
+              11,
+              100
+            ],
+            [
+              11,
+              5,
+              0.5,
+              12,
+              100
+            ],
+            [
+              12,
+              1,
+              2,
+              11,
+              100
+            ],
+            [
+              13,
+              1,
+              0.5,
+              12,
+              100
+            ]
+          ],
+          "labels": [
+            "S1",
+            "dS1",
+            "dX",
+            "S2",
+            "dS2"
+          ],
+          "units": [
+            "a.u.",
+            "a.u.",
+            "a.u.",
+            "a.u.",
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "errors"
+      },
+      "x_domain": [
+        0,
+        3
+      ],
+      "y_domain": [
+        10,
+        13
+      ],
+      "x_lim": null,
+      "y_lim": null
+    },
+    {
+      "name": "a hidden series' bars do not count",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              10,
+              1,
+              0.5,
+              11,
+              100
+            ],
+            [
+              11,
+              5,
+              0.5,
+              12,
+              100
+            ],
+            [
+              12,
+              1,
+              2,
+              11,
+              100
+            ],
+            [
+              13,
+              1,
+              0.5,
+              12,
+              100
+            ]
+          ],
+          "labels": [
+            "S1",
+            "dS1",
+            "dX",
+            "S2",
+            "dS2"
+          ],
+          "units": [
+            "a.u.",
+            "a.u.",
+            "a.u.",
+            "a.u.",
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "error_spans": [
+          {
+            "y": {
+              "plus": [
+                1,
+                5,
+                1,
+                1
+              ],
+              "minus": [
+                1,
+                5,
+                1,
+                1
+              ]
+            },
+            "x": {
+              "plus": [
+                0.5,
+                0.5,
+                2,
+                0.5
+              ],
+              "minus": [
+                0.5,
+                0.5,
+                2,
+                0.5
+              ]
+            }
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "errors"
+      },
+      "x_domain": [
+        -0.5,
+        4
+      ],
+      "y_domain": [
+        6,
+        16
+      ],
+      "x_lim": null,
+      "y_lim": null
+    },
+    {
+      "name": "non-monotonic x",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            3,
+            2,
+            1
+          ],
+          "values": [
+            [
+              10,
+              1,
+              0.5,
+              11,
+              100
+            ],
+            [
+              13,
+              5,
+              0.5,
+              12,
+              100
+            ],
+            [
+              12,
+              1,
+              2,
+              11,
+              100
+            ],
+            [
+              11,
+              1,
+              0.5,
+              12,
+              100
+            ]
+          ],
+          "labels": [
+            "S1",
+            "dS1",
+            "dX",
+            "S2",
+            "dS2"
+          ],
+          "units": [
+            "a.u.",
+            "a.u.",
+            "a.u.",
+            "a.u.",
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "error_spans": [
+          {
+            "y": {
+              "plus": [
+                1,
+                5,
+                1,
+                1
+              ],
+              "minus": [
+                1,
+                5,
+                1,
+                1
+              ]
+            },
+            "x": {
+              "plus": [
+                0.5,
+                0.5,
+                2,
+                0.5
+              ],
+              "minus": [
+                0.5,
+                0.5,
+                2,
+                0.5
+              ]
+            }
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "errors"
+      },
+      "x_domain": [
+        -0.5,
+        4
+      ],
+      "y_domain": [
+        8,
+        18
+      ],
+      "x_lim": null,
+      "y_lim": null
+    },
+    {
+      "name": "explicit limits win",
+      "request": {
+        "dataset": {
+          "time": [
+            0,
+            1,
+            2,
+            3
+          ],
+          "values": [
+            [
+              10,
+              1,
+              0.5,
+              11,
+              100
+            ],
+            [
+              11,
+              5,
+              0.5,
+              12,
+              100
+            ],
+            [
+              12,
+              1,
+              2,
+              11,
+              100
+            ],
+            [
+              13,
+              1,
+              0.5,
+              12,
+              100
+            ]
+          ],
+          "labels": [
+            "S1",
+            "dS1",
+            "dX",
+            "S2",
+            "dS2"
+          ],
+          "units": [
+            "a.u.",
+            "a.u.",
+            "a.u.",
+            "a.u.",
+            "a.u."
+          ],
+          "metadata": {}
+        },
+        "y_keys": [
+          0
+        ],
+        "x_scale": "linear",
+        "y_scale": "linear",
+        "x_step": null,
+        "y_step": null,
+        "fmt": "svg",
+        "style": "default",
+        "dpi": 300,
+        "title": "",
+        "series_styles": [
+          {
+            "color": "#8b5cf6"
+          }
+        ],
+        "error_spans": [
+          {
+            "y": {
+              "plus": [
+                1,
+                5,
+                1,
+                1
+              ],
+              "minus": [
+                1,
+                5,
+                1,
+                1
+              ]
+            },
+            "x": {
+              "plus": [
+                0.5,
+                0.5,
+                2,
+                0.5
+              ],
+              "minus": [
+                0.5,
+                0.5,
+                2,
+                0.5
+              ]
+            }
+          }
+        ],
+        "overrides": {
+          "legend": {
+            "show": true,
+            "loc": "upper right"
+          },
+          "x_lim": [
+            0.5,
+            2.5
+          ],
+          "y_lim": [
+            10,
+            12
+          ],
+          "grid": true,
+          "spines": {
+            "top": true,
+            "right": true
+          }
+        },
+        "transparent": false,
+        "filename": "errors"
+      },
+      "x_domain": null,
+      "y_domain": null,
+      "x_lim": [
+        0.5,
+        2.5
+      ],
+      "y_lim": [
+        10,
+        12
+      ]
+    }
+  ]
+}

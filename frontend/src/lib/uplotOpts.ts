@@ -20,6 +20,7 @@ import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
 import { decimalsForIncrement, pow10 } from "./ticks";
+import { errorRange, errorReach, fullYExtents, withXBarRows } from "./uplotErrorRange";
 import { fixedXRange, fullXExtents, scannedXRange } from "./uplotXRange";
 import type { Annotation, AxisFormat, AxisScale, DefaultTrace, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
 import {
@@ -790,35 +791,6 @@ export interface BuildOptsArgs {
   bg?: PlotBg;
 }
 
-/** Full-scan [min, max] of the finite values across every visible series on one
- *  scale — the manual counterpart of uPlot's auto-range for non-monotonic x,
- *  where uPlot's own scan window (derived from a binary search over x) is
- *  meaningless. Log AND reciprocal scales consider positive values only (MAIN
- *  #12 — reciprocal has the same domain restriction as log; see
- *  `reciprocalTransform`'s doc). Returns null when nothing qualifies (leave
- *  uPlot's default behaviour alone). */
-function fullYExtents(
-  payload: PlotPayload,
-  hidden: boolean[] | undefined,
-  axis: 0 | 1,
-  positiveOnly: boolean,
-): [number, number] | null {
-  let min = Infinity;
-  let max = -Infinity;
-  payload.series.forEach((s, i) => {
-    if ((s.axis ?? 0) !== axis || hidden?.[i]) return;
-    for (const v of payload.data[i + 1] ?? []) {
-      if (v == null || !Number.isFinite(v) || (positiveOnly && v <= 0)) continue;
-      if (v < min) min = v;
-      if (v > max) max = v;
-    }
-  });
-  if (min > max) return null;
-  if (positiveOnly) return [min / 1.1, max * 1.1];
-  const pad = (max - min || Math.abs(max) || 1) * 0.1; // mirror uPlot's soft pad
-  return [min - pad, max + pad];
-}
-
 /** Whether `scale` requires positive-only data (log AND reciprocal share the
  *  domain restriction — see `reciprocalTransform`'s doc). */
 function isPositiveOnlyScale(scale: AxisScale): boolean {
@@ -1113,25 +1085,25 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // (on Y) is only consulted when no explicit scale is pending, so box/wheel zoom and
   // a fixed yLim still win; double-click reset re-ranges back to the extents.
   const y2ScaleEff: AxisScale = args.y2Scale ?? yScale;
-  const loopY = !xAscending && !yLim ? fullYExtents(payload, args.hidden, 0, isPositiveOnlyScale(yScale)) : null;
-  const loopY2 = !xAscending
-    ? fullYExtents(payload, args.hidden, 1, isPositiveOnlyScale(y2ScaleEff))
-    : null;
+  // Every scale's autoscale covers the drawn error bars too, as the export's (`lib/uplotErrorRange.ts`).
+  const reach = errorReach(payload, args.errorBars, args.errorSpans);
+  const loopY = !xAscending && !yLim ? fullYExtents(payload, args.hidden, 0, isPositiveOnlyScale(yScale), reach) : null;
+  const loopY2 = !xAscending ? fullYExtents(payload, args.hidden, 1, isPositiveOnlyScale(y2ScaleEff), reach) : null;
   // …and its x auto-range collapses to a sliver for the same reason — scan the
   // x column for the true sweep width. uPlot calls X's range on a zoom too: `scannedXRange` keeps it.
   // A waterfall X-offset layout always scans (its drawn points, `fullXExtents`).
   const loopX = (!xAscending || payload.blockRows) && !xLim
-    ? fullXExtents(payload, args.hidden, isPositiveOnlyScale(xScale))
+    ? fullXExtents(withXBarRows(payload, reach, args.hidden), args.hidden, isPositiveOnlyScale(xScale))
     : null;
   const scales: uPlot.Scales = {
     x: {
       time: xFmt?.mode === "date" || xFmt?.mode === "time" || xFmt?.mode === "datetime",
       ...scaleDistrProps(xScale),
-      ...(xLim ? { range: fixedXRange(xLim) } : loopX ? { range: scannedXRange(loopX) } : {}),
+      ...(xLim ? { range: fixedXRange(xLim) } : loopX ? { range: scannedXRange(loopX) } : errorRange(reach, "x", isPositiveOnlyScale(xScale))),
     },
     y: {
       ...scaleDistrProps(yScale),
-      ...(yLim ? { range: yLim } : loopY ? { range: () => loopY } : {}),
+      ...(yLim ? { range: yLim } : loopY ? { range: () => loopY } : errorRange(reach, 0, isPositiveOnlyScale(yScale))),
     },
   };
   // A categorical x-axis (gap #20) overrides a numeric xFmt: the plotted
@@ -1234,7 +1206,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     const y2Lim = args.y2Lim ?? null;
     scales.y2 = {
       ...scaleDistrProps(y2ScaleEff),
-      ...(y2Lim ? { range: y2Lim } : loopY2 ? { range: () => loopY2 } : {}),
+      ...(y2Lim ? { range: y2Lim } : loopY2 ? { range: () => loopY2 } : errorRange(reach, 1, isPositiveOnlyScale(y2ScaleEff))),
     };
     const y2Splits = splitsFor(y2ScaleEff, y2Lim, args.y2Step);
     // Secondary axis on the right; hide its grid so the two grids don't overlap.
