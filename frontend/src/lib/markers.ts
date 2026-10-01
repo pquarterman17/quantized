@@ -108,11 +108,12 @@ export function markerPaths(
  * The publication export is NOT a third caller, and stating it as one would
  * overstate the agreement. `exportStyles.buildExportStyles` shares only the
  * EXPLICIT half of this rule (`if (st?.marker)`); it has no `defaultTrace` to
- * consult, because that preference never rides the wire. So an ambient
- * `Scatter` / `Line + markers` series draws markers on screen and exports with
- * none — a pre-existing gap, unrelated to the cycle and not narrowed by it,
- * which is precisely WHY the default-trace branch below must not cycle a glyph:
- * doing so would widen a gap the export cannot follow.
+ * consult. The LIVE Stage export (Export / Copy figure) lays the trace over its
+ * request afterwards (`exportDefaultTrace.withDefaultTrace`) as a plain circle;
+ * every other export path (saved documents, pages, the Figure Builder) still
+ * draws an ambient `Scatter` / `Line + markers` series without markers. That is
+ * WHY the default-trace branch below must not cycle a glyph: the wire carries
+ * no glyph for it to follow.
  *
  * The two branches are SEPARATE on purpose. An explicit `marker` honours
  * `markerShape`/`markerSize` — and, via `seriesStyleCycle.resolveSeriesStyle`,
