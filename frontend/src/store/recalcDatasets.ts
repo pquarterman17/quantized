@@ -36,6 +36,7 @@
 //    it — it is fixed at its own layer, in `applyCorrections`, which now says
 //    so via `setStatus`. Cite only what a mechanism actually covers.
 
+import { columnRemovalRefsPatch } from "./columnRemovalRefs";
 import { recomputeDerivedSheet } from "./derivedWorksheets";
 import { rowsChangedGuard } from "./corrections";
 import { plural } from "../lib/plural";
@@ -97,7 +98,7 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
     // own stale cache instead of the source's current data.
     if (d?.derivedFrom) {
       try {
-        const updated = await recomputeDerivedSheet(get, d);
+        const { sheet: updated, removedCol } = await recomputeDerivedSheet(get, d);
         // #50/#53 guard (P1-2 review fix): a row-count-changing recompute
         // invalidates excludedRows + the four overlays — the SAME shared
         // helper applyCorrections uses, so the two call sites can't drift.
@@ -106,10 +107,14 @@ export async function recomputeStaleDatasets(set: SliceSet, get: SliceGet): Prom
         set((s) => {
           const guard = rowsChangedGuard(s, id, rowsChanged, d.excludedRows);
           statusMsg = guard.statusMessage;
+          const datasets = s.datasets.map((x) => (x.id === id ? { ...updated, ...guard.datasetPatch } : x));
           return {
-            datasets: s.datasets.map((x) => (x.id === id ? { ...updated, ...guard.datasetPatch } : x)),
+            datasets,
             staleDatasets: s.staleDatasets.filter((x) => x !== id),
             ...guard.statePatch,
+            // The source lost a column, so this sheet did too: every window,
+            // figure and saved spec on the sheet follows the shift.
+            ...(removedCol !== null && columnRemovalRefsPatch(s, id, removedCol, datasets)),
           };
         });
         if (statusMsg) get().setStatus(statusMsg);

@@ -14,7 +14,7 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import _to_float
-from quantized.io.base import NO_COLUMN, parse_col_header, read_head, resolve_column
+from quantized.io.base import NO_COLUMN, parse_col_header, read_head, read_text, resolve_column
 
 __all__ = ["import_lake_shore", "is_lakeshore_file"]
 
@@ -58,7 +58,7 @@ def import_lake_shore(
 ) -> DataStruct:
     """Import a Lake Shore VSM file (Temperature vs Moment by default)."""
     path = Path(filepath)
-    lines = path.read_text(encoding="latin-1").splitlines()
+    lines = read_text(path).splitlines()
     header_idx = _detect_header_row(lines)
     if header_idx < 0:
         raise ValueError(f"could not detect column-header row in {path.name}")

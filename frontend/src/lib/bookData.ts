@@ -5,7 +5,7 @@
 // setter comes in as a parameter, so there's no store import and no cycle.
 
 import { fetchBookData } from "./api";
-import { applyFormulas, formulaErrors } from "./formula";
+import { applyFormulasWithErrors } from "./formula";
 import { asPreviewSourceRows, PREVIEW_SOURCE_ROWS } from "./rowSidecars";
 import type { BookSource, Dataset } from "./types";
 
@@ -122,8 +122,7 @@ function resolvedExcludedRows(ds: Dataset, sourceRows: number): number[] | undef
 
 function restoreComputedColumns(ds: Dataset, full: Dataset["data"]): Pick<Dataset, "data" | "formulaErrors"> {
   if (!ds.formulas?.length) return { data: full, formulaErrors: undefined };
-  const data = applyFormulas(full, ds.formulas);
-  const errors = formulaErrors(full, ds.formulas);
+  const { data, errors } = applyFormulasWithErrors(full, ds.formulas);
   return { data, formulaErrors: Object.keys(errors).length ? errors : undefined };
 }
 

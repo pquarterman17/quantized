@@ -11,6 +11,7 @@ row-indices out. No fastapi/pydantic/`quantized.routes` imports.
 
 from __future__ import annotations
 
+import csv
 import math
 import re
 from collections.abc import Iterator, Sequence
@@ -27,6 +28,8 @@ __all__ = [
     "_looks_like_units_row",
     "_numeric_score",
     "_to_float",
+    "reject_comma_numbers",
+    "split_row",
 ]
 
 _SCORE_CHUNK_ROWS = 4096
@@ -34,6 +37,36 @@ _SCORE_CHUNK_ROWS = 4096
 # Shared across every delimited-text reader (delimited.py, sims.py, qd.py,
 # lakeshore.py): a `,`/tab/`;`/space plurality vote over the first 10 lines.
 _DELIM_CANDIDATES = (",", "\t", ";", " ")
+
+
+def _delimiter_count(line: str, ch: str) -> int:
+    """How many separators ``ch`` contributes to ``line``. A space separator
+    is a RUN of whitespace (fixed-width exports pad to align columns), so it
+    counts gaps between fields, not individual space characters."""
+    if ch == " ":
+        return max(len(line.split()) - 1, 0)
+    return line.count(ch)
+
+
+def split_row(line: str, delim: str) -> list[str]:
+    """Tokenize one (already stripped) delimited line.
+
+    * A space delimiter splits on whitespace RUNS. Splitting on each single
+      space turned ``"1.5  2"`` into three cells but ``"10.5 3"`` into two, so
+      a fixed-width file's values landed in different columns row to row.
+    * A line carrying a double quote goes through :mod:`csv`, so a quoted
+      cell (``"1"``, or ``"x, y"`` with the delimiter inside it) is one cell
+      with its quotes removed instead of a quoted string that fails ``float()``
+      or a cell split in two that shifts every column after it.
+    * Anything else is a plain ``str.split`` -- the fast, common case.
+    """
+    if '"' in line:
+        if delim == " ":
+            return next(csv.reader([line], delimiter=" ", skipinitialspace=True))
+        return next(csv.reader([line], delimiter=delim))
+    if delim == " ":
+        return line.split()
+    return line.split(delim)
 
 
 def _detect_delimiter(raw_lines: Sequence[str]) -> str:
@@ -47,7 +80,7 @@ def _detect_delimiter(raw_lines: Sequence[str]) -> str:
     best_delim = ","
     best_score = 0.0
     for ch in _DELIM_CANDIDATES:
-        counts = [line.count(ch) for line in test]
+        counts = [_delimiter_count(line, ch) for line in test]
         if counts and all(c > 0 for c in counts):
             mean = sum(counts) / len(counts)
             std = (sum((c - mean) ** 2 for c in counts) / len(counts)) ** 0.5
@@ -273,6 +306,85 @@ def _iter_row_scores(tokens: Sequence[Sequence[str]]) -> Iterator[float]:
         yield from _score_chunk(tokens[start : start + _SCORE_CHUNK_ROWS])
 
 
+#: A number written with a comma: a decimal comma ("1,5", "-0,25", "1,5E-3",
+#: "1.234,5") or, indistinguishably, a thousands separator ("1,500").
+_COMMA_NUMBER_RE = re.compile(r"^[+-]?(?:\d{1,3}(?:\.\d{3})+|\d*),\d+(?:[eE][+-]?\d+)?$")
+
+
+def reject_comma_numbers(
+    file_name: str,
+    col_headers: Sequence[str],
+    matrix: np.ndarray,
+    data_tokens: Sequence[Sequence[str]],
+) -> None:
+    """Fail closed on a column of comma-written numbers (non-comma delimiter).
+
+    ``float()`` rejects ``"1,5"``, so such a column used to read as TEXT and
+    came back as categorical level codes 0, 1, 2, ... -- every measurement
+    silently replaced by its first-appearance rank. Whether ``"1,500"`` means
+    1.5 or 1500 depends on the exporting locale, which the file does not
+    record, so this refuses rather than guesses. Only columns that are not
+    already numeric are inspected, and only when EVERY non-blank cell has
+    the comma-number shape (bar a leading header cell), so a real text
+    column is never refused.
+    """
+    n_rows = max(matrix.shape[0], 1)
+    for c, header in enumerate(col_headers):
+        if np.count_nonzero(~np.isnan(matrix[:, c])) / n_rows > 0.1:
+            continue
+        cells = [row[c].strip() for row in data_tokens if c < len(row) and row[c].strip()]
+        hits = [cell for cell in cells if _COMMA_NUMBER_RE.match(cell)]
+        # cells[0] may be the header itself: with no recognisable number in
+        # the file, layout detection cannot tell the header from the data.
+        if hits and all(_COMMA_NUMBER_RE.match(cell) for cell in cells[1:]):
+            raise ValueError(
+                f"Column '{header}' in {file_name} writes numbers with a comma "
+                f"(e.g. '{hits[0]}'); re-export it with '.' as the decimal separator."
+            )
+
+
+#: Spellings of a MISSING value in a numeric column (compared lower-cased and
+#: stripped). "nan" itself is already numeric-like; the blank cell is here.
+_MISSING_TOKENS = frozenset({"", "na", "n/a", "#n/a", "-", "--", "null", "none", "?"})
+
+
+def _is_data_cell(token: str) -> bool:
+    return _is_numeric_like(token) or _datetime_epoch(token) is not None
+
+
+def _walk_back_gappy_rows(tokens: Sequence[Sequence[str]], first_data: int) -> int:
+    """Extend the data region upward over rows that are data with gaps.
+
+    The ``> 0.5`` numeric-majority rule mis-files a data row with a missing
+    cell: in a 2-column file ``"1,n/a"`` scores exactly 0.5, so every such
+    LEADING row was skipped as preamble -- dropped without a warning -- and
+    the header above it was lost too (it no longer sat directly above the
+    data). A row above ``first_data`` is taken as data only on positive
+    evidence, column by column against the first confirmed data row: same
+    width; every column that is numeric there holds a number or a missing-
+    value spelling here; and at least one cell is a number. A header, a units
+    row or a ``key,value`` preamble line has text in a numeric column, so the
+    walk stops at it.
+    """
+    reference = [_is_data_cell(t.strip()) for t in tokens[first_data]]
+    start = first_data
+    while start > 0:
+        row = [t.strip() for t in tokens[start - 1]]
+        if len(row) != len(reference):
+            break
+        numeric = [_is_data_cell(t) for t in row]
+        if not any(numeric):
+            break
+        compatible = all(
+            is_num or not ref or t.lower() in _MISSING_TOKENS
+            for t, is_num, ref in zip(row, numeric, reference, strict=True)
+        )
+        if not compatible:
+            break
+        start -= 1
+    return start
+
+
 def _detect_layout(tokens: Sequence[Sequence[str]]) -> tuple[int, int, int]:
     """Return 0-based (header_row, data_start, units_row); -1 when absent.
 
@@ -296,7 +408,7 @@ def _detect_layout(tokens: Sequence[Sequence[str]]) -> tuple[int, int, int]:
     for i, s in enumerate(_iter_row_scores(tokens)):
         computed.append(s)
         if s > 0.5:
-            first_data = i
+            first_data = _walk_back_gappy_rows(tokens, i)
             break
     if first_data < 0:
         # The loop above ran to exhaustion without a match, so `computed`

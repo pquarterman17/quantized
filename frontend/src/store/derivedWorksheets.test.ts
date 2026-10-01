@@ -264,7 +264,7 @@ describe("recomputeDerivedSheet — must not strip the SOURCE's own columns (#4)
     // table verbatim — exactly what recomputeDerivedSheet does with `{}`.
     vi.mocked(applyCorrectionsApi).mockResolvedValue(source.data);
 
-    const result = await recomputeDerivedSheet(useApp.getState, sheet);
+    const { sheet: result } = await recomputeDerivedSheet(useApp.getState, sheet);
 
     expect(result.data.labels).toEqual(["A", "B", "C_srcComputed", "F1"]);
     expect(result.data.values).toEqual([

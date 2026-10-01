@@ -23,7 +23,7 @@ import numpy as np
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
 from quantized.io import _delimited_layout as layout
-from quantized.io.base import read_head
+from quantized.io.base import read_head, read_text
 from quantized.time_units import TIME_UNIT_CANON
 
 __all__ = ["import_sims", "is_sims_file"]
@@ -291,11 +291,11 @@ def _detect_time_axis(x_header: str) -> str | None:
 
 
 def _read_text_tokens(path: Path) -> list[list[str]]:
-    raw_lines = _read_raw_lines(path.read_text(encoding="latin-1"))
+    raw_lines = _read_raw_lines(read_text(path))
     if not raw_lines:
         raise ValueError(f"file empty or only comments: {path.name}")
     delim = layout._detect_delimiter(raw_lines)
-    return [line.split(delim) for line in raw_lines]
+    return [layout.split_row(line, delim) for line in raw_lines]
 
 
 def _read_excel_tokens(path: Path, sheet: int | str) -> list[list[str]]:

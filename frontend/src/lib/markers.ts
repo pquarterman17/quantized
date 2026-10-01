@@ -96,8 +96,10 @@ export function markerPaths(
   };
 }
 
-/** The canvas' marker size (CSS px) when a series names none. The export sends
- *  it verbatim as `marker_size` for a default-trace marker. */
+/** The canvas' marker size (CSS px) when a series names none. Every export
+ *  sends it verbatim as `marker_size` (read as points) for such a marker, a
+ *  default-trace one (`exportDefaultTrace`) or a sizeless explicit one
+ *  (`exportStyles.toWireSeriesStyles`), never the style preset's size. */
 export const DEFAULT_MARKER_PX = 5;
 
 /**

@@ -99,9 +99,12 @@ describe("buildLegacyFigureSpec", () => {
     expect(spec.series_styles?.[0]).toMatchObject({ color: "#abcdef" });
   });
 
-  it("sends a saved doc's own styles verbatim", () => {
-    const docStyles = [{ color: "#123456", line: "none" as const, marker: true }];
-    expect(buildLegacyFigureSpec({ ...BASE, docSeriesStyles: docStyles })!.series_styles).toEqual(docStyles);
+  it("sends a saved doc's own styles, a sizeless marker at the canvas' size", () => {
+    const docStyles = [{ color: "#123456", line: "none" as const, marker: true }, { marker: true, marker_size: 9 }];
+    expect(buildLegacyFigureSpec({ ...BASE, yKeys: [0, 1], docSeriesStyles: docStyles })!.series_styles).toEqual([
+      { ...docStyles[0], marker_size: 5 }, docStyles[1],
+    ]);
+    expect(docStyles[0]).not.toHaveProperty("marker_size"); // the document keeps "no size"
   });
 
   it("omits series_styles entirely for an explicitly style-free doc", () => {

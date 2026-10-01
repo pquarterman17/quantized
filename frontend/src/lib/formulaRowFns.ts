@@ -139,11 +139,17 @@ export function tryParseRowAwareCall(
       ops.ref(col);
       ops.expectOp(")");
       const aggName = fname as AggregateName;
+      // Every row of one recompute passes the SAME column array, so reduce it
+      // once per array, not once per row (per row was O(n^2): 40k rows took
+      // 41 s). Weak, so a finished pass's column is not kept alive.
+      const memo = new WeakMap<readonly number[], number>();
       const fn: FormulaFn = (_c, ex) => {
         if (!ex) throw new Error(`${fname}() has no row context to evaluate against`);
         const arr = ex.columns[col];
         if (!arr) throw new Error(`unknown variable "${col}"`);
-        return computeAggregate(aggName, arr);
+        let v = memo.get(arr);
+        if (v === undefined) memo.set(arr, (v = computeAggregate(aggName, arr)));
+        return v;
       };
       return { fn };
     }

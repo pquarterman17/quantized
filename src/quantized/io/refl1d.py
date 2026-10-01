@@ -14,7 +14,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
-from quantized.io.base import read_head
+from quantized.io.base import read_head, read_text
 
 __all__ = ["import_refl1d_dat", "is_refl1d_dat"]
 
@@ -55,7 +55,7 @@ def is_refl1d_dat(path: Path) -> bool:
 
 def import_refl1d_dat(filepath: str | Path) -> DataStruct:
     path = Path(filepath)
-    lines = path.read_text(encoding="latin-1").splitlines()
+    lines = read_text(path).splitlines()
 
     header_meta: dict[str, Any] = {}
     column_line = ""

@@ -9,11 +9,48 @@ import re
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-__all__ = ["NO_COLUMN", "parse_col_header", "read_head", "resolve_column"]
+__all__ = [
+    "NO_COLUMN",
+    "decode_text",
+    "parse_col_header",
+    "read_head",
+    "read_text",
+    "resolve_column",
+]
 
 NO_COLUMN = -1
 
 _HEADER_UNIT_RE = re.compile(r"^(.+?)\s*\(([^)]+)\)\s*$")
+
+_UTF8_BOM = b"\xef\xbb\xbf"
+_UTF16_BOMS = (b"\xff\xfe", b"\xfe\xff")
+
+
+def decode_text(raw: bytes) -> str:
+    """Decode an instrument text file's bytes, BOM-aware.
+
+    A UTF-8 / UTF-16 byte-order mark selects that codec and is dropped (left
+    in place it glued ``"ï»¿"`` onto the first cell, which turned a headerless
+    file's first number into text and dropped that row). Otherwise strict
+    UTF-8 is tried first -- a UTF-8 ``"µemu"`` decoded as latin-1 is the
+    mojibake ``"Âµemu"`` -- and anything that is not valid UTF-8 falls back to
+    latin-1, which maps every byte, so the legacy 8-bit exports these parsers
+    were written for decode exactly as before. Pure ASCII is identical under
+    all three.
+    """
+    if raw.startswith(_UTF8_BOM):
+        return raw[len(_UTF8_BOM) :].decode("utf-8", errors="replace")
+    if raw.startswith(_UTF16_BOMS):
+        return raw.decode("utf-16", errors="replace")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("latin-1")
+
+
+def read_text(path: str | Path) -> str:
+    """Read a whole text file through :func:`decode_text`."""
+    return decode_text(Path(path).read_bytes())
 
 
 def read_head(path: str | Path, nbytes: int = 65536, *, encoding: str = "latin-1") -> str:
@@ -33,9 +70,14 @@ def read_head(path: str | Path, nbytes: int = 65536, *, encoding: str = "latin-1
     arbitrary byte boundary can never split a multi-byte character; other
     encodings use ``errors="replace"`` for the same reason a truncated read
     would otherwise risk.
+
+    A leading UTF-8 byte-order mark is dropped, so a sniffer anchored on the
+    first line (``line.startswith("#")``) sees the same text the parser will.
     """
     with Path(path).open("rb") as fh:
         raw = fh.read(nbytes)
+    if raw.startswith(_UTF8_BOM):
+        raw = raw[len(_UTF8_BOM) :]
     return raw.decode(encoding, errors="replace")
 
 

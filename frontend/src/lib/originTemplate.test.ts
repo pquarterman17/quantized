@@ -87,7 +87,7 @@ describe("BUG-016 — an imported Origin template's colour provenance", () => {
     // commit: `[{width: 0, marker: true}]` — the Origin colour gone.
     const t = sanitizeImportedTemplate(WIRE, "fallback")!;
     expect(toWireSeriesStyles(t.seriesStyles!, true)).toEqual([
-      { color: "#FF0000", width: 0, marker: true }, null,
+      { color: "#FF0000", width: 0, marker: true, marker_size: 5 }, null,
     ]);
   });
 });

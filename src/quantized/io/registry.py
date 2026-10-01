@@ -17,6 +17,7 @@ from typing import Any
 
 from quantized.datastruct import DataStruct
 from quantized.heavy_import import heavy_imports
+from quantized.io.base import read_text
 from quantized.io.bruker_brml import import_bruker_brml
 from quantized.io.bruker_raw import import_bruker_raw, is_bruker_raw
 from quantized.io.cif import import_cif
@@ -182,7 +183,7 @@ def _import_via_saved_filter(path: Path) -> DataStruct:
     filt = match_filter(path)
     if filt is None:  # pragma: no cover - resolve_parser only routes here on a match
         raise ValueError(f"no saved import filter matches '{path.name}'")
-    return parse_import(path.read_text(encoding="latin-1"), filt.settings)
+    return parse_import(read_text(path), filt.settings)
 
 
 # ── Plugin registration (single-registration path; gap #8) ──────────────────

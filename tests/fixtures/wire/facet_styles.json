@@ -129,7 +129,8 @@
               ],
               "style": {
                 "marker": true,
-                "marker_shape": "square"
+                "marker_shape": "square",
+                "marker_size": 5
               }
             }
           ]
@@ -151,7 +152,8 @@
         {
           "color": "#2d3047",
           "marker": true,
-          "marker_shape": "square"
+          "marker_shape": "square",
+          "marker_size": 5
         }
       ],
       "overrides": {

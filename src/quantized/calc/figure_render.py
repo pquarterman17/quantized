@@ -69,6 +69,7 @@ import matplotlib
 from matplotlib.backends.backend_agg import FigureCanvasAgg
 from matplotlib.figure import Figure
 
+from quantized.calc.figure_legend_memo import memoize_best_legends
 from quantized.calc.render_lock import (
     RENDER_LOCK,
     RENDER_LOCK_TIMEOUT_S,
@@ -118,7 +119,9 @@ def render_scope(rc: Mapping[str, Any] | None = None) -> Iterator[None]:
     merged: dict[str, Any] = {**BASE_RC, **(rc or {})}
     # (matplotlib's RcParams Literal-key type is impractical with the dynamic
     # font.<generic> key the styles use -- hence the targeted ignore.)
-    with acquire_render_lock(), matplotlib.rc_context(merged):  # type: ignore[arg-type]
+    # memoize_best_legends: a "best" legend is scored once per layout, not on
+    # every placement (5 per export; see calc/figure_legend_memo.py).
+    with acquire_render_lock(), matplotlib.rc_context(merged), memoize_best_legends():  # type: ignore[arg-type]
         yield
 
 
