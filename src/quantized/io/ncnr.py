@@ -18,6 +18,7 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import _to_float
+from quantized.io.base import read_text
 
 __all__ = ["import_ncnr_dat", "import_ncnr_pnr", "import_ncnr_refl", "is_ncnr_refl"]
 
@@ -38,7 +39,7 @@ def is_ncnr_refl(path: str | Path) -> bool:
     route it to the refl1d parser. Scans the header line-by-line (the reductus
     ``"template_data"`` line alone can exceed several KB, so a fixed byte slice
     would miss the later ``"columns"`` key) and stops at the first data row."""
-    with Path(path).open(encoding="latin-1", errors="replace") as fh:
+    with Path(path).open(encoding="utf-8-sig", errors="replace") as fh:
         for raw in fh:
             line = raw.rstrip("\n")
             if not line.startswith("#"):
@@ -230,7 +231,7 @@ def _refl_role_metadata(
 def import_ncnr_refl(filepath: str | Path) -> DataStruct:
     """Import an NCNR reductus ``.refl`` file (PBR or CANDOR)."""
     path = Path(filepath)
-    lines = path.read_text(encoding="latin-1").splitlines()
+    lines = read_text(path).splitlines()
 
     name = ""
     polarization = ""
@@ -320,7 +321,7 @@ def _clean_polarization(label: str) -> str:
 def import_ncnr_pnr(filepath: str | Path) -> DataStruct:
     """Import an NCNR polarized neutron reflectometry ``.pnr`` (tab-delimited)."""
     path = Path(filepath)
-    lines = path.read_text(encoding="latin-1").splitlines()
+    lines = read_text(path).splitlines()
     if len(lines) < 3:
         raise ValueError(f"{path.name}: too few lines for a .pnr file")
     col_names = lines[0].strip().split("\t")
@@ -384,7 +385,7 @@ def import_ncnr_dat(filepath: str | Path) -> DataStruct:
     )
     if pol is None:
         raise ValueError(f"{path.name}: expected extension .datA/.datB/.datC/.datD")
-    lines = path.read_text(encoding="latin-1").splitlines()
+    lines = read_text(path).splitlines()
 
     intensity = float("nan")
     background = float("nan")

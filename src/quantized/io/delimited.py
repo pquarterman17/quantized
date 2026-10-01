@@ -23,7 +23,7 @@ from quantized.io._delimited_fast import (
     _tokens_to_columns,
     try_fast_parse_matrix,
 )
-from quantized.io.base import resolve_column
+from quantized.io.base import read_text, resolve_column
 
 __all__ = ["import_csv"]
 
@@ -184,7 +184,7 @@ def import_csv(
     there is no environment-variable equivalent.
     """
     path = Path(filepath)
-    raw_lines, comment_lines = _split_lines(path.read_text(encoding="latin-1"))
+    raw_lines, comment_lines = _split_lines(read_text(path))
     if not raw_lines:
         raise ValueError(f"file empty or only comments: {path.name}")
     delim = layout._detect_delimiter(raw_lines)
@@ -235,7 +235,7 @@ def import_csv(
         matrix = fast_matrix
         data_tokens = _DeferredDataTokens(raw_lines, data_start, delim)
     else:
-        data_tokens_list = [line.split(delim) for line in raw_lines[data_start:]]
+        data_tokens_list = [layout.split_row(line, delim) for line in raw_lines[data_start:]]
         columns_str = _tokens_to_columns(data_tokens_list, n_cols)
         matrix = np.empty((n_rows, n_cols), dtype=np.float64)
         for c in range(n_cols):
@@ -244,6 +244,8 @@ def import_csv(
         # built lazily -- assign it directly rather than wrapping it, since
         # it is already a `Sequence[Sequence[str]]`.
         data_tokens = data_tokens_list
+    if delim != ",":  # with a comma delimiter, "1,5" is already two cells
+        layout.reject_comma_numbers(path.name, col_headers, matrix, data_tokens)
 
     if isinstance(time_column, int) and time_column < 0:
         time_idx = -1

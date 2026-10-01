@@ -31,6 +31,8 @@ from typing import overload
 
 import numpy as np
 
+from quantized.io._delimited_layout import split_row
+
 __all__ = ["LazyTokenRows", "try_fast_parse_matrix"]
 
 
@@ -69,7 +71,7 @@ class LazyTokenRows(Sequence[Sequence[str]]):
     def _row(self, index: int) -> list[str]:
         row = self._cache.get(index)
         if row is None:
-            row = self._raw_lines[index].split(self._delim)
+            row = split_row(self._raw_lines[index], self._delim)
             self._cache[index] = row
         return row
 
@@ -125,7 +127,7 @@ class _DeferredDataTokens(Sequence[Sequence[str]]):
 
     def _materialize(self) -> list[list[str]]:
         if self._rows is None:
-            self._rows = [line.split(self._delim) for line in self._raw_lines[self._start :]]
+            self._rows = [split_row(line, self._delim) for line in self._raw_lines[self._start :]]
         return self._rows
 
     def __len__(self) -> int:
@@ -192,7 +194,9 @@ def _probe_all_numeric(sample_lines: Sequence[str], delim: str, n_cols: int) -> 
     wrong answer.
     """
     for line in sample_lines:
-        tokens = line.split(delim)
+        if '"' in line:
+            return False  # quoted cells: np.loadtxt would not unquote them
+        tokens = split_row(line, delim)
         if len(tokens) != n_cols:
             return False
         for tok in tokens:
@@ -237,7 +241,9 @@ def try_fast_parse_matrix(
     try:
         matrix = np.loadtxt(
             _io.StringIO(block),
-            delimiter=delim,
+            # A space delimiter means whitespace RUNS (see `split_row`), which
+            # is exactly np.loadtxt's own `delimiter=None` behaviour.
+            delimiter=None if delim == " " else delim,
             dtype=np.float64,
             ndmin=2,
             comments=None,

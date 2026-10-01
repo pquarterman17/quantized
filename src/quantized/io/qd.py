@@ -14,7 +14,7 @@ import numpy as np
 
 from quantized.datastruct import DataStruct
 from quantized.io._delimited_layout import _to_float
-from quantized.io.base import NO_COLUMN, parse_col_header, read_head, resolve_column
+from quantized.io.base import NO_COLUMN, parse_col_header, read_head, read_text, resolve_column
 
 __all__ = ["import_mpms", "import_ppms", "import_qd_vsm", "is_ppms_dat", "is_qd_file"]
 
@@ -124,7 +124,7 @@ def import_qd_vsm(
 ) -> DataStruct:
     """Import a QD ``.dat`` file. Defaults to Magnetic Field (x) vs Moment (y)."""
     path = Path(filepath)
-    raw_lines = path.read_text(encoding="latin-1").splitlines()
+    raw_lines = read_text(path).splitlines()
 
     header, data_start = _parse_header(raw_lines)
     if data_start < 0:
@@ -272,7 +272,7 @@ def import_ppms(
 ) -> DataStruct:
     """Import a legacy PPMS/VSM plain-CSV ``.dat`` (no [Header]/[Data] markers)."""
     path = Path(filepath)
-    lines = path.read_text(encoding="latin-1").splitlines()
+    lines = read_text(path).splitlines()
 
     header_idx = next(
         (i for i, ln in enumerate(lines) if ln.strip() and ln.strip()[0] not in _COMMENT_CHARS),
