@@ -28,7 +28,7 @@ import { createFigureDocument } from "./figureDocument";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import { withFacetRows } from "./figureSpecFacets";
 import { facetSplitChannels } from "./facet";
-import { encodedFacetPanels, encodeSpec } from "./plotEncoding";
+import { encodedFacetPanels, encodedSpecRender, encodeSpec } from "./plotEncoding";
 import { facetEncoding, facetSplitEncoding, type FigureEncoding } from "./plotEncodingBinding";
 import type { PlotSpec } from "./plotspec";
 import { defaultPlotView } from "./plotview";
@@ -263,5 +263,38 @@ describe("Color / Symbol / Label on an xy facet grid — preview, Stage and expo
       "A gradient colours single points, so it does not apply while faceted.",
     ]);
     expect(encodingNotes(DS, SPEC)).toEqual([]);
+  });
+});
+
+// The `group` entry of `tests/fixtures/wire/facet_styles.json` (pinned against
+// the Stage by `Stage/MultiPanelStage.facetStyles.test.tsx` and against the
+// route by `tests/test_export_facet_styles.py`): ch0 B (x), ch1 level (the
+// facet), ch2 g (the group, A/B; level 1 has no B rows), ch3 M.
+const STYLES_FIXTURE = join(here, "../../../tests/fixtures/wire/facet_styles.json");
+
+describe("Group ALONE on a faceted Graph Builder spec — the preview splits as the Stage and export do", () => {
+  it("draws every panel's series per level, exactly the fixture's screen", () => {
+    const fixture = JSON.parse(readFileSync(STYLES_FIXTURE, "utf-8")).group as {
+      request: { dataset: DataStruct };
+      screen: { label: string; series: { label: string; points: [number, number][] }[] }[];
+    };
+    const ds: Dataset = { id: "fg", name: "group.csv", data: fixture.request.dataset };
+    const g = (channel: number) => ({ datasetId: "fg", channel });
+    const spec: PlotSpec = {
+      version: 1,
+      zones: { x: g(0), y: [g(3)], group: g(2), facet: g(1), yErr: [], xErr: null },
+      mark: "line",
+    };
+    // What the preview canvas draws: the render's facet panels.
+    const { render } = encodedSpecRender(spec, [ds]);
+    if (render.kind !== "xy") throw new Error(render.kind);
+    const preview = render.facets?.map((p) => ({
+      label: p.label,
+      series: p.payload.series.map((s, j) => ({
+        label: s.unit ? `${s.label} (${s.unit})` : s.label,
+        points: drawn("", {}, p.payload.data as Cols, j).points,
+      })),
+    }));
+    expect(preview).toEqual(fixture.screen);
   });
 });
