@@ -91,6 +91,7 @@ import { createReportsFigureDocsSlice, type ReportsFigureDocsSlice } from "./rep
 import { createViewAppliersSlice, type ViewAppliersSlice } from "./viewAppliers";
 import { createWorkspaceHydrationSlice, type WorkspaceHydrationSlice } from "./workspaceHydration";
 import { createMacroPipelineSlice, type MacroPipelineSlice } from "./macroPipeline";
+import { createWorkshopFlagsSlice, type WorkshopFlagsSlice } from "./workshopFlags";
 import { toast } from "./toasts";
 import { openTransformPreview, seedIds } from "./transformPreviewDialog";
 import { loadPrefs, syncPrefs, type Prefs } from "./prefs";
@@ -101,14 +102,12 @@ import { createPlotViewSettingsSlice, type PlotViewSettingsSlice } from "./plotV
 import type {
   Annotation,
   AxisFormat, AxisScale,
-  BaselineOverlay,
   ChannelRole,
   Dataset,
   DataStruct, DefaultTrace,
-  FitOverlay, FitSpec,
+  FitSpec,
   FolderNode,
   ModelingType,
-  PeakOverlay,
   RefLine,
   SeriesStyle,
 } from "../lib/types";
@@ -190,55 +189,9 @@ export type PlotTool =
 /** Committed integral region from the ∫ tool (lib/plotRangeSelection). */
 export type { IntegralResult };
 
-/** A layer SLD handed from the calculators SLD tab to the reflectivity workshop
- *  (cross-panel hook). `sld` is in Å⁻² (the reflectivity layer unit — the SLD tab
- *  converts its ×10⁻⁶ Å⁻² display value). `label` is a short provenance note. */
-export interface ReflectivitySeed {
-  sld: number;
-  label?: string;
-}
-
-/** The stat-stage pickers the Graph Builder hands over when it sends a box/violin
- *  spec to the stage (cross-panel hook, mirrors ReflectivitySeed). `useStatStage`
- *  consumes it once and clears it. `groupCol` = the categorical column to group
- *  by (null = per-plotted-channel fallback); `valueCol` = the value channel. */
-export interface StatStageSeed {
-  mode: "box" | "violin" | "bar";
-  groupCol: number | null;
-  valueCol: number;
-  facetCol?: number | null; group2Col?: number | null; colorCol?: number | null; // #11 facet; P1.4 Color-by (lib/statColor)
-}
-
-/** Peak Analyzer wizard click-on-plot marker editing (interaction plan item
- *  5, deferred from closed gap #31) — the bridge PlotStage reads to wire
- *  `peakMarkerEditPlugin` (lib/peakMarkerHit.ts). `usePeakWizard` is the sole
- *  owner of the candidate list and `addPeakAt`/`removePeak`; this is a THIN,
- *  minimal projection (marker data coords + the two callbacks) pushed into
- *  the store only while step ② is live — null the rest of the time (wizard
- *  closed, a different step, or Escape-suppressed). Mirrors
- *  ReflectivitySeed/StatStageSeed's cross-panel-hook shape, generalized to a
- *  live bridge rather than a one-shot consume (closer in spirit to
- *  qfitRoi/onRoiChange, but the callbacks travel WITH the data since
- *  usePeakWizard — not the store — owns the compute). */
-export interface PeakWizardEditBridge {
-  markers: { index: number; center: number; height: number }[];
-  addPeakAt: (x: number) => void;
-  removePeak: (index: number) => void;
-}
-
-/** Anchor-point baseline click/drag editing (GOTO #2) — the bridge PlotStage
- *  reads to wire `anchorEditPlugin` (lib/uplotAnchors.ts). `useBaseline` owns
- *  the anchor list + mutators; published only while the workshop's "Anchor
- *  points" method is live, null otherwise. Anchors are (x, y) DATA coords.
- *  IDENTITY CONTRACT (MAIN #8f): published ONCE per activation and stable
- *  across edits — anchors flow through `getAnchors` (a ref read), because
- *  PlotViewport keys its uPlot-rebuild effect on this object's identity. */
-export interface AnchorEditBridge {
-  getAnchors: () => { index: number; x: number; y: number }[];
-  addAnchor: (x: number, y: number) => void;
-  moveAnchor: (index: number, x: number, y: number) => void;
-  removeAnchor: (index: number) => void;
-}
+// ReflectivitySeed/StatStageSeed/PeakWizardEditBridge/AnchorEditBridge moved
+// with their fields to store/workshopFlags.ts; re-exported so no importer changed.
+export type { AnchorEditBridge, PeakWizardEditBridge, ReflectivitySeed, StatStageSeed } from "./workshopFlags";
 
 export type LegendPos = "ne" | "nw" | "se" | "sw";
 // Keys the Preferences dialog can set through the generic setPref action.
@@ -250,7 +203,7 @@ export type PrefKey = keyof Prefs;
 // Exported for the window slice (store/windows.ts), which types its actions
 // against the WHOLE composed store — cross-slice reads/writes are the point
 // of slice composition (type-only in that direction, so no runtime cycle).
-export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice {
+export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, ReimportSlice, ReimportAllSlice, PanelsSlice, PointerToolSlice, SplitSlice, ShapesSlice, RegionShadesSlice, ToolWindowsSlice, OriginImportSlice, OriginFallbackSlice, WorksheetSelectionSlice, LibraryPanelSlice, GraphBuilderSlice, CorrectionsSlice, ComputedColumnsSlice, DerivedWorksheetsSlice, CellEditSlice, GadgetSlice, DatasetMetaSlice, DataIntakeSlice, RowStateSlice, TrashSlice, ImportSlice, RecentsSlice, ProjectSlice, FigureLifecycleSlice, QuickPlotActionSlice, QuickFigureCreateSlice, QuickPlotTemplatesSlice, PlotRecipesSlice, QuickFigureBuilderSlice, PageDocumentSlice, RoisSlice, RoiCutsPanelSlice, WorkbookActionsSlice, CollectionsSlice, WorkbookCombineSlice, WorkbookSeparateSlice, LibraryDetailsColumnsSlice, WorkbookTransferSlice, RecipeFidelitySlice, PlotViewSettingsSlice, ReportsFigureDocsSlice, ViewAppliersSlice, WorkspaceHydrationSlice, MacroPipelineSlice, WorkshopFlagsSlice {
   datasets: Dataset[];
   activeId: string | null;
   // Multi-selection for bulk ops (Delete key). `activeId` stays the plotted
@@ -327,7 +280,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // (frames = aspect-preserving letterbox, window = fill). Read at apply time,
   // mirroring how `defaultGrid` seeds `showGrid`.
   defaultPanelFit: PanelFit;
-  prefsOpen: boolean;
   yScale: AxisScale; // Y axis scale (MAIN #12: linear/log/reciprocal)
   xScale: AxisScale; // X axis scale
   showGrid: boolean; // draw the plot grid lines
@@ -410,51 +362,11 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   fwhmResult: FwhmResult | null;
   // (qfitRoi/qfitModel/.../gadgetCursorResult — the quick-fit / ROI-gadget
   // family's state — moved to store/gadget.ts's GadgetSlice.)
-  cmdkOpen: boolean; curveFitOpen: boolean;
-  hysteresisOpen: boolean; peaksOpen: boolean;
-  reflectivityOpen: boolean;
-  // A pending SLD layer seeded by the calculators SLD tab; consumed once by the
-  // reflectivity workshop on open, then cleared (cross-panel hook).
-  reflectivitySeed: ReflectivitySeed | null;
-  baselineOpen: boolean; calculatorsOpen: boolean;
-  magToolsOpen: boolean;
-  rsmOpen: boolean; digitizerOpen: boolean;
-  datasetMathOpen: boolean; tabulateOpen: boolean;
-  distributionOpen: boolean;
-  dataFilterOpen: boolean;
-  statsChooserOpen: boolean; // the "which test?" front door (#26)
-  peakWizardOpen: boolean; // the Peak Analyzer stepper (#31)
-  importWizardOpen: boolean; // guess/preview/parse over a saved-filter (#40)
-  pipelineOpen: boolean; // the editable pipeline view (#6)
-  figureBuilderOpen: boolean;
-  figurePageOpen: boolean; // the multi-panel figure page composer (GOTO #4)
-  // graphBuilderOpen/graphBuilderSeed/savedPlotSpecs/activePlotSpecId now live
-  // on GraphBuilderSlice (store/graphBuilder.ts) — see AppState's extends list.
-  // One-shot pickers handed from the Graph Builder to the stat stage when a
-  // box/violin spec is sent (consumed + cleared by useStatStage). null = none.
-  statStageSeed: StatStageSeed | null;
-  waterfallOpen: boolean;
-  reflViewOpen: boolean;
-  columnSwitcherOpen: boolean; // the JMP-style solo-a-channel flipper (#54)
-  shortcutsOpen: boolean;
-  textFormatHelpOpen: boolean; // Help ▸ Text formatting (GOTO #11)
-  fitOverlay: FitOverlay | null;
-  peakOverlay: PeakOverlay | null;
-  baselineOverlay: BaselineOverlay | null;
-  // Peak wizard click-on-plot marker editing (item 5) — see PeakWizardEditBridge.
-  peakWizardEdit: PeakWizardEditBridge | null;
-  // Anchor-point baseline editing (GOTO #2) — see AnchorEditBridge.
-  baselineAnchorEdit: AnchorEditBridge | null;
+  // (prefsOpen + every workshop/dialog open flag, the reflectivity/stat-stage
+  // seeds, the fit/peak/baseline overlays, the peak/anchor edit bridges and
+  // the map/contour settings live on WorkshopFlagsSlice — store/workshopFlags.ts.)
   // rsmPeaks/setRsmPeaks: see RoisSlice (store/rois.ts) — relocated there
   // under the store-size ratchet (RSM_CUTS_PLAN item 4).
-  mapMethod: string; // 2D-map regrid interpolation (natural/linear/nearest/idw)
-  mapRes: number; // 2D-map grid resolution (nx = ny)
-  // Interactive contour overlay (ORIGIN_GAP_PLAN #17 remaining half). Mirrors
-  // the export side's `_contour_levels` semantics (calc/figure_map.py) so the
-  // on-screen lines and the exported figure agree.
-  contourOn: boolean;
-  contourLevelCount: number;
-  contourScale: "linear" | "log";
   // macroRecording / macroSteps / pipelineRunning — the macro recorder +
   // pipeline view's (#6) OWN state — declared on MacroPipelineSlice
   // (store/macroPipeline.ts); see AppState's extends list.
@@ -558,7 +470,6 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   setPalette: (palette: string) => void;
   // Generic pref setter (used by the Preferences dialog); applies + persists.
   setPref: (key: PrefKey, value: string | number | boolean) => void;
-  setPrefsOpen: (open: boolean) => void;
   // (setYScale … setErrKey and setSeriesOrder/toggleHidden/soloChannel/
   //  setWaterfall — every writer of singleton PlotView state — are declared
   //  on PlotViewSettingsSlice; see store/plotViewSettings.ts.)
@@ -575,48 +486,8 @@ export interface AppState extends WindowsSlice, HistorySlice, ReductionsSlice, R
   // (the quick-fit / ROI-gadget family's state + actions moved to
   // store/gadget.ts — composed via createGadgetSlice at the top of this
   // literal, GadgetSlice added to this interface's extends clause.)
-  setCmdk: (open: boolean) => void;
-  setCurveFitOpen: (open: boolean) => void;
-  setHysteresisOpen: (open: boolean) => void;
-  setPeaksOpen: (open: boolean) => void;
-  setReflectivityOpen: (open: boolean) => void;
-  // Send an SLD to the reflectivity workshop as a new layer + open it (SLD→refl).
-  seedReflectivityLayer: (seed: ReflectivitySeed) => void;
-  clearReflectivitySeed: () => void;
-  setBaselineOpen: (open: boolean) => void;
-  setCalculatorsOpen: (open: boolean) => void;
-  setMagToolsOpen: (open: boolean) => void;
-  setRsmOpen: (open: boolean) => void;
-  setDigitizerOpen: (open: boolean) => void;
-  setDatasetMathOpen: (open: boolean) => void;
-  setTabulateOpen: (open: boolean) => void;
-  setDistributionOpen: (open: boolean) => void;
-  setDataFilterOpen: (open: boolean) => void;
-  setStatsChooserOpen: (open: boolean) => void;
-  setPeakWizardOpen: (open: boolean) => void;
-  setImportWizardOpen: (open: boolean) => void;
-  setPipelineOpen: (open: boolean) => void;
-  setFigureBuilderOpen: (open: boolean) => void;
-  setFigurePageOpen: (open: boolean) => void;
-  // Send a box/violin Graph Builder spec to the stat stage: store the pickers +
-  // switch statMode on; clearStatStageSeed drops the pending pickers once read.
-  seedStatStage: (seed: StatStageSeed) => void;
-  clearStatStageSeed: () => void;
-  setWaterfallOpen: (open: boolean) => void;
-  setReflViewOpen: (open: boolean) => void;
-  setColumnSwitcherOpen: (open: boolean) => void;
-  setShortcutsOpen: (open: boolean) => void;
-  setTextFormatHelpOpen: (open: boolean) => void;
-  setFitOverlay: (overlay: FitOverlay | null) => void;
-  setPeakOverlay: (overlay: PeakOverlay | null) => void;
-  setBaselineOverlay: (overlay: BaselineOverlay | null) => void;
-  setPeakWizardEdit: (edit: PeakWizardEditBridge | null) => void;
-  setBaselineAnchorEdit: (edit: AnchorEditBridge | null) => void;
-  setMapMethod: (method: string) => void;
-  setMapRes: (res: number) => void;
-  setContourOn: (on: boolean) => void;
-  setContourLevelCount: (n: number) => void;
-  setContourScale: (scale: "linear" | "log") => void;
+  // (setPrefsOpen, setCmdk … setContourScale — the workshop-flag, seed,
+  // overlay and map/contour setters — are declared on WorkshopFlagsSlice.)
   // (startMacro … setPipelineRunning — the macro recorder + pipeline view's
   // actions — are declared on MacroPipelineSlice; see store/macroPipeline.ts.)
   setStatus: (status: string) => void;
@@ -679,6 +550,7 @@ export const useApp = create<AppState>((set, get) => ({
   ...createViewAppliersSlice(set, get),
   ...createWorkspaceHydrationSlice(set, get),
   ...createMacroPipelineSlice(set),
+  ...createWorkshopFlagsSlice(set),
   datasets: [],
   activeId: null,
   worksheetId: null,
@@ -706,7 +578,6 @@ export const useApp = create<AppState>((set, get) => ({
   // is re-assigned here with the IDENTICAL value `createLibraryPanelSlice`
   // above was already constructed from, so the order of the two is immaterial.
   ..._initialPrefs,
-  prefsOpen: false,
   yScale: "linear",
   xScale: "linear",
   showGrid: _initialPrefs.defaultGrid,
@@ -755,46 +626,8 @@ export const useApp = create<AppState>((set, get) => ({
   fwhmResult: null,
   // (qfitRoi/.../gadgetCursorResult initial state now lives in
   // store/gadget.ts's createGadgetSlice, spread in below.)
-  cmdkOpen: false,
-  curveFitOpen: false,
-  hysteresisOpen: false,
-  peaksOpen: false,
-  reflectivityOpen: false,
-  reflectivitySeed: null,
-  baselineOpen: false,
-  calculatorsOpen: false,
-  magToolsOpen: false,
-  rsmOpen: false,
-  digitizerOpen: false,
-  datasetMathOpen: false,
-  tabulateOpen: false,
-  distributionOpen: false,
-  dataFilterOpen: false,
-  statsChooserOpen: false,
-  peakWizardOpen: false,
-  importWizardOpen: false,
-  pipelineOpen: false,
-  figureBuilderOpen: false,
-  figurePageOpen: false,
-  statStageSeed: null,
-  waterfallOpen: false,
-  reflViewOpen: false,
-  columnSwitcherOpen: false,
-  shortcutsOpen: false,
-  textFormatHelpOpen: false,
-  fitOverlay: null,
-  peakOverlay: null,
-  baselineOverlay: null,
-  peakWizardEdit: null,
-  baselineAnchorEdit: null,
-  // 'linear' default: fast (~50 ms) and bit-exact MATLAB parity. 'natural'
-  // (true Sibson) is correct but does a per-query Voronoi cavity walk (seconds
-  // at 200²), so it's an opt-in quality choice, not the auto-open default.
-  mapMethod: "linear",
-  mapRes: 200,
-  contourOn: false,
-  contourLevelCount: 8,
-  contourScale: "linear",
+  // (prefsOpen, cmdkOpen … contourScale initialized by
+  // createWorkshopFlagsSlice above, spread into this literal.)
   // (macroRecording / macroSteps / pipelineRunning initialized by
   // createMacroPipelineSlice above, spread into this literal.)
   status: "starting…",
@@ -1172,7 +1005,6 @@ export const useApp = create<AppState>((set, get) => ({
     set({ [key]: value } as Partial<AppState>);
     syncPrefs(get());
   },
-  setPrefsOpen: (prefsOpen) => set({ prefsOpen }),
   // (the PlotView-settings action implementations moved to
   // store/plotViewSettings.ts — composed via createPlotViewSettingsSlice
   // at the top of this literal.)
@@ -1230,24 +1062,8 @@ export const useApp = create<AppState>((set, get) => ({
   setIntegral: (integral) =>
     set((s) => ({ integral: integral && { ...integral, context: { datasetId: s.activeId, xKey: s.xKey } } })),
   setFwhmResult: (fwhmResult) => set({ fwhmResult }),
-  setCmdk: (cmdkOpen) => set({ cmdkOpen }),
-  setCurveFitOpen: (curveFitOpen) => set({ curveFitOpen }),
-  setHysteresisOpen: (hysteresisOpen) => set({ hysteresisOpen }),
-  setPeaksOpen: (peaksOpen) => set({ peaksOpen }),
-  setReflectivityOpen: (reflectivityOpen) => set({ reflectivityOpen }),
-  seedReflectivityLayer: (reflectivitySeed) => set({ reflectivitySeed, reflectivityOpen: true }),
-  clearReflectivitySeed: () => set({ reflectivitySeed: null }),
-  setBaselineOpen: (baselineOpen) => set({ baselineOpen }),
-  setCalculatorsOpen: (calculatorsOpen) => set({ calculatorsOpen }),
-  setRsmOpen: (rsmOpen) => set({ rsmOpen }),
-  setDigitizerOpen: (digitizerOpen) => set({ digitizerOpen }),
-  setDatasetMathOpen: (datasetMathOpen) => set({ datasetMathOpen }),
-  setTabulateOpen: (tabulateOpen) => set({ tabulateOpen }),
-  setDistributionOpen: (distributionOpen) => set({ distributionOpen }),
-  setStatsChooserOpen: (statsChooserOpen) => set({ statsChooserOpen }),
-  setPeakWizardOpen: (peakWizardOpen) => set({ peakWizardOpen }),
-  setImportWizardOpen: (importWizardOpen) => set({ importWizardOpen }),
-  setPipelineOpen: (pipelineOpen) => set({ pipelineOpen }),
+  // (setPrefsOpen, setCmdk … setContourScale bodies moved to
+  // createWorkshopFlagsSlice, spread into this literal above.)
   // ── Recalc engine (#1; K3/K5c/K5d generalize it over derived worksheets) ──
   // `downstreamOf` (lib/recalc.ts) now walks the WIDENED ds/col/sheet/fit
   // graph internally, so a dataset with `derivedFrom` set (K2, L0.50) already
@@ -1302,27 +1118,6 @@ export const useApp = create<AppState>((set, get) => ({
     set((s) => ({ datasets: s.datasets.map((d) => (d.id === id ? { ...d, fitSpec: spec ?? undefined } : d)) }));
     refreshFitRefsLater(id, get); // P2.5: fit() columns follow the fit
   },
-  setDataFilterOpen: (dataFilterOpen) => set({ dataFilterOpen }),
-  setFigureBuilderOpen: (figureBuilderOpen) => set({ figureBuilderOpen }),
-  setFigurePageOpen: (figurePageOpen) => set({ figurePageOpen }),
-  seedStatStage: (statStageSeed) => set({ statStageSeed, statMode: true }),
-  clearStatStageSeed: () => set({ statStageSeed: null }),
-  setWaterfallOpen: (waterfallOpen) => set({ waterfallOpen }),
-  setReflViewOpen: (reflViewOpen) => set({ reflViewOpen }),
-  setColumnSwitcherOpen: (columnSwitcherOpen) => set({ columnSwitcherOpen }),
-  setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
-  setTextFormatHelpOpen: (textFormatHelpOpen) => set({ textFormatHelpOpen }),
-  setMagToolsOpen: (magToolsOpen) => set({ magToolsOpen }),
-  setFitOverlay: (fitOverlay) => set({ fitOverlay }),
-  setPeakOverlay: (peakOverlay) => set({ peakOverlay }),
-  setBaselineOverlay: (baselineOverlay) => set({ baselineOverlay }),
-  setPeakWizardEdit: (peakWizardEdit) => set({ peakWizardEdit }),
-  setBaselineAnchorEdit: (baselineAnchorEdit) => set({ baselineAnchorEdit }),
-  setMapMethod: (mapMethod) => set({ mapMethod }),
-  setMapRes: (mapRes) => set({ mapRes }),
-  setContourOn: (contourOn) => set({ contourOn }),
-  setContourLevelCount: (n) => set({ contourLevelCount: Math.max(2, Math.round(n)) }),
-  setContourScale: (contourScale) => set({ contourScale }),
   // (startMacro … setPipelineRunning bodies moved to
   // createMacroPipelineSlice, spread into this literal above.)
   setStatus: (status) => set({ status }),
