@@ -8,12 +8,12 @@
 // `store/commands.ts`'s MAIN #9 note for the "keep in sync, document
 // divergences" precedent this follows.
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { contextPaletteActions } from "../../lib/paletteContextActions";
 import { fuzzy } from "../../lib/fuzzy";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
-import { mergeCommands, runAction, useCommands, type Action } from "../../store/commands";
+import { mergeCommands, PALETTE_LABEL, runAction, useCommands, type Action } from "../../store/commands";
 import { useApp } from "../../store/useApp";
 import { useOpenerCapture } from "./openerCapture";
 
@@ -29,6 +29,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
   const [cursor, setCursor] = useState(0);
   const [menuCmds, setMenuCmds] = useState<Action[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const listId = useId();
   // R2 (PRIMARY_SOFTWARE_AUDIT_PLAN): give focus back to whatever opened the
   // palette. Without it every close dropped focus on <body>, where the global
   // Delete binding removes the active dataset. This is `useOpenerRestore`'s
@@ -118,6 +119,10 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
       setCursor((c) => Math.max(0, c - 1));
     } else if (e.key === "Enter" && matches[cursor]) {
       run(matches[cursor].a);
+    } else if (e.key === "Tab") {
+      // The input is the palette's only Tab stop, so trapping Tab means
+      // staying put rather than walking into the page behind the backdrop.
+      e.preventDefault();
     }
     e.stopPropagation();
   };
@@ -134,16 +139,29 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
         close();
       }}
     >
-      <div className="qzk-glass qz-cmdk" onMouseDown={(e) => e.stopPropagation()}>
+      {/* A headingless dialog, so named by aria-label; the input is an
+          ARIA 1.2 combobox driving the listbox by aria-activedescendant. */}
+      <div
+        className="qzk-glass qz-cmdk"
+        role="dialog"
+        aria-label={PALETTE_LABEL.replace("…", "")}
+        onMouseDown={(e) => e.stopPropagation()}
+      >
         <input
           ref={inputRef}
           className="qz-cmdk-input"
           placeholder="Type a command…"
+          role="combobox"
+          aria-label="Command"
+          aria-expanded="true"
+          aria-controls={listId}
+          aria-autocomplete="list"
+          aria-activedescendant={matches[cursor] ? `${listId}-${cursor}` : undefined}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={onKey}
         />
-        <div className="qz-cmdk-list">
+        <div className="qz-cmdk-list" id={listId} role="listbox" aria-label="Commands">
           {matches.length === 0 && (
             <div className="qz-cmdk-empty">No matching commands</div>
           )}
@@ -157,6 +175,9 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
               <div key={a.id}>
                 {header}
                 <div
+                  id={`${listId}-${i}`}
+                  role="option"
+                  aria-selected={i === cursor}
                   className={`qz-cmdk-item${i === cursor ? " active" : ""}`}
                   onMouseEnter={() => setCursor(i)}
                   onMouseDown={() => run(a)}

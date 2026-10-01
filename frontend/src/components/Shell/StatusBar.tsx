@@ -53,7 +53,12 @@ export default function StatusBar() {
     <footer className="qzk-statusbar">
       <span className="qzk-conn">
         <StatusDot tone={connected ? "ok" : "warn"} />
-        {status}
+        {/* The result of most commands lands here: a polite live region,
+            mounted while empty, and exempt from a dialog's background inert
+            (R12) like the two regions below. */}
+        <span role="status" aria-live="polite" aria-label="Status message" data-live-region="">
+          {status}
+        </span>
       </span>
       {/* P3.4 slice 2: the in-flight signal the 2026-07-26 audit's #2 gap
           named ("every command-palette export runs untracked") — an async

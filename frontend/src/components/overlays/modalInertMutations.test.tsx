@@ -165,7 +165,7 @@ describe("R12 (b) — live regions that mount while a dialog is open", () => {
     expect(alert).toHaveTextContent("autosave failing");
     expect(inertAncestor(alert)).toBeNull();
     // The rest of the footer is still inert: the exemption is the alert alone.
-    expect(inertAncestor(document.querySelector(".qzk-statusbar .qzk-conn"))).not.toBeNull();
+    expect(inertAncestor(document.querySelector(".qzk-statusbar .qzk-conn")!.firstElementChild)).not.toBeNull();
   });
 
   it("a live region mounting under an inert ancestor gets the descent, not the ancestor's inert", async () => {

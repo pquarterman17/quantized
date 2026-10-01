@@ -11,7 +11,9 @@ import { useToasts } from "../../store/toasts";
 export default function Toaster() {
   const toasts = useToasts((s) => s.toasts);
   const dismiss = useToasts((s) => s.dismiss);
-  if (toasts.length === 0) return null;
+  // Rendered even while empty: screen readers commonly skip a live region
+  // that enters the DOM together with its first text, which lost the first
+  // toast's announcement (often the only one).
   return (
     // `data-live-region` (R12) exempts this element from the `inert` a modal
     // dialog puts on everything around it (lib/modalInert.ts, which also

@@ -38,6 +38,14 @@ describe("RecodePanel", () => {
     expect(container.firstChild).toBeNull();
   });
 
+  it("every field is labelled programmatically, not by a placeholder (dialog-basics audit)", () => {
+    useRecode.getState().openRecode("d1", 0);
+    render(<RecodePanel />);
+    expect(screen.getByRole("textbox", { name: "Find" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Replace with" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "New column" })).toBeInTheDocument();
+  });
+
   it("shows the live old->new preview table and level count", () => {
     useRecode.getState().openRecode("d1", 0);
     render(<RecodePanel />);

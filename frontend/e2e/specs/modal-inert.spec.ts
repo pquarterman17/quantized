@@ -304,8 +304,9 @@ test("a window opened while a dialog is open mounts inert and cannot take focus;
   const win = page.locator(".qzk-win").first();
   await expect(win).toBeAttached();
   expect(await inertAncestor(win)).toBe(true);
-  // The window tries to take focus on mount; the browser refused it.
-  expect(await page.evaluate(() => document.activeElement?.closest("[role='dialog']") !== null)).toBe(true);
+  // The window tries to take focus on mount; the browser refused it. (Tool
+  // windows are non-modal role="dialog" too, so exclude them.)
+  expect(await page.evaluate(() => document.activeElement?.closest("[role='dialog']:not(.qzk-win)") !== null)).toBe(true);
 
   await setPrefs(page, false);
   expect(await page.locator("[inert]").count()).toBe(0);

@@ -597,7 +597,7 @@ describe("row actions (P3.5 slice 3)", () => {
     fireEvent.click(screen.getByRole("button", { name: "More actions for Doomed" }));
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
 
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog", { name: /^Delete analysis template/ });
     expect(dialog).toHaveAccessibleName('Delete analysis template "Doomed" (global)?');
     expect(dialog).toHaveAccessibleDescription("This cannot be undone.");
 
@@ -621,14 +621,14 @@ describe("row actions (P3.5 slice 3)", () => {
     const focusSpy = vi.spyOn(trigger, "focus");
     fireEvent.click(trigger);
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
-    await screen.findByRole("dialog");
+    await screen.findByRole("dialog", { name: /^Delete analysis template/ });
     // The pre-dialog focus is a focus() like any other on this row, and the
     // menu can close on scroll — so it carries preventScroll too.
     expect(focusSpy).toHaveBeenCalledWith({ preventScroll: true });
     focusSpy.mockRestore();
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /^Delete analysis template/ })).not.toBeInTheDocument());
     expect(loadTemplates().map((t) => t.name)).toEqual(["Safe"]);
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "More actions for Safe" }),

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useId, useRef } from "react";
 
 import ToolWindow from "../../overlays/ToolWindow";
 import { askConfirm } from "../../overlays/ConfirmDialog";
@@ -37,6 +37,7 @@ export default function PackProjectPanel() {
   // previewPackProject()` covers the same case from the run side; this
   // covers every OTHER path back to idle (e.g. a future retry).
   const sawActive = useRef(false);
+  const existsId = useId();
   useEffect(() => {
     if (phase !== "idle") sawActive.current = true;
     else if (sawActive.current) setOpen(false);
@@ -101,7 +102,7 @@ export default function PackProjectPanel() {
             value={`${preview.manifest.summary.datasets} datasets · ${preview.manifest.summary.sources} source files · ${bytes(preview.manifest.summary.total_bytes)}`}
           />
           {preview.destination.exists && (
-            <p role="alert" className="qzk-ds-meta qzk-msg" style={{ color: "var(--warn)" }}>A folder already exists at the destination. Packing will refuse to overwrite it.</p>
+            <p id={existsId} role="alert" className="qzk-ds-meta qzk-msg" style={{ color: "var(--warn)" }}>A folder already exists at the destination. Packing will refuse to overwrite it.</p>
           )}
           {preview.warnings.length > 0 && (
             <section aria-labelledby="pack-warnings"><h3 id="pack-warnings">Needs attention</h3>
@@ -120,7 +121,7 @@ export default function PackProjectPanel() {
           </div>
           {preview.blockers.length > 0 && <p className="qzk-ds-meta qzk-msg">{preview.blockers.length === 1 ? "1 unavailable source keeps its original absolute path" : `${preview.blockers.length} unavailable sources keep their original absolute paths`} in the packed copy.</p>}
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <Button size="sm" onClick={() => void start(preview.manifest)} disabled={preview.destination.exists}>Pack Project</Button>
+            <Button size="sm" onClick={() => void start(preview.manifest)} disabled={preview.destination.exists} aria-describedby={preview.destination.exists ? existsId : undefined}>Pack Project</Button>
             <Button size="sm" onClick={() => void dismiss()}>Cancel</Button>
           </div>
         </>

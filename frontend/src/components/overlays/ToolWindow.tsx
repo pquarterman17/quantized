@@ -15,7 +15,7 @@
 // never end up with its grab handle unreachable. The title bar is also a Tab
 // stop whose arrow keys move the window and Shift+arrows resize it (R3).
 
-import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type CSSProperties, type ReactNode } from "react";
 
 import { useEscapeSurface } from "../../lib/escapeStack";
 import {
@@ -79,6 +79,7 @@ export default function ToolWindow({
   const resizeRef = useRef<{ x: number; y: number; w: number; h: number } | null>(null);
   const winRef = useRef<HTMLDivElement | null>(null);
   const titleRef = useRef<HTMLDivElement | null>(null);
+  const titleId = useId();
 
   const clampNow = (nx: number, ny: number, w: number) => {
     const th = titleRef.current?.offsetHeight ?? TITLE_BAR_HEIGHT;
@@ -258,6 +259,10 @@ export default function ToolWindow({
       ref={winRef}
       className="qzk-glass qzk-win"
       data-tool-window={id}
+      // A NON-modal dialog (no trap, no inert background), named by its
+      // visible title, so a screen reader announces which panel focus is in.
+      role="dialog"
+      aria-labelledby={titleId}
       tabIndex={-1}
       // --qzk-win-top: shell.css caps the window at the viewport below this edge.
       style={
@@ -297,7 +302,7 @@ export default function ToolWindow({
             onClick={closeNow}
           />
         )}
-        <span className="grow">{title}</span>
+        <span className="grow" id={titleId}>{title}</span>
         {topic && (
           <button
             type="button"

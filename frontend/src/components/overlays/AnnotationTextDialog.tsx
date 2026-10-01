@@ -36,6 +36,7 @@ export default function AnnotationTextDialog() {
   const [draft, setDraft] = useState("");
   const dialogRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
+  const textId = useId();
 
   // P3.3: Enter/Escape live on the dialog box's React `onKeyDown`, so they
   // need focus inside the box. This dialog is opened by a double-click on a
@@ -77,8 +78,8 @@ export default function AnnotationTextDialog() {
       >
         <h2 id={titleId}>{title}</h2>
         <div className="qz-ws-row">
-          <span className="k">Text</span>
-          <RichLabelInput value={draft} placeholder="label text" onCommit={setDraft} live />
+          <span className="k" id={textId}>Text</span>
+          <RichLabelInput value={draft} placeholder="label text" labelledBy={textId} onCommit={setDraft} live />
         </div>
         <div className="qz-btn-row">
           <Button onClick={() => finish(null)}>Cancel</Button>

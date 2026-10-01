@@ -122,3 +122,27 @@ describe("RichLabelInput keyboard shortcuts", () => {
     expect(validateRichText(onCommit.mock.calls[0][0] as string).ok).toBe(true);
   });
 });
+
+describe("RichLabelInput accessibility (dialog-basics audit)", () => {
+  it("is named by the caption it is given, not by its placeholder", () => {
+    render(
+      <>
+        <span id="cap">Text</span>
+        <RichLabelInput value="" placeholder="label text" labelledBy="cap" onCommit={() => {}} />
+      </>,
+    );
+    expect(getInput()).toHaveAccessibleName("Text");
+  });
+
+  it("links an invalid-markup message to the field with aria-invalid + aria-describedby", () => {
+    render(<RichLabelInput value={"$\\alpha"} onCommit={() => {}} />);
+    const input = getInput();
+    expect(input).toHaveAttribute("aria-invalid", "true");
+    expect(input).toHaveAccessibleDescription(/Invalid markup/);
+  });
+
+  it("valid markup is not marked invalid", () => {
+    render(<RichLabelInput value={"$\\alpha$"} onCommit={() => {}} />);
+    expect(getInput()).not.toHaveAttribute("aria-invalid");
+  });
+});
