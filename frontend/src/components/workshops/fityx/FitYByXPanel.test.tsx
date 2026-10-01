@@ -209,3 +209,35 @@ describe("FitYByXPanel — By grouping (JMP_GAP_PLAN J7)", () => {
     );
   });
 });
+
+// Silent-failure audit (2026-10-01): a rejected optional sub-test became null
+// and its section vanished (Levene even claimed "every group needs ≥ 2
+// observations"). Each failure must name the test and its reason instead.
+describe("FitYByXPanel — failed sub-tests say so", () => {
+  it("oneway: a failed Levene and test chooser each show a failure note", async () => {
+    leveneMock.mockRejectedValue(new Error("levene 500"));
+    recommendMock.mockRejectedValue(new Error("chooser 503"));
+    render(<FitYByXPanel />);
+    expect(await screen.findByText("Levene failed: levene 500")).toBeInTheDocument();
+    expect(screen.getByText("Test chooser failed: chooser 503")).toBeInTheDocument();
+    expect(screen.queryByText(/Levene unavailable/)).not.toBeInTheDocument();
+  });
+
+  it("oneway: a failed Tukey HSD shows a failure note in place of the table", async () => {
+    useApp.setState({ datasets: [{ id: "d1", name: "run.dat", data: BY_DATA }], activeId: "d1" });
+    tukeyMock.mockRejectedValue(new Error("tukey timeout"));
+    render(<FitYByXPanel />);
+    fireEvent.change(screen.getByLabelText("X (factor)"), { target: { value: "0" } }); // byc: 3 levels
+    fireEvent.change(screen.getByLabelText("Y (response)"), { target: { value: "2" } });
+    expect(await screen.findByText("Tukey HSD failed: tukey timeout")).toBeInTheDocument();
+  });
+
+  it("contingency: a failed Fisher's exact shows a failure note", async () => {
+    fisherMock.mockRejectedValue(new Error("fisher 422"));
+    render(<FitYByXPanel />);
+    fireEvent.change(screen.getByLabelText("X (factor)"), { target: { value: "0" } });
+    fireEvent.change(screen.getByLabelText("Y (response)"), { target: { value: "1" } });
+    expect(await screen.findByText("Fisher's exact failed: fisher 422")).toBeInTheDocument();
+    expect(screen.queryByText("Fisher's exact (2x2)")).not.toBeInTheDocument();
+  });
+});

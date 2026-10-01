@@ -7,6 +7,7 @@ import { fmtNum } from "../../../lib/format";
 import { DataTable } from "../../primitives/DataTable";
 import { StatusDot } from "../../primitives";
 import GroupedStrip from "./GroupedStrip";
+import SubtestFailedNote from "./SubtestFailedNote";
 import type { OnewayResult } from "./useFitYByX";
 
 function mean(xs: number[]): number {
@@ -20,7 +21,7 @@ function sd(xs: number[]): number {
 }
 
 export default function OnewayView({ result }: { result: OnewayResult }) {
-  const { groups, anova, levene, tukey, recommend } = result;
+  const { groups, anova, levene, tukey, recommend, failed } = result;
   const unequalVariance = levene != null && Number(levene.p) < 0.05;
 
   return (
@@ -57,6 +58,8 @@ export default function OnewayView({ result }: { result: OnewayResult }) {
                 : `Levene: variances consistent with equal (p=${fmtNum(levene.p)})`
             }
           />
+        ) : failed?.levene !== undefined ? (
+          <SubtestFailedNote test="Levene" reason={failed.levene} />
         ) : (
           <span className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
             Levene unavailable (every group needs ≥ 2 observations)
@@ -83,6 +86,7 @@ export default function OnewayView({ result }: { result: OnewayResult }) {
           />
         </div>
       )}
+      <SubtestFailedNote test="Tukey HSD" reason={failed?.tukey} />
 
       {recommend && (
         <div className="qzk-ds-meta" style={{ marginTop: 10, color: "var(--text-faint)" }}>
@@ -90,6 +94,7 @@ export default function OnewayView({ result }: { result: OnewayResult }) {
           {recommend.reasons.length > 0 && ` — ${recommend.reasons[0]}`}
         </div>
       )}
+      <SubtestFailedNote test="Test chooser" reason={failed?.recommend} />
     </>
   );
 }
