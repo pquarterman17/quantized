@@ -21,6 +21,7 @@ import { decodeDataStruct, isWireCellArray, type WireDataStruct } from "./nonFin
 import { parseDatasetSource } from "./datasetSource";
 import { sanitizeFilter } from "./datafilter";
 import { sanitizeBindings } from "./errorRoles";
+import { parseFitSpec } from "./fitSpecParse";
 import { baseColumns } from "./formula";
 import { sanitizePeakTable } from "./peakTable";
 import { applyComputedColumnsExtras, reresolveDerivedFitsOnLoad, sanitizeDerived } from "./workspaceComputedColumns";
@@ -31,10 +32,7 @@ import type {
   ComputedColumn,
   CorrectionParams,
   Dataset,
-  FitSpec,
-  FitWeighting,
   ModelingType,
-  WeightMode,
 } from "./types";
 
 // BUG-017: the per-cell check is `isWireCellArray` (lib/nonFiniteCells.ts),
@@ -242,40 +240,9 @@ export function parseWorkspaceDataset(d: unknown, i: number, projectDir?: string
   // Local data filter (#53): validate predicate columns against the channels.
   const filter = sanitizeFilter(dd.filter, ds.data.labels.length);
   if (filter.length) ds.filter = filter;
-  if (
-    dd.fitSpec &&
-    typeof dd.fitSpec === "object" &&
-    typeof (dd.fitSpec as Record<string, unknown>).model === "string"
-  ) {
-    const fs = dd.fitSpec as Record<string, unknown>;
-    const spec: FitSpec = { model: fs.model as string };
-    // Provenance fields (audit P1 #3), each validated; absent = legacy v1.
-    if (fs.xKey === null || (typeof fs.xKey === "number" && Number.isInteger(fs.xKey))) {
-      spec.xKey = fs.xKey as number | null;
-    }
-    if (typeof fs.yKey === "number" && Number.isInteger(fs.yKey) && fs.yKey >= 0) {
-      spec.yKey = fs.yKey;
-    }
-    // Weighting provenance (Sol audit); validated, non-`none` only.
-    const wm = (fs.weight as Record<string, unknown> | undefined)?.mode;
-    if (
-      fs.weight &&
-      typeof fs.weight === "object" &&
-      (["yerr", "poisson", "manual"] as WeightMode[]).includes(wm as WeightMode)
-    ) {
-      const w = fs.weight as Record<string, unknown>;
-      const weight: FitWeighting = { mode: wm as WeightMode };
-      if (typeof w.errKey === "number" && Number.isInteger(w.errKey) && w.errKey >= 0) {
-        weight.errKey = w.errKey;
-      }
-      spec.weight = weight;
-    }
-    if (Array.isArray(fs.params) && fs.params.every((v) => typeof v === "number")) {
-      spec.params = fs.params as number[];
-    }
-    if (typeof fs.exitFlag === "number") spec.exitFlag = fs.exitFlag;
-    ds.fitSpec = spec;
-  }
+  // Every recorded field, each validated on its own (lib/fitSpecParse.ts).
+  const fitSpec = parseFitSpec(dd.fitSpec);
+  if (fitSpec) ds.fitSpec = fitSpec;
   // Review finding 10: NOW that both `ds.formulas` (with its type-checked-
   // only fit snapshots) and `ds.fitSpec` are parsed, re-resolve every
   // snapshot against the ACTUAL loaded fit — a stale snapshot (saved before

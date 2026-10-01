@@ -197,6 +197,10 @@ export function sanitizeFrozenBundle(v: unknown): FrozenPlotBundle | null {
       xLabel: typeof p.xLabel === "string" ? p.xLabel : "x",
       xUnit: typeof p.xUnit === "string" ? p.xUnit : "",
       ...(xCategories ? { xCategories } : {}),
+      // Waterfall X block layout and the server-decimated flag: both change
+      // how the frozen columns render (x autoscale, loop drawing, re-decimation).
+      ...(Number.isInteger(p.blockRows) && (p.blockRows as number) > 0 ? { blockRows: p.blockRows as number } : {}),
+      ...(p.decimated === true ? { decimated: true } : {}),
     },
     // Structural passthrough for the style objects themselves — the same
     // cast-not-deep-validate precedent sanitizeView uses for seriesStyles.
