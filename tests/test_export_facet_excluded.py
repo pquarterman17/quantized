@@ -193,3 +193,26 @@ def test_a_masked_panel_without_its_rows_is_a_422() -> None:
     r = client.post("/api/export/figure", json=req)
     assert r.status_code == 422, r.text
     assert "rows" in r.text
+
+
+@pytest.mark.parametrize("key", ["split_color", "split_group"])
+def test_a_greyscale_split_grid_keeps_levels_apart_and_the_companion_grey(
+    monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    """Greyscale (U2) and split-grid greying (U1) together: every stroke is
+    achromatic, the split levels stay distinguishable from each other, and
+    the "(excluded)" companion stays a grey, line-less marker series."""
+    from matplotlib.colors import to_rgb
+
+    req = {**_fixture(key)["request"], "greyscale": True}
+    fig = _post_capturing(monkeypatch, "/api/export/figure", req)
+    for ax in _panels(fig):
+        levels = []
+        for line in ax.get_lines():
+            r, g, b = to_rgb(line.get_color())
+            assert abs(r - g) < 1e-6 and abs(g - b) < 1e-6, line.get_label()
+            if "(excluded)" in str(line.get_label()):
+                assert line.get_linestyle() in ("None", "none", "")
+            else:
+                levels.append((round(r, 4), line.get_linestyle(), line.get_marker()))
+        assert len(set(levels)) == len(levels), levels
