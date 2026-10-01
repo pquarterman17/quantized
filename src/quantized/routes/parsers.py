@@ -37,6 +37,7 @@ from quantized.io.origin_project.graph_preview import (
 )
 from quantized.io.origin_project.preview import decimate_with_alignment
 from quantized.routes._bookcache import cache_project_books
+from quantized.routes._datasetcache import cache_dataset
 from quantized.routes._errors import CALC_ERRORS_IO
 from quantized.routes._payload import DataStructResponse, datastruct_payload, jsonify
 from quantized.routes._uploadcache import clear_in_flight, stage_upload_stream
@@ -191,8 +192,15 @@ def _book_source_ref(path: Path, upload_token: str | None) -> dict[str, str]:
 
 def _import_with_books(
     path: Path, *, full_books: bool = False, upload_token: str | None = None
-) -> dict[str, Any]:
-    """Single-DataStruct payload; Origin projects also carry every workbook.
+) -> tuple[dict[str, Any], str | None]:
+    """``(payload, dataset handle)``: a single-DataStruct payload; Origin
+    projects also carry every workbook.
+
+    A non-Origin import is cached in ``_datasetcache`` (handle ``None`` when too
+    large to stay resident), so the client's first plot references the dataset
+    this parse just built instead of POSTing every row back (1M x 6: ~5 s). An
+    Origin project gets no handle: its top-level payload is the slimmed primary
+    book, not the DataStruct parsed here.
 
     A multi-book project adds ``"books": [...]`` so the Library still lists
     every workbook immediately (the locked import-all UX) — but, per
@@ -279,10 +287,16 @@ def _import_with_books(
         if figs:
             payload["figures"] = figs
         payload["origin_fidelity"] = fidelity
-        return payload
+        return payload, None
 
     ds = import_auto(path)
-    return datastruct_payload(ds)
+    return datastruct_payload(ds), cache_dataset(ds)
+
+
+def _payload_response(payload: dict[str, Any], handle: str | None) -> Response:
+    """The import body, with ``X-Dataset-Handle`` (the plot routes' header)
+    when the parsed dataset is resident in the cache."""
+    return DataStructResponse(payload, headers={"X-Dataset-Handle": handle} if handle else None)
 
 
 def _import_response(
@@ -334,10 +348,10 @@ def _import_response(
     docstring), it surfaces as the 500 it actually is.
     """
     try:
-        payload = _import_with_books(path, full_books=full_books, upload_token=upload_token)
+        payload, handle = _import_with_books(path, full_books=full_books, upload_token=upload_token)
     except CALC_ERRORS_IO as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return DataStructResponse(payload)
+    return _payload_response(payload, handle)
 
 
 @router.post("/import", response_model=dict[str, Any], response_class=DataStructResponse)
@@ -351,15 +365,8 @@ def import_file(req: ImportRequest) -> Response:
     cannot be used to read system files (e.g. ``/etc/passwd``) through path
     traversal.
 
-    Returns a pre-built ``DataStructResponse`` (see ``_import_response``'s
-    docstring on ``upload_file`` for why: a plain ``dict`` return goes
-    through FastAPI's own encoding on the event loop even for a route whose
-    OWN body Starlette already runs in a threadpool). ``response_model``
-    documents the real body shape for OpenAPI (this function's return
-    annotation, a bare ``Response``, would otherwise produce an empty
-    schema); ``response_class`` is set to the same type for consistency,
-    though it has no runtime effect once a ``Response`` instance is
-    returned directly.
+    Returns a pre-built ``DataStructResponse`` (why: ``_import_response``'s
+    docstring); ``response_model`` only documents the body shape for OpenAPI.
     """
     try:
         resolved = os.path.realpath(req.path)
@@ -394,24 +401,18 @@ def import_file(req: ImportRequest) -> Response:
     if not os.path.isfile(safe_path):
         raise HTTPException(status_code=404, detail=f"file not found: {req.path}")
     try:
-        payload = _import_with_books(Path(safe_path), full_books=req.full_books)
+        payload, handle = _import_with_books(Path(safe_path), full_books=req.full_books)
     except CALC_ERRORS_IO as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return DataStructResponse(payload)
+    return _payload_response(payload, handle)
 
 
 @router.post("/upload", response_model=dict[str, Any], response_class=DataStructResponse)
 async def upload_file(file: UploadFile, full_books: bool = False) -> Response:
     """Import an uploaded data file (browser file-picker / drag-drop).
 
-    ``response_model=dict[str, Any]`` is DOCUMENTATION ONLY here: the actual
-    return value is a pre-serialized ``Response`` (see below), which FastAPI
-    passes straight through with no validation against this model at
-    runtime -- it exists purely so the OpenAPI schema (and the frontend's
-    generated types, ``frontend/api/openapi.json`` / ``schema.d.ts``) still
-    describes this endpoint's real body shape (the same import payload
-    ``import_file``/``/import`` returns) instead of the empty schema a bare
-    ``Response`` return type would otherwise produce.
+    ``response_model`` is documentation only (OpenAPI / ``schema.d.ts``): the
+    pre-serialized ``Response`` returned below passes through unvalidated.
 
     The bytes are streamed to disk in bounded chunks (``_uploadstream``,
     ROBUSTNESS_PLAN #3) rather than read whole into memory, under the
