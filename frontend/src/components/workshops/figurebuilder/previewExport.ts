@@ -70,6 +70,7 @@ export async function exportPreviewFigure(deps: PreviewExportDeps): Promise<void
         const picked = await chooseExcludedRows(
           (greyExcluded) => buildFigureSpecFromDocument(canonicalDocument, dataset, stem, {
             autoSeriesStyles, greyExcluded, defaultTrace: useApp.getState().defaultTrace,
+            defaultLineWidth: useApp.getState().defaultLineWidth,
           }),
           excludedChoiceMatters,
           useApp.getState().excludedDisplay,

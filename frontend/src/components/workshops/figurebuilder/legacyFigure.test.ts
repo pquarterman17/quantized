@@ -102,7 +102,8 @@ describe("buildLegacyFigureSpec", () => {
   it("sends a saved doc's own styles, a sizeless marker at the canvas' size", () => {
     const docStyles = [{ color: "#123456", line: "none" as const, marker: true }, { marker: true, marker_size: 9 }];
     expect(buildLegacyFigureSpec({ ...BASE, yKeys: [0, 1], docSeriesStyles: docStyles })!.series_styles).toEqual([
-      { ...docStyles[0], marker_size: 5 }, docStyles[1],
+      // A lineless entry keeps no width; a widthless line gets the canvas' 1.5 px.
+      { ...docStyles[0], marker_size: 5 }, { ...docStyles[1], width: 1.5 },
     ]);
     expect(docStyles[0]).not.toHaveProperty("marker_size"); // the document keeps "no size"
   });
@@ -216,21 +217,22 @@ describe("BUG-016 — a grouped legacy request's colour", () => {
     const pinned = buildExportStyles([0], { 0: { width: 2, line: "dashed" } });
     flipTheme();
     expect(buildLegacyFigureSpec(grouped({ docSeriesStyles: pinned }))!.series_styles)
-      .toEqual([{ width: 2, line: "dashed" }]);
+      // (+ the unpinned second channel at the canvas' line width, lib/exportLineWidth.ts)
+      .toEqual([{ width: 2, line: "dashed" }, { width: 1.5 }]);
   });
 
   it("keeps a PINNED explicit colour on a grouped doc after a theme flip", () => {
     const pinned = buildExportStyles([0], { 0: { color: "#ffe066", width: 2 } });
     flipTheme();
     expect(buildLegacyFigureSpec(grouped({ docSeriesStyles: pinned }))!.series_styles)
-      .toEqual([{ color: "#ffe066", width: 2 }]);
+      .toEqual([{ color: "#ffe066", width: 2 }, { width: 1.5 }]);
   });
 
   it("leaves a pinned array's colour alone on a FLAT doc, palette switch included", () => {
     const pinned = buildExportStyles([0], { 0: { width: 2 } });
     flipTheme();
     expect(buildLegacyFigureSpec({ ...BASE, docGroupCol: null, docSeriesStyles: pinned })!.series_styles)
-      .toEqual([{ color: TEST_SERIES_PALETTE[0], width: 2 }]);
+      .toEqual([{ color: TEST_SERIES_PALETTE[0], width: 2 }, { width: 1.5 }]);
   });
 
   it("SAVES a PINNED array's colour instead of the wire's (round-2 review F6)", () => {
@@ -263,7 +265,7 @@ describe("BUG-016 — a grouped legacy request's colour", () => {
     flipTheme();
     const reopened = grouped({ yKeys: [0, 1], docSeriesStyles: saved.config.seriesStyles });
     expect(buildLegacyFigureSpec(reopened)!.series_styles)
-      .toEqual([null, { color: "#ffe066" }]);
+      .toEqual([{ width: 1.5 }, { color: "#ffe066", width: 1.5 }]);
   });
 
   // A PRE-PROVENANCE `.dwk` document, taken through the REAL load path
@@ -386,7 +388,7 @@ describe("BUG-016 — a grouped legacy request's colour", () => {
       // document cannot have, which is exactly what the residual says.
       expect(buildLegacyFigureSpec(grouped({
         yKeys: [0, 1], docSeriesStyles: repinned.config.seriesStyles,
-      }))!.series_styles).toEqual([null, { color: "#ffe066" }]);
+      }))!.series_styles).toEqual([{ width: 1.5 }, { color: "#ffe066", width: 1.5 }]);
     });
 
     it("leaves a config with NO seriesStyles field exactly as it was", () => {

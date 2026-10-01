@@ -87,7 +87,10 @@
                 0,
                 0,
                 0
-              ]
+              ],
+              "style": {
+                "width": 1.5
+              }
             },
             {
               "label": "M_DC (emu)",
@@ -118,7 +121,10 @@
                 1,
                 1,
                 1
-              ]
+              ],
+              "style": {
+                "width": 1.5
+              }
             },
             {
               "label": "M_AC (emu)",
@@ -130,7 +136,8 @@
               "style": {
                 "marker": true,
                 "marker_shape": "square",
-                "marker_size": 5
+                "marker_size": 5,
+                "width": 1.5
               }
             }
           ]
@@ -142,7 +149,8 @@
       "title": "",
       "series_styles": [
         {
-          "color": "#0b6e4f"
+          "color": "#0b6e4f",
+          "width": 1.5
         },
         {
           "color": "#ff8800",
@@ -153,7 +161,8 @@
           "color": "#2d3047",
           "marker": true,
           "marker_shape": "square",
-          "marker_size": 5
+          "marker_size": 5,
+          "width": 1.5
         }
       ],
       "overrides": {

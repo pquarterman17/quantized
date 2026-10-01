@@ -27,3 +27,15 @@ export const PLOT_TEMPLATES: PlotTemplate[] = [
 export function resolveTemplate(value: string): PlotTemplate {
   return PLOT_TEMPLATES.find((t) => t.value === value) ?? PLOT_TEMPLATES[0];
 }
+
+/** The Preferences "Default line width" when none is passed (store/prefs.ts). */
+export const DEFAULT_LINE_WIDTH_PX = 1.5;
+
+/** The stroke width (CSS px) a canvas draws a series with no explicit width:
+ *  the Preferences default under the Screen template, else the template's own.
+ *  The export sends the same number as points (lib/exportLineWidth.ts). */
+export function canvasLineWidth(plotTemplate: string, defaultLineWidth?: number): number {
+  return plotTemplate === "screen"
+    ? (defaultLineWidth ?? DEFAULT_LINE_WIDTH_PX)
+    : resolveTemplate(plotTemplate).lineWidth;
+}

@@ -113,6 +113,7 @@ export function buildStageFigureSpec(
   // The Preferences default trace the focused canvas draws in (Scatter / Line +
   // markers / Step), read like `autoSeriesStyles` from the live store.
   const defaultTrace = st.defaultTrace;
+  const defaultLineWidth = st.defaultLineWidth; // and its line width (`exportLineWidth`)
   const spec = canRouteThroughDocument
     ? buildFigureSpecFromDocument(document, ds, stem, {
         fmt: o.fmt,
@@ -128,7 +129,8 @@ export function buildStageFigureSpec(
         greyscale: o.greyscale,
         greyExcluded: o.greyExcluded,
         defaultTrace,
+        defaultLineWidth,
       })
-    : buildFigureSpec(s, ds, stem, { ...o, defaultTrace }, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
+    : buildFigureSpec(s, ds, stem, { ...o, defaultTrace, defaultLineWidth }, { autoSeriesStyles, waterfallSpan, waterfallXSpan });
   return extra.transparent === undefined ? spec : { ...spec, transparent: extra.transparent };
 }

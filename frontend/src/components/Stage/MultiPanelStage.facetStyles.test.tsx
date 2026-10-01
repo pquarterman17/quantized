@@ -154,9 +154,10 @@ describe("MultiPanelStage — per-channel styles on an unencoded facet grid (FEA
     const view = { ...defaultPlotView(), xKey: 0, yKeys: null, facetKey: 1, seriesStyles: STYLES };
     const doc = createFigureDocument({ id: "w", name: "w", datasetId: "fs", view, facetKey: 1, mark: "line" });
     const request = buildFigureSpecFromDocument(doc, DS, "fs", OPTS);
+    // A widthless line also names the canvas' 1.5 px (lib/exportLineWidth.ts).
     expect(request.facets?.map((f) => f.series.map((s) => s.style ?? null))).toEqual([
-      [null, { color: "#ff8800", line: "dashed", width: 3 }],
-      [null, { marker: true, marker_shape: "square", marker_size: 5 }],
+      [{ width: 1.5 }, { color: "#ff8800", line: "dashed", width: 3 }],
+      [{ width: 1.5 }, { marker: true, marker_shape: "square", marker_size: 5, width: 1.5 }],
     ]);
     expect(request.encoding).toBeUndefined();
 

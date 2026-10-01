@@ -98,7 +98,8 @@ describe("FigureDocument FigureSpec adapter", () => {
 
     expect(spec.x_key).toBe(0);
     expect(spec.y_keys).toEqual([0, 1]);
-    expect(spec.series_styles).toEqual([{ color: "#3366cc" }, { color: "#cc6633" }]);
+    // `width`: the canvas' line width (lib/exportLineWidth.ts).
+    expect(spec.series_styles).toEqual([{ color: "#3366cc", width: 1.5 }, { color: "#cc6633", width: 1.5 }]);
   });
 
   it("re-cuts a PINNED publication array to `y_keys` when a channel is hidden (BUG-016)", () => {
@@ -125,7 +126,7 @@ describe("FigureDocument FigureSpec adapter", () => {
     expect(spec.y_keys).toEqual([2, 3]);
     // Entry 0 belongs to the HIDDEN channel 1 and is dropped, rather than
     // sliding onto channel 2 the way an un-recut array did.
-    expect(spec.series_styles).toEqual([{ color: "#00aa00" }, { color: "#0000aa" }]);
+    expect(spec.series_styles).toEqual([{ color: "#00aa00", width: 1.5 }, { color: "#0000aa", width: 1.5 }]);
   });
 
   it("keeps the established StoreGet FigureSpec wire shape byte/deep-equal", () => {
@@ -161,7 +162,7 @@ describe("FigureDocument FigureSpec adapter", () => {
       x_label: "X",
       y_label: "Y",
       series_styles: [
-        { color: "#8b5cf6" },
+        { color: "#8b5cf6", width: 1.5 }, // the canvas' line width (lib/exportLineWidth.ts)
         { color: "#123456", width: 3, marker: true, marker_size: 7, legend: "left trace" },
       ],
       overrides: {
@@ -303,10 +304,12 @@ describe("FigureDocument FigureSpec adapter", () => {
     // `series_styles: []` on the wire — pinned here, not just at
     // `documentPinsSeriesStyles([])` in seriesStyleCycle.test.ts.
     const emptyStyles = createFigureDocument({ ...unnamed, publication: { overrides: null, seriesStyles: [] } });
-    expect(buildFigureSpecFromDocument(emptyStyles, dataset, "empty").series_styles).toEqual([]);
+    // An exact array's unstyled series still draw at the canvas' line width
+    // (lib/exportLineWidth.ts); only an explicit `null` (above) opts out.
+    expect(buildFigureSpecFromDocument(emptyStyles, dataset, "empty").series_styles).toEqual([{ width: 1.5 }]);
     const emptyRenamed = createFigureDocument({ ...base, publication: { overrides: null, seriesStyles: [] } });
     expect(buildFigureSpecFromDocument(emptyRenamed, dataset, "empty").series_styles).toEqual([
-      { legend: "left trace" },
+      { legend: "left trace", width: 1.5 },
     ]);
 
     const exactStyles = [{ color: "#fedcba", line: "none" as const, marker: true, marker_size: 9 }];
@@ -368,7 +371,7 @@ describe("FigureDocument FigureSpec adapter", () => {
       view: { ...defaultPlotView(), xKey: 0, yKeys: [1], seriesLabels: { 1: "" } },
     });
     expect(buildFigureSpecFromDocument(blanked, dataset, "blanked").series_styles).toEqual([
-      { color: "#8b5cf6", legend: "" },
+      { color: "#8b5cf6", legend: "", width: 1.5 },
     ]);
   });
 
@@ -1406,7 +1409,8 @@ describe("auto dash/marker cycle — figure requests (P3.3)", () => {
         publication: { overrides: null, seriesStyles: [{ color: "#3366cc" }, null, null] },
       });
       const spec = buildFigureSpecFromDocument(pinned, dataset, "doc2", { autoSeriesStyles: true });
-      expect(spec.series_styles).toEqual([{ color: "#3366cc" }, null, null]);
+      // Only the canvas' line width is named on it (lib/exportLineWidth.ts).
+      expect(spec.series_styles).toEqual([{ color: "#3366cc", width: 1.5 }, { width: 1.5 }, { width: 1.5 }]);
     });
   });
 });
