@@ -2731,9 +2731,17 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       call: 'import("../lib/pageSetupCommand")',
     },
     {
-      module: "/lib/workbookTransfer.ts",
+      // SLICE 17: Paste and Duplicate load their bodies, which import the
+      // core statically, so the core itself moved to DRAGGED_OUT below.
+      module: "/store/workbookTransferRun.ts",
       loader: "/store/workbookTransfer.ts",
-      call: 'import("../lib/workbookTransfer")',
+      call: 'import("./workbookTransferRun")',
+    },
+    {
+      // SLICE 17: the Take Over Editing / Open as Copy bodies.
+      module: "/commands/projectLockRun.ts",
+      loader: "/commands/projectLockCommands.ts",
+      call: 'import("./projectLockRun")',
     },
     {
       module: "/components/Library/OriginSavedPreviewWindow.tsx",
@@ -3282,8 +3290,12 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/downsample.ts",
     "/lib/libraryPreviewPrefs.ts",
     // Group F (2026-09-25): the large-workbook descriptor/transfer-store
-    // client. Only `lib/workbookTransfer.ts` (itself a seam) imports it.
+    // client. Only `lib/workbookTransfer.ts` (itself lazy) imports it.
     "/lib/workbookTransferRef.ts",
+    // SLICE 17: the transfer core. Copy and the paste probe still load it
+    // with `import()`, but `store/workbookTransferRun.ts` (a seam) imports it
+    // statically, so only reachability can hold it.
+    "/lib/workbookTransfer.ts",
     "/components/overlays/useDialogFocus.ts",
     "/components/overlays/ParamFields.tsx",
     "/lib/params.ts",
@@ -3404,6 +3416,13 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     // `commands/recentProjectReopen.ts`: the eager `recentProjectsCommands.ts`
     // reaches it through `runLazy`, the lazy recovery chooser statically.
     "/commands/recentProjectReopen.ts",
+    // SLICE 17 (2026-10-01): the open-workspace replace half. fileCommands.ts
+    // loads it once a picked `.dwk` has parsed; the lazy file-command bodies,
+    // the recent-project reopen and the recovery chooser import it statically,
+    // so only reachability can hold it (and `store/projectLockLifecycle.ts`,
+    // which only it reached eagerly).
+    "/lib/openWorkspaceReplace.ts",
+    "/store/projectLockLifecycle.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

@@ -23,6 +23,10 @@ function action(id: string) {
   return a;
 }
 
+/** Bundle diet slice 17: each body loads on first use, so `run()` returns
+ *  that promise (typed `void`, like every async command). */
+const run = (id: string) => Promise.resolve(action(id).run() as unknown);
+
 beforeEach(() => {
   vi.clearAllMocks();
   useCommands.setState({ menuCommands: [] });
@@ -48,20 +52,20 @@ describe("useProjectLockCommands", () => {
     expect(action("open-as-copy").group).toBe("File");
   });
 
-  it("Take Over Editing refuses with a reason (never calls the store action) when the lock isn't stale", () => {
+  it("Take Over Editing refuses with a reason (never calls the store action) when the lock isn't stale", async () => {
     renderHook(() => useProjectLockCommands());
     const takeOverEditing = vi.fn();
     useProjectLock.setState({ takeOverEditing });
-    action("take-over-editing").run();
+    await run("take-over-editing");
     expect(takeOverEditing).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith(expect.stringMatching(/nothing to take over|not available/i), "danger");
   });
 
-  it("Take Over Editing calls the store action when the lock is stale", () => {
+  it("Take Over Editing calls the store action when the lock is stale", async () => {
     renderHook(() => useProjectLockCommands());
     const takeOverEditing = vi.fn(async () => true);
     useProjectLock.setState({ status: "held-by-other-stale", path: "/p/x.dwk", takeOverEditing });
-    action("take-over-editing").run();
+    await run("take-over-editing");
     expect(takeOverEditing).toHaveBeenCalled();
   });
 
@@ -69,7 +73,7 @@ describe("useProjectLockCommands", () => {
     renderHook(() => useProjectLockCommands());
     const refused = vi.fn(async () => false);
     useProjectLock.setState({ status: "held-by-other-stale", path: "/p/x.dwk", takeOverEditing: refused });
-    action("take-over-editing").run();
+    await run("take-over-editing");
     await refused.mock.results[0]?.value;
     await Promise.resolve();
     expect(toast).toHaveBeenCalledWith(expect.stringMatching(/responding again/), "danger");
@@ -80,37 +84,37 @@ describe("useProjectLockCommands", () => {
       return false;
     });
     useProjectLock.setState({ status: "held-by-other-stale", path: "/p/x.dwk", takeOverEditing: superseded });
-    action("take-over-editing").run();
+    await run("take-over-editing");
     await superseded.mock.results[0]?.value;
     await Promise.resolve();
     expect(toast).not.toHaveBeenCalled();
   });
 
-  it("Open as Copy refuses with a reason when the project isn't currently held read-only", () => {
+  it("Open as Copy refuses with a reason when the project isn't currently held read-only", async () => {
     renderHook(() => useProjectLockCommands());
     const openAsCopy = vi.fn();
     useProjectLock.setState({ openAsCopy });
-    action("open-as-copy").run();
+    await run("open-as-copy");
     expect(openAsCopy).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith(expect.stringMatching(/not read-only|nothing to copy/i), "danger");
   });
 
-  it("Open as Copy calls the store action when the project is read-only", () => {
+  it("Open as Copy calls the store action when the project is read-only", async () => {
     renderHook(() => useProjectLockCommands());
     const openAsCopy = vi.fn();
     useProjectLock.setState({ status: "held-by-other-live", path: "/p/x.dwk", openAsCopy });
-    action("open-as-copy").run();
+    await run("open-as-copy");
     expect(openAsCopy).toHaveBeenCalled();
   });
 
   // N3 (coordinator review round 3): the shared browser autosave slot has no
   // separate "copy destination" — Open as Copy must refuse outright, before
   // ever reaching (or calling) the store action, regardless of status.
-  it("N3: Open as Copy refuses for the browser autosave slot even though it's read-only", () => {
+  it("N3: Open as Copy refuses for the browser autosave slot even though it's read-only", async () => {
     renderHook(() => useProjectLockCommands());
     const openAsCopy = vi.fn();
     useProjectLock.setState({ status: "held-by-other-live", path: BROWSER_AUTOSAVE_LOCK_PATH, openAsCopy });
-    action("open-as-copy").run();
+    await run("open-as-copy");
     expect(openAsCopy).not.toHaveBeenCalled();
     expect(toast).toHaveBeenCalledWith(expect.stringMatching(/single autosave slot|take over editing/i), "danger");
   });

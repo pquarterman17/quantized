@@ -15,13 +15,16 @@
 // the ordinary read-only check — the belt (the autosave write gate ALSO
 // refuses when `openedAsCopy` is set in browser-autosave mode) lives in
 // `useWorkspaceAutosave.ts`'s `autosaveGateBlocked()`.
+//
+// Bundle diet slice 17: both bodies live in commands/projectLockRun.ts and
+// load on first use. `run()` returns that promise, so `runAction` shows the
+// busy label meanwhile and toasts a load failure naming the command.
 
 import { useEffect } from "react";
 
 import { useCommands, type Action } from "../store/commands";
-import { useProjectLock } from "../store/projectLock";
-import { BROWSER_AUTOSAVE_LOCK_PATH } from "../store/projectLockPaths";
-import { toast } from "../store/toasts";
+
+const body = () => import("./projectLockRun");
 
 export function useProjectLockCommands(): void {
   useEffect(() => {
@@ -34,23 +37,7 @@ export function useProjectLockCommands(): void {
         description:
           "Take over a project whose other editing instance is unresponsive (stale lock) — L0.47.",
         keywords: "lock takeover stale unresponsive concurrent single-writer",
-        run: () => {
-          const lock = useProjectLock.getState();
-          if (lock.status !== "held-by-other-stale") {
-            toast(
-              lock.status === "held-by-other-live"
-                ? "Take Over Editing is not available — the other instance is still responding"
-                : "nothing to take over — this project is not locked by another instance",
-              "danger",
-            );
-            return;
-          }
-          void lock.takeOverEditing().then((ok) => {
-            // Closed or switched projects meanwhile: the takeover was dropped, nothing to report.
-            if (!ok && useProjectLock.getState().path !== lock.path) return;
-            toast(ok ? "took over editing" : "take over failed — the other instance is responding again", ok ? "ok" : "danger");
-          });
-        },
+        run: () => body().then((m) => m.takeOverEditing()),
       },
       {
         id: "open-as-copy",
@@ -59,25 +46,7 @@ export function useProjectLockCommands(): void {
         label: "Open as Copy",
         description: "Keep working without the original project's lock — saves land at a new location.",
         keywords: "copy read-only lock duplicate open as",
-        run: () => {
-          const lock = useProjectLock.getState();
-          // Ordering (review round 4): the generic "not read-only" refusal
-          // runs FIRST — a session that already holds (or is mid-engaging)
-          // the autosave lock gets the accurate "nothing to copy" message,
-          // never advice to "take over editing" it already has. The
-          // browser-slot refusal below only applies where a copy would
-          // otherwise be OFFERED (a genuinely read-only session).
-          if (lock.status !== "held-by-other-live" && lock.status !== "held-by-other-stale") {
-            toast("nothing to copy — this project is not currently read-only", "danger");
-            return;
-          }
-          if (lock.path === BROWSER_AUTOSAVE_LOCK_PATH) {
-            toast("this browser session has a single autosave slot — take over editing instead", "danger");
-            return;
-          }
-          lock.openAsCopy();
-          toast("opened as a copy — Save will prompt for a new location", "ok");
-        },
+        run: () => body().then((m) => m.openAsCopy()),
       },
     ];
     useCommands.getState().setMenuCommands("project-lock", actions);

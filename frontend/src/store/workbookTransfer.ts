@@ -42,15 +42,13 @@
 
 import { copyTextAsync } from "../lib/clipboard";
 import { plural } from "../lib/plural";
-import type { BuildTransferResult, TransferExistingIds, TransferIdGenerators } from "../lib/workbookTransfer";
+import type { BuildTransferResult } from "../lib/workbookTransfer";
 import type { AppState } from "./useApp";
-import { nextDatasetId } from "./idSeq";
-import { nextWorkbookId } from "./workbookIds";
 import { nextFigureId } from "./figureLifecycle";
-import { notifyMigrationWarnings, toast } from "./toasts";
+import { toast } from "./toasts";
 
-type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
-type SliceGet = () => AppState;
+export type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
+export type SliceGet = () => AppState;
 
 /** `lib/workbookTransfer.ts` — the pure build/parse/paste core: the package
  *  envelope, the fresh-id rewrite and the lineage repair — is reached from
@@ -72,15 +70,19 @@ type SliceGet = () => AppState;
  *  retries. Measured: 912,461 -> 910,631 B eager.
  *
  *  Copy is the one action that does NOT simply `await` the core first — see
- *  `buildForCopy` below for why the clipboard write has to start before it. */
-type TransferCore = typeof import("../lib/workbookTransfer");
-type PasteResult = ReturnType<TransferCore["pasteTransferPackage"]>;
+ *  `buildForCopy` below for why the clipboard write has to start before it.
+ *
+ *  Bundle diet slice 17: Paste and Duplicate load their bodies
+ *  (store/workbookTransferRun.ts, which imports the core statically) instead
+ *  of the bare core, so the id generators, the merge and the success report
+ *  leave the eager bundle too. Same failure contract, same messages. */
+type TransferRun = typeof import("./workbookTransferRun");
 type CopyBuilt = Extract<BuildTransferResult, { ok: true }>;
 
-/** The transfer core, or null after reporting that `what` could not run. */
-async function transferCore(get: SliceGet, what: string): Promise<TransferCore | null> {
+/** The Paste/Duplicate bodies, or null after reporting that `what` could not run. */
+async function transferRun(get: SliceGet, what: string): Promise<TransferRun | null> {
   try {
-    return await import("../lib/workbookTransfer");
+    return await import("./workbookTransferRun");
   } catch (e) {
     fail(get, `${what} failed: ${e instanceof Error ? e.message : "error"}`);
     return null;
@@ -107,7 +109,7 @@ async function buildForCopy(
   name: string,
   get: SliceGet,
 ): Promise<CopyBuilt> {
-  let core: TransferCore;
+  let core: typeof import("../lib/workbookTransfer");
   try {
     core = await import("../lib/workbookTransfer");
   } catch (e) {
@@ -118,96 +120,17 @@ async function buildForCopy(
   return built;
 }
 
-let _reportSeq = 0;
-/** Own generator (not useApp.ts's private `nextReportId`, which is
- *  unexported — see workbookIds.ts's identical "own module, own counter"
- *  rationale). Distinct prefix so a pasted report id can never collide with
- *  one useApp.ts itself mints, even in theory. */
-const nextTransferReportId = (): string => `xrep-${Date.now().toString(36)}-${++_reportSeq}`;
-
-let _templateSeq = 0;
-const nextTransferTemplateId = (): string => `xqpt-${Date.now().toString(36)}-${++_templateSeq}`;
-
-function idGenerators(): TransferIdGenerators {
-  return {
-    dataset: nextDatasetId,
-    workbook: nextWorkbookId,
-    figure: nextFigureId,
-    report: nextTransferReportId,
-    template: nextTransferTemplateId,
-  };
-}
-
-function existingIds(s: AppState): TransferExistingIds {
-  return {
-    datasetIds: new Set(s.datasets.map((d) => d.id)),
-    datasetNames: new Set(s.datasets.map((d) => d.name)),
-    workbookIds: new Set(s.workbooks.map((w) => w.id)),
-    figureIds: new Set(s.editableFigures.map((f) => f.id)),
-    reportIds: new Set(s.reports.map((r) => r.id)),
-    templateIds: new Set(s.quickPlotTemplates.map((t) => t.id)),
-  };
-}
-
-/** UX-002: `pasteTransferPackage` DROPS any lineage reference whose target is
- *  outside the copied package (`versionOf`, an external `derivedFrom`, a
- *  dangling `bgRef`) rather than leaving a dangling id — see
- *  lib/workbookTransfer.ts's header for why the drop itself is correct. The
- *  BUG was the silence: the count was computed and returned, and read by
- *  nothing. Both gestures below now name it, so a pasted worksheet that lost
- *  its "version 2 of ..." link says so instead of looking complete.
- *
- *  Only the COUNT is surfaced, deliberately. Preserving a dropped link as
- *  inert historical text (the source dataset's NAME, say) is a semantics call
- *  about what lineage means across a transfer boundary and is still an open
- *  owner decision (BUGS_AND_ISSUES.md UX-002, box 2) — inventing it here
- *  would be inventing it silently.
- *
- *  "reference", not "lineage link": `rewriteRef` counts `bgRef` alongside
- *  `derivedFrom`/`versionOf`, and a dropped BACKGROUND reference is not
- *  provenance — it is a subtraction input, so losing it changes the plotted
- *  data, not just the history. That is the more serious of the two, so it is
- *  named separately rather than folded into a generic count. */
-function refNote(n: number, background: number): string {
-  if (n <= 0) return "";
-  const bg = background > 0 ? `, ${background} of them a background reference` : "";
-  return ` — ${n} reference${plural(n)} to data outside the copy not carried${bg}`;
-}
-
-/** Report a COMPLETED transfer: one message, one status line, one toast — and
- *  `"info"` rather than `"ok"` whenever a reference was dropped, because a
- *  green check on a result that lost something reads as "clean". Paste and
- *  Duplicate differ only in their headline. */
-function succeed(get: SliceGet, result: PasteResult, headline: string): void {
-  const note = refNote(result.droppedExternalRefs, result.droppedBackgroundRefs);
-  const msg = headline + note;
-  get().setStatus(msg);
-  toast(msg, note ? "info" : "ok");
-}
-
 /** Every refusal in this slice reports the SAME way — the persistent status
  *  line AND a danger toast, one message built once. Nine sites open-coded some
  *  part of that: five repeated the pair (three of them building their message
  *  string TWICE — duplicated logic and duplicated bytes in an eager module),
  *  and four of Paste's refusals toasted WITHOUT touching the status line, so a
  *  refused paste left the previous action's success message standing on the
- *  status bar. All nine go through here now. */
+ *  status bar. All nine go through here now (store/workbookTransferRun.ts's
+ *  bodies get it through their `TransferCtx`). */
 function fail(get: SliceGet, msg: string): void {
   get().setStatus(msg);
   toast(msg, "danger");
-}
-
-/** Merge a paste result into the store's arrays in ONE `set()` — the "swap
- *  once" half of the failure-safe contract; `recordHistory` must already
- *  have been called by the caller, immediately before this. */
-function applyPasteResult(set: SliceSet, result: PasteResult): void {
-  set((s) => ({
-    workbooks: [...s.workbooks, result.workbook],
-    datasets: [...s.datasets, ...result.datasets],
-    editableFigures: [...s.editableFigures, ...result.editableFigures],
-    reports: [...s.reports, ...result.reports],
-    quickPlotTemplates: [...s.quickPlotTemplates, ...result.quickPlotTemplates],
-  }));
 }
 
 export interface WorkbookTransferSlice {
@@ -244,6 +167,7 @@ export interface WorkbookTransferSlice {
 }
 
 export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): WorkbookTransferSlice {
+  const ctx = { set, get, fail, figureId: nextFigureId };
   return {
     copyWorkbookToClipboard: async (workbookId) => {
       const workbook = get().workbooks.find((w) => w.id === workbookId);
@@ -288,7 +212,7 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
       try {
         const text = await navigator.clipboard?.readText();
         if (typeof text !== "string") return false;
-        // Not `transferCore()`: this probe answers a plain boolean and must
+        // Not `transferRun()`: this probe answers a plain boolean and must
         // never toast — a Paste command merely asking "is anything pastable?"
         // has not failed at anything the user did.
         return (await import("../lib/workbookTransfer")).canPasteText(text);
@@ -310,26 +234,8 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
         fail(get, "paste workbook: clipboard read denied");
         return;
       }
-      const core = await transferCore(get, "paste workbook");
-      if (!core) return;
-      const parsed = await core.resolvePasteText(text);
-      if (!parsed.ok) {
-        fail(get, `paste workbook: ${parsed.reason}`);
-        return;
-      }
-      // Build fully BEFORE touching history/state (frozen-scope item 5) —
-      // pasteTransferPackage is pure and cannot itself fail past this point.
-      const result = core.pasteTransferPackage(parsed.pkg, existingIds(get()), idGenerators(), targetFolderId);
-      get().recordHistory(`paste workbook "${parsed.pkg.workbook.name}"`);
-      applyPasteResult(set, result);
-      const n = result.datasets.length;
-      succeed(get, result, `pasted "${result.workbook.name}" (${n} worksheet${plural(n)})`);
-      // BUG-010: a package built by an OLDER instance can carry a
-      // FigureDocument version this build no longer understands
-      // (parseTransferPackage skips it and records why) — the only place
-      // that can be non-empty, since a same-session duplicate below always
-      // round-trips already-current-version live data.
-      notifyMigrationWarnings(parsed.migrationWarnings);
+      const run = await transferRun(get, "paste workbook");
+      if (run) await run.pasteWorkbook(ctx, text, targetFolderId);
     },
 
     duplicateWorkbook: async (workbookId) => {
@@ -345,33 +251,8 @@ export function createWorkbookTransferSlice(set: SliceSet, get: SliceGet): Workb
           return null;
         }
       }
-      const core = await transferCore(get, `duplicate "${name}"`);
-      if (!core) return null;
-      const built = core.buildTransferPackage(workbookId, get());
-      if (!built.ok) {
-        fail(get, `duplicate "${name}" unavailable: ${built.reason}`);
-        return null;
-      }
-      // Same core as Paste (frozen-scope item 6) — round-tripped through the
-      // identical parse validation for one code path, not two.
-      const parsed = core.parseTransferPackage(built.text);
-      if (!parsed.ok) {
-        // Unreachable in practice (buildTransferPackage's own output always
-        // parses) — defensive, never silently duplicates something broken.
-        fail(get, `duplicate "${name}" failed: ${parsed.reason}`);
-        return null;
-      }
-      const raw = core.pasteTransferPackage(parsed.pkg, existingIds(get()), idGenerators(), workbook?.folderId);
-      // Duplicate's one deliberate divergence from Paste: the workbook's own
-      // display name gets the same "X copy" convention every other
-      // Duplicate in this app uses (store/figureLifecycle.ts's `duplicateEditableFigure`)
-      // — Paste keeps the source name verbatim (it's a DIFFERENT project's
-      // workbook arriving, not a copy of one already here).
-      const result = { ...raw, workbook: { ...raw.workbook, name: `${name} copy` } };
-      get().recordHistory(`duplicate workbook "${name}"`);
-      applyPasteResult(set, result);
-      succeed(get, result, `duplicated "${name}" as "${result.workbook.name}"`);
-      return result.workbook.id;
+      const run = await transferRun(get, `duplicate "${name}"`);
+      return run ? run.duplicateWorkbook(ctx, workbookId, name, workbook?.folderId) : null;
     },
   };
 }
