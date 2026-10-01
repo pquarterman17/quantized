@@ -7,6 +7,7 @@ importExcel's logic; the cell grid replaces MATLAB's ``readcell``.
 
 from __future__ import annotations
 
+import xml.etree.ElementTree as ET
 import zipfile
 from collections.abc import Sequence
 from pathlib import Path
@@ -31,6 +32,9 @@ __all__ = ["import_excel"]
 # their uncompressed size is capped like a .brml scan document.
 MAX_CELLS = 1 << 25
 MAX_PART_BYTES = 256 << 20
+_MANIFEST = "[Content_Types].xml"
+_CT_NS = "http://schemas.openxmlformats.org/package/2006/content-types"
+_WORKSHEET_TYPE = "application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"
 
 
 def _cell_to_float(value: Any) -> float:
@@ -65,13 +69,36 @@ def _header_str(value: Any, col: int) -> str:
     return f"Col{col + 1}"
 
 
+def _worksheet_parts(zf: zipfile.ZipFile) -> set[str]:
+    """The parts ``[Content_Types].xml`` declares as worksheets.
+
+    Only these are streamed. A folder name proves nothing: a worksheet's own
+    ``.rels`` sits under ``xl/worksheets/`` and is parsed whole, and shared
+    strings live wherever the manifest says."""
+    try:
+        root = ET.fromstring(zf.read(_MANIFEST))  # noqa: S314 (size checked first)
+    except (KeyError, ET.ParseError):
+        return set()
+    return {
+        str(el.get("PartName", "")).lstrip("/")
+        for el in root.iter(f"{{{_CT_NS}}}Override")
+        if el.get("ContentType") == _WORKSHEET_TYPE
+    }
+
+
 def _check_parts(path: Path) -> None:
     """Refuse a non-worksheet part whose uncompressed size passes the cap."""
     if not zipfile.is_zipfile(path):
         return  # openpyxl reports a non-ZIP file below
     with zipfile.ZipFile(path) as zf:
-        for info in zf.infolist():
-            if info.filename.startswith("xl/worksheets/"):
+        infos = zf.infolist()
+        # The manifest is checked before it is read to find the worksheets.
+        infos.sort(key=lambda info: info.filename != _MANIFEST)
+        streamed: set[str] | None = None
+        for info in infos:
+            if streamed is None and info.filename != _MANIFEST:
+                streamed = _worksheet_parts(zf)
+            if streamed is not None and info.filename in streamed:
                 continue
             if info.file_size > MAX_PART_BYTES:
                 raise ValueError(

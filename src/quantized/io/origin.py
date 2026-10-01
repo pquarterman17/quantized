@@ -60,14 +60,16 @@ def _meta_get(meta: dict[str, Any], *keys: str, default: Any = None) -> Any:
 
 
 def _escape_lt(text: str) -> str:
-    """Escape double-quotes for a LabTalk string literal.
+    """Make ``text`` safe inside a LabTalk string literal.
 
     Control characters become spaces first: a newline in a file-derived label
     would end the statement's line and run the rest as LabTalk (``run -e``
     starts a program) when the user runs the script (security audit
-    2026-10-01)."""
+    2026-10-01). LabTalk has no backslash escape (``\\"`` lands literally,
+    live-verified 2026-07-04, docs/origin_re/validation_log.md), so a double
+    quote becomes ``'``, as in ``origin_com._escape_lt``."""
     text = _CONTROL_CHARS.sub(" ", text)
-    return text.replace('"', '\\"')
+    return text.replace('"', "'")
 
 
 def _sanitize(name: str) -> str:
