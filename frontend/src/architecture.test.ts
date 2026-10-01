@@ -3317,6 +3317,18 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/panelwindow.ts",
     "/lib/facetGrid.ts",
     "/lib/pipeline.ts",
+    // SLICE 14 (2026-10-01): the relink store. AppOverlays gates the lazy
+    // panel on the tiny `store/relinkPanel.ts` mirror, the replace chokepoint
+    // closes it through that mirror's registered closer, and the palette
+    // command loads it through `runLazy`. The panel, re-import and the commit
+    // and preview halves still import it statically, so only reachability can
+    // hold it (and `store/relinkBrowse.ts`, which only it reaches).
+    "/store/relink.ts",
+    "/store/relinkBrowse.ts",
+    // ...and the Recent Projects reopen body, moved verbatim to
+    // `commands/recentProjectReopen.ts`: the eager `recentProjectsCommands.ts`
+    // reaches it through `runLazy`, the lazy recovery chooser statically.
+    "/commands/recentProjectReopen.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

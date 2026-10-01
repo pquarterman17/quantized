@@ -1,6 +1,14 @@
 # Bundle headroom campaign
 
-**Current state (2026-09-30, after slice 13):** no seam — three import
+**Current state (2026-10-01, after slice 14):** two click-time seams, both
+`runLazy`, no render seam. Taken on the batch-11 head (`6dbdbb05`), which
+measured **860,080 B**, 6,278 B under the pin. Measured **854,211 B**
+(**−5,869 B**): the relink store leaves the entry chunk behind a tiny open-flag
+mirror, and the Recent Projects reopen body loads on the first reopen. The
+pin is NOT moved (**866,358 B**), so **12,147 B** of headroom is left. See
+"Slice 14".
+
+**Previous state (2026-09-30, after slice 13):** no seam — three import
 edges, the slice-12 method again. Taken on the batch-6 head (`01e2f252`),
 which measured **866,165 B**, 193 B under the pin, with the next batch still
 queued. Measured **859,599 B** (**−6,566 B**), with no behaviour or timing
@@ -2179,6 +2187,91 @@ helpers (~0.8 kB; `store/workspaceIO.ts` is their only caller), and
 `store/relink.ts` (2.2 kB, three eager importers). `lib/contextActions.ts`'s
 dataset action lists look lazy-only to the per-declaration scan but are not:
 `datasetActions` composes them for the eager ⌘K palette.
+
+### Slice 14 — the relink store and the Recent Projects reopen — **DONE (2026-10-01)**
+
+**Measured net eager delta −5,869 B — pin NOT moved (866,358 B)**
+
+Brief: the batch-11 head `6dbdbb05` measured 860,080 B, 6,278 B under the
+pin. Target: free ≥ 4 kB from slice 13's not-taken list without touching
+`EAGER_JS_BUDGET`, any pin, `store/useApp.ts` or the Library row components.
+Exact bytes out of `dist/index.html` (entry + `modulepreload`), `npm ci`
+once, then `node_modules/.vite` wiped before EVERY build:
+
+| tree | eager B | delta |
+|---|---:|---:|
+| `6dbdbb05` (parent, batch-11 head) | 860,080 | — |
+| + relink store behind `store/relinkPanel.ts` | 856,630 | **−3,450** |
+| + reopen body → `commands/recentProjectReopen.ts` | 854,211 | **−2,419** |
+
+Rows are MARGINAL. Both beat their slice-13 estimates (2.2 and 1.4 kB): the
+estimates priced the module alone, and each also took one `modulepreload`
+chunk boundary with it (76 → 75 eager files after the first edge).
+
+#### The two edges
+
+- **`store/relink.ts` (with `store/relinkBrowse.ts`).** It had three eager
+  importers, each for one thing. AppOverlays read `s.open` to gate the lazy
+  RelinkPanel: it now reads the new dependency-free `store/relinkPanel.ts`,
+  a mirror kept by a `subscribe` registered when the heavy store evaluates —
+  the slice-13 `store/recodePanel.ts` shape exactly. `lib/openWorkspaceReplace.ts`
+  called `closePanel()` at the replace chokepoint: it now calls
+  `closeRelinkPanel()`, which runs the closer the heavy store registers when
+  it evaluates (`useRelink.getState().closePanel()`, read at call time).
+  Before the store loads that is a no-op, and that is the same outcome:
+  only the store can open the panel or mint the directory grant `closePanel`
+  revokes. The one difference is that an app that never loaded relink no
+  longer sends a `revoke_relink_dir` bridge call on each workspace replace;
+  there is nothing to revoke (the backend also clears directory grants at
+  the native open itself). The ⌘K "Relink sources…" command loads the store
+  through `runLazy` and then calls `openPanel()`; the panel it opens is a
+  lazy chunk that imports the same store, so that gesture already waited on
+  a fetch.
+- **`openRecentProject`.** The body (with `pickProjectNear`) moved verbatim
+  to `commands/recentProjectReopen.ts`. `commands/recentProjectsCommands.ts`
+  stays eager (Stage mounts its palette hook) and keeps an
+  `openRecentProject` with the same signature that loads the body through
+  `runLazy`, so HomeScreen and the palette entries are unchanged. A chunk
+  that will not load is toasted by `runLazy` and settles `"failed"` — the
+  outcome that already meant "a reason was toasted" — so HomeScreen's
+  double-click guard and the palette never see a rejection. The crash-
+  recovery chooser (`lib/applyRecoveryChoice.ts`, already lazy) imports the
+  body directly, so "Keep the last project" runs the same function as
+  before with no extra hop.
+
+#### Why it qualifies under the `PlotLegend` ruling, and what it costs
+
+Nothing renders differently: no component seam, no `Suspense`, no fallback,
+focus or Escape path. Both new `import()`s sit behind a click whose next step
+was already async — opening a lazy panel, or a `pathState` bridge round trip
+before anything is read — so the chunk fetch joins a wait that was already
+there, with `runLazy`'s busy entry covering it. The import-running refusal
+in the reopen body now toasts after the chunk loads instead of on the click's
+own tick; it only ever toasted, and the guard is still checked before any
+bridge call. `preload-verify` passes on the emitted lists (185 sites,
+0 violations). Not measured in a browser (no Playwright browser here).
+
+#### Guards and sabotage
+
+`architecture.test.ts`: `store/relink.ts`, `store/relinkBrowse.ts` and
+`commands/recentProjectReopen.ts` are `DRAGGED_OUT` (each is still imported
+statically by lazy modules: the panel, re-import, the commit/preview halves,
+the recovery chooser). `store/relink.test.ts` pins the mirror (open, close,
+direct `setState`) and that `closeRelinkPanel()` runs the real `closePanel`
+(consent cleared, grant revoked). `commands/recentProjectsCommands.lazyFail.test.ts`
+pins the load-failure contract; `recentProjectsCommands.test.ts` preloads the
+body in `beforeAll`; `relinkCommands.test.ts` waits on the store's state.
+
+| sabotage | result |
+|---|---|
+| the new `DRAGGED_OUT` entries added before the change | RED — the arm names `store/relink.ts`, `store/relinkBrowse.ts` |
+| `recentProjectsCommands.ts` imports `./recentProjectReopen` statically | RED — `DRAGGED_OUT` arm, and the lazy-failure file fails to load |
+
+#### Candidates still not taken
+
+Slice 13's list minus these two, unchanged: `lib/foldertree.ts`'s lazy-only
+queries and `.dwk` parse (~1.9 kB), `lib/desktopBridge.ts`'s save helpers
+(~0.8 kB), `lib/clipboard.ts`'s `copyImageAsync`/`copySvgAsync` (~0.7 kB).
 
 ## What this does NOT change
 

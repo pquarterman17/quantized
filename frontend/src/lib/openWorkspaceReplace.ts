@@ -13,7 +13,7 @@ import { beginProjectLockOperation, isCurrentProjectLockOperation } from "../sto
 import { closeProjectLock, reserveProjectLock } from "../store/projectLockLifecycle";
 import type { ProjectIdentity } from "../store/project";
 import { useRecentProjects } from "../store/recentProjects";
-import { useRelink } from "../store/relink";
+import { closeRelinkPanel } from "../store/relinkPanel";
 import { notifyMigrationWarnings, toast } from "../store/toasts";
 import { useWorkingPaths } from "../store/workingPaths";
 import type { StoreGet } from "./exportActive";
@@ -159,8 +159,10 @@ function replaceWorkspaceImpl(s: StoreGet, ws: LoadedWorkspace, native: ProjectI
   // — close the panel here so `newRootConsented` can't survive as a stale
   // "verified" label over a grant that no longer exists. This chokepoint
   // (see recordNativeOpen's doc) is what every accepted replace passes
-  // through; closePanel is idempotent when the panel isn't open.
-  useRelink.getState().closePanel();
+  // through; closePanel is idempotent when the panel isn't open. Reached
+  // through store/relinkPanel.ts so the relink store stays lazy (a no-op
+  // until it loads: no panel can be open and no grant minted before then).
+  closeRelinkPanel();
   const priorLock = reserveLockForSwitch(native);
   try {
     s().loadWorkspace(ws, skipLayout ? { skipLayout: true } : undefined);

@@ -3,7 +3,7 @@
 // one of these; nothing else does, which is what keeps the dialog itself a
 // thin renderer.
 
-import { openRecentProject } from "../commands/recentProjectsCommands";
+import { openRecentProject } from "../commands/recentProjectReopen";
 import { useRecoveryChoice, type RecoveryPrompt } from "../store/recoveryChoice";
 import { useApp } from "../store/useApp";
 import { toast } from "../store/toasts";

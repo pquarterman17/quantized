@@ -72,7 +72,7 @@ import { useOutlierScreeningStore } from "./store/outlierScreening";
 import { useMultivarStore } from "./store/multivar";
 import { useStatsTestsStore } from "./store/statsTests";
 import { useVariabilityStore } from "./store/variability";
-import { useRelink } from "./store/relink";
+import { useRelinkPanel } from "./store/relinkPanel";
 import { useRecodePanel } from "./store/recodePanel";
 import { useLevelOrderPanel } from "./store/levelOrderPanel";
 import { useCombineDialog } from "./store/combineDialog";
@@ -191,7 +191,8 @@ const RecoveryChoiceDialog = lazyPanel(() => import("./components/overlays/Recov
 // P1.7: relink-one/relink-folder dry-run + commit. Rare-ish, on-demand
 // action (opened from the command palette, never on startup), so it stays
 // out of the eager bundle like every other workshop panel above.
-const RelinkPanel = lazyPanel(() => import("./components/workshops/relink/RelinkPanel"), "RelinkPanel");
+// Its open flag is the tiny store/relinkPanel.ts mirror, not store/relink.ts.
+const RelinkPanel =lazyPanel(() => import("./components/workshops/relink/RelinkPanel"), "RelinkPanel");
 const PackProjectPanel = lazyPanel(() => import("./components/workshops/packproject/PackProjectPanel"), "PackProjectPanel");
 // J2: the Recode workshop, opened from the worksheet's column context menu
 // (a categorical column only) — rare-ish, on-demand, so it stays out of the
@@ -276,7 +277,7 @@ export default function AppOverlays() {
   const textFormatHelpOpen = useApp((s) => s.textFormatHelpOpen);
   const prefsOpen = useApp((s) => s.prefsOpen);
   const recoveryPending = useRecoveryChoice((s) => s.pending !== null);
-  const relinkOpen = useRelink((s) => s.open);
+  const relinkOpen = useRelinkPanel((s) => s.open);
   const packProjectOpen = usePackProjectPanel((s) => s.open);
   const recodeOpen = useRecodePanel((s) => s.open);
   const levelOrderOpen = useLevelOrderPanel((s) => s.open);

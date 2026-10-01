@@ -12,8 +12,17 @@
 
 import { useEffect } from "react";
 
+import { onLoadFailure, runLazy } from "../lib/runLazy";
 import { useCommands, type Action } from "../store/commands";
-import { useRelink } from "../store/relink";
+
+// The relink store loads on the click (bundle headroom slice 14): the panel
+// it opens is a lazy chunk that imports the same store, so the gesture
+// already waited on a fetch.
+const openRelinkPanel = (): void =>
+  void runLazy("Loading relink…", () => import("../store/relink")).then(
+    (m) => m.useRelink.getState().openPanel(),
+    onLoadFailure,
+  );
 
 export function useRelinkCommands(): void {
   useEffect(() => {
@@ -26,7 +35,7 @@ export function useRelinkCommands(): void {
         description:
           "Point datasets at a moved folder — dry-run preview before committing (P1.7).",
         keywords: "relink move folder source reimport portability missing offline",
-        run: () => useRelink.getState().openPanel(),
+        run: openRelinkPanel,
       },
     ];
     useCommands.getState().setMenuCommands("relink", actions);
