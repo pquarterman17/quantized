@@ -94,7 +94,7 @@ export default function InsetPlot({ payload, styleList, seriesCycle }: Props) {
         }}
       >
         <span>inset · drag to zoom</span>
-        <button className="qzk-tool-btn" title="Close inset" onClick={() => setInsetMode(false)}>
+        <button aria-label="Close inset" className="qzk-tool-btn" title="Close inset" onClick={() => setInsetMode(false)}>
           ×
         </button>
       </div>

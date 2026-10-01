@@ -146,7 +146,7 @@ export default function MapToolbar(props: MapToolbarProps) {
           >
             2θ/ω
           </button>
-          <button className={`qzk-tool-btn${isQ ? " active" : ""}`} title="Reciprocal-space axes (Qx / Qz)" onClick={onQ}>
+          <button aria-label="Q-space axes" className={`qzk-tool-btn${isQ ? " active" : ""}`} title="Reciprocal-space axes (Qx / Qz)" onClick={onQ}>
             Q
           </button>
           <span className="qzk-tool-sep" />
@@ -156,6 +156,7 @@ export default function MapToolbar(props: MapToolbarProps) {
         <Picker
           key={axis}
           label={axis}
+          name={`${axis} channel`}
           value={keys[slot]}
           options={labels.map((lab, i) => ({ v: i, text: lab }))}
           onChange={(v) => onKeyChange(slot as 0 | 1 | 2, Number(v))}
@@ -176,6 +177,7 @@ export default function MapToolbar(props: MapToolbarProps) {
         log
       </button>
       <button
+        aria-label="Contours"
         className={`qzk-tool-btn${contourOn ? " active" : ""}`}
         title="Contour lines (level count + lin/log spacing live in the Inspector's 2-D map card)"
         onClick={onToggleContour}
@@ -188,6 +190,7 @@ export default function MapToolbar(props: MapToolbarProps) {
           <span className="qzk-tool-sep" />
           {gridable && (
             <button
+              aria-label="H-cut"
               className={`qzk-tool-btn${cutMode === "h" ? " active" : ""}`}
               title="H-cut: click the map → intensity vs the horizontal axis at that height (width averages a swath)"
               onClick={() => onSetCutMode(cutMode === "h" ? "off" : "h")}
@@ -197,6 +200,7 @@ export default function MapToolbar(props: MapToolbarProps) {
           )}
           {gridable && (
             <button
+              aria-label="V-cut"
               className={`qzk-tool-btn${cutMode === "v" ? " active" : ""}`}
               title="V-cut: click the map → intensity vs the vertical axis at that position"
               onClick={() => onSetCutMode(cutMode === "v" ? "off" : "v")}
@@ -205,6 +209,7 @@ export default function MapToolbar(props: MapToolbarProps) {
             </button>
           )}
           <button
+            aria-label="Segment cut"
             className={`qzk-tool-btn${cutMode === "seg" ? " active" : ""}`}
             title="Segment cut: drag any line across the map → distance-parametrized linescan"
             onClick={() => onSetCutMode(cutMode === "seg" ? "off" : "seg")}
@@ -223,6 +228,7 @@ export default function MapToolbar(props: MapToolbarProps) {
               actually is. The titles lead with what the tool PRODUCES, not
               with its shape. */}
           <button
+            aria-label="Integration box"
             className={`qzk-tool-btn${roiMode === "roi" ? " active" : ""}`}
             title="Integration box — drag on the map to draw one; drag inside to move it, edges/corners to resize; its own floating bar previews the profile and commits ∫ / Stats"
             onClick={onToggleRoi}
@@ -230,6 +236,7 @@ export default function MapToolbar(props: MapToolbarProps) {
             ▣
           </button>
           <button
+            aria-label="Angled cut"
             className={`qzk-tool-btn${rulerMode === "ruler" ? " active" : ""}`}
             title="Angled line cut (ruler) — drag along the cut direction to draw; endpoint handles set length and angle, side handles set width; radial / transverse-about-a-peak actions live in the RSM panel"
             onClick={onToggleRuler}
@@ -238,6 +245,7 @@ export default function MapToolbar(props: MapToolbarProps) {
           </button>
           {qAvailable && (
             <button
+              aria-label="Sector wedge"
               className={`qzk-tool-btn${wedgeMode === "sector" ? " active" : ""}`}
               disabled={cutSpace !== "q"}
               title={
@@ -284,7 +292,7 @@ export default function MapToolbar(props: MapToolbarProps) {
         </>
       )}
       <span className="qzk-tool-sep" />
-      <button className="qzk-tool-btn" title="Export map (PDF, SVG or PNG)…" onClick={onExport}>
+      <button aria-label="Export map" className="qzk-tool-btn" title="Export map (PDF, SVG or PNG)…" onClick={onExport}>
         ⤓
       </button>
     </div>
@@ -298,8 +306,11 @@ function Picker({
   options,
   onChange,
   title,
+  name,
 }: {
   label: string;
+  /** Accessible name, when the visible `label` is too terse to be one ("X"). */
+  name?: string;
   value: string | number;
   options: { v: string | number; text: string }[];
   onChange: (v: string) => void;
@@ -308,7 +319,7 @@ function Picker({
   return (
     <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11 }} title={title}>
       {label}
-      <select value={value} onChange={(e) => onChange(e.target.value)}>
+      <select aria-label={name} value={value} onChange={(e) => onChange(e.target.value)}>
         {options.map((o) => (
           <option key={String(o.v)} value={o.v}>
             {o.text}

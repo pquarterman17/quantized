@@ -50,6 +50,7 @@ export default function CalcTitleBar() {
           ↗
         </button>
         <button
+          aria-label="Theme"
           className="qz-icon-btn"
           title="Toggle theme"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}

@@ -91,6 +91,7 @@ function StyleRow({
         {label}
         {overridden && (
           <IconButton
+            aria-label="Reset style"
             title="Reset to default"
             style={{ marginLeft: "auto" }}
             onClick={(e) => {

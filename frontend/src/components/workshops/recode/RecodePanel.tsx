@@ -133,7 +133,7 @@ export default function RecodePanel() {
                   <Button size="sm" onClick={() => applySavedMapping(m.id)}>
                     Apply
                   </Button>
-                  <Button size="sm" variant="danger" onClick={() => deleteMapping(m.id)} title="Delete this saved mapping">
+                  <Button aria-label="Delete mapping" size="sm" variant="danger" onClick={() => deleteMapping(m.id)} title="Delete this saved mapping">
                     ×
                   </Button>
                 </span>

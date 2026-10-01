@@ -32,7 +32,7 @@ export default function PolarStage() {
         accent={accent}
       />
       <div className="qzk-glass qzk-float-tools">
-        <button className="qzk-tool-btn active" title="Back to a cartesian plot" onClick={() => setPolarMode(false)}>
+        <button aria-label="Cartesian plot" className="qzk-tool-btn active" title="Back to a cartesian plot" onClick={() => setPolarMode(false)}>
           ✺
         </button>
       </div>

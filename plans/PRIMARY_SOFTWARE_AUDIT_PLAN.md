@@ -7696,6 +7696,15 @@ that goes red without its fix.
   `Cancel ${op.label}` (e.g. "Cancel Importing a.dat…"), using the label
   already in hand. Pinned by `StatusBar.test.tsx`'s "shows a Cancel control
   for EVERY visible op … each with a distinct accessible name" test.
+  **Icon-name audit + ratchet (2026-10-01, U6).** Icon-only controls were
+  named by their glyph ("▤"): content outranks `title`. Fixed every site
+  outside `components/Library` with a short `aria-label`; the Library's 23 are
+  pinned for its own pass. Guards: `accessibleNames.test.ts` (static JSX scan
+  via `test/accessibleNameScan.ts`, zero outside Library) and
+  `accessibleNames.render.test.tsx` (dom-accessibility-api names on the title
+  bars, menu/status bars, Appearance, every Preferences tab, map toolbar,
+  digitizer). Still `[~]`: plots, trees, and the Library are not audited, and
+  Preferences' tab strip is clickable `<div>`s with no role or keyboard path.
 - [~] Contrast and non-color encodings — **audited 2026-09-09; what exists and
   what does not, stated precisely instead of left as one unchecked line.**
 

@@ -50,6 +50,7 @@ export default function DiffusionTab() {
           <Field label="Eₐ" value={ea} onChange={withTouch(c1.touch, setEa)} unit="eV" width={72} />
           <Field label="T" value={arrT} onChange={withTouch(c1.touch, setArrT)} unit="K" width={72} />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>
@@ -70,6 +71,7 @@ export default function DiffusionTab() {
           <Field label="D" value={dlD} onChange={withTouch(c2.touch, setDlD)} unit="cm²/s" />
           <Field label="t" value={dlT} onChange={withTouch(c2.touch, setDlT)} unit="s" />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>
@@ -91,6 +93,7 @@ export default function DiffusionTab() {
           <Field label="ΔC" value={fickDC} onChange={withTouch(c3.touch, setFickDC)} unit="cm⁻³" width={72} />
           <Field label="Δx" value={fickDx} onChange={withTouch(c3.touch, setFickDx)} unit="cm" width={72} />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>
@@ -113,6 +116,7 @@ export default function DiffusionTab() {
           <Field label="D" value={cpD} onChange={withTouch(c4.touch, setCpD)} unit="cm²/s" width={72} />
           <Field label="c₀" value={cpC0} onChange={withTouch(c4.touch, setCpC0)} width={72} />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>

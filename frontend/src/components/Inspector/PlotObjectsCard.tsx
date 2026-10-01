@@ -216,10 +216,10 @@ export default function PlotObjectsCard() {
           <span className="qz-v" style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis" }}>
             {active.data.labels[channel] ?? `Channel ${channel + 1}`}
           </span>
-          <IconButton title="Move up" disabled={i === 0} onClick={() => moveCurve(channel, -1)}>↑</IconButton>
-          <IconButton title="Move down" disabled={i === channels.length - 1} onClick={() => moveCurve(channel, 1)}>↓</IconButton>
+          <IconButton aria-label="Move up" title="Move up" disabled={i === 0} onClick={() => moveCurve(channel, -1)}>↑</IconButton>
+          <IconButton aria-label="Move down" title="Move down" disabled={i === channels.length - 1} onClick={() => moveCurve(channel, 1)}>↓</IconButton>
           <Button size="sm" onClick={() => toggleCurveAxis(channel)}>{y2Keys?.includes(channel) ? "Y2" : "Y"}</Button>
-          <IconButton title="Properties" onClick={() => openSeriesProperties(channel)}>⚙</IconButton>
+          <IconButton aria-label="Curve properties" title="Properties" onClick={() => openSeriesProperties(channel)}>⚙</IconButton>
         </div>
       ))}
 
@@ -238,9 +238,9 @@ export default function PlotObjectsCard() {
             onClick={() => { setSelection(new Set([annotationKey(a.id)])); setSelectedShapeId(null); setSelectedAnnotationId(a.id); }}
             style={{ flex: 1, overflow: "hidden", textOverflow: "ellipsis", textAlign: "left" }}
           >{a.text}</button>
-          <IconButton title="Duplicate" onClick={() => addAnnotation(a.x, a.y, a.text)}>⧉</IconButton>
-          <IconButton title="Properties" onClick={() => { setSelectedAnnotationId(a.id); setStatus("Annotation selected; edit it in Annotations below"); }}>⚙</IconButton>
-          <IconButton title="Delete" onClick={() => removeAnnotation(a.id)}>×</IconButton>
+          <IconButton aria-label="Duplicate annotation" title="Duplicate" onClick={() => addAnnotation(a.x, a.y, a.text)}>⧉</IconButton>
+          <IconButton aria-label="Annotation properties" title="Properties" onClick={() => { setSelectedAnnotationId(a.id); setStatus("Annotation selected; edit it in Annotations below"); }}>⚙</IconButton>
+          <IconButton aria-label="Delete annotation" title="Delete" onClick={() => removeAnnotation(a.id)}>×</IconButton>
         </div>
       ))}
 
@@ -259,9 +259,9 @@ export default function PlotObjectsCard() {
             onClick={() => { setSelection(new Set([shapeKey(shape.id)])); setSelectedAnnotationId(null); setSelectedShapeId(shape.id); }}
             style={{ flex: 1, textAlign: "left" }}
           >{shape.kind}</button>
-          <IconButton title="Duplicate" onClick={() => { const { id: _id, ...copy } = shape; addShape(copy); }}>⧉</IconButton>
-          <IconButton title="Properties" onClick={() => { setSelectedShapeId(shape.id); setStatus("Shape selected; edit it in Shapes below"); }}>⚙</IconButton>
-          <IconButton title="Delete" onClick={() => removeShape(shape.id)}>×</IconButton>
+          <IconButton aria-label="Duplicate shape" title="Duplicate" onClick={() => { const { id: _id, ...copy } = shape; addShape(copy); }}>⧉</IconButton>
+          <IconButton aria-label="Shape properties" title="Properties" onClick={() => { setSelectedShapeId(shape.id); setStatus("Shape selected; edit it in Shapes below"); }}>⚙</IconButton>
+          <IconButton aria-label="Delete shape" title="Delete" onClick={() => removeShape(shape.id)}>×</IconButton>
         </div>
       ))}
     </Card>

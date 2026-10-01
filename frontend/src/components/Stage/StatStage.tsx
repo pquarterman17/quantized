@@ -187,6 +187,7 @@ export default function StatStage() {
         style={{ gap: 10, padding: "6px 10px", flexWrap: "wrap", maxWidth: "92vw", justifyContent: "center" }}
       >
         <button
+          aria-label="Cartesian plot"
           className="qzk-tool-btn active"
           title="Back to a cartesian plot"
           onClick={() => setStatMode(false)}

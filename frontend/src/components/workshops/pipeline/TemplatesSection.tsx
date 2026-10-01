@@ -143,6 +143,7 @@ export default function TemplatesSection() {
             Export
           </Button>
           <Button
+            aria-label="Delete template"
             size="sm"
             disabled={!picked}
             onClick={() => {

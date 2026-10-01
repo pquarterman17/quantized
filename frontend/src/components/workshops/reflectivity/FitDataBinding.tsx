@@ -62,7 +62,7 @@ function ChannelRow({
           value={ch.spin}
           onChange={(e) => fit.setChannel(index, { spin: e.target.value as Spin })}
         />
-        <IconButton title={`Remove channel ${n}`} disabled={fit.channels.length <= 1} onClick={() => fit.removeChannel(index)}>
+        <IconButton aria-label={`Remove channel ${n}`} title={`Remove channel ${n}`} disabled={fit.channels.length <= 1} onClick={() => fit.removeChannel(index)}>
           ✕
         </IconButton>
       </div>

@@ -104,6 +104,7 @@ export default function LayerTable({
                 onChange={(v) => onUpdate(i, { roughness: Number(v) || 0 })}
               />
               <IconButton
+                aria-label="Remove layer"
                 title="Remove layer"
                 disabled={isEnd || layers.length <= 2}
                 onClick={() => onRemove(i)}

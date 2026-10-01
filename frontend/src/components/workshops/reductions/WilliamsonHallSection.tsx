@@ -102,7 +102,7 @@ export default function WilliamsonHallSection() {
             step={0.001}
             onChange={(v) => updateRow(i, { fwhm: Number(v) || 0 })}
           />
-          <IconButton title="Remove peak" disabled={rows.length <= 2} onClick={() => removeRow(i)}>
+          <IconButton aria-label="Remove peak" title="Remove peak" disabled={rows.length <= 2} onClick={() => removeRow(i)}>
             ✕
           </IconButton>
         </div>

@@ -42,6 +42,7 @@ export default function TitleBar() {
       </div>
       <div className="qzk-tbar-right">
         <button
+          aria-label="Calculators"
           className="qz-icon-btn"
           title="DiraCulator — materials calculators"
           onClick={() => setCalculatorsOpen(true)}
@@ -49,6 +50,7 @@ export default function TitleBar() {
           √
         </button>
         <button
+          aria-label="Theme"
           className="qz-icon-btn"
           title="Toggle theme"
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -56,10 +58,10 @@ export default function TitleBar() {
           {theme === "dark" ? "☾" : "☀"}
         </button>
         <AppearanceMenu />
-        <button className="qz-icon-btn" title="Toggle library" onClick={toggleLeft}>
+        <button aria-label="Library" className="qz-icon-btn" title="Toggle library" onClick={toggleLeft}>
           ▤
         </button>
-        <button className="qz-icon-btn" title="Toggle inspector" onClick={toggleRight}>
+        <button aria-label="Inspector" className="qz-icon-btn" title="Toggle inspector" onClick={toggleRight}>
           ▥
         </button>
       </div>

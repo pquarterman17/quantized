@@ -38,7 +38,7 @@ export default function PlotResultChips({ integral, fwhm, onClearIntegral, onCle
           <span className="lbl">
             {fmtNum(integral.xlo)}–{fmtNum(integral.xhi)}
           </span>
-          <button className="qzk-chip-reset" title="Clear" onClick={onClearIntegral}>
+          <button aria-label="Clear integral" className="qzk-chip-reset" title="Clear" onClick={onClearIntegral}>
             ×
           </button>
         </div>
@@ -50,7 +50,7 @@ export default function PlotResultChips({ integral, fwhm, onClearIntegral, onCle
           <span className="v">{fmtNum(fwhm.center)}</span>
           <span className="lbl">FWHM</span>
           <span className="v">{fmtNum(fwhm.fwhm)}</span>
-          <button className="qzk-chip-reset" title="Clear" onClick={onClearFwhm}>
+          <button aria-label="Clear FWHM" className="qzk-chip-reset" title="Clear" onClick={onClearFwhm}>
             ×
           </button>
         </div>
@@ -153,7 +153,7 @@ export default function PlotResultChips({ integral, fwhm, onClearIntegral, onCle
               {gadget.reporting ? "Reporting…" : "→ Report"}
             </Button>
           )}
-          <button className="qzk-chip-reset" title="Clear" onClick={gadget.dismiss}>
+          <button aria-label="Clear result" className="qzk-chip-reset" title="Clear" onClick={gadget.dismiss}>
             ×
           </button>
         </div>

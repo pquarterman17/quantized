@@ -110,6 +110,7 @@ export default function AnnotationsCard() {
                 }}
               />
               <IconButton
+                aria-label="Remove annotation"
                 title="Remove"
                 onClick={() => removeRowSafely(containerRef.current, () => removeAnnotation(a.id))}
               >

@@ -122,7 +122,7 @@ export default function BondAngleCard({
             touch();
           }}
         />
-        <Button variant="primary" size="sm" onClick={compute}>
+        <Button aria-label="Calculate" variant="primary" size="sm" onClick={compute}>
           =
         </Button>
       </div>

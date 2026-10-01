@@ -201,6 +201,7 @@ export function StepFindPeaks({ w }: { w: PeakWizardState }) {
                   <td>{fmtNum(c.fwhm)}</td>
                   <td>
                     <button
+                      aria-label="Remove peak"
                       className="qz-btn qz-ghost qz-sm"
                       title={c.manual ? "remove manual peak" : "remove"}
                       onClick={() => w.removePeak(i)}

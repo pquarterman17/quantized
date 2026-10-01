@@ -277,7 +277,7 @@ export default function SemiconductorTab() {
                 unit={f.unit}
               />
             ))}
-            <Button variant="primary" size="sm" onClick={() => void run(idx, card)}>
+            <Button aria-label="Calculate" variant="primary" size="sm" onClick={() => void run(idx, card)}>
               =
             </Button>
           </div>

@@ -8,16 +8,20 @@ export function Switch({
   checked,
   onChange,
   label,
+  "aria-label": ariaLabel,
 }: {
   checked: boolean;
   onChange?: (checked: boolean) => void;
   label?: ReactNode;
+  /** The switch's name when there is no visible `label` wrapping it. */
+  "aria-label"?: string;
 }) {
   const sw = (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={ariaLabel}
       className={clsx("qz-switch", checked && "qz-on")}
       onClick={() => onChange?.(!checked)}
     />

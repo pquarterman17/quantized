@@ -34,7 +34,7 @@ export default function PhotonEnergyPanel({ c }: { c: CalculatorsState }) {
           onChange={(e) => c.setPeFrom(e.target.value)}
           aria-label="photon-energy quantity"
         />
-        <Button variant="primary" size="sm" disabled={c.peBusy} onClick={() => void c.peCompute()}>
+        <Button aria-label="Calculate" variant="primary" size="sm" disabled={c.peBusy} onClick={() => void c.peCompute()}>
           =
         </Button>
       </div>
