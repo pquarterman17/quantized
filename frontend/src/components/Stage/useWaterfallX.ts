@@ -9,21 +9,24 @@
 import { useEffect, useMemo, useState } from "react";
 
 import type { PlotPayload } from "../../lib/plotdata";
-import { waterfallXApplies } from "../../lib/waterfallOffset";
+import { waterfallXApplies, waterfallXSpanOf } from "../../lib/waterfallOffset";
 import type { WaterfallXCompanions } from "../../lib/waterfallX";
 
 type Lib = typeof import("../../lib/waterfallX");
 let loaded: Lib | undefined;
 
-/** `base`: the plotted series count before compose; `fraction`: the step
- *  (0 when the caller refuses it — a group split or an encoding). Returns the
- *  payload + companions to draw, keyed as `usePlotPayload` returns them. */
+/** `fetched`: the payload before compose — its series count is the slot
+ *  count, its `waterfallXSpanOf` the step's basis (the full range even after a
+ *  zoom re-fetch); `fraction`: the step (0 when the caller refuses it — a group
+ *  split or an encoding). Returns the payload + companions to draw, keyed as
+ *  `usePlotPayload` returns them. */
 export function useWaterfallX(
   display: PlotPayload | null,
-  base: number,
+  fetched: PlotPayload | null,
   fraction: number,
   { errorBars, errorSpans, colorByColumns }: WaterfallXCompanions,
 ): WaterfallXCompanions & { displayPayload: PlotPayload | null } {
+  const base = fetched?.series.length ?? 0;
   const on = !!display && base > 1 && waterfallXApplies(fraction);
   const [lib, setLib] = useState(loaded);
   useEffect(() => {
@@ -31,6 +34,6 @@ export function useWaterfallX(
   }, [on]);
   return useMemo(() => {
     const c = { errorBars, errorSpans, colorByColumns };
-    return on && lib ? lib.expandWaterfallX(display!, base, fraction, c) : { displayPayload: display, ...c };
-  }, [on, lib, display, base, fraction, errorBars, errorSpans, colorByColumns]);
+    return on && lib ? lib.expandWaterfallX(display!, base, fraction, c, waterfallXSpanOf(fetched!)) : { displayPayload: display, ...c };
+  }, [on, lib, display, fetched, base, fraction, errorBars, errorSpans, colorByColumns]);
 }

@@ -13,7 +13,7 @@ import type { PlotPayload } from "../../lib/plotdata";
 import { publishLivePlotSnapshot } from "../../lib/plotsnapshot";
 import { resolveSeriesStyle, type SeriesCycle } from "../../lib/seriesStyleCycle";
 import type { Dataset, SeriesStyle } from "../../lib/types";
-import { publishLiveWaterfallSpan, waterfallSpan } from "../../lib/waterfallOffset";
+import { publishLiveWaterfallSpan, waterfallSpan, waterfallXSpanOf } from "../../lib/waterfallOffset";
 import { multiPanelShowing } from "./useEffectiveComposition";
 
 export interface LiveSnapshotArgs {
@@ -94,10 +94,11 @@ export function useLiveSnapshotPublish(args: LiveSnapshotArgs): void {
   // focused Stage) cannot each publish a competing span.
   const datasetId = args.payloadDatasetId;
   const rawPayload = args.payload;
-  // The x column's span is the X step's (`lib/waterfallX.ts` measures the same column).
+  // The X step's span: the full-range one even after a zoom re-fetch (`waterfallXSpanOf`, as the canvas).
   const span = useMemo(() => {
-    const cols = rawPayload ? (rawPayload.data as unknown as (number | null)[][]) : null;
-    return cols ? { span: waterfallSpan(cols.slice(1)), xSpan: waterfallSpan(cols.slice(0, 1)) } : null;
+    if (!rawPayload) return null;
+    const cols = rawPayload.data as unknown as (number | null)[][];
+    return { span: waterfallSpan(cols.slice(1)), xSpan: waterfallXSpanOf(rawPayload) };
   }, [rawPayload]);
   // P3.3: the bundle carries the RESOLVED styles — the cycle applied, not the
   // cycle itself. A snapshot window has no export and no live view; its whole

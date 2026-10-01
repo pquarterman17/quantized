@@ -20,7 +20,7 @@ import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
 import { decimalsForIncrement, pow10 } from "./ticks";
-import { fullXExtents } from "./uplotXRange";
+import { fullXExtents, scannedXRange } from "./uplotXRange";
 import type { Annotation, AxisFormat, AxisScale, DefaultTrace, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
 import {
   annotationPlugin,
@@ -1110,7 +1110,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
   // axes, never timestamps.
   // Non-monotonic x also breaks uPlot's y auto-range (it scans the same
   // collapsed index window), so supply full-scan extents. A range *function*
-  // is only consulted when no explicit scale is pending, so box/wheel zoom and
+  // (on Y) is only consulted when no explicit scale is pending, so box/wheel zoom and
   // a fixed yLim still win; double-click reset re-ranges back to the extents.
   const y2ScaleEff: AxisScale = args.y2Scale ?? yScale;
   const loopY = !xAscending && !yLim ? fullYExtents(payload, args.hidden, 0, isPositiveOnlyScale(yScale)) : null;
@@ -1118,7 +1118,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     ? fullYExtents(payload, args.hidden, 1, isPositiveOnlyScale(y2ScaleEff))
     : null;
   // …and its x auto-range collapses to a sliver for the same reason — scan the
-  // x column for the true sweep width (a range function, so zoom/xLim still win).
+  // x column for the true sweep width. uPlot calls X's range on a zoom too: `scannedXRange` keeps it.
   // A waterfall X-offset layout always scans (its drawn points, `fullXExtents`).
   const loopX = (!xAscending || payload.blockRows) && !xLim
     ? fullXExtents(payload, args.hidden, isPositiveOnlyScale(xScale))
@@ -1127,7 +1127,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     x: {
       time: xFmt?.mode === "date" || xFmt?.mode === "time" || xFmt?.mode === "datetime",
       ...scaleDistrProps(xScale),
-      ...(xLim ? { range: xLim } : loopX ? { range: () => loopX } : {}),
+      ...(xLim ? { range: xLim } : loopX ? { range: scannedXRange(loopX) } : {}),
     },
     y: {
       ...scaleDistrProps(yScale),

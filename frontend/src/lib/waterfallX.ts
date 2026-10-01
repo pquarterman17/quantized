@@ -34,6 +34,11 @@
 // x <= 0, which both renderers drop (`waterfallXDomainFixture.test.ts` pins
 // every case on both sides).
 //
+// ZOOM. A committed zoom is in SHIFTED x while the windowed re-fetch filters
+// raw x, so `usePlotPayload` widens it to every slot's raw window
+// (`waterfallOffset.waterfallXFetchWindow`), and the step stays a fraction of
+// the FULL-range x-span (`waterfallXSpanOf`), not the window's.
+//
 // LAZY. Only `Stage/useWaterfallX` imports this, dynamically and only once a
 // non-zero step is set — no eager cost for a plot that never uses it.
 
@@ -73,16 +78,19 @@ function place<T>(col: readonly T[], slot: number, rows: number, blocks: number)
 
 /** Expand a COMPOSED display payload (and its row-aligned companions) into the
  *  per-slot x blocks. `base` is the number of plotted series before compose;
- *  `fraction` the view's `waterfallDx`. Identity (the same objects) when the
- *  step is off or there is nothing to stagger against. */
+ *  `fraction` the view's `waterfallDx`; `xSpan` what it is a fraction of
+ *  (`waterfallXSpanOf` the fetched payload — the full range even when zoomed),
+ *  else this payload's own x-span. Identity (the same objects) when the step
+ *  is off or there is nothing to stagger against. */
 export function expandWaterfallX(
   payload: PlotPayload,
   base: number,
   fraction: number,
   companions: WaterfallXCompanions,
+  xSpan?: number,
 ): WaterfallXCompanions & { displayPayload: PlotPayload } {
   const [x, ...ys] = payload.data as unknown as Col[];
-  const step = fraction * waterfallSpan([x]);
+  const step = fraction * (xSpan ?? waterfallSpan([x]));
   if (!waterfallXApplies(fraction) || base < 2 || !step) return { displayPayload: payload, ...companions };
   const rows = x.length;
   const slots = slotsOf(payload.series, base);

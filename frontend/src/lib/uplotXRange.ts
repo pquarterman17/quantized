@@ -1,7 +1,29 @@
 // The canvas' X autoscale range when uPlot's own cannot be trusted. Split out
 // of `lib/uplotOpts.ts` (shrink-only pin) — `buildOpts` is the only caller.
 
+import type uPlot from "uplot";
+
 import type { PlotPayload } from "./plotdata";
+
+/** The x scale's range function for a scanned extent (`fullXExtents`). uPlot
+ *  calls it on EVERY x `setScale` — a box/wheel zoom and a pan too, not only
+ *  on autoscale — so a constant return snapped every zoom back to the full
+ *  extent. Only uPlot's own autoscale (`autoScaleX`: construction, a
+ *  double-click reset, a re-autoscaling `setData`) gets the scan; an explicit
+ *  view keeps its bounds. Autoscale passes the first and last x, or, when they
+ *  are equal (a loop that ends where it started), a padded interval around
+ *  that value — recognised as the pair of the first such call, which is the
+ *  construction autoscale, so no uPlot internals are restated here. */
+export function scannedXRange(extent: [number, number]): uPlot.Range.Function {
+  let constructed: [number, number] | null = null;
+  return (u, min, max) => {
+    if (min == null || max == null) return extent;
+    const xs = u.data?.[0];
+    if (!xs?.length || (min === xs[0] && max === xs[xs.length - 1])) return extent;
+    if (!constructed && xs[0] === xs[xs.length - 1]) constructed = [min, max];
+    return constructed && min === constructed[0] && max === constructed[1] ? extent : [min, max];
+  };
+}
 
 /** A [min, max] x data domain lightly padded — the canvas' x margin rule.
  *  Log AND reciprocal pad multiplicatively (their domain is positive only). */

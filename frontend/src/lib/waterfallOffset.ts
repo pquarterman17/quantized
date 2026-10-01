@@ -127,6 +127,35 @@ export function waterfallSpan(columns: readonly (readonly (number | null)[])[]):
   return hi > lo ? hi - lo : 1;
 }
 
+/** The x-span the X step is a fraction of: the FULL-range fetch's, which a zoom
+ *  re-fetch stamps on its windowed payload (`withFullXSpan`), so the stagger does
+ *  not shrink on zoom. The canvas and the live export span both read it here. */
+export function waterfallXSpanOf(payload: PlotPayload): number {
+  const x = (payload.data as unknown as (number | null)[][])[0] ?? [];
+  return (payload as XSpanned).fullXSpan ?? waterfallSpan([x]);
+}
+
+// Kept off `PlotPayload` itself (plotdata.ts is at its size pin): only these
+// two functions write or read it.
+type XSpanned = PlotPayload & { fullXSpan?: number };
+
+/** `windowed` (a zoom re-fetch) stamped with its full-range `base`'s x-span. */
+export function withFullXSpan(windowed: PlotPayload, base: PlotPayload): PlotPayload {
+  const out: XSpanned = { ...windowed, fullXSpan: waterfallXSpanOf(base) };
+  return out;
+}
+
+/** A committed zoom `[lo, hi]` is in SHIFTED x, but `/api/plot/series` windows
+ *  RAW x (before decimating). Slot k draws x + k·step, so it needs raw
+ *  [lo − k·step, hi − k·step]; one shared x column means fetching the union
+ *  over every slot of `base` (the full-range fetch). Identity without a step,
+ *  so every non-waterfall plot windows exactly as before. */
+export function waterfallXFetchWindow(base: PlotPayload, [lo, hi]: readonly [number, number], fraction: number): [number, number] {
+  const n = base.series.length;
+  const far = waterfallXApplies(fraction) && n > 1 ? (n - 1) * fraction * waterfallXSpanOf(base) : 0;
+  return Number.isFinite(far) ? [lo - Math.max(far, 0), hi - Math.min(far, 0)] : [lo, hi];
+}
+
 /** The per-index vertical step of a waterfall: `fraction` of `waterfallSpan`. */
 export function waterfallStep(
   columns: readonly (readonly (number | null)[])[],
