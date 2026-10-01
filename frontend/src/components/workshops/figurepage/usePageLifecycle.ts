@@ -8,7 +8,7 @@
 // the new F3.4 panel-editing actions mutate them directly); this hook is
 // handed those setters and drives the save/reopen side of the session instead
 // of owning the grid state itself.
-import { useEffect, useMemo, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, type Dispatch, type SetStateAction } from "react";
 
 import type { PageDocument, PagePanel } from "../../../lib/pageDocument";
 import { pageDocumentDirty, pageDocumentHasUnsavedEdits } from "../../../lib/pageDocumentActions";
@@ -109,6 +109,27 @@ export function usePageLifecycle(
     clearPageDocSeed();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pageDocSeed, clearPageDocSeed]);
+
+  // A Library rename (or its undo) of THIS page must reach the open session:
+  // `draft.name` is a local snapshot, so without this the next Save wrote the
+  // old name back over the rename. Follow only a CHANGE of the stored name for
+  // the same id — a switch of id (reopen, Save As) or a missing entry just
+  // re-baselines. `modifiedAt` follows too, so a clean session stays clean.
+  const storedName = pages.find((p) => p.id === draft.id)?.name;
+  const seenName = useRef<{ id: string; name: string | undefined }>({ id: draft.id, name: storedName });
+  useEffect(() => {
+    const prev = seenName.current;
+    seenName.current = { id: draft.id, name: storedName };
+    if (prev.id !== draft.id || prev.name === undefined || storedName === undefined) return;
+    if (prev.name === storedName) return;
+    const stored = useApp.getState().pages.find((p) => p.id === draft.id);
+    if (!stored) return;
+    setDraft((d) =>
+      d.id !== stored.id || (d.name === stored.name && d.modifiedAt === stored.modifiedAt)
+        ? d
+        : { ...d, name: stored.name, modifiedAt: stored.modifiedAt },
+    );
+  }, [draft.id, storedName, setDraft]);
 
   /** F3.3: FILLED slots that would be silently dropped (`figureId: null`) if
    *  saved right now — an open plot window never saved as an editable
