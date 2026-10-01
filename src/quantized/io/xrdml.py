@@ -42,6 +42,7 @@ from numpy.typing import NDArray
 
 from quantized.calc.qspace import compute_qspace
 from quantized.datastruct import DataStruct
+from quantized.io._safe_xml import parse_untrusted_xml
 from quantized.io._xrdml_scan import (
     _apply_intensity,
     _build_2d_cloud,
@@ -146,12 +147,9 @@ def import_xrdml(filepath: str | Path, *, intensity: str = "cps") -> DataStruct:
     # as latin-1 it becomes "ï»¿" — an invalid token to the XML parser.
     if text.startswith("\xef\xbb\xbf"):
         text = text[3:]
-    try:
-        root = ET.fromstring(text)
-    except ET.ParseError as exc:
-        # Empty/truncated/non-XML content raises ParseError (a SyntaxError, not a
-        # ValueError) -> would escape the import route as a 500. Reject cleanly.
-        raise ValueError(f"{path.name} is not valid XRDML (XML parse failed): {exc}") from exc
+    # Refuses any DTD (XXE / entity expansion) and turns a ParseError into a
+    # clean ValueError naming the file.
+    root = parse_untrusted_xml(text, path.name, kind="XRDML")
 
     scans_xml = _find_all(root, "scan")
     if not scans_xml:

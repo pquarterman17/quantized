@@ -28,7 +28,7 @@ FAIRmat pynxtools-xrd corpus) seed the parity tests.
 
 from __future__ import annotations
 
-import xml.etree.ElementTree as ET  # noqa: S405 (matches io/xrdml.py; trusted local files)
+import xml.etree.ElementTree as ET  # noqa: S405 (types only; parsing via _safe_xml)
 import zipfile
 from pathlib import Path
 from typing import Any
@@ -36,6 +36,7 @@ from typing import Any
 import numpy as np
 
 from quantized.datastruct import DataStruct
+from quantized.io._safe_xml import parse_untrusted_xml
 from quantized.io.base import CORRUPT_ARCHIVE_ERRORS
 
 __all__ = ["import_bruker_brml", "is_bruker_brml"]
@@ -119,7 +120,7 @@ def import_bruker_brml(filepath: str | Path) -> DataStruct:
                     f"(limit {MAX_XML_BYTES}): {path.name}"
                 )
             xml_text = zf.read(members[0]).decode("utf-8", "replace")
-        root = ET.fromstring(xml_text)  # noqa: S314 (trusted local file, matches xrdml)
+        root = parse_untrusted_xml(xml_text, path.name, kind="BRML")  # refuses DTDs
     except CORRUPT_ARCHIVE_ERRORS as exc:
         raise ValueError(f"damaged .brml archive ({exc}): {path.name}") from exc
 
