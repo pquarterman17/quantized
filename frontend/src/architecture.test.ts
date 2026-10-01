@@ -844,7 +844,9 @@ const TS_MODULE_PINS: Record<string, number> = {
   // actually is. 1428 -> 1330 (2026-09-30, display-only repaint): the per-series
   // half of `buildOpts` moved verbatim to lib/uplotSeries.ts, so PlotViewport
   // can re-resolve a LIVE instance's paint through the code a rebuild runs.
-  "/lib/uplotOpts.ts": 1330,
+  // 1330 -> 1279 (2026-10-01): fullXExtents moved to lib/uplotXRange.ts and
+  // fullYExtents to lib/uplotErrorRange.ts (error-bar autoscale).
+  "/lib/uplotOpts.ts": 1279,
   "/lib/uplotOverlays.ts": 1175,
   // 1090 -> 1040 (2026-08-14, LIBRARY_WORKBOOK_UX_PLAN PR A1): the Reductions
   // wire types (WilliamsonHallResult/FftThicknessResult/SuperlatticeResult/
