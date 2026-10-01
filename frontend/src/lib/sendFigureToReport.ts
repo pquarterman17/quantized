@@ -43,6 +43,7 @@ import {
 } from "./reportBlocks";
 import { beginOp, endOp } from "../store/pendingOps";
 import { TOAST_ACTION_TTL, toast } from "../store/toasts";
+import { asOneEditStep } from "../store/undoStep";
 
 /** The "make a new report" choice in the Report picker. */
 export const NEW_REPORT = "New report";
@@ -209,13 +210,14 @@ export function addFigureToReport(
 ): void {
   const st = s();
   if (targetId === null) {
-    // `addReport` itself records no history (none of the report-library
-    // actions do); the send is still one user gesture, so it is one undo step.
-    st.recordHistory(SEND_UNDO_LABEL);
-    st.addReport(
-      newReportName,
-      withSourceRefs(newFigureReport(newReportName, { ...block, name: stem }), refs),
-      datasetId,
+    // `addReport` records its own "add report" step; fold it into ONE step
+    // under the send's label, so both targets undo the same way.
+    asOneEditStep(s, SEND_UNDO_LABEL, () =>
+      st.addReport(
+        newReportName,
+        withSourceRefs(newFigureReport(newReportName, { ...block, name: stem }), refs),
+        datasetId,
+      ),
     );
     return;
   }
