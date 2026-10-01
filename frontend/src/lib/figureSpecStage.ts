@@ -73,6 +73,8 @@ export function buildStageFigureSpec(
   extra: { transparent?: boolean } = {},
 ): FigureSpec {
   const st = s();
+  // Stat mode never gets here when the stat stage is mounted: its commands route to the
+  // stage's own export first (lib/statFigureCommands.ts); otherwise screenOnlyExport asks.
   // The polar canvas (PlotStage's first early return) exports as a polar figure, never as XY.
   if (st.polarMode) {
     const polar = buildPolarFigureSpec(st, ds, stem, o);

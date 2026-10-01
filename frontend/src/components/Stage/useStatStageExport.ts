@@ -21,9 +21,15 @@
 // message (the stage's status line shows it) and nothing is posted. The caller
 // passes `error` only for the modes whose export reads the draw (box/violin/
 // strip/bar); a Q-Q/histogram export is rebuilt from the raw values server-side.
+//
+// The app-level figure commands reach this same export through
+// lib/statStageBridge.ts: the FOCUSED StatStage registers it
+// (`useRegisterStatStageExporter`), and a caller with its own Cancel passes
+// `out.signal`, so the wait and render run under that op instead of a second one.
 
 import { useCallback, useEffect, useRef } from "react";
 
+import { registerStatStageExporter, type StatExportOut, type StatStageExporter } from "../../lib/statStageBridge";
 import { runCancellable } from "../../store/pendingOps";
 import { exportStatStage, type StatStageExportInputs } from "./statStageExport";
 
@@ -40,7 +46,7 @@ export function useStatStageExport(
   pending: boolean,
   inputs: StatStageExportInputs | null,
   error: string | null = null,
-): (fmt: string) => Promise<boolean> {
+): StatStageExporter {
   const latest = useRef<Latest>({ pending, inputs, error });
   const waiters = useRef(new Set<(err?: Error) => void>());
 
@@ -59,7 +65,7 @@ export function useStatStageExport(
     };
   }, []);
 
-  return useCallback(async (fmt: string) => {
+  return useCallback(async (fmt: string, out: StatExportOut = {}) => {
     const settled = (signal: AbortSignal) =>
       new Promise<void>((resolve, reject) => {
         const done = (err?: Error) => {
@@ -72,8 +78,7 @@ export function useStatStageExport(
         waiters.current.add(done);
         signal.addEventListener("abort", onAbort);
       });
-    // P3.4: a StatusBar op whose Cancel aborts the wait and the render request.
-    const r = await runCancellable("Exporting statistical plot…", async (signal) => {
+    const work = async (signal: AbortSignal) => {
       // Re-checked after every wake: a newer pick may have started another compute.
       while (latest.current.pending) {
         signal.throwIfAborted();
@@ -81,8 +86,20 @@ export function useStatStageExport(
       }
       const { inputs: now, error: failure } = latest.current;
       if (failure) throw new Error(failure);
-      if (now) await exportStatStage(fmt, now, signal);
-    });
+      if (now) await exportStatStage(fmt, now, signal, out);
+    };
+    if (out.signal) {
+      await work(out.signal);
+      return true;
+    }
+    // P3.4: a StatusBar op whose Cancel aborts the wait and the render request.
+    const r = await runCancellable("Exporting statistical plot…", work);
     return r !== null;
   }, []);
+}
+
+/** Make `exporter` the one the app's figure commands route to while this
+ *  (focused) stage is mounted. */
+export function useRegisterStatStageExporter(exporter: StatStageExporter): void {
+  useEffect(() => registerStatStageExporter(exporter), [exporter]);
 }

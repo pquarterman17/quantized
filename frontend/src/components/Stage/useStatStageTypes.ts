@@ -7,6 +7,7 @@
 import type { GroupNotice } from "../../lib/groupAxis";
 import type { StatMarksByMode, StatMarksMode, StatPicks } from "../../lib/plotviewSanitize";
 import type { ResolvedStatMarks, StatMarks } from "../../lib/statMarks";
+import type { StatStageExporter } from "../../lib/statStageBridge";
 import type { StatMode } from "../../lib/statstage";
 import type { Dataset } from "../../lib/types";
 import type { StatStageSeed } from "../../store/useApp";
@@ -127,7 +128,7 @@ export interface StatStageState {
    *  from `draw`. Runs as a cancellable StatusBar op (P3.4); resolves
    *  false when the user cancelled it (nothing was saved). While a recompute
    *  is pending it first waits for the fresh draw (useStatStageExport.ts). */
-  exportFigure: (fmt: string) => Promise<boolean>;
+  exportFigure: StatStageExporter;
   /** P2.6 box 4: the whole-plot category axis with the rows behind every
    *  slot (`statStageLevels.levelAxes`) — what the summary table and the
    *  plot's selection link read. Null outside the categorical modes. */

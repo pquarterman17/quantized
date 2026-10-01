@@ -33,6 +33,8 @@ import { buildFigureSpecFromDocument } from "./figureSpec";
 import type { FigureRenderOpts } from "./figureSpec";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import { confirmScreenOnlyExport } from "./screenOnlyExport";
+import { statReportBlock } from "./statFigureCommands";
+import { activeStatExporter } from "./statStageBridge";
 import {
   appendFigureBlock,
   estimateJsonBytes,
@@ -264,7 +266,14 @@ async function sendActivePlot(s: StoreGet): Promise<void> {
   const { targetId, caption, opts, newReportName } = choice;
   await exportActive(
     s,
-    async (stem, ds) => {
+    async (stem, ds, signal) => {
+      const refs: ReportSourceRef[] = [{ kind: "dataset", id: ds.id, name: ds.name }];
+      // Stat mode: the stat renderer's PNG as the block's image (lib/statFigureCommands.ts).
+      const stat = activeStatExporter(s());
+      if (stat) {
+        const statBlock = await statReportBlock(stat, { style: opts.style, dpi: REPORT_FIGURE_DPI, signal }, stem, caption);
+        return addFigureToReport(s, targetId, statBlock, stem, ds.id, newReportName, refs);
+      }
       // Title and axis labels come from the live view AFTER the dataset
       // resolved — the moment `buildStageFigureSpec` reads the focused
       // window — exactly as "Copy figure" takes them (lib/copyFigureCommand.ts),
@@ -285,9 +294,7 @@ async function sendActivePlot(s: StoreGet): Promise<void> {
       );
       if (!picked || !(await confirmScreenOnlyExport(s(), picked.value, "Send"))) return false;
       const block = figureBlockFromSpec(picked.value, stem, caption);
-      addFigureToReport(
-        s, targetId, block, stem, ds.id, newReportName, [{ kind: "dataset", id: ds.id, name: ds.name }],
-      );
+      addFigureToReport(s, targetId, block, stem, ds.id, newReportName, refs);
       // Estimated by walking the spec, never by serializing it (see
       // estimateJsonBytes): a heads-up, not a refusal — the copy is the point.
       const notice = largeSpecNotice(estimateJsonBytes(block.spec));

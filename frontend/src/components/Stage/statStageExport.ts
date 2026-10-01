@@ -41,6 +41,7 @@ import {
 import type { BarChartData } from "../../lib/barlayout";
 import type { AxisSlot } from "../../lib/groupAxis";
 import { resolvedPalette } from "../../lib/plotEncodingBinding";
+import type { StatExportOut, StatStageRequest } from "../../lib/statStageBridge";
 import { axisStyleWire, errorHalfWidth, nestedTiers, type ResolvedStatMarks } from "../../lib/statMarks";
 import type { GroupSpec } from "../../lib/statschooser";
 import { finiteOf, type IndexedGroupSpec, type StatMode } from "../../lib/statstage";
@@ -272,6 +273,16 @@ function axisWire(
   return m ? axisStyleWire(m, labels, nestLabel) : null;
 }
 
+/** Hand one built request to `out.deliver` (the app commands' copy / report,
+ *  lib/statStageBridge.ts), or download it — with the caller's style / DPI. */
+function deliver(req: StatStageRequest, signal: AbortSignal | undefined, out: StatExportOut): Promise<void> {
+  const o = { ...(out.style ? { style: out.style } : {}), ...(out.dpi ? { dpi: out.dpi } : {}) };
+  const r: StatStageRequest =
+    req.route === "statplot" ? { route: req.route, spec: { ...req.spec, ...o } } : { route: req.route, spec: { ...req.spec, ...o } };
+  if (out.deliver) return out.deliver(r, signal);
+  return r.route === "statplot" ? exportStatplotFigure(r.spec, signal) : exportCategoricalFigure(r.spec, signal);
+}
+
 /** Rebuilds a `facets[]` wire payload from `drawFacets` and renders one
  *  faceted figure — the SAME ceil(sqrt(n)) grid the screen shows (gap
  *  #21's shared `calc.figure_facets` layout). Bar facets reuse
@@ -286,6 +297,7 @@ export async function exportFacetedFigure(
   fmt: string,
   o: FacetedExportInputs,
   signal?: AbortSignal,
+  out: StatExportOut = {},
 ): Promise<void> {
   const { drawFacets, mode, barStack, groupLabel, barValueLabel, valueLabel } = o;
   const showN = o.showN ?? false;
@@ -317,7 +329,7 @@ export async function exportFacetedFigure(
       axis_style: axisWire(m, facets.flatMap((f) => f.groups)),
       ...paletteWire(facets.some((f) => f.color_levels)),
     };
-    await exportCategoricalFigure(spec, signal);
+    await deliver({ route: "categorical", spec }, signal, out);
     return;
   }
   if (mode !== "box" && mode !== "violin" && mode !== "strip") return;
@@ -382,7 +394,7 @@ export async function exportFacetedFigure(
       ? { rotation: style.rotation, wrap: style.wrap, tiered: style.tiered, ...(style.fit ? { fit: style.fit } : {}) }
       : null,
   };
-  await exportStatplotFigure(spec, signal);
+  await deliver({ route: "statplot", spec }, signal, out);
 }
 
 /** Everything the stage's "Export" button needs — moved out of
@@ -405,20 +417,23 @@ export interface StatStageExportInputs extends FacetedExportInputs {
 }
 
 /** `signal` (P3.4): the stage's StatusBar Cancel; every render request
- *  below takes it, so a cancelled export saves nothing. */
-export async function exportStatStage(fmt: string, o: StatStageExportInputs, signal?: AbortSignal): Promise<void> {
+ *  below takes it, so a cancelled export saves nothing. `out`: style / DPI and
+ *  where the request goes (default: downloaded). */
+export async function exportStatStage(
+  fmt: string, o: StatStageExportInputs, signal?: AbortSignal, out: StatExportOut = {},
+): Promise<void> {
   const { mode, draw } = o;
   const showN = o.showN ?? false;
   const caveat = o.caveat ?? null;
   // Faceted export (GUI_INTERACTION #12 slice 4b): drawFacets is set for
   // exactly the modes that facet (box/violin/strip/bar). Checked first.
   if (o.drawFacets && o.drawFacets.length > 0) {
-    await exportFacetedFigure(fmt, o, signal);
+    await exportFacetedFigure(fmt, o, signal, out);
     return;
   }
   if (mode === "bar") {
     if (!draw || draw.mode !== "bar" || draw.data.groups.length === 0) return;
-    await exportCategoricalFigure({
+    await deliver({ route: "categorical", spec: {
       ...barWire(draw.data, showN && !o.barStack, o.marks ?? null, !o.barStack),
       ...colorWire(draw.colorLevels),
       axis_style: axisWire(o.marks, draw.data.groups.map((g) => g.label)),
@@ -430,7 +445,7 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs, sig
       x_label: o.groupLabel,
       y_label: o.barValueLabel,
       filename: `bar_${o.barValueLabel}`,
-    }, signal);
+    } }, signal, out);
     return;
   }
   // Box's points overlay (JMP_GAP J5 #1) and Strip mode (#3, which always
@@ -472,5 +487,5 @@ export async function exportStatStage(fmt: string, o: StatStageExportInputs, sig
     // hidden by the current marks would otherwise narrow the export's range).
     spec.y_domain = canvasYDomain(draw, m);
   }
-  await exportStatplotFigure(spec, signal);
+  await deliver({ route: "statplot", spec }, signal, out);
 }

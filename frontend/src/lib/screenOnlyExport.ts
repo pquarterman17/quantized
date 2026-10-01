@@ -12,9 +12,10 @@
 // the figure-page route, which is not a small change, so the export instead
 // says what it will produce and lets the user cancel (owner rule: silent
 // wrong output is the bug). Views that DO export faithfully never ask: polar
-// (`lib/polarFigureSpec.ts`), facets (the spec carries `facets`), an x-break
-// (the flat figure plus `x_breaks`, by design), and stat mode, which is not
-// this request's to judge.
+// (`lib/polarFigureSpec.ts`), facets (the spec carries `facets`) and an x-break
+// (the flat figure plus `x_breaks`, by design). Stat mode routes to the stat
+// stage's own export first (`lib/statStageBridge.ts`); reaching this XY
+// request in stat mode means no stat stage was there to route to, so it asks.
 // Imported only by lazily-loaded export modules.
 
 import type { FigureSpec } from "./api/figures";
@@ -31,11 +32,14 @@ export interface ScreenOnlyView {
 
 export const STACK_EXPORT_NOTICE = "Stacked panels are screen-only, so this exports one overlaid plot.";
 export const INSET_EXPORT_NOTICE = "The magnifier inset is screen-only, so this exports the plot without it.";
+export const STAT_EXPORT_NOTICE = "The statistics plot isn't ready to export, so this exports the data as an XY plot.";
 
 /** The one-sentence notice for a view whose export differs from the screen,
  *  or null when the export is what the screen shows. */
 export function screenOnlyExportNotice(st: ScreenOnlyView, spec: FigureSpec): string | null {
-  if (st.polarMode || st.statMode || spec.polar || spec.facets) return null;
+  if (st.polarMode || spec.polar) return null;
+  if (st.statMode) return STAT_EXPORT_NOTICE;
+  if (spec.facets) return null;
   const composition = st.composition ?? null; // a partial store snapshot may omit it
   if (spec.overrides?.x_breaks?.length || breakPanelsOf(composition) !== null) return null;
   // PlotStage's stack gate (`multiPanelShowing`): two or more series, or a spatial page.
