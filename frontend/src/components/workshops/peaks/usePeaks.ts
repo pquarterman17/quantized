@@ -25,6 +25,7 @@ import { peakInputs } from "./peakInputs";
 import { labelFailureMessage, nextLabelGroupId, rejectIfHistoryBatchRunning } from "./peakLabelGuards";
 import { usePeakManualEdits } from "./usePeakManualEdits";
 import { finiteRange } from "./peakRanges";
+import { limOr } from "../../../lib/axisLimFields";
 import { findOverrides, type PeakFindParams } from "./peakFindParams";
 import { askParams } from "../../overlays/ParamDialog";
 import { confirmPeaksRefit, publishFitResult, setPeakExcluded } from "../../../store/peakTables";
@@ -401,8 +402,8 @@ export function usePeaks(find?: PeakFindRequest): PeaksState {
       // lib/uplotOpts.ts) — an explicit `yLim` is trusted as-is (a real
       // log-scaled view can never legitimately hold a non-positive bound).
       const yNeedsPositive = st.yScale === "log" || st.yScale === "reciprocal";
-      const xRange = st.xLim ?? finiteRange(x);
-      const yRange = st.yLim ?? finiteRange(y, yNeedsPositive);
+      const xRange = limOr(st.xLim, finiteRange(x)); // a half-open limit's auto side: the data's
+      const yRange = limOr(st.yLim, finiteRange(y, yNeedsPositive));
 
       // L1 CRITICAL (review): a peak's apex y is `height + bg`, NEVER
       // `height` alone — `height` is measured ABOVE background by the

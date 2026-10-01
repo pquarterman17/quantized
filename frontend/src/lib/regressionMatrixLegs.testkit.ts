@@ -17,6 +17,7 @@
 
 import type uPlot from "uplot";
 
+import { resolveCanvasLims } from "./canvasLims";
 import { groupLevelLabel, levelOrderFor } from "./categorical";
 import { breakPanelsOf } from "./composition";
 import { buildErrorSpans, type ErrorSpan } from "./errorbars";
@@ -175,8 +176,9 @@ function renderScreen(figure: FigureDocument, dataset: Dataset): ScreenRender {
     yScale: view.yScale,
     tool: "cursor",
     onReadout: () => {},
-    xLim: view.xLim,
-    yLim: view.yLim,
+    // Resolved exactly as PlotViewport does (a half-open side from the canvas' extent).
+    xLim: resolveCanvasLims(display, { xLim: view.xLim, yLim: view.yLim, xScale: view.xScale, yScale: view.yScale }).x.range,
+    yLim: resolveCanvasLims(display, { xLim: view.xLim, yLim: view.yLim, xScale: view.xScale, yScale: view.yScale }).y.range,
     y2Lim: view.y2Lim,
     y2Scale: view.y2Scale,
     xFmt: view.xFmt,

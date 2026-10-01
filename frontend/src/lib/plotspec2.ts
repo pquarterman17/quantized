@@ -78,6 +78,7 @@
 // must not flip that spec to version 2.
 
 import type { Annotation, AxisFormat, AxisScale, LineStyle, MarkerShape, Shape, StepMode, TickMode } from "./types";
+import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import { MARKER_SHAPE_VALUES } from "./seriesStyleCycle";
 import { PANEL_FITS, type PanelFit } from "./panelLayout";
 import { sanitizePageSetup, type PageSetup } from "./pagesetup";
@@ -133,7 +134,7 @@ export interface DisplayBlock {
  *  `AxesBlock` entirely (see `axesBlockHasContent`). */
 export interface AxisSpecV2 {
   label?: string;
-  lim?: [number, number];
+  lim?: HalfLim;
   scale?: AxisScale;
   step?: number;
   fmt?: AxisFormat;
@@ -234,10 +235,6 @@ function isValidWidth(v: unknown): v is number {
   return isFiniteNumber(v) && v >= 0 && v <= 100;
 }
 
-function isRange(v: unknown): v is [number, number] {
-  return Array.isArray(v) && v.length === 2 && isFiniteNumber(v[0]) && isFiniteNumber(v[1]);
-}
-
 function isAxisFormat(v: unknown): v is AxisFormat {
   if (typeof v !== "object" || v === null) return false;
   const o = v as Record<string, unknown>;
@@ -322,7 +319,8 @@ function validateAxisSpec(v: unknown): AxisSpecV2 | null {
   const o = v as Record<string, unknown>;
   const out: AxisSpecV2 = {};
   if (typeof o.label === "string") out.label = o.label;
-  if (isRange(o.lim)) out.lim = o.lim;
+  const lim = sanitizeHalfLim(o.lim); // a null side = auto for that side
+  if (lim) out.lim = lim;
   if (typeof o.scale === "string" && (AXIS_SCALES as readonly string[]).includes(o.scale)) {
     out.scale = o.scale as AxisScale;
   }
@@ -508,8 +506,8 @@ export interface AxesBlockArgs {
   xLabel?: string;
   yLabel?: string;
   y2Label?: string;
-  xLim?: [number, number] | null;
-  yLim?: [number, number] | null;
+  xLim?: HalfLim | null;
+  yLim?: HalfLim | null;
   y2Lim?: [number, number] | null;
   /** Default "linear" — captured only when it differs (matches the store's
    *  own default for `xScale`/`yScale`). */
@@ -531,7 +529,7 @@ export interface AxesBlockArgs {
 
 function captureAxisSpec(
   label: string | undefined,
-  lim: [number, number] | null | undefined,
+  lim: HalfLim | null | undefined,
   scale: AxisScale | undefined,
   defaultScale: AxisScale | undefined,
   step: number | null | undefined,

@@ -101,8 +101,9 @@ class OriginGraphSpec(BaseModel):
     x_key: int | None = None
     x_log: bool = False
     y_log: bool = False
-    x_lim: tuple[float, float] | None = None
-    y_lim: tuple[float, float] | None = None
+    # A null side is auto for that side (a half-open limit; io.origin._lim_lines).
+    x_lim: tuple[float | None, float | None] | None = None
+    y_lim: tuple[float | None, float | None] | None = None
     y2_keys: list[int] = []
 
 

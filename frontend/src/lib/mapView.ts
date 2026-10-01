@@ -45,6 +45,7 @@
 // those. `components/Stage/MapSliceOverlay.tsx` projects them through the
 // SAME `mapRender.dataToPx` the canvas paints with.
 
+import { sanitizeHalfLim, type HalfLim } from "./axisLim";
 import type { ColormapName } from "./colormap";
 import type { CutSpace } from "./mapcuts";
 import { uniqueIds } from "./uniqueIds";
@@ -107,8 +108,9 @@ export interface MapViewState {
   colormap: ColormapName;
   logZ: boolean;
   /** Explicit [lo, hi] colour limits, or null for "auto" (the payload's own
-   *  finite z extent, which is what the canvas used before P2.8). */
-  colorLimits: [number, number] | null;
+   *  finite z extent, which is what the canvas used before P2.8). Either side
+   *  may be null: auto for that side only (half-open, `lib/axisLim.ts`). */
+  colorLimits: HalfLim | null;
   slices: MapSliceDef[];
   annotations: MapAnnotation[];
 }
@@ -214,8 +216,8 @@ export function mapViewFor(
  *  store's no-op guard on `setMapColorLimits` (a fresh array with the same two
  *  numbers is not a change). */
 export function sameColorLimits(
-  a: [number, number] | null,
-  b: [number, number] | null,
+  a: HalfLim | null,
+  b: HalfLim | null,
 ): boolean {
   if (a === b) return true;
   return a !== null && b !== null && a[0] === b[0] && a[1] === b[1];
@@ -302,16 +304,16 @@ function annotation(raw: unknown): MapAnnotation | null {
 export function sanitizeMapView(raw: unknown): MapViewState {
   if (typeof raw !== "object" || raw === null) return DEFAULT_MAP_VIEW;
   const o = raw as Record<string, unknown>;
-  const lim = Array.isArray(o.colorLimits) ? o.colorLimits : null;
-  const lo = lim ? num(lim[0]) : null;
-  const hi = lim ? num(lim[1]) : null;
+  // A half-open pair (one side null = auto for that side) is kept; a fully
+  // typed pair must still run low -> high.
+  const lim = sanitizeHalfLim(o.colorLimits);
   return {
     colormap:
       typeof o.colormap === "string" && COLORMAP_NAMES.includes(o.colormap)
         ? (o.colormap as ColormapName)
         : DEFAULT_MAP_VIEW.colormap,
     logZ: o.logZ === true,
-    colorLimits: lo !== null && hi !== null && hi > lo ? [lo, hi] : null,
+    colorLimits: lim && (lim[0] === null || lim[1] === null || lim[1] > lim[0]) ? lim : null,
     slices: Array.isArray(o.slices)
       ? uniqueIds(o.slices
           .map(sliceDef)

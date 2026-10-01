@@ -33,6 +33,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi } from "vitest";
 
+import { resolveCanvasLims } from "./canvasLims";
 import { createFigureDocument } from "./figureDocument";
 import { buildFigureSpecFromDocument } from "./figureSpec";
 import { buildColumns, composeDisplayPayload, effectiveChannels } from "./plotdata";
@@ -139,7 +140,7 @@ function canvasXRange(c: Case): unknown {
   const hidden = shown.series.map((_, i) => i < channels.length && view.hiddenChannels.includes(channels[i]));
   const opts = buildOpts(shown, {
     width: 600, height: 400, xScale: view.xScale, yScale: "linear", tool: "zoom", onReadout: vi.fn(),
-    hidden, xLim: view.xLim,
+    hidden, xLim: resolveCanvasLims(shown, { xLim: view.xLim, xScale: view.xScale, yScale: "linear", hidden }).x.range,
   });
   const range = (opts.scales?.x as { range?: unknown }).range;
   return typeof range === "function" ? (range as () => unknown)() : range;

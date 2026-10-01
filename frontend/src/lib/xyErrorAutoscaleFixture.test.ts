@@ -31,6 +31,7 @@ import uPlot from "uplot";
 
 import "./uplotPaths"; // provides uPlot's range helpers, as every canvas loads it
 
+import { resolveCanvasLims } from "./canvasLims";
 import { buildErrorSpans } from "./errorbars";
 import type { ErrorBinding } from "./errorRoles";
 import { createFigureDocument } from "./figureDocument";
@@ -40,6 +41,10 @@ import { defaultPlotView, type PlotView } from "./plotview";
 import type { Dataset } from "./types";
 import { buildOpts } from "./uplotOpts";
 import { padXDomain } from "./uplotXRange";
+
+// The committed X/Y limits as PlotViewport resolves them (a half-open side
+// filled from the canvas' own extent — `lib/canvasLims.ts`).
+const lims = (r: ReturnType<typeof resolveCanvasLims>) => ({ xLim: r.x.range, yLim: r.y.range });
 
 const FIXTURE = join(
   dirname(fileURLToPath(import.meta.url)),
@@ -146,7 +151,8 @@ async function canvas(c: Case): Promise<uPlot> {
   const hidden = payload.series.map((_, i) => i < channels.length && view.hiddenChannels.includes(channels[i]));
   const opts = buildOpts(payload, {
     width: 600, height: 400, xScale: "linear", yScale: "linear", tool: "zoom", onReadout: vi.fn(),
-    hidden, errorSpans, xLim: view.xLim, yLim: view.yLim,
+    hidden, errorSpans,
+    ...lims(resolveCanvasLims(payload, { xLim: view.xLim, yLim: view.yLim, xScale: "linear", yScale: "linear", hidden, errorSpans })),
   });
   const host = document.createElement("div");
   document.body.appendChild(host);

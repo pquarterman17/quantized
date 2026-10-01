@@ -45,8 +45,8 @@ class GraphSpec:
     x_key: int | None = None
     x_log: bool = False
     y_log: bool = False
-    x_lim: tuple[float, float] | None = None
-    y_lim: tuple[float, float] | None = None
+    x_lim: tuple[float | None, float | None] | None = None
+    y_lim: tuple[float | None, float | None] | None = None
     y2_keys: tuple[int, ...] = ()
 
 
@@ -85,6 +85,19 @@ def _col(idx: int) -> int:
     Column 1 is X; channels start at column 2 (mirrors the designations loop
     in ``format_origin_script``)."""
     return idx + 2
+
+
+def _lim_lines(axis: str, lim: tuple[float | None, float | None] | None) -> list[str]:
+    """The ``layer.<axis>.from/to`` lines for one axis limit. A ``None`` side is
+    auto for that side (the GUI's half-open limit, a blank min or max field):
+    only the typed side is emitted, so Origin keeps its own autoscale for the
+    other. Only finite limits are emitted -- NaN/Inf would format as invalid
+    LabTalk literals (``layer.x.from = nan;``), so a non-finite member skips
+    the whole pair, letting Origin auto-scale that axis."""
+    if lim is None or any(v is not None and not math.isfinite(v) for v in lim):
+        return []
+    sides = zip(("from", "to"), lim, strict=True)
+    return [f"layer.{axis}.{side} = {v:.10g};" for side, v in sides if v is not None]
 
 
 def _axis_title(label: str, unit: str) -> str:
@@ -152,17 +165,8 @@ def _plot_state_graph(
         o.append("layer.x.type = 1;  // Log X")
     if graph.y_log:
         o.append("layer.y.type = 1;  // Log Y")
-    # Only emit finite limits -- NaN/Inf would format as invalid LabTalk
-    # literals (`layer.x.from = nan;`). A non-finite bound just omits the line,
-    # letting Origin auto-scale that axis.
-    if graph.x_lim is not None and all(math.isfinite(v) for v in graph.x_lim):
-        lo, hi = graph.x_lim
-        o.append(f"layer.x.from = {lo:.10g};")
-        o.append(f"layer.x.to = {hi:.10g};")
-    if graph.y_lim is not None and all(math.isfinite(v) for v in graph.y_lim):
-        lo, hi = graph.y_lim
-        o.append(f"layer.y.from = {lo:.10g};")
-        o.append(f"layer.y.to = {hi:.10g};")
+    o.extend(_lim_lines("x", graph.x_lim))  # finite sides only (see _lim_lines)
+    o.extend(_lim_lines("y", graph.y_lim))
     o.append(f'xb.text$ = "{_escape_lt(_axis_title(x_label, x_lbl_unit))}";')
     if len(primary) == 1:
         yi = primary[0]

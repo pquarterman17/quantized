@@ -54,6 +54,7 @@ import {
   type MapViewMap,
   type MapViewState,
 } from "../lib/mapView";
+import type { HalfLim } from "../lib/axisLim";
 import type { ColormapName } from "../lib/colormap";
 import type { CutSpace } from "../lib/mapcuts";
 import { nextPlotObjectId } from "./idSeq";
@@ -73,8 +74,9 @@ export interface MapViewSlice {
   setMapColormap: (datasetId: string | null, colormap: ColormapName) => void;
   /** The colour SCALE: true = log. */
   setMapLogZ: (datasetId: string | null, logZ: boolean) => void;
-  /** Explicit [lo, hi]; null restores auto (the payload's own z extent). */
-  setMapColorLimits: (datasetId: string | null, colorLimits: [number, number] | null) => void;
+  /** Explicit [lo, hi] (a null side = auto for that side); null restores
+   *  auto (the payload's own z extent). */
+  setMapColorLimits: (datasetId: string | null, colorLimits: HalfLim | null) => void;
 
   /** Record a committed H/V/segment slice at its linked position. Returns the
    *  new id, or null when there is no dataset to record it against. The caller

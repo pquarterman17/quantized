@@ -100,8 +100,18 @@ def apply_axis_shape_overrides(
         lim = ov.get(key)
         if lim is not None:
             lo, hi = lim
+            lo_f = None if lo is None else float(lo)
+            hi_f = None if hi is None else float(hi)
             setter = ax.set_xlim if key == "x_lim" else ax.set_ylim
-            setter(None if lo is None else float(lo), None if hi is None else float(hi))
+            if (lo_f is None) != (hi_f is None):
+                # Half-open (a blank GUI field = auto for that side): the
+                # None side keeps matplotlib's autoscale. A typed side that
+                # would cross it falls back to full autoscale -- the canvas'
+                # rule (frontend lib/canvasLims.ts), never an inverted axis.
+                auto_lo, auto_hi = ax.get_xlim() if key == "x_lim" else ax.get_ylim()
+                if not (auto_lo if lo_f is None else lo_f) < (auto_hi if hi_f is None else hi_f):
+                    continue
+            setter(lo_f, hi_f)
 
     if "grid" in ov:
         ax.grid(bool(ov["grid"]), which="both", alpha=st.grid_alpha or 0.3)

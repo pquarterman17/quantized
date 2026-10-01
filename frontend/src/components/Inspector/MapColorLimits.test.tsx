@@ -6,7 +6,7 @@
 // Also pins the two things that make it the ACTIVE dataset's control now that
 // the views are keyed by dataset id.
 
-import { fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { EMPTY_MAP_VIEWS, mapViewFor } from "../../lib/mapView";
@@ -76,15 +76,32 @@ describe("MapColorLimits (P2.8)", () => {
     expect(useApp.getState().history).toHaveLength(0);
   });
 
-  // Pinned as it BEHAVES, not as one might wish: a blank field reads as 0
-  // through `Number("")`, inherited verbatim from the sibling AxisLimits.tsx
-  // this control was copied from. So "clip the top, leave the bottom auto" is
-  // not expressible — only both-blank restores auto. Recorded here rather than
-  // changed, because changing it would fork the two controls' one shared idiom.
-  it("a half-filled pair commits with the blank side read as 0", () => {
+  // P2.8 residual (b): a blank side is auto for THAT side (half-open), so
+  // "clip the top, leave the bottom auto" is expressible. It used to read as
+  // `Number("") === 0` and commit [0, 50] while the field still said "auto".
+  it("a blank minimum with a typed maximum commits [auto, max], in one entry", () => {
     render(<MapColorLimits />);
     commit(hi(), "50");
-    expect(view("ds-a").colorLimits).toEqual([0, 50]);
+    expect(view("ds-a").colorLimits).toEqual([null, 50]);
+    expect(lo()).toHaveValue("");
+    expect(useApp.getState().history).toHaveLength(1);
+  });
+
+  it("a typed minimum with a blank maximum commits [min, auto]", () => {
+    render(<MapColorLimits />);
+    commit(lo(), "10");
+    expect(view("ds-a").colorLimits).toEqual([10, null]);
+    expect(hi()).toHaveValue("");
+  });
+
+  it("undo restores the half-open pair, and the fields show its blank side blank", () => {
+    useApp.getState().setMapColorLimits("ds-a", [null, 50]);
+    useApp.getState().setMapColorLimits("ds-a", [1, 2]);
+    render(<MapColorLimits />);
+    act(() => useApp.getState().undo());
+    expect(view("ds-a").colorLimits).toEqual([null, 50]);
+    expect(lo()).toHaveValue("");
+    expect(hi()).toHaveValue("50");
   });
 
   it("clearing both fields restores auto, in one entry", () => {

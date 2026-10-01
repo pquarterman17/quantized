@@ -1,12 +1,14 @@
 // Inspector control: the 2-D map's explicit colour (z) limits — audit P2.8's
 // "Persist color limits/scale/map/slices/annotations". A filled min+max clips
-// the heatmap and its colourbar to that range (Origin-style); clearing both
-// restores auto, i.e. the regridded payload's own finite z extent, which is
-// what the canvas used before this control existed.
+// the heatmap and its colourbar to that range (Origin-style); a blank side is
+// auto for that side (half-open, P2.8 residual (b)); clearing both restores
+// auto, i.e. the regridded payload's own finite z extent, which is what the
+// canvas used before this control existed.
 //
 // Deliberately a near-copy of the sibling `AxisLimits.tsx` — same
-// commit-on-blur/Enter contract, same "partial or inverted range leaves the
-// current value alone" rule, same store-mirroring effect — so the map's limits
+// commit-on-blur/Enter contract (`lib/axisLim.parseLimFields`), same "invalid
+// or inverted range leaves the current value alone" rule, same
+// store-mirroring effect — so the map's limits
 // behave exactly like the plot's X/Y limits rather than inventing a second
 // idiom for the same gesture. The difference that matters is undo: this one
 // DOES record an entry (see `setMapColorLimits` in store/mapView.ts for why).

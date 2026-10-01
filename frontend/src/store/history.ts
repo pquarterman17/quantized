@@ -50,6 +50,7 @@
 // when its promise settles, exactly like any other external mutation racing
 // the store.
 
+import type { HalfLim } from "../lib/axisLim";
 import type { AppState } from "./useApp";
 import { restorePatch, snapshotOf, type HistorySnapshot } from "./historySnapshot";
 
@@ -102,8 +103,8 @@ export interface HistoryEntry {
 export type HistoryBatchToken = symbol;
 
 export interface ViewSnapshot {
-  xLim: [number, number] | null;
-  yLim: [number, number] | null;
+  xLim: HalfLim | null;
+  yLim: HalfLim | null;
 }
 
 export interface ViewHistoryEntry {

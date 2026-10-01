@@ -172,7 +172,7 @@ function panelFields(r: PlotRecipe): RecipeDetailsField[] {
     fields.push({ label: "Panels", value: "none" });
   }
   const m = r.map;
-  const limits = m?.colorLimits ? `, limits ${m.colorLimits[0]} – ${m.colorLimits[1]}` : "";
+  const limits = m?.colorLimits ? `, limits ${m.colorLimits[0] ?? "auto"} – ${m.colorLimits[1] ?? "auto"}` : "";
   fields.push({ label: "Map", value: m ? `${m.colormap}${m.logZ ? ", log Z" : ""}${limits}` : "not recorded" });
   return fields;
 }

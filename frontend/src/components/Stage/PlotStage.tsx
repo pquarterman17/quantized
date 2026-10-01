@@ -226,8 +226,8 @@ export default function PlotStage() {
   }, [active?.id, active?.pending]);
 
   // (One-per-line -> wrapped: P3.3 needed two prop lines in the JSX below and
-  // this file is on the 400-line component ceiling. Same nine names.)
-  const { resetView, smartScale, savePng, copyData, copyFigure, copyFigureSvg, snapshot, onRegionSelect, onRangeSelect } =
+  // this file is on the 400-line component ceiling. Ten names: + onLimCrossed.)
+  const { resetView, smartScale, savePng, copyData, copyFigure, copyFigureSvg, snapshot, onRegionSelect, onRangeSelect, onLimCrossed } =
     usePlotStageActions(plotRef, displayPayload, active);
 
   // Item 11 / MAIN #27 offset: the live-snapshot publish (see
@@ -284,8 +284,7 @@ export default function PlotStage() {
         syncKey={windowSyncKey(winLinkGroup)}
         yScale={yScale}
         xScale={xScale}
-        xLim={xLim}
-        yLim={yLim}
+        xLim={xLim} yLim={yLim} onLimCrossed={onLimCrossed}
         xStep={xStep}
         yStep={yStep}
         y2Lim={y2Lim}

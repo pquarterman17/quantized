@@ -7,6 +7,7 @@
 import { describe, expect, it } from "vitest";
 
 import { createFigureDocument } from "./figureDocument";
+import { mapViewFor } from "./mapView";
 import type { FigureDoc } from "./figuredoc";
 import { defaultPlotView, type PlotView, type PlotWindow } from "./plotview";
 import type { FrozenPlotBundle } from "./plotsnapshot";
@@ -229,5 +230,35 @@ describe("snapshot window: the waterfall block layout survives save/reopen", () 
     const back = roundTrip({ datasets: [ds], plotWindows: [win] }).plotWindows.find((w) => w.id === "s1")!;
     expect(back.snapshot!.payload.blockRows).toBe(2);
     expect(back.snapshot!.payload.decimated).toBe(true);
+  });
+});
+
+// P2.8 residual (b): a blank limit side is "auto for that side" (half-open,
+// `lib/axisLim.ts`). It must reopen half-open — a reader that only accepted a
+// finite [lo, hi] pair dropped it to full auto, losing the typed side.
+describe("half-open limits survive save/reopen", () => {
+  const plotWin = (view: PlotView, extra: Partial<PlotWindow> = {}): PlotWindow => ({
+    id: "w1", kind: "plot", title: "W", datasetId: "d1", geometry: { x: 1, y: 2, w: 300, h: 200 },
+    z: 1, winState: "normal", view, bg: "theme", linkGroup: null, pinned: false, ...extra,
+  });
+
+  it("a window view's (and its document's) X/Y limits keep their auto side", () => {
+    const view: PlotView = { ...defaultPlotView(), xLim: [null, 5], yLim: [2, null] };
+    const document = createFigureDocument({ id: "f1", name: "W", datasetId: "d1", view });
+    const back = roundTrip({ datasets: [ds], plotWindows: [plotWin(view, { document })], focusedWindowId: "w1" })
+      .plotWindows[0];
+    expect(back.view.xLim).toEqual([null, 5]);
+    expect(back.view.yLim).toEqual([2, null]);
+    expect(back.document?.plot.view.xLim).toEqual([null, 5]);
+  });
+
+  it("a map's colour limits keep their auto side", () => {
+    const mapViews = { d1: { ...mapViewFor({}, "d1"), colorLimits: [null, 50] as [number | null, number | null] } };
+    expect(roundTrip({ datasets: [ds], mapViews }).mapViews?.d1?.colorLimits).toEqual([null, 50]);
+  });
+
+  it("a pair with no finite side at all reopens as full auto", () => {
+    const view = { ...defaultPlotView(), xLim: [null, null] } as unknown as PlotView;
+    expect(roundTrip({ datasets: [ds], plotWindows: [plotWin(view)] }).plotWindows[0].view.xLim).toBeNull();
   });
 });

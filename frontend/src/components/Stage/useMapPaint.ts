@@ -45,6 +45,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import type { HalfLim } from "../../lib/axisLim";
 import type { ColormapName } from "../../lib/colormap";
 import type { MapPayload } from "../../lib/mapdataFetch";
 import type { RsmPeak } from "../../lib/types";
@@ -61,7 +62,7 @@ export interface MapPaintArgs {
   dsId: string | null;
   cmap: ColormapName;
   logZ: boolean;
-  colorLimits: [number, number] | null;
+  colorLimits: HalfLim | null;
   /** The app-wide peak table; drawn only when it belongs to THIS map's
    *  dataset (unchanged rule, moved verbatim). */
   rsmPeaks: { datasetId: string; peaks: RsmPeak[] } | null;

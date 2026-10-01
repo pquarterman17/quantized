@@ -81,6 +81,24 @@ describe("mapFigureBody", () => {
     ]);
   });
 
+  // P2.8 residual (b): a half-open pair clamps only its typed side, and
+  // `z_limits` carries the blank side filled from the grid's own extent — the
+  // exact pair the canvas paints (`effectiveColorLimits`).
+  it("a half-open pair clamps only its typed side and fills the auto side from the data", () => {
+    const top = mapFigureBody(payload, { ...view, colorLimits: [null, 500] }, opts);
+    expect(top.z_grid).toEqual([
+      [1, 10, null],
+      [100, 500, 0],
+    ]);
+    expect(top.z_limits).toEqual([0, 500]);
+    const bottom = mapFigureBody(payload, { ...view, colorLimits: [5, null] }, opts);
+    expect(bottom.z_grid).toEqual([
+      [5, 10, null],
+      [100, 1000, 5],
+    ]);
+    expect(bottom.z_limits).toEqual([5, 1000]);
+  });
+
   it("under a log scale a non-positive cell stays a gap even when a limit would clamp it up", () => {
     const b = mapFigureBody(payload, { ...view, logZ: true, colorLimits: [10, 100] }, opts);
     expect(b.z_grid).toEqual([

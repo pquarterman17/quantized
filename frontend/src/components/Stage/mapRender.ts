@@ -31,7 +31,7 @@ import type { RsmPeak } from "../../lib/types";
  *  which in log mode means the grid has no positive cell at all, and there is
  *  nothing a log scale could show. */
 export function effectiveColorLimits(
-  colorLimits: [number, number] | null,
+  colorLimits: readonly [number | null, number | null] | null, // a null side = auto (lib/axisLim.ts)
   autoLo: number | null,
   autoHi: number | null,
   logZ = false,
@@ -46,8 +46,11 @@ export function effectiveColorLimits(
     if (logZ && auto && auto[0] <= 0) return null;
     return auto;
   }
-  let lo = colorLimits[0];
-  const hi = colorLimits[1];
+  // P2.8 residual (b): a null side is auto for THAT side, filled from `auto` (log mode: the log floor).
+  const [typedLo, typedHi] = colorLimits;
+  if ((typedLo === null || typedHi === null) && !auto) return null;
+  let lo = typedLo ?? auto?.[0] ?? 0; // `?? 0` is unreachable: `auto` is set here
+  const hi = typedHi ?? auto?.[1] ?? 0;
   if (logZ && lo <= 0) {
     // No positive floor to raise to: null, not the auto pair. `draw` passes
     // `minPositive(p.zGrid)` here, which is null or strictly positive, so this
@@ -240,7 +243,7 @@ export function draw(
   // Audit P2.8: the user's explicit colour limits, or null for "auto" (the
   // payload's own z extent — exactly what this function used before). Last and
   // defaulted so every existing caller and test is untouched.
-  colorLimits: [number, number] | null = null,
+  colorLimits: readonly [number | null, number | null] | null = null,
   // Returns the [lo, hi] actually PAINTED (null when there is nothing to
   // paint) — P2.8 review round 3, finding 2. The Inspector's colour-limit
   // fields would otherwise go on showing a pair the renderer silently

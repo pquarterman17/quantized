@@ -9,6 +9,7 @@
 // the capture half; matching lives in `plotRecipeMatch.ts`, the untrusted
 // `.dwk`/import boundary in `plotRecipeIO.ts`).
 
+import type { HalfLim } from "./axisLim";
 import type { ColormapName } from "./colormap";
 import type { CompositionKind } from "./composition";
 import type { ErrorSide } from "./errorRoles";
@@ -109,7 +110,7 @@ export interface RecipeMapping {
  *  recipe should carry the POLICY, not just a frozen numeric window --
  *  reapplying to different data with `{mode: "auto"}` autoscales fresh
  *  rather than replaying a stale range from the source dataset). */
-export type RecipeAxisRange = { mode: "auto" } | { mode: "fixed"; lim: [number, number]; step?: number };
+export type RecipeAxisRange = { mode: "auto" } | { mode: "fixed"; lim: HalfLim; step?: number }; // null side = auto
 
 export interface RecipeAxisBreaks {
   x: [number, number][];
@@ -252,7 +253,7 @@ export interface RecipePanelWindow {
 export interface RecipeMapView {
   colormap: ColormapName;
   logZ: boolean;
-  colorLimits: [number, number] | null;
+  colorLimits: HalfLim | null;
 }
 
 /** A captured, data-free preview of the plot the recipe was saved from:

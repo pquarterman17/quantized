@@ -21,6 +21,7 @@ import {
   type LegendPos,
 } from "./plotview";
 import { sanitizeLegendSize, sanitizeRegionShades } from "./plotviewSanitize";
+import { sanitizeHalfLim } from "./axisLim";
 import { PLOT_MARKS, type PlotMark } from "./plotspec";
 import { isString, keyedRecord } from "./sanitizeRecord";
 import type { SignatureErrorRole } from "./quickPlotTemplates";
@@ -263,10 +264,11 @@ function sanitizeRange(v: unknown, fb: RecipeAxisRange): RecipeAxisRange {
   if (typeof v !== "object" || v === null) return fb;
   const o = v as Record<string, unknown>;
   if (o.mode === "auto") return { mode: "auto" };
-  if (o.mode === "fixed" && isRange(o.lim)) {
+  const lim = o.mode === "fixed" ? sanitizeHalfLim(o.lim) : null; // a half-open pair is kept
+  if (lim) {
     return typeof o.step === "number" && Number.isFinite(o.step)
-      ? { mode: "fixed", lim: o.lim, step: o.step }
-      : { mode: "fixed", lim: o.lim };
+      ? { mode: "fixed", lim, step: o.step }
+      : { mode: "fixed", lim };
   }
   return fb;
 }

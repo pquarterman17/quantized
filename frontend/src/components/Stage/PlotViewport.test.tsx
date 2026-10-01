@@ -276,3 +276,42 @@ describe("PlotViewport — display-only changes patch the live instance", () => 
     expect(calls).toEqual([]);
   });
 });
+
+// P2.8 residual (b): a half-open limit (one side null = auto for that side)
+// is resolved against the canvas' own scanned extent before it reaches
+// uPlot — the typed side is honoured, the blank side is the autoscale side.
+describe("PlotViewport — half-open limits", () => {
+  const optsOf = (i: number) => (created[i] as { opts: uPlot.Options }).opts;
+  const xRange = (i: number) =>
+    (optsOf(i).scales?.x?.range as unknown as (u: unknown, min: null, max: null) => [number, number])(null, null, null);
+
+  it("fills a blank Y side from the data extent (y 10..30, soft-padded to 8..32)", () => {
+    vi.stubGlobal("ResizeObserver", MockResizeObserver);
+    render(<PlotViewport {...baseProps()} yLim={[null, 25]} />);
+    expect(optsOf(0).scales?.y?.range).toEqual([8, 25]);
+  });
+
+  it("fills a blank X side from the scanned x extent", () => {
+    vi.stubGlobal("ResizeObserver", MockResizeObserver);
+    render(<PlotViewport {...baseProps()} xLim={[0.5, null]} />);
+    expect(xRange(0)).toEqual([0.5, 2.04]);
+  });
+
+  it("an explicit side that crosses the auto side falls back to full auto and says so", () => {
+    vi.stubGlobal("ResizeObserver", MockResizeObserver);
+    const onLimCrossed = vi.fn();
+    render(<PlotViewport {...baseProps()} yLim={[40, null]} onLimCrossed={onLimCrossed} />);
+    const range = optsOf(0).scales?.y?.range;
+    expect(Array.isArray(range) && range[0] === 40).toBe(false);
+    expect(onLimCrossed).toHaveBeenCalledWith("y");
+  });
+
+  it("editing the typed side nudges the live instance, keeping the resolved auto side, without a rebuild", () => {
+    vi.stubGlobal("ResizeObserver", MockResizeObserver);
+    const props = { ...baseProps(), yLim: [null, 25] as [number | null, number | null] };
+    const { rerender } = render(<PlotViewport {...props} />);
+    rerender(<PlotViewport {...props} yLim={[null, 28]} />);
+    expect(calls).toContainEqual(["setScale", "y", { min: 8, max: 28 }]);
+    expect(created).toHaveLength(1);
+  });
+});

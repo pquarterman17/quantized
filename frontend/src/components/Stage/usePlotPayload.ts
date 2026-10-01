@@ -11,6 +11,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
+import { fixedLim, type HalfLim } from "../../lib/axisLim";
 import { groupLevelLabel, levelOrderFor } from "../../lib/categorical";
 import { buildColorByColumns, type ColorScatterSpec } from "../../lib/colorscatter";
 import type { ErrorSpan } from "../../lib/errorbars";
@@ -89,8 +90,8 @@ export interface PlotPayloadParams {
    *  recovers full local detail instead of showing only the envelope the
    *  full-range decimation kept. `null` (autoscale/reset — also every
    *  pre-existing caller that omits this prop) shows the cached full-range
-   *  payload with NO extra fetch. */
-  xLim?: [number, number] | null;
+   *  payload with NO extra fetch; so does a half-open limit (a side on auto). */
+  xLim?: HalfLim | null;
 }
 
 /** Would ANY overlay/selection/exclusion companion be appended onto the base
@@ -431,8 +432,9 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
   // instance was superseded, its `.then` is a no-op — so a slow response for
   // a window the user has since zoomed/panned/reset away from can never
   // clobber whatever IS currently committed.
+  const fetchLim = fixedLim(p.xLim); // same reference as p.xLim when fully fixed
   useEffect(() => {
-    if (!p.xLim) {
+    if (!fetchLim) {
       // Reset/autoscale: restore the cached full-range payload with no fetch
       // at all — it's already in memory from the base effect above.
       const base = basePayloadRef.current;
@@ -440,10 +442,10 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
       if (base && base !== payload && activeId !== undefined) setFetched({ payload: base, datasetId: activeId });
       return;
     }
-    if (!data || activeId === undefined || !shouldRefetchWindow(p.xLim, baseDecimated)) return;
+    if (!data || activeId === undefined || !shouldRefetchWindow(fetchLim, baseDecimated)) return;
     const base = basePayloadRef.current; // the full-range fetch; null only mid-invalidation
     // The zoom is in SHIFTED x, the route windows raw x: widen by the X stagger (identity without one).
-    const [xMin, xMax] = base ? waterfallXFetchWindow(base, p.xLim, waterfallDx) : p.xLim;
+    const [xMin, xMax] = base ? waterfallXFetchWindow(base, fetchLim, waterfallDx) : fetchLim;
     let cancelled = false;
     const controller = new AbortController();
     fetchPlot(
@@ -474,7 +476,7 @@ export function usePlotPayload(p: PlotPayloadParams): PlotPayloadResult {
     };
     // `payload` is read but NOT listed — see this effect's header comment.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p.xLim, data, activeId, xType, fetchChannels, p.y2Keys, p.xKey, p.yScale, p.xScale, baseDecimated, waterfallDx]);
+  }, [fetchLim, data, activeId, xType, fetchChannels, p.y2Keys, p.xKey, p.yScale, p.xScale, baseDecimated, waterfallDx]);
 
   // #36 / G4: the canonical-role error spans -- see usePlotPayloadLogOffsets.ts's
   // `useOffsetErrorSpans` for the document-vs-dataset authority rule.

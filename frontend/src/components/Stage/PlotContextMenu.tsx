@@ -142,7 +142,7 @@ export default function PlotContextMenu({ x, y, plotRef, payload, plotted, hidde
     // Set-limits dialog seeded from the current manual range or the live scale.
     const editLimits = (
       scaleKey: string,
-      cur: [number, number] | null,
+      cur: readonly [number | null, number | null] | null, // a null side prefills from the live scale
       setter: (lim: [number, number] | null) => void,
     ) => {
       const sc = plotRef.current?.scales?.[scaleKey];

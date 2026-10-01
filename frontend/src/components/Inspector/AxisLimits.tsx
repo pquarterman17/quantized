@@ -1,14 +1,20 @@
 // Inspector control: explicit X/Y axis ranges (the W6 plot-state "limits"). A
-// filled min+max fixes the axis (Origin-style); clearing both restores autoscale.
-// Commits on blur / Enter so typing isn't reformatted mid-edit. Lives in the Axes
-// card; the actual range is applied in uplotOpts via scales.{x,y}.range.
+// filled min+max fixes the axis (Origin-style); a blank side is auto for THAT
+// side (a half-open limit — `lib/axisLim.ts`, P2.8 residual (b)): the other
+// side is honoured and the canvas fills the blank one from its autoscale
+// extent. Clearing both restores full autoscale; a non-numeric entry, or two
+// typed sides with min >= max, leaves the committed range untouched. Commits
+// on blur / Enter so typing isn't reformatted mid-edit. Lives in the Axes
+// card; the range is resolved and applied by PlotViewport (useResolvedLims).
 
 import { useEffect, useState } from "react";
 
+import type { HalfLim } from "../../lib/axisLim";
+import { limFieldText, parseLimFields } from "../../lib/axisLimFields";
 import { useApp } from "../../store/useApp";
 import { NumberField } from "../primitives/NumberField";
 
-type Lim = [number, number] | null;
+type Lim = HalfLim | null;
 
 export default function AxisLimits() {
   const xLim = useApp((s) => s.xLim);
@@ -24,23 +30,18 @@ export default function AxisLimits() {
   // Mirror store → fields when the limits change elsewhere (autoscale on dataset
   // switch, or a reset). Normalizes "1.50" → "1.5" after a commit, which is fine.
   useEffect(() => {
-    setXMin(xLim ? String(xLim[0]) : "");
-    setXMax(xLim ? String(xLim[1]) : "");
+    setXMin(limFieldText(xLim, 0));
+    setXMax(limFieldText(xLim, 1));
   }, [xLim]);
   useEffect(() => {
-    setYMin(yLim ? String(yLim[0]) : "");
-    setYMax(yLim ? String(yLim[1]) : "");
+    setYMin(limFieldText(yLim, 0));
+    setYMax(limFieldText(yLim, 1));
   }, [yLim]);
 
   const commit = (minStr: string, maxStr: string, set: (v: Lim) => void): void => {
-    if (minStr === "" && maxStr === "") {
-      set(null); // both blank → autoscale
-      return;
-    }
-    const lo = Number(minStr);
-    const hi = Number(maxStr);
-    if (Number.isFinite(lo) && Number.isFinite(hi) && lo < hi) set([lo, hi]);
-    // partial / invalid (min ≥ max) → leave the current range untouched
+    // both blank → autoscale; one blank → auto for that side; invalid → no-op
+    const next = parseLimFields(minStr, maxStr);
+    if (next !== undefined) set(next);
   };
 
   const row = (
@@ -59,6 +60,7 @@ export default function AxisLimits() {
         value={minV}
         width={64}
         placeholder="auto"
+        aria-label={`${label} axis minimum`}
         onChange={setMin}
         onBlur={onCommit}
         onKeyDown={(e) => e.key === "Enter" && onCommit()}
@@ -68,6 +70,7 @@ export default function AxisLimits() {
         value={maxV}
         width={64}
         placeholder="auto"
+        aria-label={`${label} axis maximum`}
         onChange={setMax}
         onBlur={onCommit}
         onKeyDown={(e) => e.key === "Enter" && onCommit()}

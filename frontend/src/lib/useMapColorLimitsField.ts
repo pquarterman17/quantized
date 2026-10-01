@@ -15,19 +15,17 @@
 //   - the typed-field state, mirrored from the store's committed pair
 //     whenever it changes elsewhere (a dataset switch, undo, another window
 //     editing the SAME dataset);
-//   - the blur/Enter commit contract, verbatim from the Inspector row: both
-//     fields blank commits `null` (auto); a non-finite or inverted pair, or
-//     one that says nothing new, is a no-op (no store write, no undo step —
-//     `store/mapView.ts`'s `setMapColorLimits` already short-circuits on an
-//     unchanged pair, so this hook does not need its own guard — see
-//     `commit()` below). A HALF-blank pair is not symmetric, and this is a
-//     pre-existing, deliberately PINNED contract, not a bug: `Number("")` is
-//     `0`, so a blank min with a typed max commits `[0, max]` (one undo
-//     entry); a typed min with a blank max is `min < max` failing and stays a
-//     no-op. Pinned by `components/Inspector/MapColorLimits.test.tsx`'s "a
-//     half-filled pair commits with the blank side read as 0" — carried over
-//     verbatim from the sibling `AxisLimits.tsx` this control was copied
-//     from, so changing it here would fork the two controls' one idiom;
+//   - the blur/Enter commit contract, shared with the sibling
+//     `AxisLimits.tsx` through `lib/axisLim.parseLimFields`: both fields
+//     blank commits `null` (auto); ONE blank field is auto for that side
+//     only — a half-open pair such as `[null, max]` ("clip the top, leave
+//     the bottom auto"), which the renderer fills from the data's own extent
+//     (P2.8 residual (b); it used to read as `Number("") === 0` and commit
+//     `[0, max]` while the field still showed "auto"). A non-numeric entry,
+//     a fully typed inverted pair, or one that says nothing new, is a no-op
+//     (no store write, no undo step — `store/mapView.ts`'s
+//     `setMapColorLimits` already short-circuits on an unchanged pair, so
+//     this hook does not need its own guard — see `commit()` below);
 //   - Escape-to-revert: discard the typed-but-uncommitted edit and restore
 //     the fields to the last COMMITTED pair, without touching the store;
 //   - the "effective" pair the renderer actually painted with, when it
@@ -43,7 +41,9 @@
 
 import { useEffect, useState } from "react";
 
-import { mapViewFor, sameColorLimits } from "./mapView";
+import type { HalfLim } from "./axisLim";
+import { limFieldText, parseLimFields } from "./axisLimFields";
+import { mapViewFor } from "./mapView";
 import { useApp } from "../store/useApp";
 
 export interface MapColorLimitsField {
@@ -95,20 +95,15 @@ export function useMapColorLimitsField(
   // re-render an instance that no longer reads it.
   const storePainted = useApp((s) => (!hasOverride && datasetId ? s.mapPaintedLimits[datasetId] : undefined));
   const painted = hasOverride ? paintedOverride.value : storePainted;
+  // Said only when a TYPED side was not honoured: a half-open pair's auto
+  // side is filled from the data by design, which is not worth a note.
   const effective =
-    colorLimits !== null &&
-    painted !== undefined &&
-    !sameColorLimits(painted === null ? null : [painted[0], painted[1]], colorLimits)
-      ? painted
-      : undefined;
+    colorLimits !== null && painted !== undefined && !honours(painted, colorLimits) ? painted : undefined;
 
   const [lo, setLo] = useState("");
   const [hi, setHi] = useState("");
 
-  const format = (limits: readonly [number, number] | null): [string, string] => [
-    limits ? String(limits[0]) : "",
-    limits ? String(limits[1]) : "",
-  ];
+  const format = (limits: HalfLim | null): [string, string] => [limFieldText(limits, 0), limFieldText(limits, 1)];
 
   // Mirror store -> fields whenever the committed pair changes elsewhere (a
   // dataset switch, undo restoring an earlier pair, another open window
@@ -120,19 +115,15 @@ export function useMapColorLimitsField(
   }, [colorLimits]);
 
   const commit = (): void => {
-    if (lo === "" && hi === "") {
-      if (colorLimits !== null) setMapColorLimits(datasetId, null); // both blank -> auto
-      return;
-    }
-    const min = Number(lo);
-    const max = Number(hi);
-    if (!Number.isFinite(min) || !Number.isFinite(max) || !(min < max)) return;
+    // Both blank -> auto; one blank -> auto for that side; invalid -> no-op.
+    const next = parseLimFields(lo, hi);
+    if (next === undefined) return;
     // No separate "unchanged pair" guard here (review round 7, finding 5): a
     // re-commit of the SAME pair already reaches `store/mapView.ts`'s
     // `setMapColorLimits`, which short-circuits on `sameColorLimits` — no
     // write, no undo entry, no re-render. A second guard here was dead code,
     // not defence in depth: deleting it changed nothing observable.
-    setMapColorLimits(datasetId, [min, max]);
+    setMapColorLimits(datasetId, next);
   };
 
   const revert = (): void => {
@@ -142,4 +133,11 @@ export function useMapColorLimitsField(
   };
 
   return { lo, hi, setLo, setHi, commit, revert, effective };
+}
+
+/** Did the renderer paint every TYPED side of `typed` as typed? (`painted`
+ *  null — nothing paintable — never honours a typed pair.) */
+function honours(painted: readonly [number, number] | null, typed: HalfLim): boolean {
+  if (!painted) return false;
+  return (typed[0] === null || typed[0] === painted[0]) && (typed[1] === null || typed[1] === painted[1]);
 }

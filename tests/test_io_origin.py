@@ -116,6 +116,22 @@ def test_origin_graph_custom_lims() -> None:
     assert "layer.y.to = 250;" in ogs
 
 
+def test_origin_graph_half_open_lims_emit_only_the_typed_side() -> None:
+    # A blank min/max field in the GUI is auto for that side (P2.8 residual
+    # (b)): only the typed side becomes a LabTalk line; Origin autoscales the
+    # other one.
+    ds = _three_channel_ds()
+    _, ogs = format_origin_script(
+        ds,
+        make_graph=True,
+        graph=GraphSpec(y_keys=(0,), x_lim=(None, 12.0), y_lim=(-3.0, None)),
+    )
+    assert "layer.x.from" not in ogs
+    assert "layer.x.to = 12;" in ogs
+    assert "layer.y.from = -3;" in ogs
+    assert "layer.y.to" not in ogs
+
+
 def test_origin_graph_x_key_uses_value_channel() -> None:
     # x_key=1 -> X comes from worksheet col 3 (Y2), not col 1 (time).
     ds = _three_channel_ds()
