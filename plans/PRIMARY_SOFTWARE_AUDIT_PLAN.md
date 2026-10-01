@@ -4718,8 +4718,8 @@ violin, bar, strip, or summary plots.
 
 **Models:** GPT-5.6 Terra high / Claude Sonnet 5. **Dependencies:** P1.4-P1.5.
 
-- [ ] Nested grouping/order/labels/jitter/summary/errors/raw-point visibility.
-  **Progress 2026-09-27 (not ticked — see "Not done").**
+- [x] Nested grouping/order/labels/jitter/summary/errors/raw-point visibility.
+  **Progress 2026-09-27 (ticked 2026-10-01 with the level rename, `3fe75caa`).**
   **Survey (before):** nested grouping (#351 compute + "then by" picker) and
   level order (`LevelOrderPanel`, `DataStruct.level_order`) existed; level
   RENAME exists only as a derived column (Recode workshop). Raw points: box
@@ -4774,7 +4774,11 @@ violin, bar, strip, or summary plots.
   per option, the shared fixtures, route validation). Wire fixture
   `statplot_levels_export.json` gained the new fields. Eager bundle 858,336 ->
   858,810 B (+474, the sanitizer and the field); all UI in the lazy stage chunk.
-  **Not done:** in-stage level RENAME (use Recode). (Former entries done:
+  **Done 2026-10-01:** level RENAME in place (`3fe75caa`): double-click a label
+  or its ✎ in the level-order workshop; one undo entry, `.dwk` round-trip,
+  refused on re-derived datasets and for duplicate names, Recode mappings
+  follow (`lib/levelRename.ts`, `store/levelRename.ts`); the Stat Stage has no
+  categorical-axis context menu, so there is no entry point there. (Former entries done:
   rotated-label depth measured from each side's own text metrics, and a long
   upright label wrapping or rotating on screen and in the export by ONE
   fixture-pinned rule (`fit: "auto"`), `bd7f61af`; the Graph Builder
