@@ -36,6 +36,7 @@ import { useLevelOrderPanel } from "../../../store/levelOrderPanel";
 import ContextMenu from "../../overlays/ContextMenu";
 import GridViewport from "./GridViewport";
 import SheetTabs from "./SheetTabs";
+import { useRowReveal } from "./useRowReveal";
 import { useWorksheetView } from "./useWorksheetView";
 import WorksheetFilterBar from "./WorksheetFilterBar";
 import WorksheetToolbar from "./WorksheetToolbar";
@@ -87,6 +88,7 @@ export default function WorksheetPane({ datasetId, windowId }: WorksheetPaneProp
  *  can't be called conditionally. */
 function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string }) {
   const view = useWorksheetView(ds, windowId);
+  const reveal = useRowReveal(ds, view, windowId);
   const [menu, setMenu] = useState<{ kind: "col" | "row"; target: number; x: number; y: number } | null>(null);
 
   // ORIGIN_FILE_DECODE_PLAN #38: opening the worksheet on a still-lazy Origin
@@ -200,6 +202,11 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
           {view.err}
         </div>
       )}
+      {reveal.notice && (
+        <div className="qzk-ds-meta" style={{ padding: "4px 8px", color: "var(--text-faint)" }}>
+          {reveal.notice}
+        </div>
+      )}
       {hasOriginReportSheets(ds.data) && (
         <div className="qzk-ds-meta" style={{ padding: "4px 8px", color: "var(--text-faint)" }}>
           This sheet has Origin report-sheet columns not shown here — see Inspector › Origin provenance.
@@ -239,6 +246,7 @@ function WorksheetPaneView({ ds, windowId }: { ds: Dataset; windowId?: string })
         channelTypes={ds.channelTypes}
         onChangeChannelType={(col, t) => useApp.getState().setChannelType(ds.id, col, t)}
         readOnly={isRederived(ds)}
+        reveal={reveal.target}
       />
 
       {menu && (

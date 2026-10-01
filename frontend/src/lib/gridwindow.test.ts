@@ -10,8 +10,26 @@ import {
   MAX_COL_WIDTH,
   MIN_COL_WIDTH,
   offsetIndexAt,
+  revealScrollOffset,
   windowIndices,
 } from "./gridwindow";
+
+describe("revealScrollOffset", () => {
+  it("leaves a fully visible item where it is", () => {
+    expect(revealScrollOffset(100, 20, 50, 200, true)).toBe(50);
+  });
+  it("centres an off-screen item when asked, never below 0", () => {
+    expect(revealScrollOffset(1000, 20, 0, 200, true)).toBe(910);
+    expect(revealScrollOffset(20, 20, 500, 200, true)).toBe(0);
+  });
+  it("otherwise moves the least distance that shows the item", () => {
+    expect(revealScrollOffset(1000, 120, 0, 400, false)).toBe(720);
+    expect(revealScrollOffset(100, 120, 500, 400, false)).toBe(100);
+  });
+  it("puts the item at the edge of a degenerate viewport", () => {
+    expect(revealScrollOffset(300, 20, 0, 0, true)).toBe(300);
+  });
+});
 
 describe("computeAxisWindow", () => {
   it("windows from the top when scrolled to 0", () => {

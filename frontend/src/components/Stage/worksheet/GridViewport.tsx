@@ -34,6 +34,7 @@ import {
   DEFAULT_GUTTER_WIDTH,
   DEFAULT_ROW_HEIGHT,
   DEFAULT_ROW_OVERSCAN,
+  revealScrollOffset,
   windowIndices,
 } from "../../../lib/gridwindow";
 import type { CalcResult, ChannelRole, DataStruct, ModelingType } from "../../../lib/types";
@@ -94,6 +95,16 @@ export interface GridViewportProps {
   onChangeChannelType?: (col: number, t: ModelingType | null) => void;
   /** Every cell is read-only: the dataset is re-derived by the recalc (lib/rederived.ts). */
   readOnly?: boolean;
+  /** Scroll a DISPLAY row (index into `order`) — and a column, if given — into
+   *  view, once per `key` (see ./useRowReveal.ts). */
+  reveal?: GridReveal | null;
+}
+
+export interface GridReveal {
+  pos: number;
+  /** A channel index, or a text column's short name. */
+  column?: number | string;
+  key: number;
 }
 
 /** The row height token, read once per mount (and on resize, in case a
@@ -138,6 +149,7 @@ export default function GridViewport({
   channelTypes,
   onChangeChannelType,
   readOnly,
+  reveal,
 }: GridViewportProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scroll, setScroll] = useState({ top: 0, left: 0 });
@@ -185,6 +197,31 @@ export default function GridViewport({
     () => (hasCustomCols ? buildOffsets(colCount, (c) => colWidths[c] ?? DEFAULT_COL_WIDTH) : null),
     [hasCustomCols, colCount, colWidths],
   );
+
+  // Reveal (store/worksheetReveal.ts): scroll once per request key. Reads the
+  // live element — rows sit under the sticky header, and the gutter
+  // + x column are pinned — then mirrors the result into `scroll` so the window
+  // moves this render, not after the browser's async scroll event.
+  const revealed = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !reveal || revealed.current === reveal.key) return;
+    revealed.current = reveal.key;
+    const rh = readRowHeight(el);
+    const headerH = (el.firstElementChild as HTMLElement | null)?.offsetHeight || rh;
+    const top = revealScrollOffset(reveal.pos * rh, rh, el.scrollTop, el.clientHeight - headerH, true);
+    const c = reveal.column;
+    const text = typeof c === "string" ? textCols.findIndex((t) => t.shortName === c) : -1;
+    const at = (i: number) => (colOffsets ? colOffsets[i] : i * colWidth);
+    const value = typeof c === "number" && c >= 0 && c < colCount;
+    const start = text >= 0 ? at(colCount) + text * colWidth : value ? at(c) : null;
+    const size = (value && colWidths[c]) || colWidth;
+    const avail = el.clientWidth - gutterWidth - (colWidths[-1] ?? colWidth);
+    const left = start == null ? el.scrollLeft : revealScrollOffset(start, size, el.scrollLeft, avail, false);
+    el.scrollTop = top;
+    el.scrollLeft = left;
+    setScroll({ top, left });
+  }, [reveal, textCols, colCount, colWidth, colWidths, gutterWidth, colOffsets]);
 
   const rowWindow = computeAxisWindow(scroll.top, metrics.height, order.length, {
     itemSize: metrics.rowHeight,

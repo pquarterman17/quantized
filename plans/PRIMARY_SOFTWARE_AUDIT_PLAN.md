@@ -1432,7 +1432,7 @@ output, not a caught error).
   UX yet to prevent, flag, or guide the edit (a level-picker/dropdown, a
   Recode-and-extend-the-table flow) — P1.6's worksheet-UI slice owns
   closing that gap, not this contract.
-- [~] Keep ignored instrumental metadata searchable — **this box was FALSE as
+- [x] Keep ignored instrumental metadata searchable — **this box was FALSE as
   written, and saying so is the finding.** It read "unchanged (pre-existing
   `text_columns`/`comments` sidecars; still stand)". The sidecars did stand and
   the data in them was preserved; it was never SEARCHABLE, which is what the box
@@ -1496,6 +1496,15 @@ output, not a caught error).
   so row-level full-text search over data columns is booked as its own feature
   needing an index, not faked here. What ships searches metadata ABOUT the file,
   bounded by the header block, not by the data.
+
+  **Ticked 2026-10-01.** That booked feature shipped: text-column cells are
+  searched through a lazily built per-dataset index, one complete hit per
+  (dataset, column). Opening a hit now SCROLLS the worksheet to its first
+  matching row and column and selects it — through a consume-once request
+  (`store/worksheetReveal.ts`, read by `Stage/worksheet/useRowReveal.ts`) that
+  survives the tab mounting after it, maps the dataset row through the
+  worksheet's sort, and says in one sentence when the worksheet filter hides the
+  row (`useRowReveal.test.tsx`, `GridViewport.reveal.test.tsx`).
 - [x] Sample ID, field, or temperature can independently label the legend —
   the representation supports it (any categorical channel can be the group
   column); the Graph Builder wiring to pick ANY such channel as the legend
