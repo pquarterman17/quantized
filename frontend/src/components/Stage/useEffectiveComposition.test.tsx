@@ -17,6 +17,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import { breakPanelsOf, facetPanelsOf } from "../../lib/composition";
 import { createFigureDocument } from "../../lib/figureDocument";
+import { buildFigureSpecFromDocument } from "../../lib/figureSpec";
 import { defaultPlotView, type PlotWindow } from "../../lib/plotview";
 import type { DataStruct } from "../../lib/types";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -290,10 +291,29 @@ describe("multiPanelShowing — what the Stage actually mounts", () => {
     expect(multiPanelShowing(null, true, 1)).toBe(false);
   });
 
-  it("keeps the facet gate: one facet panel is enough, but only in stack mode", () => {
+  // R1 (S1 of the screen-canvas regression matrix): a durable facet binding is
+  // its own explicit-intent gate, like a saved break. A `.dwk` or a plot
+  // recipe carries `bindings.facetKey` apart from `view.stackMode` (an applied
+  // facet recipe seeds `stackMode: false`), and the export facets on
+  // `facetKey` alone — so the canvas used to draw ONE overlaid plot for a
+  // figure whose export was a grid.
+  it("a facet binding mounts the grid with stackMode off too, as the export facets", () => {
     reopenedWith();
     useApp.setState({ facetKey: 0 });
+    const panels = facetPanelsOf(effective())?.length ?? 0;
+    expect(panels).toBe(6);
     expect(multiPanelShowing(effective(), true, 1)).toBe(true);
-    expect(multiPanelShowing(effective(), false, 1)).toBe(false);
+    expect(multiPanelShowing(effective(), false, 1)).toBe(true);
+    const view = { ...defaultPlotView(), xKey: 0, yKeys: [1, 0], facetKey: 0, stackMode: false };
+    const doc = createFigureDocument({ id: "f", name: "f", datasetId: "d1", view, facetKey: 0 });
+    const spec = buildFigureSpecFromDocument(doc, { id: "d1", name: "ds1", data: DATA }, "f");
+    expect(spec.facets).toHaveLength(panels);
+  });
+
+  it("the stack toggle still returns a facet grid to a plain plot", () => {
+    reopenedWith();
+    useApp.setState({ facetKey: 0, stackMode: true });
+    useApp.getState().setStackMode(false);
+    expect(multiPanelShowing(effective(), useApp.getState().stackMode, 2)).toBe(false);
   });
 });

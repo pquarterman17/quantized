@@ -7,6 +7,7 @@ import type uPlot from "uplot";
 import { plotSeries } from "./api";
 import { categoryLevels, resolveCategoryLabels } from "./barlayout";
 import { isCategorical } from "./modeling";
+import { mapColumn } from "./plotColumnOps";
 import type {
   BaselineOverlay,
   ChannelRole,
@@ -124,7 +125,7 @@ export function categoricalXPayload(
   const labels = resolveCategoryLabels(data, xKey, levels);
   const position = new Map(levels.map((lvl, i) => [lvl, i]));
   const [x, ...ys] = payload.data as (number | null)[][];
-  const ordinal = x.map((v) => (v == null ? null : (position.get(v) ?? null)));
+  const ordinal = mapColumn(x, (v) => (v == null ? null : (position.get(v) ?? null)));
   return { ...payload, data: [ordinal, ...ys] as uPlot.AlignedData, xCategories: labels };
 }
 
@@ -280,11 +281,9 @@ export function maskExcludedPayload(
 ): PlotPayload {
   if (dropped.size === 0) return payload;
   const [x, ...ys] = payload.data as (number | null)[][];
-  const keptOnly = ys.map((col) => col.map((v, r) => (dropped.has(r) ? null : v)));
-  if (mode === "hide") {
-    return { ...payload, data: [x, ...keptOnly] as uPlot.AlignedData };
-  }
-  const ghosts = ys.map((col) => col.map((v, r) => (dropped.has(r) ? v : null)));
+  const keptOnly = ys.map((col) => mapColumn(col, (v, r) => (dropped.has(r) ? null : v)));
+  if (mode === "hide") return { ...payload, data: [x, ...keptOnly] as uPlot.AlignedData };
+  const ghosts = ys.map((col) => mapColumn(col, (v, r) => (dropped.has(r) ? v : null)));
   return {
     ...payload,
     data: [x, ...keptOnly, ...ghosts] as uPlot.AlignedData,
@@ -322,7 +321,7 @@ export function rowsInXRange(xs: (number | null)[], x0: number, x1: number): num
 export function highlightSelectedPayload(payload: PlotPayload, selected: Set<number>): PlotPayload {
   if (selected.size === 0) return payload;
   const [x, ...ys] = payload.data as (number | null)[][];
-  const marks = ys.map((col) => col.map((v, r) => (selected.has(r) ? v : null)));
+  const marks = ys.map((col) => mapColumn(col, (v, r) => (selected.has(r) ? v : null)));
   return {
     ...payload,
     data: [x, ...ys, ...marks] as uPlot.AlignedData,

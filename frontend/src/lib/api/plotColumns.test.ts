@@ -3,7 +3,9 @@
 // regenerated and freshness-checked by `tests/test_routes_columns.py`) and
 // deep-equals the JSON payload the same request produced, so the two paths
 // can never drift apart unnoticed: NaN gaps, -0.0, an all-gap row pair and a
-// secondary-axis series all ride through.
+// secondary-axis series all ride through. A gap-free column decodes to a
+// Float64Array, a gapped one to a plain array with `null` gaps, so values are
+// compared through `plain` below.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -44,12 +46,15 @@ function frame(header: Record<string, unknown>, columns: number[][], opts: { pad
   return buf;
 }
 
+/** The response with every column as a plain array, for value comparison. */
+const plain = (r: PlotSeriesResponse): PlotSeriesResponse => ({ ...r, data: r.data.map((c) => Array.from(c)) });
+
 const HEADER = { series: [{ label: "a", unit: "", axis: 0 }], x: { label: "t", unit: "s", log: false }, y: { log: false } };
 
 describe("decodeColumns", () => {
   it("decodes the server's bytes into exactly the JSON payload (NaN gaps -> null, -0 kept)", () => {
     const decoded = decodeColumns(fixtureBytes());
-    expect(decoded).toEqual(fixture.json);
+    expect(plain(decoded)).toEqual(fixture.json);
     // toEqual treats 0 and -0 alike; the sign is a separate promise.
     expect(Object.is(decoded.data[2][0], -0)).toBe(true);
     expect(decoded.data[1][1]).toBeNull();
@@ -60,15 +65,25 @@ describe("decodeColumns", () => {
 
   it("maps ±Infinity to null too -- every non-finite value is a gap, as on the JSON path", () => {
     const decoded = decodeColumns(frame(HEADER, [[0, 1, 2], [Infinity, -Infinity, NaN]]));
-    expect(decoded.data).toEqual([
+    expect(plain(decoded).data).toEqual([
       [0, 1, 2],
       [null, null, null],
     ]);
     expect(decoded.series).toEqual(HEADER.series);
   });
 
+  it("returns a gap-free column as its own Float64Array copy and a gapped one as a plain array", () => {
+    const buf = frame(HEADER, [[0, -0, 1e300], [1, NaN, 3]]);
+    const [x, y] = decodeColumns(buf).data;
+    expect(x).toBeInstanceOf(Float64Array);
+    expect((x as Float64Array).buffer).not.toBe(buf); // a copy: never pins the whole frame
+    expect(Object.is(x[1], -0)).toBe(true);
+    expect(Array.isArray(y)).toBe(true);
+    expect(y).toEqual([1, null, 3]);
+  });
+
   it("handles zero rows and zero series", () => {
-    expect(decodeColumns(frame(HEADER, [[], []])).data).toEqual([[], []]);
+    expect(plain(decodeColumns(frame(HEADER, [[], []]))).data).toEqual([[], []]);
     expect(decodeColumns(frame(HEADER, [])).data).toEqual([]);
   });
 
@@ -114,7 +129,7 @@ describe("plotSeriesColumns", () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(fakeResponse(fixtureBytes(), { type: COLUMNS_MEDIA_TYPE }));
     vi.stubGlobal("fetch", fetchMock);
     const got = await plotSeriesColumns({ dataset: dataset() });
-    expect(got).toEqual(fixture.json);
+    expect(plain(got)).toEqual(fixture.json);
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect((init.headers as Record<string, string>).Accept).toContain(COLUMNS_MEDIA_TYPE);
     expect((init.headers as Record<string, string>)["Content-Type"]).toBe("application/json");

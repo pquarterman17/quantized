@@ -389,7 +389,7 @@ Parity of every value across the 7M cells held in both runs. Not measured:
 a real browser (the bench is Node), and transfer over a socket rather than
 in-process (the 2.3× smaller body only helps there).
 
-### Typed-array decode contract — 2026-10-01 (decided: stays plain arrays)
+### Typed-array decode contract — 2026-10-01 (first decided: stays plain arrays; superseded by R4 below)
 
 The question left open above: could `decodeColumns` hand out `Float64Array`
 columns (NaN gaps) instead of boxed `(number | null)[]`? Same bodies, same
@@ -436,6 +436,81 @@ yield equal payloads, plain-`Array` columns with `null` gaps (never NaN,
 `-0` kept), and equal compose / group-split / snapshot-reload / clipboard
 results. A typed decode needs those consumers made typed-safe first, then
 this test relaxed on purpose.
+
+### Typed decode shipped — 2026-10-01 (R4)
+
+`decodeColumns` now returns a gap-free column as its own `Float64Array`
+copy, and a column with any non-finite value as a plain `(number | null)[]`
+with `null` gaps, as before. NaNs are counted while scanning the view; the
+header has no per-column gap flag. Gapped columns stay plain because uPlot
+breaks a line only on `null`. A copy, not a view: a view would keep the whole
+64 MB frame alive, and a `structuredClone` of one copies the whole frame.
+
+The consumers were made typed-safe first, through
+`lib/plotColumnOps.ts`. Its `mapColumn(col, fn)` always returns a plain
+array, and its `plainColumn(col)` copies a typed column plain.
+
+- `plotdata.ts` `maskExcludedPayload`, `highlightSelectedPayload`,
+  `categoricalXPayload`, and `plotGroupSplit.ts` `applyGroupSplit` map
+  through `mapColumn`, so a written `null` stays `null`.
+- `plotsnapshot.ts` `freezePlotSnapshot` copies every payload column with
+  `plainColumn` before `structuredClone`, so the `.dwk` JSON holds arrays
+  and `sanitizeFrozenBundle` keeps the window on reload.
+- Audited and left alone, because they are read-only or numeric-only on a
+  fetched payload: `applyWaterfall` and `applyLogOffsets` (`v == null ? v :
+  …` keeps a gap-free typed column typed, with no gap to write),
+  `dropTrailingEmptyRows` (`slice`), the overlay `with*Overlay` appends,
+  `applyEncodedSplit` (builds its own arrays), `payloadToTSV`, client
+  decimation (`buildDecimatedData` gathers through a plain row list),
+  `xIsAscending` / `xExtent` / `clampPlottedRange` / `rowsInXRange` /
+  `suggestLogScale` / `waterfallSpan` (index or `for…of` reads), `InsetPlot`'s
+  `.filter`, `multipanel.splitPayload`, and uPlot itself. uPlot accepts typed
+  columns (`AlignedData`, and its `copy` handles `TypedArray`), and a
+  gap-free typed column has no `null` to mishandle.
+- Not fed by a fetched payload, so out of scope: `quickFigureSetup.previewWithLook`
+  (its `col.map(log10OrNull)` runs on `buildColumns` output), the Graph
+  Builder preview, and facet panels.
+
+`plotColumns.parity.test.ts` was relaxed on purpose. Payloads must be equal
+value for value (via `Array.from`, `Object.is`, so `-0` and `null` are exact).
+A decoded column must be typed exactly when the JSON column has no gap, and
+every derived column (compose with and without exclusions, group split) must
+be either a finite `Float64Array` or a plain array with no NaN. Snapshot
+reload and clipboard must still be equal. Each changed consumer also has its
+own typed-column test, and each fix, sabotaged on its own, fails at least one
+of them.
+
+Decode at 1M × 7 (+x) on the same bodies (`bt_1m.bin`: 7 gap-free columns,
+1 with a NaN every 1000th row), Node 22.22.2 / vitest, load average 9.6–11.
+"Before" is the aaae132e loop and "after" is this decoder; both results match
+on every cell:
+
+| Run | before: best / median | after: best / median |
+|---|---|---|
+| Sequential, n=11 | 370 / 521 ms | 82 / 414 ms |
+| Sequential, `gc()` between reps | 300 / 382 ms | **105 / 149 ms** |
+| Interleaved A/B, n=15 (both orders) | 330–344 / 375–445 ms | 91 / 544–742 ms |
+| Interleaved, `gc()` between reps | 323–363 / 419–427 ms | 137–161 / 219–221 ms |
+| One decoder per process, n=15, 3 runs | 334–342 / 395–499 ms | 99–115 / 349–381 ms |
+| Same, `gc()` between reps | 322–351 / 376–388 ms | **128–149 / 160–191 ms** |
+
+`JSON.parse` of the 146 MB text took 881 / 949 ms in the same session.
+
+The decode itself is 2–3× faster from a clean heap, about 150–220 ms instead
+of 380–430 ms median. Back to back without `gc()`, the after medians are
+noisy: 349–742 ms, against 82–115 ms best. Each decode allocates 56 MB of
+typed-array backing store outside the JS heap. That external-memory pressure
+starts a full GC inside the decode, which also collects garbage left by
+earlier reps. In the interleaved runs, that includes the boxed decoder's
+garbage. A real plot fetch decodes once, not 15 times in a loop, so the
+clean-heap rows are the representative ones. A view-based decode (0 ms in
+the Q2 table) would avoid the allocation but pins the frame, as noted above.
+Not measured: a real browser.
+
+Bundle: eager JS 859,369 → 859,602 B (+233 B, the `plotColumnOps.ts`
+helpers that `plotdata.ts` imports); the lazy `plotColumns` chunk
+1.72 → 1.78 kB. `plotdata.ts` holds its 650-line pin (an import added,
+a three-line `if` folded).
 
 ## Residuals (explicitly unmeasured — carry in P0.4)
 

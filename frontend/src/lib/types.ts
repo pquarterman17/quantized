@@ -300,8 +300,8 @@ export interface OriginFigure {
 
 /** Response of POST /api/plot/series — uPlot-ready column data. */
 export interface PlotSeriesResponse {
-  /** Column-oriented: [xValues, series1Values, series2Values, ...] (null = NaN). */
-  data: (number | null)[][];
+  /** Column-oriented [x, series1, series2, ...] (null = NaN); a gap-free column may be a Float64Array. */
+  data: ((number | null)[] | Float64Array)[];
   /** `axis` = 0 (primary/left Y) or 1 (secondary/right Y) for the dual-Y feature. */
   series: { label: string; unit: string; axis?: number }[];
   x: { label: string; unit: string; log: boolean };

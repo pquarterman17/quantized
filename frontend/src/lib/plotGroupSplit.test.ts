@@ -41,6 +41,18 @@ describe("applyGroupSplit", () => {
     ]);
   });
 
+  it("splits a typed (Float64Array) column into plain arrays with null gaps, never zeros", () => {
+    // The binary column transport hands out a Float64Array for a gap-free
+    // column; its own `.map` would coerce the split's null to 0.
+    const p: PlotPayload = { ...payload(), data: [Float64Array.from([1, 2, 3, 4]), Float64Array.from([10, 20, 30, 40])] };
+    const out = applyGroupSplit(p, [0, 1, 0, 1], "Sample", (c) => (c === 0 ? "A" : "B"));
+    expect(Array.isArray(out.data[1]) && Array.isArray(out.data[2])).toBe(true);
+    expect(out.data.slice(1)).toEqual([
+      [10, null, 30, null],
+      [null, 20, null, 40],
+    ]);
+  });
+
   it("levels sort ascending by numeric code, independent of first-seen order", () => {
     const out = applyGroupSplit(payload(), [2, 0, 1, 2], "G", (c) => `L${c}`);
     expect(out.series.map((s) => s.label)).toEqual(["Moment (G=L0)", "Moment (G=L1)", "Moment (G=L2)"]);

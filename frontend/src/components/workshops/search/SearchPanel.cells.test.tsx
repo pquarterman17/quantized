@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 
 import SearchPanel from "./SearchPanel";
 import { useApp } from "../../../store/useApp";
+import { useWorksheetReveal } from "../../../store/worksheetReveal";
 import type { Dataset } from "../../../lib/types";
 
 const ds = (id: string, name: string, textColumns?: Record<string, unknown[]>): Dataset => ({
@@ -40,6 +41,7 @@ beforeEach(() => {
     selection: null,
     revealTarget: null,
   });
+  useWorksheetReveal.setState({ rowReveal: null });
 });
 
 describe("SearchPanel — text cells", () => {
@@ -60,6 +62,8 @@ describe("SearchPanel — text cells", () => {
     expect(s.revealTarget).toBe("d1");
     expect(s.stageTab).toBe("worksheet");
     expect(s.selection).toEqual({ datasetId: "d1", rows: [1] });
+    // …and asks the worksheet to scroll that row (and its column) into view.
+    expect(useWorksheetReveal.getState().rowReveal).toMatchObject({ datasetId: "d1", row: 1, column: "SampleID" });
     expect(s.status).toContain("row 2");
     expect(s.searchOpen).toBe(false);
   });
@@ -83,6 +87,7 @@ describe("SearchPanel — text cells", () => {
     fireEvent.click(screen.getByRole("button", { name: /A/ }));
     expect(useApp.getState().activeId).toBe("d1");
     expect(useApp.getState().selection).toBeNull();
+    expect(useWorksheetReveal.getState().rowReveal).toBeNull();
   });
 
   it("says no matches only when cells do not match either", () => {

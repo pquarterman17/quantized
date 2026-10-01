@@ -7,13 +7,15 @@
 // brush), the group split, the snapshot freeze -> JSON -> sanitize round trip,
 // and the clipboard export.
 //
-// Gap contract (pinned here, Q2): every decoded column is a plain `Array` and
-// `null` is its only gap. A `Float64Array` with NaN gaps would decode in ~0 ms
-// instead of ~300+ ms at 1M x 7 (docs/performance_envelope.md), but the
-// consumers below are not typed-array safe: `Float64Array.prototype.map`
-// coerces the `null` a mask/brush/split writes to 0 (a drawn point at y = 0
-// where a gap belongs), and a snapshot holding one serializes as an object and
-// is dropped on reload. Every assertion below fails if a typed array leaks.
+// Gap contract (Q2, relaxed on purpose in R4): a column with a gap is a plain
+// `Array` and `null` is its only gap (never NaN, -0 kept); a gap-free column
+// is a `Float64Array` (a 1M x 7 decode from a clean heap drops from ~400 to
+// ~150-220 ms median, docs/performance_envelope.md). Payloads are compared value for value via
+// `Array.from`. The consumers below were made typed-safe for that (a mask /
+// brush / split / categorical remap builds a plain array through
+// `lib/plotColumnOps.ts`, the snapshot freeze copies typed columns plain), so
+// every derived result must still equal the JSON path's, and no derived
+// column may be both typed and in need of a gap.
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -94,32 +96,51 @@ async function bothPaths(json: Json, frame: ArrayBuffer): Promise<{ viaJson: Plo
   return { viaJson, viaColumns };
 }
 
-/** Every column a real Array, gaps `null` (never NaN), -0 kept where JSON kept it. */
-function expectArrayColumns(p: PlotPayload, oracle: PlotPayload): void {
-  for (const [c, col] of (p.data as unknown[]).entries()) {
-    expect(Array.isArray(col), `column ${c} is a plain Array`).toBe(true);
-    const want = oracle.data[c] as (number | null)[];
-    (col as (number | null)[]).forEach((v, r) => {
-      expect(Number.isNaN(v), `column ${c} row ${r} is not NaN`).toBe(false);
+type Col = ArrayLike<number | null | undefined>;
+const valuesOf = (p: PlotPayload) => ({ ...p, data: p.data.map((c: Col) => Array.from(c)) });
+
+/** Same values as the oracle (Object.is, so -0 and null are exact); a typed
+ *  column is a Float64Array of finite values, a plain one holds no NaN. With
+ *  `strict`, a column is typed exactly when the oracle's has no gap -- the
+ *  decoder's own contract. */
+function expectColumns(p: PlotPayload, oracle: PlotPayload, strict = false): void {
+  expect(p.data.length).toBe(oracle.data.length);
+  for (const [c, col] of (p.data as Col[]).entries()) {
+    const want = Array.from(oracle.data[c] as Col);
+    const got = Array.from(col);
+    expect(got.length, `column ${c} length`).toBe(want.length);
+    got.forEach((v, r) => {
       expect(Object.is(v, want[r]), `column ${c} row ${r}: ${String(v)} vs ${String(want[r])}`).toBe(true);
     });
+    if (ArrayBuffer.isView(col)) {
+      expect(col, `column ${c} is a Float64Array`).toBeInstanceOf(Float64Array);
+      expect(got.every((v) => Number.isFinite(v)), `typed column ${c} has no gap`).toBe(true);
+    } else {
+      expect(Array.isArray(col), `column ${c} is a plain Array`).toBe(true);
+      expect(got.some((v) => Number.isNaN(v)), `column ${c} has no NaN`).toBe(false);
+    }
+    if (strict) expect(ArrayBuffer.isView(col), `column ${c} typed iff gap-free`).toBe(!want.includes(null));
   }
 }
 
 /** The consumers that reshape or persist columns, applied identically. */
 function derived(p: PlotPayload) {
   const n = p.data[0].length;
-  const display = composeDisplayPayload(p, {
-    id: "d",
-    waterfall: 0.25,
-    dropped: new Set([0, 3]),
-    excludedDisplay: "grey",
-    fitOverlay: null,
-    baselineOverlay: null,
-    peakOverlay: null,
-    derivOverlay: null,
-    selection: { datasetId: "d", rows: [1, n - 1] },
-  });
+  const compose = (dropped: number[]) =>
+    composeDisplayPayload(p, {
+      id: "d",
+      waterfall: 0.25,
+      dropped: new Set(dropped),
+      excludedDisplay: "grey",
+      fitOverlay: null,
+      baselineOverlay: null,
+      peakOverlay: null,
+      derivOverlay: null,
+      selection: { datasetId: "d", rows: [1, n - 1] },
+    });
+  const display = compose([0, 3]);
+  // Nothing excluded: the selection brush runs on the decoded columns themselves.
+  const brushed = compose([]);
   const codes = Array.from({ length: n }, (_, r) => r % 2);
   const grouped = applyGroupSplit(p, codes, "g", (c) => `L${c}`);
   const frozen = freezePlotSnapshot({
@@ -132,7 +153,7 @@ function derived(p: PlotPayload) {
     hidden: undefined,
   });
   const reloaded = sanitizeFrozenBundle(JSON.parse(JSON.stringify(frozen)));
-  return { display, grouped, reloaded, tsv: payloadToTSV(display) };
+  return { display, brushed, grouped, reloaded, tsv: payloadToTSV(display) };
 }
 
 afterEach(() => {
@@ -144,8 +165,8 @@ describe("columns path vs JSON path: identical plots", () => {
     // The server's own bytes: gaps, -0, an all-gap row pair, a y2 series and
     // an all-finite x column.
     ["server fixture", () => ({ json: fixture.json as Json, frame: base64Bytes(fixture.columns_base64) })],
-    // The same answer plus an all-finite Y column -- the column a "typed
-    // array when gap-free" decoder would hand out first.
+    // The same answer plus an all-finite Y column: a typed Y column through
+    // the mask, brush, waterfall and group split.
     [
       "fixture + an all-finite y column",
       () => {
@@ -165,15 +186,18 @@ describe("columns path vs JSON path: identical plots", () => {
     const { viaJson, viaColumns } = await bothPaths(json, frame);
 
     expect(viaColumns.series.map((s) => s.label)).not.toContain("not-the-server");
-    expect(viaColumns).toEqual(viaJson);
-    expectArrayColumns(viaColumns, viaJson);
+    expect(valuesOf(viaColumns)).toEqual(valuesOf(viaJson));
+    expectColumns(viaColumns, viaJson, true);
+    expect(viaColumns.data.some((c) => ArrayBuffer.isView(c))).toBe(true); // the fast path is exercised
 
     const a = derived(viaJson);
     const b = derived(viaColumns);
-    expect(b.display).toEqual(a.display);
-    expectArrayColumns(b.display, a.display);
-    expect(b.grouped).toEqual(a.grouped);
-    expectArrayColumns(b.grouped, a.grouped);
+    expect(valuesOf(b.display)).toEqual(valuesOf(a.display));
+    expectColumns(b.display, a.display);
+    expect(valuesOf(b.brushed)).toEqual(valuesOf(a.brushed));
+    expectColumns(b.brushed, a.brushed);
+    expect(valuesOf(b.grouped)).toEqual(valuesOf(a.grouped));
+    expectColumns(b.grouped, a.grouped);
     expect(a.reloaded).not.toBeNull();
     expect(b.reloaded).toEqual(a.reloaded);
     expect(b.tsv).toBe(a.tsv);

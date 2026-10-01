@@ -23,16 +23,16 @@
 //
 // SCREEN-ONLY DIFFERENCES this spec measured and pins by value (flip the pin
 // when one is fixed), each named in the test that pins it:
-//   S1 facet  — the fixture binds `facetKey` with `stackMode: false`; the canvas
-//               gates the facet grid on `stackMode` (`multiPanelShowing`) and
-//               draws ONE overlaid plot, while the export facets on `facetKey`
-//               alone. The UI's own facet gesture sets both, so the grid itself
-//               is checked with `stackMode: true`.
-//   S2 break  — break panels are built without the view's `seriesStyles`
-//               (`useMultiPanelStage`'s break `cell`), so an explicit width 2
-//               draws at the default 1.5.
-//   S3 decor  — the interactive legend shows no `legendTitle`; only the static
-//               (Origin) legend renders one.
+//   S1 facet  — FIXED (R1): the fixture binds `facetKey` with `stackMode:
+//               false`; the canvas used to gate the facet grid on `stackMode`
+//               (`multiPanelShowing`) and draw ONE overlaid plot while the
+//               export faceted on `facetKey` alone. A facet binding now mounts
+//               the grid by itself, so the facet test runs the fixture as built
+//               AND with the UI gesture's `stackMode: true`.
+//   S2 break  — FIXED (R1): break panels were built without the view's
+//               `seriesStyles`, so an explicit width 2 drew at the default 1.5.
+//   S3 decor  — FIXED (R2): the interactive legend now renders `legendTitle`
+//               as its heading, as the static legend and the export do.
 // Untagged (no canvas hit-testing): runs at the 100% project only.
 
 import { expect, test, type Page } from "@playwright/test";
@@ -200,18 +200,15 @@ test.describe("P4.2 regression matrix — screen canvas", () => {
     expect(s.legend!.rows.every((r) => r.dash !== null), "legend samples dashed").toBe(true);
   });
 
-  test("facet as built (stackMode off): ONE overlaid plot on screen (S1 pinned)", async ({ page }) => {
-    const g = golden("facet");
-    await load(page, "facet");
-    const s = await settledScreen(page, 1, [g.series.length]);
-    expect(g.facet.panels!.length, "the export facets into 2 panels").toBe(2);
-    expect(s.panels[0].title, "S1: no facet grid without stackMode").toBe("Matrix fixture");
-  });
-
-  test("facet: one panel per level, titled, with that level's rows", async ({ page }) => {
+  // S1 (fixed): the fixture as built carries `stackMode: false`; the UI's own
+  // facet gesture sets it true. Both must draw the grid the export does.
+  for (const stackMode of [false, true]) test(`facet (stackMode ${stackMode}): one panel per level, titled, with that level's rows`, async ({ page }) => {
     const g = golden("facet");
     const panels = g.facet.panels!;
-    await load(page, "facet", (d) => { d.plot.view = { ...d.plot.view, stackMode: true }; });
+    await load(page, "facet", (d) => {
+      expect(d.plot.view.stackMode, "the fixture as built").toBe(false);
+      d.plot.view = { ...d.plot.view, stackMode };
+    });
     const s = await settledScreen(page, panels.length, panels.map((pl) => pl.series.length));
     expect(s.panels.map((p) => p.title), "facet panel titles").toEqual(panels.map((pl) => pl.label));
     const siteLevels = [0, 1];
@@ -235,7 +232,7 @@ test.describe("P4.2 regression matrix — screen canvas", () => {
     expect(ax.y2.length, "y2 tick labels").toBeGreaterThan(2);
   });
 
-  test("break: two x-panels split at the break, with a seam (S2 pinned)", async ({ page }) => {
+  test("break: two x-panels split at the break, with a seam, in the view's styles (S2 fixed)", async ({ page }) => {
     const g = golden("break");
     await load(page, "break");
     const s = await settledScreen(page, 2, [1, 1]);
@@ -248,9 +245,9 @@ test.describe("P4.2 regression matrix — screen canvas", () => {
       const [line] = seriesLines(p);
       expect(line.style).toBe(ser.color);
       expect(line.dash).toEqual(ser.dash ?? []);
-      // S2: the explicit width is dropped on break panels (default 1.5).
-      expect(line.width, "S2 pin").toBe(1.5);
-      expect(line.width).not.toBe(ser.width);
+      // S2 (fixed): the explicit width reaches every break panel.
+      expect(ser.width, "a non-default width is under test").not.toBe(1.5);
+      expect(line.width, "S2: explicit width").toBe(ser.width);
       const ax = axesOf(p);
       expectSpan(ax.x, ranges[k], p, "x");
       expectSpan(ax.y, g.axes.y.limits, p, "y");
@@ -265,7 +262,7 @@ test.describe("P4.2 regression matrix — screen canvas", () => {
     expect(g.waterfallOffset, "a non-zero offset is under test").toBeGreaterThan(0);
   });
 
-  test("decor: explicit styles, markers, step, fill, annotations, lines, shapes, shade (S3 pinned)", async ({ page }) => {
+  test("decor: explicit styles, markers, step, fill, annotations, lines, shapes, shade, legend title (S3)", async ({ page }) => {
     const { s, ax, lines, g } = await checkFlat(page, "decor");
     const p = s.panels[0];
     const [fx, fy] = [toPx(ax.x), toPx(ax.y)];
@@ -305,9 +302,9 @@ test.describe("P4.2 regression matrix — screen canvas", () => {
     // legend: corner, explicit swatches, dashed samples, the square marker
     expect(s.legend!.rows.map((r) => r.marker)).toEqual(["square", "none"]);
     expect(s.legend!.rows.every((r) => r.dash !== null)).toBe(true);
-    // S3: the interactive legend renders no title.
+    // S3 (fixed, R2): the interactive legend heads its rows with the title.
     expect(g.decor.legend.title).toBe("Runs");
-    expect(s.legend!.title, "S3 pin").toBeNull();
+    expect(s.legend!.title, "S3 legend title").toBe("Runs");
   });
 
   test("hidden: the hidden channel is not drawn and the others keep their slots", async ({ page }) => {

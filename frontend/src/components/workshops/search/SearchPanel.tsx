@@ -12,12 +12,14 @@
 // ./useCellSearch.ts. Those hits are listed below the others, complete and
 // uncapped, one per (dataset, column); opening one reveals its first matching
 // row: the dataset is activated and shown in the Library, the worksheet opens,
-// and that row is selected.
+// that row is selected, and the worksheet scrolls it (and its column) into view
+// through store/worksheetReveal.ts's request, which waits for the tab to mount.
 
 import { useMemo, useState } from "react";
 
 import { searchProject, type SearchHit } from "../../../lib/projectSearch";
 import { useApp } from "../../../store/useApp";
+import { useWorksheetReveal } from "../../../store/worksheetReveal";
 import ToolWindow from "../../overlays/ToolWindow";
 import { NumberField } from "../../primitives/NumberField";
 import CellHitList from "./CellHitList";
@@ -73,13 +75,17 @@ export default function SearchPanel() {
   };
 
   // The existing reveal actions, in order: activate (which also starts a lazy
-  // book's fetch), "Show in Library", open the worksheet, select the row. A
-  // still-sampled preview's row numbers are not real rows, so none is selected.
+  // book's fetch), "Show in Library", open the worksheet, select the row and
+  // ask the worksheet to scroll to it. A still-sampled preview's row numbers
+  // are not real rows, so none is selected or revealed.
   const revealCell = (hit: CellHit) => {
     setActive(hit.datasetId);
     requestReveal(hit.datasetId);
     setStageTab("worksheet");
-    if (!hit.sampled) setRowSelection([hit.firstRow]);
+    if (!hit.sampled) {
+      setRowSelection([hit.firstRow]);
+      useWorksheetReveal.getState().requestRowReveal({ datasetId: hit.datasetId, row: hit.firstRow, column: hit.column });
+    }
     setStatus(`revealed row ${hit.firstRow + 1} of ${hit.column} in ${hit.datasetName}`);
     setOpen(false);
   };

@@ -4,7 +4,7 @@
 // baseline — index ≥ plotted.length) are display-only: not toggleable, not
 // renameable. Extracted from PlotStage to keep that component lean.
 
-import { useState } from "react";
+import { useId, useState } from "react";
 
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
 import { CHANNEL_DND, encodeChannelDrag } from "../../lib/dragaxis";
@@ -84,11 +84,14 @@ export default function PlotLegend({
   const setY2Keys = useApp((s) => s.setY2Keys);
   // Static mode (decode #52): an applied Origin figure renders a clean,
   // read-only legend — no reorder arrows, no row click/dblclick/drag/context
-  // handlers, hidden channels omitted (not greyed) — plus an optional bold
-  // title header. The BOX itself stays draggable (still Origin-like). Default
-  // false keeps the full interactive legend for every ordinary plot.
+  // handlers, hidden channels omitted (not greyed). The BOX itself stays
+  // draggable (still Origin-like). Default false keeps the full interactive
+  // legend for every ordinary plot.
   const legendStatic = useApp((s) => s.legendStatic);
-  const legendTitle = useApp((s) => s.legendTitle);
+  // R2: the title heads the legend in BOTH modes, as the export draws it; a
+  // blank title draws no heading.
+  const legendTitle = useApp((s) => s.legendTitle)?.trim() || null;
+  const titleId = useId();
   const tool = useApp((s) => s.plotTool);
   const legendBox = useLegendBox(tool);
   const [editing, setEditing] = useState<{ channel: number; value: string } | null>(null);
@@ -136,13 +139,17 @@ export default function PlotLegend({
       onMouseDown={legendBox.onBoxMouseDown}
       onDoubleClick={legendBox.onBoxDoubleClick}
       title={tool === "pointer" ? "Drag to move · drag an edge or corner to resize · double-click to reset position" : undefined}
+      role="group"
+      aria-label={legendTitle ? undefined : "Plot legend"}
+      aria-labelledby={legendTitle ? titleId : undefined}
     >
       {tool === "pointer" && <LegendResizeHandles boxRef={legendBox.boxRef} />}
       <div className="qzk-legend-content">
-      {/* Decode #52: Origin's bold legend title header, drawn above the
-          entries in static mode (rich-text so `\g(q)`→θ etc. render). */}
-      {legendStatic && legendTitle ? (
-        <div className="it qzk-legend-title" style={{ fontWeight: 700 }}>
+      {/* Decode #52 / R2: the bold legend title heading, drawn above the
+          entries INSIDE the content wrapper so fit-to-contents sizing includes
+          it (rich-text so `\g(q)`→θ etc. render). */}
+      {legendTitle ? (
+        <div className="it qzk-legend-title" id={titleId}>
           <RichText text={legendTitle} />
         </div>
       ) : null}

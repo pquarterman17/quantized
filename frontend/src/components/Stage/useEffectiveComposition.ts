@@ -66,7 +66,17 @@ export function useEffectiveComposition(active: Dataset | null): Composition | n
  *  plot recipe) has no such toggle to restore — gating it on `stackMode`
  *  would leave the reopened figure rendering an unbroken line, which is the
  *  bug. `breakCompositionFromBreaks` already refuses anything under two
- *  panels, so this never mounts a one-panel "break". */
+ *  panels, so this never mounts a one-panel "break".
+ *
+ *  A facet arrangement is the same kind of gate (R1, the regression matrix's
+ *  S1): `bindings.facetKey` is durable and travels apart from
+ *  `view.stackMode` — an applied facet recipe seeds `stackMode: false`
+ *  (`store/plotRecipeApply.viewFromResolved`), a `.dwk` stores the two in
+ *  different blocks — while the export facets on `facetKey` alone
+ *  (`lib/figureSpecFacets`). Gating it on `stackMode` drew one overlaid plot
+ *  for a figure whose export was a grid. Every UI gesture sets or clears the
+ *  pair together (`facetByColumn`, `setStackMode`, the Figure Builder's
+ *  `withFacetKey`), so for them this changes nothing. */
 export function multiPanelShowing(
   composition: Composition | null,
   stackMode: boolean,
@@ -74,9 +84,7 @@ export function multiPanelShowing(
 ): boolean {
   return (
     breakPanelsOf(composition) !== null ||
-    (stackMode &&
-      (plottedCount >= 2 ||
-        (spatialPanelsOf(composition)?.length ?? 0) >= 2 ||
-        (facetPanelsOf(composition)?.length ?? 0) >= 1))
+    (facetPanelsOf(composition)?.length ?? 0) >= 1 ||
+    (stackMode && (plottedCount >= 2 || (spatialPanelsOf(composition)?.length ?? 0) >= 2))
   );
 }

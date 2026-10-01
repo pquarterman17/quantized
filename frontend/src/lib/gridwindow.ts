@@ -155,6 +155,23 @@ export function computeAxisWindowOffsets(
   return { start, end, offset: offsets[start], totalSize };
 }
 
+/** The scroll offset that brings the item spanning `[start, start + size)`
+ *  into a `viewportSize` window currently at `scroll`: unchanged when it is
+ *  already fully visible; otherwise centred (`center`) or moved the least
+ *  distance that shows it. A degenerate viewport scrolls the item to the edge. */
+export function revealScrollOffset(
+  start: number,
+  size: number,
+  scroll: number,
+  viewportSize: number,
+  center: boolean,
+): number {
+  if (viewportSize <= 0) return start;
+  if (start >= scroll && start + size <= scroll + viewportSize) return scroll;
+  if (center) return Math.max(0, start - (viewportSize - size) / 2);
+  return start < scroll ? start : Math.max(0, start + size - viewportSize);
+}
+
 // ── Column width bounds + autofit (MAIN_PLAN #3 drag resize) ─────────────────
 
 export const MIN_COL_WIDTH = 56;
