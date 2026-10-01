@@ -149,4 +149,33 @@ describe("useWaterfall", () => {
     expect(useApp.getState().datasets[1].pending).toBeUndefined();
     expect(saveBlob).toHaveBeenCalledTimes(1);
   });
+
+  it("reports a failed full-data load instead of rejecting silently", async () => {
+    // Silent-failure audit (2026-10-01): the buttons fire `void exportCSV()`,
+    // so a rejected resolve left no file and no status.
+    useApp.setState({
+      datasets: [
+        { id: "d1", name: "5K.dat", data: mk([1, 2, 3]) },
+        {
+          id: "d2",
+          name: "book.opj",
+          data: { time: [10], values: [[4]], labels: ["R"], units: ["cts"], metadata: {} },
+          pending: { kind: "path", path: "/p.opj", bookId: "Book2", rows: 4, cols: 1 },
+        },
+      ],
+      activeId: "d1",
+      selectedIds: ["d1", "d2"],
+      status: "",
+    });
+    vi.mocked(fetchBookData).mockRejectedValue(new Error("source moved"));
+    const { result } = renderHook(() => useWaterfall());
+
+    await act(async () => {
+      await expect(result.current.exportCSV(true)).resolves.toBeUndefined();
+    });
+
+    expect(saveBlob).not.toHaveBeenCalled();
+    expect(useApp.getState().status).toContain("waterfall export failed");
+    expect(useApp.getState().status).toContain("source moved");
+  });
 });

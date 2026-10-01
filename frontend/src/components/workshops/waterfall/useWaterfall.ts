@@ -16,6 +16,7 @@ import {
   type OffsetMode,
   type WaterfallOptions,
 } from "../../../lib/waterfall";
+import type { Dataset } from "../../../lib/types";
 import { useApp } from "../../../store/useApp";
 
 export interface WaterfallState {
@@ -126,7 +127,15 @@ export function useWaterfall(): WaterfallState {
     // #38 deferred edge: the stacked set defaults to the WHOLE library —
     // resolve every included dataset's full data first (bounded concurrency)
     // rather than silently exporting previews for the never-activated ones.
-    const resolved = await useApp.getState().resolveDatasets(included.map((d) => d.id));
+    // The buttons fire `void exportCSV()`: a rejected resolve must land in the
+    // status line or it is invisible (silent-failure audit 2026-10-01).
+    let resolved: Dataset[];
+    try {
+      resolved = await useApp.getState().resolveDatasets(included.map((d) => d.id));
+    } catch (e) {
+      setStatus(`waterfall export failed: ${e instanceof Error ? e.message : "error"}`);
+      return;
+    }
     const resolvedSeries = activeChannel
       ? resolved.map((d) => extractSeries(d.data, d.id, d.name, activeChannel))
       : [];

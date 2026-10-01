@@ -47,7 +47,15 @@ export async function plotSelectedTogether(ids: readonly string[]): Promise<void
   // import) must be fully loaded before its channels/rows are readable —
   // An append (lib/transformRun.runTransform, the Reshape & combine commit)
   // resolves the same way before combining.
-  const resolved = await useApp.getState().resolveDatasets([...ids]);
+  // Every entry point fires this as `void …`, so a rejected resolve must be
+  // reported here or it is invisible (silent-failure audit 2026-10-01).
+  let resolved: Dataset[];
+  try {
+    resolved = await useApp.getState().resolveDatasets([...ids]);
+  } catch (e) {
+    toast(`couldn't load the selected datasets to plot together — ${e instanceof Error ? e.message : "error"}`, "danger");
+    return;
+  }
   if (resolved.length < MIN_SELECTION) {
     toast("couldn't resolve enough of the selected datasets to plot together", "danger");
     return;
