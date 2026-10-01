@@ -3,7 +3,9 @@ r"""Fit a specular-reflectivity layer model to measured data (audit P2.2).
 Pure calc layer. Builds on :func:`quantized.calc.reflectivity.parratt_refl`
 (golden vs MATLAB ``parrattRefl``); MATLAB has no reflectivity *fitter*, so
 this module is new capability, verified by recovering the known truth of
-synthetic data and by invariants, never by golden parity.
+synthetic data and by invariants, never by golden parity. Graded (spline)
+layers fit their knots through the same parameter vector
+(:mod:`quantized.calc.refl_graded`).
 
 Model and conventions live in :mod:`quantized.calc.refl_model`: named
 parameters ``L{i}.{thickness|sld|isld|roughness|msld}`` plus scale/background
@@ -47,11 +49,10 @@ import numpy as np
 from numpy.typing import NDArray
 
 from quantized.calc._bounded_lsq import pinv_covariance, solve_bounded
+from quantized.calc.refl_graded import ReflStack, model_stack
 from quantized.calc.refl_model import (
     ReflChannel,
     ReflParams,
-    layer_stack,
-    validate_model,
 )
 from quantized.calc.reflectivity import parratt_refl
 from quantized.calc.sld import sld_profile
@@ -67,12 +68,12 @@ _TINY = 1e-300
 _DEGENERATE = 1e-6
 
 
-def channel_model(ch: ReflChannel, params: ReflParams, v: NDArray[np.float64], n_layers: int,
+def channel_model(ch: ReflChannel, params: ReflParams, v: NDArray[np.float64], stack: ReflStack,
            m: NDArray[np.bool_]) -> NDArray[np.float64]:
     res: Any = ch.dq[m] if ch.dq is not None else ch.resolution
     return parratt_refl(
         ch.q_all[m],
-        layer_stack(params, v, n_layers, ch.spin),
+        stack.build(params, v, ch.spin),
         scale=params.get(v, ch.scale_name, 1.0),
         background=params.get(v, ch.background_name, 0.0),
         resolution=res,
@@ -95,8 +96,12 @@ def fit_reflectivity(
     max_nfev: int = 200,
     deadline_s: float | None = None,
     sld_points: int = 400,
+    graded: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Fit a layer model to one or more reflectivity curves.
+
+    ``graded`` declares graded (spline) layers, whose knots are parameters
+    like any slab field (``calc.refl_graded``).
 
     Returns ``parameters`` (value, stderr or None, vary, tie, at_bound),
     the objective (``chi2``/``reduced_chi2`` for dr weighting,
@@ -109,7 +114,7 @@ def fit_reflectivity(
         raise ValueError(f"weighting must be one of {_WEIGHTINGS}")
     if not channels:
         raise ValueError("need at least one data channel")
-    n_layers = validate_model(parameters, channels)
+    stack = model_stack(parameters, channels, graded)
     params = ReflParams(parameters)
     chans = [ReflChannel(c, i) for i, c in enumerate(channels)]
     masks = [c.points(weighting) for c in chans]
@@ -121,7 +126,7 @@ def fit_reflectivity(
     def residuals(x: NDArray[np.float64]) -> NDArray[np.float64]:
         v = params.full(x)
         return np.concatenate([
-            channel_residuals(c, channel_model(c, params, v, n_layers, m), m, weighting)
+            channel_residuals(c, channel_model(c, params, v, stack, m), m, weighting)
             for c, m in zip(chans, masks, strict=True)
         ])
 
@@ -186,7 +191,7 @@ def fit_reflectivity(
 
     curves = []
     for c, m in zip(chans, masks, strict=True):
-        model = channel_model(c, params, v, n_layers, m)
+        model = channel_model(c, params, v, stack, m)
         curves.append({
             "label": c.label,
             "spin": c.spin_label,
@@ -199,7 +204,7 @@ def fit_reflectivity(
 
     profiles = []
     for spin in sorted({c.spin for c in chans}):
-        z, sld = sld_profile(layer_stack(params, v, n_layers, spin), n_points=sld_points)
+        z, sld = sld_profile(stack.build(params, v, spin), n_points=sld_points)
         profiles.append({"spin": {0: None, 1: "+", -1: "-"}[spin],
                          "z": np.asarray(z).tolist(), "sld": np.asarray(sld).tolist()})
 
@@ -226,19 +231,19 @@ def fit_reflectivity(
 
 def model_curves(
     parameters: list[dict[str, Any]], q: list[float], spins: list[str | None],
-    *, resolution: float | None = None,
+    *, resolution: float | None = None, graded: list[dict[str, Any]] | None = None,
 ) -> list[NDArray[np.float64]]:
     """Evaluate the model (no fitting) on a Q grid for each spin state."""
     fixed = [{**p, "vary": False} for p in parameters]
     qa = np.asarray(q, dtype=float)
     chans = [{"q": qa, "r": np.ones_like(qa), "spin": s, "resolution": resolution} for s in spins]
-    n_layers = validate_model(fixed, chans)
+    stack = model_stack(fixed, chans, graded)
     params = ReflParams(fixed)
     v = params.full(np.zeros(0))
     out = []
     for i, spec in enumerate(chans):
         ch = ReflChannel(spec, i)
-        out.append(channel_model(ch, params, v, n_layers, np.ones(qa.size, dtype=bool)))
+        out.append(channel_model(ch, params, v, stack, np.ones(qa.size, dtype=bool)))
     return out
 
 

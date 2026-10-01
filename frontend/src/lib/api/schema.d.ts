@@ -9205,6 +9205,8 @@ export interface components {
             } | null;
             /** Channels */
             channels: components["schemas"]["ReflFitChannel"][];
+            /** Graded */
+            graded?: components["schemas"]["ReflGradedLayer"][];
             /** Parameters */
             parameters: components["schemas"]["ReflFitParameter"][];
             /**
@@ -9298,6 +9300,8 @@ export interface components {
         ReflFitRequest: {
             /** Channels */
             channels: components["schemas"]["ReflFitChannel"][];
+            /** Graded */
+            graded?: components["schemas"]["ReflGradedLayer"][];
             /**
              * Max Nfev
              * @default 200
@@ -9311,6 +9315,28 @@ export interface components {
              * @enum {string}
              */
             weighting?: "dr" | "log";
+        };
+        /**
+         * ReflGradedLayer
+         * @description A graded (spline) film layer whose knots ``L{layer}.knot{j}.sld`` (and
+         *     optionally ``.isld``) are fit parameters (``calc.refl_graded``).
+         *     ``positions`` are the knots' depths as fractions of the layer thickness
+         *     (default evenly spaced); ``slices`` is the fixed slab count (default ~2 Å
+         *     per slab at the starting thickness).
+         */
+        ReflGradedLayer: {
+            /** Layer */
+            layer: number;
+            /**
+             * Method
+             * @default pchip
+             * @enum {string}
+             */
+            method?: "pchip" | "spline" | "makima" | "linear";
+            /** Positions */
+            positions?: number[] | null;
+            /** Slices */
+            slices?: number | null;
         };
         /** ReflectivityFFTRequest */
         ReflectivityFFTRequest: {

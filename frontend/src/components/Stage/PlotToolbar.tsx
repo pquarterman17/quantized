@@ -49,6 +49,7 @@ import {
   type ActionDef,
   type ToolDef,
 } from "../../lib/plotToolbarDefs";
+import { stackLayoutOn } from "../../store/plotViewSettings";
 import { loadToolbarPrefs, saveToolbarPrefs } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
 import ContextMenu, { type ContextMenuItem } from "../overlays/ContextMenu";
@@ -107,8 +108,9 @@ export default function PlotToolbar({
 }: Props) {
   const tool = useApp((s) => s.plotTool);
   const setPlotTool = useApp((s) => s.setPlotTool);
-  const stackMode = useApp((s) => s.stackMode);
-  const setStackMode = useApp((s) => s.setStackMode);
+  // S1 (a): ON whenever a multi-panel layout is engaged, not just `stackMode`.
+  const stackOn = useApp(stackLayoutOn);
+  const toggleStackLayout = useApp((s) => s.toggleStackLayout);
   const insetMode = useApp((s) => s.insetMode);
   const setInsetMode = useApp((s) => s.setInsetMode);
   const polarMode = useApp((s) => s.polarMode);
@@ -213,7 +215,11 @@ export default function PlotToolbar({
           onClick: onReset,
         }),
         actionBtn(SMART_SCALE, { onClick: onSmartScale }),
-        actionBtn(STACK_MODE, { active: stackMode, onClick: () => setStackMode(true) }),
+        actionBtn(STACK_MODE, {
+          active: stackOn,
+          desc: stackOn ? "Return to a single overlaid plot" : STACK_MODE.desc,
+          onClick: toggleStackLayout,
+        }),
         actionBtn(INSET_MODE, { active: insetMode, onClick: () => setInsetMode(!insetMode) }),
         actionBtn(POLAR_MODE, { active: polarMode, onClick: () => setPolarMode(true) }),
         actionBtn(STAT_MODE, { active: statMode, onClick: () => setStatMode(true) }),

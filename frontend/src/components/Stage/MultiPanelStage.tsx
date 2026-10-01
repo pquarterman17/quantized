@@ -74,7 +74,9 @@ import { useActiveDataset, useApp } from "../../store/useApp";
 import { canvasGroupCol } from "../../lib/plotGroupSplit";
 import { useFacetEncoding } from "./useFacetEncoding";
 import { useGreyedFacets } from "./useGreyedFacets";
+import { useBreakSeriesStyles } from "./useBreakSeriesStyles";
 import { MULTIPANEL_SYNC_KEY, useMultiPanelStage } from "./useMultiPanelStage";
+import { selectFocusedWindowCycles } from "./useStageSeriesCycle";
 import SpatialPanelLegend from "./SpatialPanelLegend";
 
 export interface MultiPanelStageProps {
@@ -136,6 +138,10 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
     active, picks, canvasGroupCol(groupKey, y2Keys), y2Keys, facetKey, xKey, yKeys, seriesLabels, seriesStyles,
   );
   const shown = useGreyedFacets(composition, active, facetKey, xKey, excludedDisplay); // F4.2c (a)
+  // S1 (b): an x-break exports as the flat figure, so its panels cycle exactly when that figure does.
+  const breakSeriesStyles = useBreakSeriesStyles(
+    useApp(selectFocusedWindowCycles), composition, active, { xKey, yKeys, seriesOrder, seriesStyles },
+  );
   const { hostRef, hostStyle, readout, tool, spatialLegends } = useMultiPanelStage({
     active,
     datasets,
@@ -155,6 +161,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
     defaultTrace,
     refLines,
     seriesStyles,
+    breakSeriesStyles,
     seriesLabels,
     autoSeriesStyles,
     excludedDisplay,

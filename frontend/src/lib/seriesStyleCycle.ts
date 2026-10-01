@@ -156,9 +156,13 @@ export function displayListsAgree(v: CycleView): boolean {
  *  refuses too, through this same predicate, so neither side cycles a grouped
  *  view at all); faceted views send `facets`, for which
  *  `series_styles` is explicitly unused (`:125-127`); `stackMode` is a
- *  screen-only split (one panel per channel, plus the break/facet/spatial
- *  arrangements, all of which `PlotStage` gates behind it) that the
- *  single-figure export does not reproduce at all; and `polarMode`/`statMode`
+ *  screen-only split (one panel per channel, or a spatial arrangement — the
+ *  two `PlotStage` gates behind it) that the single-figure export does not
+ *  reproduce at all. A facet binding and a saved x-break mount their panels
+ *  WITHOUT `stackMode` (`Stage/useEffectiveComposition.multiPanelShowing`):
+ *  the facet is refused by its own `facetKey` clause, and an x-break exports
+ *  as this flat figure plus `x_breaks`, so its panels cycle by channel
+ *  (`Stage/useBreakSeriesStyles`); and `polarMode`/`statMode`
  *  replace the XY canvas entirely (`PlotStage` early-returns to `PolarStage` /
  *  `StatStage`, and both own their own export paths) while a plain
  *  `buildFigureSpec`/`buildStageFigureSpec` request still emits an ordinary XY
@@ -264,9 +268,11 @@ export function windowCyclesSeriesStyles(
  *  already. THREE of the eight `buildOpts` call sites can pass one:
  *  `Stage/PlotViewport.tsx` (the plot-window XY overlay, focused or background),
  *  `Stage/InsetPlot.tsx` (a second view of those same series) and
- *  `useMultiPanelStage`'s SPATIAL cell branch. The other five — that hook's
- *  stack, facet and x-break branches, `WaterfallView` and `ReflPanel` — have no
- *  export that could follow and pass nothing. See the table in
+ *  `useMultiPanelStage`'s SPATIAL cell branch. Its x-break branch cycles too,
+ *  but by CHANNEL (`Stage/useBreakSeriesStyles` resolves the styles it is
+ *  handed), so it passes none. The other four — that hook's stack and facet
+ *  branches, `WaterfallView` and `ReflPanel` — have no export that could follow
+ *  and pass nothing. See the table in
  *  `plans/PRIMARY_SOFTWARE_AUDIT_PLAN.md` P3.3. Returns `null` when `on` is false
  *  so the call site reads as one expression. */
 export function displayPositions(on: boolean, count: number): SeriesCycle {

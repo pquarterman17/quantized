@@ -9898,6 +9898,14 @@
             "title": "Channels",
             "type": "array"
           },
+          "graded": {
+            "items": {
+              "$ref": "#/components/schemas/ReflGradedLayer"
+            },
+            "maxItems": 16,
+            "title": "Graded",
+            "type": "array"
+          },
           "parameters": {
             "items": {
               "$ref": "#/components/schemas/ReflFitParameter"
@@ -10167,6 +10175,14 @@
             "title": "Channels",
             "type": "array"
           },
+          "graded": {
+            "items": {
+              "$ref": "#/components/schemas/ReflGradedLayer"
+            },
+            "maxItems": 16,
+            "title": "Graded",
+            "type": "array"
+          },
           "max_nfev": {
             "default": 200,
             "maximum": 2000.0,
@@ -10198,6 +10214,62 @@
           "channels"
         ],
         "title": "ReflFitRequest",
+        "type": "object"
+      },
+      "ReflGradedLayer": {
+        "description": "A graded (spline) film layer whose knots ``L{layer}.knot{j}.sld`` (and\noptionally ``.isld``) are fit parameters (``calc.refl_graded``).\n``positions`` are the knots' depths as fractions of the layer thickness\n(default evenly spaced); ``slices`` is the fixed slab count (default ~2 \u00c5\nper slab at the starting thickness).",
+        "properties": {
+          "layer": {
+            "maximum": 200.0,
+            "minimum": 1.0,
+            "title": "Layer",
+            "type": "integer"
+          },
+          "method": {
+            "default": "pchip",
+            "enum": [
+              "pchip",
+              "spline",
+              "makima",
+              "linear"
+            ],
+            "title": "Method",
+            "type": "string"
+          },
+          "positions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "maxItems": 64,
+                "minItems": 2,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Positions"
+          },
+          "slices": {
+            "anyOf": [
+              {
+                "maximum": 400.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slices"
+          }
+        },
+        "required": [
+          "layer"
+        ],
+        "title": "ReflGradedLayer",
         "type": "object"
       },
       "ReflectivityFFTRequest": {

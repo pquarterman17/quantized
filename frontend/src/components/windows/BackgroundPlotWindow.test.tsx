@@ -410,6 +410,21 @@ describe("BackgroundPlotWindow — item 15 alternate render modes", () => {
     ]);
   });
 
+  it("S1 (b): a saved x-break with stackMode off cycles its panels' dashes by channel, as its export does", async () => {
+    const GAP: DataStruct = {
+      time: [0, 1, 2, 3],
+      values: [[10, 100, 5], [20, 200, 6], [30, 300, 7], [40, 400, 8]],
+      labels: ["A", "B", "C"], units: ["", "", ""], metadata: {},
+    };
+    const view = { ...defaultPlotView(), stackMode: false };
+    const document = createFigureDocument({ id: "fig-w1", name: "w1", datasetId: "d1", view, axisBreaks: { x: [[1, 2]] } });
+    useApp.setState({ autoSeriesStyles: true });
+    render(<BackgroundPlotWindow dataset={{ id: "d1", name: "ds1", data: GAP }} view={view} document={document} />);
+    await waitFor(() => expect(created).toHaveLength(2));
+    const dashes = (created as { opts: { series: { dash?: number[] }[] } }[]).map((p) => p.opts.series.slice(1).map((s) => s.dash));
+    expect(dashes).toEqual([[undefined, [8, 4], [2, 4]], [undefined, [8, 4], [2, 4]]]);
+  });
+
   it("a facetKey pointing at a column with no finite levels still falls back to the plain XY path, never a crash", async () => {
     const view = { ...defaultPlotView(), stackMode: true, facetKey: 99 };
     render(<BackgroundPlotWindow dataset={DATASET} view={view} />);

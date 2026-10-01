@@ -82,6 +82,7 @@ export interface PlotViewSettingsSlice {
   setPlotTemplate: (template: string) => void;
   setShowAxisBox: (show: boolean) => void;
   setStackMode: (stackMode: boolean) => void;
+  toggleStackLayout: () => void; // S1 (a): the Stack button / command — flips what `stackLayoutOn` reads
   setPanelFit: (mode: PanelFit) => void; // #54
   cyclePanelFit: () => void; // #54 — frames<->window, +page when a pageSetup exists
   setPageSetup: (pageSetup: PageSetup | null) => void; // #54
@@ -133,6 +134,15 @@ export interface PlotViewSettingsSlice {
   setWaterfall: (waterfall: number) => void;
 }
 
+/** Is a multi-panel layout engaged — the per-channel stack, a facet binding, a
+ *  live arrangement, or the focused window's saved x-break? The last three
+ *  mount their panels WITHOUT `stackMode` (`Stage/useEffectiveComposition.
+ *  multiPanelShowing`; a plot recipe applies facets that way), so the Stack
+ *  toggle reads this rather than `stackMode` alone. */
+export const stackLayoutOn = (s: AppState): boolean =>
+  s.stackMode || s.facetKey !== null || s.composition !== null ||
+  s.plotWindows.some((w) => w.id === s.focusedWindowId && w.kind === "plot" && !!w.document?.plot.axisBreaks.x.length);
+
 type SliceSet = (partial: Partial<AppState> | ((s: AppState) => Partial<AppState>)) => void;
 type SliceGet = () => AppState;
 
@@ -172,6 +182,9 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
     setInsetMode: (insetMode) => { get().recordHistory("toggle inset"); set({ insetMode }); },
     setPolarMode: (polarMode) => { get().recordHistory("toggle polar plot"); set({ polarMode }); },
     setStatMode: (statMode) => { get().recordHistory("toggle statistics plot"); set({ statMode }); },
+    // On: `setStackMode(false)` turns the whole layout off (facet, break and
+    // stack in ONE undo entry). Off: the plain per-channel stack, as before.
+    toggleStackLayout: () => get().setStackMode(!stackLayoutOn(get())),
     // Clears the paired decoded step too: a manual/Inspector range (or the
     // smart auto-scale reset to null) is no longer the Origin figure that
     // produced xStep/yStep, so a stale step must never leak onto it.

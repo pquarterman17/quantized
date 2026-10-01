@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections.abc import Collection
 from typing import Any
 
 import numpy as np
@@ -36,6 +37,8 @@ __all__ = [
     "LAYER_FIELDS",
     "ReflChannel",
     "ReflParams",
+    "knot_field",
+    "knot_param_name",
     "layer_field",
     "layer_param_name",
     "layer_stack",
@@ -48,6 +51,8 @@ FWHM_TO_SIGMA = 1.0 / (2.0 * math.sqrt(2.0 * math.log(2.0)))
 # never match the canonical name layer_stack looks up.
 _LAYER_NAME = re.compile(r"^L(0|[1-9][0-9]*)\.([a-z]+)$", re.ASCII)
 _NON_NEGATIVE = ("thickness", "roughness")
+# A graded layer's knot (calc.refl_graded): "L2.knot0.sld", "L2.knot0.isld".
+_KNOT_NAME = re.compile(r"^L(0|[1-9][0-9]*)\.knot(0|[1-9][0-9]*)\.(sld|isld)$", re.ASCII)
 
 
 def layer_param_name(layer: int, field: str) -> str:
@@ -59,6 +64,17 @@ def layer_field(name: str) -> tuple[int, str] | None:
     """``(layer, field)`` for a canonical layer parameter name, else None."""
     m = _LAYER_NAME.match(name)
     return (int(m.group(1)), m.group(2)) if m else None
+
+
+def knot_param_name(layer: int, knot: int, field: str = "sld") -> str:
+    """A graded layer's knot parameter name, e.g. ``L1.knot0.sld``."""
+    return f"L{layer}.knot{knot}.{field}"
+
+
+def knot_field(name: str) -> tuple[int, int, str] | None:
+    """``(layer, knot, "sld" | "isld")`` for a canonical knot name, else None."""
+    m = _KNOT_NAME.match(name)
+    return (int(m.group(1)), int(m.group(2)), m.group(3)) if m else None
 
 
 class ReflParams:
@@ -126,7 +142,9 @@ class ReflParams:
         return default if i is None else float(v[i])
 
 
-def validate_model(specs: list[dict[str, Any]], channels: list[dict[str, Any]]) -> int:
+def validate_model(
+    specs: list[dict[str, Any]], channels: list[dict[str, Any]], graded: Collection[int] = ()
+) -> int:
     """Refuse a model that cannot mean what it says; return the layer count.
 
     A misspelled name, or a varied parameter the model never reads, would
@@ -138,13 +156,19 @@ def validate_model(specs: list[dict[str, Any]], channels: list[dict[str, Any]]) 
     not vary, and L0.msld must be 0; msld may vary only with a polarised
     channel; and
     thickness/roughness bounds must be non-negative (the engine treats
-    values <= 0 as absent, a region with no gradient).
+    values <= 0 as absent, a region with no gradient). A ``graded`` layer's
+    SLD is its knots (``L{i}.knot{j}.sld``, checked by ``calc.refl_graded``),
+    so it needs no ``L{i}.sld`` and may not vary one.
     """
     globals_used = {str(c.get("scale", "scale")) for c in channels}
     globals_used |= {str(c.get("background", "background")) for c in channels}
     layers: dict[int, set[str]] = {}
     for s in specs:
         name = str(s["name"])
+        kf = knot_field(name)
+        if kf:
+            layers.setdefault(kf[0], set()).add("knot")
+            continue
         lf = layer_field(name)
         if lf:
             i, field = lf
@@ -162,11 +186,12 @@ def validate_model(specs: list[dict[str, Any]], channels: list[dict[str, Any]]) 
         raise ValueError("need at least 2 layers (incident medium + substrate)")
     for i in range(n):
         fields = layers.get(i, set())
-        if "sld" not in fields:
+        if "sld" not in fields and i not in graded:
             raise ValueError(f"layer {i} has no L{i}.sld parameter")
         if 0 < i < n - 1 and "thickness" not in fields:
             raise ValueError(f"interior layer {i} has no L{i}.thickness parameter")
     meaningless = {"L0.thickness", "L0.roughness", "L0.msld", f"L{n - 1}.thickness"}
+    meaningless |= {layer_param_name(i, "sld") for i in graded}
     polarised = any(c.get("spin") in ("+", "-") for c in channels)
     for s in specs:
         name = str(s["name"])

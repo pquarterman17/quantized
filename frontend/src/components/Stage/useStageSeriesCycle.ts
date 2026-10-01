@@ -10,10 +10,11 @@
 //
 // It exists as a NAMED opt-in on purpose. `buildOpts` cycles only for a caller
 // that hands it display positions, so every other canvas — the waterfall, the
-// reflectometry panel, faceted/stacked/x-break panels, the snapshot and
+// reflectometry panel, faceted/stacked panels, the snapshot and
 // composite-panel windows — is uncycled by simply not calling this, and a NEW
 // render path is uncycled until someone deliberately wires its export and opts
-// in.
+// in. (X-break panels opt in through `useBreakSeriesStyles`, keyed by channel:
+// their export is this same flat figure plus `x_breaks`.)
 //
 // FOCUS IS NOT A STYLING INPUT. Both the focused Stage and an unfocused
 // background window of the same plot go through the same decision here, from
@@ -42,7 +43,7 @@ import { useApp, type AppState } from "../../store/useApp";
  *  `AppState` satisfies `CycleView` structurally (`groupKey`, `facetKey`,
  *  `stackMode`, `polarMode`, `statMode`, `xKey`, `yKeys` are all live
  *  singletons), so nothing is assembled to ask. */
-function selectFocusedWindowCycles(s: AppState): boolean {
+export function selectFocusedWindowCycles(s: AppState): boolean {
   const win = s.plotWindows.find((w) => w.id === s.focusedWindowId);
   return windowCyclesSeriesStyles(
     s.autoSeriesStyles,

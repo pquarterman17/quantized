@@ -22,7 +22,7 @@ export interface ModelLayer {
   sld: number; // manual SLD (Å⁻²), used only when preset === ""
   isld?: number; // manual absorption (Å⁻², POSITIVE = absorption), preset === "" only; default 0
   msld?: number; // magnetic SLD (Å⁻²), read only by polarised-neutron fits; default 0
-  graded?: GradedProfile; // film only: a spline SLD(z) profile instead of a slab (model-only)
+  graded?: GradedProfile; // film only: a spline SLD(z) profile instead of a slab (knots fit as L{i}.knot{j}.sld)
 }
 
 export interface QGrid {

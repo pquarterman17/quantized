@@ -4,7 +4,7 @@
 // interpolation is calc.sld.spline_sld's. An unparseable knot list stays local
 // (with a one-line reason) and never reaches the model.
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Select } from "../../primitives";
 import { formatKnots, parseKnots, SPLINE_METHODS, type GradedProfile } from "./reflGraded";
@@ -20,6 +20,12 @@ export default function GradedLayerEditor({
 }) {
   const [draft, setDraft] = useState(() => formatKnots(graded.knots));
   const valid = parseKnots(draft) != null;
+  // Knots edited elsewhere (the fit's parameter table, "Apply to model")
+  // replace the text, unless it already reads as those knots.
+  const shown = formatKnots(graded.knots);
+  useEffect(() => {
+    setDraft((d) => (formatKnots(parseKnots(d) ?? []) === shown ? d : shown));
+  }, [shown]);
 
   const onKnots = (text: string) => {
     setDraft(text);

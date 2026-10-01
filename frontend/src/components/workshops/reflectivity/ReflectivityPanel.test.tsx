@@ -50,7 +50,7 @@ describe("ReflectivityPanel", () => {
 });
 
 describe("ReflectivityPanel — graded layers", () => {
-  it("keeps a graded layer out of the fit and says so", async () => {
+  async function openFit(): Promise<void> {
     useApp.setState({
       datasets: [{
         id: "xrr", name: "xrr.dat",
@@ -62,10 +62,35 @@ describe("ReflectivityPanel — graded layers", () => {
     await waitFor(() => expect(screen.getAllByRole("option", { name: "Nickel" }).length).toBeGreaterThan(0));
     fireEvent.click(screen.getByRole("tab", { name: "Fit" }));
     expect(screen.getByRole("button", { name: "Run fit" })).toBeEnabled();
+  }
 
+  it("fits a graded layer's knots with the slab parameters' controls", async () => {
+    await openFit();
     fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "graded" } });
+    expect(screen.getByRole("button", { name: "Run fit" })).toBeEnabled();
+    expect(screen.queryByRole("note")).toBeNull();
+    // The knots replace the slab SLD rows, each with value, fit, min and max.
+    expect(screen.queryByRole("textbox", { name: "L1.sld value" })).toBeNull();
+    for (const k of ["L1.knot0.sld", "L1.knot1.sld"]) {
+      expect(screen.getByRole("textbox", { name: `${k} value` })).toBeInTheDocument();
+      expect(screen.getByRole("checkbox", { name: `vary ${k}` })).not.toBeChecked();
+      expect(screen.getByRole("textbox", { name: `${k} min` })).toBeDisabled();
+    }
+    fireEvent.click(screen.getByRole("checkbox", { name: "vary L1.knot1.sld" }));
+    expect(screen.getByRole("textbox", { name: "L1.knot1.sld max" })).toBeEnabled();
+    // A knot edited in the table is the model's knot: the open layer editor reads it.
+    const editor = await screen.findByRole("textbox", { name: "Layer 1 SLD knots" });
+    expect(editor).toHaveValue("71.8, 71.8");
+    fireEvent.change(screen.getByRole("textbox", { name: "L1.knot1.sld value" }), { target: { value: "8e-5" } });
+    expect(editor).toHaveValue("71.8, 80");
+  });
+
+  it("still refuses a graded layer it cannot slice, and says why", async () => {
+    await openFit();
+    fireEvent.change(screen.getAllByRole("combobox")[1], { target: { value: "graded" } });
+    fireEvent.change(screen.getByRole("textbox", { name: "L1.thickness value" }), { target: { value: "0" } });
     expect(screen.getByRole("button", { name: "Run fit" })).toBeDisabled();
-    expect(screen.getByRole("note")).toHaveTextContent("Graded layers are model-only: the fit varies slab layers.");
+    expect(screen.getByRole("note")).toHaveTextContent("Graded layer 1 needs a thickness above 0 Å to fit.");
   });
 });
 

@@ -8,6 +8,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { buildPlotCommands } from "../../commands/plotCommands";
+import { createFigureDocument } from "../../lib/figureDocument";
+import { defaultPlotView } from "../../lib/plotview";
 import { loadToolbarPrefs, saveToolbarPrefs } from "../../store/prefs";
 import { useApp } from "../../store/useApp";
 import PlotToolbar from "./PlotToolbar";
@@ -188,5 +191,73 @@ describe("PlotToolbar — toolbar options flyout + persisted group-label prefs",
     expect(screen.queryByText("Navigate")).toBeNull();
     // the group's ARIA name still works even with captions hidden
     expect(screen.getByRole("group", { name: "Navigate" })).toBeInTheDocument();
+  });
+});
+
+// S1 (a): a facet binding (or a saved x-break) mounts its panels with
+// `stackMode` off — a plot recipe applies facets that way. The Stack toggle
+// used to read `stackMode` alone, so it read OFF over a facet grid and pressing
+// it cleared the facet INTO the plain per-channel stack. It now reads the
+// layout on screen and, when one is showing, turns it off in one undo entry.
+describe("PlotToolbar — the Stack toggle follows the multi-panel layout (S1 a)", () => {
+  const stackBtn = () => screen.getByRole("button", { name: "Stack Channels" });
+  const savedBreakWindow = () =>
+    useApp.setState({
+      plotWindows: [
+        {
+          id: "w1", kind: "plot", title: "", datasetId: "d1",
+          geometry: { x: 0, y: 0, w: 480, h: 360 }, z: 0, winState: "normal",
+          bg: "theme", linkGroup: null, pinned: false, view: defaultPlotView(),
+          document: createFigureDocument({
+            id: "fig-w1", name: "w1", datasetId: "d1", view: defaultPlotView(), axisBreaks: { x: [[1, 2]] },
+          }),
+        },
+      ],
+      focusedWindowId: "w1",
+    });
+
+  it("reads ON over a facet binding with stackMode off, and says pressing returns one plot", () => {
+    useApp.setState({ stackMode: false, facetKey: 0, composition: null });
+    render(<PlotToolbar {...props} />);
+    expect(stackBtn()).toHaveAttribute("aria-pressed", "true");
+    expect(stackBtn()).toHaveAttribute("data-tip-desc", "Return to a single overlaid plot");
+  });
+
+  it("pressing it over that facet grid turns the grid off — facetKey and stackMode cleared, one undo entry", () => {
+    useApp.setState({ stackMode: false, facetKey: 0, composition: null });
+    const before = useApp.getState().history.length;
+    render(<PlotToolbar {...props} />);
+    fireEvent.click(stackBtn());
+    const s = useApp.getState();
+    expect([s.facetKey, s.stackMode, s.composition]).toEqual([null, false, null]);
+    expect(s.history).toHaveLength(before + 1);
+    s.undo();
+    expect([useApp.getState().facetKey, useApp.getState().stackMode]).toEqual([0, false]);
+  });
+
+  it("a saved x-break with stackMode off reads ON too, and pressing it removes the break", () => {
+    useApp.setState({ stackMode: false, facetKey: null, composition: null });
+    savedBreakWindow();
+    render(<PlotToolbar {...props} />);
+    expect(stackBtn()).toHaveAttribute("aria-pressed", "true");
+    fireEvent.click(stackBtn());
+    const w = useApp.getState().plotWindows[0];
+    expect(w.kind === "plot" ? w.document?.plot.axisBreaks.x : null).toEqual([]);
+    expect(useApp.getState().stackMode).toBe(false);
+  });
+
+  it("reads OFF over a plain overlay, and pressing it stacks the channels", () => {
+    useApp.setState({ stackMode: false, facetKey: null, composition: null, plotWindows: [], focusedWindowId: null });
+    render(<PlotToolbar {...props} />);
+    expect(stackBtn()).toHaveAttribute("aria-pressed", "false");
+    expect(stackBtn()).toHaveAttribute("data-tip-desc", "Show each channel in its own panel");
+    fireEvent.click(stackBtn());
+    expect(useApp.getState().stackMode).toBe(true);
+  });
+
+  it("the command-palette toggle makes the same choice over a facet grid", () => {
+    useApp.setState({ stackMode: false, facetKey: 0, composition: null });
+    buildPlotCommands(useApp.getState).find((c) => c.id === "stacked")?.run();
+    expect([useApp.getState().facetKey, useApp.getState().stackMode]).toEqual([null, false]);
   });
 });

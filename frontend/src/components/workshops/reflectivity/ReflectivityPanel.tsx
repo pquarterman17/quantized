@@ -3,7 +3,8 @@
 //   Model — build a layer stack from SLD presets (a film may be a graded
 //           spline profile), pick a Q grid, and simulate R(Q) / the SLD
 //           profile into the library (plot it on a log-Y axis).
-//   Fit   — fit that same stack to a measured XRR/PNR dataset (ReflFitView).
+//   Fit   — fit that same stack to a measured XRR/PNR dataset (ReflFitView);
+//           a graded layer's knots are fit parameters like slab fields.
 //   Spin asym. — SA(Q) from two measured PNR spin channels (SpinAsymmetryView,
 //           loaded on first use; it needs no layer model).
 // Thin by design — all state/logic lives in the hooks. Both hooks live HERE so
@@ -19,14 +20,11 @@ import { lazyRegion } from "../../../lib/lazyRegion";
 import { useApp } from "../../../store/useApp";
 import LayerTable from "./LayerTable";
 import ReflFitView from "./ReflFitView";
+import { gradedFitBlock } from "./reflGraded";
 import { useReflFit } from "./useReflFit";
 import { useReflectivity, type Radiation } from "./useReflectivity";
 
 type Mode = "model" | "fit" | "asym";
-
-// calc.refl_fit varies slab fields only; a spline profile's knots are not
-// parameters it knows, so a graded layer is model/simulate only.
-const GRADED_FIT_NOTE = "Graded layers are model-only: the fit varies slab layers.";
 
 const SpinAsymmetryView = lazyRegion(() => import("./SpinAsymmetryView"), "Spin asymmetry");
 
@@ -86,7 +84,7 @@ export default function ReflectivityPanel() {
           </div>
 
           {mode === "fit" ? (
-            <ReflFitView fit={fit} blocked={layers.some((l) => l.graded) ? GRADED_FIT_NOTE : null} />
+            <ReflFitView fit={fit} blocked={gradedFitBlock(layers)} />
           ) : (
             <>
               <div

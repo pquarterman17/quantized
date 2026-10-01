@@ -170,7 +170,7 @@ export function buildPlotCommands(s: StoreGet): Action[] {
       section: "Layout",
       label: "Toggle stacked layout",
       description: "Switch between overlaid curves and vertically stacked plot lanes.",
-      run: () => s().setStackMode(!s().stackMode),
+      run: () => s().toggleStackLayout(), // S1 (a): a facet grid / saved break with stackMode off counts as ON
     },
     {
       id: "panel-fit",

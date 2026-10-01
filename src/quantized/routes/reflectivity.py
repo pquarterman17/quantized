@@ -8,7 +8,8 @@ physics here; the recursion + Névot-Croce roughness live in ``calc/``.
 Fitting (audit P2.2): ``/fit`` runs ``calc.refl_fit`` synchronously under a
 deadline; ``/dream`` queues ``calc.refl_dream``'s posterior sampling on the
 poll-model job runner (``quantized.jobs``, polled via ``/api/jobs``), the same
-transport the bumps DREAM engine uses.
+transport the bumps DREAM engine uses. Both take ``graded`` layers, whose
+spline knots are fit parameters (``calc.refl_graded``).
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from quantized.calc.dream_seed import DreamCancelled
 from quantized.calc.fit_bumps import bumps_available
 from quantized.calc.refl_dream import plan_sampling, sample_reflectivity
 from quantized.calc.refl_fit import fit_reflectivity
+from quantized.calc.refl_graded import MAX_KNOTS, MAX_SLICES, default_slices
 from quantized.calc.refl_model import layer_field
 from quantized.calc.reflectivity import parratt_refl
 from quantized.calc.sld import refl_sld_presets, sld_profile
@@ -116,6 +118,7 @@ FIT_MAX_PARAMETERS = 200
 FIT_MAX_CHANNELS = 4
 FIT_MAX_EVAL_UNITS = 4_000_000  # points x layers x (21 if smeared), summed
 FIT_DEADLINE_S = 30.0
+FIT_MAX_GRADED = 16  # graded (spline) layers per model; each is `slices` rows
 _SMEAR_SAMPLES = 21
 
 FiniteFloat = Annotated[float, Field(allow_inf_nan=False)]
@@ -152,16 +155,36 @@ class ReflFitChannel(BaseModel):
     label: str | None = Field(default=None, max_length=120)
 
 
+class ReflGradedLayer(BaseModel):
+    """A graded (spline) film layer whose knots ``L{layer}.knot{j}.sld`` (and
+    optionally ``.isld``) are fit parameters (``calc.refl_graded``).
+    ``positions`` are the knots' depths as fractions of the layer thickness
+    (default evenly spaced); ``slices`` is the fixed slab count (default ~2 Å
+    per slab at the starting thickness)."""
+
+    layer: int = Field(ge=1, le=FIT_MAX_PARAMETERS)
+    positions: list[FiniteFloat] | None = Field(default=None, min_length=2, max_length=MAX_KNOTS)
+    method: Literal["pchip", "spline", "makima", "linear"] = "pchip"
+    slices: int | None = Field(default=None, ge=1, le=MAX_SLICES)
+
+
 class ReflFitRequest(BaseModel):
     parameters: list[ReflFitParameter] = Field(min_length=1, max_length=FIT_MAX_PARAMETERS)
     channels: list[ReflFitChannel] = Field(min_length=1, max_length=FIT_MAX_CHANNELS)
     weighting: Literal["dr", "log"] = "dr"
     max_nfev: int = Field(default=200, ge=1, le=2000)
+    graded: list[ReflGradedLayer] = Field(default_factory=list, max_length=FIT_MAX_GRADED)
 
 
 def _eval_units(req: ReflFitRequest | ReflDreamRequest) -> int:
     idx = [lf[0] for p in req.parameters if (lf := layer_field(p.name))]
-    layers = 1 + max(idx, default=0)
+    idx += [g.layer for g in req.graded]
+    values = {p.name: p.value for p in req.parameters}
+    # Each graded layer is `slices` engine rows instead of one.
+    layers = 1 + max(idx, default=0) + sum(
+        (g.slices or default_slices(values.get(f"L{g.layer}.thickness", 0.0))) - 1
+        for g in req.graded
+    )
     units = 0
     for ch in req.channels:
         smeared = ch.dq is not None or (ch.resolution or 0.0) > 0
@@ -193,6 +216,7 @@ def fit_route(req: ReflFitRequest) -> dict[str, Any]:
         weighting=req.weighting,
         max_nfev=req.max_nfev,
         deadline_s=FIT_DEADLINE_S,
+        graded=[g.model_dump() for g in req.graded],
     )
     result: dict[str, Any] = to_jsonable(out)
     return result
@@ -236,6 +260,7 @@ class ReflDreamRequest(BaseModel):
     thin: int = Field(default=1, ge=1, le=100)
     seed: int | None = Field(default=None, ge=0, le=2**32 - 1)
     band_draws: int = Field(default=200, ge=10, le=1_000)
+    graded: list[ReflGradedLayer] = Field(default_factory=list, max_length=FIT_MAX_GRADED)
 
 
 @router.post("/dream")
@@ -261,6 +286,7 @@ def dream_route(req: ReflDreamRequest) -> dict[str, Any]:
     kwargs: dict[str, Any] = {
         "centre": req.centre, "weighting": req.weighting, "samples": req.samples,
         "burn": req.burn, "pop": req.pop, "thin": req.thin, "band_draws": band_draws,
+        "graded": [g.model_dump() for g in req.graded],
     }
     plan = call_calc(plan_sampling, params, chans, **kwargs)
     if plan["n_chains"] * units > DREAM_MAX_GENERATION_UNITS:

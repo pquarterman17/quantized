@@ -18,7 +18,8 @@ import type { ReflFitState } from "./useReflFit";
 
 const SECTION = { marginTop: 12, marginBottom: 6 } as const;
 
-/** `blocked`: why this model cannot be fitted (a graded layer), shown as a note. */
+/** `blocked`: why this model cannot be fitted (a graded layer it cannot
+ *  slice, reflGraded.ts `gradedFitBlock`), shown as a note. */
 export default function ReflFitView({ fit, blocked = null }: { fit: ReflFitState; blocked?: string | null }) {
   const lambdaMissing = fit.settings.xKind === "twotheta" && fit.lambda == null;
   const h = fit.history;
