@@ -53,7 +53,14 @@ import { askParams } from "../../overlays/ParamDialog";
 import { describeExtract, planExtract } from "./extractRows";
 import { fmtCell } from "./cellFormat";
 import { resolvePendingEdit } from "../../../store/pendingEdit";
-import { resolvedSourceRow, resolveWorksheetRows, worksheetTsvHeaders } from "./worksheetRows";
+import {
+  analysisWorksheetRows,
+  resolvedSourceRow,
+  resolveWorksheetRows,
+  sortWorksheetRows,
+  visibleWorksheetRows,
+  worksheetTsvHeaders,
+} from "./worksheetRows";
 
 export interface WorksheetView {
   data: DataStruct;
@@ -353,14 +360,15 @@ export function useWorksheetView(ds: Dataset, windowId?: string): WorksheetView 
   const textCols = useMemo(() => worksheetTextColumns(ds.data, ds.pending), [ds.data, ds.pending]);
   const textRowCount = useMemo(() => textColumnRowCount(textCols), [textCols]);
 
-  const resolvedRows = useMemo(
-    () => resolveWorksheetRows(ds, { filterCol, filterOp, filterV1, filterV2, sort }),
-    [ds, filterCol, filterOp, filterV1, filterV2, sort],
+  // Memoised on the data and the rules only, never the whole Dataset: a rename
+  // or an exclusion toggle must not re-sort 1M rows (audit, 1M x 6).
+  const filtered = useMemo(
+    () => visibleWorksheetRows(ds.data, ds.pending, { filterCol, filterOp, filterV1, filterV2 }),
+    [ds.data, ds.pending, filterCol, filterOp, filterV1, filterV2],
   );
+  const order = useMemo(() => sortWorksheetRows(filtered, ds.data, sort), [filtered, ds.data, sort]);
+  const analysisRows = useMemo(() => analysisWorksheetRows(filtered, masked), [filtered, masked]);
   const rowRules = { filterCol, filterOp, filterV1, filterV2, sort };
-  const filtered = resolvedRows.visible;
-  const order = resolvedRows.ordered;
-  const analysisRows = resolvedRows.analysis;
 
   // Fetch per-column descriptive stats (golden /api/stats/descriptive) over
   // the ANALYSIS rows — independent of the windowed display range and the

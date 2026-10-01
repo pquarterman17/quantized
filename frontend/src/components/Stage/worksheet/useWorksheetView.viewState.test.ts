@@ -75,6 +75,22 @@ describe("sort and filter reset on a dataset switch", () => {
   });
 });
 
+// 1M x 6 audit: the sort was memoised on the whole Dataset, so an exclusion
+// toggle or a rename re-sorted every row. Identity of `order` is the
+// load-invariant proof that no sort ran.
+describe("the sorted order", () => {
+  it("is reused when the dataset changes but its data and rules do not", () => {
+    const { result, rerender } = renderHook(({ d }) => useWorksheetView(d), { initialProps: { d: a } });
+    act(() => result.current.setSort({ col: 0, dir: 1 }));
+    const order = result.current.order;
+    rerender({ d: { ...a, name: "renamed.dat", excludedRows: [1] } });
+    expect(result.current.order).toBe(order);
+    expect(result.current.analysisRows).toEqual([0, 2, 3, 4]); // exclusions still apply
+    rerender({ d: { ...a, data: { ...a.data, values: [[5], [4], [3], [2], [1]] } } });
+    expect(result.current.order).toEqual([4, 3, 2, 1, 0]); // a data change does re-sort
+  });
+});
+
 describe("copyRows", () => {
   it("copies the sorted, non-excluded rows, building the exclusion set once", () => {
     const ds = sheet("a", [50, 10, 40, 20, 30], { excludedRows: [3] });
