@@ -622,19 +622,19 @@ describe("breakAtGaps — the x-break applier", () => {
     const post = useApp.getState();
     useApp.getState().undo();
     const undone = useApp.getState();
-    // `composition` is a render cache outside the snapshot (HISTORY_EXCLUDED):
-    // undo clears it like a dataset switch, so the break is gone; the durable
+    // The pre-break state had no break, so the panels are gone; the durable
     // bindings (`stackMode`, `facetKey`) come back from the snapshot.
     expect(undone.composition).toBeNull();
     expect(undone.stackMode).toBe(pre.stackMode);
     expect(undone.facetKey).toBe(pre.facetKey);
     expect(undone.activeId).toBe("g1");
-    // Redo restores the bindings; the break panels themselves are that same
-    // excluded render cache, which nothing rebuilds for a break (a facet has
-    // the `facetKey` fallback) — see the HISTORY_EXCLUDED `composition` entry.
+    // Redo restores the bindings AND the break panels: the snapshot carries a
+    // break composition (`HistorySnapshot.breakComposition`), since a break has
+    // no durable binding to rebuild from (a facet has `facetKey`).
     useApp.getState().redo();
     expect(useApp.getState().stackMode).toBe(post.stackMode);
     expect(useApp.getState().facetKey).toBeNull();
+    expect(useApp.getState().composition).toBe(post.composition);
   });
 
   it("breaking a DIFFERENT dataset is still ONE entry; undo restores the old active dataset", () => {

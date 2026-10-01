@@ -9,6 +9,7 @@
 // The allowlist contract below is the load-bearing part; read it before adding
 // any field to AppState.
 
+import type { BreakComposition } from "../lib/composition";
 import { hydrateView, navigationView, snapshotView, type PlotView } from "../lib/plotview";
 import { focusTransientReset } from "./windows";
 import type { AppState } from "./useApp";
@@ -97,6 +98,12 @@ export interface HistorySnapshot {
   plotWindows: AppState["plotWindows"];
   focusedWindowId: AppState["focusedWindowId"];
   view: PlotView;
+  // The live BREAK arrangement only — not `composition` wholesale (a render
+  // cache, HISTORY_EXCLUDED). A facet rebuilds from `view.facetKey`; a break
+  // (`breakAtGaps`) has no durable binding, so without this redo restored
+  // `stackMode` with no panels and any undo wiped a live break. Held by
+  // reference (no copy); built from this same snapshot's datasets/view.
+  breakComposition: BreakComposition | null;
 }
 
 
@@ -129,6 +136,7 @@ export function snapshotOf(s: AppState): HistorySnapshot {
     plotWindows: s.plotWindows,
     focusedWindowId: s.focusedWindowId,
     view: snapshotView(s),
+    breakComposition: s.composition?.kind === "break" ? s.composition : null,
   };
 }
 
@@ -146,7 +154,7 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
   // AppState, and spreading `snap` wholesale wrote an inert `state.view` onto
   // the live store on every undo/redo (harmless today, a silent clobber the
   // day AppState gains a real `view` field).
-  const { view, ...fields } = snap;
+  const { view, breakComposition, ...fields } = snap;
   return {
     ...fields,
     ...hydrateView(view),
@@ -183,6 +191,12 @@ export function restorePatch(s: AppState, snap: HistorySnapshot): Partial<AppSta
       w.datasetId && !live.has(w.datasetId) ? { ...w, datasetId: null } : w,
     ),
     ...focusTransientReset(),
+    // After the reset, which nulls `composition`: a snapshotted break comes back.
+    composition: breakComposition,
+    // UI open state outside the snapshot: close the viewer on a report the
+    // restore removed (an undone "add report") rather than show nothing.
+    openReportId:
+      s.openReportId && !snap.reports.some((r) => r.id === s.openReportId) ? null : s.openReportId,
   };
 }
 
