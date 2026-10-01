@@ -343,6 +343,7 @@ def preview_import(text: str, settings: ImportSettings, *, max_rows: int = 20,
         ],
         "suggested_error_bindings": [b.to_dict() for b in suggested_bindings],
         "categorical_problems": categorical_problems,
+        "decimal_comma_columns": [p.names[k] for k in p.decimal_columns],
     }
 
 
