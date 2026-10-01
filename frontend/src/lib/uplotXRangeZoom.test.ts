@@ -55,8 +55,8 @@ afterEach(() => live.splice(0).forEach((u) => u.destroy()));
 const settle = () => new Promise((r) => setTimeout(r, 0)); // uPlot commits on a microtask
 const xOf = (u: uPlot) => [u.scales.x.min, u.scales.x.max];
 
-async function mount(payload: PlotPayload) {
-  const opts = buildOpts(payload, { width: 600, height: 400, xScale: "linear", yScale: "linear", tool: "zoom", onReadout: vi.fn() });
+async function mount(payload: PlotPayload, xLim?: [number, number]) {
+  const opts = buildOpts(payload, { width: 600, height: 400, xScale: "linear", yScale: "linear", tool: "zoom", onReadout: vi.fn(), xLim });
   const u = new uPlot(opts, payload.data, document.body.appendChild(document.createElement("div")));
   live.push(u);
   await settle();
@@ -91,5 +91,36 @@ describe("the scanned X range keeps an explicit zoom (real uPlot)", () => {
     u.setScale("x", { min: 0.5, max: 1.5 });
     await settle();
     expect(xOf(u)).toEqual([0.5, 1.5]);
+  });
+});
+
+// A FIXED X limit (`xLim`: a committed zoom, an Inspector value, a restored
+// view) is what the plot is BUILT with after any rebuild while zoomed — a
+// windowed re-fetch, a theme change. A static `range` pair is answered on every
+// x setScale too, so it pinned the live plot: the next zoom/pan, and the
+// Inspector applying a new limit to the live instance, snapped back to it.
+describe("a fixed X limit applies on autoscale only (real uPlot)", () => {
+  it.each([
+    ["a monotonic plot", MONOTONIC],
+    ["a closed hysteresis loop", LOOP],
+    ["a waterfall X-offset layout", WATERFALL],
+  ])("%s: starts at the limit, keeps a zoom, a pan and a new limit, resets to the limit", async (_, payload) => {
+    const lim: [number, number] = [-0.5, 2.5];
+    const u = await mount(payload, lim);
+    expect(xOf(u)).toEqual(lim);
+
+    u.setScale("x", { min: 0.5, max: 1.5 }); // a box/wheel zoom
+    await settle();
+    expect(xOf(u)).toEqual([0.5, 1.5]);
+    u.setScale("x", { min: 1, max: 2 }); // a pan
+    await settle();
+    expect(xOf(u)).toEqual([1, 2]);
+    u.setScale("x", { min: 0, max: 2 }); // the Inspector's live apply (PlotViewport, classifyLimChange "apply")
+    await settle();
+    expect(xOf(u)).toEqual([0, 2]);
+
+    u.setData(payload.data); // uPlot's own autoscale (a double-click reset)
+    await settle();
+    expect(xOf(u)).toEqual(lim);
   });
 });

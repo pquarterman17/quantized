@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { buildOpts, categoricalTickFormatter, fixedLinearAxisSplits, fixedLogAxisSplits, logMajorTickFilter, niceLinearStep, reciprocalAxisSplits, reciprocalTransform, resolvePlotBg, tickFormatter, utcTzDate, xIsAscending } from "./uplotOpts";
 import type { PlotPayload } from "./plotdata";
+import { isFixedXRange } from "./uplotXRange";
 import { displayPositions } from "./seriesStyleCycle";
 import type { DefaultTrace, SeriesStyle } from "./types";
 
@@ -16,6 +17,12 @@ const payload: PlotPayload = {
 };
 
 const base = { width: 600, height: 400, xScale: "linear" as const, onReadout: vi.fn() };
+
+/** The limit a FIXED x range autoscales to (`uplotXRange.fixedXRange`: a range
+ *  function, so a live zoom is kept), or undefined when the range is not one. */
+function fixedXLimit(range: unknown): unknown {
+  return isFixedXRange(range) ? range(undefined as never, null as never, null as never, "x") : undefined;
+}
 
 describe("buildOpts non-monotonic x (hysteresis loop) x-range", () => {
   // Field sweeps up then back down, starting and ending near the SAME value —
@@ -47,7 +54,7 @@ describe("buildOpts non-monotonic x (hysteresis loop) x-range", () => {
 
   it("an explicit xLim still wins over the loop x-range", () => {
     const opts = buildOpts(loop, { ...base, yScale: "linear", tool: "zoom", xLim: [-50, 50] });
-    expect((opts.scales?.x as { range?: unknown }).range).toEqual([-50, 50]);
+    expect(fixedXLimit(opts.scales?.x?.range)).toEqual([-50, 50]);
   });
 });
 
@@ -429,7 +436,7 @@ describe("buildOpts defaultTrace", () => {
       xLim: [0, 5],
       yLim: [-1, 10],
     });
-    expect(opts.scales?.x?.range).toEqual([0, 5]);
+    expect(fixedXLimit(opts.scales?.x?.range)).toEqual([0, 5]);
     expect(opts.scales?.y?.range).toEqual([-1, 10]);
   });
 

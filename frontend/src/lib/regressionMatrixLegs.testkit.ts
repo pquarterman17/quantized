@@ -40,6 +40,7 @@ import {
 import type { PlotView } from "./plotview";
 import { droppedRows } from "./rowstate";
 import { buildOpts } from "./uplotOpts";
+import { isFixedXRange } from "./uplotXRange";
 import type { AxisScale, Dataset, DataStruct, SeriesStyle, StepMode } from "./types";
 import {
   canonicalErrorsFromSpans,
@@ -86,7 +87,10 @@ function axisLabelOf(label: uPlot.Axis.Label | undefined): string | null {
 }
 
 function rangeOf(scale: uPlot.Scale | undefined): [number, number] | null {
-  const range = scale?.range;
+  // A fixed X limit is a range function (`uplotXRange.fixedXRange`, so a live
+  // zoom is kept); what it autoscales to IS the limit. An autoscale scan is not one.
+  const raw = scale?.range;
+  const range = isFixedXRange(raw) ? raw(undefined as never, null as never, null as never, "x") : raw;
   return Array.isArray(range) && range.length === 2 && range.every((v) => typeof v === "number")
     ? [range[0] as number, range[1] as number]
     : null;

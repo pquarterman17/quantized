@@ -20,7 +20,7 @@ import type { GadgetMode } from "./quickfit";
 import type { RegionStats } from "./regionStats";
 import { richLabelAst, type RichNode } from "./richtext";
 import { decimalsForIncrement, pow10 } from "./ticks";
-import { fullXExtents, scannedXRange } from "./uplotXRange";
+import { fixedXRange, fullXExtents, scannedXRange } from "./uplotXRange";
 import type { Annotation, AxisFormat, AxisScale, DefaultTrace, RefLine, RegionShade, SeriesStyle, Shape } from "./types";
 import {
   annotationPlugin,
@@ -1127,7 +1127,7 @@ export function buildOpts(payload: PlotPayload, args: BuildOptsArgs): uPlot.Opti
     x: {
       time: xFmt?.mode === "date" || xFmt?.mode === "time" || xFmt?.mode === "datetime",
       ...scaleDistrProps(xScale),
-      ...(xLim ? { range: xLim } : loopX ? { range: scannedXRange(loopX) } : {}),
+      ...(xLim ? { range: fixedXRange(xLim) } : loopX ? { range: scannedXRange(loopX) } : {}),
     },
     y: {
       ...scaleDistrProps(yScale),
