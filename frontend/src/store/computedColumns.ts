@@ -14,7 +14,7 @@
 // captured on every write, not just at creation, so an edit that fixes (or
 // breaks) a formula keeps both in sync.
 
-import { applyFormulas, baseColumns, channelLetter, formulaErrors, referencedColumns } from "../lib/formula";
+import { applyFormulasWithErrors, baseColumns, channelLetter, referencedColumns } from "../lib/formula";
 import { remapSurvivingFormulas } from "../lib/formulaRename";
 import { lit } from "../lib/macro";
 import { recalcNodes, wouldCreateCycle } from "../lib/recalc";
@@ -73,8 +73,7 @@ export function withRecomputedFormulas(
   base: DataStruct,
   formulas: ComputedColumn[],
 ): { data: DataStruct; formulaErrors: Record<string, string> | undefined } {
-  const data = applyFormulas(base, formulas);
-  const errors = formulaErrors(base, formulas);
+  const { data, errors } = applyFormulasWithErrors(base, formulas);
   return { data, formulaErrors: Object.keys(errors).length ? errors : undefined };
 }
 

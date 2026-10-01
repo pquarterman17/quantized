@@ -442,6 +442,15 @@ export function formulaErrors(base: DataStruct, formulas: ComputedColumn[]): Rec
   return computeFormulas(base, formulas).errors;
 }
 
+/** `applyFormulas` + `formulaErrors` from ONE evaluation pass. Calling the two
+ *  separately evaluates every formula over every row twice. */
+export function applyFormulasWithErrors(
+  base: DataStruct,
+  formulas: ComputedColumn[],
+): { data: DataStruct; errors: Record<string, string> } {
+  return computeFormulas(base, formulas);
+}
+
 /** Strip the last `formulas.length` stale computed columns from `data` and
  *  reapply, plus the error state (K5b), in one pass — `store/useApp.ts`'s
  *  `recompute` chokepoint. `data` must be `StrippableData`

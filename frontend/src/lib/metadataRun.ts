@@ -22,7 +22,7 @@ import { applyCleanup, planCleanup, type CleanupPlan, type CleanupResult, type L
 import { factorColumn, planFactor, type FactorAs, type FactorPlan } from "./metadataFactor";
 import { isScalar, pathLabel, type MetaPath, type MetaScalar } from "./metadataKeys";
 import { plural } from "./plural";
-import { applyFormulas, formulaErrors } from "./formula";
+import { applyFormulasWithErrors } from "./formula";
 import { asAlreadyComputed, baseColumns, carryComputedLevelOrder } from "./formulaInputs";
 import type { ComputedColumn, Dataset } from "./types";
 import { useApp, type AppState } from "../store/useApp";
@@ -99,8 +99,8 @@ export interface PromoteOutcome {
 function appendFactorColumn(d: Dataset, col: ComputedColumn): Pick<Dataset, "formulas" | "data" | "formulaErrors"> {
   const base = baseColumns(d.data, d.formulas?.length ?? 0);
   const formulas = [...(d.formulas ?? []), col];
-  const data = carryComputedLevelOrder(asAlreadyComputed(d.data), applyFormulas(base, formulas));
-  const errors = formulaErrors(base, formulas);
+  const { data: applied, errors } = applyFormulasWithErrors(base, formulas);
+  const data = carryComputedLevelOrder(asAlreadyComputed(d.data), applied);
   return { formulas, data, formulaErrors: Object.keys(errors).length ? errors : undefined };
 }
 

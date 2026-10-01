@@ -31,7 +31,7 @@
 // (or `applyFormulas` directly, if it doesn't need the per-column error
 // state) instead of asserting a lie through `asAlreadyComputed`.
 
-import { applyFormulas, formulaErrors } from "./formula";
+import { applyFormulasWithErrors } from "./formula";
 import type { ComputedColumn, DataStruct } from "./types";
 
 declare const COMPUTED_BRAND: unique symbol;
@@ -62,7 +62,7 @@ export function recomputeFromBase(
   base: DataStruct,
   formulas: ComputedColumn[],
 ): { data: DataStruct; errors: Record<string, string> } {
-  return { data: applyFormulas(base, formulas), errors: formulaErrors(base, formulas) };
+  return applyFormulasWithErrors(base, formulas);
 }
 
 /** `recomputeFromBase`, collapsed into the `{ data, formulaErrors }` patch
