@@ -45,7 +45,7 @@ export default function ColumnSwitcher() {
       ) : (
         <>
           <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-            <Button onClick={() => step(-1)} title="Previous channel (wraps)">
+            <Button aria-label="Previous channel" onClick={() => step(-1)} title="Previous channel (wraps)">
               ◀
             </Button>
             <Select
@@ -58,7 +58,7 @@ export default function ColumnSwitcher() {
                 ...plotted.map((c) => ({ value: String(c), label: name(c) })),
               ]}
             />
-            <Button onClick={() => step(1)} title="Next channel (wraps)">
+            <Button aria-label="Next channel" onClick={() => step(1)} title="Next channel (wraps)">
               ▶
             </Button>
           </div>

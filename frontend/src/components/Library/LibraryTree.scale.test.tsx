@@ -321,4 +321,30 @@ describe("LibraryTree — large-Library virtualization", () => {
       expect((document.activeElement as HTMLElement).matches("[data-lib-row], [data-ds-id]")).toBe(true);
     });
   });
+  // U5 (WAI-ARIA tree): ONE roving tab stop must survive virtualization. The
+  // stop is a model-level row; when a scroll unmounts it, the window's first
+  // rendered row stands in (Details' `effectiveRovingKey` rule) so Tab can
+  // still enter the tree, and the real roving row reclaims it on return.
+  it("a 400-item tree keeps exactly ONE tabbable treeitem through organic scrolls, with absolute aria positions", () => {
+    seedWide(400);
+    render(<Harness />);
+    const panel = document.querySelector(".qzk-lib-tree") as HTMLElement;
+    const tabbable = (): HTMLElement[] => renderedRows().filter((r) => r.tabIndex === 0);
+    expect(tabbable()).toHaveLength(1);
+    const focused = renderedRows()[3];
+    const focusedId = focused.getAttribute("data-ds-id")!;
+    act(() => focused.focus());
+    expect(tabbable()).toEqual([focused]);
+
+    fireEvent.scroll(panel, { target: { scrollTop: 6000 } });
+    expect(document.querySelector(`[data-ds-id="${focusedId}"]`)).toBeNull();
+    expect(tabbable()).toHaveLength(1);
+    // Positions are absolute model facts, not window-relative: d{i} is sibling i+1 of 400.
+    const deep = renderedRows().find((r) => r.hasAttribute("data-ds-id"))!;
+    expect(deep.getAttribute("aria-setsize")).toBe("400");
+    expect(deep.getAttribute("aria-posinset")).toBe(String(Number(deep.getAttribute("data-ds-id")!.slice(1)) + 1));
+
+    fireEvent.scroll(panel, { target: { scrollTop: 0 } });
+    expect(tabbable()).toEqual([document.querySelector(`[data-ds-id="${focusedId}"]`)]);
+  });
 });

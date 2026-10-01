@@ -62,6 +62,7 @@ export default function AppearanceMenu() {
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button
+        aria-label="Appearance"
         className={`qz-icon-btn${open ? " active" : ""}`}
         title="Appearance (theme · accent · density · palette)"
         onClick={() => setOpen((o) => !o)}
@@ -83,15 +84,16 @@ export default function AppearanceMenu() {
           }}
         >
           <label className="qzk-field-lbl">Theme</label>
-          <Select options={opts(THEMES)} value={theme} onChange={(e) => setTheme(e.target.value as Theme)} />
+          <Select aria-label="Theme" options={opts(THEMES)} value={theme} onChange={(e) => setTheme(e.target.value as Theme)} />
           <label className="qzk-field-lbl" style={{ marginTop: 4 }}>
             Accent
           </label>
-          <Select options={opts(ACCENTS)} value={accent} onChange={(e) => setAccent(e.target.value as Accent)} />
+          <Select aria-label="Accent" options={opts(ACCENTS)} value={accent} onChange={(e) => setAccent(e.target.value as Accent)} />
           <label className="qzk-field-lbl" style={{ marginTop: 4 }}>
             Density
           </label>
           <Select
+            aria-label="Density"
             options={opts(DENSITIES)}
             value={density}
             onChange={(e) => setDensity(e.target.value as Density)}
@@ -100,6 +102,7 @@ export default function AppearanceMenu() {
             Series palette
           </label>
           <Select
+            aria-label="Palette"
             options={PALETTE_OPTS}
             value={palette}
             onChange={(e) => setPalette(e.target.value)}

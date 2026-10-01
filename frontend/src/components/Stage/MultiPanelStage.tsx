@@ -136,6 +136,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
   const picks = useApp((s) => s.plotWindows.find((w) => w.id === s.focusedWindowId)?.document?.bindings.encoding);
   const encodedFacets = useFacetEncoding(
     active, picks, canvasGroupCol(groupKey, y2Keys), y2Keys, facetKey, xKey, yKeys, seriesLabels, seriesStyles,
+    excludedDisplay,
   );
   const shown = useGreyedFacets(composition, active, facetKey, xKey, excludedDisplay); // F4.2c (a)
   // S1 (b): an x-break exports as the flat figure, so its panels cycle exactly when that figure does.
@@ -202,6 +203,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
         : null}
       <div className="qzk-glass qzk-float-tools">
         <button
+          aria-label="Single plot"
           className="qzk-tool-btn active"
           title="Back to a single overlaid plot"
           onClick={() => setStackMode(false)}
@@ -214,6 +216,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
         {spatialPanels && (
           <>
             <button
+              aria-label="Fit aspect"
               className={`qzk-tool-btn${panelFit === "frames" ? " active" : ""}`}
               title="Fit: preserve the figure's aspect ratio (letterbox)"
               onClick={() => setPanelFit("frames")}
@@ -221,6 +224,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
               ▭
             </button>
             <button
+              aria-label="Fill window"
               className={`qzk-tool-btn${panelFit === "window" ? " active" : ""}`}
               title="Fill: stretch the panels to fill the window"
               onClick={() => setPanelFit("window")}
@@ -230,6 +234,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
             {/* Page fit only when this window has a page model (#54 Stage 2). */}
             {pageSetup && (
               <button
+                aria-label="Page layout"
                 className={`qzk-tool-btn${panelFit === "page" ? " active" : ""}`}
                 title="Page: place panels at their true page coordinates"
                 onClick={() => setPanelFit("page")}
@@ -245,6 +250,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
                 to the grid layout. */}
             {canExportSpatialPage(spatialPanels, pageSetup) && (
               <button
+                aria-label="Export page"
                 className="qzk-tool-btn"
                 title="Export page… (true page coordinates)"
                 onClick={() => void runExportSpatialPageCommand(useApp.getState)}

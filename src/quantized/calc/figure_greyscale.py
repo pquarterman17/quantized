@@ -1,7 +1,8 @@
 """Print-safe greyscale export mode (PRIMARY_SOFTWARE_AUDIT_PLAN P3.3).
 
 Pure layer: a series count in -> grey ``#rrggbb`` hex strings out, plus a
-style-list transform built on top of it. No matplotlib/fastapi/pydantic
+style-list transform built on top of it (and its facet-grid form,
+:func:`greyscale_facet_panels`). No matplotlib/fastapi/pydantic
 import — a plain colour-space computation, unit-testable without a
 renderer, and importable from ``calc.figure``/``calc.figure_y2``/
 ``calc.figure_break`` (every place a per-series style spec reaches
@@ -49,6 +50,7 @@ __all__ = [
     "GREY_SLOT_KEY",
     "greyscale_ramp",
     "apply_greyscale",
+    "greyscale_facet_panels",
 ]
 
 # CIE L* target range for the grey ramp. Kept well inside [0, 100]: L*=0 is
@@ -84,6 +86,8 @@ MARKER_SHAPES: tuple[str, ...] = (
 # ``calc.plotting_encoded.encoded_series_styles`` for a P1.4 colour factor (the
 # slot is the colour LEVEL, so one level greys alike on every Y channel, as it
 # colours alike on screen); :func:`apply_greyscale` consumes and removes it.
+# ``calc.plotting_encoded_facets`` also sets it on each encoded facet SERIES
+# dict (beside its ``style``, U2), read by :func:`greyscale_facet_panels`.
 GREY_SLOT_KEY = "grey_slot"
 
 
@@ -201,3 +205,53 @@ def apply_greyscale(
             spec["marker_shape"] = MARKER_SHAPES[k % len(MARKER_SHAPES)]
         out.append(spec)
     return out
+
+
+def _is_mapped(style: Mapping[str, Any] | None) -> bool:
+    """A ``color_by`` series: its colour is the plotted quantity, never greyed."""
+    return style is not None and style.get("color_by") is not None
+
+
+def greyscale_facet_panels(panels: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    """:func:`apply_greyscale` over an xy FACET grid (U2): NEW panel dicts
+    (``panels`` is never mutated) whose series styles are greyed ONCE over the
+    whole grid, so a series keeps one grey, dash and glyph in every panel, as
+    it keeps one colour on screen.
+
+    A series' grid-wide key is the series-level :data:`GREY_SLOT_KEY` when
+    every series carries one (an encoded grid, ``calc.plotting_encoded_facets``:
+    its colour level, else its place in the grid's split). Otherwise it is the
+    series' ``label`` plus that label's repeat count inside its panel: an
+    unencoded grid's series are its channels, and a panel can resolve a
+    different channel list than its neighbours (FEATURE-001), so position
+    within a panel is not a key. The series-level key is dropped from the
+    output."""
+    rows = [list(p.get("series") or []) for p in panels]
+    flat = [s for r in rows for s in r]
+    slotted = bool(flat) and all(
+        isinstance(k := s.get(GREY_SLOT_KEY), int) and not isinstance(k, bool) for s in flat
+    )
+    keys: list[Any] = []
+    ids: dict[tuple[str, int], int] = {}
+    for r in rows:
+        seen: dict[str, int] = {}
+        for s in r:
+            label = str(s.get("label", ""))
+            seen[label] = seen.get(label, 0) + 1
+            ident = ids.setdefault((label, seen[label]), len(ids))
+            keys.append(s[GREY_SLOT_KEY] if slotted else ident)
+    styles: list[Mapping[str, Any] | None] = []
+    for s, k in zip(flat, keys, strict=True):
+        st = s.get("style") if isinstance(s.get("style"), Mapping) else None
+        styles.append(st if _is_mapped(st) else {**(st or {}), GREY_SLOT_KEY: k})
+    greyed = iter(apply_greyscale(styles, len(styles)))
+    return [
+        {
+            **p,
+            "series": [
+                {**{k: v for k, v in s.items() if k != GREY_SLOT_KEY}, "style": next(greyed)}
+                for s in r
+            ],
+        }
+        for p, r in zip(panels, rows, strict=True)
+    ]

@@ -83,7 +83,7 @@ describe("Library — figures nested in the tree", () => {
     });
     render(<Library />);
     expect(await screen.findByText("Project")).toBeInTheDocument(); // folder header
-    expect(screen.getByRole("button", { name: /MokeGraph/ })).toBeInTheDocument(); // figure row
+    expect(screen.getByRole("treeitem", { name: /MokeGraph/ })).toBeInTheDocument(); // figure row
     // The flat "Figures" section header must be absent in tree mode (no dup).
     expect(screen.queryByText("Figures", { selector: ".qzk-group-name" })).not.toBeInTheDocument();
   });
@@ -100,7 +100,7 @@ describe("Library — figures nested in the tree", () => {
     // library renders the tree, so the flat "Figures" section header stays
     // hidden and the figure appears as a tree row instead (root-level, since
     // there's no workbook to nest it under in this legacy-shaped fixture).
-    expect(await screen.findByRole("button", { name: /MokeGraph/ })).toBeInTheDocument();
+    expect(await screen.findByRole("treeitem", { name: /MokeGraph/ })).toBeInTheDocument();
     expect(screen.queryByText("Figures", { selector: ".qzk-group-name" })).not.toBeInTheDocument();
   });
 });
@@ -455,7 +455,7 @@ describe("Library — project-wide search + Show in Library reveal (PR D2)", () 
     // The observable reveal contract: whatever the figure's parent chain is,
     // every collapsed ancestor is now disclosed, so its row RENDERS in the
     // tree the query cleared back to.
-    expect(await screen.findByRole("button", { name: /Loop Figure/ })).toBeInTheDocument();
+    expect(await screen.findByRole("treeitem", { name: /Loop Figure/ })).toBeInTheDocument();
   });
 
   it("Show in Library reveals a node the active type filter would hide", async () => {
@@ -465,7 +465,7 @@ describe("Library — project-wide search + Show in Library reveal (PR D2)", () 
       useApp.getState().requestReveal("editable-figure:fig1");
     });
     expect(useApp.getState().librarySelection).toEqual({ kind: "editable-figure", id: "fig1" });
-    expect(await screen.findByRole("button", { name: /Loop Figure/ })).toBeInTheDocument();
+    expect(await screen.findByRole("treeitem", { name: /Loop Figure/ })).toBeInTheDocument();
   });
 
   it("a kind:id reveal request expands the target worksheet's folder AND workbook ancestors", () => {

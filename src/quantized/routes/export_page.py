@@ -161,6 +161,7 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                         overrides=facet_ov,
                         label=spec.label, page_rect=spec.page_rect,
                         facets=_facet_panels(f),
+                        greyscale=f.greyscale,  # U2: facets grey too
                     )
                 )
                 continue
@@ -202,10 +203,8 @@ def export_figure_page(req: FigurePageRequest) -> Response:
                     y2_step=f.y2_step,
                     # V6 (P3.3 review F1): PER-PANEL, since a page can mix a
                     # greyscale panel next to a coloured one -- see
-                    # calc.figure_page.PagePanel.greyscale's own doc. Never
-                    # set on the facet branch above: same no-op reason
-                    # FigureRequest.greyscale's own doc gives for the
-                    # standalone facet route (nothing to grey there).
+                    # calc.figure_page.PagePanel.greyscale's own doc (the
+                    # facet branch above sets it as well, since U2).
                     greyscale=f.greyscale,
                 )
             )

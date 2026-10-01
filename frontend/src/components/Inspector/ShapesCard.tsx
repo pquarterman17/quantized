@@ -84,6 +84,7 @@ export default function ShapesCard() {
                 {sh.anchor === "page" ? " (page)" : ""}
               </span>
               <IconButton
+                aria-label="Remove shape"
                 title="Remove"
                 onClick={(e) => {
                   e.stopPropagation();

@@ -4,7 +4,7 @@
 // ok split, applied to a project path instead of a dataset path).
 
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { askConfirm } from "../components/overlays/ConfirmDialog";
 import { CANCELLED, openProject, pathState, readProject } from "../lib/desktopBridge";
@@ -24,6 +24,12 @@ vi.mock("../lib/desktopBridge", async (orig) => ({
   readProject: vi.fn(),
   openProject: vi.fn(),
 }));
+
+// The reopen body is a lazy chunk (bundle headroom slice 14); preload it so
+// every case below exercises the reopen itself, not a cold chunk fetch.
+beforeAll(async () => {
+  await import("./recentProjectReopen");
+});
 
 function action(id: string) {
   const a = useCommands.getState().menuCommands.find((c) => c.id === id);

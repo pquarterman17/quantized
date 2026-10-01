@@ -12,6 +12,11 @@ it to the real route and reads the matplotlib figure back: each panel draws the
 same kept points and the same grey, line-free companion points the screen does.
 Plus the transform on its own (``calc.figure_facets_excluded``) and the
 request rules (422s).
+
+A SPLIT grid (``split_color``: Color by a factor; ``split_group``: Group alone)
+greys too: the route re-splits each full panel over its KEPT rows and appends
+ONE grey companion per Y channel, never coloured by level -- the screen's
+``lib/facetEncodedExcluded.ts``.
 """
 
 from __future__ import annotations
@@ -35,8 +40,11 @@ client = TestClient(app)
 FIXTURE = Path(__file__).parent / "fixtures" / "wire" / "facet_excluded.json"
 
 
-def _fixture() -> dict[str, Any]:
-    return dict(json.loads(FIXTURE.read_text(encoding="utf-8"))["grey"])
+def _fixture(key: str = "grey") -> dict[str, Any]:
+    return dict(json.loads(FIXTURE.read_text(encoding="utf-8"))[key])
+
+
+SPLIT_CASES = ["split_color", "split_group"]
 
 
 def _post_capturing(monkeypatch: pytest.MonkeyPatch, route: str, body: dict[str, Any]) -> Any:
@@ -119,18 +127,64 @@ def test_the_transform_keeps_a_panel_with_nothing_excluded_as_it_was() -> None:
 
 
 @pytest.mark.parametrize(
-    ("change", "why"),
+    ("key", "change", "why"),
     [
-        ({"encoding": {"color_col": 1}}, "unsplit"),
-        ({"group_col": 1}, "unsplit"),
-        ({"excluded_rows": [-1]}, "non-negative"),
+        ("grey", {"excluded_rows": [-1]}, "non-negative"),
+        ("split_color", {"excluded_rows": [1, 99]}, "must index"),
     ],
 )
-def test_a_mask_the_grid_cannot_honour_is_a_422(change: dict[str, Any], why: str) -> None:
-    req = {**_fixture()["request"], **change}
+def test_a_mask_the_grid_cannot_honour_is_a_422(key: str, change: dict[str, Any], why: str) -> None:
+    req = {**_fixture(key)["request"], **change}
     r = client.post("/api/export/figure", json=req)
     assert r.status_code == 422, r.text
     assert why in r.text
+
+
+@pytest.mark.parametrize("key", SPLIT_CASES)
+def test_a_split_grid_draws_the_screens_series_and_one_grey_companion(
+    monkeypatch: pytest.MonkeyPatch, key: str,
+) -> None:
+    fx = _fixture(key)
+    req = fx["request"]
+    assert req["grey_excluded"] is True and req["excluded_rows"] == [1, 6, 7, 8]
+    fig = _post_capturing(monkeypatch, "/api/export/figure", req)
+    panels = _panels(fig)
+    assert [ax.get_title() for ax in panels] == [p["label"] for p in fx["screen"]]
+    palette = (req.get("encoding") or {}).get("palette")
+    for ax, want in zip(panels, fx["screen"], strict=True):
+        lines = ax.get_lines()
+        assert [ln.get_label() for ln in lines] == [s["label"] for s in want["series"]]
+        for ln, s in zip(lines, want["series"], strict=True):
+            assert [float(v) for v in ln.get_xdata()] == want["x"]
+            assert _ys(ln) == s["y"]
+        *kept, ghost = lines
+        # ONE companion per Y channel: grey ink, no line, never a level's colour.
+        assert to_hex(ghost.get_color()) == EXCLUDED_GHOST_STYLE["color"]
+        assert ghost.get_linestyle() == "None"
+        assert ghost.get_marker() == "o"
+        assert all(to_hex(ln.get_color()) != EXCLUDED_GHOST_STYLE["color"] for ln in kept)
+        if palette:  # Color by `sample`: each level keeps its palette slot
+            slot = {"M (sample=s1) (emu)": 0, "M (sample=s2) (emu)": 1}
+            want = [palette[slot[ln.get_label()]] for ln in kept]
+            assert [to_hex(ln.get_color()) for ln in kept] == want
+
+
+@pytest.mark.parametrize("key", SPLIT_CASES)
+def test_a_split_grid_greys_on_the_hitmap_and_page_routes_and_only_blanks_when_omitted(
+    monkeypatch: pytest.MonkeyPatch, key: str,
+) -> None:
+    req = _fixture(key)["request"]
+    fig = _post_capturing(monkeypatch, "/api/export/figure-hitmap", req)
+    assert [len(ax.get_lines()) for ax in _panels(fig)] == [3, 2]
+    page = {"rows": 1, "cols": 1, "panels": [{"figure": req, "row": 0, "col": 0}], "fmt": "svg"}
+    fig = _post_capturing(monkeypatch, "/api/export/figure-page", page)
+    assert [len(ax.get_lines()) for ax in _panels(fig)] == [3, 2]
+    fig = _post_capturing(monkeypatch, "/api/export/figure", {**req, "grey_excluded": False})
+    drawn = [[_ys(ln) for ln in ax.get_lines()] for ax in _panels(fig)]
+    assert drawn == [
+        [[1.0, None, 1.2, None], [None, None, None, 1.4]],
+        [[3.0, 2.5, None, None]],
+    ]
 
 
 def test_a_masked_panel_without_its_rows_is_a_422() -> None:
@@ -139,3 +193,26 @@ def test_a_masked_panel_without_its_rows_is_a_422() -> None:
     r = client.post("/api/export/figure", json=req)
     assert r.status_code == 422, r.text
     assert "rows" in r.text
+
+
+@pytest.mark.parametrize("key", ["split_color", "split_group"])
+def test_a_greyscale_split_grid_keeps_levels_apart_and_the_companion_grey(
+    monkeypatch: pytest.MonkeyPatch, key: str
+) -> None:
+    """Greyscale (U2) and split-grid greying (U1) together: every stroke is
+    achromatic, the split levels stay distinguishable from each other, and
+    the "(excluded)" companion stays a grey, line-less marker series."""
+    from matplotlib.colors import to_rgb
+
+    req = {**_fixture(key)["request"], "greyscale": True}
+    fig = _post_capturing(monkeypatch, "/api/export/figure", req)
+    for ax in _panels(fig):
+        levels = []
+        for line in ax.get_lines():
+            r, g, b = to_rgb(line.get_color())
+            assert abs(r - g) < 1e-6 and abs(g - b) < 1e-6, line.get_label()
+            if "(excluded)" in str(line.get_label()):
+                assert line.get_linestyle() in ("None", "none", "")
+            else:
+                levels.append((round(r, 4), line.get_linestyle(), line.get_marker()))
+        assert len(set(levels)) == len(levels), levels

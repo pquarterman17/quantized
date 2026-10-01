@@ -154,7 +154,7 @@ export default function SldTab({ c }: { c: CalculatorsState }) {
           onChange={(v) => c.updSld({ xrayWavelength: v })}
         />
         <span style={{ color: "var(--text-faint)" }}>Å</span>
-        <Button variant="primary" size="sm" disabled={c.sldBusy} onClick={() => void c.sldCompute()}>
+        <Button aria-label="Calculate" variant="primary" size="sm" disabled={c.sldBusy} onClick={() => void c.sldCompute()}>
           =
         </Button>
       </div>

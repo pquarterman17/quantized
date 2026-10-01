@@ -160,7 +160,7 @@ export default function PreferencesDialog() {
       >
         <div className="qzk-prefs-head">
           <span className="ttl" id={titleId}>Preferences</span>
-          <button className="qzk-prefs-x" title="Close (Esc)" onClick={() => setOpen(false)}>
+          <button aria-label="Close" className="qzk-prefs-x" title="Close (Esc)" onClick={() => setOpen(false)}>
             ✕
           </button>
         </div>
@@ -210,7 +210,7 @@ export default function PreferencesDialog() {
                   />
                 </PrefRow>
                 <PrefRow label="Reduce motion" hint="disable transitions">
-                  <Switch checked={p.reduceMotion} onChange={(v) => setPref("reduceMotion", v)} />
+                  <Switch aria-label="Reduce motion" checked={p.reduceMotion} onChange={(v) => setPref("reduceMotion", v)} />
                 </PrefRow>
               </>
             )}
@@ -218,6 +218,7 @@ export default function PreferencesDialog() {
               <>
                 <PrefRow label="Default trace">
                   <Select
+                    aria-label="Default trace"
                     options={TRACE_OPTS}
                     value={p.defaultTrace}
                     onChange={(e) => setPref("defaultTrace", e.target.value)}
@@ -226,6 +227,7 @@ export default function PreferencesDialog() {
                 <PrefRow label="Default line width">
                   <div style={{ width: 160 }}>
                     <SliderRow
+                      aria-label="Line width"
                       label="px"
                       value={p.defaultLineWidth}
                       min={0.5}
@@ -237,7 +239,7 @@ export default function PreferencesDialog() {
                   </div>
                 </PrefRow>
                 <PrefRow label="Grid lines" hint="default for the plot">
-                  <Switch checked={p.defaultGrid} onChange={(v) => setPref("defaultGrid", v)} />
+                  <Switch aria-label="Grid lines" checked={p.defaultGrid} onChange={(v) => setPref("defaultGrid", v)} />
                 </PrefRow>
                 <PrefRow label="Multi-panel fit" hint="fresh Origin multi-panel figures">
                   <SegmentedControl
@@ -261,13 +263,14 @@ export default function PreferencesDialog() {
                   />
                 </PrefRow>
                 <PrefRow label="Antialias 2-D map" hint="smooth vs crisp heatmap cells">
-                  <Switch checked={p.antialias} onChange={(v) => setPref("antialias", v)} />
+                  <Switch aria-label="Antialias map" checked={p.antialias} onChange={(v) => setPref("antialias", v)} />
                 </PrefRow>
                 <PrefRow
                   label="High-density plot decimation"
                   hint="above ~10k rows, draw a min/max-reduced view that re-resolves on zoom"
                 >
                   <Switch
+                    aria-label="Plot decimation"
                     checked={decimateDensePlots}
                     onChange={(v) => {
                       setDecimateDensePlots(v);
@@ -304,6 +307,7 @@ export default function PreferencesDialog() {
                 </PrefRow>
                 <PrefRow label="Confirm before removing data">
                   <Switch
+                    aria-label="Confirm removal"
                     checked={p.confirmRemove}
                     onChange={(v) => setPref("confirmRemove", v)}
                   />
@@ -313,6 +317,7 @@ export default function PreferencesDialog() {
                   hint="Esc cancels a drag but keeps the tool armed, instead of returning to Pointer"
                 >
                   <Switch
+                    aria-label="Persistent tool"
                     checked={persistentTool}
                     onChange={(v) => {
                       setPersistentTool(v);
@@ -327,6 +332,7 @@ export default function PreferencesDialog() {
                 <PrefRow label="Significant figures">
                   <div style={{ width: 160 }}>
                     <SliderRow
+                      aria-label="Significant figures"
                       label="sf"
                       value={p.sigFigs}
                       min={2}
@@ -339,6 +345,7 @@ export default function PreferencesDialog() {
                 </PrefRow>
                 <PrefRow label="Notation">
                   <Select
+                    aria-label="Notation"
                     options={NOTATION_OPTS}
                     value={p.notation}
                     onChange={(e) => setPref("notation", e.target.value)}

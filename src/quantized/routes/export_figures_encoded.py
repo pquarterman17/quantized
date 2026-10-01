@@ -77,22 +77,23 @@ class FigureEncoding(BaseModel):
 class ExcludedRowsFields(BaseModel):
     """``FigureRequest``'s per-row mask for excluded rows (F4.2c (a)). An
     ENCODED request takes it: the backend splits that one, so it needs the
-    full rows to take the window's levels. So does an UNSPLIT facet grid: its
-    panels carry their full level rows and the dataset ``rows`` behind them,
-    and the route blanks or greys the mask per panel
-    (``calc.figure_facets_excluded``). Every other request already sends the
-    pruned rows plus any greyed companions as ordinary channels
-    (``lib/excludedRowsExport.ts``), so the field there is refused (422), as it
-    is on a SPLIT facet grid, which cannot grey."""
+    full rows to take the window's levels. So does a facet grid: its panels
+    carry their full level rows and the dataset ``rows`` behind them, and the
+    route blanks or greys the mask per panel -- an unsplit grid per series
+    (``calc.figure_facets_excluded``), a SPLIT one (encoding or ``group_col``)
+    with one companion per Y channel (``calc.plotting_encoded_facets``). Every
+    other request already sends the pruned rows plus any greyed companions as
+    ordinary channels (``lib/excludedRowsExport.ts``), so the field there is
+    refused (422)."""
 
     excluded_rows: list[int] | None = Field(
         default=None,
         description=(
             "Rows of `dataset` the plot window does not draw as data (excluded, or dropped "
             "by the Data Filter). With `encoding`: the split takes its levels over every "
-            "row, then these rows are blanked in each series. With unsplit `facets` "
-            "(no `encoding`, no `group_col`): each panel names its `rows`, and these rows "
-            "are blanked in its series."
+            "row, then these rows are blanked in each series. With `facets`: each panel "
+            "names its `rows`, and these rows are blanked in its series (a split panel "
+            "keeps only the series with a row left)."
         ),
     )
     grey_excluded: bool = Field(
@@ -100,7 +101,7 @@ class ExcludedRowsFields(BaseModel):
         description=(
             "With `excluded_rows`: also draw those rows as one grey, line-free "
             "'(excluded)' marker series per series, after all the series (per panel "
-            "on a facet grid)."
+            "on a facet grid; one per Y channel on a split one)."
         ),
     )
 
@@ -113,10 +114,6 @@ class ExcludedRowsFields(BaseModel):
         encoding = getattr(self, "encoding", None)
         encoded = isinstance(encoding, FigureEncoding) and encoding.active()
         if getattr(self, "facets", None):
-            if encoded or getattr(self, "group_col", None) is not None:
-                raise ValueError(
-                    "excluded_rows on a facet grid needs unsplit panels (no encoding or group_col)"
-                )
             return self
         if not encoded:
             raise ValueError(

@@ -82,9 +82,8 @@ export async function runExportSpatialPageCommand(s: StoreGet): Promise<void> {
     // export dialogs. Threaded below as ONE page-level choice applied to
     // EVERY panel's own figure spec (PagePanel.greyscale is per-panel on
     // the backend, but this dialog offers no per-panel UI, so "on" means
-    // "on for the whole page"). A facet panel would be a documented no-op
-    // (FigureSpec.greyscale never applies once `.facets` is set) — moot
-    // today since `spatialPanelFigure` never emits `.facets`.
+    // "on for the whole page"). A facet panel would grey too (U2), though
+    // `spatialPanelFigure` never emits `.facets` today.
     GREYSCALE_FIELD,
   ]);
   if (!params) return;

@@ -37,10 +37,13 @@
 // and names the dataset `rows` behind them, and the request carries
 // `excluded_rows` + `grey_excluded`; the route draws the companions
 // (`calc/figure_facets_excluded.py`). A SPLIT facet grid (Color / Symbol /
-// label source, or Group) still cannot grey, on screen or on paper: its grey
-// build is returned as an unchanged copy tagged with the reason
-// (`omitOnlyReason`, a symbol key that never reaches the wire), so the export
-// asks with only the honest option.
+// label source, or Group) greys the same way; the route re-splits each full
+// panel over its kept rows and adds one grey companion per Y channel
+// (`calc/plotting_encoded_facets.py`, as `lib/facetEncodedExcluded.ts` on
+// screen). Panels that do not line up with the data cannot grey: that grey
+// build is an unchanged copy tagged with the reason (`omitOnlyReason`, a
+// symbol key that never reaches the wire), so the export asks with only the
+// honest option.
 
 import type { FigureSpec } from "./api/figures";
 import { greyFacetSpecs } from "./facetExcluded";
@@ -56,7 +59,7 @@ export type ExcludedRowsExport = "grey" | "omit";
 
 /** Why a figure with masked rows can only omit them (see the module header). */
 export const FACET_OMIT_REASON =
-  "Faceted figures split by Color, Symbol, Label or Group cannot grey excluded rows, so this export leaves them out.";
+  "This faceted figure cannot grey excluded rows, so this export leaves them out.";
 const OMIT_ONLY = Symbol("excludedRowsOmitOnly");
 
 /** A copy of `spec` tagged with why it cannot grey (never serialized). */
@@ -164,8 +167,7 @@ function withFacetGhosts(
   const lost = [...dropped].filter((r) => r >= 0 && r < data.time.length).sort((a, b) => a - b);
   if (lost.length === 0) return spec;
   const xKey = typeof spec.x_key === "number" ? spec.x_key : null;
-  const split = !!spec.encoding || spec.group_col != null;
-  const grey = facet && !split ? greyFacetSpecs(facets, data, facet, xKey, dropped) : null;
+  const grey = facet ? greyFacetSpecs(facets, data, facet, xKey, dropped) : null;
   if (!grey) return omitOnly(spec, FACET_OMIT_REASON);
   // Only rows of a level with no panel are dropped: the grid greys nothing.
   if (!grey.some((f) => f.rows?.some((r) => dropped.has(r)))) return spec;

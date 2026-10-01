@@ -206,6 +206,7 @@ function PeakRow({
       <td>{fmt(peak.centre_Q[1])}</td>
       <td style={{ textAlign: "left", whiteSpace: "nowrap" }}>
         <button
+          aria-label="Radial cut"
           className="qzk-chip-reset"
           disabled={!hasQ || busy}
           title={reason ?? `Radial cut through this ${peak.classification} peak`}
@@ -214,6 +215,7 @@ function PeakRow({
           ∥
         </button>
         <button
+          aria-label="Transverse cut"
           className="qzk-chip-reset"
           disabled={!hasQ || busy}
           title={reason ?? `Transverse cut through this ${peak.classification} peak`}

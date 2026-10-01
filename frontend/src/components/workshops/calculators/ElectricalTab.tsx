@@ -105,6 +105,7 @@ export default function ElectricalTab() {
         <div style={ROW}>
           <Field label="ρ" value={rho2} onChange={withTouch(c2.touch, setRho2)} unit="Ω·cm" />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>
@@ -125,6 +126,7 @@ export default function ElectricalTab() {
           <Field label="ρ" value={rho3} onChange={withTouch(c3.touch, setRho3)} unit="Ω·cm" />
           <Field label="n" value={n3} onChange={withTouch(c3.touch, setN3)} unit="cm⁻³" />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>
@@ -145,6 +147,7 @@ export default function ElectricalTab() {
           <Field label="I" value={cur} onChange={withTouch(c4.touch, setCur)} unit="A" />
           <Field label="A" value={area} onChange={withTouch(c4.touch, setArea)} unit="cm²" />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>
@@ -176,6 +179,7 @@ export default function ElectricalTab() {
             ariaLabel="Hall effect thickness"
           />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>

@@ -125,7 +125,7 @@ export default function XrayTab({ c }: { c: CalculatorsState }) {
         <div style={{ ...ROW, marginTop: 10 }}>
           <NumberField value={c.xrayValue} width={100} onChange={c.setXrayValue} />
           <span style={{ color: "var(--text-faint)" }}>{mode?.inUnit ?? ""}</span>
-          <Button variant="primary" size="sm" disabled={c.xrayBusy} onClick={() => void c.xrayCompute()}>
+          <Button aria-label="Calculate" variant="primary" size="sm" disabled={c.xrayBusy} onClick={() => void c.xrayCompute()}>
             =
           </Button>
         </div>

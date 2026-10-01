@@ -269,6 +269,7 @@ export default function PlotLegend({
             {interactive && plotted.length > 1 && (
               <span style={{ marginLeft: 6, display: "inline-flex", gap: 2 }}>
                 <button
+                  aria-label="Move earlier"
                   className="qz-icon-btn"
                   title="Move earlier (draw under)"
                   disabled={i === 0}
@@ -280,6 +281,7 @@ export default function PlotLegend({
                   ▲
                 </button>
                 <button
+                  aria-label="Move later"
                   className="qz-icon-btn"
                   title="Move later (draw over)"
                   disabled={i === plotted.length - 1}

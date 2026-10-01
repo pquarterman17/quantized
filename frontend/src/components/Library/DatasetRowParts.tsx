@@ -13,13 +13,20 @@
 // inline rename `<input>` when active. Both variants keep the exact same
 // `.qzk-ds-name` class (LibraryTree.test.tsx queries it directly).
 //
+// `DatasetRowTags` — tag chips (click filters), per-tag remove, and the
+// add-tag button/input. Shared by both layouts (UX-001 review round: Tree view
+// had silently lost them); in the compact row it is a full-width flex child
+// that wraps onto its own line, so it takes NO height unless the dataset has
+// tags or one is being added.
+//
 // Extracted out of DatasetRow.tsx so the compact layout doesn't duplicate
-// either (DatasetRow.tsx sits at the 400-line component ceiling).
+// any of them (DatasetRow.tsx sits near the 400-line component ceiling).
 
 import { DATASET_DND } from "./dnd";
 import DerivedWorksheetMark from "./DerivedWorksheetMark";
 import RecomputedMark from "./RecomputedMark";
 import { isOriginBookDataset } from "../../lib/grouping";
+import { innerTabIndex, type TreeItemProps } from "../../lib/libraryTreeNav";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 
@@ -34,9 +41,12 @@ interface ControlsProps {
    *  whether opening also selects the row first (DatasetRow.tsx: selects
    *  when not already selected, matching the pre-extraction behavior). */
   onOpenMenu: (el: HTMLElement) => void;
+  /** Set inside LibraryTree (U5): the grip leaves the Tab sequence, and the
+   *  menu button stays in it only on the roving row. */
+  treeItem?: TreeItemProps;
 }
 
-export function DatasetRowControls({ dataset: d, stale, onRecalc, sheetNumber, onOpenMenu }: ControlsProps) {
+export function DatasetRowControls({ dataset: d, stale, onRecalc, sheetNumber, onOpenMenu, treeItem }: ControlsProps) {
   const setActiveDrag = useApp((s) => s.setActiveDrag);
   return (
     <>
@@ -46,7 +56,7 @@ export function DatasetRowControls({ dataset: d, stale, onRecalc, sheetNumber, o
       <span
         className="qzk-drag-handle"
         draggable
-        tabIndex={0}
+        tabIndex={treeItem ? -1 : 0}
         role="button"
         aria-label="Drag to move"
         title="Drag to move"
@@ -65,6 +75,7 @@ export function DatasetRowControls({ dataset: d, stale, onRecalc, sheetNumber, o
        *  right-click or the ContextMenu key does. */}
       <button
         className="qzk-menu-btn"
+        tabIndex={innerTabIndex(treeItem)}
         title="More actions"
         aria-label="More actions"
         onClick={(e) => {
@@ -160,5 +171,85 @@ export function DatasetRowName({ dataset: d, compactOriginName = false, rename, 
         {displayName}
       </span>
     </>
+  );
+}
+
+interface TagsProps {
+  dataset: Dataset;
+  /** The Tree's one-line row (`qzk-ds-tags-compact`). */
+  compact: boolean;
+  /** The add-tag draft (null = not adding) — owned by DatasetRow because its
+   *  context menu's "Add tag…" opens the input too. */
+  draft: string | null;
+  onDraft: (value: string | null) => void;
+  onFilterTag: (tag: string) => void;
+  /** -1 inside LibraryTree on a non-roving row (U5). */
+  tabIndex?: number;
+}
+
+export function DatasetRowTags({ dataset: d, compact, draft, onDraft, onFilterTag, tabIndex }: TagsProps) {
+  const addDatasetTag = useApp((s) => s.addDatasetTag);
+  const removeDatasetTag = useApp((s) => s.removeDatasetTag);
+  const commit = () => {
+    if (draft && draft.trim()) addDatasetTag(d.id, draft);
+    onDraft(null);
+  };
+  return (
+    <div className={`qzk-ds-tags${compact ? " qzk-ds-tags-compact" : ""}`}>
+      {(d.tags ?? []).map((t) => (
+        <span
+          key={t}
+          className="qzk-tag"
+          title={`Filter by "${t}"`}
+          onClick={(e) => {
+            e.stopPropagation();
+            onFilterTag(t);
+          }}
+        >
+          {t}
+          <button
+            className="qzk-tag-x"
+            title="Remove tag"
+            aria-label={`Remove tag ${t}`}
+            tabIndex={tabIndex}
+            onClick={(e) => {
+              e.stopPropagation();
+              removeDatasetTag(d.id, t);
+            }}
+          >
+            ×
+          </button>
+        </span>
+      ))}
+      {draft != null ? (
+        <input
+          className="qz-input qzk-tag-input"
+          autoFocus
+          placeholder="tag…"
+          aria-label="New tag"
+          value={draft}
+          onClick={(e) => e.stopPropagation()}
+          onChange={(e) => onDraft(e.target.value)}
+          onBlur={commit}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commit();
+            if (e.key === "Escape") onDraft(null);
+          }}
+        />
+      ) : (
+        <button
+          className="qzk-tag qzk-tag-add"
+          title="Add tag"
+          aria-label="Add tag"
+          tabIndex={tabIndex}
+          onClick={(e) => {
+            e.stopPropagation();
+            onDraft("");
+          }}
+        >
+          ＋
+        </button>
+      )}
+    </div>
   );
 }

@@ -41,6 +41,7 @@ export default function ThermalTab() {
           <Field label="σ" value={sigma} onChange={withTouch(c1.touch, setSigma)} unit="S/cm" />
           <Field label="T" value={wfT} onChange={withTouch(c1.touch, setWfT)} unit="K" />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>
@@ -61,6 +62,7 @@ export default function ThermalTab() {
           <Field label="v_s" value={vs} onChange={withTouch(c2.touch, setVs)} unit="m/s" />
           <Field label="n" value={nDens} onChange={withTouch(c2.touch, setNDens)} unit="m⁻³" />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>
@@ -84,6 +86,7 @@ export default function ThermalTab() {
         <div style={{ ...ROW, marginTop: 8 }}>
           <Field label="c_p" value={cp} onChange={withTouch(c3.touch, setCp)} unit="J/kg·K" width={72} />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>

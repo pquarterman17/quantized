@@ -120,12 +120,14 @@ export default function MapSectorWedge({ payload, w, h, wedge }: MapSectorWedgeP
             <span className="qzk-roi-bar-label">preview</span>
             <div className="qzk-roi-axis-toggle">
               <button
+                aria-label="Radial profile"
                 className={wedge.previewAxis === "q" ? "active" : ""}
                 onClick={() => wedge.setPreviewAxis("q")}
               >
                 q
               </button>
               <button
+                aria-label="Azimuthal profile"
                 className={wedge.previewAxis === "phi" ? "active" : ""}
                 onClick={() => wedge.setPreviewAxis("phi")}
               >

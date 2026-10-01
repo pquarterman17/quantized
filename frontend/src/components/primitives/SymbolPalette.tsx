@@ -173,6 +173,12 @@ interface SymbolPaletteProps {
   onClose: () => void;
 }
 
+/** The short accessible name in an entry's tooltip: "Subscript  _{ }  (Ctrl+=)"
+ *  → "Subscript", "\\alpha" → "alpha". The glyph alone would be the name. */
+export function paletteEntryName(title: string): string {
+  return title.split(/ {2}| \(/)[0].replace(/^\\/, "");
+}
+
 function Section({ label, entries, onInsert, cols }: {
   label: string;
   entries: PaletteEntry[];
@@ -185,6 +191,7 @@ function Section({ label, entries, onInsert, cols }: {
       <div style={{ display: "grid", gridTemplateColumns: `repeat(${cols}, 1fr)`, gap: 2, padding: "0 6px 4px" }}>
         {entries.map((e) => (
           <button
+            aria-label={paletteEntryName(e.title)}
             key={e.title}
             className="qz-icon-btn"
             title={e.title}

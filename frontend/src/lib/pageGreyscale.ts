@@ -24,10 +24,8 @@ import type { FigurePageSpec } from "./api/figurePage";
  *  (`...(o.greyscale ? { greyscale: true } : {})`), and the reason the flag
  *  is never sent as `greyscale: false`.
  *
- *  A faceted panel is a documented no-op: `FigureSpec.greyscale` never
- *  applies once `.facets` is set (`calc.figure_facets` renders its own
- *  grid), so such a panel keeps its colours — stated here rather than
- *  silently true. */
+ *  A faceted panel greys too: `calc.figure_facets` greys its series once
+ *  over the whole grid (`calc.figure_greyscale.greyscale_facet_panels`). */
 export function withPageGreyscale(spec: FigurePageSpec, greyscale: boolean | undefined): FigurePageSpec {
   if (!greyscale) return spec;
   return {

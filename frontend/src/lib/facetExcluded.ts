@@ -53,11 +53,14 @@ export function greyFacetPanels(
   });
 }
 
-/** The wire form of the same rule, for a finished UNSPLIT facet request
+/** The wire form of the same rule, for a finished facet request
  *  (`excludedRowsExport.withExcludedGhosts`): each of `facets` (built from the
  *  analysis view of `data`) re-sliced from its full level, with the dataset
- *  `rows` behind its `x`. The labels, legends and styles ride unchanged. Null
- *  when the panels do not line up with `data`'s partition (nothing to grey). */
+ *  `rows` behind its `x`. The labels, legends and styles ride unchanged. A
+ *  SPLIT grid's panels (they name their `channels`, `figureSpecFacets.
+ *  withFacetRows`) are re-split by the route, which greys them
+ *  (`lib/facetEncodedExcluded`). Null when the panels do not line up with
+ *  `data`'s partition (nothing to grey). */
 export function greyFacetSpecs(
   facets: readonly FigureFacetSpec[],
   data: DataStruct,
@@ -65,7 +68,10 @@ export function greyFacetSpecs(
   xKey: number | null,
   dropped: ReadonlySet<number>,
 ): FigureFacetSpec[] | null {
-  const panels = facetPayloads(pruneExcluded(data, dropped), facet.col, xKey, facet.yKeys);
+  const split = facets.every((f) => f.channels?.length);
+  const panels = split
+    ? facets.map((f) => ({ label: f.label, channels: f.channels as number[] }))
+    : facetPayloads(pruneExcluded(data, dropped), facet.col, xKey, facet.yKeys);
   if (panels.length !== facets.length || panels.some((p, i) => p.label !== facets[i].label)) return null;
   const full = facetFullSlices(panels, data, facet.col);
   const out: FigureFacetSpec[] = [];

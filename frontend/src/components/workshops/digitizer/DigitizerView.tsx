@@ -23,6 +23,7 @@ export default function DigitizerView() {
   const setOpen = useApp((s) => s.setDigitizerOpen);
   const d = useDigitizer();
   const imgRef = useRef<HTMLImageElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [nat, setNat] = useState<[number, number]>([1, 1]);
   const [val, setVal] = useState<number | string>("");
   const [name, setName] = useState("digitized");
@@ -81,16 +82,24 @@ export default function DigitizerView() {
           {d.image ? STEP[d.mode] : "Load or paste an image of a plot to begin."}
         </span>
         <span style={{ flex: 1 }} />
-        <label className="qz-icon-btn" title="Load image" style={{ cursor: "default" }}>
+        {/* A real button: the old <label> around a display:none input was
+         *  neither focusable nor named, so the keyboard could not load. */}
+        <button
+          aria-label="Load image"
+          className="qz-icon-btn"
+          title="Load image"
+          onClick={() => fileRef.current?.click()}
+        >
           ⤒
-          <input
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={(e) => e.target.files?.[0] && loadFile(e.target.files[0])}
-          />
-        </label>
-        <button className="qz-icon-btn" title="Close digitizer" onClick={() => setOpen(false)}>
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={(e) => e.target.files?.[0] && loadFile(e.target.files[0])}
+        />
+        <button aria-label="Close digitizer" className="qz-icon-btn" title="Close digitizer" onClick={() => setOpen(false)}>
           ×
         </button>
       </div>

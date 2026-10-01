@@ -592,8 +592,9 @@ body {
   visibility: visible;
   pointer-events: auto;
 }
-/* A disabled unresolved graph cannot focus/select its main button. Keep its
-   recovery controls visible so keyboard/touch users can still choose a source. */
+/* An unresolved graph has nothing to open (in the tree its row stays a
+   focusable aria-disabled treeitem). Keep its recovery controls visible so
+   keyboard/touch users can still choose a source. */
 .qzk-fig-row-tree.unresolved .qzk-origin-figure-actions {
   position: static;
   align-self: center;
@@ -604,8 +605,8 @@ body {
   transform: none;
 }
 .qzk-fig-item { display: flex; justify-content: space-between; align-items: center; gap: 8px; width: 100%; min-width: 0; text-align: left; padding: 6px 8px; border: 1px solid var(--border-soft); border-radius: var(--radius-sm); background: var(--surface-2); cursor: default; color: var(--text); font-size: var(--font-size-sm); }
-.qzk-fig-item:hover:not(:disabled) { border-color: var(--accent); }
-.qzk-fig-item:disabled { opacity: 0.45; cursor: default; }
+.qzk-fig-item:hover:not(:disabled):not([aria-disabled="true"]) { border-color: var(--accent); }
+.qzk-fig-item:disabled, .qzk-fig-item[aria-disabled="true"] { opacity: 0.45; cursor: default; }
 .qzk-fig-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .qzk-fig-meta { flex-shrink: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-faint); font-size: var(--type-nano); font-family: var(--font-mono); }
 .qzk-origin-figure-row { min-width: 0; }

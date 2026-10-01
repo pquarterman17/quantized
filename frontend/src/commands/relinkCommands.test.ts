@@ -2,7 +2,7 @@
 // the actual relink logic is store/relink.test.ts's job.
 
 import { renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useCommands } from "../store/commands";
 import { useRelink } from "../store/relink";
@@ -26,9 +26,11 @@ describe("useRelinkCommands", () => {
     expect(action("relink-sources").group).toBe("File");
   });
 
-  it("opens the relink panel when run", () => {
+  // The store loads through runLazy (bundle headroom slice 14), so the panel
+  // opens once that import settles — wait on the store's state.
+  it("opens the relink panel when run", async () => {
     renderHook(() => useRelinkCommands());
     action("relink-sources").run();
-    expect(useRelink.getState().open).toBe(true);
+    await vi.waitFor(() => expect(useRelink.getState().open).toBe(true));
   });
 });

@@ -71,7 +71,7 @@ export default function RefLinesCard() {
             <span className="qz-k">
               {r.axis.toUpperCase()} = <span style={{ fontFamily: "var(--font-mono)" }}>{fmtNum(r.value)}</span>
             </span>
-            <IconButton title="Remove" onClick={() => removeRowSafely(containerRef.current, () => removeRefLine(r.id))}>
+            <IconButton aria-label="Remove line" title="Remove" onClick={() => removeRowSafely(containerRef.current, () => removeRefLine(r.id))}>
               ✕
             </IconButton>
           </div>

@@ -181,15 +181,14 @@ class FigureRequest(CachedDatasetRequest, ExcludedRowsFields):
     # EXPORT-ONLY transform: the on-screen canvas stays coloured regardless
     # of this flag, so it is a user-chosen export option, not a derived
     # style, and does not touch the P3.3 screen/export style-parity
-    # invariant that `series_styles` above exists to satisfy. No-op when
-    # `facets` is set (see this class's `facets` field doc) -- a faceted
-    # panel never resolves per-series colour at all today (FEATURE-001,
-    # `plans/BUGS_AND_ISSUES.md`), so there is nothing for this flag to grey.
-    # Also reachable embedded in a page panel (`routes.export_page.
-    # PagePanelSpec.figure` is this SAME `FigureRequest`): review fix P3.3-F1
-    # threaded this field into `calc.figure_page.PagePanel.greyscale`, honored
-    # PER PANEL there too -- it used to 200 and silently render as if it were
-    # `False` on that route (a real bug, not a documented no-op like facets).
+    # invariant that `series_styles` above exists to satisfy. With `facets`
+    # set (U2) it greys every panel's series once over the whole grid
+    # (`calc.figure_greyscale.greyscale_facet_panels`). Also reachable
+    # embedded in a page panel (`routes.export_page.PagePanelSpec.figure` is
+    # this SAME `FigureRequest`): review fix P3.3-F1 threaded this field
+    # into `calc.figure_page.PagePanel.greyscale`, honored PER PANEL there
+    # too -- it used to 200 and silently render as if it were `False` on
+    # that route (a real bug, not a documented no-op).
     # `/api/export/map-figure` (contour/heatmap/surface/waterfall) has NO
     # `greyscale` field at all, deliberately: every one of its `kind`s colours
     # by a continuous z-value through `cmap`, the same "colour IS the plotted

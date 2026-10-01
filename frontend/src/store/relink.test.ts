@@ -7,6 +7,7 @@ import { importFile } from "../lib/api";
 import * as desktopBridge from "../lib/desktopBridge";
 import type { Dataset } from "../lib/types";
 import { useRelink } from "./relink";
+import { closeRelinkPanel, useRelinkPanel } from "./relinkPanel";
 import { toast } from "./toasts";
 import { useApp, type AppState } from "./useApp";
 
@@ -53,6 +54,32 @@ beforeEach(() => {
   });
   vi.mocked(desktopBridge.grantSourceReadPaths).mockResolvedValue([]);
   vi.mocked(desktopBridge.revokeRelinkDir).mockResolvedValue(undefined);
+});
+
+// AppOverlays and the replace chokepoint use store/relinkPanel.ts, not this
+// store (bundle headroom slice 14) — the mirror must track `open` on every
+// path, and its closer must reach this store's real closePanel.
+describe("the relinkPanel mirror", () => {
+  it("follows openPanel, closePanel and a direct setState", () => {
+    expect(useRelinkPanel.getState().open).toBe(false);
+    useRelink.getState().openPanel({ oldRoot: "/old" });
+    expect(useRelinkPanel.getState().open).toBe(true);
+    useRelink.getState().closePanel();
+    expect(useRelinkPanel.getState().open).toBe(false);
+    useRelink.setState({ open: true });
+    expect(useRelinkPanel.getState().open).toBe(true);
+    useRelink.setState({ open: false });
+    expect(useRelinkPanel.getState().open).toBe(false);
+  });
+
+  it("closeRelinkPanel runs the store's closePanel (consent cleared, grant revoked)", () => {
+    useRelink.setState({ open: true, newRoot: "/granted", newRootConsented: true });
+    closeRelinkPanel();
+    expect(useRelink.getState().open).toBe(false);
+    expect(useRelink.getState().newRootConsented).toBe(false);
+    expect(useRelinkPanel.getState().open).toBe(false);
+    expect(desktopBridge.revokeRelinkDir).toHaveBeenCalledTimes(1);
+  });
 });
 
 // C1 (relink consent): browseNewRoot is the ONLY store action that can set

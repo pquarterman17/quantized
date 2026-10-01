@@ -196,7 +196,7 @@ function CommitBar(props: CommitBarProps) {
           </strong>
           <span>N</span>
           <strong>{apiStats.n_points}</strong>
-          <button className="qzk-chip-reset" title="Clear" onClick={onClearStats}>
+          <button aria-label="Clear stats" className="qzk-chip-reset" title="Clear" onClick={onClearStats}>
             ×
           </button>
         </div>

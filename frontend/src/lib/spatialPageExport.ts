@@ -82,10 +82,8 @@ export interface SpatialPageAppearance {
    *  composer offers no per-panel UI — see `lib/exportPageCommand.ts`'s own
    *  doc). Omitted/false = today's coloured export, byte-identical, mirroring
    *  the single-figure dialog's own wire convention (`lib/figureSpec.ts`'s
-   *  `...(o.greyscale ? { greyscale: true } : {})`). A facet panel would be a
-   *  documented no-op (`FigureSpec.greyscale`'s own doc: never applies once
-   *  `.facets` is set) — moot today since `spatialPanelFigure` below never
-   *  emits `.facets`. */
+   *  `...(o.greyscale ? { greyscale: true } : {})`). A facet panel would grey
+   *  too (U2), though `spatialPanelFigure` below never emits `.facets`. */
   greyscale?: boolean;
 }
 

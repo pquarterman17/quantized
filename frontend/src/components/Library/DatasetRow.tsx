@@ -44,11 +44,12 @@
 import { useState } from "react";
 import { buildDatasetRowMenu, removeDatasetConfirmed } from "./datasetRowMenu";
 import DatasetRowPreview from "./DatasetRowPreview";
-import { DatasetRowControls, DatasetRowName } from "./DatasetRowParts";
+import { DatasetRowControls, DatasetRowName, DatasetRowTags } from "./DatasetRowParts";
 import { recordWorkbookOpen } from "./libraryOpen";
 import { LIBRARY_NODE_GLYPH, LIBRARY_NODE_LABEL } from "./nodeIcons";
 import Sparkline from "./Sparkline";
 import { isContextMenuKeyEvent } from "../../lib/contextActions";
+import { innerTabIndex, type TreeItemProps } from "../../lib/libraryTreeNav";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import ContextMenu from "../overlays/ContextMenu";
@@ -84,6 +85,8 @@ interface Props {
    *  the compact-vs-full-card switch (UX-001): true renders the Tree's
    *  one-line row, false the flat list's full card. */
   treeMode?: boolean;
+  /** LibraryTree only: treeitem semantics + the roving tab stop (U5). */
+  treeItem?: TreeItemProps;
 }
 
 export default function DatasetRow({
@@ -98,7 +101,9 @@ export default function DatasetRow({
   depth = 0,
   folderCaption,
   treeMode = false,
+  treeItem,
 }: Props) {
+  const innerTab = innerTabIndex(treeItem);
   // Staleness badge (#4): amber when this dataset's corrections or fit await
   // recalculation (manual mode) — click runs the dirty set now.
   const staleDs = useApp((s) => s.staleDatasets);
@@ -112,8 +117,6 @@ export default function DatasetRow({
   const duplicateDataset = useApp((s) => s.duplicateDataset);
   const moveDataset = useApp((s) => s.moveDataset);
   const renameDataset = useApp((s) => s.renameDataset);
-  const addDatasetTag = useApp((s) => s.addDatasetTag);
-  const removeDatasetTag = useApp((s) => s.removeDatasetTag);
   const folders = useApp((s) => s.folders);
 
   // Inline editors (null = not editing); rename allows an empty draft.
@@ -124,10 +127,6 @@ export default function DatasetRow({
   const commitRename = () => {
     if (rename != null) renameDataset(d.id, rename);
     setRename(null);
-  };
-  const commitTag = () => {
-    if (tag && tag.trim()) addDatasetTag(d.id, tag);
-    setTag(null);
   };
 
   // Plain click activates (and collapses the selection); ctrl/cmd toggles this row
@@ -210,66 +209,9 @@ export default function DatasetRow({
     onStart: () => setRename(d.name),
   };
 
-  // UX-001 review round: tags are SHARED by both layouts, not owned by the full
-  // card. Leaving them in the card branch made Tree view silently lose real
-  // function — "Add tag…" in the context menu still called `setTag("")` but no
-  // input rendered (a dead no-op), and existing chips, chip-click filtering and
-  // per-tag removal were unreachable. Compactness was never meant to cost
-  // features. In the compact row this is a full-width flex child that wraps onto
-  // its own line, so it occupies NO height unless the dataset actually has tags
-  // or the user is adding one.
+  // UX-001 review round: tags are SHARED by both layouts (DatasetRowTags).
   const tagsEl = (
-  <div className={`qzk-ds-tags${treeMode ? " qzk-ds-tags-compact" : ""}`}>
-    {(d.tags ?? []).map((t) => (
-      <span
-        key={t}
-        className="qzk-tag"
-        title={`Filter by "${t}"`}
-        onClick={(e) => {
-          e.stopPropagation();
-          onFilterTag(t);
-        }}
-      >
-        {t}
-        <button
-          className="qzk-tag-x"
-          title="Remove tag"
-          onClick={(e) => {
-            e.stopPropagation();
-            removeDatasetTag(d.id, t);
-          }}
-        >
-          ×
-        </button>
-      </span>
-    ))}
-    {tag != null ? (
-      <input
-        className="qz-input qzk-tag-input"
-        autoFocus
-        placeholder="tag…"
-        value={tag}
-        onClick={(e) => e.stopPropagation()}
-        onChange={(e) => setTag(e.target.value)}
-        onBlur={commitTag}
-        onKeyDown={(e) => {
-          if (e.key === "Enter") commitTag();
-          if (e.key === "Escape") setTag(null);
-        }}
-      />
-    ) : (
-      <button
-        className="qzk-tag qzk-tag-add"
-        title="Add tag"
-        onClick={(e) => {
-          e.stopPropagation();
-          setTag("");
-        }}
-      >
-        ＋
-      </button>
-    )}
-  </div>
+    <DatasetRowTags dataset={d} compact={treeMode} draft={tag} onDraft={setTag} onFilterTag={onFilterTag} tabIndex={innerTab} />
   );
 
   const rowClassName = `qzk-ds${treeMode ? " qzk-ds-compact" : ""}${active ? " active" : ""}${selected ? " selected" : ""}${sheetNumber ? " qzk-ds-sheet" : ""}`;
@@ -281,7 +223,7 @@ export default function DatasetRow({
   const ch = d.pending ? d.pending.cols : d.data.labels.length;
   const pendingTitle = d.pending ? "full data loads on first view" : undefined;
   const controls = (
-    <DatasetRowControls dataset={d} stale={stale} onRecalc={() => void recalcNow()} sheetNumber={sheetNumber} onOpenMenu={openMenuAt} />
+    <DatasetRowControls dataset={d} stale={stale} onRecalc={() => void recalcNow()} sheetNumber={sheetNumber} onOpenMenu={openMenuAt} treeItem={treeItem} />
   );
   const nameEl = <DatasetRowName {...nameProps} />;
   const folderCaptionEl = folderCaption && (
@@ -296,6 +238,7 @@ export default function DatasetRow({
       style={depth ? { marginLeft: depth * 14 } : undefined}
       data-ds-id={d.id}
       tabIndex={0}
+      {...treeItem}
       // UX-001: `active` = shown in the focused window (LibraryTree passes
       // `id === activeId`) -- semantic marker for the `.active` CSS class,
       // independent of multi-select's `selected`/`.selected`.
@@ -319,7 +262,7 @@ export default function DatasetRow({
             <span className="qzk-ds-compact-meta" title={pendingTitle}>
               {pts} pts · {ch} ch{d.pending && " · …"}
             </span>
-            <DatasetRowPreview dataset={d} />
+            <DatasetRowPreview dataset={d} tabIndex={innerTab} />
             {tagsEl}
           </div>
           {folderCaptionEl}

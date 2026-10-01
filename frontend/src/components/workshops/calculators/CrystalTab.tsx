@@ -166,7 +166,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
             onChange={setMillerMode}
           />
         )}
-        <Button variant="primary" size="sm" disabled={c.crBusy} onClick={() => void c.crCompute()}>
+        <Button aria-label="Calculate" variant="primary" size="sm" disabled={c.crBusy} onClick={() => void c.crCompute()}>
           =
         </Button>
       </div>
@@ -216,7 +216,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
           Z
         </span>
         <NumberField value={c.crystal.z} width={44} onChange={(v) => c.updCrystal({ z: v })} />
-        <Button variant="primary" size="sm" disabled={c.cellBusy} onClick={() => void c.cellCompute()}>
+        <Button aria-label="Calculate" variant="primary" size="sm" disabled={c.cellBusy} onClick={() => void c.cellCompute()}>
           =
         </Button>
       </div>
@@ -268,6 +268,7 @@ export default function CrystalTab({ c }: { c: CalculatorsState }) {
           <NumberField value={ak2} width={40} onChange={withTouch(angleCard.touch, setAk2)} aria-label="k2" />
           <NumberField value={al2} width={40} onChange={withTouch(angleCard.touch, setAl2)} aria-label="l2" />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>

@@ -523,7 +523,20 @@ const STORE_PINS: Record<string, number> = {
   // `statMode: true`. store/workshopFlags.characterization.test.ts (poisoned
   // whole-getState() diff per setter and branch + the initial values) was
   // green before the move and is unchanged after it.
-  "/store/useApp.ts": 1135,
+  // 1135 -> 921 (2026-10-01, P4.1 seventh domain): the dataset-list edits —
+  // removeDataset/removeSelected/removeDatasets, mergeSelected,
+  // duplicateDataset, moveDataset, renameDataset, the six folder-tree actions
+  // and the three smart-folder actions (16 actions), with the `folders`/
+  // `expandedFolders`/`smartFolders` fields they edit — moved to the new
+  // store/datasetListEdits.ts (DatasetListEditsSlice, an own-state slice like
+  // workshopFlags.ts). Unlike the sixth domain these write `datasets` and
+  // record undo steps; the selection/activation group (setActive …
+  // selectIds) stays here because it reaches into the windows slice.
+  // store/datasetListEdits.characterization.test.ts (poisoned whole-
+  // getState() diff, undo label and undo/redo identity round trip, no
+  // toast/macro, per action and branch) was green before the move and is
+  // unchanged after it.
+  "/store/useApp.ts": 921,
   // Review finding 2026-07-11: code that left App.tsx's component ratchet
   // must not become unguarded — the extracted registry + window slice get
   // their own shrink-only pins (founded at their extraction size).
@@ -581,13 +594,14 @@ describe("store-size ratchet (MAIN_PLAN #2)", () => {
 // fails a fast unit test rather than only showing up as a bundle-size or
 // runtime surprise.
 describe("mergeSelected opens the workshop eagerly (review finding 8)", () => {
-  it("store/useApp.ts's mergeSelected action never lazy-imports lib/transformRun", () => {
-    const [, src] = sources().find(([p]) => p.endsWith("/store/useApp.ts"))!;
+  // The action moved with the dataset-list edits (P4.1 seventh domain).
+  it("store/datasetListEdits.ts's mergeSelected action never lazy-imports lib/transformRun", () => {
+    const [, src] = sources().find(([p]) => p.endsWith("/store/datasetListEdits.ts"))!;
     // `mergeSelected: () => Promise<void>;` (the interface field) also
     // contains "mergeSelected:" — match the IMPLEMENTATION line specifically
     // (`mergeSelected: async`), never the type declaration above it.
     const line = src.split("\n").find((l) => l.includes("mergeSelected: async"));
-    expect(line, "mergeSelected: async ... not found in store/useApp.ts").toBeDefined();
+    expect(line, "mergeSelected: async ... not found in store/datasetListEdits.ts").toBeDefined();
     expect(line).not.toMatch(/import\(/);
   });
 });
@@ -3317,6 +3331,18 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
     "/lib/panelwindow.ts",
     "/lib/facetGrid.ts",
     "/lib/pipeline.ts",
+    // SLICE 14 (2026-10-01): the relink store. AppOverlays gates the lazy
+    // panel on the tiny `store/relinkPanel.ts` mirror, the replace chokepoint
+    // closes it through that mirror's registered closer, and the palette
+    // command loads it through `runLazy`. The panel, re-import and the commit
+    // and preview halves still import it statically, so only reachability can
+    // hold it (and `store/relinkBrowse.ts`, which only it reaches).
+    "/store/relink.ts",
+    "/store/relinkBrowse.ts",
+    // ...and the Recent Projects reopen body, moved verbatim to
+    // `commands/recentProjectReopen.ts`: the eager `recentProjectsCommands.ts`
+    // reaches it through `runLazy`, the lazy recovery chooser statically.
+    "/commands/recentProjectReopen.ts",
   ];
 
   /** The eager chunk's module set, computed the way Rollup computes it: walk

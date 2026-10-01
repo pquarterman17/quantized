@@ -155,11 +155,9 @@ class PagePanel:
     # `calc.figure._render_impl`'s own `greyscale` verbatim: rewrites
     # `series_styles` via `apply_greyscale` before `_draw_panel` draws,
     # covering the flat/y2 paths the same way the single-figure route does.
-    # No-op for a faceted panel (`facets` set) -- same reason `_render_impl`
-    # documents: a facet panel never resolves per-series colour at all
-    # today (FEATURE-001), so `_draw_panel` (which owns this flag) is never
-    # even reached for one -- `_build_page_figure` draws facets through a
-    # completely separate code path that never touches `series_styles`.
+    # A faceted panel (`facets` set) honours it too (U2), through its own
+    # path: `calc.figure_page_facets` hands it to `draw_facet_grid`, which
+    # greys the facet series' styles grid-wide (`greyscale_facet_panels`).
     greyscale: bool = False
 
 

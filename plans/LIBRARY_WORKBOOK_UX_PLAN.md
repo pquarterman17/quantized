@@ -614,6 +614,33 @@ as a CSS-only tree redesign.
   `<button>`s (pre-existing, not introduced by this mechanism) mean Tab from
   the holder walks into row internals rather than leaving the list — a
   separate accessibility gap, not this fallback's.
+  **U5 (2026-10-01) — tree keyboard model + ARIA; closes the Tab-walk and
+  holder Home/End residuals above.** `LibraryTree` is now `role="tree"`
+  (named "Library", multi-selectable) and every row anchor a `treeitem` with
+  explicit `aria-level`/`aria-setsize`/`aria-posinset` (absolute model facts —
+  the flattened, windowed DOM has no nesting), `aria-expanded` on parents,
+  `aria-selected`, and the item's name as its accessible name
+  (`lib/libraryTreeNav.treeItemProps`). ONE roving tab stop: the last-focused
+  row, else the selected row, else the first, clamped to the rendered window
+  (Details' `effectiveRovingKey` rule) so a scrolled 400-item tree still has
+  exactly one. Grips are never stops; the other inner controls stay tabbable
+  only on the roving row (Details' reveal-button rule — the preview toggle,
+  tag removal and the recovered-graph actions have no menu equivalent), so
+  Tab leaves the tree after at most that row's few controls. Home/End jump
+  to the first/last visible row (also from the scroll-out holder); Escape on
+  a nested control, and Escape/Enter closing an inline rename or tag input,
+  return focus to the row instead of `<body>`. An unresolved recovered graph
+  is `aria-disabled` in the tree, not a disabled `<button>`, so it can take
+  focus and hold the stop (opening it was already a no-op). Tag ×/＋ buttons got real
+  names ("Remove tag X", "Add tag"). Tests: `LibraryTree.aria.test.tsx`, the
+  400-item case in `LibraryTree.scale.test.tsx`, `libraryTreeNav.test.ts`,
+  e2e `library-tree-keyboard.spec.ts` (real Tab order). Eager +52 B (Tree and
+  DatasetRow are lazy chunks: +0.2 / +0.4 kB). **Still open:** Escape on a
+  row itself still blurs (to `<body>`); Enter/Escape on the holder still
+  bubble; Origin-figure/artifact anchors are `<button role="treeitem">`
+  (ARIA-in-HTML disallows that role on `button`; browsers honour it); the
+  recovered-graph `role="group"` action strip sits between treeitems; no
+  type-ahead.
   **Adversarial review round (2026-09-14).** Three findings, all fixed in the
   same commit: (1) `LibraryDetails.tsx`'s fallback predicate was keyed on
   `rovingKey` — non-null even with NOTHING ever focused (it falls back to the

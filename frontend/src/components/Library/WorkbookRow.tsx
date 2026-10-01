@@ -32,6 +32,7 @@ import { isContextMenuKeyEvent } from "../../lib/contextActions";
 import type { LibraryNode } from "../../lib/libraryHierarchy";
 import { useApp } from "../../store/useApp";
 import { useLibraryStore } from "../../store/hooks/useLibraryStore";
+import { innerTabIndex, type TreeItemProps } from "../../lib/libraryTreeNav";
 import ContextMenu from "../overlays/ContextMenu";
 
 interface Props {
@@ -40,9 +41,11 @@ interface Props {
   expanded: boolean;
   hasChildren: boolean;
   onFocus?: () => void;
+  /** Set inside LibraryTree: treeitem semantics + the roving tab stop (U5). */
+  treeItem?: TreeItemProps;
 }
 
-export default function WorkbookRow({ node, depth, expanded, hasChildren, onFocus }: Props) {
+export default function WorkbookRow({ node, depth, expanded, hasChildren, onFocus, treeItem }: Props) {
   const workbook = node.entity;
   const toggle = useLibraryStore((s) => s.toggleWorkbookExpanded);
   const selection = useLibraryStore((s) => s.librarySelection);
@@ -79,6 +82,7 @@ export default function WorkbookRow({ node, depth, expanded, hasChildren, onFocu
       style={{ paddingLeft: 6 + depth * 14 }}
       data-lib-row={node.key}
       tabIndex={0}
+      {...treeItem}
       onClick={select}
       onDoubleClick={() => openLibraryNode(node)}
       onKeyDown={onKeyDown}
@@ -94,7 +98,8 @@ export default function WorkbookRow({ node, depth, expanded, hasChildren, onFocu
       <span
         className="qzk-drag-handle"
         draggable={rename == null}
-        tabIndex={0}
+        // A drag can't be started from the keyboard: never a tree tab stop.
+        tabIndex={treeItem ? -1 : 0}
         role="button"
         aria-label="Drag to move"
         title="Drag to move"
@@ -111,6 +116,7 @@ export default function WorkbookRow({ node, depth, expanded, hasChildren, onFocu
       </span>
       <button
         className="qzk-menu-btn"
+        tabIndex={innerTabIndex(treeItem)}
         title="More actions"
         aria-label="More actions"
         onClick={(e) => {

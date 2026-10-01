@@ -16,17 +16,21 @@
 // analysis view sliced by the facet column (`facetCompositionFromBinding`'s
 // `facetPayloads` call) — with each slice's rows mapped back to dataset rows,
 // which is exactly what the export sends (`figureSpecFacets.withFacetRows`)
-// for the backend port (`calc/plotting_encoded_facets.py`) to re-split.
-// Loaded lazily, like the flat encoding; until it resolves the grid draws
-// unencoded.
+// for the backend port (`calc/plotting_encoded_facets.py`) to re-split. With
+// the "Excluded rows" mode on "greyed" (F4.2c (a)), each panel is its FULL
+// level and draws its dropped rows as one grey companion per Y channel
+// (`lib/facetEncodedExcluded`), as the export does. Loaded lazily, like the
+// flat encoding; until it resolves the grid draws unencoded.
 
 import { useMemo } from "react";
 
 import { facetSliceRowIds, facetSlices, facetSplitChannels, type FacetPanel } from "../../lib/facet";
+import { facetFullSlices } from "../../lib/facetExcluded";
 import { facetSplitEncoding, windowEncoding, type FigureEncoding } from "../../lib/plotEncodingBinding";
-import { analysisView } from "../../lib/rowstate";
+import { analysisView, droppedRows } from "../../lib/rowstate";
 import type { Dataset, SeriesStyle } from "../../lib/types";
 import { useStableByValue } from "../../lib/useStableValue";
+import type { ExcludedDisplay } from "../../store/useApp";
 import { useEncodingModule } from "./usePlotEncoding";
 
 /** An encoded facet grid: its panels, and per panel each series' style and
@@ -53,6 +57,7 @@ export function useFacetEncoding(
   yKeys: readonly number[] | null,
   seriesLabels: Record<number, string> = EMPTY_LABELS,
   seriesStyles: Record<number, SeriesStyle> = EMPTY_STYLES,
+  excludedDisplay: ExcludedDisplay = "hide",
 ): FacetEncodingRender | null {
   const stablePicks = useStableByValue(picks, (v) => JSON.stringify(v));
   const enc = useMemo(
@@ -71,10 +76,13 @@ export function useFacetEncoding(
     if (!channels) return null;
     const slices = facetSlices(view.data, facetKey).map((s) => ({ ...s, rows: facetSliceRowIds(s, view.rowIds) }));
     const renames = channels.map((c) => seriesLabels[c]);
+    // F4.2c (a) greyed: FULL level panels, the dropped rows as grey companions.
+    const dropped = excludedDisplay === "grey" ? droppedRows(active) : undefined;
+    const shown = dropped?.size ? facetFullSlices(slices, active.data, facetKey).map((s, i) => s ?? slices[i]) : slices;
     // FEATURE-001: each series' encoding over its CHANNEL's own style.
     const panels = mod.encodedFacetPanels(
-      mod.encodingData(active.data, enc), slices, xKey, channels, enc, renames, seriesStyles,
+      mod.encodingData(active.data, enc), shown, xKey, channels, enc, renames, seriesStyles, dropped,
     );
     return { panels, styles: panels.map((p) => p.styles), labels: panels.map((p) => p.labels) };
-  }, [enc, mod, active, facetKey, xKey, yKeys, seriesLabels, seriesStyles]);
+  }, [enc, mod, active, facetKey, xKey, yKeys, seriesLabels, seriesStyles, excludedDisplay]);
 }

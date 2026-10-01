@@ -54,6 +54,7 @@ export default function ElectrochemistryTab() {
           <Field label="n" value={nerN} onChange={withTouch(c1.touch, setNerN)} width={56} />
           <Field label="Q" value={nerQ} onChange={withTouch(c1.touch, setNerQ)} width={72} />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>
@@ -75,6 +76,7 @@ export default function ElectrochemistryTab() {
           <Field label="η" value={eta} onChange={withTouch(c2.touch, setEta)} unit="V" width={72} />
           <Field label="α" value={bvAlpha} onChange={withTouch(c2.touch, setBvAlpha)} width={56} />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>
@@ -99,6 +101,7 @@ export default function ElectrochemistryTab() {
           <Field label="α" value={tafAlpha} onChange={withTouch(c3.touch, setTafAlpha)} width={56} />
           <Field label="T" value={tafT} onChange={withTouch(c3.touch, setTafT)} unit="K" width={72} />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>
@@ -120,6 +123,7 @@ export default function ElectrochemistryTab() {
           <Field label="d" value={dlcD} onChange={withTouch(c4.touch, setDlcD)} unit="nm" width={64} />
           <Field label="A" value={dlcA} onChange={withTouch(c4.touch, setDlcA)} unit="cm²" width={64} />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>
@@ -140,6 +144,7 @@ export default function ElectrochemistryTab() {
           <Field label="I" value={irI} onChange={withTouch(c5.touch, setIrI)} unit="A" width={72} />
           <Field label="R" value={irR} onChange={withTouch(c5.touch, setIrR)} unit="Ω" width={72} />
           <Button
+            aria-label="Calculate"
             variant="primary"
             size="sm"
             onClick={() =>

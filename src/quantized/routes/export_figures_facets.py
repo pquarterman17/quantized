@@ -69,7 +69,9 @@ def _encoded_facet_panels(req: FigureRequest) -> list[dict[str, Any]]:
     say which dataset rows and Y channels it plots. With no ``encoding``
     (Group alone) the split has no colour / symbol / label factor and no
     palette: a level takes the channel's chosen colour, else matplotlib's
-    cycle -- the flat grouped export's own rule (BUG-016)."""
+    cycle -- the flat grouped export's own rule (BUG-016). F4.2c (a): the
+    request's ``excluded_rows`` are blanked over the panels' full level rows
+    and, with ``grey_excluded``, drawn as one grey companion per Y channel."""
     assert req.facets
     enc = req.encoding
     ds = append_text_factors(_request_dataset(req), (enc.text_columns if enc else None) or [])
@@ -83,6 +85,8 @@ def _encoded_facet_panels(req: FigureRequest) -> list[dict[str, Any]]:
         label_col=enc.label_col if enc else None,
         palette=enc.palette if enc else None,
         markers=enc.markers if enc else None,
+        excluded_rows=req.excluded_rows,
+        grey=req.grey_excluded,
     )
 
 
@@ -157,6 +161,7 @@ def _render_facets_bytes(
         y_fmt=_tick_fmt(req.y_fmt),
         overrides=req.overrides,
         svg_text_as_paths=req.svg_text_as_paths,
+        greyscale=req.greyscale,
     )
 
 
@@ -187,4 +192,5 @@ def _render_facets_map(
         x_fmt=_tick_fmt(req.x_fmt),
         y_fmt=_tick_fmt(req.y_fmt),
         overrides=req.overrides,
+        greyscale=req.greyscale,
     )

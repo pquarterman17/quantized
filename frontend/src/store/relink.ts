@@ -58,6 +58,7 @@ import { create } from "zustand";
 import { grantSourceReadPaths, hasDesktopShell, revokeRelinkDir } from "../lib/desktopBridge";
 import type { Dataset } from "../lib/types";
 import { browseForNewRoot } from "./relinkBrowse";
+import { registerRelinkCloser, useRelinkPanel } from "./relinkPanel";
 import { toast } from "./toasts";
 import { useApp } from "./useApp";
 
@@ -306,3 +307,11 @@ export const useRelink = create<RelinkState>((set, get) => ({
     if (created) toast(`imported "${ds.name}" as a new version`, "ok");
   },
 }));
+
+// AppOverlays and the workspace-replace chokepoint use store/relinkPanel.ts
+// (see that file), so this module stays out of the eager bundle. The closer
+// reads `getState()` at call time, so a replaced `closePanel` still runs.
+useRelink.subscribe((s) => {
+  if (useRelinkPanel.getState().open !== s.open) useRelinkPanel.setState({ open: s.open });
+});
+registerRelinkCloser(() => useRelink.getState().closePanel());

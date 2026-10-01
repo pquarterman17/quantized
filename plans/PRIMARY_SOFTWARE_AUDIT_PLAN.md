@@ -7696,6 +7696,15 @@ that goes red without its fix.
   `Cancel ${op.label}` (e.g. "Cancel Importing a.dat…"), using the label
   already in hand. Pinned by `StatusBar.test.tsx`'s "shows a Cancel control
   for EVERY visible op … each with a distinct accessible name" test.
+  **Icon-name audit + ratchet (2026-10-01, U6).** Icon-only controls were
+  named by their glyph ("▤"): content outranks `title`. Fixed every site
+  outside `components/Library` with a short `aria-label`; the Library's 23 are
+  pinned for its own pass. Guards: `accessibleNames.test.ts` (static JSX scan
+  via `test/accessibleNameScan.ts`, zero outside Library) and
+  `accessibleNames.render.test.tsx` (dom-accessibility-api names on the title
+  bars, menu/status bars, Appearance, every Preferences tab, map toolbar,
+  digitizer). Still `[~]`: plots, trees, and the Library are not audited, and
+  Preferences' tab strip is clickable `<div>`s with no role or keyboard path.
 - [~] Contrast and non-color encodings — **audited 2026-09-09; what exists and
   what does not, stated precisely instead of left as one unchecked line.**
 
@@ -8429,7 +8438,14 @@ that goes red without its fix.
       plotted quantity, not a categorical distinction, so forcing it grey
       would delete information rather than make the figure print-safe; this
       is a deliberate, documented residual, not an oversight.
-    - **RESIDUAL — facets stay a no-op, honestly.** A faceted small-
+    - **CLOSED 2026-10-01 (batch 12, U2):** facet grids now grey —
+      `calc.figure_greyscale.greyscale_facet_panels` keys each series once
+      across the grid (channel label, or the encoded `grey_slot`) and runs the
+      flat `apply_greyscale`; the no-op pins were flipped to
+      `test_figure_facets_greyscale_renders_achromatic_strokes` /
+      `test_figure_page_facet_panel_greyscale_renders_achromatic_strokes`, plus
+      `tests/test_export_facet_greyscale.py`. Historical note below.
+    - **(Historical) RESIDUAL — facets stay a no-op, honestly.** A faceted small-
       multiples request (`FigureRequest.facets`) renders through
       `calc.figure_facets`, which never resolves per-series colour at all
       today (FEATURE-001, `plans/BUGS_AND_ISSUES.md` — the screen's own
@@ -9962,6 +9978,13 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   initial values, green at `36439baf` before the move and unchanged after.
   Sabotage-checked: an extra field write in `setMapRes` and a
   `recordHistory` call in `setShortcutsOpen` each failed their specs.
+  **Seventh domain (2026-10-01)**: `store/datasetListEdits.characterization.test.ts`,
+  34 specs over the 16 dataset-list/folder/smart-folder actions — the keys
+  each writes, its undo label, an undo/redo identity round trip, no toast or
+  macro step, and the remove-the-active/selected/window-bound paths. Green
+  at `6dbdbb05` before the move and unchanged after. Sabotage-checked: extra
+  writes in `renameDataset`, `removeSelected` and `moveDataset`, a dropped
+  `recordHistory` in `moveFolder` and a toast in `addSmartFolder` each failed.
 - [~] Split one owned domain per PR with unchanged behavior/contracts.
   **ONE domain extracted 2026-09-17**, characterization tests first: the
   singleton **PlotView writers** — axis scales/limits/steps/tick formats/
@@ -10411,6 +10434,23 @@ so a loaded handler's own throw is no longer swallowed with the load's.
   keys (386 functions), values identical apart from the time-based window id.
   Eager bundle 860,011 → 860,043 B (+32 B, the creator wrapper), both built
   after `npm ci` and a `.vite` wipe; `EAGER_JS_BUDGET` untouched.
+
+  **SEVENTH domain extracted 2026-10-01**: the **dataset-list edits** —
+  `removeDataset`/`removeSelected`/`removeDatasets`, `mergeSelected`,
+  `duplicateDataset`, `moveDataset`, `renameDataset`, the six folder-tree
+  actions and the three smart-folder actions (16 actions), with the
+  `folders`/`expandedFolders`/`smartFolders` fields — moved to the new
+  `store/datasetListEdits.ts` (281 lines, `DatasetListEditsSlice`, an
+  own-state slice like `workshopFlags.ts`). `store/useApp.ts` **1,134 → 920
+  lines (−214)**; `STORE_PINS` 1,135 → 921. These do write `datasets` and
+  record undo steps; the heavy bodies stay in `removeDatasets.ts` and
+  `folderDelete.ts`. The selection/activation group (`setActive` …
+  `selectIds`) stays in `useApp.ts` because it reaches into the windows
+  slice. The `mergeSelected` eager-open guard in `architecture.test.ts` now
+  reads the new module. Composed initial store unchanged: 602 keys (386
+  functions), values identical apart from the window id.
+  Eager bundle 860,080 → 860,104 B (+24 B, the creator wrapper), both after
+  `npm ci`; `EAGER_JS_BUDGET` untouched.
 - [x] Generate clients/types where it reduces drift. **Done** (`91583f9c`,
   2026-09-03): `npm run api:types` generates `src/lib/api/schema.d.ts` from
   the dumped OpenAPI document; `ci.yml`'s "Generated API types are up to

@@ -319,6 +319,7 @@ export default function ToolWindow({
           </button>
         )}
         <button
+          aria-label={layout.collapsed ? "Expand" : "Collapse"}
           className="qzk-win-collapse"
           title={layout.collapsed ? "Expand" : "Collapse"}
           onPointerDown={(e) => e.stopPropagation()}

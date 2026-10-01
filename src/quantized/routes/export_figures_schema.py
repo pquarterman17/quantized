@@ -214,9 +214,9 @@ class FigureFacet(BaseModel):
     # P1.4 residual 3 (with `FigureRequest.encoding`, or `group_col` alone):
     # the dataset row behind each `x` entry and the Y channel behind each
     # series, so the route re-splits the panel by the encoding and/or group
-    # (`calc.plotting_encoded_facets`). F4.2c (a): `rows` alone, with
-    # `excluded_rows`, names a greyed unsplit panel's rows for the mask
-    # (`calc.figure_facets_excluded`).
+    # (`calc.plotting_encoded_facets`). F4.2c (a): with `excluded_rows`,
+    # `rows` names a greyed panel's FULL level rows for the mask, split or
+    # not (`calc.figure_facets_excluded`).
     rows: list[int] | None = None
     channels: list[int] | None = None
 

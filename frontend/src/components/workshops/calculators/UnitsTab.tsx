@@ -83,7 +83,7 @@ export default function UnitsTab({ c }: { c: CalculatorsState }) {
                 aria-label="to unit"
               />
             )}
-            <Button variant="primary" size="sm" disabled={c.busy} onClick={() => void c.convert()}>
+            <Button aria-label="Calculate" variant="primary" size="sm" disabled={c.busy} onClick={() => void c.convert()}>
               =
             </Button>
           </div>

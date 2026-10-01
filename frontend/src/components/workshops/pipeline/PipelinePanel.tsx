@@ -124,9 +124,9 @@ export default function PipelinePanel() {
                   </span>
                   {log && <StatusDot tone={TONE[log.status]} label={log.note ?? log.status} />}
                   <span style={{ flex: 1 }} />
-                  <button className="qz-btn qz-ghost qz-sm" title="move up" onClick={(e) => { e.stopPropagation(); p.moveStep(s.id, -1); }}>↑</button>
-                  <button className="qz-btn qz-ghost qz-sm" title="move down" onClick={(e) => { e.stopPropagation(); p.moveStep(s.id, 1); }}>↓</button>
-                  <button className="qz-btn qz-ghost qz-sm" title="delete step" onClick={(e) => { e.stopPropagation(); p.removeStep(s.id); }}>×</button>
+                  <button aria-label="Move up" className="qz-btn qz-ghost qz-sm" title="move up" onClick={(e) => { e.stopPropagation(); p.moveStep(s.id, -1); }}>↑</button>
+                  <button aria-label="Move down" className="qz-btn qz-ghost qz-sm" title="move down" onClick={(e) => { e.stopPropagation(); p.moveStep(s.id, 1); }}>↓</button>
+                  <button aria-label="Delete step" className="qz-btn qz-ghost qz-sm" title="delete step" onClick={(e) => { e.stopPropagation(); p.removeStep(s.id); }}>×</button>
                 </div>
                 {selected === s.id && (
                   <StepEditor
