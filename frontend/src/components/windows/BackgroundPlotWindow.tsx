@@ -44,7 +44,7 @@ import { durableComposition } from "../../lib/facet";
 import type { FigureDocument } from "../../lib/figureDocument";
 import { effectiveChannels } from "../../lib/plotdata";
 import type { PlotBg, PlotView } from "../../lib/plotview";
-import { resolveTemplate } from "../../lib/plotTemplates";
+import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
 import type { Dataset } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
 import { windowSyncKey } from "../../lib/windowsync";
@@ -240,9 +240,7 @@ function BackgroundXYWindow({
         showGrid={view.showGrid}
         axisBox={view.showAxisBox}
         fontSize={resolveTemplate(view.plotTemplate).fontSize}
-        baseLineWidth={
-          view.plotTemplate === "screen" ? defaultLineWidth : resolveTemplate(view.plotTemplate).lineWidth
-        }
+        baseLineWidth={canvasLineWidth(view.plotTemplate, defaultLineWidth)}
         defaultTrace={defaultTrace}
         steppedPaths={STEPPED_PATHS}
         steppedPathsPre={STEPPED_PATHS_PRE}

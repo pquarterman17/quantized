@@ -94,7 +94,11 @@ describe("PlotToolbar — overflow menu (GUI audit P1)", () => {
     stubLayout(500);
     render(<PlotToolbar {...props} />);
     fireEvent.click(screen.getByRole("button", { name: "Toolbar Options" }));
-    expect(screen.getByText(/Reset View/).closest("button")).toHaveAttribute("aria-disabled", "true");
+    const item = screen.getByText(/Reset View/).closest("button");
+    expect(item).toHaveAttribute("aria-disabled", "true");
+    // ...and its reason, as the item's description rather than only a title.
+    expect(item).toHaveAccessibleName(/Reset View/);
+    expect(item).toHaveAccessibleDescription("Nothing to reset — the view is already at its default extents");
   });
 
   it("offers the drawing tools when Annotate is collapsed", () => {

@@ -75,7 +75,9 @@ def _detect_delimiter(raw_lines: Sequence[str]) -> str:
     majority, so a ragged preamble line doesn't disqualify the real
     delimiter by itself (see the ``std < mean * 0.5`` consistency check).
     Defaults to comma when nothing qualifies (e.g. every candidate is
-    absent from at least one of the first 10 lines)."""
+    absent from at least one of the first 10 lines). A comma win is handed
+    to ``;`` when the sample is ``;``-delimited decimal-comma data
+    (`_semicolon_over_comma`)."""
     test = raw_lines[:10]
     best_delim = ","
     best_score = 0.0
@@ -87,7 +89,31 @@ def _detect_delimiter(raw_lines: Sequence[str]) -> str:
             if std < mean * 0.5 and mean > best_score:
                 best_score = mean
                 best_delim = ch
+    if best_delim == "," and _semicolon_over_comma(test):
+        return ";"
     return best_delim
+
+
+def _semicolon_over_comma(lines: Sequence[str]) -> bool:
+    """Whether a comma-voted sample is really ``;``-delimited decimal-comma data.
+
+    A headerless ``"1,5;2,5"`` file has more commas than semicolons, so the
+    plain vote picked ``","``. Narrow on purpose: every line needs the same
+    nonzero ``;`` count and no quotes, and then either the comma counts vary
+    line to line or every ``;``-cell holding a comma is a comma number. A
+    file with no ``;`` returns at once.
+    """
+    first = lines[0].count(";") if lines else 0
+    if first == 0 or any(ln.count(";") != first or '"' in ln for ln in lines):
+        return False
+    if len({ln.count(",") for ln in lines}) > 1:
+        return True
+    return all(
+        _COMMA_NUMBER_RE.match(cell.strip())
+        for ln in lines
+        for cell in ln.split(";")
+        if "," in cell
+    )
 
 
 def _to_float(token: str) -> float:

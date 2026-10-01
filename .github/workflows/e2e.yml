@@ -79,7 +79,9 @@ jobs:
   e2e-xbrowser:
     name: e2e cross-browser (${{ matrix.engine }})
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    # 50, not 25: the install step below may take up to 30 on its own when
+    # apt is slow, which leaves 20 for everything else (it all fit in 25).
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
@@ -121,6 +123,10 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ matrix.engine }}-${{ steps.pw.outputs.version }}
       - name: Install Playwright (${{ matrix.engine }})
+        # Own budget: a slow apt mirror (webkit's system deps are the largest)
+        # twice ran this past the old 25-minute JOB limit. A step limit fails
+        # here, by name, instead of cancelling the whole job.
+        timeout-minutes: 30
         run: npx playwright install --with-deps ${{ matrix.engine }}
       - name: Build the SPA (what the backend serves)
         run: npm run build

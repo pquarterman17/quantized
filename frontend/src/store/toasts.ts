@@ -40,6 +40,9 @@ interface ToastsState {
   toasts: Toast[];
   push: (msg: string, kind?: ToastKind, opts?: ToastOptions) => void;
   dismiss: (id: number) => void;
+  /** Add (`on`) or lift one hold on a toast's auto-dismiss: the pointer over
+   *  it, or focus in it. It never times out while any hold remains. */
+  hold: (id: number, on: boolean) => void;
 }
 
 /** P3.4 diagnostics — three monotonic, content-free counters, incremented
@@ -108,7 +111,18 @@ export const TOAST_ACTION_TTL = 6000;
 /** Cap concurrent toasts so a burst can't cover the screen. */
 const MAX = 4;
 
-export const useToasts = create<ToastsState>((set, get) => ({
+/** How many holds (pointer over it, focus in it) each toast has. A toast
+ *  whose timer runs out while held is marked expired and goes only once the
+ *  last hold lifts, after `TOAST_TTL` more (WCAG 2.2.1). */
+const held = new Map<number, number>();
+const expired = new Set<number>();
+
+function expire(id: number): void {
+  if (held.get(id)) expired.add(id);
+  else useToasts.getState().dismiss(id);
+}
+
+export const useToasts = create<ToastsState>((set) => ({
   toasts: [],
   push: (msg, kind = "info", opts) => {
     const id = ++seq;
@@ -123,9 +137,18 @@ export const useToasts = create<ToastsState>((set, get) => ({
     // An action toast lives long enough to act on even when the caller does not
     // say so (BUG-009's Re-import offer relies on this: importing the constant
     // there broke the many suites that `vi.mock` this module with `toast` alone).
-    setTimeout(() => get().dismiss(id), opts?.ttlMs ?? (opts?.action ? TOAST_ACTION_TTL : TOAST_TTL));
+    setTimeout(() => expire(id), opts?.ttlMs ?? (opts?.action ? TOAST_ACTION_TTL : TOAST_TTL));
   },
-  dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
+  dismiss: (id) => {
+    held.delete(id);
+    expired.delete(id);
+    set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) }));
+  },
+  hold: (id, on) => {
+    const n = Math.max(0, (held.get(id) ?? 0) + (on ? 1 : -1));
+    held.set(id, n);
+    if (!n && expired.delete(id)) setTimeout(() => expire(id), TOAST_TTL);
+  },
 }));
 
 /** Imperative helper for non-component call sites (store actions, callbacks). */

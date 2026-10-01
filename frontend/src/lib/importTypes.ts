@@ -159,6 +159,9 @@ export interface ImportPreviewResponse {
    *  Optional on the wire type for the same reason as `header_fields`
    *  above. */
   categorical_problems?: ImportCategoricalProblem[];
+  /** Names of the columns read with a decimal comma (`io._decimal_comma`);
+   *  empty for a "." file. Optional for older fixtures. */
+  decimal_comma_columns?: string[];
 }
 
 /** One duplicate key found while parsing `header_fields` (P1.6 Part A). */

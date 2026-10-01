@@ -294,6 +294,7 @@ export default function Library({ viewMode: controlledViewMode, onViewModeChange
         <input
           className="qz-input"
           style={{ flex: 1 }}
+          aria-label="Filter library"
           placeholder="⌕ Filter… (tag:… format:…)"
           value={query}
           onChange={(e) => setQuery(e.target.value)}

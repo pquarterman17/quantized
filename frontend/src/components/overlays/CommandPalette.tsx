@@ -8,9 +8,8 @@
 // `store/commands.ts`'s MAIN #9 note for the "keep in sync, document
 // divergences" precedent this follows.
 
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
-import { contextPaletteActions } from "../../lib/paletteContextActions";
 import { fuzzy } from "../../lib/fuzzy";
 import { formatShortcut, isMacPlatform } from "../../lib/shortcutFormat";
 import { mergeCommands, PALETTE_LABEL, runAction, useCommands, type Action } from "../../store/commands";
@@ -22,6 +21,12 @@ export type { Action };
 // Resolved once at module load — the host platform does not change.
 const IS_MAC = isMacPlatform();
 
+// The background-`inert` registry every other modal uses (lib/modalInert.ts,
+// via the lazy `useDialogFocus`), loaded with `import()`: this component is
+// eager and must not pull it into the entry chunk. Kept once loaded, so a
+// close can lift the inert synchronously before focus goes back.
+let modalInert: typeof import("../../lib/modalInert") | undefined;
+
 export default function CommandPalette({ actions }: { actions: Action[] }) {
   const open = useApp((s) => s.cmdkOpen);
   const setCmdk = useApp((s) => s.setCmdk);
@@ -29,6 +34,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
   const [cursor, setCursor] = useState(0);
   const [menuCmds, setMenuCmds] = useState<Action[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const listId = useId();
   // R2 (PRIMARY_SOFTWARE_AUDIT_PLAN): give focus back to whatever opened the
   // palette. Without it every close dropped focus on <body>, where the global
@@ -51,21 +57,53 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `opener` is a ref
   }, [open]);
+  // The page behind goes inert while the palette is open (registered a
+  // microtask after the commit, before paint). A failed chunk load only costs
+  // that: Tab is trapped here and the backdrop takes clicks.
+  useLayoutEffect(() => {
+    if (!open) return;
+    let live = true;
+    void import("../../lib/modalInert").then(
+      (m) => {
+        modalInert = m;
+        if (live) m.registerModal(dialogRef);
+      },
+      () => {},
+    );
+    return () => {
+      live = false;
+      modalInert?.releaseModal(dialogRef);
+    };
+  }, [open]);
   const close = () => {
+    // Lift the inert first: focus() into an inert background is refused.
+    modalInert?.releaseModal(dialogRef);
     restoreOpener();
     setCmdk(false);
   };
 
   useEffect(() => {
-    if (open) {
-      setQuery("");
-      setCursor(0);
-      // Context-selection commands (the active dataset / selected annotation
-      // / selected shape's registry actions) are computed fresh each open —
-      // non-reactive by design, same snapshot discipline as menuCommands.
-      setMenuCmds([...useCommands.getState().menuCommands, ...contextPaletteActions()]);
-      requestAnimationFrame(() => inputRef.current?.focus());
-    }
+    if (!open) return;
+    let live = true;
+    setQuery("");
+    setCursor(0);
+    const menu = useCommands.getState().menuCommands;
+    setMenuCmds(menu);
+    // Context-selection commands (the active dataset / selected annotation
+    // / selected shape's registry actions) are computed fresh each open —
+    // non-reactive by design, same snapshot discipline as menuCommands. Their
+    // registry loads with `import()` (a microtask once cached), which keeps
+    // it and the action modules it reaches out of the entry chunk.
+    void import("../../lib/paletteContextActions").then(
+      (m) => {
+        if (live) setMenuCmds([...menu, ...m.contextPaletteActions()]);
+      },
+      () => {},
+    );
+    requestAnimationFrame(() => inputRef.current?.focus());
+    return () => {
+      live = false;
+    };
   }, [open]);
 
   const allActions = useMemo(
@@ -127,7 +165,13 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
     e.stopPropagation();
   };
 
-  let lastGroup = "";
+  // Consecutive matches of one group form a labelled `group` (the header is
+  // its name, not an option); a group can recur after a better-scoring match.
+  const runs: ((typeof matches)[number] & { i: number })[][] = [];
+  matches.forEach((x, i) => {
+    if (x.a.group !== matches[i - 1]?.a.group) runs.push([]);
+    runs[runs.length - 1].push({ ...x, i });
+  });
 
   return (
     <div
@@ -142,6 +186,7 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
       {/* A headingless dialog, so named by aria-label; the input is an
           ARIA 1.2 combobox driving the listbox by aria-activedescendant. */}
       <div
+        ref={dialogRef}
         className="qzk-glass qz-cmdk"
         role="dialog"
         aria-label={PALETTE_LABEL.replace("…", "")}
@@ -165,16 +210,14 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
           {matches.length === 0 && (
             <div className="qz-cmdk-empty">No matching commands</div>
           )}
-          {matches.map(({ a, m }, i) => {
-            const header =
-              a.group !== lastGroup ? (
-                <div className="qz-cmdk-group">{a.group}</div>
-              ) : null;
-            lastGroup = a.group;
-            return (
-              <div key={a.id}>
-                {header}
+          {runs.map((grp, r) => (
+            <div key={r} role="group" aria-labelledby={`${listId}-g${r}`}>
+              <div id={`${listId}-g${r}`} className="qz-cmdk-group" role="presentation">
+                {grp[0].a.group}
+              </div>
+              {grp.map(({ a, m, i }) => (
                 <div
+                  key={a.id}
                   id={`${listId}-${i}`}
                   role="option"
                   aria-selected={i === cursor}
@@ -190,9 +233,9 @@ export default function CommandPalette({ actions }: { actions: Action[] }) {
                   </span>
                   {a.shortcut && <span className="qz-shortcut">{formatShortcut(a.shortcut, IS_MAC)}</span>}
                 </div>
-              </div>
-            );
-          })}
+              ))}
+            </div>
+          ))}
         </div>
       </div>
     </div>

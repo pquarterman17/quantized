@@ -27,7 +27,7 @@ import type { Composition } from "../../lib/composition";
 import type { FigureDocument } from "../../lib/figureDocument";
 import type { FigureEncoding } from "../../lib/figureEncoding";
 import { canvasGroupCol } from "../../lib/plotGroupSplit";
-import { resolveTemplate } from "../../lib/plotTemplates";
+import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
 import type { PlotBg, PlotView } from "../../lib/plotview";
 import type { Dataset } from "../../lib/types";
 import { useApp } from "../../store/useApp";
@@ -173,7 +173,7 @@ export function BackgroundStackWindow({ dataset, view, bg, composition = null, e
     showGrid: view.showGrid,
     showAxisBox: view.showAxisBox,
     fontSize: template.fontSize,
-    baseLineWidth: view.plotTemplate === "screen" ? defaultLineWidth : template.lineWidth,
+    baseLineWidth: canvasLineWidth(view.plotTemplate, defaultLineWidth),
     defaultTrace,
     refLines: view.refLines,
     seriesStyles: view.seriesStyles,

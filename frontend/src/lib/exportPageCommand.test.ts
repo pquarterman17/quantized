@@ -96,6 +96,18 @@ describe("runExportSpatialPageCommand", () => {
     });
   });
 
+  // A widthless line exports at the width the spatial cells draw it
+  // (`canvasLineWidth`, as MultiPanelStage passes it), not the preset's.
+  it.each([
+    ["poster", 1.5, 3.5],
+    ["screen", 2.25, 2.25],
+  ])("sends the cell canvas' line width (template %s, Preferences %s px)", async (plotTemplate, pref, width) => {
+    useApp.setState({ plotTemplate, defaultLineWidth: pref });
+    await runExportSpatialPageCommand(useApp.getState);
+    const body = vi.mocked(exportFigurePage).mock.calls[0][0];
+    expect(body.panels[0].figure.series_styles?.[0]?.width).toBe(width);
+  });
+
   // FIGURE_AUTHORING_WORKFLOW_PLAN flat-path fix: the SAME row-exclusion
   // gap the single-figure flat path had -- this command used to resolve
   // each panel from the raw `ds.data`, so an excluded row could reach the

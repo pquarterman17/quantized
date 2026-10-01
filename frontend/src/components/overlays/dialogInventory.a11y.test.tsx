@@ -7,7 +7,7 @@
 // The store-driven dialogs are in `dialogInventoryStores.a11y.test.tsx`;
 // `dialogInventory.ratchet.test.ts` fails a new dialog that is in neither.
 
-import { act, render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState, type ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -128,10 +128,9 @@ describe("dialog basics — the most-used dialogs", () => {
     const user = userEvent.setup();
     const actions = [{ id: "a", label: "Export figure", group: "File", run: () => {} }];
     const opener = await openWith(<CommandPalette actions={actions} />, () => useApp.setState({ cmdkOpen: true }));
-    // Not a backdrop dialog: no background inert (it is eager and never
-    // registers as a modal), so only the keyboard trap is asked of it.
-    const issues = await auditDialog(dialog, { opener, user });
-    expect(issues.filter((i) => !i.startsWith("background is not inert"))).toEqual([]);
+    // The palette is eager, so it loads the inert registry on its first open.
+    await waitFor(() => expect(opener.closest("[inert]")).not.toBeNull());
+    expect(await auditDialog(dialog, { opener, user })).toEqual([]);
   });
 });
 

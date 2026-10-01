@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import CommandPalette from "./CommandPalette";
@@ -76,6 +76,29 @@ describe("CommandPalette returns focus to its opener (R2)", () => {
   });
 });
 
+// The context-action registry loads with `import()` (eager-bundle cost), so
+// its entries join the list a microtask after the palette opens.
+describe("CommandPalette context actions", () => {
+  const dataset = { id: "d1", name: "Alpha", data: { time: [1], values: [[1]], labels: ["m"], units: [""], metadata: {} } };
+
+  it("lists the active dataset's actions under its own group", async () => {
+    useApp.setState({ datasets: [dataset], activeId: "d1", selectedAnnotationId: null, selectedShapeId: null });
+    render(<CommandPalette actions={[action]} />);
+    const group = await screen.findByRole("group", { name: "Active dataset — Alpha" });
+    expect(within(group).getByRole("option", { name: /^Duplicate/ })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: /Break x-axis/ })).toBeInTheDocument();
+  });
+
+  it("closing and reopening lists each context action once", async () => {
+    useApp.setState({ datasets: [dataset], activeId: "d1", selectedAnnotationId: null, selectedShapeId: null });
+    render(<CommandPalette actions={[action]} />);
+    act(() => useApp.setState({ cmdkOpen: false }));
+    act(() => useApp.setState({ cmdkOpen: true }));
+    const group = await screen.findByRole("group", { name: "Active dataset — Alpha" });
+    expect(within(group).getAllByRole("option", { name: /^Duplicate/ })).toHaveLength(1);
+  });
+});
+
 describe("CommandPalette discovery descriptions", () => {
   it("shows the concise command outcome below its label", () => {
     render(<CommandPalette actions={[action]} />);
@@ -89,5 +112,57 @@ describe("CommandPalette discovery descriptions", () => {
     });
     expect(screen.getByText("Break x-axis at gaps…")).toBeInTheDocument();
     expect(screen.queryByText("No matching commands")).not.toBeInTheDocument();
+  });
+});
+
+// Dialog-basics audit residuals: the palette is a backdrop dialog, so the page
+// behind it goes inert through the same registry the other modals use
+// (lib/modalInert.ts), and its group headers are group labels, not options.
+describe("CommandPalette as a modal listbox", () => {
+  function renderWithPage(actions = [action]) {
+    useApp.setState({ cmdkOpen: false });
+    render(
+      <>
+        <main>
+          <button type="button">Opener</button>
+        </main>
+        <CommandPalette actions={actions} />
+      </>,
+    );
+    const opener = screen.getByRole("button", { name: "Opener" });
+    opener.focus();
+    return opener;
+  }
+
+  it("makes the page behind it inert while open, and lifts it before focus goes back", async () => {
+    const opener = renderWithPage();
+    act(() => useApp.setState({ cmdkOpen: true }));
+    await waitFor(() => expect(opener.closest("main")).toHaveAttribute("inert"));
+    expect(screen.getByRole("dialog").closest("[inert]")).toBeNull();
+    fireEvent.keyDown(screen.getByRole("combobox"), { key: "Escape" });
+    expect(opener.closest("[inert]")).toBeNull();
+    expect(opener).toHaveFocus();
+  });
+
+  it("labels each run of commands as a group whose header is not an option", () => {
+    const actions = [
+      action,
+      { id: "a2", group: "File", label: "Export figure", run: vi.fn() },
+      { id: "a3", group: "File", label: "Export page", run: vi.fn() },
+    ];
+    render(<CommandPalette actions={actions} />);
+    const listbox = screen.getByRole("listbox");
+    expect(within(listbox).getAllByRole("option")).toHaveLength(3);
+    const file = within(listbox).getByRole("group", { name: "File" });
+    expect(within(file).getAllByRole("option").map((o) => o.textContent)).toEqual(["Export figure", "Export page"]);
+    expect(within(listbox).getByRole("group", { name: "Plot" })).toBeInTheDocument();
+    // The header text is the group's name, not a stray item in the listbox.
+    for (const header of listbox.querySelectorAll(".qz-cmdk-group")) {
+      expect(header).toHaveAttribute("role", "presentation");
+      expect(header.closest('[role="group"]')).not.toBeNull();
+    }
+    // A grouped option still runs on click.
+    fireEvent.mouseDown(within(file).getByRole("option", { name: "Export page" }));
+    expect(actions[2].run).toHaveBeenCalledTimes(1);
   });
 });

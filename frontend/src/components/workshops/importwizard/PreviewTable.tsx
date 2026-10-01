@@ -143,6 +143,12 @@ export default function PreviewTable({
         </table>
       </div>
 
+      {preview.decimal_comma_columns && preview.decimal_comma_columns.length > 0 && (
+        <div role="note" className="qzk-ds-meta qzk-msg" style={{ color: "var(--text-dim)" }}>
+          Read with a decimal comma: {preview.decimal_comma_columns.join(", ")}.
+        </div>
+      )}
+
       <div className="qzk-ds-meta" style={{ color: "var(--text-faint)" }}>
         {preview.n_data_rows} data row{preview.n_data_rows === 1 ? "" : "s"} ·{" "}
         {preview.columns.length} column{preview.columns.length === 1 ? "" : "s"} · delimiter{" "}

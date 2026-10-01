@@ -126,6 +126,7 @@ export function DatasetRowName({ dataset: d, compactOriginName = false, rename, 
     return (
       <input
         className="qz-input qzk-ds-name"
+        aria-label={`Rename "${d.name}"`}
         autoFocus
         value={rename}
         onClick={(e) => e.stopPropagation()}

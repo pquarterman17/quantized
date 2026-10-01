@@ -142,6 +142,8 @@ describe("DatasetRow — Tree (treeMode) compact worksheet row (UX-001)", () => 
     const name = screen.getByText("Book4 — 30 nm MnN");
     fireEvent.doubleClick(name);
     expect(screen.getByDisplayValue("Moke:Book4 — 30 nm MnN")).toBeInTheDocument();
+    // Named for what it renames, not left unnamed.
+    expect(screen.getByRole("textbox", { name: 'Rename "Moke:Book4 — 30 nm MnN"' })).toBeInTheDocument();
   });
 
   it("shows concise rows/channels meta text on the one line", () => {

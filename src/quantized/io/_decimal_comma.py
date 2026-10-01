@@ -19,7 +19,8 @@ strings in -> floats/column indices out. No fastapi/pydantic/
   column like ``"1,500"`` -- exactly three digits after the comma and no
   other evidence -- could be 1.5 or 1500. The file does not say which, so
   it fails closed and the error names the Import Wizard's decimal-separator
-  control.
+  control. That holds with plain integers mixed in too; only a column with
+  a text cell keeps the old reading.
 
 A pure US file never reaches the per-column work here: the callers skip it
 entirely unless the text contains a comma and the delimiter is not one.
@@ -180,10 +181,14 @@ def _auto_column(cells: list[str], numeric_ratio: float) -> tuple[bool, str | No
         return False, None
     if any(_unambiguous(m) for m in hits):
         return True, None
-    # Ambiguous: refuse exactly where decimal="." has always refused (a
-    # non-numeric column that is entirely comma numbers); anything else keeps
-    # today's reading.
+    # Ambiguous. Refuse where decimal="." has always refused (a non-numeric
+    # column that is entirely comma numbers, bar a possible header cell), and
+    # also where integers are mixed in: every cell is then a comma number or
+    # neutral, and keeping today's reading would turn the comma cells into
+    # NaN without a word. A column with any text cell is never refused.
     if numeric_ratio <= 0.1 and all(m for m in matches[1:]):
+        return False, hits[0].group(0)
+    if matches[0] or _is_neutral(non_blank[0]):
         return False, hits[0].group(0)
     return False, None
 

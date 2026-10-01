@@ -148,6 +148,7 @@ export default function WorkbookRow({ node, depth, expanded, hasChildren, onFocu
       {rename != null ? (
         <input
           className="qz-input qzk-folder-rename"
+          aria-label={`Rename "${workbook.name}"`}
           autoFocus
           value={rename}
           onClick={(e) => e.stopPropagation()}

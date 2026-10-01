@@ -79,6 +79,9 @@ export interface GridRowProps {
   onEditCell?: (row: number, col: number, value: number) => void;
   /** Every cell is read-only: the dataset is re-derived by the recalc (lib/rederived.ts). */
   readOnly?: boolean;
+  /** A column's header name (-1 = x), which names the cell editor with its
+   *  row ("A, row 3"); the editors have no visible label of their own. */
+  colName?: (col: number) => string;
 }
 
 export default function GridRow({
@@ -105,7 +108,9 @@ export default function GridRow({
   onEditCategoricalCell,
   onEditCell,
   readOnly = false,
+  colName = (col) => (col < 0 ? "x" : `column ${col + 1}`),
 }: GridRowProps) {
+  const editorName = (col: number) => `${colName(col)}, row ${r + 1}`;
   const rowTitle = isMasked
     ? "excluded row"
     : isFilteredOut
@@ -147,6 +152,7 @@ export default function GridRow({
       return (
         <input
           className="qz-input qzk-cell-edit"
+          aria-label={`New level, ${editorName(col)}`}
           autoFocus
           value={cellEdit.draft}
           onChange={(e) => cellEdit.setDraft(e.target.value)}
@@ -161,6 +167,7 @@ export default function GridRow({
     return (
       <select
         className="qz-select qzk-cell-edit"
+        aria-label={editorName(col)}
         autoFocus
         value={currentIndex}
         onChange={(e) => {
@@ -226,6 +233,7 @@ export default function GridRow({
         ) : editing ? (
           <input
             className="qz-input qzk-cell-edit"
+            aria-label={editorName(col)}
             autoFocus
             value={cellEdit.draft}
             onChange={(e) => cellEdit.setDraft(e.target.value)}

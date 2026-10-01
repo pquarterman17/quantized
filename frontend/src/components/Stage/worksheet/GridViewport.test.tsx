@@ -118,6 +118,15 @@ describe("GridViewport windowed rendering", () => {
     expect(onEditCell).toHaveBeenCalledWith(1, -1, 42);
   });
 
+  it("the cell editor is named by its column and row, not left unnamed", () => {
+    renderGrid(5);
+    fireEvent.doubleClick(screen.getByText("1.0000")); // row 1's x cell
+    expect(screen.getByRole("textbox", { name: "x, row 2" })).toHaveDisplayValue("1");
+    fireEvent.keyDown(screen.getByRole("textbox"), { key: "Escape" });
+    fireEvent.doubleClick(screen.getByText("20.0000")); // row 2's A cell
+    expect(screen.getByRole("textbox", { name: "A, row 3" })).toBeInTheDocument();
+  });
+
   it("a read-only (re-derived) grid opens no editor and says why on hover", () => {
     renderGrid(5, noop, true);
     const cell = screen.getByText("1.0000"); // row 1's x cell
@@ -467,6 +476,13 @@ describe("GridViewport categorical cells (P1.6b)", () => {
     fireEvent.change(input, { target: { value: "Incomplete" } });
     fireEvent.keyDown(input, { key: "Enter" });
     expect(onEditCategoricalCell).toHaveBeenCalledWith(0, 0, "Incomplete");
+  });
+
+  it("the level picker and the new-level box are named by their column and row", () => {
+    renderCategorical();
+    fireEvent.doubleClick(screen.getByText("Pass"));
+    fireEvent.change(screen.getByRole("combobox", { name: "Grade, row 1" }), { target: { value: "__new__" } });
+    expect(screen.getByRole("textbox", { name: "New level, Grade, row 1" })).toBeInTheDocument();
   });
 
   // Adversarial review P1: levels differing only by case ("pass" / "PASS")

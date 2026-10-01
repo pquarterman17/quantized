@@ -13,7 +13,7 @@ import type uPlot from "uplot";
 
 import { buildOverlayPayload } from "../../lib/panelwindow";
 import { defaultPlotView } from "../../lib/plotview";
-import { resolveTemplate } from "../../lib/plotTemplates";
+import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
 import { rowStateIdentity } from "../../lib/rowstate";
 import type { Dataset } from "../../lib/types";
 import { LINEAR_PATHS, POINTS_PATHS, STEPPED_MID_PATHS, STEPPED_PATHS, STEPPED_PATHS_PRE } from "../../lib/uplotPaths";
@@ -102,7 +102,7 @@ export default function PanelOverlayWindow({ datasets }: { datasets: Dataset[] }
         showGrid={OVERLAY_VIEW.showGrid}
         axisBox={OVERLAY_VIEW.showAxisBox}
         fontSize={resolveTemplate(OVERLAY_VIEW.plotTemplate).fontSize}
-        baseLineWidth={defaultLineWidth}
+        baseLineWidth={canvasLineWidth(OVERLAY_VIEW.plotTemplate, defaultLineWidth)}
         defaultTrace={defaultTrace}
         steppedPaths={STEPPED_PATHS}
         steppedPathsPre={STEPPED_PATHS_PRE}

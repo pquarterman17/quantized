@@ -11,8 +11,10 @@
 //   - `POLAR_CANVAS` (degrees, counter-clockwise, 0 east), the shared radial
 //     range `polarRadialRange` (min at the centre, values clamped) and the
 //     `niceTicks` rings, all sent explicitly (`routes/export_figures_polar`);
-//   - per-series COLOUR only, at the canvas' palette positions — the canvas
-//     draws every series as one solid line, so width/dash/marker are not sent;
+//   - per-series COLOUR, at the canvas' palette positions, and the canvas'
+//     fixed `POLAR_LINE_PX` width — the canvas draws every series as one solid
+//     line at that width, so a series' own width/dash/marker are not sent and
+//     the style preset's `line_width` never applies (`exportLineWidth`'s rule);
 //   - the grid toggle; legend renames.
 // Imported only by lazily-loaded export modules (via figureSpecStage).
 
@@ -21,7 +23,7 @@ import { buildExportStyles, toWireSeriesStyles } from "./exportStyles";
 import type { FigureRenderOpts } from "./figureSpec";
 import { pageSizeInches } from "./pagesetup";
 import type { PlotView } from "./plotview";
-import { POLAR_CANVAS, polarChannels, polarRadialRange } from "./polar";
+import { POLAR_CANVAS, POLAR_LINE_PX, polarChannels, polarRadialRange } from "./polar";
 import { niceTicks } from "./ticks";
 import type { Dataset } from "./types";
 
@@ -37,8 +39,7 @@ export function buildPolarFigureSpec(
   const rLim = polarRadialRange(ds.data.values, channels);
   const styles = toWireSeriesStyles(buildExportStyles(channels, st.seriesStyles), false).map((s, i) => {
     const legend = st.seriesLabels[channels[i]];
-    const keep = { ...(s?.color ? { color: s.color } : {}), ...(legend ? { legend } : {}) };
-    return Object.keys(keep).length > 0 ? keep : null;
+    return { ...(s?.color ? { color: s.color } : {}), ...(legend ? { legend } : {}), width: POLAR_LINE_PX };
   });
   return {
     dataset: ds.data,
@@ -51,7 +52,7 @@ export function buildPolarFigureSpec(
     title: o.title,
     x_label: o.xLabel || undefined,
     y_label: o.yLabel || undefined,
-    ...(styles.some((s) => s !== null) ? { series_styles: styles } : {}),
+    series_styles: styles,
     ...(o.greyscale ? { greyscale: true } : {}),
     filename: stem,
   };

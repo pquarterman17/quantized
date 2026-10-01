@@ -200,6 +200,7 @@ export default function PlotLegend({
                 className="qz-input"
                 autoFocus
                 style={{ width: 90, height: 18, padding: "0 4px" }}
+                aria-label={`Legend label for ${defaultLabel(s)}`}
                 value={editing.value}
                 placeholder={defaultLabel(s)}
                 onChange={(e) => setEditing({ channel, value: e.target.value })}

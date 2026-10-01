@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from quantized.io import _decimal_comma
+from quantized.io._delimited_layout import _detect_delimiter
 from quantized.io.delimited import import_csv
 from quantized.io.import_preview import (
     ImportSettings,
@@ -209,3 +210,110 @@ def test_parse_route_passes_decimal_through() -> None:
     )
     assert ok.status_code == 200
     assert ok.json()["time"] == [1.5, 3.75, 5.0]
+
+
+# --- auto: an ambiguous column mixed with integers fails closed --------------------
+
+_MIXED = "A;B\n1,500;1\n2;2\n3;3\n4,250;4\n"
+
+
+def test_auto_ambiguous_column_mixed_with_integers_fails_closed(tmp_path: Path) -> None:
+    # The integers made the column >10% numeric, so the comma cells used to
+    # come back as NaN with no error.
+    with pytest.raises(ValueError, match="'A'.*Import Wizard"):
+        import_csv(_write(tmp_path, _MIXED))
+
+
+def test_wizard_ambiguous_mixed_column_fails_closed() -> None:
+    with pytest.raises(ValueError, match="decimal separator"):
+        preview_import(_MIXED, guess_settings(_MIXED))
+
+
+def test_point_keeps_todays_reading_of_a_mixed_column(tmp_path: Path) -> None:
+    # Today's "." reading, pinned as-is: "1,500;1" scores as text, so it is
+    # taken for the header, and "4,250" does not parse. No error is raised.
+    ds = import_csv(_write(tmp_path, _MIXED), decimal=".")
+    assert ds.time[:2].tolist() == [2.0, 3.0]
+    assert np.isnan(ds.time[2])
+    assert ds.values[:, 0].tolist() == [2.0, 3.0, 4.0]
+
+
+@pytest.mark.parametrize(
+    "column",
+    [
+        ["1,500", "2", "Smith, J"],  # a text cell among the numbers
+        ["2", "1,500 units", "3"],  # comma inside text
+        ["2", "Doe, A", "1,500"],
+    ],
+)
+def test_auto_never_refuses_a_text_column(tmp_path: Path, column: list[str]) -> None:
+    rows = "".join(f"{k + 1};{cell}\n" for k, cell in enumerate(column))
+    ds = import_csv(_write(tmp_path, "T;Note\n" + rows))
+    assert ds.time.tolist() == [1.0, 2.0, 3.0]
+    assert "decimal_separator" not in ds.metadata
+
+
+
+def test_auto_never_refuses_a_column_whose_first_cell_is_text(tmp_path: Path) -> None:
+    ds = import_csv(_write(tmp_path, "T;U;Note\n1;1;run\n2;2;1,500\n3;3;2\n"))
+    assert ds.time.tolist() == [1.0, 2.0, 3.0]
+    assert "decimal_separator" not in ds.metadata
+
+# --- delimiter detection: a headerless semicolon file -------------------------------
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ["1,5;2,5", "3,5;4,5", "5,5;6,5"],  # decimal-comma shaped
+        ["1,5;2", "3;4,25", "5,5;6,5"],  # comma counts vary line to line
+    ],
+)
+def test_semicolon_wins_over_decimal_commas(lines: list[str]) -> None:
+    assert _detect_delimiter(lines) == ";"
+
+
+def test_headerless_semicolon_decimal_comma_file_imports(tmp_path: Path) -> None:
+    ds = import_csv(_write(tmp_path, "1,5;2,5\n3,5;4,5\n5,5;6,5\n"))
+    assert ds.time.tolist() == [1.5, 3.5, 5.5]
+    assert ds.values[:, 0].tolist() == [2.5, 4.5, 6.5]
+    assert ds.metadata["decimal_comma_columns"] == ["Col1", "Col2"]
+
+
+def test_wizard_detects_headerless_semicolon_file() -> None:
+    text = "1,5;2,5\n3,5;4,5\n"
+    out = preview_import(text, guess_settings(text))
+    assert out["delimiter"] == ";"
+    assert out["rows"] == [[1.5, 2.5], [3.5, 4.5]]
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [
+        ["1,5", "3,5", "5,5"],  # headerless US: still two integer columns
+        ["Temp,Moment", "300.5,1.25e-3", "301,1.5e-3"],
+        ['1,"x; y, z"', '2,"p; q"'],  # quoted text with a ';' in it
+        ["a, b;1", "c, d;2"],  # ';' present but the commas are text
+    ],
+)
+def test_us_comma_layouts_keep_the_comma_delimiter(lines: list[str]) -> None:
+    assert _detect_delimiter(lines) == ","
+
+
+def test_headerless_us_comma_csv_is_unaffected(tmp_path: Path) -> None:
+    ds = import_csv(_write(tmp_path, "1,5\n3,5\n5,5\n"))
+    assert ds.time.tolist() == [1.0, 3.0, 5.0]
+    assert ds.values[:, 0].tolist() == [5.0, 5.0, 5.0]
+    assert "decimal_separator" not in ds.metadata
+
+
+# --- wizard preview names the decimal-comma columns ---------------------------------
+
+
+def test_preview_reports_decimal_comma_columns() -> None:
+    assert preview_import(_EU, guess_settings(_EU))["decimal_comma_columns"] == [
+        "Temp",
+        "Moment",
+    ]
+    us = "Temp;Moment\n300.5;1.25e-3\n301;1.5e-3\n"
+    assert preview_import(us, guess_settings(us))["decimal_comma_columns"] == []

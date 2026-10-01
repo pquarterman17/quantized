@@ -3,7 +3,7 @@
 // then click along the curve. "Create dataset" maps the traced pixels to data
 // (lib/digitizer) and adds it to the library. Thin view over useDigitizer.
 
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { NumberField } from "../../primitives/NumberField";
 import { Button } from "../../primitives";
@@ -27,6 +27,7 @@ export default function DigitizerView() {
   const [nat, setNat] = useState<[number, number]>([1, 1]);
   const [val, setVal] = useState<number | string>("");
   const [name, setName] = useState("digitized");
+  const fieldId = useId();
 
   function loadFile(file: File): void {
     const reader = new FileReader();
@@ -153,10 +154,10 @@ export default function DigitizerView() {
         >
           {d.pending ? (
             <>
-              <span className="qzk-field-lbl" style={{ margin: 0 }}>
+              <label className="qzk-field-lbl" style={{ margin: 0 }} htmlFor={fieldId}>
                 {d.mode.startsWith("x") ? "X" : "Y"} value
-              </span>
-              <NumberField value={val} width={110} onChange={(v) => setVal(v)} />
+              </label>
+              <NumberField id={fieldId} value={val} width={110} onChange={(v) => setVal(v)} />
               <Button variant="primary" size="sm" onClick={commitValue}>
                 Set
               </Button>
@@ -171,10 +172,11 @@ export default function DigitizerView() {
                 Undo point
               </Button>
               <span className="qzk-tool-sep" />
-              <span className="qzk-field-lbl" style={{ margin: 0 }}>
+              <label className="qzk-field-lbl" style={{ margin: 0 }} htmlFor={fieldId}>
                 Name
-              </span>
+              </label>
               <input
+                id={fieldId}
                 className="qz-input"
                 value={name}
                 onChange={(e) => setName(e.target.value)}

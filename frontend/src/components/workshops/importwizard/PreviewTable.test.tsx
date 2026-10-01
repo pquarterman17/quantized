@@ -134,4 +134,32 @@ describe("PreviewTable", () => {
     const select = screen.getByLabelText("column 1 role") as HTMLSelectElement;
     expect([...select.options].map((o) => o.value)).toContain("categorical");
   });
+
+  it("names the columns read with a decimal comma under the table", () => {
+    render(
+      <PreviewTable
+        preview={{ ...PREVIEW, decimal_comma_columns: ["Temp", "Moment"] }}
+        onRoleChange={vi.fn()}
+        onNameChange={vi.fn()}
+        onUnitChange={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole("note")).toHaveTextContent("Read with a decimal comma: Temp, Moment.");
+  });
+
+  it("shows no decimal-comma note for an empty or absent list", () => {
+    const { rerender } = render(
+      <PreviewTable
+        preview={{ ...PREVIEW, decimal_comma_columns: [] }}
+        onRoleChange={vi.fn()}
+        onNameChange={vi.fn()}
+        onUnitChange={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText(/decimal comma/)).not.toBeInTheDocument();
+    rerender(
+      <PreviewTable preview={PREVIEW} onRoleChange={vi.fn()} onNameChange={vi.fn()} onUnitChange={vi.fn()} />,
+    );
+    expect(screen.queryByText(/decimal comma/)).not.toBeInTheDocument();
+  });
 });

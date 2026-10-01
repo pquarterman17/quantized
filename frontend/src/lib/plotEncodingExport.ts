@@ -17,18 +17,26 @@
 // document's `bindings.encoding`) over its per-channel styles. The dialog,
 // `exportActive`'s resolve/cancel chokepoint and `/api/export/figure` are
 // reused as-is via `runExportFigureCommand`'s `buildSpec` hook.
+//
+// Line width: the preview strokes every series at a fixed
+// `plotTemplates.GRAPH_PREVIEW_LINE_PX`, NOT the Stage's template width
+// (`canvasLineWidth`), so a widthless line exports at that fixed width under
+// `exportLineWidth`'s rule (an explicit width, `line: "none"` and a gradient
+// encoding are left alone). Fixture: `tests/fixtures/wire/line_width_paths.json`.
 // Lazy-only, like `plotEncoding.ts`.
 
 import type { FigureSpec } from "./api/figures";
 import type { StoreGet } from "./exportActive";
 import { toWireSeriesStyles } from "./exportStyles";
 import type { FigureRenderOpts } from "./figureSpec";
+import { withCanvasLineWidth } from "./exportLineWidth";
 import { exportErrorSpans } from "./figureSpecSeries";
 import { buildStageFigureSpec } from "./figureSpecStage";
 import { encodeSpec, type EncodedSpec } from "./plotEncoding";
 import { figureEncodingWire, resolvedPalette } from "./plotEncodingBinding";
 import type { PlotSpec } from "./plotspec";
 import { stylesForMark } from "./plotSpecFigure";
+import { GRAPH_PREVIEW_LINE_PX } from "./plotTemplates";
 import type { Dataset } from "./types";
 
 export { resolvedPalette };
@@ -39,10 +47,11 @@ export { resolvedPalette };
  *  lays palette colour and glyph over each split series. The legend is forced
  *  on because the preview always lists its entries — matplotlib would draw
  *  none for a lone series, dropping a label-source legend. Error spans ride
- *  only when nothing splits (`EncodedSpec.errors`), as the preview draws them. */
+ *  only when nothing splits (`EncodedSpec.errors`), as the preview draws them.
+ *  A widthless line carries the preview's width (see the module doc). */
 export function encodedFigureSpec(e: EncodedSpec, spec: PlotSpec, stem: string, o: FigureRenderOpts): FigureSpec {
   const { group } = e.enc;
-  return {
+  return withCanvasLineWidth({
     dataset: e.source, // the text-column factors are appended server-side (`text_columns`)
     ...(e.xKey === null ? {} : { x_key: e.xKey }),
     y_keys: e.yChannels,
@@ -59,7 +68,7 @@ export function encodedFigureSpec(e: EncodedSpec, spec: PlotSpec, stem: string, 
     ...(o.yLabel ? { y_label: o.yLabel } : {}),
     ...(o.greyscale ? { greyscale: true } : {}),
     filename: stem,
-  };
+  }, GRAPH_PREVIEW_LINE_PX);
 }
 
 /** The presentation fields an encoded export takes from the Stage plot's own

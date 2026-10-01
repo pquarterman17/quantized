@@ -67,7 +67,7 @@ import { createPortal } from "react-dom";
 import type { Composition } from "../../lib/composition";
 import { spatialPanelsOf } from "../../lib/composition";
 import { runExportSpatialPageCommand } from "../../lib/exportPageCommand";
-import { resolveTemplate } from "../../lib/plotTemplates";
+import { canvasLineWidth, resolveTemplate } from "../../lib/plotTemplates";
 import { canExportSpatialPage } from "../../lib/spatialPageExport";
 import { resolvePlotBg } from "../../lib/uplotOpts";
 import { useActiveDataset, useApp } from "../../store/useApp";
@@ -158,7 +158,7 @@ export default function MultiPanelStage({ composition }: MultiPanelStageProps) {
     showGrid,
     showAxisBox,
     fontSize: template.fontSize,
-    baseLineWidth: plotTemplate === "screen" ? defaultLineWidth : template.lineWidth,
+    baseLineWidth: canvasLineWidth(plotTemplate, defaultLineWidth),
     defaultTrace,
     refLines,
     seriesStyles,

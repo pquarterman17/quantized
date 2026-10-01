@@ -106,6 +106,22 @@ describe("Quick Figure Builder — concise setup panel", () => {
     expect(select("Line width")).toBeDisabled();
   });
 
+  it("a disabled setting's reason is its accessible description, not only a tooltip", () => {
+    // A disabled control is not a Tab stop, so a title on its label is out of
+    // a keyboard user's reach; the reason must be linked to the control.
+    render(<QuickFigureBuilderWorkspace />);
+    const markers = "Markers apply to the Scatter and Line + symbol styles.";
+    expect(select("Marker")).toHaveAccessibleDescription(markers);
+    expect(select("Marker size")).toHaveAccessibleDescription(markers);
+    expect(select("Marker").closest("label")).toHaveAttribute("title", markers); // tooltip kept
+    expect(select("Line width")).not.toHaveAttribute("aria-describedby");
+    change("Plot style", "scatter");
+    expect(select("Marker")).not.toHaveAttribute("aria-describedby");
+    const lines = "Scatter draws points only, so line settings do not apply.";
+    expect(select("Line width")).toHaveAccessibleDescription(lines);
+    expect(select("Line style")).toHaveAccessibleDescription(lines);
+  });
+
   it("Save Quick Plot Template carries the setup, and Quick Plot With re-applies it", async () => {
     vi.mocked(askParams).mockResolvedValue({ name: "Log look" });
     render(<QuickFigureBuilderWorkspace />);
