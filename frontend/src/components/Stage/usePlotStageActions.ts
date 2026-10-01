@@ -24,6 +24,7 @@ import { withYRange } from "../../lib/regionSelect";
 import { exportPlotPng, plotPngBlob } from "../../lib/plotExport";
 import { onLoadFailure, runLazy } from "../../lib/runLazy";
 import type { Dataset } from "../../lib/types";
+import { waterfallSourceRows } from "../../lib/waterfallOffset";
 import { toast } from "../../store/toasts";
 import { useApp } from "../../store/useApp";
 
@@ -179,7 +180,9 @@ export function usePlotStageActions(
   // Plot-brush: a dragged x-band → row indices (original order) → worksheet selection.
   function onRangeSelect(x0: number, x1: number) {
     if (!displayPayload) return;
-    useApp.getState().setRowSelection(rowsInXRange(displayPayload.data[0] as (number | null)[], x0, x1));
+    // An X-offset (waterfall) payload repeats each row once per x block: map back to dataset rows.
+    const rows = rowsInXRange(displayPayload.data[0] as (number | null)[], x0, x1);
+    useApp.getState().setRowSelection(waterfallSourceRows(displayPayload, rows));
   }
 
   return {

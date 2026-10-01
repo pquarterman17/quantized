@@ -542,7 +542,7 @@ with parent items P1.3 and P1.5.
         handoff, and export. Transformations/style-template choice: see
         F4.2c. A direct "Plot in new window" action (Library + palette)
         closed the one-plot-per-dataset misconception.
-  - [~] **F4.2b Plot Recipe schema + resolve/apply pipeline (P1.3 waves 1-3,
+  - [x] **F4.2b Plot Recipe schema + resolve/apply pipeline (P1.3 waves 1-3,
         PRs #203/#204, wave 3 2026-08-22).** `lib/plotRecipe.ts`'s schema
         captures roles, errors, group/facet BINDINGS (by signature id, never
         index), axis scales/ranges/breaks/tick formats, legend, stacking, a
@@ -558,8 +558,10 @@ with parent items P1.3 and P1.5.
         focused plot window, and a subtle (never-auto-apply) post-import
         suggestion toast. FACET is closed by F4.4's durable `facetKey`,
         BREAK by BUG-012's `axisBreaks` rebuild, and SPATIAL + the maps/panels
-        payload by schema v3 (2026-09-30, see F4.4's closing note). Still
-        open: waterfall settings beyond the scalar offset. Transformations,
+        payload by schema v3 (2026-09-30, see F4.4's closing note). The
+        waterfall X offset (Origin's X step, `waterfallDx`) closed 2026-10-01:
+        captured as an optional `visual.waterfallDx`, screen == export pinned
+        by `tests/fixtures/wire/waterfall_x_offset.json`. Transformations,
         style-template choice, schema migration and preview thumbnails moved
         to F4.2c.
   - [x] **F4.2c Recipe schema v2: preview, outlier policy, transformation,

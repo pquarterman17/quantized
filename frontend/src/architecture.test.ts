@@ -1992,6 +1992,7 @@ const PLOTVIEW_CHANNEL_REMAP_EXCLUDED: Record<string, string> = {
   regionShades: "RegionShade[] pinned at data coordinates, not a column index",
   shapes: "Shape[] pinned at data/page coordinates, not a column index",
   waterfall: "numeric offset step, not a column index",
+  waterfallDx: "numeric X offset step (a fraction of the x-span), not a column index",
   panelFit: "layout-fit mode enum, not channel-indexed",
   pageSetup: "page geometry model, not channel-indexed",
 };
@@ -2976,6 +2977,13 @@ describe("the lazy action seams stay lazily reachable (2026-09-14 bundle diet)",
       module: "/store/importDatasets.ts",
       loader: "/store/importDatasetsLazy.ts",
       call: 'import("./importDatasets")',
+    },
+    // Waterfall X offset (2026-10-01): the X-block layout is loaded only once a
+    // plot shows a non-zero X step; born lazy rather than extracted.
+    {
+      module: "/lib/waterfallX.ts",
+      loader: "/components/Stage/useWaterfallX.ts",
+      call: 'import("../../lib/waterfallX")',
     },
   ];
 

@@ -798,7 +798,7 @@ preview+confirm dialog, an explicit "apply anyway, drop unmatched" opt-in
 (`confirmPendingRecipeApplicationPartial`), a "Save as Plot Recipe…" entry
 point on the focused plot window, and a subtle (never-auto-apply) post-import
 suggestion toast. See F4.2b in `FIGURE_AUTHORING_WORKFLOW_PLAN.md` for the
-itemized still-open gaps (waterfall settings beyond the scalar offset;
+itemized gaps (waterfall X offset closed 2026-10-01;
 the SPATIAL rebuild and maps/panels payload closed 2026-09-30 as schema v3). **2026-09-29 (F4.2c):** recipe
 schema v2 closed the preview-thumbnail, outlier-policy capture, version-
 migration and transformation/style-template-choice gaps — see F4.2c for the
@@ -827,8 +827,12 @@ Recipes should include:
   on the target dataset; a missing sibling dataset or column is named in the
   apply dialog with a rebind picker — `lib/plotRecipePanels.test.ts`,
   `store/plotRecipesSpatial.test.ts`, `PlotRecipeApplyDialog.test.tsx`);
-- [~] waterfall settings (only the scalar offset; no richer settings exist to
-  capture);
+- [x] waterfall settings (2026-10-01: Origin's X step joins the Y offset —
+  `PlotView.waterfallDx`, an optional recipe `visual.waterfallDx`, the
+  Inspector's "X offset" field, and `FigureSpec.waterfall_x_offsets`; screen
+  == export per series is pinned by `tests/fixtures/wire/waterfall_x_offset.json`
+  (`waterfallXWireFixture.test.ts` / `test_export_waterfall_x.py`). Origin's
+  auto-offset and colour-by-Z waterfall variants are not modelled);
 - [x] technique scope such as XRD, XRR, SIMS, or magnetometry;
 - [x] provenance, schema version, description, and preview (2026-09-29,
   F4.2c: a numbers-only preview is captured at save time

@@ -8,8 +8,8 @@ import {
   waterfallApplies,
   waterfallSpan,
   waterfallStep,
-  waterfallWire,
 } from "./waterfallOffset";
+import { waterfallWire } from "./waterfallWire";
 import type { CycleView } from "./seriesStyleCycle";
 import type { DataStruct } from "./types";
 

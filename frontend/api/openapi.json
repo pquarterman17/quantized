@@ -5109,6 +5109,21 @@
             "description": "Per-plotted-series vertical offset in Y data units, aligned to `y_keys`: the stagger a waterfall view draws on screen, which used to reach no export path at all (the exported figure overlaid the curves the canvas had separated). RESOLVED client-side (`frontend/src/lib/waterfallOffset.ts`) rather than re-derived here, because the fraction the user sets is a share of the CANVAS y-range -- a range that includes hidden series and excluded rows this request never receives, and that a zoomed canvas measures over only the rows it fetched. `dataset` keeps the true, un-shifted values; None/absent renders exactly as it did before the field existed. UNUSED on the `group_col` branch (the per-level series it synthesizes do not align 1:1 with `y_keys`, so a single offset per channel cannot say how far to stagger each level -- unlike `series_styles`, which every level of a channel shares and which IS expanded there, BUG-016) and on the `facets` branch (which renders from its own panel payloads); the client omits it for both rather than sending an offset the renderer would mis-apply. See `calc.plotting.apply_waterfall_offsets`.",
             "title": "Waterfall Offsets"
           },
+          "waterfall_x_offsets": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Per-plotted-series HORIZONTAL offset in X data units, aligned to `y_keys`: the X step of a waterfall (Origin's waterfall has both an X and a Y offset; series i slides right by i*dx). RESOLVED client-side (`frontend/src/lib/waterfallOffset.ts`) for the same reason as `waterfall_offsets`: the fraction the user sets is a share of the canvas x-range. Laid out as one x block per series (`calc.plot_waterfall_x.apply_waterfall_x_offsets`), the canvas' own layout. None/absent/all-zero renders exactly as before the field existed; unused on the `group_col`/encoding/`facets` branches, which the client never sends it for.",
+            "title": "Waterfall X Offsets"
+          },
           "width_in": {
             "anyOf": [
               {

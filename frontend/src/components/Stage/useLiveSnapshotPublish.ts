@@ -94,13 +94,11 @@ export function useLiveSnapshotPublish(args: LiveSnapshotArgs): void {
   // focused Stage) cannot each publish a competing span.
   const datasetId = args.payloadDatasetId;
   const rawPayload = args.payload;
-  const span = useMemo(
-    () =>
-      rawPayload
-        ? waterfallSpan((rawPayload.data as unknown as (number | null)[][]).slice(1))
-        : null,
-    [rawPayload],
-  );
+  // The x column's span is the X step's (`lib/waterfallX.ts` measures the same column).
+  const span = useMemo(() => {
+    const cols = rawPayload ? (rawPayload.data as unknown as (number | null)[][]) : null;
+    return cols ? { span: waterfallSpan(cols.slice(1)), xSpan: waterfallSpan(cols.slice(0, 1)) } : null;
+  }, [rawPayload]);
   // P3.3: the bundle carries the RESOLVED styles — the cycle applied, not the
   // cycle itself. A snapshot window has no export and no live view; its whole
   // contract (this module's header, and `plotsnapshot.ts`'s) is "freezes exactly
@@ -127,7 +125,7 @@ export function useLiveSnapshotPublish(args: LiveSnapshotArgs): void {
   // re-runs for (an overlay, a brush) without re-deriving, and clears on the
   // same unmount/alternate-mode transitions.
   useEffect(() => {
-    publishLiveWaterfallSpan(span != null && !alt ? { datasetId, span } : null);
+    publishLiveWaterfallSpan(span != null && !alt ? { datasetId, ...span } : null);
     return () => publishLiveWaterfallSpan(null);
   }, [span, datasetId, alt]);
 }

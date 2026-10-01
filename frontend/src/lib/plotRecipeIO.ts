@@ -309,6 +309,7 @@ function sanitizeVisual(v: unknown): RecipeVisual {
     legendStatic: typeof o.legendStatic === "boolean" ? o.legendStatic : fb.legendStatic,
     stackMode: typeof o.stackMode === "boolean" ? o.stackMode : fb.stackMode,
     waterfall: typeof o.waterfall === "number" && Number.isFinite(o.waterfall) ? o.waterfall : fb.waterfall,
+    ...(typeof o.waterfallDx === "number" && Number.isFinite(o.waterfallDx) ? { waterfallDx: o.waterfallDx } : {}),
     plotTemplate: typeof o.plotTemplate === "string" ? o.plotTemplate : fb.plotTemplate,
     // Structural passthrough for `seriesStyles` -- no deep per-field
     // `SeriesStyle` validation, just an object-shape check; `seriesLabels`

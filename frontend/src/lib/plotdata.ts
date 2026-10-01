@@ -65,6 +65,7 @@ export interface PlotPayload {
    *  `usePlotPayload.ts`'s windowed re-fetch effect is the single producer of
    *  a request that sets this. */
   window?: [number, number] | null;
+  blockRows?: number; // waterfall X offset: rows per x block (lib/waterfallX.ts); absent = one block
 }
 
 /** Pure client-side column packing — the offline mirror of /api/plot/series.

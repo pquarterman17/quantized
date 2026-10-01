@@ -132,6 +132,16 @@ export interface PlotViewSettingsSlice {
   // switcher's engine — kept in the store so it's testable.
   soloChannel: (channel: number | null) => void;
   setWaterfall: (waterfall: number) => void;
+  /** Origin's waterfall X step: series i slides right by i·dx·(x-span).
+   *  Declared and initialized HERE, unlike its `waterfall` sibling (which
+   *  predates this module and stays on `AppState` in useApp.ts): a PlotView
+   *  field, so the view swap/history/.dwk paths carry it through `VIEW_KEYS`
+   *  with no per-field line in useApp.ts. */
+  waterfallDx: number;
+  /** Coalesced (one undo entry per typed value): the Inspector field commits
+   *  on every valid keystroke and closes the run with `endHistoryRun`. A
+   *  non-finite step is refused. */
+  setWaterfallDx: (dx: number) => void;
 }
 
 /** Is a multi-panel layout engaged — the per-channel stack, a facet binding, a
@@ -302,6 +312,12 @@ export function createPlotViewSettingsSlice(set: SliceSet, get: SliceGet): PlotV
       get().recordHistory("change waterfall offset");
       set({ waterfall });
       get().recordMacro(`Waterfall → ${waterfall}`, `qz.setWaterfall(${waterfall})`);
+    },
+    waterfallDx: 0,
+    setWaterfallDx: (waterfallDx) => {
+      if (!Number.isFinite(waterfallDx)) return;
+      get().recordHistoryCoalesced("change waterfall X offset", "waterfall-dx");
+      set({ waterfallDx });
     },
   };
 }

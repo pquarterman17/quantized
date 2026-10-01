@@ -32,6 +32,8 @@ beforeEach(() => {
     y2Keys: null,
     errKeys: {},
     waterfall: 0,
+    waterfallDx: 0,
+    history: [],
   });
 });
 
@@ -127,5 +129,34 @@ describe("ChannelsCard legend-label source (MAIN #33)", () => {
     render(<ChannelsCard active={ds} />);
     fireEvent.change(sourceSelect(), { target: { value: "2" } });
     expect(useApp.getState().seriesLabels).toEqual({ 0: "NbAu-1", 2: "NbAu-3" });
+  });
+});
+
+// Origin's waterfall has an X offset as well as a Y one. The X field sits
+// beside the Waterfall slider, in the same % units, and one typed value is
+// ONE undo entry (the field commits per keystroke; focus/blur bound the run).
+describe("ChannelsCard waterfall X offset", () => {
+  it("renders an X offset field (percent of the x-range) with a one-sentence tooltip", () => {
+    render(<ChannelsCard active={dataset} />);
+    const field = screen.getByRole("textbox", { name: "Waterfall X offset" });
+    expect(field).toHaveValue("0");
+    const tip = field.closest("[title]")?.getAttribute("title") ?? "";
+    expect(tip).toMatch(/^[^.]+\.$/); // one short sentence
+  });
+
+  it("writes the step as a fraction, negative too, as one undo entry per typed value", () => {
+    render(<ChannelsCard active={dataset} />);
+    const field = screen.getByRole("textbox", { name: "Waterfall X offset" });
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "-" } });
+    fireEvent.change(field, { target: { value: "-2" } });
+    fireEvent.change(field, { target: { value: "-25" } });
+    fireEvent.blur(field);
+    expect(useApp.getState().waterfallDx).toBe(-0.25);
+    expect(useApp.getState().history.map((h) => h.label)).toEqual(["change waterfall X offset"]);
+    fireEvent.focus(field);
+    fireEvent.change(field, { target: { value: "10" } });
+    expect(useApp.getState().waterfallDx).toBe(0.1);
+    expect(useApp.getState().history).toHaveLength(2);
   });
 });

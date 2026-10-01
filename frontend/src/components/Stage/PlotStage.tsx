@@ -26,13 +26,11 @@ import PlotStageOverlays from "./PlotStageOverlays";
 import PlotViewport from "./PlotViewport";
 import { useAnnotationEdit } from "./useAnnotationEdit";
 
-// E-c1 bundle pass (MapStage precedent): stat/multi-panel are runtime-
-// conditional alternate modes, never the default-plot first paint.
+// E-c1 bundle pass (MapStage precedent): stat/multi-panel are runtime-conditional.
 const MultiPanelStage = lazyRegion(() => import("./MultiPanelStage"), "Plot");
 const StatStage = lazyRegion(() => import("./StatStage"), "Plot");
-// plans/BUNDLE_HEADROOM.md slice 3: polar is the third such alternate mode and
-// was the only one still static — reached one way, the Plot menu's polar
-// toggle. UX-003 fixed: lazyRegion gives it an error boundary + real retry.
+// plans/BUNDLE_HEADROOM.md slice 3: polar is the third such alternate mode (the Plot
+// menu's polar toggle). UX-003 fixed: lazyRegion gives it an error boundary + retry.
 const PolarStage = lazyRegion(() => import("./PolarStage"), "Plot");
 import { useAxisLabelEdit } from "./useAxisLabelEdit";
 import { useAxisDrop } from "./useAxisDrop";
@@ -77,6 +75,7 @@ export default function PlotStage() {
   const seriesStyles = useApp((s) => s.seriesStyles);
   const seriesLabels = useApp((s) => s.seriesLabels);
   const waterfall = useApp((s) => s.waterfall);
+  const waterfallDx = useApp((s) => s.waterfallDx); // Origin's waterfall X step
   const excludedDisplay = useApp((s) => s.excludedDisplay);
   const xKey = useApp((s) => s.xKey);
   const groupKey = useApp((s) => s.groupKey);
@@ -181,6 +180,7 @@ export default function PlotStage() {
     encoding: focusedBindings?.encoding,
     hiddenChannels,
     waterfall,
+    waterfallDx,
     excludedDisplay,
     fitOverlay,
     baselineOverlay,

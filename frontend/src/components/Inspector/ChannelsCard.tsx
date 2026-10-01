@@ -13,6 +13,7 @@ import type { ChannelRole, Dataset, ModelingType } from "../../lib/types";
 import { useApp } from "../../store/useApp";
 import { Pill } from "../primitives/Pill";
 import { SliderRow } from "../primitives/SliderRow";
+import BufferedNumberField from "../primitives/BufferedNumberField";
 import { Select } from "../primitives";
 import Card from "../primitives/Card";
 
@@ -32,6 +33,9 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
   const setChannelType = useApp((s) => s.setChannelType);
   const waterfall = useApp((s) => s.waterfall);
   const setWaterfall = useApp((s) => s.setWaterfall);
+  const waterfallDx = useApp((s) => s.waterfallDx);
+  const setWaterfallDx = useApp((s) => s.setWaterfallDx);
+  const endHistoryRun = useApp((s) => s.endHistoryRun);
 
   if (!active || active.data.labels.length < 2) return null;
 
@@ -255,6 +259,22 @@ export default function ChannelsCard({ active }: { active: Dataset | null }) {
         onChange={(v) => setWaterfall(v / 100)}
         format={(v) => `${v}%`}
       />
+      {/* Origin's waterfall X step: series i slides right by i x this % of the x-range.
+          Typed per keystroke, so focus starts a fresh undo run (setWaterfallDx coalesces). */}
+      <div className="qz-slider-row" title="Shift each next series right by this % of the x-range (negative shifts left).">
+        <span className="qz-k">X offset</span>
+        <BufferedNumberField
+          aria-label="Waterfall X offset"
+          value={Number((waterfallDx * 100).toFixed(6))}
+          min={-100}
+          max={100}
+          width={56}
+          required
+          unit="%"
+          onFocus={endHistoryRun}
+          onValue={(v) => setWaterfallDx((v ?? 0) / 100)}
+        />
+      </div>
     </Card>
   );
 }

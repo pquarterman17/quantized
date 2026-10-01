@@ -142,6 +142,19 @@ WATERFALL_OFFSETS_DOC = (
 )
 
 
+WATERFALL_X_OFFSETS_DOC = (
+    "Per-plotted-series HORIZONTAL offset in X data units, aligned to `y_keys`: "
+    "the X step of a waterfall (Origin's waterfall has both an X and a Y "
+    "offset; series i slides right by i*dx). RESOLVED client-side "
+    "(`frontend/src/lib/waterfallOffset.ts`) for the same reason as "
+    "`waterfall_offsets`: the fraction the user sets is a share of the canvas "
+    "x-range. Laid out as one x block per series "
+    "(`calc.plot_waterfall_x.apply_waterfall_x_offsets`), the canvas' own "
+    "layout. None/absent/all-zero renders exactly as before the field existed; "
+    "unused on the `group_col`/encoding/`facets` branches, which the client "
+    "never sends it for."
+)
+
 SVG_TEXT_AS_PATHS_DOC = (
     "SVG only (ignored for pdf/png/tiff): write every glyph -- mathtext "
     "included -- as a path outline instead of live `<text>` (matplotlib "

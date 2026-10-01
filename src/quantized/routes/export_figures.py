@@ -28,6 +28,7 @@ from pydantic import Field, field_validator
 
 from quantized.calc.figure_group_styles import expand_grouped_series_styles
 from quantized.calc.plot_log_offsets import apply_log_offsets, scale_error_spans
+from quantized.calc.plot_waterfall_x import apply_waterfall_x_offsets
 from quantized.calc.plotting import (
     PlotState,
     apply_waterfall_offsets,
@@ -72,6 +73,7 @@ from quantized.routes.export_figures_schema import (
     SERIES_STYLES_DOC,
     SVG_TEXT_AS_PATHS_DOC,
     WATERFALL_OFFSETS_DOC,
+    WATERFALL_X_OFFSETS_DOC,
     FigureFacet,
     TickFormatSpec,
     _ResolvedFigure,
@@ -220,6 +222,9 @@ class FigureRequest(CachedDatasetRequest, ExcludedRowsFields):
     waterfall_offsets: list[float] | None = Field(
         default=None, description=WATERFALL_OFFSETS_DOC
     )
+    waterfall_x_offsets: list[float] | None = Field(
+        default=None, description=WATERFALL_X_OFFSETS_DOC
+    )
     log_offsets: list[float] | None = Field(default=None, description=LOG_OFFSETS_DOC)
     svg_text_as_paths: bool = Field(default=False, description=SVG_TEXT_AS_PATHS_DOC)
     # Property-panel overrides (gap #11): fonts / legend / ticks / spines /
@@ -249,7 +254,8 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
 
     ``req.waterfall_offsets`` (BUG-013) shifts each resolved series up by its
     own offset (``calc.plotting.apply_waterfall_offsets``), so every caller of
-    this helper exports the waterfall stagger the canvas shows.
+    this helper exports the waterfall stagger the canvas shows, and
+    ``req.waterfall_x_offsets`` its X step (``calc.plot_waterfall_x``).
 
     ``req.group_col`` (GUI_INTERACTION #12 Slice 5) switches to the grouped
     resolve path (``calc.plotting.build_grouped_series``): every ``y_keys``
@@ -331,7 +337,10 @@ def _figure_series(req: FigureRequest, ds: DataStruct | None = None) -> _Resolve
     styles = resolve_style_channels(ds, req.y_keys, req.series_styles)
     y2_mask = [s.axis == 1 for s in plot.series]
     spans = scale_error_spans(req.error_spans, req.log_offsets)  # finding 3
-    return _ResolvedFigure(plot.x, series, x_label, y_label, styles, y2_mask, y2_label, spans)
+    x, series, styles, spans = apply_waterfall_x_offsets(  # Origin's X step: one x block per series
+        plot.x, series, styles, spans, req.waterfall_x_offsets
+    )
+    return _ResolvedFigure(x, series, x_label, y_label, styles, y2_mask, y2_label, spans)
 
 
 def render_figure_request(req: FigureRequest, *, fmt: str, dpi: int) -> bytes:

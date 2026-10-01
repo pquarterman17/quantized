@@ -272,6 +272,7 @@ export function captureRecipe(
       legendStatic: view.legendStatic,
       stackMode: view.stackMode,
       waterfall: view.waterfall,
+      ...(view.waterfallDx ? { waterfallDx: view.waterfallDx } : {}),
       plotTemplate: view.plotTemplate,
       seriesStyles: pickRecord(view.seriesStyles),
       seriesLabels: pickRecord(view.seriesLabels),

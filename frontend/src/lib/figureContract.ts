@@ -107,6 +107,7 @@ export const PLOT_VIEW_FIELD_CONTRACT = {
   seriesOrder: canonical("series.order"),
   hiddenChannels: canonical("series.hiddenChannels"),
   waterfall: canonical("plot.waterfall.verticalOffset"),
+  waterfallDx: canonical("plot.waterfall.horizontalOffset"),
   panelFit: canonical("page.panelFit"),
   pageSetup: canonical("page.setup"),
 } satisfies FieldContractMap<PlotView>;
@@ -209,6 +210,10 @@ export const FIGURE_SPEC_FIELD_CONTRACT = {
   waterfall_offsets: derived(
     "plot.waterfall.verticalOffset",
     "BUG-013: the per-series stagger RESOLVED at render time (lib/waterfallOffset.ts) from the canonical fraction above plus the display list -- Y data units, not a second source of the fraction itself. Nothing here is stored on the document.",
+  ),
+  waterfall_x_offsets: derived(
+    "plot.waterfall.horizontalOffset",
+    "Origin's waterfall X step, RESOLVED at render time (lib/waterfallOffset.ts) from the canonical fraction above plus the display list -- X data units, laid out one x block per series by the backend. Nothing here is stored on the document.",
   ),
   log_offsets: derived(
     "series.styles",

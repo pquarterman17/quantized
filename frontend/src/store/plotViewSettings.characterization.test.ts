@@ -107,6 +107,7 @@ function resetView(): void {
     seriesOrder: null,
     hiddenChannels: [],
     waterfall: 0,
+    waterfallDx: 0,
   });
 }
 
@@ -516,6 +517,30 @@ describe("plot-view settings — hidden channels, solo and waterfall", () => {
     expect(withMacro(() => useApp.getState().setWaterfall(0.25))).toEqual(["qz.setWaterfall(0.25)"]);
     expect(useApp.getState().waterfall).toBe(0.25);
     expect(labels()).toEqual(["change waterfall offset"]);
+  });
+
+  // Origin's waterfall X step. The Inspector field commits on every valid
+  // keystroke, so one typed value ("2", "25") must be ONE undo entry; the
+  // field's focus/blur closes the run so the next edit is its own entry.
+  it("setWaterfallDx writes the X step as one undo entry per gesture", () => {
+    expect(useApp.getState().waterfallDx).toBe(0);
+    useApp.getState().setWaterfallDx(0.02);
+    useApp.getState().setWaterfallDx(0.25);
+    expect(useApp.getState().waterfallDx).toBe(0.25);
+    expect(labels()).toEqual(["change waterfall X offset"]);
+    useApp.getState().endHistoryRun();
+    useApp.getState().setWaterfallDx(-0.1);
+    expect(labels()).toEqual(["change waterfall X offset", "change waterfall X offset"]);
+    useApp.getState().undo();
+    expect(useApp.getState().waterfallDx).toBe(0.25);
+    useApp.getState().undo();
+    expect(useApp.getState().waterfallDx).toBe(0);
+  });
+
+  it("setWaterfallDx refuses a non-finite step", () => {
+    useApp.getState().setWaterfallDx(Number.NaN);
+    expect(useApp.getState().waterfallDx).toBe(0);
+    expect(labels()).toEqual([]);
   });
 });
 
