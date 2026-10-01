@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { runAction, type Action } from "./commands";
 import { usePendingOps } from "./pendingOps";
+import { useToasts } from "./toasts";
 
 beforeEach(() => usePendingOps.setState({ ops: [] }));
 
@@ -45,6 +46,19 @@ describe("runAction (P3.4 slice 2 chokepoint)", () => {
 
     reject(new Error("export failed"));
     await vi.waitFor(() => expect(usePendingOps.getState().ops).toHaveLength(0));
+  });
+
+  it("a rejecting async command shows a danger toast naming the command", async () => {
+    // Silent-failure audit (2026-10-01): "Pack Project…" and "Send to Origin"
+    // return their lazy `import(...).then(...)` from run(); a failed chunk
+    // load rejected into this catch and vanished — no toast, no console.
+    useToasts.setState({ toasts: [] });
+    runAction(action({ label: "Pack Project…", run: () => Promise.reject(new Error("chunk 404")) }));
+    await vi.waitFor(() => expect(useToasts.getState().toasts).toHaveLength(1));
+    const [t] = useToasts.getState().toasts;
+    expect(t.kind).toBe("danger");
+    expect(t.msg).toContain("Pack Project");
+    expect(t.msg).toContain("chunk 404");
   });
 
   it("calls run() exactly once even when it returns a thenable", () => {

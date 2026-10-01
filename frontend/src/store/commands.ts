@@ -7,6 +7,7 @@
 import { create } from "zustand";
 
 import { withOp } from "./pendingOps";
+import { toast } from "./toasts";
 
 export interface Action {
   id: string;
@@ -92,18 +93,19 @@ function isThenable(x: unknown): x is PromiseLike<unknown> {
  *  never changes what a command DOES — it only observes the promise the
  *  command already returns.
  *
- *  A rejection is swallowed here (after `withOp` unregisters + rethrows):
- *  every current async command already reports its own failure via
- *  status/toast internally and resolves normally, so this only prevents an
- *  otherwise-inert "unhandled rejection" console warning from a wrapper
- *  that didn't exist before — it does not hide anything a user would have
- *  seen, since `a.run()` was already fire-and-forget (uncaught) at every
- *  call site before this chokepoint existed. */
+ *  A rejection (after `withOp` unregisters + rethrows) becomes a danger
+ *  toast naming the command. A command that reports its own failure via
+ *  status/toast resolves normally, so this never double-reports; it is the
+ *  safety net for a rejection nothing else reported — a lazy command
+ *  body's chunk failing to load was silent here before 2026-10-01. */
 export function runAction(action: Action): void {
   const result = (action.run as () => unknown)();
   if (isThenable(result)) {
-    void withOp(action.label, () => Promise.resolve(result)).catch(() => {
-      /* see doc comment above — the command's own status/toast already ran */
+    // Silent-failure audit (2026-10-01): a command that reports its own
+    // failure resolves, so a rejection reaching here was reported by nobody
+    // (e.g. Pack Project's or Send to Origin's lazy chunk failing to load).
+    void withOp(action.label, () => Promise.resolve(result)).catch((e: unknown) => {
+      toast(`${action.label.replace(/…$/, "")} failed: ${e instanceof Error ? e.message : "error"}`, "danger");
     });
   }
 }
