@@ -104,8 +104,11 @@ export function useCurveFit(): CurveFitState {
   // center), and discarding a hand-tuned start on every model flip would
   // throw away work the user just did.
   const [paramRows, setParamRows] = useState<FitParamRow[]>([]);
-  const [result, setResult] = useState<CalcResult | null>(null);
-  const [fitData, setFitData] = useState<FittedData | null>(null);
+  // The result, keyed to the dataset + model it was computed for, and shown
+  // (so reportable) only under that pick: "→ Report" titles and references
+  // the CURRENT dataset/model, so a dataset switch or a model pick (or a fit
+  // landing after either) would otherwise ship another fit's parameters.
+  const [fitted, setFitted] = useState<{ result: CalcResult; fitData: FittedData | null; datasetId: string; model: string } | null>(null);
   const [guessOnly, setGuessOnly] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -170,6 +173,9 @@ export function useCurveFit(): CurveFitState {
   }, [active, xKey, plottedYKeyNow]);
 
   const model = models.find((m) => m.name === modelName);
+  const current = fitted && fitted.datasetId === active?.id && fitted.model === modelName ? fitted : null;
+  const result = current?.result ?? null;
+  const fitData = current?.fitData ?? null;
   useEffect(() => {
     setParamRows((prev) => rowsForModel(model, prev));
     // Keyed on the model identity, not the object, so a models[] refetch
@@ -214,8 +220,7 @@ export function useCurveFit(): CurveFitState {
       }
       if (kind === "guess") {
         const g = await autoGuess(modelName, pairs.x, pairs.y);
-        setResult({ params: g.p0 });
-        setFitData(null);
+        setFitted({ result: { params: g.p0 }, fitData: null, datasetId: ds.id, model: modelName });
         setGuessOnly(true);
       } else {
         // Resolve weighting -> dy over the SAME analysis rows as the fit; a
@@ -249,8 +254,12 @@ export function useCurveFit(): CurveFitState {
               }
             : {}),
         });
-        setResult(r);
-        setFitData({ x: pairs.x, y: pairs.y, xKey: state.xKey, yKey: localXy.yKey });
+        setFitted({
+          result: r,
+          fitData: { x: pairs.x, y: pairs.y, xKey: state.xKey, yKey: localXy.yKey },
+          datasetId: ds.id,
+          model: modelName,
+        });
         setGuessOnly(false);
         // Durable fit spec (audit P1 #3): records the plotted channels + the
         // weighting ACTUALLY used (unweighted if dy couldn't resolve) so the
@@ -302,8 +311,7 @@ export function useCurveFit(): CurveFitState {
   }
 
   function clear(): void {
-    setResult(null);
-    setFitData(null);
+    setFitted(null);
     setGuessOnly(false);
     setError(null);
     setWeightNote(null);
